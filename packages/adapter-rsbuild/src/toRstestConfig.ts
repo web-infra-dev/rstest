@@ -1,37 +1,21 @@
+import { normalize } from 'node:path';
 import { mergeRsbuildConfig, type RsbuildConfig } from '@rsbuild/core';
 import type { ExtendConfig } from '@rstest/core';
-
-export interface WithRsbuildConfigOptions {
-  /**
-   * `cwd` passed to loadConfig of Rsbuild
-   * @default process.cwd()
-   */
-  cwd?: string;
-  /**
-   * Path to rsbuild config file
-   * @default './rsbuild.config.ts'
-   */
-  configPath?: string;
-  /**
-   * The environment name in `environments` field to use, will be merged with the common config.
-   * Set to a string to use the environment config with matching name.
-   * @default undefined
-   */
-  environmentName?: string;
-  /**
-   * Modify rsbuild config before converting to rstest config
-   */
-  modifyRsbuildConfig?: (buildConfig: RsbuildConfig) => RsbuildConfig;
-}
+import {
+  resolveBuildCache,
+  resolveTestEnvironmentFromTarget,
+} from '@rstest/core/internal/adapter';
 
 /**
  * Convert rsbuild config to rstest config
  */
 export function toRstestConfig({
+  configPath,
   environmentName,
   rsbuildConfig: rawRsbuildConfig,
   modifyRsbuildConfig,
 }: {
+  configPath?: string;
   environmentName?: string;
   rsbuildConfig: RsbuildConfig;
   modifyRsbuildConfig?: (buildConfig: RsbuildConfig) => RsbuildConfig;
@@ -54,13 +38,23 @@ export function toRstestConfig({
     : rsbuildConfig;
 
   const { rspack, swc, bundlerChain } = finalBuildConfig.tools || {};
-  const { cssModules, target, module } = finalBuildConfig.output || {};
-  const { decorators, define, include, exclude, tsconfigPath } =
-    finalBuildConfig.source || {};
+  const { buildCache } = finalBuildConfig.performance || {};
+  const { cssModules, emitAssets, target, module } =
+    finalBuildConfig.output || {};
+  const {
+    assetsInclude,
+    decorators,
+    define,
+    include,
+    exclude,
+    tsconfigPath,
+    transformImport,
+  } = finalBuildConfig.source || {};
 
-  return {
+  const rstestConfig = {
     root: finalBuildConfig.root,
     name: environmentName,
+    forceRerunTriggers: configPath ? [normalize(configPath)] : undefined,
     plugins: [
       ...(finalBuildConfig.plugins || []),
       // remove some plugins that are not needed or not compatible in test environment
@@ -71,22 +65,34 @@ export function toRstestConfig({
       },
     ],
     source: {
+      assetsInclude,
       decorators,
       define,
       include,
       exclude,
       tsconfigPath,
+      transformImport,
     },
     resolve: finalBuildConfig.resolve,
     output: {
       cssModules,
+      emitAssets,
       module,
+    },
+    performance: {
+      buildCache: resolveBuildCache({
+        buildCache,
+        configPath,
+        root: finalBuildConfig.root,
+      }),
     },
     tools: {
       rspack,
       swc,
       bundlerChain,
     } as ExtendConfig['tools'],
-    testEnvironment: target === 'node' ? 'node' : 'happy-dom',
-  };
+    testEnvironment: resolveTestEnvironmentFromTarget(target),
+  } as ExtendConfig;
+
+  return rstestConfig;
 }

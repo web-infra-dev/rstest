@@ -10,6 +10,7 @@
   "globals",
   "pass-with-no-tests",
   "include-source",
+  "force-rerun-triggers",
   "test-name-pattern",
   "extends",
 
@@ -35,6 +36,7 @@
   "reporters",
   "include-task-location",
   "log-heap-usage",
+  "detect-async-leaks",
   "hide-skipped-tests",
   "hide-skipped-test-files",
   "slow-test-threshold",
@@ -42,6 +44,7 @@
   "chai-config",
   "resolve-snapshot-path",
   "print-console-trace",
+  "silent",
   "on-console-log",
   "disable-console-intercept"
 ]

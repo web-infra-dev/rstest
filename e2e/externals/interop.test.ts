@@ -57,7 +57,7 @@ describe('test interop', () => {
               './fixtures/interopLodash',
               '--testEnvironment=node',
               '-c',
-              './fixtures/rstest.lodash.config.ts',
+              './fixtures/rstest.lodash.config.mts',
             ]
           : ['run', './fixtures/interopLodash', '--testEnvironment=node'],
       options: {

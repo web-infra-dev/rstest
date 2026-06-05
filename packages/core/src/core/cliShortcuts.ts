@@ -2,7 +2,7 @@ import { clearScreen, color, isTTY, logger } from '../utils';
 
 export const isCliShortcutsEnabled = (): boolean => isTTY('stdin');
 
-export type CliShortcut = {
+type CliShortcut = {
   /**
    * The key to trigger the shortcut.
    */

@@ -1,9 +1,15 @@
-import { useLang } from '@rspress/core/runtime';
-import { Layout as BaseLayout } from '@rspress/core/theme-original';
+import { useLang, usePage } from '@rspress/core/runtime';
+import {
+  Layout as BaseLayout,
+  DocLayout as BasicDocLayout,
+  type DocLayoutProps,
+  Link,
+} from '@rspress/core/theme-original';
 import {
   Search as PluginAlgoliaSearch,
   ZH_LOCALES,
 } from '@rspress/plugin-algolia/runtime';
+import { BlogBackButton } from '@rstack-dev/doc-ui/blog-back-button';
 import { NavIcon } from '@rstack-dev/doc-ui/nav-icon';
 
 import { HomeLayout } from './pages';
@@ -26,9 +32,30 @@ const Search = () => {
   );
 };
 
+const DocLayout = (props: DocLayoutProps) => {
+  const { page } = usePage();
+  const lang = useLang();
+
+  return (
+    <BasicDocLayout
+      {...props}
+      beforeDocContent={
+        <>
+          <BlogBackButton
+            pathname={page.routePath}
+            lang={lang}
+            LinkComp={Link}
+          />
+          {props.beforeDocContent}
+        </>
+      }
+    />
+  );
+};
+
 const Layout = () => {
   return <BaseLayout beforeNavTitle={<NavIcon />} />;
 };
 
 export * from '@rspress/core/theme-original';
-export { HomeLayout, Layout, Search };
+export { DocLayout, HomeLayout, Layout, Search };

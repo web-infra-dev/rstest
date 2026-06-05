@@ -8,26 +8,32 @@ import type { Rspack } from '@rstest/core';
 import {
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
+  type CoverageMapData,
   color,
+  createCoverageProvider,
+  DEFAULT_TEST_TIMEOUT,
   type FormattedError,
+  getNoTestFilesMessage,
   getSetupFiles,
   getTestEntries,
   isDebug,
   type ListCommandResult,
   loadCoverageProvider,
   logger,
+  PhaseTracker,
   type ProjectContext,
   type Reporter,
-  type Rstest,
+  type RstestContext,
   type RuntimeConfig,
+  resolveProjectBuildCache,
+  RSTEST_ENV_SYMBOL_KEY,
   rsbuild,
   serializableConfig,
-  TEMP_RSTEST_OUTPUT_DIR,
   type Test,
   type TestFileResult,
   type TestResult,
   type UserConsoleLog,
-} from '@rstest/core/browser';
+} from '@rstest/core/internal/browser';
 import { type BirpcReturn, createBirpc } from 'birpc';
 import openEditor from 'open-editor';
 import { basename, dirname, join, normalize, relative, resolve } from 'pathe';
@@ -48,6 +54,7 @@ import type {
   BrowserDispatchRequest,
   BrowserDispatchResponse,
   BrowserHostConfig,
+  BrowserLogPayload,
   BrowserProjectRuntime,
   BrowserRpcRequest,
   BrowserViewport,
@@ -56,6 +63,7 @@ import type {
 } from './protocol';
 import {
   DISPATCH_MESSAGE_TYPE,
+  DISPATCH_NAMESPACE_BROWSER,
   DISPATCH_NAMESPACE_RUNNER,
   validateBrowserRpcRequest,
 } from './protocol';
@@ -92,6 +100,27 @@ type RsbuildInstance = rsbuild.RsbuildInstance;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OPTIONS_PLACEHOLDER = '__RSTEST_OPTIONS_PLACEHOLDER__';
+
+/**
+ * Extra time added on top of a file's `testTimeout` before the host gives up
+ * waiting for that file's RPC to settle. Covers fixed per-file overhead (page
+ * navigation, runner boot) that is not part of the user's test budget. The
+ * headless and headed scheduling paths both apply this same buffer, so it lives
+ * here as one constant to keep their per-file timeout semantics identical.
+ */
+const PER_FILE_TIMEOUT_BUFFER_MS = 30_000;
+
+/**
+ * Monotonic counter for synthetic per-file Perfetto `pid` values in `--trace`
+ * mode. Browser host runs every test file inside the same Node process, so
+ * without an override every file would emit events under the same `pid` and
+ * share a single track labelled `worker <hostPid>`. Giving each file its own
+ * synthetic `pid` makes the track title surface the file path instead,
+ * matching node mode's default `isolate: true` behavior. The 1_000_000_000
+ * base keeps each synthetic `pid` well clear of real OS `pid` values in
+ * mixed-mode traces.
+ */
+let nextBrowserFilePid = 1_000_000_000;
 
 /**
  * Serialize JSON for inline <script> injection.
@@ -149,14 +178,8 @@ type TestFileStartPayload = {
   projectName: string;
 };
 
-/** Payload for log event */
-type LogPayload = {
-  level: 'log' | 'warn' | 'error' | 'info' | 'debug';
-  content: string;
-  testPath: string;
-  type: 'stdout' | 'stderr';
-  trace?: string;
-};
+/** Payload for log event — single-sourced from the wire protocol. */
+type LogPayload = BrowserLogPayload;
 
 /** Payload for fatal error event */
 type FatalPayload = {
@@ -164,9 +187,10 @@ type FatalPayload = {
   stack?: string;
 };
 
-type ReporterHookArg<THook extends keyof Reporter> = Parameters<
-  NonNullable<Reporter[THook]>
->[0];
+type ReporterHookArg<THook extends keyof Reporter> =
+  NonNullable<Reporter[THook]> extends (...args: infer TArgs) => unknown
+    ? TArgs[0]
+    : never;
 
 type TestFileReadyPayload = ReporterHookArg<'onTestFileReady'>;
 type TestSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;
@@ -183,6 +207,14 @@ type DeferredPromise<T> = {
   promise: Promise<T>;
   resolve: (value: T | PromiseLike<T>) => void;
   reject: (reason?: unknown) => void;
+};
+
+const getFileTaskId = (testPath: string): string => {
+  return `file:${testPath}`;
+};
+
+const getBufferedLogTaskId = (log: UserConsoleLog): string => {
+  return log.taskId ?? getFileTaskId(log.testPath);
 };
 
 const createDeferredPromise = <T>(): DeferredPromise<T> => {
@@ -505,8 +537,9 @@ const applyDefaultWatchOptions = (
     rspackConfig.watchOptions.ignored.push('**/.git', '**/node_modules');
   }
 
-  rspackConfig.output?.path &&
+  if (rspackConfig.output?.path) {
     rspackConfig.watchOptions.ignored.push(rspackConfig.output.path);
+  }
 };
 
 type LazyCompilationModule = {
@@ -517,6 +550,30 @@ type BrowserLazyCompilationConfig = {
   imports: true;
   entries: false;
   test?: (module: LazyCompilationModule) => boolean;
+};
+
+/**
+ * Resolve the actual port the dev server is listening on.
+ *
+ * Rsbuild's `devServer.listen()` may return `0` when configured with
+ * `server.port: 0` because its internal `getPort` never reads back the
+ * OS-assigned ephemeral port.  This helper falls back to
+ * `httpServer.address()` to obtain the real bound port.
+ */
+export const resolveListenPort = (
+  listenPort: number,
+  httpServer: {
+    address: () => ReturnType<import('node:net').Server['address']>;
+  } | null,
+): number => {
+  if (listenPort) {
+    return listenPort;
+  }
+  const addr = httpServer?.address();
+  if (addr && typeof addr === 'object') {
+    return addr.port;
+  }
+  return listenPort;
 };
 
 export const createBrowserLazyCompilationConfig = (
@@ -543,11 +600,12 @@ export const createBrowserLazyCompilationConfig = (
   };
 };
 
-export const createBrowserRsbuildDevConfig = (isWatchMode: boolean) => {
+export const createBrowserRsbuildDevConfig = (_isWatchMode: boolean) => {
   return {
-    // Disable HMR in non-watch mode (tests run once and exit).
-    // Aligns with node mode behavior (packages/core/src/core/rsbuild.ts).
-    hmr: isWatchMode,
+    writeToDisk: isDebug(),
+    // Keep HMR enabled in browser mode even for one-shot runs.
+    // lazyCompilation depends on HMR runtime wiring for async import chains.
+    hmr: true,
     client: {
       logLevel: 'error' as const,
     },
@@ -769,12 +827,25 @@ const getRuntimeConfigFromProject = (
     env,
     bail,
     logHeapUsage,
+    detectAsyncLeaks,
     chaiConfig,
     includeTaskLocation,
+    silent,
   } = project.normalizedConfig;
 
   return {
-    env,
+    // Propagate NODE_ENV and the RSTEST flag from the host so
+    // `process.env.NODE_ENV` / `process.env.RSTEST` (rewritten to the
+    // `RSTEST_ENV_SYMBOL_KEY` symbol store) resolve in browser tests the same
+    // way they do in Node mode, where `prepare.ts` sets them on the real
+    // `process.env`.
+    // User-supplied `env` wins so explicit overrides still take effect.
+    // See https://github.com/web-infra-dev/rstest/issues/1351
+    env: {
+      NODE_ENV: process.env.NODE_ENV,
+      RSTEST: 'true',
+      ...env,
+    },
     testNamePattern,
     testTimeout,
     hookTimeout,
@@ -796,12 +867,14 @@ const getRuntimeConfigFromProject = (
     snapshotFormat,
     bail,
     logHeapUsage,
+    detectAsyncLeaks,
     chaiConfig,
     includeTaskLocation,
+    silent,
   };
 };
 
-const getBrowserProjects = (context: Rstest): ProjectContext[] => {
+const getBrowserProjects = (context: RstestContext): ProjectContext[] => {
   return context.projects.filter(
     (project) => project.normalizedConfig.browser.enabled,
   );
@@ -873,7 +946,7 @@ const resolveProviderForTestPath = ({
 };
 
 const collectProjectEntries = async (
-  context: Rstest,
+  context: RstestContext,
 ): Promise<BrowserProjectEntries[]> => {
   // Only collect entries for browser mode projects
   const browserProjects = getBrowserProjects(context);
@@ -891,6 +964,7 @@ const collectProjectEntries = async (
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
         fileFilters: context.fileFilters || [],
+        fileFilterMode: context.fileFilterMode,
       });
 
       const setup = getSetupFiles(setupFiles, project.rootPath);
@@ -1147,7 +1221,7 @@ const createBrowserRuntime = async ({
   containerDevServer,
   forceHeadless,
 }: {
-  context: Rstest;
+  context: RstestContext;
   manifestPath: string;
   manifestSource: string;
   tempDir: string;
@@ -1193,7 +1267,7 @@ const createBrowserRuntime = async ({
 
   // Rstest internal aliases that must not be overridden by user config
   const browserRuntimePath = fileURLToPath(
-    import.meta.resolve('@rstest/core/browser-runtime'),
+    import.meta.resolve('@rstest/core/internal/browser-runtime'),
   );
 
   const rstestInternalAliases = {
@@ -1204,7 +1278,7 @@ const createBrowserRuntime = async ({
     '@rstest/browser': resolveBrowserFile('browser.ts'),
     // Browser runtime APIs for entry.ts and public.ts
     // Uses dist file with extractSourceMap to preserve sourcemap chain for inline snapshots
-    '@rstest/core/browser-runtime': browserRuntimePath,
+    '@rstest/core/internal/browser-runtime': browserRuntimePath,
     '@sinonjs/fake-timers': resolveBrowserFile('client/fakeTimersStub.ts'),
   };
 
@@ -1255,60 +1329,83 @@ const createBrowserRuntime = async ({
             }
 
             const userRsbuildConfig = project.normalizedConfig;
+            const buildCache = resolveProjectBuildCache({
+              context,
+              project,
+            });
             const setupFiles = Object.values(
               getSetupFiles(
                 project.normalizedConfig.setupFiles,
                 project.rootPath,
               ),
             );
+            // rspack `define` replaces `process.env` / `import.meta.env` with
+            // this literal expression. JSON.stringify reproduces the exact
+            // double-quoted `"rstest.env"` text, so the owned key can never
+            // drift from the runtime `Symbol.for(RSTEST_ENV_SYMBOL_KEY)` sites.
+            const rstestEnvDefine = `globalThis[Symbol.for(${JSON.stringify(
+              RSTEST_ENV_SYMBOL_KEY,
+            )})]`;
             // Merge order: current config -> userConfig -> rstest required config (highest priority)
-            const merged = mergeEnvironmentConfig(config, userRsbuildConfig, {
-              resolve: {
-                alias: rstestInternalAliases,
+            const merged = mergeEnvironmentConfig(
+              config,
+              {
+                ...userRsbuildConfig,
+                performance: buildCache
+                  ? {
+                      ...userRsbuildConfig.performance,
+                      buildCache,
+                    }
+                  : userRsbuildConfig.performance,
               },
-              source: {
-                define: {
-                  'process.env': 'globalThis[Symbol.for("rstest.env")]',
-                  'import.meta.env': 'globalThis[Symbol.for("rstest.env")]',
+              {
+                resolve: {
+                  alias: rstestInternalAliases,
+                },
+                source: {
+                  define: {
+                    'process.env': rstestEnvDefine,
+                    'import.meta.env': rstestEnvDefine,
+                  },
+                },
+                output: {
+                  target: 'web',
+                  // Enable source map for inline snapshot support
+                  sourceMap: {
+                    js: 'source-map',
+                  },
+                },
+                tools: {
+                  rspack: (rspackConfig) => {
+                    rspackConfig.mode = 'development';
+                    rspackConfig.lazyCompilation =
+                      createBrowserLazyCompilationConfig(setupFiles);
+                    rspackConfig.plugins = rspackConfig.plugins || [];
+                    rspackConfig.plugins.push(virtualManifestPlugin);
+
+                    applyDefaultWatchOptions(rspackConfig, isWatchMode);
+
+                    // Extract and merge sourcemaps from pre-built @rstest/core files
+                    // This preserves the sourcemap chain for inline snapshot support
+                    // See: https://rspack.dev/config/module-rules#rulesextractsourcemap
+                    const browserRuntimeDir = dirname(browserRuntimePath);
+                    rspackConfig.module = rspackConfig.module || {};
+                    rspackConfig.module.rules = rspackConfig.module.rules || [];
+                    rspackConfig.module.rules.unshift({
+                      test: /\.js$/,
+                      include: browserRuntimeDir,
+                      extractSourceMap: true,
+                    });
+
+                    if (isDebug()) {
+                      logger.log(
+                        `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
+                      );
+                    }
+                  },
                 },
               },
-              output: {
-                target: 'web',
-                // Enable source map for inline snapshot support
-                sourceMap: {
-                  js: 'source-map',
-                },
-              },
-              tools: {
-                rspack: (rspackConfig) => {
-                  rspackConfig.mode = 'development';
-                  rspackConfig.lazyCompilation =
-                    createBrowserLazyCompilationConfig(setupFiles);
-                  rspackConfig.plugins = rspackConfig.plugins || [];
-                  rspackConfig.plugins.push(virtualManifestPlugin);
-
-                  applyDefaultWatchOptions(rspackConfig, isWatchMode);
-
-                  // Extract and merge sourcemaps from pre-built @rstest/core files
-                  // This preserves the sourcemap chain for inline snapshot support
-                  // See: https://rspack.dev/config/module-rules#rulesextractsourcemap
-                  const browserRuntimeDir = dirname(browserRuntimePath);
-                  rspackConfig.module = rspackConfig.module || {};
-                  rspackConfig.module.rules = rspackConfig.module.rules || [];
-                  rspackConfig.module.rules.unshift({
-                    test: /\.js$/,
-                    include: browserRuntimeDir,
-                    extractSourceMap: true,
-                  });
-
-                  if (isDebug()) {
-                    logger.log(
-                      `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
-                    );
-                  }
-                },
-              },
-            });
+            );
 
             // Completely overwrite entry to prevent Rsbuild default entry detection from taking effect.
             // In browser mode, entry is fully controlled by rstest (not user's src/index.ts).
@@ -1390,6 +1487,18 @@ const createBrowserRuntime = async ({
   const devServer = await rsbuildInstance.createDevServer({
     getPortSilently: true,
   });
+
+  if (isDebug()) {
+    await rsbuildInstance.inspectConfig({
+      writeToDisk: true,
+      extraConfigs: {
+        rstest: {
+          ...context.normalizedConfig,
+          projects: browserProjects.map((p) => p.normalizedConfig),
+        },
+      },
+    });
+  }
 
   // Serve prebuilt container assets (SPA) via sirv
   const serveContainer = containerDistPath
@@ -1539,7 +1648,8 @@ const createBrowserRuntime = async ({
     },
   );
 
-  const { port } = await devServer.listen();
+  const { port: listenPort } = await devServer.listen();
+  const port = resolveListenPort(listenPort, devServer.httpServer);
 
   // Create WebSocket server on an available port
   // Using port: 0 lets the OS assign an available port, avoiding conflicts
@@ -1576,15 +1686,15 @@ const createBrowserRuntime = async ({
       dispatchHandlers,
       wss,
     };
-  } catch (_error) {
+  } catch (error) {
     wss.close();
     await devServer.close();
-    throw _error;
+    throw error;
   }
 };
 
 async function resolveProjectEntries(
-  context: Rstest,
+  context: RstestContext,
   shardedEntries?: Map<string, { entries: Record<string, string> }>,
 ): Promise<BrowserProjectEntries[]> {
   if (shardedEntries) {
@@ -1614,11 +1724,25 @@ async function resolveProjectEntries(
 // ============================================================================
 
 export const runBrowserController = async (
-  context: Rstest,
+  context: RstestContext,
   options?: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> => {
-  const { skipOnTestRunEnd = false } = options ?? {};
+  const {
+    skipOnTestRunEnd = false,
+    allowEmptyWatchRun = false,
+    onTraceEvents,
+  } = options ?? {};
   const buildStart = Date.now();
+  const isWatchMode = context.command === 'watch';
+
+  // Per-file PhaseTrackers, populated only when `--trace` is on (caller
+  // passes `onTraceEvents`). The browser host shares one Node process across
+  // every test file, so each tracker is assigned a synthetic per-file pid
+  // (`nextBrowserFilePid`) that lets Perfetto render each file as its own
+  // process track with the file path as the title.
+  const phaseTrackers = onTraceEvents
+    ? new Map<string, PhaseTracker>()
+    : undefined;
   const browserProjects = getBrowserProjects(context);
   const useHeadlessDirect = browserProjects.every(
     (project) => project.normalizedConfig.browser.headless,
@@ -1746,6 +1870,13 @@ export const runBrowserController = async (
     }
   };
 
+  const coverageConfig = browserProjects.find(
+    (project) => project.normalizedConfig.coverage?.enabled,
+  )?.normalizedConfig.coverage;
+  const coverageProvider = coverageConfig?.enabled
+    ? await createCoverageProvider(coverageConfig, context.rootPath)
+    : null;
+
   const notifyTestRunEnd = async ({
     duration,
     unhandledErrors,
@@ -1763,9 +1894,26 @@ export const runBrowserController = async (
       return;
     }
 
+    // Merge per-file coverage into a single CoverageMapData for reporters
+    let mergedCoverage: CoverageMapData | undefined;
+    if (coverageProvider) {
+      const coverageMap = coverageProvider.createCoverageMap();
+      let hasCoverage = false;
+      for (const result of context.reporterResults.results) {
+        if (result.coverage) {
+          coverageMap.merge(result.coverage);
+          hasCoverage = true;
+        }
+      }
+      if (hasCoverage) {
+        mergedCoverage = coverageMap.toJSON();
+      }
+    }
+
     for (const reporter of context.reporters) {
       await reporter.onTestRunEnd?.({
         results: context.reporterResults.results,
+        coverage: mergedCoverage,
         testResults: context.reporterResults.testResults,
         duration,
         snapshotSummary: context.snapshotManager.summary,
@@ -1811,36 +1959,57 @@ export const runBrowserController = async (
     (total, item) => total + item.testFiles.length,
     0,
   );
+  const shouldKeepWatchingWithEmptySet = isWatchMode && allowEmptyWatchRun;
 
   if (totalTests === 0) {
     const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
     if (!skipOnTestRunEnd) {
-      const message = `No test files found, exiting with code ${code}.`;
+      const message = shouldKeepWatchingWithEmptySet
+        ? 'No test files found.'
+        : getNoTestFilesMessage({
+            context,
+            code,
+            defaultMessage: `No test files found, exiting with code ${code}.`,
+          });
       if (code === 0) {
         logger.log(color.yellow(message));
       } else {
         logger.error(color.red(message));
       }
+
+      if (context.relatedFilters?.length) {
+        logger.log(
+          color.gray('related: '),
+          context.relatedFilters.join(color.gray(', ')),
+        );
+      } else if (context.fileFilters?.length) {
+        logger.log(
+          color.gray('filter: '),
+          context.fileFilters.join(color.gray(', ')),
+        );
+      }
     }
 
-    if (code !== 0) {
+    if (code !== 0 && !shouldKeepWatchingWithEmptySet) {
       ensureProcessExitCode(code);
     }
-    return;
+    if (!shouldKeepWatchingWithEmptySet) {
+      return;
+    }
   }
 
   await notifyTestRunStart();
 
-  const isWatchMode = context.command === 'watch';
   const enableCliShortcuts = isWatchMode && isBrowserWatchCliShortcutsEnabled();
+  const browserTempOutputRoot = context.normalizedConfig.output.distPath.root;
   const tempDir =
     isWatchMode && watchContext.runtime
       ? watchContext.runtime.tempDir
       : isWatchMode
-        ? join(context.rootPath, TEMP_RSTEST_OUTPUT_DIR, 'browser', 'watch')
+        ? join(context.rootPath, browserTempOutputRoot, 'browser', 'watch')
         : join(
             context.rootPath,
-            TEMP_RSTEST_OUTPUT_DIR,
+            browserTempOutputRoot,
             'browser',
             Date.now().toString(),
           );
@@ -1921,7 +2090,9 @@ export const runBrowserController = async (
 
   // Get max testTimeout from all browser projects for RPC timeout
   const maxTestTimeoutForRpc = Math.max(
-    ...browserProjects.map((p) => p.normalizedConfig.testTimeout ?? 5000),
+    ...browserProjects.map(
+      (p) => p.normalizedConfig.testTimeout ?? DEFAULT_TEST_TIMEOUT,
+    ),
   );
 
   const hostOptions: BrowserHostConfig = {
@@ -2009,13 +2180,16 @@ export const runBrowserController = async (
     }
   };
 
-  runtime.dispatchHandlers.set('browser', async (dispatchRequest) => {
-    const request = validateBrowserRpcRequest(dispatchRequest.args);
-    return dispatchBrowserRpcRequest({
-      request,
-      target: dispatchRequest.target,
-    });
-  });
+  runtime.dispatchHandlers.set(
+    DISPATCH_NAMESPACE_BROWSER,
+    async (dispatchRequest) => {
+      const request = validateBrowserRpcRequest(dispatchRequest.args);
+      return dispatchBrowserRpcRequest({
+        request,
+        target: dispatchRequest.target,
+      });
+    },
+  );
 
   runtime.setContainerOptions(hostOptions);
 
@@ -2061,9 +2235,21 @@ export const runBrowserController = async (
   const handleTestFileStart = async (
     payload: TestFileStartPayload,
   ): Promise<void> => {
+    if (phaseTrackers) {
+      const tracker = new PhaseTracker({
+        trace: {
+          testPath: payload.testPath,
+          project: payload.projectName,
+        },
+        pid: nextBrowserFilePid++,
+      });
+      tracker.transition('prepare');
+      phaseTrackers.set(payload.testPath, tracker);
+    }
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestFileStart?.({
+          testId: getFileTaskId(payload.testPath),
           testPath: payload.testPath,
           tests: [],
         }),
@@ -2074,6 +2260,7 @@ export const runBrowserController = async (
   const handleTestFileReady = async (
     payload: TestFileReadyPayload,
   ): Promise<void> => {
+    phaseTrackers?.get(payload.testPath)?.transition('tests');
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestFileReady?.(payload),
@@ -2084,6 +2271,7 @@ export const runBrowserController = async (
   const handleTestSuiteStart = async (
     payload: TestSuiteStartPayload,
   ): Promise<void> => {
+    phaseTrackers?.get(payload.testPath)?.recordSuiteStart(payload);
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestSuiteStart?.(payload),
@@ -2094,16 +2282,28 @@ export const runBrowserController = async (
   const handleTestSuiteResult = async (
     payload: TestSuiteResultPayload,
   ): Promise<void> => {
+    phaseTrackers?.get(payload.testPath)?.recordSuiteResult(payload);
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestSuiteResult?.(payload),
       ),
     );
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+        taskParentNames: payload.parentNames,
+        taskType: 'suite',
+        testPath: payload.testPath,
+      });
+    }
   };
 
   const handleTestCaseStart = async (
     payload: TestCaseStartPayload,
   ): Promise<void> => {
+    phaseTrackers?.get(payload.testPath)?.recordCaseStart(payload);
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestCaseStart?.(payload),
@@ -2113,11 +2313,22 @@ export const runBrowserController = async (
 
   const handleTestCaseResult = async (payload: TestResult): Promise<void> => {
     caseResults.push(payload);
+    phaseTrackers?.get(payload.testPath)?.recordCaseResult(payload);
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestCaseResult?.(payload),
       ),
     );
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+        taskParentNames: payload.parentNames,
+        taskType: 'case',
+        testPath: payload.testPath,
+      });
+    }
   };
 
   const handleTestFileComplete = async (
@@ -2128,6 +2339,27 @@ export const runBrowserController = async (
     if (payload.snapshotResult) {
       context.snapshotManager.add(payload.snapshotResult);
     }
+
+    if (phaseTrackers) {
+      const tracker = phaseTrackers.get(payload.testPath);
+      if (tracker) {
+        tracker.end();
+        const events = tracker.getTraceEvents();
+        if (events) onTraceEvents?.(events);
+        phaseTrackers.delete(payload.testPath);
+      }
+    }
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+        taskParentNames: payload.parentNames,
+        taskType: 'file',
+        testPath: payload.testPath,
+      });
+    }
+
     await Promise.all(
       context.reporters.map((reporter) =>
         (reporter as Reporter).onTestFileResult?.(payload),
@@ -2142,19 +2374,28 @@ export const runBrowserController = async (
     const log: UserConsoleLog = {
       content: payload.content,
       name: payload.level,
+      taskId: payload.taskId,
+      taskName: payload.taskName,
+      taskParentNames: payload.taskParentNames,
+      taskType: payload.taskType,
       testPath: payload.testPath,
       type: payload.type,
       trace: payload.trace,
     };
-    const shouldLog =
-      context.normalizedConfig.onConsoleLog?.(log.content) ?? true;
-    if (shouldLog) {
-      await Promise.all(
-        context.reporters.map((reporter) =>
-          (reporter as Reporter).onUserConsoleLog?.(log),
-        ),
-      );
+    if (context.normalizedConfig.silent === true) {
+      return;
     }
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      bufferConsoleLog(log);
+      return;
+    }
+
+    if (context.normalizedConfig.disableConsoleIntercept) {
+      return;
+    }
+
+    await emitUserConsoleLog(log);
   };
 
   const handleFatal = async (payload: FatalPayload): Promise<void> => {
@@ -2162,6 +2403,115 @@ export const runBrowserController = async (
     error.stack = payload.stack;
     fatalError = error;
     ensureProcessExitCode(1);
+  };
+
+  const bufferedConsoleLogs = new Map<string, UserConsoleLog[]>();
+  const suiteIdsByChain = new Map<string, string>();
+
+  const getSuiteChainKey = (names: string[]): string => {
+    return names.join('\u0000');
+  };
+
+  const pushTaskId = (taskIds: string[], taskId: string): void => {
+    if (!taskIds.includes(taskId)) {
+      taskIds.push(taskId);
+    }
+  };
+
+  const shouldEmitUserConsoleLog = (log: UserConsoleLog): boolean => {
+    return (
+      context.normalizedConfig.onConsoleLog?.(log.content, log.type) !== false
+    );
+  };
+
+  const emitUserConsoleLog = async (log: UserConsoleLog): Promise<void> => {
+    if (!shouldEmitUserConsoleLog(log)) {
+      return;
+    }
+
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onUserConsoleLog?.(log),
+      ),
+    );
+  };
+
+  const bufferConsoleLog = (log: UserConsoleLog): void => {
+    const taskId = getBufferedLogTaskId(log);
+    const logs = bufferedConsoleLogs.get(taskId) || [];
+    logs.push(log);
+    bufferedConsoleLogs.set(taskId, logs);
+
+    if (log.taskType === 'suite' && log.taskId) {
+      suiteIdsByChain.set(
+        getSuiteChainKey([...(log.taskParentNames || []), log.taskName || '']),
+        log.taskId,
+      );
+    }
+  };
+
+  const flushBufferedLogsForTask = async ({
+    taskId,
+    status,
+    taskParentNames,
+    taskType,
+    testPath,
+  }: {
+    taskId: string;
+    status: TestResult['status'];
+    taskParentNames?: string[];
+    taskType?: 'file' | 'suite' | 'case';
+    testPath: string;
+  }): Promise<void> => {
+    if (status !== 'fail') {
+      bufferedConsoleLogs.delete(taskId);
+      return;
+    }
+
+    const taskIdsToFlush: string[] = [];
+
+    if (taskType === 'case') {
+      pushTaskId(taskIdsToFlush, getFileTaskId(testPath));
+
+      const suiteNames = taskParentNames || [];
+      for (let i = 0; i < suiteNames.length; i++) {
+        const suiteId = suiteIdsByChain.get(
+          getSuiteChainKey(suiteNames.slice(0, i + 1)),
+        );
+
+        if (suiteId) {
+          pushTaskId(taskIdsToFlush, suiteId);
+        }
+      }
+
+      pushTaskId(taskIdsToFlush, taskId);
+    }
+
+    if (taskType === 'suite') {
+      pushTaskId(taskIdsToFlush, getFileTaskId(testPath));
+      pushTaskId(taskIdsToFlush, taskId);
+    }
+
+    if (taskType === 'file') {
+      pushTaskId(taskIdsToFlush, taskId);
+    }
+
+    for (const bufferedTaskId of taskIdsToFlush) {
+      const logs = bufferedConsoleLogs.get(bufferedTaskId);
+      if (!logs) {
+        continue;
+      }
+
+      bufferedConsoleLogs.delete(bufferedTaskId);
+
+      for (const log of logs) {
+        await Promise.all(
+          context.reporters.map((reporter) =>
+            (reporter as Reporter).onUserConsoleLog?.(log),
+          ),
+        );
+      }
+    }
   };
 
   const runSnapshotRpc = async (
@@ -2179,8 +2529,12 @@ export const runBrowserController = async (
         );
       case 'removeSnapshotFile':
         return snapshotRpcMethods.removeSnapshotFile(request.args.filepath);
-      default:
-        return undefined;
+      default: {
+        // Exhaustiveness guard: a new SnapshotRpcRequest method without a case
+        // here fails to compile rather than silently returning undefined.
+        const _exhaustive: never = request;
+        return _exhaustive;
+      }
     }
   };
 
@@ -2270,7 +2624,7 @@ export const runBrowserController = async (
       message: BrowserClientMessage,
     ): Promise<void> => {
       const response = await dispatchRouter.dispatch({
-        requestId: nextDispatchRequestId('runner'),
+        requestId: nextDispatchRequestId(DISPATCH_NAMESPACE_RUNNER),
         runToken: run.token,
         namespace: DISPATCH_NAMESPACE_RUNNER,
         method: message.type,
@@ -2327,7 +2681,7 @@ export const runBrowserController = async (
       );
       const perFileTimeoutMs =
         (projectRuntime?.runtimeConfig.testTimeout ?? maxTestTimeoutForRpc) +
-        30_000;
+        PER_FILE_TIMEOUT_BUFFER_MS;
 
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -2550,6 +2904,69 @@ export const runBrowserController = async (
       },
     });
 
+    if (allTestFiles.length === 0) {
+      const duration = {
+        totalTime: buildTime,
+        buildTime,
+        testTime: 0,
+      };
+      const result = {
+        results: reporterResults,
+        testResults: caseResults,
+        duration,
+        hasFailure: false,
+        getSourcemap: getBrowserSourcemap,
+        resolveSourcemap: resolveBrowserSourcemap,
+        close: skipOnTestRunEnd
+          ? async () => {
+              sessionRegistry.clear();
+              await destroyBrowserRuntime(runtime);
+            }
+          : undefined,
+      };
+
+      if (!skipOnTestRunEnd) {
+        await notifyTestRunEnd({ duration });
+      }
+
+      if (isWatchMode) {
+        triggerRerun = async () => {
+          const newProjectEntries = await collectProjectEntries(context);
+          const rerunPlan = planWatchRerun({
+            projectEntries: newProjectEntries,
+            previousTestFiles: watchContext.lastTestFiles,
+            affectedTestFiles: watchContext.affectedTestFiles,
+          });
+          watchContext.affectedTestFiles = [];
+
+          if (rerunPlan.filesChanged) {
+            watchContext.lastTestFiles = rerunPlan.currentTestFiles;
+            if (rerunPlan.currentTestFiles.length === 0) {
+              logger.log(
+                color.cyan('No browser test files remain after update.\n'),
+              );
+              logBrowserWatchReadyMessage(enableCliShortcuts);
+              return;
+            }
+
+            logger.log(
+              color.cyan(
+                `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
+              ),
+            );
+            void latestRerunScheduler.enqueueLatest(rerunPlan.currentTestFiles);
+            return;
+          }
+
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+        };
+        watchContext.hooksEnabled = true;
+        logBrowserWatchReadyMessage(enableCliShortcuts);
+      }
+
+      return result;
+    }
+
     const testStart = Date.now();
     await runFilesWithPool(allTestFiles);
     const testTime = Date.now() - testStart;
@@ -2663,6 +3080,12 @@ export const runBrowserController = async (
   }
 
   let currentTestFiles = allTestFiles;
+  // Coincidentally equal to the runner-side CONFIG_WAIT_TIMEOUT_MS and
+  // DEFAULT_RPC_TIMEOUT_MS (client/entry.ts, client/dispatchTransport.ts) but
+  // semantically distinct and in a different runtime, so deliberately NOT shared
+  // with them. Invariant worth preserving: a runner must be able to receive its
+  // config (config-wait) before the host declares its frames un-ready, i.e.
+  // CONFIG_WAIT_TIMEOUT_MS <= RUNNER_FRAMES_READY_TIMEOUT_MS.
   const RUNNER_FRAMES_READY_TIMEOUT_MS = 30_000;
   let currentRunnerFramesSignature: string | null = null;
   const runnerFramesWaiters = new Map<string, Set<() => void>>();
@@ -2695,7 +3118,6 @@ export const runBrowserController = async (
     await new Promise<void>((resolve, reject) => {
       const waiters =
         runnerFramesWaiters.get(signature) ?? new Set<() => void>();
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
       const cleanup = () => {
         const currentWaiters = runnerFramesWaiters.get(signature);
@@ -2716,7 +3138,7 @@ export const runBrowserController = async (
         resolve();
       };
 
-      timeoutId = setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         cleanup();
         reject(
           new Error(
@@ -2751,7 +3173,7 @@ export const runBrowserController = async (
     );
     return (
       (projectRuntime?.runtimeConfig.testTimeout ?? maxTestTimeoutForRpc) +
-      30_000
+      PER_FILE_TIMEOUT_BUFFER_MS
     );
   };
 
@@ -3027,24 +3449,27 @@ export const runBrowserController = async (
     });
   };
 
-  const testStart = Date.now();
-  try {
-    await waitForRunnerFramesReady(
-      currentTestFiles.map((file) => file.testPath),
-    );
+  let testTime = 0;
+  if (currentTestFiles.length > 0) {
+    const testStart = Date.now();
+    try {
+      await waitForRunnerFramesReady(
+        currentTestFiles.map((file) => file.testPath),
+      );
 
-    for (const file of currentTestFiles) {
-      await enqueueHeadedReload(file);
-      if (fatalError) {
-        break;
+      for (const file of currentTestFiles) {
+        await enqueueHeadedReload(file);
+        if (fatalError) {
+          break;
+        }
       }
+    } catch (error) {
+      fatalError = fatalError ?? toError(error);
+      ensureProcessExitCode(1);
     }
-  } catch (error) {
-    fatalError = fatalError ?? toError(error);
-    ensureProcessExitCode(1);
-  }
 
-  const testTime = Date.now() - testStart;
+    testTime = Date.now() - testStart;
+  }
 
   // Define rerun logic for watch mode
   if (isWatchMode) {
@@ -3068,6 +3493,13 @@ export const runBrowserController = async (
         watchContext.lastTestFiles = rerunPlan.currentTestFiles;
         currentTestFiles = rerunPlan.currentTestFiles;
         await rpcManager.notifyTestFileUpdate(currentTestFiles);
+        if (currentTestFiles.length === 0) {
+          logger.log(
+            color.cyan('No browser test files remain after update.\n'),
+          );
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+          return;
+        }
         await waitForRunnerFramesReady(
           currentTestFiles.map((file) => file.testPath),
         );
@@ -3204,7 +3636,7 @@ export type ListBrowserTestsResult = {
  * and collects their test structure (describe/test declarations).
  */
 export const listBrowserTests = async (
-  context: Rstest,
+  context: RstestContext,
   options?: {
     shardedEntries?: Map<string, { entries: Record<string, string> }>;
   },
@@ -3227,7 +3659,7 @@ export const listBrowserTests = async (
 
   const tempDir = join(
     context.rootPath,
-    TEMP_RSTEST_OUTPUT_DIR,
+    context.normalizedConfig.output.distPath.root,
     'browser',
     `list-${Date.now()}`,
   );
@@ -3283,7 +3715,9 @@ export const listBrowserTests = async (
 
   // Get max testTimeout from all browser projects for RPC timeout
   const maxTestTimeoutForRpc = Math.max(
-    ...browserProjects.map((p) => p.normalizedConfig.testTimeout ?? 5000),
+    ...browserProjects.map(
+      (p) => p.normalizedConfig.testTimeout ?? DEFAULT_TEST_TIMEOUT,
+    ),
   );
 
   const hostOptions: BrowserHostConfig = {

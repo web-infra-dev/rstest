@@ -1,6 +1,6 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
-import { castArray, TEMP_RSTEST_OUTPUT_DIR_GLOB } from '../../utils';
+import { castArray, getTempRstestOutputDirGlob } from '../../utils';
 
 class TestFileWatchPlugin {
   private readonly contextToWatch: string | null = null;
@@ -42,6 +42,7 @@ export const pluginEntryWatch: (params: {
 }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
+    const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
     api.modifyRspackConfig(async (config, { environment }) => {
       if (isWatch) {
         config.plugins.push(new TestFileWatchPlugin(environment.config.root));
@@ -71,7 +72,7 @@ export const pluginEntryWatch: (params: {
         }
 
         config.watchOptions.ignored.push(
-          TEMP_RSTEST_OUTPUT_DIR_GLOB,
+          getTempRstestOutputDirGlob(outputDistPathRoot),
           context.normalizedConfig.coverage.reportsDirectory,
           // ignore global setup files since they are only run once
           ...Object.values(globalSetupFiles?.[environment.name] || {}),

@@ -68,3 +68,5 @@ export default defineConfig({
 +  include: ['**/index.test.ts'],
 });
 ```
+
+It should be noted that for a single extension you should write `**/*.ts` instead of `**/*.{ts}`. The underlying glob libraries treat single-value braces literally, so `**/*.{ts}` will not match `.ts` files.

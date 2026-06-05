@@ -5,7 +5,8 @@
     "rootDir": "src",
     "composite": true,
     "isolatedDeclarations": true,
-    "declarationMap": true
+    "declarationMap": true,
+    "types": ["node"]
   },
   "include": ["src"]
 }

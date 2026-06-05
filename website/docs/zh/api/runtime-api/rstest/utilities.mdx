@@ -2,41 +2,56 @@
 description: 提供一些实用的工具函数，如模拟环境变量、全局变量等。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Utilities
 
 一些实用的工具函数。
 
-## rstest.stubEnv
+## rs.stubEnv
 
-- **别名：** `rs.stubEnv`
+- **别名：** `rstest.stubEnv`
 
-- **类型：** `(name: string, value: string | undefined) => Rstest`
+- **类型：** `(name: string, value: string | undefined) => Rstest & Disposable`
 
 临时设置 `process.env` 和 `import.meta.env` 中的环境变量为指定值。适用于测试依赖环境变量的代码。
 
 - 如果 `value` 为 `undefined`，该变量会从 `process.env` 和 `import.meta.env` 中移除。
 - 可多次调用以模拟多个环境变量。
-- 使用 `rstest.unstubAllEnvs()` 可恢复所有通过此方法更改的环境变量。
+- 使用 `rs.unstubAllEnvs()` 可恢复所有通过此方法更改的环境变量。
+
+**Disposable / `using` 语法**
+
+<ApiMeta addedVersion="0.10.3" />
+
+Rstest 支持使用 `using` 语法在代码块退出时自动恢复当前作用域内的 env stub。
 
 **示例：**
 
 ```ts
-rstest.stubEnv('NODE_ENV', 'test');
+rs.stubEnv('NODE_ENV', 'test');
 expect(process.env.NODE_ENV).toBe('test');
 expect(import.meta.env.NODE_ENV).toBe('test');
 
-rstest.stubEnv('MY_VAR', undefined);
+rs.stubEnv('MY_VAR', undefined);
 expect(process.env.MY_VAR).toBeUndefined();
 expect(import.meta.env.MY_VAR).toBeUndefined();
 ```
 
-## rstest.unstubAllEnvs
+```ts
+{
+  using _env = rs.stubEnv('NODE_ENV', 'test');
+  expect(process.env.NODE_ENV).toBe('test');
+}
+```
 
-- **别名：** `rs.unstubAllEnvs`
+## rs.unstubAllEnvs
+
+- **别名：** `rstest.unstubAllEnvs`
 
 - **类型：** `() => Rstest`
 
-恢复所有通过 `rstest.stubEnv` 更改的环境变量到原始值。
+恢复所有通过 `rs.stubEnv` 更改的环境变量到原始值。
 
 - 测试后调用此方法以清理环境变量。
 - 如果配置项 `unstubEnvs` 启用，则每个测试前会自动调用。
@@ -44,40 +59,53 @@ expect(import.meta.env.MY_VAR).toBeUndefined();
 **示例：**
 
 ```ts
-rstest.stubEnv('NODE_ENV', 'test');
+rs.stubEnv('NODE_ENV', 'test');
 // ... 执行相关代码
-rstest.unstubAllEnvs();
+rs.unstubAllEnvs();
 expect(process.env.NODE_ENV).not.toBe('test');
 ```
 
-## rstest.stubGlobal
+## rs.stubGlobal
 
-- **别名：** `rs.stubGlobal`
+- **别名：** `rstest.stubGlobal`
 
-- **类型：** `(name: string | number | symbol, value: unknown) => Rstest`
+- **类型：** `(name: string | number | symbol, value: unknown) => Rstest & Disposable`
 
 临时设置全局变量为指定值。适用于模拟全局对象或函数。
 
 - 可多次调用以模拟多个全局变量。
-- 使用 `rstest.unstubAllGlobals()` 可恢复所有通过此方法更改的全局变量。
+- 使用 `rs.unstubAllGlobals()` 可恢复所有通过此方法更改的全局变量。
+
+**Disposable / `using` 语法**
+
+<ApiMeta addedVersion="0.10.3" />
+
+Rstest 支持使用 `using` 语法在代码块退出时自动恢复当前作用域内的 global stub。
 
 **示例：**
 
 ```ts
-rstest.stubGlobal('myGlobal', 123);
+rs.stubGlobal('myGlobal', 123);
 expect(globalThis.myGlobal).toBe(123);
 
-rstest.stubGlobal(Symbol.for('foo'), 'bar');
+rs.stubGlobal(Symbol.for('foo'), 'bar');
 expect(globalThis[Symbol.for('foo')]).toBe('bar');
 ```
 
-## rstest.unstubAllGlobals
+```ts
+{
+  using _global = rs.stubGlobal('myGlobal', 123);
+  expect(globalThis.myGlobal).toBe(123);
+}
+```
 
-- **别名：** `rs.unstubAllGlobals`
+## rs.unstubAllGlobals
+
+- **别名：** `rstest.unstubAllGlobals`
 
 - **类型：** `() => Rstest`
 
-恢复所有通过 `rstest.stubGlobal` 更改的全局变量到原始值。
+恢复所有通过 `rs.stubGlobal` 更改的全局变量到原始值。
 
 - 测试后调用此方法以清理全局变量。
 - 如果配置项 `unstubGlobals` 启用，则每个测试前会自动调用。
@@ -85,15 +113,15 @@ expect(globalThis[Symbol.for('foo')]).toBe('bar');
 **示例：**
 
 ```ts
-rstest.stubGlobal('myGlobal', 123);
+rs.stubGlobal('myGlobal', 123);
 // ... 执行相关代码
-rstest.unstubAllGlobals();
+rs.unstubAllGlobals();
 expect(globalThis.myGlobal).toBeUndefined();
 ```
 
-## rstest.setConfig
+## rs.setConfig
 
-- **别名：** `rs.setConfig`
+- **别名：** `rstest.setConfig`
 
 - **类型：**
 
@@ -116,22 +144,22 @@ type SetConfig = (config: RuntimeConfig) => void;
 **示例：**
 
 ```ts
-rstest.setConfig({ testTimeout: 1000, retry: 2 });
+rs.setConfig({ testTimeout: 1000, retry: 2 });
 // ... 在新的配置下运行代码
-rstest.resetConfig(); // 恢复默认配置
+rs.resetConfig(); // 恢复默认配置
 ```
 
-## rstest.resetConfig
+## rs.resetConfig
 
-- **别名：** `rs.resetConfig`
+- **别名：** `rstest.resetConfig`
 
 - **类型：** `() => void`
 
-将通过 `rstest.setConfig` 修改的运行时配置重置为默认值。
+将通过 `rs.setConfig` 修改的运行时配置重置为默认值。
 
-## rstest.getConfig
+## rs.getConfig
 
-- **别名：** `rs.getConfig`
+- **别名：** `rstest.getConfig`
 
 - **类型：** `() => RuntimeConfig`
 
@@ -140,13 +168,13 @@ rstest.resetConfig(); // 恢复默认配置
 **示例：**
 
 ```ts
-const config = rstest.getConfig();
+const config = rs.getConfig();
 console.log(config);
 ```
 
-## rstest.waitFor
+## rs.waitFor
 
-- **别名：** `rs.waitFor`
+- **别名：** `rstest.waitFor`
 
 - **类型：**
 
@@ -179,9 +207,9 @@ await rs.waitFor(
 );
 ```
 
-## rstest.waitUntil
+## rs.waitUntil
 
-- **别名：** `rs.waitUntil`
+- **别名：** `rstest.waitUntil`
 
 - **类型：**
 

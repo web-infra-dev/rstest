@@ -11,6 +11,7 @@
   <a href="https://nodejs.org/en/about/previous-releases"><img src="https://img.shields.io/node/v/@rstest/core.svg?style=flat-square&colorA=564341&colorB=EDED91" alt="node version"></a>
   <a href="https://github.com/web-infra-dev/rstest/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square&colorA=564341&colorB=EDED91" alt="license" /></a>
   <a href="https://deepwiki.com/web-infra-dev/rstest"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" /></a>
+  <a href="https://codspeed.io/web-infra-dev/rstest?utm_source=badge"><img src="https://img.shields.io/endpoint?url=https://codspeed.io/badge.json" alt="CodSpeed" /></a>
 </p>
 
 Rstest is a testing framework powered by Rspack. It delivers comprehensive, first-class support for the Rspack ecosystem, enabling seamless integration into existing Rspack-based projects.

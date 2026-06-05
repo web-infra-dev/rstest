@@ -7,14 +7,14 @@ import { globalApis } from './constants';
 import { color, isDebug, logger } from './logger';
 import { formatTestPath } from './testFiles';
 
-export const isRelativePath = (p: string): boolean => /^\.\.?\//.test(p);
+const isRelativePath = (p: string): boolean => /^\.\.?\//.test(p);
 
 const isHttpLikeFile = (file: string): boolean => /^https?:\/\//.test(file);
 
 const hintNotDefinedError = (message: string): string => {
-  const [, varName] = message.match(/(\w+) is not defined/) || [];
+  const [, varName] = /(\w+) is not defined/.exec(message) || [];
   if (varName) {
-    if ((globalApis as string[]).includes(varName)) {
+    if ((globalApis as readonly string[]).includes(varName)) {
       return message.replace(
         `${varName} is not defined`,
         `${varName} is not defined. Did you forget to enable "globals" configuration?`,
@@ -139,13 +139,12 @@ function printStack(stackFrames: StackFrame[], rootPath: string) {
   for (const frame of stackFrames) {
     logger.stderr(color.gray(`        ${formatStack(frame, rootPath)}`));
   }
-  stackFrames.length && logger.stderr('');
+  if (stackFrames.length) logger.stderr('');
 }
 
 const stackIgnores: (RegExp | string)[] = [
   /\/@rstest\/core/,
   /rstest\/packages\/core\/dist/,
-  /node_modules\/tinypool/,
   /node_modules\/chai/,
   /node_modules\/@vitest\/expect/,
   /node_modules\/@vitest\/snapshot/,

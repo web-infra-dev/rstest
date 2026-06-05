@@ -6,7 +6,19 @@ description: Rstest is a testing framework powered by Rspack. It delivers compre
 
 Rstest is a testing framework powered by Rspack. It delivers comprehensive, first-class support for the Rspack ecosystem, enabling seamless integration into existing Rspack-based projects.
 
-Rstest offers full Jest-compatible APIs while providing native, out-of-the-box support for TypeScript, ESM, and more, ensuring a modern and efficient testing experience.
+Rstest offers full Jest-compatible APIs while providing native, out-of-the-box support for TypeScript, ESM, CJS, and more, ensuring a modern and efficient testing experience.
+
+## ✨ Why Rstest
+
+Rstest is built on top of Rspack and Rsbuild, and works out of the box with built-in support for common use cases such as TypeScript, ESM, CJS, and CSS Modules. Even if you are not using Rspack, Rstest can be adopted without migrating your existing build system.
+
+For projects already using the Rstack toolchain (Rspack, Rsbuild, Rslib, etc.), Rstest can further **reuse your existing build configuration**—including module resolution, code transformation, and plugin capabilities—eliminating the need to maintain separate transform or resolver setups for testing.
+
+In terms of execution model, Rstest runs tests using a dependency graph–based **bundle model**, rather than the traditional per-file transform-and-execute approach. This enables it to fully leverage build-time optimizations—such as tree-shaking and skipping unused re-exports in side-effect-free barrel files—bringing test behavior closer to real production output. As a result, Rstest reduces redundant module transformations and executions in large-scale projects, improving both performance and stability.
+
+By integrating testing into the build pipeline, Rstest simplifies the overall toolchain, reduces the duplicated cost of maintaining separate configuration and plugin systems, and allows testing to fit more naturally into modern engineering architectures such as monorepos and complex applications.
+
+In the future, Rstest will continue evolving around a unified “build + test” model—exploring more efficient approaches to quality assurance, and integrating more deeply with CI systems and AI-driven workflows.
 
 ## 🔥 Roadmap
 

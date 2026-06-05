@@ -102,7 +102,7 @@ export const preloadTestFileSourceMap = async (
  * Preload source map for the runner.js file.
  *
  * This is essential for inline snapshot support because the snapshot code
- * runs in runner.js (which contains @rstest/core/browser-runtime).
+ * runs in runner.js (which contains @rstest/core/internal/browser-runtime).
  * Without this, stack traces from inline snapshots cannot be mapped back
  * to the original source files.
  */
@@ -112,17 +112,9 @@ export const preloadRunnerSourceMap = async (): Promise<void> => {
 };
 
 /**
- * Clear cache (for testing purposes)
- */
-export const clearCache = (): void => {
-  sourceMapCache.clear();
-  sourceMapPayloadCache.clear();
-};
-
-/**
  * Stack frame interface matching @vitest/snapshot's format
  */
-export interface StackFrame {
+interface StackFrame {
   file: string;
   line: number;
   column: number;

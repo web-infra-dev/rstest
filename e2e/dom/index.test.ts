@@ -4,7 +4,7 @@ import { runCli } from './utils';
 const appFilters = 'test/App';
 const jestDomFilters = 'test/jestDom';
 
-const externalConfigArgs = ['--config', 'rstest.externals.config.ts'];
+const externalConfigArgs = ['--config', 'rstest.externals.config.mts'];
 
 describe('jsdom', () => {
   it('should run test correctly', async () => {
@@ -26,7 +26,7 @@ describe('jsdom', () => {
 
   it('should run test correctly with custom environment options', async () => {
     const { expectExecSuccess } = await runCli('test/envOptions', undefined, {
-      args: ['--config', 'rstest.envOptions.config.ts'],
+      args: ['--config', 'rstest.envOptions.config.mts'],
     });
     await expectExecSuccess();
   });

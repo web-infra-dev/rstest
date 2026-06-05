@@ -61,10 +61,42 @@ export const getSummaryStatusString = (
 };
 
 /**
+ * Plain-text version of getSummaryStatusString (no ANSI codes).
+ * Suitable for markdown / GitHub step summary output.
+ */
+export const getPlainSummaryStatusString = (
+  tasks: TestResult[],
+  name = 'tests',
+  showTotal = true,
+): string => {
+  if (tasks.length === 0) {
+    return `no ${name}`;
+  }
+
+  const failed = tasks.filter((result) => result.status === 'fail');
+  const passed = tasks.filter((result) => result.status === 'pass');
+  const skipped = tasks.filter((result) => result.status === 'skip');
+  const todo = tasks.filter((result) => result.status === 'todo');
+
+  const icon = failed.length > 0 ? '❌' : '✅';
+  const parts = [
+    failed.length ? `${failed.length} failed` : null,
+    passed.length ? `${passed.length} passed` : null,
+    skipped.length ? `${skipped.length} skipped` : null,
+    todo.length ? `${todo.length} todo` : null,
+  ].filter(Boolean);
+
+  return (
+    `${icon} ${parts.join(' | ')}` +
+    (showTotal && parts.length > 1 ? ` (${tasks.length})` : '')
+  );
+};
+
+/**
  * This method is modified based on source found in
  * https://github.com/vitest-dev/vitest/blob/e8ce94cfb5520a8b69f9071cc5638a53129130d6/packages/vitest/src/node/reporters/renderers/utils.ts#L67
  */
-export const printSnapshotSummaryLog = (
+const printSnapshotSummaryLog = (
   snapshots: SnapshotSummary,
   rootDir: string,
 ): void => {
@@ -168,7 +200,7 @@ export const printSummaryErrorLogs = async ({
   getSourcemap: GetSourcemap;
   filterRerunTestPaths?: string[];
   unhandledErrors?: Error[];
-}): Promise<void> => {
+}): Promise<boolean> => {
   const failedTests: TestResult[] = [
     ...results.filter(
       (i) =>
@@ -188,7 +220,7 @@ export const printSummaryErrorLogs = async ({
   ];
 
   if (failedTests.length === 0 && !unhandledErrors?.length) {
-    return;
+    return false;
   }
 
   logger.stderr('');
@@ -217,4 +249,6 @@ export const printSummaryErrorLogs = async ({
       }
     }
   }
+
+  return true;
 };

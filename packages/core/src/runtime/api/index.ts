@@ -8,11 +8,13 @@ import type {
   WorkerState,
 } from '../../types';
 import { createRunner } from '../runner';
+import type { TaskContext } from '../worker/taskContext';
 import { assert, createExpect, GLOBAL_EXPECT, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
 
 export const createRstestRuntime = async (
   workerState: WorkerState,
+  { taskContext }: { taskContext: TaskContext },
 ): Promise<{
   runner: {
     runTests: (
@@ -25,7 +27,10 @@ export const createRstestRuntime = async (
   };
   api: Rstest;
 }> => {
-  const { runner, api: runnerAPI } = createRunner({ workerState });
+  const [{ runner, api: runnerAPI }, { SnapshotPlugin }] = await Promise.all([
+    Promise.resolve(createRunner({ workerState, taskContext })),
+    import(/* webpackChunkName: "snapshot" */ './snapshot'),
+  ]);
 
   if (workerState.runtimeConfig.chaiConfig) {
     setupChaiConfig(workerState.runtimeConfig.chaiConfig);
@@ -34,6 +39,7 @@ export const createRstestRuntime = async (
   const expect: RstestExpect = createExpect({
     workerState,
     getCurrentTest: () => runner.getCurrentTest(),
+    snapshotPlugin: SnapshotPlugin(workerState),
   });
 
   Object.defineProperty(globalThis, GLOBAL_EXPECT, {

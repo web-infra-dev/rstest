@@ -40,39 +40,129 @@ export function interopModule(mod: any): { mod: any; defaultExport: any } {
   return { mod, defaultExport };
 }
 
+/**
+ * Wrap an interop'd module in a Proxy that exposes a synthetic `default`
+ * (the unwrapped value from `interopModule`) across property access, `in`,
+ * descriptor lookup, and enumeration. Without an `ownKeys` trap, spread /
+ * `Object.keys` / pretty-format silently drop the synthetic key and diverge
+ * from a real Module Namespace.
+ *
+ * When `mod` is non-extensible (e.g., `module.exports = Object.freeze({...})`),
+ * `ownKeys` / `getOwnPropertyDescriptor` skip synthesis — Proxy invariants
+ * forbid reporting keys absent from a non-extensible target. `get` / `has`
+ * still resolve `ns.default` and `'default' in ns`. Mirrors
+ * https://github.com/vitest-dev/vitest/issues/2596.
+ */
+export function createInteropProxy(mod: any, defaultExport: any): any {
+  return new Proxy(mod, {
+    get(mod, prop) {
+      if (prop === 'default') {
+        return defaultExport;
+      }
+      /**
+       * interop invalid named exports. eg:
+       * exports: module.exports = { a: 1 }
+       * import: import { a } from 'mod';
+       */
+      return mod[prop] ?? defaultExport?.[prop];
+    },
+    has(mod, prop) {
+      if (prop === 'default') {
+        return defaultExport !== undefined;
+      }
+      return (
+        prop in mod || (!isPrimitive(defaultExport) && prop in defaultExport)
+      );
+    },
+    getOwnPropertyDescriptor(mod, prop): any {
+      const descriptor = Reflect.getOwnPropertyDescriptor(mod, prop);
+      if (descriptor) {
+        return descriptor;
+      }
+      if (
+        prop === 'default' &&
+        defaultExport !== undefined &&
+        Object.isExtensible(mod)
+      ) {
+        return {
+          value: defaultExport,
+          enumerable: true,
+          configurable: true,
+        };
+      }
+    },
+    ownKeys(mod) {
+      const keys = Reflect.ownKeys(mod);
+      if (
+        defaultExport !== undefined &&
+        !keys.includes('default') &&
+        Object.isExtensible(mod)
+      ) {
+        keys.push('default');
+      }
+      return keys;
+    },
+  });
+}
+
+// Caches vm.SyntheticModule by resolved module id to avoid nodejs/node#54735:
+// repeatedly wrapping the same exports in fresh SyntheticModule instances
+// races the V8 module-graph evaluation and segfaults the worker. One instance
+// per resolved id structurally eliminates the race (mirrors vitest#7741).
+const smCache = new Map<string, vm.SyntheticModule>();
+
+/**
+ * Wrap a plain exports object in a `vm.SyntheticModule` so it can participate
+ * in the `vm.Module` graph as a link() or importModuleDynamically result.
+ *
+ * Default-export semantics are driven by the caller:
+ * - Pass `defaultExport` when the source has an explicit default (CJS interop,
+ *   JSON, WASM, native ESM with `export default`).
+ * - Omit `defaultExport` for native ESM namespaces with only named exports —
+ *   no `default` key is synthesized, so the consumer namespace shape stays
+ *   identical to the original ESM namespace.
+ */
 export const asModule = async (
   something: Record<string, any>,
-  defaultExport: Record<string, any>,
-  context?: Record<string, any>,
-  unlinked?: boolean,
-): Promise<vm.SourceTextModule> => {
-  const { Module, SyntheticModule } = await import('node:vm');
+  resolvedId: string,
+  defaultExport?: unknown,
+): Promise<vm.SyntheticModule> => {
+  const { SyntheticModule } = await import('node:vm');
 
-  if (something instanceof Module) {
-    return something;
-  }
+  const cached = smCache.get(resolvedId);
+  if (cached) return cached;
 
-  const exports = [...new Set(['default', ...Object.keys(something)])];
+  const hasDefault = defaultExport !== undefined || 'default' in something;
+  const namedKeys = Object.keys(something).filter((k) => k !== 'default');
+  const exports = hasDefault ? ['default', ...namedKeys] : namedKeys;
+  const resolvedDefault = hasDefault
+    ? (defaultExport ?? something.default)
+    : undefined;
 
-  const m = new SyntheticModule(
+  const syntheticModule = new SyntheticModule(
     exports,
     () => {
       for (const name of exports) {
-        m.setExport(name, name === 'default' ? defaultExport : something[name]);
+        syntheticModule.setExport(
+          name,
+          name === 'default' ? resolvedDefault : something[name],
+        );
       }
     },
-    {
-      context,
-    },
+    { identifier: resolvedId },
   );
 
-  if (unlinked) return m;
+  smCache.set(resolvedId, syntheticModule);
 
-  await m.link((() => undefined) as unknown as vm.ModuleLinker);
+  await syntheticModule.link((() => undefined) as unknown as vm.ModuleLinker);
 
   // @ts-expect-error copy from webpack
-  if (m.instantiate) m.instantiate();
-  await m.evaluate();
+  if (syntheticModule.instantiate) syntheticModule.instantiate();
+  await syntheticModule.evaluate();
 
-  return m;
+  return syntheticModule;
+};
+
+export const clearSyntheticModuleCache = (): void => {
+  smCache.clear();
 };

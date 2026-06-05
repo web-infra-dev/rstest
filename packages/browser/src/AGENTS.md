@@ -15,6 +15,9 @@ flowchart LR
     SR["sessionRegistry.ts\nRunnerSessionRegistry"]
     WP["watchRerunPlanner.ts"]
     LS["headlessLatestRerunScheduler.ts"]
+    HT["headlessTransport.ts\nattachHeadlessRunnerTransport()"]
+    CC["concurrency.ts\ngetHeadlessConcurrency()"]
+    HQ["headedSerialTaskQueue.ts\ncreateHeadedSerialTaskQueue()"]
   end
 
   subgraph UI["@rstest/browser-ui container (headed path)"]
@@ -35,6 +38,9 @@ flowchart LR
   WP --> LS
   HC --> RL
   RL --> SR
+  HC --> CC
+  HC --> HQ
+  HC --> HT
 
   UR <--> HC
   MSG --> MH
@@ -42,7 +48,7 @@ flowchart LR
   RPC --> CH
   CH --> UR
 
-  HC -."headless bridge:\nexposeFunction(__rstest_dispatch__, __rstest_dispatch_rpc__)".-> Runner
+  HT -."headless bridge:\nexposeFunction(__rstest_dispatch__, __rstest_dispatch_rpc__)".-> Runner
 ```
 
 ## Headed transport path

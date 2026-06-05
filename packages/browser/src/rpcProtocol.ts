@@ -178,43 +178,41 @@ export const validateBrowserRpcRequest = (
   return request;
 };
 
-export type BrowserRpcResponse = {
-  id: string;
-  result?: unknown;
-  error?: string;
+/**
+ * Single source of truth for snapshot RPC methods and their argument shapes.
+ * The request union, the client sender, both host-side mappers, and every
+ * exhaustiveness check derive from this map — adding or renaming a method here
+ * forces a compile error at every site that has not been updated.
+ */
+export type SnapshotRpcMethodArgs = {
+  resolveSnapshotPath: { testPath: string };
+  readSnapshotFile: { filepath: string };
+  saveSnapshotFile: { filepath: string; content: string };
+  removeSnapshotFile: { filepath: string };
 };
+
+export type SnapshotRpcMethod = keyof SnapshotRpcMethodArgs;
 
 /**
  * Snapshot RPC request from runner iframe.
  * The container will forward these to the host via WebSocket RPC.
  */
-export type SnapshotRpcRequest =
-  | {
-      id: string;
-      method: 'resolveSnapshotPath';
-      args: { testPath: string };
-    }
-  | {
-      id: string;
-      method: 'readSnapshotFile';
-      args: { filepath: string };
-    }
-  | {
-      id: string;
-      method: 'saveSnapshotFile';
-      args: { filepath: string; content: string };
-    }
-  | {
-      id: string;
-      method: 'removeSnapshotFile';
-      args: { filepath: string };
-    };
+export type SnapshotRpcRequest = {
+  [M in SnapshotRpcMethod]: {
+    id: string;
+    method: M;
+    args: SnapshotRpcMethodArgs[M];
+  };
+}[SnapshotRpcMethod];
 
 /**
- * Snapshot RPC response from container to runner iframe.
+ * Client-side snapshot RPC call (request without the transport `id`).
+ * Distributive over {@link SnapshotRpcMethod} so `method` and `args` stay paired
+ * at the call site — a mismatched pair fails to compile.
  */
-export type SnapshotRpcResponse = {
-  id: string;
-  result?: unknown;
-  error?: string;
-};
+export type SnapshotRpcCall = {
+  [M in SnapshotRpcMethod]: {
+    method: M;
+    args: SnapshotRpcMethodArgs[M];
+  };
+}[SnapshotRpcMethod];

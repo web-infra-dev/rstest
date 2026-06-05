@@ -10,6 +10,7 @@ import { x } from 'tinyexec';
 import treeKill from 'tree-kill';
 
 type IoType = 'stdout' | 'stderr';
+
 class Cli {
   public exec: Result;
   public stdout = '';
@@ -164,6 +165,8 @@ export async function runRstestCli({
       env: {
         ...baseEnv,
         ...(options?.nodeOptions?.env || {}),
+        GITHUB_STEP_SUMMARY:
+          options?.nodeOptions?.env?.GITHUB_STEP_SUMMARY || undefined,
       },
     },
   } as Options);
@@ -171,13 +174,12 @@ export async function runRstestCli({
   const cli = new Cli(exec, { stripAnsi });
 
   (onTestFinished || onRstestFinished)(() => {
-    !cli.exec.killed && cli.exec.kill();
+    if (!cli.exec.killed) cli.exec.kill();
   });
 
   (onTestFailed || onRstestFailed)?.(({ task }) => {
     if (task.result?.errors?.[0]) {
-      task.result.errors![0]!.message +=
-        `\n\n--- CLI Log Start ---\n${cli.log}\n--- CLI Log End ---\n`;
+      task.result.errors![0]!.message += `\n\n--- CLI Log Start ---\n\`\`\`text\n${cli.log}\n\`\`\`\n--- CLI Log End ---\n`;
     }
   });
 

@@ -27,15 +27,15 @@ Commands:
   run [...filters]          run tests without watch mode
   watch [...filters]        run tests in watch mode
   list [...filters]         lists all test files that Rstest will run
-  merge-reports [path]      merge blob reports from multiple shards
+  merge-reports [path]      Merge blob reports from multiple shards into a unified report
+  init [project]            Initialize rstest configuration
 
 Options:
-  -w, --watch                              Run tests in watch mode
-  -h, --help                               Display this message
-  -v, --version                            Display version number
-  -c, --config <config>
-  ...
+  -h, --help                Display this message
+  -v, --version             Display version number
 ```
+
+Use `npx rstest <command> -h` to see command-specific options. For example, `npx rstest init -h` only shows initialization options, while `npx rstest merge-reports -h` only shows merge-related options.
 
 ## rstest [...filters]
 
@@ -62,6 +62,57 @@ $ npx rstest --watch
 ## rstest run
 
 `rstest run` will perform a single run, and the command is suitable for CI environments or scenarios where tests are not required to be performed while modifying.
+
+### Run related tests
+
+<ApiMeta addedVersion="0.10.0" />
+
+Use `--related` when you want Rstest to treat positional arguments as source files and only run the tests that depend on those files.
+
+```bash
+npx rstest run --related src/button.ts
+```
+
+Rstest resolves related tests from the build module graph, so the same filter works for Node mode and Browser Mode projects. You can also use the Jest-compatible alias:
+
+```bash
+npx rstest run --findRelatedTests src/button.ts
+```
+
+If you only want to inspect the affected test files, combine it with `rstest list`:
+
+```bash
+npx rstest list --related src/button.ts --filesOnly
+```
+
+### Run changed tests
+
+<ApiMeta addedVersion="0.10.0" />
+
+Use `--changed` to collect changed files from the current Git repository and run the tests related to those files. By default, it includes unstaged, staged, and untracked files, which is useful for local development before committing:
+
+```bash
+npx rstest run --changed
+```
+
+You can also pass a commit or branch. Rstest will include files changed between that ref and `HEAD`, plus local staged, unstaged, and untracked files:
+
+```bash
+npx rstest run --changed=HEAD~1
+npx rstest run --changed=origin/main
+```
+
+When a changed file matches [`forceRerunTriggers`](/config/test/force-rerun-triggers), Rstest runs the whole test suite instead of only related tests.
+
+When coverage is enabled and [`coverage.changed`](/config/test/coverage#changed) is not configured, `--changed` also limits coverage reports to changed source files. If a changed file matches [`forceRerunTriggers`](/config/test/force-rerun-triggers), Rstest runs the whole test suite and reports full coverage unless `coverage.changed` is explicitly enabled.
+
+Use `rstest list` to preview which tests would run without executing them:
+
+```bash
+npx rstest list --changed --filesOnly
+```
+
+`--changed` cannot be combined with positional filters or `--related` / `--findRelatedTests`, because it already provides the source-file filter from Git state.
 
 ## rstest watch
 
@@ -135,6 +186,27 @@ b.test.ts:4:5 > test b > test b-1
 b.test.ts:9:3 > test b-2
 ```
 
+You can use `--summary` to append a compact summary after the list output:
+
+```bash
+$ npx rstest list --summary
+
+# the output is shown below:
+a.test.ts > test a > test a-1
+a.test.ts > test a-2
+b.test.ts > test b > test b-1
+b.test.ts > test b-2
+c.test.ts > test c it each 0
+c.test.ts > test c it for 0
+c.test.ts > test c it runIf
+c.test.ts > test c it skipIf
+
+ Test Files 3 matched
+      Tests 8 matched
+```
+
+When used with `--json`, `--summary` changes the JSON output shape from an array to an object with `items` and `summary` fields.
+
 ## rstest merge-reports
 
 <ApiMeta addedVersion="0.9.3" />
@@ -147,13 +219,13 @@ b.test.ts:9:3 > test b-2
 
 ```bash
 # On CI machine 1
-npx rstest run --shard 1/3 --reporter=blob
+npx rstest run --shard 1/3 --reporters=blob
 
 # On CI machine 2
-npx rstest run --shard 2/3 --reporter=blob
+npx rstest run --shard 2/3 --reporters=blob
 
 # On CI machine 3
-npx rstest run --shard 3/3 --reporter=blob
+npx rstest run --shard 3/3 --reporters=blob
 ```
 
 2. Collect all `.rstest-reports/` directories into a single location, then merge:
@@ -180,63 +252,132 @@ Use `--cleanup` to remove the blob reports directory after merging:
 npx rstest merge-reports --cleanup
 ```
 
+## rstest init
+
+`rstest init` creates starter configuration for supported project types.
+
+```bash
+npx rstest init
+```
+
+Currently, `browser` is the available initializer:
+
+```bash
+npx rstest init browser
+```
+
+Use `--yes` to skip the interactive prompt and apply the default setup:
+
+```bash
+npx rstest init browser --yes
+```
+
 ## CLI options
 
-Rstest CLI provides several common options that can be used with all commands:
+Rstest CLI options are registered per command instead of being shared by every command.
 
-| Flag                            | Description                                                                                                                                                           |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-c, --config <config>`         | Specify the configuration file, can be a relative or absolute path, see [Specify config file](/guide/basic/configure-rstest#specify-config-file)                      |
-| `--config-loader <loader>`      | Specify the config loader (`auto` \| `jiti` \| `native`), see [Rsbuild - Specify config loader](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
-| `-r, --root <root>`             | Specify the project root directory, see [root](/config/test/root)                                                                                                     |
-| `--globals`                     | Provide global APIs, see [globals](/config/test/globals)                                                                                                              |
-| `--isolate`                     | Run tests in an isolated environment, see [isolate](/config/test/isolate)                                                                                             |
-| `--reporter <reporter>`         | Specify the test reporter, see [reporters](/config/test/reporters)                                                                                                    |
-| `--exclude <exclude>`           | Exclude files from test, see [exclude](/config/test/exclude)                                                                                                          |
-| `-u, --update`                  | Update snapshot files, see [update](/config/test/update)                                                                                                              |
-| `--coverage`                    | Enable code coverage collection, see [coverage](/config/test/coverage)                                                                                                |
-| `--passWithNoTests`             | Allows the test suite to pass when no files are found, see [passWithNoTests](/config/test/pass-with-no-tests)                                                         |
-| `--printConsoleTrace`           | Print console traces when calling any console method, see [printConsoleTrace](/config/test/print-console-trace)                                                       |
-| `--project <name>`              | Only run tests for the specified project, see [Filter by project name](/guide/basic/test-filter#filter-by-project-name)                                               |
-| `--disableConsoleIntercept`     | Disable console intercept, see [disableConsoleIntercept](/config/test/disable-console-intercept)                                                                      |
-| `--slowTestThreshold <value>`   | The number of milliseconds after which a test or suite is considered slow, see [slowTestThreshold](/config/test/slow-test-threshold)                                  |
-| `-t, --testNamePattern <value>` | Run only tests with a name that matches the regex, see [testNamePattern](/config/test/test-name-pattern)                                                              |
-| `--testEnvironment <name>`      | The environment that will be used for testing, see [testEnvironment](/config/test/test-environment)                                                                   |
-| `--testTimeout <value>`         | Timeout of a test in milliseconds, see [testTimeout](/config/test/test-timeout)                                                                                       |
-| `--hookTimeout <value>`         | Timeout of hook in milliseconds, see [hookTimeout](/config/test/hook-timeout)                                                                                         |
-| `--retry <retry>`               | Number of times to retry a test if it fails, see [retry](/config/test/retry)                                                                                          |
-| `--bail [number]`               | Abort the test run after the specified number of test failures, see [bail](/config/test/bail)                                                                         |
-| `--browser, --browser.enabled`  | Run tests in Browser Mode, see [browser](/config/test/browser)                                                                                                        |
-| `--browser.name <name>`         | Browser to use: `chromium`, `firefox`, `webkit` (default: `chromium`), see [browser](/config/test/browser)                                                            |
-| `--browser.headless`            | Run browser in headless mode (default: `true` in CI), see [browser](/config/test/browser)                                                                             |
-| `--browser.port <port>`         | Port for the Browser Mode dev server, see [browser](/config/test/browser)                                                                                             |
-| `--browser.strictPort`          | Exit if the specified port is already in use, see [browser](/config/test/browser)                                                                                     |
-| `--maxConcurrency <value>`      | Maximum number of concurrent tests, see [maxConcurrency](/config/test/max-concurrency)                                                                                |
-| `--clearMocks`                  | Automatically clear mock calls, instances, contexts and results before every test, see [clearMocks](/config/test/clear-mocks)                                         |
-| `--resetMocks`                  | Automatically reset mock state before every test, see [resetMocks](/config/test/reset-mocks)                                                                          |
-| `--restoreMocks`                | Automatically restore mock state and implementation before every test, see [restoreMocks](/config/test/restore-mocks)                                                 |
-| `--unstubGlobals`               | Restores all global variables that were changed with `rstest.stubGlobal` before every test, see [unstubGlobals](/config/test/unstub-globals)                          |
-| `--unstubEnvs`                  | Restores all `process.env` values that were changed with `rstest.stubEnv` before every test, see [unstubEnvs](/config/test/unstub-envs)                               |
-| `--include <pattern>`           | Specify test file matching pattern, see [include](/config/test/include)                                                                                               |
-| `--includeSource <pattern>`     | Specify in-source testing file matching pattern, see [includeSource](/config/test/include-source)                                                                     |
-| `--logHeapUsage`                | Print heap usage for each test, see [logHeapUsage](/config/test/log-heap-usage)                                                                                       |
-| `--hideSkippedTests`            | Do not display skipped test logs, see [hideSkippedTests](/config/test/hide-skipped-tests)                                                                             |
-| `--hideSkippedTestFiles`        | Do not display skipped test file logs, see [hideSkippedTestFiles](/config/test/hide-skipped-test-files)                                                               |
-| `--chaiConfig <config>`         | Customize Chai configuration, see [chaiConfig](/config/test/chai-config)                                                                                              |
-| `--env <key=value>`             | Set environment variables, see [env](/config/test/env)                                                                                                                |
-| `--pool <type>`                 | Shorthand for `--pool.type`, see [pool](/config/test/pool)                                                                                                            |
-| `--pool.type <type>`            | Specify the test pool type, see [pool](/config/test/pool)                                                                                                             |
-| `--pool.maxWorkers <value>`     | Maximum number or percentage of workers, see [pool](/config/test/pool)                                                                                                |
-| `--pool.minWorkers <value>`     | Minimum number or percentage of workers, see [pool](/config/test/pool)                                                                                                |
-| `--pool.execArgv <arg>`         | Additional Node.js execArgv for worker processes (repeatable), see [pool](/config/test/pool)                                                                          |
-| `--setupFiles <files>`          | Specify setup files list, see [setupFiles](/config/test/setup-files)                                                                                                  |
-| `--snapshotFormat <options>`    | Customize snapshot format, see [snapshotFormat](/config/test/snapshot-format)                                                                                         |
-| `--resolveSnapshotPath`         | Customize snapshot path resolution, see [resolveSnapshotPath](/config/test/resolve-snapshot-path)                                                                     |
-| `--onConsoleLog <handler>`      | Handle console logs, see [onConsoleLog](/config/test/on-console-log)                                                                                                  |
-| `--name <name>`                 | Set test suite name, see [name](/config/test/name)                                                                                                                    |
-| `--projects <projects>`         | Configure multi-project testing, see [projects](/config/test/projects)                                                                                                |
-| `-h, --help`                    | Display help for command                                                                                                                                              |
-| `-v, --version`                 | Display version                                                                                                                                                       |
+### Test commands
+
+`rstest`, `rstest run`, and `rstest watch` share the same test runtime options:
+
+| Flag                                | Description                                                                                                                                                           |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--bail [number]`                   | Abort the test run after the specified number of test failures, see [bail](/config/test/bail)                                                                         |
+| `--browser, --browser.enabled`      | Run tests in Browser Mode, see [browser](/config/test/browser)                                                                                                        |
+| `--browser.headless`                | Run browser in headless mode (default: `true` in CI), see [browser](/config/test/browser)                                                                             |
+| `--browser.name <name>`             | Browser to use: `chromium`, `firefox`, `webkit` (default: `chromium`), see [browser](/config/test/browser)                                                            |
+| `--browser.port <port>`             | Port for the Browser Mode dev server, see [browser](/config/test/browser)                                                                                             |
+| `--browser.strictPort`              | Exit if the specified port is already in use, see [browser](/config/test/browser)                                                                                     |
+| `--changed [commit]`                | Run tests related to changed files in the current Git repository, optionally since a commit                                                                           |
+| `--clearMocks`                      | Automatically clear mock calls, instances, contexts and results before every test, see [clearMocks](/config/test/clear-mocks)                                         |
+| `-c, --config <config>`             | Specify the configuration file, can be a relative or absolute path, see [Specify config file](/guide/basic/configure-rstest#specify-config-file)                      |
+| `--config-loader <loader>`          | Specify the config loader (`auto` \| `jiti` \| `native`), see [Rsbuild - Specify config loader](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
+| `--coverage`                        | Enable code coverage collection, see [coverage](/config/test/coverage)                                                                                                |
+| `--coverage.allowExternal`          | Collect coverage for files outside the project root, see [coverage.allowExternal](/config/test/coverage#allowexternal)                                                |
+| `--coverage.changed [commit]`       | Collect coverage only for changed files in the current Git repository, optionally since a commit                                                                      |
+| `--coverage.clean`                  | Clean the coverage directory before running tests, see [coverage.clean](/config/test/coverage#clean)                                                                  |
+| `--coverage.enabled`                | Enable code coverage collection, see [coverage.enabled](/config/test/coverage#enabled)                                                                                |
+| `--coverage.exclude <pattern>`      | Exclude files from coverage collection, see [coverage.exclude](/config/test/coverage#exclude)                                                                         |
+| `--coverage.include <pattern>`      | Include files for coverage collection, see [coverage.include](/config/test/coverage#include)                                                                          |
+| `--coverage.provider <provider>`    | Choose the coverage provider (`istanbul` \| `v8`), see [coverage.provider](/config/test/coverage#provider)                                                            |
+| `--coverage.reporters <reporter>`   | Specify coverage reporter(s), see [coverage.reporters](/config/test/coverage#reporters)                                                                               |
+| `--coverage.reportOnFailure`        | Generate coverage reports even when tests fail, see [coverage.reportOnFailure](/config/test/coverage#reportonfailure)                                                 |
+| `--coverage.reportsDirectory <dir>` | Directory to store coverage reports, see [coverage.reportsDirectory](/config/test/coverage#reportsdirectory)                                                          |
+| `--detectAsyncLeaks`                | Detect async resources that leak after tests finish, see [detectAsyncLeaks](/config/test/detect-async-leaks)                                                          |
+| `--disableConsoleIntercept`         | Disable console intercept, see [disableConsoleIntercept](/config/test/disable-console-intercept)                                                                      |
+| `--exclude <exclude>`               | Exclude files from test, see [exclude](/config/test/exclude)                                                                                                          |
+| `--findRelatedTests`                | Alias for `--related` for Jest compatibility                                                                                                                          |
+| `--globals`                         | Provide global APIs, see [globals](/config/test/globals)                                                                                                              |
+| `-h, --help`                        | Display help for command                                                                                                                                              |
+| `--hideSkippedTestFiles`            | Do not display skipped test file logs, see [hideSkippedTestFiles](/config/test/hide-skipped-test-files)                                                               |
+| `--hideSkippedTests`                | Do not display skipped test logs, see [hideSkippedTests](/config/test/hide-skipped-tests)                                                                             |
+| `--hookTimeout <value>`             | Timeout of hook in milliseconds, see [hookTimeout](/config/test/hook-timeout)                                                                                         |
+| `--include <include>`               | Specify test file matching pattern, see [include](/config/test/include)                                                                                               |
+| `--includeTaskLocation`             | Collect test and suite locations, see [includeTaskLocation](/config/test/include-task-location)                                                                       |
+| `--isolate`                         | Run tests in an isolated environment, see [isolate](/config/test/isolate)                                                                                             |
+| `--logHeapUsage`                    | Print heap usage for each test, see [logHeapUsage](/config/test/log-heap-usage)                                                                                       |
+| `--maxConcurrency <value>`          | Maximum number of concurrent tests, see [maxConcurrency](/config/test/max-concurrency)                                                                                |
+| `--passWithNoTests`                 | Allows the test suite to pass when no files are found, see [passWithNoTests](/config/test/pass-with-no-tests)                                                         |
+| `--pool <type>`                     | Shorthand for `--pool.type`, see [pool](/config/test/pool)                                                                                                            |
+| `--pool.execArgv <arg>`             | Additional Node.js execArgv for worker processes (repeatable), see [pool](/config/test/pool)                                                                          |
+| `--pool.maxWorkers <value>`         | Maximum number or percentage of workers, see [pool](/config/test/pool)                                                                                                |
+| `--pool.minWorkers <value>`         | Minimum number or percentage of workers, see [pool](/config/test/pool)                                                                                                |
+| `--pool.type <type>`                | Specify the test pool type, see [pool](/config/test/pool)                                                                                                             |
+| `--printConsoleTrace`               | Print console traces when calling any console method, see [printConsoleTrace](/config/test/print-console-trace)                                                       |
+| `--project <name>`                  | Only run tests for the specified project, see [Filter by project name](/guide/basic/test-filter#filter-by-project-name)                                               |
+| `--related`                         | Treat positional arguments as source file paths and only run related tests                                                                                            |
+| `--reporters, --reporter <name>`    | Specify the test reporter(s), see [reporters](/config/test/reporters)                                                                                                 |
+| `--resetMocks`                      | Automatically reset mock state before every test, see [resetMocks](/config/test/reset-mocks)                                                                          |
+| `--restoreMocks`                    | Automatically restore mock state and implementation before every test, see [restoreMocks](/config/test/restore-mocks)                                                 |
+| `--retry <retry>`                   | Number of times to retry a test if it fails, see [retry](/config/test/retry)                                                                                          |
+| `-r, --root <root>`                 | Specify the project root directory, see [root](/config/test/root)                                                                                                     |
+| `--shard <index/count>`             | Split tests into several shards, see [shard](/config/test/shard)                                                                                                      |
+| `--silent [value]`                  | Silence intercepted test console output, or keep logs only for failed tasks with `passed-only`, see [silent](/config/test/silent)                                     |
+| `--slowTestThreshold <value>`       | The number of milliseconds after which a test or suite is considered slow, see [slowTestThreshold](/config/test/slow-test-threshold)                                  |
+| `--testEnvironment <name>`          | The environment that will be used for testing, see [testEnvironment](/config/test/test-environment)                                                                   |
+| `-t, --testNamePattern <value>`     | Run only tests with a name that matches the regex, see [testNamePattern](/config/test/test-name-pattern)                                                              |
+| `--testTimeout <value>`             | Timeout of a test in milliseconds, see [testTimeout](/config/test/test-timeout)                                                                                       |
+| `--trace`                           | Dump a Perfetto-compatible performance trace JSON file, plus a ranked markdown timing summary printed to the terminal and written next to it                          |
+| `--unstubEnvs`                      | Restores all `process.env` values that were changed with `rs.stubEnv` before every test, see [unstubEnvs](/config/test/unstub-envs)                                   |
+| `--unstubGlobals`                   | Restores all global variables that were changed with `rs.stubGlobal` before every test, see [unstubGlobals](/config/test/unstub-globals)                              |
+| `-u, --update`                      | Update snapshot files, see [update](/config/test/update)                                                                                                              |
+
+`rstest` also supports `-w, --watch`, which switches the default command into watch mode.
+
+### rstest list
+
+`rstest list` supports the same filtering and config options as the test commands above, and adds:
+
+| Flag                    | Description                                 |
+| ----------------------- | ------------------------------------------- |
+| `--filesOnly`           | Only print matching test files              |
+| `--json [boolean/path]` | Print tests as JSON or write JSON to a file |
+| `--includeSuites`       | Include suites in the output                |
+| `--printLocation`       | Print test and suite locations              |
+| `--summary`             | Print a compact summary after the list      |
+
+### rstest merge-reports
+
+`rstest merge-reports` has its own smaller option set:
+
+| Flag                       | Description                                                                                                                                                           |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-c, --config <config>`    | Specify the configuration file, can be a relative or absolute path, see [Specify config file](/guide/basic/configure-rstest#specify-config-file)                      |
+| `--config-loader <loader>` | Specify the config loader (`auto` \| `jiti` \| `native`), see [Rsbuild - Specify config loader](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
+| `-r, --root <root>`        | Specify the project root directory, see [root](/config/test/root)                                                                                                     |
+| `--coverage`               | Enable coverage generation after merging, see [coverage](/config/test/coverage)                                                                                       |
+| `--reporters <name>`       | Specify which reporter(s) run on merged results, see [reporters](/config/test/reporters)                                                                              |
+| `--cleanup`                | Remove the blob reports directory after merging                                                                                                                       |
+| `-h, --help`               | Display help for command                                                                                                                                              |
+
+### rstest init
+
+`rstest init` only accepts initialization-specific options:
+
+| Flag         | Description                                 |
+| ------------ | ------------------------------------------- |
+| `--yes`      | Use default options and skip interactive UI |
+| `-h, --help` | Display help for command                    |
 
 ### Boolean option negation
 

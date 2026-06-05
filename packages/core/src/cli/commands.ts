@@ -1,8 +1,12 @@
-import cac, { type CAC } from 'cac';
-import { normalize } from 'pathe';
+import cac, { type CAC, type Command } from 'cac';
+import { normalize, relative, resolve } from 'pathe';
+import picomatch from 'picomatch';
 import type {
+  FileFilterMode,
   ListCommandOptions,
+  Project,
   RstestCommand,
+  RstestConfig,
   RstestInstance,
 } from '../types';
 import { color, determineAgent, formatError, logger } from '../utils';
@@ -11,123 +15,395 @@ import { showRstest } from './prepare';
 
 export type { CommonOptions } from './init';
 
-const applyCommonOptions = (cli: CAC) => {
-  cli
-    .option(
-      '-c, --config <config>',
-      'Specify the configuration file, can be a relative or absolute path',
-    )
-    .option(
-      '--config-loader <loader>',
-      'Specify the loader to load the config file (auto | jiti | native)',
-      {
-        default: 'auto',
-      },
-    )
-    .option(
-      '-r, --root <root>',
-      'Specify the project root directory, can be an absolute path or a path relative to cwd',
-    )
-    .option('--globals', 'Provide global APIs')
-    .option('--isolate', 'Run tests in an isolated environment')
-    .option('--include <include>', 'Match test files')
-    .option('--exclude <exclude>', 'Exclude files from test')
-    .option('-u, --update', 'Update snapshot files')
-    .option('--coverage', 'Enable code coverage collection')
-    .option(
-      '--project <name>',
-      'Run only projects that match the name, can be a full name or wildcards pattern',
-    )
-    .option(
-      '--passWithNoTests',
-      'Allows the test suite to pass when no files are found',
-    )
-    .option(
-      '--printConsoleTrace',
-      'Print console traces when calling any console method',
-    )
-    .option('--disableConsoleIntercept', 'Disable console intercept')
-    .option('--logHeapUsage', 'Log heap usage after each test')
-    .option(
-      '--slowTestThreshold <value>',
-      'The number of milliseconds after which a test or suite is considered slow',
-    )
-    .option('--reporter <reporter>', 'Specify the reporter to use')
-    .option(
-      '-t, --testNamePattern <value>',
-      'Run only tests with a name that matches the regex',
-    )
-    .option(
-      '--testEnvironment <name>',
-      'The environment that will be used for testing',
-    )
-    .option('--testTimeout <value>', 'Timeout of a test in milliseconds')
-    .option('--hookTimeout <value>', 'Timeout of hook in milliseconds')
-    .option('--hideSkippedTests', 'Hide skipped tests from the output')
-    .option('--hideSkippedTestFiles', 'Hide skipped test files from the output')
-    .option('--retry <retry>', 'Number of times to retry a test if it fails')
-    .option(
-      '--bail [number]',
-      'Stop running tests after n failures. Set to 0 to run all tests regardless of failures',
-    )
-    .option(
-      '--shard <index/count>',
-      'Split tests into several shards. This is useful for running tests in parallel on multiple machines.',
-    )
-    .option('--maxConcurrency <value>', 'Maximum number of concurrent tests')
-    .option(
-      '--clearMocks',
-      'Automatically clear mock calls, instances, contexts and results before every test',
-    )
-    .option('--resetMocks', 'Automatically reset mock state before every test')
-    .option(
-      '--restoreMocks',
-      'Automatically restore mock state and implementation before every test',
-    )
-    .option('--browser', 'Run tests in browser mode')
-    .option('--browser.enabled', 'Run tests in browser mode')
-    .option(
-      '--browser.name <name>',
-      'Browser to use: chromium, firefox, webkit (default: chromium)',
-    )
-    .option(
-      '--browser.headless',
-      'Run browser in headless mode (default: true in CI)',
-    )
-    .option('--browser.port <port>', 'Port for the browser mode dev server')
-    .option(
-      '--browser.strictPort',
-      'Exit if the specified port is already in use',
-    )
-    .option(
-      '--unstubGlobals',
-      'Restores all global variables that were changed with `rstest.stubGlobal` before every test',
-    )
-    .option(
-      '--unstubEnvs',
-      'Restores all runtime env values that were changed with `rstest.stubEnv` before every test',
-    )
-    .option(
-      '--includeTaskLocation',
-      'Collect test and suite locations. This might increase the running time.',
-    );
-
-  cli
-    .option('--pool <type>', 'Shorthand for --pool.type')
-    .option('--pool.type <type>', 'Specify the test pool type (e.g. forks)')
-    .option(
-      '--pool.maxWorkers <value>',
-      'Maximum number or percentage of workers (e.g. 4 or 50%)',
-    )
-    .option(
-      '--pool.minWorkers <value>',
-      'Minimum number or percentage of workers (e.g. 1 or 25%)',
-    )
-    .option(
-      '--pool.execArgv <arg>',
-      'Additional Node.js execArgv passed to worker processes (can be specified multiple times)',
-    );
+type OptionConfig = {
+  default?: string;
 };
+
+type OptionDefinition = readonly [
+  rawName: string,
+  description: string,
+  config?: OptionConfig,
+];
+
+const runtimeOptionDefinitions: OptionDefinition[] = [
+  [
+    '-c, --config <config>',
+    'Specify the configuration file, can be a relative or absolute path',
+  ],
+  [
+    '--config-loader <loader>',
+    'Specify the loader to load the config file (auto | jiti | native)',
+    { default: 'auto' },
+  ],
+  [
+    '-r, --root <root>',
+    'Specify the project root directory, can be an absolute path or a path relative to cwd',
+  ],
+  [
+    '--related',
+    'Treat positional arguments as source file paths and run only related tests',
+  ],
+  ['--findRelatedTests', 'Alias for --related for Jest compatibility'],
+  [
+    '--changed [commit]',
+    'Run tests related to changed files in the current Git repository, optionally since a commit',
+  ],
+  ['--globals', 'Provide global APIs'],
+  ['--isolate', 'Run tests in an isolated environment'],
+  ['--include <include>', 'Match test files'],
+  ['--exclude <exclude>', 'Exclude files from test'],
+  ['-u, --update', 'Update snapshot files'],
+  ['--coverage', 'Enable code coverage collection'],
+  ['--coverage.enabled', 'Enable code coverage collection'],
+  [
+    '--coverage.provider <provider>',
+    'Coverage provider to use (istanbul | v8)',
+  ],
+  [
+    '--coverage.reporters <reporter>',
+    'Coverage reporter to use (repeat the flag for multiple reporters)',
+  ],
+  [
+    '--coverage.changed [commit]',
+    'Collect coverage only for changed files, optionally since a commit',
+  ],
+  ['--coverage.include <pattern>', 'Include files for coverage collection'],
+  ['--coverage.exclude <pattern>', 'Exclude files from coverage collection'],
+  ['--coverage.reportsDirectory <dir>', 'Directory to store coverage reports'],
+  [
+    '--coverage.reportOnFailure',
+    'Generate coverage reports even when tests fail',
+  ],
+  ['--coverage.clean', 'Clean the coverage directory before running tests'],
+  [
+    '--coverage.allowExternal',
+    'Collect coverage for files outside the project root directory',
+  ],
+  [
+    '--project <name>',
+    'Run only projects that match the name, can be a full name or wildcards pattern',
+  ],
+  [
+    '--passWithNoTests',
+    'Allows the test suite to pass when no files are found',
+  ],
+  [
+    '--silent [value]',
+    'Silence intercepted test console output (true | false | passed-only)',
+  ],
+  [
+    '--printConsoleTrace',
+    'Print console traces when calling any console method',
+  ],
+  ['--disableConsoleIntercept', 'Disable console intercept'],
+  ['--logHeapUsage', 'Log heap usage after each test'],
+  ['--detectAsyncLeaks', 'Detect async resources that leak after tests finish'],
+  [
+    '--trace',
+    'Dump a Perfetto-compatible performance trace JSON file, plus a ranked markdown timing summary printed to the terminal and written next to it',
+  ],
+  [
+    '--slowTestThreshold <value>',
+    'The number of milliseconds after which a test or suite is considered slow',
+  ],
+  ['--reporters, --reporter <name>', 'Specify the reporter(s) to use'],
+  [
+    '-t, --testNamePattern <value>',
+    'Run only tests with a name that matches the regex',
+  ],
+  ['--testEnvironment <name>', 'The environment that will be used for testing'],
+  ['--testTimeout <value>', 'Timeout of a test in milliseconds'],
+  ['--hookTimeout <value>', 'Timeout of hook in milliseconds'],
+  ['--hideSkippedTests', 'Hide skipped tests from the output'],
+  ['--hideSkippedTestFiles', 'Hide skipped test files from the output'],
+  ['--retry <retry>', 'Number of times to retry a test if it fails'],
+  [
+    '--bail [number]',
+    'Stop running tests after n failures. Set to 0 to run all tests regardless of failures',
+  ],
+  [
+    '--shard <index/count>',
+    'Split tests into several shards. This is useful for running tests in parallel on multiple machines.',
+  ],
+  ['--maxConcurrency <value>', 'Maximum number of concurrent tests'],
+  [
+    '--clearMocks',
+    'Automatically clear mock calls, instances, contexts and results before every test',
+  ],
+  ['--resetMocks', 'Automatically reset mock state before every test'],
+  [
+    '--restoreMocks',
+    'Automatically restore mock state and implementation before every test',
+  ],
+  ['--browser', 'Run tests in browser mode'],
+  ['--browser.enabled', 'Run tests in browser mode'],
+  [
+    '--browser.name <name>',
+    'Browser to use: chromium, firefox, webkit (default: chromium)',
+  ],
+  ['--browser.headless', 'Run browser in headless mode (default: true in CI)'],
+  ['--browser.port <port>', 'Port for the browser mode dev server'],
+  ['--browser.strictPort', 'Exit if the specified port is already in use'],
+  [
+    '--unstubGlobals',
+    'Restores all global variables that were changed with `rstest.stubGlobal` before every test',
+  ],
+  [
+    '--unstubEnvs',
+    'Restores all runtime env values that were changed with `rstest.stubEnv` before every test',
+  ],
+  [
+    '--includeTaskLocation',
+    'Collect test and suite locations. This might increase the running time.',
+  ],
+];
+
+const poolOptionDefinitions: OptionDefinition[] = [
+  ['--pool <type>', 'Shorthand for --pool.type'],
+  ['--pool.type <type>', 'Specify the test pool type (forks | threads)'],
+  [
+    '--pool.maxWorkers <value>',
+    'Maximum number or percentage of workers (e.g. 4 or 50%)',
+  ],
+  [
+    '--pool.minWorkers <value>',
+    'Minimum number or percentage of workers (e.g. 1 or 25%)',
+  ],
+  [
+    '--pool.execArgv <arg>',
+    'Additional Node.js execArgv passed to worker processes (can be specified multiple times)',
+  ],
+];
+
+const mergeReportsOptionDefinitions: OptionDefinition[] = [
+  [
+    '-c, --config <config>',
+    'Specify the configuration file, can be a relative or absolute path',
+  ],
+  [
+    '--config-loader <loader>',
+    'Specify the loader to load the config file (auto | jiti | native)',
+    { default: 'auto' },
+  ],
+  [
+    '-r, --root <root>',
+    'Specify the project root directory, can be an absolute path or a path relative to cwd',
+  ],
+  ['--coverage', 'Enable code coverage collection'],
+  ['--reporters, --reporter <name>', 'Specify the reporter(s) to use'],
+  ['--cleanup', 'Remove blob reports directory after merging'],
+];
+
+const hiddenPassthroughOptionDefinitions: OptionDefinition[] = [
+  ['--isolate', 'Run tests in an isolated environment'],
+];
+
+const listCommandOptionDefinitions: OptionDefinition[] = [
+  ['--filesOnly', 'only list the test files'],
+  ['--json [boolean/path]', 'print tests as JSON or write to a file'],
+  ['--includeSuites', 'include suites in output'],
+  ['--printLocation', 'print test case location'],
+  ['--summary', 'print a summary after the list'],
+];
+
+const applyOptions = (
+  command: CAC | Command,
+  definitions: readonly OptionDefinition[],
+): void => {
+  for (const [rawName, description, config] of definitions) {
+    command.option(rawName, description, config);
+  }
+};
+
+const applyRuntimeCommandOptions = (command: Command): void => {
+  applyOptions(command, runtimeOptionDefinitions);
+  applyOptions(command, poolOptionDefinitions);
+};
+
+/**
+ * Derives the set of option names that consume a following value-bearing
+ * argument, directly from the cac option definitions. cac treats an option as
+ * value-taking when its rawName carries a `<required>` or `[optional]` token,
+ * so any rawName containing a `<` or `[` is value-taking — the same way cac
+ * classifies each option when it parses the rawName. Every comma-separated
+ * alias before the first such token (e.g. both `-c` and `--config`) is
+ * registered.
+ *
+ * Single owner: previously this was a hand-maintained literal that had to be
+ * kept byte-for-byte in sync with the five option-definition arrays — adding a
+ * new value-taking flag silently desynced argument splitting in
+ * {@link getCliCommand}. Tokens stay RAW (no de-dashing/camelCasing) because
+ * they are matched against `arg.split('=', 1)[0]`.
+ */
+const valueTakingOptionNames = (
+  definitions: readonly OptionDefinition[][],
+): Set<string> => {
+  const names = new Set<string>();
+  for (const group of definitions) {
+    for (const [rawName] of group) {
+      // The aliases end at the first `<required>` / `[optional]` token; an
+      // option with neither token is a boolean flag, which is not value-taking.
+      const lt = rawName.indexOf('<');
+      const sq = rawName.indexOf('[');
+      if (lt < 0 && sq < 0) {
+        continue;
+      }
+      const tokenAt = lt < 0 ? sq : sq < 0 ? lt : Math.min(lt, sq);
+      for (const alias of rawName.slice(0, tokenAt).split(',')) {
+        const trimmed = alias.trim();
+        if (trimmed) {
+          names.add(trimmed);
+        }
+      }
+    }
+  }
+  return names;
+};
+
+const commands = new Set(['init', 'list', 'merge-reports', 'run', 'watch']);
+
+export const valueTakingOptions: Set<string> = valueTakingOptionNames([
+  runtimeOptionDefinitions,
+  poolOptionDefinitions,
+  mergeReportsOptionDefinitions,
+  hiddenPassthroughOptionDefinitions,
+  listCommandOptionDefinitions,
+]);
+
+const getCliCommand = (argv: string[]): string | undefined => {
+  for (let index = 2; index < argv.length; index++) {
+    const arg = argv[index];
+
+    if (arg === '--') {
+      return;
+    }
+
+    if (!arg) {
+      continue;
+    }
+
+    if (commands.has(arg)) {
+      return arg;
+    }
+
+    if (!arg.startsWith('-')) {
+      return;
+    }
+
+    const optionName = arg.split('=', 1)[0];
+    if (
+      optionName &&
+      arg === optionName &&
+      valueTakingOptions.has(optionName) &&
+      argv[index + 1] &&
+      !argv[index + 1]!.startsWith('-')
+    ) {
+      index++;
+    }
+  }
+
+  return;
+};
+
+const normalizeCoverageCliArgs = (argv: string[]): string[] => {
+  const command = getCliCommand(argv);
+  if (command === 'init' || command === 'merge-reports') {
+    return argv;
+  }
+
+  return argv.map((arg) => {
+    if (arg === '--coverage') {
+      return '--coverage.enabled';
+    }
+    if (arg.startsWith('--coverage=')) {
+      return `--coverage.enabled=${arg.slice('--coverage='.length)}`;
+    }
+    if (arg === '--no-coverage') {
+      return '--coverage.enabled=false';
+    }
+
+    return arg;
+  });
+};
+
+const normalizePoolCliArgs = (argv: string[]): string[] => {
+  const hasPoolNestedOption = argv.some((arg) => arg.startsWith('--pool.'));
+
+  if (!hasPoolNestedOption) {
+    return argv;
+  }
+
+  return argv.map((arg) => {
+    if (arg === '--pool') {
+      return '--pool.type';
+    }
+    if (arg.startsWith('--pool=')) {
+      return `--pool.type=${arg.slice('--pool='.length)}`;
+    }
+
+    return arg;
+  });
+};
+
+const normalizeBrowserCliArgs = (argv: string[]): string[] => {
+  const hasBrowserNestedOption = argv.some((arg) =>
+    arg.startsWith('--browser.'),
+  );
+
+  if (!hasBrowserNestedOption) {
+    return argv;
+  }
+
+  return argv.map((arg) => {
+    if (arg === '--browser') {
+      return '--browser.enabled';
+    }
+    if (arg.startsWith('--browser=')) {
+      return `--browser.enabled=${arg.slice('--browser='.length)}`;
+    }
+    if (arg === '--no-browser') {
+      return '--browser.enabled=false';
+    }
+
+    return arg;
+  });
+};
+
+const normalizeCliArgs = (argv: string[]): string[] =>
+  normalizePoolCliArgs(normalizeBrowserCliArgs(normalizeCoverageCliArgs(argv)));
+
+const normalizeMixedCliOptions = (cli: CAC): void => {
+  const originalParse = cli.parse.bind(cli);
+
+  cli.parse = ((argv, options) =>
+    originalParse(
+      normalizeCliArgs(argv ?? process.argv),
+      options,
+    )) as CAC['parse'];
+};
+
+const filterHelpOptions = (
+  sections: Array<{ title?: string; body: string }>,
+  hiddenOptionPrefixes: string[],
+) =>
+  sections.map((section) => {
+    if (section.title !== 'Options') {
+      return section;
+    }
+
+    return {
+      ...section,
+      body: section.body
+        .split('\n')
+        .filter(
+          (line) =>
+            !hiddenOptionPrefixes.some((prefix) =>
+              line.trimStart().startsWith(prefix),
+            ),
+        )
+        .join('\n'),
+    };
+  });
 
 const handleUnexpectedExit = (rstest: RstestInstance | undefined, err: any) => {
   for (const reporter of rstest?.context.reporters || []) {
@@ -153,13 +429,312 @@ const resolveCliRuntime = async (options: CommonOptions) => {
   };
 };
 
+export const normalizeCliFilters = (
+  filters: ReadonlyArray<string | number>,
+): string[] => filters.map((filter) => normalize(String(filter)));
+
+export const isRelatedRun = (options: CommonOptions): boolean =>
+  options.related === true ||
+  options.findRelatedTests === true ||
+  options.changed !== undefined;
+
+export const validateRelatedCliOptions = (options: CommonOptions): void => {
+  const relatedOptionCount = [
+    options.related === true,
+    options.findRelatedTests === true,
+    options.changed !== undefined,
+  ].filter(Boolean).length;
+
+  if (relatedOptionCount > 1) {
+    throw new Error(
+      'Options `--related`, `--findRelatedTests`, and `--changed` cannot be used together.',
+    );
+  }
+};
+
+const formatGitError = (error: unknown): string | undefined => {
+  if (error instanceof Error) {
+    if ('code' in error && error.code === 'ENOENT') {
+      return 'Git is not installed or not available on PATH.';
+    }
+
+    const stderr = 'stderr' in error ? error.stderr : undefined;
+    if (typeof stderr === 'string' && stderr.trim()) {
+      return stderr.trim().split('\n')[0];
+    }
+
+    if (error.message) {
+      return error.message;
+    }
+  }
+
+  return undefined;
+};
+
+export const getForceRerunTriggers = ({
+  rootTriggers,
+  projects,
+}: {
+  rootTriggers: string[];
+  projects: Array<{ normalizedConfig: { forceRerunTriggers: string[] } }>;
+}): string[] =>
+  Array.from(
+    new Set([
+      ...rootTriggers,
+      ...projects.flatMap(
+        (project) => project.normalizedConfig.forceRerunTriggers,
+      ),
+    ]),
+  );
+
+export const getForceRerunTriggerFiles = ({
+  changedFiles,
+  triggers,
+  rootPath,
+}: {
+  changedFiles: string[];
+  triggers: string[];
+  rootPath: string;
+}): string[] => {
+  if (!triggers.length || !changedFiles.length) {
+    return [];
+  }
+
+  const matcher = picomatch(
+    triggers.map((trigger) => normalize(trigger)),
+    { windows: true },
+  );
+
+  return changedFiles.filter(
+    (file) =>
+      matcher(normalize(relative(rootPath, file))) || matcher(normalize(file)),
+  );
+};
+
+export const hasForceRerunTrigger = ({
+  changedFiles,
+  triggers,
+  rootPath,
+}: {
+  changedFiles: string[];
+  triggers: string[];
+  rootPath: string;
+}): boolean =>
+  getForceRerunTriggerFiles({ changedFiles, triggers, rootPath }).length > 0;
+
+export const resolveChangedFiles = async (
+  cwd: string,
+  since?: string,
+): Promise<string[]> => {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const execFileAsync = promisify(execFile);
+  const normalizedCwd = normalize(cwd);
+  const runGit = async (args: string[], gitCwd = cwd) => {
+    const { stdout } = await execFileAsync('git', args, {
+      cwd: gitCwd,
+      encoding: 'utf8',
+      maxBuffer: 10 * 1024 * 1024,
+    });
+
+    return stdout;
+  };
+  const resolveGitRoot = async () => {
+    const cdup = await runGit(['rev-parse', '--show-cdup']);
+
+    return normalize(resolve(cwd, cdup.trim()));
+  };
+  const git = async (args: string[], gitRoot: string) => {
+    const stdout = await runGit(args, gitRoot);
+
+    return stdout
+      .split('\0')
+      .filter(Boolean)
+      .map((file) => normalize(resolve(gitRoot, file)));
+  };
+
+  try {
+    const gitRoot = await resolveGitRoot();
+    const [committedFiles, stagedFiles, unstagedFiles] = await Promise.all([
+      since
+        ? git(
+            [
+              'diff',
+              '--name-only',
+              '-z',
+              '--diff-filter=ACMRTUXB',
+              `${since}...HEAD`,
+            ],
+            gitRoot,
+          )
+        : [],
+      git(
+        ['diff', '--name-only', '-z', '--cached', '--diff-filter=ACMRTUXB'],
+        gitRoot,
+      ),
+      git(
+        ['ls-files', '-z', '--others', '--modified', '--exclude-standard'],
+        gitRoot,
+      ),
+    ]);
+
+    return Array.from(
+      new Set([...committedFiles, ...stagedFiles, ...unstagedFiles]),
+    ).sort();
+  } catch (error) {
+    const reason = formatGitError(error);
+
+    throw new Error(
+      `Failed to resolve changed files for \`--changed\` from ${normalizedCwd}. Make sure the current root is inside a Git repository.${reason ? ` Git error: ${reason}` : ''}`,
+      { cause: error },
+    );
+  }
+};
+
+const getCoverageChangedOption = (options: CommonOptions) => {
+  if (options.coverage === undefined || typeof options.coverage === 'boolean') {
+    return undefined;
+  }
+
+  return options.coverage.changed;
+};
+
+const resolveEffectiveCliFilters = async ({
+  options,
+  filters,
+  createRstest,
+  config,
+  configFilePath,
+  projects,
+}: {
+  options: CommonOptions;
+  filters: Array<string | number>;
+  createRstest: (
+    input: {
+      config: RstestConfig;
+      configFilePath?: string;
+      projects: Project[];
+    },
+    command: RstestCommand,
+    fileFilters: string[],
+  ) => RstestInstance;
+  config: RstestConfig;
+  configFilePath?: string;
+  projects: Project[];
+}): Promise<{
+  effectiveFilters: string[];
+  fileFilterMode: FileFilterMode;
+  relatedFilters?: string[];
+  relatedMode?: 'related' | 'changed';
+  relatedResolutionEmpty?: boolean;
+  changedCoverageFilters?: string[];
+  relatedRerunReason?: 'forceRerunTrigger';
+  relatedRerunFiles?: string[];
+}> => {
+  const normalizedFilters = normalizeCliFilters(filters);
+
+  if (!isRelatedRun(options)) {
+    return { effectiveFilters: normalizedFilters, fileFilterMode: 'fuzzy' };
+  }
+
+  validateRelatedCliOptions(options);
+
+  if (options.changed !== undefined && normalizedFilters.length > 0) {
+    throw new Error(
+      'The `--changed` option cannot be used with positional filters.',
+    );
+  }
+
+  const { resolveRelatedTestFiles } = await import('../core/related');
+  const rstest = createRstest({ config, configFilePath, projects }, 'list', []);
+
+  const sourceFilters =
+    options.changed !== undefined
+      ? await resolveChangedFiles(
+          rstest.context.rootPath,
+          typeof options.changed === 'string' ? options.changed : undefined,
+        )
+      : normalizedFilters;
+
+  const forceRerunTriggerFiles =
+    options.changed !== undefined
+      ? getForceRerunTriggerFiles({
+          changedFiles: sourceFilters,
+          triggers: getForceRerunTriggers({
+            rootTriggers: rstest.context.normalizedConfig.forceRerunTriggers,
+            projects: rstest.context.projects,
+          }),
+          rootPath: rstest.context.rootPath,
+        })
+      : [];
+
+  if (forceRerunTriggerFiles.length) {
+    return {
+      effectiveFilters: [],
+      fileFilterMode: 'fuzzy',
+      relatedFilters: sourceFilters,
+      relatedMode: 'changed',
+      relatedResolutionEmpty: false,
+      relatedRerunReason: 'forceRerunTrigger',
+      relatedRerunFiles: forceRerunTriggerFiles.map((file) =>
+        normalize(relative(rstest.context.rootPath, file)),
+      ),
+    };
+  }
+
+  const relatedFiles = await resolveRelatedTestFiles(rstest.context, {
+    sourceFilters,
+    filterLabel: options.changed !== undefined ? '--changed' : '--related',
+    allowEmpty: options.changed !== undefined,
+  });
+  const coverageChanged = getCoverageChangedOption(options);
+
+  return {
+    effectiveFilters: relatedFiles,
+    fileFilterMode: 'exact',
+    relatedFilters: sourceFilters,
+    relatedMode: options.changed !== undefined ? 'changed' : 'related',
+    relatedResolutionEmpty: relatedFiles.length === 0,
+    changedCoverageFilters:
+      options.changed !== undefined && coverageChanged === undefined
+        ? sourceFilters
+        : undefined,
+  };
+};
+
+const resolveCoverageChangedFilters = async (
+  rstest: RstestInstance,
+): Promise<string[] | undefined> => {
+  const { changed } = rstest.context.normalizedConfig.coverage;
+
+  if (changed === undefined) {
+    return rstest.context.changedCoverageFilters;
+  }
+  if (changed === false) {
+    return undefined;
+  }
+
+  try {
+    return await resolveChangedFiles(
+      rstest.context.rootPath,
+      typeof changed === 'string' ? changed : undefined,
+    );
+  } catch (error) {
+    const reason = formatGitError(error);
+    logger.warn(
+      `Failed to resolve changed files for \`coverage.changed\`, falling back to full coverage.${reason ? ` Git error: ${reason}` : ''}`,
+    );
+    return undefined;
+  }
+};
+
 export const runRest = async ({
   options,
   filters,
   command,
 }: {
   options: CommonOptions;
-  filters: string[];
+  filters: Array<string | number>;
   command: RstestCommand;
 }): Promise<void> => {
   let rstest: RstestInstance | undefined;
@@ -170,20 +745,48 @@ export const runRest = async ({
   try {
     const { config, configFilePath, projects, createRstest } =
       await resolveCliRuntime(options);
+    const {
+      effectiveFilters,
+      fileFilterMode,
+      relatedFilters,
+      relatedMode,
+      relatedResolutionEmpty,
+      changedCoverageFilters,
+      relatedRerunReason,
+      relatedRerunFiles,
+    } = await resolveEffectiveCliFilters({
+      options,
+      filters,
+      createRstest,
+      config,
+      configFilePath,
+      projects,
+    });
+
     rstest = createRstest(
-      { config, configFilePath, projects },
+      { config, configFilePath, projects, trace: options.trace },
       command,
-      filters.map(normalize),
+      effectiveFilters,
+      fileFilterMode,
     );
+    rstest.context.relatedFilters = relatedFilters;
+    rstest.context.relatedMode = relatedMode;
+    rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
+    rstest.context.changedCoverageFilters = changedCoverageFilters;
+    rstest.context.changedCoverageFilters =
+      await resolveCoverageChangedFilters(rstest);
+    rstest.context.relatedRerunReason = relatedRerunReason;
+    rstest.context.relatedRerunFiles = relatedRerunFiles;
+    rstest.context.relatedRerunReason = relatedRerunReason;
+    rstest.context.relatedRerunFiles = relatedRerunFiles;
 
     process.on('uncaughtException', unexpectedlyExitHandler);
 
     process.on('unhandledRejection', unexpectedlyExitHandler);
 
     if (command === 'watch') {
-      const { watchFilesForRestart, onBeforeRestart } = await import(
-        '../core/restart'
-      );
+      const { watchFilesForRestart, onBeforeRestart } =
+        await import('../core/restart');
 
       onBeforeRestart(() => {
         process.off('uncaughtException', unexpectedlyExitHandler);
@@ -203,129 +806,169 @@ export const runRest = async ({
   }
 };
 
-export function setupCommands(): void {
+export function createCli(): CAC {
   const cli = cac('rstest');
 
-  cli.help();
+  cli.help((sections) => {
+    switch (cli.matchedCommand?.name) {
+      case 'init':
+      case 'merge-reports':
+        return filterHelpOptions(sections, ['--isolate']);
+      default:
+        return sections;
+    }
+  });
   cli.version(RSTEST_VERSION);
 
-  // Apply common options to all commands
-  applyCommonOptions(cli);
-
-  cli
+  const defaultCommand = cli
     .command('[...filters]', 'run tests')
-    .option('-w, --watch', 'Run tests in watch mode')
-    .action(
-      async (
-        filters: string[],
-        options: CommonOptions & {
-          watch?: boolean;
-        },
-      ) => {
-        if (!determineAgent().isAgent) {
-          showRstest();
-        }
-        if (options.watch) {
-          await runRest({ options, filters, command: 'watch' });
-        } else {
-          await runRest({ options, filters, command: 'run' });
-        }
+    .option('-w, --watch', 'Run tests in watch mode');
+  applyRuntimeCommandOptions(defaultCommand);
+  defaultCommand.action(
+    async (
+      filters: string[],
+      options: CommonOptions & {
+        watch?: boolean;
       },
-    );
-
-  cli
-    .command('run [...filters]', 'run tests without watch mode')
-    .action(async (filters: string[], options: CommonOptions) => {
+    ) => {
       if (!determineAgent().isAgent) {
         showRstest();
       }
-      await runRest({ options, filters, command: 'run' });
-    });
+      if (options.watch) {
+        await runRest({ options, filters, command: 'watch' });
+      } else {
+        await runRest({ options, filters, command: 'run' });
+      }
+    },
+  );
 
-  cli
-    .command('watch [...filters]', 'run tests in watch mode')
-    .action(async (filters: string[], options: CommonOptions) => {
+  const runCommand = cli.command(
+    'run [...filters]',
+    'run tests without watch mode',
+  );
+  applyRuntimeCommandOptions(runCommand);
+  runCommand.action(async (filters: string[], options: CommonOptions) => {
+    if (!determineAgent().isAgent) {
+      showRstest();
+    }
+    await runRest({ options, filters, command: 'run' });
+  });
+
+  const watchCommand = cli.command(
+    'watch [...filters]',
+    'run tests in watch mode',
+  );
+  applyRuntimeCommandOptions(watchCommand);
+  watchCommand.action(async (filters: string[], options: CommonOptions) => {
+    if (!determineAgent().isAgent) {
+      showRstest();
+    }
+    await runRest({ options, filters, command: 'watch' });
+  });
+
+  const listCommand = cli.command(
+    'list [...filters]',
+    'lists all test files that Rstest will run',
+  );
+  applyRuntimeCommandOptions(listCommand);
+  applyOptions(listCommand, listCommandOptionDefinitions);
+  listCommand.action(
+    async (filters: string[], options: CommonOptions & ListCommandOptions) => {
+      try {
+        const { config, configFilePath, projects, createRstest } =
+          await resolveCliRuntime(options);
+
+        if (options.printLocation) {
+          config.includeTaskLocation = true;
+        }
+
+        const {
+          effectiveFilters,
+          fileFilterMode,
+          relatedFilters,
+          relatedMode,
+          relatedResolutionEmpty,
+          changedCoverageFilters,
+          relatedRerunReason,
+          relatedRerunFiles,
+        } = await resolveEffectiveCliFilters({
+          options,
+          filters,
+          createRstest,
+          config,
+          configFilePath,
+          projects,
+        });
+
+        const rstest = createRstest(
+          { config, configFilePath, projects },
+          'list',
+          effectiveFilters,
+          fileFilterMode,
+        );
+        rstest.context.relatedFilters = relatedFilters;
+        rstest.context.relatedMode = relatedMode;
+        rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
+        rstest.context.changedCoverageFilters = changedCoverageFilters;
+        rstest.context.changedCoverageFilters =
+          await resolveCoverageChangedFilters(rstest);
+        rstest.context.relatedRerunReason = relatedRerunReason;
+        rstest.context.relatedRerunFiles = relatedRerunFiles;
+        rstest.context.relatedRerunReason = relatedRerunReason;
+        rstest.context.relatedRerunFiles = relatedRerunFiles;
+
+        await rstest.listTests({
+          filesOnly: options.filesOnly,
+          json: options.json,
+          includeSuites: options.includeSuites,
+          printLocation: options.printLocation,
+          summary: options.summary,
+        });
+      } catch (err) {
+        logger.error('Failed to run Rstest list.');
+        logger.error(formatError(err));
+        process.exit(1);
+      }
+    },
+  );
+
+  const mergeReportsCommand = cli.command(
+    'merge-reports [path]',
+    'Merge blob reports from multiple shards into a unified report',
+  );
+  applyOptions(mergeReportsCommand, mergeReportsOptionDefinitions);
+  applyOptions(mergeReportsCommand, hiddenPassthroughOptionDefinitions);
+  mergeReportsCommand.action(
+    async (
+      path: string | undefined,
+      options: CommonOptions & { cleanup?: boolean },
+    ) => {
       if (!determineAgent().isAgent) {
         showRstest();
       }
-      await runRest({ options, filters, command: 'watch' });
-    });
+      try {
+        const { config, configFilePath, projects, createRstest } =
+          await resolveCliRuntime(options);
+        const rstest = createRstest(
+          { config, configFilePath, projects },
+          'merge-reports',
+          [],
+        );
 
-  cli
-    .command('list [...filters]', 'lists all test files that Rstest will run')
-    .option('--filesOnly', 'only list the test files')
-    .option('--json [boolean/path]', 'print tests as JSON or write to a file')
-    .option('--includeSuites', 'include suites in output')
-    .option('--printLocation', 'print test case location')
-    .action(
-      async (
-        filters: string[],
-        options: CommonOptions & ListCommandOptions,
-      ) => {
-        try {
-          const { config, configFilePath, projects, createRstest } =
-            await resolveCliRuntime(options);
-
-          if (options.printLocation) {
-            config.includeTaskLocation = true;
-          }
-
-          const rstest = createRstest(
-            { config, configFilePath, projects },
-            'list',
-            filters.map(normalize),
-          );
-
-          await rstest.listTests({
-            filesOnly: options.filesOnly,
-            json: options.json,
-            includeSuites: options.includeSuites,
-            printLocation: options.printLocation,
-          });
-        } catch (err) {
-          logger.error('Failed to run Rstest list.');
-          logger.error(formatError(err));
-          process.exit(1);
-        }
-      },
-    );
-
-  cli
-    .command(
-      'merge-reports [path]',
-      'Merge blob reports from multiple shards into a unified report',
-    )
-    .option('--cleanup', 'Remove blob reports directory after merging')
-    .action(
-      async (
-        path: string | undefined,
-        options: CommonOptions & { cleanup?: boolean },
-      ) => {
-        if (!determineAgent().isAgent) {
-          showRstest();
-        }
-        try {
-          const { config, configFilePath, projects, createRstest } =
-            await resolveCliRuntime(options);
-          const rstest = createRstest(
-            { config, configFilePath, projects },
-            'merge-reports',
-            [],
-          );
-
-          await rstest.mergeReports({ path, cleanup: options.cleanup });
-        } catch (err) {
-          logger.error('Failed to merge reports.');
-          logger.error(formatError(err));
-          process.exit(1);
-        }
-      },
-    );
+        await rstest.mergeReports({ path, cleanup: options.cleanup });
+      } catch (err) {
+        logger.error('Failed to merge reports.');
+        logger.error(formatError(err));
+        process.exit(1);
+      }
+    },
+  );
 
   // init command - initialize rstest configuration
   cli
     .command('init [project]', 'Initialize rstest configuration')
     .option('--yes', 'Use default options (non-interactive)')
+    .option('--isolate', 'Run tests in an isolated environment')
     .action(async (project: string | undefined, options: { yes?: boolean }) => {
       try {
         let selectedProject = project;
@@ -370,5 +1013,12 @@ export function setupCommands(): void {
       }
     });
 
-  cli.parse();
+  normalizeMixedCliOptions(cli);
+
+  return cli;
+}
+
+export function setupCommands(): void {
+  const cli = createCli();
+  cli.parse(process.argv);
 }

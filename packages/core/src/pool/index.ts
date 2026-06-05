@@ -1,8 +1,8 @@
-import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import { basename, dirname, join } from 'pathe';
+import { basename, dirname, join, resolve } from 'pathe';
 import type {
+  CoverageMapData,
   EntryInfo,
   FormattedError,
   ProjectContext,
@@ -19,28 +19,22 @@ import type {
 } from '../types';
 import {
   color,
+  getFileTaskId,
   getForceColorEnv,
   isDeno,
+  logger,
   needFlagExperimentalDetectModule,
+  toError,
 } from '../utils';
+import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
-import { createForksPool } from './forks';
+import { getNumCpus, parseWorkers } from '../utils/workers';
+import { selectMemoryGate } from './memoryGate';
+import { Pool } from './pool';
+import type { PoolWorkerKind } from './types';
 
-const getNumCpus = (): number => {
-  return os.availableParallelism?.() ?? os.cpus().length;
-};
-
-const parseWorkers = (maxWorkers: string | number): number => {
-  const parsed = Number.parseInt(maxWorkers.toString(), 10);
-
-  if (typeof maxWorkers === 'string' && maxWorkers.trim().endsWith('%')) {
-    const numCpus = getNumCpus();
-    const workers = Math.floor((parsed / 100) * numCpus);
-    return Math.max(workers, 1);
-  }
-
-  return parsed > 0 ? parsed : 1;
-};
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
   const {
@@ -65,9 +59,11 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     snapshotFormat,
     env,
     logHeapUsage,
+    detectAsyncLeaks,
     bail,
     chaiConfig,
     includeTaskLocation,
+    silent,
   } = context.normalizedConfig;
 
   return {
@@ -96,9 +92,11 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     coverage: { ...coverage, reporters: [] }, // reporters may be functions so remove it
     snapshotFormat,
     logHeapUsage,
+    detectAsyncLeaks,
     bail,
     chaiConfig,
     includeTaskLocation,
+    silent,
   };
 };
 
@@ -109,19 +107,15 @@ const filterAssetsByEntry = async (
   setupAssets: string[],
 ) => {
   const assetNames = Array.from(new Set([...entryInfo.files!, ...setupAssets]));
-  const neededFilesPromise = getAssetFiles(assetNames);
-  const neededSourceMapsPromise = getSourceMaps(assetNames);
   const [neededFiles, neededSourceMaps] = await Promise.all([
-    neededFilesPromise,
-    neededSourceMapsPromise,
+    getAssetFiles(assetNames),
+    getSourceMaps(assetNames),
   ]);
 
   return { assetFiles: neededFiles, sourceMaps: neededSourceMaps };
 };
 
 const getNodeExecArgv = () => {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
   const suppressFile = join(__dirname, './rstestSuppressWarnings.cjs');
 
   return [
@@ -133,6 +127,140 @@ const getNodeExecArgv = () => {
     '--require',
     suppressFile,
   ].filter(Boolean) as string[];
+};
+
+/** Shared parameter type for `runTests` and `collectTests`. */
+type PoolDispatchParams = {
+  entries: EntryInfo[];
+  getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
+  getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
+  setupEntries: EntryInfo[];
+  updateSnapshot: SnapshotUpdateState;
+  project: ProjectContext;
+};
+
+/**
+ * Build a `PoolTask` for a single entry.  Shared by `runTests` and
+ * `collectTests` so the option-assembly logic lives in one place.
+ */
+const buildTask = async ({
+  type,
+  workerKind,
+  entryInfo,
+  index,
+  context,
+  project,
+  runtimeConfig,
+  setupEntries,
+  setupAssets,
+  updateSnapshot,
+  getAssetFiles,
+  getSourceMaps,
+  rpcMethods,
+  traceSpan,
+}: {
+  type: 'run' | 'collect';
+  workerKind: PoolWorkerKind;
+  entryInfo: EntryInfo;
+  index: number;
+  context: RstestContext;
+  project: ProjectContext;
+  runtimeConfig: RuntimeConfig;
+  setupEntries: EntryInfo[];
+  setupAssets: string[];
+  updateSnapshot: SnapshotUpdateState;
+  getAssetFiles: PoolDispatchParams['getAssetFiles'];
+  getSourceMaps: PoolDispatchParams['getSourceMaps'];
+  rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
+  traceSpan: TraceSpan;
+}) => {
+  const getAssets = () =>
+    filterAssetsByEntry(entryInfo, getAssetFiles, getSourceMaps, setupAssets);
+  const traceArgs = {
+    project: project.name,
+    testPath: entryInfo.testPath,
+    type,
+  };
+
+  return {
+    worker: workerKind,
+    type,
+    options: {
+      entryInfo,
+      context: {
+        outputModule: project.outputModule,
+        taskId: index + 1,
+        project: project.name,
+        rootPath: context.rootPath,
+        projectRoot: project.rootPath,
+        runtimeConfig,
+        trace: context.trace,
+      },
+      type,
+      setupEntries,
+      updateSnapshot,
+      /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
+      assets: isMemorySufficient()
+        ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
+            ...traceArgs,
+            mode: 'eager',
+          })
+        : undefined,
+    },
+    rpcMethods: {
+      ...rpcMethods,
+      // getAssetsByEntry is only used when memory is not sufficient since it may be slow
+      getAssetsByEntry: () =>
+        traceSpan('host:get-assets-by-entry', 'host', getAssets, {
+          ...traceArgs,
+          mode: 'rpc',
+        }),
+    },
+  };
+};
+
+/**
+ * Convert a worker crash or pool error into a fail-status `TestFileResult`.
+ * Enriches the error with context about which test cases were running at the
+ * time of the crash (if any).
+ */
+const workerErrorToResult = (
+  err: unknown,
+  testPath: string,
+  projectName: string,
+  context: RstestContext,
+): TestFileResult => {
+  const error = toError(err);
+
+  (error as any).fullStack = true;
+  if (error.message.includes('Worker exited unexpectedly')) {
+    delete error.stack;
+  }
+
+  const runningModule = context.stateManager.runningModules.get(testPath);
+  const runningTests = runningModule?.runningTests;
+
+  if (runningTests?.length) {
+    const getCaseName = (test: TestCaseInfo) =>
+      `"${test.name}"${test.parentNames?.length ? ` (Under suite: ${test.parentNames?.join(' > ')})` : ''}`;
+
+    const hint =
+      runningTests.length === 1
+        ? `Maybe relevant test case: ${getCaseName(runningTests[0]!)} which is running when the error occurs.`
+        : `The below test cases may be relevant, as they were running when the error occurred:\n  - ${runningTests.map((t) => getCaseName(t)).join('\n  - ')}`;
+
+    error.message += `\n\n${color.white(hint)}`;
+  }
+
+  return {
+    testId: getFileTaskId(testPath),
+    project: projectName,
+    testPath,
+    status: 'fail',
+    name: '',
+    results: runningModule?.results || [],
+    errors: [error],
+  };
 };
 
 export const createPool = async ({
@@ -149,18 +277,17 @@ export const createPool = async ({
     setupEntries: EntryInfo[];
     updateSnapshot: SnapshotUpdateState;
     project: ProjectContext;
+    /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
+    onCoverageResult?: (coverage: CoverageMapData) => void;
+    /** Perfetto trace events forwarded for caller-owned dumping. */
+    onTraceEvents?: (events: TraceEvent[]) => void;
+    /** Records host-side pool slices in the caller-owned Perfetto trace. */
+    traceSpan: TraceSpan;
   }) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
   }>;
-  collectTests: (params: {
-    entries: EntryInfo[];
-    getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
-    getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
-    setupEntries: EntryInfo[];
-    updateSnapshot: SnapshotUpdateState;
-    project: ProjectContext;
-  }) => Promise<
+  collectTests: (params: PoolDispatchParams) => Promise<
     {
       tests: TestInfo[];
       testPath: string;
@@ -170,15 +297,59 @@ export const createPool = async ({
   >;
   close: () => Promise<void>;
 }> => {
-  // Some options may crash worker, e.g. --prof, --title.
+  const shouldEmitUserConsoleLog = ({
+    log,
+    projectConfig,
+  }: {
+    log: UserConsoleLog;
+    projectConfig: ProjectContext['normalizedConfig'];
+  }): boolean => {
+    return projectConfig.onConsoleLog?.(log.content, log.type) !== false;
+  };
+
+  const emitUserConsoleLog = async ({
+    log,
+    projectConfig,
+  }: {
+    log: UserConsoleLog;
+    projectConfig: ProjectContext['normalizedConfig'];
+  }): Promise<void> => {
+    // The worker forwards console output fire-and-forget (see `emitInterceptedLog`
+    // in runInPool): a delivery failure is dropped silently in the worker, and an
+    // error thrown here cannot travel back to fail the originating test — the
+    // worker's swallow would hide it. A user `onConsoleLog` filter or a reporter
+    // `onUserConsoleLog` that throws is a real defect, though, so surface it here
+    // on the host — where it occurs — rather than letting it vanish. This keeps
+    // console handling best-effort without hiding bugs.
+    try {
+      if (!shouldEmitUserConsoleLog({ log, projectConfig })) {
+        return;
+      }
+
+      await Promise.all(
+        reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
+      );
+    } catch (error) {
+      logger.error(color.red('Failed to handle console log:'), toError(error));
+    }
+  };
+
+  // Propagate parent execArgv to workers, except flags known to cause issues
+  // in child processes (--prof writes per-worker profiling logs, --title is
+  // meaningless for workers). Safe for child_process.fork; the referenced
+  // Node.js issue (#41103) only affects worker_threads.
   // https://github.com/nodejs/node/issues/41103
-  const execArgv = process.execArgv.filter(
-    (execArg) =>
-      execArg.startsWith('--perf') ||
-      execArg.startsWith('--cpu-prof') ||
-      execArg.startsWith('--heap-prof') ||
-      execArg.startsWith('--diagnostic-dir'),
-  );
+  const blockedFlags = ['--prof', '--title'];
+  const execArgv = process.execArgv.filter((arg, i, arr) => {
+    if (blockedFlags.some((f) => arg === f || arg.startsWith(`${f}=`))) {
+      return false;
+    }
+    // skip standalone value following --title (handles `--title foo` form)
+    if (i > 0 && arr[i - 1] === '--title') {
+      return false;
+    }
+    return true;
+  });
 
   const numCpus = getNumCpus();
 
@@ -186,6 +357,8 @@ export const createPool = async ({
     normalizedConfig: { pool: poolOptions, isolate },
     reporters,
   } = context;
+
+  const workerKind: PoolWorkerKind = poolOptions.type ?? 'forks';
 
   const threadsCount =
     context.command === 'watch'
@@ -199,11 +372,11 @@ export const createPool = async ({
       : Math.min(recommendWorkerCount, threadsCount);
 
   const maxWorkers = poolOptions.maxWorkers
-    ? parseWorkers(poolOptions.maxWorkers)
+    ? parseWorkers(poolOptions.maxWorkers, numCpus)
     : recommendCount;
 
   const minWorkers = poolOptions.minWorkers
-    ? parseWorkers(poolOptions.minWorkers)
+    ? parseWorkers(poolOptions.minWorkers, numCpus)
     : maxWorkers < recommendCount
       ? maxWorkers
       : recommendCount;
@@ -212,8 +385,8 @@ export const createPool = async ({
     throw `Invalid pool configuration: maxWorkers(${maxWorkers}) cannot be less than minWorkers(${minWorkers}).`;
   }
 
-  const pool = createForksPool({
-    ...poolOptions,
+  const pool = new Pool({
+    workerEntry: resolve(__dirname, './worker.js'),
     isolate,
     maxWorkers,
     minWorkers,
@@ -226,10 +399,17 @@ export const createPool = async ({
       NODE_ENV: 'test',
       ...getForceColorEnv(),
       ...process.env,
-    },
+    } as Record<string, string>,
+    memoryGate: selectMemoryGate(workerKind),
   });
 
-  const rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'> = {
+  const createRpcMethods = ({
+    runtimeConfig,
+    projectConfig,
+  }: {
+    runtimeConfig: RuntimeConfig;
+    projectConfig: ProjectContext['normalizedConfig'];
+  }): Omit<RuntimeRPC, 'getAssetsByEntry'> => ({
     onTestCaseStart: async (test: TestCaseInfo) => {
       context.stateManager.onTestCaseStart(test);
       Promise.all(
@@ -246,9 +426,11 @@ export const createPool = async ({
       return context.stateManager.getCountOfFailedTests();
     },
     onConsoleLog: async (log: UserConsoleLog) => {
-      await Promise.all(
-        reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
-      );
+      if (runtimeConfig.disableConsoleIntercept) {
+        return;
+      }
+
+      await emitUserConsoleLog({ log, projectConfig });
     },
     onTestFileStart: async (test: TestFileInfo) => {
       context.stateManager.onTestFileStart(test.testPath);
@@ -274,7 +456,7 @@ export const createPool = async ({
     resolveSnapshotPath: (testPath: string): string => {
       const snapExtension = '.snap';
       const resolver =
-        context.normalizedConfig.resolveSnapshotPath ||
+        projectConfig.resolveSnapshotPath ||
         // test/index.ts -> test/__snapshots__/index.ts.snap
         (() =>
           join(
@@ -286,7 +468,7 @@ export const createPool = async ({
       const snapshotPath = resolver(testPath, snapExtension);
       return snapshotPath;
     },
-  };
+  });
 
   return {
     runTests: async ({
@@ -296,90 +478,69 @@ export const createPool = async ({
       setupEntries,
       project,
       updateSnapshot,
+      onCoverageResult,
+      onTraceEvents,
+      traceSpan,
     }) => {
       const projectName = project.name;
       const runtimeConfig = getRuntimeConfig(project);
+      const rpcMethods = createRpcMethods({
+        runtimeConfig,
+        projectConfig: project.normalizedConfig,
+      });
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       const results = await Promise.all(
         entries.map(async (entryInfo, index) => {
-          const result = await pool
-            .runTest({
-              options: {
-                entryInfo,
-                context: {
-                  outputModule: project.outputModule,
-                  taskId: index + 1,
-                  project: projectName,
-                  rootPath: context.rootPath,
-                  projectRoot: project.rootPath,
-                  runtimeConfig,
-                },
+          const traceArgs = {
+            project: projectName,
+            testPath: entryInfo.testPath,
+          };
+          const task = await traceSpan(
+            'host:build-task',
+            'host',
+            () =>
+              buildTask({
                 type: 'run',
+                workerKind,
+                entryInfo,
+                index,
+                context,
+                project,
+                runtimeConfig,
                 setupEntries,
+                setupAssets,
                 updateSnapshot,
-                /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
-                assets: isMemorySufficient()
-                  ? await filterAssetsByEntry(
-                      entryInfo,
-                      getAssetFiles,
-                      getSourceMaps,
-                      setupAssets,
-                    )
-                  : undefined,
-              },
-              rpcMethods: {
-                ...rpcMethods,
-                // getAssetsByEntry is only used when memory is not sufficient since it may be slow
-                getAssetsByEntry: async () =>
-                  filterAssetsByEntry(
-                    entryInfo,
-                    getAssetFiles,
-                    getSourceMaps,
-                    setupAssets,
-                  ),
-              },
-            })
-            .catch((err: unknown) => {
-              (err as any).fullStack = true;
-              if (err instanceof Error) {
-                if (err.message.includes('Worker exited unexpectedly')) {
-                  delete err.stack;
-                }
-                const runningModule = context.stateManager.runningModules.get(
-                  entryInfo.testPath,
-                );
-                if (runningModule?.runningTests.length) {
-                  const getCaseName = (test: TestCaseInfo) =>
-                    `"${test.name}"${test.parentNames?.length ? ` (Under suite: ${test.parentNames?.join(' > ')})` : ''}`;
-                  if (runningModule?.runningTests.length === 1) {
-                    err.message += `\n\n${color.white(`Maybe relevant test case: ${getCaseName(runningModule.runningTests[0]!)} which is running when the error occurs.`)}`;
-                  } else {
-                    err.message += `\n\n${color.white(`The below test cases may be relevant, as they were running when the error occurred:\n  - ${runningModule.runningTests.map((t) => getCaseName(t)).join('\n  - ')}`)}`;
-                  }
-                }
+                getAssetFiles,
+                getSourceMaps,
+                rpcMethods,
+                traceSpan,
+              }),
+            traceArgs,
+          );
 
-                return {
-                  testId: '0',
-                  project: projectName,
-                  testPath: entryInfo.testPath,
-                  status: 'fail',
-                  name: '',
-                  results: runningModule?.results || [],
-                  errors: [err],
-                } as TestFileResult;
-              }
+          const result = await traceSpan(
+            'host:pool-run-test',
+            'host',
+            () => pool.runTest(task),
+            { ...traceArgs, worker: task.worker },
+          ).catch((err: unknown) => {
+            return workerErrorToResult(
+              err,
+              entryInfo.testPath,
+              projectName,
+              context,
+            );
+          });
 
-              return {
-                testId: '0',
-                project: projectName,
-                testPath: entryInfo.testPath,
-                status: 'fail',
-                name: '',
-                results: [],
-                errors: [err],
-              } as TestFileResult;
-            });
+          if (result.coverage) {
+            onCoverageResult?.(result.coverage);
+            delete result.coverage;
+          }
+          if (result.traceEvents) {
+            onTraceEvents?.(result.traceEvents);
+            delete result.traceEvents;
+          }
           context.stateManager.onTestFileResult(result);
           reporters.map((reporter) => reporter.onTestFileResult?.(result));
           return result;
@@ -406,55 +567,41 @@ export const createPool = async ({
     }) => {
       const runtimeConfig = getRuntimeConfig(project);
       const projectName = project.normalizedConfig.name;
-
+      const rpcMethods = createRpcMethods({
+        runtimeConfig,
+        projectConfig: project.normalizedConfig,
+      });
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       return Promise.all(
         entries.map(async (entryInfo, index) => {
-          return pool
-            .collectTests({
-              options: {
-                entryInfo,
-                context: {
-                  taskId: index + 1,
-                  project: projectName,
-                  outputModule: project.outputModule,
-                  rootPath: context.rootPath,
-                  projectRoot: project.rootPath,
-                  runtimeConfig,
-                },
-                type: 'collect',
-                setupEntries,
-                updateSnapshot,
-                assets: isMemorySufficient()
-                  ? await filterAssetsByEntry(
-                      entryInfo,
-                      getAssetFiles,
-                      getSourceMaps,
-                      setupAssets,
-                    )
-                  : undefined,
-              },
-              rpcMethods: {
-                ...rpcMethods,
-                getAssetsByEntry: async () =>
-                  filterAssetsByEntry(
-                    entryInfo,
-                    getAssetFiles,
-                    getSourceMaps,
-                    setupAssets,
-                  ),
-              },
-            })
-            .catch((err: FormattedError) => {
-              err.fullStack = true;
-              return {
-                project: projectName,
-                testPath: entryInfo.testPath,
-                tests: [],
-                errors: [err],
-              };
-            });
+          const task = await buildTask({
+            type: 'collect',
+            workerKind,
+            entryInfo,
+            index,
+            context,
+            project,
+            runtimeConfig,
+            setupEntries,
+            setupAssets,
+            updateSnapshot,
+            getAssetFiles,
+            getSourceMaps,
+            rpcMethods,
+            // `collect` does not participate in tracing.
+            traceSpan: noopTraceSpan,
+          });
+
+          return pool.collectTests(task).catch((err: FormattedError) => {
+            err.fullStack = true;
+            return {
+              project: projectName,
+              testPath: entryInfo.testPath,
+              tests: [],
+              errors: [err],
+            };
+          });
         }),
       );
     },

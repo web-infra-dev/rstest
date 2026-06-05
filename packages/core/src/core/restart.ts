@@ -48,7 +48,7 @@ const beforeRestart = async ({
   cleaners = [];
 };
 
-export const restart = async ({
+const restart = async ({
   filePath,
   clear = true,
   options,
@@ -57,7 +57,7 @@ export const restart = async ({
 }: {
   root: string;
   options: CommonOptions;
-  filters: string[];
+  filters: Array<string | number>;
   filePath?: string;
   clear?: boolean;
 }): Promise<boolean> => {
@@ -75,7 +75,7 @@ export async function watchFilesForRestart({
   filters,
 }: {
   options: CommonOptions;
-  filters: string[];
+  filters: Array<string | number>;
   rstest: RstestInstance;
   watchOptions?: ChokidarOptions;
 }): Promise<void> {

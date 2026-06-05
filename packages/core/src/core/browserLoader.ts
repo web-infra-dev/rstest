@@ -4,37 +4,47 @@ import type {
   BrowserTestRunOptions,
   BrowserTestRunResult,
   ListCommandResult,
+  RstestContext,
 } from '../types';
 import { color, logger } from '../utils';
 
 export type { BrowserTestRunOptions, BrowserTestRunResult } from '../types';
 
 /**
- * Type definition for the @rstest/browser internal exports.
+ * Core-owned contract for the `@rstest/browser/internal` host module.
+ *
+ * This is the single source of truth for the core↔browser load boundary:
+ * `loadBrowserModule` returns it, and `@rstest/browser`'s public entry
+ * constrains its exports against it via `satisfies`. The `context` is typed
+ * as {@link RstestContext} (not `unknown`) so drift between the two sides —
+ * such as a dropped `options` argument — surfaces as a type error.
  */
-export interface BrowserModule {
-  validateBrowserConfig: (context: unknown) => void;
+export interface BrowserHostModule {
+  validateBrowserConfig: (context: RstestContext) => void;
   runBrowserTests: (
-    context: unknown,
+    context: RstestContext,
     options?: BrowserTestRunOptions,
   ) => Promise<BrowserTestRunResult | void>;
   listBrowserTests: (
-    context: unknown,
-    options?: {
-      shardedEntries?: Map<string, { entries: Record<string, string> }>;
-    },
+    context: RstestContext,
+    options?: Pick<BrowserTestRunOptions, 'shardedEntries'>,
   ) => Promise<{
     list: ListCommandResult[];
     close: () => Promise<void>;
   }>;
 }
 
-export interface LoadBrowserModuleOptions {
+interface LoadBrowserModuleOptions {
   /**
    * List of project root directories to try resolving @rstest/browser from.
    * This allows resolving from project-specific node_modules in monorepo setups.
    */
   projectRoots?: string[];
+  /**
+   * When true, a missing or version-mismatched `@rstest/browser` throws instead
+   * of calling `process.exit(1)`. See the `embedded` option on `createRstest`.
+   */
+  embedded?: boolean;
 }
 
 /**
@@ -48,11 +58,11 @@ export interface LoadBrowserModuleOptions {
  */
 export async function loadBrowserModule(
   options: LoadBrowserModuleOptions = {},
-): Promise<BrowserModule> {
+): Promise<BrowserHostModule> {
   const coreVersion = RSTEST_VERSION;
-  const { projectRoots = [] } = options;
+  const { projectRoots = [], embedded = false } = options;
 
-  let browserModule: BrowserModule;
+  let browserModule: BrowserHostModule;
   let browserVersion: string;
 
   // Build resolution bases list with project roots first
@@ -78,12 +88,23 @@ export async function loadBrowserModule(
         '@rstest/browser/package.json',
       );
 
-      browserModule = await import(pathToFileURL(browserPath).href);
+      // The dynamic import namespace is unknown-shaped; the runtime contract is
+      // guaranteed on the `@rstest/browser` side via `satisfies BrowserHostModule`.
+      browserModule = (await import(
+        pathToFileURL(browserPath).href
+      )) as BrowserHostModule;
       const browserPkg = userRequire(browserPkgPath);
       browserVersion = browserPkg.version;
 
       // Successfully resolved, validate version and return
       if (browserVersion !== coreVersion) {
+        if (embedded) {
+          throw new Error(
+            `Version mismatch between @rstest/core (${coreVersion}) and ` +
+              `@rstest/browser (${browserVersion}). Install matching versions: ` +
+              `npm install @rstest/browser@${coreVersion}`,
+          );
+        }
         logger.error(
           `\n${color.red('Error:')} Version mismatch between ${color.cyan('@rstest/core')} and ${color.cyan('@rstest/browser')}.\n`,
         );
@@ -111,6 +132,12 @@ export async function loadBrowserModule(
   }
 
   // All resolution strategies failed
+  if (embedded) {
+    throw new Error(
+      `Browser mode requires @rstest/browser to be installed: ` +
+        `npm install @rstest/browser@${coreVersion}`,
+    );
+  }
   logger.error(
     `\n${color.red('Error:')} Browser mode requires ${color.cyan('@rstest/browser')} to be installed.\n`,
   );

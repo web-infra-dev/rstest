@@ -1,37 +1,33 @@
 import { type BirpcOptions, type BirpcReturn, createBirpc } from 'birpc';
-import type { TinypoolWorkerMessage } from 'tinypool';
+import { isRpcEnvelope, wrapRpc } from '../../pool/protocol';
 import type { RuntimeRPC, ServerRPC } from '../../types';
+import { channel } from './channels';
 
 export type WorkerRPC = BirpcReturn<RuntimeRPC, ServerRPC>;
 
-const processSend = process.send!.bind(process);
-const processOn = process.on.bind(process);
-const processOff = process.off.bind(process);
-
-export type WorkerRpcOptions = Pick<
+type WorkerRpcOptions = Pick<
   BirpcOptions<ServerRPC>,
   'on' | 'post' | 'serialize' | 'deserialize'
 >;
 
-export function createForksRpcOptions({
+export function createWorkerRpcOptions({
   dispose = [],
 }: {
   dispose?: (() => void)[];
 }): WorkerRpcOptions {
   return {
     post(v) {
-      processSend(v);
+      channel.send(wrapRpc(v));
     },
     on(fn) {
       const handler = (message: any, ...extras: any) => {
-        // Do not react on Tinypool's internal messaging
-        if ((message as TinypoolWorkerMessage)?.__tinypool_worker_message__) {
+        if (!isRpcEnvelope(message)) {
           return;
         }
-        return fn(message, ...extras);
+        return fn(message.payload, ...extras);
       };
-      processOn('message', handler);
-      dispose.push(() => processOff('message', handler));
+      channel.on(handler);
+      dispose.push(() => channel.off(handler));
     },
   };
 }

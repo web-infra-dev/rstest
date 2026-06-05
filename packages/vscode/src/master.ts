@@ -39,7 +39,6 @@ export class RstestApi {
       if (configuredPackagePath) {
         // Support ${workspaceFolder} placeholder
         configuredPackagePath = configuredPackagePath.replace(
-          // biome-ignore lint: This is a VS Code config placeholder string
           '${workspaceFolder}',
           this.workspace.uri.fsPath,
         );

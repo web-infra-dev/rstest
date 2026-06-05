@@ -3,16 +3,17 @@ import type {
   CoverageProvider as RstestCoverageProvider,
 } from '@rstest/core';
 import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
-import istanbulLibCoverage from 'istanbul-lib-coverage';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import {
+  createFastCoverageMap,
+  mapWithConcurrency,
   readInitialCoverage,
   registerSourceMapURL,
   transformCoverage,
 } from './utils';
 
-const { createCoverageMap } = istanbulLibCoverage;
+const UNTESTED_FILES_CONCURRENCY = 4;
 
 // Global type declaration for coverage
 declare global {
@@ -20,7 +21,7 @@ declare global {
 }
 
 export class CoverageProvider implements RstestCoverageProvider {
-  private coverageMap: ReturnType<typeof createCoverageMap> | null = null;
+  private coverageMap: CoverageMap | null = null;
   // Cache to avoid redundant readFile calls in generateCoverageForUntestedFiles and generateReports.
   private sourcemapUrlCache = new Map<string, string | undefined>();
 
@@ -44,8 +45,10 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     const { readFile } = await import('node:fs/promises');
 
-    return await Promise.all(
-      files.map(async (file) => {
+    return mapWithConcurrency(
+      files,
+      UNTESTED_FILES_CONCURRENCY,
+      async (file) => {
         try {
           const content = await readFile(file, 'utf-8');
           const { code } = await transformCoverage(
@@ -62,22 +65,25 @@ export class CoverageProvider implements RstestCoverageProvider {
           process.exitCode = 1;
           return undefined;
         }
-      }),
+      },
     ).then((results) => results.filter((r): r is FileCoverageData => !!r));
   }
 
   createCoverageMap(): CoverageMap {
-    return createCoverageMap({});
+    return createFastCoverageMap();
   }
 
-  collect(): CoverageMap | null {
+  collect(_options?: {
+    assetFiles?: Record<string, string>;
+    sourceMaps?: Record<string, string>;
+  }): CoverageMap | null {
     if (typeof globalThis === 'undefined' || !globalThis.__coverage__) {
       return null;
     }
 
     try {
       if (!this.coverageMap) {
-        this.coverageMap = createCoverageMap();
+        this.coverageMap = this.createCoverageMap();
       }
       // Merge current coverage data
       if (this.coverageMap) {
@@ -86,7 +92,11 @@ export class CoverageProvider implements RstestCoverageProvider {
 
       return this.coverageMap;
     } catch (error) {
-      console.warn('Failed to collect coverage data:', error);
+      // Surface collection failures the same way the v8 provider does: log to
+      // stderr and mark the run as failed, so a broken coverage map never
+      // passes silently with a zero exit code.
+      console.error('Failed to collect coverage data:', error);
+      process.exitCode = 1;
       return null;
     }
   }

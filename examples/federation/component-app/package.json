@@ -2,6 +2,9 @@
   "name": "@examples/federation-component-app",
   "version": "1.0.0",
   "description": "",
+  "keywords": [],
+  "license": "ISC",
+  "author": "",
   "main": "index.js",
   "scripts": {
     "build": "rspack build --config rspack.browser.config.js ",
@@ -12,22 +15,19 @@
     "pretest": "pnpm -C ../node-local-remote build:node",
     "test": "rstest --reporter=verbose"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "dependencies": {
+    "@module-federation/node": "2.7.32",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
   "devDependencies": {
     "@module-federation/enhanced": "https://pkg.pr.new/module-federation/core/@module-federation/enhanced@3fe0a1a3b6b5eab3d2d8eba2e4fd554fc1bda214",
     "@module-federation/rstest": "https://pkg.pr.new/module-federation/core/@module-federation/rstest@517741e",
-    "@rsbuild/plugin-react": "^1.4.6",
-    "@rspack/cli": "2.0.0-canary-20260116",
-    "@rspack/core": "2.0.0-beta.6",
+    "@rsbuild/plugin-react": "^2.0.1",
+    "@rspack/cli": "~2.0.5",
+    "@rspack/core": "~2.0.5",
     "@rstest/core": "workspace:*",
     "concurrently": "8.2.2",
     "serve": "14.2.3"
-  },
-  "dependencies": {
-    "@module-federation/node": "2.7.32",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4"
   }
 }

@@ -8,27 +8,30 @@ import {
 } from '@rstest/browser-manifest';
 import type {
   CoverageMapData,
+  CurrentTaskInfo,
   RunnerHooks,
   RuntimeConfig,
   WorkerState,
-} from '@rstest/core/browser-runtime';
+} from '@rstest/core/internal/browser-runtime';
 import {
+  createBrowserTaskContext,
   createRstestRuntime,
   globalApis,
+  RSTEST_ENV_SYMBOL_KEY,
   setRealTimers,
-} from '@rstest/core/browser-runtime';
+  unwrapRegex,
+} from '@rstest/core/internal/browser-runtime';
 import { normalize } from 'pathe';
 import type {
   BrowserClientMessage,
-  BrowserDispatchRequest,
   BrowserProjectRuntime,
+  RunnerLifecycleMethod,
 } from '../protocol';
+import { DISPATCH_MESSAGE_TYPE, RSTEST_CONFIG_MESSAGE_TYPE } from '../protocol';
 import {
-  DISPATCH_MESSAGE_TYPE,
-  DISPATCH_NAMESPACE_RUNNER,
-  DISPATCH_RPC_REQUEST_TYPE,
-  RSTEST_CONFIG_MESSAGE_TYPE,
-} from '../protocol';
+  createRunnerLifecycleRequest,
+  sendRunnerLifecycle,
+} from './dispatchTransport';
 import { BrowserSnapshotEnvironment } from './snapshot';
 import {
   findNewScriptUrl,
@@ -42,14 +45,6 @@ declare global {
   var __coverage__: Record<string, unknown> | undefined;
 }
 
-type RunnerLifecycleMethod =
-  | 'file-ready'
-  | 'suite-start'
-  | 'suite-result'
-  | 'case-start';
-
-let runnerDispatchRequestId = 0;
-
 /**
  * Debug logger for browser client.
  * Only logs when debug mode is enabled (DEBUG=rstest on server side).
@@ -61,26 +56,12 @@ const debugLog = (...args: unknown[]): void => {
 };
 
 type RuntimeEnvStore = Record<string, string | undefined>;
-const RSTEST_ENV_SYMBOL = Symbol.for('rstest.env');
+const RSTEST_ENV_SYMBOL = Symbol.for(RSTEST_ENV_SYMBOL_KEY);
 
 type GlobalWithRuntimeEnv = typeof globalThis &
   Record<symbol, unknown> & {
     global?: typeof globalThis;
   };
-
-const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
-
-const unwrapRegex = (value: string): string | RegExp => {
-  if (value.startsWith(REGEXP_FLAG_PREFIX)) {
-    const raw = value.slice(REGEXP_FLAG_PREFIX.length);
-    const match = raw.match(/^\/(.+)\/([gimuy]*)$/);
-    if (match) {
-      const [, pattern, flags] = match;
-      return new RegExp(pattern!, flags);
-    }
-  }
-  return value;
-};
 
 const restoreRuntimeConfig = (
   config: BrowserProjectRuntime['runtimeConfig'],
@@ -146,19 +127,18 @@ const formatArg = (arg: unknown): string => {
   }
 };
 
+const getFileTaskId = (testPath: string): string => {
+  return `file:${testPath}`;
+};
+
 /**
  * Intercept console methods and forward to host via send().
  * Returns a restore function to revert console to original.
  */
 const interceptConsole = (
-  testPath: string,
+  getCurrentTask: () => CurrentTaskInfo | undefined,
   printConsoleTrace: boolean,
-  disableConsoleIntercept: boolean,
 ): (() => void) => {
-  if (disableConsoleIntercept) {
-    return () => {};
-  }
-
   const originalConsole = {
     log: console.log.bind(console),
     warn: console.warn.bind(console),
@@ -183,6 +163,7 @@ const interceptConsole = (
 
       // Format message
       const content = args.map(formatArg).join(' ');
+      const currentTask = getCurrentTask();
 
       // Send to host
       send({
@@ -190,7 +171,11 @@ const interceptConsole = (
         payload: {
           level,
           content,
-          testPath,
+          taskId: currentTask?.taskId,
+          taskName: currentTask?.taskName,
+          taskParentNames: currentTask?.taskParentNames,
+          taskType: currentTask?.taskType,
+          testPath: currentTask?.testPath ?? '',
           type: level === 'error' || level === 'warn' ? 'stderr' : 'stdout',
           trace: getConsoleTrace(),
         },
@@ -224,42 +209,30 @@ const send = (message: BrowserClientMessage): void => {
   }
   // Fallback: direct call if running outside iframe (not typical)
   // Note: This binding may not exist if not using Playwright
-  window.__rstest_dispatch__?.(message);
+  window[DISPATCH_MESSAGE_TYPE]?.(message);
 };
 
 const dispatchRunnerLifecycle = (
   method: RunnerLifecycleMethod,
   payload: unknown,
 ): void => {
-  const request: BrowserDispatchRequest = {
-    requestId: `runner-lifecycle-${++runnerDispatchRequestId}`,
-    namespace: DISPATCH_NAMESPACE_RUNNER,
-    method,
-    args: payload,
-  };
-
-  if (window.parent === window) {
-    const dispatchBridge = window.__rstest_dispatch_rpc__;
-    if (!dispatchBridge) {
-      debugLog(
-        '[Runner] Missing dispatch bridge for lifecycle method:',
-        method,
-      );
-      return;
-    }
-    void Promise.resolve(dispatchBridge(request)).catch((error: unknown) => {
+  sendRunnerLifecycle(
+    createRunnerLifecycleRequest(method, payload),
+    (error: unknown) => {
       debugLog('[Runner] Failed to dispatch lifecycle method:', method, error);
-    });
-    return;
-  }
-
-  send({
-    type: DISPATCH_RPC_REQUEST_TYPE,
-    payload: request,
-  });
+    },
+  );
 };
 
-/** Timeout for waiting for browser config from container (30 seconds) */
+/**
+ * Timeout for waiting for browser config from container (30 seconds).
+ *
+ * Coincidentally equal to the RPC default (client/dispatchTransport.ts) and the
+ * host's RUNNER_FRAMES_READY_TIMEOUT_MS (hostController.ts), but semantically
+ * distinct and in a different runtime, so deliberately not shared. Implicit
+ * invariant: this must not exceed the host's frames-ready timeout, or the host
+ * declares the runner un-ready before it can even receive its config.
+ */
 const CONFIG_WAIT_TIMEOUT_MS = 30_000;
 
 /**
@@ -520,7 +493,9 @@ const run = async () => {
         },
       };
 
-      const runtime = await createRstestRuntime(workerState);
+      const runtime = await createRstestRuntime(workerState, {
+        taskContext: createBrowserTaskContext(),
+      });
 
       // Register global APIs if globals config is enabled
       if (runtimeConfig.globals) {
@@ -570,13 +545,32 @@ const run = async () => {
   // 2. Run tests for each file
   for (const key of testKeysToRun) {
     const testPath = toAbsolutePath(key, currentProject.projectRoot);
+    const taskStack: CurrentTaskInfo[] = [
+      {
+        taskId: getFileTaskId(testPath),
+        taskType: 'file',
+        testPath,
+      },
+    ];
+
+    // Per-file TaskContext; taskStack supplies the concurrent attribution
+    // that the single-slot fallback can't.
+    const taskContext = createBrowserTaskContext();
+
+    const shouldInterceptConsole =
+      !runtimeConfig.disableConsoleIntercept ||
+      runtimeConfig.silent === true ||
+      runtimeConfig.silent === 'passed-only';
 
     // Intercept console methods to forward logs to host
-    const restoreConsole = interceptConsole(
-      testPath,
-      runtimeConfig.printConsoleTrace ?? false,
-      runtimeConfig.disableConsoleIntercept ?? false,
-    );
+    const restoreConsole = shouldInterceptConsole
+      ? interceptConsole(
+          () => taskContext.getCurrent() ?? taskStack[taskStack.length - 1],
+          runtimeConfig.disableConsoleIntercept
+            ? false
+            : (runtimeConfig.printConsoleTrace ?? false),
+        )
+      : () => {};
 
     const workerState: WorkerState = {
       project: projectRuntime.name,
@@ -586,6 +580,7 @@ const run = async () => {
       taskId: 0,
       outputModule: false,
       environment: 'browser',
+      currentTask: taskStack[0],
       testPath,
       distPath: testPath,
       snapshotOptions: {
@@ -595,7 +590,22 @@ const run = async () => {
       },
     };
 
-    const runtime = await createRstestRuntime(workerState);
+    const syncCurrentTask = (): void => {
+      workerState.currentTask = taskStack[taskStack.length - 1];
+    };
+
+    const removeTaskFromStack = (taskId: string): void => {
+      const taskIndex = taskStack.findLastIndex(
+        (task) => task.taskId === taskId,
+      );
+      if (taskIndex < 0) {
+        return;
+      }
+      taskStack.splice(taskIndex, 1);
+      syncCurrentTask();
+    };
+
+    const runtime = await createRstestRuntime(workerState, { taskContext });
 
     // Register global APIs if globals config is enabled
     if (runtimeConfig.globals) {
@@ -611,15 +621,33 @@ const run = async () => {
         dispatchRunnerLifecycle('file-ready', test);
       },
       onTestSuiteStart: async (test) => {
+        taskStack.push({
+          taskId: test.testId,
+          taskName: test.name,
+          taskParentNames: test.parentNames,
+          taskType: 'suite',
+          testPath: test.testPath,
+        });
+        syncCurrentTask();
         dispatchRunnerLifecycle('suite-start', test);
       },
       onTestSuiteResult: async (result) => {
+        removeTaskFromStack(result.testId);
         dispatchRunnerLifecycle('suite-result', result);
       },
       onTestCaseStart: async (test) => {
+        taskStack.push({
+          taskId: test.testId,
+          taskName: test.name,
+          taskParentNames: test.parentNames,
+          taskType: 'case',
+          testPath: test.testPath,
+        });
+        syncCurrentTask();
         dispatchRunnerLifecycle('case-start', test);
       },
       onTestCaseResult: async (result) => {
+        removeTaskFromStack(result.testId);
         if (result.status === 'fail') {
           failedTestsCount++;
         }

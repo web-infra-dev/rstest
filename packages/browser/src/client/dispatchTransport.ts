@@ -4,11 +4,16 @@ import type {
 } from '../protocol';
 import {
   DISPATCH_MESSAGE_TYPE,
+  DISPATCH_NAMESPACE_RUNNER,
   DISPATCH_RESPONSE_TYPE,
+  DISPATCH_RPC_BRIDGE_NAME,
   DISPATCH_RPC_REQUEST_TYPE,
 } from '../protocol';
 
-export const DEFAULT_RPC_TIMEOUT_MS = 30_000;
+// Coincidentally equal to the host-side RUNNER_FRAMES_READY_TIMEOUT_MS and the
+// runner's CONFIG_WAIT_TIMEOUT_MS (entry.ts), but a semantically distinct
+// default in a different runtime, so deliberately not shared with them.
+const DEFAULT_RPC_TIMEOUT_MS = 30_000;
 
 export const getRpcTimeout = (): number => {
   return (
@@ -35,6 +40,63 @@ export const createRequestId = (prefix: string): string => {
 
   requestIdCounter += 1;
   return `${prefix}-${Date.now().toString(36)}-${requestIdCounter.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
+/**
+ * Build a runner-lifecycle dispatch request.
+ *
+ * Lifecycle events (`file-ready`, `suite-start`, `suite-result`, `case-start`)
+ * share the dispatch-rpc envelope but are delivered fire-and-forget via
+ * {@link sendRunnerLifecycle}, so the request id only needs to be unique — it is
+ * produced by the shared {@link createRequestId} factory rather than a bespoke
+ * per-runner counter.
+ */
+export const createRunnerLifecycleRequest = (
+  method: string,
+  args: unknown,
+): BrowserDispatchRequest => ({
+  requestId: createRequestId('runner-lifecycle'),
+  namespace: DISPATCH_NAMESPACE_RUNNER,
+  method,
+  args,
+});
+
+/**
+ * Deliver a runner-lifecycle request fire-and-forget.
+ *
+ * Unlike {@link dispatchRpc}, this never awaits, unwraps, id-matches, or times
+ * out: the host echoes a response but the runner ignores it. Failures surface
+ * only through the optional `onError` hook (debug logging at the call site),
+ * keeping the hot test loop non-blocking.
+ */
+export const sendRunnerLifecycle = (
+  request: BrowserDispatchRequest,
+  onError?: (error: unknown) => void,
+): void => {
+  if (window.parent === window) {
+    const dispatchBridge = window[DISPATCH_RPC_BRIDGE_NAME];
+    if (!dispatchBridge) {
+      onError?.(
+        new Error('Dispatch RPC bridge is not available in top-level runner.'),
+      );
+      return;
+    }
+    void Promise.resolve(dispatchBridge(request)).catch((error: unknown) => {
+      onError?.(error);
+    });
+    return;
+  }
+
+  window.parent.postMessage(
+    {
+      type: DISPATCH_MESSAGE_TYPE,
+      payload: {
+        type: DISPATCH_RPC_REQUEST_TYPE,
+        payload: request,
+      },
+    },
+    '*',
+  );
 };
 
 const isDispatchResponse = (
@@ -116,7 +178,7 @@ export const dispatchRpc = <T>({
   staleMessage: string;
 }): Promise<T> => {
   if (window.parent === window) {
-    const dispatchBridge = window.__rstest_dispatch_rpc__;
+    const dispatchBridge = window[DISPATCH_RPC_BRIDGE_NAME];
     if (!dispatchBridge) {
       throw new Error(
         'Dispatch RPC bridge is not available in top-level runner.',

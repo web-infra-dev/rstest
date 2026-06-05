@@ -7,10 +7,11 @@ on:
   push:
     branches: [main]
 
-  schedule:
-    - cron: '0 16 * * *'
-
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 permissions:
   contents: read
@@ -24,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       changed: ${{ steps.changes.outputs.changed }}
+      # Full e2e sweep: push to main (post-merge gate) or release PR (pre-publish gate)
+      is_full_run: ${{ github.event_name == 'push' || startsWith(github.event.pull_request.title, 'release:') }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -41,16 +44,59 @@ jobs:
               - "!**/_meta.json"
               - "!**/dictionary.txt"
 
+  # ======== lint ========
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+
+      - name: Install pnpm
+        run: |
+          npm install -g corepack@latest --force
+          corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --ignore-scripts
+
+      - name: Build Packages
+        run: pnpm run build
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Check Dependency Version
+        run: pnpm run check-dependency-version
+
+      - name: Check pnpm Dedupe
+        run: pnpm dedupe --check --config.minimum-release-age=0
+
+      - name: Check Unused Code
+        run: pnpm run check-unused
+
   # ======== ut ========
   ut:
-    needs: prepare
-    if: needs.prepare.outputs.changed == 'true' || github.event_name == 'schedule'
+    # Gate behind lint so a lint failure skips the (billed-premium) macOS +
+    # Windows ut runners — and transitively e2e — before they start; e2e already
+    # needs lint. Trade-off: any lint nit (prettier/spell/dedupe/knip) now blocks
+    # ut+e2e too, instead of running them in parallel with lint.
+    needs: [prepare, lint]
+    if: needs.prepare.outputs.changed == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
       matrix:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
-        os: [macos-14, windows-latest]
+        os: [macos-latest, windows-latest]
 
     steps:
       - name: Checkout
@@ -59,40 +105,30 @@ jobs:
           fetch-depth: 1
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 22
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: pnpm fetch
-        run: pnpm fetch
-
       - name: Install Dependencies
+        # setup-node's `cache: pnpm` restores the store; `--prefer-offline`
+        # reuses it. A standalone `pnpm fetch` only re-warms an already-warm
+        # store (~26s/job of no gain). Install still runs the root `prepare`
+        # lifecycle (`pnpm run build`), so packages are built as before.
         run: pnpm install --frozen-lockfile --prefer-offline
 
-      - name: Set Playwright cache path
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            echo "PLAYWRIGHT_BROWSERS_PATH=$USERPROFILE/AppData/Local/ms-playwright" >> "$GITHUB_ENV"
-          else
-            echo "PLAYWRIGHT_BROWSERS_PATH=$HOME/Library/Caches/ms-playwright" >> "$GITHUB_ENV"
-          fi
-
-      - name: Cache Playwright Browsers
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-
-      - name: Install Playwright Browsers
-        run: npx playwright install chromium webkit
+      - name: Setup Playwright
+        uses: ./.github/actions/setup-playwright
 
       - name: Run Type Check
+        # tsc is OS-independent, so PR runs it on macOS only; the post-merge
+        # FULL run still typechecks both OSes so push-to-main stays a literal
+        # superset of PR coverage.
+        if: needs.prepare.outputs.is_full_run == 'true' || matrix.os == 'macos-latest'
         run: pnpm run typecheck
 
       - name: Run Test
@@ -107,21 +143,43 @@ jobs:
 
   # ======== e2e ========
   e2e:
-    needs: [prepare, ut]
-    if: needs.prepare.outputs.changed == 'true' || github.event_name == 'schedule'
+    needs: [prepare, lint, ut]
+    if: needs.prepare.outputs.changed == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
-        os: [macos-14, windows-latest]
-        node_version: ${{ fromJson(github.event_name == 'schedule' && '["20","22","24"]' || '["20","24"]') }}
-        test_script: ['test', 'test:commonjs', 'test:no-isolate']
-        exclude:
-          # Node 20 is flaky here because reused no-isolate workers can hit upstream vm native crashes.
-          - node_version: '20'
-            test_script: 'test:no-isolate'
+        os: [macos-latest, windows-latest]
+        # Trigger-dependent axes (gated by prepare.outputs.is_full_run):
+        #
+        #   trigger      | node_version | test_script                           | exclude
+        #   -------------+--------------+---------------------------------------+-----------
+        #   PR (regular) | [24]         | [test]                                | -
+        #   push to main | [20, 22, 24] | [test, commonjs, no-isolate, threads] | test × 22
+        #   release PR   | [20, 22, 24] | [test, commonjs, no-isolate, threads] | test × 22
+        #
+        # Node 20 + test:no-isolate can hit upstream vm native crashes under worker
+        # reuse; tolerated on full runs in exchange for coverage.
+        node_version: >-
+          ${{ fromJson(
+            needs.prepare.outputs.is_full_run == 'true'
+              && '["20","22","24"]'
+            || '["24"]'
+          ) }}
+        test_script: >-
+          ${{ fromJson(
+            needs.prepare.outputs.is_full_run == 'true'
+              && '["test","test:commonjs","test:no-isolate","test:threads"]'
+            || '["test"]'
+          ) }}
+        exclude: >-
+          ${{ fromJson(
+            needs.prepare.outputs.is_full_run == 'true'
+              && '[{"node_version":"22","test_script":"test"}]'
+            || '[]'
+          ) }}
 
     steps:
       - name: Checkout
@@ -130,54 +188,66 @@ jobs:
           fetch-depth: 1
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          # pnpm 11 requires Node >=22, but this matrix intentionally tests Node 20 runtime behavior.
+          standalone: true
 
       - name: Setup Node.js ${{ matrix.node_version }}
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ matrix.node_version }}
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: pnpm fetch
-        run: pnpm fetch
-
       - name: Install Dependencies
+        # setup-node's `cache: pnpm` restores the store; `--prefer-offline`
+        # reuses it. A standalone `pnpm fetch` only re-warms an already-warm
+        # store (~26s/job of no gain). Install still runs the root `prepare`
+        # lifecycle (`pnpm run build`), so packages are built as before.
         run: pnpm install --frozen-lockfile --prefer-offline
 
-      - name: Set Playwright cache path
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            echo "PLAYWRIGHT_BROWSERS_PATH=$USERPROFILE/AppData/Local/ms-playwright" >> "$GITHUB_ENV"
-          else
-            echo "PLAYWRIGHT_BROWSERS_PATH=$HOME/Library/Caches/ms-playwright" >> "$GITHUB_ENV"
-          fi
-
-      - name: Cache Playwright Browsers
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-
-      - name: Install Playwright Browsers
-        run: npx playwright install chromium webkit
+      - name: Setup Playwright
+        uses: ./.github/actions/setup-playwright
 
       - name: E2E Test (${{ matrix.test_script }})
         run: cd e2e && pnpm ${{ matrix.test_script }}
 
       - name: VS Code Extension Test
-        if: matrix.test_script == 'test'
+        # OS-sensitive (Extension Host) but node-insensitive: on PR, pin to a
+        # single combo (Windows + node 24) instead of every e2e row. FULL runs
+        # still exercise it on every 'test' row.
+        if: matrix.test_script == 'test' && (needs.prepare.outputs.is_full_run == 'true' || (matrix.os == 'windows-latest' && matrix.node_version == '24'))
         run: pnpm run test:vscode
+
+  # ======== codspeed ========
+  # Temporarily disabled: CodSpeed runner quota exhausted.
+  # Re-enable once quota resets.
+  codspeed:
+    needs: e2e
+    if: false
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/codspeed.yml
+    with:
+      ref: ${{ github.sha }}
 
   # ======== gate ========
   test-gate:
-    needs: [prepare, ut, e2e]
+    needs: [prepare, lint, ut, e2e]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check test requirement
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ needs.prepare.outputs.changed }}" = "true" ]; then
-            [ "${{ needs.ut.result }}" = "success" ] && [ "${{ needs.e2e.result }}" = "success" ]
-          fi
+          for result in \
+            "${{ needs.prepare.result }}" \
+            "${{ needs.lint.result }}" \
+            "${{ needs.ut.result }}" \
+            "${{ needs.e2e.result }}"; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              exit 1
+            fi
+          done

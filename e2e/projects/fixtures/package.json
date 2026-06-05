@@ -1,8 +1,8 @@
 {
-  "private": true,
   "name": "@rstest/tests-projects",
-  "sideEffects": true,
   "version": "1.0.0",
+  "private": true,
+  "sideEffects": true,
   "devDependencies": {
     "@rstest/core": "workspace:*",
     "@rstest/coverage-istanbul": "workspace:*"

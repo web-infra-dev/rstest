@@ -1,25 +1,27 @@
 ---
 title: Rstest Utility
-description: Rstest provides utility functions to help you out through its rstest helper.
+description: Rstest provides utility functions to help you out through its rs helper.
 ---
 
 # Rstest utility
 
-Rstest provides utility functions to help you out through its `rstest` helper.
+Rstest provides utility functions to help you out through its `rs` helper.
 
-You can import it from `@rstest/core` directly, and you can also use its alias `rs`.
-
-```ts
-import { rstest } from '@rstest/core';
-
-const fn = rstest.fn();
-fn.mockResolvedValue('foo');
-```
+You can import `rs` from `@rstest/core` directly.
 
 ```ts
 import { rs } from '@rstest/core';
 
 const fn = rs.fn();
+fn.mockResolvedValue('foo');
+```
+
+The longer `rstest` helper remains available as an alias.
+
+```ts
+import { rstest } from '@rstest/core';
+
+const fn = rstest.fn();
 fn.mockResolvedValue('foo');
 ```
 

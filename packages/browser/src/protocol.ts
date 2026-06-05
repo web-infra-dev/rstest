@@ -1,20 +1,19 @@
-import type { DevicePreset } from '@rstest/core/browser';
+import type { BrowserViewport } from '@rstest/core/internal/browser';
 import type {
   RuntimeConfig,
   TestFileResult,
   TestInfo,
   TestResult,
-} from '@rstest/core/browser-runtime';
+} from '@rstest/core/internal/browser-runtime';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 
 export type {
   BrowserLocatorIR,
-  BrowserLocatorStep,
-  BrowserLocatorText,
   BrowserRpcRequest,
-  BrowserRpcResponse,
+  SnapshotRpcCall,
+  SnapshotRpcMethod,
+  SnapshotRpcMethodArgs,
   SnapshotRpcRequest,
-  SnapshotRpcResponse,
 } from './rpcProtocol';
 export { validateBrowserRpcRequest } from './rpcProtocol';
 
@@ -31,12 +30,10 @@ export const DISPATCH_METHOD_RPC = 'rpc';
 
 export type SerializedRuntimeConfig = RuntimeConfig;
 
-export type BrowserViewport =
-  | {
-      width: number;
-      height: number;
-    }
-  | DevicePreset;
+// `BrowserViewport` is a core config type (`@rstest/core` owns the canonical
+// definition used by `NormalizedBrowserModeConfig`). Re-export it so the host
+// assigns the SAME type across the seam instead of a hand-copied duplicate.
+export type { BrowserViewport };
 
 export type BrowserProjectRuntime = {
   name: string;
@@ -61,6 +58,25 @@ export type TestFileInfo = {
  * - 'collect': Only collect test metadata without running
  */
 export type BrowserExecutionMode = 'run' | 'collect';
+
+/**
+ * Wire shape of a `log` client message payload. The host receives this and maps
+ * it onto core's {@link UserConsoleLog} (notably `level` → `name`); that mapper
+ * (`hostController.ts` `handleLog`) annotates its result as `UserConsoleLog`, so
+ * the map→core direction is compiler-checked. Owning the wire shape here as one
+ * named type keeps the host's input type from drifting away from the producer.
+ */
+export type BrowserLogPayload = {
+  level: 'log' | 'warn' | 'error' | 'info' | 'debug';
+  content: string;
+  taskId?: string;
+  taskName?: string;
+  taskParentNames?: string[];
+  taskType?: 'file' | 'suite' | 'case';
+  testPath: string;
+  type: 'stdout' | 'stderr';
+  trace?: string;
+};
 
 export type BrowserHostConfig = {
   rootPath: string;
@@ -105,16 +121,7 @@ export type BrowserClientMessage =
     }
   | { type: 'case-result'; payload: TestResult }
   | { type: 'file-complete'; payload: TestFileResult }
-  | {
-      type: 'log';
-      payload: {
-        level: 'log' | 'warn' | 'error' | 'info' | 'debug';
-        content: string;
-        testPath: string;
-        type: 'stdout' | 'stderr';
-        trace?: string;
-      };
-    }
+  | { type: 'log'; payload: BrowserLogPayload }
   | {
       type: 'fatal';
       payload: { message: string; stack?: string };
@@ -135,6 +142,38 @@ export type BrowserClientMessage =
     };
 
 /**
+ * Lifecycle methods the runner emits via `dispatchRunnerLifecycle()` as
+ * dispatch-rpc-requests on the `runner` namespace (as opposed to the
+ * {@link BrowserClientMessage} types it `send()`s). The runner client imports
+ * this instead of redeclaring the list, so the emit site cannot drift from the
+ * host router.
+ */
+export type RunnerLifecycleMethod =
+  | 'file-ready'
+  | 'suite-start'
+  | 'suite-result'
+  | 'case-start';
+
+/**
+ * {@link BrowserClientMessage} types that are forwarded to the `runner`
+ * namespace (by message `type`) rather than handled at the transport layer.
+ * `Extract` keeps this a checked subset of the message union — renaming a
+ * message type drops it here, surfacing as a missing handler downstream.
+ */
+type RunnerMessageMethod = Extract<
+  BrowserClientMessage['type'],
+  'file-start' | 'case-result' | 'file-complete' | 'log' | 'fatal'
+>;
+
+/**
+ * Single source of truth for every method handled by the `runner` dispatch
+ * namespace. The host handler table is keyed by this union (a missing key is a
+ * compile error), so adding a runner method here forces a matching handler and
+ * cannot silently no-op at runtime.
+ */
+export type RunnerDispatchMethod = RunnerLifecycleMethod | RunnerMessageMethod;
+
+/**
  * Transport-agnostic envelope used by host routing.
  * `namespace + method + args + target` describes an operation independent of
  * the underlying message channel, and `runToken` provides run-level isolation.
@@ -147,6 +186,11 @@ export type BrowserDispatchRequest = {
   namespace: string;
   method: string;
   args?: unknown;
+  // Routing reads `namespace`, `method`, `runToken`, and `target.sessionId`
+  // (see dispatchRouter.ts / dispatchBrowserRpcRequest). `target.testFile` and
+  // `target.projectName` are carried for diagnostics / forward-compatibility and
+  // are NOT consulted for routing today — adding a routing-relevant field here
+  // means wiring a reader on the host side, which structural typing won't force.
   target?: {
     testFile?: string;
     sessionId?: string;
@@ -164,11 +208,6 @@ export type BrowserDispatchResponse = {
   result?: unknown;
   error?: string;
   stale?: boolean;
-};
-
-export type BrowserDispatchResponseEnvelope = {
-  type: typeof DISPATCH_RESPONSE_TYPE;
-  payload: BrowserDispatchResponse;
 };
 
 export type BrowserDispatchHandler = (

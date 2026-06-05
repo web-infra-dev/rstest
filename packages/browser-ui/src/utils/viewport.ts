@@ -4,7 +4,7 @@ import {
   isDevicePreset,
 } from './viewportPresets';
 
-export type BrowserViewport =
+type BrowserViewport =
   | {
       width: number;
       height: number;
@@ -37,6 +37,16 @@ export const viewportSizeOf = (
     : { width: info.width, height: info.height };
 };
 
+/**
+ * Sole owner of the "valid responsive dimensions" rule: both axes must be
+ * finite and strictly positive. Shared by {@link selectionFromConfig} (decoding
+ * a config object) and `readStoredViewport` in main.tsx (decoding persisted
+ * localStorage state) so a future viewport field can never diverge between the
+ * two decoders.
+ */
+export const isPositiveFiniteSize = (width: number, height: number): boolean =>
+  Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
+
 export const selectionFromConfig = (
   viewport: BrowserViewport | undefined,
 ): ViewportSelection => {
@@ -56,12 +66,7 @@ export const selectionFromConfig = (
   if (typeof viewport === 'object') {
     const width = Number((viewport as any).width);
     const height = Number((viewport as any).height);
-    if (
-      Number.isFinite(width) &&
-      width > 0 &&
-      Number.isFinite(height) &&
-      height > 0
-    ) {
+    if (isPositiveFiniteSize(width, height)) {
       // In DevTools terms, this is a custom responsive viewport.
       return { mode: 'responsive', width, height };
     }

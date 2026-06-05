@@ -12,13 +12,13 @@ import type { DistPath, TestPath } from './utils';
 
 export type EntryInfo = {
   distPath: DistPath;
+  runtimeDistPath?: DistPath;
   chunks: (string | number)[];
   testPath: TestPath;
   files?: string[];
 };
 
 /** Server to Runtime */
-// biome-ignore lint/complexity/noBannedTypes: TODO
 export type ServerRPC = {};
 
 /** Runtime to Server */
@@ -61,9 +61,16 @@ export type RuntimeConfig = Pick<
   | 'snapshotFormat'
   | 'env'
   | 'logHeapUsage'
+  | 'detectAsyncLeaks'
   | 'bail'
   | 'chaiConfig'
   | 'includeTaskLocation'
+  | 'silent'
+>;
+
+export type CurrentTaskInfo = Pick<
+  UserConsoleLog,
+  'taskId' | 'taskName' | 'taskParentNames' | 'taskType' | 'testPath'
 >;
 
 export type WorkerContext = {
@@ -73,6 +80,8 @@ export type WorkerContext = {
   runtimeConfig: RuntimeConfig;
   taskId: number;
   outputModule: boolean;
+  /** When true, the worker emits Perfetto trace events alongside phase totals. */
+  trace?: boolean;
 };
 
 export type RunWorkerOptions = {
@@ -95,6 +104,7 @@ export type WorkerState = WorkerContext & {
   environment: string;
   testPath: TestPath;
   distPath: DistPath;
+  currentTask?: CurrentTaskInfo;
   snapshotClient?: SnapshotClient;
   snapshotOptions: {
     updateSnapshot: SnapshotUpdateState;

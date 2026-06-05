@@ -1,4 +1,4 @@
-import type { FakeTimerInstallOpts } from '@sinonjs/fake-timers';
+import type { Config as FakeTimerInstallOpts } from '@sinonjs/fake-timers';
 import type { FunctionLike, MaybePromise } from './utils';
 import type { RuntimeConfig } from './worker';
 
@@ -117,6 +117,10 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
    */
   mockRestore(): void;
   /**
+   * Restores the mock when it leaves a `using` scope.
+   */
+  [Symbol.dispose](): void;
+  /**
    * Returns current mock implementation if there is one.
    */
   getMockImplementation(): NormalizedProcedure<T> | undefined;
@@ -165,8 +169,9 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
   mockRejectedValueOnce(error: unknown): this;
 }
 
-export interface Mock<T extends FunctionLike = FunctionLike>
-  extends MockInstance<T> {
+export interface Mock<
+  T extends FunctionLike = FunctionLike,
+> extends MockInstance<T> {
   new (...args: Parameters<T>): ReturnType<T>;
   (...args: Parameters<T>): ReturnType<T>;
 }
@@ -287,6 +292,13 @@ export type MaybePartiallyMockedDeep<T> = T extends Constructor
     : T extends object
       ? MockedObjectDeep<T>
       : T;
+
+export type DisposableRstestUtilities = RstestUtilities & {
+  /**
+   * Restores the resource created by the current utility call when it leaves a `using` scope.
+   */
+  [Symbol.dispose](): void;
+};
 
 export interface RstestUtilities {
   /**
@@ -451,9 +463,19 @@ export interface RstestUtilities {
   unmock: (path: string) => void;
 
   /**
+   * Removes CommonJS require module from the mocked registry.
+   */
+  unmockRequire: (path: string) => void;
+
+  /**
    * Removes module from the mocked registry, not hoisted.
    */
   doUnmock: (path: string) => void;
+
+  /**
+   * Removes CommonJS require module from the mocked registry, not hoisted.
+   */
+  doUnmockRequire: (path: string) => void;
 
   /**
    * Imports a module with all of its properties (including nested properties) mocked.
@@ -484,7 +506,10 @@ export interface RstestUtilities {
    * Changes the value of an environment variable in the current runtime env store.
    * Uses `process.env` in Node.js and runtime env store in browser mode.
    */
-  stubEnv: (name: string, value: string | undefined) => RstestUtilities;
+  stubEnv: (
+    name: string,
+    value: string | undefined,
+  ) => DisposableRstestUtilities;
 
   /**
    * Restores all env values that were changed with `rstest.stubEnv`.
@@ -497,7 +522,7 @@ export interface RstestUtilities {
   stubGlobal: (
     name: string | number | symbol,
     value: unknown,
-  ) => RstestUtilities;
+  ) => DisposableRstestUtilities;
 
   /**
    * Restores all global variables that were changed with `rstest.stubGlobal`.
@@ -522,7 +547,7 @@ export interface RstestUtilities {
   /**
    * Mocks timers using `@sinonjs/fake-timers`.
    */
-  useFakeTimers: (config?: FakeTimerInstallOpts) => RstestUtilities;
+  useFakeTimers: (config?: FakeTimerInstallOpts) => DisposableRstestUtilities;
   useRealTimers: () => RstestUtilities;
   isFakeTimers: () => boolean;
   /**

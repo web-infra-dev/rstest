@@ -28,7 +28,7 @@ const configSchema = object({
   applyDiagnostic: fallback(boolean(), true),
 });
 
-export type ExtensionConfig = InferOutput<typeof configSchema>;
+type ExtensionConfig = InferOutput<typeof configSchema>;
 
 // Type-safe getter for a single config value
 export function getConfigValue<K extends keyof ExtensionConfig>(
@@ -37,18 +37,6 @@ export function getConfigValue<K extends keyof ExtensionConfig>(
 ): ExtensionConfig[K] {
   const value = vscode.workspace.getConfiguration('rstest', scope).get(key);
   return parse(configSchema.entries[key], value) as ExtensionConfig[K];
-}
-
-// Convenience to get a full, normalized config object at the given scope.
-export function getConfig(
-  scope?: vscode.ConfigurationScope | null,
-): ExtensionConfig {
-  return Object.fromEntries(
-    Object.keys(configSchema.entries).map((key) => [
-      key,
-      getConfigValue(key as keyof ExtensionConfig, scope),
-    ]),
-  ) as ExtensionConfig;
 }
 
 export function watchConfigValue<K extends keyof ExtensionConfig>(

@@ -1,0 +1,160 @@
+---
+title: Rstest types
+description: Import public TypeScript types from @rstest/core for configuration, runtime APIs, reporters, and mock helpers.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Rstest types
+
+Rstest exports its public TypeScript types from `@rstest/core`. Use `import type` so these imports are erased from runtime output.
+
+```ts
+import type { Mock, Mocked, RstestConfig } from '@rstest/core';
+```
+
+## Configuration types
+
+Use these types when you need to type a config object, a config factory, or shared config utilities outside `defineConfig`.
+
+```ts
+import type {
+  ProjectConfig,
+  RstestConfig,
+  RstestConfigAsyncFn,
+  RstestConfigExport,
+  RstestConfigSyncFn,
+} from '@rstest/core';
+```
+
+- `RstestConfig`: The top-level Rstest configuration type.
+- `RstestConfigSyncFn`: A synchronous function that returns `RstestConfig`.
+- `RstestConfigAsyncFn`: An asynchronous function that returns `RstestConfig`.
+- `RstestConfigExport`: The union accepted by a Rstest config file.
+- `ProjectConfig`: The type for a standalone [Rstest Project](/guide/basic/projects) config.
+
+For most config files, prefer [`defineConfig`](/api/javascript-api/rstest-core#defineconfig), [`defineProject`](/api/javascript-api/rstest-core#defineproject), and [`defineInlineProject`](/api/javascript-api/rstest-core#defineinlineproject) because they preserve autocomplete without requiring explicit annotations.
+
+## Test API types
+
+Use these types when extending test APIs, defining reusable helpers, or typing custom fixtures.
+
+```ts
+import type {
+  Describe,
+  Expect,
+  ExpectStatic,
+  Rstest,
+  RstestUtilities,
+  TestContext,
+} from '@rstest/core';
+```
+
+<ApiMeta addedVersion="0.10.1" />
+
+`TestContext` is available as a public type export starting in Rstest 0.10.1.
+
+- `Rstest`: The full runtime API shape, including `test`, `describe`, `expect`, hooks, and `rs` / `rstest` utilities.
+- `RstestUtilities`: The type of the `rs` and `rstest` utility objects.
+- `TestContext`: The context object passed to test callbacks and lifecycle hooks.
+- `Describe`: The type of the `describe` API.
+- `Expect`: The assertion type returned by `expect(value)`.
+- `ExpectStatic`: The callable `expect` API type.
+
+## Mock types
+
+Use mock types when a helper accepts mock functions, spies, or mocked modules.
+
+```ts
+import type { Mock, Mocked, MockInstance } from '@rstest/core';
+```
+
+### Mock
+
+`Mock<T>` represents a callable mock function created by [`rs.fn`](/api/runtime-api/rstest/mock-functions#rsfn). It preserves the parameters and return type of `T` while adding mock control APIs.
+
+```ts
+import { rs } from '@rstest/core';
+import type { Mock } from '@rstest/core';
+
+type LoadUser = (id: string) => Promise<{ name: string }>;
+
+const loadUser: Mock<LoadUser> = rs.fn<LoadUser>();
+loadUser.mockResolvedValue({ name: 'Jack' });
+```
+
+### MockInstance
+
+<ApiMeta addedVersion="0.10.1" />
+
+`MockInstance<T>` represents the shared mock control API on both `rs.fn()` mocks and `rs.spyOn()` spies. Use it when a helper only needs mock methods such as `mockClear`, `mockReset`, or `mockRestore` and does not need to call the mock function directly.
+
+```ts
+import type { MockInstance } from '@rstest/core';
+
+function resetTrackedMock(mock: MockInstance) {
+  mock.mockReset();
+}
+```
+
+When you create a mock or spy inline, you usually do not need to annotate it because TypeScript can infer the type.
+
+```ts
+const spy = rs.spyOn(service, 'loadUser');
+spy.mockResolvedValue({ name: 'Jack' });
+```
+
+### Mocked
+
+`Mocked<T>` wraps an object or module type so its methods are typed as mocks. This is useful after [`rs.mock`](/api/runtime-api/rstest/mock-modules#rsmock), [`rs.mockObject`](/api/runtime-api/rstest/mock-functions#rsmockobject), or [`rs.mocked`](/api/runtime-api/rstest/mock-functions#rsmocked).
+
+```ts
+import { rs } from '@rstest/core';
+import type { Mocked } from '@rstest/core';
+import * as userApi from './userApi';
+
+rs.mock('./userApi');
+
+const mockedUserApi: Mocked<typeof userApi> = rs.mocked(userApi);
+mockedUserApi.loadUser.mockResolvedValue({ name: 'Jack' });
+```
+
+## Reporter and result types
+
+Use these types when creating custom reporters or external tools that consume Rstest results.
+
+```ts
+import type {
+  Reporter,
+  TestCaseInfo,
+  TestFileInfo,
+  TestFileResult,
+  TestResult,
+  TestSuiteInfo,
+} from '@rstest/core';
+```
+
+For reporter implementation details, see [Reporter](/api/javascript-api/reporter).
+
+## Assertion types
+
+Use `Assertion` or `ExpectStatic` when typing custom assertion helpers.
+
+```ts
+import type { Assertion, ExpectStatic } from '@rstest/core';
+
+function expectVisible(
+  expect: ExpectStatic,
+  value: HTMLElement,
+): Assertion<HTMLElement> {
+  return expect(value);
+}
+```
+
+## Rsbuild type
+
+Rstest re-exports `Rspack` from `@rsbuild/core` for integrations that need to type Rsbuild or Rspack hooks while staying on the same dependency graph as Rstest.
+
+```ts
+import type { Rspack } from '@rstest/core';
+```

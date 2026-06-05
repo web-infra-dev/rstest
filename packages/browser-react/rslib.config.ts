@@ -1,11 +1,19 @@
 import { defineConfig } from '@rslib/core';
+import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
 export default defineConfig({
+  plugins: publishCheckPlugins(),
   lib: [
     {
       format: 'esm',
       syntax: ['chrome 100'],
       dts: true,
+      redirect: {
+        // Append `.js` to relative imports in emitted .d.ts so they resolve
+        // under NodeNext/Node16 module resolution (ESM requires explicit ext).
+        dts: { extension: true },
+      },
       output: {
         target: 'web',
         sourceMap: process.env.SOURCEMAP === 'true',
@@ -26,6 +34,11 @@ export default defineConfig({
     entry: {
       index: './src/index.ts',
       pure: './src/pure.tsx',
+    },
+  },
+  tools: {
+    rspack: {
+      plugins: [rsdoctorCIPlugin()].filter(Boolean),
     },
   },
 });

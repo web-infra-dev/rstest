@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "create-draft-release-notes": {
+      "source": "rstackjs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/create-draft-release-notes/SKILL.md",
+      "computedHash": "976322727110f876a069fbd2a3f8ee23fa2cd4b6bd5fa454e309062b0c9da608"
+    },
+    "pr-creator": {
+      "source": "rstackjs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/pr-creator/SKILL.md",
+      "computedHash": "a632c60f135594b5ec098ce6196c85395e448ade27882292bf0b68f9192e8278"
+    }
+  }
+}

@@ -11,11 +11,12 @@ import path from 'pathe';
 import type {
   EntryInfo,
   NormalizedProjectConfig,
+  ProjectContext,
   RstestContext,
 } from '../types';
 import { isDebug } from '../utils';
 import { isMemorySufficient } from '../utils/memory';
-import { pluginBasic, RUNTIME_CHUNK_NAME } from './plugins/basic';
+import { pluginBasic } from './plugins/basic';
 import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginExternal } from './plugins/external';
@@ -23,22 +24,47 @@ import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
+import { isRuntimeChunk, runtimeChunkNameForEnvironment } from './runtimeChunk';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 type TestEntryToChunkHashes = {
   name: string;
-  /** key is chunk name, value is chunk hash */
+  /** key is chunk asset file path, value is chunk hash */
   chunks: Record<string, string>;
 }[];
+
+const getRuntimeChunkFiles = ({
+  chunks,
+  outputPath,
+  runtimeChunkName,
+}: {
+  chunks: Rspack.StatsChunk[] | undefined;
+  outputPath: string;
+  runtimeChunkName: string;
+}): Set<string> => {
+  const runtimeChunkFiles = new Set<string>();
+
+  for (const chunk of chunks || []) {
+    if (!isRuntimeChunk(chunk, runtimeChunkName)) {
+      continue;
+    }
+
+    for (const file of chunk.files || []) {
+      runtimeChunkFiles.add(path.join(outputPath, String(file)));
+    }
+  }
+
+  return runtimeChunkFiles;
+};
 
 function parseInlineSourceMapStr(code: string) {
   // match the inline source map comment (format may be `//# sourceMappingURL=data:...`)
   const inlineSourceMapRegex =
     /\/\/# sourceMappingURL=data:application\/json(?:;charset=utf-8)?;base64,(.+)\s*$/m;
-  const match = code.match(inlineSourceMapRegex);
+  const match = inlineSourceMapRegex.exec(code);
 
-  if (!match || !match[1]) {
+  if (!match?.[1]) {
     return null;
   }
 
@@ -46,7 +72,7 @@ function parseInlineSourceMapStr(code: string) {
     const base64Data = match[1];
     const decodedStr = Buffer.from(base64Data, 'base64').toString('utf-8');
     return decodedStr;
-  } catch (_error) {
+  } catch {
     return null;
   }
 }
@@ -65,16 +91,29 @@ export const prepareRsbuild = async (
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>,
   setupFiles: Record<string, Record<string, string>>,
   globalSetupFiles: Record<string, Record<string, string>>,
+  /**
+   * Explicit list of projects to include in the Rsbuild instance.
+   *
+   * Most callers still pass node-mode projects for execution, but related-test
+   * resolution also reuses this node-targeted build to collect a uniform module
+   * graph for browser projects. If browser graph collection ever needs a
+   * materially different build pipeline, split that behavior at the caller.
+   */
+  targetProjects?: ProjectContext[],
+  extraPlugins: RsbuildPlugin[] = [],
 ): Promise<RsbuildInstance> => {
   const {
     command,
     normalizedConfig: { isolate, dev = {}, coverage, pool },
   } = context;
 
-  // Filter out browser mode projects - this rsbuild is for node mode only
-  const projects = context.projects.filter(
-    (project) => !project.normalizedConfig.browser.enabled,
-  );
+  // Default execution still excludes browser projects. Callers can opt in to a
+  // broader project set when they only need graph information.
+  const projects = targetProjects?.length
+    ? targetProjects
+    : context.projects.filter(
+        (project) => !project.normalizedConfig.browser.enabled,
+      );
   const debugMode = isDebug();
 
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
@@ -131,13 +170,13 @@ export const prepareRsbuild = async (
             )
           : null,
         pluginInspect({ poolExecArgv: pool.execArgv }),
+        ...extraPlugins,
       ].filter(Boolean) as RsbuildPlugin[],
     },
   });
 
   if (coverage?.enabled && command !== 'list') {
-    const [{ loadCoverageProvider }, { pluginCoverageCore }] =
-      await Promise.all([import('../coverage'), import('../coverage/plugin')]);
+    const { loadCoverageProvider } = await import('../coverage');
     const { pluginCoverage } = await loadCoverageProvider(
       coverage,
       context.rootPath,
@@ -149,50 +188,63 @@ export const prepareRsbuild = async (
       ),
     );
 
-    rsbuildInstance.addPlugins([
-      pluginCoverage(coverage),
-      pluginCoverageCore(coverage),
-    ]);
+    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
   }
 
   return rsbuildInstance;
 };
 
-export const calcEntriesToRerun = (
+const calcEntriesToRerun = (
   entries: EntryInfo[],
   chunks: Rspack.StatsChunk[] | undefined,
   buildData: {
     entryToChunkHashes?: TestEntryToChunkHashes;
     setupEntryToChunkHashes?: TestEntryToChunkHashes;
+    chunkHashesByFile?: Record<string, string>;
+    runtimeChunkFiles?: string[];
   },
+  outputPath: string,
   runtimeChunkName: string,
   setupEntries: EntryInfo[],
 ): {
   affectedEntries: EntryInfo[];
   deletedEntries: string[];
 } => {
+  const entryByTestPath = new Map(
+    entries.map((entry) => [entry.testPath, entry] as const),
+  );
+  const chunkHashesByFile = new Map(
+    Object.entries(buildData.chunkHashesByFile || {}),
+  );
+  const runtimeChunkFiles = new Set(buildData.runtimeChunkFiles || []);
+
+  for (const chunk of chunks || []) {
+    const chunkIsRuntime = isRuntimeChunk(chunk, runtimeChunkName);
+
+    for (const file of chunk.files || []) {
+      const filePath = path.join(outputPath, String(file));
+      chunkHashesByFile.set(filePath, chunk.hash ?? '');
+
+      if (chunkIsRuntime) {
+        runtimeChunkFiles.add(filePath);
+      }
+    }
+  }
+
   const buildChunkHashes = (
     entry: EntryInfo,
     map: Map<string, Record<string, string>>,
   ) => {
-    const validChunks = (entry.chunks || []).filter(
-      (chunk) => chunk !== runtimeChunkName,
+    const chunkHashes = Object.fromEntries(
+      (entry.files || [])
+        .filter((file) => !runtimeChunkFiles.has(file))
+        .map((file) => [file, chunkHashesByFile.get(file) ?? '']),
     );
 
-    validChunks.forEach((chunkName) => {
-      const chunkInfo = chunks?.find((c) =>
-        c.names?.includes(chunkName as string),
-      );
-      if (chunkInfo) {
-        const existing = map.get(entry.testPath) || {};
-        existing[chunkName] = chunkInfo.hash ?? '';
-        map.set(entry.testPath, existing);
-      }
-    });
+    map.set(entry.testPath, chunkHashes);
   };
 
   const processEntryChanges = (
-    _entries: EntryInfo[],
     prevHashes: TestEntryToChunkHashes | undefined,
     currentHashesMap: Map<string, Record<string, string>>,
   ): {
@@ -210,28 +262,28 @@ export const calcEntriesToRerun = (
         ...Array.from(prevMap.keys()).filter((name) => !currentNames.has(name)),
       );
 
-      const findAffectedEntry = (testPath: string) => {
-        const currentChunks = currentHashesMap.get(testPath);
+      currentHashesMap.forEach((currentChunks, testPath) => {
         const prevChunks = prevMap.get(testPath);
-
-        if (!currentChunks) return;
 
         if (!prevChunks) {
           affectedPaths.add(testPath);
           return;
         }
 
-        const hasChanges = Object.entries(currentChunks).some(
-          ([chunkName, hash]) => prevChunks[chunkName] !== hash,
+        const currentChunkNames = Object.keys(currentChunks);
+        const prevChunkNames = Object.keys(prevChunks);
+        if (currentChunkNames.length !== prevChunkNames.length) {
+          affectedPaths.add(testPath);
+          return;
+        }
+
+        const hasChanges = currentChunkNames.some(
+          (chunkName) => prevChunks[chunkName] !== currentChunks[chunkName],
         );
 
         if (hasChanges) {
           affectedPaths.add(testPath);
         }
-      };
-
-      currentHashesMap.forEach((_, testPath) => {
-        findAffectedEntry(testPath);
       });
     }
 
@@ -250,11 +302,10 @@ export const calcEntriesToRerun = (
     setupEntryToChunkHashesMap.entries(),
   ).map(([name, chunks]) => ({ name, chunks }));
 
-  // apply latest setup entry chunk hashes
   buildData.setupEntryToChunkHashes = setupEntryToChunkHashes;
 
   const entryToChunkHashesMap = new Map<string, Record<string, string>>();
-  (entries || []).forEach((entry) => {
+  entries.forEach((entry) => {
     buildChunkHashes(entry, entryToChunkHashesMap);
   });
 
@@ -262,34 +313,35 @@ export const calcEntriesToRerun = (
     entryToChunkHashesMap.entries(),
   ).map(([name, chunks]) => ({ name, chunks }));
 
-  // apply latest entry chunk hashes
   buildData.entryToChunkHashes = entryToChunkHashes;
 
-  const isSetupChanged = () => {
-    const { affectedPaths: affectedSetupPaths, deletedPaths: deletedSetups } =
-      processEntryChanges(
-        setupEntries,
-        previousSetupHashes,
-        setupEntryToChunkHashesMap,
-      );
+  const referencedChunkFiles = new Set<string>();
+  for (const entry of [...setupEntries, ...entries]) {
+    for (const file of entry.files || []) {
+      referencedChunkFiles.add(file);
+    }
+  }
+  buildData.chunkHashesByFile = Object.fromEntries(
+    Array.from(chunkHashesByFile.entries()).filter(([file]) =>
+      referencedChunkFiles.has(file),
+    ),
+  );
+  buildData.runtimeChunkFiles = Array.from(runtimeChunkFiles).filter((file) =>
+    referencedChunkFiles.has(file),
+  );
 
-    const affectedSetups = Array.from(affectedSetupPaths)
-      .map((testPath) => setupEntries.find((e) => e.testPath === testPath))
-      .filter((entry): entry is EntryInfo => entry !== undefined);
+  const { affectedPaths: affectedSetupPaths, deletedPaths: deletedSetups } =
+    processEntryChanges(previousSetupHashes, setupEntryToChunkHashesMap);
 
-    return affectedSetups.length > 0 || deletedSetups.length > 0;
-  };
-
-  if (isSetupChanged()) {
-    // if setup files changed, all test entries are affected
+  if (affectedSetupPaths.size > 0 || deletedSetups.length > 0) {
     return { affectedEntries: entries, deletedEntries: [] };
   }
 
   const { affectedPaths: affectedTestPaths, deletedPaths } =
-    processEntryChanges(entries, previousEntryHashes, entryToChunkHashesMap);
+    processEntryChanges(previousEntryHashes, entryToChunkHashesMap);
 
   const affectedEntries = Array.from(affectedTestPaths)
-    .map((testPath) => entries.find((e) => e.testPath === testPath))
+    .map((testPath) => entryByTestPath.get(testPath))
     .filter((entry): entry is EntryInfo => entry !== undefined);
 
   return { affectedEntries, deletedEntries: deletedPaths };
@@ -318,7 +370,7 @@ export const createRsbuildServer = async ({
 }: {
   isWatchMode: boolean;
   rsbuildInstance: RsbuildInstance;
-  inspectedConfig: RstestContext['normalizedConfig'] & {
+  inspectedConfig?: RstestContext['normalizedConfig'] & {
     projects: NormalizedProjectConfig[];
   };
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
@@ -374,7 +426,7 @@ export const createRsbuildServer = async ({
     getPortSilently: true,
   });
 
-  if (isDebug()) {
+  if (isDebug() && inspectedConfig) {
     await rsbuildInstance.inspectConfig({
       writeToDisk: true,
       extraConfigs: {
@@ -429,6 +481,8 @@ export const createRsbuildServer = async ({
     {
       entryToChunkHashes?: TestEntryToChunkHashes;
       setupEntryToChunkHashes?: TestEntryToChunkHashes;
+      chunkHashesByFile?: Record<string, string>;
+      runtimeChunkFiles?: string[];
     }
   > = {};
 
@@ -474,12 +528,16 @@ export const createRsbuildServer = async ({
       assets: true,
       relatedAssets: true,
       cachedAssets: true,
-      // get the compilation time
       chunks: true,
       timings: true,
     });
 
     const entryFiles = getEntryFiles(manifest, outputPath!);
+    const runtimeChunkFiles = getRuntimeChunkFiles({
+      chunks,
+      outputPath: outputPath!,
+      runtimeChunkName: runtimeChunkNameForEnvironment(environmentName),
+    });
     const entries: EntryInfo[] = [];
     const setupEntries: EntryInfo[] = [];
     const globalSetupEntries: EntryInfo[] = [];
@@ -495,10 +553,14 @@ export const createRsbuildServer = async ({
         outputPath!,
         filteredAssets[filteredAssets.length - 1]!.name,
       );
+      const runtimeDistPath = entryFiles[entry]?.find((file) =>
+        runtimeChunkFiles.has(file),
+      );
 
       if (setupFiles[environmentName]?.[entry]) {
         setupEntries.push({
           distPath,
+          runtimeDistPath,
           testPath: setupFiles[environmentName][entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
@@ -512,6 +574,7 @@ export const createRsbuildServer = async ({
         }
         entries.push({
           distPath,
+          runtimeDistPath,
           testPath: sourceEntries[entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
@@ -519,6 +582,7 @@ export const createRsbuildServer = async ({
       } else if (globalSetupFiles?.[environmentName]?.[entry]) {
         globalSetupEntries.push({
           distPath,
+          runtimeDistPath,
           testPath: globalSetupFiles[environmentName][entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
@@ -555,7 +619,8 @@ export const createRsbuildServer = async ({
           entries,
           chunks,
           buildData[environmentName],
-          `${environmentName}-${RUNTIME_CHUNK_NAME}`,
+          outputPath!,
+          runtimeChunkNameForEnvironment(environmentName),
           setupEntries,
         )
       : { affectedEntries: [], deletedEntries: [] };
@@ -569,7 +634,7 @@ export const createRsbuildServer = async ({
       }
       const content = await readFile(name);
 
-      enableAssetsCache && cachedAssetFiles.set(name, content);
+      if (enableAssetsCache) cachedAssetFiles.set(name, content);
 
       return content;
     };
@@ -594,7 +659,7 @@ export const createRsbuildServer = async ({
         content = sourceMap;
       }
 
-      enableAssetsCache && content && cachedSourceMaps.set(name, content);
+      if (enableAssetsCache && content) cachedSourceMaps.set(name, content);
 
       return content;
     };

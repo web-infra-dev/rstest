@@ -5,7 +5,7 @@ import { getTestEntries } from './testFiles';
 /**
  * Distributes test files into a specific shard.
  */
-export function getShardedFiles<T extends { testPath: string }>(
+function getShardedFiles<T extends { testPath: string }>(
   files: T[],
   shard: { count: number; index: number },
 ): T[] {
@@ -53,6 +53,7 @@ export async function resolveShardedEntries(
           rootPath,
           projectRoot: root,
           fileFilters: fileFilters || [],
+          fileFilterMode: context.fileFilterMode,
         });
         return Object.entries(entries).map(([alias, testPath]) => ({
           project: p.environmentName,

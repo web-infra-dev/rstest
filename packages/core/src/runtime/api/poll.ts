@@ -19,6 +19,7 @@
 import type { Assertion } from '@vitest/expect';
 import { Assertion as ChaiAssertion, util } from 'chai';
 import type { RstestExpect, TestCase } from '../../types';
+import { SYNTHETIC_STACK_ERROR_MESSAGE } from '../../utils/constants';
 import { getRealTimers } from '../util';
 
 // these matchers are not supported because they don't make sense with poll
@@ -50,7 +51,6 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
     const assertion = expect(null, message).withContext({
       poll: true,
     }) as Assertion;
-    // biome-ignore lint/style/noParameterAssign: reassigning
     fn = fn.bind(assertion);
     // TODO: flag rstest
     const test = util.flag(assertion, 'vitest-test') as TestCase | undefined;
@@ -78,11 +78,10 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
         }
 
         return function (this: any, ...args: any[]) {
-          const STACK_TRACE_ERROR = new Error('STACK_TRACE_ERROR');
+          const STACK_TRACE_ERROR = new Error(SYNTHETIC_STACK_ERROR_MESSAGE);
           const promise = () =>
             new Promise<void>((resolve, reject) => {
               let intervalId: any;
-              let timeoutId: any;
               let lastError: any;
               // TODO: use timeout manager
               const check = async () => {
@@ -100,7 +99,7 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
                   }
                 }
               };
-              timeoutId = getRealTimers().setTimeout!(() => {
+              const timeoutId = getRealTimers().setTimeout!(() => {
                 clearTimeout(intervalId);
                 util.flag(assertion, '_isLastPollAttempt', true);
                 const rejectWithCause = (cause: any) => {
@@ -138,7 +137,6 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
           // only .then is enough to check awaited, but we type this as `Promise<void>` in global types
           // so let's follow it
           return {
-            // biome-ignore lint/suspicious/noThenProperty: promise-like
             then(onFulfilled, onRejected) {
               awaited = true;
               resultPromise ||= promise();

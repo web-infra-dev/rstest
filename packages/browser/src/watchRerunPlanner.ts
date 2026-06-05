@@ -1,7 +1,7 @@
 import { normalize } from 'pathe';
 import type { TestFileInfo } from './protocol';
 
-export type WatchPlannerProjectEntry = {
+type WatchPlannerProjectEntry = {
   project: {
     name: string;
   };
@@ -14,7 +14,7 @@ type WatchRerunPlannerInput = {
   affectedTestFiles: string[];
 };
 
-export type WatchRerunPlan = {
+type WatchRerunPlan = {
   currentTestFiles: TestFileInfo[];
   filesChanged: boolean;
   normalizedAffectedTestFiles: string[];

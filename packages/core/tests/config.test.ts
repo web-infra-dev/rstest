@@ -1,5 +1,14 @@
-import { mergeRstestConfig, withDefaultConfig } from '../src/config';
+import { resolve } from 'pathe';
+import {
+  getDefaultReporters,
+  isGithubActions,
+  mergeRstestConfig,
+  resolveExtends,
+  withDefaultConfig,
+} from '../src/config';
+import { Rstest } from '../src/core/rstest';
 import type { RstestConfig } from '../src/types';
+import { normalizeBuildCache, resolveProjectBuildCache } from '../src/utils';
 
 // Mock std-env to ensure consistent snapshot across environments
 rs.mock('std-env', () => ({
@@ -26,6 +35,356 @@ describe('mergeRstestConfig', () => {
     });
 
     expect(merged.globalSetup).toEqual(['./single-global-setup.ts']);
+  });
+
+  it('should override forceRerunTriggers', () => {
+    expect(
+      withDefaultConfig({
+        forceRerunTriggers: ['custom/**'],
+      }).forceRerunTriggers,
+    ).toEqual(['custom/**']);
+
+    expect(
+      withDefaultConfig({
+        forceRerunTriggers: [],
+      }).forceRerunTriggers,
+    ).toEqual([]);
+  });
+
+  it('should append adapter forceRerunTriggers unless user config overrides them', async () => {
+    await expect(
+      resolveExtends({
+        extends: {
+          forceRerunTriggers: ['/repo/rsbuild.config.ts'],
+        },
+      }),
+    ).resolves.toMatchObject({
+      forceRerunTriggers: [
+        '**/package.json/**',
+        '**/rstest.config.*',
+        '/repo/rsbuild.config.ts',
+      ],
+    });
+
+    await expect(
+      resolveExtends({
+        extends: {
+          forceRerunTriggers: ['/repo/rsbuild.config.ts'],
+        },
+        forceRerunTriggers: ['custom/**'],
+      }),
+    ).resolves.toMatchObject({
+      forceRerunTriggers: ['custom/**'],
+    });
+  });
+
+  it('should respect output.distPath.root when appending rstest temp exclude', () => {
+    const merged = withDefaultConfig({
+      root: __dirname,
+      output: {
+        distPath: {
+          root: 'custom/.rstest-temp',
+        },
+      },
+    });
+
+    expect(merged.output?.distPath?.root).toBe('custom/.rstest-temp');
+    expect(merged.exclude.patterns).toContain('**/custom/.rstest-temp');
+  });
+
+  it('should normalize string output.distPath to object in normalized config', () => {
+    const merged = withDefaultConfig({
+      root: __dirname,
+      output: {
+        distPath: 'custom/.rstest-temp',
+      },
+    });
+
+    expect(merged.output?.distPath).toEqual({
+      root: 'custom/.rstest-temp',
+    });
+  });
+
+  it('should normalize performance.buildCache defaults for rstest', () => {
+    const merged = withDefaultConfig({
+      root: __dirname,
+      source: {
+        tsconfigPath: './tsconfig.custom.json',
+      },
+      performance: {
+        buildCache: true,
+      },
+    });
+
+    expect(merged.performance?.buildCache).toEqual({
+      cacheDirectory: resolve(__dirname, 'node_modules/.cache/rstest'),
+      cacheDigest: [
+        'rstest',
+        undefined,
+        undefined,
+        'node',
+        'no-coverage',
+        'dist/.rstest-temp',
+      ],
+      buildDependencies: [resolve(__dirname, 'tsconfig.custom.json')],
+    });
+  });
+
+  it('should preserve custom buildCache fields while appending rstest defaults', () => {
+    const merged = withDefaultConfig({
+      root: __dirname,
+      output: {
+        distPath: 'custom/.rstest-temp',
+      },
+      performance: {
+        buildCache: {
+          cacheDirectory: './custom-cache',
+          cacheDigest: ['user-digest'],
+          buildDependencies: ['./a.config.ts'],
+        },
+      },
+    });
+
+    expect(merged.performance?.buildCache).toEqual({
+      cacheDirectory: resolve(__dirname, 'custom-cache'),
+      cacheDigest: [
+        'rstest',
+        undefined,
+        undefined,
+        'node',
+        'no-coverage',
+        'custom/.rstest-temp',
+        'user-digest',
+      ],
+      buildDependencies: [resolve(__dirname, 'a.config.ts')],
+    });
+  });
+
+  it('should include coverage state and provider in buildCache digest', () => {
+    const withoutCoverage = withDefaultConfig({
+      root: __dirname,
+      performance: {
+        buildCache: true,
+      },
+    });
+    const withCoverage = withDefaultConfig({
+      root: __dirname,
+      coverage: {
+        enabled: true,
+      },
+      performance: {
+        buildCache: true,
+      },
+    });
+
+    expect(withoutCoverage.performance?.buildCache).toMatchObject({
+      cacheDigest: [
+        'rstest',
+        undefined,
+        undefined,
+        'node',
+        'no-coverage',
+        'dist/.rstest-temp',
+      ],
+    });
+    expect(withCoverage.performance?.buildCache).toMatchObject({
+      cacheDigest: [
+        'rstest',
+        undefined,
+        undefined,
+        'node',
+        'coverage:istanbul',
+        'dist/.rstest-temp',
+      ],
+    });
+
+    const withCustomProvider = normalizeBuildCache({
+      buildCache: true,
+      root: __dirname,
+      browserEnabled: false,
+      coverageEnabled: true,
+      coverageProvider: 'custom',
+      outputDistPathRoot: 'dist/.rstest-temp',
+    });
+
+    expect(withCustomProvider).toMatchObject({
+      cacheDigest: [
+        'rstest',
+        undefined,
+        undefined,
+        'node',
+        'coverage:custom',
+        'dist/.rstest-temp',
+      ],
+    });
+  });
+
+  it('should resolve buildCache buildDependencies relative to config file directory', () => {
+    const rstest = new Rstest(
+      {
+        cwd: '/repo',
+        command: 'run',
+        configFilePath: '/repo/configs/rstest.config.mts',
+        projects: [],
+      },
+      {
+        performance: {
+          buildCache: {
+            buildDependencies: ['./cache-flags.ts'],
+          },
+        },
+      },
+    );
+
+    expect(rstest.normalizedConfig.performance?.buildCache).toEqual({
+      cacheDirectory: '/repo/node_modules/.cache/rstest',
+      cacheDigest: [
+        'rstest',
+        undefined,
+        undefined,
+        'node',
+        'no-coverage',
+        'dist/.rstest-temp',
+      ],
+      buildDependencies: ['/repo/configs/cache-flags.ts'],
+    });
+  });
+
+  it('should resolve inline project buildCache buildDependencies relative to root config file directory', () => {
+    const rstest = new Rstest(
+      {
+        cwd: '/repo',
+        command: 'run',
+        configFilePath: '/repo/configs/rstest.config.mts',
+        projects: [
+          {
+            config: {
+              name: 'node',
+              root: './projects/node',
+              performance: {
+                buildCache: {
+                  buildDependencies: ['./cache-flags.ts'],
+                },
+              },
+            },
+          },
+        ],
+      },
+      {},
+    );
+
+    expect(
+      rstest.projects[0]?.normalizedConfig.performance?.buildCache
+        ?.buildDependencies,
+    ).toEqual(['/repo/configs/cache-flags.ts']);
+  });
+
+  it('should preserve explicit default buildCache directory for projects', () => {
+    const rstest = new Rstest(
+      {
+        cwd: '/repo',
+        command: 'run',
+        configFilePath: '/repo/rstest.config.mts',
+        projects: [
+          {
+            config: {
+              name: 'node',
+              root: './projects/node',
+              performance: {
+                buildCache: {
+                  cacheDirectory: 'node_modules/.cache/rstest',
+                },
+              },
+            },
+          },
+        ],
+      },
+      {},
+    );
+
+    expect(
+      rstest.projects[0]?.normalizedConfig.performance?.buildCache
+        ?.cacheDirectory,
+    ).toBe('/repo/projects/node/node_modules/.cache/rstest');
+    expect(
+      resolveProjectBuildCache({
+        context: rstest,
+        project: rstest.projects[0]!,
+      }),
+    ).toMatchObject({
+      cacheDirectory: '/repo/projects/node/node_modules/.cache/rstest',
+    });
+  });
+
+  it('should append project name to default buildCache directory for per-project caches', () => {
+    const rstest = new Rstest(
+      {
+        cwd: '/repo',
+        command: 'run',
+        configFilePath: '/repo/rstest.config.mts',
+        projects: [
+          {
+            configFilePath: '/repo/projects/browser/rstest.config.mts',
+            config: {
+              name: 'browser',
+              root: './projects/browser',
+              performance: {
+                buildCache: true,
+              },
+            },
+          },
+          {
+            configFilePath: '/repo/projects/node/rstest.config.mts',
+            config: {
+              name: 'node',
+              root: './projects/node',
+              performance: {
+                buildCache: true,
+              },
+            },
+          },
+        ],
+      },
+      {},
+    );
+
+    expect(
+      rstest.projects[0]?.normalizedConfig.performance?.buildCache,
+    ).toEqual({
+      cacheDirectory:
+        '/repo/projects/browser/node_modules/.cache/rstest-browser',
+      cacheDigest: [
+        'rstest',
+        undefined,
+        'browser',
+        'node',
+        'no-coverage',
+        'dist/.rstest-temp',
+      ],
+      buildDependencies: [],
+    });
+    expect(
+      rstest.projects[1]?.normalizedConfig.performance?.buildCache,
+    ).toEqual({
+      cacheDirectory: '/repo/projects/node/node_modules/.cache/rstest-node',
+      cacheDigest: [
+        'rstest',
+        undefined,
+        'node',
+        'node',
+        'no-coverage',
+        'dist/.rstest-temp',
+      ],
+      buildDependencies: [],
+    });
+    expect(
+      resolveProjectBuildCache({
+        context: rstest,
+        project: rstest.projects[1]!,
+      }),
+    ).toMatchObject({
+      cacheDirectory: '/repo/projects/node/node_modules/.cache/rstest-node',
+    });
   });
 
   it('should merge exclude correctly', () => {
@@ -163,5 +522,26 @@ describe('withDefaultConfig browser normalization', () => {
     const config: RstestConfig = {};
 
     expect(() => withDefaultConfig(config)).not.toThrow();
+  });
+});
+
+describe('default reporter selection', () => {
+  // `getDefaultReporters` takes the GitHub Actions flag as a parameter so both
+  // branches can be asserted directly — the build-time `GITHUB_ACTIONS` define
+  // (forced to 'false' for this package's own tests) makes the inline runtime
+  // check otherwise impossible to exercise for the `true` branch here.
+  it('adds the github-actions reporter under GitHub Actions', () => {
+    expect(getDefaultReporters(true)).toEqual(['default', 'github-actions']);
+  });
+
+  it('uses only the default reporter outside GitHub Actions', () => {
+    expect(getDefaultReporters(false)).toEqual(['default']);
+  });
+
+  it('defaults to the GITHUB_ACTIONS env signal', () => {
+    // In this package's test build the define pins GITHUB_ACTIONS off, so the
+    // env-driven default must match the non-CI branch and `isGithubActions()`.
+    expect(isGithubActions()).toBe(false);
+    expect(getDefaultReporters()).toEqual(['default']);
   });
 });

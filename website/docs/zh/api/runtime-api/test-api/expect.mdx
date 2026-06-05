@@ -105,7 +105,7 @@ expect.soft(1 + 2).toBe(4);
 注意：
 
 - `expect.poll(...)` 是异步断言，**必须**使用 `await`。
-- `expect.poll(...)` 不支持 `resolves`/`rejects`、`toThrow*` 以及快照类 matcher。遇到这类不稳定条件建议使用 `rstest.waitFor()`。
+- `expect.poll(...)` 不支持 `resolves`/`rejects`、`toThrow*` 以及快照类 matcher。遇到这类不稳定条件建议使用 `rs.waitFor()`。
 
 ```ts
 await expect.poll(() => getStatus()).toBe('ready');
@@ -293,7 +293,7 @@ expect(() => {
 
 ### Mock 匹配器
 
-Mock 匹配器用于验证 `rstest.fn` / `rstest.spyOn` 的交互行为，包括调用次数、参数、调用顺序、返回值和异步结果。
+Mock 匹配器用于验证 `rs.fn` / `rs.spyOn` 的交互行为，包括调用次数、参数、调用顺序、返回值和异步结果。
 
 调用相关：
 
@@ -328,7 +328,7 @@ Promise 结果相关：
 - 这些 matcher 只能用于 mock/spy，不能用于普通函数。
 
 ```ts
-const sum = rstest.fn((a: number, b: number) => a + b);
+const sum = rs.fn((a: number, b: number) => a + b);
 sum(1, 2);
 sum(2, 3);
 
@@ -338,15 +338,15 @@ expect(sum).toHaveBeenLastCalledWith(2, 3);
 expect(sum).toHaveReturnedWith(3);
 expect(sum).toHaveLastReturnedWith(5);
 
-const fetchUser = rstest.fn(async (id: number) => ({ id, name: 'alice' }));
+const fetchUser = rs.fn(async (id: number) => ({ id, name: 'alice' }));
 await fetchUser(1);
 await fetchUser(2);
 
 expect(fetchUser).toHaveResolvedTimes(2);
 expect(fetchUser).toHaveNthResolvedWith(1, { id: 1, name: 'alice' });
 
-const before = rstest.fn();
-const after = rstest.fn();
+const before = rs.fn();
+const after = rs.fn();
 before();
 after();
 expect(before).toHaveBeenCalledBefore(after);

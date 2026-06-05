@@ -1,12 +1,34 @@
 import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
 import { defineConfig, rspack } from '@rslib/core';
-import { peerDependencies } from '../browser/package.json';
+import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
+import {
+  peerDependencies,
+  version as browserVersion,
+} from '../browser/package.json';
 import { licensePlugin } from './licensePlugin';
 import { version } from './package.json';
 
+// `RSTEST_VERSION` is build-injected into both @rstest/core and @rstest/browser
+// from each package's own package.json, and the browser-mode runtime gate
+// (core/src/core/browserLoader.ts) refuses to load a browser build whose version
+// differs from core's. Those two reads can only drift if the packages are
+// versioned independently — which a single build cannot otherwise detect — so
+// assert the peer pair is in lockstep here, surfacing a mismatch at build time
+// instead of as a runtime version-gate false negative for the user.
+if (version !== browserVersion) {
+  throw new Error(
+    `@rstest/core (${version}) and @rstest/browser (${browserVersion}) versions ` +
+      'are out of sync. They are published as a peer pair and must match; ' +
+      'bump packages/core/package.json and packages/browser/package.json together.',
+  );
+}
+
 const isBuildWatch = process.argv.includes('--watch');
+const isLibBuild = process.argv.includes('build');
 
 export default defineConfig({
+  plugins: publishCheckPlugins(),
   lib: [
     {
       id: 'rstest',
@@ -16,13 +38,12 @@ export default defineConfig({
         advancedEsm: true,
       },
       dts: {
-        // Only use tsgo in local dev for faster build, disable it in CI until it's more stable
-        tsgo: !process.env.CI,
+        tsgo: true,
         bundle: process.env.SOURCEMAP
           ? false
           : {
               bundledPackages: [
-                '@types/sinonjs__fake-timers',
+                '@sinonjs/fake-timers',
                 '@types/istanbul-reports',
                 '@types/istanbul-lib-report',
                 '@types/istanbul-lib-coverage',
@@ -39,9 +60,6 @@ export default defineConfig({
       output: {
         sourceMap: process.env.SOURCEMAP === 'true',
         externals: {
-          // Temporary fix: `import * as timers from 'timers'` reassign error
-          timers: 'commonjs timers',
-          'timers/promises': 'commonjs timers/promises',
           // fix deduplicate import from fs & node:fs
           fs: 'node:fs',
           os: 'node:os',
@@ -79,6 +97,8 @@ export default defineConfig({
       source: {
         entry: {
           index: './src/index.ts',
+          'api/index': './src/api/index.ts',
+          adapter: './src/adapter.ts',
           browser: './src/browser.ts',
           worker: './src/runtime/worker/index.ts',
           globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',
@@ -104,7 +124,9 @@ export default defineConfig({
                 },
               ],
             }),
-            isBuildWatch ? null : licensePlugin(),
+            // only load & apply licensePlugin in lib build
+            isBuildWatch || !isLibBuild ? null : await licensePlugin(),
+            rsdoctorCIPlugin({ reportDir: '.rsdoctor/main' }),
           ].filter(Boolean),
         },
       },
@@ -124,14 +146,20 @@ export default defineConfig({
           js: '[name].mjs',
         },
       },
+      tools: {
+        rspack: {
+          plugins: [
+            rsdoctorCIPlugin({ reportDir: '.rsdoctor/loaders' }),
+          ].filter(Boolean),
+        },
+      },
     },
     {
       id: 'browser_runtime',
       format: 'esm',
       syntax: 'es2023',
       dts: {
-        // Only use tsgo in local dev for faster build, disable it in CI until it's more stable
-        tsgo: !process.env.CI,
+        tsgo: true,
         bundle: true,
       },
       source: {
@@ -166,6 +194,13 @@ export default defineConfig({
         },
       },
       plugins: [pluginNodePolyfill()],
+      tools: {
+        rspack: {
+          plugins: [
+            rsdoctorCIPlugin({ reportDir: '.rsdoctor/browser' }),
+          ].filter(Boolean),
+        },
+      },
     },
   ],
   performance: {

@@ -2,16 +2,45 @@
 description: This chapter introduces how to help AI better understand Rstest's features, configuration, and best practices, so it can provide more accurate assistance during day-to-day development and troubleshooting.
 ---
 
+import { Prompt } from '@rspress/core/theme';
 import { PackageManagerTabs } from '@theme';
 
 # AI
 
 To help AI better understand Rstest's features, configuration, and best practices so it can provide more accurate assistance during day-to-day development and troubleshooting, Rstest provides the following capabilities:
 
+- [Agent prompt](#agent-prompt)
 - [Agent Skills](#agent-skills)
 - [llms.txt](#llmstxt)
 - [Markdown docs](#markdown-docs)
+- [Markdown reporter](#markdown-reporter)
 - [AGENTS.md](#agentsmd)
+
+## Agent prompt
+
+If you are using a coding agent (such as Claude Code, Cursor, Copilot, etc.), copy the prompt that matches your project. The agent will read the linked instructions and install dependencies, create configuration, and write tests based on your project type.
+
+### Set up Rstest
+
+Use this prompt to add Rstest to a project that doesn't have a test runner configured yet:
+
+<Prompt
+  title="Set up Rstest"
+  description="Copy this prompt and send it to your coding agent."
+  prompt={`Set up Rstest in this project by following the instructions here:
+https://rstest.rs/guide/start/agent-install.md`}
+/>
+
+### Migrate from Jest or Vitest
+
+Use this prompt to migrate an existing Jest or Vitest project to Rstest. For convenience, the linked instructions inline the full [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill so nothing needs to be installed; alternatively, you can [install the skill](#agent-skills) and use it directly:
+
+<Prompt
+  title="Migrate to Rstest"
+  description="Copy this prompt and send it to your coding agent."
+  prompt={`Migrate this project to Rstest by following the instructions here:
+https://rstest.rs/guide/start/agent-migrate.md`}
+/>
 
 ## Agent Skills
 
@@ -21,6 +50,7 @@ In the [rstackjs/agent-skills](https://github.com/rstackjs/agent-skills) reposit
 
 - [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest): Migrate Jest or Vitest projects to Rstest.
 - [rstest-best-practices](https://github.com/rstackjs/agent-skills#rstest-best-practices): Share best practices for using Rstest.
+- [rstest-debugging](https://github.com/rstackjs/agent-skills#rstest-debugging): Debug Rstest issues systematically, including performance regressions. Use it when Rstest is slower than expected, slower than Jest or Vitest, or when you need to determine whether the bottleneck is in build startup or test execution before trying config or code changes.
 
 In Coding Agents that support skills, you can use the [skills](https://www.npmjs.com/package/skills) package to install a specific skill with the following command:
 
@@ -65,6 +95,28 @@ https://rstest.rs/guide/start/index.md
 ```
 
 Providing the Markdown link or content allows AI to focus on a specific chapter, which is useful for targeted troubleshooting or looking up a particular topic.
+
+## Markdown reporter
+
+When you want AI to directly consume test results, use the `md` reporter. It outputs a single markdown document to stdout, which is easier for LLMs to parse than colorful terminal logs. The output is also more concise, which usually reduces token usage.
+
+In Agent environments, Rstest defaults to `md` when you didn't explicitly configure reporters.
+
+```bash
+npx rstest --reporters=md
+```
+
+You can also configure it in `rstest.config.ts` and combine it with other reporters in local or CI workflows.
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: ['md'],
+});
+```
+
+More information about the `md` reporter can be found in [Markdown reporter](/guide/basic/reporters#markdown-reporter).
 
 ## AGENTS.md
 

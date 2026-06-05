@@ -1,4 +1,4 @@
-export type HeadedSerialTask = () => Promise<void>;
+type HeadedSerialTask = () => Promise<void>;
 
 /**
  * Serializes headed browser file execution so only one task runs at a time.

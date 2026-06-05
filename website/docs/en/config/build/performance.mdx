@@ -1,0 +1,70 @@
+---
+description: Configure Rsbuild performance options used by Rstest test builds.
+---
+
+import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
+import { ApiMeta } from '@components/ApiMeta';
+
+# performance
+
+## performance.buildCache <RsbuildDocBadge path="/config/performance/build-cache" text="performance.buildCache" />
+
+<ApiMeta addedVersion="0.10.0" />
+
+- **Type:**
+
+```ts
+type BuildCacheConfig =
+  | boolean
+  | {
+      cacheDirectory?: string;
+      cacheDigest?: Array<string | undefined>;
+      buildDependencies?: string[];
+    };
+```
+
+- **Default:** `false`
+
+Enables Rsbuild persistent build cache for Rstest test builds.
+
+:::tip
+Rspack's persistent cache is still experimental and may change across versions, so Rstest does not enable `performance.buildCache` by default.
+:::
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: true,
+  },
+});
+```
+
+When enabled, Rstest applies a few Rstest-specific defaults to keep the cache stable across runs:
+
+- `cacheDirectory` defaults to `node_modules/.cache/rstest-<project-name>` under the active project root, so projects that share the same root still get isolated caches.
+- `cacheDigest` automatically includes Rstest runtime inputs such as command, environment name, browser-vs-node mode.
+- `buildDependencies` automatically includes the active Rstest config file, project config files, and discovered `tsconfig` paths when available.
+
+You can customize these fields to override or extend the defaults:
+
+- `cacheDirectory`: **override**. When you provide it, Rstest uses your directory.
+- `cacheDigest`: **extend**. Rstest keeps its own runtime digest entries and appends your custom values after them.
+- `buildDependencies`: **extend**. Rstest keeps its own dependency files and appends your custom files after resolving relative paths from the active config file directory.
+
+For example:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: {
+      cacheDirectory: '.cache/rstest/browser',
+      cacheDigest: [process.env.CUSTOM_ENV],
+      buildDependencies: ['./scripts/test-env.ts'],
+    },
+  },
+});
+```

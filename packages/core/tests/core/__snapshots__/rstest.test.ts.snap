@@ -16,6 +16,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   "clearMocks": false,
   "coverage": {
     "allowExternal": false,
+    "changed": undefined,
     "clean": true,
     "enabled": false,
     "exclude": [
@@ -39,6 +40,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
     ],
     "reportsDirectory": "<ROOT>/packages/core/coverage",
   },
+  "detectAsyncLeaks": false,
   "disableConsoleIntercept": false,
   "env": {},
   "exclude": {
@@ -51,6 +53,10 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
     ],
   },
   "federation": false,
+  "forceRerunTriggers": [
+    "**/package.json/**",
+    "**/rstest.config.*",
+  ],
   "globalSetup": [],
   "globals": false,
   "hideSkippedTestFiles": false,
@@ -65,6 +71,11 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "rstest",
+  "output": {
+    "distPath": {
+      "root": "dist/.rstest-temp",
+    },
+  },
   "passWithNoTests": false,
   "pool": {
     "type": "forks",
@@ -78,6 +89,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   "retry": 0,
   "root": "<ROOT>/packages/core",
   "setupFiles": [],
+  "silent": false,
   "slowTestThreshold": 300,
   "snapshotFormat": {},
   "testEnvironment": {
@@ -106,6 +118,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "clearMocks": false,
   "coverage": {
     "allowExternal": false,
+    "changed": undefined,
     "clean": true,
     "enabled": false,
     "exclude": [
@@ -129,6 +142,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     ],
     "reportsDirectory": "<ROOT>/packages/core/coverage",
   },
+  "detectAsyncLeaks": false,
   "disableConsoleIntercept": false,
   "env": {},
   "exclude": {
@@ -141,6 +155,10 @@ exports[`rstest context > should generate rstest context correctly with multiple
     ],
   },
   "federation": false,
+  "forceRerunTriggers": [
+    "**/package.json/**",
+    "**/rstest.config.*",
+  ],
   "globalSetup": [],
   "globals": false,
   "hideSkippedTestFiles": false,
@@ -155,6 +173,11 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "test-project",
+  "output": {
+    "distPath": {
+      "root": "dist/.rstest-temp",
+    },
+  },
   "passWithNoTests": false,
   "pool": {
     "type": "forks",
@@ -170,6 +193,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "setupFiles": [
     "<ROOT>/packages/core/test-project/scripts/rstest.setup.ts",
   ],
+  "silent": false,
   "slowTestThreshold": 300,
   "snapshotFormat": {},
   "source": {},
@@ -199,6 +223,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "clearMocks": false,
   "coverage": {
     "allowExternal": false,
+    "changed": undefined,
     "clean": true,
     "enabled": false,
     "exclude": [
@@ -222,6 +247,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     ],
     "reportsDirectory": "<ROOT>/packages/core/coverage",
   },
+  "detectAsyncLeaks": false,
   "disableConsoleIntercept": false,
   "env": {},
   "exclude": {
@@ -234,6 +260,10 @@ exports[`rstest context > should generate rstest context correctly with multiple
     ],
   },
   "federation": false,
+  "forceRerunTriggers": [
+    "**/package.json/**",
+    "**/rstest.config.*",
+  ],
   "globalSetup": [],
   "globals": false,
   "hideSkippedTestFiles": false,
@@ -248,6 +278,11 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "test-project1",
+  "output": {
+    "distPath": {
+      "root": "dist/.rstest-temp",
+    },
+  },
   "passWithNoTests": false,
   "pool": {
     "type": "forks",
@@ -263,6 +298,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "setupFiles": [
     "<ROOT>/packages/core/test-project1/scripts/rstest.setup.ts",
   ],
+  "silent": false,
   "slowTestThreshold": 300,
   "snapshotFormat": {},
   "source": {},

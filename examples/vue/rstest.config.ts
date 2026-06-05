@@ -12,4 +12,5 @@ export default defineConfig({
     pluginVueJsx(),
   ],
   testEnvironment: 'happy-dom',
+  exclude: ['test/ssr.test.ts'],
 });

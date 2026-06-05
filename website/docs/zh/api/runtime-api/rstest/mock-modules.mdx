@@ -160,20 +160,26 @@ lodash.random(multiple(1, 2), multiple(3, 4));
 
 ```ts title="src/calculator.test.ts"
 import { expect, rs, test } from '@rstest/core';
-import { calculate, add } from './calculator';
+import { calculate } from './calculator';
 
 rs.mock('./calculator', { spy: true });
 
-test('calculate 使用正确的参数调用 add', () => {
+test('保留真实实现并追踪调用', () => {
   // 原始实现仍然有效
   const result = calculate(1, 2);
   expect(result).toBe(3);
 
-  // 但我们也可以断言调用情况
-  expect(add).toHaveBeenCalledWith(1, 2);
-  expect(add).toHaveReturnedWith(3);
+  // 因为 calculate 是被直接调用的，所以我们也可以断言调用情况
+  expect(calculate).toHaveBeenCalledWith(1, 2);
+  expect(calculate).toHaveReturnedWith(3);
 });
 ```
+
+:::note 模块内部调用不会被追踪
+
+spy 包装的是模块的**导出**。当一个导出在同一模块内调用另一个导出时（例如 `calculate` 内部调用 `add`），该内部调用走的是模块的本地绑定而非被包装的导出，因此**不会**被追踪。请对你直接调用的导出（或从其他模块调用的导出）进行断言。这是 ESM module spying 的固有限制。
+
+:::
 
 :::note ESM 和 CommonJS 模块
 
@@ -298,6 +304,50 @@ test('doMockRequire 只影响后续 require 调用', () => {
 });
 ```
 
+## rs.unmockRequire
+
+- **类型：** `(path: string) => void`
+
+取消通过 `require()` 加载模块的 mock 实现。和 `rs.mockRequire` 一样，这个调用会被提升到文件顶部。
+
+当你希望后续的 `require()` 重新加载原始 CommonJS 模块时，使用这个 API。
+
+```ts title="src/math.test.cjs"
+const { sum } = require('./math.cjs');
+
+rs.mockRequire('./math.cjs', () => ({
+  sum: (a, b) => a + b + 100,
+}));
+
+rs.unmockRequire('./math.cjs');
+
+test('unmockRequire 恢复原始 CommonJS 模块', () => {
+  expect(sum(1, 2)).toBe(3);
+});
+```
+
+## rs.doUnmockRequire
+
+- **类型：** `(path: string) => void`
+
+与 `rs.unmockRequire` 相同，但不会被提升。只有后续的 `require()` 调用才会重新加载原始模块。
+
+```ts title="src/math.test.cjs"
+test('doUnmockRequire 只影响后续 require 调用', () => {
+  rs.doMockRequire('./math.cjs', () => ({
+    sum: (a, b) => a + b + 100,
+  }));
+
+  const { sum: mockedSum } = require('./math.cjs');
+  expect(mockedSum(1, 2)).toBe(103);
+
+  rs.doUnmockRequire('./math.cjs');
+
+  const { sum } = require('./math.cjs');
+  expect(sum(1, 2)).toBe(3);
+});
+```
+
 ## rs.hoisted
 
 - **类型：** `<T = unknown>(fn: () => T) => T`
@@ -419,5 +469,5 @@ it('test', async () => {
 清除所有模块的缓存。这允许在重新导入时重新执行模块。这在隔离不同测试中共享的模块的状态时非常有用。
 
 :::warning
-不会重置被 mock 的 modules。要清除 mock 的模块，请使用 [`rs.unmock`](#rsunmock) 或 [`rs.doUnmock`](#rsdounmock) 。
+不会重置被 mock 的 modules。要清除 mock 的模块，请使用 [`rs.unmock`](#rsunmock)、[`rs.doUnmock`](#rsdounmock)、[`rs.unmockRequire`](#rsunmockrequire) 或 [`rs.doUnmockRequire`](#rsdounmockrequire)。
 :::

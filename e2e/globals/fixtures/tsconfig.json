@@ -1,7 +1,4 @@
 {
   "extends": "@rstest/tsconfig/base",
-  "compilerOptions": {
-    "baseUrl": "./"
-  },
   "include": ["./**/*.ts"]
 }

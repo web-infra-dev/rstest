@@ -1,0 +1,127 @@
+---
+description: Use `using` and `await using` to automatically clean up temporary test resources when a block exits.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Scoped cleanup
+
+Rstest supports scoped cleanup for temporary test changes. When your runtime or toolchain supports explicit resource management, you can use `using` to automatically restore resources at the end of a block.
+
+This is useful when a test temporarily changes shared state, such as spies, environment variables, globals, or fake timers.
+
+## Disposable `using` syntax
+
+<ApiMeta addedVersion="0.10.3" />
+
+`rs.stubEnv()`, `rs.stubGlobal()`, and `rs.useFakeTimers()` return disposable resources that work with `using`.
+
+## Spy cleanup
+
+Mocks and spies implement `Symbol.dispose`, so a spy created with `rs.spyOn()` is restored when the `using` block exits.
+
+```ts title="logger.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+test('logs a warning', () => {
+  {
+    using warn = rs.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    console.warn('invalid payload');
+    expect(warn).toHaveBeenCalledWith('invalid payload');
+  }
+
+  // console.warn is restored here
+});
+```
+
+See [Mock](/guide/basic/mock#using-syntax) for more spy examples.
+
+## Environment variables
+
+`rs.stubEnv()` returns a disposable resource. When it leaves a `using` scope, only that scoped env stub is restored.
+
+```ts title="env.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+test('uses test env', () => {
+  {
+    using _env = rs.stubEnv('NODE_ENV', 'test');
+
+    expect(process.env.NODE_ENV).toBe('test');
+  }
+
+  // NODE_ENV is restored here
+});
+```
+
+Nested env stubs are restored in reverse order:
+
+```ts
+using _outer = rs.stubEnv('FEATURE_FLAG', 'on');
+expect(process.env.FEATURE_FLAG).toBe('on');
+
+{
+  using _inner = rs.stubEnv('FEATURE_FLAG', 'off');
+  expect(process.env.FEATURE_FLAG).toBe('off');
+}
+
+expect(process.env.FEATURE_FLAG).toBe('on');
+```
+
+You can still call [rs.unstubAllEnvs()](/api/runtime-api/rstest/utilities#rsunstuballenvs) to restore all env stubs in the current test.
+
+## Globals
+
+`rs.stubGlobal()` also returns a disposable resource. This is convenient for temporarily replacing global APIs.
+
+```ts title="global.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+test('uses a global feature flag', () => {
+  {
+    using _global = rs.stubGlobal('__FEATURE_ENABLED__', true);
+
+    expect(globalThis.__FEATURE_ENABLED__).toBe(true);
+  }
+
+  // __FEATURE_ENABLED__ is restored here
+});
+```
+
+You can still call [rs.unstubAllGlobals()](/api/runtime-api/rstest/utilities#rsunstuballglobals) to restore all global stubs in the current test.
+
+## Fake timers
+
+`rs.useFakeTimers()` returns a disposable resource that restores real timers when the block exits.
+
+```ts title="timer.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+test('runs delayed work', () => {
+  {
+    using _timers = rs.useFakeTimers();
+
+    const fn = rs.fn();
+    setTimeout(fn, 1000);
+
+    rs.advanceTimersByTime(1000);
+    expect(fn).toHaveBeenCalledTimes(1);
+  }
+
+  expect(rs.isFakeTimers()).toBe(false);
+});
+```
+
+## Async resources
+
+For asynchronous resources that implement `Symbol.asyncDispose`, use `await using`. Rstest's browser provider resources support async disposal internally so provider pages, contexts, and browsers can be closed by the same explicit resource management protocol.
+
+```ts
+await using resource = createAsyncResource();
+
+await resource.run();
+// resource[Symbol.asyncDispose]() is awaited here
+```
+
+Use `using` for synchronous cleanup and `await using` when cleanup needs to await asynchronous work.

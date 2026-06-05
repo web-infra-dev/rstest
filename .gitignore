@@ -1,8 +1,10 @@
 .DS_Store
 *.log*
 *.cpuprofile
+*.dump
 node_modules/
 
+.cache/
 dist/
 dist-*
 compiled/
@@ -30,6 +32,8 @@ test-temp-*
 .idea/
 .nx/
 .history/
+.claude/worktrees/
+.claude/settings.local.json
 .env.local
 .env.*.local
 
@@ -45,3 +49,10 @@ tests-dist/
 .vscode-test/
 packages/vscode/*.vsix
 packages/vscode/icon.png
+
+.rstest-temp/
+.rstest/
+lefthook-local.yml
+
+# Generated memory benchmark fixture
+benchmarks/fixtures/memory/

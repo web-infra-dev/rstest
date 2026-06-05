@@ -1,4 +1,4 @@
-export type HeadlessLatestRerunScheduler<TFile> = {
+type HeadlessLatestRerunScheduler<TFile> = {
   enqueueLatest: (files: TFile[]) => Promise<void>;
   whenIdle: () => Promise<void>;
 };

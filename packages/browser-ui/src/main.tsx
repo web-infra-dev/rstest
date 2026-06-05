@@ -20,7 +20,12 @@ import {
   isStaleBrowserRpcRequest,
   readBrowserRpcRequest,
 } from './core/browserRpc';
-import { buildCollectedCaseMap, upsertRunningCase } from './core/caseMap';
+import {
+  buildCollectedCaseMap,
+  projectCaseInfo,
+  upsertRunningCase,
+} from './core/caseMap';
+import { projectKey as toProjectKey, suiteKey } from './core/treeNodeKey';
 import { forwardDispatchRpcRequest, readDispatchMessage } from './core/channel';
 import { createRunId, createRunnerUrl } from './core/runtime';
 import { useRpc } from './hooks/useRpc';
@@ -42,7 +47,11 @@ import type {
   TestStatus,
 } from './utils/constants';
 import { logger } from './utils/logger';
-import { selectionFromConfig, type ViewportSelection } from './utils/viewport';
+import {
+  isPositiveFiniteSize,
+  selectionFromConfig,
+  type ViewportSelection,
+} from './utils/viewport';
 import { isDevicePreset } from './utils/viewportPresets';
 import './index.css';
 
@@ -137,15 +146,9 @@ const BrowserRunner: React.FC<{
         if (mode === 'responsive') {
           const width = Number((parsed as any).width);
           const height = Number((parsed as any).height);
-          if (
-            Number.isFinite(width) &&
-            width > 0 &&
-            Number.isFinite(height) &&
-            height > 0
-          ) {
-            return { mode: 'responsive', width, height };
-          }
-          return null;
+          return isPositiveFiniteSize(width, height)
+            ? { mode: 'responsive', width, height }
+            : null;
         }
         if (mode === 'preset') {
           const preset = (parsed as any).preset;
@@ -341,24 +344,21 @@ const BrowserRunner: React.FC<{
 
   const upsertCase = useCallback(
     (filePath: string, payload: BrowserClientTestResult) => {
-      const parentNames = (payload.parentNames ?? []).filter(Boolean);
-      const fullName =
-        [...parentNames, payload.name].join('  ') || payload.name;
+      // Project via the shared owner WITHOUT previousCase so the three-tier
+      // filePath / location?? fallback collapses to the two-tier
+      // `testPath || filePath` and bare `location` this path has always used.
+      const next = projectCaseInfo({
+        filePath,
+        test: payload,
+        status: mapCaseStatus(payload.status),
+      });
       setCaseMap((prev) => {
         const prevFile = prev[filePath] ?? {};
         return {
           ...prev,
           [filePath]: {
             ...prevFile,
-            [payload.testId]: {
-              id: payload.testId,
-              name: payload.name,
-              parentNames,
-              fullName,
-              status: mapCaseStatus(payload.status),
-              filePath: payload.testPath || filePath,
-              location: payload.location,
-            },
+            [payload.testId]: next,
           },
         };
       });
@@ -484,18 +484,14 @@ const BrowserRunner: React.FC<{
             const newCases: Record<string, CaseInfo> = {};
             for (const result of payload.results ?? []) {
               if (result?.testId) {
-                const parentNames = (result.parentNames ?? []).filter(Boolean);
-                const fullName =
-                  [...parentNames, result.name].join('  ') || result.name;
-                newCases[result.testId] = {
-                  id: result.testId,
-                  name: result.name,
-                  parentNames,
-                  fullName,
+                // Same shared projection, without previousCase: the file's
+                // `testPath` is the two-tier filePath fallback, location stays
+                // bare — byte-identical to the previous inline literal.
+                newCases[result.testId] = projectCaseInfo({
+                  filePath: testPath,
+                  test: result,
                   status: mapCaseStatus(result.status),
-                  filePath: result.testPath || testPath,
-                  location: result.location,
-                };
+                });
               }
             }
             return { ...prev, [testPath]: newCases };
@@ -616,7 +612,7 @@ const BrowserRunner: React.FC<{
     // Add project keys if multiple projects
     if (hasMultipleProjects) {
       for (const projectName of projectNames) {
-        keys.push(`__project__${projectName}`);
+        keys.push(toProjectKey(projectName));
       }
     }
 
@@ -625,31 +621,16 @@ const BrowserRunner: React.FC<{
       const filePath = file.testPath;
       keys.push(filePath);
 
-      // Collect all unique suite paths from cases
+      // Enumerate every ancestor suite key straight from each case's
+      // parentNames array — via the shared grammar, never a join→split
+      // round-trip — so the keys match the producer byte-for-byte even when a
+      // suite name itself contains a literal '::'.
       const cases = Object.values(caseMap[filePath] ?? {});
-      const suitePaths = new Set<string>();
-
       for (const testCase of cases) {
-        const parentNames = testCase.parentNames;
-        // Build all ancestor suite keys
+        const { parentNames } = testCase;
         for (let i = 1; i <= parentNames.length; i++) {
-          const suitePath = parentNames.slice(0, i).join('::');
-          suitePaths.add(suitePath);
+          keys.push(suiteKey(filePath, parentNames.slice(0, i)));
         }
-      }
-
-      // Add suite keys - need to match the key format in TestFilesTree
-      // Key format: ${keyPrefix}::suite::${fullPath.join('::')}
-      // where keyPrefix accumulates from parent suites
-      for (const suitePath of suitePaths) {
-        const parts = suitePath.split('::');
-        // Build the actual key by accumulating prefixes
-        let currentKey = filePath;
-        for (let i = 1; i <= parts.length; i++) {
-          const partialPath = parts.slice(0, i).join('::');
-          currentKey = `${currentKey}::suite::${partialPath}`;
-        }
-        keys.push(currentKey);
       }
     }
 

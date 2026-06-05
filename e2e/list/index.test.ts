@@ -135,6 +135,87 @@ describe('test list command', () => {
     `);
   });
 
+  it('should print summary correctly', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--summary'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        "a.test.ts > test a > test a-1",
+        "a.test.ts > test a-2",
+        "b.test.ts > test b > test b-1",
+        "b.test.ts > test b-2",
+        "c.test.ts > test c it each 0",
+        "c.test.ts > test c it for 0",
+        "c.test.ts > test c it runIf",
+        "c.test.ts > test c it skipIf",
+        " Test Files 3 matched",
+        "      Tests 8 matched",
+      ]
+    `);
+  });
+
+  it('should print file summary correctly with --filesOnly', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--filesOnly', '--summary'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    await expectExecSuccess();
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+
+    expect(logs).toMatchInlineSnapshot(`
+      [
+        "a.test.ts",
+        "b.test.ts",
+        "c.test.ts",
+        " Test Files 3 matched",
+      ]
+    `);
+  });
+
+  it('should print suite summary correctly with --includeSuites', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--includeSuites', '--summary'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+
+    expect(logs.slice(-3)).toMatchInlineSnapshot(`
+      [
+        " Test Files 3 matched",
+        "     Suites 6 matched",
+        "      Tests 8 matched",
+      ]
+    `);
+  });
+
   it('should list tests and suites correctly', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

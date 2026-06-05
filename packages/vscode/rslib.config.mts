@@ -1,4 +1,5 @@
 import { defineConfig } from '@rslib/core';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
 export default defineConfig({
   lib: [
@@ -22,6 +23,9 @@ export default defineConfig({
           output: {
             devtoolModuleFilenameTemplate: '[absolute-resource-path]',
           },
+          plugins: [
+            rsdoctorCIPlugin({ reportDir: '.rsdoctor/extension' }),
+          ].filter(Boolean),
         },
       },
     },
@@ -44,6 +48,9 @@ export default defineConfig({
           output: {
             devtoolModuleFilenameTemplate: '[absolute-resource-path]',
           },
+          plugins: [rsdoctorCIPlugin({ reportDir: '.rsdoctor/worker' })].filter(
+            Boolean,
+          ),
         },
       },
     },

@@ -148,7 +148,7 @@ Locator actions are strict: if a locator matches more than one element, actions 
 Here's a complete form submission test example demonstrating common user interaction methods:
 
 ```tsx title="src/LoginForm.test.tsx"
-import { expect, test } from '@rstest/core';
+import { expect, rs, test } from '@rstest/core';
 import { render } from '@rstest/browser-react';
 import { getByLabelText, getByRole } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
@@ -156,7 +156,7 @@ import { LoginForm } from './LoginForm';
 
 test('submits login form with user credentials', async () => {
   const user = userEvent.setup();
-  const onSubmit = rstest.fn();
+  const onSubmit = rs.fn();
 
   const { container } = await render(<LoginForm onSubmit={onSubmit} />);
 

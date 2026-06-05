@@ -2,6 +2,7 @@
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   extends: [
     'config:recommended',
+    'github>rstackjs/renovate:security',
     'schedule:weekly',
     'helpers:pinGitHubActionDigests',
   ],
@@ -24,6 +25,7 @@
       matchPackageNames: ['@rsbuild/**'],
       groupSlug: 'rsbuild',
       extends: ['schedule:daily'],
+      allowedVersions: '!/-canary-/',
     },
     {
       groupName: 'rslib',
@@ -60,10 +62,6 @@
     },
   ],
   ignoreDeps: [
-    // manually update some packages
-    'pnpm',
-    '@rspack/core',
-    '@rspack/core-canary',
     // align Node.js version minimum requirements
     '@types/node',
     'node',

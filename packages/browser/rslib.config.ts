@@ -1,6 +1,8 @@
 import { createRequire } from 'node:module';
 import { defineConfig, rspack } from '@rslib/core';
 import { dirname, resolve } from 'pathe';
+import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
 const require = createRequire(import.meta.url);
 const browserUiRoot = dirname(
@@ -9,21 +11,26 @@ const browserUiRoot = dirname(
 const browserUiDist = resolve(browserUiRoot, 'dist');
 
 export default defineConfig({
+  plugins: publishCheckPlugins(),
   lib: [
     {
       id: 'rstest-browser',
       format: 'esm',
       syntax: 'es2023',
       dts: {
-        // Only use tsgo in local dev for faster build, disable it in CI until it's more stable
-        tsgo: !process.env.CI,
+        tsgo: true,
         bundle: false,
+      },
+      redirect: {
+        // Append `.js` to relative imports in emitted .d.ts so they resolve
+        // under NodeNext/Node16 module resolution (ESM requires explicit ext).
+        dts: { extension: true },
       },
       output: {
         externals: {
           // Keep @rstest/core as external
           '@rstest/core': '@rstest/core',
-          '@rstest/core/browser': '@rstest/core/browser',
+          '@rstest/core/internal/browser': '@rstest/core/internal/browser',
           // Keep @rsbuild/core as external (provided by @rstest/core)
           '@rsbuild/core': '@rsbuild/core',
         },
@@ -45,12 +52,13 @@ export default defineConfig({
                   to: 'browser-container',
                   context: browserUiDist,
                   globOptions: {
-                    ignore: ['**/*.LICENSE.txt'],
+                    ignore: ['**/*.LICENSE.txt', '**/rsdoctor-data.json'],
                   },
                 },
               ],
             }),
-          ],
+            rsdoctorCIPlugin(),
+          ].filter(Boolean),
         },
       },
     },

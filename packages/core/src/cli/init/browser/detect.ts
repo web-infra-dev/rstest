@@ -4,9 +4,7 @@ import type { Agent } from 'package-manager-detector';
 import { detect as detectPM } from 'package-manager-detector/detect';
 import { readPackageJson } from './utils';
 
-export type { Agent };
-
-export interface ProjectInfo {
+interface ProjectInfo {
   /** Detected framework, null if not detected */
   framework: 'react' | null;
   /** Detected language */

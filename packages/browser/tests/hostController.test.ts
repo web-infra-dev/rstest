@@ -1,8 +1,9 @@
 import { describe, expect, it } from '@rstest/core';
-import type { ProjectContext, Rstest } from '@rstest/core/browser';
+import type { ProjectContext, Rstest } from '@rstest/core/internal/browser';
 import {
   createBrowserLazyCompilationConfig,
   createBrowserRsbuildDevConfig,
+  resolveListenPort,
 } from '../src/hostController';
 
 /**
@@ -104,10 +105,10 @@ describe('browser config resolution', () => {
     expect(browserConfig.strictPort).toBe(true);
   });
 
-  it('should disable HMR in non-watch mode and keep error-only client log', () => {
+  it('should enable HMR in non-watch mode and keep error-only client log', () => {
     const devConfig = createBrowserRsbuildDevConfig(false);
 
-    expect(devConfig.hmr).toBe(false);
+    expect(devConfig.hmr).toBe(true);
     expect(devConfig.client.logLevel).toBe('error');
   });
 
@@ -147,5 +148,27 @@ describe('browser config resolution', () => {
         nameForCondition: () => '/project/tests/../tests/rstest.setup.ts',
       }),
     ).toBe(false);
+  });
+});
+
+describe('resolveListenPort', () => {
+  it('should return listenPort when it is non-zero', () => {
+    expect(resolveListenPort(4000, null)).toBe(4000);
+  });
+
+  it('should fall back to httpServer.address() when listenPort is 0', () => {
+    const httpServer = {
+      address: () => ({ address: '127.0.0.1', family: 'IPv4', port: 52341 }),
+    };
+    expect(resolveListenPort(0, httpServer)).toBe(52341);
+  });
+
+  it('should return 0 when both listenPort and httpServer are unavailable', () => {
+    expect(resolveListenPort(0, null)).toBe(0);
+  });
+
+  it('should return 0 when httpServer.address() returns a string', () => {
+    const httpServer = { address: () => '/tmp/sock' as unknown as null };
+    expect(resolveListenPort(0, httpServer as any)).toBe(0);
   });
 });

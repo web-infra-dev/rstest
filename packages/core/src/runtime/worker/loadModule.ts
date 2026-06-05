@@ -1,12 +1,58 @@
 import { createRequire as createNativeRequire } from 'node:module';
-import { isAbsolute } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import path from 'pathe';
 import { logger } from '../../utils/logger';
-import { asModule, interopModule, shouldInterop } from './interop';
+import { clearSyntheticModuleCache } from './interop';
+import {
+  finalizeDynamicImport,
+  loadWasmFromContent,
+  resolveImportSpecifier,
+} from './resolveDynamicImport';
+import {
+  RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_REQUIRE_RESOLVE_HOOK,
+} from './runtimeHooks';
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
+
+const defineRstestRequireResolve =
+  ({
+    testPath,
+    distPath,
+    assetFiles,
+  }: {
+    testPath: string;
+    distPath: string;
+    assetFiles: Record<string, string>;
+  }) =>
+  (
+    specifier: string,
+    optionsOrOrigin?: string | { paths?: string[] },
+    maybeOrigin?: string,
+  ): string => {
+    const options =
+      typeof optionsOrOrigin === 'string' ? undefined : optionsOrOrigin;
+    // `origin` is the absolute path of the source module that produced the
+    // `require.resolve()` call, injected by rspack's `RstestPlugin` when
+    // `injectRequireResolveOrigin` is enabled. Falling back keeps native
+    // `require.resolve` semantics for un-rewritten calls.
+    const origin =
+      typeof optionsOrOrigin === 'string' ? optionsOrOrigin : maybeOrigin;
+    const resolveBase = origin ?? testPath;
+
+    const currentDirectory = path.dirname(origin ?? distPath);
+    const joinedPath = isRelativePath(specifier)
+      ? path.join(currentDirectory, specifier)
+      : specifier;
+    const normalizedPath = path.normalize(joinedPath);
+
+    if (assetFiles[normalizedPath]) {
+      return normalizedPath;
+    }
+
+    return createNativeRequire(resolveBase).resolve(specifier, options);
+  };
 
 const createRequire = (
   filename: string,
@@ -19,7 +65,7 @@ const createRequire = (
     try {
       // compat with some testPath may not be an available path but the third-party package name
       return createNativeRequire(filename);
-    } catch (_err) {
+    } catch {
       return createNativeRequire(distPath);
     }
   })();
@@ -53,7 +99,13 @@ const createRequire = (
     const resolved = _require.resolve(id);
     return _require(resolved);
   }) as NodeJS.Require;
-  require.resolve = _require.resolve;
+  const requireResolve = defineRstestRequireResolve({
+    testPath: filename,
+    distPath,
+    assetFiles,
+  }) as NodeJS.RequireResolve;
+  requireResolve.paths = _require.resolve.paths.bind(_require.resolve);
+  require.resolve = requireResolve;
   require.main = _require.main;
   return require;
 };
@@ -70,14 +122,16 @@ const defineRstestDynamicImport =
     interopDefault: boolean;
     assetFiles: Record<string, string>;
   }) =>
-  async (specifier: string, importAttributes: ImportCallOptions) => {
-    const resolvedPath = isAbsolute(specifier)
-      ? pathToFileURL(specifier)
-      : import.meta.resolve(specifier, pathToFileURL(testPath));
+  async (
+    specifier: string,
+    importAttributes: ImportCallOptions,
+    origin?: string,
+  ) => {
+    const modulePath = resolveImportSpecifier({ specifier, origin, testPath });
 
-    const modulePath =
-      typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;
-
+    // Bundled `.wasm` is emitted as an in-memory asset file and must be
+    // instantiated from that content — Node's loader cannot import the virtual
+    // dist path. Every other specifier resolves and imports natively below.
     if (modulePath.endsWith('.wasm')) {
       const normalizedPath = path.normalize(
         modulePath.startsWith('file://')
@@ -87,84 +141,16 @@ const defineRstestDynamicImport =
       const content = assetFiles[normalizedPath];
 
       if (content) {
-        const wasmBuffer = Buffer.from(content, 'base64');
-        const wasmModule = await WebAssembly.compile(wasmBuffer);
-        const wasmInstance = await WebAssembly.instantiate(wasmModule);
-        const exports = wasmInstance.exports as Record<string, any>;
-        return returnModule ? asModule(exports, exports) : exports;
+        return loadWasmFromContent(content, modulePath, returnModule);
       }
     }
 
-    // Rstest importAttributes is used internally to distinguish `importActual` and normal imports,
-    // and should not be passed to Node.js side, otherwise it will cause ERR_IMPORT_ATTRIBUTE_UNSUPPORTED error.
-    if (importAttributes?.with?.rstest) {
-      delete importAttributes.with.rstest;
-    }
-
-    if (modulePath.endsWith('.json')) {
-      // const json = await import(jsonPath);
-      // should return { default: jsonExports, ...jsonExports }
-      const importedModule = await import(modulePath, {
-        with: { type: 'json' },
-      });
-
-      return returnModule
-        ? asModule(importedModule.default, importedModule.default)
-        : {
-            ...importedModule.default,
-            default: importedModule.default,
-          };
-    }
-
-    const importedModule = await import(modulePath, importAttributes);
-
-    if (
-      shouldInterop({
-        interopDefault,
-        modulePath,
-        mod: importedModule,
-      })
-    ) {
-      const { mod, defaultExport } = interopModule(importedModule);
-
-      if (returnModule) {
-        return asModule(mod, defaultExport);
-      }
-
-      return new Proxy(mod, {
-        get(mod, prop) {
-          if (prop === 'default') {
-            return defaultExport;
-          }
-          /**
-           * interop invalid named exports. eg:
-           * exports: module.exports = { a: 1 }
-           * import: import { a } from 'mod';
-           */
-          return mod[prop] ?? defaultExport?.[prop];
-        },
-        has(mod, prop) {
-          if (prop === 'default') {
-            return defaultExport !== undefined;
-          }
-          return prop in mod || (defaultExport && prop in defaultExport);
-        },
-        getOwnPropertyDescriptor(mod, prop): any {
-          const descriptor = Reflect.getOwnPropertyDescriptor(mod, prop);
-          if (descriptor) {
-            return descriptor;
-          }
-          if (prop === 'default' && defaultExport !== undefined) {
-            return {
-              value: defaultExport,
-              enumerable: true,
-              configurable: true,
-            };
-          }
-        },
-      });
-    }
-    return importedModule;
+    return finalizeDynamicImport({
+      modulePath,
+      importAttributes,
+      interopDefault,
+      returnModule,
+    });
   };
 
 // setup and rstest module should not be cached
@@ -222,9 +208,14 @@ export const loadModule = ({
         );
       }
     },
-    __rstest_dynamic_import__: defineRstestDynamicImport({
+    [RSTEST_DYNAMIC_IMPORT_HOOK]: defineRstestDynamicImport({
       testPath,
       interopDefault,
+      assetFiles,
+    }),
+    [RSTEST_REQUIRE_RESOLVE_HOOK]: defineRstestRequireResolve({
+      testPath,
+      distPath,
       assetFiles,
     }),
     __dirname: fileDir,
@@ -286,4 +277,7 @@ export const cacheableLoadModule = ({
   return mod;
 };
 
-export const clearModuleCache = (): void => moduleCache.clear();
+export const clearModuleCache = (): void => {
+  moduleCache.clear();
+  clearSyntheticModuleCache();
+};

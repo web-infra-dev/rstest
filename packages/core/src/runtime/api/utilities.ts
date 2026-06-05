@@ -1,4 +1,5 @@
 import type {
+  DisposableRstestUtilities,
   MaybeMockedDeep,
   RstestUtilities,
   RuntimeConfig,
@@ -6,8 +7,9 @@ import type {
   WaitUntilOptions,
   WorkerState,
 } from '../../types';
+import { RSTEST_ENV_SYMBOL_KEY } from '../../utils/constants';
 import { getRealTimers } from '../util';
-import { type FakeTimerInstallOpts, FakeTimers } from './fakeTimers';
+import type { FakeTimerInstallOpts, FakeTimersSnapshot } from './fakeTimers';
 import { mockObject as mockObjectImpl } from './mockObject';
 import { initSpy } from './spy';
 
@@ -45,20 +47,82 @@ const normalizeWaitOptions = (
   ),
 });
 
+/**
+ * Shared LIFO index-lifecycle for the three scoped-restore stacks behind
+ * `stubEnv`, `stubGlobal`, and `useFakeTimers`. Each stub pushes an entry and
+ * hands back a disposer; the disposer calls this to unwind. The three stacks
+ * keep identical bookkeeping but distinct restore actions, so this primitive
+ * owns ONLY the index management and delegates the restore itself:
+ *
+ *  - entry already removed (out-of-order dispose): no-op.
+ *  - entry shadowed by a newer stub: forward this entry's saved payload onto
+ *    the newer entry via `onSupersede` and drop this one — the live binding is
+ *    left untouched because the newer stub still owns it.
+ *  - entry is the newest (LIFO tail): pop it, re-apply its saved value via
+ *    `onTail`, then, only when the stack has fully drained, run `onEmpty`
+ *    (the two Map-backed stacks delete their now-empty key here; the bare
+ *    timer array passes none).
+ *
+ * The per-stack supersede payload (env value vs global descriptor vs the timer
+ * triple) and tail-restore action stay in the caller closures, so the
+ * behavioral split between the three stacks is preserved exactly.
+ */
+export const restoreScopedEntry = <E>(
+  stack: E[] | undefined,
+  entry: E,
+  handlers: {
+    onSupersede: (laterEntry: E) => void;
+    onTail: () => void;
+    onEmpty?: () => void;
+  },
+): void => {
+  if (!stack) {
+    return;
+  }
+  const index = stack.lastIndexOf(entry);
+  if (index === -1) {
+    return;
+  }
+
+  if (index !== stack.length - 1) {
+    // `index` is not the tail, so `index + 1` is always in-bounds.
+    handlers.onSupersede(stack[index + 1]!);
+    stack.splice(index, 1);
+    return;
+  }
+
+  stack.pop();
+  handlers.onTail();
+  if (stack.length === 0) {
+    handlers.onEmpty?.();
+  }
+};
+
 export const createRstestUtilities: (
   workerState: WorkerState,
 ) => Promise<RstestUtilities> = async (workerState) => {
   type RuntimeEnvStore = Record<string, string | undefined>;
-  const RSTEST_ENV_SYMBOL = Symbol.for('rstest.env');
+  const RSTEST_ENV_SYMBOL = Symbol.for(RSTEST_ENV_SYMBOL_KEY);
   type GlobalWithRuntimeEnv = typeof globalThis & Record<symbol, unknown>;
+  type PropertyKey = string | symbol | number;
+  type EnvStackEntry = { value: string | undefined };
+  type GlobalStackEntry = { descriptor: PropertyDescriptor | undefined };
+  type TimerStackEntry = {
+    config: FakeTimerInstallOpts | undefined;
+    snapshot: FakeTimersSnapshot | undefined;
+    wasFakeTimers: boolean;
+  };
 
-  const originalEnvValues = new Map<string, string | undefined>();
-  const originalGlobalValues = new Map<
-    string | symbol | number,
-    PropertyDescriptor | undefined
-  >();
+  const originalEnvValues = new Map<string, EnvStackEntry[]>();
+  const originalGlobalValues = new Map<PropertyKey, GlobalStackEntry[]>();
+  const timerStack: TimerStackEntry[] = [];
 
-  let _timers: FakeTimers;
+  const { FakeTimers } = await import(
+    /* webpackChunkName: "fake-timers" */ './fakeTimers'
+  );
+
+  let _timers: InstanceType<typeof FakeTimers>;
+  let currentFakeTimersConfig: FakeTimerInstallOpts | undefined;
 
   let originalConfig: undefined | RuntimeConfig;
 
@@ -85,6 +149,101 @@ export const createRstestUtilities: (
       });
     }
     return _timers;
+  };
+
+  const createDisposableRstestUtilities = (
+    dispose: () => void,
+  ): DisposableRstestUtilities => {
+    let disposed = false;
+    const disposers = [dispose];
+    const disposableRstest = Object.create(rstest) as DisposableRstestUtilities;
+
+    const addDisposable = (next: DisposableRstestUtilities) => {
+      if (Symbol.dispose) {
+        disposers.push(() => next[Symbol.dispose]());
+      }
+      return disposableRstest;
+    };
+
+    disposableRstest.stubEnv = (name, value) => {
+      return addDisposable(rstest.stubEnv(name, value));
+    };
+    disposableRstest.stubGlobal = (name, value) => {
+      return addDisposable(rstest.stubGlobal(name, value));
+    };
+    disposableRstest.useFakeTimers = (opts) => {
+      return addDisposable(rstest.useFakeTimers(opts));
+    };
+
+    if (Symbol.dispose) {
+      Object.defineProperty(disposableRstest, Symbol.dispose, {
+        configurable: true,
+        value: () => {
+          if (!disposed) {
+            disposed = true;
+            for (let index = disposers.length - 1; index >= 0; index--) {
+              disposers[index]?.();
+            }
+          }
+        },
+      });
+    }
+    return disposableRstest;
+  };
+
+  const restoreEnvValue = (name: string, entry: EnvStackEntry) => {
+    const runtimeEnv = resolveRuntimeEnv();
+    restoreScopedEntry(originalEnvValues.get(name), entry, {
+      onSupersede: (laterEntry) => {
+        laterEntry.value = entry.value;
+      },
+      onTail: () => {
+        if (entry.value === undefined) {
+          Reflect.deleteProperty(runtimeEnv, name);
+        } else {
+          runtimeEnv[name] = entry.value;
+        }
+      },
+      onEmpty: () => originalEnvValues.delete(name),
+    });
+  };
+
+  const restoreGlobalValue = (name: PropertyKey, entry: GlobalStackEntry) => {
+    restoreScopedEntry(originalGlobalValues.get(name), entry, {
+      onSupersede: (laterEntry) => {
+        laterEntry.descriptor = entry.descriptor;
+      },
+      onTail: () => {
+        if (!entry.descriptor) {
+          Reflect.deleteProperty(globalThis, name);
+        } else {
+          Object.defineProperty(globalThis, name, entry.descriptor);
+        }
+      },
+      onEmpty: () => originalGlobalValues.delete(name),
+    });
+  };
+
+  const restoreFakeTimers = (entry: TimerStackEntry) => {
+    restoreScopedEntry(timerStack, entry, {
+      onSupersede: (laterEntry) => {
+        laterEntry.config = entry.config;
+        laterEntry.snapshot = entry.snapshot;
+        laterEntry.wasFakeTimers = entry.wasFakeTimers;
+      },
+      onTail: () => {
+        if (entry.wasFakeTimers) {
+          timers().useFakeTimers(entry.config);
+          if (entry.snapshot) {
+            timers().restore(entry.snapshot);
+          }
+          currentFakeTimersConfig = entry.config;
+        } else {
+          timers().useRealTimers();
+          currentFakeTimersConfig = undefined;
+        }
+      },
+    });
   };
 
   const { fn, spyOn, isMockFunction, mocks, createMockInstance } = initSpy();
@@ -142,6 +301,8 @@ export const createRstestUtilities: (
     doMockRequire: () => undefined,
     unmock: () => undefined,
     doUnmock: () => undefined,
+    unmockRequire: () => undefined,
+    doUnmockRequire: () => undefined,
     importMock: () => {
       // The actual implementation is managed by the built-in Rstest plugin.
       return Promise.resolve({} as any);
@@ -201,31 +362,35 @@ export const createRstestUtilities: (
       }
     },
 
-    stubEnv: (name: string, value: string | undefined): RstestUtilities => {
+    stubEnv: (name: string, value: string | undefined) => {
       const runtimeEnv = resolveRuntimeEnv();
+      const envStack = originalEnvValues.get(name) ?? [];
+      const entry = { value: runtimeEnv[name] };
+      envStack.push(entry);
+      originalEnvValues.set(name, envStack);
 
-      if (!originalEnvValues.has(name)) {
-        originalEnvValues.set(name, runtimeEnv[name]);
-      }
-
-      // update runtime env store
       if (value === undefined) {
-        delete runtimeEnv[name];
+        Reflect.deleteProperty(runtimeEnv, name);
       } else {
         runtimeEnv[name] = value;
       }
 
-      return rstest;
+      return createDisposableRstestUtilities(() =>
+        restoreEnvValue(name, entry),
+      );
     },
     unstubAllEnvs: (): RstestUtilities => {
       const runtimeEnv = resolveRuntimeEnv();
 
-      // restore runtime env store
-      for (const [name, value] of originalEnvValues) {
-        if (value === undefined) {
-          delete runtimeEnv[name];
+      for (const [name, envStack] of originalEnvValues) {
+        const entry = envStack[0];
+        if (!entry) {
+          continue;
+        }
+        if (entry.value === undefined) {
+          Reflect.deleteProperty(runtimeEnv, name);
         } else {
-          runtimeEnv[name] = value;
+          runtimeEnv[name] = entry.value;
         }
       }
 
@@ -234,37 +399,54 @@ export const createRstestUtilities: (
       return rstest;
     },
     stubGlobal: (name: string | symbol | number, value: any) => {
-      if (!originalGlobalValues.has(name)) {
-        originalGlobalValues.set(
-          name,
-          Object.getOwnPropertyDescriptor(globalThis, name),
-        );
-      }
+      const descriptorStack = originalGlobalValues.get(name) ?? [];
+      const entry = {
+        descriptor: Object.getOwnPropertyDescriptor(globalThis, name),
+      };
+      descriptorStack.push(entry);
+      originalGlobalValues.set(name, descriptorStack);
       Object.defineProperty(globalThis, name, {
         value,
         writable: true,
         configurable: true,
         enumerable: true,
       });
-      return rstest;
+      return createDisposableRstestUtilities(() =>
+        restoreGlobalValue(name, entry),
+      );
     },
     unstubAllGlobals: () => {
-      originalGlobalValues.forEach((original, name) => {
+      originalGlobalValues.forEach((descriptorStack, name) => {
+        const original = descriptorStack[0];
         if (!original) {
+          return;
+        }
+        if (!original.descriptor) {
           Reflect.deleteProperty(globalThis, name);
         } else {
-          Object.defineProperty(globalThis, name, original);
+          Object.defineProperty(globalThis, name, original.descriptor);
         }
       });
       originalGlobalValues.clear();
       return rstest;
     },
     useFakeTimers: (opts?: FakeTimerInstallOpts) => {
-      timers().useFakeTimers(opts);
-      return rstest;
+      const timerApi = timers();
+      const wasFakeTimers = timerApi.isFakeTimers();
+      const entry = {
+        config: currentFakeTimersConfig,
+        snapshot: wasFakeTimers ? timerApi.snapshot() : undefined,
+        wasFakeTimers,
+      };
+      timerStack.push(entry);
+      timerApi.useFakeTimers(opts);
+      currentFakeTimersConfig = opts;
+      return createDisposableRstestUtilities(() => restoreFakeTimers(entry));
     },
     useRealTimers: () => {
       timers().useRealTimers();
+      currentFakeTimersConfig = undefined;
+      timerStack.length = 0;
       return rstest;
     },
     setSystemTime: (now?: number | Date) => {

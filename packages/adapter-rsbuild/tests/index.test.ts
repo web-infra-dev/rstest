@@ -9,7 +9,15 @@ describe('withRsbuildConfig', () => {
 import { defineConfig } from '@rsbuild/core';
 
 export default defineConfig({
+  performance: {
+    buildCache: {
+      cacheDirectory: '.cache/from-file',
+      cacheDigest: ['file-digest'],
+      buildDependencies: ['./cache-extra.ts']
+    }
+  },
   source: {
+    assetsInclude: /\\.json5$/,
     define: {
       'process.env.NODE_ENV': '"common"'
     }
@@ -49,13 +57,43 @@ export default defineConfig({
     })({});
 
     expect(config).toBeDefined();
+    expect(config.source?.assetsInclude).toEqual(/\.json5$/);
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"common"',
     });
     expect(config.resolve?.alias).toEqual({
       '@': './src',
     });
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: '.cache/from-file',
+      cacheDigest: ['file-digest'],
+      buildDependencies: [join(__dirname, 'cache-extra.ts'), testConfigPath],
+    });
+    expect(config.forceRerunTriggers).toEqual([testConfigPath]);
     expect(config.testEnvironment).toBe('happy-dom');
+  });
+
+  it('should add rsbuild config file as dependency for boolean build cache', async () => {
+    writeFileSync(
+      testConfigPath,
+      `
+import { defineConfig } from '@rsbuild/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: true
+  }
+});
+  `,
+    );
+
+    const config = await withRsbuildConfig({
+      configPath: testConfigPath,
+    })({});
+
+    expect(config.performance?.buildCache).toEqual({
+      buildDependencies: [testConfigPath],
+    });
   });
 
   it('should load and merge environment config', async () => {
@@ -66,6 +104,7 @@ export default defineConfig({
 
     expect(config).toBeDefined();
     expect(config.name).toBe('test');
+    expect(config.source?.assetsInclude).toEqual(/\.json5$/);
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"test"',
     });

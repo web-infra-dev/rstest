@@ -11,9 +11,19 @@ import { defineConfig } from '@rspack/cli';
 export default defineConfig([
   {
     name: 'client',
+    context: ${JSON.stringify(__dirname)},
     target: 'web',
     output: {
       module: true,
+    },
+    cache: {
+      type: 'persistent',
+      version: 'file-digest',
+      storage: {
+        type: 'filesystem',
+        directory: '.cache/from-file',
+      },
+      buildDependencies: ['./cache-extra.ts'],
     },
   },
   {
@@ -43,6 +53,12 @@ export default defineConfig([
 
     expect(config).toBeDefined();
     expect(config.output).toEqual({ module: true });
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: join(__dirname, '.cache/from-file'),
+      cacheDigest: ['file-digest'],
+      buildDependencies: [join(__dirname, 'cache-extra.ts'), testConfigPath],
+    });
+    expect(config.forceRerunTriggers).toEqual([testConfigPath]);
     expect(config.testEnvironment).toBe('happy-dom');
   });
 

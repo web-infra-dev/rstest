@@ -10,7 +10,7 @@ describe('test projects inline projectConfig', () => {
   it('should run projects correctly with inline projectConfig', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '-c', 'rstest.inline.config.ts'],
+      args: ['run', '-c', 'rstest.inline.config.mts'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),

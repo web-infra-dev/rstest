@@ -1,5 +1,7 @@
-import { loadConfig, type RslibConfig, rsbuild } from '@rslib/core';
+import { normalize } from 'node:path';
+import { loadConfig, type RslibConfig, mergeRslibConfig } from '@rslib/core';
 import type { ExtendConfig, ExtendConfigFn } from '@rstest/core';
+import { resolveBuildCache } from '@rstest/core/internal/adapter';
 
 export interface WithRslibConfigOptions {
   /**
@@ -55,10 +57,10 @@ export function withRslibConfig(
     };
 
     const rslibConfig = Array.isArray(lib)
-      ? rsbuild.mergeRsbuildConfig<RslibConfig>(
+      ? (mergeRslibConfig(
           rawLibConfig as RslibConfig,
           libTestConfig as RslibConfig,
-        )
+        ) as RslibConfig)
       : (rawLibConfig as RslibConfig);
 
     let libDecoratorsVersion = rslibConfig.source?.decorators?.version;
@@ -86,17 +88,27 @@ export function withRslibConfig(
       : rslibConfig;
 
     const { rspack, swc, bundlerChain } = finalLibConfig.tools || {};
+    const { buildCache } = finalLibConfig.performance || {};
     const { cssModules, target } = finalLibConfig.output || {};
-    const { decorators, define, include, exclude, tsconfigPath } =
-      finalLibConfig.source || {};
+    const {
+      assetsInclude,
+      decorators,
+      define,
+      include,
+      exclude,
+      tsconfigPath,
+      transformImport,
+    } = finalLibConfig.source || {};
 
     // Convert rslib config to rstest config
-    const rstestConfig: ExtendConfig = {
+    const rstestConfig = {
       // Copy over compatible configurations
       root: finalLibConfig.root,
       name: libId,
+      forceRerunTriggers: [normalize(filePath)],
       plugins: finalLibConfig.plugins,
       source: {
+        assetsInclude,
         decorators: {
           version: libDecoratorsVersion,
           ...decorators,
@@ -105,11 +117,19 @@ export function withRslibConfig(
         include,
         exclude,
         tsconfigPath,
+        transformImport,
       },
       resolve: finalLibConfig.resolve,
       output: {
         cssModules,
         module: finalLibConfig.output?.module ?? libConfig.format !== 'cjs',
+      },
+      performance: {
+        buildCache: resolveBuildCache({
+          buildCache,
+          configPath: filePath,
+          root: finalLibConfig.root,
+        }),
       },
       tools: {
         rspack,
@@ -117,8 +137,12 @@ export function withRslibConfig(
         bundlerChain,
       } as ExtendConfig['tools'],
 
+      // rslib builds libraries, which are Node-first: only an explicit `web`
+      // target maps to a browser env, everything else (including no target)
+      // defaults to `node`. This is the inverse of the rsbuild/rspack adapters'
+      // `resolveTestEnvironmentFromTarget` default, so this rule stays local.
       testEnvironment: target === 'web' ? 'happy-dom' : 'node',
-    };
+    } as ExtendConfig;
 
     return rstestConfig;
   };

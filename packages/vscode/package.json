@@ -1,29 +1,42 @@
 {
   "name": "rstest",
-  "icon": "icon.png",
   "displayName": "Rstest",
-  "publisher": "rstack",
-  "description": "VS Code extension for Rstest",
-  "version": "0.9.4",
+  "version": "0.10.3",
   "private": true,
-  "license": "MIT",
+  "description": "VS Code extension for Rstest",
+  "categories": [
+    "Testing"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/web-infra-dev/rstest",
     "directory": "packages/vscode"
   },
-  "engines": {
-    "vscode": "^1.97.0"
-  },
-  "categories": [
-    "Testing"
-  ],
-  "activationEvents": [
-    "workspaceContains:**/*rstest*.config*.{ts,js,mjs,cjs,cts,mts}",
-    "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
-  ],
+  "license": "MIT",
+  "publisher": "rstack",
   "main": "./dist/extension.js",
+  "scripts": {
+    "build": "rslib build",
+    "build:local": "cross-env SOURCEMAP=true rslib build",
+    "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rstest-logo-512x512.png --output icon.png",
+    "lint": "rslint .",
+    "package:vsce": "npm run build && vsce package",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",
+    "test:unit": "rstest",
+    "typecheck": "pnpm -w exec tsc --noEmit -p packages/vscode/tsconfig.json",
+    "watch": "rslib build --watch",
+    "watch:local": "cross-env SOURCEMAP=true rslib build --watch"
+  },
   "contributes": {
+    "commands": [
+      {
+        "command": "rstest.updateSnapshot",
+        "title": "Update Snapshot",
+        "category": "Testing",
+        "icon": "$(merge)"
+      }
+    ],
     "configuration": {
       "title": "Rstest",
       "properties": {
@@ -65,14 +78,6 @@
         }
       }
     },
-    "commands": [
-      {
-        "command": "rstest.updateSnapshot",
-        "title": "Update Snapshot",
-        "category": "Testing",
-        "icon": "$(merge)"
-      }
-    ],
     "menus": {
       "commandPalette": [
         {
@@ -95,42 +100,36 @@
       ]
     }
   },
-  "scripts": {
-    "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rstest-logo-512x512.png --output icon.png",
-    "build": "rslib build",
-    "lint": "biome check . --diagnostic-level=warn",
-    "build:local": "cross-env SOURCEMAP=true rslib build",
-    "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",
-    "test:unit": "rstest",
-    "test": "npm run test:unit && npm run test:e2e",
-    "typecheck": "tsc --noEmit",
-    "watch": "rslib build --watch",
-    "watch:local": "cross-env SOURCEMAP=true rslib build --watch",
-    "package:vsce": "npm run build && vsce package"
-  },
+  "activationEvents": [
+    "workspaceContains:**/*rstest*.config*.{ts,js,mjs,cjs,cts,mts}",
+    "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
+  ],
   "devDependencies": {
-    "@rsbuild/core": "2.0.0-beta.9",
-    "@rslib/core": "0.20.0",
+    "@rsbuild/core": "~2.0.9",
+    "@rslib/core": "0.22.0",
     "@rstest/core": "workspace:*",
-    "@rstest/coverage-istanbul": "workspace:*",
-    "@swc/core": "^1.15.18",
+    "@swc/core": "^1.15.40",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
-    "@types/picomatch": "^4.0.2",
+    "@types/picomatch": "^4.0.3",
     "@types/semver": "^7.7.1",
     "@types/vscode": "1.97.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "3.7.1",
+    "@vscode/vsce": "3.9.1",
     "birpc": "^4.0.0",
     "core-js-pure": "^3.49.0",
-    "mocha": "^11.7.5",
-    "ovsx": "^0.10.9",
-    "picomatch": "^4.0.3",
-    "semver": "^7.7.4",
-    "tinyglobby": "^0.2.15",
-    "typescript": "^5.9.3",
-    "valibot": "^1.3.0"
-  }
+    "mocha": "^11.7.6",
+    "ovsx": "^0.10.12",
+    "picomatch": "^4.0.4",
+    "semver": "^7.8.1",
+    "tinyglobby": "^0.2.17",
+    "typescript": "^6.0.3",
+    "valibot": "^1.4.1"
+  },
+  "engines": {
+    "vscode": "^1.97.0"
+  },
+  "icon": "icon.png"
 }

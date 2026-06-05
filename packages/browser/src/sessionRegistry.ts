@@ -1,6 +1,6 @@
 import type { BrowserProviderContext, BrowserProviderPage } from './providers';
 
-export type RunnerSessionRecord = {
+type RunnerSessionRecord = {
   id: string;
   testFile: string;
   projectName: string;

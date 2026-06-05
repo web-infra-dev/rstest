@@ -10,10 +10,25 @@ import { defineConfig } from '@rslib/core';
 
 export default defineConfig({
   lib: [{ format: 'esm', id: 'test-lib' }],
+  performance: {
+    buildCache: {
+      cacheDirectory: '.cache/from-file',
+      cacheDigest: ['file-digest'],
+      buildDependencies: ['./cache-extra.ts']
+    }
+  },
   source: {
+    assetsInclude: /\\.json5$/,
     define: {
       'process.env.NODE_ENV': '"test"'
-    }
+    },
+    transformImport: [
+      {
+        libraryName: 'lodash',
+        libraryDirectory: '.',
+        camelToDashComponentName: false
+      }
+    ]
   },
   resolve: {
     alias: {
@@ -41,13 +56,50 @@ export default defineConfig({
     })({});
 
     expect(config).toBeDefined();
+    expect(config.source?.assetsInclude).toEqual(/\.json5$/);
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"test"',
     });
+    expect(config.source?.transformImport).toEqual([
+      {
+        libraryName: 'lodash',
+        libraryDirectory: '.',
+        camelToDashComponentName: false,
+      },
+    ]);
     expect(config.resolve?.alias).toEqual({
       '@': './src',
     });
+    expect((config as any).performance?.buildCache).toEqual({
+      cacheDirectory: '.cache/from-file',
+      cacheDigest: ['file-digest'],
+      buildDependencies: [join(__dirname, 'cache-extra.ts'), testConfigPath],
+    });
+    expect(config.forceRerunTriggers).toEqual([testConfigPath]);
     expect(config.testEnvironment).toBe('node');
+  });
+
+  it('should add rslib config file as dependency for boolean build cache', async () => {
+    writeFileSync(
+      testConfigPath,
+      `
+import { defineConfig } from '@rslib/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: true
+  }
+});
+  `,
+    );
+
+    const config = await withRslibConfig({
+      configPath: testConfigPath,
+    })({});
+
+    expect((config as any).performance?.buildCache).toEqual({
+      buildDependencies: [testConfigPath],
+    });
   });
 
   it('should allow modification of rslib config', async () => {
@@ -68,6 +120,11 @@ export default defineConfig({
     expect(config.source?.define).toEqual({
       'process.env.NODE_ENV': '"test"',
       'process.env.CUSTOM': '"custom-value"',
+    });
+    expect((config as any).performance?.buildCache).toEqual({
+      cacheDirectory: '.cache/from-file',
+      cacheDigest: ['file-digest'],
+      buildDependencies: [join(__dirname, 'cache-extra.ts'), testConfigPath],
     });
   });
 

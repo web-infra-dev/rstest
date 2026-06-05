@@ -13,9 +13,12 @@ export { createRstestRuntime } from './runtime/api';
 // Public test APIs (describe, it, expect, etc.)
 export * from './runtime/api/public';
 export { setRealTimers } from './runtime/util';
+export { createBrowserTaskContext } from './runtime/worker/taskContext.browser';
+export type { TaskContext } from './runtime/worker/taskContext';
 // Types for browser runtime
 export type {
   CoverageMapData,
+  CurrentTaskInfo,
   RunnerHooks,
   RuntimeConfig,
   Test,
@@ -25,4 +28,7 @@ export type {
   WorkerState,
 } from './types';
 // Constants needed by browser client
-export { globalApis } from './utils/constants';
+export { globalApis, RSTEST_ENV_SYMBOL_KEY } from './utils/constants';
+// Browser-safe regexp wire-format decoder (mirrors the host-side encoder used
+// by `serializableConfig`). Kept here so the client never re-declares it.
+export { unwrapRegex } from './utils/regexpWireFormat';

@@ -3,6 +3,8 @@ title: Test
 description: test defines a test case. It supports chainable modifiers and fixture extension for flexible and powerful test definitions.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Test
 
 `test` defines a test case. It supports chainable modifiers and fixture extension for flexible and powerful test definitions.
@@ -11,7 +13,7 @@ Alias: `it`.
 
 ## test
 
-- **Type:** `(name: string, fn: (testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `(name: string, fn: (testContext: TestContext) => void | Promise<void>, options?: number | TestOptions) => void`
 
 Defines a test case.
 
@@ -23,6 +25,53 @@ test('should add two numbers correctly', () => {
   expect(1 + 2).toBe(3);
 });
 ```
+
+### TestOptions
+
+<ApiMeta addedVersion="0.10.3" />
+
+The third argument tunes the behavior of a single test. Passing a number is shorthand for `{ timeout: n }` so existing code keeps working:
+
+```ts
+test('runs within 3s', async () => {
+  /* ... */
+}, 3000);
+
+// equivalent to:
+test(
+  'runs within 3s',
+  async () => {
+    /* ... */
+  },
+  { timeout: 3000 },
+);
+```
+
+`TestOptions` accepts:
+
+- `timeout?: number` — per-test timeout in milliseconds. Overrides [`test.testTimeout`](/config/test/test-timeout).
+- `retry?: number` — re-runs the test up to this many times if it fails, stopping at the first pass. Overrides [`test.retry`](/config/test/retry).
+- `repeats?: number` — re-runs an already-passing test this many extra times; any failure marks the whole case as failed. Each repeat runs the full `beforeEach`/`afterEach` lifecycle and gets an independent `retry` budget.
+
+```ts
+test(
+  'flaky network call',
+  async () => {
+    /* ... */
+  },
+  { retry: 3 },
+);
+
+test(
+  'stays green across runs',
+  async () => {
+    /* ... */
+  },
+  { repeats: 9 },
+); // 10 total runs; first failure short-circuits the rest
+```
+
+`test.each` and `test.for` accept the same third argument and apply it to every generated case.
 
 ## test.only
 
@@ -54,7 +103,7 @@ test.todo('should implement this test');
 
 ## test.each
 
-- **Type:** `test.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `test.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>, options?: number | TestOptions) => void`
 
 Runs the same test logic for each item in the provided array.
 
@@ -118,7 +167,7 @@ test.each([
 // adds 2 + 2 to equal 4
 ```
 
-You can also access object properties and array elements with `$` prefix:
+You can also access object properties with `$` prefix:
 
 ```ts
 test.each([
@@ -133,24 +182,11 @@ test.each([
 // adds 1 + 1 to equal 2
 // adds 1 + 2 to equal 3
 // adds 2 + 1 to equal 3
-
-test.each([
-  [1, 1, 2],
-  [1, 2, 3],
-  [2, 1, 3],
-])('add $0 + $1 to equal $2', (a, b, sum) => {
-  expect(a + b).toBe(sum);
-});
-
-// this will return
-// add 1 + 1 to equal 2
-// add 1 + 2 to equal 3
-// add 2 + 1 to equal 3
 ```
 
 ## test.for
 
-- **Type:** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, testContext: TestContext) => void | Promise<void>, options?: number | TestOptions) => void`
 
 Alternative to `test.each` to provide `TestContext`.
 
@@ -257,19 +293,166 @@ test.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 - **Type:** `test.extend(fixtures: Fixtures)`
 
-Extends the test context with custom fixtures.
+Extends the test context with custom fixtures and returns a **new** test API. The original `test` is not modified — you can have multiple independent extended versions at the same time.
+
+Fixtures are reusable context entries that help you prepare test resources once and inject them where needed. Typical uses include:
+
+- Sharing test data and helper clients (for example, API clients, tokens, test users).
+- Wrapping setup/teardown logic in one place instead of repeating it in every test.
+- Building fixture dependencies (one fixture can consume another fixture).
+- Running global-per-test side effects automatically (for example, logging) via `auto` fixtures.
 
 ```ts
-const testWithUser = test.extend({
+import { test } from '@rstest/core';
+
+const myTest = test.extend({
   user: async ({}, use) => {
     await use({ name: 'Alice' });
   },
 });
 
-testWithUser('has user in context', ({ user, expect }) => {
+// Use myTest (not test) to define tests that need the fixture
+myTest('has user in context', ({ user, expect }) => {
   expect(user.name).toBe('Alice');
 });
+
+// The original test is unaffected and cannot access user
+test('plain test', ({ expect }) => {
+  expect(1).toBe(1);
+});
 ```
+
+The returned API has the same chainable modifiers as `test` (`only`, `skip`, `each`, `concurrent`, etc.) and can call `.extend()` again for further extension.
+
+### Fixture function lifecycle
+
+A fixture function receives two parameters:
+
+1. **context** — contains other fixtures as well as `TestContext` (`task`, `expect`, `onTestFinished`, `onTestFailed`). Use object destructuring to declare the dependencies you need.
+2. **use** — call `await use(value)` to pass the fixture value to the test.
+
+Code before `await use(value)` is **setup**; code after it is **teardown** (runs after the test finishes).
+
+```ts
+import { test } from '@rstest/core';
+
+const testWithDb = test.extend({
+  db: async ({}, use) => {
+    // setup: create connection
+    const db = await connectTestDb();
+    await use(db);
+    // teardown: close connection
+    await db.close();
+  },
+});
+```
+
+### Plain value fixtures
+
+If a fixture does not need setup/teardown logic, you can provide a plain value directly:
+
+```ts
+import { test } from '@rstest/core';
+
+const myTest = test.extend({
+  baseURL: 'https://api.example.com',
+});
+
+myTest('uses baseURL', ({ baseURL, expect }) => {
+  expect(baseURL).toBe('https://api.example.com');
+});
+```
+
+### Accessing TestContext
+
+The first parameter of a fixture function also includes `TestContext`, so you can read current test information or use `expect` directly inside a fixture:
+
+```ts
+import { test } from '@rstest/core';
+
+const myTest = test.extend({
+  traceId: async ({ task }, use) => {
+    // task.name comes from TestContext
+    await use(`trace:${task.name}`);
+  },
+});
+```
+
+### Fixture dependencies
+
+A fixture can destructure other fixtures from its first parameter. Rstest automatically initializes them in dependency order and runs teardown in reverse order:
+
+```ts
+import { test } from '@rstest/core';
+
+const testWithApi = test.extend({
+  baseURL: 'https://api.example.com',
+  token: async ({ baseURL }, use) => {
+    const token = await createTestToken(baseURL);
+    await use(token);
+    await revokeTestToken(token);
+  },
+});
+
+testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
+  // baseURL → token initialization order is resolved automatically
+  const res = await fetch(`${baseURL}/profile`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(res.ok).toBe(true);
+});
+```
+
+### Automatic fixtures (`auto`)
+
+Fixtures are lazy by default: they only run when destructured by the test function (or required by another fixture). To make a fixture run for every test automatically — even when not destructured — use the tuple syntax with `{ auto: true }`:
+
+```ts
+import { test } from '@rstest/core';
+
+const events: string[] = [];
+
+const myTest = test.extend({
+  logger: [
+    async ({ task }, use) => {
+      events.push(`start:${task.name}`);
+      await use(undefined);
+      events.push(`end:${task.name}`);
+    },
+    { auto: true },
+  ],
+});
+
+myTest('runs logger automatically', ({ expect }) => {
+  // logger is not destructured here, but it still runs because of auto: true
+  expect(events).toContain('start:runs logger automatically');
+});
+```
+
+### Type inference and explicit generics
+
+Fixture types are usually inferred automatically. If inference is not precise enough, provide an explicit generic to `test.extend`:
+
+```ts
+import { test } from '@rstest/core';
+
+interface MyFixtures {
+  user: { name: string; role: 'admin' | 'guest' };
+}
+
+const myTest = test.extend<MyFixtures>({
+  user: async ({}, use) => {
+    await use({ name: 'Alice', role: 'admin' });
+  },
+});
+
+myTest('typed fixture', ({ user, expect }) => {
+  // user is typed as { name: string; role: 'admin' | 'guest' }
+  expect(user.role).toBe('admin');
+});
+```
+
+Fixture types only take effect on the new API returned by `test.extend`. The type signature of the original `test` remains unchanged.
 
 ## Chainable modifiers
 
@@ -294,6 +477,11 @@ export interface TestContext {
    * Metadata of the current test
    */
   task: {
+    /**
+     * A unique identifier for the test.
+     * The format is `{fileHash}_{suiteIndex}_{testIndex}_...`, for example `419cefd87e_0_0`.
+     */
+    id: string;
     /** Test name provided by user */
     name: string;
     /** Result of the current test, undefined if the test is not run yet */

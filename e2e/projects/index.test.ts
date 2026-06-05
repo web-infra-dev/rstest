@@ -51,7 +51,7 @@ describe('test projects', () => {
   it('should run project correctly with specified config root', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '--globals', '-c', 'packages/client/rstest.config.ts'],
+      args: ['run', '--globals', '-c', 'packages/client/rstest.config.mts'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
@@ -78,7 +78,7 @@ describe('test projects', () => {
   it('should run projects fail when project not found', async () => {
     const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '-c', 'rstest.404.config.ts'],
+      args: ['run', '-c', 'rstest.404.config.mts'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
@@ -126,6 +126,51 @@ describe('test projects', () => {
       logs.find((log) => log.includes('No test files found')),
     ).toBeTruthy();
   });
+
+  it('should print project summary correctly in list mode', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--summary', '--globals'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(logs.slice(-3)).toMatchInlineSnapshot(`
+      [
+        "   Projects 4 matched",
+        " Test Files 10 matched",
+        "      Tests 13 matched",
+      ]
+    `);
+  });
+
+  it('should include project summary in list json output', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--json', '--summary', '--globals'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    const json = JSON.parse(cli.stdout);
+
+    expect(json.summary).toEqual({
+      files: 10,
+      projects: 4,
+      tests: 13,
+    });
+  });
+
   it('should run projects with extends correctly', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
@@ -151,8 +196,8 @@ describe('test projects', () => {
         args: [
           'run',
           '-c',
-          'rstest.projectConfig.config.ts',
-          '--reporter',
+          'rstest.projectConfig.config.mts',
+          '--reporters',
           'verbose',
         ],
         options: {
@@ -184,8 +229,8 @@ describe('test projects', () => {
         args: [
           'run',
           '-c',
-          'rstest.slowTest.config.ts',
-          '--reporter',
+          'rstest.slowTest.config.mts',
+          '--reporters',
           'verbose',
         ],
         options: {
@@ -210,7 +255,7 @@ describe('test projects', () => {
     it('should respect hideSkippedTestFiles per project', async () => {
       const { cli, expectExecSuccess } = await runRstestCli({
         command: 'rstest',
-        args: ['run', '-c', 'rstest.hideSkippedTestFiles.config.ts'],
+        args: ['run', '-c', 'rstest.hideSkippedTestFiles.config.mts'],
         options: {
           nodeOptions: {
             cwd: join(__dirname, 'fixtures'),

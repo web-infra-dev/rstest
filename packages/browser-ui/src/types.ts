@@ -4,7 +4,6 @@ import type {
   BrowserHostConfig,
   BrowserProjectRuntime,
   BrowserRpcRequest,
-  BrowserRpcResponse,
   BrowserClientMessage as ProtocolBrowserClientMessage,
   TestFileInfo,
 } from '@rstest/browser/protocol';
@@ -13,7 +12,7 @@ import type {
   TestFileResult,
   TestInfo,
   TestResult,
-} from '@rstest/core/browser-runtime';
+} from '@rstest/core/internal/browser-runtime';
 
 /**
  * Browser UI types
@@ -108,6 +107,5 @@ export type {
   BrowserHostConfig,
   BrowserProjectRuntime,
   BrowserRpcRequest,
-  BrowserRpcResponse,
   TestFileInfo,
 };

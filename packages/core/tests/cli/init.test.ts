@@ -427,6 +427,242 @@ describe('resolveProjects', () => {
     });
   });
 
+  describe('coverage CLI options', () => {
+    it('should apply coverage.changed from CLI', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+              coverage: {
+                enabled: true,
+              },
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            changed: 'HEAD',
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        changed: 'HEAD',
+      });
+    });
+
+    it('should normalize boolean-like coverage CLI values', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            enabled: 'true',
+            changed: 'false',
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        changed: false,
+      });
+    });
+
+    it('should enable coverage when coverage.changed is enabled from CLI', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            changed: true,
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        changed: true,
+      });
+    });
+
+    it('should not enable coverage when coverage.changed is disabled from CLI', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            changed: 'false',
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        changed: false,
+      });
+      expect(projects[0]!.config.coverage.enabled).toBeUndefined();
+    });
+
+    it('should enable coverage when coverage provider is set from CLI', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            provider: 'v8',
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        provider: 'v8',
+      });
+    });
+
+    it('should apply a single coverage.reporters from CLI as an array', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            reporters: 'html',
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        reporters: ['html'],
+      });
+    });
+
+    it('should apply repeated coverage.reporters from CLI as an array', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            reporters: ['text', 'html'],
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        reporters: ['text', 'html'],
+      });
+    });
+
+    it('should let CLI coverage.reporters override config reporters', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+              coverage: {
+                enabled: true,
+                reporters: ['text', ['json', { file: 'coverage.json' }]],
+              },
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            reporters: ['lcov'],
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        reporters: ['lcov'],
+      });
+    });
+
+    it('should override coverage options from CLI', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+              coverage: {
+                include: ['old-include/**'],
+                exclude: ['old-exclude/**'],
+                reporters: ['html'],
+                reportsDirectory: 'old-coverage',
+                clean: true,
+              },
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            include: ['src/**', 'test/**'],
+            exclude: ['src/generated/**'],
+            reporters: ['text', 'json'],
+            reportsDirectory: 'custom-coverage',
+            reportOnFailure: 'true',
+            clean: 'false',
+            allowExternal: true,
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        include: ['src/**', 'test/**'],
+        exclude: ['old-exclude/**', 'src/generated/**'],
+        reporters: ['text', 'json'],
+        reportsDirectory: 'custom-coverage',
+        reportOnFailure: true,
+        clean: false,
+        allowExternal: true,
+      });
+    });
+  });
+
   describe('pool CLI options', () => {
     it('should apply --pool shorthand (string) and preserve other pool fields', async () => {
       const projects = await resolveProjects({

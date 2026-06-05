@@ -6,14 +6,27 @@
  */
 
 import type {
-  FakeTimerInstallOpts,
-  FakeTimerWithContext,
-  InstalledClock,
+  Config as FakeTimerInstallOpts,
+  FakeTimers as FakeTimerWithContext,
+  Clock as InstalledClock,
+  Timer as FakeTimerRecord,
 } from '@sinonjs/fake-timers';
 
 export type { FakeTimerInstallOpts };
 
 const RealDate = Date;
+type FakeMethod = NonNullable<FakeTimerInstallOpts['toFake']>[number];
+
+export type FakeTimersSnapshot = {
+  now: number;
+  timers: [number, FakeTimerRecord][];
+  jobs: FakeTimerRecord[];
+};
+
+const cloneFakeTimerRecord = (record: FakeTimerRecord): FakeTimerRecord => ({
+  ...record,
+  args: record.args ? [...record.args] : undefined,
+});
 
 const loadFakeTimersModule = () => {
   // TODO: Switch back to createRequire(import.meta.url) once Rspack supports
@@ -125,7 +138,6 @@ export class FakeTimers {
 
   runAllTicks(): void {
     if (this._checkFakeTimers()) {
-      // @ts-expect-error - doesn't exist?
       this._clock.runMicrotasks();
     }
   }
@@ -137,16 +149,21 @@ export class FakeTimers {
     }
   }
 
-  useFakeTimers(fakeTimersConfig: FakeTimerInstallOpts = {}): void {
+  useFakeTimers({
+    toNotFake = [],
+    ...restFakeTimersConfig
+  }: FakeTimerInstallOpts = {}): void {
     if (this._fakingTime) {
       this._clock.uninstall();
     }
 
+    const ignoreTimers = ['Intl', 'nextTick', 'queueMicrotask'].concat(
+      toNotFake,
+    );
+
     const toFake = Object.keys(this._fakeTimers.timers)
       // Do not mock timers internally used by node by default. It can still be mocked through userConfig.
-      .filter(
-        (timer) => timer !== 'nextTick' && timer !== 'queueMicrotask',
-      ) as (keyof FakeTimerWithContext['timers'])[];
+      .filter((timer): timer is FakeMethod => !ignoreTimers.includes(timer));
 
     const isChildProcess = typeof process !== 'undefined' && !!process.send;
 
@@ -159,11 +176,12 @@ export class FakeTimers {
       shouldClearNativeTimers: true,
       now: Date.now(),
       toFake: [...toFake],
-      // @ts-expect-error untyped but supported
       ignoreMissingTimers: true,
-      ...fakeTimersConfig,
+      ...restFakeTimersConfig,
     });
 
+    // temporary fix fake-timers 15.1.1 → 15.2.0 timerHeap.push error
+    this._clock.reset();
     this._fakingTime = true;
   }
 
@@ -178,6 +196,40 @@ export class FakeTimers {
   setSystemTime(now?: number | Date): void {
     if (this._checkFakeTimers()) {
       this._clock.setSystemTime(now);
+    }
+  }
+
+  snapshot(): FakeTimersSnapshot | undefined {
+    if (!this._fakingTime) {
+      return undefined;
+    }
+
+    return {
+      now: this._clock.now,
+      timers: [...(this._clock.timers ?? new Map())].map(([id, timer]) => [
+        id,
+        cloneFakeTimerRecord(timer),
+      ]),
+      jobs: (this._clock.jobs ?? []).map(cloneFakeTimerRecord),
+    };
+  }
+
+  restore(snapshot: FakeTimersSnapshot): void {
+    if (this._checkFakeTimers()) {
+      this._clock.setSystemTime(snapshot.now);
+      const timerEntries = snapshot.timers.map(([id, timer]) => [
+        id,
+        cloneFakeTimerRecord(timer),
+      ]) as [number, FakeTimerRecord][];
+      const timers = timerEntries.map(([, timer]) => timer);
+      this._clock.timers = new Map(timerEntries);
+      if (this._clock.timerHeap) {
+        this._clock.timerHeap.timers = [];
+        for (const timer of timers) {
+          this._clock.timerHeap.push(timer);
+        }
+      }
+      this._clock.jobs = snapshot.jobs.map(cloneFakeTimerRecord);
     }
   }
 

@@ -1,4 +1,4 @@
-import type { BrowserDispatchRequest, SnapshotRpcRequest } from '../protocol';
+import type { BrowserDispatchRequest, SnapshotRpcCall } from '../protocol';
 import { DISPATCH_NAMESPACE_SNAPSHOT } from '../protocol';
 import {
   createRequestId,
@@ -11,41 +11,36 @@ const SNAPSHOT_HEADER = '// Rstest Snapshot';
 
 const createSnapshotDispatchRequest = (
   requestId: string,
-  method: SnapshotRpcRequest['method'],
-  args: SnapshotRpcRequest['args'],
+  call: SnapshotRpcCall,
 ): BrowserDispatchRequest => {
   // Snapshot is just one namespace on the shared dispatch RPC channel.
   // Keep this mapping explicit so new runner-side RPC clients can mirror it.
   return {
     requestId,
     namespace: DISPATCH_NAMESPACE_SNAPSHOT,
-    method,
-    args,
+    method: call.method,
+    args: call.args,
   };
 };
 
 /**
  * Send a snapshot RPC request to the container (parent window).
  * The container will forward it to the host via WebSocket RPC.
+ *
+ * `call` is a {@link SnapshotRpcCall}, so `method` and `args` are validated as a
+ * pair — a mismatched argument shape fails to compile at the call site.
  */
-const sendRpcRequest = <T>(
-  method: SnapshotRpcRequest['method'],
-  args: SnapshotRpcRequest['args'],
-): Promise<T> => {
+const sendRpcRequest = <T>(call: SnapshotRpcCall): Promise<T> => {
   const requestId = createRequestId('snapshot-rpc');
   const rpcTimeout = getRpcTimeout();
-  const dispatchRequest = createSnapshotDispatchRequest(
-    requestId,
-    method,
-    args,
-  );
+  const dispatchRequest = createSnapshotDispatchRequest(requestId, call);
 
   return dispatchRpc<T>({
     requestId,
     request: dispatchRequest,
     timeoutMs: rpcTimeout,
     staleMessage: 'Stale snapshot RPC request ignored.',
-    timeoutMessage: `Snapshot RPC timeout after ${rpcTimeout / 1000}s: ${method}`,
+    timeoutMessage: `Snapshot RPC timeout after ${rpcTimeout / 1000}s: ${call.method}`,
   });
 };
 
@@ -67,8 +62,9 @@ export class BrowserSnapshotEnvironment {
   }
 
   async resolvePath(filepath: string): Promise<string> {
-    return sendRpcRequest<string>('resolveSnapshotPath', {
-      testPath: filepath,
+    return sendRpcRequest<string>({
+      method: 'resolveSnapshotPath',
+      args: { testPath: filepath },
     });
   }
 
@@ -77,18 +73,24 @@ export class BrowserSnapshotEnvironment {
   }
 
   async saveSnapshotFile(filepath: string, snapshot: string): Promise<void> {
-    await sendRpcRequest<void>('saveSnapshotFile', {
-      filepath,
-      content: snapshot,
+    await sendRpcRequest<void>({
+      method: 'saveSnapshotFile',
+      args: { filepath, content: snapshot },
     });
   }
 
   async readSnapshotFile(filepath: string): Promise<string | null> {
-    return sendRpcRequest<string | null>('readSnapshotFile', { filepath });
+    return sendRpcRequest<string | null>({
+      method: 'readSnapshotFile',
+      args: { filepath },
+    });
   }
 
   async removeSnapshotFile(filepath: string): Promise<void> {
-    await sendRpcRequest<void>('removeSnapshotFile', { filepath });
+    await sendRpcRequest<void>({
+      method: 'removeSnapshotFile',
+      args: { filepath },
+    });
   }
 
   /**

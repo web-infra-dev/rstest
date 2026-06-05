@@ -1,10 +1,18 @@
-import { builtinModules } from 'node:module';
-import { isAbsolute } from 'node:path';
+import { createRequire as createNativeRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import vm, { type ModuleLinker, type SourceTextModule } from 'node:vm';
+import vm, { type SourceTextModule } from 'node:vm';
 import path from 'pathe';
 import { logger } from '../../utils/logger';
-import { interopModule, shouldInterop } from './interop';
+import { clearSyntheticModuleCache } from './interop';
+import {
+  finalizeDynamicImport,
+  loadWasmFromContent,
+  resolveImportSpecifier,
+} from './resolveDynamicImport';
+import {
+  RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_REQUIRE_RESOLVE_HOOK,
+} from './runtimeHooks';
 
 export enum EsmMode {
   Unknown = 0,
@@ -12,10 +20,66 @@ export enum EsmMode {
   Unlinked = 2,
 }
 
+const sourceUrlCommentRE = /\/\/[#@]\s*sourceURL=/;
+export const shouldInjectSourceURL = (): boolean => {
+  return typeof process !== 'undefined' && process.versions?.bun !== undefined;
+};
+
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
-const isBuiltinSpecifier = (specifier: string) =>
-  specifier.startsWith('node:') || builtinModules.includes(specifier);
+export const appendSourceURL = (
+  codeContent: string,
+  sourceUrl: string,
+): string => {
+  if (sourceUrlCommentRE.test(codeContent)) {
+    return codeContent;
+  }
+
+  // Bun's vm.SourceTextModule reports stack frames and source-map-support
+  // lookups as synthetic "[source:n]" ids instead of the module identifier.
+  // Appending sourceURL keeps the emitted source name stable so sourcemaps
+  // still resolve back to the built asset path.
+  const suffix = `//# sourceURL=${sourceUrl}`;
+  return codeContent.endsWith('\n')
+    ? `${codeContent}${suffix}`
+    : `${codeContent}\n${suffix}`;
+};
+
+const defineRstestRequireResolve =
+  ({
+    testPath,
+    distPath,
+    assetFiles,
+  }: {
+    testPath: string;
+    distPath: string;
+    assetFiles: Record<string, string>;
+  }) =>
+  (
+    specifier: string,
+    optionsOrOrigin?: string | { paths?: string[] },
+    maybeOrigin?: string,
+  ): string => {
+    const options =
+      typeof optionsOrOrigin === 'string' ? undefined : optionsOrOrigin;
+    const origin =
+      typeof optionsOrOrigin === 'string' ? optionsOrOrigin : maybeOrigin;
+    const resolveBase = origin ?? testPath;
+
+    const currentDirectory = path.dirname(origin ?? distPath);
+    const joinedPath = isRelativePath(specifier)
+      ? path.join(currentDirectory, specifier)
+      : specifier;
+    const normalizedPath = path.normalize(
+      joinedPath.startsWith('file://') ? fileURLToPath(joinedPath) : joinedPath,
+    );
+
+    if (assetFiles[normalizedPath]) {
+      return normalizedPath;
+    }
+
+    return createNativeRequire(resolveBase).resolve(specifier, options);
+  };
 
 const defineRstestDynamicImport =
   ({
@@ -25,15 +89,21 @@ const defineRstestDynamicImport =
     interopDefault,
     returnModule,
     esmMode,
+    runtimeDistPath,
   }: {
     esmMode: EsmMode;
     assetFiles: Record<string, string>;
     returnModule?: boolean;
     distPath: string;
+    runtimeDistPath?: string;
     testPath: string;
     interopDefault: boolean;
   }) =>
-  async (specifier: string, importAttributes: ImportCallOptions) => {
+  async (
+    specifier: string,
+    importAttributes: ImportCallOptions,
+    origin?: string,
+  ) => {
     const currentDirectory = path.dirname(distPath);
 
     const joinedPath = isRelativePath(specifier)
@@ -48,16 +118,13 @@ const defineRstestDynamicImport =
     if (content) {
       try {
         if (specifier.endsWith('.wasm')) {
-          const wasmBuffer = Buffer.from(content, 'base64');
-          const wasmModule = await WebAssembly.compile(wasmBuffer);
-          const wasmInstance = await WebAssembly.instantiate(wasmModule);
-          const exports = wasmInstance.exports as Record<string, any>;
-          return returnModule ? await asModule(exports) : exports;
+          return loadWasmFromContent(content, joinedPath, returnModule);
         }
         return await loadModule({
           codeContent: content,
           testPath,
           distPath: joinedPath,
+          runtimeDistPath,
           rstestContext: {},
           assetFiles,
           interopDefault,
@@ -71,118 +138,13 @@ const defineRstestDynamicImport =
       }
     }
 
-    const resolvedPath = isAbsolute(specifier)
-      ? pathToFileURL(specifier)
-      : isBuiltinSpecifier(specifier)
-        ? specifier
-        : // TODO: use module path instead of testPath
-          import.meta.resolve(specifier, pathToFileURL(testPath));
-
-    const modulePath =
-      typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;
-
-    // Rstest importAttributes is used internally to distinguish `importActual` and normal imports,
-    // and should not be passed to Node.js side, otherwise it will cause ERR_IMPORT_ATTRIBUTE_UNSUPPORTED error.
-    if (importAttributes?.with?.rstest) {
-      delete importAttributes.with.rstest;
-    }
-
-    if (modulePath.endsWith('.json')) {
-      const importedModule = await import(modulePath, {
-        with: { type: 'json' },
-      });
-
-      return returnModule
-        ? asModule(importedModule.default)
-        : {
-            ...importedModule.default,
-            default: importedModule.default,
-          };
-    }
-    const importedModule = await import(modulePath, importAttributes);
-
-    if (
-      shouldInterop({
-        interopDefault,
-        modulePath,
-        mod: importedModule,
-      }) &&
-      !modulePath.startsWith('node:')
-    ) {
-      const { mod, defaultExport } = interopModule(importedModule);
-      if (returnModule) {
-        return asModule(mod);
-      }
-
-      return new Proxy(mod, {
-        get(mod, prop) {
-          if (prop === 'default') {
-            return defaultExport;
-          }
-          /**
-           * interop invalid named exports. eg:
-           * exports: module.exports = { a: 1 }
-           * import: import { a } from 'mod';
-           */
-          return mod[prop] ?? defaultExport?.[prop];
-        },
-        has(mod, prop) {
-          if (prop === 'default') {
-            return defaultExport !== undefined;
-          }
-          return prop in mod || (defaultExport && prop in defaultExport);
-        },
-        getOwnPropertyDescriptor(mod, prop): any {
-          const descriptor = Reflect.getOwnPropertyDescriptor(mod, prop);
-          if (descriptor) {
-            return descriptor;
-          }
-          if (prop === 'default' && defaultExport !== undefined) {
-            return {
-              value: defaultExport,
-              enumerable: true,
-              configurable: true,
-            };
-          }
-        },
-      });
-    }
-
-    return importedModule;
+    return finalizeDynamicImport({
+      modulePath: resolveImportSpecifier({ specifier, origin, testPath }),
+      importAttributes,
+      interopDefault,
+      returnModule,
+    });
   };
-
-export const asModule = async (
-  something: Record<string, any>,
-  context?: Record<string, any>,
-  unlinked?: boolean,
-): Promise<SourceTextModule> => {
-  const { Module, SyntheticModule } = await import('node:vm');
-
-  if (something instanceof Module) {
-    return something;
-  }
-
-  const exports = [...new Set(['default', ...Object.keys(something)])];
-
-  const syntheticModule = new SyntheticModule(
-    exports,
-    () => {
-      for (const name of exports) {
-        syntheticModule.setExport(
-          name,
-          name === 'default' ? (something[name] ?? something) : something[name],
-        );
-      }
-    },
-    { context },
-  );
-
-  if (unlinked) return syntheticModule;
-
-  await syntheticModule.link((() => undefined) as unknown as ModuleLinker);
-  await syntheticModule.evaluate();
-  return syntheticModule;
-};
 
 const esmCache = new Map<string, SourceTextModule>();
 
@@ -194,16 +156,20 @@ export const loadModule = async ({
   assetFiles,
   interopDefault,
   esmMode = EsmMode.Unknown,
+  runtimeDistPath,
 }: {
   esmMode?: EsmMode;
   interopDefault: boolean;
   codeContent: string;
   distPath: string;
+  runtimeDistPath?: string;
   testPath: string;
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
 }): Promise<any> => {
-  const code = codeContent;
+  const code = shouldInjectSourceURL()
+    ? appendSourceURL(codeContent, distPath)
+    : codeContent;
   let esm = esmCache.get(distPath);
   if (!esm) {
     esm = new vm.SourceTextModule(code, {
@@ -212,16 +178,23 @@ export const loadModule = async ({
       columnOffset: 0,
       initializeImportMeta: (meta) => {
         meta.url = pathToFileURL(
-          distPath.endsWith('rstest-runtime.mjs') ? distPath : testPath,
+          distPath === runtimeDistPath ? distPath : testPath,
         ).toString();
         // @ts-expect-error
-        meta.__rstest_dynamic_import__ = defineRstestDynamicImport({
+        meta[RSTEST_DYNAMIC_IMPORT_HOOK] = defineRstestDynamicImport({
           assetFiles,
           testPath,
           distPath: distPath || testPath,
+          runtimeDistPath,
           interopDefault,
           returnModule: false,
           esmMode: EsmMode.Unknown,
+        });
+        // @ts-expect-error
+        meta[RSTEST_REQUIRE_RESOLVE_HOOK] = defineRstestRequireResolve({
+          assetFiles,
+          testPath,
+          distPath: distPath || testPath,
         });
         // @ts-expect-error
         meta.readWasmFile = (
@@ -248,40 +221,39 @@ export const loadModule = async ({
           assetFiles,
           testPath,
           distPath: distPath || testPath,
+          runtimeDistPath,
           interopDefault,
           returnModule: true,
           esmMode: EsmMode.Unlinked,
         })(specifier, importAttributes as ImportCallOptions);
       },
     });
-    distPath && esmCache.set(distPath, esm);
+    if (distPath) esmCache.set(distPath, esm);
   }
 
   if (esmMode === EsmMode.Unlinked) return esm;
 
   if (esm.status === 'unlinked') {
-    await esm.link(async (specifier, referencingModule) => {
-      const result = await defineRstestDynamicImport({
+    await esm.link((specifier, referencingModule) =>
+      defineRstestDynamicImport({
         assetFiles,
         testPath,
         distPath: distPath || testPath,
+        runtimeDistPath,
         interopDefault,
         returnModule: true,
         esmMode: EsmMode.Unlinked,
-      })(specifier, referencingModule as ImportCallOptions);
-
-      const linkedModule = await asModule(
-        result,
-        referencingModule.context,
-        true,
-      );
-      return linkedModule;
-    });
+      })(
+        specifier,
+        {},
+        isRelativePath(specifier) ? referencingModule.identifier : undefined,
+      ),
+    );
   }
 
-  esm.status !== 'evaluated' &&
-    esm.status !== 'evaluating' &&
-    (await esm.evaluate());
+  if (esm.status !== 'evaluated' && esm.status !== 'evaluating') {
+    await esm.evaluate();
+  }
 
   const ns = esm.namespace as {
     default: unknown;
@@ -290,4 +262,7 @@ export const loadModule = async ({
   return ns.default && ns.default instanceof Promise ? ns.default : ns;
 };
 
-export const clearModuleCache = (): void => esmCache.clear();
+export const clearModuleCache = (): void => {
+  esmCache.clear();
+  clearSyntheticModuleCache();
+};

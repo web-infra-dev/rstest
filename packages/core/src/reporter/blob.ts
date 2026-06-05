@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'pathe';
 import type {
+  CoverageMapData,
   Duration,
   NormalizedConfig,
   Reporter,
@@ -15,6 +16,7 @@ export type BlobData = {
   version: string;
   shard?: { index: number; count: number };
   results: TestFileResult[];
+  coverage?: CoverageMapData;
   testResults: TestResult[];
   duration: Duration;
   snapshotSummary: SnapshotSummary;
@@ -23,6 +25,21 @@ export type BlobData = {
 };
 
 const DEFAULT_OUTPUT_DIR = '.rstest-reports';
+
+/**
+ * Single owner of the on-disk blob filename grammar. The writer (this module)
+ * and the merge reader (`mergeReports.ts`) previously encoded the
+ * `blob[-index-count].json` shape independently — a string template here and a
+ * hand-written regexp there — so a rename would silently desync the two sides.
+ */
+export const blobFileName = (shard?: {
+  index: number;
+  count: number;
+}): string => (shard ? `blob-${shard.index}-${shard.count}.json` : 'blob.json');
+
+export const BLOB_FILE_RE: RegExp = /^blob(-\d+-\d+)?\.json$/;
+
+export const isBlobFile = (name: string): boolean => BLOB_FILE_RE.test(name);
 
 export class BlobReporter implements Reporter {
   private readonly config: NormalizedConfig;
@@ -50,26 +67,27 @@ export class BlobReporter implements Reporter {
 
   async onTestRunEnd({
     results,
+    coverage,
     testResults,
     duration,
     snapshotSummary,
     unhandledErrors,
   }: {
     results: TestFileResult[];
+    coverage?: CoverageMapData;
     testResults: TestResult[];
     duration: Duration;
     snapshotSummary: SnapshotSummary;
     unhandledErrors?: Error[];
   }): Promise<void> {
     const shard = this.config.shard;
-    const fileName = shard
-      ? `blob-${shard.index}-${shard.count}.json`
-      : 'blob.json';
+    const fileName = blobFileName(shard);
 
     const blobData: BlobData = {
       version: RSTEST_VERSION,
       shard: shard ? { index: shard.index, count: shard.count } : undefined,
       results,
+      coverage,
       testResults,
       duration,
       snapshotSummary,

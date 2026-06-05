@@ -11,6 +11,18 @@ import { ROOT_SUITE_NAME, TEST_DELIMITER } from '../../utils/constants';
 import { getTaskNameWithPrefix } from '../../utils/helper';
 import { getRealTimers } from '../util';
 
+/**
+ * Coerce a user-supplied retry/repeats count into a non-negative integer.
+ * Negative, NaN, Infinity, and fractional values collapse to 0 so loop
+ * bounds stay well-defined.
+ */
+export const sanitizeAttemptCount = (value: number | undefined): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return Math.floor(value);
+};
+
 export const getTestStatus = (
   results: TestResult[],
   defaultStatus: TestResultStatus,
@@ -27,33 +39,135 @@ export const getTestStatus = (
         : 'pass';
 };
 
-export function hasOnlyTest(test: Test[]): boolean {
-  return test.some((t) => {
-    return t.runMode === 'only' || (t.type === 'suite' && hasOnlyTest(t.tests));
-  });
-}
+type TestModeContext = {
+  shouldSkipByName?: (test: TestCase) => boolean;
+  suiteHasOnlyDescendants: WeakMap<TestSuite, boolean>;
+};
+
+const collectOnlyTests = (
+  tests: Test[],
+  suiteHasOnlyDescendants: WeakMap<TestSuite, boolean>,
+): boolean => {
+  let hasOnly = false;
+
+  for (const test of tests) {
+    const childrenHaveOnly =
+      test.type === 'suite'
+        ? collectOnlyTests(test.tests, suiteHasOnlyDescendants)
+        : false;
+
+    if (test.type === 'suite') {
+      suiteHasOnlyDescendants.set(test, childrenHaveOnly);
+    }
+
+    if (test.runMode === 'only' || childrenHaveOnly) {
+      hasOnly = true;
+    }
+  }
+
+  return hasOnly;
+};
+
+const createShouldSkipByName = (
+  testNamePattern?: RegExp | string,
+): ((test: TestCase) => boolean) | undefined => {
+  if (!testNamePattern) {
+    return undefined;
+  }
+
+  const regex =
+    typeof testNamePattern === 'string'
+      ? new RegExp(testNamePattern)
+      : testNamePattern;
+  const delimiter = regex.toString().includes(TEST_DELIMITER)
+    ? TEST_DELIMITER
+    : '';
+
+  return (test: TestCase) => {
+    if (regex.global || regex.sticky) {
+      regex.lastIndex = 0;
+    }
+
+    return !regex.test(getTaskNameWithPrefix(test, delimiter));
+  };
+};
 
 const shouldTestSkip = (
   test: TestCase,
   runOnly: boolean,
-  testNamePattern?: RegExp | string,
+  shouldSkipByName?: (test: TestCase) => boolean,
 ) => {
   if (runOnly && test.runMode !== 'only') {
     return true;
   }
 
-  const delimiter = testNamePattern?.toString().includes(TEST_DELIMITER)
-    ? TEST_DELIMITER
-    : '';
-
-  if (
-    testNamePattern &&
-    !getTaskNameWithPrefix(test, delimiter).match(testNamePattern)
-  ) {
+  if (shouldSkipByName?.(test)) {
     return true;
   }
 
   return false;
+};
+
+const traverseUpdateTestRunModeWithContext = (
+  testSuite: TestSuite,
+  parentRunMode: TestRunMode,
+  runOnly: boolean,
+  context: TestModeContext,
+): void => {
+  if (testSuite.tests.length === 0) {
+    return;
+  }
+
+  const childrenHaveOnly =
+    context.suiteHasOnlyDescendants.get(testSuite) ?? false;
+
+  if (runOnly && testSuite.runMode !== 'only' && !childrenHaveOnly) {
+    testSuite.runMode = 'skip';
+  } else if (['skip', 'todo'].includes(parentRunMode)) {
+    testSuite.runMode = parentRunMode;
+  }
+
+  const runSubOnly =
+    runOnly && testSuite.runMode !== 'only' ? runOnly : childrenHaveOnly;
+  let hasRunTest = false;
+  let allTodoTest = true;
+
+  for (const test of testSuite.tests) {
+    if (test.type === 'case') {
+      if (['skip', 'todo'].includes(testSuite.runMode)) {
+        test.runMode = testSuite.runMode;
+      }
+      if (shouldTestSkip(test, runSubOnly, context.shouldSkipByName)) {
+        test.runMode = 'skip';
+      }
+    } else {
+      traverseUpdateTestRunModeWithContext(
+        test,
+        testSuite.runMode,
+        runSubOnly,
+        context,
+      );
+    }
+
+    if (test.runMode === 'run' || test.runMode === 'only') {
+      hasRunTest = true;
+    }
+
+    if (test.runMode !== 'todo') {
+      allTodoTest = false;
+    }
+  }
+
+  if (testSuite.runMode !== 'run') {
+    return;
+  }
+
+  if (hasRunTest) {
+    testSuite.runMode = 'run';
+    return;
+  }
+
+  testSuite.runMode = allTodoTest ? 'todo' : 'skip';
 };
 
 export const traverseUpdateTestRunMode = (
@@ -62,60 +176,13 @@ export const traverseUpdateTestRunMode = (
   runOnly: boolean,
   testNamePattern?: RegExp | string,
 ): void => {
-  if (testSuite.tests.length === 0) {
-    return;
-  }
+  const suiteHasOnlyDescendants = new WeakMap<TestSuite, boolean>();
+  collectOnlyTests([testSuite], suiteHasOnlyDescendants);
 
-  if (
-    runOnly &&
-    testSuite.runMode !== 'only' &&
-    !hasOnlyTest(testSuite.tests)
-  ) {
-    testSuite.runMode = 'skip';
-  } else if (['skip', 'todo'].includes(parentRunMode)) {
-    testSuite.runMode = parentRunMode;
-  }
-
-  const tests = testSuite.tests.map((test) => {
-    const runSubOnly =
-      runOnly && testSuite.runMode !== 'only'
-        ? runOnly
-        : hasOnlyTest(testSuite.tests);
-
-    if (test.type === 'case') {
-      if (['skip', 'todo'].includes(testSuite.runMode)) {
-        test.runMode = testSuite.runMode;
-      }
-      if (shouldTestSkip(test, runSubOnly, testNamePattern)) {
-        test.runMode = 'skip';
-      }
-      return test;
-    }
-    traverseUpdateTestRunMode(
-      test,
-      testSuite.runMode,
-      runSubOnly,
-      testNamePattern,
-    );
-    return test;
+  traverseUpdateTestRunModeWithContext(testSuite, parentRunMode, runOnly, {
+    shouldSkipByName: createShouldSkipByName(testNamePattern),
+    suiteHasOnlyDescendants,
   });
-
-  if (testSuite.runMode !== 'run') {
-    return;
-  }
-
-  const hasRunTest = tests.some(
-    (test) => test.runMode === 'run' || test.runMode === 'only',
-  );
-
-  if (hasRunTest) {
-    testSuite.runMode = 'run';
-    return;
-  }
-
-  const allTodoTest = tests.every((test) => test.runMode === 'todo');
-
-  testSuite.runMode = allTodoTest ? 'todo' : 'skip';
 };
 
 /**
@@ -136,12 +203,17 @@ export const updateTestModes = (
   tests: Test[],
   testNamePattern?: RegExp | string,
 ): void => {
-  const hasOnly = hasOnlyTest(tests);
+  const suiteHasOnlyDescendants = new WeakMap<TestSuite, boolean>();
+  const hasOnly = collectOnlyTests(tests, suiteHasOnlyDescendants);
+  const shouldSkipByName = createShouldSkipByName(testNamePattern);
 
   for (const test of tests) {
     if (test.type === 'suite') {
-      traverseUpdateTestRunMode(test, 'run', hasOnly, testNamePattern);
-    } else if (shouldTestSkip(test, hasOnly, testNamePattern)) {
+      traverseUpdateTestRunModeWithContext(test, 'run', hasOnly, {
+        shouldSkipByName,
+        suiteHasOnlyDescendants,
+      });
+    } else if (shouldTestSkip(test, hasOnly, shouldSkipByName)) {
       test.runMode = 'skip';
     }
   }
@@ -189,7 +261,7 @@ export function registerTestSuiteListener(
   suite[listenersKey].push(fn);
 }
 
-export function makeError(message: string, stackTraceError?: Error): Error {
+function makeError(message: string, stackTraceError?: Error): Error {
   const error = new Error(message);
   if (stackTraceError?.stack) {
     error.stack = stackTraceError.stack.replace(
@@ -235,10 +307,10 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
 
     try {
       const result = await Promise.race([fn(...args), timeoutPromise]);
-      timeoutId && clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
       return result;
     } catch (error) {
-      timeoutId && clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
       throw error;
     }
   }) as T;

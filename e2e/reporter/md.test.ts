@@ -25,7 +25,7 @@ describe('md', () => {
   }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'agent-md/index', '-c', './rstest.agentMd.config.ts'],
+      args: ['run', 'agent-md/index', '-c', './rstest.agentMd.config.mts'],
       onTestFinished,
       unsetEnv: UNSET_ENV,
       options: {
@@ -124,7 +124,7 @@ describe('md', () => {
         'run',
         'agent-md/snapshotMismatch',
         '-c',
-        './rstest.agentMd.snapshotMismatch.config.ts',
+        './rstest.agentMd.snapshotMismatch.config.mts',
       ],
       onTestFinished,
       unsetEnv: UNSET_ENV,
@@ -226,7 +226,7 @@ describe('md', () => {
         'run',
         'agent-md/console',
         '-c',
-        './rstest.agentMd.console.config.ts',
+        './rstest.agentMd.console.config.mts',
       ],
       onTestFinished,
       unsetEnv: UNSET_ENV,
@@ -341,7 +341,12 @@ describe('md', () => {
   it('formats thrown errors', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'agent-md/throw', '-c', './rstest.agentMd.throw.config.ts'],
+      args: [
+        'run',
+        'agent-md/throw',
+        '-c',
+        './rstest.agentMd.throw.config.mts',
+      ],
       onTestFinished,
       unsetEnv: UNSET_ENV,
       options: {
@@ -430,7 +435,7 @@ describe('md', () => {
         'run',
         'agent-md/timeout',
         '-c',
-        './rstest.agentMd.timeout.config.ts',
+        './rstest.agentMd.timeout.config.mts',
       ],
       onTestFinished,
       unsetEnv: UNSET_ENV,
@@ -522,7 +527,7 @@ describe('md', () => {
         'run',
         'agent-md/truncated',
         '-c',
-        './rstest.agentMd.truncated.config.ts',
+        './rstest.agentMd.truncated.config.mts',
       ],
       onTestFinished,
       unsetEnv: UNSET_ENV,
@@ -700,7 +705,7 @@ describe('md', () => {
   it('omits lists on non-focused passing runs', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '-c', './rstest.agentMd.pass.config.ts'],
+      args: ['run', '-c', './rstest.agentMd.pass.config.mts'],
       onTestFinished,
       unsetEnv: UNSET_ENV,
       options: {
@@ -769,7 +774,7 @@ describe('md', () => {
   }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'agent-md-pass', '-c', './rstest.agentMd.pass.config.ts'],
+      args: ['run', 'agent-md-pass', '-c', './rstest.agentMd.pass.config.mts'],
       onTestFinished,
       unsetEnv: UNSET_ENV,
       options: {
@@ -861,7 +866,7 @@ describe('md', () => {
         'run',
         'agent-md/unhandled',
         '-c',
-        './rstest.agentMd.unhandled.config.ts',
+        './rstest.agentMd.unhandled.config.mts',
       ],
       onTestFinished,
       unsetEnv: UNSET_ENV,

@@ -16,6 +16,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   "clearMocks": false,
   "coverage": {
     "allowExternal": false,
+    "changed": undefined,
     "clean": true,
     "enabled": false,
     "exclude": [
@@ -39,6 +40,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     ],
     "reportsDirectory": "<ROOT>/packages/core/tests/coverage",
   },
+  "detectAsyncLeaks": false,
   "disableConsoleIntercept": false,
   "env": {},
   "exclude": {
@@ -52,6 +54,10 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
     ],
   },
   "federation": false,
+  "forceRerunTriggers": [
+    "**/package.json/**",
+    "**/rstest.config.*",
+  ],
   "globalSetup": [
     "./global-setup.ts",
   ],
@@ -68,6 +74,11 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "rstest",
+  "output": {
+    "distPath": {
+      "root": "dist/.rstest-temp",
+    },
+  },
   "passWithNoTests": false,
   "pool": {
     "type": "forks",
@@ -83,6 +94,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   "setupFiles": [
     "./setup.ts",
   ],
+  "silent": false,
   "slowTestThreshold": 300,
   "snapshotFormat": {},
   "testEnvironment": {

@@ -1,4 +1,3 @@
-/** biome-ignore-all lint/complexity/useArrowFunction: <follow webpack runtime code convention> */
 // Rstest runtime code should be prefixed with `rstest_` to avoid conflicts with other runtimes.
 
 // Some async-node outputs (including Module Federation runtimes) are externalized to
@@ -133,6 +132,29 @@ const hasOwn = (target, property) => Object.hasOwn(target, property);
 
 const isPromise = (value) => value instanceof Promise;
 
+/**
+ * Define named exports on __webpack_exports__ from a module object, and
+ * auto-create a `default` export for CJS-style modules that lack one.
+ * This preserves `import foo from 'mod'` behavior for mocked CJS modules.
+ */
+const defineExportsWithCjsInterop = (
+  moduleObj,
+  __webpack_exports__,
+  __webpack_require__,
+) => {
+  __webpack_require__.r(__webpack_exports__);
+  for (const key in moduleObj) {
+    __webpack_require__.d(__webpack_exports__, {
+      [key]: () => moduleObj[key],
+    });
+  }
+  if (!moduleObj.__esModule && !('default' in moduleObj)) {
+    __webpack_require__.d(__webpack_exports__, {
+      default: () => moduleObj,
+    });
+  }
+};
+
 //#region rs.unmock
 __webpack_require__.rstest_unmock = (id) => {
   const originalModuleFactory =
@@ -148,6 +170,15 @@ __webpack_require__.rstest_unmock = (id) => {
 
 //#region rs.doUnmock
 __webpack_require__.rstest_do_unmock = __webpack_require__.rstest_unmock;
+//#endregion
+
+//#region rs.unmockRequire
+__webpack_require__.rstest_unmock_require = __webpack_require__.rstest_unmock;
+//#endregion
+
+//#region rs.doUnmockRequire
+__webpack_require__.rstest_do_unmock_require =
+  __webpack_require__.rstest_do_unmock;
 //#endregion
 
 //#region rs.requireActual
@@ -230,7 +261,6 @@ const getMockImplementation = (mockType = 'mock') => {
         );
       }
       const originalModule = requiredModule;
-      const isEsModule = originalModule.__esModule === true;
       const mockedModule =
         globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
           spy: isSpy,
@@ -246,18 +276,11 @@ const getMockImplementation = (mockType = 'mock') => {
           return;
         }
 
-        __webpack_require__.r(__webpack_exports__);
-        for (const key in mockedModule) {
-          __webpack_require__.d(__webpack_exports__, {
-            [key]: () => mockedModule[key],
-          });
-        }
-        // For CJS modules, add default export to preserve default-import behavior
-        if (!isEsModule && !('default' in mockedModule)) {
-          __webpack_require__.d(__webpack_exports__, {
-            default: () => mockedModule,
-          });
-        }
+        defineExportsWithCjsInterop(
+          mockedModule,
+          __webpack_exports__,
+          __webpack_require__,
+        );
       };
 
       __webpack_modules__[id] = finalModFactory;
@@ -287,12 +310,11 @@ const getMockImplementation = (mockType = 'mock') => {
           return;
         }
 
-        __webpack_require__.r(__webpack_exports__);
-        for (const key in res) {
-          __webpack_require__.d(__webpack_exports__, {
-            [key]: () => res[key],
-          });
-        }
+        defineExportsWithCjsInterop(
+          res,
+          __webpack_exports__,
+          __webpack_require__,
+        );
       };
 
       __webpack_modules__[id] = finalModFactory;

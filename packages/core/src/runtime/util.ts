@@ -1,32 +1,57 @@
-import type { FormattedError, Test } from '../types';
+import type { FormattedError, Test, TestOptions } from '../types';
+
+/**
+ * Normalize the third argument of `test` / `it` / `test.each` / `test.for`.
+ * Accepts `number` (shorthand for `{ timeout }`) or a full `TestOptions` object.
+ */
+export const normalizeTestOptions = (
+  input?: number | TestOptions,
+): TestOptions => {
+  if (typeof input === 'number') {
+    return { timeout: input };
+  }
+  return input ?? {};
+};
 
 const loadDiffModules = async () => {
-  const [jestDiff, prettyFormat] = await Promise.all([
-    import('jest-diff'),
-    import('pretty-format'),
+  const [{ diff }, { format, plugins }] = await Promise.all([
+    import('@vitest/utils/diff'),
+    import('@vitest/pretty-format'),
   ]);
 
   return {
-    diff: jestDiff.diff,
-    prettyFormat: prettyFormat.format,
-    prettyFormatPlugins: prettyFormat.plugins,
+    diff,
+    format,
+    formatPlugins: Object.values(plugins),
   };
 };
 
 const REAL_TIMERS: {
   setTimeout?: typeof globalThis.setTimeout;
   clearTimeout?: typeof globalThis.clearTimeout;
+  setImmediate?: typeof globalThis.setImmediate;
 } = {};
 
 // store the original timers
 export const setRealTimers = (): void => {
   REAL_TIMERS.setTimeout ??= globalThis.setTimeout.bind(globalThis);
   REAL_TIMERS.clearTimeout ??= globalThis.clearTimeout.bind(globalThis);
+  if (typeof globalThis.setImmediate === 'function') {
+    REAL_TIMERS.setImmediate ??= globalThis.setImmediate.bind(globalThis);
+  }
 };
 
 export const getRealTimers = (): typeof REAL_TIMERS => {
   return REAL_TIMERS;
 };
+
+/**
+ * Stable reference to `Date.now`, captured before `@sinonjs/fake-timers`
+ * can hijack the global. Phase boundaries straddling `tests` rely on this.
+ */
+const realNow = Date.now.bind(Date);
+
+export const getRealNow = (): number => realNow();
 
 export const formatTestError = async (
   err: any,
@@ -58,8 +83,7 @@ export const formatTestError = async (
       ) {
         const expected = error.expected;
         const actual = error.actual;
-        const { diff, prettyFormat, prettyFormatPlugins } =
-          await loadDiffModules();
+        const { diff, format, formatPlugins } = await loadDiffModules();
 
         errObj.diff = diff(expected, actual, {
           expand: false,
@@ -67,15 +91,11 @@ export const formatTestError = async (
         errObj.expected =
           typeof expected === 'string'
             ? expected
-            : prettyFormat(expected, {
-                plugins: Object.values(prettyFormatPlugins),
-              });
+            : format(expected, { plugins: formatPlugins });
         errObj.actual =
           typeof actual === 'string'
             ? actual
-            : prettyFormat(actual, {
-                plugins: Object.values(prettyFormatPlugins),
-              });
+            : format(actual, { plugins: formatPlugins });
       }
 
       return errObj;
@@ -208,7 +228,7 @@ export function parseTemplateTable(
 
 export class TestRegisterError extends Error {}
 
-export class RstestError extends Error {
+class RstestError extends Error {
   public fullStack?: boolean;
 }
 

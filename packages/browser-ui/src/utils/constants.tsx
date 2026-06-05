@@ -11,7 +11,7 @@ import type { BrowserHostConfig } from '../types';
 export type TestStatus = 'idle' | 'running' | 'pass' | 'fail';
 export type CaseStatus = TestStatus | 'skip';
 
-export type StatusMeta = {
+type StatusMeta = {
   label: string;
   color: string;
   icon: React.ReactNode;

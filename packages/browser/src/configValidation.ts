@@ -1,4 +1,4 @@
-import type { Rstest } from '@rstest/core/browser';
+import type { RstestContext } from '@rstest/core/internal/browser';
 import { resolveBrowserViewportPreset } from './viewportPresets';
 
 const SUPPORTED_PROVIDERS = ['playwright'] as const;
@@ -42,9 +42,9 @@ const validateViewport = (viewport: unknown): void => {
   );
 };
 
-export const validateBrowserConfig = (context: Rstest): void => {
+export const validateBrowserConfig = (context: RstestContext): void => {
   for (const project of context.projects) {
-    const browser = project.normalizedConfig.browser;
+    const { browser, output } = project.normalizedConfig;
     if (!browser.enabled) {
       continue;
     }
@@ -65,6 +65,12 @@ export const validateBrowserConfig = (context: Rstest): void => {
 
     if (!isPlainObject(browser.providerOptions)) {
       throw new Error('browser.providerOptions must be a plain object.');
+    }
+
+    if (output?.bundleDependencies === false) {
+      throw new Error(
+        'output.bundleDependencies false is not supported in browser mode.',
+      );
     }
   }
 };

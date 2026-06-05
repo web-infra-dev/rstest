@@ -56,9 +56,8 @@ describe('getIncludedFiles', () => {
   };
 
   it('should include visible files by default', async () => {
-    expect(
-      await glob(['**/*.{js,ts}', '../packages/*.{js,ts}']),
-    ).toMatchInlineSnapshot(`
+    expect(await glob(['**/*.{js,ts}', '../packages/*.{js,ts}']))
+      .toMatchInlineSnapshot(`
       [
         "apps/a.ts",
         "apps/b.js",
@@ -92,6 +91,45 @@ describe('getIncludedFiles', () => {
 
   it('should exclude .d.ts files by default', async () => {
     expect(await glob(['**/*.d.ts'])).toMatchInlineSnapshot('[]');
+  });
+
+  it('should not treat single-value braces as an extension alternation', async () => {
+    expect(await glob(['**/*.{ts}'])).toMatchInlineSnapshot('[]');
+    expect(await glob(['**/*.ts'])).toMatchInlineSnapshot(`
+      [
+        "apps/a.ts",
+        "apps/dist/a.ts",
+      ]
+    `);
+  });
+
+  it('should exclude setup files by exact relative path and bare filename', async () => {
+    const { fs } = await import('memfs');
+    fs.mkdirSync('/root/apps/src', { recursive: true });
+    fs.writeFileSync('/root/apps/rstest.setup.ts', '');
+    fs.writeFileSync('/root/apps/src/rstest.setup.ts', '');
+
+    expect(await glob(['**/*.{js,ts}'], ['./rstest.setup.ts']))
+      .toMatchInlineSnapshot(`
+        [
+          "apps/a.ts",
+          "apps/b.js",
+          "apps/dist/a.ts",
+          "apps/src/rstest.setup.ts",
+        ]
+      `);
+
+    expect(await glob(['**/*.{js,ts}'], ['rstest.setup.ts']))
+      .toMatchInlineSnapshot(`
+        [
+          "apps/a.ts",
+          "apps/b.js",
+          "apps/dist/a.ts",
+        ]
+      `);
+
+    fs.unlinkSync('/root/apps/rstest.setup.ts');
+    fs.unlinkSync('/root/apps/src/rstest.setup.ts');
   });
 
   it('should exclude test and spec files by default', async () => {

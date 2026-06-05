@@ -9,7 +9,7 @@ export type CreateMockInstanceFn = (options?: {
   keepMembersImplementation?: boolean;
 }) => Mock;
 
-export interface MockObjectOptions {
+interface MockObjectOptions {
   globalConstructors: GlobalConstructors;
   createMockInstance: CreateMockInstanceFn;
   /**
@@ -19,7 +19,7 @@ export interface MockObjectOptions {
   type: 'automock' | 'autospy';
 }
 
-export interface GlobalConstructors {
+interface GlobalConstructors {
   Object: typeof Object;
   Function: typeof Function;
   Array: typeof Array;

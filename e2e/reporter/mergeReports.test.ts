@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -21,7 +21,7 @@ describe('merge-reports', () => {
     // Run shard 1/2 with blob reporter
     const { expectExecSuccess: shard1Success } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '--shard', '1/2', '--reporter=blob'],
+      args: ['run', '--shard', '1/2', '--reporters=blob'],
       options: {
         nodeOptions: {
           cwd: fixturesDir,
@@ -38,7 +38,7 @@ describe('merge-reports', () => {
     // Run shard 2/2 with blob reporter
     const { expectExecSuccess: shard2Success } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '--shard', '2/2', '--reporter=blob'],
+      args: ['run', '--shard', '2/2', '--reporters=blob'],
       options: {
         nodeOptions: {
           cwd: fixturesDir,
@@ -93,9 +93,9 @@ describe('merge-reports', () => {
         'run',
         '--shard',
         '1/2',
-        '--reporter=blob',
+        '--reporters=blob',
         '-c',
-        'rstest.coverage.config.ts',
+        'rstest.coverage.config.mts',
       ],
       options: {
         nodeOptions: {
@@ -105,6 +105,12 @@ describe('merge-reports', () => {
     });
     await shard1Success();
 
+    const shard1Blob = JSON.parse(
+      readFileSync(join(blobDir, 'blob-1-2.json'), 'utf-8'),
+    ) as { coverage?: Record<string, unknown>; coverageResults?: unknown[] };
+    expect(shard1Blob.coverage).toBeTruthy();
+    expect(shard1Blob.coverageResults).toBeUndefined();
+
     // Run shard 2/2 with blob reporter + coverage
     const { expectExecSuccess: shard2Success } = await runRstestCli({
       command: 'rstest',
@@ -112,9 +118,9 @@ describe('merge-reports', () => {
         'run',
         '--shard',
         '2/2',
-        '--reporter=blob',
+        '--reporters=blob',
         '-c',
-        'rstest.coverage.config.ts',
+        'rstest.coverage.config.mts',
       ],
       options: {
         nodeOptions: {
@@ -128,7 +134,12 @@ describe('merge-reports', () => {
     const { cli: mergeCli, expectExecSuccess: mergeSuccess } =
       await runRstestCli({
         command: 'rstest',
-        args: ['merge-reports', '--cleanup', '-c', 'rstest.coverage.config.ts'],
+        args: [
+          'merge-reports',
+          '--cleanup',
+          '-c',
+          'rstest.coverage.config.mts',
+        ],
         options: {
           nodeOptions: {
             cwd: fixturesDir,

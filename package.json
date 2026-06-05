@@ -2,80 +2,48 @@
   "name": "rstest-monorepo",
   "private": true,
   "scripts": {
-    "typecheck": "pnpm --filter \"!@examples/*\" run typecheck",
+    "bench:cpu": "pnpm --filter @rstest/benchmarks bench:cpu",
+    "bench:memory": "pnpm --filter @rstest/benchmarks bench:memory",
     "build": "pnpm --filter \"./packages/*\" run build",
-    "test:vscode": "pnpm --filter ./packages/vscode test",
-    "e2e": "cd e2e && pnpm test && pnpm test:commonjs && pnpm test:no-isolate",
-    "test": "rstest",
-    "test:examples": "pnpm --filter \"@examples/*\" --filter \"!@examples/federation-main-app\" --filter \"!@examples/federation-component-app\" --filter \"!@examples/federation-node-local-remote\" test",
+    "bump": "bumpp",
     "check-dependency-version": "pnpx check-dependency-version-consistency --ignore-package @rstest/test-mock-re-exports . && echo",
     "check-spell": "pnpx cspell && heading-case",
-    "format": "biome check --write && prettier --write '**/*.{md,mdx,css,less,scss,json,jsonc,json5}' && heading-case --write",
-    "lint": "biome check . --diagnostic-level=warn && pnpm run check-spell && pnpm lint:type",
+    "check-unused": "knip",
+    "e2e": "cd e2e && pnpm test && pnpm test:commonjs && pnpm test:no-isolate",
+    "format": "prettier --write . && heading-case --write",
+    "lint": "prettier --check . && pnpm run check-spell && pnpm lint:type",
     "lint:type": "rslint",
-    "prepare": "simple-git-hooks && pnpm run build",
+    "prepare": "lefthook install && pnpm run build",
+    "test": "rstest",
+    "test:examples": "pnpm --filter \"@examples/*\" --filter \"!@examples/federation-main-app\" --filter \"!@examples/federation-component-app\" --filter \"!@examples/federation-node-local-remote\" test",
     "test:federation": "pnpm -C examples/federation test",
-    "bump": "node --experimental-strip-types scripts/version.mts"
-  },
-  "simple-git-hooks": {
-    "pre-commit": "npx nano-staged"
-  },
-  "nano-staged": {
-    "*.{md,mdx,css,less,scss,json,jsonc,json5}": "prettier --write",
-    "*.{js,jsx,ts,tsx,mjs,cjs}": [
-      "biome check --write"
-    ],
-    "package.json": [
-      "pnpm run check-dependency-version",
-      "prettier --write"
-    ],
-    "pnpm-lock.yaml": "pnpm dedupe --check"
+    "test:vscode": "pnpm --filter ./packages/vscode test",
+    "typecheck": "pnpm --filter \"!@examples/*\" run typecheck"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.7",
-    "@rsdoctor/rspack-plugin": "^1.5.4",
-    "@rslint/core": "^0.2.3",
+    "@rsdoctor/rspack-plugin": "^1.5.12",
+    "@rslint/core": "^0.5.3",
     "@rstest/core": "workspace:*",
-    "@rstest/coverage-istanbul": "workspace:*",
-    "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.16.5",
-    "bumpp": "^11.0.1",
+    "bumpp": "^11.1.0",
     "check-dependency-version-consistency": "^6.0.0",
     "cross-env": "^10.1.0",
     "cspell-ban-words": "^0.0.4",
-    "fs-extra": "^11.3.4",
-    "heading-case": "^1.0.7",
-    "nano-staged": "^0.9.0",
+    "heading-case": "^1.1.2",
+    "knip": "^6.14.2",
+    "lefthook": "^2.1.9",
     "path-serializer": "0.6.0",
-    "playwright": "^1.58.2",
-    "prettier": "^3.8.1",
+    "pkg-pr-new": "^0.0.75",
+    "playwright": "^1.60.0",
+    "prettier": "^3.8.3",
     "prettier-plugin-packagejson": "^3.0.2",
-    "simple-git-hooks": "^2.13.1",
-    "typescript": "^5.9.3"
+    "rsbuild-plugin-arethetypeswrong": "^0.3.1",
+    "rsbuild-plugin-publint": "^0.3.4",
+    "typescript": "^6.0.3"
   },
-  "packageManager": "pnpm@10.12.4",
+  "packageManager": "pnpm@11.5.1",
   "engines": {
     "node": "^20.19.0 || >=22.12.0",
-    "pnpm": ">=10.12.4"
-  },
-  "pnpm": {
-    "ignoredBuiltDependencies": [
-      "@biomejs/biome",
-      "simple-git-hooks"
-    ],
-    "onlyBuiltDependencies": [
-      "@biomejs/biome",
-      "core-js",
-      "simple-git-hooks"
-    ],
-    "packageExtensions": {
-      "@vue/test-utils": {
-        "peerDependencies": {
-          "vue": "^3.5.17",
-          "@vue/compiler-dom": "3.5.17",
-          "@vue/server-renderer": "3.5.17"
-        }
-      }
-    }
+    "pnpm": ">=11.0.0"
   }
 }

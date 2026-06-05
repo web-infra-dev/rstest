@@ -1,6 +1,7 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { GetSourcemap } from './reporter';
 import type { TestFileResult, TestResult } from './testSuite';
+import type { TraceEvent } from '../utils/trace';
 
 export interface BrowserSourcemapResolutionResult {
   handled: boolean;
@@ -26,6 +27,16 @@ export interface BrowserTestRunOptions {
    * Key is project environmentName.
    */
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
+  /**
+   * Keep watch infrastructure alive even when the initial browser test set is empty.
+   */
+  allowEmptyWatchRun?: boolean;
+  /**
+   * When set, the browser host emits Perfetto trace events to this callback
+   * (per-file `tests` slices + suite/case slices). Only invoked when the
+   * caller has `--trace` enabled.
+   */
+  onTraceEvents?: (events: TraceEvent[]) => void;
 }
 
 /**

@@ -1,10 +1,14 @@
 import path from 'node:path';
 import type { RsbuildPlugin } from '@rsbuild/core';
 import pathe from 'pathe';
+import {
+  importMetaHook,
+  RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_REQUIRE_RESOLVE_HOOK,
+} from '../../runtime/worker/runtimeHooks';
 import type { RstestContext } from '../../types';
-import { TEMP_RSTEST_OUTPUT_DIR } from '../../utils';
-
-export const RUNTIME_CHUNK_NAME = 'runtime';
+import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
+import { runtimeChunkNameForEnvironment } from '../runtimeChunk';
 
 const requireShim = `// Rstest ESM shims
 import __rstest_shim_module__ from 'node:module';
@@ -29,6 +33,8 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         .delete('type');
     });
     api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig, name }) => {
+      const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
+      const project = context.projects.find((p) => p.environmentName === name)!;
       const {
         normalizedConfig: {
           resolve,
@@ -40,16 +46,27 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         },
         outputModule,
         rootPath,
-      } = context.projects.find((p) => p.environmentName === name)!;
+      } = project;
 
-      const distRootDir =
-        context.projects.length > 1
-          ? `${TEMP_RSTEST_OUTPUT_DIR}/${name}`
-          : TEMP_RSTEST_OUTPUT_DIR;
+      const distRootDir = getTempRstestOutputDir({
+        distPathRoot: outputDistPathRoot,
+        environmentName: name,
+        multipleProjects: context.projects.length > 1,
+      });
+
+      // Mirrors the pattern in packages/browser/src/hostController.ts:
+      // only write `performance.buildCache` when the user has opted in.
+      // Leaving it undefined keeps the generated Rsbuild config aligned with
+      // the user's original intent instead of materializing the default value.
+      const buildCache = resolveProjectBuildCache({
+        context,
+        project,
+      });
 
       return mergeEnvironmentConfig(
         config,
         {
+          performance: buildCache ? { buildCache } : undefined,
           tools,
           resolve,
           source,
@@ -62,6 +79,13 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               'import.meta.rstest': "global['@rstest/core']",
               'import.meta.env': 'process.env',
             },
+          },
+          resolve: {
+            // Extend the default resolve conditionNames for browser-like environment, use `browser` field instead of `node` field
+            conditionNames:
+              testEnvironment.name === 'node' || resolve?.conditionNames
+                ? undefined
+                : ['browser', '...'],
           },
           output: {
             assetPrefix: '',
@@ -89,23 +113,46 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               config.output ??= {};
               config.output.iife = false;
               // polyfill interop
+              // TODO: if we ever expose `output.importFunctionName` as a user
+              // option, rspack#13849's rewrite still reads it directly to pick
+              // the callee for non-string-literal `import()`. Either bind the
+              // runtime helper under the user-configured name as well, or move
+              // the dynamic-import-origin rewrite onto a dedicated rspack
+              // option so the two concerns stop sharing one identifier.
               config.output.importFunctionName = outputModule
-                ? 'import.meta.__rstest_dynamic_import__'
-                : '__rstest_dynamic_import__';
+                ? importMetaHook(RSTEST_DYNAMIC_IMPORT_HOOK)
+                : RSTEST_DYNAMIC_IMPORT_HOOK;
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
 
-              if (!config.devtool || !config.devtool.includes('inline')) {
+              if (
+                typeof config.devtool !== 'string' ||
+                !config.devtool.includes('inline')
+              ) {
                 config.devtool = 'nosources-source-map';
               }
 
+              const rstestPluginOptions = {
+                injectModulePathName: true,
+                importMetaPathName: true,
+                hoistMockModule: true,
+                manualMockRoot: pathe.resolve(rootPath, '__mocks__'),
+                // The runtime hook below resolves relative dynamic-import
+                // specifiers against the source module that produced the
+                // call, instead of the test entry, fixing #1207.
+                injectDynamicImportOrigin: true,
+                // The runtime hook below resolves relative require.resolve
+                // specifiers against the source module that produced the
+                // call, instead of the test entry, fixing #848.
+                injectRequireResolveOrigin: {
+                  functionName: outputModule
+                    ? importMetaHook(RSTEST_REQUIRE_RESOLVE_HOOK)
+                    : RSTEST_REQUIRE_RESOLVE_HOOK,
+                },
+              };
+
               config.plugins.push(
-                new rspack.experiments.RstestPlugin({
-                  injectModulePathName: true,
-                  importMetaPathName: true,
-                  hoistMockModule: true,
-                  manualMockRoot: pathe.resolve(rootPath, '__mocks__'),
-                }),
+                new rspack.experiments.RstestPlugin(rstestPluginOptions),
               );
 
               config.module.rules ??= [];
@@ -173,7 +220,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 ...(config.optimization || {}),
                 // make sure setup file and test file share the runtime
                 runtimeChunk: {
-                  name: `${name}-${RUNTIME_CHUNK_NAME}`,
+                  name: runtimeChunkNameForEnvironment(name),
                 },
               };
             },

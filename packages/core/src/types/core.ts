@@ -20,6 +20,7 @@ export type ProjectEntries = {
 };
 
 export type RstestCommand = 'watch' | 'run' | 'list' | 'merge-reports';
+export type FileFilterMode = 'fuzzy' | 'exact';
 
 export type Project = { config: RstestConfig; configFilePath?: string };
 
@@ -61,6 +62,20 @@ export type RstestContext = {
   normalizedConfig: NormalizedConfig;
   /** filter by a filename regex pattern */
   fileFilters?: string[];
+  /** How file filters should match discovered test files. */
+  fileFilterMode?: FileFilterMode;
+  /** Original source filters passed to `--related`, `--findRelatedTests`, or resolved from `--changed`. */
+  relatedFilters?: string[];
+  /** CLI option that produced related source filters. */
+  relatedMode?: 'related' | 'changed';
+  /** Related test resolution completed successfully but matched no test files. */
+  relatedResolutionEmpty?: boolean;
+  /** Changed source files used to limit coverage reports for `--changed`. */
+  changedCoverageFilters?: string[];
+  /** Why a related run was expanded back to the full test suite. */
+  relatedRerunReason?: 'forceRerunTrigger';
+  /** Changed files that caused a related run to expand back to the full test suite. */
+  relatedRerunFiles?: string[];
   /** The config file path. */
   configFilePath?: string;
   /**
@@ -80,6 +95,15 @@ export type RstestContext = {
    * - list: `rstest list`
    */
   command: RstestCommand;
+  /**
+   * Dump a Perfetto-compatible performance trace JSON file. CLI-only switch;
+   * not exposed via user config.
+   *
+   * @internal
+   */
+  trace: boolean;
+  /** See the `embedded` option on `createRstest`. */
+  embedded: boolean;
   reporters: Reporter[];
   snapshotManager: SnapshotManager;
   stateManager: TestStateManager;
@@ -87,6 +111,12 @@ export type RstestContext = {
     results: TestFileResult[];
     testResults: TestResult[];
   };
+  /** Merge a batch of file/test results into `reporterResults`. */
+  updateReporterResultState: (
+    results: TestFileResult[],
+    testResults: TestResult[],
+    deletedEntries?: string[],
+  ) => void;
 };
 
 export type ListCommandOptions = {
@@ -94,6 +124,7 @@ export type ListCommandOptions = {
   json?: boolean | string;
   includeSuites?: boolean;
   printLocation?: boolean;
+  summary?: boolean;
 };
 
 export type ListCommandResult = {

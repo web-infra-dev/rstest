@@ -1,34 +1,20 @@
-import os from 'node:os';
-import type { Rstest } from '@rstest/core/browser';
+import { getNumCpus, parseWorkers } from '@rstest/core/internal/browser';
+import type { Rstest } from '@rstest/core/internal/browser';
+
+// Re-export the shared worker primitives so existing consumers (and unit tests
+// importing from `../src/concurrency`) keep a stable import surface.
+export { getNumCpus, parseWorkers };
 
 // Shared headless concurrency policy.
 // Keep this in one place so executors reuse the same worker semantics.
 const DEFAULT_MAX_HEADLESS_WORKERS = 12;
 
-export type HeadlessConcurrencyContext = Pick<Rstest, 'command'> & {
+type HeadlessConcurrencyContext = Pick<Rstest, 'command'> & {
   normalizedConfig: {
     pool: {
       maxWorkers?: string | number;
     };
   };
-};
-
-export const getNumCpus = (): number => {
-  return os.availableParallelism?.() ?? os.cpus().length;
-};
-
-export const parseWorkers = (
-  maxWorkers: string | number,
-  numCpus = getNumCpus(),
-): number => {
-  const parsed = Number.parseInt(maxWorkers.toString(), 10);
-
-  if (typeof maxWorkers === 'string' && maxWorkers.trim().endsWith('%')) {
-    const workers = Math.floor((parsed / 100) * numCpus);
-    return Math.max(workers, 1);
-  }
-
-  return parsed > 0 ? parsed : 1;
 };
 
 export const resolveDefaultHeadlessWorkers = (

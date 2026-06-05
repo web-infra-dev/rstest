@@ -7,6 +7,7 @@ import {
 import { dirname, isAbsolute, join, resolve } from 'pathe';
 import { isCI } from 'std-env';
 import type {
+  BuiltInReporterNames,
   ExtendConfig,
   NormalizedConfig,
   ProjectConfig,
@@ -17,9 +18,13 @@ import {
   color,
   DEFAULT_CONFIG_EXTENSIONS,
   DEFAULT_CONFIG_NAME,
+  DEFAULT_TEST_TIMEOUT,
   formatRootStr,
+  getOutputDistPathRoot,
+  getTempRstestOutputDirGlob,
   logger,
-  TEMP_RSTEST_OUTPUT_DIR_GLOB,
+  normalizeBuildCache,
+  TEMP_RSTEST_OUTPUT_DIR,
 } from './utils';
 
 type ResolvedExtendEntry =
@@ -27,6 +32,11 @@ type ResolvedExtendEntry =
   | ((
       userConfig: Readonly<RstestConfig>,
     ) => Promise<ExtendConfig> | ExtendConfig);
+
+const DEFAULT_FORCE_RERUN_TRIGGERS = [
+  '**/package.json/**',
+  '**/rstest.config.*',
+];
 
 const findConfig = (basePath: string): string | undefined => {
   return DEFAULT_CONFIG_EXTENSIONS.map((ext) => basePath + ext).find(
@@ -120,7 +130,24 @@ export const resolveExtends = async (
     extendsEntries.map((entry) => resolveExtendEntry(entry, userConfig)),
   );
 
-  return mergeRstestConfig(...resolvedExtends, config);
+  const merged = mergeRstestConfig(...resolvedExtends, config);
+
+  if (config.forceRerunTriggers === undefined) {
+    const extendedForceRerunTriggers = resolvedExtends.flatMap(
+      (entry) => entry.forceRerunTriggers || [],
+    );
+
+    if (extendedForceRerunTriggers.length) {
+      merged.forceRerunTriggers = Array.from(
+        new Set([
+          ...DEFAULT_FORCE_RERUN_TRIGGERS,
+          ...extendedForceRerunTriggers,
+        ]),
+      );
+    }
+  }
+
+  return merged;
 };
 
 export const mergeProjectConfig = (
@@ -156,6 +183,8 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
 
     // The following configurations need overrides
     merged.include = config.include ?? merged.include;
+    merged.forceRerunTriggers =
+      config.forceRerunTriggers ?? merged.forceRerunTriggers;
     merged.reporters = config.reporters ?? merged.reporters;
     if (merged.coverage) {
       merged.coverage.reporters =
@@ -165,6 +194,26 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
     return merged;
   }, {});
 };
+
+/**
+ * Whether the process is running inside GitHub Actions. Single source for the
+ * `GITHUB_ACTIONS` runtime signal so every consumer interprets it identically.
+ * Reads `process.env` directly so the build-time `process.env.GITHUB_ACTIONS`
+ * define keeps controlling it (e.g. forced off in this package's own tests).
+ */
+export const isGithubActions = (): boolean =>
+  process.env.GITHUB_ACTIONS === 'true';
+
+/**
+ * Reporters enabled by default. Under GitHub Actions the `github-actions`
+ * reporter is added so failures surface as CI annotations. Takes the flag as a
+ * parameter (pure) so the selection is unit-testable without mutating env or
+ * fighting the build-time `GITHUB_ACTIONS` define.
+ */
+export const getDefaultReporters = (
+  githubActions: boolean = isGithubActions(),
+): BuiltInReporterNames[] =>
+  githubActions ? ['default', 'github-actions'] : ['default'];
 
 const createDefaultConfig = (): NormalizedConfig => ({
   root: process.cwd(),
@@ -181,6 +230,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   setupFiles: [],
   globalSetup: [],
   includeSource: [],
+  forceRerunTriggers: DEFAULT_FORCE_RERUN_TRIGGERS,
   pool: {
     type: 'forks',
   },
@@ -188,16 +238,18 @@ const createDefaultConfig = (): NormalizedConfig => ({
   globals: false,
   passWithNoTests: false,
   update: false,
-  testTimeout: 5_000,
+  testTimeout: DEFAULT_TEST_TIMEOUT,
   hookTimeout: 10_000,
   testEnvironment: {
     name: 'node',
   },
+  output: {
+    distPath: {
+      root: TEMP_RSTEST_OUTPUT_DIR,
+    },
+  },
   retry: 0,
-  reporters:
-    process.env.GITHUB_ACTIONS === 'true'
-      ? ['default', 'github-actions']
-      : ['default'],
+  reporters: getDefaultReporters(),
   clearMocks: false,
   resetMocks: false,
   restoreMocks: false,
@@ -207,11 +259,13 @@ const createDefaultConfig = (): NormalizedConfig => ({
   maxConcurrency: 5,
   printConsoleTrace: false,
   disableConsoleIntercept: false,
+  silent: false,
   snapshotFormat: {},
   env: {},
   hideSkippedTests: false,
   hideSkippedTestFiles: false,
   logHeapUsage: false,
+  detectAsyncLeaks: false,
   bail: 0,
   includeTaskLocation: false,
   federation: false,
@@ -238,6 +292,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
       '**/*.{test,spec}.[cm][jt]sx',
     ],
     enabled: false,
+    changed: undefined,
     provider: 'istanbul',
     reporters: ['text', 'html', 'clover', 'json'],
     reportsDirectory: './coverage',
@@ -256,7 +311,27 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
   merged.setupFiles = castArray(merged.setupFiles);
   merged.globalSetup = castArray(merged.globalSetup);
 
-  merged.exclude.patterns.push(TEMP_RSTEST_OUTPUT_DIR_GLOB);
+  const outputDistPathRoot = getOutputDistPathRoot(merged.output?.distPath);
+  merged.output.distPath = {
+    root: formatRootStr(outputDistPathRoot, merged.root),
+  };
+
+  if (merged.performance?.buildCache) {
+    merged.performance.buildCache = normalizeBuildCache({
+      buildCache: merged.performance.buildCache,
+      root: merged.root,
+      tsconfigPaths: merged.source?.tsconfigPath
+        ? [merged.source.tsconfigPath]
+        : [],
+      coverageEnabled: merged.coverage?.enabled,
+      coverageProvider: merged.coverage?.provider,
+      outputDistPathRoot: merged.output.distPath.root,
+    });
+  }
+
+  merged.exclude.patterns.push(
+    getTempRstestOutputDirGlob(merged.output?.distPath?.root),
+  );
 
   const reportsDirectory = formatRootStr(
     merged.coverage.reportsDirectory,
@@ -303,6 +378,9 @@ export const withDefaultConfig = (config: RstestConfig): NormalizedConfig => {
     setupFiles: merged.setupFiles.map((p) => formatRootStr(p, merged.root)),
     globalSetup: merged.globalSetup.map((p) => formatRootStr(p, merged.root)),
     includeSource: merged.includeSource.map((p) =>
+      formatRootStr(p, merged.root),
+    ),
+    forceRerunTriggers: merged.forceRerunTriggers.map((p) =>
       formatRootStr(p, merged.root),
     ),
   };

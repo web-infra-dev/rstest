@@ -68,14 +68,14 @@ describe('test environment variables', () => {
     await expectExecSuccess();
   });
 
-  it('should not set FORCE_COLOR when no color env is set by user', async ({
+  it('should propagate color env correctly without user overrides', async ({
     onTestFinished,
   }) => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'defaultColor.test.ts'],
       onTestFinished,
-      // Unset both color envs to test default behavior (like vitest)
+      // Unset both color envs to test default behavior
       unsetEnv: ['FORCE_COLOR', 'NO_COLOR'],
       options: {
         nodeOptions: {

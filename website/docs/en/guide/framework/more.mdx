@@ -1,0 +1,44 @@
+---
+description: You can register Rsbuild plugins to enable compilation and testing support for more frameworks.
+---
+
+# More frameworks
+
+Rstest shares the same plugin system as Rsbuild, so if your framework has an available Rsbuild plugin, you can usually register that plugin in `rstest.config.ts` to enable the framework's compilation support for tests. See [plugins](/config/build/plugins) for how plugin registration works, and browse the [Rsbuild plugin list](https://rsbuild.rs/plugins/list/) for available plugins.
+
+For example, Rsbuild's official plugin list already includes plugins for frameworks such as Preact, Svelte, and Solid, and the community ecosystem also provides plugins for frameworks such as Angular.
+
+## Basic setup
+
+You can usually integrate another framework with this flow:
+
+1. Install the framework's Rsbuild plugin and the framework's own testing utilities.
+2. Register the plugin in `plugins` inside `rstest.config.ts`.
+3. Choose an appropriate `testEnvironment` for the type of test you are running.
+
+- Use `happy-dom` or `jsdom` for component tests that need DOM APIs
+- Use `node` for SSR, utilities, or tests that do not touch the DOM
+
+Here is a minimal configuration example:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { pluginFramework } from 'your-rsbuild-plugin';
+
+export default defineConfig({
+  plugins: [pluginFramework()],
+  testEnvironment: 'happy-dom',
+});
+```
+
+## What else you need
+
+An Rsbuild plugin solves compilation and build integration. The full testing experience usually still depends on the framework's own testing toolchain. In most cases, you should also prepare:
+
+- The framework's recommended component testing utilities
+- Any required setup files
+- Assertion or query tools that fit the framework ecosystem
+
+If your project already uses Rsbuild, Rslib, or one of their adapters, prefer reusing that existing configuration first. That usually lets you inherit plugins, aliases, and other build settings automatically.
+
+If you run into issues while integrating more frameworks, please contact us through [GitHub Issues](https://github.com/web-infra-dev/rstest/issues).

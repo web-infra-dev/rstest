@@ -80,6 +80,12 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'hideSkippedTestFiles',
       'slowTestThreshold',
       'chaiConfig',
+    ],
+  },
+  {
+    name: 'console',
+    items: [
+      'silent',
       'onConsoleLog',
       'printConsoleTrace',
       'disableConsoleIntercept',
@@ -124,6 +130,8 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
     name: 'source',
     items: [
       'source.decorators',
+      'source.transformImport',
+      'source.assetsInclude',
       'source.define',
       'source.exclude',
       'source.include',
@@ -135,8 +143,11 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
     items: [
       'output.module',
       'output.externals',
+      'output.bundleDependencies',
       'output.cssModules',
+      'output.emitAssets',
       'output.cleanDistPath',
+      'output.distPath',
     ],
   },
   {
@@ -146,6 +157,8 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
       'resolve.alias',
       'resolve.dedupe',
       'resolve.extensions',
+      'resolve.conditionNames',
+      'resolve.mainFields',
     ],
   },
   {
@@ -155,6 +168,10 @@ const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
   {
     name: 'dev',
     items: ['dev.writeToDisk'],
+  },
+  {
+    name: 'performance',
+    items: ['performance.buildCache'],
   },
 ];
 
@@ -175,7 +192,7 @@ export function BuildOverview() {
             groupItem.name === 'top level'
               ? tUrl(`/config/build/${item}`)
               : tUrl(
-                  `/config/build/${groupItem.name}#${item.replace('.', '')}`,
+                  `/config/build/${groupItem.name}#${item.toLowerCase().replace('.', '')}`,
                 ),
           text: item,
         };

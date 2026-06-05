@@ -6,3 +6,6 @@ export type FunctionLike = (...args: any) => any;
 export type DistPath = string;
 /** The test file original path */
 export type TestPath = string;
+
+/** The stdio stream a console log was written to */
+export type ConsoleStreamType = 'stdout' | 'stderr';
