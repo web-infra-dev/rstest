@@ -9,8 +9,17 @@ import * as rsbuild from '@rsbuild/core';
 
 // Core-owned contract for the host module that @rstest/browser implements
 export type { BrowserHostModule } from './core/browserLoader';
-// Single classifier for the node/browser project boundary
-export { type ExecutorKind, kindOf } from './core/executor';
+// Single classifier for the node/browser project boundary, plus the executor
+// contract the browser host implements (`createExecutorFactory`).
+export {
+  type ExecutorKind,
+  type ExecutorRunArgs,
+  kindOf,
+  type ResolveSourcemap,
+  type RunResult,
+  type TestExecutor,
+  type TestExecutorFactory,
+} from './core/executor';
 // Re-export Rstest type for convenience
 export type { Rstest } from './core/rstest';
 // Coverage support for browser mode

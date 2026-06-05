@@ -199,6 +199,21 @@ importers:
         specifier: workspace:*
         version: link:../../../../packages/coverage-istanbul
 
+  e2e/browser-mode/fixtures/browser-coverage-fail:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../../packages/core
+      '@rstest/coverage-istanbul':
+        specifier: workspace:*
+        version: link:../../../../packages/coverage-istanbul
+
+  e2e/browser-mode/fixtures/browser-verbose:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../../packages/core
+
   e2e/build/fixtures/runtimeRequire: {}
 
   e2e/build/runtimeImport: {}

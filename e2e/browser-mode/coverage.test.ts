@@ -59,4 +59,40 @@ describe('browser mode - coverage', () => {
     // sum.ts should have 100% coverage (tested)
     expect(cli.stdout.replaceAll(' ', '')).toContain('sum.ts|100|100|100|100');
   });
+
+  // Browser-only coverage now follows node's unified `(!isFailure ||
+  // reportOnFailure)` guard (RFC phase 3): a failing run writes no report by
+  // default, and only writes one when `reportOnFailure` is set.
+  it('should not write a coverage report when browser tests fail (reportOnFailure: false)', async () => {
+    const fixtureDir = join(__dirname, 'fixtures/browser-coverage-fail');
+    const reportPath = join(fixtureDir, 'coverage/coverage-final.json');
+    fs.rmSync(join(fixtureDir, 'coverage'), { recursive: true, force: true });
+
+    const { cli, expectExecFailed } = await runBrowserCli(
+      'browser-coverage-fail',
+    );
+
+    await expectExecFailed();
+
+    expect(cli.stdout).toMatch(/Coverage enabled with istanbul/);
+    expect(fs.existsSync(reportPath)).toBe(false);
+  });
+
+  it('should write a coverage report when browser tests fail and reportOnFailure is true', async () => {
+    const fixtureDir = join(__dirname, 'fixtures/browser-coverage-fail');
+    const reportPath = join(fixtureDir, 'coverage/coverage-final.json');
+    fs.rmSync(join(fixtureDir, 'coverage'), { recursive: true, force: true });
+
+    const { cli, expectExecFailed } = await runBrowserCli(
+      'browser-coverage-fail',
+      { args: ['-c', 'rstest.reportOnFailure.config.mts'] },
+    );
+
+    await expectExecFailed();
+
+    expect(cli.stdout).toMatch(/Coverage enabled with istanbul/);
+    expect(fs.existsSync(reportPath)).toBe(true);
+    // calc.ts was executed by the failing test, so it appears in the report.
+    expect(fs.readFileSync(reportPath, 'utf-8')).toContain('calc.ts');
+  });
 });

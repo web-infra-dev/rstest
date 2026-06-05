@@ -3,7 +3,9 @@ import type {
   BrowserTestRunOptions,
   BrowserTestRunResult,
   RstestContext,
+  TestExecutorFactory,
 } from '@rstest/core/internal/browser';
+import { createBrowserExecutorFactory } from './browserExecutor';
 import { validateBrowserConfig } from './configValidation';
 import {
   type ListBrowserTestsResult,
@@ -12,6 +14,15 @@ import {
 } from './hostController';
 
 export { validateBrowserConfig };
+
+/**
+ * Construct the browser {@link TestExecutorFactory} consumed by core's run path
+ * (RFC phase 3). The core-side version gate in `loadBrowserModule` runs before
+ * this is reachable, so the factory can assume a version-matched host.
+ */
+export function createExecutorFactory(): TestExecutorFactory {
+  return createBrowserExecutorFactory();
+}
 
 export async function runBrowserTests(
   context: RstestContext,
@@ -36,6 +47,7 @@ export async function listBrowserTests(
  */
 void ({
   validateBrowserConfig,
+  createExecutorFactory,
   runBrowserTests,
   listBrowserTests,
 } satisfies BrowserHostModule);

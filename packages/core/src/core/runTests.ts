@@ -23,7 +23,7 @@ import {
   loadBrowserModule,
 } from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
-import { kindOf } from './executor';
+import { kindOf, type TestExecutor } from './executor';
 import { runGlobalTeardown } from './globalSetup';
 import { createNodeExecutor } from './nodeExecutor';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
@@ -45,6 +45,54 @@ async function runBrowserModeTests(
   });
   validateBrowserConfig(context);
   return runBrowserTests(context, options);
+}
+
+/**
+ * Load and construct the browser {@link TestExecutor}. The version gate and
+ * `validateBrowserConfig` run here (mirroring {@link runBrowserModeTests})
+ * before the factory's `create()` is reached.
+ */
+async function createBrowserExecutor(
+  context: Rstest,
+  browserProjects: typeof context.projects,
+): Promise<TestExecutor> {
+  const projectRoots = browserProjects.map((p) => p.rootPath);
+  const { validateBrowserConfig, createExecutorFactory } =
+    await loadBrowserModule({
+      projectRoots,
+      embedded: context.embedded,
+    });
+  validateBrowserConfig(context);
+  return createExecutorFactory().create({ context });
+}
+
+/**
+ * Collect the browser test entry file paths up front so the run can populate
+ * `stateManager.testFiles` before the host fans `onTestFileResult` — the verbose
+ * reporter reads `getTestFiles()?.length === 1` during execution to decide
+ * single-file case expansion (matching node, which sets `testFiles` in `run()`).
+ * Mirrors the host's own entry collection so the count agrees with what runs.
+ */
+async function collectBrowserEntryFiles(
+  context: Rstest,
+  browserProjects: typeof context.projects,
+): Promise<string[]> {
+  const perProject = await Promise.all(
+    browserProjects.map(async (project) => {
+      const { include, exclude, includeSource } = project.normalizedConfig;
+      const entries = await getTestEntries({
+        include,
+        exclude: exclude.patterns,
+        includeSource,
+        rootPath: context.rootPath,
+        projectRoot: project.rootPath,
+        fileFilters: context.fileFilters || [],
+        fileFilterMode: context.fileFilterMode,
+      });
+      return Object.values(entries);
+    }),
+  );
+  return perProject.flat();
 }
 
 const getSignalExitCode = (signal: NodeJS.Signals): number => {
@@ -196,11 +244,6 @@ export async function runTests(context: Rstest): Promise<void> {
   // For non-watch mode with both browser and node tests, we need to unify reporter output
   const shouldUnifyReporter =
     !isWatchMode && hasBrowserProjects && hasNodeProjects;
-  const getEmptyRunDuration = () => ({
-    totalTime: 0,
-    buildTime: 0,
-    testTime: 0,
-  });
 
   // Constructed before the browser-only fast path so `--trace` is honored
   // for pure-browser runs (browser host forwards events via `onTraceEvents`).
@@ -209,29 +252,89 @@ export async function runTests(context: Rstest): Promise<void> {
     rootPath: context.rootPath,
   });
 
-  // If only browser tests, run them and generate coverage
+  // Browser-only: the non-watch run flows through the same `run()` finalize as
+  // node via the browser TestExecutor (one `onTestRunEnd`, one coverage map,
+  // one verdict). Watch keeps the host self-finalize path until the watch
+  // unification (RFC phase 5).
   if (hasBrowserProjects && !hasNodeProjects) {
-    if (context.relatedResolutionEmpty) {
-      if (isWatchMode) {
+    if (isWatchMode) {
+      if (context.relatedResolutionEmpty) {
         await runBrowserModeTests(context, browserProjects, {
           skipOnTestRunEnd: false,
           allowEmptyWatchRun: true,
         });
-      } else {
-        reportNoTestFiles({ context });
-        await notifyReportersOnTestRunEnd({
-          context,
-          duration: getEmptyRunDuration(),
-          getSourcemap: async () => null,
-        });
+        await runLifecycleStep('trace controller cleanup', () =>
+          traceController.close(),
+        );
+        return;
       }
 
-      await runLifecycleStep('trace controller cleanup', () =>
-        traceController.close(),
+      const { coverage } = context.normalizedConfig;
+
+      await ensureRunDependencies({
+        projects: [],
+        rootPath: context.rootPath,
+        coverage,
+      });
+
+      if (coverage.enabled) {
+        logger.log(
+          ` ${color.gray('Coverage enabled with')} %s\n`,
+          color.yellow(coverage.provider),
+        );
+      }
+
+      const traceRun = traceController.beginRun();
+
+      const browserResult = await runBrowserModeTests(
+        context,
+        browserProjects,
+        {
+          skipOnTestRunEnd: false,
+          onTraceEvents: traceRun.onEvents,
+        },
+      );
+
+      // Watch keeps the host self-finalize coverage path: the host reported
+      // reporter coverage via its own `onTestRunEnd`; here we generate the
+      // report files for the initial run. This weaker guard is preserved for
+      // watch only — the non-watch path below uses the unified node guard.
+      if (
+        coverage.enabled &&
+        browserResult?.results.length &&
+        !browserResult.unhandledErrors?.length
+      ) {
+        const coverageProvider = await createCoverageProvider(
+          coverage,
+          context.rootPath,
+        );
+        if (coverageProvider) {
+          const browserCoverageMap = coverageProvider.createCoverageMap();
+          for (const result of browserResult.results) {
+            if (result.coverage) {
+              browserCoverageMap.merge(result.coverage);
+            }
+          }
+          const { generateCoverage } = await import('../coverage/generate');
+          // Browser-only path: every project is a browser project here
+          // (`!hasNodeProjects`), so `browserProjects === context.projects`.
+          await generateCoverage(
+            browserProjects,
+            context,
+            browserCoverageMap,
+            coverageProvider,
+            traceRun.span,
+          );
+        }
+      }
+
+      await runLifecycleStep('trace shutdown', () =>
+        traceController.shutdown(traceRun),
       );
       return;
     }
 
+    // Non-watch browser-only — unified core finalize via the browser executor.
     const { coverage } = context.normalizedConfig;
 
     await ensureRunDependencies({
@@ -247,46 +350,114 @@ export async function runTests(context: Rstest): Promise<void> {
       );
     }
 
-    const traceRun = traceController.beginRun();
+    const coverageProvider = coverage.enabled
+      ? await createCoverageProvider(coverage, context.rootPath)
+      : null;
 
-    const browserResult = await runBrowserModeTests(context, browserProjects, {
-      skipOnTestRunEnd: false,
-      onTraceEvents: traceRun.onEvents,
-    });
+    const browserExecutor = await createBrowserExecutor(
+      context,
+      browserProjects,
+    );
 
-    // Generate coverage reports for browser-only tests when execution produced test results.
-    // Skip coverage on early startup failures surfaced via unhandledErrors.
-    if (
-      coverage.enabled &&
-      browserResult?.results.length &&
-      !browserResult.unhandledErrors?.length
-    ) {
-      const coverageProvider = await createCoverageProvider(
-        coverage,
-        context.rootPath,
-      );
-      if (coverageProvider) {
-        const browserCoverageMap = coverageProvider.createCoverageMap();
-        for (const result of browserResult.results) {
-          if (result.coverage) {
-            browserCoverageMap.merge(result.coverage);
-          }
-        }
-        const { generateCoverage } = await import('../coverage/generate');
-        // Browser-only path: every project is a browser project here
-        // (`!hasNodeProjects`), so `browserProjects === context.projects`.
-        await generateCoverage(
-          browserProjects,
-          context,
-          browserCoverageMap,
-          coverageProvider,
-          traceRun.span,
-        );
-      }
+    // Populate `stateManager.testFiles` before execution so the verbose reporter
+    // expands cases for a single-file run exactly like node. Skip when related
+    // resolution is empty (no files run; the executor returns empty).
+    const browserEntryFiles = context.relatedResolutionEmpty
+      ? []
+      : await collectBrowserEntryFiles(context, browserProjects);
+
+    for (const reporter of context.reporters) {
+      await reporter.onTestRunStart?.();
     }
 
-    await runLifecycleStep('trace shutdown', () =>
-      traceController.shutdown(traceRun),
+    context.stateManager.reset();
+    context.stateManager.testFiles = browserEntryFiles;
+
+    const mergedCoverageMap: CoverageMap | undefined = coverageProvider
+      ? coverageProvider.createCoverageMap()
+      : undefined;
+
+    const traceRun = traceController.beginRun();
+
+    try {
+      const runResult = await browserExecutor.runTests({
+        projects: browserProjects,
+        mode: 'all',
+        fileFilters: context.fileFilters,
+        buildStart: Date.now(),
+        onCoverageResult: (cov) => mergedCoverageMap?.merge(cov),
+        onTraceEvents: traceRun.onEvents,
+        traceSpan: traceRun.span,
+      });
+
+      const getSourcemap = async (
+        sourcePath: string,
+      ): Promise<SourceMapInput | null> => {
+        const resolved = await runResult.resolveSourcemap?.(sourcePath);
+        return resolved?.sourcemap ?? null;
+      };
+
+      const { results, testResults } = runResult;
+      const errors = runResult.unhandledErrors;
+
+      const isFailure =
+        results.some((r) => r.status === 'fail') || errors.length > 0;
+      const noTestsDiscovered = results.length === 0 && errors.length === 0;
+
+      context.updateReporterResultState(
+        results,
+        testResults,
+        runResult.deletedEntries,
+      );
+
+      if (noTestsDiscovered) {
+        reportNoTestFiles({ context });
+      }
+
+      if (isFailure) {
+        process.exitCode = 1;
+      }
+
+      await runLifecycleStep('reporter onTestRunEnd', () =>
+        notifyReportersOnTestRunEnd({
+          context,
+          coverage: mergedCoverageMap,
+          duration: runResult.duration,
+          getSourcemap,
+          unhandledErrors: errors,
+          filterRerunTestPaths: runResult.ranTestPaths.length
+            ? runResult.ranTestPaths
+            : undefined,
+        }),
+      );
+
+      if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
+        const { generateCoverage } = await import('../coverage/generate');
+        await runLifecycleStep('coverage report generation', () =>
+          generateCoverage(
+            browserProjects,
+            context,
+            mergedCoverageMap!,
+            coverageProvider,
+            traceRun.span,
+          ),
+        );
+      }
+
+      await runLifecycleStep('trace run finalize', () => traceRun.finalize());
+    } finally {
+      await runLifecycleStep('browser result cleanup', () =>
+        browserExecutor.close(),
+      );
+    }
+
+    // Mirrors node's non-watch teardown (`traceRun.finalize()` above, then
+    // `waitForExit()`). No trailing `traceController.close()`: when `--trace` is
+    // on, `waitForExit()` is a `Promise<never>` that blocks until the user's
+    // SIGINT calls `process.exit()`, so a `close()` after it is unreachable;
+    // when `--trace` is off it is a no-op. Either way it is byte-identical.
+    await runLifecycleStep('trace wait for exit', () =>
+      traceController.waitForExit(),
     );
     return;
   }

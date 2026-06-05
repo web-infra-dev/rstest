@@ -1870,9 +1870,15 @@ export const runBrowserController = async (
   const coverageConfig = browserProjects.find(
     (project) => project.normalizedConfig.coverage?.enabled,
   )?.normalizedConfig.coverage;
-  const coverageProvider = coverageConfig?.enabled
-    ? await createCoverageProvider(coverageConfig, context.rootPath)
-    : null;
+  // This provider only feeds the host's own `notifyTestRunEnd` reporter-coverage
+  // merge, which is skipped when `skipOnTestRunEnd` is set. On the executor path
+  // (`skipOnTestRunEnd: true`) core owns the single coverage map and merges
+  // per-file coverage itself, so constructing a host provider here would be dead
+  // work — only build it for the self-finalize (watch / mixed) paths.
+  const coverageProvider =
+    !skipOnTestRunEnd && coverageConfig?.enabled
+      ? await createCoverageProvider(coverageConfig, context.rootPath)
+      : null;
 
   const notifyTestRunEnd = async ({
     duration,

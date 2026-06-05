@@ -1,0 +1,8 @@
+{
+  "name": "@rstest/tests-browser-verbose",
+  "version": "1.0.0",
+  "private": true,
+  "devDependencies": {
+    "@rstest/core": "workspace:*"
+  }
+}

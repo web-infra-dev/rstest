@@ -7,6 +7,7 @@ import type {
   RstestContext,
 } from '../types';
 import { color, logger } from '../utils';
+import type { TestExecutorFactory } from './executor';
 
 export type { BrowserTestRunOptions, BrowserTestRunResult } from '../types';
 
@@ -21,6 +22,14 @@ export type { BrowserTestRunOptions, BrowserTestRunResult } from '../types';
  */
 export interface BrowserHostModule {
   validateBrowserConfig: (context: RstestContext) => void;
+  /**
+   * Construct the browser {@link TestExecutor} factory. The non-watch
+   * browser-only run path routes through this so the run owns reporters,
+   * coverage finalize, verdict, and teardown uniformly with node (RFC phase 3).
+   * `runBrowserTests`/`listBrowserTests` remain for the mixed, list, and watch
+   * paths that have not yet been folded into the executor seam.
+   */
+  createExecutorFactory: () => TestExecutorFactory;
   runBrowserTests: (
     context: RstestContext,
     options?: BrowserTestRunOptions,
