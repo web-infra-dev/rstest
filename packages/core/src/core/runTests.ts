@@ -2,8 +2,15 @@ import { constants as osConstants } from 'node:os';
 import { cleanCoverageReports, createCoverageProvider } from '../coverage';
 import { ensureRunDependencies } from './dependencies';
 import { createPool } from '../pool';
-import type { Duration, ProjectEntries, SourceMapInput } from '../types';
-import type { CoverageMap } from '../types/coverage';
+import type {
+  Duration,
+  ProjectContext,
+  ProjectEntries,
+  SourceMapInput,
+  TestFileResult,
+  TestResult,
+} from '../types';
+import type { CoverageMap, CoverageProvider } from '../types/coverage';
 import {
   clearScreen,
   color,
@@ -16,6 +23,7 @@ import {
   logger,
   resolveShardedEntries,
   type TraceEvent,
+  type TraceRun,
 } from '../utils';
 import {
   type BrowserTestRunOptions,
@@ -221,6 +229,95 @@ const runLifecycleStep = async <T>(
   }
 };
 
+/**
+ * The single core-driven finalize for a non-watch run (and each node watch
+ * rerun): derive the verdict, sink the results into the reporter state, fire the
+ * one `onTestRunEnd`, and generate the one coverage report. Both the browser-only
+ * run and the node/mixed `run()` call this, so `notifyReportersOnTestRunEnd` and
+ * `generateCoverage` each have a single reachable call site in non-watch mode —
+ * the bypass finalize paths cannot silently regrow. (The browser-only WATCH path
+ * still self-finalizes inside the host until RFC phase 5.)
+ *
+ * Callers pre-reduce their executor results (concat results, sum durations, union
+ * ran paths) and pass an already-built `getSourcemap`; the divergent bits — the
+ * sourcemap resolver chain (browser-only vs browser-first-then-node) and the
+ * coverage scope (`scheduledProjects`) — stay in the callers, not here.
+ */
+const finalizeRun = async ({
+  context,
+  results,
+  testResults,
+  unhandledErrors,
+  deletedEntries,
+  duration,
+  ranTestPaths,
+  getSourcemap,
+  mergedCoverageMap,
+  coverageProvider,
+  scheduledProjects,
+  traceRun,
+  mode,
+}: {
+  context: Rstest;
+  results: TestFileResult[];
+  testResults: TestResult[];
+  unhandledErrors: Error[];
+  deletedEntries: string[];
+  duration: Duration;
+  ranTestPaths: string[];
+  getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>;
+  mergedCoverageMap: CoverageMap | undefined;
+  coverageProvider: CoverageProvider | null;
+  /** Projects whose env was built this round — scopes untested-file coverage. */
+  scheduledProjects: ProjectContext[];
+  traceRun: TraceRun;
+  mode?: 'all' | 'on-demand';
+}): Promise<{ isFailure: boolean }> => {
+  const isFailure =
+    results.some((r) => r.status === 'fail') || unhandledErrors.length > 0;
+  const noTestsDiscovered =
+    results.length === 0 && unhandledErrors.length === 0;
+
+  context.updateReporterResultState(results, testResults, deletedEntries);
+
+  if (noTestsDiscovered) {
+    reportNoTestFiles({ context, mode });
+  }
+
+  if (isFailure) {
+    process.exitCode = 1;
+  }
+
+  await runLifecycleStep('reporter onTestRunEnd', () =>
+    notifyReportersOnTestRunEnd({
+      context,
+      coverage: mergedCoverageMap,
+      duration,
+      getSourcemap,
+      unhandledErrors,
+      filterRerunTestPaths: ranTestPaths.length ? ranTestPaths : undefined,
+    }),
+  );
+
+  const { coverage } = context.normalizedConfig;
+  if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
+    const { generateCoverage } = await import('../coverage/generate');
+    await runLifecycleStep('coverage report generation', () =>
+      generateCoverage(
+        scheduledProjects,
+        context,
+        mergedCoverageMap!,
+        coverageProvider,
+        traceRun.span,
+      ),
+    );
+  }
+
+  await runLifecycleStep('trace run finalize', () => traceRun.finalize());
+
+  return { isFailure };
+};
+
 export async function runTests(context: Rstest): Promise<void> {
   cleanCoverageReports(context.normalizedConfig.coverage);
 
@@ -397,54 +494,22 @@ export async function runTests(context: Rstest): Promise<void> {
         return resolved?.sourcemap ?? null;
       };
 
-      const { results, testResults } = runResult;
-      const errors = runResult.unhandledErrors;
-
-      const isFailure =
-        results.some((r) => r.status === 'fail') || errors.length > 0;
-      const noTestsDiscovered = results.length === 0 && errors.length === 0;
-
-      context.updateReporterResultState(
-        results,
-        testResults,
-        runResult.deletedEntries,
-      );
-
-      if (noTestsDiscovered) {
-        reportNoTestFiles({ context });
-      }
-
-      if (isFailure) {
-        process.exitCode = 1;
-      }
-
-      await runLifecycleStep('reporter onTestRunEnd', () =>
-        notifyReportersOnTestRunEnd({
-          context,
-          coverage: mergedCoverageMap,
-          duration: runResult.duration,
-          getSourcemap,
-          unhandledErrors: errors,
-          filterRerunTestPaths: runResult.ranTestPaths.length
-            ? runResult.ranTestPaths
-            : undefined,
-        }),
-      );
-
-      if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
-        const { generateCoverage } = await import('../coverage/generate');
-        await runLifecycleStep('coverage report generation', () =>
-          generateCoverage(
-            browserProjects,
-            context,
-            mergedCoverageMap!,
-            coverageProvider,
-            traceRun.span,
-          ),
-        );
-      }
-
-      await runLifecycleStep('trace run finalize', () => traceRun.finalize());
+      await finalizeRun({
+        context,
+        results: runResult.results,
+        testResults: runResult.testResults,
+        unhandledErrors: runResult.unhandledErrors,
+        deletedEntries: runResult.deletedEntries,
+        duration: runResult.duration,
+        ranTestPaths: runResult.ranTestPaths,
+        getSourcemap,
+        mergedCoverageMap,
+        coverageProvider,
+        // Browser-only: every project is a browser project, and its env was
+        // built this round, so it is the coverage scope.
+        scheduledProjects: browserProjects,
+        traceRun,
+      });
     } finally {
       await runLifecycleStep('browser result cleanup', () =>
         browserExecutor.close(),
@@ -597,24 +662,25 @@ export async function runTests(context: Rstest): Promise<void> {
     browserResultPromise.catch(() => undefined);
   }
 
-  // If there are no node tests to run, we can potentially exit early.
-  if (!hasNodeTestsToRun) {
+  // Watch keeps the early return: in watch the browser host self-finalizes its
+  // own reporters (skipOnTestRunEnd is false) and drives its own reruns, so a
+  // node-empty watch round exits here after flushing trace. In non-watch we
+  // deliberately fall through to the unified `run()` finalize even with no node
+  // tests left — a filtered-mixed run (node matched zero files, browser has
+  // tests) then emits exactly one `onTestRunEnd` and one coverage report instead
+  // of zero, closing the deferred #1363 gap.
+  if (isWatchMode && !hasNodeTestsToRun) {
     if (browserResultPromise) {
       await browserResultPromise;
     }
-    // If only browser tests were to run and they ran, we should return.
     if (hasBrowserTestsToRun) {
-      // `run()` was never invoked on this path, so no node-side finalize
-      // fires for the pre-allocated buffer. Flush any browser events the
-      // host emitted into it before exiting so `--trace` still produces a
-      // file for filtered mixed-mode runs.
+      // `run()` is not invoked on this watch path, so flush any browser trace
+      // events the host emitted into the pre-allocated buffer before exiting.
       await runLifecycleStep('trace shutdown', () =>
         traceController.shutdown(activeTraceRun),
       );
       return;
     }
-    // If no node projects at all, and no browser tests to run,
-    // then nothing to do here. This handles the original early exit for no node projects.
     if (!hasNodeProjects) {
       return;
     }
@@ -779,15 +845,42 @@ export async function runTests(context: Rstest): Promise<void> {
         return resolved?.sourcemap ?? null;
       };
 
-      // Reduce the node executor result (and, when unifying reporter output, the
-      // browser result) into the run verdict. The only side effects are merging
-      // browser coverage into `mergedCoverageMap` and stripping it from the
-      // browser results to avoid reporter/state cache bloat (mirrors the
-      // node-side pool layer's `delete result.coverage`).
+      // In non-watch mixed runs the browser result is merged into the node
+      // verdict for one unified finalize. In watch the browser self-finalizes
+      // (own reporters + reruns), so its results are never merged here —
+      // preserved until the watch unification (RFC phase 5).
+      const unifyBrowser = shouldUnifyReporter && Boolean(browserResult);
 
-      // When unifying reporter output, combine browser and node durations
+      const results = [...nodeResult.results];
+      const testResults = [...nodeResult.testResults];
+      const errors: Error[] = [...nodeResult.unhandledErrors];
+      let ranTestPaths = nodeResult.ranTestPaths;
+
+      if (unifyBrowser && browserResult) {
+        results.push(...browserResult.results);
+        // Strip coverage from browser results into the one merged map, mirroring
+        // the node-side pool layer's `delete result.coverage`.
+        for (const r of browserResult.results) {
+          if (r.coverage) {
+            mergedCoverageMap?.merge(r.coverage);
+            delete r.coverage;
+          }
+        }
+        testResults.push(...(browserResult.testResults ?? []));
+        if (browserResult.unhandledErrors) {
+          errors.push(...browserResult.unhandledErrors);
+        }
+        // Union ran paths so the failing-tests summary keeps browser failures —
+        // node-only `filterRerunTestPaths` would otherwise filter them out.
+        ranTestPaths = [
+          ...nodeResult.ranTestPaths,
+          ...browserResult.results.map((r) => r.testPath),
+        ];
+      }
+
+      // Combine browser and node durations when unifying reporter output.
       const duration: Duration =
-        shouldUnifyReporter && browserResult
+        unifyBrowser && browserResult
           ? {
               totalTime:
                 nodeResult.duration.totalTime +
@@ -800,84 +893,30 @@ export async function runTests(context: Rstest): Promise<void> {
             }
           : nodeResult.duration;
 
-      const results = [...nodeResult.results];
-      const testResults = [...nodeResult.testResults];
-      const errors: Error[] = [...nodeResult.unhandledErrors];
+      // Browser project envs are built this round in the host's own Rsbuild, so
+      // include them in the coverage scope. Required for a node-empty mixed run:
+      // with `coverage.include` set, the include-filter would otherwise drop the
+      // browser project's files from the report.
+      const scheduledProjects = unifyBrowser
+        ? [...projects, ...browserProjectsToRun]
+        : projects;
 
-      // Merge browser test results for coverage collection (only when unifying reporter output)
-      // In watch mode, browser and node tests run independently with their own reporters,
-      // so we should not merge stale browser results into node results
-      if (shouldUnifyReporter && browserResult?.results) {
-        results.push(...browserResult.results);
-        // Strip coverage from browser results to avoid memory bloat in reporter/state caches,
-        // same as the node-side pool layer does via `delete result.coverage`
-        for (const r of browserResult.results) {
-          if (r.coverage) {
-            mergedCoverageMap?.merge(r.coverage);
-            delete r.coverage;
-          }
-        }
-      }
-      if (shouldUnifyReporter && browserResult?.testResults) {
-        testResults.push(...browserResult.testResults);
-      }
-      if (shouldUnifyReporter && browserResult?.unhandledErrors) {
-        errors.push(...browserResult.unhandledErrors);
-      }
-
-      // Check for failures including browser results when unified
-      const nodeHasFailure =
-        results.some((r) => r.status === 'fail') || errors.length;
-      const browserHasFailure =
-        shouldUnifyReporter && browserResult?.hasFailure;
-
-      const noTestsDiscovered = results.length === 0 && !errors.length;
-
-      const isFailure = nodeHasFailure || browserHasFailure;
-
-      context.updateReporterResultState(
+      const { isFailure } = await finalizeRun({
+        context,
         results,
         testResults,
-        nodeResult.deletedEntries,
-      );
+        unhandledErrors: errors,
+        deletedEntries: nodeResult.deletedEntries,
+        duration,
+        ranTestPaths,
+        getSourcemap,
+        mergedCoverageMap,
+        coverageProvider,
+        scheduledProjects,
+        traceRun,
+        mode,
+      });
 
-      if (noTestsDiscovered) {
-        reportNoTestFiles({ context, mode });
-      }
-
-      if (isFailure) {
-        process.exitCode = 1;
-      }
-
-      await runLifecycleStep('reporter onTestRunEnd', () =>
-        notifyReportersOnTestRunEnd({
-          context,
-          coverage: mergedCoverageMap,
-          duration,
-          getSourcemap,
-          unhandledErrors: errors,
-          filterRerunTestPaths: nodeResult.ranTestPaths.length
-            ? nodeResult.ranTestPaths
-            : undefined,
-        }),
-      );
-
-      // Generate coverage reports after all tests complete
-      if (coverageProvider && (!isFailure || coverage.reportOnFailure)) {
-        const { generateCoverage } = await import('../coverage/generate');
-
-        await runLifecycleStep('coverage report generation', () =>
-          generateCoverage(
-            projects,
-            context,
-            mergedCoverageMap!,
-            coverageProvider,
-            traceRun.span,
-          ),
-        );
-      }
-
-      await runLifecycleStep('trace run finalize', () => traceRun.finalize());
       // Pre-allocate the next watch-rerun buffer so browser events emitted
       // between reruns (or before the next `run()` adopts a fresh buffer)
       // are not lost.

@@ -34,6 +34,7 @@ export const BROWSER_PORTS = {
   'browser-coverage-fail': 5234,
   'browser-coverage-fail-report': 5236,
   'browser-verbose': 5238,
+  'mixed-node-empty': 5240,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);
