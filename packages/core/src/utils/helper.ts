@@ -7,7 +7,7 @@ import {
   resolve,
   sep,
 } from 'pathe';
-import type { RuntimeConfig, TestResult } from '../types';
+import type { Duration, RuntimeConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
 import { color } from './logger';
 import { wrapRegex } from './regexpWireFormat';
@@ -138,6 +138,21 @@ export const prettyTime = (milliseconds: number): string => {
     time += getSecond(secondsRemainder, !minutes);
   }
   return time;
+};
+
+/** Sum the `totalTime`/`buildTime`/`testTime` of several durations field-wise. */
+export const mergeDurations = (durations: Duration[]): Duration => {
+  let totalTime = 0;
+  let buildTime = 0;
+  let testTime = 0;
+
+  for (const d of durations) {
+    totalTime += d.totalTime;
+    buildTime += d.buildTime;
+    testTime += d.testTime;
+  }
+
+  return { totalTime, buildTime, testTime };
 };
 
 const getTaskNames = (

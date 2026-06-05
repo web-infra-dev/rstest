@@ -21,6 +21,7 @@ import {
   isDebug,
   flushOutputStreams,
   logger,
+  mergeDurations,
   resolveShardedEntries,
   type TraceEvent,
   type TraceRun,
@@ -38,6 +39,25 @@ import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
 /**
+ * Load the browser module for the given projects and run its version gate +
+ * `validateBrowserConfig` before any export is used. Both browser entry points
+ * (`runBrowserTests` and `createExecutorFactory`) go through here so the
+ * load/validate sequence stays single-sourced.
+ */
+async function loadValidatedBrowserModule(
+  context: Rstest,
+  browserProjects: typeof context.projects,
+): Promise<Awaited<ReturnType<typeof loadBrowserModule>>> {
+  const projectRoots = browserProjects.map((p) => p.rootPath);
+  const mod = await loadBrowserModule({
+    projectRoots,
+    embedded: context.embedded,
+  });
+  mod.validateBrowserConfig(context);
+  return mod;
+}
+
+/**
  * Run browser mode tests.
  * Returns the result for unified reporter output.
  */
@@ -46,31 +66,26 @@ async function runBrowserModeTests(
   browserProjects: typeof context.projects,
   options: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> {
-  const projectRoots = browserProjects.map((p) => p.rootPath);
-  const { validateBrowserConfig, runBrowserTests } = await loadBrowserModule({
-    projectRoots,
-    embedded: context.embedded,
-  });
-  validateBrowserConfig(context);
+  const { runBrowserTests } = await loadValidatedBrowserModule(
+    context,
+    browserProjects,
+  );
   return runBrowserTests(context, options);
 }
 
 /**
  * Load and construct the browser {@link TestExecutor}. The version gate and
- * `validateBrowserConfig` run here (mirroring {@link runBrowserModeTests})
- * before the factory's `create()` is reached.
+ * `validateBrowserConfig` run in {@link loadValidatedBrowserModule} before the
+ * factory's `create()` is reached.
  */
 async function createBrowserExecutor(
   context: Rstest,
   browserProjects: typeof context.projects,
 ): Promise<TestExecutor> {
-  const projectRoots = browserProjects.map((p) => p.rootPath);
-  const { validateBrowserConfig, createExecutorFactory } =
-    await loadBrowserModule({
-      projectRoots,
-      embedded: context.embedded,
-    });
-  validateBrowserConfig(context);
+  const { createExecutorFactory } = await loadValidatedBrowserModule(
+    context,
+    browserProjects,
+  );
   return createExecutorFactory().create({ context });
 }
 
@@ -681,9 +696,6 @@ export async function runTests(context: Rstest): Promise<void> {
       );
       return;
     }
-    if (!hasNodeProjects) {
-      return;
-    }
   }
 
   // The `projects` variable now refers to node projects that have tests to run.
@@ -851,13 +863,15 @@ export async function runTests(context: Rstest): Promise<void> {
       // preserved until the watch unification (RFC phase 5).
       const unifyBrowser = shouldUnifyReporter && Boolean(browserResult);
 
-      const results = [...nodeResult.results];
-      const testResults = [...nodeResult.testResults];
-      const errors: Error[] = [...nodeResult.unhandledErrors];
+      // The node executor returns freshly-allocated, single-owner arrays, so the
+      // node-only path reuses them as-is; only the unify path builds new arrays.
+      let results = nodeResult.results;
+      let testResults = nodeResult.testResults;
+      let errors = nodeResult.unhandledErrors;
       let ranTestPaths = nodeResult.ranTestPaths;
+      let duration = nodeResult.duration;
 
       if (unifyBrowser && browserResult) {
-        results.push(...browserResult.results);
         // Strip coverage from browser results into the one merged map, mirroring
         // the node-side pool layer's `delete result.coverage`.
         for (const r of browserResult.results) {
@@ -866,32 +880,23 @@ export async function runTests(context: Rstest): Promise<void> {
             delete r.coverage;
           }
         }
-        testResults.push(...(browserResult.testResults ?? []));
+        results = [...results, ...browserResult.results];
+        testResults = [...testResults, ...(browserResult.testResults ?? [])];
         if (browserResult.unhandledErrors) {
-          errors.push(...browserResult.unhandledErrors);
+          errors = [...errors, ...browserResult.unhandledErrors];
         }
         // Union ran paths so the failing-tests summary keeps browser failures —
         // node-only `filterRerunTestPaths` would otherwise filter them out.
         ranTestPaths = [
-          ...nodeResult.ranTestPaths,
+          ...ranTestPaths,
           ...browserResult.results.map((r) => r.testPath),
         ];
+        // Combine browser and node durations for the unified reporter output.
+        duration = mergeDurations([
+          nodeResult.duration,
+          browserResult.duration,
+        ]);
       }
-
-      // Combine browser and node durations when unifying reporter output.
-      const duration: Duration =
-        unifyBrowser && browserResult
-          ? {
-              totalTime:
-                nodeResult.duration.totalTime +
-                browserResult.duration.totalTime,
-              buildTime:
-                nodeResult.duration.buildTime +
-                browserResult.duration.buildTime,
-              testTime:
-                nodeResult.duration.testTime + browserResult.duration.testTime,
-            }
-          : nodeResult.duration;
 
       // Browser project envs are built this round in the host's own Rsbuild, so
       // include them in the coverage scope. Required for a node-empty mixed run:

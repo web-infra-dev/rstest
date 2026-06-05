@@ -13,7 +13,13 @@ import type {
   TestResult,
 } from '../types';
 import type { CoverageMap } from '../types/coverage';
-import { color, flushOutputStreams, logger, prettyTime } from '../utils';
+import {
+  color,
+  flushOutputStreams,
+  logger,
+  mergeDurations,
+  prettyTime,
+} from '../utils';
 import type { Rstest } from './rstest';
 
 const DEFAULT_BLOB_DIR = '.rstest-reports';
@@ -81,20 +87,6 @@ function mergeSnapshots(summaries: SnapshotSummary[]): SnapshotSummary {
   }
 
   return merged;
-}
-
-function mergeDurations(durations: Duration[]): Duration {
-  let totalTime = 0;
-  let buildTime = 0;
-  let testTime = 0;
-
-  for (const d of durations) {
-    totalTime += d.totalTime;
-    buildTime += d.buildTime;
-    testTime += d.testTime;
-  }
-
-  return { totalTime, buildTime, testTime };
 }
 
 function mergeBlobCoverage(blob: BlobData, coverageMap: CoverageMap): boolean {
