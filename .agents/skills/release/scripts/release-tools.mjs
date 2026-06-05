@@ -10,6 +10,10 @@
  * Commands:
  *   preflight                   Pre-release environment checks (exit 1 on any failure)
  *   bump-menu                   Print bumpp's native commit list + version menu, non-mutating
+ *   prepare-release-branch <patch|minor|major|x.y.z>
+ *                               Create release/x.y.z from origin/main in an isolated
+ *                               worktree, run the bump, verify it, clean up. The local
+ *                               checkout (including dirty WIP) is never touched.
  *   verify-bump-commit          Check HEAD is a well-formed bump commit (only package.json
  *                               version bumps, all public packages present and consistent)
  *   extract-stage-ids <run-id>  Print package@version<TAB>stage-id table from a CI run log
@@ -17,7 +21,8 @@
  *   verify-live <version>       Check every public package is live on npm (parallel)
  */
 import { execFile, execFileSync, spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, symlinkSync, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { promisify, stripVTControlCharacters } from 'node:util';
@@ -41,8 +46,8 @@ const repoRoot = () => run('git', ['rev-parse', '--show-toplevel']).trim();
  * Manifests of all npm-published (non-private) workspace packages.
  * Single source of truth — never hardcode the list, it changes over time.
  */
-function publicPackageManifests() {
-  const packagesDir = join(repoRoot(), 'packages');
+function publicPackageManifests(root = repoRoot()) {
+  const packagesDir = join(root, 'packages');
   const manifests = [];
   for (const dir of readdirSync(packagesDir)) {
     let pkg;
@@ -66,18 +71,61 @@ function splitSpec(spec) {
   return { name: spec.slice(0, at), version: spec.slice(at + 1) };
 }
 
+/** The single consistent version of all public packages; throws on divergence. */
+function consistentVersion(root) {
+  const manifests = publicPackageManifests(root);
+  if (manifests.length === 0) throw new Error('no public packages found');
+  const versions = new Set(manifests.map((m) => m.version));
+  if (versions.size !== 1) {
+    throw new Error(
+      `mixed versions: ${manifests.map((m) => `${m.name}@${m.version}`).join(', ')}`,
+    );
+  }
+  return { version: manifests[0].version, count: manifests.length };
+}
+
+/** Compute the target version from a release type, or pass an exact version through. */
+function bumpVersion(current, releaseArg) {
+  if (/^\d+\.\d+\.\d+/.test(releaseArg)) return releaseArg;
+  const m = current.match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!m) throw new Error(`cannot parse current version '${current}'`);
+  const [major, minor, patch] = m.slice(1).map(Number);
+  switch (releaseArg) {
+    case 'major':
+      return `${major + 1}.0.0`;
+    case 'minor':
+      return `${major}.${minor + 1}.0`;
+    case 'patch':
+      return `${major}.${minor}.${patch + 1}`;
+    default:
+      throw new Error(
+        `unsupported release type '${releaseArg}' — pass patch, minor, major, or an exact version (use an exact version for pre-releases)`,
+      );
+  }
+}
+
 function preflight() {
   let failed = false;
+  const report = (mark, label, detail) =>
+    console.log(`  ${mark} ${label}${detail ? ` — ${detail}` : ''}`);
   const check = (label, fn) => {
     try {
       const detail = fn();
-      console.log(`  ✅ ${label}${detail ? ` — ${detail}` : ''}`);
+      report('✅', label, detail);
       return detail;
     } catch (e) {
-      const reason = String(e.message || e).split('\n')[0];
-      console.log(`  ❌ ${label} — ${reason}`);
+      report('❌', label, String(e.message || e).split('\n')[0]);
       failed = true;
       return null;
+    }
+  };
+  // Informational: prints ⚠️ instead of failing. Used for local-checkout state
+  // that the worktree-based release path (prepare-release-branch) makes harmless.
+  const note = (label, fn) => {
+    try {
+      report('✅', label, fn());
+    } catch (e) {
+      report('⚠️', label, String(e.message || e).split('\n')[0]);
     }
   };
 
@@ -88,19 +136,23 @@ function preflight() {
     return '';
   });
 
-  check('working tree clean', () => {
+  note('working tree clean', () => {
     const dirty = run('git', ['status', '--porcelain']).trim();
-    if (dirty) throw new Error(`${dirty.split('\n').length} dirty path(s)`);
+    if (dirty) {
+      throw new Error(
+        `${dirty.split('\n').length} dirty path(s) — OK: the release branch is prepared in an isolated worktree`,
+      );
+    }
     return '';
   });
 
-  check('HEAD is at origin/main', () => {
+  note('HEAD is at origin/main', () => {
     run('git', ['fetch', 'origin', 'main', '--quiet']);
     const head = run('git', ['rev-parse', 'HEAD']).trim();
     const main = run('git', ['rev-parse', 'origin/main']).trim();
     if (head !== main) {
       throw new Error(
-        `HEAD=${head.slice(0, 8)} origin/main=${main.slice(0, 8)}`,
+        `HEAD=${head.slice(0, 8)} origin/main=${main.slice(0, 8)} — note: bump-menu's commit list reflects local HEAD`,
       );
     }
     return head.slice(0, 8);
@@ -120,15 +172,8 @@ function preflight() {
   });
 
   const version = check('public package versions consistent', () => {
-    const manifests = publicPackageManifests();
-    if (manifests.length === 0) throw new Error('no public packages found');
-    const versions = new Set(manifests.map((m) => m.version));
-    if (versions.size !== 1) {
-      throw new Error(
-        `mixed versions: ${manifests.map((m) => `${m.name}@${m.version}`).join(', ')}`,
-      );
-    }
-    return `${manifests.length} packages at ${manifests[0].version}`;
+    const { version, count } = consistentVersion(repoRoot());
+    return `${count} packages at ${version}`;
   });
 
   // The skill's Step 3 dispatch command and its npm_tag foot-gun warning are
@@ -165,6 +210,17 @@ function preflight() {
  */
 function bumpMenu() {
   const cwd = repoRoot();
+  try {
+    const head = run('git', ['rev-parse', 'HEAD'], { cwd }).trim();
+    const main = run('git', ['rev-parse', 'origin/main'], { cwd }).trim();
+    if (head !== main) {
+      console.log(
+        `⚠️ local HEAD (${head.slice(0, 8)}) differs from origin/main (${main.slice(0, 8)}) — the commit list below reflects local HEAD; the release itself is cut from origin/main.`,
+      );
+    }
+  } catch {
+    // origin/main not resolvable — skip the hint
+  }
   const statusBefore = run('git', ['status', '--porcelain'], { cwd });
   const result = spawnSync('pnpm', ['bump', '--print-commits'], {
     cwd,
@@ -173,7 +229,7 @@ function bumpMenu() {
   });
   const statusAfter = run('git', ['status', '--porcelain'], { cwd });
   if (statusAfter !== statusBefore) {
-    console.error('ERROR: bump-menu modified the working tree — bumpp\'s');
+    console.error("ERROR: bump-menu modified the working tree — bumpp's");
     console.error('EOF-abort behavior has changed. Inspect `git status`,');
     console.error('restore the touched package.json files, and update this script.');
     process.exit(1);
@@ -191,15 +247,85 @@ function bumpMenu() {
 }
 
 /**
- * Check that HEAD is a well-formed `pnpm bump` commit:
+ * Create the release branch in an isolated worktree cut from origin/main.
+ * The local checkout — whatever branch it is on, however dirty — is never
+ * touched: the worktree gets its own clean copy, bumpp runs there, the bump
+ * commit is verified there, and only the resulting `release/x.y.z` branch
+ * ref survives the cleanup. bumpp and its config loader resolve from the
+ * main checkout's node_modules via a temporary symlink, so the worktree
+ * needs no install.
+ */
+function prepareReleaseBranch(releaseArg) {
+  const root = repoRoot();
+  const bumppBin = join(root, 'node_modules', 'bumpp', 'bin', 'bumpp.mjs');
+  if (!existsSync(bumppBin)) {
+    console.error('bumpp is not installed — run `pnpm install` first.');
+    process.exit(1);
+  }
+
+  run('git', ['fetch', 'origin', 'main', '--quiet'], { cwd: root });
+  const dir = join(tmpdir(), `rstest-release-${process.pid}`);
+  run('git', ['worktree', 'add', '--detach', dir, 'origin/main'], { cwd: root });
+
+  let error = null;
+  let version = null;
+  let branch = null;
+  try {
+    version = bumpVersion(consistentVersion(dir).version, releaseArg);
+    branch = `release/${version}`;
+    run('git', ['switch', '-c', branch], { cwd: dir });
+    symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir');
+
+    console.log(`Bumping to ${version} in an isolated worktree (from origin/main)...`);
+    // --no-verify: the shared pre-commit hook runs pnpm-backed checks that
+    // cannot work against the worktree's symlinked node_modules (pnpm wants
+    // to purge it). The bump only rewrites version fields, and the stricter
+    // verifyBumpCommit() below replaces what the hook would have checked.
+    const result = spawnSync(
+      process.execPath,
+      [bumppBin, '--release', version, '--yes', '--no-verify'],
+      { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    if (result.status !== 0) {
+      throw new Error(`bumpp failed:\n${result.stdout}\n${result.stderr}`);
+    }
+    verifyBumpCommit(dir);
+  } catch (e) {
+    error = e;
+  } finally {
+    try {
+      unlinkSync(join(dir, 'node_modules'));
+    } catch {
+      // symlink was never created
+    }
+    run('git', ['worktree', 'remove', '--force', dir], { cwd: root });
+  }
+
+  if (error) {
+    // The worktree is gone; a partially created branch may remain.
+    console.error(String(error.message || error));
+    if (branch) console.error(`Clean up with: git branch -D ${branch}`);
+    process.exit(1);
+  }
+
+  console.log(`\nBranch ${branch} is ready (local only). Next:`);
+  console.log(`  git push -u origin ${branch}`);
+  console.log(`  gh pr create --title "release: ${version}" --body "Release ${version}" --head ${branch}`);
+}
+
+/**
+ * Check that the given checkout's HEAD is a well-formed `pnpm bump` commit:
  *   - it touches nothing but packages/<pkg>/package.json files
  *   - every public package is included
  *   - every touched manifest now carries the same new version
  * The expected file set is derived from the workspace, so this stays correct
  * when packages are added or bump.config.mts exclusions change.
+ * Throws on violation (the CLI case prints and exits).
  */
-function verifyBumpCommit() {
-  const changed = run('git', ['show', '--name-only', '--format=', 'HEAD'])
+function verifyBumpCommit(root = repoRoot()) {
+  const changed = run('git', ['show', '--name-only', '--format=', 'HEAD'], {
+    cwd: root,
+  })
     .trim()
     .split('\n')
     .filter(Boolean);
@@ -208,33 +334,24 @@ function verifyBumpCommit() {
     (f) => !/^packages\/[^/]+\/package\.json$/.test(f),
   );
   if (stray.length) {
-    console.error('HEAD touches files that are not package manifests:');
-    for (const f of stray) console.error(`  ${f}`);
-    process.exit(1);
+    throw new Error(
+      `HEAD touches files that are not package manifests:\n${stray.map((f) => `  ${f}`).join('\n')}`,
+    );
   }
 
-  const manifests = publicPackageManifests();
+  const manifests = publicPackageManifests(root);
   const missing = manifests.filter(
     (m) => !changed.includes(`packages/${m.dir}/package.json`),
   );
   if (missing.length) {
-    console.error(
+    throw new Error(
       `HEAD does not bump these public packages: ${missing.map((m) => m.name).join(', ')}`,
     );
-    process.exit(1);
   }
 
-  const versions = new Set(manifests.map((m) => m.version));
-  if (versions.size !== 1) {
-    console.error(
-      `Public package versions diverge after the bump: ${manifests.map((m) => `${m.name}@${m.version}`).join(', ')}`,
-    );
-    process.exit(1);
-  }
-
-  const [version] = versions;
+  const { version, count } = consistentVersion(root);
   console.log(
-    `Bump commit OK: ${changed.length} manifest(s) changed, ${manifests.length} public packages at ${version}.`,
+    `Bump commit OK: ${changed.length} manifest(s) changed, ${count} public packages at ${version}.`,
   );
 }
 
@@ -383,7 +500,7 @@ async function verifyLive(version) {
 const [command, ...args] = process.argv.slice(2);
 const usage = () => {
   console.error(
-    'usage: release-tools.mjs <preflight|bump-menu|verify-bump-commit|extract-stage-ids <run-id>|approve-staged <run-id>|verify-live <version>>',
+    'usage: release-tools.mjs <preflight|bump-menu|prepare-release-branch <patch|minor|major|x.y.z>|verify-bump-commit|extract-stage-ids <run-id>|approve-staged <run-id>|verify-live <version>>',
   );
   process.exit(64);
 };
@@ -395,8 +512,17 @@ switch (command) {
   case 'bump-menu':
     bumpMenu();
     break;
+  case 'prepare-release-branch':
+    if (!args[0]) usage();
+    prepareReleaseBranch(args[0]);
+    break;
   case 'verify-bump-commit':
-    verifyBumpCommit();
+    try {
+      verifyBumpCommit();
+    } catch (e) {
+      console.error(String(e.message || e));
+      process.exit(1);
+    }
     break;
   case 'extract-stage-ids': {
     if (!args[0]) usage();

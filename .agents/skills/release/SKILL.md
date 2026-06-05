@@ -28,10 +28,14 @@ step; the task list is what makes the state recoverable.
 
 Run `rt preflight`.
 
-It verifies: gh auth, clean working tree, HEAD at `origin/main`, latest
-release tag, that all public package versions are consistent, and that
-`release.yml` still matches the assumptions in Step 3. Fix any ❌ before
-continuing.
+It verifies: gh auth, latest release tag, that all public package versions
+are consistent, and that `release.yml` still matches the assumptions in
+Step 3. Fix any ❌ before continuing.
+
+A dirty working tree or a local HEAD away from `origin/main` is reported as
+⚠️ but does NOT block: the release branch is prepared in an isolated worktree
+cut from `origin/main` (Step 2), so the user's in-progress work is never
+touched and never leaks into the release.
 
 ## Step 1 — Choose the version (🧑 decides)
 
@@ -65,29 +69,24 @@ Do not pick a version yourself when no instruction was given.
 With the chosen version (e.g. `0.10.4`):
 
 ```bash
-git checkout -b release/0.10.4
-pnpm bump --release patch --yes   # or --release 0.10.4 for an exact version
+rt prepare-release-branch patch   # or an exact version like 0.10.4
 ```
 
-`bump.config.mts` makes this commit `release: 0.10.4` locally with no tag and
-no push. Before pushing, verify the commit is exactly what a release commit
-should be:
+This never touches the current checkout: it creates a temporary git worktree
+from `origin/main`, creates `release/0.10.4` there, runs the bump
+(`bump.config.mts` makes the commit `release: 0.10.4`, no tag, no push),
+verifies the bump commit (only package manifests touched, every public
+package included, all on one consistent version — the expected set is derived
+from the workspace), and removes the worktree, leaving only the local branch.
+A verification failure means a dirty state — stop and investigate.
 
-```bash
-rt verify-bump-commit
-```
-
-It checks that HEAD touches only package manifests, includes every public
-package, and leaves all of them on one consistent version (the expected set
-is derived from the workspace, so it stays correct as packages change). A
-failure means a dirty state — stop and investigate.
-
-Then push and open the PR (title format is load-bearing for repo history):
+Then push and open the PR using the commands the tool prints (title format is
+load-bearing for repo history):
 
 ```bash
 git push -u origin release/0.10.4
-gh pr create --title "release: 0.10.4" --body "Release 0.10.4"
-gh pr checks --watch
+gh pr create --title "release: 0.10.4" --body "Release 0.10.4" --head release/0.10.4
+gh pr checks release/0.10.4 --watch
 ```
 
 Wait until all checks pass. If CI fails, fix on this branch (or abort the
