@@ -92,9 +92,20 @@ cd e2e && RSTEST_E2E_RUN_HEADED=true pnpm test browser-mode/basic.test.ts
 
 Repository maintainers can publish new versions of changed packages.
 
+The recommended way is to let a coding agent drive the flow with the `release` skill (`.agents/skills/release/`). The skill walks through every step below and pauses at the decisions that stay human — choosing the version, confirming the publish, approving the staged packages with 2FA, and publishing the release notes. For example, prompt your agent with:
+
+```text
+/release patch
+```
+
+Or just `/release` to see the version menu before deciding the bump type.
+
+To release manually:
+
 1. Run the local release command `pnpm bump` to bump all Rstest packages together.
 2. The command will prompt for a bump type. It creates a local commit only (no tag, no push).
 3. Open a pull request with a title like `release: 0.7.10` and ensure CI passes.
-4. Trigger the [release action](https://github.com/web-infra-dev/rstest/actions/workflows/release.yml) to publish packages to npm.
-5. Merge the release pull request to `main`.
-6. Use the `create-draft-release-notes` skill to create a draft [GitHub release note](https://github.com/web-infra-dev/rstest/releases). Review the draft release note, optionally add release highlights, and publish it.
+4. Trigger the [release action](https://github.com/web-infra-dev/rstest/actions/workflows/release.yml) with `npm_tag` set to `latest` and `branch` set to the release branch. The workflow uses [staged publishing](https://docs.npmjs.com/staged-publishing/) — packages are uploaded to npm but not yet installable.
+5. Approve the staged packages with 2FA: run `npm stage approve <stage-id>` for each package (the stage ids are printed in the workflow log), or approve them in the [Staged Packages tab](https://www.npmjs.com/settings/rstest/packages) on npmjs.com. Verify every package is live (e.g. `npm view @rstest/core@x.y.z version`) before continuing.
+6. Merge the release pull request to `main`.
+7. Use the `create-draft-release-notes` skill to create a draft [GitHub release note](https://github.com/web-infra-dev/rstest/releases). Review the draft release note, optionally add release highlights, and publish it.
