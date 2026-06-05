@@ -93,8 +93,15 @@ gh pr create --title "release: 0.10.4" --body "Release 0.10.4" --head release/0.
 gh pr checks release/0.10.4 --watch
 ```
 
-Wait until all checks pass. If CI fails, fix on this branch (or abort the
-release) — never trigger the publish workflow on a red branch.
+Wait until all checks pass. A full CI round on this repo takes **25–40
+minutes** — longer than most command timeouts, so don't block on `--watch` in
+the foreground. Run it in the background if your environment supports that,
+or poll `gh pr checks release/0.10.4` at a relaxed interval (every few
+minutes). This wait is also a natural point to hand control back to the user
+and resume later — the task list from Step 0 carries the state.
+
+If CI fails, fix on this branch (or abort the release) — never trigger the
+publish workflow on a red branch.
 
 ## Step 3 — Trigger the staged npm publish (🧑 confirms)
 
@@ -114,7 +121,8 @@ Two foot-guns, both verified against the workflow definition:
   on main yet; publishing happens before merge by design, so the merge only
   lands once the bits are known good).
 
-Then find and watch the run:
+Then find and watch the run (it takes **5–20 minutes** — same rule as Step 2:
+background the watch or poll at a relaxed interval, don't block):
 
 ```bash
 gh run list --workflow=release.yml --limit 1 --json databaseId,status --jq '.[0]'
