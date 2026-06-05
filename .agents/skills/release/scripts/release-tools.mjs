@@ -8,9 +8,10 @@
  * Usage: node release-tools.mjs <command> [args]
  *
  * Commands:
- *   packages                    List public (npm-published) workspace packages
  *   preflight                   Pre-release environment checks (exit 1 on any failure)
  *   bump-menu                   Print bumpp's native commit list + version menu, non-mutating
+ *   verify-bump-commit          Check HEAD is a well-formed bump commit (only package.json
+ *                               version bumps, all public packages present and consistent)
  *   extract-stage-ids <run-id>  Print package@version<TAB>stage-id table from a CI run log
  *   approve-staged <run-id>     INTERACTIVE: approve all staged packages with one OTP
  *   verify-live <version>       Check every public package is live on npm (parallel)
@@ -19,13 +20,13 @@ import { execFile, execFileSync, spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
-import { promisify } from 'node:util';
+import { promisify, stripVTControlCharacters } from 'node:util';
 
-const DEFAULT_REPO = 'web-infra-dev/rstest';
+const REPO = 'web-infra-dev/rstest';
 const STAGED_PACKAGES_URL = 'https://www.npmjs.com/settings/rstest/packages';
 const execFileAsync = promisify(execFile);
 
-/** Run a command and return trimmed stdout; throws on non-zero exit. */
+/** Run a command and return its stdout; throws on non-zero exit. */
 const run = (cmd, args, opts = {}) =>
   execFileSync(cmd, args, {
     encoding: 'utf8',
@@ -37,12 +38,12 @@ const run = (cmd, args, opts = {}) =>
 const repoRoot = () => run('git', ['rev-parse', '--show-toplevel']).trim();
 
 /**
- * Names of all npm-published (non-private) workspace packages.
+ * Manifests of all npm-published (non-private) workspace packages.
  * Single source of truth — never hardcode the list, it changes over time.
  */
-function publicPackages() {
+function publicPackageManifests() {
   const packagesDir = join(repoRoot(), 'packages');
-  const names = [];
+  const manifests = [];
   for (const dir of readdirSync(packagesDir)) {
     let pkg;
     try {
@@ -52,9 +53,17 @@ function publicPackages() {
     } catch {
       continue;
     }
-    if (!pkg.private && pkg.name) names.push(pkg.name);
+    if (!pkg.private && pkg.name) {
+      manifests.push({ name: pkg.name, version: pkg.version, dir });
+    }
   }
-  return names.sort();
+  return manifests.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Split "@scope/name@1.2.3" into { name, version } (survives scoped names). */
+function splitSpec(spec) {
+  const at = spec.lastIndexOf('@');
+  return { name: spec.slice(0, at), version: spec.slice(at + 1) };
 }
 
 function preflight() {
@@ -100,7 +109,7 @@ function preflight() {
   const lastTag = check('latest release tag resolved', () => {
     const releases = JSON.parse(
       run('gh', [
-        'release', 'list', '--repo', DEFAULT_REPO,
+        'release', 'list', '--repo', REPO,
         '--exclude-drafts', '--exclude-pre-releases',
         '--limit', '1', '--json', 'tagName',
       ]),
@@ -110,42 +119,68 @@ function preflight() {
     return tag;
   });
 
-  const version = check('current version resolved', () => {
-    const pkg = JSON.parse(
-      readFileSync(join(repoRoot(), 'packages/core/package.json'), 'utf8'),
-    );
-    if (!pkg.version) throw new Error('packages/core has no version');
-    return pkg.version;
+  const version = check('public package versions consistent', () => {
+    const manifests = publicPackageManifests();
+    if (manifests.length === 0) throw new Error('no public packages found');
+    const versions = new Set(manifests.map((m) => m.version));
+    if (versions.size !== 1) {
+      throw new Error(
+        `mixed versions: ${manifests.map((m) => `${m.name}@${m.version}`).join(', ')}`,
+      );
+    }
+    return `${manifests.length} packages at ${manifests[0].version}`;
   });
 
-  check('public packages enumerated', () => {
-    const count = publicPackages().length;
-    if (count === 0) throw new Error('no public packages found');
-    return `${count} packages`;
+  // The skill's Step 3 dispatch command and its npm_tag foot-gun warning are
+  // written against release.yml's current inputs — fail fast if they drift.
+  check('release.yml inputs match the skill assumptions', () => {
+    const workflow = readFileSync(
+      join(repoRoot(), '.github/workflows/release.yml'),
+      'utf8',
+    );
+    for (const expected of ['npm_tag:', 'branch:', "default: 'alpha'"]) {
+      if (!workflow.includes(expected)) {
+        throw new Error(
+          `release.yml no longer contains \`${expected}\` — update the release skill (Step 3) to match`,
+        );
+      }
+    }
+    return '';
   });
 
   if (failed) {
     console.log('Preflight failed — resolve the issues above before releasing.');
     process.exit(1);
   }
-  console.log(`Preflight OK. Last release: ${lastTag}, current version: ${version}`);
+  console.log(`Preflight OK. Last release: ${lastTag}, current: ${version}`);
 }
 
 /**
  * bumpp has no --dry-run flag. With stdin at EOF (stdio 'ignore'), the
  * interactive version prompt aborts cleanly AFTER printing the commits since
  * the last tag (--print-commits) and the full version menu, with no file
- * writes and no commit. Verified empirically against bumpp 11.1.0.
+ * writes and no commit. Verified empirically against bumpp 11.1.0 — and
+ * enforced at runtime below, so a future bumpp that behaves differently
+ * fails loudly instead of silently mutating package.json files.
  */
 function bumpMenu() {
+  const cwd = repoRoot();
+  const statusBefore = run('git', ['status', '--porcelain'], { cwd });
   const result = spawnSync('pnpm', ['bump', '--print-commits'], {
-    cwd: repoRoot(),
+    cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  const lines = `${result.stdout ?? ''}${result.stderr ?? ''}`
-    // ANSI escape sequences and prompt-redraw control codes
-    .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
+  const statusAfter = run('git', ['status', '--porcelain'], { cwd });
+  if (statusAfter !== statusBefore) {
+    console.error('ERROR: bump-menu modified the working tree — bumpp\'s');
+    console.error('EOF-abort behavior has changed. Inspect `git status`,');
+    console.error('restore the touched package.json files, and update this script.');
+    process.exit(1);
+  }
+  const lines = stripVTControlCharacters(
+    `${result.stdout ?? ''}${result.stderr ?? ''}`,
+  )
     .split('\n')
     // prompt cursor/selection glyphs at line start
     .map((l) => l.replace(/^\s*[?❯›…]+\s*/, '').trimEnd())
@@ -156,26 +191,89 @@ function bumpMenu() {
 }
 
 /**
- * Parse `package@version → stage-id` pairs from a release workflow run log.
- * `pnpm stage publish` prints one line per package:
+ * Check that HEAD is a well-formed `pnpm bump` commit:
+ *   - it touches nothing but packages/<pkg>/package.json files
+ *   - every public package is included
+ *   - every touched manifest now carries the same new version
+ * The expected file set is derived from the workspace, so this stays correct
+ * when packages are added or bump.config.mts exclusions change.
+ */
+function verifyBumpCommit() {
+  const changed = run('git', ['show', '--name-only', '--format=', 'HEAD'])
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+
+  const stray = changed.filter(
+    (f) => !/^packages\/[^/]+\/package\.json$/.test(f),
+  );
+  if (stray.length) {
+    console.error('HEAD touches files that are not package manifests:');
+    for (const f of stray) console.error(`  ${f}`);
+    process.exit(1);
+  }
+
+  const manifests = publicPackageManifests();
+  const missing = manifests.filter(
+    (m) => !changed.includes(`packages/${m.dir}/package.json`),
+  );
+  if (missing.length) {
+    console.error(
+      `HEAD does not bump these public packages: ${missing.map((m) => m.name).join(', ')}`,
+    );
+    process.exit(1);
+  }
+
+  const versions = new Set(manifests.map((m) => m.version));
+  if (versions.size !== 1) {
+    console.error(
+      `Public package versions diverge after the bump: ${manifests.map((m) => `${m.name}@${m.version}`).join(', ')}`,
+    );
+    process.exit(1);
+  }
+
+  const [version] = versions;
+  console.log(
+    `Bump commit OK: ${changed.length} manifest(s) changed, ${manifests.length} public packages at ${version}.`,
+  );
+}
+
+/**
+ * Parse `package@version → stage-id` pairs from a release workflow run.
+ * `pnpm stage publish` prints one line per package in the `Release` job:
  *   + @rstest/core@0.10.4 (staged with id 8f98b2c9-9cb9-4799-85fa-effd60b117bc)
  * (format verified against rsbuild release runs, which use the same command).
  *
+ * Fetches only the `Release` job's log when it can be resolved — the run also
+ * contains a 6-target VS Code packaging matrix whose logs are large and never
+ * contain stage lines. Falls back to the full run log if the job lookup fails.
+ *
  * Returns { entries: [pkgSpec, stageId][], mismatch: string | null }.
  */
-function extractStageIds(runId, repo = DEFAULT_REPO) {
-  const log = run('gh', ['run', 'view', runId, '--repo', repo, '--log']);
+function extractStageIds(runId) {
+  let log;
+  try {
+    const { jobs } = JSON.parse(
+      run('gh', ['run', 'view', runId, '--repo', REPO, '--json', 'jobs']),
+    );
+    const releaseJob = jobs.find((j) => j.name === 'Release');
+    log = run('gh', [
+      'run', 'view', '--repo', REPO,
+      '--job', String(releaseJob.databaseId), '--log',
+    ]);
+  } catch {
+    log = run('gh', ['run', 'view', runId, '--repo', REPO, '--log']);
+  }
+
   const matches = [
     ...log.matchAll(/\+ (\S+@[^\s)]+) \(staged with id ([0-9a-f-]+)\)/g),
   ];
   const entries = [...new Map(matches.map((m) => [m[1], m[2]]))].sort();
 
   let mismatch = null;
-  if (entries.length > 0 && repo === DEFAULT_REPO) {
-    const staged = new Set(
-      entries.map(([spec]) => spec.slice(0, spec.lastIndexOf('@'))),
-    );
-    const expected = publicPackages();
+  if (entries.length > 0) {
+    const staged = new Set(entries.map(([spec]) => splitSpec(spec).name));
+    const expected = publicPackageManifests().map((m) => m.name);
     const missing = expected.filter((p) => !staged.has(p));
     const unexpected = [...staged].filter((p) => !expected.includes(p));
     if (missing.length || unexpected.length) {
@@ -188,8 +286,15 @@ function extractStageIds(runId, repo = DEFAULT_REPO) {
   return { entries, mismatch };
 }
 
-function printStageIds(runId, repo) {
-  const { entries, mismatch } = extractStageIds(runId, repo);
+/**
+ * Shared front half of `extract-stage-ids` and `approve-staged`: resolve the
+ * staged entries, print the table (or the npmjs.com fallback when the log has
+ * no stage lines), and return what the caller needs to act on. The two
+ * commands only differ in how they treat a set mismatch — extract exits 2 so
+ * automation stops, approve warns and lets the human decide.
+ */
+function loadStagedEntries(runId) {
+  const { entries, mismatch } = extractStageIds(runId);
   if (entries.length === 0) {
     console.error(`No 'staged with id' lines found in run ${runId}.`);
     console.error('Fallback: check the Staged Packages tab on npmjs.com:');
@@ -199,9 +304,11 @@ function printStageIds(runId, repo) {
   for (const [spec, id] of entries) console.log(`${spec}\t${id}`);
   if (mismatch) {
     console.error('');
-    console.error(`WARNING: staged packages do not match the public workspace packages (${mismatch}).`);
-    process.exit(2);
+    console.error(
+      `WARNING: staged packages do not match the public workspace packages (${mismatch}).`,
+    );
   }
+  return { entries, mismatch };
 }
 
 /**
@@ -215,18 +322,8 @@ function printStageIds(runId, repo) {
  * fresh code. Requires a logged-in npm account with publish access and 2FA.
  */
 async function approveStaged(runId) {
-  const { entries, mismatch } = extractStageIds(runId);
-  if (entries.length === 0) {
-    console.error(`No staged packages found in run ${runId}. Check the run id,`);
-    console.error(`or approve on the web instead: ${STAGED_PACKAGES_URL}`);
-    process.exit(1);
-  }
-  console.log('Staged packages to approve:');
-  for (const [spec, id] of entries) console.log(`  ${spec}\t${id}`);
-  if (mismatch) {
-    console.error(`\nWARNING: staged set does not match public workspace packages (${mismatch}).`);
-    console.error('Continue only if you understand why.');
-  }
+  const { entries, mismatch } = loadStagedEntries(runId);
+  if (mismatch) console.error('Continue only if you understand why.');
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const otp = (await rl.question('\nEnter OTP (from your authenticator): ')).trim();
@@ -240,10 +337,12 @@ async function approveStaged(runId) {
     });
     if (result.status !== 0) {
       failures += 1;
-      console.log(`  failed: ${spec} — re-run this command, or approve on ${STAGED_PACKAGES_URL}`);
+      console.log(
+        `  failed: ${spec} — re-run this command, or approve on ${STAGED_PACKAGES_URL}`,
+      );
     }
   }
-  const version = entries[0][0].slice(entries[0][0].lastIndexOf('@') + 1);
+  const { version } = splitSpec(entries[0][0]);
   console.log(`\nDone (${entries.length - failures}/${entries.length} approved).`);
   console.log(`Verify with: node ${process.argv[1]} verify-live ${version}`);
   process.exit(failures > 0 ? 1 : 0);
@@ -256,20 +355,20 @@ async function approveStaged(runId) {
  */
 async function verifyLive(version) {
   const results = await Promise.all(
-    publicPackages().map(async (pkg) => {
+    publicPackageManifests().map(async ({ name }) => {
       try {
         const { stdout } = await execFileAsync('npm', [
-          'view', `${pkg}@${version}`, 'version',
+          'view', `${name}@${version}`, 'version',
         ]);
-        return [pkg, stdout.trim() === version];
+        return [name, stdout.trim() === version];
       } catch {
-        return [pkg, false];
+        return [name, false];
       }
     }),
   );
   let missing = 0;
-  for (const [pkg, live] of results) {
-    console.log(live ? `  ✅ ${pkg}@${version}` : `  ⏳ ${pkg}@${version} not live yet`);
+  for (const [name, live] of results) {
+    console.log(live ? `  ✅ ${name}@${version}` : `  ⏳ ${name}@${version} not live yet`);
     if (!live) missing += 1;
   }
   if (missing > 0) {
@@ -283,25 +382,26 @@ async function verifyLive(version) {
 
 const [command, ...args] = process.argv.slice(2);
 const usage = () => {
-  console.error('usage: release-tools.mjs <packages|preflight|bump-menu|extract-stage-ids <run-id> [--repo owner/repo]|approve-staged <run-id>|verify-live <version>>');
+  console.error(
+    'usage: release-tools.mjs <preflight|bump-menu|verify-bump-commit|extract-stage-ids <run-id>|approve-staged <run-id>|verify-live <version>>',
+  );
   process.exit(64);
 };
 
 switch (command) {
-  case 'packages':
-    console.log(publicPackages().join('\n'));
-    break;
   case 'preflight':
     preflight();
     break;
   case 'bump-menu':
     bumpMenu();
     break;
+  case 'verify-bump-commit':
+    verifyBumpCommit();
+    break;
   case 'extract-stage-ids': {
-    const runId = args[0];
-    if (!runId) usage();
-    const repoFlag = args.indexOf('--repo');
-    printStageIds(runId, repoFlag !== -1 ? args[repoFlag + 1] : DEFAULT_REPO);
+    if (!args[0]) usage();
+    const { mismatch } = loadStagedEntries(args[0]);
+    if (mismatch) process.exit(2);
     break;
   }
   case 'approve-staged':

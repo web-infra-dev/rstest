@@ -29,9 +29,9 @@ step; the task list is what makes the state recoverable.
 Run `rt preflight`.
 
 It verifies: gh auth, clean working tree, HEAD at `origin/main`, latest
-release tag, current version, and that the public package list resolves.
-Fix any ❌ before continuing. Note the reported last tag and current version —
-later steps need both.
+release tag, that all public package versions are consistent, and that
+`release.yml` still matches the assumptions in Step 3. Fix any ❌ before
+continuing.
 
 ## Step 1 — Choose the version (🧑 decides)
 
@@ -53,7 +53,10 @@ choose, with context that helps them judge:
   routinely contain `feat` commits; minors are reserved for milestones and
   breaking changes. bumpp's `conventional` line will often suggest minor just
   because a feat exists; that is input, not a decision.
-- Point out any commits with `!` / `BREAKING CHANGE` markers if present.
+- Point out any commits with `!` / `BREAKING CHANGE` markers. Don't rely on
+  eyeballing the list for this — run
+  `node .agents/skills/create-release-blog/scripts/collect-commits.mjs <last-tag>..HEAD`,
+  which buckets breaking commits explicitly.
 
 Do not pick a version yourself when no instruction was given.
 
@@ -71,12 +74,13 @@ no push. Before pushing, verify the commit is exactly what a release commit
 should be:
 
 ```bash
-git show --stat HEAD
+rt verify-bump-commit
 ```
 
-It must touch only `packages/*/package.json`, and must NOT touch private
-packages excluded by `bump.config.mts` (currently `packages/browser-ui`).
-Anything else means a dirty state — stop and investigate.
+It checks that HEAD touches only package manifests, includes every public
+package, and leaves all of them on one consistent version (the expected set
+is derived from the workspace, so it stays correct as packages change). A
+failure means a dirty state — stop and investigate.
 
 Then push and open the PR (title format is load-bearing for repo history):
 

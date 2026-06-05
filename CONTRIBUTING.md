@@ -106,6 +106,6 @@ To release manually:
 2. The command will prompt for a bump type. It creates a local commit only (no tag, no push).
 3. Open a pull request with a title like `release: 0.7.10` and ensure CI passes.
 4. Trigger the [release action](https://github.com/web-infra-dev/rstest/actions/workflows/release.yml) with `npm_tag` set to `latest` and `branch` set to the release branch. The workflow uses [staged publishing](https://docs.npmjs.com/staged-publishing/) — packages are uploaded to npm but not yet installable.
-5. Approve the staged packages with 2FA: run `npm stage approve <stage-id>` for each package (the stage ids are printed in the workflow log), or approve them in the [Staged Packages tab](https://www.npmjs.com/settings/rstest/packages) on npmjs.com. Verify every package is live (e.g. `npm view @rstest/core@x.y.z version`) before continuing.
+5. Approve the staged packages with 2FA: run `node .agents/skills/release/scripts/release-tools.mjs approve-staged <run-id>` (extracts the stage ids from the workflow log and approves all packages with one OTP), or approve them in the [Staged Packages tab](https://www.npmjs.com/settings/rstest/packages) on npmjs.com. Then run `node .agents/skills/release/scripts/release-tools.mjs verify-live x.y.z` to confirm every package is live before continuing.
 6. Merge the release pull request to `main`.
 7. Use the `create-draft-release-notes` skill to create a draft [GitHub release note](https://github.com/web-infra-dev/rstest/releases). Review the draft release note, optionally add release highlights, and publish it.

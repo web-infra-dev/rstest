@@ -12,7 +12,7 @@
       "id": 1,
       "name": "resume-state-detection",
       "prompt": "I think a release of rstest was in progress recently — can you figure out where it stands and what's left to do?",
-      "expected_output": "Walks the resume checklist in order: checks for release/* PRs, recent release.yml runs, npm live status, tag/release existence. Concludes v0.10.3 is fully complete and no release is in progress. Read-only throughout.",
+      "expected_output": "Walks the resume checklist in order: checks for release/* PRs, recent release.yml runs, npm live status, tag/release existence. Correctly concludes whether a release is in progress (and at which step) or the latest release is fully complete. Read-only throughout.",
       "files": []
     },
     {
