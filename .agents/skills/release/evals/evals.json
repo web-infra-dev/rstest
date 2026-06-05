@@ -1,0 +1,26 @@
+{
+  "skill_name": "release",
+  "evals": [
+    {
+      "id": 0,
+      "name": "version-decision-support",
+      "prompt": "What should the next rstest version be? Show me what changed since the last release and give me the version options. Don't start the release yet.",
+      "expected_output": "Runs release-tools.mjs preflight/bump-menu (read-only), shows bumpp's native commit list and version menu verbatim, explains repo convention (0.x patch releases routinely contain feats; conventional line is input not decision), presents options without choosing autonomously.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "resume-state-detection",
+      "prompt": "I think a release of rstest was in progress recently — can you figure out where it stands and what's left to do?",
+      "expected_output": "Walks the resume checklist in order: checks for release/* PRs, recent release.yml runs, npm live status, tag/release existence. Concludes v0.10.3 is fully complete and no release is in progress. Read-only throughout.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "approval-guidance",
+      "prompt": "The release CI for rstest just finished staging the packages. How do I approve them so they go live? Walk me through it.",
+      "expected_output": "Explains the 2FA approval is human-only, offers BOTH the one-OTP release-tools.mjs approve-staged command path and the npmjs.com Staged Packages web link (on its own line), explains stage-id extraction from the run log, and points to release-tools.mjs verify-live as the gate before merging.",
+      "files": []
+    }
+  ]
+}
