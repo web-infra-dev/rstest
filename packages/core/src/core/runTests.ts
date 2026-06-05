@@ -2,12 +2,7 @@ import { constants as osConstants } from 'node:os';
 import { cleanCoverageReports, createCoverageProvider } from '../coverage';
 import { ensureRunDependencies } from './dependencies';
 import { createPool } from '../pool';
-import type {
-  Duration,
-  EntryInfo,
-  ProjectEntries,
-  SourceMapInput,
-} from '../types';
+import type { Duration, ProjectEntries, SourceMapInput } from '../types';
 import type { CoverageMap } from '../types/coverage';
 import {
   clearScreen,
@@ -29,11 +24,8 @@ import {
 } from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import { kindOf } from './executor';
-import {
-  claimGlobalSetupOnce,
-  runGlobalSetup,
-  runGlobalTeardown,
-} from './globalSetup';
+import { runGlobalTeardown } from './globalSetup';
+import { createNodeExecutor } from './nodeExecutor';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
@@ -531,6 +523,12 @@ export async function runTests(context: Rstest): Promise<void> {
     recommendWorkerCount,
   });
 
+  const nodeExecutor = createNodeExecutor({
+    context,
+    pool,
+    getRsbuildStats,
+  });
+
   // Initialize coverage collector
   const coverageProvider = coverage.enabled
     ? await createCoverageProvider(coverage, context.rootPath)
@@ -558,10 +556,6 @@ export async function runTests(context: Rstest): Promise<void> {
       await reporter.onTestRunStart?.();
     }
 
-    let testStart: number | undefined;
-    const currentEntries: EntryInfo[] = [];
-    const currentDeletedEntries: string[] = [];
-
     context.stateManager.reset();
 
     // TODO: this is not the best practice for collecting test files
@@ -579,128 +573,15 @@ export async function runTests(context: Rstest): Promise<void> {
     // (see `beginRun` in utils/trace.ts), so call sites stay branch-free.
     const { span } = traceRun;
 
-    const returns = await Promise.all(
-      projects.map(async (p) => {
-        const {
-          assetNames,
-          entries,
-          setupEntries,
-          globalSetupEntries,
-          getAssetFiles,
-          getSourceMaps,
-          affectedEntries,
-          deletedEntries,
-        } = await span(
-          'host:get-rsbuild-stats',
-          'host',
-          () =>
-            getRsbuildStats({
-              environmentName: p.environmentName,
-              fileFilters,
-            }),
-          { project: p.name, testPath: '<project>' },
-        );
-
-        testStart ??= Date.now();
-
-        // Global setup runs once per project, only if there is at least one
-        // running test.
-        if (
-          claimGlobalSetupOnce(p, entries.length, globalSetupEntries.length)
-        ) {
-          const files = globalSetupEntries.flatMap((e) => e.files!);
-          const globalSetupTraceArgs = {
-            project: p.name,
-            testPath: '<globalSetup>',
-          };
-          const [assetFiles, sourceMaps] = await span(
-            'host:global-setup-assets',
-            'host',
-            () => Promise.all([getAssetFiles(files), getSourceMaps(files)]),
-            globalSetupTraceArgs,
-          );
-
-          const { success, errors } = await span(
-            'host:global-setup',
-            'host',
-            () =>
-              runGlobalSetup({
-                globalSetupEntries,
-                assetFiles,
-                sourceMaps,
-                interopDefault: true,
-                outputModule: p.outputModule,
-              }),
-            globalSetupTraceArgs,
-          );
-          if (!success) {
-            return {
-              results: [],
-              testResults: [],
-              errors,
-              assetNames,
-              // sourcemap is useless since we install source-map-support in worker
-              getSourceMaps: () => null,
-            };
-          }
-        }
-
-        currentDeletedEntries.push(...deletedEntries);
-
-        let finalEntries: EntryInfo[] = entries;
-        if (mode === 'on-demand') {
-          if (affectedEntries.length === 0) {
-            logger.debug(
-              color.yellow(
-                `No test files need re-run in project(${p.environmentName}).`,
-              ),
-            );
-          } else {
-            logger.debug(
-              color.yellow(
-                `Test files to re-run in project(${p.environmentName}):\n`,
-              ) +
-                affectedEntries.map((e) => e.testPath).join('\n') +
-                '\n',
-            );
-          }
-          finalEntries = affectedEntries;
-        } else {
-          logger.debug(
-            color.yellow(
-              fileFilters?.length
-                ? `Run filtered tests in project(${p.environmentName}).\n`
-                : `Run all tests in project(${p.environmentName}).\n`,
-            ),
-          );
-        }
-
-        currentEntries.push(...finalEntries);
-        const { results, testResults } = await pool.runTests({
-          entries: finalEntries,
-          getSourceMaps,
-          setupEntries,
-          getAssetFiles,
-          project: p,
-          updateSnapshot: context.snapshotManager.options.updateSnapshot,
-          onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
-          onTraceEvents: traceRun.onEvents,
-          traceSpan: span,
-        });
-
-        return {
-          results,
-          testResults,
-          assetNames,
-          getSourceMaps,
-        };
-      }),
-    );
-
-    testStart ??= buildStart;
-    const buildTime = testStart - buildStart;
-
-    const testTime = Date.now() - testStart;
+    const nodeResult = await nodeExecutor.runTests({
+      projects,
+      mode,
+      fileFilters,
+      buildStart,
+      onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
+      onTraceEvents: traceRun.onEvents,
+      traceSpan: span,
+    });
 
     // Wait for browser tests to complete if running in parallel
     const browserResult = browserResultPromise
@@ -710,17 +591,6 @@ export async function runTests(context: Rstest): Promise<void> {
     const browserClose = browserResult?.close;
 
     try {
-      const nodeResourceByAssetName = new Map<
-        string,
-        (typeof returns)[number]['getSourceMaps']
-      >();
-
-      for (const item of returns) {
-        for (const assetName of item.assetNames) {
-          nodeResourceByAssetName.set(assetName, item.getSourceMaps);
-        }
-      }
-
       const getSourcemap = async (
         sourcePath: string,
       ): Promise<SourceMapInput | null> => {
@@ -731,35 +601,34 @@ export async function runTests(context: Rstest): Promise<void> {
           }
         }
 
-        const getSourceMaps = nodeResourceByAssetName.get(sourcePath);
-        const sourceMap = (await getSourceMaps?.([sourcePath]))?.[sourcePath];
-        return sourceMap ? JSON.parse(sourceMap) : null;
+        const resolved = await nodeResult.resolveSourcemap?.(sourcePath);
+        return resolved?.sourcemap ?? null;
       };
 
-      // Reduce the per-environment worker returns (and, when unifying reporter
-      // output, the browser result) into the run verdict. The only side effects
-      // are merging browser coverage into `mergedCoverageMap` and stripping it
-      // from the browser results to avoid reporter/state cache bloat (mirrors
-      // the node-side pool layer's `delete result.coverage`).
+      // Reduce the node executor result (and, when unifying reporter output, the
+      // browser result) into the run verdict. The only side effects are merging
+      // browser coverage into `mergedCoverageMap` and stripping it from the
+      // browser results to avoid reporter/state cache bloat (mirrors the
+      // node-side pool layer's `delete result.coverage`).
 
       // When unifying reporter output, combine browser and node durations
       const duration: Duration =
         shouldUnifyReporter && browserResult
           ? {
               totalTime:
-                testTime + buildTime + browserResult.duration.totalTime,
-              buildTime: buildTime + browserResult.duration.buildTime,
-              testTime: testTime + browserResult.duration.testTime,
+                nodeResult.duration.totalTime +
+                browserResult.duration.totalTime,
+              buildTime:
+                nodeResult.duration.buildTime +
+                browserResult.duration.buildTime,
+              testTime:
+                nodeResult.duration.testTime + browserResult.duration.testTime,
             }
-          : {
-              totalTime: testTime + buildTime,
-              buildTime,
-              testTime,
-            };
+          : nodeResult.duration;
 
-      const results = returns.flatMap((r) => r.results);
-      const testResults = returns.flatMap((r) => r.testResults);
-      const errors = returns.flatMap((r) => r.errors || []);
+      const results = [...nodeResult.results];
+      const testResults = [...nodeResult.testResults];
+      const errors: Error[] = [...nodeResult.unhandledErrors];
 
       // Merge browser test results for coverage collection (only when unifying reporter output)
       // In watch mode, browser and node tests run independently with their own reporters,
@@ -795,7 +664,7 @@ export async function runTests(context: Rstest): Promise<void> {
       context.updateReporterResultState(
         results,
         testResults,
-        currentDeletedEntries,
+        nodeResult.deletedEntries,
       );
 
       if (noTestsDiscovered) {
@@ -813,8 +682,8 @@ export async function runTests(context: Rstest): Promise<void> {
           duration,
           getSourcemap,
           unhandledErrors: errors,
-          filterRerunTestPaths: currentEntries.length
-            ? currentEntries.map((e) => e.testPath)
+          filterRerunTestPaths: nodeResult.ranTestPaths.length
+            ? nodeResult.ranTestPaths
             : undefined,
         }),
       );
@@ -870,7 +739,9 @@ export async function runTests(context: Rstest): Promise<void> {
 
       try {
         await runLifecycleStep('global teardown', () => runGlobalTeardown());
-        await runLifecycleStep('worker pool cleanup', () => pool.close());
+        await runLifecycleStep('worker pool cleanup', () =>
+          nodeExecutor.close(),
+        );
         await runLifecycleStep('rsbuild server cleanup', () => closeServer());
         // Flush any browser events the host pushed into the pre-allocated
         // buffer since the last `run()` finalized — otherwise they get
@@ -924,7 +795,7 @@ export async function runTests(context: Rstest): Promise<void> {
 
     onBeforeRestart(async () => {
       await runLifecycleStep('global teardown', () => runGlobalTeardown());
-      await runLifecycleStep('worker pool cleanup', () => pool.close());
+      await runLifecycleStep('worker pool cleanup', () => nodeExecutor.close());
       await runLifecycleStep('rsbuild server cleanup', () => closeServer());
       await runLifecycleStep('trace run finalize', () =>
         activeTraceRun.finalize(),
@@ -951,7 +822,9 @@ export async function runTests(context: Rstest): Promise<void> {
       if (isFirstCompile && enableCliShortcuts) {
         const closeCliShortcuts = await setupCliShortcuts({
           closeServer: async () => {
-            await runLifecycleStep('worker pool cleanup', () => pool.close());
+            await runLifecycleStep('worker pool cleanup', () =>
+              nodeExecutor.close(),
+            );
             await runLifecycleStep('rsbuild server cleanup', () =>
               closeServer(),
             );
@@ -1086,7 +959,9 @@ export async function runTests(context: Rstest): Promise<void> {
 
       try {
         await runLifecycleStep('global teardown', () => runGlobalTeardown());
-        await runLifecycleStep('worker pool cleanup', () => pool.close());
+        await runLifecycleStep('worker pool cleanup', () =>
+          nodeExecutor.close(),
+        );
         await runLifecycleStep('rsbuild server cleanup', () => closeServer());
         await runLifecycleStep('trace run finalize', () =>
           activeTraceRun.finalize(),
@@ -1141,7 +1016,7 @@ export async function runTests(context: Rstest): Promise<void> {
     try {
       await run();
       isTeardown = true;
-      await runLifecycleStep('worker pool cleanup', () => pool.close());
+      await runLifecycleStep('worker pool cleanup', () => nodeExecutor.close());
       await runLifecycleStep('rsbuild server cleanup', () => closeServer());
 
       // Run global teardown after all tests are done
