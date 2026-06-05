@@ -16,6 +16,7 @@ import type {
 } from '../types';
 import { isDebug } from '../utils';
 import { isMemorySufficient } from '../utils/memory';
+import { kindOf } from './executor';
 import { pluginBasic } from './plugins/basic';
 import { pluginCSSFilter } from './plugins/css-filter';
 import { pluginEntryWatch } from './plugins/entry';
@@ -111,9 +112,7 @@ export const prepareRsbuild = async (
   // broader project set when they only need graph information.
   const projects = targetProjects?.length
     ? targetProjects
-    : context.projects.filter(
-        (project) => !project.normalizedConfig.browser.enabled,
-      );
+    : context.projects.filter((project) => kindOf(project) === 'node');
   const debugMode = isDebug();
 
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';

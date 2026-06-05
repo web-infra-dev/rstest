@@ -17,6 +17,7 @@ import {
   getSetupFiles,
   getTestEntries,
   isDebug,
+  kindOf,
   type ListCommandResult,
   loadCoverageProvider,
   logger,
@@ -873,9 +874,7 @@ const getRuntimeConfigFromProject = (
 };
 
 const getBrowserProjects = (context: RstestContext): ProjectContext[] => {
-  return context.projects.filter(
-    (project) => project.normalizedConfig.browser.enabled,
-  );
+  return context.projects.filter((project) => kindOf(project) === 'browser');
 };
 
 const getBrowserLaunchOptions = (

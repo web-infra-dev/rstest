@@ -28,6 +28,7 @@ import {
   loadBrowserModule,
 } from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
+import { kindOf } from './executor';
 import {
   claimGlobalSetupOnce,
   runGlobalSetup,
@@ -189,10 +190,10 @@ export async function runTests(context: Rstest): Promise<void> {
 
   // Separate browser mode and node mode projects
   const browserProjects = context.projects.filter(
-    (project) => project.normalizedConfig.browser.enabled,
+    (project) => kindOf(project) === 'browser',
   );
   const nodeProjects = context.projects.filter(
-    (project) => !project.normalizedConfig.browser.enabled,
+    (project) => kindOf(project) === 'node',
   );
 
   const hasBrowserProjects = browserProjects.length > 0;
@@ -514,7 +515,7 @@ export async function runTests(context: Rstest): Promise<void> {
     // TODO: the best way is to create workers on demand
     const nodeEntries = Array.from(entriesCache.entries()).filter(([key]) => {
       const project = projects.find((p) => p.environmentName === key);
-      return project?.normalizedConfig.browser.enabled !== true;
+      return !project || kindOf(project) === 'node';
     });
 
     return nodeEntries.flatMap(

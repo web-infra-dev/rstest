@@ -21,6 +21,7 @@ import {
   ROOT_SUITE_NAME,
   resolveShardedEntries,
 } from '../utils';
+import { kindOf } from './executor';
 import {
   claimGlobalSetupOnce,
   runGlobalSetup,
@@ -363,11 +364,9 @@ const collectAllTests = async ({
 }> => {
   // Separate browser and node mode projects
   const browserProjects = context.projects.filter(
-    (p) => p.normalizedConfig.browser.enabled,
+    (p) => kindOf(p) === 'browser',
   );
-  const nodeProjects = context.projects.filter(
-    (p) => !p.normalizedConfig.browser.enabled,
-  );
+  const nodeProjects = context.projects.filter((p) => kindOf(p) === 'node');
 
   // Collect from both in parallel
   const [nodeResult, browserResult] = await Promise.all([
@@ -458,9 +457,7 @@ export async function listTests(
     }
 
     shardedBrowserEntries = new Map();
-    for (const p of context.projects.filter(
-      (p) => p.normalizedConfig.browser.enabled,
-    )) {
+    for (const p of context.projects.filter((p) => kindOf(p) === 'browser')) {
       shardedBrowserEntries.set(p.environmentName, {
         entries: testEntries[p.environmentName] || {},
       });
