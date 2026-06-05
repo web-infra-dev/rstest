@@ -232,7 +232,14 @@ export async function mergeReports(
     (!hasFailure || coverageOptions.reportOnFailure)
   ) {
     const { generateCoverage } = await import('../coverage/generate');
-    await generateCoverage(context, mergedCoverageMap, coverageProvider);
+    // Merge-reports backfills untested files from any prior blob with no
+    // node/browser distinction, so it scopes to the full project set.
+    await generateCoverage(
+      context.projects,
+      context,
+      mergedCoverageMap,
+      coverageProvider,
+    );
   }
 
   if (cleanup && existsSync(blobDir)) {

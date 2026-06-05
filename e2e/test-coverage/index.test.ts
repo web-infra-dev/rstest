@@ -274,4 +274,31 @@ describe('test coverage-istanbul', () => {
       logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
     ).toMatchInlineSnapshot(`"Allfiles|0|0|0|0|"`);
   });
+
+  it('does not crash instrumenting untested files for an unbuilt sibling project (coverage.include)', async () => {
+    const { expectExecSuccess, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'rstest.unbuiltSibling.config.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    // The built project's coverage is reported and the run succeeds — the
+    // unbuilt sibling is scoped out of untested-file instrumentation instead of
+    // throwing `swc transform function ... is not registered`.
+    await expectExecSuccess();
+
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).not.toContain('is not registered');
+    expect(output).not.toContain('Can not generate coverage for untested file');
+    expect(output).not.toContain('Failed to generate coverage reports');
+
+    // The built project's source is instrumented and reported; the unbuilt
+    // sibling's source must not appear in the coverage report.
+    expect(output).toContain('array.ts');
+    expect(output).not.toContain('orphan.ts');
+  });
 });

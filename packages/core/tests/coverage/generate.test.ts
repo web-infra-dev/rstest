@@ -93,10 +93,91 @@ describe('generateCoverage', () => {
     } as RstestContext;
 
     try {
-      await generateCoverage(context, createCoverageMap(), provider);
+      await generateCoverage(
+        context.projects,
+        context,
+        createCoverageMap(),
+        provider,
+      );
       expect(batches).toEqual([25, 25, 5]);
     } finally {
       rmSync(rootPath, { recursive: true, force: true });
+    }
+  });
+
+  it('only instruments untested files for the scheduled (built) projects', async () => {
+    // A project configured but NOT built this round (e.g. a node sibling that
+    // matched zero files, or a browser project) must be skipped, so its
+    // environment's swc transform is never demanded (would throw otherwise).
+    const scheduledRoot = mkdtempSync(
+      path.join(tmpdir(), 'rstest-coverage-scheduled-'),
+    );
+    const unscheduledRoot = mkdtempSync(
+      path.join(tmpdir(), 'rstest-coverage-unscheduled-'),
+    );
+    for (const root of [scheduledRoot, unscheduledRoot]) {
+      const srcDir = path.join(root, 'src');
+      mkdirSync(srcDir, { recursive: true });
+      writeFileSync(path.join(srcDir, 'index.ts'), 'export const value = 1;\n');
+    }
+
+    const defaultCoverage = withDefaultConfig({}).coverage;
+    const instrumented: string[] = [];
+
+    const provider = {
+      init: () => {},
+      collect: () => null,
+      cleanup: () => {},
+      createCoverageMap: () => createCoverageMap(),
+      async generateCoverageForUntestedFiles({ files }) {
+        instrumented.push(...files);
+        return files.map(createFileCoverage);
+      },
+      async generateReports() {},
+    } satisfies CoverageProvider;
+
+    const scheduledProject = {
+      rootPath: scheduledRoot,
+      environmentName: 'node',
+    };
+    const unscheduledProject = {
+      rootPath: unscheduledRoot,
+      environmentName: 'node-unbuilt',
+    };
+
+    const context = {
+      rootPath: scheduledRoot,
+      normalizedConfig: {
+        coverage: {
+          ...defaultCoverage,
+          include: ['src/**/*.ts'],
+          allowExternal: true,
+        },
+      },
+      // Both projects are configured, but only the scheduled one was built.
+      projects: [scheduledProject, unscheduledProject],
+    } as unknown as RstestContext;
+
+    const norm = (p: string) => p.split('\\').join('/');
+
+    try {
+      await generateCoverage(
+        [scheduledProject] as unknown as RstestContext['projects'],
+        context,
+        createCoverageMap(),
+        provider,
+      );
+
+      expect(instrumented.length).toBeGreaterThan(0);
+      expect(
+        instrumented.every((f) => norm(f).startsWith(norm(scheduledRoot))),
+      ).toBe(true);
+      expect(
+        instrumented.some((f) => norm(f).startsWith(norm(unscheduledRoot))),
+      ).toBe(false);
+    } finally {
+      rmSync(scheduledRoot, { recursive: true, force: true });
+      rmSync(unscheduledRoot, { recursive: true, force: true });
     }
   });
 
@@ -153,7 +234,7 @@ describe('generateCoverage', () => {
     } as RstestContext;
 
     try {
-      await generateCoverage(context, coverageMap, provider);
+      await generateCoverage(context.projects, context, coverageMap, provider);
       expect(reportedFiles).toEqual([[sourceFile]]);
     } finally {
       rmSync(rootPath, { recursive: true, force: true });
@@ -208,7 +289,7 @@ describe('generateCoverage', () => {
     } as RstestContext;
 
     try {
-      await generateCoverage(context, coverageMap, provider);
+      await generateCoverage(context.projects, context, coverageMap, provider);
       expect(reportedFiles).toEqual([[sourceFile]]);
     } finally {
       rmSync(rootPath, { recursive: true, force: true });
@@ -258,7 +339,7 @@ describe('generateCoverage', () => {
     } as RstestContext;
 
     try {
-      await generateCoverage(context, coverageMap, provider);
+      await generateCoverage(context.projects, context, coverageMap, provider);
       expect(reportedFiles).toEqual([[sourceFile]]);
     } finally {
       rmSync(parentPath, { recursive: true, force: true });
@@ -313,7 +394,7 @@ describe('generateCoverage', () => {
     } as RstestContext;
 
     try {
-      await generateCoverage(context, coverageMap, provider);
+      await generateCoverage(context.projects, context, coverageMap, provider);
       expect(reportedFiles).toEqual([[sourceFile]]);
     } finally {
       rmSync(rootPath, { recursive: true, force: true });
@@ -367,7 +448,12 @@ describe('generateCoverage', () => {
     } as RstestContext;
 
     try {
-      await generateCoverage(context, createCoverageMap(), provider);
+      await generateCoverage(
+        context.projects,
+        context,
+        createCoverageMap(),
+        provider,
+      );
     } finally {
       rmSync(rootPath, { recursive: true, force: true });
     }
@@ -474,7 +560,13 @@ describe('generateCoverage', () => {
     };
 
     try {
-      await generateCoverage(context, createCoverageMap(), provider, traceSpan);
+      await generateCoverage(
+        context.projects,
+        context,
+        createCoverageMap(),
+        provider,
+        traceSpan,
+      );
       expect(spans).toEqual([
         'coverage:filter-files',
         'coverage:collect-covered-files',

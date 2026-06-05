@@ -2,7 +2,7 @@ import type FS from 'node:fs';
 import { isAbsolute, normalize, relative } from 'pathe';
 import picomatch from 'picomatch';
 import { glob, isDynamicPattern } from 'tinyglobby';
-import type { RstestContext } from '../types';
+import type { ProjectContext, RstestContext } from '../types';
 import type {
   CoverageMap,
   CoverageOptions,
@@ -176,6 +176,14 @@ export const filterChangedFiles = (
 };
 
 export async function generateCoverage(
+  /**
+   * Projects whose environment was built this round. Untested-file
+   * instrumentation (`coverage.include`) only runs for these — instrumenting a
+   * configured-but-unbuilt project (a browser project, or a node sibling that
+   * matched zero files) would call `transformCoverage` for an environment whose
+   * swc transform was never registered, throwing `transform not registered`.
+   */
+  scheduledProjects: ProjectContext[],
   context: RstestContext,
   coverageMap: CoverageMap,
   coverageProvider: CoverageProvider,
@@ -184,7 +192,6 @@ export async function generateCoverage(
   const {
     rootPath,
     normalizedConfig: { coverage },
-    projects,
   } = context;
   try {
     const finalCoverageMap = coverageMap;
@@ -260,7 +267,7 @@ export async function generateCoverage(
       // the resident set. Sequential processing lets each project's
       // intermediate data be GC'd before the next one starts.
       const allFiles: string[] = [];
-      for (const p of projects) {
+      for (const p of scheduledProjects) {
         const includedFiles = await traceSpan(
           'coverage:collect-included-files',
           'coverage',

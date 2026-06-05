@@ -273,7 +273,10 @@ export async function runTests(context: Rstest): Promise<void> {
           }
         }
         const { generateCoverage } = await import('../coverage/generate');
+        // Browser-only path: every project is a browser project here
+        // (`!hasNodeProjects`), so `browserProjects === context.projects`.
         await generateCoverage(
+          browserProjects,
           context,
           browserCoverageMap,
           coverageProvider,
@@ -694,6 +697,7 @@ export async function runTests(context: Rstest): Promise<void> {
 
         await runLifecycleStep('coverage report generation', () =>
           generateCoverage(
+            projects,
             context,
             mergedCoverageMap!,
             coverageProvider,
