@@ -59,8 +59,9 @@ choose, with context that helps them judge:
   because a feat exists; that is input, not a decision.
 - Point out any commits with `!` / `BREAKING CHANGE` markers. Don't rely on
   eyeballing the list for this — run
-  `node .agents/skills/create-release-blog/scripts/collect-commits.mjs <last-tag>..HEAD`,
-  which buckets breaking commits explicitly.
+  `node .agents/skills/create-release-blog/scripts/collect-commits.mjs <last-tag>..origin/main`,
+  which buckets breaking commits explicitly (range ends at `origin/main`, not
+  local HEAD — the release is cut from `origin/main`).
 
 Do not pick a version yourself when no instruction was given.
 
@@ -78,10 +79,11 @@ from `origin/main`, creates `release/0.10.4` there, runs the bump
 verifies the bump commit (only package manifests touched, every public
 package included, all on one consistent version — the expected set is derived
 from the workspace), and removes the worktree, leaving only the local branch.
-A verification failure means a dirty state — stop and investigate.
+On a verification failure no branch is created and the worktree is kept —
+inspect it (the tool prints how) before cleaning up; do not retry blindly.
 
-Then push and open the PR using the commands the tool prints (title format is
-load-bearing for repo history):
+Then push and open the PR — the tool prints these commands with the real
+version filled in (title format is load-bearing for repo history):
 
 ```bash
 git push -u origin release/0.10.4

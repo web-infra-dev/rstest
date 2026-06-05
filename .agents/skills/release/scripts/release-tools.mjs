@@ -21,9 +21,17 @@
  *   verify-live <version>       Check every public package is live on npm (parallel)
  */
 import { execFile, execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, symlinkSync, unlinkSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { promisify, stripVTControlCharacters } from 'node:util';
 
@@ -72,7 +80,7 @@ function splitSpec(spec) {
 }
 
 /** The single consistent version of all public packages; throws on divergence. */
-function consistentVersion(root) {
+function consistentVersion(root = repoRoot()) {
   const manifests = publicPackageManifests(root);
   if (manifests.length === 0) throw new Error('no public packages found');
   const versions = new Set(manifests.map((m) => m.version));
@@ -84,23 +92,14 @@ function consistentVersion(root) {
   return { version: manifests[0].version, count: manifests.length };
 }
 
-/** Compute the target version from a release type, or pass an exact version through. */
-function bumpVersion(current, releaseArg) {
-  if (/^\d+\.\d+\.\d+/.test(releaseArg)) return releaseArg;
-  const m = current.match(/^(\d+)\.(\d+)\.(\d+)/);
-  if (!m) throw new Error(`cannot parse current version '${current}'`);
-  const [major, minor, patch] = m.slice(1).map(Number);
-  switch (releaseArg) {
-    case 'major':
-      return `${major + 1}.0.0`;
-    case 'minor':
-      return `${major}.${minor + 1}.0`;
-    case 'patch':
-      return `${major}.${minor}.${patch + 1}`;
-    default:
-      throw new Error(
-        `unsupported release type '${releaseArg}' — pass patch, minor, major, or an exact version (use an exact version for pre-releases)`,
-      );
+/** Compare local HEAD with origin/main; null when origin/main is unresolvable. */
+function headVsOriginMain(cwd) {
+  try {
+    const head = run('git', ['rev-parse', 'HEAD'], { cwd }).trim();
+    const main = run('git', ['rev-parse', 'origin/main'], { cwd }).trim();
+    return { head: head.slice(0, 8), main: main.slice(0, 8), same: head === main };
+  } catch {
+    return null;
   }
 }
 
@@ -108,24 +107,18 @@ function preflight() {
   let failed = false;
   const report = (mark, label, detail) =>
     console.log(`  ${mark} ${label}${detail ? ` — ${detail}` : ''}`);
-  const check = (label, fn) => {
+  // blocking: false prints ⚠️ instead of ❌ and does not fail the preflight —
+  // used for local-checkout state that the worktree-based release path
+  // (prepare-release-branch) makes harmless.
+  const check = (label, fn, { blocking = true } = {}) => {
     try {
       const detail = fn();
       report('✅', label, detail);
       return detail;
     } catch (e) {
-      report('❌', label, String(e.message || e).split('\n')[0]);
-      failed = true;
+      report(blocking ? '❌' : '⚠️', label, String(e.message || e).split('\n')[0]);
+      if (blocking) failed = true;
       return null;
-    }
-  };
-  // Informational: prints ⚠️ instead of failing. Used for local-checkout state
-  // that the worktree-based release path (prepare-release-branch) makes harmless.
-  const note = (label, fn) => {
-    try {
-      report('✅', label, fn());
-    } catch (e) {
-      report('⚠️', label, String(e.message || e).split('\n')[0]);
     }
   };
 
@@ -136,27 +129,26 @@ function preflight() {
     return '';
   });
 
-  note('working tree clean', () => {
-    const dirty = run('git', ['status', '--porcelain']).trim();
-    if (dirty) {
-      throw new Error(
-        `${dirty.split('\n').length} dirty path(s) — OK: the release branch is prepared in an isolated worktree`,
-      );
-    }
-    return '';
-  });
+  check(
+    'working tree clean',
+    () => {
+      const dirty = run('git', ['status', '--porcelain']).trim();
+      if (dirty) throw new Error(`${dirty.split('\n').length} dirty path(s)`);
+      return '';
+    },
+    { blocking: false },
+  );
 
-  note('HEAD is at origin/main', () => {
-    run('git', ['fetch', 'origin', 'main', '--quiet']);
-    const head = run('git', ['rev-parse', 'HEAD']).trim();
-    const main = run('git', ['rev-parse', 'origin/main']).trim();
-    if (head !== main) {
-      throw new Error(
-        `HEAD=${head.slice(0, 8)} origin/main=${main.slice(0, 8)} — note: bump-menu's commit list reflects local HEAD`,
-      );
-    }
-    return head.slice(0, 8);
-  });
+  check(
+    'HEAD is at origin/main',
+    () => {
+      run('git', ['fetch', 'origin', 'main', '--quiet']);
+      const at = headVsOriginMain(repoRoot());
+      if (!at.same) throw new Error(`HEAD=${at.head} origin/main=${at.main}`);
+      return at.head;
+    },
+    { blocking: false },
+  );
 
   const lastTag = check('latest release tag resolved', () => {
     const releases = JSON.parse(
@@ -210,16 +202,11 @@ function preflight() {
  */
 function bumpMenu() {
   const cwd = repoRoot();
-  try {
-    const head = run('git', ['rev-parse', 'HEAD'], { cwd }).trim();
-    const main = run('git', ['rev-parse', 'origin/main'], { cwd }).trim();
-    if (head !== main) {
-      console.log(
-        `⚠️ local HEAD (${head.slice(0, 8)}) differs from origin/main (${main.slice(0, 8)}) — the commit list below reflects local HEAD; the release itself is cut from origin/main.`,
-      );
-    }
-  } catch {
-    // origin/main not resolvable — skip the hint
+  const at = headVsOriginMain(cwd);
+  if (at && !at.same) {
+    console.log(
+      `⚠️ local HEAD (${at.head}) differs from origin/main (${at.main}) — the commit list below reflects local HEAD; the release itself is cut from origin/main.`,
+    );
   }
   const statusBefore = run('git', ['status', '--porcelain'], { cwd });
   const result = spawnSync('pnpm', ['bump', '--print-commits'], {
@@ -253,7 +240,8 @@ function bumpMenu() {
  * commit is verified there, and only the resulting `release/x.y.z` branch
  * ref survives the cleanup. bumpp and its config loader resolve from the
  * main checkout's node_modules via a temporary symlink, so the worktree
- * needs no install.
+ * needs no install. On failure the worktree is kept for inspection (and no
+ * branch exists yet — it is created only after verification passes).
  */
 function prepareReleaseBranch(releaseArg) {
   const root = repoRoot();
@@ -264,53 +252,59 @@ function prepareReleaseBranch(releaseArg) {
   }
 
   run('git', ['fetch', 'origin', 'main', '--quiet'], { cwd: root });
-  const dir = join(tmpdir(), `rstest-release-${process.pid}`);
+  // self-heal worktree registrations left behind by crashed runs
+  run('git', ['worktree', 'prune'], { cwd: root });
+  const dir = join(mkdtempSync(join(tmpdir(), 'rstest-release-')), 'wt');
   run('git', ['worktree', 'add', '--detach', dir, 'origin/main'], { cwd: root });
 
-  let error = null;
-  let version = null;
-  let branch = null;
+  let version;
+  let branch;
   try {
-    version = bumpVersion(consistentVersion(dir).version, releaseArg);
-    branch = `release/${version}`;
-    run('git', ['switch', '-c', branch], { cwd: dir });
     symlinkSync(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir');
 
-    console.log(`Bumping to ${version} in an isolated worktree (from origin/main)...`);
-    // --no-verify: the shared pre-commit hook runs pnpm-backed checks that
-    // cannot work against the worktree's symlinked node_modules (pnpm wants
-    // to purge it). The bump only rewrites version fields, and the stricter
-    // verifyBumpCommit() below replaces what the hook would have checked.
+    console.log(`Bumping (${releaseArg}) in an isolated worktree (from origin/main)...`);
+    // bumpp owns the version arithmetic — the release type passes straight
+    // through and the resulting version is read back afterwards.
+    // --no-verify: the shared pre-commit hook runs pnpm-backed checks
+    // (prettier, check-dependency-version) that need a real install and
+    // cannot work against the worktree's symlinked store; the release PR's
+    // CI covers those, and verifyBumpCommit() guards the commit's shape.
     const result = spawnSync(
       process.execPath,
-      [bumppBin, '--release', version, '--yes', '--no-verify'],
+      [bumppBin, '--release', releaseArg, '--yes', '--no-verify'],
       { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
     );
     if (result.status !== 0) {
       throw new Error(`bumpp failed:\n${result.stdout}\n${result.stderr}`);
     }
     verifyBumpCommit(dir);
+    ({ version } = consistentVersion(dir));
+    branch = `release/${version}`;
+    // The branch is created only after verification passes, so a failed run
+    // leaves no branch — just the worktree below, kept for inspection.
+    run('git', ['switch', '-c', branch], { cwd: dir });
   } catch (e) {
-    error = e;
-  } finally {
-    try {
-      unlinkSync(join(dir, 'node_modules'));
-    } catch {
-      // symlink was never created
-    }
-    run('git', ['worktree', 'remove', '--force', dir], { cwd: root });
+    console.error(String(e.message || e));
+    console.error(`\nThe worktree is left at ${dir} for inspection (git -C ${dir} show HEAD).`);
+    console.error(`Clean up with: git worktree remove --force ${dir}`);
+    process.exit(1);
   }
 
-  if (error) {
-    // The worktree is gone; a partially created branch may remain.
-    console.error(String(error.message || error));
-    if (branch) console.error(`Clean up with: git branch -D ${branch}`);
-    process.exit(1);
+  try {
+    unlinkSync(join(dir, 'node_modules'));
+    run('git', ['worktree', 'remove', dir], { cwd: root });
+    // also drop the (now empty) mkdtemp parent directory
+    rmSync(dirname(dir), { recursive: true, force: true });
+  } catch (e) {
+    console.error(
+      `Worktree cleanup failed (${String(e.message || e).split('\n')[0]}) — remove manually: git worktree remove --force ${dir}`,
+    );
   }
 
   console.log(`\nBranch ${branch} is ready (local only). Next:`);
   console.log(`  git push -u origin ${branch}`);
   console.log(`  gh pr create --title "release: ${version}" --body "Release ${version}" --head ${branch}`);
+  console.log(`  gh pr checks ${branch} --watch`);
 }
 
 /**
