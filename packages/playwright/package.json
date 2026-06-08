@@ -1,0 +1,59 @@
+{
+  "name": "@rstest/playwright",
+  "version": "0.10.4",
+  "description": "Playwright fixture integration for Rstest",
+  "keywords": [
+    "rstest",
+    "playwright",
+    "testing",
+    "browser"
+  ],
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/web-infra-dev/rstest",
+    "directory": "packages/playwright"
+  },
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": {
+      "default": "./package.json"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "dev": "cross-env SOURCEMAP=true rslib build --watch",
+    "test": "rstest",
+    "typecheck": "pnpm -w exec tsc --noEmit -p packages/playwright/tsconfig.json"
+  },
+  "devDependencies": {
+    "@rslib/core": "0.22.0",
+    "@rstest/core": "workspace:*",
+    "@rstest/tsconfig": "workspace:*",
+    "playwright": "^1.60.0",
+    "typescript": "^6.0.3"
+  },
+  "peerDependencies": {
+    "@rstest/core": "workspace:^",
+    "playwright": "^1.49.1"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

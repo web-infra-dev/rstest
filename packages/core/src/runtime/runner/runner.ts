@@ -613,7 +613,11 @@ export class TestRunner {
 
     const current = this._test;
 
-    context.task = { id: test.testId, name: test.name };
+    context.task = {
+      id: test.testId,
+      name: test.name,
+      filepath: test.testPath,
+    };
 
     Object.defineProperty(context, 'expect', {
       get: () => {

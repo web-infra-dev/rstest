@@ -19,6 +19,8 @@ export interface TestContext {
     id: string;
     /** Test name provided by user */
     name: string;
+    /** Absolute path of the current test file */
+    filepath: string;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
   };
