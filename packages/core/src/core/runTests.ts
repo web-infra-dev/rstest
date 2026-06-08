@@ -661,12 +661,13 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     }
     browserResultPromise = runBrowserModeTests(context, browserProjectsToRun, {
-      // Defer browser teardown + reporting to the unified node run only when
-      // node tests will actually run. If node projects resolve to zero files,
-      // the `!hasNodeTestsToRun` early return below skips `run()` entirely, so a
-      // deferred browser would never be torn down and the CLI hangs. Otherwise
-      // let the browser self-finalize like the browser-only path. See #1363.
-      skipOnTestRunEnd: shouldUnifyReporter && hasNodeTestsToRun,
+      // In a non-watch mixed run the browser defers its teardown + reporting to
+      // the unified `run()` finalize. The early return below is gated to watch
+      // only, so non-watch always reaches `run()` even when node resolves to
+      // zero files — which both closes #1363 (one unified `onTestRunEnd`) and
+      // supersedes the interim `&& hasNodeTestsToRun` hang-guard from #1386:
+      // with `run()` always reached, the deferred browser is always torn down.
+      skipOnTestRunEnd: shouldUnifyReporter,
       shardedEntries: shard ? browserEntries : undefined,
       allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
       onTraceEvents: forwardBrowserTraceEvents,
