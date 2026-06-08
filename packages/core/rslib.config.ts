@@ -80,6 +80,12 @@ export default defineConfig({
         entry: {
           index: './src/index.ts',
           'api/index': './src/api/index.ts',
+          // Internal raw-argv entry for the `rstest` bin only. A build chunk,
+          // not a package export — intentionally absent from `package.json`
+          // `exports` so it stays off the public surface (the public
+          // programmatic API lives in `./api`). Mirrors how vitest builds
+          // `src/node/cli.ts` -> `dist/cli.js` without exporting it.
+          cli: './src/cli/index.ts',
           browser: './src/browser.ts',
           worker: './src/runtime/worker/index.ts',
           globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',

@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
-import { runRstest } from '@rstest/core/api';
+import { createRstest } from '@rstest/core/api';
 import { rspack } from '@rsbuild/core';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -17,9 +17,9 @@ describe('programmatic virtual', () => {
 `,
 };
 
-const result = await runRstest({
+const rstest = await createRstest({
   cwd: __dirname,
-  inlineConfig: {
+  config: {
     include: Object.keys(virtualTests),
     reporters: [],
     tools: {
@@ -31,6 +31,8 @@ const result = await runRstest({
     },
   },
 });
+const result = await rstest.run();
+await rstest.close();
 
 console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({

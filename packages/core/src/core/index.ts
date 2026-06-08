@@ -4,11 +4,16 @@ import type {
   Project,
   RstestCommand,
   RstestConfig,
-  RstestInstance,
+  RstestRunner,
 } from '../types';
 import { Rstest } from './rstest';
 
-export function createRstest(
+/**
+ * Build an internal {@link RstestRunner} for a single command + filter set. The
+ * public, async, instance-shaped `createRstest` (with `run`/`listTests`/
+ * `close`) lives in `@rstest/core/api` and composes this factory.
+ */
+export function createRstestContext(
   {
     config,
     projects,
@@ -28,15 +33,15 @@ export function createRstest(
      * When true, Rstest won't install `process.on('exit' | 'SIG*')` handlers
      * and config errors throw instead of calling `process.exit()`, so a
      * programmatic run can't kill the host process. (`process.exitCode` is
-     * still written; `runRstest` restores it via try/finally.) Set by the
-     * `@rstest/core/api` adapter.
+     * still written; `executeHostSafeRun` restores it via try/finally.) Set by
+     * the `@rstest/core/api` adapter.
      */
     embedded?: boolean;
   },
   command: RstestCommand,
   fileFilters: string[],
   fileFilterMode?: FileFilterMode,
-): RstestInstance {
+): RstestRunner {
   const context = new Rstest(
     {
       cwd,
