@@ -8,13 +8,10 @@
  * semantic changes may land in any minor release in the 0.x line. Pin the
  * exact patch version of `@rstest/core` if you depend on these APIs today.
  */
-import {
-  applyResolvedFilters,
-  isRelatedRun,
-  resolveEffectiveCliFilters,
-} from '../cli/commands';
+import { buildResolvedRunner } from '../cli/commands';
 import {
   type CommonOptions,
+  initCli,
   mergeWithCLIOptions,
   resolveProjects,
 } from '../cli/init';
@@ -25,7 +22,6 @@ import type {
   FileFilterMode,
   ListCommandOptions,
   ListCommandResult,
-  Reporter,
   RstestCommand,
   RstestConfig,
   RstestContext,
@@ -43,12 +39,14 @@ import {
 } from './result';
 
 /**
- * The single CLI entry — jest-compatible, used by the `rstest` bin. Parses one
- * argv and resolves to a {@link TestRunResult} for test-running commands.
+ * Internal raw-argv CLI entry for the `rstest` bin. Re-exported here (not in
+ * `package.json` `exports`) so the bin loads it from the single `api/index`
+ * build output. Not part of the public programmatic surface — use {@link runCli}
+ * or {@link createRstest} instead.
  *
- * @experimental Subject to change until 1.0.0.
+ * @internal
  */
-export { runCli } from '../cli';
+export { startCli } from '../cli';
 
 /**
  * @experimental Subject to change until 1.0.0.
@@ -161,6 +159,22 @@ export interface RunOptions {
 }
 
 /**
+ * Parsed CLI flag bag accepted by {@link runCli} — mirrors what a parsed
+ * `rstest <args>` produces: named flags plus positional files in `_`. This is
+ * the full, undifferentiated CLI option surface (analogous to jest's
+ * `Config.Argv`), as opposed to {@link RunOptions}'s curated per-run subset.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export type RstestArgv = CommonOptions & {
+  /**
+   * Positional arguments. Test-file filters by default; treated as source files
+   * when `related` / `findRelatedTests` is set.
+   */
+  _?: (string | number)[];
+};
+
+/**
  * A programmatic Rstest instance. Created by {@link createRstest}; holds the
  * resolved config identity and runs tests against it per invocation.
  *
@@ -180,9 +194,6 @@ export interface RstestInstance {
 
   /** Merge on-disk blob reports into a single aggregate report. */
   mergeReports(options?: { path?: string; cleanup?: boolean }): Promise<void>;
-
-  /** Register an extra reporter applied to subsequent runs. */
-  addReporter(reporter: Reporter): void;
 
   /** Release instance resources. No-op on the 1.0 happy path (each run self-cleans). */
   close(): Promise<void>;
@@ -267,6 +278,43 @@ const toCommonOptions = (options: RunOptions): CommonOptions => ({
 });
 
 /**
+ * Run a freshly-built runner host-safely and assemble a {@link TestRunResult}:
+ * snapshot/restore process globals so the embedding host isn't left with leaked
+ * `exitCode`/`env` state, and contain any build/run error as an `unhandledError`
+ * (with `ok: false`) instead of throwing or exiting. Shared by
+ * {@link createRstest}'s `run` and the standalone {@link runCli} entry.
+ *
+ * `buildRunner` runs inside the guarded `try` so config/build errors are
+ * captured too; results are read in `finally` so a failure in a post-run step
+ * doesn't discard results already gathered during the run.
+ */
+const executeHostSafeRun = async (
+  buildRunner: () => Promise<RstestRunner>,
+): Promise<TestRunResult> => {
+  const restoreProcessGuards = snapshotProcessGuards();
+  const captured = createCapturedRunState();
+  let files: TestFileResult[] = [];
+  let runner: RstestRunner | undefined;
+
+  try {
+    runner = await buildRunner();
+    runner.context.reporters.push(createCaptureReporter(captured));
+    await runner.runTests();
+  } catch (err) {
+    captured.unhandledErrors.unshift(toSerializedError(err));
+  } finally {
+    if (runner) {
+      files = runner.context.reporterResults.results.map(
+        toPublicTestFileResult,
+      );
+    }
+    restoreProcessGuards();
+  }
+
+  return assembleTestRunResult(files, captured, runner?.context);
+};
+
+/**
  * Create a programmatic Rstest instance. Resolves the config file + inline
  * config + projects up front (the instance's stable identity); each `run()` /
  * `listTests()` performs a full build → execute → teardown against it.
@@ -288,7 +336,6 @@ export async function createRstest(
     : process.cwd();
   const embedded = options.embedded ?? true;
   const trace = options.trace ?? false;
-  const extraReporters: Reporter[] = [];
 
   // Holds the most recent build's context, exposed via `instance.context`.
   let context!: RstestContext;
@@ -322,33 +369,19 @@ export async function createRstest(
       options: commonOptions,
     });
 
-    const resolved = await resolveEffectiveCliFilters({
-      options: commonOptions,
-      filters: runOptions.filters ?? [],
+    const runner = await buildResolvedRunner({
       createRstest: createRstestContext,
       config: userConfig,
       configFilePath,
       projects,
-    });
-
-    // Related/changed runs force exact matching; otherwise honor an explicit
-    // `filterMode` (default fuzzy, matching the CLI's positional behavior).
-    const finalMode = isRelatedRun(commonOptions)
-      ? resolved.fileFilterMode
-      : (runOptions.filterMode ?? resolved.fileFilterMode);
-
-    const runner = createRstestContext(
-      { config: userConfig, configFilePath, projects, cwd, embedded, trace },
       command,
-      resolved.effectiveFilters,
-      finalMode,
-    );
-
-    await applyResolvedFilters(runner, resolved);
-
-    for (const reporter of extraReporters) {
-      runner.context.reporters.push(reporter);
-    }
+      options: commonOptions,
+      filters: runOptions.filters ?? [],
+      cwd,
+      embedded,
+      trace,
+      filterMode: runOptions.filterMode,
+    });
 
     context = runner.context;
     return runner;
@@ -358,33 +391,8 @@ export async function createRstest(
   // errors surface at creation time rather than on first run.
   await build('run', {});
 
-  const run = async (runOptions: RunOptions = {}): Promise<TestRunResult> => {
-    // Capture host globals up front; restore them in `finally` so the embedding
-    // host isn't left with leaked exitCode/env state.
-    const restoreProcessGuards = snapshotProcessGuards();
-    const captured = createCapturedRunState();
-    let files: TestFileResult[] = [];
-    let runner: RstestRunner | undefined;
-
-    try {
-      runner = await build('run', runOptions);
-      runner.context.reporters.push(createCaptureReporter(captured));
-      await runner.runTests();
-    } catch (err) {
-      captured.unhandledErrors.unshift(toSerializedError(err));
-    } finally {
-      // Read collected results here (not at the end of `try`) so a failure in a
-      // post-run step doesn't discard results already gathered during the run.
-      if (runner) {
-        files = runner.context.reporterResults.results.map(
-          toPublicTestFileResult,
-        );
-      }
-      restoreProcessGuards();
-    }
-
-    return assembleTestRunResult(files, captured, runner?.context);
-  };
+  const run = (runOptions: RunOptions = {}): Promise<TestRunResult> =>
+    executeHostSafeRun(() => build('run', runOptions));
 
   const listTests = async (
     listOptions: ListCommandOptions & RunOptions = {},
@@ -407,14 +415,9 @@ export async function createRstest(
     return runner.mergeReports(mergeOptions);
   };
 
-  const addReporter = (reporter: Reporter): void => {
-    extraReporters.push(reporter);
-  };
-
   const close = async (): Promise<void> => {
     // Each run() builds and tears down its own worker pool + Rsbuild server, so
-    // there are no instance-held resources to release in 1.0. Kept as a stable
-    // forward-compat hook (load-bearing once build-graph reuse lands).
+    // there are no instance-held resources to release in 1.0.
   };
 
   return {
@@ -424,7 +427,54 @@ export async function createRstest(
     run,
     listTests,
     mergeReports,
-    addReporter,
     close,
   };
+}
+
+/**
+ * Run Rstest once from a parsed CLI flag bag — the jest-compatible programmatic
+ * entry, analogous to `@jest/core`'s `runCLI(argv, projects)`. It accepts the
+ * full, undifferentiated CLI option bag ({@link RstestArgv}: named flags plus
+ * positional files in `argv._`) and resolves to a structured
+ * {@link TestRunResult}.
+ *
+ * Unlike {@link createRstest}, this mirrors the `rstest run` CLI command:
+ * it auto-discovers the config file from `cwd` and applies CLI defaults. It is
+ * host-safe (never calls `process.exit`) and one-shot — for repeated runs,
+ * config inspection, listing, or report merging, use {@link createRstest}.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export async function runCli(
+  argv: RstestArgv = {},
+  options: { cwd?: string } = {},
+): Promise<TestRunResult> {
+  // Match the CLI's environment setup so workers (spawned per run) observe
+  // `NODE_ENV=test` / `RSTEST=true`.
+  initRstestEnv();
+
+  const cwd = options.cwd
+    ? getAbsolutePath(process.cwd(), options.cwd)
+    : process.cwd();
+  const { _: positionals, ...commonOptions } = argv;
+  const filters = positionals ?? [];
+
+  return executeHostSafeRun(async () => {
+    const { config, configFilePath, projects } = await initCli(
+      commonOptions,
+      cwd,
+    );
+    return buildResolvedRunner({
+      createRstest: createRstestContext,
+      config,
+      configFilePath,
+      projects,
+      command: 'run',
+      options: commonOptions,
+      filters,
+      cwd,
+      embedded: true,
+      trace: commonOptions.trace,
+    });
+  });
 }

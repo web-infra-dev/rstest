@@ -152,7 +152,7 @@ export const toPublicTestFileResult = (
   results: f.results.map(toPublicTestResult),
 });
 
-export const computeStats = (
+const computeStats = (
   files: readonly TestFileResult[],
 ): TestRunResult['stats'] => {
   const stats: TestRunResult['stats'] = {
@@ -185,7 +185,7 @@ export const computeStats = (
 };
 
 /** Mutable bag a {@link createCaptureReporter} reporter fills during a run. */
-export type CapturedRunState = {
+type CapturedRunState = {
   unhandledErrors: SerializedError[];
   duration: { total: number };
   coverage?: CoverageMapData;

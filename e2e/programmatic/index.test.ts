@@ -86,3 +86,27 @@ describe('programmatic createRstest', () => {
     ]);
   });
 });
+
+describe('programmatic runCli', () => {
+  it('runs only related test files for a source file (jest findRelatedTests parity)', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-related.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // Only `math.test.ts` depends on `src/math.ts`; `unrelated.test.ts` is dropped.
+    expect(result.ok).toBe(true);
+    expect(result.files).toEqual([
+      { status: 'pass', testPath: 'math.test.ts' },
+    ]);
+    expect(result.stats.files.total).toBe(1);
+    expect(result.hostExitCode).toBe(0);
+  });
+});

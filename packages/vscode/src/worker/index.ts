@@ -13,7 +13,7 @@ export class Worker {
     // inline config. The rest is `RstestConfig`-shaped override content.
     fileFilters: _fileFilters,
     rstestPath,
-    command: _command = 'run',
+    command: _command,
     ...overrideConfig
   }: WorkerInitOptions) {
     // Load the programmatic API from the resolved core package (sibling of the

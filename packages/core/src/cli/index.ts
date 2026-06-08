@@ -1,4 +1,3 @@
-import type { TestRunResult } from '../api/result';
 import { logger } from '../utils/logger';
 import { setupCommands } from './commands';
 import { prepareCli } from './prepare';
@@ -6,23 +5,24 @@ import { prepareCli } from './prepare';
 export { initCli } from './init';
 
 /**
- * Run the Rstest CLI from an argv. The single CLI entry — used by the `rstest`
- * bin and exported from `@rstest/core/api` for jest-compatible programmatic use.
+ * Internal entry for the `rstest` bin: parse a raw `process.argv`-shaped string
+ * array, route it to the matched command (run/watch/list/merge-reports/init),
+ * and run it to completion. Owns the CLI process — shows the banner and may call
+ * `process.exit` on fatal errors.
  *
- * Resolves to a structured {@link TestRunResult} when the matched command runs
- * tests (`run` / default / `watch`); resolves to `undefined` for `list` /
- * `merge-reports` / `init`. Like the CLI, it may call `process.exit` on fatal
- * errors — for host-safe in-process runs that never exit, use `createRstest`.
- *
- * @experimental Subject to change until 1.0.0.
+ * This is the raw-argv layer (analogous to jest-cli's `run`); the public,
+ * parsed-object, host-safe entry that returns a structured result is `runCli`
+ * in `@rstest/core/api` (analogous to `@jest/core`'s `runCLI`). `startCli` is
+ * re-exported `@internal` from `/api` only so the bin can load it from the
+ * single `api/index` build output.
  */
-export async function runCli(
+export async function startCli(
   options: { argv?: string[]; cwd?: string } = {},
-): Promise<TestRunResult | undefined> {
+): Promise<void> {
   prepareCli();
 
   try {
-    return await setupCommands(options.argv ?? process.argv, options.cwd);
+    await setupCommands(options.argv ?? process.argv, options.cwd);
   } catch (err) {
     logger.error('Failed to start Rstest CLI.');
     logger.error(err);
