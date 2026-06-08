@@ -34,33 +34,20 @@ __webpack_require__ = new Proxy(
 __webpack_require__.rstest_original_modules = {};
 __webpack_require__.rstest_original_module_factories = {};
 
-/**
- * Maps a clean module request (e.g. `node:child_process`, `p-limit`) to the
- * installed mock factory, so a dynamic `import(request)` — which rspack assigns
- * a DIFFERENT external module id than the hoisted `rs.mock` — can still resolve
- * to the mock. See {@link rstest_dynamic_require} for the full two-id-split
- * rationale. Fixes #1327 (node builtins) and #1328 (ESM-only npm packages).
- *
- * Null-prototype: keys are user-controlled request strings, so a specifier like
- * `constructor`/`__proto__` must not collide with inherited `Object.prototype`
- * members (which would make the unguarded lookups below see a phantom factory).
- */
+// Clean request (e.g. `node:child_process`) -> mock factory, looked up by
+// `rstest_dynamic_require`. Null-prototype because keys are user-controlled
+// request strings that must not collide with `Object.prototype` members.
 __webpack_require__.rstest_mocked_by_request = Object.create(null);
-/**
- * request -> ids that {@link rstest_dynamic_require} lazily redirected to the
- * mock, so `rs.unmock` can restore their real factories. Null-prototype for the
- * same request-key-pollution reason as {@link rstest_mocked_by_request}.
- */
+// request -> ids redirected to the mock by `rstest_dynamic_require`, so
+// `rs.unmock` can restore their real factories.
 __webpack_require__.rstest_redirected_ids = Object.create(null);
 
 const hasOwn = (target, property) => Object.hasOwn(target, property);
 
 const isPromise = (value) => value instanceof Promise;
 
-/**
- * Restore a module id to its captured original factory (if any) and drop its
- * cache entry — undoing a mock or a dynamic-import redirect.
- */
+// Restore a module id to its captured original factory and drop its cache
+// entry — undoing a mock or a dynamic-import redirect.
 const restoreOriginalFactory = (id) => {
   const factory = __webpack_require__.rstest_original_module_factories[id];
   if (factory) {
@@ -96,15 +83,12 @@ const defineExportsWithCjsInterop = (
 __webpack_require__.rstest_unmock = (id, request) => {
   restoreOriginalFactory(id);
 
-  // TODO(compat): `request` is `undefined` only under an OLDER @rspack/core that
-  // omits the trailing request literal (`rstest_unmock(id)`). Drop this
-  // `request !== undefined` guard — running the body unconditionally — once the
-  // minimum @rspack/core always emits the request literal.
+  // `request` is `undefined` under an older @rspack/core that omits the request
+  // literal; the guard can be dropped once the minimum @rspack/core always emits it.
   if (request !== undefined) {
     delete __webpack_require__.rstest_mocked_by_request[request];
-    // Restore every dynamic-import sibling id that was lazily redirected to the
-    // mock (see rstest_dynamic_require), so a later `await import(request)`
-    // resolves to the real module.
+    // Restore the dynamic-import sibling ids redirected to the mock, so a later
+    // `await import(request)` resolves to the real module.
     const redirectedIds = __webpack_require__.rstest_redirected_ids[request];
     if (redirectedIds) {
       for (const redirectedId of redirectedIds) {
@@ -154,12 +138,10 @@ const getMockImplementation = (mockType = 'mock') => {
 
   // The mock and mockRequire will resolve to different module ids when the module is a dual package.
   return (id, modFactory, request) => {
-    // Register `factory` under the clean request, so a dynamic `import(request)`
-    // (which carries a different external module id) can resolve to the mock via
-    // rstest_dynamic_require.
-    // TODO(compat): the `request !== undefined` guard no-ops under an OLDER
-    // @rspack/core that omits the trailing request literal; drop it (assign
-    // unconditionally) once the minimum @rspack/core always emits it.
+    // Register the factory under the clean request so a dynamic `import(request)`
+    // — which carries a different external module id — resolves to it via
+    // `rstest_dynamic_require`. No-ops under an older @rspack/core that omits the
+    // request literal.
     const registerByRequest = (factory) => {
       if (request !== undefined) {
         __webpack_require__.rstest_mocked_by_request[request] = factory;
@@ -253,9 +235,9 @@ const getMockImplementation = (mockType = 'mock') => {
       __webpack_module_cache__[id] = {
         exports: __webpack_require__(modFactory),
       };
-      // Auto-mock (`rs.mock('X')`) and string-redirect forms never write
-      // __webpack_modules__[id], so synthesize a factory that re-exports the
-      // redirect target for any dynamic-import sibling of `request`.
+      // String-redirect forms never write `__webpack_modules__[id]`, so
+      // synthesize a factory that re-exports the redirect target for any
+      // dynamic-import sibling of `request`.
       registerByRequest(function (__webpack_module__) {
         __webpack_module__.exports = __webpack_require__(modFactory);
       });
@@ -310,17 +292,11 @@ __webpack_require__.rstest_do_mock_require =
 
 //#region dynamic import() interception
 /**
- * Shim bound by the dynamic-import codegen in place of the bare
- * `__webpack_require__` for an externalized `await import(request)`:
- * `...then(rstest_dynamic_require.bind(rstest_dynamic_require, id, request))`.
- *
- * The dynamic-import external module id (`id`) differs from the id the hoisted
- * `rs.mock` patched (they are separate rspack module identities for the same
- * `request`). If `request` is mocked, redirect this id to the mock factory —
- * capturing its real factory lazily (the chunk has loaded by the time this
- * runs, inside the `.then` after `__webpack_require__.e(...)`) so `rs.unmock`
- * can restore it. Otherwise behave exactly like `__webpack_require__(id)`,
- * preserving lazy loading for unmocked dynamic imports.
+ * Resolves an externalized `await import(request)`. rspack gives the dynamic
+ * import a different external module id (`id`) than the one the hoisted
+ * `rs.mock` patched, so the mock is looked up by `request`. When mocked,
+ * redirect this id to the mock factory — capturing its real factory so
+ * `rs.unmock` can restore it; otherwise behave like `__webpack_require__(id)`.
  */
 __webpack_require__.rstest_dynamic_require = (id, request) => {
   const mockFactory = __webpack_require__.rstest_mocked_by_request[request];
