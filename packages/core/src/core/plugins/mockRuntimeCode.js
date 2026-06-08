@@ -56,6 +56,15 @@ const restoreOriginalFactory = (id) => {
   delete __webpack_module_cache__[id];
 };
 
+// Capture a module id's current factory as its original, once — the inverse of
+// restoreOriginalFactory. No-op if already captured.
+const captureOriginalFactory = (id) => {
+  if (!hasOwn(__webpack_require__.rstest_original_module_factories, id)) {
+    __webpack_require__.rstest_original_module_factories[id] =
+      __webpack_modules__[id];
+  }
+};
+
 /**
  * Define named exports on __webpack_exports__ from a module object, and
  * auto-create a `default` export for CJS-style modules that lack one.
@@ -148,6 +157,14 @@ const getMockImplementation = (mockType = 'mock') => {
       }
     };
 
+    // Swap in a mock factory: install it, register it under the request, and
+    // drop the stale cache entry.
+    const installFactory = (factory) => {
+      __webpack_modules__[id] = factory;
+      registerByRequest(factory);
+      delete __webpack_module_cache__[id];
+    };
+
     // Only load the module if it's already in cache (to avoid side effects)
     const hasCachedModule = hasOwn(__webpack_module_cache__, id);
     let requiredModule = hasCachedModule
@@ -225,9 +242,7 @@ const getMockImplementation = (mockType = 'mock') => {
         );
       };
 
-      __webpack_modules__[id] = finalModFactory;
-      registerByRequest(finalModFactory);
-      delete __webpack_module_cache__[id];
+      installFactory(finalModFactory);
       return;
     }
 
@@ -266,9 +281,7 @@ const getMockImplementation = (mockType = 'mock') => {
         );
       };
 
-      __webpack_modules__[id] = finalModFactory;
-      registerByRequest(finalModFactory);
-      delete __webpack_module_cache__[id];
+      installFactory(finalModFactory);
     }
   };
 };
@@ -302,10 +315,7 @@ __webpack_require__.rstest_dynamic_require = (id, request) => {
   const mockFactory = __webpack_require__.rstest_mocked_by_request[request];
 
   if (mockFactory && __webpack_modules__[id] !== mockFactory) {
-    if (!hasOwn(__webpack_require__.rstest_original_module_factories, id)) {
-      __webpack_require__.rstest_original_module_factories[id] =
-        __webpack_modules__[id];
-    }
+    captureOriginalFactory(id);
     __webpack_modules__[id] = mockFactory;
     delete __webpack_module_cache__[id];
     (__webpack_require__.rstest_redirected_ids[request] ||= []).push(id);
