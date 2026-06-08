@@ -286,7 +286,7 @@ export default defineConfig({
 
 #### Custom coverage reporters
 
-Custom coverage reporters should follow the Istanbul reporter contract. A reporter package or file is loaded by [`istanbul-reports`](https://github.com/istanbuljs/istanbuljs/tree/main/packages/istanbul-reports), constructed with the options from `coverage.reporters`, and then called with an Istanbul report context.
+Custom coverage reporters should follow the Istanbul reporter contract. A reporter package or file is loaded by Rstest's coverage provider (using [`istanbul-reports`](https://github.com/istanbuljs/istanbuljs/tree/main/packages/istanbul-reports) when possible), constructed with the options from `coverage.reporters`, and then called with an Istanbul report context.
 
 For example, an ESM reporter can export a class with an `execute` method:
 
