@@ -14,14 +14,14 @@ const parsePayload = (stdout: string) => {
   const payload = match?.[1];
   if (!payload) {
     throw new Error(
-      `runRstest payload not found in stdout. Got:\n${stdout.slice(0, 4000)}`,
+      `createRstest payload not found in stdout. Got:\n${stdout.slice(0, 4000)}`,
     );
   }
   return JSON.parse(payload) as Record<string, any>;
 };
 
-describe('programmatic runRstest', () => {
-  it('runs disk tests via inlineConfig + returns nested stats', async ({
+describe('programmatic createRstest', () => {
+  it('runs disk tests via inline config object + returns nested stats', async ({
     onTestFinished,
   }) => {
     const { cli } = await runRstestCli({
@@ -66,6 +66,27 @@ describe('programmatic runRstest', () => {
     expect(exec.exitCode).toBe(0);
   });
 
+  it('config callback receives the disk config and transforms it', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-config-fn.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // Disk config included a.test.ts + b.test.ts; the callback narrowed
+    // `include` to a.test.ts, so only it runs (the returned config replaces
+    // the disk config rather than merging onto it).
+    expect(result.ok).toBe(true);
+    expect(result.files).toEqual([{ status: 'pass', testPath: 'a.test.ts' }]);
+    expect(result.stats.files.total).toBe(1);
+  });
+
   it('accepts inline config + virtual modules plugin (Midscene shape)', async ({
     onTestFinished,
   }) => {
@@ -84,5 +105,29 @@ describe('programmatic runRstest', () => {
     expect(result.files).toEqual([
       { status: 'pass', testName: 'virtual/programmatic.test.ts' },
     ]);
+  });
+});
+
+describe('programmatic runCli', () => {
+  it('runs only related test files for a source file (jest findRelatedTests parity)', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-related.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // Only `math.test.ts` depends on `src/math.ts`; `unrelated.test.ts` is dropped.
+    expect(result.ok).toBe(true);
+    expect(result.files).toEqual([
+      { status: 'pass', testPath: 'math.test.ts' },
+    ]);
+    expect(result.stats.files.total).toBe(1);
+    expect(result.hostExitCode).toBe(0);
   });
 });
