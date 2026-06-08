@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it } from '@rstest/core';
 
 const extended = it.extend({
   fixtureCleanup: [
-    async ({}, use) => {
+    async (_, use) => {
       await use(undefined);
       calls++;
     },
