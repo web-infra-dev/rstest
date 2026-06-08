@@ -13,8 +13,8 @@ if (enableCompileCache) {
 }
 
 async function main() {
-  const { runCLI } = await import('../dist/index.js');
-  runCLI();
+  const { startCli } = await import('../dist/api/index.js');
+  await startCli();
 }
 
 main();

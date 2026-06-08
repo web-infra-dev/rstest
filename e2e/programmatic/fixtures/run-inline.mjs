@@ -1,11 +1,11 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { runRstest } from '@rstest/core/api';
+import { createRstest } from '@rstest/core/api';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const cwd = join(__dirname, 'disk');
 
-const result = await runRstest({
+const rstest = await createRstest({
   cwd,
   inlineConfig: {
     include: ['*.test.ts'],
@@ -13,6 +13,8 @@ const result = await runRstest({
     reporters: [],
   },
 });
+const result = await rstest.run();
+await rstest.close();
 
 console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({
