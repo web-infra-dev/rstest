@@ -44,7 +44,7 @@ describe('Test API', () => {
         nodeOptions: {
           cwd: dirname(fileURLToPath(import.meta.url)),
         },
-      }
+      },
     });
     await expectExecSuccess();
 
