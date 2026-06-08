@@ -61,11 +61,10 @@ export const normalizeFixtures = (
 export const handleFixtures = async (
   test: TestCase,
   context: Record<string, any>,
+  cleanups: (() => Promise<void>)[] = [],
 ): Promise<{
   cleanups: (() => Promise<void>)[];
 }> => {
-  const cleanups: (() => Promise<void>)[] = [];
-
   if (!test.fixtures) {
     return { cleanups };
   }
@@ -110,6 +109,10 @@ export const handleFixtures = async (
       const block = Promise.resolve().then(() =>
         fixtureValue(context, async (value: any) => {
           context[name] = value;
+          cleanups.unshift(() => {
+            useDone?.();
+            return block;
+          });
           fixtureResolve();
           return new Promise<void>((useFnResolve) => {
             useDone = useFnResolve;
@@ -117,11 +120,6 @@ export const handleFixtures = async (
         }),
       );
       block.catch(fixtureReject);
-
-      cleanups.unshift(() => {
-        useDone?.();
-        return block;
-      });
     });
 
     doneMap.add(name);

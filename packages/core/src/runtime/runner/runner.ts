@@ -111,6 +111,7 @@ export class TestRunner {
       this.beforeEach(test, state, api);
 
       const cleanups: AfterEachListener[] = [];
+      const fixtureCleanups: (() => Promise<void>)[] = [];
 
       let skipped = false;
 
@@ -124,11 +125,11 @@ export class TestRunner {
       });
 
       try {
-        const fixtureCleanups = await this.beforeRunTest(
+        await this.beforeRunTest(
           test,
           snapshotClient.getSnapshotState(testPath),
+          fixtureCleanups,
         );
-        cleanups.push(...fixtureCleanups);
       } catch (error) {
         if (error instanceof TestSkipError) {
           skipped = true;
@@ -254,6 +255,7 @@ export class TestRunner {
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]
         .reverse()
         .concat(cleanups)
+        .concat(fixtureCleanups)
         .concat(test.onFinished);
 
       test.context.task.result = result;
@@ -746,7 +748,8 @@ export class TestRunner {
   private async beforeRunTest(
     test: TestCase,
     snapshotState: SnapshotState,
-  ): Promise<(() => Promise<void>)[]> {
+    fixtureCleanups: (() => Promise<void>)[],
+  ): Promise<void> {
     setState<MatcherState>(
       {
         assertionCalls: 0,
@@ -769,9 +772,7 @@ export class TestRunner {
       enumerable: false,
     });
 
-    const { cleanups } = await handleFixtures(test, context);
-
-    return cleanups;
+    await handleFixtures(test, context, fixtureCleanups);
   }
 
   private afterRunTest(test: TestCase): void {

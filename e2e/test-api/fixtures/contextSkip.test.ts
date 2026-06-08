@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, expect, it } from '@rstest/core';
 
 const extended = it.extend({
+  fixtureCleanup: [
+    async ({}, use) => {
+      await use(undefined);
+      calls++;
+    },
+    { auto: true },
+  ],
   skipFixture: async ({ skip }, use) => {
     skip();
     await use('unreachable');
@@ -38,14 +45,14 @@ it('can skip from beforeEach', () => {
   expect(1 + 1).toBe(3);
 });
 
-it('continues running later tests', () => {
-  calls++;
-  expect(calls).toBe(2);
-  expect(beforeEachCalls).toBe(3);
-  expect(afterEachCalls).toBe(2);
-});
-
 extended('can skip from fixture', ({ skipFixture }) => {
   calls++;
   expect(skipFixture).toBe('unreachable');
+});
+
+it('continues running later tests', () => {
+  calls++;
+  expect(calls).toBe(3);
+  expect(beforeEachCalls).toBe(3);
+  expect(afterEachCalls).toBe(3);
 });
