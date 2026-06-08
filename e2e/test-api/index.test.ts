@@ -42,9 +42,9 @@ describe('Test API', () => {
       args: ['run', 'fixtures/contextSkip.test.ts'],
       options: {
         nodeOptions: {
-          cwd: __dirname,
+          cwd: dirname(fileURLToPath(import.meta.url)),
         },
-      },
+      }
     });
     await expectExecSuccess();
 
