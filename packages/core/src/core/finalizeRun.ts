@@ -40,8 +40,9 @@ export const reportNoTestFiles = ({
 
     // `process.exitCode` mutations here (and in deeper layers such as
     // globalSetup teardown, coverage threshold checks) are restored to their
-    // pre-run value by `runRstest` in the embedded path via try/finally, so
-    // we don't need to gate them per-call site. Never-downgrade: a zero code
+    // pre-run value by the embedded `@rstest/core/api` runner
+    // (`executeHostSafeRun`) via try/finally, so we don't gate them per-call
+    // site. Never-downgrade: a zero code
     // (passWithNoTests) must not clear a prior non-zero code.
     if (
       code !== 0 ||

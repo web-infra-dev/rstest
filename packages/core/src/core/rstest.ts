@@ -46,8 +46,8 @@ function formatEnvironmentName(name: string): string {
 
 /**
  * Report a fatal configuration error. In embedded (programmatic) mode the
- * caller owns the process, so throw and let `runRstest` surface it; otherwise
- * log and exit the CLI process.
+ * caller owns the process, so throw and let the programmatic caller
+ * (`createRstest`/`runCli`) surface it; otherwise log and exit the CLI process.
  */
 function failConfig(embedded: boolean, message: string): never {
   if (embedded) {
