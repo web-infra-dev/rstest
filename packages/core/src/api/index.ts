@@ -82,7 +82,7 @@ export type {
  * @experimental Subject to change until 1.0.0.
  */
 export interface CreateRstestOptions {
-  /** Working directory. Defaults to `process.cwd()`. Base for absolutizing `root`. */
+  /** Working directory. Defaults to `process.cwd()`. Base for resolving `root`. */
   cwd?: string;
 
   /**
