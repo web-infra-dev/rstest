@@ -93,6 +93,17 @@ test.skip('skip this test', () => {
 });
 ```
 
+当你在定义测试时就确定要跳过它，可以使用 `test.skip`。如果只能在测试运行过程中决定是否跳过，请从测试上下文中调用 `context.skip()`。`context.skip()` 会立即停止执行当前测试，因此它后面的代码不会继续执行，并且该测试会被报告为 skipped。
+
+```ts
+test('skip at runtime', (context) => {
+  context.skip();
+
+  // 这个断言不会被执行。
+  expect(1 + 1).toBe(3);
+});
+```
+
 ## test.todo
 
 将某些测试标记为待办。
@@ -478,11 +489,25 @@ export interface TestContext {
   };
   /** The `expect` API bound to the current test */
   expect: Expect;
+  /** Skip the current test during execution */
+  skip: () => never;
   /** The `onTestFinished` hook bound to the current test */
   onTestFinished: OnTestFinished;
   /** The `onTestFailed` hook bound to the current test */
   onTestFailed: OnTestFailed;
 }
+```
+
+你可以使用 `context.skip()` 在测试运行过程中跳过当前测试。`context.skip()` 之后的代码不会继续执行，测试结果会被标记为 skipped：
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test('skipped test', (context) => {
+  context.skip();
+
+  expect(1 + 1).toBe(3);
+});
 ```
 
 你也可以通过 `test.extend` 方法通过自定义 fixture 的方式来扩展测试上下文。

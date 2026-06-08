@@ -93,6 +93,17 @@ test.skip('skip this test', () => {
 });
 ```
 
+Use `test.skip` when you know at definition time that a test should be skipped. If the decision can only be made while the test is running, call `context.skip()` from the test context instead. `context.skip()` stops executing the current test immediately, so code after it will not run, and the test is reported as skipped.
+
+```ts
+test('skip at runtime', (context) => {
+  context.skip();
+
+  // This assertion is not executed.
+  expect(1 + 1).toBe(3);
+});
+```
+
 ## test.todo
 
 Marks certain tests as todo.
@@ -489,11 +500,26 @@ export interface TestContext {
   };
   /** The `expect` API bound to the current test */
   expect: Expect;
+  /** Skip the current test during execution */
+  skip: () => never;
   /** The `onTestFinished` hook bound to the current test */
   onTestFinished: OnTestFinished;
   /** The `onTestFailed` hook bound to the current test */
   onTestFailed: OnTestFailed;
 }
+```
+
+Use `context.skip()` to skip a test while it is running. Code after
+`context.skip()` will not execute, and the test is reported as skipped:
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test('skipped test', (context) => {
+  context.skip();
+
+  expect(1 + 1).toBe(3);
+});
 ```
 
 You can also extend `TestContext` with custom fixtures using `test.extend`.

@@ -61,11 +61,10 @@ export const normalizeFixtures = (
 export const handleFixtures = async (
   test: TestCase,
   context: Record<string, any>,
+  cleanups: (() => Promise<void>)[] = [],
 ): Promise<{
   cleanups: (() => Promise<void>)[];
 }> => {
-  const cleanups: (() => Promise<void>)[] = [];
-
   if (!test.fixtures) {
     return { cleanups };
   }
@@ -105,20 +104,22 @@ export const handleFixtures = async (
 
     // This API behavior follows Vitest & Playwright
     // but why not return cleanup function?
-    await new Promise<void>((fixtureResolve) => {
+    await new Promise<void>((fixtureResolve, fixtureReject) => {
       let useDone: (() => void) | undefined;
-      const block = fixtureValue(context, async (value: any) => {
-        context[name] = value;
-        fixtureResolve();
-        return new Promise<void>((useFnResolve) => {
-          useDone = useFnResolve;
-        });
-      });
-
-      cleanups.unshift(() => {
-        useDone?.();
-        return block;
-      });
+      const block = Promise.resolve().then(() =>
+        fixtureValue(context, async (value: any) => {
+          context[name] = value;
+          cleanups.unshift(() => {
+            useDone?.();
+            return block;
+          });
+          fixtureResolve();
+          return new Promise<void>((useFnResolve) => {
+            useDone = useFnResolve;
+          });
+        }),
+      );
+      block.catch(fixtureReject);
     });
 
     doneMap.add(name);

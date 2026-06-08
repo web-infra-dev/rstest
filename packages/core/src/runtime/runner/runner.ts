@@ -23,7 +23,7 @@ import type {
 import { SYNTHETIC_STACK_ERROR_MESSAGE } from '../../utils/constants';
 import { getFileTaskId, getTaskNameWithPrefix } from '../../utils/helper';
 import { createExpect } from '../api/expect';
-import { formatTestError } from '../util';
+import { formatTestError, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
 import { handleFixtures } from './fixtures';
 import {
@@ -111,31 +111,67 @@ export class TestRunner {
       this.beforeEach(test, state, api);
 
       const cleanups: AfterEachListener[] = [];
+      const fixtureCleanups: (() => Promise<void>)[] = [];
 
-      const fixtureCleanups = await this.beforeRunTest(
-        test,
-        snapshotClient.getSnapshotState(testPath),
-      );
-      cleanups.push(...fixtureCleanups);
+      let skipped = false;
+
+      const skipResult = (): TestResult => ({
+        testId: test.testId,
+        status: 'skip' as const,
+        parentNames: test.parentNames,
+        name: test.name,
+        testPath,
+        project,
+      });
 
       try {
-        for (const fn of parentHooks.beforeEachListeners) {
-          const cleanupFn = await fn(test.context);
-          if (cleanupFn) cleanups.push(cleanupFn);
-        }
+        await this.beforeRunTest(
+          test,
+          snapshotClient.getSnapshotState(testPath),
+          fixtureCleanups,
+        );
       } catch (error) {
-        result = {
-          testId: test.testId,
-          status: 'fail' as const,
-          parentNames: test.parentNames,
-          name: test.name,
-          errors: await formatTestError(error, test),
-          testPath,
-          project,
-        };
+        if (error instanceof TestSkipError) {
+          skipped = true;
+          result = skipResult();
+        } else {
+          result = {
+            testId: test.testId,
+            status: 'fail' as const,
+            parentNames: test.parentNames,
+            name: test.name,
+            errors: await formatTestError(error, test),
+            testPath,
+            project,
+          };
+        }
       }
 
-      if (result?.status !== 'fail') {
+      if (!result) {
+        try {
+          for (const fn of parentHooks.beforeEachListeners) {
+            const cleanupFn = await fn(test.context);
+            if (cleanupFn) cleanups.push(cleanupFn);
+          }
+        } catch (error) {
+          if (error instanceof TestSkipError) {
+            skipped = true;
+            result = skipResult();
+          } else {
+            result = {
+              testId: test.testId,
+              status: 'fail' as const,
+              parentNames: test.parentNames,
+              name: test.name,
+              errors: await formatTestError(error, test),
+              testPath,
+              project,
+            };
+          }
+        }
+      }
+
+      if (!result) {
         if (test.fails) {
           try {
             await test.fn?.(test.context);
@@ -154,15 +190,20 @@ export class TestRunner {
                 },
               ],
             };
-          } catch {
-            result = {
-              testId: test.testId,
-              project,
-              status: 'pass' as const,
-              parentNames: test.parentNames,
-              name: test.name,
-              testPath,
-            };
+          } catch (error) {
+            if (error instanceof TestSkipError) {
+              skipped = true;
+              result = skipResult();
+            } else {
+              result = {
+                testId: test.testId,
+                project,
+                status: 'pass' as const,
+                parentNames: test.parentNames,
+                name: test.name,
+                testPath,
+              };
+            }
           }
         } else {
           try {
@@ -193,15 +234,20 @@ export class TestRunner {
               testPath,
             };
           } catch (error) {
-            result = {
-              testId: test.testId,
-              project,
-              status: 'fail' as const,
-              parentNames: test.parentNames,
-              name: test.name,
-              errors: await formatTestError(error, test),
-              testPath,
-            };
+            if (error instanceof TestSkipError) {
+              skipped = true;
+              result = skipResult();
+            } else {
+              result = {
+                testId: test.testId,
+                project,
+                status: 'fail' as const,
+                parentNames: test.parentNames,
+                name: test.name,
+                errors: await formatTestError(error, test),
+                testPath,
+              };
+            }
           }
         }
       }
@@ -209,6 +255,7 @@ export class TestRunner {
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]
         .reverse()
         .concat(cleanups)
+        .concat(fixtureCleanups)
         .concat(test.onFinished);
 
       test.context.task.result = result;
@@ -220,6 +267,10 @@ export class TestRunner {
         result.status = 'fail';
         result.errors ??= [];
         result.errors.push(...(await formatTestError(error)));
+      }
+
+      if (skipped) {
+        snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
       }
 
       if (result.status === 'fail') {
@@ -627,6 +678,12 @@ export class TestRunner {
       },
     });
 
+    Object.defineProperty(context, 'skip', {
+      value: () => {
+        throw new TestSkipError('Test skipped');
+      },
+    });
+
     Object.defineProperty(context, '_useLocalExpect', {
       get() {
         return _expect != null;
@@ -691,7 +748,8 @@ export class TestRunner {
   private async beforeRunTest(
     test: TestCase,
     snapshotState: SnapshotState,
-  ): Promise<(() => Promise<void>)[]> {
+    fixtureCleanups: (() => Promise<void>)[],
+  ): Promise<void> {
     setState<MatcherState>(
       {
         assertionCalls: 0,
@@ -708,15 +766,13 @@ export class TestRunner {
 
     const context = this.createTestContext(test);
 
-    const { cleanups } = await handleFixtures(test, context);
-
     // create test context
     Object.defineProperty(test, 'context', {
       value: context,
       enumerable: false,
     });
 
-    return cleanups;
+    await handleFixtures(test, context, fixtureCleanups);
   }
 
   private afterRunTest(test: TestCase): void {
