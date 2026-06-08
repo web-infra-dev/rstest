@@ -26,8 +26,6 @@ type CoverageOptions = {
 };
 
 type CoverageReporter =
-  | keyof ReportOptions
-  | [keyof ReportOptions, ReporterOptions]
   | string
   | [string, Record<string, unknown>]
   | ReportBase;
