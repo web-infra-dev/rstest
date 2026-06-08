@@ -288,10 +288,10 @@ export default defineConfig({
 
 自定义 coverage reporter 应遵循 Istanbul reporter 约定。reporter 包或文件会由 [`istanbul-reports`](https://github.com/istanbuljs/istanbuljs/tree/main/packages/istanbul-reports) 加载，使用 `coverage.reporters` 中传入的选项创建实例，然后用 Istanbul report context 调用。
 
-例如，一个 CommonJS reporter 可以导出带有 `execute` 方法的 class：
+例如，一个 ESM reporter 可以导出带有 `execute` 方法的 class：
 
-```js title='custom-coverage-reporter.cjs'
-class CustomCoverageReporter {
+```js title='custom-coverage-reporter.mjs'
+export default class CustomCoverageReporter {
   constructor(options = {}) {
     this.options = options;
   }
@@ -302,8 +302,6 @@ class CustomCoverageReporter {
     console.log('Coverage summary:', summary.toJSON());
   }
 }
-
-module.exports = CustomCoverageReporter;
 ```
 
 然后在 `rstest.config.ts` 中通过包名或文件路径引用该 reporter：
@@ -316,7 +314,7 @@ export default defineConfig({
     enabled: true,
     reporters: [
       'text',
-      ['./custom-coverage-reporter.cjs', { outputFile: 'summary.json' }],
+      ['./custom-coverage-reporter.mjs', { outputFile: 'summary.json' }],
     ],
   },
 });

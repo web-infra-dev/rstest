@@ -7,7 +7,7 @@ export default defineConfig({
     provider: 'istanbul',
     reporters: [
       [
-        './custom-coverage-reporter.cjs',
+        './custom-coverage-reporter.mjs',
         { outputFile: 'custom-coverage-report.json' },
       ],
     ],

@@ -290,10 +290,10 @@ export default defineConfig({
 
 Custom coverage reporters should follow the Istanbul reporter contract. A reporter package or file is loaded by [`istanbul-reports`](https://github.com/istanbuljs/istanbuljs/tree/main/packages/istanbul-reports), constructed with the options from `coverage.reporters`, and then called with an Istanbul report context.
 
-For example, a CommonJS reporter can export a class with an `execute` method:
+For example, an ESM reporter can export a class with an `execute` method:
 
-```js title='custom-coverage-reporter.cjs'
-class CustomCoverageReporter {
+```js title='custom-coverage-reporter.mjs'
+export default class CustomCoverageReporter {
   constructor(options = {}) {
     this.options = options;
   }
@@ -304,8 +304,6 @@ class CustomCoverageReporter {
     console.log('Coverage summary:', summary.toJSON());
   }
 }
-
-module.exports = CustomCoverageReporter;
 ```
 
 Then reference the reporter by package name or file path in `rstest.config.ts`:
@@ -318,7 +316,7 @@ export default defineConfig({
     enabled: true,
     reporters: [
       'text',
-      ['./custom-coverage-reporter.cjs', { outputFile: 'summary.json' }],
+      ['./custom-coverage-reporter.mjs', { outputFile: 'summary.json' }],
     ],
   },
 });

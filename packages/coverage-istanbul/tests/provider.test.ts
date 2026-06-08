@@ -69,9 +69,10 @@ describe('coverage-istanbul provider', () => {
 
     try {
       writeFileSync(
-        join(root, 'custom-coverage-reporter.cjs'),
-        `const fs = require('node:fs');
-module.exports = class CustomCoverageReporter {
+        join(root, 'custom-coverage-reporter.mjs'),
+        `import fs from 'node:fs';
+
+export default class CustomCoverageReporter {
   constructor(options = {}) {
     this.options = options;
   }
@@ -79,13 +80,13 @@ module.exports = class CustomCoverageReporter {
   execute() {
     fs.writeFileSync(this.options.outputFile, JSON.stringify({ ok: true }));
   }
-};
+}
 `,
       );
 
       const provider = new CoverageProvider(
         createOptions({
-          reporters: [['./custom-coverage-reporter.cjs', { outputFile }]],
+          reporters: [['./custom-coverage-reporter.mjs', { outputFile }]],
           reportsDirectory: join(root, 'coverage'),
         }),
         root,

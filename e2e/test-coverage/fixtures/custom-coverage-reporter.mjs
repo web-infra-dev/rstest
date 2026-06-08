@@ -1,6 +1,6 @@
-const fs = require('node:fs');
+import fs from 'node:fs';
 
-module.exports = class CustomCoverageReporter {
+export default class CustomCoverageReporter {
   constructor(options = {}) {
     this.options = options;
   }
@@ -12,4 +12,4 @@ module.exports = class CustomCoverageReporter {
       JSON.stringify({ lines: summary.lines.pct }),
     );
   }
-};
+}
