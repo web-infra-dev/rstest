@@ -1,4 +1,10 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -101,6 +107,42 @@ function getProviderInternals(provider: CoverageProvider): ProviderInternals {
 }
 
 describe('coverage-v8 provider', () => {
+  it('loads custom coverage reporters from relative config paths', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rstest-coverage-reporter-'));
+    const outputFile = join(root, 'custom-reporter-output.json');
+
+    try {
+      writeFileSync(
+        join(root, 'custom-coverage-reporter.cjs'),
+        `const fs = require('node:fs');
+module.exports = class CustomCoverageReporter {
+  constructor(options = {}) {
+    this.options = options;
+  }
+
+  execute() {
+    fs.writeFileSync(this.options.outputFile, JSON.stringify({ ok: true }));
+  }
+};
+`,
+      );
+
+      const provider = new CoverageProvider(
+        createOptions({
+          reporters: [['./custom-coverage-reporter.cjs', { outputFile }]],
+          reportsDirectory: join(root, 'coverage'),
+        }),
+        root,
+      );
+
+      await provider.generateReports(provider.createCoverageMap());
+
+      expect(existsSync(outputFile)).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('fast merges duplicate converted coverage shapes', () => {
     const file = '/project/src/index.ts';
     const provider = new CoverageProvider(createOptions());

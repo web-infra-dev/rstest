@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import inspector from 'node:inspector/promises';
-import { posix, win32 } from 'node:path';
+import { posix, resolve, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
   NormalizedCoverageOptions,
@@ -442,10 +442,23 @@ export class CoverageProvider implements RstestCoverageProvider {
         const [reporterName, reporterOptions] = Array.isArray(reporter)
           ? reporter
           : [reporter, {}];
-        const report = reports.create(reporterName as any, reporterOptions);
+        const report = reports.create(
+          this.resolveReporterName(reporterName) as Parameters<
+            typeof reports.create
+          >[0],
+          reporterOptions,
+        );
         report.execute(context);
       }
     }
+  }
+
+  private resolveReporterName(reporterName: string): string {
+    if (reporterName.startsWith('.')) {
+      return resolve(this.root ?? process.cwd(), reporterName);
+    }
+
+    return reporterName;
   }
 
   cleanup(): void {

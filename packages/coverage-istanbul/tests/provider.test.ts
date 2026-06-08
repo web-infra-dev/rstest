@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { NormalizedCoverageOptions } from '@rstest/core';
 import type { CoverageMap } from 'istanbul-lib-coverage';
 import { CoverageProvider } from '../src/provider';
@@ -58,5 +61,41 @@ describe('coverage-istanbul provider', () => {
     expect(provider.collect()).toBeNull();
     expect(loggedError).toBe(true);
     expect(process.exitCode).toBe(1);
+  });
+
+  it('loads custom coverage reporters from relative config paths', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rstest-coverage-reporter-'));
+    const outputFile = join(root, 'custom-reporter-output.json');
+
+    try {
+      writeFileSync(
+        join(root, 'custom-coverage-reporter.cjs'),
+        `const fs = require('node:fs');
+module.exports = class CustomCoverageReporter {
+  constructor(options = {}) {
+    this.options = options;
+  }
+
+  execute() {
+    fs.writeFileSync(this.options.outputFile, JSON.stringify({ ok: true }));
+  }
+};
+`,
+      );
+
+      const provider = new CoverageProvider(
+        createOptions({
+          reporters: [['./custom-coverage-reporter.cjs', { outputFile }]],
+          reportsDirectory: join(root, 'coverage'),
+        }),
+        root,
+      );
+
+      await provider.generateReports(provider.createCoverageMap());
+
+      expect(existsSync(outputFile)).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

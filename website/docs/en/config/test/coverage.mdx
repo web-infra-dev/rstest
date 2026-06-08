@@ -17,13 +17,20 @@ type CoverageOptions = {
   include?: string[];
   changed?: boolean | string;
   exclude?: string[];
-  reporters?: (keyof ReportOptions | ReportWithOptions)[];
+  reporters?: CoverageReporter[];
   reportsDirectory?: string;
   reportOnFailure?: boolean;
   clean?: boolean;
   allowExternal?: boolean;
   thresholds?: CoverageThresholds;
 };
+
+type CoverageReporter =
+  | keyof ReportOptions
+  | [keyof ReportOptions, ReporterOptions]
+  | string
+  | [string, Record<string, unknown>]
+  | ReportBase;
 ```
 
 - **Default:** `undefined`
@@ -247,11 +254,13 @@ export default defineConfig({
 
 ### reporters
 
-- **Type:** `(ReporterName | [ReporterName, ReporterOptions>])[]`
+- **Type:** `CoverageReporter[]`
 - **Default:** `['text', 'html', 'clover', 'json']`
 - **CLI:** `--coverage.reporters <reporter>`
 
-The reporters to use for coverage collection. Each reporter can be either a string (the reporter name) or a tuple with the reporter name and its options.
+The reporters to use for coverage collection. Rstest uses the standard [Istanbul reporter API](https://istanbul.js.org/docs/advanced/alternative-reporters/) instead of a Rstest-specific coverage reporter API.
+
+Each reporter can be either a string (the reporter name), a tuple with the reporter name and its options, or an Istanbul-compatible reporter object with an `execute(context)` method.
 
 The CLI supports reporter names only. Repeat the flag to specify multiple reporters:
 
@@ -260,7 +269,7 @@ npx rstest run --coverage.reporters text --coverage.reporters=json
 ```
 
 - See [Istanbul Reporters](https://istanbul.js.org/docs/advanced/alternative-reporters/) for available reporters.
-- See [@types/istanbul-reporter](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts) for details about reporter specific options.
+- See [@types/istanbul-reports](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts) for details about reporter specific options.
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -272,6 +281,67 @@ export default defineConfig({
       'html',
       ['text', { skipFull: true }],
       ['json', { file: 'coverage-final.json' }],
+    ],
+  },
+});
+```
+
+#### Custom coverage reporters
+
+Custom coverage reporters should follow the Istanbul reporter contract. A reporter package or file is loaded by [`istanbul-reports`](https://github.com/istanbuljs/istanbuljs/tree/main/packages/istanbul-reports), constructed with the options from `coverage.reporters`, and then called with an Istanbul report context.
+
+For example, a CommonJS reporter can export a class with an `execute` method:
+
+```js title='custom-coverage-reporter.cjs'
+class CustomCoverageReporter {
+  constructor(options = {}) {
+    this.options = options;
+  }
+
+  execute(context) {
+    // Use the standard Istanbul report context.
+    const summary = context.getTree('flat').getRoot().getCoverageSummary();
+    console.log('Coverage summary:', summary.toJSON());
+  }
+}
+
+module.exports = CustomCoverageReporter;
+```
+
+Then reference the reporter by package name or file path in `rstest.config.ts`:
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reporters: [
+      'text',
+      ['./custom-coverage-reporter.cjs', { outputFile: 'summary.json' }],
+    ],
+  },
+});
+```
+
+You can also pass an Istanbul-compatible reporter object directly when the reporter is created in config:
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reporters: [
+      {
+        execute(context) {
+          const summary = context
+            .getTree('flat')
+            .getRoot()
+            .getCoverageSummary();
+          console.log(summary.toJSON());
+        },
+      },
     ],
   },
 });
