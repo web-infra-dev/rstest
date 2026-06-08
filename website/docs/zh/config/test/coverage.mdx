@@ -25,10 +25,7 @@ type CoverageOptions = {
   thresholds?: CoverageThresholds;
 };
 
-type CoverageReporter =
-  | string
-  | [string, Record<string, unknown>]
-  | ReportBase;
+type CoverageReporter = string | [string, Record<string, unknown>] | ReportBase;
 ```
 
 - **默认值：** `undefined`
