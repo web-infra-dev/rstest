@@ -105,15 +105,18 @@ export const handleFixtures = async (
 
     // This API behavior follows Vitest & Playwright
     // but why not return cleanup function?
-    await new Promise<void>((fixtureResolve) => {
+    await new Promise<void>((fixtureResolve, fixtureReject) => {
       let useDone: (() => void) | undefined;
-      const block = fixtureValue(context, async (value: any) => {
-        context[name] = value;
-        fixtureResolve();
-        return new Promise<void>((useFnResolve) => {
-          useDone = useFnResolve;
-        });
-      });
+      const block = Promise.resolve().then(() =>
+        fixtureValue(context, async (value: any) => {
+          context[name] = value;
+          fixtureResolve();
+          return new Promise<void>((useFnResolve) => {
+            useDone = useFnResolve;
+          });
+        }),
+      );
+      block.catch(fixtureReject);
 
       cleanups.unshift(() => {
         useDone?.();

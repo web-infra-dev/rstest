@@ -35,4 +35,23 @@ describe('Test API', () => {
   it('`rs` should be identical to `rstest`', () => {
     expect(rs).toBe(rstest);
   });
+
+  it('context.skip skips the current test at runtime', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/contextSkip.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(
+      logs.find((log) => log.includes('Tests 1 passed | 3 skipped')),
+    ).toBeTruthy();
+  });
 });

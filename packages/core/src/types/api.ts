@@ -23,6 +23,8 @@ export interface TestContext {
     result?: TestResult;
   };
   expect: RstestExpect;
+  /** Skip the current test during execution. */
+  skip: () => never;
   onTestFinished: RunnerAPI['onTestFinished'];
   onTestFailed: RunnerAPI['onTestFailed'];
 }
