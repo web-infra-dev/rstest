@@ -20,6 +20,22 @@ test('exposes playwright options fixture overrides', async ({ playwright }) => {
   expect(playwright.browserName).toBe('chromium');
 });
 
+test.sequential(
+  'allows local mutation of default playwright options',
+  ({ playwright }) => {
+    playwright.launchOptions = { headless: false };
+
+    expect(playwright.launchOptions).toEqual({ headless: false });
+  },
+);
+
+test.sequential(
+  'provides fresh default playwright options',
+  ({ playwright }) => {
+    expect(playwright.launchOptions).toBeUndefined();
+  },
+);
+
 test.extend({
   playwright: {
     contextOptions: {

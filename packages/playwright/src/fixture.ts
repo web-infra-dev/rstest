@@ -123,14 +123,7 @@ export type PlaywrightFixture = {
   serve: PlaywrightServe;
 };
 
-type BrowserCache = {
-  key: string;
-  promise: Promise<Browser>;
-};
-
-const DEFAULT_PLAYWRIGHT_OPTIONS = {
-  browserName: 'chromium',
-} satisfies PlaywrightOptions;
+const DEFAULT_BROWSER_NAME = 'chromium' satisfies PlaywrightBrowserName;
 
 const DEBUG_ENV = 'RSTEST_PLAYWRIGHT_DEBUG';
 const PAUSE_ENV = 'RSTEST_PLAYWRIGHT_PAUSE';
@@ -152,7 +145,7 @@ const CONTENT_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
 };
 
-let browserCache: BrowserCache | undefined;
+const browserCache = new Map<string, Promise<Browser>>();
 
 const browserTypes = {
   chromium,
@@ -208,32 +201,31 @@ const resolveLaunchOptions = ({
 
 const getBrowserCacheKey = (options: PlaywrightOptions) =>
   JSON.stringify({
-    browserName: options.browserName ?? DEFAULT_PLAYWRIGHT_OPTIONS.browserName,
+    browserName: options.browserName ?? DEFAULT_BROWSER_NAME,
     launchOptions: resolveLaunchOptions(options),
   });
 
 const getBrowser = (options: PlaywrightOptions) => {
-  const browserName = options.browserName ?? 'chromium';
+  const browserName = options.browserName ?? DEFAULT_BROWSER_NAME;
   const key = getBrowserCacheKey(options);
+  const cachedBrowser = browserCache.get(key);
 
-  if (browserCache?.key !== key) {
-    browserCache = {
-      key,
-      promise: browserTypes[browserName].launch(resolveLaunchOptions(options)),
-    };
+  if (cachedBrowser) {
+    return cachedBrowser;
   }
 
-  return browserCache.promise;
+  const browser = browserTypes[browserName].launch(
+    resolveLaunchOptions(options),
+  );
+  browserCache.set(key, browser);
+  return browser;
 };
 
 const closeBrowser = async () => {
-  if (!browserCache) {
-    return;
-  }
+  const browsers = [...browserCache.values()];
+  browserCache.clear();
 
-  const browser = await browserCache.promise;
-  browserCache = undefined;
-  await browser.close();
+  await Promise.all(browsers.map(async (browser) => (await browser).close()));
 };
 
 rstestAfterAll(closeBrowser);
@@ -386,7 +378,12 @@ const cleanupServer = async ({
 };
 
 const playwrightFixtures = {
-  playwright: DEFAULT_PLAYWRIGHT_OPTIONS,
+  playwright: async (
+    _context: TestContext,
+    use: (options: PlaywrightOptions) => Promise<void>,
+  ) => {
+    await use({ browserName: DEFAULT_BROWSER_NAME });
+  },
 
   serve: async (
     { playwright }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
