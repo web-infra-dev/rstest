@@ -68,3 +68,17 @@ test(
   },
   { timeout: 30_000 },
 );
+
+test(
+  'returns 404 for malformed static server paths',
+  async ({ request, serve }) => {
+    const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
+    await writeFile(join(root, 'index.html'), '<h1>ok</h1>');
+
+    const { url } = await serve(join(root, 'index.html'));
+    const response = await request.get(`${url}/%E0%A4%A`);
+
+    expect(response.status()).toBe(404);
+  },
+  { timeout: 30_000 },
+);

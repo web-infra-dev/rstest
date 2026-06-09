@@ -195,7 +195,6 @@ const resolveLaunchOptions = ({
   const debugOptions = getDebugOptions(debug);
 
   return {
-    channel: process.env.CI ? 'chrome' : undefined,
     ...launchOptions,
     ...(debugOptions
       ? {
@@ -209,7 +208,7 @@ const resolveLaunchOptions = ({
 
 const getBrowserCacheKey = (options: PlaywrightOptions) =>
   JSON.stringify({
-    browserName: options.browserName,
+    browserName: options.browserName ?? DEFAULT_PLAYWRIGHT_OPTIONS.browserName,
     launchOptions: resolveLaunchOptions(options),
   });
 
@@ -274,7 +273,18 @@ const listenStaticServer = async (
 };
 
 const resolveStaticFile = async (root: string, pathName: string) => {
-  const decodedPath = decodeURIComponent(pathName);
+  const decodedPath = (() => {
+    try {
+      return decodeURIComponent(pathName);
+    } catch {
+      return;
+    }
+  })();
+
+  if (!decodedPath) {
+    return;
+  }
+
   const filePath = resolve(
     root,
     decodedPath === '/' ? 'index.html' : `.${decodedPath}`,
