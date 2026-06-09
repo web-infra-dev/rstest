@@ -11,8 +11,6 @@ import { PackageManagerTabs } from '@theme';
 
 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 为运行在 Node.js worker 中的 Rstest 测试提供 Playwright fixtures 和 Playwright 风格的断言。它适合对一个完整页面或应用做 E2E 测试，例如本地 dev server、preview server 或线上 URL。测试代码运行在 Node.js 中，并通过 Playwright 控制页面。
 
-Rstest browser mode 的目标场景不同，更偏向组件测试和浏览器内测试。它会通过 Rstest 对测试文件和源码进行 web 打包，并在浏览器运行时中执行测试代码。
-
 ## 与 Rstest browser mode 的区别
 
 两者的主要区别是适用场景：Rstest browser mode 会为测试模块准备浏览器运行时，而 `@rstest/playwright` 会控制一个由应用或服务端准备好的页面。
@@ -25,6 +23,18 @@ Rstest browser mode 的目标场景不同，更偏向组件测试和浏览器内
 | 需要浏览器内组件测试能力                          | [Rstest browser mode](/guide/browser-testing)                      |
 
 由于 `@rstest/playwright` 控制的是外部页面，而不是 Rstest browser mode 的 runner iframe，因此它不走 Browser UI 的预览 iframe。需要本地可视化调试时，可以使用 `RSTEST_PLAYWRIGHT_DEBUG=true` 开启 headed 模式。
+
+## 与原生 Playwright 的区别
+
+`@rstest/playwright` 和原生 Playwright 主要区别在 runner 和配置方式：
+
+| 项目     | `@rstest/playwright`                            | 原生 Playwright                               |
+| -------- | ----------------------------------------------- | --------------------------------------------- |
+| Runner   | Rstest runner                                   | Playwright Test runner                        |
+| 配置方式 | `rstest.config.ts` 和 `playwright` fixture 覆盖 | `playwright.config.ts`                        |
+| 测试 API | 从 `@rstest/playwright` 导入 `test` 和 `expect` | 从 `@playwright/test` 导入 `test` 和 `expect` |
+
+如果希望 Playwright E2E 测试和其他 Rstest 测试使用同一套 Rstest 工作流，可以使用 `@rstest/playwright`。如果希望使用完整的 Playwright Test runner 工作流和配置模型，可以使用原生 Playwright。
 
 ## 安装
 

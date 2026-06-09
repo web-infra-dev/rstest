@@ -4,8 +4,6 @@ Playwright fixture integration for Rstest. It provides Node-side Playwright fixt
 
 Use `@rstest/playwright` for E2E tests against a complete page or app, such as a local dev server, a preview server, or a deployed URL. The test runs in a Node.js worker and uses Playwright to drive the page.
 
-Rstest browser mode (`@rstest/browser`) has a different target. It is designed for component and in-browser tests. Rstest bundles the test and source modules for the browser, then runs the test code inside the browser runtime.
-
 ## When to use it
 
 | Scenario                                                        | Recommended                                |
@@ -16,6 +14,18 @@ Rstest browser mode (`@rstest/browser`) has a different target. It is designed f
 | Need in-browser component test utilities                        | Rstest browser mode                        |
 
 Because `@rstest/playwright` controls an external page instead of running the test in Rstest's browser runner, it does not use the Browser UI preview iframe. For visual debugging, use headed mode with `RSTEST_PLAYWRIGHT_DEBUG=true`.
+
+## Rstest Playwright vs native Playwright
+
+`@rstest/playwright` and native Playwright use different runners and configuration files:
+
+| Item          | `@rstest/playwright`                                  | Native Playwright                                  |
+| ------------- | ----------------------------------------------------- | -------------------------------------------------- |
+| Runner        | Rstest runner                                         | Playwright Test runner                             |
+| Configuration | `rstest.config.ts` and `playwright` fixture overrides | `playwright.config.ts`                             |
+| Test API      | Import `test` and `expect` from `@rstest/playwright`  | Import `test` and `expect` from `@playwright/test` |
+
+Use `@rstest/playwright` when you want Playwright-driven E2E tests to run in the same Rstest workflow as the rest of your tests. Use native Playwright when you want the full Playwright Test runner workflow and its configuration model.
 
 ## Installation
 
@@ -113,7 +123,7 @@ e2e('mobile page', async ({ page }) => {
 });
 ```
 
-For Playwright E2E projects, set `isolate: false` in `rstest.config.ts` so worker-level browser and server state can be reused predictably across test files:
+For Playwright E2E projects, set `isolate: false` in `rstest.config.ts` so fixture state can be managed consistently within each test file:
 
 ```ts
 import { defineConfig } from '@rstest/core';

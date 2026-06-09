@@ -11,8 +11,6 @@ import { PackageManagerTabs } from '@theme';
 
 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) provides Playwright fixtures and Playwright-style assertions for Rstest tests that run in Node.js workers. Use it for E2E tests against a complete page or app, such as a local dev server, a preview server, or a deployed URL. The test runs in Node.js and uses Playwright to drive the page.
 
-Rstest browser mode has a different target. It is designed for component and in-browser tests. Rstest bundles the test and source modules for the browser, then runs the test code inside the browser runtime.
-
 ## Rstest browser mode vs playwright
 
 The main difference is the testing scenario: Rstest browser mode prepares a browser runtime for your test modules, while `@rstest/playwright` controls a page that is already prepared by your app or server.
@@ -25,6 +23,18 @@ The main difference is the testing scenario: Rstest browser mode prepares a brow
 | Need in-browser component test utilities                        | [Rstest browser mode](/guide/browser-testing)                        |
 
 Because `@rstest/playwright` controls an external page instead of running the test in Rstest's browser runner, it does not use the Browser UI preview iframe. For visual debugging, use headed mode with `RSTEST_PLAYWRIGHT_DEBUG=true`.
+
+## Rstest Playwright vs native Playwright
+
+`@rstest/playwright` and native Playwright use different runners and configuration files:
+
+| Item          | `@rstest/playwright`                                  | Native Playwright                                  |
+| ------------- | ----------------------------------------------------- | -------------------------------------------------- |
+| Runner        | Rstest runner                                         | Playwright Test runner                             |
+| Configuration | `rstest.config.ts` and `playwright` fixture overrides | `playwright.config.ts`                             |
+| Test API      | Import `test` and `expect` from `@rstest/playwright`  | Import `test` and `expect` from `@playwright/test` |
+
+Use `@rstest/playwright` when you want Playwright-driven E2E tests to run in the same Rstest workflow as the rest of your tests. Use native Playwright when you want the full Playwright Test runner workflow and its configuration model.
 
 ## Install
 
