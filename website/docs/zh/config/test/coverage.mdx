@@ -17,13 +17,15 @@ type CoverageOptions = {
   include?: string[];
   changed?: boolean | string;
   exclude?: string[];
-  reporters?: (keyof ReportOptions | ReportWithOptions)[];
+  reporters?: CoverageReporter[];
   reportsDirectory?: string;
   reportOnFailure?: boolean;
   clean?: boolean;
   allowExternal?: boolean;
   thresholds?: CoverageThresholds;
 };
+
+type CoverageReporter = string | [string, Record<string, unknown>] | ReportBase;
 ```
 
 - **默认值：** `undefined`
@@ -245,11 +247,13 @@ export default defineConfig({
 
 ### reporters
 
-- **类型：** `(ReporterName | [ReporterName, ReporterOptions>])[]`
+- **类型：** `CoverageReporter[]`
 - **默认值：** `['text', 'html', 'clover', 'json']`
 - **CLI：** `--coverage.reporters <reporter>`
 
-用于覆盖率收集的报告器。每个报告器可以是字符串（报告器名称）或包含报告器名称及其选项的元组。
+用于覆盖率收集的报告器。Rstest 使用标准 [Istanbul reporter API](https://istanbul.js.org/docs/advanced/alternative-reporters/)，而不是 Rstest 专属的 coverage reporter API。
+
+每个 reporter 可以是字符串（reporter 名称）、包含 reporter 名称及其选项的元组，也可以是带有 `execute(context)` 方法且兼容 Istanbul 的 reporter 对象。
 
 CLI 仅支持传入报告器名称。如需指定多个报告器，可以重复使用该参数：
 
@@ -258,7 +262,7 @@ npx rstest run --coverage.reporters text --coverage.reporters=json
 ```
 
 - 有关可用报告器，可参考 [Istanbul Reporters](https://istanbul.js.org/docs/advanced/alternative-reporters/)。
-- 有关报告器选项的详细信息，可参考 [@types/istanbul-reporter](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts)。
+- 有关报告器选项的详细信息，可参考 [@types/istanbul-reports](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts)。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -270,6 +274,66 @@ export default defineConfig({
       'html',
       ['text', { skipFull: true }],
       ['json', { file: 'coverage-final.json' }],
+    ],
+  },
+});
+```
+
+#### 自定义 coverage reporter
+
+自定义 coverage reporter 应遵循 Istanbul reporter 约定。reporter 包或文件会由 Rstest 的 coverage provider 加载（在可能的情况下会通过 [`istanbul-reports`](https://github.com/istanbuljs/istanbuljs/tree/main/packages/istanbul-reports) 创建），使用 `coverage.reporters` 中传入的选项创建实例，然后用 Istanbul report context 调用。
+
+例如，一个 ESM reporter 可以导出带有 `execute` 方法的 class。`context` 参数对应 `istanbul-lib-report` 中的 Istanbul `Context` 类型：
+
+```js title='custom-coverage-reporter.mjs'
+export default class CustomCoverageReporter {
+  constructor(options = {}) {
+    this.options = options;
+  }
+
+  /** @param {import('istanbul-lib-report').Context} context */
+  execute(context) {
+    // Use the standard Istanbul report context.
+    const summary = context.getTree('flat').getRoot().getCoverageSummary();
+    console.log('Coverage summary:', summary.toJSON());
+  }
+}
+```
+
+然后在 `rstest.config.ts` 中通过包名或文件路径引用该 reporter：
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reporters: [
+      'text',
+      ['./custom-coverage-reporter.mjs', { outputFile: 'summary.json' }],
+    ],
+  },
+});
+```
+
+如果在配置中直接创建 reporter，也可以传入兼容 Istanbul 的 reporter 对象：
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    reporters: [
+      {
+        execute(context) {
+          const summary = context
+            .getTree('flat')
+            .getRoot()
+            .getCoverageSummary();
+          console.log(summary.toJSON());
+        },
+      },
     ],
   },
 });
