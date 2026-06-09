@@ -1,13 +1,35 @@
+import { join } from 'node:path';
 import { createRsbuild } from '@rsbuild/core';
 import { expect, test } from '@rstest/playwright';
+
+const cwd = import.meta.dirname;
+const distPath = 'dist-index';
+const entry = join(cwd, distPath, 'index.html');
 
 test(
   'opens an Rsbuild page with Playwright',
   async ({ page, serve }) => {
-    const rsbuild = await createRsbuild({ cwd: import.meta.dirname });
+    const rsbuild = await createRsbuild({
+      cwd,
+      rsbuildConfig: {
+        html: {
+          title: 'Rstest Playwright E2E',
+        },
+        output: {
+          distPath: {
+            root: distPath,
+          },
+        },
+        source: {
+          entry: {
+            index: './src/index.ts',
+          },
+        },
+      },
+    });
     await rsbuild.build();
 
-    const { url } = await serve('./dist/index.html', {
+    const { url } = await serve(entry, {
       keepAliveOnDebug: false,
     });
 

@@ -1,10 +1,31 @@
+import { join } from 'node:path';
 import { createRsbuild } from '@rsbuild/core';
 import { expect, test } from '@rstest/playwright';
 
 const debugEnabled = process.env.RSTEST_PLAYWRIGHT_DEBUG === 'true';
+const cwd = import.meta.dirname;
+const distPath = 'dist-debug';
+const entry = join(cwd, distPath, 'index.html');
 
 const buildApp = async () => {
-  const rsbuild = await createRsbuild({ cwd: import.meta.dirname });
+  const rsbuild = await createRsbuild({
+    cwd,
+    rsbuildConfig: {
+      html: {
+        title: 'Rstest Playwright E2E',
+      },
+      output: {
+        distPath: {
+          root: distPath,
+        },
+      },
+      source: {
+        entry: {
+          index: './src/index.ts',
+        },
+      },
+    },
+  });
   await rsbuild.build();
 };
 
@@ -13,7 +34,7 @@ test(
   async ({ page, serve }) => {
     await buildApp();
 
-    const { url } = await serve('./dist/index.html', {
+    const { url } = await serve(entry, {
       keepAliveOnDebug: false,
     });
 
@@ -33,7 +54,7 @@ test.skip(
   async ({ page, serve }) => {
     await buildApp();
 
-    const { url } = await serve('./dist/index.html');
+    const { url } = await serve(entry);
 
     await page.goto(url);
     await page.pause();
