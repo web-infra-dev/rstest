@@ -15,7 +15,7 @@ Use `@rstest/playwright` for E2E tests against a complete page or app, such as a
 
 Because `@rstest/playwright` controls an external page instead of running the test in Rstest's browser runner, it does not use the Browser UI preview iframe. For visual debugging, use headed mode with `RSTEST_PLAYWRIGHT_DEBUG=true`.
 
-## Rstest Playwright vs native Playwright
+## Rstest playwright vs native playwright
 
 `@rstest/playwright` and native Playwright use different runners and configuration files:
 
