@@ -285,7 +285,7 @@ export default defineConfig({
 
 Custom coverage reporters should follow the Istanbul reporter contract. A reporter package or file is loaded by Rstest's coverage provider (using [`istanbul-reports`](https://github.com/istanbuljs/istanbuljs/tree/main/packages/istanbul-reports) when possible), constructed with the options from `coverage.reporters`, and then called with an Istanbul report context.
 
-For example, an ESM reporter can export a class with an `execute` method:
+For example, an ESM reporter can export a class with an `execute` method. The `context` parameter is Istanbul's `Context` type from `istanbul-lib-report`:
 
 ```js title='custom-coverage-reporter.mjs'
 export default class CustomCoverageReporter {
@@ -293,6 +293,7 @@ export default class CustomCoverageReporter {
     this.options = options;
   }
 
+  /** @param {import('istanbul-lib-report').Context} context */
   execute(context) {
     // Use the standard Istanbul report context.
     const summary = context.getTree('flat').getRoot().getCoverageSummary();
