@@ -156,6 +156,17 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     '--includeTaskLocation',
     'Collect test and suite locations. This might increase the running time.',
   ],
+  ['--source.*', 'Internal parser helper for source.* options'],
+  ['--source.tsconfigPath <path>', 'Path to the tsconfig.json file'],
+  ['--dev.*', 'Internal parser helper for dev.* options'],
+  ['--dev.writeToDisk', 'Write test temporary files to disk'],
+  ['--output.*', 'Internal parser helper for output.* options'],
+  ['--output.emitAssets', 'Emit imported static assets'],
+  [
+    '--output.cleanDistPath',
+    'Clean test temporary files before the test starts',
+  ],
+  ['--output.module', 'Output JavaScript files in ES module format'],
 ];
 
 const poolOptionDefinitions: OptionDefinition[] = [
@@ -372,14 +383,54 @@ const normalizeBrowserCliArgs = (argv: string[]): string[] => {
 const normalizeCliArgs = (argv: string[]): string[] =>
   normalizePoolCliArgs(normalizeBrowserCliArgs(normalizeCoverageCliArgs(argv)));
 
+const allowedWildcardOptions = {
+  source: new Set(['tsconfigPath']),
+  dev: new Set(['writeToDisk']),
+  output: new Set(['emitAssets', 'cleanDistPath', 'module']),
+};
+
+const validateWildcardOptions = (options: Record<string, unknown>): void => {
+  for (const [name, allowedOptions] of Object.entries(allowedWildcardOptions)) {
+    const value = options[name];
+
+    if (value === undefined) {
+      continue;
+    }
+
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new Error(`Unknown option \`--${name}\``);
+    }
+
+    for (const [key, optionValue] of Object.entries(value)) {
+      if (!allowedOptions.has(key)) {
+        throw new Error(`Unknown option \`--${name}.${key}\``);
+      }
+
+      if (
+        typeof optionValue === 'object' &&
+        optionValue !== null &&
+        !Array.isArray(optionValue)
+      ) {
+        const nestedKey = Object.keys(optionValue)[0];
+        throw new Error(
+          `Unknown option \`--${name}.${key}${nestedKey ? `.${nestedKey}` : ''}\``,
+        );
+      }
+    }
+  }
+};
+
 const normalizeMixedCliOptions = (cli: CAC): void => {
   const originalParse = cli.parse.bind(cli);
 
-  cli.parse = ((argv, options) =>
-    originalParse(
+  cli.parse = ((argv, options) => {
+    const parsed = originalParse(
       normalizeCliArgs(argv ?? process.argv),
       options,
-    )) as CAC['parse'];
+    );
+    validateWildcardOptions(parsed.options as Record<string, unknown>);
+    return parsed;
+  }) as CAC['parse'];
 };
 
 const filterHelpOptions = (
@@ -815,7 +866,11 @@ export function createCli(): CAC {
       case 'merge-reports':
         return filterHelpOptions(sections, ['--isolate']);
       default:
-        return sections;
+        return filterHelpOptions(sections, [
+          '--source.*',
+          '--dev.*',
+          '--output.*',
+        ]);
     }
   });
   cli.version(RSTEST_VERSION);

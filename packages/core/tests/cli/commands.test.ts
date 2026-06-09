@@ -66,6 +66,7 @@ describe('valueTakingOptions (derived from option definitions)', () => {
         '--root',
         '--shard',
         '--silent',
+        '--source.tsconfigPath',
         '--slowTestThreshold',
         '--testEnvironment',
         '--testNamePattern',
@@ -78,6 +79,8 @@ describe('valueTakingOptions (derived from option definitions)', () => {
     expect(valueTakingOptions.has('--globals')).toBe(false);
     expect(valueTakingOptions.has('--isolate')).toBe(false);
     expect(valueTakingOptions.has('--coverage')).toBe(false);
+    expect(valueTakingOptions.has('--output.emitAssets')).toBe(false);
+    expect(valueTakingOptions.has('--output.cssModules')).toBe(false);
   });
 });
 
@@ -295,6 +298,99 @@ describe('CLI help output', () => {
     );
 
     expect(parsed.options.reporters).toEqual(['verbose', 'junit']);
+  });
+
+  it('accepts source, dev, and output nested options', () => {
+    const parsed = createCli().parse(
+      [
+        'node',
+        'rstest',
+        'run',
+        '--source.tsconfigPath',
+        'tsconfig.test.json',
+        '--dev.writeToDisk',
+        '--output.emitAssets=false',
+        '--output.cleanDistPath',
+        '--no-output.module',
+      ],
+      { run: false },
+    );
+
+    expect(parsed.options.source).toEqual({
+      tsconfigPath: 'tsconfig.test.json',
+    });
+    expect(parsed.options.dev).toEqual({
+      writeToDisk: true,
+    });
+    expect(parsed.options.output).toEqual({
+      emitAssets: false,
+      cleanDistPath: true,
+      module: false,
+    });
+  });
+
+  it('hides internal parser helper options from command help', () => {
+    const help = renderHelp(['node', 'rstest', 'run', '--help']);
+
+    expect(help).toContain('--source.tsconfigPath');
+    expect(help).toContain('--output.emitAssets');
+    expect(help).not.toContain('--output.cssModules');
+    expect(help).not.toContain('--source.*');
+    expect(help).not.toContain('--dev.*');
+    expect(help).not.toContain('--output.*');
+  });
+
+  it('rejects unknown source, dev, and output nested options', () => {
+    const cli = createCli();
+
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--source.unknown'], { run: false }),
+    ).toThrow('Unknown option `--source.unknown`');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--dev.unknown'], { run: false }),
+    ).toThrow('Unknown option `--dev.unknown`');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--output.unknown'], { run: false }),
+    ).toThrow('Unknown option `--output.unknown`');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--output.cssModules'], {
+        run: false,
+      }),
+    ).toThrow('Unknown option `--output.cssModules`');
+  });
+
+  it('rejects deeper source, dev, and output nested options', () => {
+    const cli = createCli();
+
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--source.tsconfigPath.foo'], {
+        run: false,
+      }),
+    ).toThrow('Unknown option `--source.tsconfigPath.foo`');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--dev.writeToDisk.foo'], {
+        run: false,
+      }),
+    ).toThrow('Unknown option `--dev.writeToDisk.foo`');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--output.module.foo'], {
+        run: false,
+      }),
+    ).toThrow('Unknown option `--output.module.foo`');
+  });
+
+  it('rejects bare source, dev, and output parser helper options', () => {
+    const cli = createCli();
+
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--source'], { run: false }),
+    ).toThrow('Unknown option `--source`');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--dev'], { run: false }),
+    ).toThrow('Unknown option `--dev`');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--output'], { run: false }),
+    ).toThrow('Unknown option `--output`');
   });
 
   it('accepts --coverage.* and populates nested coverage options', () => {
