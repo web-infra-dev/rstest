@@ -108,7 +108,7 @@
     "@rsbuild/core": "~2.0.11",
     "@rslib/core": "0.22.0",
     "@rstest/core": "workspace:*",
-    "@swc/core": "^1.15.41",
+    "@swc/core": "^1.15.40",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
