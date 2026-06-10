@@ -3,9 +3,9 @@ import { afterAll, expect, it, rs } from '@rstest/core';
 // Regression for #1327 (node builtins) / #1328 (ESM-only npm packages): a dynamic
 // `import()` of a mocked externalized specifier must resolve to the mock, not the
 // real module (static `import` was never affected). rspack gives the dynamic
-// import a different external module id than the hoisted `rs.mock`, so the mock
-// is routed by request via `rstest_dynamic_require`. These assert the mock RESULT
-// at runtime — not the emitted codegen.
+// import a different external module id than the hoisted `rs.mock`, so
+// `rstest_dynamic_require` redirects it to the mocked id by request. These assert
+// the mock RESULT at runtime — not the emitted codegen.
 
 // #1327: node built-in module.
 rs.mock('node:child_process', () => ({
