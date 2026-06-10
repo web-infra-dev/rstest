@@ -11,11 +11,11 @@
     "vue": "^3.5.35"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.0.9",
+    "@rsbuild/core": "~2.0.11",
     "@rsbuild/plugin-vue": "^1.2.9",
     "@rstest/core": "workspace:*",
     "@vue/compiler-dom": "^3.5.35",
     "@vue/server-renderer": "^3.5.35",
-    "@vue/test-utils": "^2.4.10"
+    "@vue/test-utils": "^2.4.11"
   }
 }
