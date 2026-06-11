@@ -65,15 +65,19 @@ Input: a release tag/title such as `v2.0.6`. If title and tag differ, ask for th
    node .agents/skills/create-draft-release-notes/scripts/create-draft-release-notes.mjs "$tmp_dir/generated.md" > "$tmp_dir/organized.md"
    ```
 
-8. Select the final notes file. Use `$tmp_dir/organized.md` by default. If the user asked for highlights, run the [Optional Highlights Workflow](#optional-highlights-workflow), write the result to `$tmp_dir/final.md`, and use that file instead.
+8. Select the final notes file:
+
+   ```bash
+   final_notes_file="$tmp_dir/organized.md"
+   ```
+
+   If the user asked for highlights, run the [Optional Highlights Workflow](#optional-highlights-workflow), write the result to `$tmp_dir/final.md`, and then set `final_notes_file="$tmp_dir/final.md"`.
 
 9. Save the final body:
 
    ```bash
-   gh release edit "$release_tag" -R "$repo" --draft --title "$release_title" --notes-file "$tmp_dir/organized.md"
+   gh release edit "$release_tag" -R "$repo" --draft --title "$release_title" --notes-file "$final_notes_file"
    ```
-
-   Replace `$tmp_dir/organized.md` with `$tmp_dir/final.md` when highlights were generated.
 
 10. Return the draft URL with `gh release view "$release_tag" -R "$repo" --json url --jq '.url'`.
 
