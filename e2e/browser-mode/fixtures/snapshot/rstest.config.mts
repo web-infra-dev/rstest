@@ -1,5 +1,5 @@
 import { defineConfig } from '@rstest/core';
-import { BROWSER_PORTS } from '../ports';
+import { BROWSER_PORTS } from './ports';
 
 export default defineConfig({
   browser: {
