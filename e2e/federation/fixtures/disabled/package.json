@@ -1,0 +1,5 @@
+{
+  "name": "e2e-federation-disabled",
+  "private": true,
+  "type": "module"
+}
