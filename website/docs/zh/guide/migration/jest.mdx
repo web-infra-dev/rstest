@@ -132,6 +132,19 @@ export default defineConfig({
 }
 ```
 
+### 文件级环境注释
+
+如果你的 Jest 测试使用了文件级环境注释，Rstest 在迁移时会识别 Jest pragma：
+
+```ts
+/**
+ * @jest-environment jsdom
+ * @jest-environment-options { "url": "https://example.com/" }
+ */
+```
+
+你可以保留这些注释，也可以改名为 `@rstest-environment` / `@rstest-environment-options`。选项值必须是单行 JSON 对象。支持的环境包括 `node`、`jsdom` 和 `happy-dom`。
+
 ### 代码转换
 
 Rstest 默认使用 `swc` 进行代码转换，这与 Jest 的 `babel-jest` 不同。大多数情况下，你不需要做任何更改。你可以通过 [tools.swc](/config/build/tools#toolsswc) 配置你的 swc 选项。

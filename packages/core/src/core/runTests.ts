@@ -34,6 +34,7 @@ import {
   runGlobalTeardown,
 } from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
+import { resolveRunnableProjectsByEntries } from './environmentEntries';
 import type { Rstest } from './rstest';
 
 /**
@@ -311,13 +312,13 @@ export async function runTests(context: Rstest): Promise<void> {
     ? (events: TraceEvent[]) => activeTraceRun.onEvents?.(events)
     : undefined;
 
-  const allProjects = context.projects;
+  let allProjects = context.projects;
 
   const { rootPath, reporters, snapshotManager, command, normalizedConfig } =
     context;
   const { coverage, shard } = normalizedConfig;
 
-  const entriesCache: Map<string, ProjectEntries> =
+  let entriesCache: Map<string, ProjectEntries> =
     (await resolveShardedEntries(context)) || new Map();
 
   // Define globTestSourceEntries after entriesCache is potentially populated
@@ -327,7 +328,7 @@ export async function runTests(context: Rstest): Promise<void> {
     if (context.relatedResolutionEmpty) {
       return {};
     }
-    if (!isWatchMode && shard && entriesCache.has(name)) {
+    if (!isWatchMode && entriesCache.has(name)) {
       return entriesCache.get(name)!.entries;
     }
     const { include, exclude, includeSource, root } = allProjects.find(
@@ -356,20 +357,16 @@ export async function runTests(context: Rstest): Promise<void> {
 
   // In non-watch mode, proactively skip projects with no test files to avoid unnecessary builds
   if (!isWatchMode) {
-    // Populate entries cache for all projects
-    await Promise.all(
-      allProjects.map((p) => globTestSourceEntries(p.environmentName)),
-    );
-
-    const hasEntries = (env: string) =>
-      Object.keys(entriesCache.get(env)?.entries || {}).length > 0;
-
-    browserProjectsToRun = browserProjects.filter((p) =>
-      hasEntries(p.environmentName),
-    );
-    nodeProjectsToRun = nodeProjects.filter((p) =>
-      hasEntries(p.environmentName),
-    );
+    const runnable = await resolveRunnableProjectsByEntries({
+      entriesCache,
+      projects: allProjects,
+      globTestSourceEntries,
+    });
+    allProjects = runnable.projects;
+    entriesCache = runnable.entriesCache;
+    context.projects = allProjects;
+    browserProjectsToRun = runnable.browserProjectsToRun;
+    nodeProjectsToRun = runnable.nodeProjectsToRun;
   } else if (shard) {
     // In watch mode with sharding, only run projects that have sharded entries
     browserProjectsToRun = browserProjects.filter((p) => {

@@ -132,6 +132,17 @@ Walk through **every** option under `test` and match it against the table below 
 | `unstubEnvs`                  | [`unstubEnvs`](/config/test/unstub-envs)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `chaiConfig`                  | [`chaiConfig`](/config/test/chai-config)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
+### File-level environment comments
+
+If your Vitest tests use file-level environment comments, Rstest recognizes the Vitest pragma during migration:
+
+```ts
+// @vitest-environment jsdom
+// @vitest-environment-options { "url": "https://example.com/" }
+```
+
+You can keep these comments as-is or rename them to `@rstest-environment` / `@rstest-environment-options`. The options value must be a single-line JSON object. Supported environments are `node`, `jsdom`, and `happy-dom`.
+
 ### Build configuration
 
 Rstest uses Rsbuild as the default test build tool instead of Vite. You can view all available build configuration options in [Build Configurations](/config/#build-configurations).

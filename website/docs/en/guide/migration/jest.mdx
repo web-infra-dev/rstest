@@ -132,6 +132,19 @@ To enable TypeScript to properly recognize the global APIs, add the `@rstest/cor
 }
 ```
 
+### File-level environment comments
+
+If your Jest tests use file-level environment comments, Rstest recognizes the Jest pragma during migration:
+
+```ts
+/**
+ * @jest-environment jsdom
+ * @jest-environment-options { "url": "https://example.com/" }
+ */
+```
+
+You can keep these comments as-is or rename them to `@rstest-environment` / `@rstest-environment-options`. The options value must be a single-line JSON object. Supported environments are `node`, `jsdom`, and `happy-dom`.
+
 ### Code transformation
 
 Rstest uses `swc` for code transformation by default, which is different from Jest's `babel-jest`. Most of the time, you don't need to change anything. And you can configure your swc options through [tools.swc](/config/build/tools#toolsswc).
