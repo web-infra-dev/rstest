@@ -118,7 +118,6 @@ export const groupProjectEntriesByEnvironment = async ({
         name: groupName,
         environmentName,
         normalizedConfig: group.config,
-        _globalSetups: false,
       });
       groupedEntriesCache.set(environmentName, {
         ...projectEntries,

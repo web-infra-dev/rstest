@@ -355,27 +355,27 @@ export async function runTests(context: Rstest): Promise<void> {
   let browserProjectsToRun = browserProjects;
   let nodeProjectsToRun = nodeProjects;
 
-  // In non-watch mode, proactively skip projects with no test files to avoid unnecessary builds
-  if (!isWatchMode) {
-    const runnable = await resolveRunnableProjectsByEntries({
-      entriesCache,
-      projects: allProjects,
-      globTestSourceEntries,
-    });
-    allProjects = runnable.projects;
-    entriesCache = runnable.entriesCache;
-    context.projects = allProjects;
-    browserProjectsToRun = runnable.browserProjectsToRun;
-    nodeProjectsToRun = runnable.nodeProjectsToRun;
-  } else if (shard) {
+  const runnable = await resolveRunnableProjectsByEntries({
+    entriesCache,
+    projects: allProjects,
+    globTestSourceEntries,
+    skipEmptyProjects: !isWatchMode,
+  });
+  allProjects = runnable.projects;
+  entriesCache = runnable.entriesCache;
+  context.projects = allProjects;
+  browserProjectsToRun = runnable.browserProjectsToRun;
+  nodeProjectsToRun = runnable.nodeProjectsToRun;
+
+  if (isWatchMode && shard) {
     // In watch mode with sharding, only run projects that have sharded entries
-    browserProjectsToRun = browserProjects.filter((p) => {
+    browserProjectsToRun = browserProjectsToRun.filter((p) => {
       return (
         Object.keys(entriesCache.get(p.environmentName)?.entries || {}).length >
         0
       );
     });
-    nodeProjectsToRun = nodeProjects.filter((p) => {
+    nodeProjectsToRun = nodeProjectsToRun.filter((p) => {
       return (
         Object.keys(entriesCache.get(p.environmentName)?.entries || {}).length >
         0

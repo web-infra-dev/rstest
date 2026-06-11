@@ -16,10 +16,12 @@ export const resolveRunnableProjectsByEntries = async ({
   projects,
   entriesCache,
   globTestSourceEntries,
+  skipEmptyProjects = true,
 }: {
   projects: ProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
   globTestSourceEntries: GlobTestSourceEntries;
+  skipEmptyProjects?: boolean;
 }): Promise<{
   projects: ProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
@@ -49,19 +51,18 @@ export const resolveRunnableProjectsByEntries = async ({
   const resolvedProjects = grouped.changed
     ? [...browserProjects, ...grouped.projects]
     : projects;
+  const shouldRunProject = (project: ProjectContext): boolean =>
+    !skipEmptyProjects ||
+    hasEntries(resolvedEntriesCache, project.environmentName);
 
   return {
     projects: resolvedProjects,
     entriesCache: resolvedEntriesCache,
     browserProjectsToRun: resolvedProjects.filter(
-      (project) =>
-        isBrowserProject(project) &&
-        hasEntries(resolvedEntriesCache, project.environmentName),
+      (project) => isBrowserProject(project) && shouldRunProject(project),
     ),
     nodeProjectsToRun: resolvedProjects.filter(
-      (project) =>
-        !isBrowserProject(project) &&
-        hasEntries(resolvedEntriesCache, project.environmentName),
+      (project) => !isBrowserProject(project) && shouldRunProject(project),
     ),
   };
 };
