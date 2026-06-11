@@ -17,13 +17,6 @@ allowBuilds:
 
 autoInstallPeers: false
 
-# TEMPORARY: route @rspack/core to a canary that emits the dynamic-import-of-
-# external mock codegen (rspack#14247), so the runtime fix in this PR can be
-# verified end-to-end. The canary's `@rspack/binding` alias is pulled in
-# automatically. Revert to the stable @rspack/core once rspack#14247 ships.
-overrides:
-  '@rspack/core': npm:@rspack-canary/core@2.0.7-canary-dda7b8cb-20260608101727
-
 # for vsce
 hoistPattern: ['@secretlint/*']
 
@@ -31,9 +24,6 @@ hoistPattern: ['@secretlint/*']
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@rspack/*'
-  # TEMPORARY: paired with the `@rspack/core` canary override below; drop when the
-  # override is reverted to the stable @rspack/core.
-  - '@rspack-canary/*'
   - '@rsbuild/*'
   - '@rslib/*'
   - '@rspress/*'
