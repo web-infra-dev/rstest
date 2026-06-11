@@ -317,6 +317,23 @@ describe('CLI help output', () => {
     });
   });
 
+  it('rejects missing values in repeated required pool dot-notation options', () => {
+    const cli = createCli();
+
+    expect(() =>
+      cli.parse(
+        [
+          'node',
+          'rstest',
+          'run',
+          '--pool.execArgv=--inspect',
+          '--pool.execArgv',
+        ],
+        { run: false },
+      ),
+    ).toThrow('option `--pool.execArgv <arg>` value is missing');
+  });
+
   it('allows --browser shorthand to be mixed with nested browser options', () => {
     const parsed = createCli().parse(
       ['node', 'rstest', 'run', '--browser', '--browser.name', 'chromium'],
@@ -548,6 +565,23 @@ describe('CLI help output', () => {
         run: false,
       }),
     ).toThrow('option `--coverage.reportsDirectory <dir>` value is missing');
+  });
+
+  it('rejects missing values in repeated required coverage dot-notation options', () => {
+    const cli = createCli();
+
+    expect(() =>
+      cli.parse(
+        [
+          'node',
+          'rstest',
+          'run',
+          '--coverage.include=src/**',
+          '--coverage.include',
+        ],
+        { run: false },
+      ),
+    ).toThrow('option `--coverage.include <pattern>` value is missing');
   });
 
   it('accepts optional coverage dot-notation options without a value', () => {

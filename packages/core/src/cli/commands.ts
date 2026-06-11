@@ -310,6 +310,11 @@ export const requiredDotOptions: Set<string> = requiredDotOptionNames([
   listCommandOptionDefinitions,
 ]);
 
+const hasMissingRequiredOptionValue = (value: unknown): boolean =>
+  value === true ||
+  value === false ||
+  (Array.isArray(value) && value.some(hasMissingRequiredOptionValue));
+
 const validateRequiredDotOptionValues = (cli: CAC): void => {
   for (const option of [
     ...cli.globalCommand.options,
@@ -330,7 +335,7 @@ const validateRequiredDotOptionValues = (cli: CAC): void => {
       return (target as Record<string, unknown>)[key];
     }, cli.options[root]);
 
-    if (value === true || value === false) {
+    if (hasMissingRequiredOptionValue(value)) {
       throw new Error(`option \`${option.rawName}\` value is missing`);
     }
   }
