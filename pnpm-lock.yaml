@@ -341,8 +341,8 @@ importers:
   e2e/playwright/fixtures:
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.9
-        version: 2.0.9
+        specifier: ~2.0.11
+        version: 2.0.11
       '@rstest/core':
         specifier: workspace:*
         version: link:../../../packages/core
@@ -1328,7 +1328,7 @@ importers:
     devDependencies:
       '@rslib/core':
         specifier: 0.22.0
-        version: 0.22.0(@microsoft/api-extractor@7.58.7(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260527.2)(typescript@6.0.3)
+        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
