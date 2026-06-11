@@ -836,8 +836,8 @@ importers:
         specifier: ~2.0.12
         version: 2.0.12
       '@rsbuild/plugin-svelte':
-        specifier: ^1.1.2
-        version: 1.1.2(@babel/core@7.29.0)(@rsbuild/core@2.0.12)(less@4.6.4)(postcss@8.5.15)(sass@1.100.0)(svelte@5.56.3)(typescript@6.0.3)
+        specifier: ^2.0.0
+        version: 2.0.0(@babel/core@7.29.0)(@rsbuild/core@2.0.12)(less@4.6.4)(postcss@8.5.15)(sass@1.100.0)(svelte@5.56.3)(typescript@6.0.3)
       '@rstest/adapter-rsbuild':
         specifier: workspace:*
         version: link:../../packages/adapter-rsbuild
@@ -2877,10 +2877,11 @@ packages:
       '@rsbuild/core':
         optional: true
 
-  '@rsbuild/plugin-svelte@1.1.2':
-    resolution: {integrity: sha512-q70LYytPpZGDuisLPZmkdN01O2wSEo99u67ovClA2iFGRwB+tinEXGhGmQstWbuHU0Iw5PntGd+uF0AedcJ8ow==}
+  '@rsbuild/plugin-svelte@2.0.0':
+    resolution: {integrity: sha512-4DmSnRtyVUHz2cIHM2LZRKDBolqt9NeInoPv1v1EkA0eO0VyssvG5y9KxBb9eSrbH+MZi+Mvqy4CfahEjqMPMQ==}
     peerDependencies:
-      '@rsbuild/core': ^1.4.0 || ^2.0.0-0
+      '@rsbuild/core': ^2.0.0
+      svelte: ^5.0.0
     peerDependenciesMeta:
       '@rsbuild/core':
         optional: true
@@ -7424,8 +7425,8 @@ packages:
     peerDependencies:
       svelte: ^3.0.0 || ^4.0.0-next.0 || ^5.0.0-next.1
 
-  svelte-preprocess@6.0.3:
-    resolution: {integrity: sha512-PLG2k05qHdhmRG7zR/dyo5qKvakhm8IJ+hD2eFRQmMLHp7X3eJnjeupUtvuRpbNiF31RjVw45W+abDwHEmP5OA==}
+  svelte-preprocess@6.0.5:
+    resolution: {integrity: sha512-sgwew5yV/2eMeQobIWgAxCNarKwiTUDIc3siAUbq3sp0G6ONtzk0W+wJihMdqjbYb3iGU3ubpGv0usnnuXT3qg==}
     engines: {node: '>= 18.0.0'}
     peerDependencies:
       '@babel/core': ^7.10.2
@@ -7438,7 +7439,7 @@ packages:
       stylus: '>=0.55'
       sugarss: ^2.0.0 || ^3.0.0 || ^4.0.0
       svelte: ^4.0.0 || ^5.0.0-next.100 || ^5.0.0
-      typescript: ^5.0.0
+      typescript: ^5.0.0 || ^6.0.0
     peerDependenciesMeta:
       '@babel/core':
         optional: true
@@ -9589,10 +9590,11 @@ snapshots:
     optionalDependencies:
       '@rsbuild/core': 2.0.12
 
-  '@rsbuild/plugin-svelte@1.1.2(@babel/core@7.29.0)(@rsbuild/core@2.0.12)(less@4.6.4)(postcss@8.5.15)(sass@1.100.0)(svelte@5.56.3)(typescript@6.0.3)':
+  '@rsbuild/plugin-svelte@2.0.0(@babel/core@7.29.0)(@rsbuild/core@2.0.12)(less@4.6.4)(postcss@8.5.15)(sass@1.100.0)(svelte@5.56.3)(typescript@6.0.3)':
     dependencies:
+      svelte: 5.56.3
       svelte-loader: 3.2.4(svelte@5.56.3)
-      svelte-preprocess: 6.0.3(@babel/core@7.29.0)(less@4.6.4)(postcss@8.5.15)(sass@1.100.0)(svelte@5.56.3)(typescript@6.0.3)
+      svelte-preprocess: 6.0.5(@babel/core@7.29.0)(less@4.6.4)(postcss@8.5.15)(sass@1.100.0)(svelte@5.56.3)(typescript@6.0.3)
     optionalDependencies:
       '@rsbuild/core': 2.0.12
     transitivePeerDependencies:
@@ -9605,7 +9607,6 @@ snapshots:
       - sass
       - stylus
       - sugarss
-      - svelte
       - typescript
 
   '@rsbuild/plugin-svgr@2.0.3(@rsbuild/core@2.0.12)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(typescript@6.0.3)':
@@ -14955,7 +14956,7 @@ snapshots:
       svelte-dev-helper: 1.1.9
       svelte-hmr: 0.14.12(svelte@5.56.3)
 
-  svelte-preprocess@6.0.3(@babel/core@7.29.0)(less@4.6.4)(postcss@8.5.15)(sass@1.100.0)(svelte@5.56.3)(typescript@6.0.3):
+  svelte-preprocess@6.0.5(@babel/core@7.29.0)(less@4.6.4)(postcss@8.5.15)(sass@1.100.0)(svelte@5.56.3)(typescript@6.0.3):
     dependencies:
       svelte: 5.56.3
     optionalDependencies:

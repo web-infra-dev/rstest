@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "@rsbuild/core": "~2.0.12",
-    "@rsbuild/plugin-svelte": "^1.1.2",
+    "@rsbuild/plugin-svelte": "^2.0.0",
     "@rstest/adapter-rsbuild": "workspace:*",
     "@rstest/core": "workspace:*",
     "happy-dom": "^20.10.2",
