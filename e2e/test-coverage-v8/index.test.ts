@@ -12,7 +12,7 @@ const expectCoverageSummary = (logs: string[]) => {
       ?.replaceAll(' ', ''),
   ).toBe(
     isCommonJs
-      ? 'string.ts|75|50|100|78.57|3-6,10'
+      ? 'string.ts|81.25|75|83.33|78.57|10-12'
       : 'string.ts|75|50|66.66|78.57|2-3,7',
   );
 
@@ -20,7 +20,7 @@ const expectCoverageSummary = (logs: string[]) => {
     logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
   ).toBe(
     isCommonJs
-      ? 'Allfiles|93.44|69.23|100|94.64|'
+      ? 'Allfiles|95.08|84.61|94.44|94.64|'
       : 'Allfiles|93.44|84.61|88.88|94.64|',
   );
 };

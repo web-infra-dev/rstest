@@ -1,6 +1,8 @@
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
+import vm from 'node:vm';
+import { onTestFinished, rs } from '@rstest/core';
 import path from 'pathe';
 import {
   clearModuleCache as clearEsModuleCache,
@@ -97,6 +99,42 @@ describe('require.resolve origin runtime helper', () => {
     });
 
     expect(exports).toEqual({ foo: 'bar' });
+  });
+
+  it('keeps the CommonJS wrapper source stable when context parameters change', () => {
+    const compileFunctionSpy = rs.spyOn(vm, 'compileFunction');
+    onTestFinished(() => {
+      compileFunctionSpy.mockRestore();
+    });
+
+    const dir = path.join(os.tmpdir(), `rstest-cjs-context-${Date.now()}`);
+    const loadOptions = {
+      codeContent: `module.exports = 'ok';`,
+      distPath: path.join(dir, 'bundle.js'),
+      testPath: path.join(dir, 'test.spec.ts'),
+      assetFiles: {},
+      interopDefault: true,
+    };
+
+    loadModule({
+      ...loadOptions,
+      rstestContext: {},
+    });
+    const [baseCode, , baseOptions] = compileFunctionSpy.mock.lastCall!;
+
+    loadModule({
+      ...loadOptions,
+      rstestContext: {
+        __rstest_future_context_param__: 'coverage-stability-check',
+      },
+    });
+    const [extraParamCode, extraParamNames, extraParamOptions] =
+      compileFunctionSpy.mock.lastCall!;
+
+    expect(extraParamCode).toBe(baseCode);
+    expect(extraParamNames).toContain('__rstest_future_context_param__');
+    expect(extraParamOptions?.columnOffset).toBe(baseOptions?.columnOffset);
+    expect(extraParamOptions?.columnOffset).toBe(0);
   });
 
   it('attaches the helper to import.meta in esm mode', async () => {
