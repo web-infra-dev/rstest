@@ -600,7 +600,15 @@ export const createBrowserLazyCompilationConfig = (
   };
 };
 
-export const createBrowserRsbuildDevConfig = (_isWatchMode: boolean) => {
+export const createBrowserRsbuildDevConfig = (
+  _isWatchMode: boolean,
+): {
+  writeToDisk: boolean;
+  hmr: boolean;
+  client: {
+    logLevel: 'error';
+  };
+} => {
   return {
     writeToDisk: isDebug(),
     // Keep HMR enabled in browser mode even for one-shot runs.

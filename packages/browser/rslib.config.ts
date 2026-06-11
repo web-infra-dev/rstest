@@ -18,7 +18,7 @@ export default defineConfig({
       format: 'esm',
       syntax: 'es2023',
       dts: {
-        tsgo: true,
+        isolated: true,
         bundle: false,
       },
       redirect: {

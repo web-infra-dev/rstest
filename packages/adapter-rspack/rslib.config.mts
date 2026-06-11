@@ -15,7 +15,9 @@ export default defineConfig({
   lib: [
     {
       format: 'esm',
-      dts: true,
+      dts: {
+        isolated: true,
+      },
       bundle: true,
       syntax: 'es2023',
       experiments: {

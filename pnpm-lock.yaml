@@ -102,7 +102,7 @@ importers:
         version: 2.0.1(@rsbuild/core@2.0.11)(@rspack/core@2.0.6(@swc/helpers@0.5.23))
       '@rslib/core':
         specifier: 0.22.0
-        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260608.1)(typescript@6.0.3)
+        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(typescript@6.0.3)
       '@rstest/browser':
         specifier: workspace:*
         version: link:../packages/browser
@@ -898,7 +898,7 @@ importers:
         version: 2.0.11
       '@rslib/core':
         specifier: 0.22.0
-        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260608.1)(typescript@6.0.3)
+        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -910,7 +910,7 @@ importers:
     devDependencies:
       '@rslib/core':
         specifier: 0.22.0
-        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260608.1)(typescript@6.0.3)
+        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -928,7 +928,7 @@ importers:
     devDependencies:
       '@rslib/core':
         specifier: 0.22.0
-        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260608.1)(typescript@6.0.3)
+        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(typescript@6.0.3)
       '@rspack/cli':
         specifier: ~2.0.6
         version: 2.0.6(@rspack/core@2.0.6(@swc/helpers@0.5.23))(@rspack/dev-server@2.0.3(@rspack/core@2.0.6(@swc/helpers@0.5.23)))
@@ -965,7 +965,7 @@ importers:
     devDependencies:
       '@rslib/core':
         specifier: 0.22.0
-        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260608.1)(typescript@6.0.3)
+        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(typescript@6.0.3)
       '@rstest/browser-ui':
         specifier: workspace:*
         version: link:../browser-ui
@@ -984,9 +984,6 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
-      '@typescript/native-preview':
-        specifier: 7.0.0-dev.20260608.1
-        version: 7.0.0-dev.20260608.1
       '@vitest/snapshot':
         specifier: ^3.2.6
         version: 3.2.6
@@ -1004,7 +1001,7 @@ importers:
     devDependencies:
       '@rslib/core':
         specifier: 0.22.0
-        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260608.1)(typescript@6.0.3)
+        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1105,7 +1102,7 @@ importers:
         version: 1.5.3(@rsbuild/core@2.0.11)
       '@rslib/core':
         specifier: 0.22.0
-        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260608.1)(typescript@6.0.3)
+        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(typescript@6.0.3)
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../../scripts/tsconfig
@@ -1133,9 +1130,6 @@ importers:
       '@types/source-map-support':
         specifier: ^0.5.10
         version: 0.5.10
-      '@typescript/native-preview':
-        specifier: 7.0.0-dev.20260608.1
-        version: 7.0.0-dev.20260608.1
       '@vitest/expect':
         specifier: ^3.2.6
         version: 3.2.6
@@ -1234,7 +1228,7 @@ importers:
     devDependencies:
       '@rslib/core':
         specifier: 0.22.0
-        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260608.1)(typescript@6.0.3)
+        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1289,7 +1283,7 @@ importers:
         version: 2.0.11
       '@rslib/core':
         specifier: 0.22.0
-        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260608.1)(typescript@6.0.3)
+        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1322,7 +1316,7 @@ importers:
         version: 2.0.11
       '@rslib/core':
         specifier: 0.22.0
-        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260608.1)(typescript@6.0.3)
+        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -3815,53 +3809,6 @@ packages:
 
   '@types/yargs@17.0.33':
     resolution: {integrity: sha512-WpxBCKWPLr4xSsHgz511rFJAM+wS28w2zEO1QDNY5zM/S8ok70NNfztH0xwhqKyaK0OHCbN98LDAZuy1ctxDkA==}
-
-  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260608.1':
-    resolution: {integrity: sha512-ZGs+yhsPWFDkSHydJyF8I3d4witpXiD69auWZtSotNWG3gBR5Ne291m38rvxoLFDRlFHwAQpPT7q3yStp+cQSQ==}
-    engines: {node: '>=16.20.0'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260608.1':
-    resolution: {integrity: sha512-cxmBCl1+fvGgom2vwPTbZ43bW68rfjDIU1ZDQGtjXvj1bpW9fEozskJqgZdNNHu8WQIl17zj4Ke+noENwgGu9w==}
-    engines: {node: '>=16.20.0'}
-    cpu: [x64]
-    os: [darwin]
-
-  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260608.1':
-    resolution: {integrity: sha512-/JPrQqa36CSMdXeEXhZ0mYUmufehIL8ujagXvU8z/3/b/CeWjgoZLJCuy76k9NLZCG7wGvcFWFK5kgOEKyDQdw==}
-    engines: {node: '>=16.20.0'}
-    cpu: [arm64]
-    os: [linux]
-
-  '@typescript/native-preview-linux-arm@7.0.0-dev.20260608.1':
-    resolution: {integrity: sha512-tWFLuzAWg8XnOkN7f94MAW8qLTMG7Q74IXHSG18cVmftuBxwvn1Lov+0Rnd9rsH7VAuSIu00Co6G3/PbGvGrxA==}
-    engines: {node: '>=16.20.0'}
-    cpu: [arm]
-    os: [linux]
-
-  '@typescript/native-preview-linux-x64@7.0.0-dev.20260608.1':
-    resolution: {integrity: sha512-QfVLSH1NMAOa+N6Ey9cFHWppLFISOeCG3c0nJER3LXrDwkE4WtsVGHQ4IRDpIYT3Q2iC7QWUFWwrHayNKlrGYA==}
-    engines: {node: '>=16.20.0'}
-    cpu: [x64]
-    os: [linux]
-
-  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260608.1':
-    resolution: {integrity: sha512-DvpbX0aPCWCe4bJEP0cOky4cCwF+5QJZHsLoGV4gYd+0EFEkarTOxZG0CezP30E/iX6u1RUOrtTeMZOQthqDpQ==}
-    engines: {node: '>=16.20.0'}
-    cpu: [arm64]
-    os: [win32]
-
-  '@typescript/native-preview-win32-x64@7.0.0-dev.20260608.1':
-    resolution: {integrity: sha512-J9nQB87sU+YJE3fq3XKwQvgLNWVXiEWyOP1L/FuyOlHb77UkFXmpaUbFTJ1w7rfd91nlKb2EECfsdTxbELUT0Q==}
-    engines: {node: '>=16.20.0'}
-    cpu: [x64]
-    os: [win32]
-
-  '@typescript/native-preview@7.0.0-dev.20260608.1':
-    resolution: {integrity: sha512-nJyuPQwFn/VlP7JvFA0jPHJMMHaDy5vWM5xRYUwjZZd3dcY7LldfZ1EkdPOLc+GW0trXcmvRemQ4XCsBkOGOUQ==}
-    engines: {node: '>=16.20.0'}
-    hasBin: true
 
   '@typespec/ts-http-runtime@0.3.0':
     resolution: {integrity: sha512-sOx1PKSuFwnIl7z4RN0Ls7N9AQawmR9r66eI5rFCzLDIs8HTIYrIpH9QjYWoX0lkgGrkLxXhi4QnK7MizPRrIg==}
@@ -9800,10 +9747,10 @@ snapshots:
       - '@rspack/core'
       - webpack
 
-  '@rslib/core@0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@typescript/native-preview@7.0.0-dev.20260608.1)(typescript@6.0.3)':
+  '@rslib/core@0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(typescript@6.0.3)':
     dependencies:
       '@rsbuild/core': 2.0.11
-      rsbuild-plugin-dts: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@rsbuild/core@2.0.11)(@typescript/native-preview@7.0.0-dev.20260608.1)(typescript@6.0.3)
+      rsbuild-plugin-dts: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@rsbuild/core@2.0.11)(typescript@6.0.3)
     optionalDependencies:
       '@microsoft/api-extractor': 7.58.8(@types/node@22.18.6)
       typescript: 6.0.3
@@ -10708,37 +10655,6 @@ snapshots:
   '@types/yargs@17.0.33':
     dependencies:
       '@types/yargs-parser': 21.0.3
-
-  '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260608.1':
-    optional: true
-
-  '@typescript/native-preview-darwin-x64@7.0.0-dev.20260608.1':
-    optional: true
-
-  '@typescript/native-preview-linux-arm64@7.0.0-dev.20260608.1':
-    optional: true
-
-  '@typescript/native-preview-linux-arm@7.0.0-dev.20260608.1':
-    optional: true
-
-  '@typescript/native-preview-linux-x64@7.0.0-dev.20260608.1':
-    optional: true
-
-  '@typescript/native-preview-win32-arm64@7.0.0-dev.20260608.1':
-    optional: true
-
-  '@typescript/native-preview-win32-x64@7.0.0-dev.20260608.1':
-    optional: true
-
-  '@typescript/native-preview@7.0.0-dev.20260608.1':
-    optionalDependencies:
-      '@typescript/native-preview-darwin-arm64': 7.0.0-dev.20260608.1
-      '@typescript/native-preview-darwin-x64': 7.0.0-dev.20260608.1
-      '@typescript/native-preview-linux-arm': 7.0.0-dev.20260608.1
-      '@typescript/native-preview-linux-arm64': 7.0.0-dev.20260608.1
-      '@typescript/native-preview-linux-x64': 7.0.0-dev.20260608.1
-      '@typescript/native-preview-win32-arm64': 7.0.0-dev.20260608.1
-      '@typescript/native-preview-win32-x64': 7.0.0-dev.20260608.1
 
   '@typespec/ts-http-runtime@0.3.0':
     dependencies:
@@ -14518,13 +14434,12 @@ snapshots:
     optionalDependencies:
       '@rsbuild/core': 2.0.11
 
-  rsbuild-plugin-dts@0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@rsbuild/core@2.0.11)(@typescript/native-preview@7.0.0-dev.20260608.1)(typescript@6.0.3):
+  rsbuild-plugin-dts@0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(@rsbuild/core@2.0.11)(typescript@6.0.3):
     dependencies:
       '@ast-grep/napi': 0.37.0
       '@rsbuild/core': 2.0.11
     optionalDependencies:
       '@microsoft/api-extractor': 7.58.8(@types/node@22.18.6)
-      '@typescript/native-preview': 7.0.0-dev.20260608.1
       typescript: 6.0.3
 
   rsbuild-plugin-google-analytics@1.0.6(@rsbuild/core@2.0.11):
