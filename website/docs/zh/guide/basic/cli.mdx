@@ -303,6 +303,7 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--coverage.reporters <reporter>`   | 指定一个或多个覆盖率报告器，详见 [coverage.reporters](/config/test/coverage#reporters)                                                               |
 | `--coverage.reportOnFailure`        | 测试失败时仍生成覆盖率报告，详见 [coverage.reportOnFailure](/config/test/coverage#reportonfailure)                                                   |
 | `--coverage.reportsDirectory <dir>` | 指定覆盖率报告目录，详见 [coverage.reportsDirectory](/config/test/coverage#reportsdirectory)                                                         |
+| `--dev.writeToDisk`                 | 将测试临时文件写入磁盘，详见 [dev.writeToDisk](/config/build/dev#devwritetodisk)                                                                     |
 | `--detectAsyncLeaks`                | 检测测试结束后仍然存活的异步资源，详见 [detectAsyncLeaks](/config/test/detect-async-leaks)                                                           |
 | `--disableConsoleIntercept`         | 禁用 console 拦截，详见 [disableConsoleIntercept](/config/test/disable-console-intercept)                                                            |
 | `--exclude <exclude>`               | 排除指定文件，详见 [exclude](/config/test/exclude)                                                                                                   |
@@ -317,6 +318,9 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--isolate`                         | 在隔离环境中运行测试，详见 [isolate](/config/test/isolate)                                                                                           |
 | `--logHeapUsage`                    | 打印每个测试的堆内存使用情况，详见 [logHeapUsage](/config/test/log-heap-usage)                                                                       |
 | `--maxConcurrency <value>`          | 最大并发测试数，详见 [maxConcurrency](/config/test/max-concurrency)                                                                                  |
+| `--output.cleanDistPath`            | 测试开始前清理测试临时文件，详见 [output.cleanDistPath](/config/build/output#outputcleandistpath)                                                    |
+| `--output.emitAssets`               | 输出导入的静态资源，详见 [output.emitAssets](/config/build/output#outputemitassets)                                                                  |
+| `--output.module`                   | 以 ES module 格式输出 JavaScript 文件，详见 [output.module](/config/build/output#outputmodule)                                                       |
 | `--passWithNoTests`                 | 当未找到测试文件时允许测试通过，详见 [passWithNoTests](/config/test/pass-with-no-tests)                                                              |
 | `--pool <type>`                     | `--pool.type` 的 shorthand，详见 [pool](/config/test/pool)                                                                                           |
 | `--pool.execArgv <arg>`             | 传给 worker 进程的额外 Node.js execArgv（可重复传入），详见 [pool](/config/test/pool)                                                                |
@@ -334,6 +338,7 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--shard <index/count>`             | 将测试拆分为多个分片运行，详见 [shard](/config/test/shard)                                                                                           |
 | `--silent [value]`                  | 静默被拦截的测试 console 输出，或用 `passed-only` 仅保留失败任务日志，详见 [silent](/config/test/silent)                                             |
 | `--slowTestThreshold <value>`       | 设置测试或套件被视为慢的阈值（毫秒），详见 [slowTestThreshold](/config/test/slow-test-threshold)                                                     |
+| `--source.tsconfigPath <path>`      | 指定 tsconfig.json 文件路径，详见 [source.tsconfigPath](/config/build/source#sourcetsconfigpath)                                                     |
 | `--testEnvironment <name>`          | 指定测试环境，详见 [testEnvironment](/config/test/test-environment)                                                                                  |
 | `-t, --testNamePattern <value>`     | 仅运行名称匹配正则的测试，详见 [testNamePattern](/config/test/test-name-pattern)                                                                     |
 | `--testTimeout <value>`             | 设置单个测试的超时时间（毫秒），详见 [testTimeout](/config/test/test-timeout)                                                                        |

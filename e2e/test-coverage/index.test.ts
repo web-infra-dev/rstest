@@ -221,6 +221,30 @@ describe('test coverage-istanbul', () => {
     ).toBeTruthy();
   });
 
+  it('coverage-istanbul with custom reporter', async () => {
+    const reportFile = join(__dirname, 'fixtures/custom-coverage-report.json');
+    fs.removeSync(reportFile);
+
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'rstest.customReporter.config.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with istanbul', logs);
+    expect(fs.readJsonSync(reportFile)).toEqual({ lines: 94.64 });
+
+    fs.removeSync(reportFile);
+  });
+
   it('should keep coverage report when no test files match with --passWithNoTests (regression #1212)', async () => {
     const reportsDir = join(__dirname, 'fixtures/test-temp-no-tests-coverage');
     const staleFile = join(reportsDir, 'stale-from-previous-run.txt');

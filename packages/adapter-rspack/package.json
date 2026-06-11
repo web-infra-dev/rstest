@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rspack",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "description": "Rstest adapter for rspack configuration",
   "keywords": [
     "rstest",
@@ -37,8 +37,8 @@
   },
   "devDependencies": {
     "@rslib/core": "0.22.0",
-    "@rspack/cli": "~2.0.5",
-    "@rspack/core": "~2.0.5",
+    "@rspack/cli": "~2.0.6",
+    "@rspack/core": "~2.0.6",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*"
   },

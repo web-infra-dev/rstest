@@ -1,9 +1,134 @@
 import { describe, expect, it } from '@rstest/core';
 import { join } from 'pathe';
-import { resolveProjects } from '../../src/cli/init';
+import { mergeWithCLIOptions, resolveProjects } from '../../src/cli/init';
 import type { RstestConfig } from '../../src/types';
 
 const rootPath = join(__dirname, '../..');
+
+describe('mergeWithCLIOptions', () => {
+  it('creates simple nested build config objects from CLI', () => {
+    const config = mergeWithCLIOptions(
+      {},
+      {
+        source: {
+          tsconfigPath: 'tsconfig.cli.json',
+        },
+        dev: {
+          writeToDisk: true,
+        },
+        output: {
+          emitAssets: false,
+          cleanDistPath: true,
+          module: false,
+        },
+      },
+    );
+
+    expect(config).toEqual({
+      source: {
+        tsconfigPath: 'tsconfig.cli.json',
+      },
+      dev: {
+        writeToDisk: true,
+      },
+      output: {
+        emitAssets: false,
+        cleanDistPath: true,
+        module: false,
+      },
+    });
+  });
+
+  it('preserves nested build config fields that are not supported by CLI', () => {
+    const config = mergeWithCLIOptions(
+      {
+        source: {
+          define: {
+            BASE_URL: JSON.stringify('https://example.com'),
+          },
+        },
+        output: {
+          cssModules: {
+            localIdentName: '[local]-[hash:base64:6]',
+          },
+          externals: ['react'],
+        },
+      },
+      {
+        source: {
+          tsconfigPath: 'tsconfig.cli.json',
+        },
+        output: {
+          emitAssets: false,
+        },
+      },
+    );
+
+    expect(config).toMatchObject({
+      source: {
+        define: {
+          BASE_URL: JSON.stringify('https://example.com'),
+        },
+        tsconfigPath: 'tsconfig.cli.json',
+      },
+      output: {
+        cssModules: {
+          localIdentName: '[local]-[hash:base64:6]',
+        },
+        externals: ['react'],
+        emitAssets: false,
+      },
+    });
+  });
+
+  it('merges simple nested build options from CLI', () => {
+    const config = mergeWithCLIOptions(
+      {
+        includeTaskLocation: false,
+        source: {
+          tsconfigPath: 'base.tsconfig.json',
+        },
+        dev: {
+          writeToDisk: false,
+        },
+        output: {
+          emitAssets: true,
+          cleanDistPath: true,
+          module: true,
+        },
+      },
+      {
+        includeTaskLocation: true,
+        source: {
+          tsconfigPath: 'cli.tsconfig.json',
+        },
+        dev: {
+          writeToDisk: true,
+        },
+        output: {
+          emitAssets: false,
+          cleanDistPath: false,
+          module: false,
+        },
+      },
+    );
+
+    expect(config).toMatchObject({
+      includeTaskLocation: true,
+      source: {
+        tsconfigPath: 'cli.tsconfig.json',
+      },
+      dev: {
+        writeToDisk: true,
+      },
+      output: {
+        emitAssets: false,
+        cleanDistPath: false,
+        module: false,
+      },
+    });
+  });
+});
 
 describe('resolveProjects', () => {
   describe('inline project extends', () => {

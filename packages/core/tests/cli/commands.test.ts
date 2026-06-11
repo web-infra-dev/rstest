@@ -9,6 +9,7 @@ import {
   getForceRerunTriggers,
   hasForceRerunTrigger,
   normalizeCliFilters,
+  requiredDotOptions,
   resolveChangedFiles,
   validateRelatedCliOptions,
   valueTakingOptions,
@@ -66,6 +67,7 @@ describe('valueTakingOptions (derived from option definitions)', () => {
         '--root',
         '--shard',
         '--silent',
+        '--source.tsconfigPath',
         '--slowTestThreshold',
         '--testEnvironment',
         '--testNamePattern',
@@ -78,6 +80,36 @@ describe('valueTakingOptions (derived from option definitions)', () => {
     expect(valueTakingOptions.has('--globals')).toBe(false);
     expect(valueTakingOptions.has('--isolate')).toBe(false);
     expect(valueTakingOptions.has('--coverage')).toBe(false);
+    expect(valueTakingOptions.has('--output.emitAssets')).toBe(false);
+    expect(valueTakingOptions.has('--output.cssModules')).toBe(false);
+  });
+});
+
+describe('requiredDotOptions (derived from option definitions)', () => {
+  it('derives the required dot-notation option names', () => {
+    expect([...requiredDotOptions].sort()).toEqual(
+      [
+        '--browser.name',
+        '--browser.port',
+        '--coverage.exclude',
+        '--coverage.include',
+        '--coverage.provider',
+        '--coverage.reporters',
+        '--coverage.reportsDirectory',
+        '--pool.execArgv',
+        '--pool.maxWorkers',
+        '--pool.minWorkers',
+        '--pool.type',
+        '--source.tsconfigPath',
+      ].sort(),
+    );
+  });
+
+  it('excludes optional and boolean dot-notation flags', () => {
+    expect(requiredDotOptions.has('--coverage.changed')).toBe(false);
+    expect(requiredDotOptions.has('--coverage.enabled')).toBe(false);
+    expect(requiredDotOptions.has('--browser.enabled')).toBe(false);
+    expect(requiredDotOptions.has('--output.emitAssets')).toBe(false);
   });
 });
 
@@ -243,6 +275,65 @@ describe('CLI help output', () => {
     });
   });
 
+  it('rejects missing values for required pool dot-notation options', () => {
+    const cli = createCli();
+
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--pool.type'], { run: false }),
+    ).toThrow('option `--pool.type <type>` value is missing');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--pool.maxWorkers'], {
+        run: false,
+      }),
+    ).toThrow('option `--pool.maxWorkers <value>` value is missing');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--pool.minWorkers'], {
+        run: false,
+      }),
+    ).toThrow('option `--pool.minWorkers <value>` value is missing');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--pool.execArgv'], { run: false }),
+    ).toThrow('option `--pool.execArgv <arg>` value is missing');
+  });
+
+  it('accepts required pool dot-notation option values', () => {
+    const parsed = createCli().parse(
+      [
+        'node',
+        'rstest',
+        'run',
+        '--pool.type=forks',
+        '--pool.maxWorkers',
+        '2',
+        '--pool.execArgv=--no-warnings',
+      ],
+      { run: false },
+    );
+
+    expect(parsed.options.pool).toEqual({
+      type: 'forks',
+      maxWorkers: 2,
+      execArgv: '--no-warnings',
+    });
+  });
+
+  it('rejects missing values in repeated required pool dot-notation options', () => {
+    const cli = createCli();
+
+    expect(() =>
+      cli.parse(
+        [
+          'node',
+          'rstest',
+          'run',
+          '--pool.execArgv=--inspect',
+          '--pool.execArgv',
+        ],
+        { run: false },
+      ),
+    ).toThrow('option `--pool.execArgv <arg>` value is missing');
+  });
+
   it('allows --browser shorthand to be mixed with nested browser options', () => {
     const parsed = createCli().parse(
       ['node', 'rstest', 'run', '--browser', '--browser.name', 'chromium'],
@@ -279,6 +370,17 @@ describe('CLI help output', () => {
     });
   });
 
+  it('rejects missing values for required browser dot-notation options', () => {
+    const cli = createCli();
+
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--browser.name'], { run: false }),
+    ).toThrow('option `--browser.name <name>` value is missing');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--browser.port'], { run: false }),
+    ).toThrow('option `--browser.port <port>` value is missing');
+  });
+
   it('accepts --reporters and populates options.reporters', () => {
     const parsed = createCli().parse(
       ['node', 'rstest', 'run', '--reporters', 'verbose'],
@@ -295,6 +397,109 @@ describe('CLI help output', () => {
     );
 
     expect(parsed.options.reporters).toEqual(['verbose', 'junit']);
+  });
+
+  it('accepts source, dev, and output nested options', () => {
+    const parsed = createCli().parse(
+      [
+        'node',
+        'rstest',
+        'run',
+        '--source.tsconfigPath',
+        'tsconfig.test.json',
+        '--dev.writeToDisk',
+        '--output.emitAssets=false',
+        '--output.cleanDistPath',
+        '--no-output.module',
+      ],
+      { run: false },
+    );
+
+    expect(parsed.options.source).toEqual({
+      tsconfigPath: 'tsconfig.test.json',
+    });
+    expect(parsed.options.dev).toEqual({
+      writeToDisk: true,
+    });
+    expect(parsed.options.output).toEqual({
+      emitAssets: false,
+      cleanDistPath: true,
+      module: false,
+    });
+  });
+
+  it('rejects missing values for required source dot-notation options', () => {
+    const cli = createCli();
+
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--source.tsconfigPath'], {
+        run: false,
+      }),
+    ).toThrow('option `--source.tsconfigPath <path>` value is missing');
+  });
+
+  it('hides internal parser helper options from command help', () => {
+    const help = renderHelp(['node', 'rstest', 'run', '--help']);
+
+    expect(help).toContain('--source.tsconfigPath');
+    expect(help).toContain('--output.emitAssets');
+    expect(help).not.toContain('--output.cssModules');
+    expect(help).not.toContain('--source.*');
+    expect(help).not.toContain('--dev.*');
+    expect(help).not.toContain('--output.*');
+  });
+
+  it('rejects unknown source, dev, and output nested options', () => {
+    const cli = createCli();
+
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--source.unknown'], { run: false }),
+    ).toThrow('Unknown option `--source.unknown`');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--dev.unknown'], { run: false }),
+    ).toThrow('Unknown option `--dev.unknown`');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--output.unknown'], { run: false }),
+    ).toThrow('Unknown option `--output.unknown`');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--output.cssModules'], {
+        run: false,
+      }),
+    ).toThrow('Unknown option `--output.cssModules`');
+  });
+
+  it('rejects deeper source, dev, and output nested options', () => {
+    const cli = createCli();
+
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--source.tsconfigPath.foo'], {
+        run: false,
+      }),
+    ).toThrow('Unknown option `--source.tsconfigPath.foo`');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--dev.writeToDisk.foo'], {
+        run: false,
+      }),
+    ).toThrow('Unknown option `--dev.writeToDisk.foo`');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--output.module.foo'], {
+        run: false,
+      }),
+    ).toThrow('Unknown option `--output.module.foo`');
+  });
+
+  it('rejects bare source, dev, and output parser helper options', () => {
+    const cli = createCli();
+
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--source'], { run: false }),
+    ).toThrow('Unknown option `--source`');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--dev'], { run: false }),
+    ).toThrow('Unknown option `--dev`');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--output'], { run: false }),
+    ).toThrow('Unknown option `--output`');
   });
 
   it('accepts --coverage.* and populates nested coverage options', () => {
@@ -329,6 +534,64 @@ describe('CLI help output', () => {
       reportOnFailure: true,
       clean: false,
       allowExternal: true,
+    });
+  });
+
+  it('rejects missing values for required coverage dot-notation options', () => {
+    const cli = createCli();
+
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--coverage.provider'], {
+        run: false,
+      }),
+    ).toThrow('option `--coverage.provider <provider>` value is missing');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--coverage.include'], {
+        run: false,
+      }),
+    ).toThrow('option `--coverage.include <pattern>` value is missing');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--coverage.exclude'], {
+        run: false,
+      }),
+    ).toThrow('option `--coverage.exclude <pattern>` value is missing');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--coverage.reporters'], {
+        run: false,
+      }),
+    ).toThrow('option `--coverage.reporters <reporter>` value is missing');
+    expect(() =>
+      cli.parse(['node', 'rstest', 'run', '--coverage.reportsDirectory'], {
+        run: false,
+      }),
+    ).toThrow('option `--coverage.reportsDirectory <dir>` value is missing');
+  });
+
+  it('rejects missing values in repeated required coverage dot-notation options', () => {
+    const cli = createCli();
+
+    expect(() =>
+      cli.parse(
+        [
+          'node',
+          'rstest',
+          'run',
+          '--coverage.include=src/**',
+          '--coverage.include',
+        ],
+        { run: false },
+      ),
+    ).toThrow('option `--coverage.include <pattern>` value is missing');
+  });
+
+  it('accepts optional coverage dot-notation options without a value', () => {
+    const parsed = createCli().parse(
+      ['node', 'rstest', 'run', '--coverage.changed'],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toEqual({
+      changed: true,
     });
   });
 });

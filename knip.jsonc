@@ -54,10 +54,6 @@
         "tests/**/*.ts",
         "tests/**/fixtures/**",
       ],
-      "ignoreDependencies": [
-        // Used by rslib for fast declaration file generation: https://rslib.dev/guide/advanced/dts#generate-declaration-files-with-tsgo
-        "@typescript/native-preview",
-      ],
     },
     "packages/browser": {
       "entry": [
@@ -70,8 +66,6 @@
         "tests/**/*.ts",
       ],
       "ignoreDependencies": [
-        // Used by rslib for fast declaration file generation: https://rslib.dev/guide/advanced/dts#generate-declaration-files-with-tsgo
-        "@typescript/native-preview",
         // Virtual module resolved at build time by rspack alias in hostController.ts
         "@rstest/browser-manifest",
       ],

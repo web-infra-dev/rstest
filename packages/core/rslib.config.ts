@@ -38,7 +38,7 @@ export default defineConfig({
         advancedEsm: true,
       },
       dts: {
-        tsgo: true,
+        isolated: true,
         bundle: process.env.SOURCEMAP
           ? false
           : {
@@ -159,7 +159,7 @@ export default defineConfig({
       format: 'esm',
       syntax: 'es2023',
       dts: {
-        tsgo: true,
+        isolated: true,
         bundle: true,
       },
       source: {

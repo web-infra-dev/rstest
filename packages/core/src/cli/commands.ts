@@ -156,6 +156,17 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     '--includeTaskLocation',
     'Collect test and suite locations. This might increase the running time.',
   ],
+  ['--source.*', 'Internal parser helper for source.* options'],
+  ['--source.tsconfigPath <path>', 'Path to the tsconfig.json file'],
+  ['--dev.*', 'Internal parser helper for dev.* options'],
+  ['--dev.writeToDisk', 'Write test temporary files to disk'],
+  ['--output.*', 'Internal parser helper for output.* options'],
+  ['--output.emitAssets', 'Emit imported static assets'],
+  [
+    '--output.cleanDistPath',
+    'Clean test temporary files before the test starts',
+  ],
+  ['--output.module', 'Output JavaScript files in ES module format'],
 ];
 
 const poolOptionDefinitions: OptionDefinition[] = [
@@ -260,6 +271,27 @@ const valueTakingOptionNames = (
   return names;
 };
 
+const requiredDotOptionNames = (
+  definitions: readonly OptionDefinition[][],
+): Set<string> => {
+  const names = new Set<string>();
+  for (const group of definitions) {
+    for (const [rawName] of group) {
+      const tokenAt = rawName.indexOf('<');
+      if (tokenAt < 0) {
+        continue;
+      }
+      for (const alias of rawName.slice(0, tokenAt).split(',')) {
+        const trimmed = alias.trim();
+        if (trimmed.includes('.')) {
+          names.add(trimmed);
+        }
+      }
+    }
+  }
+  return names;
+};
+
 const commands = new Set(['init', 'list', 'merge-reports', 'run', 'watch']);
 
 export const valueTakingOptions: Set<string> = valueTakingOptionNames([
@@ -269,6 +301,45 @@ export const valueTakingOptions: Set<string> = valueTakingOptionNames([
   hiddenPassthroughOptionDefinitions,
   listCommandOptionDefinitions,
 ]);
+
+export const requiredDotOptions: Set<string> = requiredDotOptionNames([
+  runtimeOptionDefinitions,
+  poolOptionDefinitions,
+  mergeReportsOptionDefinitions,
+  hiddenPassthroughOptionDefinitions,
+  listCommandOptionDefinitions,
+]);
+
+const hasMissingRequiredOptionValue = (value: unknown): boolean =>
+  value === true ||
+  value === false ||
+  (Array.isArray(value) && value.some(hasMissingRequiredOptionValue));
+
+const validateRequiredDotOptionValues = (cli: CAC): void => {
+  for (const option of [
+    ...cli.globalCommand.options,
+    ...(cli.matchedCommand?.options ?? []),
+  ]) {
+    if (!option.required || !requiredDotOptions.has(`--${option.name}`)) {
+      continue;
+    }
+
+    const [root, ...path] = option.name.split('.');
+    if (!root) {
+      continue;
+    }
+    const value = path.reduce<unknown>((target, key) => {
+      if (typeof target !== 'object' || target === null) {
+        return undefined;
+      }
+      return (target as Record<string, unknown>)[key];
+    }, cli.options[root]);
+
+    if (hasMissingRequiredOptionValue(value)) {
+      throw new Error(`option \`${option.rawName}\` value is missing`);
+    }
+  }
+};
 
 const getCliCommand = (argv: string[]): string | undefined => {
   for (let index = 2; index < argv.length; index++) {
@@ -372,14 +443,59 @@ const normalizeBrowserCliArgs = (argv: string[]): string[] => {
 const normalizeCliArgs = (argv: string[]): string[] =>
   normalizePoolCliArgs(normalizeBrowserCliArgs(normalizeCoverageCliArgs(argv)));
 
+const allowedWildcardOptions = {
+  source: new Set(['tsconfigPath']),
+  dev: new Set(['writeToDisk']),
+  output: new Set(['emitAssets', 'cleanDistPath', 'module']),
+};
+
+const validateWildcardOptions = (options: Record<string, unknown>): void => {
+  for (const [name, allowedOptions] of Object.entries(allowedWildcardOptions)) {
+    const value = options[name];
+
+    if (value === undefined) {
+      continue;
+    }
+
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new Error(`Unknown option \`--${name}\``);
+    }
+
+    for (const [key, optionValue] of Object.entries(value)) {
+      if (!allowedOptions.has(key)) {
+        throw new Error(`Unknown option \`--${name}.${key}\``);
+      }
+
+      if (
+        typeof optionValue === 'object' &&
+        optionValue !== null &&
+        !Array.isArray(optionValue)
+      ) {
+        const nestedKey = Object.keys(optionValue)[0];
+        throw new Error(
+          `Unknown option \`--${name}.${key}${nestedKey ? `.${nestedKey}` : ''}\``,
+        );
+      }
+    }
+  }
+};
+
 const normalizeMixedCliOptions = (cli: CAC): void => {
   const originalParse = cli.parse.bind(cli);
 
-  cli.parse = ((argv, options) =>
-    originalParse(
-      normalizeCliArgs(argv ?? process.argv),
-      options,
-    )) as CAC['parse'];
+  cli.parse = ((argv, options) => {
+    const run = options?.run !== false;
+    const parsed = originalParse(normalizeCliArgs(argv ?? process.argv), {
+      ...options,
+      run: false,
+    });
+    validateWildcardOptions(parsed.options as Record<string, unknown>);
+    validateRequiredDotOptionValues(cli);
+    if (run) {
+      cli.runMatchedCommand();
+    }
+    return parsed;
+  }) as CAC['parse'];
 };
 
 const filterHelpOptions = (
@@ -815,7 +931,11 @@ export function createCli(): CAC {
       case 'merge-reports':
         return filterHelpOptions(sections, ['--isolate']);
       default:
-        return sections;
+        return filterHelpOptions(sections, [
+          '--source.*',
+          '--dev.*',
+          '--output.*',
+        ]);
     }
   });
   cli.version(RSTEST_VERSION);
