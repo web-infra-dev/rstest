@@ -70,7 +70,7 @@ export default defineConfig({
 | ---------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `preset`（例如 `'ts-jest'`） | 移除                                                                                              | Rstest 默认使用 swc，不需要 `ts-jest`。                                                                                                                                                                                                                                                                                                                                  |
 | `transform`                  | 移除                                                                                              | swc 默认会处理 `.ts` / `.tsx` / `.js` / `.jsx`。若需自定义 Babel，请参考 [代码转换](#代码转换)。                                                                                                                                                                                                                                                                         |
-| `testEnvironment`            | [`testEnvironment`](/config/test/test-environment)                                                |                                                                                                                                                                                                                                                                                                                                                                          |
+| `testEnvironment`            | [`testEnvironment`](/config/test/test-environment)                                                | 如果使用了 Jest 自定义 environment，请参考 [从 Jest 迁移自定义 environment](#custom-environments)。                                                                                                                                                                                                                                                                      |
 | `testEnvironmentOptions`     | [`testEnvironment.options`](/config/test/test-environment)                                        | 合并到对象形式：`testEnvironment: { name: 'jsdom', options: { ... } }`。                                                                                                                                                                                                                                                                                                 |
 | `testRegex`                  | [`include`](/config/test/include)                                                                 |                                                                                                                                                                                                                                                                                                                                                                          |
 | `testMatch`                  | [`include`](/config/test/include)                                                                 | 去掉每条 pattern 中的 `<rootDir>/` 前缀。                                                                                                                                                                                                                                                                                                                                |
@@ -107,6 +107,65 @@ export default defineConfig({
 | `projects`                   | [`projects`](/config/test/projects)                                                               | Jest 的 inline project 结构不同，迁移前请核对。                                                                                                                                                                                                                                                                                                                          |
 
 更多详情，请参考 [配置文档](/config)。
+
+### 迁移自定义 environment {#custom-environments}
+
+如果 Jest 项目使用自定义 environment，需要把 class-based API 改成 Rstest 默认导出的 environment 对象：
+
+```diff title="Jest to Rstest custom environment"
+- const NodeEnvironment = require('jest-environment-node').TestEnvironment;
+-
+- class CustomEnvironment extends NodeEnvironment {
+-   async setup() {
+-     await super.setup();
+-     this.global.__MARKER__ = this.globalConfig.testEnvironmentOptions.marker;
+-   }
+-
+-   async teardown() {
+-     delete this.global.__MARKER__;
+-     await super.teardown();
+-   }
+- }
+-
+- module.exports = CustomEnvironment;
++ import { builtinEnvironments } from '@rstest/core';
++
++ export default {
++   name: 'custom-node',
++   async setup(global, options) {
++     const base = await builtinEnvironments.node.setup(global, options);
++     global.__MARKER__ = options.marker;
++
++     return {
++       async teardown() {
++         delete global.__MARKER__;
++         await base.teardown();
++       },
++     };
++   },
++ };
+```
+
+```diff title="Jest config to Rstest config"
+- module.exports = {
+-   testEnvironment: './custom-environment.js',
+-   testEnvironmentOptions: {
+-     marker: 'custom-marker',
+-   },
+- };
++ import { defineConfig } from '@rstest/core';
++
++ export default defineConfig({
++   testEnvironment: {
++     name: './custom-environment.mjs',
++     options: {
++       marker: 'custom-marker',
++     },
++   },
++ });
+```
+
+Jest 特有的 `handleTestEvent`、`getVmContext`、构造函数 `context` 以及文件级 `@jest-environment` pragma 在 Rstest 中没有直接等价能力。测试运行时初始化优先使用 `setupFiles`，观察测试事件优先使用 reporter，需要为不同文件使用不同 environment 时优先拆成不同的 Rstest project。更多自定义 environment API 说明请参考 [`testEnvironment`](/config/test/test-environment#自定义-environment)。
 
 ### 注入全局 API
 

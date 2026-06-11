@@ -2,15 +2,21 @@
 description: The environment that will be used for testing. Includes practical guidance, options, and examples for real projects.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # testEnvironment
 
-- **Type:** `'node' | 'jsdom' | 'happy-dom' | { name: EnvironmentName, options?: EnvironmentOptions }`
+- **Type:** `'node' | 'jsdom' | 'happy-dom' | string | { name: EnvironmentName, options?: EnvironmentOptions, target?: 'node' | 'web' }`
 - **Default:** `'node'`
 - **CLI:** `--testEnvironment=node`
 
 The environment that will be used for testing.
 
 The default environment in Rstest is a `Node.js` environment. If you are building a web application, you can use a browser-like environment through `jsdom` or `happy-dom` instead.
+
+:::tip Browser Mode
+If you enable [browser mode](/config/test/browser), tests run directly in a real browser (Chromium/Firefox/WebKit). In this case, the `testEnvironment` option is ignored because the real browser itself is the host environment.
+:::
 
 import { Tab, Tabs } from '@theme';
 
@@ -89,6 +95,111 @@ The `options` object is passed directly to the environment's constructor.
 
 - For `jsdom`, it's passed to the `JSDOM` constructor. You can find available options in the [jsdom documentation](https://github.com/jsdom/jsdom#customizing-jsdom).
 - For `happy-dom`, it's passed to the `Window` constructor. You can find available options in the [happy-dom documentation](https://github.com/capricorn86/happy-dom/wiki/Window).
+
+### Custom environments
+
+<ApiMeta addedVersion="0.10.5" />
+
+:::warning Experimental API
+Custom environment APIs are experimental before Rstest 1.0. Their core shape is expected to stay stable, but type signatures and config details may receive minor adjustments based on migration feedback.
+:::
+
+Rstest also supports custom environments through `testEnvironment.name`.
+
+- Use a package name.
+- Use a relative or absolute JavaScript file path such as `.js` or `.mjs`.
+- For package names, `testEnvironment: 'foo'` also tries to resolve `rstest-environment-foo`.
+
+Custom environments should export an environment object as the default export.
+
+```js title="my-environment.mjs"
+import { builtinEnvironments } from '@rstest/core';
+
+/** @type {import('@rstest/core').TestEnvironment<typeof globalThis, { marker: string }>} */
+const environment = {
+  name: 'custom-jsdom',
+  async setup(global, options) {
+    const base = await builtinEnvironments.jsdom.setup(global, {
+      url: 'https://example.com',
+    });
+
+    global.__MARKER__ = options.marker;
+
+    return {
+      async teardown() {
+        delete global.__MARKER__;
+        await base.teardown();
+      },
+    };
+  },
+};
+
+export default environment;
+```
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: {
+    name: './my-environment.mjs',
+    options: {
+      marker: 'custom-marker',
+    },
+  },
+});
+```
+
+`@rstest/core` exports `builtinEnvironments` so you can extend `node`, `jsdom`, or `happy-dom` instead of rebuilding them from scratch.
+
+Rstest currently loads custom environment files as JavaScript modules. Direct `.ts` custom environment file paths are not supported yet. If you want type checking, write the environment in TypeScript and compile it to `.mjs` or `.js`, or use JSDoc types in a JavaScript file.
+
+#### target
+
+- **Type:** `'node' | 'web'`
+- **Default:** `'node'`
+
+`target` controls whether a custom environment should use Node.js-oriented or web-oriented build and resolution defaults. Built-in environments infer this value automatically, so you usually only need this option when configuring a custom environment.
+
+Use `target: 'node'` when the custom environment should use the same build defaults as the built-in `node` environment. In this mode, Rstest keeps Node-oriented resolution defaults and externalizes third-party dependencies from `node_modules` by default.
+
+Use `target: 'web'` when the custom environment should use the shared web-oriented build defaults of the built-in `jsdom` and `happy-dom` environments. In this mode, Rstest resolves browser-oriented package entrypoints by adding the `browser` condition when `resolve.conditionNames` is not customized, and bundles third-party dependencies by default so browser field replacements and bundled assets can take effect.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: {
+    name: './my-environment.mjs',
+    target: 'web',
+    options: {
+      url: 'https://example.com',
+    },
+  },
+});
+```
+
+`target` does not create DOM APIs by itself and does not enable [browser mode](/config/test/browser). It only selects the build and resolution defaults. The environment implementation is still responsible for installing globals such as `window` and `document`.
+
+Rstest temporarily does not support file-level `@vitest-environment` or `@jest-environment` comments. If you need per-file environment switching, use separate projects or config files for now.
+
+If you are migrating a custom environment from Jest or Vitest, see [Migrating Jest custom environments](/guide/migration/jest#custom-environments) or [Migrating Vitest custom environments](/guide/migration/vitest#custom-environments).
+
+### Custom environment vs setupFiles
+
+Use a custom environment when you need to define or wrap the host runtime itself for each test file.
+
+- Switching or extending `node`, `jsdom`, or `happy-dom`.
+- Creating globals before test modules execute.
+- Managing environment-level teardown, such as closing a browser-like runtime or cleaning injected globals.
+
+Use `setupFiles` when the environment is already correct and you only need to configure the test runtime inside it.
+
+- Registering matchers such as `@testing-library/jest-dom`.
+- Installing fake timers, serializers, mocks, or hooks.
+- Running project-level initialization code that depends on the selected environment already being available.
+
+In short: `testEnvironment` decides what globals and host APIs exist; `setupFiles` configures how your tests use that environment.
 
 ### Examples
 

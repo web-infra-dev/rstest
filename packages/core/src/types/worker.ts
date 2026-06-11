@@ -65,7 +65,9 @@ export type RuntimeConfig = Pick<
   | 'chaiConfig'
   | 'includeTaskLocation'
   | 'silent'
->;
+> & {
+  resolvedTestEnvironmentPaths?: string[];
+};
 
 export type CurrentTaskInfo = Pick<
   UserConsoleLog,

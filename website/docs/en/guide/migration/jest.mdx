@@ -70,7 +70,7 @@ When migrating, walk through **every** field in your `jest.config.js` and match 
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `preset` (e.g. `'ts-jest'`)  | Remove                                                                                                                 | Rstest uses swc by default; `ts-jest` is not needed.                                                                                                                                                                                                                                                                                                                                                                                    |
 | `transform`                  | Remove                                                                                                                 | swc transforms `.ts` / `.tsx` / `.js` / `.jsx` out of the box. For custom Babel, see [Code transformation](#code-transformation).                                                                                                                                                                                                                                                                                                       |
-| `testEnvironment`            | [`testEnvironment`](/config/test/test-environment)                                                                     |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `testEnvironment`            | [`testEnvironment`](/config/test/test-environment)                                                                     | If you use a custom Jest environment, see [Migrating Jest custom environments](#custom-environments).                                                                                                                                                                                                                                                                                                                                   |
 | `testEnvironmentOptions`     | [`testEnvironment.options`](/config/test/test-environment)                                                             | Fold into the object form: `testEnvironment: { name: 'jsdom', options: { ... } }`.                                                                                                                                                                                                                                                                                                                                                      |
 | `testRegex`                  | [`include`](/config/test/include)                                                                                      |                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `testMatch`                  | [`include`](/config/test/include)                                                                                      | Strip the `<rootDir>/` prefix from each pattern.                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -107,6 +107,65 @@ When migrating, walk through **every** field in your `jest.config.js` and match 
 | `projects`                   | [`projects`](/config/test/projects)                                                                                    | Jest's inline project shape differs — review before porting.                                                                                                                                                                                                                                                                                                                                                                            |
 
 For more details, please refer to the [Configuration](/config) section.
+
+### Migrating custom environments {#custom-environments}
+
+If your Jest project uses a custom environment, replace the class-based API with Rstest's default-exported environment object:
+
+```diff title="Jest to Rstest custom environment"
+- const NodeEnvironment = require('jest-environment-node').TestEnvironment;
+-
+- class CustomEnvironment extends NodeEnvironment {
+-   async setup() {
+-     await super.setup();
+-     this.global.__MARKER__ = this.globalConfig.testEnvironmentOptions.marker;
+-   }
+-
+-   async teardown() {
+-     delete this.global.__MARKER__;
+-     await super.teardown();
+-   }
+- }
+-
+- module.exports = CustomEnvironment;
++ import { builtinEnvironments } from '@rstest/core';
++
++ export default {
++   name: 'custom-node',
++   async setup(global, options) {
++     const base = await builtinEnvironments.node.setup(global, options);
++     global.__MARKER__ = options.marker;
++
++     return {
++       async teardown() {
++         delete global.__MARKER__;
++         await base.teardown();
++       },
++     };
++   },
++ };
+```
+
+```diff title="Jest config to Rstest config"
+- module.exports = {
+-   testEnvironment: './custom-environment.js',
+-   testEnvironmentOptions: {
+-     marker: 'custom-marker',
+-   },
+- };
++ import { defineConfig } from '@rstest/core';
++
++ export default defineConfig({
++   testEnvironment: {
++     name: './custom-environment.mjs',
++     options: {
++       marker: 'custom-marker',
++     },
++   },
++ });
+```
+
+Jest-specific hooks such as `handleTestEvent`, `getVmContext`, constructor `context`, and file-level `@jest-environment` pragmas do not have direct Rstest equivalents. Prefer `setupFiles` for test-runtime initialization, reporters for test event observation, and separate Rstest projects when different files need different environments. For more custom environment API details, see [`testEnvironment`](/config/test/test-environment#custom-environments).
 
 ### Inject globals
 

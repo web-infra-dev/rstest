@@ -119,6 +119,23 @@ const mockedUserApi: Mocked<typeof userApi> = rs.mocked(userApi);
 mockedUserApi.loadUser.mockResolvedValue({ name: 'Jack' });
 ```
 
+## Test environment 类型
+
+<ApiMeta addedVersion="0.10.5" />
+
+这些类型属于 Rstest 1.0 之前的实验性自定义 environment API，可能会根据迁移反馈做小幅调整。
+
+当你编写自定义环境时，可以使用这些类型来确保满足 Rstest 的接口协议。
+
+```ts
+import type { TestEnvironment, TestEnvironmentReturn } from '@rstest/core';
+```
+
+- `TestEnvironment<Global, Options>`：自定义测试环境对象的类型。
+- `TestEnvironmentReturn`：`setup` 方法返回的包含 `teardown` 逻辑的对象类型。
+
+详情参考 [自定义环境](/config/test/test-environment#自定义-environment)。
+
 ## Reporter 和结果类型
 
 当你创建自定义 Reporter，或编写消费 Rstest 结果的外部工具时，可以使用这些类型。

@@ -5,10 +5,12 @@ import {
   isPackageInstalled,
   type InstallPackageOptions,
 } from '../utils/packageInstaller';
-import type { EnvironmentName } from '../types';
+import type { BuiltinEnvironmentName } from '../types';
 import { color } from '../utils';
 
-const EnvironmentDependencyMap: Partial<Record<EnvironmentName, string>> = {
+const EnvironmentDependencyMap: Partial<
+  Record<BuiltinEnvironmentName, string>
+> = {
   jsdom: 'jsdom',
   'happy-dom': 'happy-dom',
 };
@@ -79,8 +81,9 @@ export const ensureTestEnvironmentDependencies = async (
 
   for (const project of projects) {
     const environmentName = project.normalizedConfig.testEnvironment.name;
-    const packageName =
-      EnvironmentDependencyMap[environmentName as EnvironmentName];
+    const packageName = Object.hasOwn(EnvironmentDependencyMap, environmentName)
+      ? EnvironmentDependencyMap[environmentName as BuiltinEnvironmentName]
+      : undefined;
 
     if (!packageName) {
       continue;

@@ -2,23 +2,32 @@ import type { RsbuildPlugin } from '@rsbuild/core';
 import type {
   CoverageOptions,
   CoverageProvider,
+  EnvironmentName,
   InlineProjectConfig,
   NormalizedCoverageOptions,
   ProjectConfig,
   RstestConfig,
+  TestEnvironmentTarget,
+  TestEnvironment,
+  TestEnvironmentReturn,
 } from './types';
 
 export { initCli, runCLI } from './cli';
 export { loadConfig, mergeProjectConfig, mergeRstestConfig } from './config';
 export { createRstest } from './core';
+export { builtinEnvironments } from './runtime/environments';
 export * from './runtime/api/public';
 
 export type {
   CoverageOptions,
   CoverageProvider,
+  EnvironmentName,
   NormalizedCoverageOptions,
   RsbuildPlugin,
   RstestConfig,
+  TestEnvironmentTarget,
+  TestEnvironment,
+  TestEnvironmentReturn,
 };
 
 export type RstestConfigAsyncFn = () => Promise<RstestConfig>;

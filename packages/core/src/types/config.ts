@@ -2,6 +2,7 @@ import type { RsbuildConfig } from '@rsbuild/core';
 import type { SnapshotStateOptions } from '@vitest/snapshot';
 import type { config } from 'chai';
 import type { CoverageOptions, NormalizedCoverageOptions } from './coverage';
+import type { TestEnvironment } from './environment';
 import type {
   BuiltInReporterNames,
   Reporter,
@@ -236,11 +237,23 @@ export type ExtendConfigFn = (
   userConfig: Readonly<LooseRstestConfig>,
 ) => MaybePromise<ExtendConfig>;
 
-export type EnvironmentName = 'node' | 'jsdom' | 'happy-dom';
+export type BuiltinEnvironmentName = 'node' | 'jsdom' | 'happy-dom';
+
+export type EnvironmentName = BuiltinEnvironmentName | TestEnvironment['name'];
+
+export type TestEnvironmentTarget = 'node' | 'web';
 
 export type EnvironmentWithOptions = {
   name: EnvironmentName;
   options?: Record<string, any>;
+  /**
+   * Controls whether rstest should use Node.js-oriented or web-oriented build
+   * defaults for this test environment.
+   *
+   * Built-in environments infer this automatically. Custom environments default
+   * to `node` unless explicitly set.
+   */
+  target?: TestEnvironmentTarget;
 };
 
 export interface RstestConfig {
