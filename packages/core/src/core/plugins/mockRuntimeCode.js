@@ -230,10 +230,16 @@ const getMockImplementation = (mockType = 'mock') => {
     }
 
     if (typeof modFactory === 'string' || typeof modFactory === 'number') {
-      __webpack_module_cache__[id] = {
-        exports: __webpack_require__(modFactory),
+      // Manual mock resolved to a module id. Install a factory that requires it
+      // (rather than only seeding the cache) so the mock survives
+      // `rs.resetModules()` — which clears the cache — the same way function
+      // factories do. A cache-only entry would be dropped on reset, leaving a
+      // later `import()` to fall back to the original (real) module.
+      const finalModFactory = function (__webpack_module__) {
+        __webpack_module__.exports = __webpack_require__(modFactory);
       };
-      registerRequestAlias();
+
+      installFactory(finalModFactory);
     } else if (typeof modFactory === 'function') {
       const finalModFactory = function (
         __webpack_module__,
