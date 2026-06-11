@@ -8,9 +8,7 @@ import type {
   CoverageOptions,
   CoverageProvider,
 } from '../types/coverage';
-import { logger, type TraceSpan } from '../utils';
-
-const traceNoop: TraceSpan = async (_name, _cat, fn) => fn();
+import { logger, noopTraceSpan, type TraceSpan } from '../utils';
 
 export const getIncludedFiles = async (
   coverage: CoverageOptions,
@@ -181,7 +179,7 @@ export async function generateCoverage(
   context: RstestContext,
   coverageMap: CoverageMap,
   coverageProvider: CoverageProvider,
-  traceSpan: TraceSpan = traceNoop,
+  traceSpan: TraceSpan = noopTraceSpan,
 ): Promise<void> {
   const {
     rootPath,
@@ -343,7 +341,7 @@ export async function generateCoverage(
 
     // Generate coverage reports
     await traceSpan('coverage:generate-reports', 'coverage', () =>
-      coverageProvider.generateReports(finalCoverageMap, coverage),
+      coverageProvider.generateReports(finalCoverageMap),
     );
 
     if (coverage.thresholds) {
@@ -379,7 +377,7 @@ async function generateCoverageForUntestedFiles(
   uncoveredFiles: string[],
   coverageMap: CoverageMap,
   coverageProvider: CoverageProvider,
-  traceSpan: TraceSpan = traceNoop,
+  traceSpan: TraceSpan = noopTraceSpan,
 ): Promise<void> {
   if (!coverageProvider.generateCoverageForUntestedFiles) {
     logger.warn(

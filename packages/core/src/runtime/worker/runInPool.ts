@@ -10,9 +10,11 @@ import type {
   WorkerState,
 } from '../../types';
 import { globalApis } from '../../utils/constants';
+import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createAsyncLeakDetector } from './asyncLeaks';
+import { environmentLoaders } from './env/registry';
 import { PhaseTracker } from './phaseTracker';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { createSilentConsoleController } from './silentConsole';
@@ -90,10 +92,6 @@ const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
   }
 };
 
-const getFileTaskId = (testPath: string): string => {
-  return `file:${testPath}`;
-};
-
 const createOriginalLogWriter = () => {
   const stdoutWrite = process.stdout.write.bind(process.stdout);
   const stderrWrite = process.stderr.write.bind(process.stderr);
@@ -167,8 +165,20 @@ const preparePool = async (
       disableConsoleIntercept,
       silent,
     },
-    emitInterceptedLog: async (log) => {
-      await rpc.onConsoleLog(log);
+    emitInterceptedLog: (log) => {
+      // Forwarding console output to the host is best-effort, fire-and-forget:
+      // the result is never awaited. With `isolate: false` a captured console
+      // (e.g. a logger that flushes from a late `setTimeout`/microtask) can fire
+      // after this file's birpc channel has been closed or disposed by the host,
+      // so the call rejects — immediately once the channel is `$close()`d, or
+      // later when `$close()` rejects the still-pending request. Swallowing it
+      // drops such an orphan log instead of surfacing an `unhandledRejection`
+      // that fails the run and is misattributed to whichever file is currently
+      // running. A dropped late log also stays subject to the host's
+      // `onConsoleLog` policy, matching `isolate: true` where late logs are lost
+      // as the worker is torn down.
+      // See https://github.com/web-infra-dev/rstest/issues/1367.
+      void rpc.onConsoleLog(log).catch(() => {});
     },
     writeOriginalLog: createOriginalLogWriter(),
   });
@@ -244,29 +254,22 @@ const preparePool = async (
   });
 
   tracker?.transition('envSetup');
-  switch (testEnvironment.name) {
-    case 'node':
-      break;
-    case 'jsdom': {
-      const { environment } = await import('./env/jsdom');
-      const { teardown } = await environment.setup(
-        global,
-        testEnvironment.options || {},
-      );
-      cleanupFns.push(() => teardown(global));
-      break;
-    }
-    case 'happy-dom': {
-      const { environment } = await import('./env/happyDom');
-      const { teardown } = await environment.setup(
-        global,
-        testEnvironment.options || {},
-      );
-      cleanupFns.push(async () => teardown(global));
-      break;
-    }
-    default:
+  // `node` is the no-op fast path; every other environment is resolved through
+  // the registry so adding one is a single entry instead of a new switch arm.
+  // teardown is `MaybePromise<void>` and is awaited via `Promise.all` in
+  // `cleanup`, so a single uniform wrapper preserves both the sync (jsdom) and
+  // async (happy-dom) teardown shapes.
+  if (testEnvironment.name !== 'node') {
+    const loadEnvironment = environmentLoaders[testEnvironment.name];
+    if (!loadEnvironment) {
       throw new Error(`Unknown test environment: ${testEnvironment.name}`);
+    }
+    const { environment } = await loadEnvironment();
+    const { teardown } = await environment.setup(
+      global,
+      testEnvironment.options || {},
+    );
+    cleanupFns.push(() => teardown(global));
   }
   tracker?.transition('prepare');
 

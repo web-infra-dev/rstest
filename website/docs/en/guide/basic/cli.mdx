@@ -303,6 +303,7 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `--coverage.reporters <reporter>`   | Specify coverage reporter(s), see [coverage.reporters](/config/test/coverage#reporters)                                                                               |
 | `--coverage.reportOnFailure`        | Generate coverage reports even when tests fail, see [coverage.reportOnFailure](/config/test/coverage#reportonfailure)                                                 |
 | `--coverage.reportsDirectory <dir>` | Directory to store coverage reports, see [coverage.reportsDirectory](/config/test/coverage#reportsdirectory)                                                          |
+| `--dev.writeToDisk`                 | Write test temporary files to disk, see [dev.writeToDisk](/config/build/dev#devwritetodisk)                                                                           |
 | `--detectAsyncLeaks`                | Detect async resources that leak after tests finish, see [detectAsyncLeaks](/config/test/detect-async-leaks)                                                          |
 | `--disableConsoleIntercept`         | Disable console intercept, see [disableConsoleIntercept](/config/test/disable-console-intercept)                                                                      |
 | `--exclude <exclude>`               | Exclude files from test, see [exclude](/config/test/exclude)                                                                                                          |
@@ -317,6 +318,9 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `--isolate`                         | Run tests in an isolated environment, see [isolate](/config/test/isolate)                                                                                             |
 | `--logHeapUsage`                    | Print heap usage for each test, see [logHeapUsage](/config/test/log-heap-usage)                                                                                       |
 | `--maxConcurrency <value>`          | Maximum number of concurrent tests, see [maxConcurrency](/config/test/max-concurrency)                                                                                |
+| `--output.cleanDistPath`            | Clean test temporary files before the test starts, see [output.cleanDistPath](/config/build/output#outputcleandistpath)                                               |
+| `--output.emitAssets`               | Emit imported static assets, see [output.emitAssets](/config/build/output#outputemitassets)                                                                           |
+| `--output.module`                   | Output JavaScript files in ES module format, see [output.module](/config/build/output#outputmodule)                                                                   |
 | `--passWithNoTests`                 | Allows the test suite to pass when no files are found, see [passWithNoTests](/config/test/pass-with-no-tests)                                                         |
 | `--pool <type>`                     | Shorthand for `--pool.type`, see [pool](/config/test/pool)                                                                                                            |
 | `--pool.execArgv <arg>`             | Additional Node.js execArgv for worker processes (repeatable), see [pool](/config/test/pool)                                                                          |
@@ -334,10 +338,11 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `--shard <index/count>`             | Split tests into several shards, see [shard](/config/test/shard)                                                                                                      |
 | `--silent [value]`                  | Silence intercepted test console output, or keep logs only for failed tasks with `passed-only`, see [silent](/config/test/silent)                                     |
 | `--slowTestThreshold <value>`       | The number of milliseconds after which a test or suite is considered slow, see [slowTestThreshold](/config/test/slow-test-threshold)                                  |
+| `--source.tsconfigPath <path>`      | Path to the tsconfig.json file, see [source.tsconfigPath](/config/build/source#sourcetsconfigpath)                                                                    |
 | `--testEnvironment <name>`          | The environment that will be used for testing, see [testEnvironment](/config/test/test-environment)                                                                   |
 | `-t, --testNamePattern <value>`     | Run only tests with a name that matches the regex, see [testNamePattern](/config/test/test-name-pattern)                                                              |
 | `--testTimeout <value>`             | Timeout of a test in milliseconds, see [testTimeout](/config/test/test-timeout)                                                                                       |
-| `--trace`                           | Dump a Perfetto-compatible performance trace JSON file                                                                                                                |
+| `--trace`                           | Dump a Perfetto-compatible performance trace JSON file, plus a ranked markdown timing summary printed to the terminal and written next to it                          |
 | `--unstubEnvs`                      | Restores all `process.env` values that were changed with `rs.stubEnv` before every test, see [unstubEnvs](/config/test/unstub-envs)                                   |
 | `--unstubGlobals`                   | Restores all global variables that were changed with `rs.stubGlobal` before every test, see [unstubGlobals](/config/test/unstub-globals)                              |
 | `-u, --update`                      | Update snapshot files, see [update](/config/test/update)                                                                                                              |

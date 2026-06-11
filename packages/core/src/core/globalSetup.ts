@@ -1,7 +1,7 @@
 import { type ChildProcess, type ForkOptions, fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'pathe';
-import type { EntryInfo, FormattedError } from '../types';
+import type { EntryInfo, FormattedError, ProjectContext } from '../types';
 import {
   bgColor,
   color,
@@ -9,6 +9,35 @@ import {
   getWorkerSerialization,
   killAndWait,
 } from '../utils';
+
+/**
+ * Single owner of the once-per-project global-setup gate.
+ *
+ * Global setup runs at most once per project and only when the project has at
+ * least one running test. This collapses the read-check-and-set that was
+ * hand-copied across {@link runTests} and {@link listTests} into one named,
+ * test-covered operation, preserving the exact short-circuit order and the
+ * set-before-await semantics (a failed setup is not retried within the run).
+ *
+ * The `_globalSetups` marker lives on the per-project {@link ProjectContext} and
+ * is intentionally never reset between watch reruns — only re-seeded `false`
+ * when a fresh context is constructed — so this helper mutates the passed object
+ * by reference and never touches module-level state.
+ *
+ * @returns `true` when the caller should run global setup now (and the marker
+ * has been claimed); `false` otherwise.
+ */
+export function claimGlobalSetupOnce(
+  project: Pick<ProjectContext, '_globalSetups'>,
+  entriesLength: number,
+  globalSetupEntriesLength: number,
+): boolean {
+  if (!(entriesLength && globalSetupEntriesLength) || project._globalSetups) {
+    return false;
+  }
+  project._globalSetups = true;
+  return true;
+}
 
 const CLOSE_TIMEOUT_MS = 10_000;
 

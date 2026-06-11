@@ -7,6 +7,7 @@ import {
 import { dirname, isAbsolute, join, resolve } from 'pathe';
 import { isCI } from 'std-env';
 import type {
+  BuiltInReporterNames,
   ExtendConfig,
   NormalizedConfig,
   ProjectConfig,
@@ -17,6 +18,7 @@ import {
   color,
   DEFAULT_CONFIG_EXTENSIONS,
   DEFAULT_CONFIG_NAME,
+  DEFAULT_TEST_TIMEOUT,
   formatRootStr,
   getOutputDistPathRoot,
   getTempRstestOutputDirGlob,
@@ -193,6 +195,26 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
   }, {});
 };
 
+/**
+ * Whether the process is running inside GitHub Actions. Single source for the
+ * `GITHUB_ACTIONS` runtime signal so every consumer interprets it identically.
+ * Reads `process.env` directly so the build-time `process.env.GITHUB_ACTIONS`
+ * define keeps controlling it (e.g. forced off in this package's own tests).
+ */
+export const isGithubActions = (): boolean =>
+  process.env.GITHUB_ACTIONS === 'true';
+
+/**
+ * Reporters enabled by default. Under GitHub Actions the `github-actions`
+ * reporter is added so failures surface as CI annotations. Takes the flag as a
+ * parameter (pure) so the selection is unit-testable without mutating env or
+ * fighting the build-time `GITHUB_ACTIONS` define.
+ */
+export const getDefaultReporters = (
+  githubActions: boolean = isGithubActions(),
+): BuiltInReporterNames[] =>
+  githubActions ? ['default', 'github-actions'] : ['default'];
+
 const createDefaultConfig = (): NormalizedConfig => ({
   root: process.cwd(),
   name: 'rstest',
@@ -216,7 +238,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   globals: false,
   passWithNoTests: false,
   update: false,
-  testTimeout: 5_000,
+  testTimeout: DEFAULT_TEST_TIMEOUT,
   hookTimeout: 10_000,
   testEnvironment: {
     name: 'node',
@@ -227,10 +249,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
     },
   },
   retry: 0,
-  reporters:
-    process.env.GITHUB_ACTIONS === 'true'
-      ? ['default', 'github-actions']
-      : ['default'],
+  reporters: getDefaultReporters(),
   clearMocks: false,
   resetMocks: false,
   restoreMocks: false,

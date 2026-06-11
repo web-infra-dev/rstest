@@ -6,7 +6,9 @@ export default defineConfig({
     {
       format: 'esm',
       syntax: 'es2021',
-      dts: true,
+      dts: {
+        isolated: true,
+      },
     },
   ],
   tools: {

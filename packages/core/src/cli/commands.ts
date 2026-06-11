@@ -98,7 +98,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['--disableConsoleIntercept', 'Disable console intercept'],
   ['--logHeapUsage', 'Log heap usage after each test'],
   ['--detectAsyncLeaks', 'Detect async resources that leak after tests finish'],
-  ['--trace', 'Dump a Perfetto-compatible performance trace JSON file'],
+  [
+    '--trace',
+    'Dump a Perfetto-compatible performance trace JSON file, plus a ranked markdown timing summary printed to the terminal and written next to it',
+  ],
   [
     '--slowTestThreshold <value>',
     'The number of milliseconds after which a test or suite is considered slow',
@@ -153,6 +156,17 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     '--includeTaskLocation',
     'Collect test and suite locations. This might increase the running time.',
   ],
+  ['--source.*', 'Internal parser helper for source.* options'],
+  ['--source.tsconfigPath <path>', 'Path to the tsconfig.json file'],
+  ['--dev.*', 'Internal parser helper for dev.* options'],
+  ['--dev.writeToDisk', 'Write test temporary files to disk'],
+  ['--output.*', 'Internal parser helper for output.* options'],
+  ['--output.emitAssets', 'Emit imported static assets'],
+  [
+    '--output.cleanDistPath',
+    'Clean test temporary files before the test starts',
+  ],
+  ['--output.module', 'Output JavaScript files in ES module format'],
 ];
 
 const poolOptionDefinitions: OptionDefinition[] = [
@@ -217,46 +231,115 @@ const applyRuntimeCommandOptions = (command: Command): void => {
   applyOptions(command, poolOptionDefinitions);
 };
 
+/**
+ * Derives the set of option names that consume a following value-bearing
+ * argument, directly from the cac option definitions. cac treats an option as
+ * value-taking when its rawName carries a `<required>` or `[optional]` token,
+ * so any rawName containing a `<` or `[` is value-taking — the same way cac
+ * classifies each option when it parses the rawName. Every comma-separated
+ * alias before the first such token (e.g. both `-c` and `--config`) is
+ * registered.
+ *
+ * Single owner: previously this was a hand-maintained literal that had to be
+ * kept byte-for-byte in sync with the five option-definition arrays — adding a
+ * new value-taking flag silently desynced argument splitting in
+ * {@link getCliCommand}. Tokens stay RAW (no de-dashing/camelCasing) because
+ * they are matched against `arg.split('=', 1)[0]`.
+ */
+const valueTakingOptionNames = (
+  definitions: readonly OptionDefinition[][],
+): Set<string> => {
+  const names = new Set<string>();
+  for (const group of definitions) {
+    for (const [rawName] of group) {
+      // The aliases end at the first `<required>` / `[optional]` token; an
+      // option with neither token is a boolean flag, which is not value-taking.
+      const lt = rawName.indexOf('<');
+      const sq = rawName.indexOf('[');
+      if (lt < 0 && sq < 0) {
+        continue;
+      }
+      const tokenAt = lt < 0 ? sq : sq < 0 ? lt : Math.min(lt, sq);
+      for (const alias of rawName.slice(0, tokenAt).split(',')) {
+        const trimmed = alias.trim();
+        if (trimmed) {
+          names.add(trimmed);
+        }
+      }
+    }
+  }
+  return names;
+};
+
+const requiredDotOptionNames = (
+  definitions: readonly OptionDefinition[][],
+): Set<string> => {
+  const names = new Set<string>();
+  for (const group of definitions) {
+    for (const [rawName] of group) {
+      const tokenAt = rawName.indexOf('<');
+      if (tokenAt < 0) {
+        continue;
+      }
+      for (const alias of rawName.slice(0, tokenAt).split(',')) {
+        const trimmed = alias.trim();
+        if (trimmed.includes('.')) {
+          names.add(trimmed);
+        }
+      }
+    }
+  }
+  return names;
+};
+
 const commands = new Set(['init', 'list', 'merge-reports', 'run', 'watch']);
 
-const valueTakingOptions = new Set([
-  '-c',
-  '-r',
-  '-t',
-  '--bail',
-  '--browser.name',
-  '--browser.port',
-  '--changed',
-  '--config',
-  '--config-loader',
-  '--coverage.changed',
-  '--coverage.exclude',
-  '--coverage.include',
-  '--coverage.provider',
-  '--coverage.reporters',
-  '--coverage.reportsDirectory',
-  '--exclude',
-  '--hookTimeout',
-  '--include',
-  '--json',
-  '--maxConcurrency',
-  '--pool',
-  '--pool.execArgv',
-  '--pool.maxWorkers',
-  '--pool.minWorkers',
-  '--pool.type',
-  '--project',
-  '--reporter',
-  '--reporters',
-  '--retry',
-  '--root',
-  '--shard',
-  '--silent',
-  '--slowTestThreshold',
-  '--testEnvironment',
-  '--testNamePattern',
-  '--testTimeout',
+export const valueTakingOptions: Set<string> = valueTakingOptionNames([
+  runtimeOptionDefinitions,
+  poolOptionDefinitions,
+  mergeReportsOptionDefinitions,
+  hiddenPassthroughOptionDefinitions,
+  listCommandOptionDefinitions,
 ]);
+
+export const requiredDotOptions: Set<string> = requiredDotOptionNames([
+  runtimeOptionDefinitions,
+  poolOptionDefinitions,
+  mergeReportsOptionDefinitions,
+  hiddenPassthroughOptionDefinitions,
+  listCommandOptionDefinitions,
+]);
+
+const hasMissingRequiredOptionValue = (value: unknown): boolean =>
+  value === true ||
+  value === false ||
+  (Array.isArray(value) && value.some(hasMissingRequiredOptionValue));
+
+const validateRequiredDotOptionValues = (cli: CAC): void => {
+  for (const option of [
+    ...cli.globalCommand.options,
+    ...(cli.matchedCommand?.options ?? []),
+  ]) {
+    if (!option.required || !requiredDotOptions.has(`--${option.name}`)) {
+      continue;
+    }
+
+    const [root, ...path] = option.name.split('.');
+    if (!root) {
+      continue;
+    }
+    const value = path.reduce<unknown>((target, key) => {
+      if (typeof target !== 'object' || target === null) {
+        return undefined;
+      }
+      return (target as Record<string, unknown>)[key];
+    }, cli.options[root]);
+
+    if (hasMissingRequiredOptionValue(value)) {
+      throw new Error(`option \`${option.rawName}\` value is missing`);
+    }
+  }
+};
 
 const getCliCommand = (argv: string[]): string | undefined => {
   for (let index = 2; index < argv.length; index++) {
@@ -360,14 +443,59 @@ const normalizeBrowserCliArgs = (argv: string[]): string[] => {
 const normalizeCliArgs = (argv: string[]): string[] =>
   normalizePoolCliArgs(normalizeBrowserCliArgs(normalizeCoverageCliArgs(argv)));
 
+const allowedWildcardOptions = {
+  source: new Set(['tsconfigPath']),
+  dev: new Set(['writeToDisk']),
+  output: new Set(['emitAssets', 'cleanDistPath', 'module']),
+};
+
+const validateWildcardOptions = (options: Record<string, unknown>): void => {
+  for (const [name, allowedOptions] of Object.entries(allowedWildcardOptions)) {
+    const value = options[name];
+
+    if (value === undefined) {
+      continue;
+    }
+
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new Error(`Unknown option \`--${name}\``);
+    }
+
+    for (const [key, optionValue] of Object.entries(value)) {
+      if (!allowedOptions.has(key)) {
+        throw new Error(`Unknown option \`--${name}.${key}\``);
+      }
+
+      if (
+        typeof optionValue === 'object' &&
+        optionValue !== null &&
+        !Array.isArray(optionValue)
+      ) {
+        const nestedKey = Object.keys(optionValue)[0];
+        throw new Error(
+          `Unknown option \`--${name}.${key}${nestedKey ? `.${nestedKey}` : ''}\``,
+        );
+      }
+    }
+  }
+};
+
 const normalizeMixedCliOptions = (cli: CAC): void => {
   const originalParse = cli.parse.bind(cli);
 
-  cli.parse = ((argv, options) =>
-    originalParse(
-      normalizeCliArgs(argv ?? process.argv),
-      options,
-    )) as CAC['parse'];
+  cli.parse = ((argv, options) => {
+    const run = options?.run !== false;
+    const parsed = originalParse(normalizeCliArgs(argv ?? process.argv), {
+      ...options,
+      run: false,
+    });
+    validateWildcardOptions(parsed.options as Record<string, unknown>);
+    validateRequiredDotOptionValues(cli);
+    if (run) {
+      cli.runMatchedCommand();
+    }
+    return parsed;
+  }) as CAC['parse'];
 };
 
 const filterHelpOptions = (
@@ -803,7 +931,11 @@ export function createCli(): CAC {
       case 'merge-reports':
         return filterHelpOptions(sections, ['--isolate']);
       default:
-        return sections;
+        return filterHelpOptions(sections, [
+          '--source.*',
+          '--dev.*',
+          '--output.*',
+        ]);
     }
   });
   cli.version(RSTEST_VERSION);

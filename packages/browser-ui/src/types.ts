@@ -12,7 +12,7 @@ import type {
   TestFileResult,
   TestInfo,
   TestResult,
-} from '@rstest/core/browser-runtime';
+} from '@rstest/core/internal/browser-runtime';
 
 /**
  * Browser UI types

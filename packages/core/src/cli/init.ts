@@ -3,7 +3,12 @@ import type { LoadConfigOptions } from '@rsbuild/core';
 import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
 import { loadConfig, resolveExtends } from '../config';
-import type { BrowserName, Project, RstestConfig } from '../types';
+import type {
+  BrowserName,
+  Project,
+  RstestConfig,
+  RstestOutputConfig,
+} from '../types';
 import {
   castArray,
   color,
@@ -96,6 +101,14 @@ export type CommonOptions = {
   hideSkippedTestFiles?: boolean;
   bail?: number | boolean;
   shard?: string;
+  includeTaskLocation?: boolean;
+  source?: {
+    tsconfigPath?: string;
+  };
+  dev?: {
+    writeToDisk?: boolean;
+  };
+  output?: Pick<RstestOutputConfig, 'emitAssets' | 'cleanDistPath' | 'module'>;
 };
 
 function coerceCliBoolean(value: unknown): boolean | undefined {
@@ -158,6 +171,7 @@ export function mergeWithCLIOptions(
     'hideSkippedTestFiles',
     'logHeapUsage',
     'detectAsyncLeaks',
+    'includeTaskLocation',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {
@@ -278,6 +292,29 @@ export function mergeWithCLIOptions(
 
   if (options.include) {
     config.include = castArray(options.include);
+  }
+
+  if (options.source?.tsconfigPath !== undefined) {
+    config.source ??= {};
+    config.source.tsconfigPath = options.source.tsconfigPath;
+  }
+
+  if (options.dev?.writeToDisk !== undefined) {
+    config.dev ??= {};
+    config.dev.writeToDisk = options.dev.writeToDisk;
+  }
+
+  if (options.output !== undefined) {
+    config.output ??= {};
+    if (options.output.emitAssets !== undefined) {
+      config.output.emitAssets = options.output.emitAssets;
+    }
+    if (options.output.cleanDistPath !== undefined) {
+      config.output.cleanDistPath = options.output.cleanDistPath;
+    }
+    if (options.output.module !== undefined) {
+      config.output.module = options.output.module;
+    }
   }
 
   if (options.browser !== undefined) {

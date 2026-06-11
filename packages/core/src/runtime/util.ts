@@ -228,6 +228,8 @@ export function parseTemplateTable(
 
 export class TestRegisterError extends Error {}
 
+export class TestSkipError extends Error {}
+
 class RstestError extends Error {
   public fullStack?: boolean;
 }

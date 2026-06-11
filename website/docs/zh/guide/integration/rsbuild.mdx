@@ -65,8 +65,8 @@ export default defineConfig({
 
 #### `cwd`
 
-- **类型:** `string`
-- **默认值:** `process.cwd()`
+- **类型：** `string`
+- **默认值：** `process.cwd()`
 
 `cwd` 会传递给 Rsbuild 的 `loadConfig` 函数。它是用于解析 Rsbuild 配置文件的当前工作目录。
 
@@ -82,15 +82,15 @@ export default defineConfig({
 
 #### `configPath`
 
-- **类型:** `string`
-- **默认值:** `'./rsbuild.config.ts'`
+- **类型：** `string`
+- **默认值：** `'./rsbuild.config.ts'`
 
 Rsbuild 配置文件的路径。
 
 #### `environmentName`
 
-- **类型:** `string`
-- **默认值:** `undefined`
+- **类型：** `string`
+- **默认值：** `undefined`
 
 要使用的 `environments` 字段中的环境名称，它将与通用配置合并。设置为一个字符串以使用具有匹配名称的环境配置。
 
@@ -154,8 +154,8 @@ export default defineConfig({
 
 #### `modifyRsbuildConfig`
 
-- **类型:** `(config: RsbuildConfig) => RsbuildConfig | void`
-- **默认值:** `undefined`
+- **类型：** `(config: RsbuildConfig) => RsbuildConfig | void`
+- **默认值：** `undefined`
 
 在将 Rsbuild 配置转换为 Rstest 配置之前对其进行修改：
 

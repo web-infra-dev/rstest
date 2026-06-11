@@ -51,8 +51,8 @@ export default defineConfig({
 
 #### `cwd`
 
-- **类型:** `string`
-- **默认值:** `process.cwd()`
+- **类型：** `string`
+- **默认值：** `process.cwd()`
 
 用于解析 Rspack 配置文件的工作目录。
 
@@ -68,17 +68,17 @@ export default defineConfig({
 
 #### `configPath`
 
-- **类型:** `string`
-- **默认值:** `'./rspack.config.ts'`
+- **类型：** `string`
+- **默认值：** `'./rspack.config.ts'`
 
 Rspack 配置文件的路径。
 
 #### `configName`
 
-- **类型:** `string`
-- **默认值:** `undefined`
+- **类型：** `string`
+- **默认值：** `undefined`
 
-当 Rspack 配置文件使用[多配置](https://rspack.dev/config/index#configuration-type)时，选择指定名称的配置。设置为字符串以使用具有匹配 `name` 字段的配置。
+当 Rspack 配置文件使用[多配置](https://rspack.rs/config/other-options#name)时，选择指定名称的配置。设置为字符串以使用具有匹配 `name` 字段的配置。
 
 如果你的 Rspack 配置导出了一个配置数组：
 
@@ -129,8 +129,8 @@ export default defineConfig({
 
 #### `env`
 
-- **类型:** `Record<string, unknown> | string[]`
-- **默认值:** `undefined`
+- **类型：** `Record<string, unknown> | string[]`
+- **默认值：** `undefined`
 
 传递给 Rspack 配置函数的环境变量。当 `rspack.config.ts` 导出一个函数时，对应其 `env` 参数：
 
@@ -146,15 +146,15 @@ export default (env) => {
 
 #### `nodeEnv`
 
-- **类型:** `string`
-- **默认值:** `undefined`
+- **类型：** `string`
+- **默认值：** `undefined`
 
 加载 Rspack 配置时使用的 `NODE_ENV` 值。
 
 #### `modifyRspackConfig`
 
-- **类型:** `(config: RspackOptions) => RspackOptions`
-- **默认值:** `undefined`
+- **类型：** `(config: RspackOptions) => RspackOptions`
+- **默认值：** `undefined`
 
 在将 Rspack 配置转换为 Rstest 配置之前对其进行修改：
 

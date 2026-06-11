@@ -7,6 +7,7 @@ import {
   type WorkerResponse,
   wrapWorkerResponse,
 } from '../../pool/protocol';
+import { ENV } from '../../utils/env';
 import { channel } from './channels';
 import { runInPool } from './runInPool';
 
@@ -82,7 +83,7 @@ process.on('uncaughtException', fatalExit);
 process.on('unhandledRejection', fatalExit);
 
 const handleStart = (request: Extract<WorkerRequest, { type: 'start' }>) => {
-  process.env.RSTEST_WORKER_ID = String(request.workerId);
+  process.env[ENV.WORKER_ID] = String(request.workerId);
   send({ type: 'started', pid: process.pid });
 };
 
@@ -98,7 +99,7 @@ const RESPONSE_TYPE: Record<TaskKind, 'runFinished' | 'collectFinished'> = {
 // bootstrap; toggling `RSTEST_MEMORY_AWARE` mid-run is not supported (host
 // samples it at pool construction too).
 const MEMORY_REPORTING_ENABLED =
-  isMainThread && process.env.RSTEST_MEMORY_AWARE !== '0';
+  isMainThread && process.env[ENV.MEMORY_AWARE] !== '0';
 
 const runTask = async (
   kind: TaskKind,

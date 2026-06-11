@@ -8,7 +8,9 @@ export default defineConfig({
     {
       format: 'esm',
       syntax: ['chrome 100'],
-      dts: true,
+      dts: {
+        isolated: true,
+      },
       redirect: {
         // Append `.js` to relative imports in emitted .d.ts so they resolve
         // under NodeNext/Node16 module resolution (ESM requires explicit ext).

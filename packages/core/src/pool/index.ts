@@ -1,8 +1,6 @@
-import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { basename, dirname, join, resolve } from 'pathe';
-import { getFileTaskId } from '../runtime/runner';
 import type {
   CoverageMapData,
   EntryInfo,
@@ -21,35 +19,22 @@ import type {
 } from '../types';
 import {
   color,
+  getFileTaskId,
   getForceColorEnv,
   isDeno,
+  logger,
   needFlagExperimentalDetectModule,
   toError,
 } from '../utils';
-import type { TraceEvent } from '../utils/trace';
+import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
+import { getNumCpus, parseWorkers } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
 import { Pool } from './pool';
 import type { PoolWorkerKind } from './types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-const getNumCpus = (): number => {
-  return os.availableParallelism?.() ?? os.cpus().length;
-};
-
-const parseWorkers = (maxWorkers: string | number): number => {
-  const parsed = Number.parseInt(maxWorkers.toString(), 10);
-
-  if (typeof maxWorkers === 'string' && maxWorkers.trim().endsWith('%')) {
-    const numCpus = getNumCpus();
-    const workers = Math.floor((parsed / 100) * numCpus);
-    return Math.max(workers, 1);
-  }
-
-  return parsed > 0 ? parsed : 1;
-};
 
 const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
   const {
@@ -170,6 +155,7 @@ const buildTask = async ({
   getAssetFiles,
   getSourceMaps,
   rpcMethods,
+  traceSpan,
 }: {
   type: 'run' | 'collect';
   workerKind: PoolWorkerKind;
@@ -184,9 +170,15 @@ const buildTask = async ({
   getAssetFiles: PoolDispatchParams['getAssetFiles'];
   getSourceMaps: PoolDispatchParams['getSourceMaps'];
   rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
+  traceSpan: TraceSpan;
 }) => {
   const getAssets = () =>
     filterAssetsByEntry(entryInfo, getAssetFiles, getSourceMaps, setupAssets);
+  const traceArgs = {
+    project: project.name,
+    testPath: entryInfo.testPath,
+    type,
+  };
 
   return {
     worker: workerKind,
@@ -206,12 +198,21 @@ const buildTask = async ({
       setupEntries,
       updateSnapshot,
       /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
-      assets: isMemorySufficient() ? await getAssets() : undefined,
+      assets: isMemorySufficient()
+        ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
+            ...traceArgs,
+            mode: 'eager',
+          })
+        : undefined,
     },
     rpcMethods: {
       ...rpcMethods,
       // getAssetsByEntry is only used when memory is not sufficient since it may be slow
-      getAssetsByEntry: getAssets,
+      getAssetsByEntry: () =>
+        traceSpan('host:get-assets-by-entry', 'host', getAssets, {
+          ...traceArgs,
+          mode: 'rpc',
+        }),
     },
   };
 };
@@ -278,6 +279,8 @@ export const createPool = async ({
     onCoverageResult?: (coverage: CoverageMapData) => void;
     /** Perfetto trace events forwarded for caller-owned dumping. */
     onTraceEvents?: (events: TraceEvent[]) => void;
+    /** Records host-side pool slices in the caller-owned Perfetto trace. */
+    traceSpan: TraceSpan;
   }) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
@@ -299,7 +302,7 @@ export const createPool = async ({
     log: UserConsoleLog;
     projectConfig: ProjectContext['normalizedConfig'];
   }): boolean => {
-    return projectConfig.onConsoleLog?.(log.content) !== false;
+    return projectConfig.onConsoleLog?.(log.content, log.type) !== false;
   };
 
   const emitUserConsoleLog = async ({
@@ -309,13 +312,24 @@ export const createPool = async ({
     log: UserConsoleLog;
     projectConfig: ProjectContext['normalizedConfig'];
   }): Promise<void> => {
-    if (!shouldEmitUserConsoleLog({ log, projectConfig })) {
-      return;
-    }
+    // The worker forwards console output fire-and-forget (see `emitInterceptedLog`
+    // in runInPool): a delivery failure is dropped silently in the worker, and an
+    // error thrown here cannot travel back to fail the originating test — the
+    // worker's swallow would hide it. A user `onConsoleLog` filter or a reporter
+    // `onUserConsoleLog` that throws is a real defect, though, so surface it here
+    // on the host — where it occurs — rather than letting it vanish. This keeps
+    // console handling best-effort without hiding bugs.
+    try {
+      if (!shouldEmitUserConsoleLog({ log, projectConfig })) {
+        return;
+      }
 
-    await Promise.all(
-      reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
-    );
+      await Promise.all(
+        reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
+      );
+    } catch (error) {
+      logger.error(color.red('Failed to handle console log:'), toError(error));
+    }
   };
 
   // Propagate parent execArgv to workers, except flags known to cause issues
@@ -356,11 +370,11 @@ export const createPool = async ({
       : Math.min(recommendWorkerCount, threadsCount);
 
   const maxWorkers = poolOptions.maxWorkers
-    ? parseWorkers(poolOptions.maxWorkers)
+    ? parseWorkers(poolOptions.maxWorkers, numCpus)
     : recommendCount;
 
   const minWorkers = poolOptions.minWorkers
-    ? parseWorkers(poolOptions.minWorkers)
+    ? parseWorkers(poolOptions.minWorkers, numCpus)
     : maxWorkers < recommendCount
       ? maxWorkers
       : recommendCount;
@@ -464,6 +478,7 @@ export const createPool = async ({
       updateSnapshot,
       onCoverageResult,
       onTraceEvents,
+      traceSpan,
     }) => {
       const projectName = project.name;
       const runtimeConfig = getRuntimeConfig(project);
@@ -475,23 +490,39 @@ export const createPool = async ({
 
       const results = await Promise.all(
         entries.map(async (entryInfo, index) => {
-          const task = await buildTask({
-            type: 'run',
-            workerKind,
-            entryInfo,
-            index,
-            context,
-            project,
-            runtimeConfig,
-            setupEntries,
-            setupAssets,
-            updateSnapshot,
-            getAssetFiles,
-            getSourceMaps,
-            rpcMethods,
-          });
+          const traceArgs = {
+            project: projectName,
+            testPath: entryInfo.testPath,
+          };
+          const task = await traceSpan(
+            'host:build-task',
+            'host',
+            () =>
+              buildTask({
+                type: 'run',
+                workerKind,
+                entryInfo,
+                index,
+                context,
+                project,
+                runtimeConfig,
+                setupEntries,
+                setupAssets,
+                updateSnapshot,
+                getAssetFiles,
+                getSourceMaps,
+                rpcMethods,
+                traceSpan,
+              }),
+            traceArgs,
+          );
 
-          const result = await pool.runTest(task).catch((err: unknown) => {
+          const result = await traceSpan(
+            'host:pool-run-test',
+            'host',
+            () => pool.runTest(task),
+            { ...traceArgs, worker: task.worker },
+          ).catch((err: unknown) => {
             return workerErrorToResult(
               err,
               entryInfo.testPath,
@@ -556,6 +587,8 @@ export const createPool = async ({
             getAssetFiles,
             getSourceMaps,
             rpcMethods,
+            // `collect` does not participate in tracing.
+            traceSpan: noopTraceSpan,
           });
 
           return pool.collectTests(task).catch((err: FormattedError) => {

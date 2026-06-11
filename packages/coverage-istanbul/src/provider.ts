@@ -1,8 +1,11 @@
+import { isAbsolute, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type {
   NormalizedCoverageOptions,
   CoverageProvider as RstestCoverageProvider,
 } from '@rstest/core';
 import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
+import type { ReportBase } from 'istanbul-lib-report';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import {
@@ -15,6 +18,10 @@ import {
 
 const UNTESTED_FILES_CONCURRENCY = 4;
 
+type CoverageReporterConstructor = new (
+  options: Record<string, unknown>,
+) => ReportBase;
+
 // Global type declaration for coverage
 declare global {
   var __coverage__: any;
@@ -25,7 +32,10 @@ export class CoverageProvider implements RstestCoverageProvider {
   // Cache to avoid redundant readFile calls in generateCoverageForUntestedFiles and generateReports.
   private sourcemapUrlCache = new Map<string, string | undefined>();
 
-  constructor(private options: NormalizedCoverageOptions) {}
+  constructor(
+    private options: NormalizedCoverageOptions,
+    private root?: string,
+  ) {}
 
   init(): void {
     // Initialize global coverage object
@@ -92,7 +102,11 @@ export class CoverageProvider implements RstestCoverageProvider {
 
       return this.coverageMap;
     } catch (error) {
-      console.warn('Failed to collect coverage data:', error);
+      // Surface collection failures the same way the v8 provider does: log to
+      // stderr and mark the run as failed, so a broken coverage map never
+      // passes silently with a zero exit code.
+      console.error('Failed to collect coverage data:', error);
+      process.exitCode = 1;
       return null;
     }
   }
@@ -110,14 +124,69 @@ export class CoverageProvider implements RstestCoverageProvider {
         const [reporterName, reporterOptions] = Array.isArray(reporter)
           ? reporter
           : [reporter, {}];
-        const report = reports.create(
-          reporterName as Parameters<typeof reports.create>[0],
-          reporterOptions,
-        );
+        const report = await this.createReport(reporterName, reporterOptions);
         //NOTE: https://github.com/vitest-dev/vitest/blob/41a111c35b6605dbe8a536a6e03b35e9bc0ce770/packages/coverage-istanbul/src/provider.ts#L145
         report.execute(context);
       }
     }
+  }
+
+  private async createReport(
+    reporterName: string,
+    reporterOptions: Record<string, unknown>,
+  ): Promise<ReportBase> {
+    const resolvedReporterName = this.resolveReporterName(reporterName);
+
+    if (resolvedReporterName.endsWith('.mjs')) {
+      const reporterModule = await import(
+        this.toImportSpecifier(resolvedReporterName)
+      );
+      const Reporter = reporterModule.default as CoverageReporterConstructor;
+
+      return new Reporter(reporterOptions);
+    }
+
+    try {
+      return reports.create(
+        resolvedReporterName as Parameters<typeof reports.create>[0],
+        reporterOptions,
+      );
+    } catch (error) {
+      if (!this.isRequireEsmError(error)) {
+        throw error;
+      }
+    }
+
+    const reporterModule = await import(
+      this.toImportSpecifier(resolvedReporterName)
+    );
+    const Reporter = reporterModule.default as CoverageReporterConstructor;
+
+    return new Reporter(reporterOptions);
+  }
+
+  private resolveReporterName(reporterName: string): string {
+    if (reporterName.startsWith('.')) {
+      return resolve(this.root ?? process.cwd(), reporterName);
+    }
+
+    return reporterName;
+  }
+
+  private toImportSpecifier(reporterName: string): string {
+    if (isAbsolute(reporterName)) {
+      return pathToFileURL(reporterName).toString();
+    }
+
+    return reporterName;
+  }
+
+  private isRequireEsmError(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null || !('code' in error)) {
+      return false;
+    }
+
+    return error.code === 'ERR_REQUIRE_ESM';
   }
 
   cleanup(): void {

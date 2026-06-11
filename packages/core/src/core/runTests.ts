@@ -28,7 +28,11 @@ import {
   loadBrowserModule,
 } from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
-import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
+import {
+  claimGlobalSetupOnce,
+  runGlobalSetup,
+  runGlobalTeardown,
+} from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
@@ -410,7 +414,12 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     }
     browserResultPromise = runBrowserModeTests(context, browserProjectsToRun, {
-      skipOnTestRunEnd: shouldUnifyReporter,
+      // Defer browser teardown + reporting to the unified node run only when
+      // node tests will actually run. If node projects resolve to zero files,
+      // the `!hasNodeTestsToRun` early return below skips `run()` entirely, so a
+      // deferred browser would never be torn down and the CLI hangs. Otherwise
+      // let the browser self-finalize like the browser-only path. See #1363.
+      skipOnTestRunEnd: shouldUnifyReporter && hasNodeTestsToRun,
       shardedEntries: shard ? browserEntries : undefined,
       allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
       onTraceEvents: forwardBrowserTraceEvents,
@@ -565,6 +574,9 @@ export async function runTests(context: Rstest): Promise<void> {
     // the previous rerun's `finalize`) so browser events emitted before
     // `run()` are captured.
     const traceRun = activeTraceRun;
+    // `span` is a transparent pass-through when tracing is disabled
+    // (see `beginRun` in utils/trace.ts), so call sites stay branch-free.
+    const { span } = traceRun;
 
     const returns = await Promise.all(
       projects.map(async (p) => {
@@ -577,32 +589,49 @@ export async function runTests(context: Rstest): Promise<void> {
           getSourceMaps,
           affectedEntries,
           deletedEntries,
-        } = await getRsbuildStats({
-          environmentName: p.environmentName,
-          fileFilters,
-        });
+        } = await span(
+          'host:get-rsbuild-stats',
+          'host',
+          () =>
+            getRsbuildStats({
+              environmentName: p.environmentName,
+              fileFilters,
+            }),
+          { project: p.name, testPath: '<project>' },
+        );
 
         testStart ??= Date.now();
 
-        // Global setup only run once per project
-        // Global setup runs only if there is at least one running test
-        if (entries.length && globalSetupEntries.length && !p._globalSetups) {
-          p._globalSetups = true;
+        // Global setup runs once per project, only if there is at least one
+        // running test.
+        if (
+          claimGlobalSetupOnce(p, entries.length, globalSetupEntries.length)
+        ) {
           const files = globalSetupEntries.flatMap((e) => e.files!);
-          const assetFilesPromise = getAssetFiles(files);
-          const sourceMapsPromise = getSourceMaps(files);
-          const [assetFiles, sourceMaps] = await Promise.all([
-            assetFilesPromise,
-            sourceMapsPromise,
-          ]);
+          const globalSetupTraceArgs = {
+            project: p.name,
+            testPath: '<globalSetup>',
+          };
+          const [assetFiles, sourceMaps] = await span(
+            'host:global-setup-assets',
+            'host',
+            () => Promise.all([getAssetFiles(files), getSourceMaps(files)]),
+            globalSetupTraceArgs,
+          );
 
-          const { success, errors } = await runGlobalSetup({
-            globalSetupEntries,
-            assetFiles,
-            sourceMaps,
-            interopDefault: true,
-            outputModule: p.outputModule,
-          });
+          const { success, errors } = await span(
+            'host:global-setup',
+            'host',
+            () =>
+              runGlobalSetup({
+                globalSetupEntries,
+                assetFiles,
+                sourceMaps,
+                interopDefault: true,
+                outputModule: p.outputModule,
+              }),
+            globalSetupTraceArgs,
+          );
           if (!success) {
             return {
               results: [],
@@ -655,6 +684,7 @@ export async function runTests(context: Rstest): Promise<void> {
           updateSnapshot: context.snapshotManager.options.updateSnapshot,
           onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
           onTraceEvents: traceRun.onEvents,
+          traceSpan: span,
         });
 
         return {
@@ -705,6 +735,12 @@ export async function runTests(context: Rstest): Promise<void> {
         return sourceMap ? JSON.parse(sourceMap) : null;
       };
 
+      // Reduce the per-environment worker returns (and, when unifying reporter
+      // output, the browser result) into the run verdict. The only side effects
+      // are merging browser coverage into `mergedCoverageMap` and stripping it
+      // from the browser results to avoid reporter/state cache bloat (mirrors
+      // the node-side pool layer's `delete result.coverage`).
+
       // When unifying reporter output, combine browser and node durations
       const duration: Duration =
         shouldUnifyReporter && browserResult
@@ -745,12 +781,6 @@ export async function runTests(context: Rstest): Promise<void> {
         errors.push(...browserResult.unhandledErrors);
       }
 
-      context.updateReporterResultState(
-        results,
-        testResults,
-        currentDeletedEntries,
-      );
-
       // Check for failures including browser results when unified
       const nodeHasFailure =
         results.some((r) => r.status === 'fail') || errors.length;
@@ -759,11 +789,17 @@ export async function runTests(context: Rstest): Promise<void> {
 
       const noTestsDiscovered = results.length === 0 && !errors.length;
 
+      const isFailure = nodeHasFailure || browserHasFailure;
+
+      context.updateReporterResultState(
+        results,
+        testResults,
+        currentDeletedEntries,
+      );
+
       if (noTestsDiscovered) {
         reportNoTestFiles({ context, mode });
       }
-
-      const isFailure = nodeHasFailure || browserHasFailure;
 
       if (isFailure) {
         process.exitCode = 1;

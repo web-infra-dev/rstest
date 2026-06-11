@@ -7,30 +7,27 @@
 // Re-export @rsbuild/core for @rstest/browser to avoid duplicate dependency
 import * as rsbuild from '@rsbuild/core';
 
+// Core-owned contract for the host module that @rstest/browser implements
+export type { BrowserHostModule } from './core/browserLoader';
 // Re-export Rstest type for convenience
 export type { Rstest } from './core/rstest';
 // Coverage support for browser mode
 export { createCoverageProvider, loadCoverageProvider } from './coverage';
-// Runtime API
-export { createRstestRuntime } from './runtime/api';
-// Public runtime API (for browser client usage)
-// These are the test APIs that run in the browser (describe, it, expect, etc.)
-export * from './runtime/api/public';
-export { setRealTimers } from './runtime/util';
 // Trace primitives — the browser host instantiates PhaseTracker per test file
 // and forwards its events via `BrowserTestRunOptions.onTraceEvents`.
 export { PhaseTracker } from './runtime/worker/phaseTracker';
-export type { TraceEvent } from './utils/trace';
 // Types
 export type {
   BrowserTestRunOptions,
   BrowserTestRunResult,
+  BrowserViewport,
   CoverageMapData,
   DevicePreset,
   FormattedError,
   ListCommandResult,
   ProjectContext,
   Reporter,
+  RstestContext,
   RunnerHooks,
   RuntimeConfig,
   Test,
@@ -44,15 +41,20 @@ export {
   color,
   getNoTestFilesMessage,
   isDebug,
+  isTTY,
   logger,
   serializableConfig,
 } from './utils';
+// Worker concurrency primitives shared with @rstest/browser
+export { getNumCpus, parseWorkers } from './utils/workers';
 // Constants
 export {
-  globalApis,
+  BROWSER_PROVIDERS,
+  DEFAULT_TEST_TIMEOUT,
   resolveProjectBuildCache,
-  TEMP_RSTEST_OUTPUT_DIR,
+  RSTEST_ENV_SYMBOL_KEY,
 } from './utils/constants';
+export type { BrowserProvider } from './utils/constants';
 export { getSetupFiles } from './utils/getSetupFiles';
 export { getTestEntries } from './utils/testFiles';
 export { rsbuild };

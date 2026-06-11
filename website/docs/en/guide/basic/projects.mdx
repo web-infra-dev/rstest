@@ -16,7 +16,7 @@ Rstest supports running multiple test projects simultaneously within a single Rs
 
 Define each sub-project in a monorepo as a project through the [projects](/config/test/projects) field, where each sub-project has its own test configuration.
 
-Rstest will automatically recognize each subdirectory under the `packages` directory as an independent test project and run tests according to the [rstest.config.ts](/guide/basic/configure-rstest#configuration-files) file (if present) in the subdirectory.
+Rstest will automatically recognize each subdirectory under the `packages` directory as an independent test project and run tests according to the [rstest.config.ts](/guide/basic/configure-rstest#configuration-file) file (if present) in the subdirectory.
 
 ```ts name='rstest.config.ts'
 import { defineConfig, defineInlineProject } from '@rstest/core';

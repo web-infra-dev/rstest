@@ -7,7 +7,8 @@ import type {
   Reporter,
   ReporterWithOptions,
 } from './reporter';
-import type { MaybePromise } from './utils';
+import type { ConsoleStreamType, MaybePromise } from './utils';
+import type { BrowserProvider } from '../utils/constants';
 
 // TODO: chaiConfig.includeStack seems not used
 export type ChaiConfig = Partial<
@@ -168,7 +169,7 @@ export type BrowserModeConfig = {
    *
    * Currently only 'playwright' is supported.
    */
-  provider: 'playwright';
+  provider: BrowserProvider;
   /**
    * Which browser to use for testing.
    *
@@ -487,9 +488,14 @@ export interface RstestConfig {
   logHeapUsage?: boolean;
 
   /**
-   * Custom handler for console log in tests
+   * Custom handler for console log in tests.
+   *
+   * Return `false` to silence the log.
+   *
+   * @param content - The console output text.
+   * @param type - Which stream the output came from.
    */
-  onConsoleLog?: (content: string) => boolean | void;
+  onConsoleLog?: (content: string, type: ConsoleStreamType) => boolean | void;
 
   /** Format snapshot output */
   snapshotFormat?: SnapshotFormat;
@@ -575,7 +581,7 @@ type OptionalKeys =
 
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
-  provider: 'playwright';
+  provider: BrowserProvider;
   browser: BrowserName;
   headless: boolean;
   port?: number;
