@@ -94,6 +94,24 @@ describe.concurrent('test exit code', () => {
     await expectExecSuccess();
   });
 
+  it('should return code 1 when required dot-notation option value is missing', async ({
+    onTestFinished,
+  }) => {
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'success.test.ts', '--pool.type'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expectStderrLog(/option `--pool\.type <type>` value is missing/);
+  });
+
   it('should support browser shorthand with nested browser options', async ({
     onTestFinished,
   }) => {

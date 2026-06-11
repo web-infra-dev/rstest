@@ -271,6 +271,27 @@ const valueTakingOptionNames = (
   return names;
 };
 
+const requiredDotOptionNames = (
+  definitions: readonly OptionDefinition[][],
+): Set<string> => {
+  const names = new Set<string>();
+  for (const group of definitions) {
+    for (const [rawName] of group) {
+      const tokenAt = rawName.indexOf('<');
+      if (tokenAt < 0) {
+        continue;
+      }
+      for (const alias of rawName.slice(0, tokenAt).split(',')) {
+        const trimmed = alias.trim();
+        if (trimmed.includes('.')) {
+          names.add(trimmed);
+        }
+      }
+    }
+  }
+  return names;
+};
+
 const commands = new Set(['init', 'list', 'merge-reports', 'run', 'watch']);
 
 export const valueTakingOptions: Set<string> = valueTakingOptionNames([
@@ -280,6 +301,40 @@ export const valueTakingOptions: Set<string> = valueTakingOptionNames([
   hiddenPassthroughOptionDefinitions,
   listCommandOptionDefinitions,
 ]);
+
+export const requiredDotOptions: Set<string> = requiredDotOptionNames([
+  runtimeOptionDefinitions,
+  poolOptionDefinitions,
+  mergeReportsOptionDefinitions,
+  hiddenPassthroughOptionDefinitions,
+  listCommandOptionDefinitions,
+]);
+
+const validateRequiredDotOptionValues = (cli: CAC): void => {
+  for (const option of [
+    ...cli.globalCommand.options,
+    ...(cli.matchedCommand?.options ?? []),
+  ]) {
+    if (!option.required || !requiredDotOptions.has(`--${option.name}`)) {
+      continue;
+    }
+
+    const [root, ...path] = option.name.split('.');
+    if (!root) {
+      continue;
+    }
+    const value = path.reduce<unknown>((target, key) => {
+      if (typeof target !== 'object' || target === null) {
+        return undefined;
+      }
+      return (target as Record<string, unknown>)[key];
+    }, cli.options[root]);
+
+    if (value === true || value === false) {
+      throw new Error(`option \`${option.rawName}\` value is missing`);
+    }
+  }
+};
 
 const getCliCommand = (argv: string[]): string | undefined => {
   for (let index = 2; index < argv.length; index++) {
@@ -424,11 +479,16 @@ const normalizeMixedCliOptions = (cli: CAC): void => {
   const originalParse = cli.parse.bind(cli);
 
   cli.parse = ((argv, options) => {
-    const parsed = originalParse(
-      normalizeCliArgs(argv ?? process.argv),
-      options,
-    );
+    const run = options?.run !== false;
+    const parsed = originalParse(normalizeCliArgs(argv ?? process.argv), {
+      ...options,
+      run: false,
+    });
     validateWildcardOptions(parsed.options as Record<string, unknown>);
+    validateRequiredDotOptionValues(cli);
+    if (run) {
+      cli.runMatchedCommand();
+    }
     return parsed;
   }) as CAC['parse'];
 };
