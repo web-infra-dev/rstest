@@ -180,7 +180,7 @@ e2e('mobile page', async ({ page }) => {
 | `requestOptions` | 传给 `request.newContext()` 的选项。        |
 | `debug`          | 用于本地 headed 调试的便捷选项。            |
 
-对于 Playwright E2E 项目，建议在 `rstest.config.ts` 中设置 `isolate: false`，这样 fixture 状态可以在单个测试文件内被稳定管理：
+对于 Playwright E2E 项目，建议在 `rstest.config.ts` 中设置 `isolate: false`。这样同一个测试文件里的测试会在同一个 worker 中运行，`@rstest/playwright` 可以在文件结束时统一清理 browser、context、page 和本地 server：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

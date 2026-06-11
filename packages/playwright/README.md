@@ -123,7 +123,7 @@ e2e('mobile page', async ({ page }) => {
 });
 ```
 
-For Playwright E2E projects, set `isolate: false` in `rstest.config.ts` so fixture state can be managed consistently within each test file:
+For Playwright E2E projects, set `isolate: false` in `rstest.config.ts`. Tests in the same test file will run in the same worker, so `@rstest/playwright` can clean up browsers, contexts, pages, and local servers when the file finishes:
 
 ```ts
 import { defineConfig } from '@rstest/core';
