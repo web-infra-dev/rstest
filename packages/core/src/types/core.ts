@@ -102,6 +102,8 @@ export type RstestContext = {
    * @internal
    */
   trace: boolean;
+  /** See the `embedded` option on `createRstest`. */
+  embedded: boolean;
   reporters: Reporter[];
   snapshotManager: SnapshotManager;
   stateManager: TestStateManager;
@@ -109,6 +111,12 @@ export type RstestContext = {
     results: TestFileResult[];
     testResults: TestResult[];
   };
+  /** Merge a batch of file/test results into `reporterResults`. */
+  updateReporterResultState: (
+    results: TestFileResult[],
+    testResults: TestResult[],
+    deletedEntries?: string[],
+  ) => void;
 };
 
 export type ListCommandOptions = {

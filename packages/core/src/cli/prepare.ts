@@ -1,3 +1,4 @@
+import { ENV } from '../utils/env';
 import { logger } from '../utils/logger';
 
 function initNodeEnv() {
@@ -6,10 +7,18 @@ function initNodeEnv() {
   }
 }
 
-export function prepareCli(): void {
+/**
+ * Initialize the test environment variables that worker processes inherit via
+ * `process.env`. Shared by the CLI (`prepareCli`) and the programmatic API
+ * (`runRstest`) so both paths run tests with `NODE_ENV=test` and `RSTEST=true`.
+ */
+export function initRstestEnv(): void {
   initNodeEnv();
+  process.env[ENV.RSTEST] = 'true';
+}
 
-  process.env.RSTEST = 'true';
+export function prepareCli(): void {
+  initRstestEnv();
 
   // Print a blank line to keep the greet log nice.
   // Some package managers automatically output a blank line, some do not.

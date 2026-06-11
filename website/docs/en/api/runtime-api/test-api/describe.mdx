@@ -121,7 +121,7 @@ Alternative to `describe.each` for more flexible parameter types.
 describe.for([
   [1, 2],
   [2, 3],
-])('math $0 + $1', ([a, b]) => {
+])('math %i + %i', ([a, b]) => {
   test('add', () => {
     // ...
   });

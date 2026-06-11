@@ -159,7 +159,7 @@ export type NormalizedCoverageOptions = Required<
 };
 
 export declare class CoverageProvider {
-  constructor(options: CoverageOptions, root?: string);
+  constructor(options: NormalizedCoverageOptions, root?: string);
   /**
    * Initialize coverage collection
    */
@@ -188,12 +188,14 @@ export declare class CoverageProvider {
   }): Promise<FileCoverageData[]>;
 
   /**
-   * Generate coverage reports
+   * Generate coverage reports.
+   *
+   * Reporters and output directory come from the normalized options the
+   * provider received at construction — there is no per-call override, so a
+   * provider cannot silently ignore a second argument that drifts away from the
+   * constructor config.
    */
-  generateReports(
-    coverageMap: CoverageMap,
-    options: CoverageOptions,
-  ): Promise<void>;
+  generateReports(coverageMap: CoverageMap): Promise<void>;
 
   /**
    * Clean up coverage data

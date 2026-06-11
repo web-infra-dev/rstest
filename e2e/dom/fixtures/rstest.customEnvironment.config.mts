@@ -6,7 +6,7 @@ export default defineConfig({
   setupFiles: ['./test/setup.ts'],
   testEnvironment: {
     name: './test/customEnvironment.mjs',
-    transformMode: 'browser',
+    target: 'web',
     options: {
       marker: 'custom-marker',
       jsdom: {

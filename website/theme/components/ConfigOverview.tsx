@@ -74,13 +74,18 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
     items: [
       'coverage',
       'reporters',
-      'silent',
       'includeTaskLocation',
       'logHeapUsage',
       'hideSkippedTests',
       'hideSkippedTestFiles',
       'slowTestThreshold',
       'chaiConfig',
+    ],
+  },
+  {
+    name: 'console',
+    items: [
+      'silent',
       'onConsoleLog',
       'printConsoleTrace',
       'disableConsoleIntercept',
@@ -103,7 +108,7 @@ export default function Overview() {
       items: item.items?.map((item) => {
         const [page, anchor] = item.split('.');
         const target = page ?? item;
-        const hash = anchor ? `#${camelToKebab(anchor)}` : '';
+        const hash = anchor ? `#${anchor.toLowerCase()}` : '';
 
         return {
           link: tUrl(`/config/test/${camelToKebab(target)}${hash}`),

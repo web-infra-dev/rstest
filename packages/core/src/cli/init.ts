@@ -3,7 +3,12 @@ import type { LoadConfigOptions } from '@rsbuild/core';
 import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
 import { loadConfig, resolveExtends } from '../config';
-import type { BrowserName, Project, RstestConfig } from '../types';
+import type {
+  BrowserName,
+  Project,
+  RstestConfig,
+  RstestOutputConfig,
+} from '../types';
 import {
   castArray,
   color,
@@ -64,7 +69,13 @@ export type CommonOptions = {
         enabled?: boolean | string;
         allowExternal?: boolean;
         provider?: 'istanbul' | 'v8';
+        include?: string | string[];
         changed?: boolean | string;
+        exclude?: string | string[];
+        reporters?: string | string[];
+        reportsDirectory?: string;
+        reportOnFailure?: boolean | string;
+        clean?: boolean | string;
       };
   passWithNoTests?: boolean;
   silent?: boolean | 'passed-only';
@@ -90,6 +101,14 @@ export type CommonOptions = {
   hideSkippedTestFiles?: boolean;
   bail?: number | boolean;
   shard?: string;
+  includeTaskLocation?: boolean;
+  source?: {
+    tsconfigPath?: string;
+  };
+  dev?: {
+    writeToDisk?: boolean;
+  };
+  output?: Pick<RstestOutputConfig, 'emitAssets' | 'cleanDistPath' | 'module'>;
 };
 
 function coerceCliBoolean(value: unknown): boolean | undefined {
@@ -123,7 +142,7 @@ const normalizeBooleanLikeCliValue = (
   return value;
 };
 
-function mergeWithCLIOptions(
+export function mergeWithCLIOptions(
   config: RstestConfig,
   options: CommonOptions,
 ): RstestConfig {
@@ -152,6 +171,7 @@ function mergeWithCLIOptions(
     'hideSkippedTestFiles',
     'logHeapUsage',
     'detectAsyncLeaks',
+    'includeTaskLocation',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {
@@ -213,6 +233,43 @@ function mergeWithCLIOptions(
         config.coverage.provider = options.coverage.provider;
         shouldEnableCoverage = true;
       }
+      if (options.coverage.include !== undefined) {
+        config.coverage.include = castArray(options.coverage.include);
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.exclude !== undefined) {
+        config.coverage.exclude = [
+          ...(config.coverage.exclude || []),
+          ...castArray(options.coverage.exclude),
+        ];
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.reporters !== undefined) {
+        config.coverage.reporters = castArray(
+          options.coverage.reporters,
+        ) as typeof config.coverage.reporters;
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.reportsDirectory !== undefined) {
+        config.coverage.reportsDirectory = options.coverage.reportsDirectory;
+        shouldEnableCoverage = true;
+      }
+      if (options.coverage.reportOnFailure !== undefined) {
+        const reportOnFailure = coerceCliBoolean(
+          options.coverage.reportOnFailure,
+        );
+        if (reportOnFailure !== undefined) {
+          config.coverage.reportOnFailure = reportOnFailure;
+          shouldEnableCoverage = true;
+        }
+      }
+      if (options.coverage.clean !== undefined) {
+        const clean = coerceCliBoolean(options.coverage.clean);
+        if (clean !== undefined) {
+          config.coverage.clean = clean;
+          shouldEnableCoverage = true;
+        }
+      }
       if (options.coverage.changed !== undefined) {
         changed = normalizeBooleanLikeCliValue(options.coverage.changed);
         config.coverage.changed = changed;
@@ -235,6 +292,29 @@ function mergeWithCLIOptions(
 
   if (options.include) {
     config.include = castArray(options.include);
+  }
+
+  if (options.source?.tsconfigPath !== undefined) {
+    config.source ??= {};
+    config.source.tsconfigPath = options.source.tsconfigPath;
+  }
+
+  if (options.dev?.writeToDisk !== undefined) {
+    config.dev ??= {};
+    config.dev.writeToDisk = options.dev.writeToDisk;
+  }
+
+  if (options.output !== undefined) {
+    config.output ??= {};
+    if (options.output.emitAssets !== undefined) {
+      config.output.emitAssets = options.output.emitAssets;
+    }
+    if (options.output.cleanDistPath !== undefined) {
+      config.output.cleanDistPath = options.output.cleanDistPath;
+    }
+    if (options.output.module !== undefined) {
+      config.output.module = options.output.module;
+    }
   }
 
   if (options.browser !== undefined) {

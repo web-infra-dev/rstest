@@ -10,19 +10,19 @@
     "test:watch": "rstest --watch"
   },
   "dependencies": {
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@rspack/cli": "2.0.3",
-    "@rspack/core": "2.0.3",
-    "@rspack/dev-server": "2.0.1",
-    "@rspack/plugin-react-refresh": "^2.0.0",
+    "@rspack/cli": "~2.0.6",
+    "@rspack/core": "~2.0.6",
+    "@rspack/dev-server": "~2.0.3",
+    "@rspack/plugin-react-refresh": "~2.0.2",
     "@rstest/adapter-rspack": "workspace:*",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",
-    "@types/react": "^19.2.14",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "playwright": "^1.60.0",
     "typescript": "^6.0.3"

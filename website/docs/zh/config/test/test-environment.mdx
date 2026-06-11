@@ -6,7 +6,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 # testEnvironment
 
-- **类型：** `'node' | 'jsdom' | 'happy-dom' | string | { name: EnvironmentName, options?: EnvironmentOptions, transformMode?: 'node' | 'browser' }`
+- **类型：** `'node' | 'jsdom' | 'happy-dom' | string | { name: EnvironmentName, options?: EnvironmentOptions, target?: 'node' | 'web' }`
 - **默认值：** `'node'`
 - **CLI：** `--testEnvironment=node`
 
@@ -98,7 +98,7 @@ export default defineConfig({
 
 ### 自定义 environment
 
-<ApiMeta addedVersion="0.10.2" />
+<ApiMeta addedVersion="0.10.5" />
 
 :::warning 实验性 API
 自定义 environment API 在 Rstest 1.0 之前仍处于实验阶段。它的核心形态预期会保持稳定，但类型签名和配置细节可能会根据迁移反馈做小幅调整。
@@ -154,16 +154,16 @@ export default defineConfig({
 
 Rstest 当前会按 JavaScript module 加载自定义 environment 文件，因此暂不支持直接传 `.ts` custom environment 文件路径。如果你需要类型检查，可以先用 TypeScript 编写，再编译成 `.mjs` 或 `.js`，或者在 JavaScript 文件里使用 JSDoc 标注类型。
 
-#### transformMode
+#### target
 
-- **类型：** `'node' | 'browser'`
+- **类型：** `'node' | 'web'`
 - **默认值：** `'node'`
 
-`transformMode` 用于控制自定义 environment 是否应该使用类 Node 或类浏览器的默认转换和解析行为。内置 environment 会自动推断该值，所以通常只有配置自定义 environment 时才需要使用这个选项。
+`target` 用于控制自定义 environment 是否应该使用面向 Node.js 或面向 Web 的默认构建和解析行为。内置 environment 会自动推断该值，所以通常只有配置自定义 environment 时才需要使用这个选项。
 
-使用 `transformMode: 'node'` 时，自定义 environment 会使用与内置 `node` environment 相同的转换默认值。Rstest 会保留面向 Node 的解析默认值，并默认 externalize `node_modules` 中的第三方依赖。
+使用 `target: 'node'` 时，自定义 environment 会使用与内置 `node` environment 相同的构建默认值。Rstest 会保留面向 Node 的解析默认值，并默认 externalize `node_modules` 中的第三方依赖。
 
-使用 `transformMode: 'browser'` 时，自定义 environment 会使用内置 `jsdom` 和 `happy-dom` environment 共享的类浏览器转换默认值。在这个模式下，如果没有自定义 `resolve.conditionNames`，Rstest 会添加 `browser` condition 来解析面向浏览器的 package entry，并默认 bundle 第三方依赖，从而让 browser field 替换和被打包的资源生效。
+使用 `target: 'web'` 时，自定义 environment 会使用内置 `jsdom` 和 `happy-dom` environment 共享的面向 Web 的构建默认值。在这个模式下，如果没有自定义 `resolve.conditionNames`，Rstest 会添加 `browser` condition 来解析面向浏览器的 package entry，并默认 bundle 第三方依赖，从而让 browser field 替换和被打包的资源生效。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -171,7 +171,7 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   testEnvironment: {
     name: './my-environment.mjs',
-    transformMode: 'browser',
+    target: 'web',
     options: {
       url: 'https://example.com',
     },
@@ -179,7 +179,7 @@ export default defineConfig({
 });
 ```
 
-`transformMode` 本身不会创建 DOM API，也不会启用 [browser 模式](/config/test/browser)。它只选择默认的转换和解析行为。environment 实现本身仍然需要负责安装 `window`、`document` 等全局对象。
+`target` 本身不会创建 DOM API，也不会启用 [browser 模式](/config/test/browser)。它只选择默认的构建和解析行为。environment 实现本身仍然需要负责安装 `window`、`document` 等全局对象。
 
 Rstest 暂不支持文件级 `@vitest-environment` 或 `@jest-environment` 注释。如果你需要按文件切换环境，当前建议用不同的 project 或不同的配置文件来拆分。
 

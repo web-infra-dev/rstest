@@ -6,7 +6,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 # testEnvironment
 
-- **Type:** `'node' | 'jsdom' | 'happy-dom' | string | { name: EnvironmentName, options?: EnvironmentOptions, transformMode?: 'node' | 'browser' }`
+- **Type:** `'node' | 'jsdom' | 'happy-dom' | string | { name: EnvironmentName, options?: EnvironmentOptions, target?: 'node' | 'web' }`
 - **Default:** `'node'`
 - **CLI:** `--testEnvironment=node`
 
@@ -98,7 +98,7 @@ The `options` object is passed directly to the environment's constructor.
 
 ### Custom environments
 
-<ApiMeta addedVersion="0.10.2" />
+<ApiMeta addedVersion="0.10.5" />
 
 :::warning Experimental API
 Custom environment APIs are experimental before Rstest 1.0. Their core shape is expected to stay stable, but type signatures and config details may receive minor adjustments based on migration feedback.
@@ -154,16 +154,16 @@ export default defineConfig({
 
 Rstest currently loads custom environment files as JavaScript modules. Direct `.ts` custom environment file paths are not supported yet. If you want type checking, write the environment in TypeScript and compile it to `.mjs` or `.js`, or use JSDoc types in a JavaScript file.
 
-#### transformMode
+#### target
 
-- **Type:** `'node' | 'browser'`
+- **Type:** `'node' | 'web'`
 - **Default:** `'node'`
 
-`transformMode` controls whether a custom environment should use Node-like or browser-like transform and resolution defaults. Built-in environments infer this value automatically, so you usually only need this option when configuring a custom environment.
+`target` controls whether a custom environment should use Node.js-oriented or web-oriented build and resolution defaults. Built-in environments infer this value automatically, so you usually only need this option when configuring a custom environment.
 
-Use `transformMode: 'node'` when the custom environment should use the same transform defaults as the built-in `node` environment. In this mode, Rstest keeps Node-oriented resolution defaults and externalizes third-party dependencies from `node_modules` by default.
+Use `target: 'node'` when the custom environment should use the same build defaults as the built-in `node` environment. In this mode, Rstest keeps Node-oriented resolution defaults and externalizes third-party dependencies from `node_modules` by default.
 
-Use `transformMode: 'browser'` when the custom environment should use the shared browser-like transform defaults of the built-in `jsdom` and `happy-dom` environments. In this mode, Rstest resolves browser-oriented package entrypoints by adding the `browser` condition when `resolve.conditionNames` is not customized, and bundles third-party dependencies by default so browser field replacements and bundled assets can take effect.
+Use `target: 'web'` when the custom environment should use the shared web-oriented build defaults of the built-in `jsdom` and `happy-dom` environments. In this mode, Rstest resolves browser-oriented package entrypoints by adding the `browser` condition when `resolve.conditionNames` is not customized, and bundles third-party dependencies by default so browser field replacements and bundled assets can take effect.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -171,7 +171,7 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   testEnvironment: {
     name: './my-environment.mjs',
-    transformMode: 'browser',
+    target: 'web',
     options: {
       url: 'https://example.com',
     },
@@ -179,7 +179,7 @@ export default defineConfig({
 });
 ```
 
-`transformMode` does not create DOM APIs by itself and does not enable [browser mode](/config/test/browser). It only selects the transform and resolution defaults. The environment implementation is still responsible for installing globals such as `window` and `document`.
+`target` does not create DOM APIs by itself and does not enable [browser mode](/config/test/browser). It only selects the build and resolution defaults. The environment implementation is still responsible for installing globals such as `window` and `document`.
 
 Rstest temporarily does not support file-level `@vitest-environment` or `@jest-environment` comments. If you need per-file environment switching, use separate projects or config files for now.
 

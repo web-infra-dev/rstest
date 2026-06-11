@@ -28,7 +28,11 @@ import {
   loadBrowserModule,
 } from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
-import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
+import {
+  claimGlobalSetupOnce,
+  runGlobalSetup,
+  runGlobalTeardown,
+} from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import type { Rstest } from './rstest';
 
@@ -44,6 +48,7 @@ async function runBrowserModeTests(
   const projectRoots = browserProjects.map((p) => p.rootPath);
   const { validateBrowserConfig, runBrowserTests } = await loadBrowserModule({
     projectRoots,
+    embedded: context.embedded,
   });
   validateBrowserConfig(context);
   return runBrowserTests(context, options);
@@ -81,6 +86,10 @@ const reportNoTestFiles = ({
       logger.error(color.red(message));
     }
 
+    // `process.exitCode` mutations here (and in deeper layers such as
+    // globalSetup teardown, coverage threshold checks) are restored to their
+    // pre-run value by `runRstest` in the embedded path via try/finally, so
+    // we don't need to gate them per-call site.
     process.exitCode = code;
   }
 
@@ -405,7 +414,12 @@ export async function runTests(context: Rstest): Promise<void> {
       }
     }
     browserResultPromise = runBrowserModeTests(context, browserProjectsToRun, {
-      skipOnTestRunEnd: shouldUnifyReporter,
+      // Defer browser teardown + reporting to the unified node run only when
+      // node tests will actually run. If node projects resolve to zero files,
+      // the `!hasNodeTestsToRun` early return below skips `run()` entirely, so a
+      // deferred browser would never be torn down and the CLI hangs. Otherwise
+      // let the browser self-finalize like the browser-only path. See #1363.
+      skipOnTestRunEnd: shouldUnifyReporter && hasNodeTestsToRun,
       shardedEntries: shard ? browserEntries : undefined,
       allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
       onTraceEvents: forwardBrowserTraceEvents,
@@ -560,6 +574,9 @@ export async function runTests(context: Rstest): Promise<void> {
     // the previous rerun's `finalize`) so browser events emitted before
     // `run()` are captured.
     const traceRun = activeTraceRun;
+    // `span` is a transparent pass-through when tracing is disabled
+    // (see `beginRun` in utils/trace.ts), so call sites stay branch-free.
+    const { span } = traceRun;
 
     const returns = await Promise.all(
       projects.map(async (p) => {
@@ -572,32 +589,49 @@ export async function runTests(context: Rstest): Promise<void> {
           getSourceMaps,
           affectedEntries,
           deletedEntries,
-        } = await getRsbuildStats({
-          environmentName: p.environmentName,
-          fileFilters,
-        });
+        } = await span(
+          'host:get-rsbuild-stats',
+          'host',
+          () =>
+            getRsbuildStats({
+              environmentName: p.environmentName,
+              fileFilters,
+            }),
+          { project: p.name, testPath: '<project>' },
+        );
 
         testStart ??= Date.now();
 
-        // Global setup only run once per project
-        // Global setup runs only if there is at least one running test
-        if (entries.length && globalSetupEntries.length && !p._globalSetups) {
-          p._globalSetups = true;
+        // Global setup runs once per project, only if there is at least one
+        // running test.
+        if (
+          claimGlobalSetupOnce(p, entries.length, globalSetupEntries.length)
+        ) {
           const files = globalSetupEntries.flatMap((e) => e.files!);
-          const assetFilesPromise = getAssetFiles(files);
-          const sourceMapsPromise = getSourceMaps(files);
-          const [assetFiles, sourceMaps] = await Promise.all([
-            assetFilesPromise,
-            sourceMapsPromise,
-          ]);
+          const globalSetupTraceArgs = {
+            project: p.name,
+            testPath: '<globalSetup>',
+          };
+          const [assetFiles, sourceMaps] = await span(
+            'host:global-setup-assets',
+            'host',
+            () => Promise.all([getAssetFiles(files), getSourceMaps(files)]),
+            globalSetupTraceArgs,
+          );
 
-          const { success, errors } = await runGlobalSetup({
-            globalSetupEntries,
-            assetFiles,
-            sourceMaps,
-            interopDefault: true,
-            outputModule: p.outputModule,
-          });
+          const { success, errors } = await span(
+            'host:global-setup',
+            'host',
+            () =>
+              runGlobalSetup({
+                globalSetupEntries,
+                assetFiles,
+                sourceMaps,
+                interopDefault: true,
+                outputModule: p.outputModule,
+              }),
+            globalSetupTraceArgs,
+          );
           if (!success) {
             return {
               results: [],
@@ -650,6 +684,7 @@ export async function runTests(context: Rstest): Promise<void> {
           updateSnapshot: context.snapshotManager.options.updateSnapshot,
           onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
           onTraceEvents: traceRun.onEvents,
+          traceSpan: span,
         });
 
         return {
@@ -700,6 +735,12 @@ export async function runTests(context: Rstest): Promise<void> {
         return sourceMap ? JSON.parse(sourceMap) : null;
       };
 
+      // Reduce the per-environment worker returns (and, when unifying reporter
+      // output, the browser result) into the run verdict. The only side effects
+      // are merging browser coverage into `mergedCoverageMap` and stripping it
+      // from the browser results to avoid reporter/state cache bloat (mirrors
+      // the node-side pool layer's `delete result.coverage`).
+
       // When unifying reporter output, combine browser and node durations
       const duration: Duration =
         shouldUnifyReporter && browserResult
@@ -740,12 +781,6 @@ export async function runTests(context: Rstest): Promise<void> {
         errors.push(...browserResult.unhandledErrors);
       }
 
-      context.updateReporterResultState(
-        results,
-        testResults,
-        currentDeletedEntries,
-      );
-
       // Check for failures including browser results when unified
       const nodeHasFailure =
         results.some((r) => r.status === 'fail') || errors.length;
@@ -754,11 +789,17 @@ export async function runTests(context: Rstest): Promise<void> {
 
       const noTestsDiscovered = results.length === 0 && !errors.length;
 
+      const isFailure = nodeHasFailure || browserHasFailure;
+
+      context.updateReporterResultState(
+        results,
+        testResults,
+        currentDeletedEntries,
+      );
+
       if (noTestsDiscovered) {
         reportNoTestFiles({ context, mode });
       }
-
-      const isFailure = nodeHasFailure || browserHasFailure;
 
       if (isFailure) {
         process.exitCode = 1;
@@ -853,9 +894,13 @@ export async function runTests(context: Rstest): Promise<void> {
       process.exit(getSignalExitCode(signal));
     };
 
-    process.on('SIGINT', handleSignal);
-    process.on('SIGTERM', handleSignal);
-    process.on('SIGTSTP', handleSignal);
+    // In embedded (programmatic) mode the caller owns process lifecycle and
+    // signal routing, so we skip installing host-process handlers.
+    if (!context.embedded) {
+      process.on('SIGINT', handleSignal);
+      process.on('SIGTERM', handleSignal);
+      process.on('SIGTSTP', handleSignal);
+    }
 
     const afterTestsWatchRun = () => {
       logger.log(color.green('  Waiting for file changes...'));
@@ -1083,10 +1128,14 @@ export async function runTests(context: Rstest): Promise<void> {
       process.exit(getSignalExitCode(signal));
     };
 
-    process.on('exit', unExpectedExit);
-    process.on('SIGINT', handleSignal);
-    process.on('SIGTERM', handleSignal);
-    process.on('SIGTSTP', handleSignal);
+    // In embedded (programmatic) mode the caller owns process lifecycle and
+    // signal routing, so we skip installing host-process handlers.
+    if (!context.embedded) {
+      process.on('exit', unExpectedExit);
+      process.on('SIGINT', handleSignal);
+      process.on('SIGTERM', handleSignal);
+      process.on('SIGTSTP', handleSignal);
+    }
 
     try {
       await run();
@@ -1096,11 +1145,23 @@ export async function runTests(context: Rstest): Promise<void> {
 
       // Run global teardown after all tests are done
       await runLifecycleStep('global teardown', () => runGlobalTeardown());
+    } catch (error) {
+      // In embedded (programmatic) mode the caller's process keeps running, so
+      // release the worker pool, Rsbuild server, and run global teardown here
+      // when `run()` (or a post-run step) throws — otherwise they leak into the
+      // host. `cleanup()` is idempotent, so this won't double-close on the happy
+      // path. The CLI path relies on process exit + its `exit` handler instead.
+      if (context.embedded) {
+        await cleanup();
+      }
+      throw error;
     } finally {
-      process.off('exit', unExpectedExit);
-      process.off('SIGINT', handleSignal);
-      process.off('SIGTERM', handleSignal);
-      process.off('SIGTSTP', handleSignal);
+      if (!context.embedded) {
+        process.off('exit', unExpectedExit);
+        process.off('SIGINT', handleSignal);
+        process.off('SIGTERM', handleSignal);
+        process.off('SIGTSTP', handleSignal);
+      }
     }
 
     await runLifecycleStep('trace wait for exit', () =>

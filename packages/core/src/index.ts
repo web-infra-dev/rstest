@@ -7,7 +7,7 @@ import type {
   NormalizedCoverageOptions,
   ProjectConfig,
   RstestConfig,
-  TestEnvironmentTransformMode,
+  TestEnvironmentTarget,
   TestEnvironment,
   TestEnvironmentReturn,
 } from './types';
@@ -25,7 +25,7 @@ export type {
   NormalizedCoverageOptions,
   RsbuildPlugin,
   RstestConfig,
-  TestEnvironmentTransformMode,
+  TestEnvironmentTarget,
   TestEnvironment,
   TestEnvironmentReturn,
 };

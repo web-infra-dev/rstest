@@ -62,6 +62,10 @@ let assignedWorkerId = null;
 
 let runCount = 0;
 
+// This worker entry runs as a real .mjs and cannot import core .ts source, so
+// it keeps a literal copy. MUST match getFileTaskId in
+// packages/core/src/utils/helper.ts (the grammar is pinned by
+// tests/utils/helper.test.ts).
 const getFileTaskId = (testPath) => `file:${testPath}`;
 
 const makeRunResult = (request, extra) => ({

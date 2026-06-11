@@ -1,11 +1,15 @@
 import path from 'node:path';
 import type { RsbuildPlugin } from '@rsbuild/core';
 import pathe from 'pathe';
+import {
+  importMetaHook,
+  RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_REQUIRE_RESOLVE_HOOK,
+} from '../../runtime/worker/runtimeHooks';
 import type { RstestContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
+import { runtimeChunkNameForEnvironment } from '../runtimeChunk';
 import { isNodeLikeTestEnvironment } from '../testEnvironment';
-
-export const RUNTIME_CHUNK_NAME = 'runtime';
 
 const requireShim = `// Rstest ESM shims
 import __rstest_shim_module__ from 'node:module';
@@ -118,8 +122,8 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               // the dynamic-import-origin rewrite onto a dedicated rspack
               // option so the two concerns stop sharing one identifier.
               config.output.importFunctionName = outputModule
-                ? 'import.meta.__rstest_dynamic_import__'
-                : '__rstest_dynamic_import__';
+                ? importMetaHook(RSTEST_DYNAMIC_IMPORT_HOOK)
+                : RSTEST_DYNAMIC_IMPORT_HOOK;
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
 
@@ -130,17 +134,27 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 config.devtool = 'nosources-source-map';
               }
 
+              const rstestPluginOptions = {
+                injectModulePathName: true,
+                importMetaPathName: true,
+                hoistMockModule: true,
+                manualMockRoot: pathe.resolve(rootPath, '__mocks__'),
+                // The runtime hook below resolves relative dynamic-import
+                // specifiers against the source module that produced the
+                // call, instead of the test entry, fixing #1207.
+                injectDynamicImportOrigin: true,
+                // The runtime hook below resolves relative require.resolve
+                // specifiers against the source module that produced the
+                // call, instead of the test entry, fixing #848.
+                injectRequireResolveOrigin: {
+                  functionName: outputModule
+                    ? importMetaHook(RSTEST_REQUIRE_RESOLVE_HOOK)
+                    : RSTEST_REQUIRE_RESOLVE_HOOK,
+                },
+              };
+
               config.plugins.push(
-                new rspack.experiments.RstestPlugin({
-                  injectModulePathName: true,
-                  importMetaPathName: true,
-                  hoistMockModule: true,
-                  manualMockRoot: pathe.resolve(rootPath, '__mocks__'),
-                  // The runtime hook below resolves relative dynamic-import
-                  // specifiers against the source module that produced the
-                  // call, instead of the test entry, fixing #1207.
-                  injectDynamicImportOrigin: true,
-                }),
+                new rspack.experiments.RstestPlugin(rstestPluginOptions),
               );
 
               config.module.rules ??= [];
@@ -208,7 +222,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 ...(config.optimization || {}),
                 // make sure setup file and test file share the runtime
                 runtimeChunk: {
-                  name: `${name}-${RUNTIME_CHUNK_NAME}`,
+                  name: runtimeChunkNameForEnvironment(name),
                 },
               };
             },

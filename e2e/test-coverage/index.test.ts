@@ -90,6 +90,45 @@ describe('test coverage-istanbul', () => {
     expectLog('Coverage enabled with istanbul', logs);
   });
 
+  it('should treat positional argument after `--coverage` as a file filter', async () => {
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--coverage', 'date'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with istanbul', logs);
+
+    expectLog('Test Files 1 passed', logs);
+  });
+
+  it('should treat positional argument before `--coverage` as a file filter', async () => {
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'date', '--coverage'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with istanbul', logs);
+    expectLog('Test Files 1 passed', logs);
+  });
+
   it('should switch coverage provider with `--coverage.provider v8`', async () => {
     const { expectExecSuccess, expectLog, cli } = await runRstestCli({
       command: 'rstest',
@@ -180,6 +219,30 @@ describe('test coverage-istanbul', () => {
     expect(
       fs.existsSync(join(__dirname, 'fixtures/test-temp-coverage/index.html')),
     ).toBeTruthy();
+  });
+
+  it('coverage-istanbul with custom reporter', async () => {
+    const reportFile = join(__dirname, 'fixtures/custom-coverage-report.json');
+    fs.removeSync(reportFile);
+
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'rstest.customReporter.config.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with istanbul', logs);
+    expect(fs.readJsonSync(reportFile)).toEqual({ lines: 94.64 });
+
+    fs.removeSync(reportFile);
   });
 
   it('should keep coverage report when no test files match with --passWithNoTests (regression #1212)', async () => {

@@ -12,8 +12,10 @@ brotli
 browserslistrc
 bundleless
 bytedance
+callees
 caniuse
 canyonjs
+catchable
 cdup
 CEHQ
 chunkhash
@@ -35,6 +37,9 @@ ctsx
 datauri
 dedupe
 deepmerge
+desync
+desynced
+dgimsuvy
 distpath
 DNSCHANNEL
 docgen
@@ -83,6 +88,7 @@ menlo
 metafile
 microfrontend
 microfrontends
+misattributed
 mjsx
 modu
 modularly
@@ -171,10 +177,12 @@ tsconfck
 tsdoc
 tsup
 unencapsulated
+Unhashed
 unocss
 unpatch
 unplugin
 unpredictibly
+unsharded
 unshift
 unstub
 upath

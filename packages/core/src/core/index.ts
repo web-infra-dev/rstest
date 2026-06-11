@@ -14,12 +14,24 @@ export function createRstest(
     projects,
     configFilePath,
     trace,
+    cwd = process.cwd(),
+    embedded = false,
   }: {
     config: RstestConfig;
     configFilePath?: string;
     projects: Project[];
     /** CLI-only `--trace` switch; not exposed via user config. */
     trace?: boolean;
+    /** Working directory; defaults to `process.cwd()`. */
+    cwd?: string;
+    /**
+     * When true, Rstest won't install `process.on('exit' | 'SIG*')` handlers
+     * and config errors throw instead of calling `process.exit()`, so a
+     * programmatic run can't kill the host process. (`process.exitCode` is
+     * still written; `runRstest` restores it via try/finally.) Set by the
+     * `@rstest/core/api` adapter.
+     */
+    embedded?: boolean;
   },
   command: RstestCommand,
   fileFilters: string[],
@@ -27,13 +39,14 @@ export function createRstest(
 ): RstestInstance {
   const context = new Rstest(
     {
-      cwd: process.cwd(),
+      cwd,
       command,
       fileFilters,
       fileFilterMode,
       configFilePath,
       projects,
       trace,
+      embedded,
     },
     config,
   );

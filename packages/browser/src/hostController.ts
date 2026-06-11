@@ -11,6 +11,7 @@ import {
   type CoverageMapData,
   color,
   createCoverageProvider,
+  DEFAULT_TEST_TIMEOUT,
   type FormattedError,
   getNoTestFilesMessage,
   getSetupFiles,
@@ -22,16 +23,17 @@ import {
   PhaseTracker,
   type ProjectContext,
   type Reporter,
-  type Rstest,
+  type RstestContext,
   type RuntimeConfig,
   resolveProjectBuildCache,
+  RSTEST_ENV_SYMBOL_KEY,
   rsbuild,
   serializableConfig,
   type Test,
   type TestFileResult,
   type TestResult,
   type UserConsoleLog,
-} from '@rstest/core/browser';
+} from '@rstest/core/internal/browser';
 import { type BirpcReturn, createBirpc } from 'birpc';
 import openEditor from 'open-editor';
 import { basename, dirname, join, normalize, relative, resolve } from 'pathe';
@@ -52,6 +54,7 @@ import type {
   BrowserDispatchRequest,
   BrowserDispatchResponse,
   BrowserHostConfig,
+  BrowserLogPayload,
   BrowserProjectRuntime,
   BrowserRpcRequest,
   BrowserViewport,
@@ -60,6 +63,7 @@ import type {
 } from './protocol';
 import {
   DISPATCH_MESSAGE_TYPE,
+  DISPATCH_NAMESPACE_BROWSER,
   DISPATCH_NAMESPACE_RUNNER,
   validateBrowserRpcRequest,
 } from './protocol';
@@ -96,6 +100,15 @@ type RsbuildInstance = rsbuild.RsbuildInstance;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OPTIONS_PLACEHOLDER = '__RSTEST_OPTIONS_PLACEHOLDER__';
+
+/**
+ * Extra time added on top of a file's `testTimeout` before the host gives up
+ * waiting for that file's RPC to settle. Covers fixed per-file overhead (page
+ * navigation, runner boot) that is not part of the user's test budget. The
+ * headless and headed scheduling paths both apply this same buffer, so it lives
+ * here as one constant to keep their per-file timeout semantics identical.
+ */
+const PER_FILE_TIMEOUT_BUFFER_MS = 30_000;
 
 /**
  * Monotonic counter for synthetic per-file Perfetto `pid` values in `--trace`
@@ -165,18 +178,8 @@ type TestFileStartPayload = {
   projectName: string;
 };
 
-/** Payload for log event */
-type LogPayload = {
-  level: 'log' | 'warn' | 'error' | 'info' | 'debug';
-  content: string;
-  taskId?: string;
-  taskName?: string;
-  taskParentNames?: string[];
-  taskType?: 'file' | 'suite' | 'case';
-  testPath: string;
-  type: 'stdout' | 'stderr';
-  trace?: string;
-};
+/** Payload for log event — single-sourced from the wire protocol. */
+type LogPayload = BrowserLogPayload;
 
 /** Payload for fatal error event */
 type FatalPayload = {
@@ -597,7 +600,15 @@ export const createBrowserLazyCompilationConfig = (
   };
 };
 
-export const createBrowserRsbuildDevConfig = (_isWatchMode: boolean) => {
+export const createBrowserRsbuildDevConfig = (
+  _isWatchMode: boolean,
+): {
+  writeToDisk: boolean;
+  hmr: boolean;
+  client: {
+    logLevel: 'error';
+  };
+} => {
   return {
     writeToDisk: isDebug(),
     // Keep HMR enabled in browser mode even for one-shot runs.
@@ -830,11 +841,16 @@ const getRuntimeConfigFromProject = (
   } = project.normalizedConfig;
 
   return {
-    // Propagate NODE_ENV from the host so `import.meta.env.NODE_ENV` resolves
-    // to `'test'` in browser tests (matches Node mode). User-supplied `env`
-    // wins so explicit overrides still take effect.
+    // Propagate NODE_ENV and the RSTEST flag from the host so
+    // `process.env.NODE_ENV` / `process.env.RSTEST` (rewritten to the
+    // `RSTEST_ENV_SYMBOL_KEY` symbol store) resolve in browser tests the same
+    // way they do in Node mode, where `prepare.ts` sets them on the real
+    // `process.env`.
+    // User-supplied `env` wins so explicit overrides still take effect.
+    // See https://github.com/web-infra-dev/rstest/issues/1351
     env: {
       NODE_ENV: process.env.NODE_ENV,
+      RSTEST: 'true',
       ...env,
     },
     testNamePattern,
@@ -864,7 +880,7 @@ const getRuntimeConfigFromProject = (
   };
 };
 
-const getBrowserProjects = (context: Rstest): ProjectContext[] => {
+const getBrowserProjects = (context: RstestContext): ProjectContext[] => {
   return context.projects.filter(
     (project) => project.normalizedConfig.browser.enabled,
   );
@@ -936,7 +952,7 @@ const resolveProviderForTestPath = ({
 };
 
 const collectProjectEntries = async (
-  context: Rstest,
+  context: RstestContext,
 ): Promise<BrowserProjectEntries[]> => {
   // Only collect entries for browser mode projects
   const browserProjects = getBrowserProjects(context);
@@ -1211,7 +1227,7 @@ const createBrowserRuntime = async ({
   containerDevServer,
   forceHeadless,
 }: {
-  context: Rstest;
+  context: RstestContext;
   manifestPath: string;
   manifestSource: string;
   tempDir: string;
@@ -1257,7 +1273,7 @@ const createBrowserRuntime = async ({
 
   // Rstest internal aliases that must not be overridden by user config
   const browserRuntimePath = fileURLToPath(
-    import.meta.resolve('@rstest/core/browser-runtime'),
+    import.meta.resolve('@rstest/core/internal/browser-runtime'),
   );
 
   const rstestInternalAliases = {
@@ -1268,7 +1284,7 @@ const createBrowserRuntime = async ({
     '@rstest/browser': resolveBrowserFile('browser.ts'),
     // Browser runtime APIs for entry.ts and public.ts
     // Uses dist file with extractSourceMap to preserve sourcemap chain for inline snapshots
-    '@rstest/core/browser-runtime': browserRuntimePath,
+    '@rstest/core/internal/browser-runtime': browserRuntimePath,
     '@sinonjs/fake-timers': resolveBrowserFile('client/fakeTimersStub.ts'),
   };
 
@@ -1329,6 +1345,13 @@ const createBrowserRuntime = async ({
                 project.rootPath,
               ),
             );
+            // rspack `define` replaces `process.env` / `import.meta.env` with
+            // this literal expression. JSON.stringify reproduces the exact
+            // double-quoted `"rstest.env"` text, so the owned key can never
+            // drift from the runtime `Symbol.for(RSTEST_ENV_SYMBOL_KEY)` sites.
+            const rstestEnvDefine = `globalThis[Symbol.for(${JSON.stringify(
+              RSTEST_ENV_SYMBOL_KEY,
+            )})]`;
             // Merge order: current config -> userConfig -> rstest required config (highest priority)
             const merged = mergeEnvironmentConfig(
               config,
@@ -1347,8 +1370,8 @@ const createBrowserRuntime = async ({
                 },
                 source: {
                   define: {
-                    'process.env': 'globalThis[Symbol.for("rstest.env")]',
-                    'import.meta.env': 'globalThis[Symbol.for("rstest.env")]',
+                    'process.env': rstestEnvDefine,
+                    'import.meta.env': rstestEnvDefine,
                   },
                 },
                 output: {
@@ -1677,7 +1700,7 @@ const createBrowserRuntime = async ({
 };
 
 async function resolveProjectEntries(
-  context: Rstest,
+  context: RstestContext,
   shardedEntries?: Map<string, { entries: Record<string, string> }>,
 ): Promise<BrowserProjectEntries[]> {
   if (shardedEntries) {
@@ -1707,7 +1730,7 @@ async function resolveProjectEntries(
 // ============================================================================
 
 export const runBrowserController = async (
-  context: Rstest,
+  context: RstestContext,
   options?: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> => {
   const {
@@ -2073,7 +2096,9 @@ export const runBrowserController = async (
 
   // Get max testTimeout from all browser projects for RPC timeout
   const maxTestTimeoutForRpc = Math.max(
-    ...browserProjects.map((p) => p.normalizedConfig.testTimeout ?? 5000),
+    ...browserProjects.map(
+      (p) => p.normalizedConfig.testTimeout ?? DEFAULT_TEST_TIMEOUT,
+    ),
   );
 
   const hostOptions: BrowserHostConfig = {
@@ -2161,13 +2186,16 @@ export const runBrowserController = async (
     }
   };
 
-  runtime.dispatchHandlers.set('browser', async (dispatchRequest) => {
-    const request = validateBrowserRpcRequest(dispatchRequest.args);
-    return dispatchBrowserRpcRequest({
-      request,
-      target: dispatchRequest.target,
-    });
-  });
+  runtime.dispatchHandlers.set(
+    DISPATCH_NAMESPACE_BROWSER,
+    async (dispatchRequest) => {
+      const request = validateBrowserRpcRequest(dispatchRequest.args);
+      return dispatchBrowserRpcRequest({
+        request,
+        target: dispatchRequest.target,
+      });
+    },
+  );
 
   runtime.setContainerOptions(hostOptions);
 
@@ -2397,7 +2425,9 @@ export const runBrowserController = async (
   };
 
   const shouldEmitUserConsoleLog = (log: UserConsoleLog): boolean => {
-    return context.normalizedConfig.onConsoleLog?.(log.content) !== false;
+    return (
+      context.normalizedConfig.onConsoleLog?.(log.content, log.type) !== false
+    );
   };
 
   const emitUserConsoleLog = async (log: UserConsoleLog): Promise<void> => {
@@ -2505,8 +2535,12 @@ export const runBrowserController = async (
         );
       case 'removeSnapshotFile':
         return snapshotRpcMethods.removeSnapshotFile(request.args.filepath);
-      default:
-        return undefined;
+      default: {
+        // Exhaustiveness guard: a new SnapshotRpcRequest method without a case
+        // here fails to compile rather than silently returning undefined.
+        const _exhaustive: never = request;
+        return _exhaustive;
+      }
     }
   };
 
@@ -2596,7 +2630,7 @@ export const runBrowserController = async (
       message: BrowserClientMessage,
     ): Promise<void> => {
       const response = await dispatchRouter.dispatch({
-        requestId: nextDispatchRequestId('runner'),
+        requestId: nextDispatchRequestId(DISPATCH_NAMESPACE_RUNNER),
         runToken: run.token,
         namespace: DISPATCH_NAMESPACE_RUNNER,
         method: message.type,
@@ -2653,7 +2687,7 @@ export const runBrowserController = async (
       );
       const perFileTimeoutMs =
         (projectRuntime?.runtimeConfig.testTimeout ?? maxTestTimeoutForRpc) +
-        30_000;
+        PER_FILE_TIMEOUT_BUFFER_MS;
 
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -3052,6 +3086,12 @@ export const runBrowserController = async (
   }
 
   let currentTestFiles = allTestFiles;
+  // Coincidentally equal to the runner-side CONFIG_WAIT_TIMEOUT_MS and
+  // DEFAULT_RPC_TIMEOUT_MS (client/entry.ts, client/dispatchTransport.ts) but
+  // semantically distinct and in a different runtime, so deliberately NOT shared
+  // with them. Invariant worth preserving: a runner must be able to receive its
+  // config (config-wait) before the host declares its frames un-ready, i.e.
+  // CONFIG_WAIT_TIMEOUT_MS <= RUNNER_FRAMES_READY_TIMEOUT_MS.
   const RUNNER_FRAMES_READY_TIMEOUT_MS = 30_000;
   let currentRunnerFramesSignature: string | null = null;
   const runnerFramesWaiters = new Map<string, Set<() => void>>();
@@ -3139,7 +3179,7 @@ export const runBrowserController = async (
     );
     return (
       (projectRuntime?.runtimeConfig.testTimeout ?? maxTestTimeoutForRpc) +
-      30_000
+      PER_FILE_TIMEOUT_BUFFER_MS
     );
   };
 
@@ -3602,7 +3642,7 @@ export type ListBrowserTestsResult = {
  * and collects their test structure (describe/test declarations).
  */
 export const listBrowserTests = async (
-  context: Rstest,
+  context: RstestContext,
   options?: {
     shardedEntries?: Map<string, { entries: Record<string, string> }>;
   },
@@ -3681,7 +3721,9 @@ export const listBrowserTests = async (
 
   // Get max testTimeout from all browser projects for RPC timeout
   const maxTestTimeoutForRpc = Math.max(
-    ...browserProjects.map((p) => p.normalizedConfig.testTimeout ?? 5000),
+    ...browserProjects.map(
+      (p) => p.normalizedConfig.testTimeout ?? DEFAULT_TEST_TIMEOUT,
+    ),
   );
 
   const hostOptions: BrowserHostConfig = {

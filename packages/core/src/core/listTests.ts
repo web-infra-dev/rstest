@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
+import { relative } from 'pathe';
 import { createPool } from '../pool';
 import type {
   FormattedError,
@@ -20,7 +21,11 @@ import {
   ROOT_SUITE_NAME,
   resolveShardedEntries,
 } from '../utils';
-import { runGlobalSetup, runGlobalTeardown } from './globalSetup';
+import {
+  claimGlobalSetupOnce,
+  runGlobalSetup,
+  runGlobalTeardown,
+} from './globalSetup';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
 type ListedTest = {
@@ -219,11 +224,8 @@ const collectNodeTests = async ({
       } = await getRsbuildStats({ environmentName: project.environmentName });
 
       if (
-        entries.length &&
-        globalSetupEntries.length &&
-        !project._globalSetups
+        claimGlobalSetupOnce(project, entries.length, globalSetupEntries.length)
       ) {
-        project._globalSetups = true;
         const files = globalSetupEntries.flatMap((e) => e.files!);
         const assetFilesPromise = getAssetFiles(files);
         const sourceMapsPromise = getSourceMaps(files);
@@ -308,6 +310,7 @@ const collectBrowserTests = async ({
   const projectRoots = browserProjects.map((p) => p.rootPath);
   const { validateBrowserConfig, listBrowserTests } = await loadBrowserModule({
     projectRoots,
+    embedded: context.embedded,
   });
   validateBrowserConfig(context);
   return listBrowserTests(context, { shardedEntries });

@@ -1,9 +1,134 @@
 import { describe, expect, it } from '@rstest/core';
 import { join } from 'pathe';
-import { resolveProjects } from '../../src/cli/init';
+import { mergeWithCLIOptions, resolveProjects } from '../../src/cli/init';
 import type { RstestConfig } from '../../src/types';
 
 const rootPath = join(__dirname, '../..');
+
+describe('mergeWithCLIOptions', () => {
+  it('creates simple nested build config objects from CLI', () => {
+    const config = mergeWithCLIOptions(
+      {},
+      {
+        source: {
+          tsconfigPath: 'tsconfig.cli.json',
+        },
+        dev: {
+          writeToDisk: true,
+        },
+        output: {
+          emitAssets: false,
+          cleanDistPath: true,
+          module: false,
+        },
+      },
+    );
+
+    expect(config).toEqual({
+      source: {
+        tsconfigPath: 'tsconfig.cli.json',
+      },
+      dev: {
+        writeToDisk: true,
+      },
+      output: {
+        emitAssets: false,
+        cleanDistPath: true,
+        module: false,
+      },
+    });
+  });
+
+  it('preserves nested build config fields that are not supported by CLI', () => {
+    const config = mergeWithCLIOptions(
+      {
+        source: {
+          define: {
+            BASE_URL: JSON.stringify('https://example.com'),
+          },
+        },
+        output: {
+          cssModules: {
+            localIdentName: '[local]-[hash:base64:6]',
+          },
+          externals: ['react'],
+        },
+      },
+      {
+        source: {
+          tsconfigPath: 'tsconfig.cli.json',
+        },
+        output: {
+          emitAssets: false,
+        },
+      },
+    );
+
+    expect(config).toMatchObject({
+      source: {
+        define: {
+          BASE_URL: JSON.stringify('https://example.com'),
+        },
+        tsconfigPath: 'tsconfig.cli.json',
+      },
+      output: {
+        cssModules: {
+          localIdentName: '[local]-[hash:base64:6]',
+        },
+        externals: ['react'],
+        emitAssets: false,
+      },
+    });
+  });
+
+  it('merges simple nested build options from CLI', () => {
+    const config = mergeWithCLIOptions(
+      {
+        includeTaskLocation: false,
+        source: {
+          tsconfigPath: 'base.tsconfig.json',
+        },
+        dev: {
+          writeToDisk: false,
+        },
+        output: {
+          emitAssets: true,
+          cleanDistPath: true,
+          module: true,
+        },
+      },
+      {
+        includeTaskLocation: true,
+        source: {
+          tsconfigPath: 'cli.tsconfig.json',
+        },
+        dev: {
+          writeToDisk: true,
+        },
+        output: {
+          emitAssets: false,
+          cleanDistPath: false,
+          module: false,
+        },
+      },
+    );
+
+    expect(config).toMatchObject({
+      includeTaskLocation: true,
+      source: {
+        tsconfigPath: 'cli.tsconfig.json',
+      },
+      dev: {
+        writeToDisk: true,
+      },
+      output: {
+        emitAssets: false,
+        cleanDistPath: false,
+        module: false,
+      },
+    });
+  });
+});
 
 describe('resolveProjects', () => {
   describe('inline project extends', () => {
@@ -544,6 +669,121 @@ describe('resolveProjects', () => {
       expect(projects[0]!.config.coverage).toMatchObject({
         enabled: true,
         provider: 'v8',
+      });
+    });
+
+    it('should apply a single coverage.reporters from CLI as an array', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            reporters: 'html',
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        reporters: ['html'],
+      });
+    });
+
+    it('should apply repeated coverage.reporters from CLI as an array', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            reporters: ['text', 'html'],
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        reporters: ['text', 'html'],
+      });
+    });
+
+    it('should let CLI coverage.reporters override config reporters', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+              coverage: {
+                enabled: true,
+                reporters: ['text', ['json', { file: 'coverage.json' }]],
+              },
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            reporters: ['lcov'],
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        reporters: ['lcov'],
+      });
+    });
+
+    it('should override coverage options from CLI', async () => {
+      const projects = await resolveProjects({
+        config: {
+          projects: [
+            {
+              name: 'test-project',
+              coverage: {
+                include: ['old-include/**'],
+                exclude: ['old-exclude/**'],
+                reporters: ['html'],
+                reportsDirectory: 'old-coverage',
+                clean: true,
+              },
+            },
+          ],
+        },
+        root: rootPath,
+        options: {
+          coverage: {
+            include: ['src/**', 'test/**'],
+            exclude: ['src/generated/**'],
+            reporters: ['text', 'json'],
+            reportsDirectory: 'custom-coverage',
+            reportOnFailure: 'true',
+            clean: 'false',
+            allowExternal: true,
+          },
+        },
+      });
+
+      expect(projects[0]!.config.coverage).toMatchObject({
+        enabled: true,
+        include: ['src/**', 'test/**'],
+        exclude: ['old-exclude/**', 'src/generated/**'],
+        reporters: ['text', 'json'],
+        reportsDirectory: 'custom-coverage',
+        reportOnFailure: true,
+        clean: false,
+        allowExternal: true,
       });
     });
   });

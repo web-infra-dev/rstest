@@ -5,6 +5,8 @@
   // `export type *` re-exports; flagging them as unused on every same-file
   // reference is noise after the knip v5 → v6 bump.
   "ignoreExportsUsedInFile": true,
+  // pnpm 11 stage is a pnpm subcommand, but knip currently reports it as a binary in GitHub workflows.
+  "ignoreBinaries": ["stage"],
   "workspaces": {
     ".": {
       "entry": [
@@ -32,7 +34,7 @@
     },
     "packages/core": {
       "entry": [
-        // Package export: "./browser-runtime" (separate rslib env targeting web)
+        // Package export: "./internal/browser-runtime" (separate rslib env targeting web)
         "src/browserRuntime.ts",
         // Worker entries bundled by rslib
         "src/runtime/worker/index.ts",
@@ -52,10 +54,6 @@
         "tests/**/*.ts",
         "tests/**/fixtures/**",
       ],
-      "ignoreDependencies": [
-        // Used by rslib for fast declaration file generation: https://rslib.dev/guide/advanced/dts#generate-declaration-files-with-tsgo
-        "@typescript/native-preview",
-      ],
     },
     "packages/browser": {
       "entry": [
@@ -68,8 +66,6 @@
         "tests/**/*.ts",
       ],
       "ignoreDependencies": [
-        // Used by rslib for fast declaration file generation: https://rslib.dev/guide/advanced/dts#generate-declaration-files-with-tsgo
-        "@typescript/native-preview",
         // Virtual module resolved at build time by rspack alias in hostController.ts
         "@rstest/browser-manifest",
       ],

@@ -1,20 +1,20 @@
 import type { EnvironmentWithOptions } from '../types';
 
-export type TestEnvironmentTransformMode = 'node' | 'browser';
+export type TestEnvironmentTarget = 'node' | 'web';
 
-export const getTestEnvironmentTransformMode = (
+export const getTestEnvironmentTarget = (
   testEnvironment: EnvironmentWithOptions,
-): TestEnvironmentTransformMode => {
-  if (testEnvironment.transformMode) {
-    return testEnvironment.transformMode;
+): TestEnvironmentTarget => {
+  if (testEnvironment.target) {
+    return testEnvironment.target;
   }
 
   return testEnvironment.name === 'jsdom' ||
     testEnvironment.name === 'happy-dom'
-    ? 'browser'
+    ? 'web'
     : 'node';
 };
 
 export const isNodeLikeTestEnvironment = (
   testEnvironment: EnvironmentWithOptions,
-): boolean => getTestEnvironmentTransformMode(testEnvironment) === 'node';
+): boolean => getTestEnvironmentTarget(testEnvironment) === 'node';

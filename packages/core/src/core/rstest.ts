@@ -12,6 +12,7 @@ import { JUnitReporter } from '../reporter/junit';
 import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
+  BuiltInReporterNames,
   FileFilterMode,
   NormalizedConfig,
   NormalizedProjectConfig,
@@ -27,6 +28,7 @@ import type {
 } from '../types';
 import {
   castArray,
+  ENV,
   getAbsolutePath,
   logger,
   normalizeBuildCache,
@@ -42,6 +44,19 @@ function formatEnvironmentName(name: string): string {
   return name.replace(/[^a-zA-Z0-9\-_$]/g, '_');
 }
 
+/**
+ * Report a fatal configuration error. In embedded (programmatic) mode the
+ * caller owns the process, so throw and let `runRstest` surface it; otherwise
+ * log and exit the CLI process.
+ */
+function failConfig(embedded: boolean, message: string): never {
+  if (embedded) {
+    throw new Error(message);
+  }
+  logger.error(message);
+  process.exit(1);
+}
+
 type Options = {
   cwd: string;
   command: RstestCommand;
@@ -50,6 +65,8 @@ type Options = {
   configFilePath?: string;
   projects: Project[];
   trace?: boolean;
+  /** See the `embedded` option on `createRstest`. */
+  embedded?: boolean;
 };
 
 export class Rstest implements RstestContext {
@@ -64,6 +81,7 @@ export class Rstest implements RstestContext {
   public relatedRerunReason?: 'forceRerunTrigger';
   public relatedRerunFiles?: string[];
   public configFilePath?: string;
+  public embedded: boolean;
   public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
   public trace: boolean;
@@ -103,6 +121,7 @@ export class Rstest implements RstestContext {
       configFilePath,
       projects,
       trace = false,
+      embedded = false,
     }: Options,
     userConfig: RstestConfig,
   ) {
@@ -112,6 +131,7 @@ export class Rstest implements RstestContext {
     this.fileFilters = fileFilters;
     this.fileFilterMode = fileFilterMode;
     this.configFilePath = configFilePath;
+    this.embedded = embedded;
 
     const rootPath = userConfig.root
       ? getAbsolutePath(cwd, userConfig.root)
@@ -128,8 +148,7 @@ export class Rstest implements RstestContext {
     );
 
     if (command === 'watch' && rstestConfig.shard) {
-      logger.error('Test sharding is not supported in watch mode.');
-      process.exit(1);
+      failConfig(embedded, 'Test sharding is not supported in watch mode.');
     }
 
     const snapshotManager = new SnapshotManager({
@@ -150,14 +169,14 @@ export class Rstest implements RstestContext {
             (project.config.shard.count !== rstestConfig.shard?.count ||
               project.config.shard.index !== rstestConfig.shard?.index)
           ) {
-            logger.error(
+            failConfig(
+              embedded,
               'The `shard` option is a global option and cannot be set per-project.\n' +
                 'global `shard` option:\n' +
                 `  count: ${rstestConfig.shard?.count}, index: ${rstestConfig.shard?.index}\n` +
                 `project "${project.config.name}" shard option:\n` +
                 `  count: ${project.config.shard.count}, index: ${project.config.shard.index}`,
             );
-            process.exit(1);
           }
 
           // TODO: support extend projects config
@@ -210,7 +229,7 @@ export class Rstest implements RstestContext {
             _globalSetups: false,
             outputModule:
               config.output?.module ??
-              process.env.RSTEST_OUTPUT_MODULE !== 'false',
+              process.env[ENV.OUTPUT_MODULE] !== 'false',
             environmentName,
             normalizedConfig: config,
           };
@@ -223,7 +242,7 @@ export class Rstest implements RstestContext {
             name: rstestConfig.name,
             outputModule:
               rstestConfig.output?.module ??
-              process.env.RSTEST_OUTPUT_MODULE !== 'false',
+              process.env[ENV.OUTPUT_MODULE] !== 'false',
             environmentName: formatEnvironmentName(rstestConfig.name),
             normalizedConfig: rstestConfig,
           },
@@ -295,16 +314,14 @@ export class Rstest implements RstestContext {
   }
 }
 
-const reportersMap: {
-  default: typeof DefaultReporter;
-  dot: typeof DotReporter;
-  verbose: typeof VerboseReporter;
-  'github-actions': typeof GithubActionsReporter;
-  junit: typeof JUnitReporter;
-  json: typeof JsonReporter;
-  md: typeof MdReporter;
-  blob: typeof BlobReporter;
-} = {
+// `satisfies Record<BuiltInReporterNames, …>` keeps this map in lockstep with
+// the BuiltInReporterNames union (the single source of truth): a name added to
+// the union without a class here is a missing-key compile error, and a class
+// added here without a union entry is an excess-key error. The previous explicit
+// object-type annotation duplicated the key list and let the two drift, surfacing
+// only as a runtime "Reporter X not found". `satisfies` (not `:`) preserves each
+// value's concrete constructor type for the `new reportersMap[name](…)` call.
+const reportersMap = {
   default: DefaultReporter,
   dot: DotReporter,
   verbose: VerboseReporter,
@@ -313,7 +330,7 @@ const reportersMap: {
   json: JsonReporter,
   md: MdReporter,
   blob: BlobReporter,
-};
+} satisfies Record<BuiltInReporterNames, new (...args: any[]) => unknown>;
 
 function createReporters(
   reporters: RstestConfig['reporters'],

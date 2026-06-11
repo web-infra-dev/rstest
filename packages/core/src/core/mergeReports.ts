@@ -4,7 +4,7 @@ import {
   createCoverageProvider,
   ensureCoverageProviderInstalled,
 } from '../coverage';
-import type { BlobData } from '../reporter/blob';
+import { type BlobData, isBlobFile } from '../reporter/blob';
 import type {
   CoverageMapData,
   Duration,
@@ -26,9 +26,7 @@ function loadBlobFiles(blobDir: string): BlobData[] {
     );
   }
 
-  const files = readdirSync(blobDir)
-    .filter((f) => /^blob(-\d+-\d+)?\.json$/.test(f))
-    .sort();
+  const files = readdirSync(blobDir).filter(isBlobFile).sort();
 
   if (files.length === 0) {
     throw new Error(

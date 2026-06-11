@@ -1,7 +1,16 @@
-import { isAbsolute, join, normalize, parse, sep } from 'pathe';
+import {
+  isAbsolute,
+  join,
+  normalize,
+  parse,
+  relative,
+  resolve,
+  sep,
+} from 'pathe';
 import type { RuntimeConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
 import { color } from './logger';
+import { wrapRegex } from './regexpWireFormat';
 
 /**
  * Generate a stable hash for a file path.
@@ -40,6 +49,17 @@ export const formatRootStr = (rootStr: string, root: string): string => {
 export function getAbsolutePath(base: string, filepath: string): string {
   return isAbsolute(filepath) ? filepath : join(base, filepath);
 }
+
+/**
+ * Render a path relative to `rootPath` when it lives inside the root, otherwise
+ * fall back to the original path. Used for trace labels and summary tables so
+ * in-repo files show as short relative paths while external/sentinel paths
+ * (e.g. `<host>`) pass through unchanged.
+ */
+export const displayPath = (filePath: string, rootPath: string): string => {
+  const rel = relative(rootPath, resolve(rootPath, filePath));
+  return rel && !rel.startsWith('..') ? rel : filePath;
+};
 
 export const parsePosix = (filePath: string): { dir: string; base: string } => {
   const { dir, base } = parse(filePath);
@@ -102,8 +122,9 @@ export const prettyTime = (milliseconds: number): string => {
     return `${seconds.toFixed(digits)}s`;
   };
 
-  const minutes = Math.floor(seconds / 60);
-  const secondsRemainder = seconds % 60;
+  const roundedSeconds = Math.round(seconds);
+  const minutes = Math.floor(roundedSeconds / 60);
+  const secondsRemainder = minutes > 0 ? roundedSeconds % 60 : seconds;
   let time = '';
 
   if (minutes > 0) {
@@ -128,10 +149,16 @@ export const getTaskNameWithPrefix = (
   delimiter: string = TEST_DELIMITER,
 ): string => getTaskNames(test).join(delimiter ? ` ${delimiter} ` : ' ');
 
-const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
-
-const wrapRegex = (value: RegExp): string =>
-  `${REGEXP_FLAG_PREFIX}${value.toString()}`;
+/**
+ * Single source of truth for the `file:` task-id grammar. The value is an
+ * opaque pass-through label (never equality-checked across processes), so the
+ * grammar only needs to stay self-consistent — owning it here keeps the worker,
+ * pool, and runner copies from drifting.
+ *
+ * The browser package keeps its own copy on purpose (it must not import core
+ * runtime internals across the provider-agnostic barrier).
+ */
+export const getFileTaskId = (testPath: string): string => `file:${testPath}`;
 
 /**
  * Makes some special types that are not supported for passing into the pool serializable.

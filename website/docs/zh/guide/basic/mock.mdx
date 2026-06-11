@@ -104,15 +104,17 @@ test('overrides one export', () => {
 
 ```ts title="calculator.test.ts"
 import { expect, rs, test } from '@rstest/core';
-import { add, calculate } from './calculator';
+import { calculate } from './calculator';
 
 rs.mock('./calculator', { spy: true });
 
-test('tracks the internal call to add', () => {
+test('keeps the real implementation while tracking calls', () => {
   expect(calculate(1, 2)).toBe(3);
-  expect(add).toHaveBeenCalledWith(1, 2);
+  expect(calculate).toHaveBeenCalledWith(1, 2);
 });
 ```
+
+注意，spy 只能追踪通过 export 发起的调用 —— 同一模块内部函数之间的互相调用不会被追踪。
 
 ### 部分 mock 模块
 

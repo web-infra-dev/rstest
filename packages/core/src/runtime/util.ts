@@ -1,4 +1,17 @@
-import type { FormattedError, Test } from '../types';
+import type { FormattedError, Test, TestOptions } from '../types';
+
+/**
+ * Normalize the third argument of `test` / `it` / `test.each` / `test.for`.
+ * Accepts `number` (shorthand for `{ timeout }`) or a full `TestOptions` object.
+ */
+export const normalizeTestOptions = (
+  input?: number | TestOptions,
+): TestOptions => {
+  if (typeof input === 'number') {
+    return { timeout: input };
+  }
+  return input ?? {};
+};
 
 const loadDiffModules = async () => {
   const [{ diff }, { format, plugins }] = await Promise.all([
@@ -214,6 +227,8 @@ export function parseTemplateTable(
 }
 
 export class TestRegisterError extends Error {}
+
+export class TestSkipError extends Error {}
 
 class RstestError extends Error {
   public fullStack?: boolean;

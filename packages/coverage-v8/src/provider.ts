@@ -1,22 +1,20 @@
 import fs from 'node:fs/promises';
 import inspector from 'node:inspector/promises';
-import { posix, win32 } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { isAbsolute, posix, resolve, win32 } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type {
-  CoverageOptions,
   NormalizedCoverageOptions,
   CoverageProvider as RstestCoverageProvider,
 } from '@rstest/core';
 import astV8ToIstanbul from 'ast-v8-to-istanbul';
 import { Parser } from 'acorn';
-import istanbulLibCoverage, {
-  type CoverageMap,
-  type FileCoverageData,
-} from 'istanbul-lib-coverage';
+import { type CoverageMap, type FileCoverageData } from 'istanbul-lib-coverage';
+import type { ReportBase } from 'istanbul-lib-report';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import picomatch from 'picomatch';
 import v8ToIstanbul from 'v8-to-istanbul';
+import { createFastCoverageMap } from './utils';
 
 type SourceMapLike = {
   version: number;
@@ -27,6 +25,10 @@ type SourceMapLike = {
   sourceRoot?: string;
   sourcesContent?: (string | null)[];
 };
+
+type CoverageReporterConstructor = new (
+  options: Record<string, unknown>,
+) => ReportBase;
 
 export class CoverageProvider implements RstestCoverageProvider {
   private session: inspector.Session | null = null;
@@ -384,7 +386,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   createCoverageMap(): CoverageMap {
-    return istanbulLibCoverage.createCoverageMap({});
+    return createFastCoverageMap();
   }
 
   async generateCoverageForUntestedFiles({
@@ -431,18 +433,13 @@ export class CoverageProvider implements RstestCoverageProvider {
     return results.filter((res): res is FileCoverageData => res !== null);
   }
 
-  async generateReports(
-    coverageMap: CoverageMap,
-    options?: CoverageOptions,
-  ): Promise<void> {
-    const opts = { ...this.options, ...(options || {}) };
-
+  async generateReports(coverageMap: CoverageMap): Promise<void> {
     const context = createContext({
-      dir: opts.reportsDirectory,
+      dir: this.options.reportsDirectory,
       coverageMap: coverageMap,
     });
 
-    const reportersList = opts.reporters || ['text', 'html', 'json'];
+    const reportersList = this.options.reporters;
     for (const reporter of reportersList) {
       if (typeof reporter === 'object' && 'execute' in reporter) {
         reporter.execute(context);
@@ -450,10 +447,68 @@ export class CoverageProvider implements RstestCoverageProvider {
         const [reporterName, reporterOptions] = Array.isArray(reporter)
           ? reporter
           : [reporter, {}];
-        const report = reports.create(reporterName as any, reporterOptions);
+        const report = await this.createReport(reporterName, reporterOptions);
         report.execute(context);
       }
     }
+  }
+
+  private async createReport(
+    reporterName: string,
+    reporterOptions: Record<string, unknown>,
+  ): Promise<ReportBase> {
+    const resolvedReporterName = this.resolveReporterName(reporterName);
+
+    if (resolvedReporterName.endsWith('.mjs')) {
+      const reporterModule = await import(
+        this.toImportSpecifier(resolvedReporterName)
+      );
+      const Reporter = reporterModule.default as CoverageReporterConstructor;
+
+      return new Reporter(reporterOptions);
+    }
+
+    try {
+      return reports.create(
+        resolvedReporterName as Parameters<typeof reports.create>[0],
+        reporterOptions,
+      );
+    } catch (error) {
+      if (!this.isRequireEsmError(error)) {
+        throw error;
+      }
+    }
+
+    const reporterModule = await import(
+      this.toImportSpecifier(resolvedReporterName)
+    );
+    const Reporter = reporterModule.default as CoverageReporterConstructor;
+
+    return new Reporter(reporterOptions);
+  }
+
+  private resolveReporterName(reporterName: string): string {
+    if (reporterName.startsWith('.')) {
+      return resolve(this.root ?? process.cwd(), reporterName);
+    }
+
+    return reporterName;
+  }
+
+  private toImportSpecifier(reporterName: string): string {
+    if (isAbsolute(reporterName)) {
+      return pathToFileURL(reporterName).toString();
+    }
+
+    return reporterName;
+  }
+
+  private isRequireEsmError(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null || !('code' in error)) {
+      return false;
+    }
+
+    return error.code === 'ERR_REQUIRE_ESM';
   }
 
   cleanup(): void {

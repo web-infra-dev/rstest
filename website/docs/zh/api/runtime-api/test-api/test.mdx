@@ -3,6 +3,8 @@ title: Test
 description: test 用于定义一个测试用例，支持链式调用和 fixture 扩展。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Test
 
 `test` 用于定义一个测试用例，支持链式调用和 fixture 扩展。
@@ -11,7 +13,7 @@ description: test 用于定义一个测试用例，支持链式调用和 fixture
 
 ## test
 
-- **类型：** `(name: string, fn: (testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **类型：** `(name: string, fn: (testContext: TestContext) => void | Promise<void>, options?: number | TestOptions) => void`
 
 定义一个测试用例。
 
@@ -23,6 +25,53 @@ test('should add two numbers correctly', () => {
   expect(1 + 2).toBe(3);
 });
 ```
+
+### TestOptions
+
+<ApiMeta addedVersion="0.10.3" />
+
+第三个参数用于细化单个测试的运行行为。传入数字等价于 `{ timeout: n }`，原有写法保持兼容：
+
+```ts
+test('runs within 3s', async () => {
+  /* ... */
+}, 3000);
+
+// 等价于：
+test(
+  'runs within 3s',
+  async () => {
+    /* ... */
+  },
+  { timeout: 3000 },
+);
+```
+
+`TestOptions` 支持以下字段：
+
+- `timeout?: number` — 单测超时（毫秒），覆盖 [`test.testTimeout`](/config/test/test-timeout)。
+- `retry?: number` — 测试失败时的重跑次数，首次通过即停。覆盖 [`test.retry`](/config/test/retry)。
+- `repeats?: number` — 在通过的前提下额外重跑指定次数，任一次失败则整体判定为失败。每次重跑会完整执行 `beforeEach` / `afterEach`，并各自享有独立的 `retry` 配额。
+
+```ts
+test(
+  'flaky network call',
+  async () => {
+    /* ... */
+  },
+  { retry: 3 },
+);
+
+test(
+  'stays green across runs',
+  async () => {
+    /* ... */
+  },
+  { repeats: 9 },
+); // 共执行 10 次；任一次失败即短路后续重跑
+```
+
+`test.each` 与 `test.for` 第三参语义相同，会作用于生成的每个 case。
 
 ## test.only
 
@@ -44,6 +93,17 @@ test.skip('skip this test', () => {
 });
 ```
 
+当你在定义测试时就确定要跳过它，可以使用 `test.skip`。如果只能在测试运行过程中决定是否跳过，请从测试上下文中调用 `context.skip()`。`context.skip()` 会立即停止执行当前测试，因此它后面的代码不会继续执行，并且该测试会被报告为 skipped。
+
+```ts
+test('skip at runtime', (context) => {
+  context.skip();
+
+  // 这个断言不会被执行。
+  expect(1 + 1).toBe(3);
+});
+```
+
 ## test.todo
 
 将某些测试标记为待办。
@@ -54,7 +114,7 @@ test.todo('should implement this test');
 
 ## test.each
 
-- **类型：** `test.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>, timeout?: number) => void`
+- **类型：** `test.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>, options?: number | TestOptions) => void`
 
 对提供的数组中的每一项运行相同的测试逻辑。
 
@@ -93,7 +153,7 @@ test.each<{ a: number; b: number; expected: number }>`
 });
 ```
 
-你可以使用 [printf formatting](https://nodejs.org/api/util.html#util_util_format_format_args) 来格式化测试名称中的参数。
+你可以使用 [printf formatting](https://nodejs.org/api/util.html#utilformatformat-args) 来格式化测试名称中的参数。
 
 - `%s`: String
 - `%d`: Number
@@ -118,7 +178,7 @@ test.each([
 // adds 2 + 2 to equal 4
 ```
 
-你也可以使用 `$` 前缀访问对象属性和数组元素：
+你也可以使用 `$` 前缀访问对象属性：
 
 ```ts
 test.each([
@@ -133,24 +193,11 @@ test.each([
 // adds 1 + 1 to equal 2
 // adds 1 + 2 to equal 3
 // adds 2 + 1 to equal 3
-
-test.each([
-  [1, 1, 2],
-  [1, 2, 3],
-  [2, 1, 3],
-])('add $0 + $1 to equal $2', (a, b, sum) => {
-  expect(a + b).toBe(sum);
-});
-
-// 此时将返回：
-// add 1 + 1 to equal 2
-// add 1 + 2 to equal 3
-// add 2 + 1 to equal 3
 ```
 
 ## test.for
 
-- **类型：** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **类型：** `test.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T, testContext: TestContext) => void | Promise<void>, options?: number | TestOptions) => void`
 
 `test.each` 的替代方案，提供 `TestContext`。
 
@@ -442,11 +489,25 @@ export interface TestContext {
   };
   /** The `expect` API bound to the current test */
   expect: Expect;
+  /** Skip the current test during execution */
+  skip: () => never;
   /** The `onTestFinished` hook bound to the current test */
   onTestFinished: OnTestFinished;
   /** The `onTestFailed` hook bound to the current test */
   onTestFailed: OnTestFailed;
 }
+```
+
+你可以使用 `context.skip()` 在测试运行过程中跳过当前测试。`context.skip()` 之后的代码不会继续执行，测试结果会被标记为 skipped：
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test('skipped test', (context) => {
+  context.skip();
+
+  expect(1 + 1).toBe(3);
+});
 ```
 
 你也可以通过 `test.extend` 方法通过自定义 fixture 的方式来扩展测试上下文。

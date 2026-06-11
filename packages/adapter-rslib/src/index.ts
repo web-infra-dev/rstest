@@ -1,6 +1,7 @@
-import { dirname, isAbsolute, normalize, resolve } from 'node:path';
+import { normalize } from 'node:path';
 import { loadConfig, type RslibConfig, mergeRslibConfig } from '@rslib/core';
 import type { ExtendConfig, ExtendConfigFn } from '@rstest/core';
+import { resolveBuildCache } from '@rstest/core/internal/adapter';
 
 export interface WithRslibConfigOptions {
   /**
@@ -24,77 +25,6 @@ export interface WithRslibConfigOptions {
    */
   modifyLibConfig?: (libConfig: RslibConfig) => RslibConfig;
 }
-
-type BuildCacheConfig = NonNullable<
-  NonNullable<RslibConfig['performance']>['buildCache']
->;
-type BuildCacheOutput =
-  | boolean
-  | {
-      cacheDirectory?: string;
-      cacheDigest?: Array<string | undefined>;
-      buildDependencies?: string[];
-    }
-  | undefined;
-
-const getCacheDependency = ({
-  dependency,
-  configPath,
-  root,
-}: {
-  dependency: string;
-  configPath?: string;
-  root?: string;
-}): string => {
-  if (isAbsolute(dependency)) {
-    return dependency;
-  }
-
-  if (configPath) {
-    return resolve(dirname(configPath), dependency);
-  }
-
-  return root ? resolve(root, dependency) : dependency;
-};
-
-const updateCacheConfig = ({
-  buildCache,
-  configPath,
-  root,
-}: {
-  buildCache?: BuildCacheConfig;
-  configPath?: string;
-  root?: string;
-}): BuildCacheOutput => {
-  if (buildCache === undefined) {
-    return undefined;
-  }
-
-  if (buildCache === false) {
-    return false;
-  }
-
-  if (buildCache === true) {
-    return configPath ? { buildDependencies: [configPath] } : true;
-  }
-
-  const buildDependencies = buildCache.buildDependencies?.map((dependency) =>
-    getCacheDependency({
-      dependency,
-      configPath,
-      root,
-    }),
-  );
-  const nextBuildDependencies = configPath
-    ? Array.from(new Set([...(buildDependencies || []), configPath]))
-    : buildDependencies;
-
-  return {
-    cacheDirectory: buildCache.cacheDirectory,
-    cacheDigest: buildCache.cacheDigest,
-    buildDependencies: nextBuildDependencies,
-  };
-};
 
 export function withRslibConfig(
   options: WithRslibConfigOptions = {},
@@ -195,7 +125,7 @@ export function withRslibConfig(
         module: finalLibConfig.output?.module ?? libConfig.format !== 'cjs',
       },
       performance: {
-        buildCache: updateCacheConfig({
+        buildCache: resolveBuildCache({
           buildCache,
           configPath: filePath,
           root: finalLibConfig.root,
@@ -207,6 +137,10 @@ export function withRslibConfig(
         bundlerChain,
       } as ExtendConfig['tools'],
 
+      // rslib builds libraries, which are Node-first: only an explicit `web`
+      // target maps to a browser env, everything else (including no target)
+      // defaults to `node`. This is the inverse of the rsbuild/rspack adapters'
+      // `resolveTestEnvironmentFromTarget` default, so this rule stays local.
       testEnvironment: target === 'web' ? 'happy-dom' : 'node',
     } as ExtendConfig;
 

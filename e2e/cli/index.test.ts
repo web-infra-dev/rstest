@@ -94,6 +94,24 @@ describe.concurrent('test exit code', () => {
     await expectExecSuccess();
   });
 
+  it('should return code 1 when required dot-notation option value is missing', async ({
+    onTestFinished,
+  }) => {
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'success.test.ts', '--pool.type'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expectStderrLog(/option `--pool\.type <type>` value is missing/);
+  });
+
   it('should support browser shorthand with nested browser options', async ({
     onTestFinished,
   }) => {
@@ -105,6 +123,28 @@ describe.concurrent('test exit code', () => {
         '--no-browser',
         '--browser.name',
         'chromium',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
+  it('should support source.tsconfigPath from CLI options', async ({
+    onTestFinished,
+  }) => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/tsconfig-path.test.ts',
+        '--source.tsconfigPath',
+        'fixtures/tsconfig-cli-options.json',
       ],
       onTestFinished,
       options: {
