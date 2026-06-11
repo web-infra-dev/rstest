@@ -117,6 +117,28 @@ describe.concurrent('test exit code', () => {
     await expectExecSuccess();
   });
 
+  it('should support source.tsconfigPath from CLI options', async ({
+    onTestFinished,
+  }) => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/tsconfig-path.test.ts',
+        '--source.tsconfigPath',
+        'fixtures/tsconfig-cli-options.json',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
   it('should return code 1 and print error correctly when test config error', async ({
     onTestFinished,
   }) => {

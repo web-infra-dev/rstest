@@ -11,6 +11,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 - **Type:** `boolean`
 - **Default:** `true`
+- **CLI:** `--output.module`
 
 Whether to output JavaScript files in ES module format.
 
@@ -266,6 +267,7 @@ For custom CSS Modules configuration.
 
 - **Type:** `boolean`
 - **Default:** `true`
+- **CLI:** `--output.emitAssets`
 
 Controls whether imported static assets such as images, fonts, audio, and video are emitted as build assets during test builds.
 
@@ -310,6 +312,8 @@ export default defineConfig({
 After this change, rstest will use `<root>/custom/.rstest-temp` as the temporary output root instead of `<root>/dist/.rstest-temp`.
 
 ## output.cleanDistPath <RsbuildDocBadge path="/config/output/clean-dist-path" text="output.cleanDistPath" />
+
+- **CLI:** `--output.cleanDistPath`
 
 Whether to clean up all test temporary files under the output directory before the test starts.
 
