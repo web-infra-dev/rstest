@@ -15,7 +15,8 @@
     "lint:type": "rslint",
     "prepare": "lefthook install && pnpm run build",
     "test": "rstest",
-    "test:examples": "pnpm --filter \"@examples/*\" test",
+    "test:examples": "pnpm --filter \"@examples/*\" --filter \"!@examples/federation*\" test",
+    "test:federation": "pnpm -C examples/federation test",
     "test:vscode": "pnpm --filter ./packages/vscode test",
     "typecheck": "pnpm --filter \"!@examples/*\" run typecheck"
   },
