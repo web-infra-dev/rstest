@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rslib",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "description": "Rstest adapter for rslib configuration",
   "keywords": [
     "rstest",
