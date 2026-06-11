@@ -284,7 +284,7 @@ export const loadModule = ({
   const fn = vm.compileFunction(code, Object.keys(context), {
     // Used in stack traces produced by this script.
     filename: distPath,
-    lineOffset: 0,
+    lineOffset: -1,
     columnOffset: 0,
     importModuleDynamically: (specifier, _referencer, importAttributes) => {
       return defineRstestDynamicImport({

@@ -135,6 +135,31 @@ describe('require.resolve origin runtime helper', () => {
     expect(extraParamNames).toContain('__rstest_future_context_param__');
     expect(extraParamOptions?.columnOffset).toBe(baseOptions?.columnOffset);
     expect(extraParamOptions?.columnOffset).toBe(0);
+    expect(extraParamOptions?.lineOffset).toBe(baseOptions?.lineOffset);
+    expect(extraParamOptions?.lineOffset).toBe(-1);
+  });
+
+  it('preserves CommonJS stack trace line offsets', () => {
+    const dir = path.join(os.tmpdir(), `rstest-cjs-stack-${Date.now()}`);
+    const distPath = path.join(dir, 'bundle.js');
+
+    let error: unknown;
+
+    try {
+      loadModule({
+        codeContent: `throw new Error('line-offset-check');`,
+        distPath,
+        testPath: path.join(dir, 'test.spec.ts'),
+        rstestContext: {},
+        assetFiles: {},
+        interopDefault: true,
+      });
+    } catch (err) {
+      error = err;
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).stack).toContain(`${distPath}:1:7`);
   });
 
   it('attaches the helper to import.meta in esm mode', async () => {
