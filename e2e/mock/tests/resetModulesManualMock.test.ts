@@ -1,13 +1,18 @@
-import { expect, it, rs } from '@rstest/core';
+import { afterAll, expect, it, rs } from '@rstest/core';
 import redux from 'redux';
 
-// `rs.mock('redux')` with no factory resolves to the manual mock in
-// `e2e/__mocks__/redux.ts` (the string/number "module id" mock path).
-// Regression: that mock must survive `rs.resetModules()` — which clears the
-// module cache — instead of falling back to the real module on a later import.
+// `rs.mock(id)` with no factory applies the manual mock under `__mocks__/`.
+// Regression: the manual mock must keep applying after `rs.resetModules()` —
+// for both a bundled module and a dynamically imported external — instead of
+// reverting to the real module on a later import.
 rs.mock('redux');
+rs.mock('node:dns');
 
-it('manual mock survives rs.resetModules()', async () => {
+afterAll(() => {
+  rs.doUnmock('node:dns');
+});
+
+it('bundled manual mock survives rs.resetModules()', async () => {
   // @ts-expect-error: redux is mocked to a plain object.
   expect(redux.mocked).toBe('redux_yes');
 
@@ -17,4 +22,18 @@ it('manual mock survives rs.resetModules()', async () => {
     mocked?: string;
   };
   expect(reloaded?.mocked).toBe('redux_yes');
+});
+
+it('dynamically imported external manual mock survives rs.resetModules()', async () => {
+  const before = (await import('node:dns')).default as unknown as {
+    __tag?: string;
+  };
+  expect(before?.__tag).toBe('MOCKED_DNS');
+
+  rs.resetModules();
+
+  const after = (await import('node:dns')).default as unknown as {
+    __tag?: string;
+  };
+  expect(after?.__tag).toBe('MOCKED_DNS');
 });
