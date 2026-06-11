@@ -31,6 +31,7 @@ export const BROWSER_PORTS = {
   silent: 5230,
   'browser-coverage-multiproject': 5228,
   related: 5232,
+  'multi-project-config': 5234,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);
