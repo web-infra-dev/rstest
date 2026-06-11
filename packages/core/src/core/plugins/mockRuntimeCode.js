@@ -1,5 +1,26 @@
 // Rstest runtime code should be prefixed with `rstest_` to avoid conflicts with other runtimes.
 
+//#region federation dynamic import fallback
+// Async-node outputs (including Module Federation runtimes) externalize
+// dynamic imports to `__rstest_dynamic_import__(<abs-path>)` calls. Chunks
+// evaluated via vm/eval — instead of the worker's `loadModule` — never receive
+// the function-argument injection that normally provides that hook, so the
+// free-identifier lookup falls through to `globalThis`. Provide a fallback
+// there that relies on Node's native dynamic import.
+var __rstest_dynamic_import__;
+if (globalThis.__rstest_federation__) {
+  globalThis.__rstest_dynamic_import__ =
+    globalThis.__rstest_dynamic_import__ ||
+    function (specifier, importAttributes) {
+      return import(specifier, importAttributes);
+    };
+  // Mirror onto the local binding: bundler output in this chunk's scope calls
+  // `__rstest_dynamic_import__` as a free identifier, which resolves to the
+  // `var` above (undefined when this chunk itself was evaluated via vm/eval).
+  __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__;
+}
+//#endregion
+
 const originalWebpackRequire = __webpack_require__;
 
 //#region proxy __webpack_require__
@@ -17,6 +38,43 @@ __webpack_require__ = new Proxy(
   },
   {
     set(target, property, value) {
+      if (
+        globalThis.__rstest_federation__ &&
+        property === 'f' &&
+        value &&
+        typeof value === 'object'
+      ) {
+        // The bundler assigns `__webpack_require__.f = {}` early, and later
+        // runtime modules install throwing placeholders via
+        // `f.consumes = f.consumes || thrower`. Pre-seeding no-ops keeps the
+        // placeholders from ever being installed, so eager chunk loading
+        // cannot fail before the federation runtime initializes.
+        value.consumes ??= function () {};
+        value.remotes ??= function () {};
+
+        // Module Federation's Node runtime plugin patches chunk-loading
+        // handlers (`readFileVm` / `require`) to load chunks via native
+        // require, which would evaluate them outside this runtime instance
+        // and lose Rstest's mocks and shims. Freeze those handlers once
+        // Rspack installs them.
+        const proxied = new Proxy(value, {
+          set(obj, key, val) {
+            if ((key === 'readFileVm' || key === 'require') && obj[key]) {
+              console.warn(
+                `[Rstest Federation] Ignoring attempt to overwrite __webpack_require__.f.${String(
+                  key,
+                )} after it was initialized.`,
+              );
+              return true;
+            }
+            obj[key] = val;
+            return true;
+          },
+        });
+        target[property] = proxied;
+        originalWebpackRequire[property] = proxied;
+        return true;
+      }
       target[property] = value;
       originalWebpackRequire[property] = value;
       return true;
@@ -41,6 +99,30 @@ __webpack_require__.rstest_original_module_factories = {};
 // Null-prototype because keys are user-controlled request strings that must
 // not collide with `Object.prototype` members.
 __webpack_require__.rstest_mocked_ids_by_request = Object.create(null);
+
+//#region federation chunk handler placeholders
+// When `__webpack_require__.f` was populated before this runtime module ran,
+// the pre-seeding in the `set` trap above never saw it, and Module Federation
+// placeholder handlers that throw until the federation runtime initializes
+// may already be installed. Replace them with no-ops — the real runtime
+// overrides them once it boots.
+if (globalThis.__rstest_federation__ && __webpack_require__.f) {
+  for (const key of ['consumes', 'remotes']) {
+    if (typeof __webpack_require__.f[key] !== 'function') {
+      continue;
+    }
+    const source = Function.prototype.toString.call(__webpack_require__.f[key]);
+    // The bundler generates placeholders whose body throws
+    // `"should have __webpack_require__.f.<key> ..."`.
+    if (
+      source.includes('should have __webpack_require__.f.') ||
+      source.includes('should have __webpack_require__.f[')
+    ) {
+      __webpack_require__.f[key] = function () {};
+    }
+  }
+}
+//#endregion
 
 const hasOwn = (target, property) => Object.hasOwn(target, property);
 

@@ -44,6 +44,7 @@ const runGlobalSetup = async (data: {
   sourceMaps: Record<string, string>;
   interopDefault: boolean;
   outputModule: boolean;
+  federation: boolean;
 }): Promise<{
   success: boolean;
   hasTeardown: boolean;
@@ -72,6 +73,10 @@ const runGlobalSetup = async (data: {
 
     // Start tracking environment changes
     trackEnvChanges();
+
+    // `mockRuntimeCode.js` gates its Module Federation shims on this
+    // worker-wide flag, so it must be set before any setup code is evaluated.
+    (globalThis as any).__rstest_federation__ = data.federation === true;
 
     for (const entry of data.entries) {
       const { distPath, runtimeDistPath, testPath } = entry;

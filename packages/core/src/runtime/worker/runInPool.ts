@@ -129,6 +129,11 @@ const preparePool = async (
   const taskContext = createNodeTaskContext();
   setRealTimers();
 
+  // `mockRuntimeCode.js` gates its Module Federation shims on this worker-wide
+  // flag, so it must be set before any bundle code is evaluated.
+  (globalThis as any).__rstest_federation__ =
+    context.runtimeConfig.federation === true;
+
   const cleanupFns: (() => MaybePromise<void>)[] = [];
 
   const disposeFns: (() => void)[] = [];

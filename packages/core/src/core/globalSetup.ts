@@ -191,12 +191,14 @@ export async function runGlobalSetup({
   sourceMaps,
   interopDefault,
   outputModule,
+  federation,
 }: {
   globalSetupEntries: EntryInfo[];
   assetFiles: Record<string, string>;
   sourceMaps: Record<string, string>;
   interopDefault: boolean;
   outputModule: boolean;
+  federation: boolean;
 }): Promise<{
   success: boolean;
   errors?: any[];
@@ -215,6 +217,7 @@ export async function runGlobalSetup({
       assetFiles,
       interopDefault,
       outputModule,
+      federation,
       sourceMaps,
     },
   });
