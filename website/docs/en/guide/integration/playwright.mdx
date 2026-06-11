@@ -7,7 +7,7 @@ import { PackageManagerTabs } from '@theme';
 
 # Playwright
 
-<ApiMeta addedVersion="0.10.4" />
+<ApiMeta addedVersion="0.10.5" />
 
 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) provides Playwright fixtures and Playwright-style assertions for Rstest tests that run in Node.js workers. Use it for E2E tests against a complete page or app, such as a local dev server, a preview server, or a deployed URL. The test runs in Node.js and uses Playwright to drive the page.
 
@@ -180,7 +180,7 @@ The `playwright` fixture supports these options:
 | `requestOptions` | Options passed to `request.newContext()`.            |
 | `debug`          | Convenience options for local headed debugging.      |
 
-For Playwright E2E projects, set `isolate: false` in `rstest.config.ts`. Tests in the same test file will run in the same worker, so `@rstest/playwright` can clean up browsers, contexts, pages, and local servers when the file finishes:
+For Playwright E2E projects, set `isolate: false` in `rstest.config.ts` to reuse the worker module cache across test files and avoid repeated Playwright startup cost:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

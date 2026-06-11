@@ -7,7 +7,7 @@ import { PackageManagerTabs } from '@theme';
 
 # Playwright
 
-<ApiMeta addedVersion="0.10.4" />
+<ApiMeta addedVersion="0.10.5" />
 
 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 为运行在 Node.js worker 中的 Rstest 测试提供 Playwright fixtures 和 Playwright 风格的断言。它适合对一个完整页面或应用做 E2E 测试，例如本地 dev server、preview server 或线上 URL。测试代码运行在 Node.js 中，并通过 Playwright 控制页面。
 
@@ -180,7 +180,7 @@ e2e('mobile page', async ({ page }) => {
 | `requestOptions` | 传给 `request.newContext()` 的选项。        |
 | `debug`          | 用于本地 headed 调试的便捷选项。            |
 
-对于 Playwright E2E 项目，建议在 `rstest.config.ts` 中设置 `isolate: false`。这样同一个测试文件里的测试会在同一个 worker 中运行，`@rstest/playwright` 可以在文件结束时统一清理 browser、context、page 和本地 server：
+对于 Playwright E2E 项目，建议在 `rstest.config.ts` 中设置 `isolate: false`，从而在不同测试文件间复用 worker module cache，减少重复启动 Playwright 的开销：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
