@@ -6,8 +6,7 @@
     "test": "rstest run",
     "test:commonjs": "cross-env RSTEST_OUTPUT_MODULE=false rstest run",
     "test:no-isolate": "cross-env ISOLATE=false rstest --isolate false",
-    "test:threads": "rstest run --pool.type threads",
-    "typecheck": "tsc --noEmit"
+    "test:threads": "rstest run --pool.type threads"
   },
   "devDependencies": {
     "@rsbuild/core": "~2.0.11",

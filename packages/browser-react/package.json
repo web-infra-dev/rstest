@@ -40,8 +40,7 @@
   "scripts": {
     "build": "rslib build",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
-    "test": "rstest",
-    "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser-react/tsconfig.json"
+    "test": "rstest"
   },
   "devDependencies": {
     "@rslib/core": "0.22.0",

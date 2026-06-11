@@ -29,8 +29,7 @@
   ],
   "scripts": {
     "build": "rslib build",
-    "test": "rstest",
-    "typecheck": "tsc --noEmit"
+    "test": "rstest"
   },
   "dependencies": {
     "acorn": "^8.16.0",
