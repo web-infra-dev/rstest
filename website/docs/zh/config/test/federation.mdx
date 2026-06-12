@@ -14,6 +14,8 @@ import { ApiMeta } from '@components/ApiMeta';
 
 是否启用 [Module Federation](https://module-federation.io/) 兼容模式。
 
+该选项适用于 Rstest 基于 Node 的 runner，包括 `testEnvironment: 'node'` 以及 `jsdom`、`happy-dom` 等 DOM 模拟环境。它不会启用或改变 Rstest Browser Mode（`browser.enabled: true`）。
+
 Rstest 在单个 worker 运行时中执行测试产物，以保证模块 mock 始终生效。而 Module Federation 运行时会自行加载远程入口和 chunk —— 通过 Node 的 `fs`/`vm`/`eval` 或 HTTP —— 这发生在该运行时之外。启用 `federation` 后，Rstest 会安装额外的运行时垫片，让两者协同工作：
 
 - 为外部化的动态导入提供 `globalThis` 兜底实现，使通过 `vm`/`eval` 执行的 federation 运行时 chunk 仍能使用 Node 原生动态导入加载模块。

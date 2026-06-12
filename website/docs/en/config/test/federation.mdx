@@ -14,6 +14,8 @@ import { ApiMeta } from '@components/ApiMeta';
 
 Whether to enable [Module Federation](https://module-federation.io/) compatibility mode.
 
+This option applies to Rstest's Node-based runner, including `testEnvironment: 'node'` and DOM-simulated environments such as `jsdom` and `happy-dom`. It does not enable or change Rstest Browser Mode (`browser.enabled: true`).
+
 Rstest evaluates test bundles inside a single worker runtime so that module mocks stay effective. Module Federation runtimes load remote entries and chunks on their own — via Node `fs`/`vm`/`eval` or over HTTP — outside of that runtime. When `federation` is enabled, Rstest installs additional runtime shims to make the two work together:
 
 - Externalized dynamic imports get a `globalThis` fallback, so federation runtime chunks evaluated via `vm`/`eval` can still load modules with Node's native dynamic import.
