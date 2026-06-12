@@ -16,7 +16,7 @@
   },
   "devDependencies": {
     "@module-federation/rsbuild-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a",
-    "@module-federation/rstest": "https://pkg.pr.new/module-federation/core/@module-federation/rstest@5a6de69",
+    "@module-federation/rstest": "https://pkg.pr.new/module-federation/core/@module-federation/rstest@58cc69a",
     "@rsbuild/core": "~2.0.12",
     "@rsbuild/plugin-react": "^2.0.1",
     "@rstest/core": "workspace:*",
