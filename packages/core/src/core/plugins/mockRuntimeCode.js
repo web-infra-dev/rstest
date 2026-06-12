@@ -13,6 +13,16 @@ if (globalThis.__rstest_federation__) {
   globalThis.__rstest_dynamic_import__ =
     globalThis.__rstest_dynamic_import__ ||
     function (specifier, importAttributes) {
+      // Absolute filesystem paths must round-trip through `pathToFileURL`
+      // before reaching native `import()`: Windows drive letters (`C:\...`)
+      // would otherwise be parsed as a URL scheme, and `#` / `%` in paths
+      // need percent-encoding — the same normalization the worker applies in
+      // `resolveDynamicImport.ts`.
+      if (/^(?:[A-Za-z]:[\\/]|[\\/])/.test(specifier)) {
+        return import('node:url').then(
+          (url) => import(url.pathToFileURL(specifier).href, importAttributes),
+        );
+      }
       return import(specifier, importAttributes);
     };
 }
