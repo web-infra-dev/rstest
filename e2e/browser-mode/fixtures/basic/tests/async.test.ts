@@ -40,8 +40,6 @@ describe('Async operations', () => {
 
     // Wait for next frame
     await new Promise((resolve) => globalThis.requestAnimationFrame(resolve));
-    await sleep(50);
-
     expect(called).toBe(true);
   });
 
@@ -65,7 +63,7 @@ describe('Async operations', () => {
       count++;
     }, 20);
 
-    await sleep(300);
+    await sleep(120);
     globalThis.clearInterval(intervalId);
 
     expect(count).toBeGreaterThanOrEqual(2);

@@ -40,3 +40,6 @@ if (new Set(browserPortValues).size !== browserPortValues.length) {
     `Duplicate browser fixture ports detected: ${JSON.stringify(BROWSER_PORTS)}`,
   );
 }
+
+export const BROWSER_TEST_TIMEOUT =
+  process.platform === 'win32' ? 20_000 : 10_000;

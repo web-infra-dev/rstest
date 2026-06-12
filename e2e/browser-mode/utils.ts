@@ -1,5 +1,6 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import treeKill from 'tree-kill';
 import { runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -59,6 +60,65 @@ export const expectNoFrameworkWarnings = (cli: {
   throw new Error(
     `Expected no framework warnings in CLI output, found:\n${offending.join('\n')}`,
   );
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const WINDOWS_PROCESS_CLEANUP_RETRY_COUNT = 40;
+const POSIX_PROCESS_CLEANUP_RETRY_COUNT = 20;
+
+type BrowserCli = Awaited<ReturnType<typeof runRstestCli>>['cli'];
+
+/**
+ * Kill a spawned rstest process tree without adding a fixed post-kill delay.
+ * The tree-kill callback is enough for POSIX cleanup; Windows cleanup retries are
+ * handled by deleteFixtureTarget where file handle contention can surface.
+ */
+export const killCliProcessTree = async (cli: BrowserCli): Promise<void> => {
+  const pid = cli.exec.process?.pid;
+  if (!pid) {
+    cli.exec.kill();
+    await sleep(50);
+    return;
+  }
+
+  await new Promise<void>((resolve) => {
+    treeKill(pid, 'SIGKILL', () => resolve());
+  });
+};
+
+export const deleteFixtureTarget = async (
+  fixtureFs: { delete: (targetPath: string) => void } | undefined,
+  targetPath: string,
+): Promise<void> => {
+  if (!fixtureFs) {
+    return;
+  }
+
+  try {
+    fixtureFs.delete(targetPath);
+    return;
+  } catch (err) {
+    if (process.platform !== 'win32') {
+      throw err;
+    }
+  }
+
+  const retryCount =
+    process.platform === 'win32'
+      ? WINDOWS_PROCESS_CLEANUP_RETRY_COUNT
+      : POSIX_PROCESS_CLEANUP_RETRY_COUNT;
+
+  for (let attempt = 0; attempt < retryCount; attempt++) {
+    await sleep(50);
+    try {
+      fixtureFs.delete(targetPath);
+      return;
+    } catch {
+      // Retry briefly on Windows where killed browser processes can release file
+      // handles a little after the kill callback fires.
+    }
+  }
 };
 
 /**
