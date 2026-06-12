@@ -23,8 +23,7 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "rsbuild build --config ./rsbuild.config.ts",
-    "dev": "rsbuild dev --config ./rsbuild.config.ts",
-    "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser-ui/tsconfig.json"
+    "dev": "rsbuild dev --config ./rsbuild.config.ts"
   },
   "dependencies": {
     "antd": "^6.4.3",
