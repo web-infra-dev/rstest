@@ -4,8 +4,8 @@ import type {
   ProjectEntries,
 } from '../types';
 import {
-  applyEnvironmentPragma,
-  parseEnvironmentPragmaFromFile,
+  applyEnvironmentComment,
+  parseEnvironmentCommentFromFile,
 } from '../utils';
 
 const stableJson = (value: unknown): string => {
@@ -70,11 +70,11 @@ export const groupProjectEntriesByEnvironment = async ({
     }
 
     for (const [entryName, testPath] of projectEntryItems) {
-      const pragma = await parseEnvironmentPragmaFromFile(testPath);
-      const testEnvironment = pragma
-        ? applyEnvironmentPragma(
+      const comment = await parseEnvironmentCommentFromFile(testPath);
+      const testEnvironment = comment
+        ? applyEnvironmentComment(
             project.normalizedConfig.testEnvironment,
-            pragma,
+            comment,
           )
         : project.normalizedConfig.testEnvironment;
       const key = stableJson(testEnvironment);

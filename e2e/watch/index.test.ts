@@ -39,11 +39,11 @@ const expectRerun = (
 // TODO: The following error occurs only on Windows CI. It should appear in the Rspack version range from 1.5.0 to 1.6.0-beta.0.
 // Error: EBUSY: resource busy or locked, rmdir 'D:\a\rstest\rstest\e2e\watch\fixtures-test-0'
 describe.skipIf(process.platform === 'win32')('watch', () => {
-  it('should honor environment pragmas', async () => {
-    const fixturesTargetPath = `${__dirname}/fixtures-test-environment-pragma${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
+  it('should honor environment comments', async () => {
+    const fixturesTargetPath = `${__dirname}/fixtures-test-environment-comment${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
 
     const { fs } = await prepareFixtures({
-      fixturesPath: `${__dirname}/fixtures-environment-pragma`,
+      fixturesPath: `${__dirname}/fixtures-environment-comment`,
       fixturesTargetPath,
     });
 

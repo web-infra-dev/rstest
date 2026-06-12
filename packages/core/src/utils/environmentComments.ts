@@ -1,24 +1,24 @@
 import { open, stat } from 'node:fs/promises';
 import type { EnvironmentName, EnvironmentWithOptions } from '../types';
 
-const MAX_PRAGMA_BYTES = 4096;
+const MAX_COMMENT_BYTES = 4096;
 const SUPPORTED_ENVIRONMENTS = ['node', 'jsdom', 'happy-dom'] as const;
-const environmentPragmaRE = /@(?:rstest|vitest|jest)-environment\s+([^\s*]+)/;
-const environmentOptionsPragmaRE =
+const environmentCommentRE = /@(?:rstest|vitest|jest)-environment\s+([^\s*]+)/;
+const environmentOptionsCommentRE =
   /@(?:rstest|vitest|jest)-environment-options\s+(.+?)(?:\r?\n|$)/;
 
-export type EnvironmentPragma = {
+export type EnvironmentComment = {
   name?: EnvironmentName;
   options?: Record<string, unknown>;
 };
 
-type CachedPragma = {
+type CachedEnvironmentComment = {
   mtimeMs: number;
   size: number;
-  result: EnvironmentPragma | null;
+  result: EnvironmentComment | null;
 };
 
-const pragmaCache = new Map<string, CachedPragma>();
+const environmentCommentCache = new Map<string, CachedEnvironmentComment>();
 
 const isEnvironmentName = (name: string): name is EnvironmentName =>
   SUPPORTED_ENVIRONMENTS.includes(name as EnvironmentName);
@@ -26,8 +26,8 @@ const isEnvironmentName = (name: string): name is EnvironmentName =>
 const readFileHead = async (file: string): Promise<string> => {
   const handle = await open(file, 'r');
   try {
-    const buffer = Buffer.alloc(MAX_PRAGMA_BYTES);
-    const { bytesRead } = await handle.read(buffer, 0, MAX_PRAGMA_BYTES, 0);
+    const buffer = Buffer.alloc(MAX_COMMENT_BYTES);
+    const { bytesRead } = await handle.read(buffer, 0, MAX_COMMENT_BYTES, 0);
     return buffer.subarray(0, bytesRead).toString('utf-8');
   } finally {
     await handle.close();
@@ -40,22 +40,22 @@ const normalizeOptionsText = (text: string): string =>
 const isFileNotFoundError = (error: unknown): boolean =>
   error instanceof Error && 'code' in error && error.code === 'ENOENT';
 
-export const parseEnvironmentPragma = (
+export const parseEnvironmentComment = (
   code: string,
   filePath = '<inline>',
-): EnvironmentPragma | null => {
+): EnvironmentComment | null => {
   if (!code.includes('@') || !code.includes('environment')) {
     return null;
   }
 
-  const environmentMatch = environmentPragmaRE.exec(code);
-  const optionsMatch = environmentOptionsPragmaRE.exec(code);
+  const environmentMatch = environmentCommentRE.exec(code);
+  const optionsMatch = environmentOptionsCommentRE.exec(code);
 
   if (!environmentMatch && !optionsMatch) {
     return null;
   }
 
-  const pragma: EnvironmentPragma = {};
+  const comment: EnvironmentComment = {};
   const environmentName = environmentMatch?.[1];
   if (environmentName) {
     if (!isEnvironmentName(environmentName)) {
@@ -63,7 +63,7 @@ export const parseEnvironmentPragma = (
         `Unsupported test environment "${environmentName}" in ${filePath}. Supported environments: ${SUPPORTED_ENVIRONMENTS.join(', ')}.`,
       );
     }
-    pragma.name = environmentName;
+    comment.name = environmentName;
   }
 
   const optionsText = optionsMatch?.[1];
@@ -73,7 +73,7 @@ export const parseEnvironmentPragma = (
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         throw new Error('environment options must be a JSON object');
       }
-      pragma.options = parsed as Record<string, unknown>;
+      comment.options = parsed as Record<string, unknown>;
     } catch (error) {
       throw new Error(
         `Failed to parse test environment options in ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
@@ -81,12 +81,12 @@ export const parseEnvironmentPragma = (
     }
   }
 
-  return pragma;
+  return comment;
 };
 
-export const parseEnvironmentPragmaFromFile = async (
+export const parseEnvironmentCommentFromFile = async (
   file: string,
-): Promise<EnvironmentPragma | null> => {
+): Promise<EnvironmentComment | null> => {
   const fileStat = await stat(file).catch((error: unknown) => {
     if (isFileNotFoundError(error)) {
       return null;
@@ -98,16 +98,16 @@ export const parseEnvironmentPragmaFromFile = async (
     return null;
   }
 
-  const cached = pragmaCache.get(file);
+  const cached = environmentCommentCache.get(file);
 
   if (cached?.mtimeMs === fileStat.mtimeMs && cached.size === fileStat.size) {
     return cached.result;
   }
 
   const head = await readFileHead(file);
-  const result = parseEnvironmentPragma(head, file);
+  const result = parseEnvironmentComment(head, file);
 
-  pragmaCache.set(file, {
+  environmentCommentCache.set(file, {
     mtimeMs: fileStat.mtimeMs,
     size: fileStat.size,
     result,
@@ -116,15 +116,15 @@ export const parseEnvironmentPragmaFromFile = async (
   return result;
 };
 
-export const applyEnvironmentPragma = (
+export const applyEnvironmentComment = (
   baseEnvironment: EnvironmentWithOptions,
-  pragma: EnvironmentPragma,
+  comment: EnvironmentComment,
 ): EnvironmentWithOptions => {
-  const name = pragma.name ?? baseEnvironment.name;
+  const name = comment.name ?? baseEnvironment.name;
   const options =
     name === baseEnvironment.name
-      ? { ...(baseEnvironment.options || {}), ...(pragma.options || {}) }
-      : pragma.options;
+      ? { ...(baseEnvironment.options || {}), ...(comment.options || {}) }
+      : comment.options;
 
   return options && Object.keys(options).length > 0
     ? { name, options }

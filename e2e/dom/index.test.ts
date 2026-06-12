@@ -9,10 +9,10 @@ const externalConfigArgs = ['--config', 'rstest.externals.config.mts'];
 describe('jsdom', () => {
   it('should run test correctly with environment comment', async () => {
     const { expectExecSuccess } = await runCli(
-      'test/environmentPragma',
+      'test/environmentComment',
       undefined,
       {
-        args: ['--config', 'rstest.environmentPragma.config.mts'],
+        args: ['--config', 'rstest.environmentComment.config.mts'],
       },
     );
     await expectExecSuccess();

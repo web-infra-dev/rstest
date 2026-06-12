@@ -4,10 +4,10 @@ import path from 'node:path';
 import { groupProjectEntriesByEnvironment } from '../../src/core/environmentGroups';
 import type { ProjectContext } from '../../src/types';
 import {
-  applyEnvironmentPragma,
-  parseEnvironmentPragma,
-  parseEnvironmentPragmaFromFile,
-} from '../../src/utils/environmentPragmas';
+  applyEnvironmentComment,
+  parseEnvironmentComment,
+  parseEnvironmentCommentFromFile,
+} from '../../src/utils/environmentComments';
 
 const fixturesRoot = path.join(process.cwd(), 'packages/core/tests/fixtures');
 
@@ -31,10 +31,10 @@ const createProject = (): ProjectContext => ({
   } as ProjectContext['normalizedConfig'],
 });
 
-describe('environment pragmas', () => {
-  it('parses rstest environment and options pragmas', () => {
+describe('environment comments', () => {
+  it('parses rstest environment and options comments', () => {
     expect(
-      parseEnvironmentPragma(`/**
+      parseEnvironmentComment(`/**
  * @rstest-environment jsdom
  * @rstest-environment-options { "url": "https://example.test/" }
  */`),
@@ -47,17 +47,19 @@ describe('environment pragmas', () => {
   });
 
   it('parses vitest and jest aliases', () => {
-    expect(parseEnvironmentPragma('// @vitest-environment happy-dom')).toEqual({
-      name: 'happy-dom',
-    });
-    expect(parseEnvironmentPragma('// @jest-environment node')).toEqual({
+    expect(parseEnvironmentComment('// @vitest-environment happy-dom')).toEqual(
+      {
+        name: 'happy-dom',
+      },
+    );
+    expect(parseEnvironmentComment('// @jest-environment node')).toEqual({
       name: 'node',
     });
   });
 
-  it('merges options when pragma keeps the base environment', () => {
+  it('merges options when comment keeps the base environment', () => {
     expect(
-      applyEnvironmentPragma(
+      applyEnvironmentComment(
         {
           name: 'jsdom',
           options: {
@@ -67,14 +69,14 @@ describe('environment pragmas', () => {
         },
         {
           options: {
-            url: 'https://pragma.test/',
+            url: 'https://comment.test/',
           },
         },
       ),
     ).toEqual({
       name: 'jsdom',
       options: {
-        url: 'https://pragma.test/',
+        url: 'https://comment.test/',
         pretendToBeVisual: true,
       },
     });
@@ -82,7 +84,10 @@ describe('environment pragmas', () => {
 
   it('rejects unsupported environments', () => {
     expect(() =>
-      parseEnvironmentPragma('// @rstest-environment custom', 'custom.test.ts'),
+      parseEnvironmentComment(
+        '// @rstest-environment custom',
+        'custom.test.ts',
+      ),
     ).toThrow(
       'Unsupported test environment "custom" in custom.test.ts. Supported environments: node, jsdom, happy-dom.',
     );
@@ -90,19 +95,19 @@ describe('environment pragmas', () => {
 
   it('rejects invalid options json with file path', () => {
     expect(() =>
-      parseEnvironmentPragma(
+      parseEnvironmentComment(
         '// @rstest-environment-options { invalid }',
         'invalid.test.ts',
       ),
     ).toThrow(/Failed to parse test environment options in invalid\.test\.ts/);
   });
 
-  it('reads pragmas from the file head', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-pragma-'));
+  it('reads comments from the file head', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
     try {
       const file = path.join(root, 'index.test.ts');
       writeFileSync(file, '// @rstest-environment jsdom\n');
-      await expect(parseEnvironmentPragmaFromFile(file)).resolves.toEqual({
+      await expect(parseEnvironmentCommentFromFile(file)).resolves.toEqual({
         name: 'jsdom',
       });
     } finally {
@@ -112,12 +117,12 @@ describe('environment pragmas', () => {
 
   it('ignores virtual entries without physical files', async () => {
     await expect(
-      parseEnvironmentPragmaFromFile('/virtual/missing.test.ts'),
+      parseEnvironmentCommentFromFile('/virtual/missing.test.ts'),
     ).resolves.toBeNull();
   });
 
   it('preserves global setup claims across synthetic environment groups', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-pragma-'));
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
     try {
       const nodeFile = path.join(root, 'node.test.ts');
       const jsdomFile = path.join(root, 'jsdom.test.ts');
