@@ -1,5 +1,5 @@
 import { defineConfig } from '@rstest/core';
-import { BROWSER_PORTS } from '../ports';
+import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT } from '../ports';
 
 export default defineConfig({
   browser: {
@@ -9,5 +9,5 @@ export default defineConfig({
     port: BROWSER_PORTS.list,
   },
   include: ['tests/**/*.test.ts'],
-  testTimeout: 30000,
+  testTimeout: BROWSER_TEST_TIMEOUT,
 });
