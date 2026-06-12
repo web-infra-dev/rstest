@@ -57,7 +57,7 @@ jobs:
           CI: true
 
       - name: Bundle Analysis
-        uses: web-infra-dev/rsdoctor-action@codex/parallel-bundle-analysis
+        uses: web-infra-dev/rsdoctor-action@af81e75f01c6d546e638a3ba1aa0ff8e8ee64ac0
         with:
           file_path: 'packages/*/.rsdoctor/**/rsdoctor-data.json'
           target_branch: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || 'main' }}
