@@ -155,7 +155,7 @@ function getEnumerableProperties(
  * Core algorithm:
  * 1. Iterate over all properties of the object
  * 2. Functions → replace with mock functions (automock) or wrap as spy (autospy)
- * 3. Plain objects → process recursively
+ * 3. Plain objects → process properties lazily
  * 4. Arrays → empty in automock mode, process elements recursively in autospy mode
  * 5. Primitive values → keep unchanged
  * 6. Use WeakMap to track processed objects and avoid circular references
@@ -281,22 +281,33 @@ export function mockObject<T extends Record<Key, any>>(
         continue;
       }
 
-      const value = source[prop];
-
-      // Check for circular references
-      if (value && typeof value === 'object' && processedRefs.has(value)) {
-        // Defer assignment until all objects are processed
-        deferredAssignments.push(() => {
-          target[prop] = processedRefs.get(value);
-        });
-        continue;
-      }
-
-      // Process and assign the value
       try {
-        target[prop] = processValue(value);
+        let initialized = false;
+        let mockedValue: any;
+        const getSourceValue = () =>
+          'value' in descriptor ? descriptor.value : source[prop];
+
+        Object.defineProperty(target, prop, {
+          configurable: true,
+          enumerable: true,
+          get: () => {
+            if (!initialized) {
+              initialized = true;
+              try {
+                mockedValue = processValue(getSourceValue());
+              } catch {
+                mockedValue = undefined;
+              }
+            }
+            return mockedValue;
+          },
+          set: (newValue) => {
+            initialized = true;
+            mockedValue = newValue;
+          },
+        });
       } catch {
-        // Ignore assignment failures (some properties may be readonly)
+        // Ignore definition failures
       }
     }
   };

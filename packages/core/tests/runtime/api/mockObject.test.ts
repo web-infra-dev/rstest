@@ -78,6 +78,37 @@ describe('mockObject automock', () => {
     expect(isMockFunction(result.own)).toBe(true);
     expect('inherited' in result).toBe(false);
   });
+
+  it('mocks nested objects lazily', () => {
+    const { run, isMockFunction } = make('automock');
+    let enumerated = false;
+    const nested = new Proxy(
+      { method: () => 'real' },
+      {
+        ownKeys: (target) => {
+          enumerated = true;
+          return Reflect.ownKeys(target);
+        },
+        getOwnPropertyDescriptor: (target, prop) => {
+          return Reflect.getOwnPropertyDescriptor(target, prop);
+        },
+      },
+    );
+    const result = run({ nested });
+
+    expect(enumerated).toBe(false);
+    expect(isMockFunction(result.nested.method)).toBe(true);
+    expect(enumerated).toBe(true);
+  });
+
+  it('allows lazy mocked properties to be overwritten', () => {
+    const { run } = make('automock');
+    const result = run({ nested: { value: 1 } });
+
+    result.nested = { value: 2 };
+
+    expect(result.nested.value).toBe(2);
+  });
 });
 
 describe('mockObject autospy', () => {
@@ -122,5 +153,28 @@ describe('mockObject autospy', () => {
     expect(isMockFunction(instance.greet)).toBe(true);
     expect(instance.greet()).toBe('hi');
     expect(instance.greet.mock.calls).toHaveLength(1);
+  });
+
+  it('spies on nested objects lazily', () => {
+    const { run, isMockFunction } = make('autospy');
+    let enumerated = false;
+    const nested = new Proxy(
+      { method: () => 'real' },
+      {
+        ownKeys: (target) => {
+          enumerated = true;
+          return Reflect.ownKeys(target);
+        },
+        getOwnPropertyDescriptor: (target, prop) => {
+          return Reflect.getOwnPropertyDescriptor(target, prop);
+        },
+      },
+    );
+    const result = run({ nested });
+
+    expect(enumerated).toBe(false);
+    expect(isMockFunction(result.nested.method)).toBe(true);
+    expect(result.nested.method()).toBe('real');
+    expect(enumerated).toBe(true);
   });
 });
