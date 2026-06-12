@@ -123,6 +123,21 @@ describe('mockObject automock', () => {
     expect(isMockFunction(MockedFoo.prototype.greet)).toBe(true);
     expect(MockedFoo.prototype.greet()).toBeUndefined();
   });
+
+  it('snapshots nested values before lazy mock initialization', () => {
+    const { run, isMockFunction } = make('automock');
+    const original = {
+      nested: {
+        method: () => 'original',
+      },
+    };
+
+    const result = run(original);
+    original.nested.method = () => 'new';
+
+    expect(isMockFunction(result.nested.method)).toBe(true);
+    expect(result.nested.method()).toBeUndefined();
+  });
 });
 
 describe('mockObject autospy', () => {
@@ -169,7 +184,7 @@ describe('mockObject autospy', () => {
     expect(instance.greet.mock.calls).toHaveLength(1);
   });
 
-  it('spies on nested objects lazily', () => {
+  it('snapshots nested object properties before access', () => {
     const { run, isMockFunction } = make('autospy');
     let enumerated = false;
     const nested = new Proxy(
@@ -186,9 +201,22 @@ describe('mockObject autospy', () => {
     );
     const result = run({ nested });
 
-    expect(enumerated).toBe(false);
+    expect(enumerated).toBe(true);
     expect(isMockFunction(result.nested.method)).toBe(true);
     expect(result.nested.method()).toBe('real');
-    expect(enumerated).toBe(true);
+  });
+
+  it('snapshots nested values before lazy spy initialization', () => {
+    const { run } = make('autospy');
+    const original = {
+      nested: {
+        method: () => 'original',
+      },
+    };
+
+    const result = run(original);
+    original.nested.method = () => 'new';
+
+    expect(result.nested.method()).toBe('original');
   });
 });
