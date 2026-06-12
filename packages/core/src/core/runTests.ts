@@ -328,7 +328,7 @@ export async function runTests(context: Rstest): Promise<void> {
     if (context.relatedResolutionEmpty) {
       return {};
     }
-    if (!isWatchMode && entriesCache.has(name)) {
+    if (entriesCache.has(name)) {
       return entriesCache.get(name)!.entries;
     }
     const { include, exclude, includeSource, root } = allProjects.find(

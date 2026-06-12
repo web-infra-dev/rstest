@@ -59,9 +59,12 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
     });
 
     await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Tests 1 passed');
+    expect(cli.stdout).toMatch('Tests 2 passed');
     expect(cli.stdout).toMatch(
       'Run all tests in project(rstest-environment-1).',
+    );
+    expect(cli.stdout).toMatch(
+      'Run all tests in project(rstest-environment-2).',
     );
 
     cli.resetStd();
@@ -70,7 +73,11 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
     });
 
     await cli.waitForStdout('Duration');
-    expectRerun(cli.stdout, ['index.test.ts'], ['index.test.ts']);
+    expectRerun(
+      cli.stdout,
+      ['index.test.ts'],
+      ['index.test.ts', 'node.test.ts'],
+    );
 
     cli.exec.kill();
   });
