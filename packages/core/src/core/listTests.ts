@@ -26,6 +26,7 @@ import {
   runGlobalSetup,
   runGlobalTeardown,
 } from './globalSetup';
+import { applyEnvironmentGroupsToListEntries } from './environmentEntries';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
 type ListedTest = {
@@ -491,6 +492,12 @@ export async function listTests(
 
     return entries;
   };
+
+  await applyEnvironmentGroupsToListEntries({
+    context,
+    testEntries,
+    globTestSourceEntries,
+  });
 
   const {
     list,

@@ -158,4 +158,22 @@ describe('dynamic-import CJS interop pipeline', () => {
       expect('bar' in lossy).toBe(true);
     });
   });
+
+  describe('Promise default export', () => {
+    const promise = Promise.resolve({ source: { entry: 'promise' } });
+    const ns = interop({ default: promise });
+
+    it('does not make the namespace thenable', async () => {
+      expect(ns.then).toBeUndefined();
+      await expect(ns.default).resolves.toEqual({
+        source: { entry: 'promise' },
+      });
+    });
+
+    it('preserves non-callable fallback then exports', () => {
+      const ns = interop({ default: { then: 1 } });
+
+      expect(ns.then).toBe(1);
+    });
+  });
 });
