@@ -17,6 +17,7 @@ import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
 import { PhaseTracker } from './phaseTracker';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
+import { RSTEST_DYNAMIC_IMPORT_HOOK } from './runtimeHooks';
 import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
 import { createNodeTaskContext } from './taskContext.node';
@@ -128,6 +129,18 @@ const preparePool = async (
 
   const taskContext = createNodeTaskContext();
   setRealTimers();
+
+  // `mockRuntimeCode.js` gates its Module Federation shims on this worker-wide
+  // flag, so it must be set before any bundle code is evaluated.
+  (globalThis as any).__rstest_federation__ =
+    context.runtimeConfig.federation === true;
+  // With `isolate: false` a previous file in this worker may have installed
+  // the global dynamic-import fallback (`mockRuntimeCode.js`). Always drop it:
+  // it keeps federation strictly opt-in for non-federation files, and for
+  // federation files the runtime module reinstalls a fresh hook whose
+  // `import()` is bound to the current bundle's vm dynamic-import context
+  // rather than the previous file's.
+  delete (globalThis as any)[RSTEST_DYNAMIC_IMPORT_HOOK];
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
 

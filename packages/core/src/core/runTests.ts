@@ -629,6 +629,7 @@ export async function runTests(context: Rstest): Promise<void> {
                 sourceMaps,
                 interopDefault: true,
                 outputModule: p.outputModule,
+                federation: p.normalizedConfig.federation,
               }),
             globalSetupTraceArgs,
           );

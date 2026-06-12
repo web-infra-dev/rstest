@@ -516,6 +516,16 @@ export interface RstestConfig {
   browser?: BrowserModeConfig;
 
   /**
+   * Enable Module Federation compatibility mode for Node tests.
+   *
+   * When enabled, Rstest installs runtime shims so that Module Federation
+   * runtimes which load chunks via Node `fs`/`vm`/`eval` or HTTP work inside
+   * the test worker.
+   * @default false
+   */
+  federation?: boolean;
+
+  /**
    * Coverage options
    */
   coverage?: CoverageOptions;

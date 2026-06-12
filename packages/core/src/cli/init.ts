@@ -102,6 +102,7 @@ export type CommonOptions = {
   bail?: number | boolean;
   shard?: string;
   includeTaskLocation?: boolean;
+  federation?: boolean;
   source?: {
     tsconfigPath?: string;
   };
@@ -172,6 +173,7 @@ export function mergeWithCLIOptions(
     'logHeapUsage',
     'detectAsyncLeaks',
     'includeTaskLocation',
+    'federation',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {

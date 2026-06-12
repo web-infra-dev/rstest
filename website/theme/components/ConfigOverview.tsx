@@ -52,7 +52,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
   },
   {
     name: 'environment',
-    items: ['pool', 'isolate', 'testEnvironment'],
+    items: ['pool', 'isolate', 'testEnvironment', 'federation'],
   },
   {
     name: 'browser',
