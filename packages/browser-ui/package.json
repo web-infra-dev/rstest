@@ -23,8 +23,7 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "rsbuild build --config ./rsbuild.config.ts",
-    "dev": "rsbuild dev --config ./rsbuild.config.ts",
-    "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser-ui/tsconfig.json"
+    "dev": "rsbuild dev --config ./rsbuild.config.ts"
   },
   "dependencies": {
     "antd": "^6.4.3",
@@ -34,7 +33,7 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.0.11",
+    "@rsbuild/core": "~2.0.12",
     "@rsbuild/plugin-react": "^2.0.1",
     "@rsbuild/plugin-svgr": "^2.0.3",
     "@tailwindcss/postcss": "^4.3.0",

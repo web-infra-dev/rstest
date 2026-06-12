@@ -1,6 +1,6 @@
 {
   "name": "@rstest/coverage-istanbul",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "description": "Istanbul coverage provider for Rstest",
   "keywords": [
     "rstest",
@@ -30,8 +30,7 @@
   ],
   "scripts": {
     "build": "rslib build",
-    "dev": "cross-env SOURCEMAP=true rslib build --watch",
-    "typecheck": "pnpm -w exec tsc --noEmit -p packages/coverage-istanbul/tsconfig.json"
+    "dev": "cross-env SOURCEMAP=true rslib build --watch"
   },
   "dependencies": {
     "istanbul-lib-coverage": "^3.2.2",

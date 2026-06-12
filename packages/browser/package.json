@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "description": "Browser mode support for Rstest testing framework.",
   "keywords": [
     "rstest",
@@ -41,8 +41,7 @@
   ],
   "scripts": {
     "build": "rslib build",
-    "dev": "rslib build --watch",
-    "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser/tsconfig.json"
+    "dev": "rslib build --watch"
   },
   "dependencies": {
     "@jridgewell/trace-mapping": "0.3.31",
@@ -60,7 +59,6 @@
     "@types/convert-source-map": "^2.0.3",
     "@types/picomatch": "^4.0.3",
     "@types/ws": "^8.18.1",
-    "@typescript/native-preview": "7.0.0-dev.20260608.1",
     "@vitest/snapshot": "^3.2.6",
     "birpc": "^4.0.0",
     "picomatch": "^4.0.4",

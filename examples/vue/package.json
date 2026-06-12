@@ -13,7 +13,7 @@
     "vue": "^3.5.35"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.0.11",
+    "@rsbuild/core": "~2.0.12",
     "@rsbuild/plugin-babel": "^1.2.1",
     "@rsbuild/plugin-vue": "^1.2.9",
     "@rsbuild/plugin-vue-jsx": "^2.0.1",

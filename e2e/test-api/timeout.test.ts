@@ -21,13 +21,13 @@ describe('Test timeout', () => {
       /Error: test timed out in 50ms.*no expect assertions completed/,
     );
 
-    expectStderrLog(/timeout.test.ts:5:5/);
+    expectStderrLog(/timeout.test.ts:5:3/);
 
     expectStderrLog(
       /Error: test timed out in 5000ms.*completed 1 expect assertion[^s]/,
     );
 
-    expectStderrLog(/timeout.test.ts:10:5/);
+    expectStderrLog(/timeout.test.ts:10:3/);
 
     expectLog(/Tests 2 failed/, logs);
   }, 10000);
