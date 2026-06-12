@@ -7,10 +7,10 @@
 // evaluated via vm/eval — instead of the worker's `loadModule` — never receive
 // the function-argument injection that normally provides that hook, so the
 // free-identifier lookup falls through to `globalThis`. Provide a fallback
-// there that preserves the injected origin for relative specifiers before
-// falling back to Node's native dynamic import. (This runtime module is emitted
-// inside its own IIFE, so a local binding could never be observed by module
-// factories — the global is the only effective channel.)
+// there that preserves the injected origin before falling back to Node's native
+// dynamic import. (This runtime module is emitted inside its own IIFE, so a
+// local binding could never be observed by module factories — the global is the
+// only effective channel.)
 if (globalThis.__rstest_federation__) {
   globalThis.__rstest_dynamic_import__ =
     globalThis.__rstest_dynamic_import__ ||
@@ -25,13 +25,30 @@ if (globalThis.__rstest_federation__) {
           (url) => import(url.pathToFileURL(specifier).href, importAttributes),
         );
       }
-      if (origin && /^\.\.?(?:[\\/]|$)/.test(specifier)) {
-        return import('node:url').then(
-          (url) =>
-            import(
-              new URL(specifier, url.pathToFileURL(origin)).href,
+      if (origin && !/^[A-Za-z][A-Za-z\d+\-.]*:/.test(specifier)) {
+        return Promise.all([import('node:module'), import('node:url')]).then(
+          ([module, url]) => {
+            if (
+              specifier.startsWith('node:') ||
+              module.builtinModules.includes(specifier)
+            ) {
+              return import(specifier, importAttributes);
+            }
+            if (/^\.\.?(?:[\\/]|$)/.test(specifier)) {
+              return import(
+                new URL(specifier, url.pathToFileURL(origin)).href,
+                importAttributes
+              );
+            }
+            return import(
+              url.pathToFileURL(
+                module
+                  .createRequire(url.pathToFileURL(origin).href)
+                  .resolve(specifier),
+              ).href,
               importAttributes
-            ),
+            );
+          },
         );
       }
       return import(specifier, importAttributes);

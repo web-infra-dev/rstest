@@ -1,4 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { join } from 'pathe';
@@ -115,6 +121,45 @@ describe('federation dynamic import fallback', () => {
       );
 
       expect(mod?.marker).toBe('from-origin');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves bare specifiers against the injected origin', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rstest-federation-import-'));
+    try {
+      const packageDir = join(dir, 'node_modules', 'origin-only-pkg');
+      mkdirSync(packageDir, { recursive: true });
+      writeFileSync(
+        join(packageDir, 'package.json'),
+        JSON.stringify({ main: 'index.mjs' }),
+      );
+      writeFileSync(
+        join(packageDir, 'index.mjs'),
+        'export const marker = "from-origin-package";',
+      );
+
+      const runtimeGlobal = {
+        __rstest_federation__: true,
+      } as {
+        __rstest_federation__: boolean;
+        __rstest_dynamic_import__?: (
+          specifier: string,
+          importAttributes: ImportCallOptions,
+          origin?: string,
+        ) => Promise<{ marker: string }>;
+      };
+
+      new Function('globalThis', getFederationFallbackCode())(runtimeGlobal);
+
+      const mod = await runtimeGlobal.__rstest_dynamic_import__?.(
+        'origin-only-pkg',
+        {},
+        join(dir, 'src', 'source.mjs'),
+      );
+
+      expect(mod?.marker).toBe('from-origin-package');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
