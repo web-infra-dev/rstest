@@ -169,5 +169,11 @@ describe('dynamic-import CJS interop pipeline', () => {
         source: { entry: 'promise' },
       });
     });
+
+    it('preserves non-callable fallback then exports', () => {
+      const ns = interop({ default: { then: 1 } });
+
+      expect(ns.then).toBe(1);
+    });
   });
 });

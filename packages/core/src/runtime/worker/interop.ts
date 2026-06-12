@@ -59,7 +59,11 @@ export function createInteropProxy(mod: any, defaultExport: any): any {
       if (prop === 'default') {
         return defaultExport;
       }
-      if (prop === 'then' && !('then' in mod)) {
+      if (
+        prop === 'then' &&
+        !('then' in mod) &&
+        typeof defaultExport?.then === 'function'
+      ) {
         return undefined;
       }
       /**
