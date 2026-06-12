@@ -6,18 +6,15 @@
 // evaluated via vm/eval — instead of the worker's `loadModule` — never receive
 // the function-argument injection that normally provides that hook, so the
 // free-identifier lookup falls through to `globalThis`. Provide a fallback
-// there that relies on Node's native dynamic import.
-var __rstest_dynamic_import__;
+// there that relies on Node's native dynamic import. (This runtime module is
+// emitted inside its own IIFE, so a local binding could never be observed by
+// module factories — the global is the only effective channel.)
 if (globalThis.__rstest_federation__) {
   globalThis.__rstest_dynamic_import__ =
     globalThis.__rstest_dynamic_import__ ||
     function (specifier, importAttributes) {
       return import(specifier, importAttributes);
     };
-  // Mirror onto the local binding: bundler output in this chunk's scope calls
-  // `__rstest_dynamic_import__` as a free identifier, which resolves to the
-  // `var` above (undefined when this chunk itself was evaluated via vm/eval).
-  __rstest_dynamic_import__ = globalThis.__rstest_dynamic_import__;
 }
 //#endregion
 
@@ -121,6 +118,13 @@ if (globalThis.__rstest_federation__ && __webpack_require__.f) {
       __webpack_require__.f[key] = function () {};
     }
   }
+  // The pre-existing `f` was assigned before the proxy above was installed,
+  // so it never went through the `set` trap and its chunk-loading handlers
+  // (`readFileVm` / `require`) are unguarded against Module Federation's Node
+  // runtime overwriting them. Route a re-assignment through the proxy so the
+  // same guard wrapping applies in this ordering too.
+  const preexistingChunkHandlers = __webpack_require__.f;
+  __webpack_require__.f = preexistingChunkHandlers;
 }
 //#endregion
 
