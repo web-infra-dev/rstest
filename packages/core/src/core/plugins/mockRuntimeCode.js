@@ -2,17 +2,19 @@
 
 //#region federation dynamic import fallback
 // Async-node outputs (including Module Federation runtimes) externalize
-// dynamic imports to `__rstest_dynamic_import__(<abs-path>)` calls. Chunks
+// dynamic imports to `__rstest_dynamic_import__(specifier, attrs, origin)`
+// calls. Chunks
 // evaluated via vm/eval — instead of the worker's `loadModule` — never receive
 // the function-argument injection that normally provides that hook, so the
 // free-identifier lookup falls through to `globalThis`. Provide a fallback
-// there that relies on Node's native dynamic import. (This runtime module is
-// emitted inside its own IIFE, so a local binding could never be observed by
-// module factories — the global is the only effective channel.)
+// there that preserves the injected origin for relative specifiers before
+// falling back to Node's native dynamic import. (This runtime module is emitted
+// inside its own IIFE, so a local binding could never be observed by module
+// factories — the global is the only effective channel.)
 if (globalThis.__rstest_federation__) {
   globalThis.__rstest_dynamic_import__ =
     globalThis.__rstest_dynamic_import__ ||
-    function (specifier, importAttributes) {
+    function (specifier, importAttributes, origin) {
       // Absolute filesystem paths must round-trip through `pathToFileURL`
       // before reaching native `import()`: Windows drive letters (`C:\...`)
       // would otherwise be parsed as a URL scheme, and `#` / `%` in paths
@@ -21,6 +23,15 @@ if (globalThis.__rstest_federation__) {
       if (/^(?:[A-Za-z]:[\\/]|[\\/])/.test(specifier)) {
         return import('node:url').then(
           (url) => import(url.pathToFileURL(specifier).href, importAttributes),
+        );
+      }
+      if (origin && /^\.\.?(?:[\\/]|$)/.test(specifier)) {
+        return import('node:url').then(
+          (url) =>
+            import(
+              new URL(specifier, url.pathToFileURL(origin)).href,
+              importAttributes
+            ),
         );
       }
       return import(specifier, importAttributes);
