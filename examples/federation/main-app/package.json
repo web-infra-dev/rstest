@@ -2,7 +2,7 @@
   "name": "@examples/federation-main-app",
   "private": true,
   "scripts": {
-    "build": "rspack build --config rspack.browser.config.js",
+    "build": "rsbuild build --config rsbuild.browser.config.js",
     "serve": "serve dist -p 3002",
     "start": "concurrently \"npm run build\" \"npm run serve\"",
     "test": "rstest --reporter=verbose"
@@ -12,11 +12,10 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@module-federation/enhanced": "https://pkg.pr.new/module-federation/core/@module-federation/enhanced@3fe0a1a3b6b5eab3d2d8eba2e4fd554fc1bda214",
+    "@module-federation/rsbuild-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a",
     "@module-federation/rstest": "https://pkg.pr.new/module-federation/core/@module-federation/rstest@5a6de69",
+    "@rsbuild/core": "~2.0.12",
     "@rsbuild/plugin-react": "^2.0.1",
-    "@rspack/cli": "~2.0.8",
-    "@rspack/core": "~2.0.8",
     "@rstest/core": "workspace:*",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
