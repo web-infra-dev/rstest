@@ -281,11 +281,28 @@ export function mockObject<T extends Record<Key, any>>(
         continue;
       }
 
+      const hasValue = 'value' in descriptor;
+      const value = hasValue ? descriptor.value : undefined;
+      const canInstallLazyProperty = !(
+        isFunction(target) &&
+        prop === 'prototype' &&
+        value &&
+        typeof value === 'object'
+      );
+
+      if (!canInstallLazyProperty) {
+        try {
+          target[prop] = processValue(value);
+        } catch {
+          // Ignore assignment failures (some properties may be readonly)
+        }
+        continue;
+      }
+
       try {
         let initialized = false;
         let mockedValue: any;
-        const getSourceValue = () =>
-          'value' in descriptor ? descriptor.value : source[prop];
+        const getSourceValue = () => (hasValue ? value : source[prop]);
 
         Object.defineProperty(target, prop, {
           configurable: true,

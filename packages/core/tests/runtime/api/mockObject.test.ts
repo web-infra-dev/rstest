@@ -109,6 +109,20 @@ describe('mockObject automock', () => {
 
     expect(result.nested.value).toBe(2);
   });
+
+  it('preserves constructor prototype mocks', () => {
+    const { run, isMockFunction } = make('automock');
+    class Foo {
+      greet(): string {
+        return 'hi';
+      }
+    }
+
+    const MockedFoo = run(Foo);
+
+    expect(isMockFunction(MockedFoo.prototype.greet)).toBe(true);
+    expect(MockedFoo.prototype.greet()).toBeUndefined();
+  });
 });
 
 describe('mockObject autospy', () => {
