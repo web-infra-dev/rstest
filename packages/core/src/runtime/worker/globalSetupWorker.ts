@@ -3,6 +3,7 @@ import { install } from 'source-map-support';
 import type { FormattedError } from '../../types';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
+import { RSTEST_DYNAMIC_IMPORT_HOOK } from './runtimeHooks';
 
 let teardownCallbacks: (() => Promise<void> | void)[] = [];
 // Track environment variable changes
@@ -81,6 +82,11 @@ const runGlobalSetup = async (data: {
     for (const entry of data.entries) {
       const { distPath, runtimeDistPath, testPath } = entry;
       const setupCodeContent = data.assetFiles[distPath]!;
+      if (data.federation) {
+        delete (globalThis as Record<string, unknown>)[
+          RSTEST_DYNAMIC_IMPORT_HOOK
+        ];
+      }
       const { loadModule } = data.outputModule
         ? await import('./loadEsModule')
         : await import('./loadModule');

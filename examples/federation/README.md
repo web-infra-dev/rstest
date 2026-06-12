@@ -1,8 +1,6 @@
 # Module Federation example
 
-[中文](./README_zh-cn.md)
-
-A Module Federation case with React, built with Rspack and tested with Rstest's `federation` compatibility mode.
+A Module Federation case with React, built with Rsbuild and tested with Rstest's `federation` compatibility mode.
 
 ## Project directory
 
