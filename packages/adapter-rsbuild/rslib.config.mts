@@ -16,7 +16,7 @@ export default defineConfig({
     {
       format: 'esm',
       dts: {
-        tsgo: true,
+        isolated: true,
         bundle: true,
       },
       bundle: true,

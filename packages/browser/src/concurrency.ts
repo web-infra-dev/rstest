@@ -19,7 +19,7 @@ type HeadlessConcurrencyContext = Pick<Rstest, 'command'> & {
 
 export const resolveDefaultHeadlessWorkers = (
   command: HeadlessConcurrencyContext['command'],
-  numCpus = getNumCpus(),
+  numCpus: number = getNumCpus(),
 ): number => {
   const baseWorkers = Math.max(
     Math.min(DEFAULT_MAX_HEADLESS_WORKERS, numCpus - 1),
