@@ -1,0 +1,261 @@
+---
+description: 本指南介绍如何使用 @rstest/playwright，在运行于 Node.js worker 的 Rstest 测试中驱动 Playwright。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+import { PackageManagerTabs } from '@theme';
+
+# Playwright
+
+<ApiMeta addedVersion="0.10.5" />
+
+[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 为运行在 Node.js worker 中的 Rstest 测试提供 Playwright fixtures 和 Playwright 风格的断言。它适合对一个完整页面或应用做 E2E 测试，例如本地 dev server、preview server 或线上 URL。测试代码运行在 Node.js 中，并通过 Playwright 控制页面。
+
+## 与 Rstest browser mode 的区别
+
+两者的主要区别是适用场景：Rstest browser mode 会为测试模块准备浏览器运行时，而 `@rstest/playwright` 会控制一个由应用或服务端准备好的页面。
+
+| 场景                                              | 推荐方案                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------------ |
+| 测试组件，并使用 Rstest 的 web 打包和浏览器运行时 | [Rstest browser mode](/guide/browser-testing) 和 `@rstest/browser` |
+| 通过 `page.goto()` 测试完整页面或应用             | `@rstest/playwright`                                               |
+| 驱动已有 dev server、preview server 或线上 URL    | `@rstest/playwright`                                               |
+| 需要浏览器内组件测试能力                          | [Rstest browser mode](/guide/browser-testing)                      |
+
+由于 `@rstest/playwright` 控制的是外部页面，而不是 Rstest browser mode 的 runner iframe，因此它不走 Browser UI 的预览 iframe。需要本地可视化调试时，可以使用 `RSTEST_PLAYWRIGHT_DEBUG=true` 开启 headed 模式。
+
+## 与原生 Playwright 的区别
+
+`@rstest/playwright` 和原生 Playwright 主要区别在 runner 和配置方式：
+
+| 项目     | `@rstest/playwright`                            | 原生 Playwright                               |
+| -------- | ----------------------------------------------- | --------------------------------------------- |
+| Runner   | Rstest runner                                   | Playwright Test runner                        |
+| 配置方式 | `rstest.config.ts` 和 `playwright` fixture 覆盖 | `playwright.config.ts`                        |
+| 测试 API | 从 `@rstest/playwright` 导入 `test` 和 `expect` | 从 `@playwright/test` 导入 `test` 和 `expect` |
+
+如果希望 Playwright E2E 测试和其他 Rstest 测试使用同一套 Rstest 工作流，可以使用 `@rstest/playwright`。如果希望使用完整的 Playwright Test runner 工作流和配置模型，可以使用原生 Playwright。
+
+## 安装
+
+安装两个包：
+
+- [@rstest/playwright](https://www.npmjs.com/package/@rstest/playwright) 提供 Rstest fixtures 和断言。
+- [playwright](https://www.npmjs.com/package/playwright) 提供 browser automation runtime。
+
+<PackageManagerTabs command="add @rstest/playwright playwright -D" />
+
+## 基本用法
+
+从 `@rstest/playwright` 导入 `test` 和 `expect`，而不是从 `@rstest/core` 导入：
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('page title', async ({ page }) => {
+  await page.goto('https://example.com');
+
+  await expect(page).toHaveTitle(/Example/);
+  await expect(page.locator('h1')).toHaveText('Example Domain');
+});
+```
+
+也可以从 `@rstest/playwright` 直接导入常规 lifecycle helpers：
+
+```ts
+import { beforeEach, describe, test } from '@rstest/playwright';
+
+beforeEach(() => {
+  // 准备每个测试的状态。
+});
+
+describe('checkout', () => {
+  test('opens the checkout page', async ({ page }) => {
+    await page.goto('http://localhost:3000/checkout');
+  });
+});
+```
+
+## Fixtures
+
+`@rstest/playwright` 提供以下 fixtures：
+
+| Fixture   | 说明                                                                           |
+| --------- | ------------------------------------------------------------------------------ |
+| `browser` | 当前 worker 内测试共享的 Chromium `Browser`。                                  |
+| `context` | 每个使用它的测试都会创建一个新的 `BrowserContext`，并在测试结束后关闭。        |
+| `page`    | 每个使用它的测试都会创建一个新的 `Page`，并在测试结束后关闭。                  |
+| `request` | 每个使用它的测试都会创建一个新的 `APIRequestContext`，并在测试结束后 dispose。 |
+| `serve`   | 在测试内启动静态 server，并在测试结束后自动清理。                              |
+
+当你只需要 Playwright 的 API client，而不需要启动 browser 时，可以使用 `request`：
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('health check', async ({ request }) => {
+  const response = await request.get('http://localhost:3000/health');
+
+  expect(response.ok()).toBe(true);
+});
+```
+
+## 断言
+
+`expect` 保留常规 Rstest 断言；当传入 Playwright `Locator` 或 `Page` 时，会提供可重试的 Playwright 风格异步断言。
+
+Locator 断言会优先对齐 `@rstest/browser` 已支持的元素断言能力：
+
+- `toBeVisible(options?)`
+- `toBeHidden(options?)`
+- `toBeEnabled(options?)`
+- `toBeDisabled(options?)`
+- `toBeChecked(options?)`
+- `toBeUnchecked(options?)`
+- `toBeAttached(options?)`
+- `toBeDetached(options?)`
+- `toBeEditable(options?)`
+- `toBeFocused(options?)`
+- `toBeEmpty(options?)`
+- `toBeInViewport(options?)`
+- `toContainText(expected, options?)`
+- `toHaveAttribute(name, expected?, options?)`
+- `toHaveClass(expected, options?)`
+- `toHaveCSS(propertyName, expected, options?)`
+- `toHaveCount(expected, options?)`
+- `toHaveId(expected, options?)`
+- `toHaveJSProperty(name, expected, options?)`
+- `toHaveText(expected, options?)`
+- `toHaveValue(expected, options?)`
+
+Page 断言：
+
+- `toHaveTitle(expected, options?)`
+- `toHaveURL(expected, options?)`
+
+字符串文本断言会规范化空白字符。Playwright 风格断言会持续重试，直到断言通过或达到 `timeout` 选项。默认 timeout 是 `5000` 毫秒。
+
+```ts
+await expect(page.locator('.message')).toContainText('Saved', {
+  timeout: 10_000,
+});
+```
+
+`.not` 和 `expect.soft` 也受支持：
+
+```ts
+await expect(page.locator('.error')).not.toBeAttached();
+await expect.soft(page).toHaveTitle(/Dashboard/);
+```
+
+## 配置
+
+暂不支持在 rstest.config.ts 中添加全局 playwright 配置项。当某个测试文件需要自定义 Playwright 选项时，可以覆盖 `playwright` fixture：
+
+```ts
+import { expect, test } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+const e2e = test.extend({
+  playwright: {
+    contextOptions: {
+      viewport: { width: 390, height: 844 },
+    },
+  } satisfies PlaywrightOptions,
+});
+
+e2e('mobile page', async ({ page }) => {
+  await page.goto('http://localhost:3000');
+  await expect(page.locator('main')).toBeAttached();
+});
+```
+
+`playwright` fixture 支持以下选项：
+
+| 选项             | 说明                                        |
+| ---------------- | ------------------------------------------- |
+| `browserName`    | 要启动的浏览器引擎。目前只支持 `chromium`。 |
+| `launchOptions`  | 传给 `browserType.launch()` 的选项。        |
+| `contextOptions` | 传给 `browser.newContext()` 的选项。        |
+| `requestOptions` | 传给 `request.newContext()` 的选项。        |
+| `debug`          | 用于本地 headed 调试的便捷选项。            |
+
+对于 Playwright E2E 项目，建议在 `rstest.config.ts` 中设置 `isolate: false`，从而在不同测试文件间复用 worker module cache，减少重复启动 Playwright 的开销：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  isolate: false,
+  testEnvironment: 'node',
+});
+```
+
+## 本地应用 server
+
+当测试需要访问已构建的本地应用时，可以使用 `serve` fixture。它会为入口文件启动静态 server，并在测试结束后自动停止 server。
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('home page', async ({ page, serve }) => {
+  const { url } = await serve('./dist/index.html');
+
+  await page.goto(url);
+  await expect(page.locator('h1')).toHaveText('Home');
+});
+```
+
+启用 `RSTEST_PLAYWRIGHT_DEBUG=true` 时，`serve` 默认会保留 server，避免已打开页面失去可访问的应用服务。如果即使在 debug 模式下也希望关闭 server，可以设置 `keepAliveOnDebug: false`。
+
+## Headed 调试
+
+设置 `RSTEST_PLAYWRIGHT_DEBUG=true` 可以在本地调试时以 headed 模式启动 Chromium：
+
+```bash
+RSTEST_PLAYWRIGHT_DEBUG=true rstest watch
+```
+
+这个环境变量不需要修改测试代码，并会应用以下默认值：
+
+- `headless: false`
+- `slowMo: 100`
+- `devtools: true`
+
+你也可以在测试里覆盖 debug 默认值：
+
+```ts
+import { test } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+const e2e = test.extend({
+  playwright: {
+    debug: {
+      enabled: true,
+      slowMo: 100,
+      devtools: false,
+    },
+  } satisfies PlaywrightOptions,
+});
+
+e2e('debug page', async ({ page }) => {
+  await page.goto('http://localhost:3000');
+});
+```
+
+如果需要在调试时停在当前页面，可以配合零测试超时使用 Playwright 的 `page.pause()`：
+
+```ts
+test(
+  'debug page state',
+  async ({ page, serve }) => {
+    const { url } = await serve('./dist/index.html');
+
+    await page.goto(url);
+    await page.pause();
+  },
+  { timeout: 0 },
+);
+```
+
+debug 模式下，失败测试会在关闭 page 和 context 前自动调用 `page.pause()`。如果不需要这个行为，可以在 `debug` 选项中设置 `pauseOnFailure: false`，或设置 `RSTEST_PLAYWRIGHT_PAUSE=false`。
