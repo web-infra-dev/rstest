@@ -19,6 +19,12 @@ export const initSpy = (): Pick<
 > & {
   mocks: Set<MockInstance>;
   createMockInstance: CreateMockInstanceFn;
+  /**
+   * Restart `invocationCallOrder` numbering. The spy state lives for the whole
+   * worker (the `rstest` singleton), so under `isolate: false` the per-file
+   * reset must rewind this counter to mirror the previous per-file rebuild.
+   */
+  resetCallOrder: () => void;
 } => {
   let callOrder = 0;
   const mocks: Set<MockInstance> = new Set<MockInstance>();
@@ -369,5 +375,8 @@ export const initSpy = (): Pick<
     fn,
     mocks,
     createMockInstance,
+    resetCallOrder: () => {
+      callOrder = 0;
+    },
   };
 };

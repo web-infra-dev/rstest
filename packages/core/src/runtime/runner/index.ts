@@ -8,10 +8,36 @@ import type {
   WorkerState,
 } from '../../types';
 import { getFileTaskId } from '../../utils/helper';
+import { fileContext, setFileContext } from '../fileContext';
 import type { TaskContext } from '../worker/taskContext';
 import { TestRunner } from './runner';
-import { createRuntimeAPI } from './runtime';
+import { createRuntimeAPI, runtimeAPI } from './runtime';
 import { traverseUpdateTest } from './task';
+
+// The running file's execution-phase runner (see the live-binding contract in
+// `../api`; `createRunner` publishes the context per file).
+const currentRunner = (): TestRunner => fileContext().testRunner;
+
+const onTestFinished: RunnerAPI['onTestFinished'] = (...args) => {
+  const runner = currentRunner();
+  runner.onTestFinished(runner.getCurrentTest(), ...args);
+};
+
+const onTestFailed: RunnerAPI['onTestFailed'] = (...args) => {
+  const runner = currentRunner();
+  runner.onTestFailed(runner.getCurrentTest(), ...args);
+};
+
+/**
+ * The full stable `@rstest/core` runner surface, built once: the collection-phase
+ * `runtimeAPI` plus the execution-phase `onTestFinished`/`onTestFailed`
+ * forwarders. Spread into the injected api by `createRstestRuntime` (`../api`).
+ */
+export const runnerAPI: RunnerAPI = {
+  ...runtimeAPI,
+  onTestFinished,
+  onTestFailed,
+};
 
 export function createRunner({
   workerState,
@@ -20,7 +46,6 @@ export function createRunner({
   workerState: WorkerState;
   taskContext: TaskContext;
 }): {
-  api: RunnerAPI;
   runner: {
     runTests: (
       testFilePath: string,
@@ -36,37 +61,31 @@ export function createRunner({
     project,
     runtimeConfig: { testNamePattern },
   } = workerState;
-  const runtime = createRuntimeAPI({
+  const runtimeInstance = createRuntimeAPI({
     project,
     testPath,
     runtimeConfig: workerState.runtimeConfig,
   });
   const testRunner: TestRunner = new TestRunner(taskContext);
+  // Publish this file's context as one unit; every stable forwarder (runner
+  // surface, `expect`, `rstest` config methods) resolves it at call time.
+  setFileContext({ workerState, runnerRuntime: runtimeInstance, testRunner });
 
   return {
-    api: {
-      ...runtime.api,
-      onTestFinished: (fn, timeout) => {
-        testRunner.onTestFinished(testRunner.getCurrentTest(), fn, timeout);
-      },
-      onTestFailed: (fn, timeout) => {
-        testRunner.onTestFailed(testRunner.getCurrentTest(), fn, timeout);
-      },
-    },
     runner: {
       runTests: async (testPath: string, hooks: RunnerHooks, api: Rstest) => {
         const snapshotClient = workerState.snapshotClient!;
 
         await snapshotClient.setup(testPath, workerState.snapshotOptions);
 
-        const tests = await runtime.instance.getTests();
+        const tests = await runtimeInstance.getTests();
         traverseUpdateTest(tests, testNamePattern);
         hooks.onTestFileReady?.({
           testId: getFileTaskId(testPath),
           testPath,
           tests: tests.map(toTestInfo),
         });
-        runtime.instance.updateStatus('running');
+        runtimeInstance.updateStatus('running');
 
         const results = await testRunner.runTests({
           tests,
@@ -80,7 +99,7 @@ export function createRunner({
         return results;
       },
       collectTests: async () => {
-        const tests = await runtime.instance.getTests();
+        const tests = await runtimeInstance.getTests();
         traverseUpdateTest(tests, testNamePattern);
 
         return tests.map(toTestInfo);

@@ -44,21 +44,45 @@ import type {
   TestCase,
   WorkerState,
 } from '../../types';
+import { fileContext } from '../fileContext';
 import { createExpectPoll } from './poll';
 
 export { assert } from 'chai';
-export { GLOBAL_EXPECT };
 
 export function setupChaiConfig(config: ChaiConfig): void {
   Object.assign(chaiConfig, config);
 }
 
+/**
+ * The per-file slate of `expect` state: assertion bookkeeping cleared and
+ * `testPath` (re-)established as a live getter — the runner pins `testPath` to
+ * a plain value per test, so each file must restore the getter.
+ */
+const freshExpectState = (
+  getWorkerState: () => WorkerState,
+): Partial<MatcherState> => ({
+  assertionCalls: 0,
+  isExpectingAssertions: false,
+  isExpectingAssertionsError: null,
+  expectedAssertionsNumber: null,
+  expectedAssertionsNumberErrorGen: null,
+  get testPath() {
+    return getWorkerState().testPath;
+  },
+});
+
 export function createExpect({
   getCurrentTest,
-  workerState,
+  getWorkerState,
   snapshotPlugin,
 }: {
-  workerState: WorkerState;
+  /**
+   * Resolved at call time, never captured: the file-level singleton passes a
+   * context-resolving accessor so a reference shared across files under
+   * `isolate: false` always reads the running file's state; a per-test local
+   * expect passes its own pinned state.
+   */
+  getWorkerState: () => WorkerState;
   getCurrentTest: () => TestCase | undefined;
   snapshotPlugin?: ChaiPlugin;
 }): RstestExpect {
@@ -88,20 +112,10 @@ export function createExpect({
 
   const globalState = getState((globalThis as any)[GLOBAL_EXPECT]) || {};
 
-  setState<MatcherState>(
-    {
-      ...globalState,
-      assertionCalls: 0,
-      isExpectingAssertions: false,
-      isExpectingAssertionsError: null,
-      expectedAssertionsNumber: null,
-      expectedAssertionsNumberErrorGen: null,
-      get testPath() {
-        return workerState.testPath;
-      },
-    },
-    expect,
-  );
+  setState<MatcherState>({ ...globalState }, expect);
+  // Separate call: `setState` merges property DESCRIPTORS, which keeps the
+  // `testPath` getter that a spread literal would have eagerly evaluated.
+  setState<MatcherState>(freshExpectState(getWorkerState), expect);
 
   // @ts-expect-error chai.expect.extend untyped
   expect.extend = (matchers) => chaiExpect.extend(expect, matchers);
@@ -162,3 +176,40 @@ export function createExpect({
 
   return expect;
 }
+
+let fileExpect: RstestExpect | undefined;
+
+const getContextWorkerState = (): WorkerState => fileContext().workerState;
+
+/**
+ * The file-level `expect` is a build-once singleton with a STABLE identity
+ * across files (the live-binding contract, see `../api`): it resolves the
+ * running file's worker state and current test through `fileContext()` at call
+ * time, so any value-copied reference (`expect.poll`, `.soft`, `{ ...api }`)
+ * captured in a module shared under `isolate: false` stays live — no
+ * delegation needed, there is only one instance. Per-file state is RESET, not
+ * rebuilt. The per-test local expect (`context.expect`, created via
+ * `createExpect` in the runner) intentionally stays a pinned per-test instance
+ * to keep `test.concurrent` isolation.
+ */
+export const createFileExpect = (snapshotPlugin: ChaiPlugin): RstestExpect => {
+  if (!fileExpect) {
+    fileExpect = createExpect({
+      getWorkerState: getContextWorkerState,
+      getCurrentTest: () => fileContext().testRunner.getCurrentTest(),
+      snapshotPlugin,
+    });
+    // The slot the runner and `@vitest/expect` internals read; assigned once —
+    // the singleton never changes identity.
+    Object.defineProperty(globalThis, GLOBAL_EXPECT, {
+      value: fileExpect,
+      writable: true,
+      configurable: true,
+    });
+    return fileExpect;
+  }
+  // Later files reuse the singleton on a clean slate, mirroring the previous
+  // per-file rebuild (which also carried non-bookkeeping state forward).
+  setState<MatcherState>(freshExpectState(getContextWorkerState), fileExpect);
+  return fileExpect;
+};

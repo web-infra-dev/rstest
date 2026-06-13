@@ -670,7 +670,7 @@ export class TestRunner {
       get: () => {
         if (!_expect) {
           _expect = createExpect({
-            workerState: this.workerState!,
+            getWorkerState: () => this.workerState!,
             getCurrentTest: () => current,
           });
         }

@@ -1,26 +1,26 @@
-import {
-  createRstestUtilities,
-  restoreScopedEntry,
-} from '../../../src/runtime/api/utilities';
+import { restoreScopedEntry } from '../../../src/runtime/api/utilities';
 import { setRealTimers } from '../../../src/runtime/util';
-import type { WorkerState } from '../../../src/types';
+import { createUtilities } from './helpers';
 
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-function createWorkerState(): WorkerState {
-  return {
-    runtimeConfig: {
-      testTimeout: 1_000,
-      hookTimeout: 1_000,
-      clearMocks: false,
-      resetMocks: false,
-      restoreMocks: false,
-      maxConcurrency: 5,
-      retry: 0,
-    },
-  } as WorkerState;
-}
+describe('rstest utilities per-file reset', () => {
+  it('restarts invocationCallOrder numbering for the next file', async () => {
+    const rs1 = await createUtilities();
+    const first = rs1.fn();
+    first();
+    first();
+    expect(first.mock.invocationCallOrder).toEqual([1, 2]);
+
+    // Next file reuses the singleton; the reset must rewind the shared
+    // counter, mirroring the previous per-file utilities rebuild.
+    const rs2 = await createUtilities();
+    const second = rs2.fn();
+    second();
+    expect(second.mock.invocationCallOrder).toEqual([1]);
+  });
+});
 
 describe('rstest utilities wait APIs', () => {
   beforeEach(() => {
@@ -28,7 +28,7 @@ describe('rstest utilities wait APIs', () => {
   });
 
   it('waitFor retries until callback stops throwing', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     let attempts = 0;
     const result = await rs.waitFor(
@@ -47,7 +47,7 @@ describe('rstest utilities wait APIs', () => {
   });
 
   it('waitFor throws the latest callback error after timeout', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     let attempts = 0;
     await rs
@@ -70,7 +70,7 @@ describe('rstest utilities wait APIs', () => {
   });
 
   it('waitFor rejects when callback succeeds after timeout', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     await expect(
       rs.waitFor(async () => {
@@ -81,7 +81,7 @@ describe('rstest utilities wait APIs', () => {
   });
 
   it('waitUntil retries until callback returns a truthy value', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     let attempts = 0;
     const result = await rs.waitUntil(
@@ -97,7 +97,7 @@ describe('rstest utilities wait APIs', () => {
   });
 
   it('waitUntil throws on timeout and accepts number options', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     await expect(rs.waitUntil(() => false, 20)).rejects.toThrow(
       'waitUntil timed out in 20ms',
@@ -105,7 +105,7 @@ describe('rstest utilities wait APIs', () => {
   });
 
   it('waitUntil rejects truthy values returned after timeout', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     await expect(
       rs.waitUntil(async () => {
@@ -116,7 +116,7 @@ describe('rstest utilities wait APIs', () => {
   });
 
   it('wait APIs still work when fake timers are enabled', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     rs.useFakeTimers();
 
@@ -182,7 +182,7 @@ describe('rstest utility scoped cleanup', () => {
   });
 
   it('tracks chained scoped utility disposals', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     const disposable = rs.stubEnv(envName, 'first').stubEnv(envName, 'second');
 
@@ -194,7 +194,7 @@ describe('rstest utility scoped cleanup', () => {
   });
 
   it('ignores stale scoped env disposables after unstubAllEnvs', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     const disposable = rs.stubEnv(envName, 'scoped');
     rs.unstubAllEnvs();
@@ -208,7 +208,7 @@ describe('rstest utility scoped cleanup', () => {
   });
 
   it('ignores stale scoped global disposables after unstubAllGlobals', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     const disposable = rs.stubGlobal(envName, 'scoped');
     rs.unstubAllGlobals();
@@ -222,7 +222,7 @@ describe('rstest utility scoped cleanup', () => {
   });
 
   it('restores previous fake timer state on scoped disposal', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     rs.useFakeTimers({ now: 100 });
     const disposable = rs.useFakeTimers({ now: 200 });
@@ -238,7 +238,7 @@ describe('rstest utility scoped cleanup', () => {
   });
 
   it('preserves pending timers after nested fake timer scoped disposal', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     rs.useFakeTimers({ now: 100 });
     const callback = rs.fn();

@@ -78,6 +78,12 @@ export type WorkerContext = {
   project: string;
   runtimeConfig: RuntimeConfig;
   taskId: number;
+  /**
+   * Monotonically increasing per-compile id: stable across all files of one
+   * run, bumped on every watch rebuild. A change tells a reused worker to flush
+   * its kept module cache before loading (#1373).
+   */
+  buildId: number;
   outputModule: boolean;
   /** When true, the worker emits Perfetto trace events alongside phase totals. */
   trace?: boolean;

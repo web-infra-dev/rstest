@@ -135,6 +135,8 @@ type PoolDispatchParams = {
   setupEntries: EntryInfo[];
   updateSnapshot: SnapshotUpdateState;
   project: ProjectContext;
+  /** Per-compile id threaded to the worker for rebuild-boundary cache flushing (#1373). Defaults to `0`. */
+  buildId?: number;
 };
 
 /**
@@ -156,6 +158,7 @@ const buildTask = async ({
   getSourceMaps,
   rpcMethods,
   traceSpan,
+  buildId = 0,
 }: {
   type: 'run' | 'collect';
   workerKind: PoolWorkerKind;
@@ -171,6 +174,7 @@ const buildTask = async ({
   getSourceMaps: PoolDispatchParams['getSourceMaps'];
   rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
   traceSpan: TraceSpan;
+  buildId?: number;
 }) => {
   const getAssets = () =>
     filterAssetsByEntry(entryInfo, getAssetFiles, getSourceMaps, setupAssets);
@@ -188,6 +192,7 @@ const buildTask = async ({
       context: {
         outputModule: project.outputModule,
         taskId: index + 1,
+        buildId,
         project: project.name,
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
@@ -275,6 +280,8 @@ export const createPool = async ({
     setupEntries: EntryInfo[];
     updateSnapshot: SnapshotUpdateState;
     project: ProjectContext;
+    /** Per-compile id; bumped on each watch rebuild so reused workers flush their kept module cache. */
+    buildId?: number;
     /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
     onCoverageResult?: (coverage: CoverageMapData) => void;
     /** Perfetto trace events forwarded for caller-owned dumping. */
@@ -476,6 +483,7 @@ export const createPool = async ({
       setupEntries,
       project,
       updateSnapshot,
+      buildId,
       onCoverageResult,
       onTraceEvents,
       traceSpan,
@@ -513,6 +521,7 @@ export const createPool = async ({
                 getSourceMaps,
                 rpcMethods,
                 traceSpan,
+                buildId,
               }),
             traceArgs,
           );
