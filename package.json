@@ -47,7 +47,7 @@
   },
   "pnpm": {
     "overrides": {
-      "@rspack/core": "npm:@rspack-canary/core@2.0.7-canary-6edaf632-20260609181712"
+      "@rspack/core": "npm:@rspack-canary/core@2.0.9-canary-7a50304e-20260614173249"
     }
   }
 }
