@@ -390,7 +390,8 @@ async function renderStepSummary({
       const relativePath = relative(rootPath, test.testPath);
       const fullName = formatFullTestName(test);
       const title = fullName ? `${relativePath} > ${fullName}` : relativePath;
-      pushHeading(lines, 3, `❌ FAIL ${title}`);
+      const retrySuffix = test.retryCount ? ` (retry x${test.retryCount})` : '';
+      pushHeading(lines, 3, `❌ FAIL ${title}${retrySuffix}`);
 
       for (const error of errors.length
         ? errors

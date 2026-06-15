@@ -378,7 +378,7 @@ describe('GithubActionsReporter step summary', () => {
       const summary = await fs.readFile(summaryPath, 'utf-8');
       expect(summary).toContain('## Failures');
       expect(summary).toContain(
-        '### ❌ FAIL tests/retry.test.ts > describe retry > fails after retries',
+        '### ❌ FAIL tests/retry.test.ts > describe retry > fails after retries (retry x1)',
       );
       expect(summary).toContain(
         '**Initial attempt - AssertionError**: first failure',
