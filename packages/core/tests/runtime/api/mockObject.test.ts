@@ -138,6 +138,19 @@ describe('mockObject automock', () => {
     expect(isMockFunction(result.nested.method)).toBe(true);
     expect(result.nested.method()).toBeUndefined();
   });
+
+  it('creates independent mocks for aliased functions', () => {
+    const { run } = make('automock');
+    const fn = () => 'real';
+    const result = run({ a: fn, b: fn });
+
+    expect(result.a).not.toBe(result.b);
+
+    result.a();
+
+    expect(result.a.mock.calls).toHaveLength(1);
+    expect(result.b.mock.calls).toHaveLength(0);
+  });
 });
 
 describe('mockObject autospy', () => {
@@ -218,5 +231,18 @@ describe('mockObject autospy', () => {
     original.nested.method = () => 'new';
 
     expect(result.nested.method()).toBe('original');
+  });
+
+  it('creates independent spies for aliased functions', () => {
+    const { run } = make('autospy');
+    const fn = () => 'real';
+    const result = run({ a: fn, b: fn });
+
+    expect(result.a).not.toBe(result.b);
+
+    expect(result.a()).toBe('real');
+
+    expect(result.a.mock.calls).toHaveLength(1);
+    expect(result.b.mock.calls).toHaveLength(0);
   });
 });

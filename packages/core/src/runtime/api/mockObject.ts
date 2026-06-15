@@ -279,17 +279,13 @@ export function mockObject<T extends Record<Key, any>>(
     }
 
     // Check if already processed (circular reference)
-    if (
-      (typeof value === 'object' || typeof value === 'function') &&
-      processedRefs.has(value)
-    ) {
+    if (typeof value === 'object' && processedRefs.has(value)) {
       return processedRefs.get(value);
     }
 
     // Handle functions
     if (isFunction(value)) {
       const mock = createFunctionMock(value);
-      processedRefs.set(value, mock);
       // Functions may also have properties, process them recursively
       processProperties(value, mock, snapshot);
       return mock;
@@ -364,6 +360,8 @@ export function mockObject<T extends Record<Key, any>>(
       const sourceValue =
         hasValue && isSpyMode && Array.isArray(value) ? value.slice() : value;
       const sourceSnapshot = hasValue ? snapshotProperties(value) : undefined;
+      const recursiveFunctionMock =
+        hasValue && isFunction(source) && value === source ? target : undefined;
       const canInstallLazyProperty = !(
         isFunction(target) &&
         prop === 'prototype' &&
@@ -373,7 +371,8 @@ export function mockObject<T extends Record<Key, any>>(
 
       if (!canInstallLazyProperty) {
         try {
-          target[prop] = processValue(sourceValue, sourceSnapshot);
+          target[prop] =
+            recursiveFunctionMock ?? processValue(sourceValue, sourceSnapshot);
         } catch {
           // Ignore assignment failures (some properties may be readonly)
         }
@@ -392,7 +391,9 @@ export function mockObject<T extends Record<Key, any>>(
             if (!initialized) {
               initialized = true;
               try {
-                mockedValue = processValue(getSourceValue(), sourceSnapshot);
+                mockedValue =
+                  recursiveFunctionMock ??
+                  processValue(getSourceValue(), sourceSnapshot);
               } catch {
                 mockedValue = undefined;
               }
