@@ -152,6 +152,7 @@ export type FormattedError = {
   diff?: string;
   expected?: string;
   actual?: string;
+  retryCount?: number;
 };
 
 export type TestResult = {
