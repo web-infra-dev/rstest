@@ -15,7 +15,7 @@ Defines a test suite that can contain multiple test cases or nested describe blo
 The callback can be asynchronous; Rstest waits for it during collection before running the tests declared inside it.
 
 ```ts
-import { describe, test } from '@rstest/core';
+import { describe, expect, test } from '@rstest/core';
 
 describe('math', () => {
   test('add', () => {

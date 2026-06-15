@@ -15,7 +15,7 @@ description: describe 用于定义测试套件（test suite），支持链式修
 回调可以是异步函数；Rstest 会在收集阶段等待它完成，然后再运行其中声明的测试。
 
 ```ts
-import { describe, test } from '@rstest/core';
+import { describe, expect, test } from '@rstest/core';
 
 describe('math', () => {
   test('add', () => {
