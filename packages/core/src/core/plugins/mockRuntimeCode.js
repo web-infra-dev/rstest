@@ -76,7 +76,7 @@ const defineExportsWithCjsInterop = (
   __webpack_require__,
 ) => {
   __webpack_require__.r(__webpack_exports__);
-  for (const key in moduleObj) {
+  for (const key of Object.getOwnPropertyNames(moduleObj)) {
     __webpack_require__.d(__webpack_exports__, {
       [key]: () => moduleObj[key],
     });
@@ -86,6 +86,14 @@ const defineExportsWithCjsInterop = (
       default: () => moduleObj,
     });
   }
+};
+
+const createMockedModule = (originalModule, isSpy) => {
+  return (
+    globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
+      spy: isSpy,
+    }) || originalModule
+  );
 };
 
 //#region rs.unmock
@@ -202,17 +210,22 @@ const getMockImplementation = (mockType = 'mock') => {
           `[Rstest] rs.${mockType}('${id}', { ${optionName}: true }) failed: cannot load original module`,
         );
       }
-      const originalModule = requiredModule;
-      const mockedModule =
-        globalThis.RSTEST_API?.rstest?.mockObject(originalModule, {
-          spy: isSpy,
-        }) || originalModule;
+      const mockedModule = isPromise(requiredModule)
+        ? requiredModule.then((originalModule) =>
+            createMockedModule(originalModule, isSpy),
+          )
+        : createMockedModule(requiredModule, isSpy);
 
       const finalModFactory = function (
         __webpack_module__,
         __webpack_exports__,
         __webpack_require__,
       ) {
+        if (isPromise(mockedModule)) {
+          __webpack_module__.exports = mockedModule;
+          return;
+        }
+
         if (isMockRequire) {
           __webpack_module__.exports = mockedModule;
           return;
