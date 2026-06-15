@@ -10,7 +10,7 @@
     "test:watch": "rstest --watch"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.0.12",
+    "@rsbuild/core": "~2.0.14",
     "@rsbuild/plugin-svelte": "^2.0.0",
     "@rstest/adapter-rsbuild": "workspace:*",
     "@rstest/core": "workspace:*",
