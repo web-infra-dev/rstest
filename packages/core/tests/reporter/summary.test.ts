@@ -206,7 +206,7 @@ describe('DefaultReporter summary streams', () => {
 
     const stderrText = stripVTControlCharacters(stderr.join('\n'));
 
-    expect(stderrText).toContain('Initial attempt:');
+    expect(stderrText).not.toContain('Initial attempt:');
     expect(stderrText).toContain('Error: first failure');
     expect(stderrText).toContain('Retry x1:');
     expect(stderrText).toContain('Error: retry failure');

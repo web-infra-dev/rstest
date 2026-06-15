@@ -380,9 +380,7 @@ describe('GithubActionsReporter step summary', () => {
       expect(summary).toContain(
         '### ❌ FAIL tests/retry.test.ts > describe retry > fails after retries (retry x1)',
       );
-      expect(summary).toContain(
-        '**Initial attempt - AssertionError**: first failure',
-      );
+      expect(summary).toContain('**AssertionError**: first failure');
       expect(summary).toContain('**Retry x1 - AssertionError**: retry failure');
     } finally {
       if (previousSummaryPath === undefined) {

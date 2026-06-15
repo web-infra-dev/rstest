@@ -164,13 +164,11 @@ export const getErrorType = (
 export const getRetryErrorLabel = (
   error: Pick<FormattedError, 'retryCount'>,
 ): string | undefined => {
-  if (error.retryCount === undefined) {
+  if (!error.retryCount) {
     return undefined;
   }
 
-  return error.retryCount === 0
-    ? 'Initial attempt'
-    : `Retry x${error.retryCount}`;
+  return `Retry x${error.retryCount}`;
 };
 
 export const collectFailures = ({

@@ -508,7 +508,8 @@ export class TestRunner {
                   repeatRetryErrors.push(
                     ...(currentResult.errors || []).map((error) => ({
                       ...error,
-                      retryCount,
+                      retryCount:
+                        retryBudget > 0 ? retryCount : error.retryCount,
                     })),
                   );
                 }
