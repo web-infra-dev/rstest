@@ -32,12 +32,12 @@ describe('browser mode - snapshot', () => {
 
   beforeEach(async () => {
     const { fs: preparedFs } = await prepareFixtures({
-      fixturesPath: `${__dirname}/fixtures`,
+      fixturesPath: `${__dirname}/fixtures/snapshot`,
       fixturesTargetPath,
     });
     fixturesFs = preparedFs;
 
-    fixtureDir = path.join(fixturesTargetPath, 'snapshot');
+    fixtureDir = fixturesTargetPath;
     snapshotDir = path.join(fixtureDir, 'tests', '__snapshots__');
     fileSnapshotDir = path.join(fixtureDir, '__file_snapshots__');
   });
