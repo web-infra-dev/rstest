@@ -19,7 +19,7 @@ When working on code in a specific package, use the Read tool to load that packa
 
 If a package does not have its own `AGENTS.md`, follow this root file and copy the closest local patterns.
 
-## Monorepo Structure
+## Monorepo structure
 
 - `packages/core/` — @rstest/core: core testing framework (CLI, runtime, reporter, pool)
 - `packages/browser/` — @rstest/browser: browser mode support (Playwright, WebSocket RPC)
@@ -37,7 +37,7 @@ If a package does not have its own `AGENTS.md`, follow this root file and copy t
 - `website/` — documentation site (Rspress)
 - `scripts/` — build scripts and shared configs
 
-## Package Manager and Workspace
+## Package manager and workspace
 
 - Use `pnpm` (the repository currently pins `pnpm@11.5.2`).
 - The workspace includes `benchmarks`, `website`, `scripts/**`, `packages/**`, `examples/**`, and `e2e/**`.
@@ -74,7 +74,7 @@ pnpm prettier --write path/to/file.ts
 
 _Note_: E2E tests and examples consume built package output. Rebuild affected packages before running them (for example, `pnpm --filter @rstest/browser build`). For testing workflows, use the `testing` skill.
 
-## Development Workflow
+## Development workflow
 
 - Keep changes small and focused.
 - Before changing behavior, identify the affected package(s), public API/config impact, browser-mode impact, adapter impact, docs impact, and test scope.
@@ -84,7 +84,7 @@ _Note_: E2E tests and examples consume built package output. Rebuild affected pa
 - Do not make repo-wide rewrites unless explicitly asked.
 - Do not revert unrelated local changes.
 
-## Testing Guidance
+## Testing guidance
 
 - Prefer targeted tests first, then broader validation when needed.
 - For root-discovered unit tests, prefer `pnpm rstest <package-test-path>`.
@@ -93,7 +93,7 @@ _Note_: E2E tests and examples consume built package output. Rebuild affected pa
 - Do not overlap `pnpm build` and `pnpm e2e`; wait for builds to finish before e2e.
 - If e2e fails with missing built files, rebuild the affected package(s) before retrying.
 
-## Code Style
+## Code style
 
 - Use ESM-first: `.mjs` for runtime loaders, `.ts`/`.mts` for typed utilities.
 - Do not mix CommonJS and ESM in the same module unless the file is intentionally a compatibility fixture.
