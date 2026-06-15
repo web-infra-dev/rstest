@@ -58,6 +58,10 @@ function isFunction(value: unknown): value is (...args: any[]) => any {
   return typeof value === 'function';
 }
 
+function isModuleObject(value: Record<Key, any>): boolean {
+  return getTypeName(value) === 'Module' || value.__esModule;
+}
+
 /**
  * Check if a property is a built-in readonly property (e.g., function's name, length)
  */
@@ -168,6 +172,8 @@ function getPropertyDescriptor(
     }
     current = Object.getPrototypeOf(current);
   }
+
+  return undefined;
 }
 
 /**
@@ -215,7 +221,7 @@ export function mockObject<T extends Record<Key, any>>(
     const snapshot: PropertySnapshot = {
       props,
       descriptors,
-      isModule: getTypeName(value) === 'Module' || value.__esModule,
+      isModule: !isFunction(value) && isModuleObject(value),
     };
     snapshotRefs.set(value, snapshot);
 
@@ -290,7 +296,7 @@ export function mockObject<T extends Record<Key, any>>(
         return [];
       }
       // autospy mode: process array elements recursively
-      return value.map(processValue);
+      return value.map((item) => processValue(item));
     }
 
     // Handle plain objects
@@ -315,9 +321,7 @@ export function mockObject<T extends Record<Key, any>>(
   ): void => {
     const props =
       snapshot?.props ?? getEnumerableProperties(source, globalConstructors);
-    const isModule =
-      snapshot?.isModule ??
-      (getTypeName(source) === 'Module' || source.__esModule);
+    const isModule = snapshot?.isModule ?? isModuleObject(source);
 
     for (const prop of props) {
       // Skip built-in readonly properties
