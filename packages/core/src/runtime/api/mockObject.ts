@@ -204,8 +204,6 @@ export function mockObject<T extends Record<Key, any>>(
   // Track processed object references to prevent infinite recursion from circular references
   const processedRefs = new WeakMap();
   const snapshotRefs = new WeakMap();
-  // Deferred assignment queue for handling circular references
-  const deferredAssignments: (() => void)[] = [];
 
   const snapshotProperties = (value: any): PropertySnapshot | undefined => {
     if (
@@ -385,8 +383,8 @@ export function mockObject<T extends Record<Key, any>>(
         const getSourceValue = () => (hasValue ? sourceValue : source[prop]);
 
         Object.defineProperty(target, prop, {
-          configurable: true,
-          enumerable: true,
+          configurable: descriptor.configurable,
+          enumerable: descriptor.enumerable,
           get: () => {
             if (!initialized) {
               initialized = true;
@@ -414,11 +412,6 @@ export function mockObject<T extends Record<Key, any>>(
   // Start processing
   processedRefs.set(object, mockExports);
   processProperties(object, mockExports);
-
-  // Execute deferred assignments to resolve circular references
-  for (const assign of deferredAssignments) {
-    assign();
-  }
 
   return mockExports as T;
 }

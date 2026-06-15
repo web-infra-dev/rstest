@@ -110,6 +110,22 @@ describe('mockObject automock', () => {
     expect(result.nested.value).toBe(2);
   });
 
+  it('preserves lazy property descriptors', () => {
+    const { run } = make('automock');
+    const source = {};
+    Object.defineProperty(source, 'hidden', {
+      value: () => 'real',
+      configurable: true,
+      enumerable: false,
+    });
+
+    const result = run(source);
+    const descriptor = Object.getOwnPropertyDescriptor(result, 'hidden');
+
+    expect(descriptor?.configurable).toBe(true);
+    expect(descriptor?.enumerable).toBe(false);
+  });
+
   it('preserves constructor prototype mocks', () => {
     const { run, isMockFunction } = make('automock');
     class Foo {
