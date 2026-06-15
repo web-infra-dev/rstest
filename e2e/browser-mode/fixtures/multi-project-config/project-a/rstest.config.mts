@@ -1,5 +1,6 @@
 import { pluginReact } from '@rsbuild/plugin-react';
 import { defineConfig } from '@rstest/core';
+import { BROWSER_PORTS } from '../../ports';
 
 export default defineConfig({
   name: 'project-a',
@@ -9,5 +10,6 @@ export default defineConfig({
     enabled: true,
     provider: 'playwright',
     headless: true,
+    port: BROWSER_PORTS['multi-project-config'],
   },
 });
