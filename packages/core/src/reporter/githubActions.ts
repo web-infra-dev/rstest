@@ -25,6 +25,7 @@ import {
   type FailureItem,
   formatFullTestName,
   getErrorType,
+  getRetryErrorLabel,
   pushFencedBlock,
   pushHeading,
 } from './utils';
@@ -396,7 +397,10 @@ async function renderStepSummary({
         : [{ message: 'Unknown error' }]) {
         const errorType = getErrorType(error);
         const message = trimForSummary(error.message);
-        lines.push(`**${errorType}**: ${message}`);
+        const retryLabel = getRetryErrorLabel(error);
+        lines.push(
+          `**${retryLabel ? `${retryLabel} - ` : ''}${errorType}**: ${message}`,
+        );
         lines.push('');
 
         if (error.diff) {

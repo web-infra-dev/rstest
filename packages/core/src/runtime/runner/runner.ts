@@ -505,7 +505,12 @@ export class TestRunner {
                 const currentResult = await runTestsCase(test, parentHooks);
 
                 if (currentResult.status === 'fail') {
-                  repeatRetryErrors.push(...(currentResult.errors || []));
+                  repeatRetryErrors.push(
+                    ...(currentResult.errors || []).map((error) => ({
+                      ...error,
+                      retryCount,
+                    })),
+                  );
                 }
 
                 result = {
