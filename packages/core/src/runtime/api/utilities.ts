@@ -47,6 +47,15 @@ const normalizeWaitOptions = (
   ),
 });
 
+const createUntransformedRuntimeApiError = (apiName: string) =>
+  new Error(
+    `[Rstest] rs.${apiName}() must be called as rstest.${apiName}() or rs.${apiName}() so Rstest can transform it. Import aliases are not supported for module mock APIs.`,
+  );
+
+const createPluginManagedApi = (apiName: string) => () => {
+  throw createUntransformedRuntimeApiError(apiName);
+};
+
 /**
  * Shared LIFO index-lifecycle for the three scoped-restore stacks behind
  * `stubEnv`, `stubGlobal`, and `useFakeTimers`. Each stub pushes an entry and
@@ -293,40 +302,20 @@ export const createRstestUtilities: (
       }
       return rstest;
     },
-    // The below methods are not implemented in the core package.
-    // The actual implementation is managed by the built-in Rstest plugin.
-    mock: () => undefined,
-    mockRequire: () => undefined,
-    doMock: () => undefined,
-    doMockRequire: () => undefined,
-    unmock: () => undefined,
-    doUnmock: () => undefined,
-    unmockRequire: () => undefined,
-    doUnmockRequire: () => undefined,
-    importMock: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-      return Promise.resolve({} as any);
-    },
-    requireMock: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-      return {} as any;
-    },
-    importActual: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-      return Promise.resolve({} as any);
-    },
-    requireActual: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-      return {} as any;
-    },
-    resetModules: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-      return {} as any;
-    },
-    hoisted: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-      return {} as any;
-    },
+    mock: createPluginManagedApi('mock'),
+    mockRequire: createPluginManagedApi('mockRequire'),
+    doMock: createPluginManagedApi('doMock'),
+    doMockRequire: createPluginManagedApi('doMockRequire'),
+    unmock: createPluginManagedApi('unmock'),
+    doUnmock: createPluginManagedApi('doUnmock'),
+    unmockRequire: createPluginManagedApi('unmockRequire'),
+    doUnmockRequire: createPluginManagedApi('doUnmockRequire'),
+    importMock: createPluginManagedApi('importMock'),
+    requireMock: createPluginManagedApi('requireMock'),
+    importActual: createPluginManagedApi('importActual'),
+    requireActual: createPluginManagedApi('requireActual'),
+    resetModules: createPluginManagedApi('resetModules'),
+    hoisted: createPluginManagedApi('hoisted'),
 
     setConfig: (config) => {
       if (!originalConfig) {

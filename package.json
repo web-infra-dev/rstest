@@ -17,7 +17,7 @@
     "test": "rstest",
     "test:examples": "pnpm --filter \"@examples/*\" test",
     "test:vscode": "pnpm --filter ./packages/vscode test",
-    "typecheck": "pnpm --filter \"!@examples/*\" run typecheck"
+    "typecheck": "rslint --type-check-only"
   },
   "devDependencies": {
     "@rsdoctor/rspack-plugin": "^1.5.12",

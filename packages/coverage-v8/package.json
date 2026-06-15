@@ -12,7 +12,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/web-infra-dev/rstest",
+    "url": "git+https://github.com/web-infra-dev/rstest.git",
     "directory": "packages/coverage-v8"
   },
   "license": "MIT",
@@ -29,8 +29,7 @@
   ],
   "scripts": {
     "build": "rslib build",
-    "test": "rstest",
-    "typecheck": "tsc --noEmit"
+    "test": "rstest"
   },
   "dependencies": {
     "acorn": "^8.16.0",
@@ -42,7 +41,7 @@
     "v8-to-istanbul": "^9.3.0"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.0.11",
+    "@rsbuild/core": "~2.0.12",
     "@rslib/core": "0.22.0",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",

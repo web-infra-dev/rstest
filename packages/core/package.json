@@ -13,7 +13,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/web-infra-dev/rstest",
+    "url": "git+https://github.com/web-infra-dev/rstest.git",
     "directory": "packages/core"
   },
   "license": "MIT",
@@ -64,11 +64,10 @@
   "scripts": {
     "build": "rslib build && npx prettier ./LICENSE.md --write",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
-    "test": "npx rstest --globals",
-    "typecheck": "pnpm -w exec tsc --noEmit -p packages/core/tsconfig.json"
+    "test": "npx rstest --globals"
   },
   "dependencies": {
-    "@rsbuild/core": "~2.0.11",
+    "@rsbuild/core": "~2.0.12",
     "@types/chai": "^5.2.3"
   },
   "devDependencies": {

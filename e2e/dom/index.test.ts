@@ -7,6 +7,17 @@ const jestDomFilters = 'test/jestDom';
 const externalConfigArgs = ['--config', 'rstest.externals.config.mts'];
 
 describe('jsdom', () => {
+  it('should run test correctly with environment comment', async () => {
+    const { expectExecSuccess } = await runCli(
+      'test/environmentComment',
+      undefined,
+      {
+        args: ['--config', 'rstest.environmentComment.config.mts'],
+      },
+    );
+    await expectExecSuccess();
+  });
+
   it('should run test correctly', async () => {
     const { expectExecSuccess } = await runCli(appFilters, 'jsdom');
     await expectExecSuccess();
