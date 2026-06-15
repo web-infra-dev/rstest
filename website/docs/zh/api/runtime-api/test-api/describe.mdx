@@ -9,9 +9,10 @@ description: describe 用于定义测试套件（test suite），支持链式修
 
 ## describe
 
-- **类型：** `(name: string, fn: () => void | Promise<void>) => void`
+- **类型：** `(name: string, fn?: () => void | Promise<void>) => void`
 
 定义一个测试套件，可以包含多个测试用例或嵌套的 describe。
+回调可以是异步函数；Rstest 会在收集阶段等待它完成，然后再运行其中声明的测试。
 
 ```ts
 import { describe, test } from '@rstest/core';
@@ -22,6 +23,16 @@ describe('math', () => {
   });
   test('sub', () => {
     // ...
+  });
+});
+```
+
+```ts
+describe('async setup', async () => {
+  const data = await loadFixtureData();
+
+  test('uses collected data', () => {
+    expect(data).toBeDefined();
   });
 });
 ```
@@ -68,7 +79,7 @@ describe.todo('should implement this suite');
 
 ## describe.each
 
-- **类型：** `describe.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>) => void`
+- **类型：** `describe.each(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>) => void`
 
 为数组中的每一项生成一个 describe 块。
 
@@ -113,7 +124,7 @@ describe.each<{ a: number; b: number; expected: number }>`
 
 ## describe.for
 
-- **类型：** `describe.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>) => void`
+- **类型：** `describe.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>) => void`
 
 类似 each，但参数类型更灵活。
 
