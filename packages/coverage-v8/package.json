@@ -1,6 +1,6 @@
 {
   "name": "@rstest/coverage-v8",
-  "version": "0.10.4",
+  "version": "0.10.5",
   "description": "V8 coverage provider for Rstest",
   "keywords": [
     "rstest",
