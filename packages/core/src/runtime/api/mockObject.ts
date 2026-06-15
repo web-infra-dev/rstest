@@ -164,8 +164,14 @@ function getPropertyDescriptor(
   prop: Key,
 ): PropertyDescriptor | undefined {
   let current = obj;
+  const visited = new WeakSet();
 
   while (current) {
+    if (visited.has(current)) {
+      return undefined;
+    }
+    visited.add(current);
+
     const descriptor = Object.getOwnPropertyDescriptor(current, prop);
     if (descriptor) {
       return descriptor;
