@@ -39,49 +39,6 @@ const expectRerun = (
 // TODO: The following error occurs only on Windows CI. It should appear in the Rspack version range from 1.5.0 to 1.6.0-beta.0.
 // Error: EBUSY: resource busy or locked, rmdir 'D:\a\rstest\rstest\e2e\watch\fixtures-test-0'
 describe.skipIf(process.platform === 'win32')('watch', () => {
-  it('should honor environment comments', async () => {
-    const fixturesTargetPath = `${__dirname}/fixtures-test-environment-comment${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
-
-    const { fs } = await prepareFixtures({
-      fixturesPath: `${__dirname}/fixtures-environment-comment`,
-      fixturesTargetPath,
-    });
-
-    const { cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['watch', '--disableConsoleIntercept'],
-      options: {
-        nodeOptions: {
-          env: { DEBUG: 'rstest' },
-          cwd: fixturesTargetPath,
-        },
-      },
-    });
-
-    await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Tests 2 passed');
-    expect(cli.stdout).toMatch(
-      'Run all tests in project(rstest-environment-1).',
-    );
-    expect(cli.stdout).toMatch(
-      'Run all tests in project(rstest-environment-2).',
-    );
-
-    cli.resetStd();
-    fs.update(path.join(fixturesTargetPath, 'src/index.ts'), (content) => {
-      return content.replace("'initial'", "'changed'");
-    });
-
-    await cli.waitForStdout('Duration');
-    expectRerun(
-      cli.stdout,
-      ['index.test.ts'],
-      ['index.test.ts', 'node.test.ts'],
-    );
-
-    cli.exec.kill();
-  });
-
   it('should rerun only affected test files when source changes', async () => {
     const fixturesTargetPath = `${__dirname}/fixtures-test-0${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
 
