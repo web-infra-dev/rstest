@@ -38,8 +38,8 @@ it.skipIf(!process.env.CI)('github-actions', async () => {
     .filter((log) => log.startsWith('::error'));
 
   expect(logs).toHaveLength(2);
-  expect(logs[0]).toBe(
-    '::error file=<ROOT>/reporter/fixtures/githubActions.test.ts,line=4,col=17,title=fixtures/githubActions.test.ts > should add two numbers correctly::expected 2 to be 4 // Object.is equality%0A- Expected%0A+ Received%0A%0A- 4%0A+ 2',
+  expect(logs[0]).toMatch(
+    /^::error file=<ROOT>[\\/]reporter[\\/]fixtures[\\/]githubActions\.test\.ts,line=4,col=17,title=fixtures\/githubActions\.test\.ts > should add two numbers correctly::expected 2 to be 4 \/\/ Object\.is equality%0A- Expected%0A\+ Received%0A%0A- 4%0A\+ 2$/,
   );
   expect(logs[1]).toContain(
     'title=fixtures/githubActions.test.ts > test snapshot::Snapshot `test snapshot 1` mismatched%0A- Expected%0A+ Received%0A%0A- "hello world"%0A+ "hello"',
