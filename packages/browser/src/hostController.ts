@@ -732,8 +732,10 @@ const replacePathSeparatorsInRegExpSource = (source: string): string => {
   return result;
 };
 
-const normalizeRegExpPathSeparators = (regex: RegExp): RegExp =>
-  new RegExp(replacePathSeparatorsInRegExpSource(regex.source));
+type BrowserContextExcludeSource = {
+  relative: string;
+  absolute: string;
+};
 
 /**
  * Convert exclude patterns to a RegExp for import.meta.webpackContext's exclude option
@@ -743,11 +745,12 @@ const normalizeRegExpPathSeparators = (regex: RegExp): RegExp =>
  *   Input: ['**\/node_modules\/**', '**\/dist\/**']
  *   Output: a regexp matching node_modules or dist path segments.
  */
-const excludePatternsToRegExp = (patterns: string[]): RegExp | null => {
+const excludePatternsToRegExpSources = (
+  patterns: string[],
+): BrowserContextExcludeSource[] | null => {
   const sources = patterns.map((pattern) => {
-    const regex = normalizeRegExpPathSeparators(
-      globToRegexp(normalizeExcludePatternForRegExp(pattern)),
-    );
+    const normalizedPattern = normalizeExcludePatternForRegExp(pattern);
+    const regex = globToRegexp(normalizedPattern);
     let source = regex.source;
     if (source.startsWith('^')) {
       source = source.substring(1);
@@ -755,22 +758,29 @@ const excludePatternsToRegExp = (patterns: string[]): RegExp | null => {
     if (source.endsWith('$')) {
       source = source.substring(0, source.length - 1);
     }
-    return replacePathSeparatorsInRegExpSource(source);
+
+    source = replacePathSeparatorsInRegExpSource(source);
+    return {
+      relative: source,
+      absolute: normalizedPattern.startsWith('./')
+        ? source.substring(2)
+        : source,
+    };
   });
 
   if (sources.length === 0) {
     return null;
   }
 
-  return new RegExp(`^(?:${sources.join('|')})$`);
+  return sources;
 };
 
 export const createBrowserContextExcludeRegExp = (
   patterns: string[],
   projectRoot: string,
 ): RegExp | null => {
-  const excludeRegExp = excludePatternsToRegExp(patterns);
-  if (!excludeRegExp) {
+  const excludeSources = excludePatternsToRegExpSources(patterns);
+  if (!excludeSources) {
     return null;
   }
 
@@ -782,18 +792,17 @@ export const createBrowserContextExcludeRegExp = (
     .split('/')
     .map(escapeRegExp)
     .join(PATH_SEPARATOR_SOURCE);
-  let source = excludeRegExp.source;
-  if (source.startsWith('^')) {
-    source = source.substring(1);
-  }
-  if (source.endsWith('$')) {
-    source = source.substring(0, source.length - 1);
-  }
+  const relativePatternSource = `(?:${excludeSources
+    .map((source) => source.relative)
+    .join('|')})`;
+  const absolutePatternSource = `(?:${excludeSources
+    .map((source) => source.absolute)
+    .join('|')})`;
 
-  const relativeSource = `(?:(?:${source})|\\.(?:${source}))`;
+  const relativeSource = `(?:(?:${relativePatternSource})|\\.(?:${relativePatternSource}))`;
   const absoluteSource = normalizedProjectRoot
-    ? `${projectRootSource}(?=${PATH_SEPARATOR_SOURCE})(?:${source})`
-    : `(?:${source})`;
+    ? `${projectRootSource}(?=${PATH_SEPARATOR_SOURCE})(?:${absolutePatternSource})`
+    : `(?:${absolutePatternSource})`;
   return new RegExp(
     `^(?:(?!${WINDOWS_ABSOLUTE_PATH_SOURCE}|${PATH_SEPARATOR_SOURCE})${relativeSource}|${absoluteSource})$`,
   );

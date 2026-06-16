@@ -186,8 +186,27 @@ describe('browser config resolution', () => {
 
     expect(exclude?.test('./fixtures/example.test.ts')).toBe(true);
     expect(exclude?.test('.\\fixtures\\example.test.ts')).toBe(true);
+    expect(exclude?.test('/repo/project/fixtures/example.test.ts')).toBe(true);
+    expect(exclude?.test('/repo/project/src/fixtures/example.test.ts')).toBe(
+      false,
+    );
     expect(exclude?.test('fixtures/example.test.ts')).toBe(false);
     expect(exclude?.test('./src/fixtures/example.test.ts')).toBe(false);
+  });
+
+  it('should match dot-prefixed browser context exclude patterns on Windows absolute paths', () => {
+    const exclude = createBrowserContextExcludeRegExp(
+      ['./fixtures/**'],
+      'C:\\repo\\project',
+    );
+
+    expect(exclude?.test('C:\\repo\\project\\fixtures\\example.test.ts')).toBe(
+      true,
+    );
+    expect(
+      exclude?.test('C:\\repo\\project\\src\\fixtures\\example.test.ts'),
+    ).toBe(false);
+    expect(exclude?.test('.\\fixtures\\example.test.ts')).toBe(true);
   });
 
   it('should scope Windows absolute browser context exclude patterns to project root', () => {
