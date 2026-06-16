@@ -16,6 +16,7 @@
     "url": "git+https://github.com/web-infra-dev/rstest.git",
     "directory": "packages/core"
   },
+  "homepage": "https://rstest.rs",
   "license": "MIT",
   "type": "module",
   "exports": {
