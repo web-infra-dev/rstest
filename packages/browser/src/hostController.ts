@@ -629,6 +629,7 @@ const globToRegexp = (glob: string): RegExp => {
     fastpaths: false,
     noglobstar: false,
     bash: false,
+    dot: true,
   });
 
   if (!regex) {
@@ -721,7 +722,11 @@ export const createBrowserContextExcludeRegExp = (
     return null;
   }
 
-  const projectRootSource = escapeRegExp(normalizePathForRegExp(projectRoot));
+  const normalizedProjectRoot = normalizePathForRegExp(projectRoot).replace(
+    /[\\/]$/,
+    '',
+  );
+  const projectRootSource = escapeRegExp(normalizedProjectRoot);
   let source = excludeRegExp.source;
   if (source.startsWith('^')) {
     source = source.substring(1);
@@ -730,9 +735,12 @@ export const createBrowserContextExcludeRegExp = (
     source = source.substring(0, source.length - 1);
   }
 
-  const relativeSource = `(?:\\.)?(?:${source})`;
+  const relativeSource = `(?:(?:${source})|\\.(?:${source}))`;
+  const absoluteSource = normalizedProjectRoot
+    ? `${projectRootSource}(?=[\\/])(?:${source})`
+    : `(?:${source})`;
   return new RegExp(
-    `^(?:(?![A-Za-z]:[\\/]|[\\/])${relativeSource}|${projectRootSource}(?:${source}))$`,
+    `^(?:(?![A-Za-z]:[\\/]|[\\/])${relativeSource}|${absoluteSource})$`,
   );
 };
 

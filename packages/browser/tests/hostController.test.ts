@@ -152,6 +152,7 @@ describe('browser config resolution', () => {
     expect(exclude?.test('/repo/git/project/tests/example.test.ts')).toBe(
       false,
     );
+    expect(exclude?.test('/repo/git/project-other/.git/config')).toBe(false);
     expect(exclude?.test('/repo/git/project/.git/config')).toBe(true);
     expect(exclude?.test('/repo/git/project/.cache/output.js')).toBe(true);
     expect(exclude?.test('/repo/git/project/cache/output.js')).toBe(false);
@@ -175,6 +176,20 @@ describe('browser config resolution', () => {
     expect(exclude?.test('tests/example.test.ts')).toBe(false);
     expect(exclude?.test('.cache/output.js')).toBe(true);
     expect(exclude?.test('./.cache/output.js')).toBe(true);
+  });
+
+  it('should match hidden files under browser context exclude patterns', () => {
+    const exclude = createBrowserContextExcludeRegExp(
+      ['**/dist/**'],
+      '/repo/project',
+    );
+
+    expect(exclude?.test('./dist/.fixtures/example.test.ts')).toBe(true);
+    expect(exclude?.test('/repo/project/dist/.fixtures/example.test.ts')).toBe(
+      true,
+    );
+    expect(exclude?.test('.dist/.fixtures/example.test.ts')).toBe(false);
+    expect(exclude?.test('./src/.fixtures/example.test.ts')).toBe(false);
   });
 
   it('should normalize setup file paths before filtering lazy compilation', () => {
