@@ -39,7 +39,7 @@
     "typecheck": "pnpm -w exec tsc --noEmit -p packages/playwright/tsconfig.json"
   },
   "devDependencies": {
-    "@rslib/core": "0.22.0",
+    "@rslib/core": "0.22.1",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "playwright": "^1.60.0",
