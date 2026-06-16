@@ -678,6 +678,8 @@ const globPatternsToRegExp = (patterns: string[]): RegExp => {
 };
 
 const REGEXP_SPECIAL_CHARACTERS = /[|\\{}()[\]^$+*?.]/g;
+const PATH_SEPARATOR_SOURCE = String.raw`[\\/]`;
+const WINDOWS_ABSOLUTE_PATH_SOURCE = String.raw`[A-Za-z]:[\\/]`;
 
 const escapeRegExp = (value: string): string =>
   value.replace(REGEXP_SPECIAL_CHARACTERS, '\\$&');
@@ -703,7 +705,7 @@ const excludePatternsToRegExp = (patterns: string[]): RegExp | null => {
     if (source.endsWith('$')) {
       source = source.substring(0, source.length - 1);
     }
-    return source.replaceAll('\\/', '[\\\\/]');
+    return source.replaceAll('\\/', PATH_SEPARATOR_SOURCE);
   });
 
   if (sources.length === 0) {
@@ -726,7 +728,10 @@ export const createBrowserContextExcludeRegExp = (
     /[\\/]$/,
     '',
   );
-  const projectRootSource = escapeRegExp(normalizedProjectRoot);
+  const projectRootSource = normalizedProjectRoot
+    .split('/')
+    .map(escapeRegExp)
+    .join(PATH_SEPARATOR_SOURCE);
   let source = excludeRegExp.source;
   if (source.startsWith('^')) {
     source = source.substring(1);
@@ -737,10 +742,10 @@ export const createBrowserContextExcludeRegExp = (
 
   const relativeSource = `(?:(?:${source})|\\.(?:${source}))`;
   const absoluteSource = normalizedProjectRoot
-    ? `${projectRootSource}(?=[\\/])(?:${source})`
+    ? `${projectRootSource}(?=${PATH_SEPARATOR_SOURCE})(?:${source})`
     : `(?:${source})`;
   return new RegExp(
-    `^(?:(?![A-Za-z]:[\\/]|[\\/])${relativeSource}|${absoluteSource})$`,
+    `^(?:(?!${WINDOWS_ABSOLUTE_PATH_SOURCE}|${PATH_SEPARATOR_SOURCE})${relativeSource}|${absoluteSource})$`,
   );
 };
 

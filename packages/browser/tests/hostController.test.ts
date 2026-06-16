@@ -178,6 +178,36 @@ describe('browser config resolution', () => {
     expect(exclude?.test('./.cache/output.js')).toBe(true);
   });
 
+  it('should scope Windows absolute browser context exclude patterns to project root', () => {
+    const exclude = createBrowserContextExcludeRegExp(
+      ['**/dist/**'],
+      'C:\\repo\\dist\\project',
+    );
+
+    expect(
+      exclude?.test('C:\\repo\\dist\\project\\tests\\example.test.ts'),
+    ).toBe(false);
+    expect(exclude?.test('C:\\repo\\dist\\project\\dist\\output.js')).toBe(
+      true,
+    );
+    expect(
+      exclude?.test('C:\\repo\\dist\\project-other\\dist\\output.js'),
+    ).toBe(false);
+    expect(exclude?.test('dist\\output.js')).toBe(true);
+  });
+
+  it('should apply hidden-dir browser context exclude patterns on Windows paths', () => {
+    const exclude = createBrowserContextExcludeRegExp(
+      ['**/.{idea,git,cache,output,temp}/**'],
+      'C:\\tmp\\.cache\\app',
+    );
+
+    expect(exclude?.test('C:\\tmp\\.cache\\app\\tests\\example.test.ts')).toBe(
+      false,
+    );
+    expect(exclude?.test('C:\\tmp\\.cache\\app\\.cache\\output.js')).toBe(true);
+  });
+
   it('should match hidden files under browser context exclude patterns', () => {
     const exclude = createBrowserContextExcludeRegExp(
       ['**/dist/**'],
