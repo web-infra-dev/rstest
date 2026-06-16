@@ -194,6 +194,18 @@ describe('browser config resolution', () => {
     expect(exclude?.test('./src/fixtures/example.test.ts')).toBe(false);
   });
 
+  it('should match non-globstar relative browser context exclude patterns with ./ prefixes', () => {
+    const exclude = createBrowserContextExcludeRegExp(
+      ['dist/**'],
+      '/repo/project',
+    );
+
+    expect(exclude?.test('dist/example.test.ts')).toBe(true);
+    expect(exclude?.test('./dist/example.test.ts')).toBe(true);
+    expect(exclude?.test('/repo/project/dist/example.test.ts')).toBe(true);
+    expect(exclude?.test('/repo/project/src/dist/example.test.ts')).toBe(false);
+  });
+
   it('should match dot-prefixed browser context exclude patterns on Windows absolute paths', () => {
     const exclude = createBrowserContextExcludeRegExp(
       ['./fixtures/**'],

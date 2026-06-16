@@ -741,6 +741,27 @@ type BrowserContextExcludeSource = {
   isAbsolute: boolean;
 };
 
+const createRelativeContextExcludeSource = (
+  source: string,
+  normalizedPattern: string,
+): string => {
+  if (normalizedPattern.startsWith('./')) {
+    return source;
+  }
+
+  return normalizedPattern.startsWith('**/')
+    ? `(?:(?:${source})|\\.(?:${source}))`
+    : `(?:(?:${source})|\\.${PATH_SEPARATOR_SOURCE}(?:${source}))`;
+};
+
+const createProjectAbsoluteExcludeSource = (
+  source: string,
+  normalizedPattern: string,
+): string =>
+  normalizedPattern.startsWith('./') || normalizedPattern.startsWith('**/')
+    ? source
+    : `${PATH_SEPARATOR_SOURCE}(?:${source})`;
+
 /**
  * Convert exclude patterns to a RegExp for import.meta.webpackContext's exclude option
  * This is used at compile time to filter out files during bundling
@@ -764,12 +785,19 @@ const excludePatternsToRegExpSources = (
     }
 
     source = replacePathSeparatorsInRegExpSource(source);
+    const isAbsolute = isAbsolutePatternForRegExp(normalizedPattern);
+    const absolute = normalizedPattern.startsWith('./')
+      ? source.substring(2)
+      : source;
+
     return {
-      relative: source,
-      absolute: normalizedPattern.startsWith('./')
-        ? source.substring(2)
-        : source,
-      isAbsolute: isAbsolutePatternForRegExp(normalizedPattern),
+      relative: isAbsolute
+        ? source
+        : createRelativeContextExcludeSource(source, normalizedPattern),
+      absolute: isAbsolute
+        ? absolute
+        : createProjectAbsoluteExcludeSource(absolute, normalizedPattern),
+      isAbsolute,
     };
   });
 
@@ -812,7 +840,7 @@ export const createBrowserContextExcludeRegExp = (
     const absolutePatternSource = `(?:${relativeExcludeSources
       .map((source) => source.absolute)
       .join('|')})`;
-    const relativeSource = `(?:(?:${relativePatternSource})|\\.(?:${relativePatternSource}))`;
+    const relativeSource = `(?:${relativePatternSource})`;
     const absoluteSource = normalizedProjectRoot
       ? `${projectRootSource}(?=${PATH_SEPARATOR_SOURCE})(?:${absolutePatternSource})`
       : `(?:${absolutePatternSource})`;
