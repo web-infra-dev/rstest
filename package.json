@@ -11,13 +11,13 @@
     "check-unused": "knip",
     "e2e": "cd e2e && pnpm test && pnpm test:commonjs && pnpm test:no-isolate",
     "format": "prettier --write . && heading-case --write",
-    "lint": "prettier --check . && pnpm run check-spell && pnpm lint:type",
-    "lint:type": "rslint",
+    "lint": "prettier --check . && pnpm run check-spell && pnpm run lint:type",
+    "lint:type": "rslint --type-check",
     "prepare": "lefthook install && pnpm run build",
     "test": "rstest",
     "test:examples": "pnpm --filter \"@examples/*\" test",
     "test:vscode": "pnpm --filter ./packages/vscode test",
-    "typecheck": "rslint --type-check-only"
+    "typecheck": "pnpm run lint:type"
   },
   "devDependencies": {
     "@rsdoctor/rspack-plugin": "^1.5.13",
