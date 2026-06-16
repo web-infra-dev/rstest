@@ -730,8 +730,9 @@ export const createBrowserContextExcludeRegExp = (
     source = source.substring(0, source.length - 1);
   }
 
+  const relativeSource = `(?:\\.)?(?:${source})`;
   return new RegExp(
-    `^(?:(?![A-Za-z]:[\\/]|[\\/])(?:${source})|${projectRootSource}(?:${source}))$`,
+    `^(?:(?![A-Za-z]:[\\/]|[\\/])${relativeSource}|${projectRootSource}(?:${source}))$`,
   );
 };
 

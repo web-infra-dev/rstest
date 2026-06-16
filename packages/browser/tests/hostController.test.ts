@@ -160,6 +160,8 @@ describe('browser config resolution', () => {
     );
     expect(exclude?.test('tests/example.test.ts')).toBe(false);
     expect(exclude?.test('.git/config')).toBe(true);
+    expect(exclude?.test('./.git/config')).toBe(true);
+    expect(exclude?.test('./node_modules/pkg/index.js')).toBe(true);
   });
 
   it('should apply absolute browser context exclude patterns from project root', () => {
@@ -172,6 +174,7 @@ describe('browser config resolution', () => {
     expect(exclude?.test('/tmp/.cache/app/.cache/output.js')).toBe(true);
     expect(exclude?.test('tests/example.test.ts')).toBe(false);
     expect(exclude?.test('.cache/output.js')).toBe(true);
+    expect(exclude?.test('./.cache/output.js')).toBe(true);
   });
 
   it('should normalize setup file paths before filtering lazy compilation', () => {
