@@ -9,12 +9,39 @@ import { ApiMeta } from '@components/ApiMeta';
 - **类型：**
 
 ```ts
+type BrowserViewport =
+  | {
+      width: number;
+      height: number;
+    }
+  | DevicePreset;
+
+type DevicePreset =
+  | 'iPhoneSE'
+  | 'iPhoneXR'
+  | 'iPhone12Pro'
+  | 'iPhone14ProMax'
+  | 'Pixel7'
+  | 'SamsungGalaxyS8Plus'
+  | 'SamsungGalaxyS20Ultra'
+  | 'iPadMini'
+  | 'iPadAir'
+  | 'iPadPro'
+  | 'SurfacePro7'
+  | 'SurfaceDuo'
+  | 'GalaxyZFold5'
+  | 'AsusZenbookFold'
+  | 'SamsungGalaxyA51A71'
+  | 'NestHub'
+  | 'NestHubMax';
+
 type BrowserModeConfig = {
   enabled?: boolean;
   provider: 'playwright';
   browser?: 'chromium' | 'firefox' | 'webkit';
   headless?: boolean;
   port?: number;
+  viewport?: BrowserViewport;
   strictPort?: boolean;
   providerOptions?: Record<string, unknown>;
 };
@@ -29,6 +56,7 @@ const defaultBrowser = {
   browser: 'chromium',
   headless: true, // CI 环境；本地开发为 false
   port: undefined, // 随机可用端口
+  viewport: undefined, // Browser UI 填满预览面板
   strictPort: false,
   providerOptions: {},
 };
@@ -183,6 +211,78 @@ export default defineConfig({
 });
 ```
 
+:::
+
+### viewport
+
+<ApiMeta addedVersion="0.8.4" />
+
+- **类型：** `BrowserViewport`
+- **默认值：** `undefined`
+
+设置 Browser Mode 测试的默认 runner iframe viewport。如果未指定，Browser UI 会填满预览面板。
+
+```ts
+type BrowserViewport =
+  | {
+      width: number;
+      height: number;
+    }
+  | DevicePreset;
+```
+
+如果你希望一个 browser 项目中的所有文件都使用同一个 viewport，可以显式指定尺寸：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    viewport: { width: 390, height: 844 },
+  },
+});
+```
+
+你也可以使用内置设备 preset：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    viewport: 'iPhone12Pro',
+  },
+});
+```
+
+支持的 preset：
+
+| Preset                  | 尺寸        |
+| ----------------------- | ----------- |
+| `iPhoneSE`              | 375 x 667   |
+| `iPhoneXR`              | 414 x 896   |
+| `iPhone12Pro`           | 390 x 844   |
+| `iPhone14ProMax`        | 430 x 932   |
+| `Pixel7`                | 412 x 915   |
+| `SamsungGalaxyS8Plus`   | 360 x 740   |
+| `SamsungGalaxyS20Ultra` | 412 x 915   |
+| `iPadMini`              | 768 x 1024  |
+| `iPadAir`               | 820 x 1180  |
+| `iPadPro`               | 1024 x 1366 |
+| `SurfacePro7`           | 912 x 1368  |
+| `SurfaceDuo`            | 540 x 720   |
+| `GalaxyZFold5`          | 344 x 882   |
+| `AsusZenbookFold`       | 853 x 1280  |
+| `SamsungGalaxyA51A71`   | 412 x 914   |
+| `NestHub`               | 1024 x 600  |
+| `NestHubMax`            | 1280 x 800  |
+
+:::tip
+`browser.viewport` 控制测试 runner iframe 的 viewport。如果你需要 Playwright context 选项，例如 locale、color scheme 或 permissions，请通过 [`providerOptions.context`](#provider-选项) 配置。
 :::
 
 ### port
