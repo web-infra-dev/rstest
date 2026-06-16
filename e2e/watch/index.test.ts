@@ -60,11 +60,9 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
 
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 2 passed');
+    expect(cli.stdout).toMatch('Run all tests in project(rstest).');
     expect(cli.stdout).toMatch(
       'Run all tests in project(rstest-environment-1).',
-    );
-    expect(cli.stdout).toMatch(
-      'Run all tests in project(rstest-environment-2).',
     );
 
     cli.resetStd();
