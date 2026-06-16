@@ -67,6 +67,30 @@ const jsdom = '// @rstest-environment jsdom';
     ).toBeNull();
   });
 
+  it('keeps reading comments after regex literals with quotes', () => {
+    expect(
+      parseEnvironmentComment(`
+const regexp = /"/;
+// @rstest-environment jsdom
+`),
+    ).toEqual({
+      name: 'jsdom',
+    });
+  });
+
+  it('parses CRLF line comments without a final newline', () => {
+    expect(
+      parseEnvironmentComment(
+        '// @rstest-environment jsdom\r\n// @rstest-environment-options { "url": "https://example.test/" }\r',
+      ),
+    ).toEqual({
+      name: 'jsdom',
+      options: {
+        url: 'https://example.test/',
+      },
+    });
+  });
+
   it('merges options when comment keeps the base environment', () => {
     expect(
       applyEnvironmentComment(

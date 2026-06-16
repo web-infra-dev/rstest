@@ -23,6 +23,64 @@ const environmentCommentCache = new Map<string, CachedEnvironmentComment>();
 const isEnvironmentName = (name: string): name is EnvironmentName =>
   SUPPORTED_ENVIRONMENTS.includes(name as EnvironmentName);
 
+const canStartRegexLiteral = (code: string, index: number): boolean => {
+  let cursor = index - 1;
+  while (cursor >= 0 && /\s/.test(code[cursor]!)) {
+    cursor -= 1;
+  }
+
+  if (cursor < 0) {
+    return true;
+  }
+
+  const char = code[cursor]!;
+  if ('([{=,:;!&|?+-*%^~<>'.includes(char)) {
+    return true;
+  }
+
+  return /\b(?:return|throw|case|delete|void|typeof|instanceof|in|yield|await)\s*$/.test(
+    code.slice(0, cursor + 1),
+  );
+};
+
+const skipRegexLiteral = (code: string, index: number): number | null => {
+  let cursor = index + 1;
+  let inCharacterClass = false;
+
+  while (cursor < code.length) {
+    const char = code[cursor]!;
+
+    if (char === '\\') {
+      cursor += 2;
+      continue;
+    }
+
+    if (char === '[') {
+      inCharacterClass = true;
+      cursor += 1;
+      continue;
+    }
+
+    if (char === ']') {
+      inCharacterClass = false;
+      cursor += 1;
+      continue;
+    }
+
+    if (char === '/' && !inCharacterClass) {
+      cursor += 1;
+      while (cursor < code.length && /[a-z]/i.test(code[cursor]!)) {
+        cursor += 1;
+      }
+      return cursor;
+    }
+
+    cursor += 1;
+  }
+
+  return null;
+};
+
 const readCommentText = (code: string): string => {
   const comments: string[] = [];
   let index = 0;
@@ -30,6 +88,49 @@ const readCommentText = (code: string): string => {
   while (index < code.length) {
     const char = code[index];
     const nextChar = code[index + 1];
+
+    if (char === '/' && nextChar === '/') {
+      const start = index + 2;
+      index = start;
+      while (
+        index < code.length &&
+        code[index] !== '\n' &&
+        code[index] !== '\r'
+      ) {
+        index += 1;
+      }
+      comments.push(code.slice(start, index));
+      if (code[index] === '\r' && code[index + 1] === '\n') {
+        index += 2;
+      } else if (code[index] === '\r' || code[index] === '\n') {
+        index += 1;
+      }
+      continue;
+    }
+
+    if (char === '/' && nextChar === '*') {
+      const start = index + 2;
+      index = start;
+      while (
+        index < code.length &&
+        !(code[index] === '*' && code[index + 1] === '/')
+      ) {
+        index += 1;
+      }
+      comments.push(code.slice(start, index));
+      if (index < code.length) {
+        index += 2;
+      }
+      continue;
+    }
+
+    if (char === '/' && canStartRegexLiteral(code, index)) {
+      const nextIndex = skipRegexLiteral(code, index);
+      if (nextIndex) {
+        index = nextIndex;
+        continue;
+      }
+    }
 
     if (char === '"' || char === "'" || char === '`') {
       const quote = char;
@@ -45,30 +146,6 @@ const readCommentText = (code: string): string => {
           break;
         }
       }
-      continue;
-    }
-
-    if (char === '/' && nextChar === '/') {
-      const start = index + 2;
-      index = start;
-      while (index < code.length && code[index] !== '\n') {
-        index += 1;
-      }
-      comments.push(code.slice(start, index));
-      continue;
-    }
-
-    if (char === '/' && nextChar === '*') {
-      const start = index + 2;
-      index = start;
-      while (
-        index < code.length &&
-        !(code[index] === '*' && code[index + 1] === '/')
-      ) {
-        index += 1;
-      }
-      comments.push(code.slice(start, index));
-      index += 2;
       continue;
     }
 
