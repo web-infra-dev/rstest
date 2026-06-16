@@ -8,6 +8,7 @@
     "rstack",
     "rspack"
   ],
+  "homepage": "https://rstest.rs",
   "bugs": {
     "url": "https://github.com/web-infra-dev/rstest/issues"
   },
@@ -16,7 +17,6 @@
     "url": "git+https://github.com/web-infra-dev/rstest.git",
     "directory": "packages/core"
   },
-  "homepage": "https://rstest.rs",
   "license": "MIT",
   "type": "module",
   "exports": {
