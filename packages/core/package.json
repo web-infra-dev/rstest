@@ -8,6 +8,7 @@
     "rstack",
     "rspack"
   ],
+  "homepage": "https://rstest.rs",
   "bugs": {
     "url": "https://github.com/web-infra-dev/rstest/issues"
   },
