@@ -162,6 +162,18 @@ describe('browser config resolution', () => {
     expect(exclude?.test('.git/config')).toBe(true);
   });
 
+  it('should apply absolute browser context exclude patterns from project root', () => {
+    const exclude = createBrowserContextExcludeRegExp(
+      ['**/.{idea,git,cache,output,temp}/**'],
+      '/tmp/.cache/app',
+    );
+
+    expect(exclude?.test('/tmp/.cache/app/tests/example.test.ts')).toBe(false);
+    expect(exclude?.test('/tmp/.cache/app/.cache/output.js')).toBe(true);
+    expect(exclude?.test('tests/example.test.ts')).toBe(false);
+    expect(exclude?.test('.cache/output.js')).toBe(true);
+  });
+
   it('should normalize setup file paths before filtering lazy compilation', () => {
     const lazyCompilation = createBrowserLazyCompilationConfig([
       '/project/tests/rstest.setup.ts',

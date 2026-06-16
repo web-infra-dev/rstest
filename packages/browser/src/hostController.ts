@@ -730,7 +730,9 @@ export const createBrowserContextExcludeRegExp = (
     source = source.substring(0, source.length - 1);
   }
 
-  return new RegExp(`^(?:${projectRootSource}[\\\\/])?(?:${source})$`);
+  return new RegExp(
+    `^(?:(?![A-Za-z]:[\\/]|[\\/])(?:${source})|${projectRootSource}(?:${source}))$`,
+  );
 };
 
 type StatsModule = {
