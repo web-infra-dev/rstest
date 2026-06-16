@@ -259,3 +259,26 @@ test(
 ```
 
 debug 模式下，失败测试会在关闭 page 和 context 前自动调用 `page.pause()`。如果不需要这个行为，可以在 `debug` 选项中设置 `pauseOnFailure: false`，或设置 `RSTEST_PLAYWRIGHT_PAUSE=false`。
+
+在 CI 或本地非交互式调试时，推荐在测试失败时截图：
+
+```ts
+import { mkdir } from 'node:fs/promises';
+import { test } from '@rstest/playwright';
+
+test('home page', async ({ onTestFailed, page, serve }) => {
+  onTestFailed(async ({ task }) => {
+    await mkdir('.rstest-playwright/screenshots', { recursive: true });
+    await page.screenshot({
+      fullPage: true,
+      path: `.rstest-playwright/screenshots/${task.id}.png`,
+    });
+  });
+
+  const { url } = await serve('./dist/index.html');
+
+  await page.goto(url);
+});
+```
+
+这种方式不会阻塞测试运行，同时可以把失败时的页面状态保留下来作为 artifact。完整的 Rsbuild + Playwright 示例可以参考 `examples/playwright`。

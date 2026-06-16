@@ -192,3 +192,26 @@ test(
 ```
 
 In debug mode, failed tests automatically call `page.pause()` before closing the page and context. Set `pauseOnFailure: false` in `debug` options, or `RSTEST_PLAYWRIGHT_PAUSE=false`, to disable this behavior.
+
+For non-interactive debugging in CI or local runs, capture a screenshot when a test fails:
+
+```ts
+import { mkdir } from 'node:fs/promises';
+import { test } from '@rstest/playwright';
+
+test('home page', async ({ onTestFailed, page, serve }) => {
+  onTestFailed(async ({ task }) => {
+    await mkdir('.rstest-playwright/screenshots', { recursive: true });
+    await page.screenshot({
+      fullPage: true,
+      path: `.rstest-playwright/screenshots/${task.id}.png`,
+    });
+  });
+
+  const { url } = await serve('./dist/index.html');
+
+  await page.goto(url);
+});
+```
+
+See `examples/playwright` for a complete Rsbuild + Playwright example.
