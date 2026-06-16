@@ -23,6 +23,61 @@ const environmentCommentCache = new Map<string, CachedEnvironmentComment>();
 const isEnvironmentName = (name: string): name is EnvironmentName =>
   SUPPORTED_ENVIRONMENTS.includes(name as EnvironmentName);
 
+const readCommentText = (code: string): string => {
+  const comments: string[] = [];
+  let index = 0;
+
+  while (index < code.length) {
+    const char = code[index];
+    const nextChar = code[index + 1];
+
+    if (char === '"' || char === "'" || char === '`') {
+      const quote = char;
+      index += 1;
+      while (index < code.length) {
+        const current = code[index];
+        if (current === '\\') {
+          index += 2;
+          continue;
+        }
+        index += 1;
+        if (current === quote) {
+          break;
+        }
+      }
+      continue;
+    }
+
+    if (char === '/' && nextChar === '/') {
+      const start = index + 2;
+      index = start;
+      while (index < code.length && code[index] !== '\n') {
+        index += 1;
+      }
+      comments.push(code.slice(start, index));
+      continue;
+    }
+
+    if (char === '/' && nextChar === '*') {
+      const start = index + 2;
+      index = start;
+      while (
+        index < code.length &&
+        !(code[index] === '*' && code[index + 1] === '/')
+      ) {
+        index += 1;
+      }
+      comments.push(code.slice(start, index));
+      index += 2;
+      continue;
+    }
+
+    index += 1;
+  }
+
+  return comments.join('\n');
+};
+
 const readFileHead = async (file: string): Promise<string> => {
   const handle = await open(file, 'r');
   try {
@@ -48,8 +103,9 @@ export const parseEnvironmentComment = (
     return null;
   }
 
-  const environmentMatch = environmentCommentRE.exec(code);
-  const optionsMatch = environmentOptionsCommentRE.exec(code);
+  const commentText = readCommentText(code);
+  const environmentMatch = environmentCommentRE.exec(commentText);
+  const optionsMatch = environmentOptionsCommentRE.exec(commentText);
 
   if (!environmentMatch && !optionsMatch) {
     return null;

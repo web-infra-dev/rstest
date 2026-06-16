@@ -57,6 +57,16 @@ describe('environment comments', () => {
     });
   });
 
+  it('ignores environment markers inside code strings', () => {
+    expect(
+      parseEnvironmentComment(`
+const packageName = '@rstest/core';
+describe('resolveTestEnvironmentFromTarget', () => {});
+const jsdom = '// @rstest-environment jsdom';
+`),
+    ).toBeNull();
+  });
+
   it('merges options when comment keeps the base environment', () => {
     expect(
       applyEnvironmentComment(
@@ -150,6 +160,88 @@ describe('environment comments', () => {
       expect(grouped.changed).toBe(true);
       expect(grouped.projects).toHaveLength(2);
       expect(grouped.projects.every((item) => item._globalSetups)).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves the base project name for files without environment comments', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const nodeFile = path.join(root, 'node.test.ts');
+      const jsdomFile = path.join(root, 'jsdom.test.ts');
+      writeFileSync(nodeFile, '// node test\n');
+      writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
+
+      const project = createProject();
+
+      const grouped = await groupProjectEntriesByEnvironment({
+        entriesCache: new Map([
+          [
+            project.environmentName,
+            {
+              entries: {
+                node: nodeFile,
+                jsdom: jsdomFile,
+              },
+            },
+          ],
+        ]),
+        projects: [project],
+      });
+
+      expect(grouped.changed).toBe(true);
+      expect(grouped.projects.map((item) => item.name)).toEqual([
+        'default',
+        'default-environment-1',
+      ]);
+      expect(grouped.projects.map((item) => item.environmentName)).toEqual([
+        'default',
+        'default-environment-1',
+      ]);
+      expect(grouped.entriesCache.get('default')?.entries).toEqual({
+        node: nodeFile,
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not split projects when environment markers only appear in code strings', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const file = path.join(root, 'code-string.test.ts');
+      writeFileSync(
+        file,
+        `const packageName = '@rstest/core';
+describe('resolveTestEnvironmentFromTarget', () => {});
+const jsdom = '// @rstest-environment jsdom';
+`,
+      );
+
+      const project = createProject();
+
+      const grouped = await groupProjectEntriesByEnvironment({
+        entriesCache: new Map([
+          [
+            project.environmentName,
+            {
+              entries: {
+                file,
+              },
+            },
+          ],
+        ]),
+        projects: [project],
+      });
+
+      expect(grouped.changed).toBe(false);
+      expect(grouped.projects).toEqual([project]);
+      expect(
+        grouped.entriesCache.get(project.environmentName)?.entries,
+      ).toEqual({
+        file,
+      });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
