@@ -687,6 +687,54 @@ const escapeRegExp = (value: string): string =>
 const normalizePathForRegExp = (value: string): string =>
   normalize(value).replaceAll('\\', '/');
 
+const normalizeExcludePatternForRegExp = (value: string): string =>
+  value.startsWith('./')
+    ? `./${normalizePathForRegExp(value.substring(2))}`
+    : normalizePathForRegExp(value);
+
+const isEscapedRegExpCharacter = (source: string, index: number): boolean => {
+  let backslashCount = 0;
+  for (
+    let current = index - 1;
+    current >= 0 && source[current] === '\\';
+    current--
+  ) {
+    backslashCount++;
+  }
+  return backslashCount % 2 === 1;
+};
+
+const replacePathSeparatorsInRegExpSource = (source: string): string => {
+  let result = '';
+  let inCharacterClass = false;
+
+  for (let index = 0; index < source.length; index++) {
+    const character = source[index];
+    const isEscaped = isEscapedRegExpCharacter(source, index);
+
+    if (character === '[' && !isEscaped) {
+      inCharacterClass = true;
+    }
+
+    if (!inCharacterClass && character === '\\' && source[index + 1] === '/') {
+      result += PATH_SEPARATOR_SOURCE;
+      index++;
+      continue;
+    }
+
+    result += character;
+
+    if (character === ']' && !isEscaped) {
+      inCharacterClass = false;
+    }
+  }
+
+  return result;
+};
+
+const normalizeRegExpPathSeparators = (regex: RegExp): RegExp =>
+  new RegExp(replacePathSeparatorsInRegExpSource(regex.source));
+
 /**
  * Convert exclude patterns to a RegExp for import.meta.webpackContext's exclude option
  * This is used at compile time to filter out files during bundling
@@ -697,7 +745,9 @@ const normalizePathForRegExp = (value: string): string =>
  */
 const excludePatternsToRegExp = (patterns: string[]): RegExp | null => {
   const sources = patterns.map((pattern) => {
-    const regex = globToRegexp(normalizePathForRegExp(pattern));
+    const regex = normalizeRegExpPathSeparators(
+      globToRegexp(normalizeExcludePatternForRegExp(pattern)),
+    );
     let source = regex.source;
     if (source.startsWith('^')) {
       source = source.substring(1);
@@ -705,7 +755,7 @@ const excludePatternsToRegExp = (patterns: string[]): RegExp | null => {
     if (source.endsWith('$')) {
       source = source.substring(0, source.length - 1);
     }
-    return source.replaceAll('\\/', PATH_SEPARATOR_SOURCE);
+    return replacePathSeparatorsInRegExpSource(source);
   });
 
   if (sources.length === 0) {
