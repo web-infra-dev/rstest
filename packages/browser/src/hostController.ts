@@ -676,44 +676,61 @@ const globPatternsToRegExp = (patterns: string[]): RegExp => {
   return new RegExp(`(?:${regexParts.join('|')})$`);
 };
 
+const REGEXP_SPECIAL_CHARACTERS = /[|\\{}()[\]^$+*?.]/g;
+
+const escapeRegExp = (value: string): string =>
+  value.replace(REGEXP_SPECIAL_CHARACTERS, '\\$&');
+
+const normalizePathForRegExp = (value: string): string =>
+  normalize(value).replaceAll('\\', '/');
+
 /**
  * Convert exclude patterns to a RegExp for import.meta.webpackContext's exclude option
  * This is used at compile time to filter out files during bundling
  *
  * Example:
  *   Input: ['**\/node_modules\/**', '**\/dist\/**']
- *   Output: /[\\/](node_modules|dist)[\\/]/
+ *   Output: a regexp matching node_modules or dist path segments.
  */
 const excludePatternsToRegExp = (patterns: string[]): RegExp | null => {
-  const keywords: string[] = [];
-  for (const pattern of patterns) {
-    // Extract the core part between ** wildcards
-    // e.g., '**/node_modules/**' -> 'node_modules'
-    // e.g., '**/dist/**' -> 'dist'
-    // e.g., '**/.{idea,git,cache,output,temp}/**' -> extract each part
-    const match = pattern.match(
-      /\*\*\/\.?\{?([^/*{}]+(?:,[^/*{}]+)*)\}?\/?\*?\*?/,
-    );
-    if (match) {
-      // Handle {a,b,c} patterns
-      const parts = match[1]!.split(',');
-      for (const part of parts) {
-        // Clean up the part (remove leading dots for hidden dirs)
-        const cleaned = part.replace(/^\./, '');
-        if (cleaned && !keywords.includes(cleaned)) {
-          keywords.push(cleaned);
-        }
-      }
+  const sources = patterns.map((pattern) => {
+    const regex = globToRegexp(normalizePathForRegExp(pattern));
+    let source = regex.source;
+    if (source.startsWith('^')) {
+      source = source.substring(1);
     }
-  }
+    if (source.endsWith('$')) {
+      source = source.substring(0, source.length - 1);
+    }
+    return source.replaceAll('\\/', '[\\\\/]');
+  });
 
-  if (keywords.length === 0) {
+  if (sources.length === 0) {
     return null;
   }
 
-  // Create regex that matches paths containing these directory names
-  // Use [\\/] to match both forward and back slashes
-  return new RegExp(`[\\\\/](${keywords.join('|')})[\\\\/]`);
+  return new RegExp(`^(?:${sources.join('|')})$`);
+};
+
+export const createBrowserContextExcludeRegExp = (
+  patterns: string[],
+  projectRoot: string,
+): RegExp | null => {
+  const excludeRegExp = excludePatternsToRegExp(patterns);
+  if (!excludeRegExp) {
+    return null;
+  }
+
+  const projectRootSource = escapeRegExp(normalizePathForRegExp(projectRoot));
+  let source = excludeRegExp.source;
+  if (source.startsWith('^')) {
+    source = source.substring(1);
+  }
+  if (source.endsWith('$')) {
+    source = source.substring(0, source.length - 1);
+  }
+
+  return new RegExp(`^(?:${projectRootSource}[\\\\/])?(?:${source})$`);
 };
 
 type StatsModule = {
@@ -1087,7 +1104,10 @@ const generateManifestModule = ({
       project.normalizedConfig.include,
     );
     const excludePatterns = project.normalizedConfig.exclude.patterns;
-    const excludeRegExp = excludePatternsToRegExp(excludePatterns);
+    const excludeRegExp = createBrowserContextExcludeRegExp(
+      excludePatterns,
+      projectRootPosix,
+    );
 
     lines.push(
       `const ${varName} = import.meta.webpackContext(${JSON.stringify(projectRootPosix)}, {`,

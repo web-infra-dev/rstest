@@ -3,6 +3,7 @@ import type { ProjectContext, Rstest } from '@rstest/core/internal/browser';
 import {
   createBrowserLazyCompilationConfig,
   createBrowserRsbuildDevConfig,
+  createBrowserContextExcludeRegExp,
   resolveListenPort,
 } from '../src/hostController';
 
@@ -136,6 +137,29 @@ describe('browser config resolution', () => {
         nameForCondition: () => '/project/tests/example.test.tsx',
       }),
     ).toBe(true);
+  });
+
+  it('should keep leading dots in browser context exclude patterns', () => {
+    const exclude = createBrowserContextExcludeRegExp(
+      [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/.{idea,git,cache,output,temp}/**',
+      ],
+      '/repo/git/project',
+    );
+
+    expect(exclude?.test('/repo/git/project/tests/example.test.ts')).toBe(
+      false,
+    );
+    expect(exclude?.test('/repo/git/project/.git/config')).toBe(true);
+    expect(exclude?.test('/repo/git/project/.cache/output.js')).toBe(true);
+    expect(exclude?.test('/repo/git/project/cache/output.js')).toBe(false);
+    expect(exclude?.test('/repo/git/project/node_modules/pkg/index.js')).toBe(
+      true,
+    );
+    expect(exclude?.test('tests/example.test.ts')).toBe(false);
+    expect(exclude?.test('.git/config')).toBe(true);
   });
 
   it('should normalize setup file paths before filtering lazy compilation', () => {
