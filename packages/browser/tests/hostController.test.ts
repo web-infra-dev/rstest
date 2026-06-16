@@ -209,6 +209,42 @@ describe('browser config resolution', () => {
     expect(exclude?.test('.\\fixtures\\example.test.ts')).toBe(true);
   });
 
+  it('should not prefix POSIX absolute browser context exclude patterns twice', () => {
+    const exclude = createBrowserContextExcludeRegExp(
+      ['/repo/project/fixtures/**'],
+      '/repo/project',
+    );
+
+    expect(exclude?.test('/repo/project/fixtures/example.test.ts')).toBe(true);
+    expect(exclude?.test('/repo/project/src/fixtures/example.test.ts')).toBe(
+      false,
+    );
+    expect(
+      exclude?.test('/repo/project/repo/project/fixtures/example.test.ts'),
+    ).toBe(false);
+    expect(exclude?.test('./fixtures/example.test.ts')).toBe(false);
+  });
+
+  it('should not prefix Windows absolute browser context exclude patterns twice', () => {
+    const exclude = createBrowserContextExcludeRegExp(
+      ['C:\\repo\\project\\fixtures\\**'],
+      'C:\\repo\\project',
+    );
+
+    expect(exclude?.test('C:\\repo\\project\\fixtures\\example.test.ts')).toBe(
+      true,
+    );
+    expect(
+      exclude?.test('C:\\repo\\project\\src\\fixtures\\example.test.ts'),
+    ).toBe(false);
+    expect(
+      exclude?.test(
+        'C:\\repo\\project\\C:\\repo\\project\\fixtures\\example.test.ts',
+      ),
+    ).toBe(false);
+    expect(exclude?.test('.\\fixtures\\example.test.ts')).toBe(false);
+  });
+
   it('should scope Windows absolute browser context exclude patterns to project root', () => {
     const exclude = createBrowserContextExcludeRegExp(
       ['**/dist/**'],

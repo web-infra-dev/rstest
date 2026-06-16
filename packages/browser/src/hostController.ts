@@ -692,6 +692,9 @@ const normalizeExcludePatternForRegExp = (value: string): string =>
     ? `./${normalizePathForRegExp(value.substring(2))}`
     : normalizePathForRegExp(value);
 
+const isAbsolutePatternForRegExp = (value: string): boolean =>
+  value.startsWith('/') || /^[A-Za-z]:\//.test(value);
+
 const isEscapedRegExpCharacter = (source: string, index: number): boolean => {
   let backslashCount = 0;
   for (
@@ -735,6 +738,7 @@ const replacePathSeparatorsInRegExpSource = (source: string): string => {
 type BrowserContextExcludeSource = {
   relative: string;
   absolute: string;
+  isAbsolute: boolean;
 };
 
 /**
@@ -765,6 +769,7 @@ const excludePatternsToRegExpSources = (
       absolute: normalizedPattern.startsWith('./')
         ? source.substring(2)
         : source,
+      isAbsolute: isAbsolutePatternForRegExp(normalizedPattern),
     };
   });
 
@@ -792,20 +797,41 @@ export const createBrowserContextExcludeRegExp = (
     .split('/')
     .map(escapeRegExp)
     .join(PATH_SEPARATOR_SOURCE);
-  const relativePatternSource = `(?:${excludeSources
-    .map((source) => source.relative)
-    .join('|')})`;
-  const absolutePatternSource = `(?:${excludeSources
-    .map((source) => source.absolute)
-    .join('|')})`;
-
-  const relativeSource = `(?:(?:${relativePatternSource})|\\.(?:${relativePatternSource}))`;
-  const absoluteSource = normalizedProjectRoot
-    ? `${projectRootSource}(?=${PATH_SEPARATOR_SOURCE})(?:${absolutePatternSource})`
-    : `(?:${absolutePatternSource})`;
-  return new RegExp(
-    `^(?:(?!${WINDOWS_ABSOLUTE_PATH_SOURCE}|${PATH_SEPARATOR_SOURCE})${relativeSource}|${absoluteSource})$`,
+  const relativeExcludeSources = excludeSources.filter(
+    (source) => !source.isAbsolute,
   );
+  const absoluteExcludeSources = excludeSources.filter(
+    (source) => source.isAbsolute,
+  );
+  const sourceBranches: string[] = [];
+
+  if (relativeExcludeSources.length > 0) {
+    const relativePatternSource = `(?:${relativeExcludeSources
+      .map((source) => source.relative)
+      .join('|')})`;
+    const absolutePatternSource = `(?:${relativeExcludeSources
+      .map((source) => source.absolute)
+      .join('|')})`;
+    const relativeSource = `(?:(?:${relativePatternSource})|\\.(?:${relativePatternSource}))`;
+    const absoluteSource = normalizedProjectRoot
+      ? `${projectRootSource}(?=${PATH_SEPARATOR_SOURCE})(?:${absolutePatternSource})`
+      : `(?:${absolutePatternSource})`;
+
+    sourceBranches.push(
+      `(?!${WINDOWS_ABSOLUTE_PATH_SOURCE}|${PATH_SEPARATOR_SOURCE})${relativeSource}`,
+      absoluteSource,
+    );
+  }
+
+  if (absoluteExcludeSources.length > 0) {
+    sourceBranches.push(
+      `(?:${absoluteExcludeSources
+        .map((source) => source.relative)
+        .join('|')})`,
+    );
+  }
+
+  return new RegExp(`^(?:${sourceBranches.join('|')})$`);
 };
 
 type StatsModule = {
