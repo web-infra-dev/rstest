@@ -1,4 +1,5 @@
 import { defineConfig } from '@rstest/core';
+import { BROWSER_PORTS } from '../../ports';
 
 export default defineConfig({
   name: 'project-b',
@@ -7,5 +8,6 @@ export default defineConfig({
     enabled: true,
     provider: 'playwright',
     headless: true,
+    port: BROWSER_PORTS['multi-project-config'],
   },
 });
