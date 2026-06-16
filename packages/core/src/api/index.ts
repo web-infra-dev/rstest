@@ -61,6 +61,7 @@ export interface SerializedError {
   diff?: string;
   actual?: string;
   expected?: string;
+  retryCount?: number;
   cause?: SerializedError;
 }
 
@@ -197,6 +198,7 @@ const toSerializedError = (
     diff: e.diff,
     actual: e.actual,
     expected: e.expected,
+    retryCount: e.retryCount,
     cause: e.cause !== undefined ? toSerializedError(e.cause, seen) : undefined,
   };
 };

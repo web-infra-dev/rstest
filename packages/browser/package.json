@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser",
-  "version": "0.10.4",
+  "version": "0.10.5",
   "description": "Browser mode support for Rstest testing framework.",
   "keywords": [
     "rstest",
@@ -52,7 +52,7 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@rslib/core": "0.22.0",
+    "@rslib/core": "0.22.1",
     "@rstest/browser-ui": "workspace:*",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",

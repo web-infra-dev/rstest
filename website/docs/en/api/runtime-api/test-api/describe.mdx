@@ -9,12 +9,13 @@ description: describe defines a test suite. It supports chainable modifiers and 
 
 ## describe
 
-- **Type:** `(name: string, fn: () => void | Promise<void>) => void`
+- **Type:** `(name: string, fn?: () => void | Promise<void>) => void`
 
 Defines a test suite that can contain multiple test cases or nested describe blocks.
+The callback can be asynchronous; Rstest waits for it during collection before running the tests declared inside it.
 
 ```ts
-import { describe, test } from '@rstest/core';
+import { describe, expect, test } from '@rstest/core';
 
 describe('math', () => {
   test('add', () => {
@@ -22,6 +23,16 @@ describe('math', () => {
   });
   test('sub', () => {
     // ...
+  });
+});
+```
+
+```ts
+describe('async setup', async () => {
+  const data = await loadFixtureData();
+
+  test('uses collected data', () => {
+    expect(data).toBeDefined();
   });
 });
 ```
@@ -68,7 +79,7 @@ describe.todo('should implement this suite');
 
 ## describe.each
 
-- **Type:** `describe.each(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>) => void`
+- **Type:** `describe.each(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>) => void`
 
 Creates a describe block for each item in the provided array.
 
@@ -113,7 +124,7 @@ describe.each<{ a: number; b: number; expected: number }>`
 
 ## describe.for
 
-- **Type:** `describe.for(cases: ReadonlyArray<T>)(name: string, fn: (param: T) => void | Promise<void>) => void`
+- **Type:** `describe.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>) => void`
 
 Alternative to `describe.each` for more flexible parameter types.
 

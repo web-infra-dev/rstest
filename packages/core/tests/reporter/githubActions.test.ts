@@ -316,4 +316,86 @@ describe('GithubActionsReporter step summary', () => {
       await fs.rm(tempDir, { recursive: true, force: true });
     }
   });
+
+  it('labels retry errors by attempt in the failure details', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rstest-gha-'));
+    const summaryPath = path.join(tempDir, 'summary.md');
+    const previousSummaryPath = process.env.GITHUB_STEP_SUMMARY;
+    const previousWorkspacePath = process.env.GITHUB_WORKSPACE;
+    const testPath = path.join(tempDir, 'tests/retry.test.ts');
+
+    process.env.GITHUB_STEP_SUMMARY = summaryPath;
+    process.env.GITHUB_WORKSPACE = tempDir;
+
+    try {
+      const reporter = new GithubActionsReporter({
+        rootPath: tempDir,
+        options: {
+          onWritePath: (value) => value,
+          annotations: false,
+        },
+      });
+
+      await reporter.onTestRunEnd({
+        results: [
+          {
+            testId: 'file-1',
+            status: 'fail',
+            name: 'retry.test.ts',
+            testPath,
+            project: 'rstest',
+            results: [],
+          },
+        ],
+        testResults: [
+          {
+            testId: 'test-1',
+            status: 'fail',
+            name: 'fails after retries',
+            parentNames: ['describe retry'],
+            testPath,
+            project: 'rstest',
+            retryCount: 1,
+            errors: [
+              {
+                name: 'AssertionError',
+                message: 'first failure',
+                retryCount: 0,
+              },
+              {
+                name: 'AssertionError',
+                message: 'retry failure',
+                retryCount: 1,
+              },
+            ],
+          },
+        ],
+        duration: emptyDuration,
+        snapshotSummary: emptySnapshotSummary,
+        getSourcemap: () => null,
+      });
+
+      const summary = await fs.readFile(summaryPath, 'utf-8');
+      expect(summary).toContain('## Failures');
+      expect(summary).toContain(
+        '### ❌ FAIL tests/retry.test.ts > describe retry > fails after retries (retry x1)',
+      );
+      expect(summary).toContain('**AssertionError**: first failure');
+      expect(summary).toContain('**Retry x1 - AssertionError**: retry failure');
+    } finally {
+      if (previousSummaryPath === undefined) {
+        delete process.env.GITHUB_STEP_SUMMARY;
+      } else {
+        process.env.GITHUB_STEP_SUMMARY = previousSummaryPath;
+      }
+
+      if (previousWorkspacePath === undefined) {
+        delete process.env.GITHUB_WORKSPACE;
+      } else {
+        process.env.GITHUB_WORKSPACE = previousWorkspacePath;
+      }
+
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });
