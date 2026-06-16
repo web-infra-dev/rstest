@@ -1,7 +1,7 @@
 {
   "name": "rstest",
   "displayName": "Rstest",
-  "version": "0.10.4",
+  "version": "0.10.5",
   "private": true,
   "description": "VS Code extension for Rstest",
   "categories": [
@@ -9,7 +9,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/web-infra-dev/rstest",
+    "url": "git+https://github.com/web-infra-dev/rstest.git",
     "directory": "packages/vscode"
   },
   "license": "MIT",
@@ -24,7 +24,6 @@
     "test": "npm run test:unit && npm run test:e2e",
     "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",
     "test:unit": "rstest",
-    "typecheck": "pnpm -w exec tsc --noEmit -p packages/vscode/tsconfig.json",
     "watch": "rslib build --watch",
     "watch:local": "cross-env SOURCEMAP=true rslib build --watch"
   },
@@ -105,10 +104,10 @@
     "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
   ],
   "devDependencies": {
-    "@rsbuild/core": "~2.0.11",
-    "@rslib/core": "0.22.0",
+    "@rsbuild/core": "~2.0.14",
+    "@rslib/core": "0.22.1",
     "@rstest/core": "workspace:*",
-    "@swc/core": "^1.15.40",
+    "@swc/core": "^1.15.41",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
@@ -123,7 +122,7 @@
     "mocha": "^11.7.6",
     "ovsx": "^0.10.12",
     "picomatch": "^4.0.4",
-    "semver": "^7.8.3",
+    "semver": "^7.8.4",
     "tinyglobby": "^0.2.17",
     "typescript": "^6.0.3",
     "valibot": "^1.4.1"

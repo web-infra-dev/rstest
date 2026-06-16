@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser-react",
-  "version": "0.10.4",
+  "version": "0.10.5",
   "description": "React component testing support for Rstest browser mode",
   "keywords": [
     "rstest",
@@ -14,7 +14,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/web-infra-dev/rstest",
+    "url": "git+https://github.com/web-infra-dev/rstest.git",
     "directory": "packages/browser-react"
   },
   "license": "MIT",
@@ -40,11 +40,10 @@
   "scripts": {
     "build": "rslib build",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
-    "test": "rstest",
-    "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser-react/tsconfig.json"
+    "test": "rstest"
   },
   "devDependencies": {
-    "@rslib/core": "0.22.0",
+    "@rslib/core": "0.22.1",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/react": "^19.2.17",

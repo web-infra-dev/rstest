@@ -155,6 +155,63 @@ describe('DefaultReporter summary streams', () => {
     expect(stdoutText).toContain('Duration 500ms (build 100ms, tests 300ms)');
   });
 
+  it('labels retry errors by attempt in the failing summary', async () => {
+    const testResult: TestResult = {
+      status: 'fail',
+      name: 'fails after retries',
+      testPath: '/test/root/retry.test.ts',
+      duration: 200,
+      errors: [
+        {
+          message: 'first failure',
+          name: 'Error',
+          retryCount: 0,
+        },
+        {
+          message: 'retry failure',
+          name: 'Error',
+          retryCount: 1,
+        },
+      ],
+      project: 'default',
+      testId: 'case-1',
+    };
+
+    const fileResult: TestFileResult = {
+      status: 'fail',
+      name: 'retry.test.ts',
+      testPath: '/test/root/retry.test.ts',
+      duration: 300,
+      results: [testResult],
+      project: 'default',
+      testId: 'file-1',
+    };
+
+    const { stderr } = spyOnConsole();
+
+    const reporter = new DefaultReporter({
+      rootPath: '/test/root',
+      config: baseConfig,
+      options: {},
+      testState: createTestState([fileResult]),
+    });
+
+    await reporter.onTestRunEnd({
+      results: [fileResult],
+      testResults: [testResult],
+      duration,
+      snapshotSummary: emptySnapshotSummary,
+      getSourcemap: async () => null,
+    });
+
+    const stderrText = stripVTControlCharacters(stderr.join('\n'));
+
+    expect(stderrText).not.toContain('Initial attempt:');
+    expect(stderrText).toContain('Error: first failure');
+    expect(stderrText).toContain('Retry x1:');
+    expect(stderrText).toContain('Error: retry failure');
+  });
+
   it('does not flush process streams when using a custom logger', async () => {
     const { fileResult, testResult } = createFailureResults();
     const { stdout, stderr } = spyOnConsole();

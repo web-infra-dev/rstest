@@ -136,6 +136,36 @@ describe('rstest utilities wait APIs', () => {
   });
 });
 
+describe('rstest utilities plugin-managed APIs', () => {
+  it('throws when module mock APIs are not transformed by the Rstest plugin', async () => {
+    const rs = await createRstestUtilities(createWorkerState());
+
+    expect(() => rs.mock('./module')).toThrow(
+      'rs.mock() must be called as rstest.mock() or rs.mock() so Rstest can transform it',
+    );
+    expect(() => rs.doMock('./module')).toThrow(
+      'Import aliases are not supported for module mock APIs',
+    );
+    expect(() => rs.unmock('./module')).toThrow(
+      'Import aliases are not supported for module mock APIs',
+    );
+  });
+
+  it('throws when module loader APIs are not transformed by the Rstest plugin', async () => {
+    const rs = await createRstestUtilities(createWorkerState());
+
+    expect(() => rs.importActual('./module')).toThrow(
+      'rs.importActual() must be called as rstest.importActual() or rs.importActual() so Rstest can transform it',
+    );
+    expect(() => rs.requireActual('./module')).toThrow(
+      'Import aliases are not supported for module mock APIs',
+    );
+    expect(() => rs.hoisted(() => ({}))).toThrow(
+      'Import aliases are not supported for module mock APIs',
+    );
+  });
+});
+
 describe('rstest utility scoped cleanup', () => {
   const envName = 'RSTEST_SCOPED_ENV';
 

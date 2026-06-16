@@ -78,6 +78,95 @@ describe('mockObject automock', () => {
     expect(isMockFunction(result.own)).toBe(true);
     expect('inherited' in result).toBe(false);
   });
+
+  it('mocks nested objects lazily', () => {
+    const { run, isMockFunction } = make('automock');
+    let enumerated = false;
+    const nested = new Proxy(
+      { method: () => 'real' },
+      {
+        ownKeys: (target) => {
+          enumerated = true;
+          return Reflect.ownKeys(target);
+        },
+        getOwnPropertyDescriptor: (target, prop) => {
+          return Reflect.getOwnPropertyDescriptor(target, prop);
+        },
+      },
+    );
+    const result = run({ nested });
+
+    expect(enumerated).toBe(false);
+    expect(isMockFunction(result.nested.method)).toBe(true);
+    expect(enumerated).toBe(true);
+  });
+
+  it('allows lazy mocked properties to be overwritten', () => {
+    const { run } = make('automock');
+    const result = run({ nested: { value: 1 } });
+
+    result.nested = { value: 2 };
+
+    expect(result.nested.value).toBe(2);
+  });
+
+  it('preserves lazy property descriptors', () => {
+    const { run } = make('automock');
+    const source = {};
+    Object.defineProperty(source, 'hidden', {
+      value: () => 'real',
+      configurable: true,
+      enumerable: false,
+    });
+
+    const result = run(source);
+    const descriptor = Object.getOwnPropertyDescriptor(result, 'hidden');
+
+    expect(descriptor?.configurable).toBe(true);
+    expect(descriptor?.enumerable).toBe(false);
+  });
+
+  it('preserves constructor prototype mocks', () => {
+    const { run, isMockFunction } = make('automock');
+    class Foo {
+      greet(): string {
+        return 'hi';
+      }
+    }
+
+    const MockedFoo = run(Foo);
+
+    expect(isMockFunction(MockedFoo.prototype.greet)).toBe(true);
+    expect(MockedFoo.prototype.greet()).toBeUndefined();
+  });
+
+  it('snapshots nested values before lazy mock initialization', () => {
+    const { run, isMockFunction } = make('automock');
+    const original = {
+      nested: {
+        method: () => 'original',
+      },
+    };
+
+    const result = run(original);
+    original.nested.method = () => 'new';
+
+    expect(isMockFunction(result.nested.method)).toBe(true);
+    expect(result.nested.method()).toBeUndefined();
+  });
+
+  it('creates independent mocks for aliased functions', () => {
+    const { run } = make('automock');
+    const fn = () => 'real';
+    const result = run({ a: fn, b: fn });
+
+    expect(result.a).not.toBe(result.b);
+
+    result.a();
+
+    expect(result.a.mock.calls).toHaveLength(1);
+    expect(result.b.mock.calls).toHaveLength(0);
+  });
 });
 
 describe('mockObject autospy', () => {
@@ -122,5 +211,54 @@ describe('mockObject autospy', () => {
     expect(isMockFunction(instance.greet)).toBe(true);
     expect(instance.greet()).toBe('hi');
     expect(instance.greet.mock.calls).toHaveLength(1);
+  });
+
+  it('snapshots nested object properties before access', () => {
+    const { run, isMockFunction } = make('autospy');
+    let enumerated = false;
+    const nested = new Proxy(
+      { method: () => 'real' },
+      {
+        ownKeys: (target) => {
+          enumerated = true;
+          return Reflect.ownKeys(target);
+        },
+        getOwnPropertyDescriptor: (target, prop) => {
+          return Reflect.getOwnPropertyDescriptor(target, prop);
+        },
+      },
+    );
+    const result = run({ nested });
+
+    expect(enumerated).toBe(true);
+    expect(isMockFunction(result.nested.method)).toBe(true);
+    expect(result.nested.method()).toBe('real');
+  });
+
+  it('snapshots nested values before lazy spy initialization', () => {
+    const { run } = make('autospy');
+    const original = {
+      nested: {
+        method: () => 'original',
+      },
+    };
+
+    const result = run(original);
+    original.nested.method = () => 'new';
+
+    expect(result.nested.method()).toBe('original');
+  });
+
+  it('creates independent spies for aliased functions', () => {
+    const { run } = make('autospy');
+    const fn = () => 'real';
+    const result = run({ a: fn, b: fn });
+
+    expect(result.a).not.toBe(result.b);
+
+    expect(result.a()).toBe('real');
+
+    expect(result.a.mock.calls).toHaveLength(1);
+    expect(result.b.mock.calls).toHaveLength(0);
   });
 });

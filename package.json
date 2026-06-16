@@ -17,11 +17,11 @@
     "test": "rstest",
     "test:examples": "pnpm --filter \"@examples/*\" test",
     "test:vscode": "pnpm --filter ./packages/vscode test",
-    "typecheck": "pnpm --filter \"!@examples/*\" run typecheck"
+    "typecheck": "rslint --type-check-only"
   },
   "devDependencies": {
-    "@rsdoctor/rspack-plugin": "^1.5.12",
-    "@rslint/core": "^0.5.3",
+    "@rsdoctor/rspack-plugin": "^1.5.13",
+    "@rslint/core": "^0.6.1",
     "@rstest/core": "workspace:*",
     "@types/node": "^22.16.5",
     "bumpp": "^11.1.0",
@@ -34,15 +34,15 @@
     "path-serializer": "0.6.0",
     "pkg-pr-new": "^0.0.75",
     "playwright": "^1.60.0",
-    "prettier": "^3.8.3",
+    "prettier": "^3.8.4",
     "prettier-plugin-packagejson": "^3.0.2",
     "rsbuild-plugin-arethetypeswrong": "^0.3.1",
     "rsbuild-plugin-publint": "^0.3.4",
     "typescript": "^6.0.3"
   },
-  "packageManager": "pnpm@11.5.2",
+  "packageManager": "pnpm@11.6.0",
   "engines": {
     "node": "^20.19.0 || >=22.12.0",
-    "pnpm": ">=11.5.2"
+    "pnpm": ">=11.6.0"
   }
 }

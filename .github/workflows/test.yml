@@ -8,6 +8,12 @@ on:
     branches: [main]
 
   workflow_dispatch:
+    inputs:
+      fullRun:
+        description: 'Run the full e2e matrix'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
@@ -26,7 +32,7 @@ jobs:
     outputs:
       changed: ${{ steps.changes.outputs.changed }}
       # Full e2e sweep: push to main (post-merge gate) or release PR (pre-publish gate)
-      is_full_run: ${{ github.event_name == 'push' || startsWith(github.event.pull_request.title, 'release:') }}
+      is_full_run: ${{ github.event_name == 'push' || startsWith(github.event.pull_request.title, 'release:') || inputs.fullRun }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -149,18 +155,18 @@ jobs:
         os: [macos-latest, windows-latest]
         # Trigger-dependent axes (gated by prepare.outputs.is_full_run):
         #
-        #   trigger      | node_version | test_script                           | exclude
-        #   -------------+--------------+---------------------------------------+-----------
-        #   PR (regular) | [24]         | [test]                                | -
-        #   push to main | [20, 22, 24] | [test, commonjs, no-isolate, threads] | test × 22
-        #   release PR   | [20, 22, 24] | [test, commonjs, no-isolate, threads] | test × 22
+        #   trigger      | node_version | test_script
+        #   -------------+--------------+--------------------------------------
+        #   PR (regular) | [24]         | [test]
+        #   push to main | [20, 24]     | [test, commonjs, no-isolate, threads]
+        #   release PR   | [20, 24]     | [test, commonjs, no-isolate, threads]
         #
         # Node 20 + test:no-isolate can hit upstream vm native crashes under worker
         # reuse; tolerated on full runs in exchange for coverage.
         node_version: >-
           ${{ fromJson(
             needs.prepare.outputs.is_full_run == 'true'
-              && '["20","22","24"]'
+              && '["20","24"]'
             || '["24"]'
           ) }}
         test_script: >-
@@ -168,12 +174,6 @@ jobs:
             needs.prepare.outputs.is_full_run == 'true'
               && '["test","test:commonjs","test:no-isolate","test:threads"]'
             || '["test"]'
-          ) }}
-        exclude: >-
-          ${{ fromJson(
-            needs.prepare.outputs.is_full_run == 'true'
-              && '[{"node_version":"22","test_script":"test"}]'
-            || '[]'
           ) }}
 
     steps:

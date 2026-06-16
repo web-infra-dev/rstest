@@ -1,9 +1,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import treeKill from 'tree-kill';
 import { prepareFixtures, runRstestCli } from '../scripts';
-import { runBrowserWatchCli } from './utils';
+import {
+  deleteFixtureTarget,
+  killCliProcessTree,
+  runBrowserWatchCli,
+} from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -72,23 +75,8 @@ describe('browser mode - watch', () => {
     // At least one test should pass
     await cli.waitForStdout('✓ tests/');
 
-    // Kill the process tree
-    const pid = cli.exec.process?.pid;
-    if (pid) {
-      treeKill(pid, 'SIGKILL');
-    } else {
-      cli.exec.kill();
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    try {
-      fs.delete(fixturesTargetPath);
-    } catch (err) {
-      if (process.platform !== 'win32') {
-        throw err;
-      }
-    }
+    await killCliProcessTree(cli);
+    await deleteFixtureTarget(fs, fixturesTargetPath);
   });
 
   it('test files should be ran when create / update / rename / delete', async () => {
@@ -156,10 +144,6 @@ describe('browser mode - watch', () => {
         );
       }
     };
-    const settleWatchCycle = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-    };
-
     // ========== Create: Add new test file ==========
     cli.resetStd();
     fs.create(
@@ -174,7 +158,6 @@ describe('browser mode - watch', () => {
     await waitForRerunSignal();
     await waitForRerunResult('✓ tests/new.test.ts');
     expect(cli.stdout).toContain('✓ tests/new.test.ts');
-    await settleWatchCycle();
 
     // ========== Update (break): Modify new test file to fail ==========
     cli.resetStd();
@@ -184,7 +167,6 @@ describe('browser mode - watch', () => {
     await waitForRerunSignal();
     await waitForRerunResult("expected 'new' to be 'modified'");
     expect(cli.stdout).toContain("expected 'new' to be 'modified'");
-    await settleWatchCycle();
 
     // ========== Update (fix): Fix the test file ==========
     cli.resetStd();
@@ -194,7 +176,6 @@ describe('browser mode - watch', () => {
     await waitForRerunSignal();
     await waitForRerunResult('✓ tests/new.test.ts');
     expect(cli.stdout).toContain('✓ tests/new.test.ts');
-    await settleWatchCycle();
 
     // ========== Rename: Rename new.test.ts to renamed.test.ts ==========
     cli.resetStd();
@@ -202,7 +183,6 @@ describe('browser mode - watch', () => {
     await waitForRerunSignal();
     await waitForRerunResult('✓ tests/renamed.test.ts');
     expect(cli.stdout).toContain('✓ tests/renamed.test.ts');
-    await settleWatchCycle();
 
     // ========== Delete: Remove the renamed test file ==========
     cli.resetStd();
@@ -211,29 +191,8 @@ describe('browser mode - watch', () => {
     await waitForRerunResult('✓ tests/index.test.ts');
     expect(cli.stdout).toContain('✓ tests/index.test.ts');
 
-    // Kill the entire process tree to ensure browser and all child processes are terminated.
-    // This is critical on Windows where child processes are not killed by default.
-    const pid = cli.exec.process?.pid;
-    if (pid) {
-      treeKill(pid, 'SIGKILL');
-    } else {
-      cli.exec.kill();
-    }
-
-    // Wait for process and browser to fully exit and release file handles (especially on Windows)
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    // Clean up fixtures folder
-    // Note: On Windows, file handles may not be fully released even after waiting,
-    // causing EBUSY errors. This is a known issue with watch mode tests.
-    // See: https://github.com/nodejs/node/issues/49985
-    try {
-      fs.delete(fixturesTargetPath);
-    } catch (err) {
-      if (process.platform !== 'win32') {
-        throw err;
-      }
-    }
+    await killCliProcessTree(cli);
+    await deleteFixtureTarget(fs, fixturesTargetPath);
   }, 30_000);
 
   it('should not emit HMR fallback warning when setup files are eager compiled', async () => {
@@ -246,11 +205,6 @@ describe('browser mode - watch', () => {
     );
     expect(cli.stdout).not.toContain('is not accepted');
 
-    const pid = cli.exec.process?.pid;
-    if (pid) {
-      treeKill(pid, 'SIGKILL');
-    } else {
-      cli.exec.kill();
-    }
+    await killCliProcessTree(cli);
   }, 30_000);
 });

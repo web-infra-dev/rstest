@@ -82,14 +82,14 @@ export interface TestEachFn {
     cases: readonly T[],
   ): (
     description: string,
-    fn: (...args: [...T]) => MaybePromise<void>,
+    fn?: (...args: [...T]) => MaybePromise<void>,
     options?: number | TestOptions,
   ) => void;
   <T>(
     cases: readonly T[],
   ): (
     description: string,
-    fn: (...args: T[]) => MaybePromise<void>,
+    fn?: (...args: T[]) => MaybePromise<void>,
     options?: number | TestOptions,
   ) => void;
   <T extends Record<string, unknown>>(
@@ -126,10 +126,13 @@ export interface DescribeEachFn {
   ): (description: string, fn?: (param: T) => MaybePromise<void>) => void;
   <T extends readonly [unknown, ...unknown[]]>(
     cases: readonly T[],
-  ): (description: string, fn: (...args: [...T]) => MaybePromise<void>) => void;
+  ): (
+    description: string,
+    fn?: (...args: [...T]) => MaybePromise<void>,
+  ) => void;
   <T>(
     cases: readonly T[],
-  ): (description: string, fn: (param: T) => MaybePromise<void>) => void;
+  ): (description: string, fn?: (param: T) => MaybePromise<void>) => void;
   <T extends Record<string, unknown>>(
     strings: TemplateStringsArray,
     ...expressions: unknown[]
@@ -159,7 +162,7 @@ export type TestAPI<ExtraContext = object> = TestFn<ExtraContext> & {
   skipIf: (condition: boolean) => TestAPI<ExtraContext>;
 };
 
-type DescribeFn = (description: string, fn?: () => void) => void;
+type DescribeFn = (description: string, fn?: () => MaybePromise<void>) => void;
 
 export type DescribeAPI = DescribeFn & {
   each: DescribeEachFn;
