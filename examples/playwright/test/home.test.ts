@@ -1,12 +1,10 @@
-import { mkdir } from 'node:fs/promises';
 import { expect, test } from '@rstest/playwright';
 
 test('opens the built Rsbuild page', async ({ onTestFailed, page, serve }) => {
   onTestFailed(async ({ task }) => {
-    await mkdir('.rstest-playwright/screenshots', { recursive: true });
     await page.screenshot({
       fullPage: true,
-      path: `.rstest-playwright/screenshots/${task.id}.png`,
+      path: `${task.id}-failed.png`,
     });
   });
 

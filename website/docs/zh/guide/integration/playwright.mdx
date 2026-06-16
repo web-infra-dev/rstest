@@ -263,15 +263,13 @@ debug 模式下，失败测试会在关闭 page 和 context 前自动调用 `pag
 在 CI 或本地非交互式调试时，推荐在测试失败时截图：
 
 ```ts
-import { mkdir } from 'node:fs/promises';
 import { test } from '@rstest/playwright';
 
 test('home page', async ({ onTestFailed, page, serve }) => {
   onTestFailed(async ({ task }) => {
-    await mkdir('.rstest-playwright/screenshots', { recursive: true });
     await page.screenshot({
       fullPage: true,
-      path: `.rstest-playwright/screenshots/${task.id}.png`,
+      path: `${task.id}-failed.png`,
     });
   });
 

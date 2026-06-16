@@ -263,15 +263,13 @@ In debug mode, failed tests automatically call `page.pause()` before closing the
 For non-interactive debugging in CI or local runs, capture a screenshot when a test fails:
 
 ```ts
-import { mkdir } from 'node:fs/promises';
 import { test } from '@rstest/playwright';
 
 test('home page', async ({ onTestFailed, page, serve }) => {
   onTestFailed(async ({ task }) => {
-    await mkdir('.rstest-playwright/screenshots', { recursive: true });
     await page.screenshot({
       fullPage: true,
-      path: `.rstest-playwright/screenshots/${task.id}.png`,
+      path: `${task.id}-failed.png`,
     });
   });
 
