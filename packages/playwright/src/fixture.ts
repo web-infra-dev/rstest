@@ -437,11 +437,9 @@ const playwrightFixtures = {
     try {
       await use(context);
     } finally {
-      if (shouldPauseOnFailure(playwright) && task.result?.status === 'fail') {
-        return;
+      if (!shouldPauseOnFailure(playwright) || task.result?.status !== 'fail') {
+        await context.close();
       }
-
-      await context.close();
     }
   },
 
@@ -468,11 +466,9 @@ const playwrightFixtures = {
     try {
       await use(page);
     } finally {
-      if (shouldPauseOnFailure(playwright) && task.result?.status === 'fail') {
-        return;
+      if (!shouldPauseOnFailure(playwright) || task.result?.status !== 'fail') {
+        await page.close();
       }
-
-      await page.close();
     }
   },
 

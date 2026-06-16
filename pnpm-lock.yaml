@@ -341,8 +341,8 @@ importers:
   e2e/playwright/fixtures:
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.11
-        version: 2.0.11
+        specifier: ~2.0.14
+        version: 2.0.14
       '@rstest/core':
         specifier: workspace:*
         version: link:../../../packages/core
@@ -667,8 +667,8 @@ importers:
   examples/playwright:
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.11
-        version: 2.0.11
+        specifier: ~2.0.14
+        version: 2.0.14
       '@rstest/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -1251,7 +1251,7 @@ importers:
         version: 3.0.1
       istanbul-lib-source-maps:
         specifier: ^5.0.6
-        version: 5.0.6
+        version: 5.0.6(supports-color@8.1.1)
       istanbul-reports:
         specifier: ^3.2.0
         version: 3.2.0
@@ -1346,7 +1346,7 @@ importers:
     devDependencies:
       '@rslib/core':
         specifier: 0.22.0
-        version: 0.22.0(@microsoft/api-extractor@7.58.8(@types/node@22.18.6))(typescript@6.0.3)
+        version: 0.22.0(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1397,10 +1397,10 @@ importers:
         version: 0.0.12
       '@vscode/test-electron':
         specifier: ^2.5.2
-        version: 2.5.2
+        version: 2.5.2(supports-color@8.1.1)
       '@vscode/vsce':
         specifier: 3.9.2
-        version: 3.9.2
+        version: 3.9.2(supports-color@8.1.1)
       birpc:
         specifier: ^4.0.0
         version: 4.0.0
@@ -2994,6 +2994,19 @@ packages:
 
   '@rsdoctor/utils@1.5.13':
     resolution: {integrity: sha512-Z3O+92uRl6XrYJBDt2s0YAgkDszgjut85+kmM5wx+Z10Ha2o3ZmGp3FVLYBPz7TbKsay5RYxb2OLuJ39lrUQKg==}
+
+  '@rslib/core@0.22.0':
+    resolution: {integrity: sha512-DGTMBDTSdILac0SmeBWvdYf/ZDn09vXgbJQ3/N1J7i6vBpFGWCCKjARoz1R5jYqr1Z9tLJ1OfOVZktbNY/XXuA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    hasBin: true
+    peerDependencies:
+      '@microsoft/api-extractor': ^7
+      typescript: ^5 || ^6
+    peerDependenciesMeta:
+      '@microsoft/api-extractor':
+        optional: true
+      typescript:
+        optional: true
 
   '@rslib/core@0.22.1':
     resolution: {integrity: sha512-RaqTITHFkpMDJG9fmD7Hu6FLE64hwctCo46asHOD2DipzQJWawg6K0pFGimTAyutYEZysIUfYgCwSYkbctDudg==}
@@ -6959,6 +6972,22 @@ packages:
       '@rsbuild/core':
         optional: true
 
+  rsbuild-plugin-dts@0.22.0:
+    resolution: {integrity: sha512-Oyiu5oJDHWOnBv7yRr8eAGfoEddwxfPqUbAX6HvcJxrnR/h6Zd0VgTBWVTgqALYhLcL2ZdyZ2vwnqfhan4krwA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    peerDependencies:
+      '@microsoft/api-extractor': ^7
+      '@rsbuild/core': ^1.0.0 || ^2.0.0-0
+      '@typescript/native-preview': 7.x
+      typescript: ^5 || ^6
+    peerDependenciesMeta:
+      '@microsoft/api-extractor':
+        optional: true
+      '@typescript/native-preview':
+        optional: true
+      typescript:
+        optional: true
+
   rsbuild-plugin-dts@0.22.1:
     resolution: {integrity: sha512-6vBfXgwK4j6GkjSRH13tuceBavc6qwSE5IVSoVCZ/wRuM0ZL7dIjdk+yGSWKJt5lNMfc4XwQoTErGIC9zhgztQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -9817,6 +9846,18 @@ snapshots:
       - '@rspack/core'
       - webpack
 
+  '@rslib/core@0.22.0(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(typescript@6.0.3)':
+    dependencies:
+      '@rsbuild/core': 2.0.14
+      rsbuild-plugin-dts: 0.22.0(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(@rsbuild/core@2.0.14)(typescript@6.0.3)
+    optionalDependencies:
+      '@microsoft/api-extractor': 7.58.9(@types/node@22.18.6)
+      typescript: 6.0.3
+    transitivePeerDependencies:
+      - '@module-federation/runtime-tools'
+      - '@typescript/native-preview'
+      - core-js
+
   '@rslib/core@0.22.1(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(typescript@6.0.3)':
     dependencies:
       '@rsbuild/core': 2.0.14
@@ -10747,8 +10788,8 @@ snapshots:
 
   '@typespec/ts-http-runtime@0.3.0':
     dependencies:
-      http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
+      http-proxy-agent: 7.0.2(supports-color@8.1.1)
+      https-proxy-agent: 7.0.6(supports-color@8.1.1)
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
@@ -10802,10 +10843,10 @@ snapshots:
     transitivePeerDependencies:
       - monocart-coverage-reports
 
-  '@vscode/test-electron@2.5.2':
+  '@vscode/test-electron@2.5.2(supports-color@8.1.1)':
     dependencies:
-      http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
+      http-proxy-agent: 7.0.2(supports-color@8.1.1)
+      https-proxy-agent: 7.0.6(supports-color@8.1.1)
       jszip: 3.10.1
       ora: 8.2.0
       semver: 7.8.4
@@ -10851,7 +10892,7 @@ snapshots:
       '@vscode/vsce-sign-win32-arm64': 2.0.5
       '@vscode/vsce-sign-win32-x64': 2.0.5
 
-  '@vscode/vsce@3.9.2':
+  '@vscode/vsce@3.9.2(supports-color@8.1.1)':
     dependencies:
       '@azure/identity': 4.12.0
       '@secretlint/node': 10.2.2
@@ -10874,7 +10915,7 @@ snapshots:
       minimatch: 10.2.3
       parse-semver: 1.1.1
       read: 1.0.7
-      secretlint: 10.2.2
+      secretlint: 10.2.2(supports-color@8.1.1)
       semver: 7.8.4
       tmp: 0.2.3
       typed-rest-client: 1.8.11
@@ -12534,7 +12575,7 @@ snapshots:
       domutils: 3.2.2
       entities: 6.0.1
 
-  http-proxy-agent@7.0.2:
+  http-proxy-agent@7.0.2(supports-color@8.1.1):
     dependencies:
       agent-base: 7.1.3
       debug: 4.4.3(supports-color@8.1.1)
@@ -12550,7 +12591,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  https-proxy-agent@7.0.6:
+  https-proxy-agent@7.0.6(supports-color@8.1.1):
     dependencies:
       agent-base: 7.1.3
       debug: 4.4.3(supports-color@8.1.1)
@@ -12729,7 +12770,7 @@ snapshots:
       make-dir: 4.0.0
       supports-color: 7.2.0
 
-  istanbul-lib-source-maps@5.0.6:
+  istanbul-lib-source-maps@5.0.6(supports-color@8.1.1):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       debug: 4.4.3(supports-color@8.1.1)
@@ -13902,7 +13943,7 @@ snapshots:
 
   ovsx@0.10.12:
     dependencies:
-      '@vscode/vsce': 3.9.2
+      '@vscode/vsce': 3.9.2(supports-color@8.1.1)
       commander: 6.2.1
       follow-redirects: 1.16.0
       is-ci: 2.0.0
@@ -14528,6 +14569,14 @@ snapshots:
     optionalDependencies:
       '@rsbuild/core': 2.0.14
 
+  rsbuild-plugin-dts@0.22.0(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(@rsbuild/core@2.0.14)(typescript@6.0.3):
+    dependencies:
+      '@ast-grep/napi': 0.37.0
+      '@rsbuild/core': 2.0.14
+    optionalDependencies:
+      '@microsoft/api-extractor': 7.58.9(@types/node@22.18.6)
+      typescript: 6.0.3
+
   rsbuild-plugin-dts@0.22.1(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(@rsbuild/core@2.0.14)(typescript@6.0.3):
     dependencies:
       '@ast-grep/napi': 0.37.0
@@ -14712,7 +14761,7 @@ snapshots:
     dependencies:
       compute-scroll-into-view: 3.1.1
 
-  secretlint@10.2.2:
+  secretlint@10.2.2(supports-color@8.1.1):
     dependencies:
       '@secretlint/config-creator': 10.2.2
       '@secretlint/formatter': 10.2.2
