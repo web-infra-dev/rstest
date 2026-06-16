@@ -69,6 +69,10 @@ jobs:
 
       - name: Build Packages
         run: pnpm run build
+        env:
+          # Publish checks are comparatively expensive and only need to run once
+          # as part of the lint/static-check gate.
+          RSTEST_PUBLISH_CHECK: true
 
       - name: Lint
         run: pnpm run lint
