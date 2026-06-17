@@ -36,6 +36,9 @@ describe('browser mode - watch', () => {
     // Both import from src/helper.ts
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Test Files 2 passed');
+    if (!cli.stdout.includes('Waiting for file changes...')) {
+      await cli.waitForStdout('Waiting for file changes...');
+    }
 
     const helperPath = path.join(fixturesTargetPath, 'src/helper.ts');
 
@@ -57,6 +60,9 @@ describe('browser mode - watch', () => {
     );
     // Wait for test execution result (proves the rerun actually executed)
     await cli.waitForStdout("expected 'world' to be 'hello'");
+    if (!cli.stdout.includes('Waiting for file changes...')) {
+      await cli.waitForStdout('Waiting for file changes...');
+    }
 
     // ========== Fix source file ==========
     cli.resetStd();
