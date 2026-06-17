@@ -9,7 +9,7 @@
     "test:threads": "cross-env RSTEST_POOL_TYPE=threads rstest run --pool.type threads"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.0.14",
+    "@rsbuild/core": "~2.0.15",
     "@rsbuild/plugin-react": "^2.0.1",
     "@rslib/core": "0.22.1",
     "@rstest/browser": "workspace:*",
