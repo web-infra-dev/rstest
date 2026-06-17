@@ -62,8 +62,8 @@ importers:
         specifier: ^0.3.1
         version: 0.3.1(@rsbuild/core@2.0.14)(typescript@6.0.3)
       rsbuild-plugin-publint:
-        specifier: ^0.3.4
-        version: 0.3.4(@rsbuild/core@2.0.14)
+        specifier: ^1.0.0
+        version: 1.0.0(@rsbuild/core@2.0.14)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -6940,8 +6940,9 @@ packages:
       '@rsbuild/core':
         optional: true
 
-  rsbuild-plugin-publint@0.3.4:
-    resolution: {integrity: sha512-0oIeQlTNRQoiyi2K5RT6C0+3q8J1HZEX66pkTtDAvmNNHiLf+YyBn2bx8S2w5T7MEVt323ULKoGV4rRROIOatQ==}
+  rsbuild-plugin-publint@1.0.0:
+    resolution: {integrity: sha512-QNu6zL0TOmFZfrCiKSmkw092jDhhPpiA1QYDRkvhkW1wDLowuVEYOqdV87Eo/I6geV0nuKKnCgLHT+Fevbz6pA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
       '@rsbuild/core': ^1.0.0 || ^2.0.0-0
     peerDependenciesMeta:
@@ -14493,9 +14494,8 @@ snapshots:
     optionalDependencies:
       '@rsbuild/core': 2.0.14
 
-  rsbuild-plugin-publint@0.3.4(@rsbuild/core@2.0.14):
+  rsbuild-plugin-publint@1.0.0(@rsbuild/core@2.0.14):
     dependencies:
-      picocolors: 1.1.1
       publint: 0.3.21
     optionalDependencies:
       '@rsbuild/core': 2.0.14
