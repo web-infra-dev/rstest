@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "@rsbuild/core": "~2.0.15",
-    "@rslib/core": "0.22.1",
+    "@rslib/core": "0.23.0",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*"
   },
