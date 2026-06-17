@@ -1585,6 +1585,8 @@ const createBrowserRuntime = async ({
       {
         name: 'rstest:browser-watch',
         setup(api) {
+          let afterDevCompileQueue = Promise.resolve();
+
           api.onBeforeDevCompile(() => {
             if (!watchContext.hooksEnabled) {
               return;
@@ -1592,35 +1594,41 @@ const createBrowserRuntime = async ({
             logger.log(color.cyan('\nFile changed, re-running tests...\n'));
           });
 
-          api.onAfterDevCompile(async ({ stats }) => {
-            // Collect hashes even during initial build to establish baseline
-            if (stats) {
-              const projectEntries = await collectProjectEntries(context);
-              const entryTestFiles = new Set<string>(
-                collectWatchTestFiles(projectEntries).map(
-                  (file) => file.testPath,
-                ),
-              );
-
-              const statsJson = stats.toJson({ all: true });
-              const affected = getAffectedTestFiles(
-                statsJson.chunks,
-                entryTestFiles,
-              );
-              watchContext.affectedTestFiles = affected;
-
-              if (affected.length > 0) {
-                logger.debug(
-                  `[Watch] Affected test files: ${affected.join(', ')}`,
+          api.onAfterDevCompile(({ stats }) => {
+            const afterDevCompileTask = afterDevCompileQueue.then(async () => {
+              // Collect hashes even during initial build to establish baseline.
+              if (stats) {
+                const projectEntries = await collectProjectEntries(context);
+                const entryTestFiles = new Set<string>(
+                  collectWatchTestFiles(projectEntries).map(
+                    (file) => file.testPath,
+                  ),
                 );
+
+                const statsJson = stats.toJson({ all: true });
+                const affected = getAffectedTestFiles(
+                  statsJson.chunks,
+                  entryTestFiles,
+                );
+                watchContext.affectedTestFiles = affected;
+
+                if (affected.length > 0) {
+                  logger.debug(
+                    `[Watch] Affected test files: ${affected.join(', ')}`,
+                  );
+                }
               }
-            }
 
-            if (!watchContext.hooksEnabled) {
-              return;
-            }
+              if (!watchContext.hooksEnabled) {
+                return;
+              }
 
-            await onTriggerRerun();
+              await onTriggerRerun();
+            });
+
+            afterDevCompileQueue = afterDevCompileTask.catch(() => {});
+
+            return afterDevCompileTask;
           });
         },
       },
@@ -2999,65 +3007,50 @@ export const runBrowserController = async (
       runLifecycle.clearIfActive(run);
     };
 
-    const latestRerunScheduler = createHeadlessLatestRerunScheduler<
-      TestFileInfo,
-      ActiveHeadlessRun
-    >({
-      getActiveRun: () => runLifecycle.activeSession,
-      isRunCancelled: (run) => run.cancelled,
-      invalidateActiveRun: () => {
-        runLifecycle.invalidateActiveToken();
-      },
-      interruptActiveRun: async (run) => {
-        await cancelRun(run, false);
-      },
-      runFiles: async (files) => {
-        await notifyTestRunStart();
+    const latestRerunScheduler =
+      createHeadlessLatestRerunScheduler<TestFileInfo>({
+        runFiles: async (files) => {
+          await notifyTestRunStart();
 
-        const rerunStartTime = Date.now();
-        const fatalErrorBeforeRun = fatalError;
-        let rerunError: Error | undefined;
+          const rerunStartTime = Date.now();
+          const fatalErrorBeforeRun = fatalError;
+          let rerunError: Error | undefined;
 
-        try {
-          await runFilesWithPool(files);
-        } catch (error) {
-          rerunError = toError(error);
-          throw error;
-        } finally {
-          const testTime = Math.max(0, Date.now() - rerunStartTime);
-          const rerunFatalError =
-            fatalError && fatalError !== fatalErrorBeforeRun
-              ? fatalError
-              : undefined;
-          await notifyTestRunEnd({
-            duration: {
-              totalTime: testTime,
-              buildTime: 0,
-              testTime,
-            },
-            filterRerunTestPaths: files.map((file) => file.testPath),
-            unhandledErrors: rerunError
-              ? [rerunError]
-              : rerunFatalError
-                ? [rerunFatalError]
-                : undefined,
+          try {
+            await runFilesWithPool(files);
+          } catch (error) {
+            rerunError = toError(error);
+            throw error;
+          } finally {
+            const testTime = Math.max(0, Date.now() - rerunStartTime);
+            const rerunFatalError =
+              fatalError && fatalError !== fatalErrorBeforeRun
+                ? fatalError
+                : undefined;
+            await notifyTestRunEnd({
+              duration: {
+                totalTime: testTime,
+                buildTime: 0,
+                testTime,
+              },
+              filterRerunTestPaths: files.map((file) => file.testPath),
+              unhandledErrors: rerunError
+                ? [rerunError]
+                : rerunFatalError
+                  ? [rerunFatalError]
+                  : undefined,
+            });
+            logBrowserWatchReadyMessage(enableCliShortcuts);
+          }
+        },
+        onError: async (error) => {
+          const formatted = toError(error);
+          await handleFatal({
+            message: formatted.message,
+            stack: formatted.stack,
           });
-          logBrowserWatchReadyMessage(enableCliShortcuts);
-        }
-      },
-      onError: async (error) => {
-        const formatted = toError(error);
-        await handleFatal({
-          message: formatted.message,
-          stack: formatted.stack,
-        });
-      },
-      onInterrupt: (run) => {
-        logger.debug(
-          `[Headless] Interrupting active run token ${run.token} before scheduling latest rerun`,
-        );
-      },
-    });
+        },
+      });
 
     if (allTestFiles.length === 0) {
       const duration = {
