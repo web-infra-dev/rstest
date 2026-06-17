@@ -68,7 +68,7 @@
     "test": "npx rstest --globals"
   },
   "dependencies": {
-    "@rsbuild/core": "~2.0.14",
+    "@rsbuild/core": "~2.0.15",
     "@types/chai": "^5.2.3"
   },
   "devDependencies": {
