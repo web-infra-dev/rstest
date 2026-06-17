@@ -107,10 +107,15 @@ export const groupProjectEntriesByEnvironment = async ({
 
     changed = true;
     let groupIndex = 0;
-    for (const group of groups.values()) {
-      groupIndex += 1;
-      const groupName = formatGroupName(project.name, groupIndex);
-      const environmentName = formatEnvironmentName(groupName);
+    for (const [key, group] of groups) {
+      const isBaseEnvironment = key === baseEnvironmentKey;
+      const groupName = isBaseEnvironment
+        ? project.name
+        : formatGroupName(project.name, (groupIndex += 1));
+      const environmentName = isBaseEnvironment
+        ? project.environmentName
+        : formatEnvironmentName(groupName);
+
       group.config.name = groupName;
 
       groupedProjects.push({
