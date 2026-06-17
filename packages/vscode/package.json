@@ -105,7 +105,7 @@
   ],
   "devDependencies": {
     "@rsbuild/core": "~2.0.15",
-    "@rslib/core": "0.22.1",
+    "@rslib/core": "0.23.0",
     "@rstest/core": "workspace:*",
     "@swc/core": "^1.15.41",
     "@types/istanbul-lib-report": "^3.0.3",
