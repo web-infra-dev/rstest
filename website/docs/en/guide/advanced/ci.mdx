@@ -34,6 +34,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
+        with:
+          version: 11
 
       - uses: actions/setup-node@v4
         with:
@@ -63,7 +65,7 @@ pnpm rstest --coverage
 Upload the generated `coverage/` directory if your CI needs to keep the HTML report or pass coverage data to another service:
 
 ```yaml
-- run: pnpm rstest --coverage
+- run: pnpm rstest --coverage --coverage.reportOnFailure
 
 - uses: actions/upload-artifact@v4
   if: always()
@@ -79,8 +81,8 @@ Use `if: always()` when the report is useful for failed runs too. For available 
 Browser Mode runs tests in a real browser, so CI must install both the Rstest browser package and the browser binaries. Install [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser) in the project, then install the Playwright browser used by your config.
 
 ```bash
-pnpm add @rstest/browser -D
-pnpm dlx playwright install --with-deps chromium
+pnpm add @rstest/browser playwright -D
+pnpm exec playwright install --with-deps chromium
 ```
 
 In CI, `browser.headless` defaults to `true`, so the browser runs without a visible window. A GitHub Actions workflow usually adds the browser installation step before running tests:
@@ -92,12 +94,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm dlx playwright install --with-deps chromium
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm rstest --browser
 ```
 
@@ -118,6 +122,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
@@ -129,6 +135,7 @@ jobs:
         with:
           name: rstest-blob-${{ matrix.shard }}
           path: .rstest-reports
+          include-hidden-files: true
 
   merge-reports:
     runs-on: ubuntu-latest
@@ -137,6 +144,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0

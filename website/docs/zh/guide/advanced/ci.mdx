@@ -34,6 +34,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
+        with:
+          version: 11
 
       - uses: actions/setup-node@v4
         with:
@@ -44,7 +46,7 @@ jobs:
       - run: pnpm test
 ```
 
-当 Rstest 检测到 GitHub Actions 且没有手动配置 reporter 时，会自动启用 `github-actions` reporter。失败断言会转换成 GitHub 注释，并在 workflow summary 中追加 Markdown 摘要。更多 reporter 细节请查看 [reporters](/guide/basic/reporters#github-actions-reporter)。
+当 Rstest 检测到 GitHub Actions 且没有手动配置 reporter 时，会自动启用 `github-actions` reporter。失败断言会转换成 GitHub 注释，并在 workflow summary 中追加 Markdown 摘要。更多 reporter 细节请查看 [reporters](/guide/basic/reporters#github-actions-报告器)。
 
 其他 CI 系统也可以使用相同命令。关键是先运行 `pnpm install --frozen-lockfile`，再运行 `pnpm rstest` 或你的 package script。
 
@@ -63,7 +65,7 @@ pnpm rstest --coverage
 如果 CI 需要保留 HTML 报告，或把覆盖率数据传给其他服务，可以上传生成的 `coverage/` 目录：
 
 ```yaml
-- run: pnpm rstest --coverage
+- run: pnpm rstest --coverage --coverage.reportOnFailure
 
 - uses: actions/upload-artifact@v4
   if: always()
@@ -79,8 +81,8 @@ pnpm rstest --coverage
 Browser Mode 会在真实浏览器中运行测试，因此 CI 需要同时安装 Rstest 浏览器包和浏览器二进制文件。在项目中安装 [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser)，然后安装配置中使用的 Playwright 浏览器。
 
 ```bash
-pnpm add @rstest/browser -D
-pnpm dlx playwright install --with-deps chromium
+pnpm add @rstest/browser playwright -D
+pnpm exec playwright install --with-deps chromium
 ```
 
 在 CI 中，`browser.headless` 默认值为 `true`，所以浏览器会以无界面模式运行。GitHub Actions 工作流通常会在运行测试前添加浏览器安装步骤：
@@ -92,12 +94,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm dlx playwright install --with-deps chromium
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm rstest --browser
 ```
 
@@ -118,6 +122,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
@@ -129,6 +135,7 @@ jobs:
         with:
           name: rstest-blob-${{ matrix.shard }}
           path: .rstest-reports
+          include-hidden-files: true
 
   merge-reports:
     runs-on: ubuntu-latest
@@ -137,6 +144,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
