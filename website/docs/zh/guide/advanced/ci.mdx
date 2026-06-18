@@ -74,7 +74,7 @@ pnpm rstest --coverage
 
 当失败运行中的报告也有调试价值时，可以使用 `if: always()`。可用的 provider、reporter、阈值和输出路径请查看 [coverage](/config/test/coverage)。
 
-## CI 中的 Browser Mode
+## CI 中的 browser mode
 
 Browser Mode 会在真实浏览器中运行测试，因此 CI 需要同时安装 Rstest 浏览器包和浏览器二进制文件。在项目中安装 [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser)，然后安装配置中使用的 Playwright 浏览器。
 
