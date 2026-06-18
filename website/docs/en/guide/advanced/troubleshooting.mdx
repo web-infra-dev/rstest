@@ -73,6 +73,13 @@ Prefer making the runtime-loaded file match Node.js native module semantics:
 
 If the dynamic load depends on a custom transform, register that transform explicitly. For migrated Jest projects, the simplest place is [`setupFiles`](/config/test/setup-files):
 
+Install the runtime loader you plan to register first. Rstest does not install these loaders for you; for example, [@swc-node/register](https://github.com/swc-project/swc-node) provides a SWC-based TypeScript require hook, while [ts-node](https://github.com/TypeStrong/ts-node) provides the `ts-node/register` hook:
+
+```bash
+npm add -D @swc-node/register
+# or: npm add -D ts-node
+```
+
 ```ts title="test/rstest.setup.ts"
 import '@swc-node/register';
 // or: import 'ts-node/register';

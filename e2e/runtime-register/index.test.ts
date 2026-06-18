@@ -5,23 +5,37 @@ import { runRstestCli } from '../scripts/';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const fixtureDir = join(__dirname, 'fixtures');
+const registerFixtureDir = join(__dirname, 'fixtures');
+const nativeFixtureDir = join(__dirname, 'native-fixtures');
+
+const runFixture = async (
+  cwd: string,
+  onTestFinished: (cleanup: () => void | Promise<void>) => void,
+) => {
+  const { expectExecSuccess } = await runRstestCli({
+    command: 'rstest',
+    args: ['run'],
+    onTestFinished,
+    options: {
+      nodeOptions: {
+        cwd,
+      },
+    },
+  });
+
+  await expectExecSuccess();
+};
 
 describe('runtime node register behavior', () => {
   it('should preserve node register hooks and execArgv inside workers', async ({
     onTestFinished,
   }) => {
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run'],
-      onTestFinished,
-      options: {
-        nodeOptions: {
-          cwd: fixtureDir,
-        },
-      },
-    });
+    await runFixture(registerFixtureDir, onTestFinished);
+  });
 
-    await expectExecSuccess();
+  it('should preserve native node semantics for late-loaded TypeScript files', async ({
+    onTestFinished,
+  }) => {
+    await runFixture(nativeFixtureDir, onTestFinished);
   });
 });

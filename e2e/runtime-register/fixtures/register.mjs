@@ -1,13 +1,11 @@
+import { writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { register } from 'node:module';
-import { fileURLToPath } from 'node:url';
 
-const registerFlagPath = fileURLToPath(
-  new URL('./register-loaded.txt', import.meta.url),
-);
+const registerFlagPath = join(tmpdir(), `rstest-register-${process.pid}.txt`);
 
-await import('node:fs/promises').then(({ writeFile }) =>
-  writeFile(registerFlagPath, 'loaded', 'utf-8'),
-);
+await writeFile(registerFlagPath, 'loaded', 'utf-8');
 
 register('./ts-register-loader.mjs', import.meta.url);
 
