@@ -1,5 +1,6 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { onTestFinished as onRstestFinished } from '@rstest/core';
 import { describe, it } from '@rstest/core';
 import { runRstestCli } from '../scripts/';
 
@@ -10,7 +11,7 @@ const nativeFixtureDir = join(__dirname, 'native-fixtures');
 
 const runFixture = async (
   cwd: string,
-  onTestFinished: (cleanup: () => void | Promise<void>) => void,
+  onTestFinished: typeof onRstestFinished,
 ) => {
   const { expectExecSuccess } = await runRstestCli({
     command: 'rstest',
