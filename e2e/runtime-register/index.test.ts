@@ -7,7 +7,7 @@ import { runRstestCli } from '../scripts/';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const registerFixtureDir = join(__dirname, 'fixtures');
-const nativeFixtureDir = join(__dirname, 'native-fixtures');
+const nativeFixtureDir = join(__dirname, 'fixtures-native');
 
 const runFixture = async (
   cwd: string,

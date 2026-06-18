@@ -49,11 +49,7 @@ const require = createRequire(import.meta.url);
 const plugin = require('./plugin.ts');
 ```
 
-在支持直接运行 `.ts` 文件的 Node.js 版本中，`require('./plugin.ts')` 仍然可能失败，因为 Node.js 会根据 `type: module` 的 package scope 将 `plugin.ts` 判定为 ESM：
-
-```text
-ReferenceError: module is not defined in ES module scope
-```
+在支持直接运行 `.ts` 文件的 Node.js 版本中，`require('./plugin.ts')` 会遵循 Node.js 原生模块判定。在 `type: module` 的 package scope 下，Node.js 会把 `plugin.ts` 当作 ESM 而不是 CommonJS，因此 `module.exports = ...` 这样的 CommonJS 赋值不会作为 CommonJS 值导出。
 
 ### 原因
 

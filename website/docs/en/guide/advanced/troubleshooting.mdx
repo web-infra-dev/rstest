@@ -49,11 +49,7 @@ const require = createRequire(import.meta.url);
 const plugin = require('./plugin.ts');
 ```
 
-On Node.js versions that support running `.ts` files directly, `require('./plugin.ts')` can still fail because Node.js classifies `plugin.ts` as ESM under the package `type: module` scope:
-
-```text
-ReferenceError: module is not defined in ES module scope
-```
+On Node.js versions that support running `.ts` files directly, `require('./plugin.ts')` follows Node.js native module classification. In a `type: module` package scope, Node.js treats `plugin.ts` as ESM rather than CommonJS, so CommonJS assignments such as `module.exports = ...` are not exported as a CommonJS value.
 
 ### Cause
 
