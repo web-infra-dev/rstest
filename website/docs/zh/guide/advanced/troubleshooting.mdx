@@ -2,7 +2,7 @@
 description: Rstest 常见问题排查，包括迁移和运行时差异。
 ---
 
-# Troubleshooting
+# 问题排查
 
 本页说明一些由 Rstest 执行模型带来的常见问题。这类问题通常不是断言本身失败，而是 Rstest、Jest、Vitest 与 Node.js 原生运行时行为之间存在差异。
 
@@ -101,6 +101,10 @@ export default defineConfig({
   },
 });
 ```
+
+:::warning
+`--import` preload 只在默认的 `forks` pool 中可靠。`threads` pool 会创建 `node:worker_threads` worker，而 Node.js 不会在这些 worker 中执行 `--import` preload。如果使用 `pool.type: 'threads'`，优先使用 `setupFiles` 做测试运行时设置；如果 CommonJS preload 已经足够，也可以使用 `--require`。
+:::
 
 ## 从 CommonJS 依赖导入 named exports 失败
 

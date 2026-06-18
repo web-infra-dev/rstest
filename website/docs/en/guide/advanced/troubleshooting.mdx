@@ -102,6 +102,10 @@ export default defineConfig({
 });
 ```
 
+:::warning
+`--import` preloads are only reliable with the default `forks` pool. The `threads` pool creates `node:worker_threads` workers, and Node.js does not run `--import` preloads in those workers. If you use `pool.type: 'threads'`, prefer `setupFiles` for test-time setup, or use `--require` when a CommonJS preload is enough.
+:::
+
 ## Named imports from CommonJS dependencies fail
 
 ### Symptom
