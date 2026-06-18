@@ -107,4 +107,21 @@ describe('fake timers API', () => {
 
     rs.useRealTimers();
   });
+
+  it('restores tick mode after scoped fake timers dispose', async () => {
+    const rs = await createRstestUtilities(createWorkerState());
+    rs.useFakeTimers({ now: 0 });
+    rs.setTickMode({ mode: 'nextAsync' });
+
+    const scoped = rs.useFakeTimers({ now: 100 });
+    scoped[Symbol.dispose]?.();
+
+    const result = new Promise((resolve) => {
+      setTimeout(() => resolve(Date.now()), 1000);
+    });
+
+    await expect(result).resolves.toBe(1000);
+
+    rs.useRealTimers();
+  });
 });

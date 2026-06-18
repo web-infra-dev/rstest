@@ -25,6 +25,7 @@ export type FakeTimersSnapshot = {
   now: number;
   timers: [number, FakeTimerRecord][];
   jobs: FakeTimerRecord[];
+  tickMode: FakeTimerTickMode | undefined;
 };
 
 const cloneFakeTimerRecord = (record: FakeTimerRecord): FakeTimerRecord => ({
@@ -227,6 +228,12 @@ export class FakeTimers {
         cloneFakeTimerRecord(timer),
       ]),
       jobs: (this._clock.jobs ?? []).map(cloneFakeTimerRecord),
+      tickMode: this._clock.tickMode
+        ? {
+            mode: this._clock.tickMode.mode,
+            delta: this._clock.tickMode.delta,
+          }
+        : undefined,
     };
   }
 
@@ -246,6 +253,9 @@ export class FakeTimers {
         }
       }
       this._clock.jobs = snapshot.jobs.map(cloneFakeTimerRecord);
+      if (snapshot.tickMode) {
+        this._clock.setTickMode(snapshot.tickMode);
+      }
     }
   }
 
