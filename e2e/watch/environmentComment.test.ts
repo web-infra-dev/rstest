@@ -38,11 +38,9 @@ describe.skipIf(process.platform === 'win32')(
       });
 
       await cli.waitForStdout('Tests 2 passed');
+      expect(cli.stdout).toMatch('Run all tests in project(rstest).');
       expect(cli.stdout).toMatch(
         'Run all tests in project(rstest-environment-1).',
-      );
-      expect(cli.stdout).toMatch(
-        'Run all tests in project(rstest-environment-2).',
       );
       if (!cli.stdout.includes('Waiting for file changes...')) {
         await cli.waitForStdout('Waiting for file changes...');

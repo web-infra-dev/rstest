@@ -7,8 +7,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const escapeChar = '\u001b';
-const vtControlSequenceRegex =
-  /(?:\x1b\[[0-?]*[ -/]*[@-~]|\x9b[0-?]*[ -/]*[@-~])/;
+const controlSequenceIntro = String.fromCodePoint(0x9b);
+const vtControlSequenceRegex = new RegExp(
+  `(?:${escapeChar}\\[[0-?]*[ -/]*[@-~]|${controlSequenceIntro}[0-?]*[ -/]*[@-~])`,
+);
 
 describe('ansi', () => {
   it('disables ansi output for snapshot diffs in non-tty environments', async ({

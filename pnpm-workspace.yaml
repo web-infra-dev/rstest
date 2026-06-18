@@ -31,6 +31,8 @@ minimumReleaseAgeExclude:
   - '@rsdoctor/*'
   - '@rslint/*'
   - '@rstack-dev/doc-ui'
+  # Renovate update: @rslib/core@0.23.0 depends on rsbuild-plugin-dts@0.23.0
+  - rsbuild-plugin-dts@0.23.0
   # Renovate security update: svelte@5.55.7
   - svelte@5.55.7
 

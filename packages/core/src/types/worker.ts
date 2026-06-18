@@ -19,7 +19,7 @@ export type EntryInfo = {
 };
 
 /** Server to Runtime */
-export type ServerRPC = {};
+export type ServerRPC = object;
 
 /** Runtime to Server */
 export type RuntimeRPC = {

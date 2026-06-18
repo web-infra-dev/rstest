@@ -161,6 +161,16 @@ export const getErrorType = (
   return rawName;
 };
 
+export const getRetryErrorLabel = (
+  error: Pick<FormattedError, 'retryCount'>,
+): string | undefined => {
+  if (!error.retryCount) {
+    return undefined;
+  }
+
+  return `Retry x${error.retryCount}`;
+};
+
 export const collectFailures = ({
   results,
   testResults,

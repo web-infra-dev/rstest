@@ -8,7 +8,7 @@ export default defineConfig({
     headless: true,
     port: BROWSER_PORTS.config,
   },
-  include: ['./*.test.ts'],
+  include: ['./*.test.ts', './git/*.test.ts'],
   testTimeout: BROWSER_TEST_TIMEOUT,
   globals: true,
   source: {

@@ -32,6 +32,7 @@ import {
   prettyTime,
   TEST_DELIMITER,
 } from '../utils';
+import { getRetryErrorLabel } from './utils';
 
 export const getSummaryStatusString = (
   tasks: TestResult[],
@@ -245,6 +246,10 @@ export const printSummaryErrorLogs = async ({
     if (test.errors) {
       const { printError } = await import('../utils/error');
       for (const error of test.errors) {
+        const retryLabel = getRetryErrorLabel(error);
+        if (retryLabel) {
+          logger.stderr(color.yellow(`  ${retryLabel}:`));
+        }
         await printError(error, getSourcemap, rootPath);
       }
     }
