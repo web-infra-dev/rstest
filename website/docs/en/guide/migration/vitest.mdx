@@ -147,6 +147,8 @@ You can keep these comments as-is or rename them to `@rstest-environment` / `@rs
 
 Rstest uses Rsbuild as the default test build tool instead of Vite. You can view all available build configuration options in [Build Configurations](/config/#build-configurations).
 
+Rstest runs tests with a bundle-based execution model. Code outside the bundle graph keeps Node.js native loader behavior, which may differ from Vitest. If you dynamically load files at runtime, see [Code outside the bundle graph uses native Node.js behavior](/guide/advanced/troubleshooting#code-outside-the-bundle-graph-uses-native-nodejs-behavior).
+
 In most projects, these are the key build-side changes:
 
 - Use `source.define` instead of `define`.
