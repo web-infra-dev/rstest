@@ -1,16 +1,5 @@
 import { afterEach, describe, expect, it, rstest } from '@rstest/core';
 
-const waitRealTimer = () =>
-  new Promise<void>((resolve) => {
-    const channel = new MessageChannel();
-    channel.port1.onmessage = () => {
-      channel.port1.close();
-      channel.port2.close();
-      resolve();
-    };
-    channel.port2.postMessage(undefined);
-  });
-
 describe('Fake timers', () => {
   afterEach(() => {
     if (rstest.isFakeTimers()) {
@@ -211,14 +200,16 @@ describe('Fake timers', () => {
     rstest.useFakeTimers({ now: 0, toNotFake: ['setTimeout'] });
 
     let called = false;
-    globalThis.setTimeout(() => {
+    const timeout = new Promise<void>((resolve) => {
+      globalThis.setTimeout(resolve, 0);
+    }).then(() => {
       called = true;
-    }, 0);
+    });
 
     rstest.advanceTimersByTime(1000);
     expect(called).toBe(false);
 
-    await waitRealTimer();
+    await timeout;
     expect(called).toBe(true);
   });
 });
