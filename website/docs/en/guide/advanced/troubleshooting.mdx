@@ -12,17 +12,17 @@ Rstest runs tests with a bundle-based execution model. Files that are part of th
 
 Some code is still loaded by Node.js at runtime instead of by the bundler. Common examples include:
 
-- late dynamic `require()` calls,
+- late dynamic `require()` or `import(dynamicPath)` calls,
 - modules externalized from the bundle,
 - code loaded by custom Node.js loaders or register hooks,
 - code loaded through Node.js APIs after the test bundle has started.
 
-For these parts, Rstest deliberately preserves Node.js native semantics. This makes Node.js flags, `--require`, `--import`, and `node:module` register hooks usable in test workers, but it also means Rstest does not emulate every transform-time convenience from Jest, `ts-jest`, or Vitest.
+For these parts, Rstest currently preserves Node.js native semantics. This makes Node.js flags, `--require`, `--import`, and `node:module` register hooks usable in test workers, but it also means Rstest does not emulate every transform-time convenience from Jest, `ts-jest`, or Vitest.
 
 A useful rule of thumb is:
 
 - Static imports and modules in the bundle graph → let Rstest transform or bundle them.
-- Late dynamic `require()` / Node.js loader hooks / externalized modules → expect Node.js native behavior unless you register a loader or change the bundling strategy.
+- Late dynamic `require()` or `import(dynamicPath)` / Node.js loader hooks / externalized modules → expect Node.js native behavior unless you register a loader or change the bundling strategy.
 
 ## Runtime `require()` of CommonJS-style TypeScript files fails in `type: module`
 

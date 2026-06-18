@@ -12,17 +12,17 @@ Rstest 采用基于 bundle 的执行模型来运行测试。进入 bundle graph 
 
 有些代码仍然会在运行时交给 Node.js 加载，而不是交给 bundler 处理。常见场景包括：
 
-- 后续动态执行的 `require()` 调用；
+- 后续动态执行的 `require()` 或 `import(dynamicPath)` 调用；
 - 被 external 到 bundle 之外的模块；
 - 通过自定义 Node.js loader 或 register hook 加载的代码；
 - test bundle 启动后，再通过 Node.js API 加载的代码。
 
-对于这些部分，Rstest 会有意保留 Node.js 原生语义。这让 Node.js flags、`--require`、`--import` 和 `node:module` register hooks 可以在 test worker 中使用，但也意味着 Rstest 不会模拟 Jest、`ts-jest` 或 Vitest 的每一种 transform-time 便利行为。
+对于这些部分，Rstest 目前会保留 Node.js 原生语义。这让 Node.js flags、`--require`、`--import` 和 `node:module` register hooks 可以在 test worker 中使用，但也意味着 Rstest 不会模拟 Jest、`ts-jest` 或 Vitest 的每一种 transform-time 便利行为。
 
 经验规则是：
 
 - 静态 import 和进入 bundle graph 的模块 → 交给 Rstest 转换或打包。
-- 后续动态 `require()` / Node.js loader hook / 被 external 的模块 → 除非注册 loader 或调整打包策略，否则按 Node.js 原生行为处理。
+- 后续动态 `require()` 或 `import(dynamicPath)` / Node.js loader hook / 被 external 的模块 → 除非注册 loader 或调整打包策略，否则按 Node.js 原生行为处理。
 
 ## `type: module` 中运行时 `require()` CommonJS 风格的 TypeScript 文件失败
 
