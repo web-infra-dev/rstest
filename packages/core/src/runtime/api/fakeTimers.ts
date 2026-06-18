@@ -14,6 +14,10 @@ import type {
 
 export type { FakeTimerInstallOpts };
 
+type FakeTimerTickTime = Parameters<InstalledClock['tick']>[0];
+type FakeTimerSystemTime = Parameters<InstalledClock['setSystemTime']>[0];
+type FakeTimerTickMode = Parameters<InstalledClock['setTickMode']>[0];
+
 const RealDate = Date;
 type FakeMethod = NonNullable<FakeTimerInstallOpts['toFake']>[number];
 
@@ -118,15 +122,27 @@ export class FakeTimers {
     }
   }
 
-  advanceTimersByTime(msToRun: number): void {
+  advanceTimersByTime(msToRun: FakeTimerTickTime): void {
     if (this._checkFakeTimers()) {
       this._clock.tick(msToRun);
     }
   }
 
-  async advanceTimersByTimeAsync(msToRun: number): Promise<void> {
+  async advanceTimersByTimeAsync(msToRun: FakeTimerTickTime): Promise<void> {
     if (this._checkFakeTimers()) {
       await this._clock.tickAsync(msToRun);
+    }
+  }
+
+  jumpTimersByTime(msToRun: FakeTimerTickTime): void {
+    if (this._checkFakeTimers()) {
+      this._clock.jump(msToRun);
+    }
+  }
+
+  setTickMode(mode: FakeTimerTickMode): void {
+    if (this._checkFakeTimers()) {
+      this._clock.setTickMode(mode);
     }
   }
 
@@ -193,7 +209,7 @@ export class FakeTimers {
     }
   }
 
-  setSystemTime(now?: number | Date): void {
+  setSystemTime(now?: FakeTimerSystemTime): void {
     if (this._checkFakeTimers()) {
       this._clock.setSystemTime(now);
     }
