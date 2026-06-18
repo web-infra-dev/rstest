@@ -1,0 +1,196 @@
+---
+description: Configure Rstest in CI, including basic workflows, coverage, Browser Mode, sharding, and report artifacts.
+---
+
+# CI
+
+Rstest uses the same CLI in CI as it does locally. The main difference is that CI should run tests in run mode with `rstest`, then upload any reports that other tools need to read.
+
+## Basic workflow
+
+Use `rstest` in CI so the process exits after one test pass. If your project already has a `test` script, keep CI calling that script and make the script run `rstest`.
+
+```json title="package.json"
+{
+  "scripts": {
+    "test": "rstest"
+  }
+}
+```
+
+A minimal GitHub Actions workflow installs dependencies, restores the package-manager cache, and runs the test script:
+
+```yaml title=".github/workflows/test.yml"
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+```
+
+When Rstest detects GitHub Actions and no reporter is manually configured, it automatically enables the `github-actions` reporter. Failed assertions are turned into GitHub annotations, and a Markdown summary is appended to the workflow summary. See [reporters](/guide/basic/reporters#github-actions-reporter) for reporter details.
+
+Other CI systems can use the same commands. The important part is to run `pnpm install --frozen-lockfile` before `pnpm rstest` or your package script.
+
+## Add coverage
+
+Coverage collection is opt-in. Install the provider you want to use before enabling `--coverage`:
+
+- [@rstest/coverage-istanbul](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-istanbul): the default Istanbul provider, works in Node mode and Browser Mode.
+- [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8): V8-based provider for Node mode only.
+
+```bash
+pnpm add @rstest/coverage-istanbul -D
+pnpm rstest --coverage
+```
+
+Upload the generated `coverage/` directory if your CI needs to keep the HTML report or pass coverage data to another service:
+
+```yaml
+- run: pnpm rstest --coverage
+
+- uses: actions/upload-artifact@v4
+  if: always()
+  with:
+    name: coverage
+    path: coverage
+```
+
+Use `if: always()` when the report is useful for failed runs too. For available providers, reporters, thresholds, and output paths, see [coverage](/config/test/coverage).
+
+## Browser Mode in CI
+
+Browser Mode runs tests in a real browser, so CI must install both the Rstest browser package and the browser binaries. Install [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser) in the project, then install the Playwright browser used by your config.
+
+```bash
+pnpm add @rstest/browser -D
+pnpm dlx playwright install --with-deps chromium
+```
+
+In CI, `browser.headless` defaults to `true`, so the browser runs without a visible window. A GitHub Actions workflow usually adds the browser installation step before running tests:
+
+```yaml
+jobs:
+  browser-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm dlx playwright install --with-deps chromium
+      - run: pnpm rstest --browser
+```
+
+If you test with `firefox` or `webkit`, install the same browser that `browser.browser` selects. See [Browser Mode getting started](/guide/browser-testing/getting-started) and [browser configuration](/config/test/browser) for full setup options.
+
+## Split tests with shards
+
+Use `--shard <index>/<count>` when the full suite is stable but too slow for one CI machine. Each shard runs a different subset of test files. To combine results and coverage afterward, run every shard with the `blob` reporter, upload the blob files, then merge them in a follow-up job.
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm rstest --shard ${{ matrix.shard }}/3 --reporters=blob --coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rstest-blob-${{ matrix.shard }}
+          path: .rstest-reports
+
+  merge-reports:
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rstest-blob-*
+          path: .rstest-reports
+          merge-multiple: true
+      - run: pnpm rstest merge-reports --coverage --cleanup
+```
+
+Each shard writes `.rstest-reports/blob-{index}-{count}.json`. The merge job collects those files into one `.rstest-reports/` directory, then `rstest merge-reports` runs the configured reporters on the unified result and merges coverage data. See [shard](/config/test/shard) and [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) for details.
+
+## Publish machine-readable reports
+
+CI tools often need structured report files in addition to terminal output. Add reporters when you need XML, JSON, Markdown, or blob output:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: [
+    'default',
+    ['junit', { outputPath: './reports/junit.xml' }],
+    ['json', { outputPath: './reports/rstest.json' }],
+  ],
+});
+```
+
+Then upload the report directory:
+
+```yaml
+- run: pnpm rstest
+
+- uses: actions/upload-artifact@v4
+  if: always()
+  with:
+    name: rstest-reports
+    path: reports
+```
+
+Use `junit` for CI test-result integrations, `json` for custom tooling, `md` for Markdown summaries, `github-actions` for GitHub annotations, and `blob` for sharded report merging. See [reporters](/guide/basic/reporters) for the complete list and options.
+
+## Cache dependencies
+
+Start with the package-manager cache because it is safe and usually gives the biggest CI improvement. In GitHub Actions, `actions/setup-node` with `cache: pnpm` restores the pnpm store based on the lockfile.
+
+## Recommended checklist
+
+- Use Node.js `^20.19.0` or `>=22.12.0` to match Rstest's supported runtime range.
+- Run `rstest` in CI, either directly or through a package script.
+- Install coverage and browser packages only when the workflow needs those features.
+- Upload coverage, JUnit, JSON, or blob artifacts with `if: always()` if they help debug failures.
+- Add sharding only after the single-machine workflow is stable.
+- Keep Browser Mode browser installation aligned with the browser selected in Rstest config.
