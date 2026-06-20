@@ -56,8 +56,14 @@ export const pluginEntryWatch: (params: {
         };
 
         config.watchOptions ??= {};
-        // FIXME: Temporarily default to 5 to debounce rerun in watch mode.
-        config.watchOptions.aggregateTimeout = 5;
+        // Default aggregate window for watch-mode rerun debouncing. On macOS
+        // with the rspack native watcher this also needs to be long enough
+        // for the FSEvent → vnode cache invalidation cycle to complete before
+        // rspack stats the changed file (otherwise the rebuild reads stale
+        // content and rstest reports "No test files need re-run"). 100 ms is
+        // the minimum value that survives macos-14 GHA runners. User configs
+        // can override via `tools.rspack.watchOptions`.
+        config.watchOptions.aggregateTimeout = 100;
         // TODO: rspack should support `(string | RegExp)[]` type
         // https://github.com/web-infra-dev/rspack/issues/10596
         config.watchOptions.ignored = castArray(
@@ -78,6 +84,9 @@ export const pluginEntryWatch: (params: {
           ...Object.values(globalSetupFiles?.[environment.name] || {}),
           '**/*.snap',
         );
+
+        config.experiments ??= {};
+        config.experiments.nativeWatcher = true;
 
         const configFilePath = context.projects.find(
           (project) => project.environmentName === environment.name,

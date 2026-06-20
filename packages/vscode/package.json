@@ -104,7 +104,7 @@
     "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
   ],
   "devDependencies": {
-    "@rsbuild/core": "~2.0.15",
+    "@rsbuild/core": "~2.1.0-beta.0",
     "@rslib/core": "0.23.0",
     "@rstest/core": "workspace:*",
     "@swc/core": "^1.15.41",
