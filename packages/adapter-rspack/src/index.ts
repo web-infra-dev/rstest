@@ -247,10 +247,6 @@ const buildRspackToolConfig = (
       };
     }
 
-    if (restConfig.snapshot !== undefined) {
-      nextConfig.snapshot = restConfig.snapshot;
-    }
-
     if (restConfig.externalsPresets) {
       nextConfig.externalsPresets = {
         ...(config.externalsPresets || {}),
