@@ -15,8 +15,7 @@ type PlaywrightPageLike = Omit<
       event: 'console',
       listener: (message: BrowserConsoleMessage) => void,
     ): void;
-    (event: 'crash', listener: () => void): void;
-    (event: 'close', listener: () => void): void;
+    (event: 'crash' | 'close', listener: () => void): void;
   };
 };
 type PlaywrightContextLike = Omit<
