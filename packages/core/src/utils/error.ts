@@ -69,7 +69,7 @@ export async function printError(
   }
 
   if (error.stack) {
-    const stackFrames = await parseErrorStacktrace({
+    let stackFrames = await parseErrorStacktrace({
       stack: error.stack,
       fullStack: error.fullStack,
       getSourcemap,
@@ -79,11 +79,26 @@ export async function printError(
       !(error.fullStack || isDebug()) &&
       !error.stack.endsWith(error.message)
     ) {
-      logger.stderr(
-        color.gray(
-          "No error stack found, set 'DEBUG=rstest' to show fullStack.",
-        ),
-      );
+      const fullStackFrames = await parseErrorStacktrace({
+        stack: error.stack,
+        fullStack: true,
+        getSourcemap,
+      });
+
+      if (fullStackFrames[0]) {
+        logger.stderr(
+          color.gray(
+            "No user error stack found, showing fullStack. Set 'DEBUG=rstest' to always show fullStack.",
+          ),
+        );
+        stackFrames = fullStackFrames;
+      } else {
+        logger.stderr(
+          color.gray(
+            "No error stack found, set 'DEBUG=rstest' to show fullStack.",
+          ),
+        );
+      }
     }
 
     if (stackFrames[0]) {
