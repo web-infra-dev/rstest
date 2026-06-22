@@ -438,7 +438,7 @@ export const createRstestUtilities: (
       timerStack.length = 0;
       return rstest;
     },
-    setSystemTime: (now?: number | Date) => {
+    setSystemTime: (now) => {
       timers().setSystemTime(now);
       return rstest;
     },
@@ -468,11 +468,11 @@ export const createRstestUtilities: (
       await timers().runOnlyPendingTimersAsync();
       return rstest;
     },
-    advanceTimersByTime: (ms: number) => {
+    advanceTimersByTime: (ms) => {
       timers().advanceTimersByTime(ms);
       return rstest;
     },
-    advanceTimersByTimeAsync: async (ms: number) => {
+    advanceTimersByTimeAsync: async (ms) => {
       await timers().advanceTimersByTimeAsync(ms);
       return rstest;
     },
@@ -486,6 +486,14 @@ export const createRstestUtilities: (
     },
     advanceTimersToNextFrame: () => {
       timers().advanceTimersToNextFrame();
+      return rstest;
+    },
+    jumpTimersByTime: (ms) => {
+      timers().jumpTimersByTime(ms);
+      return rstest;
+    },
+    setTickMode: (mode) => {
+      timers().setTickMode(mode);
       return rstest;
     },
     getTimerCount: () => {

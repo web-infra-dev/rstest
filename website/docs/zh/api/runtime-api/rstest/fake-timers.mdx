@@ -24,6 +24,8 @@ rs.useFakeTimers();
 
 你也可以传递配置对象以自定义 fake timers 的行为。
 
+该配置会透传给 `@sinonjs/fake-timers`。例如，`toFake` 和 `toNotFake` 用于控制要模拟哪些定时器 API，`now` 用于设置初始的模拟系统时间，`shouldAdvanceTime` / `advanceTimeDelta` 用于开启自动推进。
+
 **Disposable / `using` 语法**
 
 <ApiMeta addedVersion="0.10.3" />
@@ -64,9 +66,11 @@ if (rs.isFakeTimers()) {
 ## rs.setSystemTime
 
 - **别名：** `rstest.setSystemTime`
-- **类型：** `(now?: number | Date) => Rstest`
+- **类型：** `(now?: number | Date | { epochMilliseconds: number }) => Rstest`
 
 设置 fake timers 使用的当前系统时间。适用于需要测试依赖当前日期或时间的代码。
+
+`now` 也可以是类似 Temporal 的对象，例如 `Temporal.Instant` 或 `Temporal.ZonedDateTime`。
 
 ```ts
 rs.useFakeTimers();
@@ -122,14 +126,16 @@ const realTime = rs.getRealSystemTime();
 ## rs.advanceTimersByTime
 
 - **别名：** `rstest.advanceTimersByTime`
-- **类型：** `(ms: number) => Rstest`
+- **类型：** `(ms: number | string | Temporal.Duration) => Rstest`
 
 将 fake timers 快进指定的毫秒数，并执行在此期间计划的所有定时器。
+
+字符串时长使用与 `@sinonjs/fake-timers` 相同的格式，例如 `'00:10'` 表示 10 秒。
 
 ## rs.advanceTimersByTimeAsync
 
 - **别名：** `rstest.advanceTimersByTimeAsync`
-- **类型：** `(ms: number) => Promise<Rstest>`
+- **类型：** `(ms: number | string | Temporal.Duration) => Promise<Rstest>`
 
 异步快进 fake timers 指定的毫秒数。
 
@@ -153,6 +159,46 @@ const realTime = rs.getRealSystemTime();
 - **类型：** `() => Rstest`
 
 将定时器推进到下一个动画帧。
+
+## rs.jumpTimersByTime
+
+<ApiMeta addedVersion="0.10.5" />
+
+- **别名：** `rstest.jumpTimersByTime`
+- **类型：** `(ms: number | string | Temporal.Duration) => Rstest`
+
+将模拟时钟直接跳过指定时间，每个受影响的定时器回调最多只会触发一次。它适用于模拟 JavaScript 引擎被挂起后恢复的场景，此时中间的 interval tick 会被跳过。
+
+```ts
+rs.useFakeTimers({ now: 0 });
+
+const cb = rs.fn();
+setInterval(cb, 1000);
+
+rs.jumpTimersByTime(5000);
+
+expect(cb).toHaveBeenCalledTimes(1);
+```
+
+## rs.setTickMode
+
+<ApiMeta addedVersion="0.10.5" />
+
+- **别名：** `rstest.setTickMode`
+- **类型：** `(mode: { mode: 'manual' | 'nextAsync' } | { mode: 'interval'; delta?: number }) => Rstest`
+
+配置 fake timers 自动推进时间的方式。
+
+- `{ mode: 'manual' }`：只有调用 `rs.advanceTimersByTime()` 等 API 时，定时器才会推进。
+- `{ mode: 'nextAsync' }`：时钟会持续推进到下一个计划的定时器，并在定时器之间让 Promise 回调运行。
+- `{ mode: 'interval', delta?: number }`：按间隔推进模拟时间，等价于 `shouldAdvanceTime` / `advanceTimeDelta`。
+
+```ts
+rs.useFakeTimers();
+rs.setTickMode({ mode: 'nextAsync' });
+
+await new Promise((resolve) => setTimeout(resolve, 1000));
+```
 
 ## rs.getTimerCount
 
