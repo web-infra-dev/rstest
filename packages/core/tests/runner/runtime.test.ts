@@ -123,7 +123,7 @@ describe('RunnerRuntime', () => {
     ).toEqual(['test - 1 - 1']);
   });
 
-  describe('TestOptions third argument', () => {
+  describe('TestOptions second argument', () => {
     const createApi = (testTimeout = 5000) =>
       createPublishedRuntimeAPI({
         testPath: __filename,
@@ -145,7 +145,7 @@ describe('RunnerRuntime', () => {
 
     it('reads timeout/retry/repeats from a TestOptions object', async () => {
       const instance = createApi();
-      runtimeAPI.it('case', () => {}, { timeout: 250, retry: 2, repeats: 3 });
+      runtimeAPI.it('case', { timeout: 250, retry: 2, repeats: 3 }, () => {});
 
       const testCase = (await instance.getTests())[0] as TestCase;
       expect(testCase.timeout).toBe(250);
@@ -153,9 +153,20 @@ describe('RunnerRuntime', () => {
       expect(testCase.repeats).toBe(3);
     });
 
+    it('ignores an options object passed as the third argument', async () => {
+      const instance = createApi(123);
+      // The legacy third-arg object form is no longer supported: it is a type
+      // error and must not leak retry/repeats onto the case at runtime.
+      runtimeAPI.it('case', () => {}, { timeout: 250, retry: 2 } as any);
+
+      const testCase = (await instance.getTests())[0] as TestCase;
+      expect(testCase.timeout).toBe(123);
+      expect(testCase.retry).toBeUndefined();
+    });
+
     it('falls back to config.testTimeout when timeout omitted', async () => {
       const instance = createApi(123);
-      runtimeAPI.it('case', () => {}, { retry: 1 });
+      runtimeAPI.it('case', { retry: 1 }, () => {});
 
       const testCase = (await instance.getTests())[0] as TestCase;
       expect(testCase.timeout).toBe(123);
@@ -164,10 +175,11 @@ describe('RunnerRuntime', () => {
 
     it('propagates options through test.each', async () => {
       const instance = createApi();
-      runtimeAPI.it.each([1, 2])('case %s', () => {}, {
-        timeout: 50,
-        retry: 1,
-      });
+      runtimeAPI.it.each([1, 2])(
+        'case %s',
+        { timeout: 50, retry: 1 },
+        () => {},
+      );
 
       const cases = (await instance.getTests()) as TestCase[];
       expect(cases).toHaveLength(2);
@@ -179,10 +191,11 @@ describe('RunnerRuntime', () => {
 
     it('propagates options through test.for', async () => {
       const instance = createApi();
-      runtimeAPI.it.for([1, 2])('case %s', () => {}, {
-        timeout: 50,
-        repeats: 2,
-      });
+      runtimeAPI.it.for([1, 2])(
+        'case %s',
+        { timeout: 50, repeats: 2 },
+        () => {},
+      );
 
       const cases = (await instance.getTests()) as TestCase[];
       expect(cases).toHaveLength(2);

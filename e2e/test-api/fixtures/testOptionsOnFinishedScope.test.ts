@@ -8,19 +8,20 @@ let cleanupCalls = 0;
 
 it(
   'onTestFinished does not leak across repeats',
+  { repeats: 2 },
   ({ onTestFinished }) => {
     runs++;
     onTestFinished(() => {
       cleanupCalls++;
     });
   },
-  { repeats: 2 },
 );
 
 let retryAttempts = 0;
 let retryCleanupCalls = 0;
 it(
   'onTestFinished does not leak across retries',
+  { retry: 1 },
   ({ onTestFinished }) => {
     retryAttempts++;
     onTestFinished(() => {
@@ -29,7 +30,6 @@ it(
     // Force a retry by failing the first attempt.
     expect(retryAttempts).toBe(2);
   },
-  { retry: 1 },
 );
 
 it('cleanup count matches the number of attempts', () => {
