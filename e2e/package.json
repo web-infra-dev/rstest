@@ -10,7 +10,7 @@
   },
   "devDependencies": {
     "@rsbuild/core": "~2.0.15",
-    "@rsbuild/plugin-react": "^2.0.1",
+    "@rsbuild/plugin-react": "^2.1.0",
     "@rslib/core": "0.23.0",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
@@ -31,7 +31,7 @@
     "fs-extra": "^11.3.5",
     "is-url": "^1.2.4",
     "jest-image-snapshot": "^6.5.2",
-    "memfs": "^4.57.7",
+    "memfs": "^4.57.8",
     "pathe": "^2.0.3",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
