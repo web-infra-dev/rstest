@@ -6,6 +6,7 @@ import { loadConfig, resolveExtends } from '../config';
 import type {
   BrowserName,
   Project,
+  ResolvedRstestConfig,
   RstestConfig,
   RstestOutputConfig,
 } from '../types';
@@ -143,9 +144,9 @@ const normalizeBooleanLikeCliValue = (
 };
 
 export function mergeWithCLIOptions(
-  config: RstestConfig,
+  config: ResolvedRstestConfig,
   options: CommonOptions,
-): RstestConfig {
+): ResolvedRstestConfig {
   const keys: (keyof CommonOptions & keyof RstestConfig)[] = [
     'root',
     'globals',
@@ -201,6 +202,8 @@ export function mergeWithCLIOptions(
         `Invalid shard option: ${options.shard}. It must be in the format of <index>/<count> and 1-based.`,
       );
     }
+    // `shard` is injected from the `--shard` CLI flag onto the resolved
+    // config; it is deliberately absent from the public `RstestConfig` type.
     config.shard = {
       index,
       count,

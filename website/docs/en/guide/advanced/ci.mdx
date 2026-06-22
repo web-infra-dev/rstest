@@ -159,7 +159,7 @@ jobs:
       - run: pnpm rstest merge-reports --coverage --cleanup
 ```
 
-Each shard writes `.rstest-reports/blob-{index}-{count}.json`. The merge job collects those files into one `.rstest-reports/` directory, then `rstest merge-reports` runs the configured reporters on the unified result and merges coverage data. See [shard](/config/test/shard) and [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) for details.
+Each shard writes `.rstest-reports/blob-{index}-{count}.json`. The merge job collects those files into one `.rstest-reports/` directory, then `rstest merge-reports` runs the configured reporters on the unified result and merges coverage data. See [sharding](/guide/basic/cli#sharding-tests) and [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) for details.
 
 ## Publish machine-readable reports
 

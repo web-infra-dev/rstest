@@ -114,6 +114,19 @@ npx rstest list --changed --filesOnly
 
 `--changed` 不能和位置参数、`--related` / `--findRelatedTests` 一起使用，因为它已经从 Git 状态提供了源码文件过滤条件。
 
+### 运行分片 \{#sharding-tests}
+
+使用 `--shard <index>/<count>` 将测试文件拆分为多个分片并行运行。`count` 表示总的分片数量，`index`（从 1 开始）表示要运行的分片。
+
+```bash
+# 将测试分成 3 个分片，运行第 1 个分片
+npx rstest run --shard 1/3
+```
+
+这在 CI/CD 中尤其有用 —— 将测试套件拆分到多个 job 以减少整体测试时间，然后用 [`rstest merge-reports`](#rstest-merge-reports) 合并各分片的报告。
+
+测试文件会按其路径排序，以确保在不同运行中分片结果一致；分片发生在测试文件扫描阶段，早于构建过程，以优化性能。请确保 `count` 和 `index` 的值有效（`1 <= index <= count`）。
+
 ## rstest watch
 
 `rstest watch` 将会启动监听模式并执行测试，当测试或依赖文件修改时，将重新执行关联的测试文件。
@@ -211,7 +224,7 @@ c.test.ts > test c it skipIf
 
 <ApiMeta addedVersion="0.9.3" />
 
-`rstest merge-reports` 将多个测试分片生成的 blob 报告合并为一个统一的报告。当使用 `--shard` 在多台 CI 机器上并行运行测试时，这非常有用。
+`rstest merge-reports` 将多个测试分片生成的 blob 报告合并为一个统一的报告。当使用 [`--shard`](#sharding-tests) 在多台 CI 机器上并行运行测试时，这非常有用。
 
 ### 工作流程
 
@@ -335,7 +348,7 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--restoreMocks`                    | 每个测试前自动恢复 mock 状态和实现，详见 [restoreMocks](/config/test/restore-mocks)                                                                  |
 | `--retry <retry>`                   | 测试失败时重试次数，详见 [retry](/config/test/retry)                                                                                                 |
 | `-r, --root <root>`                 | 指定项目根目录，详见 [root](/config/test/root)                                                                                                       |
-| `--shard <index/count>`             | 将测试拆分为多个分片运行，详见 [shard](/config/test/shard)                                                                                           |
+| `--shard <index/count>`             | 将测试拆分为多个分片运行，详见 [测试分片](#sharding-tests)                                                                                           |
 | `--silent [value]`                  | 静默被拦截的测试 console 输出，或用 `passed-only` 仅保留失败任务日志，详见 [silent](/config/test/silent)                                             |
 | `--slowTestThreshold <value>`       | 设置测试或套件被视为慢的阈值（毫秒），详见 [slowTestThreshold](/config/test/slow-test-threshold)                                                     |
 | `--source.tsconfigPath <path>`      | 指定 tsconfig.json 文件路径，详见 [source.tsconfigPath](/config/build/source#sourcetsconfigpath)                                                     |

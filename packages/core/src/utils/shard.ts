@@ -1,4 +1,4 @@
-import type { ProjectEntries, RstestContext } from '../types';
+import type { ProjectEntries, RstestContext, ShardConfig } from '../types';
 import { color, logger } from './logger';
 import { getTestEntries } from './testFiles';
 
@@ -7,7 +7,7 @@ import { getTestEntries } from './testFiles';
  */
 function getShardedFiles<T extends { testPath: string }>(
   files: T[],
-  shard: { count: number; index: number },
+  shard: ShardConfig,
 ): T[] {
   const { count, index } = shard;
   if (count <= 1) {
