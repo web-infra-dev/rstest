@@ -102,15 +102,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const OPTIONS_PLACEHOLDER = '__RSTEST_OPTIONS_PLACEHOLDER__';
 
 /**
- * Extra time added on top of a file's `testTimeout` before the host gives up
- * waiting for that file's RPC to settle. Covers fixed per-file overhead (page
- * navigation, runner boot) that is not part of the user's test budget. The
- * headless and headed scheduling paths both apply this same buffer, so it lives
- * here as one constant to keep their per-file timeout semantics identical.
- */
-const PER_FILE_TIMEOUT_BUFFER_MS = 30_000;
-
-/**
  * Monotonic counter for synthetic per-file Perfetto `pid` values in `--trace`
  * mode. Browser host runs every test file inside the same Node process, so
  * without an override every file would emit events under the same `pid` and
@@ -2831,17 +2822,34 @@ export const runBrowserController = async (
         resolveDone = resolve;
       });
 
-      const projectRuntime = projectRuntimeConfigs.find(
-        (project) => project.name === file.projectName,
-      );
-      const perFileTimeoutMs =
-        (projectRuntime?.runtimeConfig.testTimeout ?? maxTestTimeoutForRpc) +
-        PER_FILE_TIMEOUT_BUFFER_MS;
-
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      // Event-driven death detection (vitest-style): a renderer crash or an
+      // unexpected page close produces no further messages, so fail the file at
+      // once. Per-test/hook timeouts are enforced inside the runner, so the host
+      // deliberately keeps no execution-duration watchdog. Our own teardown
+      // close is ignored because `settled`/`run.cancelled` are set by then.
+      const crashDeferred = createDeferredPromise<string>();
+      const onPageDead = (reason: string): void => {
+        if (
+          settled ||
+          run.cancelled ||
+          !runLifecycle.isTokenActive(run.token)
+        ) {
+          return;
+        }
+        settled = true;
+        crashDeferred.resolve(reason);
+      };
 
       try {
         page = await browserContext.newPage();
+        page.on('crash', () =>
+          onPageDead(`Browser page crashed while running ${file.testPath}.`),
+        );
+        page.on('close', () =>
+          onPageDead(
+            `Browser page closed unexpectedly while running ${file.testPath}.`,
+          ),
+        );
 
         const session = sessionRegistry.register({
           testFile: file.testPath,
@@ -2904,28 +2912,25 @@ export const runBrowserController = async (
           waitUntil: 'load',
         });
 
-        const timeoutPromise = new Promise<'timeout'>((resolve) => {
-          timeoutId = setTimeout(() => resolve('timeout'), perFileTimeoutMs);
-        });
-
         const state = await Promise.race([
-          donePromise.then(() => 'done' as const),
-          timeoutPromise,
-          run.cancelSignal.then(() => 'cancelled' as const),
+          donePromise.then(() => ({ type: 'done' as const })),
+          crashDeferred.promise.then((reason) => ({
+            type: 'crash' as const,
+            reason,
+          })),
+          run.cancelSignal.then(() => ({ type: 'cancelled' as const })),
         ]);
 
-        if (state === 'cancelled') {
+        if (state.type === 'cancelled') {
           return;
         }
 
         if (
-          state === 'timeout' &&
+          state.type === 'crash' &&
           runLifecycle.isTokenActive(run.token) &&
           !run.cancelled
         ) {
-          await handleFatal({
-            message: `Test execution timeout after ${perFileTimeoutMs / 1000}s for ${file.testPath}.`,
-          });
+          await handleFatal({ message: state.reason });
           await cancelRun(run, false);
         }
       } catch (error) {
@@ -2938,9 +2943,6 @@ export const runBrowserController = async (
           await cancelRun(run, false);
         }
       } finally {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
         if (page) {
           try {
             await page.close();
@@ -3322,16 +3324,6 @@ export const runBrowserController = async (
     return fileInfo;
   };
 
-  const getHeadedPerFileTimeoutMs = (file: TestFileInfo): number => {
-    const projectRuntime = projectRuntimeConfigs.find(
-      (project) => project.name === file.projectName,
-    );
-    return (
-      (projectRuntime?.runtimeConfig.testTimeout ?? maxTestTimeoutForRpc) +
-      PER_FILE_TIMEOUT_BUFFER_MS
-    );
-  };
-
   // Open a container page for user to view (reuse in watch mode)
   let containerContext: BrowserProviderContext;
   let containerPage: BrowserProviderPage;
@@ -3456,12 +3448,13 @@ export const runBrowserController = async (
     pending.deferred.resolve();
   };
 
-  const reloadTestFileWithTimeout = async (
+  // No execution-duration watchdog: per-test/hook timeouts are enforced inside
+  // the runner, and a dead container is caught event-driven by the WebSocket
+  // `close` handler, which rejects every pending reload via `onDisconnect`.
+  const reloadTestFileAndWait = async (
     file: TestFileInfo,
     testNamePattern?: string,
   ): Promise<void> => {
-    const timeoutMs = getHeadedPerFileTimeoutMs(file);
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     let reloadAck: ReloadTestFileAck | undefined;
 
     try {
@@ -3469,22 +3462,7 @@ export const runBrowserController = async (
         file.testPath,
         testNamePattern,
       );
-      const completionPromise = registerPendingHeadedReload(
-        file.testPath,
-        reloadAck.runId,
-      );
-      await Promise.race([
-        completionPromise,
-        new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => {
-            reject(
-              new Error(
-                `Headed test execution timeout after ${timeoutMs / 1000}s for ${file.testPath}.`,
-              ),
-            );
-          }, timeoutMs);
-        }),
-      ]);
+      await registerPendingHeadedReload(file.testPath, reloadAck.runId);
     } catch (error) {
       if (reloadAck?.runId) {
         rejectPendingHeadedReload(
@@ -3494,10 +3472,6 @@ export const runBrowserController = async (
         );
       }
       throw error;
-    } finally {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
     }
   };
 
@@ -3600,7 +3574,7 @@ export const runBrowserController = async (
       if (fatalError) {
         return;
       }
-      await reloadTestFileWithTimeout(file, testNamePattern);
+      await reloadTestFileAndWait(file, testNamePattern);
     });
   };
 
