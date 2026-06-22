@@ -85,13 +85,17 @@ export async function printError(
         getSourcemap,
       });
 
-      if (fullStackFrames[0]) {
+      const printableFullStackFrames = fullStackFrames.filter(
+        (frame) => frame.file,
+      );
+
+      if (printableFullStackFrames[0]) {
         logger.stderr(
           color.gray(
             "No user error stack found, showing fullStack. Set 'DEBUG=rstest' to always show fullStack.",
           ),
         );
-        stackFrames = fullStackFrames;
+        stackFrames = printableFullStackFrames;
       } else {
         logger.stderr(
           color.gray(
