@@ -5,6 +5,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
+  "experiments": {
+    "sourceImport": true,
+  },
   "externals": [
     [Function],
     {
@@ -590,6 +593,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
+  "experiments": {
+    "sourceImport": true,
+  },
   "externals": [
     [Function],
     {
@@ -1160,6 +1166,9 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
+  "experiments": {
+    "sourceImport": true,
+  },
   "externals": [
     [Function],
     {
@@ -1729,6 +1738,9 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": [Function],
+  "experiments": {
+    "sourceImport": true,
+  },
   "externals": [
     [Function],
     {
@@ -2633,6 +2645,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
+  "experiments": {
+    "sourceImport": true,
+  },
   "externals": [
     [Function],
     {
@@ -3203,6 +3218,9 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "context": "<ROOT>/packages/core",
   "devtool": "nosources-source-map",
   "entry": {},
+  "experiments": {
+    "sourceImport": true,
+  },
   "externals": [
     [Function],
     {
