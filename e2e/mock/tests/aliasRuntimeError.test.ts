@@ -20,9 +20,11 @@ describe('mock API aliases', () => {
 
     await expectExecFailed();
 
+    expectStderrLog('mock() was not transformed by Rstest');
     expectStderrLog(
-      'rs.mock() must be called as rstest.mock() or rs.mock() so Rstest can transform it',
+      'Module mock APIs must be called directly as rstest.mock() or rs.mock() in files processed by Rstest',
     );
-    expectStderrLog('Import aliases are not supported for module mock APIs');
+    expectStderrLog('calling file is not bundled by Rstest');
+    expectStderrLog('called through an import alias');
   });
 });
