@@ -47,7 +47,7 @@ Input: a release tag/title such as `v2.0.6`. If title and tag differ, ask for th
 
    Ask for confirmation if the previous tag is missing, surprising, or part of a non-standard range.
 
-5. Before creating anything, state the repo and range: `previous_tag -> release_tag`. If the user did not explicitly ask to create the draft in this turn, ask for confirmation.
+5. Before creating anything, state the repo and range: `previous_tag -> release_tag`. An explicit request to create/generate a version draft is authorization to create it; ask only when repo/tag/range is ambiguous, the previous tag is surprising, or the release already exists without an update request.
 
 6. Create the draft with GitHub-generated notes:
 
