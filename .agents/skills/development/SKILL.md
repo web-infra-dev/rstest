@@ -1,6 +1,6 @@
 ---
 name: development
-description: 'Feature and bug-fix development checklist. Use when implementing a new feature, fixing a bug, or making behavioral changes to ensure nothing is missed before PR.'
+description: Feature and bug-fix development checklist for the Rstest monorepo. Use when implementing a new feature, fixing a bug, changing public APIs/config/CLI behavior, addressing a GitHub issue or PR request, or assessing cross-package impact before a PR.
 metadata:
   internal: true
 ---
@@ -9,13 +9,11 @@ metadata:
 
 This skill acts as a **shift-left** gate and routing checklist: catch missing work during development, then hand off to the more specific workflow when needed.
 
-## When to Use
+## First: Build Context
 
-Invoke this checklist when:
-
-- Implementing a new feature or capability
-- Fixing a bug that changes observable behavior
-- Modifying an existing API or configuration option
+- For GitHub issues/PRs/checks/reviews, read the linked context before editing; do not implement from the title alone.
+- For external repros, read README/scripts/deps and reproduce with the smallest command first.
+- Identify the smallest user-visible behavior, affected package(s), and validation path.
 
 ## 1. Identify the Change Scope
 
@@ -29,6 +27,15 @@ Before writing code, determine the **blast radius**:
 | Does it change behavior in browser mode?        | If yes → browser e2e required                       |
 | Could it affect both Node and browser modes?    | Evaluate both; see §3                               |
 | Is the config option also present in Rsbuild?   | If yes → adapter sync required; see §4              |
+
+### Public API / Config / CLI Checklist
+
+For public API/config/CLI changes, check the full surface in one pass:
+
+1. Canonical type/default/normalization/runtime consumer.
+2. CLI flag/help/output/error text when applicable.
+3. Adapters (`rsbuild`, `rslib`, `rspack`), browser mode, and docs (`en`, `zh`, `ApiMeta`) impact.
+4. Unit tests for internals/transforms; e2e tests for user-facing behavior.
 
 ## 2. E2E Tests Are Required
 
@@ -63,10 +70,11 @@ Not every feature needs browser mode support, but you must **consciously decide*
 
 ### If Browser Mode Is Affected
 
-1. Update `packages/browser/` if the runtime behavior differs.
-2. Add or update browser e2e coverage via the `testing` skill.
-3. If the feature requires a new browser fixture, follow the pattern in `e2e/browser-mode/fixtures/`.
-4. If the feature involves React component testing, check `@rstest/browser-react` as well.
+1. Keep ownership clear: `@rstest/browser` = host/protocol/scheduling, `@rstest/browser-ui` = UI, runner/runtime = execution semantics, provider packages = provider behavior.
+2. Update `packages/browser/` if the runtime behavior differs.
+3. Add or update browser e2e coverage via the `testing` skill.
+4. If the feature requires a new browser fixture, follow the pattern in `e2e/browser-mode/fixtures/`.
+5. If the feature involves React component testing, check `@rstest/browser-react` as well.
 
 ### If Browser Mode Is Not Affected
 
