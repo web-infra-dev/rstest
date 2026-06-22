@@ -177,10 +177,6 @@ const poolOptionDefinitions: OptionDefinition[] = [
     'Maximum number or percentage of workers (e.g. 4 or 50%)',
   ],
   [
-    '--pool.minWorkers <value>',
-    'Minimum number or percentage of workers (e.g. 1 or 25%)',
-  ],
-  [
     '--pool.execArgv <arg>',
     'Additional Node.js execArgv passed to worker processes (can be specified multiple times)',
   ],

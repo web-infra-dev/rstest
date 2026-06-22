@@ -21,8 +21,6 @@ export type RstestPoolOptions = {
   type?: RstestPoolType;
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
-  /** Minimum number or percentage of workers to run tests in. */
-  minWorkers?: number | string;
   /** Pass additional arguments to node process in the child processes. */
   execArgv?: string[];
 };

@@ -826,13 +826,13 @@ describe('resolveProjects', () => {
         root: rootPath,
         options: {
           pool: {
-            minWorkers: 1,
+            maxWorkers: 1,
           },
         },
       });
 
       expect(projects[0]!.config.pool).toEqual({
-        minWorkers: 1,
+        maxWorkers: 1,
       });
     });
 
