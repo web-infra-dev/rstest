@@ -12,7 +12,7 @@ importers:
     devDependencies:
       '@rsdoctor/rspack-plugin':
         specifier: ^1.5.15
-        version: 1.5.15(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)
+        version: 1.5.15(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)
       '@rslint/core':
         specifier: ^0.6.2
         version: 0.6.2(jiti@2.7.0)
@@ -95,11 +95,11 @@ importers:
   e2e:
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rsbuild/plugin-react':
         specifier: ^2.1.0
-        version: 2.1.0(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
+        version: 2.1.0(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
       '@rslib/core':
         specifier: 0.23.0
         version: 0.23.0(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(typescript@6.0.3)
@@ -219,11 +219,11 @@ importers:
         version: 19.2.7(react@19.2.7)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rsbuild/plugin-react':
         specifier: ^2.1.0
-        version: 2.1.0(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
+        version: 2.1.0(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
       '@testing-library/dom':
         specifier: ^10.4.1
         version: 10.4.1
@@ -366,11 +366,11 @@ importers:
         version: 19.2.7(react@19.2.7)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rsbuild/plugin-react':
         specifier: ^2.1.0
-        version: 2.1.0(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
+        version: 2.1.0(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
       '@testing-library/dom':
         specifier: ^10.4.1
         version: 10.4.1
@@ -400,11 +400,11 @@ importers:
         version: 3.5.38(typescript@6.0.3)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rsbuild/plugin-vue':
         specifier: ^1.2.9
-        version: 1.2.9(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(vue@3.5.38(typescript@6.0.3))
+        version: 1.2.9(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(vue@3.5.38(typescript@6.0.3))
       '@rstest/core':
         specifier: workspace:*
         version: link:../../../../../packages/core
@@ -428,11 +428,11 @@ importers:
         version: 19.2.7(react@19.2.7)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rsbuild/plugin-react':
         specifier: ^2.1.0
-        version: 2.1.0(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
+        version: 2.1.0(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
       '@testing-library/dom':
         specifier: ^10.4.1
         version: 10.4.1
@@ -462,11 +462,11 @@ importers:
         version: 3.5.38(typescript@6.0.3)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rsbuild/plugin-vue':
         specifier: ^1.2.9
-        version: 1.2.9(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(vue@3.5.38(typescript@6.0.3))
+        version: 1.2.9(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(vue@3.5.38(typescript@6.0.3))
       '@rstest/core':
         specifier: workspace:*
         version: link:../../../../../packages/core
@@ -570,17 +570,17 @@ importers:
         version: 3.5.38(typescript@6.0.3)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rsbuild/plugin-babel':
         specifier: ^1.2.1
-        version: 1.2.1(@rsbuild/core@2.0.15)
+        version: 1.2.1(@rsbuild/core@2.1.0-beta.0)
       '@rsbuild/plugin-vue':
         specifier: ^1.2.9
-        version: 1.2.9(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(vue@3.5.38(typescript@6.0.3))
+        version: 1.2.9(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(vue@3.5.38(typescript@6.0.3))
       '@rsbuild/plugin-vue-jsx':
         specifier: ^2.0.1
-        version: 2.0.1(@babel/core@7.29.0)(@rsbuild/core@2.0.15)
+        version: 2.0.1(@babel/core@7.29.0)(@rsbuild/core@2.1.0-beta.0)
       '@rstest/core':
         specifier: workspace:*
         version: link:../../../packages/core
@@ -659,11 +659,11 @@ importers:
         version: 19.2.7(react@19.2.7)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rsbuild/plugin-react':
         specifier: ^2.1.0
-        version: 2.1.0(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
+        version: 2.1.0(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
       '@rstest/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -699,11 +699,11 @@ importers:
         version: 19.2.7(react@19.2.7)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rsbuild/plugin-react':
         specifier: ^2.1.0
-        version: 2.1.0(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
+        version: 2.1.0(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
       '@rstest/adapter-rsbuild':
         specifier: workspace:*
         version: link:../../packages/adapter-rsbuild
@@ -740,19 +740,19 @@ importers:
     devDependencies:
       '@rsbuild/plugin-react':
         specifier: ^2.1.0
-        version: 2.1.0(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
+        version: 2.1.0(@rsbuild/core@2.0.15)(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))
       '@rspack/cli':
-        specifier: ~2.0.8
-        version: 2.0.8(@rspack/core@2.0.8(@swc/helpers@0.5.23))(@rspack/dev-server@2.0.3(@rspack/core@2.0.8(@swc/helpers@0.5.23)))
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))(@rspack/dev-server@2.1.0(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23)))
       '@rspack/core':
-        specifier: ~2.0.8
-        version: 2.0.8(@swc/helpers@0.5.23)
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0(@swc/helpers@0.5.23)
       '@rspack/dev-server':
-        specifier: ~2.0.3
-        version: 2.0.3(@rspack/core@2.0.8(@swc/helpers@0.5.23))
+        specifier: ~2.1.0
+        version: 2.1.0(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))
       '@rspack/plugin-react-refresh':
         specifier: ~2.0.2
-        version: 2.0.2(@rspack/core@2.0.8(@swc/helpers@0.5.23))(react-refresh@0.18.0)
+        version: 2.0.2(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))(react-refresh@0.18.0)
       '@rstest/adapter-rspack':
         specifier: workspace:*
         version: link:../../packages/adapter-rspack
@@ -794,17 +794,17 @@ importers:
         version: 19.2.7(react@19.2.7)
     devDependencies:
       '@rspack/cli':
-        specifier: ~2.0.8
-        version: 2.0.8(@rspack/core@2.0.8(@swc/helpers@0.5.23))(@rspack/dev-server@2.0.3(@rspack/core@2.0.8(@swc/helpers@0.5.23)))
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))(@rspack/dev-server@2.1.0(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23)))
       '@rspack/core':
-        specifier: ~2.0.8
-        version: 2.0.8(@swc/helpers@0.5.23)
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0(@swc/helpers@0.5.23)
       '@rspack/dev-server':
-        specifier: ~2.0.3
-        version: 2.0.3(@rspack/core@2.0.8(@swc/helpers@0.5.23))
+        specifier: ~2.1.0
+        version: 2.1.0(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))
       '@rspack/plugin-react-refresh':
         specifier: ~2.0.2
-        version: 2.0.2(@rspack/core@2.0.8(@swc/helpers@0.5.23))(react-refresh@0.18.0)
+        version: 2.0.2(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))(react-refresh@0.18.0)
       '@rstest/adapter-rspack':
         specifier: workspace:*
         version: link:../../packages/adapter-rspack
@@ -833,11 +833,11 @@ importers:
   examples/svelte-rsbuild:
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rsbuild/plugin-svelte':
         specifier: ^2.0.0
-        version: 2.0.0(@babel/core@7.29.0)(@rsbuild/core@2.0.15)(less@4.6.4)(postcss@8.5.15)(sass@1.100.0)(svelte@5.56.3)(typescript@6.0.3)
+        version: 2.0.0(@babel/core@7.29.0)(@rsbuild/core@2.1.0-beta.0)(less@4.6.4)(postcss@8.5.15)(sass@1.100.0)(svelte@5.56.3)(typescript@6.0.3)
       '@rstest/adapter-rsbuild':
         specifier: workspace:*
         version: link:../../packages/adapter-rsbuild
@@ -861,17 +861,17 @@ importers:
         version: 3.5.38(typescript@6.0.3)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rsbuild/plugin-babel':
         specifier: ^1.2.1
-        version: 1.2.1(@rsbuild/core@2.0.15)
+        version: 1.2.1(@rsbuild/core@2.1.0-beta.0)
       '@rsbuild/plugin-vue':
         specifier: ^1.2.9
-        version: 1.2.9(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(vue@3.5.38(typescript@6.0.3))
+        version: 1.2.9(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(vue@3.5.38(typescript@6.0.3))
       '@rsbuild/plugin-vue-jsx':
         specifier: ^2.0.1
-        version: 2.0.1(@babel/core@7.29.0)(@rsbuild/core@2.0.15)
+        version: 2.0.1(@babel/core@7.29.0)(@rsbuild/core@2.1.0-beta.0)
       '@rstest/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -894,8 +894,8 @@ importers:
   packages/adapter-rsbuild:
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rslib/core':
         specifier: 0.23.0
         version: 0.23.0(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(typescript@6.0.3)
@@ -930,11 +930,11 @@ importers:
         specifier: 0.23.0
         version: 0.23.0(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(typescript@6.0.3)
       '@rspack/cli':
-        specifier: ~2.0.8
-        version: 2.0.8(@rspack/core@2.0.8(@swc/helpers@0.5.23))(@rspack/dev-server@2.0.3(@rspack/core@2.0.8(@swc/helpers@0.5.23)))
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))(@rspack/dev-server@2.1.0(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23)))
       '@rspack/core':
-        specifier: ~2.0.8
-        version: 2.0.8(@swc/helpers@0.5.23)
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0(@swc/helpers@0.5.23)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1043,14 +1043,14 @@ importers:
         version: 19.2.7(react@19.2.7)
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rsbuild/plugin-react':
         specifier: ^2.1.0
-        version: 2.1.0(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
+        version: 2.1.0(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
       '@rsbuild/plugin-svgr':
         specifier: ^2.0.4
-        version: 2.0.4(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(typescript@6.0.3)
+        version: 2.0.4(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(typescript@6.0.3)
       '@tailwindcss/postcss':
         specifier: ^4.3.1
         version: 4.3.1
@@ -1070,8 +1070,8 @@ importers:
   packages/core:
     dependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@types/chai':
         specifier: ^5.2.3
         version: 5.2.3
@@ -1093,13 +1093,13 @@ importers:
         version: 7.58.9(@types/node@22.18.6)
       '@rsbuild/plugin-less':
         specifier: ^1.6.4
-        version: 1.6.4(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)
+        version: 1.6.4(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)
       '@rsbuild/plugin-node-polyfill':
         specifier: ^1.4.6
-        version: 1.4.6(@rsbuild/core@2.0.15)
+        version: 1.4.6(@rsbuild/core@2.1.0-beta.0)
       '@rsbuild/plugin-sass':
         specifier: ^1.5.3
-        version: 1.5.3(@rsbuild/core@2.0.15)
+        version: 1.5.3(@rsbuild/core@2.1.0-beta.0)
       '@rslib/core':
         specifier: 0.23.0
         version: 0.23.0(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(typescript@6.0.3)
@@ -1218,7 +1218,7 @@ importers:
         version: 3.0.1
       istanbul-lib-source-maps:
         specifier: ^5.0.6
-        version: 5.0.6
+        version: 5.0.6(supports-color@8.1.1)
       istanbul-reports:
         specifier: ^3.2.0
         version: 3.2.0
@@ -1279,8 +1279,8 @@ importers:
         version: 9.3.0
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rslib/core':
         specifier: 0.23.0
         version: 0.23.0(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(typescript@6.0.3)
@@ -1312,8 +1312,8 @@ importers:
   packages/vscode:
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.15
-        version: 2.0.15
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rslib/core':
         specifier: 0.23.0
         version: 0.23.0(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(typescript@6.0.3)
@@ -1346,10 +1346,10 @@ importers:
         version: 0.0.12
       '@vscode/test-electron':
         specifier: ^2.5.2
-        version: 2.5.2
+        version: 2.5.2(supports-color@8.1.1)
       '@vscode/vsce':
         specifier: 3.9.2
-        version: 3.9.2
+        version: 3.9.2(supports-color@8.1.1)
       birpc:
         specifier: ^4.0.0
         version: 4.0.0
@@ -1871,11 +1871,20 @@ packages:
   '@emnapi/core@1.10.0':
     resolution: {integrity: sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==}
 
+  '@emnapi/core@1.11.1':
+    resolution: {integrity: sha512-RSvbQmHzdKzNsLYa/wHrbc3KN4sYLKAdPZxqiM2HATqv/SBk2/ENSHpvXGaLOMcsAyz0poEGqkmmKYG3OWiJEQ==}
+
   '@emnapi/runtime@1.10.0':
     resolution: {integrity: sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA==}
 
+  '@emnapi/runtime@1.11.1':
+    resolution: {integrity: sha512-vgj7R3y3Wgx24IQaGPA/R6YFXLHVMOZ0uVEyIQPaWs+rd1AzfEMXlAC22FYwO1XkKR6NPsq7mUandH8oIRdZFw==}
+
   '@emnapi/wasi-threads@1.2.1':
     resolution: {integrity: sha512-uTII7OYF+/Mes/MrcIOYp5yOtSMLBWSIoLPpcgwipoiKbli6k322tcoFsxoIIxPDqW01SQGAgko4EzZi2BNv2w==}
+
+  '@emnapi/wasi-threads@1.2.2':
+    resolution: {integrity: sha512-c95qOXkHdydNKhscBTebqEC1CVAZpyqOfVfBzQ1qgzyl3gfeldUjIggDbIZgDKsHLgnsM+igH7TJ/eAasaVuMA==}
 
   '@emotion/hash@0.8.0':
     resolution: {integrity: sha512-kBJtf7PH6aWwZ6fka3zQ0p6SBYzx4fl1LoZXE2RrnYST9Xljm7WfKJrU4g/Xr3Beg72MLrp1AWNUmuYJTL7Cow==}
@@ -2093,6 +2102,12 @@ packages:
 
   '@napi-rs/wasm-runtime@1.1.4':
     resolution: {integrity: sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow==}
+    peerDependencies:
+      '@emnapi/core': ^1.7.1
+      '@emnapi/runtime': ^1.7.1
+
+  '@napi-rs/wasm-runtime@1.1.5':
+    resolution: {integrity: sha512-AWPoBRJ9tsnVhor4sjO7rkni+7p+2IAEFj6cx06UgP10jkQHqay/36uRV/bFkgrh18D9vb4cr8Q0Pthskgzy+Q==}
     peerDependencies:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
@@ -2829,6 +2844,16 @@ packages:
       core-js:
         optional: true
 
+  '@rsbuild/core@2.1.0-beta.0':
+    resolution: {integrity: sha512-uiVwiLWjrOXORRoj6FkrtqiAP2qtl1ynxs26uyS/29gaOJLiAjDT7q0lpuToxJ4JPQQ2O65H/tOt0IBFvMjGOg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    hasBin: true
+    peerDependencies:
+      core-js: '>= 3.0.0'
+    peerDependenciesMeta:
+      core-js:
+        optional: true
+
   '@rsbuild/plugin-babel@1.2.1':
     resolution: {integrity: sha512-6Zad7Ff/RUNc91AtftemJcJ1wcZRGOiwuJy349qlLJl9F++oRYwUhx+MxLSpNnVeIywWx2mKdZZBtD1hLqfj9w==}
     peerDependencies:
@@ -3023,13 +3048,29 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
+  '@rspack/binding-darwin-arm64@2.1.0-beta.0':
+    resolution: {integrity: sha512-BE2O8aq/tzG9c3BHlsmH/cDnwr86wG68AQ/n1uaYEB5hoBJMk2eBJo/q2/CZ37ZT5ntVsCGkJpCPBT/Dh7q9PA==}
+    cpu: [arm64]
+    os: [darwin]
+
   '@rspack/binding-darwin-x64@2.0.8':
     resolution: {integrity: sha512-satPm2PD4B7jDTVlVAdvMVdUszwLvWUEnUDzLb77mvVkezKNDZmuhb+e8s+FfKs8hJpNbZ9VAejuA2rr8o985w==}
     cpu: [x64]
     os: [darwin]
 
+  '@rspack/binding-darwin-x64@2.1.0-beta.0':
+    resolution: {integrity: sha512-9icL31+mGJRKaU1i0IVbsBcmRWpUVfTM9TuLUHZOy0fnPhoZPDT0C/BZJxjvlvSeV2NNhh/NBEzUP3taZj7Zcg==}
+    cpu: [x64]
+    os: [darwin]
+
   '@rspack/binding-linux-arm64-gnu@2.0.8':
     resolution: {integrity: sha512-pSI+npPQE/uDtiboqvcOIRJbEV2+B+H1xffmko/gw50la92oTUW60kVULFwsb6L0+GVCzIcwX3yq60GtYIn+Ug==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@rspack/binding-linux-arm64-gnu@2.1.0-beta.0':
+    resolution: {integrity: sha512-92OuAccIQx5AQIWdhF5GaXmW0nsW+cApQYZ1PZ2kMfCe0kq8t4R5gLL2cuJ6a3Qo66TerFsj+ii5wx0qfP7aFA==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
@@ -3040,8 +3081,20 @@ packages:
     os: [linux]
     libc: [musl]
 
+  '@rspack/binding-linux-arm64-musl@2.1.0-beta.0':
+    resolution: {integrity: sha512-YuaHU9A+vLBYNEbjUGHlEE/K4Ctt7kp34DaKlv9iShtOz7bIc3NRfFUIZEHjExhJ+wWYInrcIAIJeviOQJnHig==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
   '@rspack/binding-linux-x64-gnu@2.0.8':
     resolution: {integrity: sha512-zrkoEOnqj1hOEBO5T2I/2Ts2HSJsYFh1qXwMpK4dMJFGGNWDfNeUa6/LF5uq3VINF3JUl7RL47AgrucoSZJXPA==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@rspack/binding-linux-x64-gnu@2.1.0-beta.0':
+    resolution: {integrity: sha512-BA2j6CS8MJfT7o7oP2UFpucf3EAv4Does/D35SfRCdBKlgMXy8kG6zJXKLW3gzKSNUez5SZ26n/mPcHcX8A6zg==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
@@ -3052,12 +3105,27 @@ packages:
     os: [linux]
     libc: [musl]
 
+  '@rspack/binding-linux-x64-musl@2.1.0-beta.0':
+    resolution: {integrity: sha512-riLlSAgbyGRXclLeK0y/FN0Qd+hHlwNj0lCdgh98sADUX62gaFcWFYizC8cnfxzlIUaTjQsPCy8PjWFEbSOmuQ==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
   '@rspack/binding-wasm32-wasi@2.0.8':
     resolution: {integrity: sha512-Yf4SiqTUroT5Ju+te0YAY2xxKOb35tECsO21v7hYyGa705wrgoAK/MmF7enOvs9GR1iZIqgiLD/wxsIxl8GjJw==}
     cpu: [wasm32]
 
+  '@rspack/binding-wasm32-wasi@2.1.0-beta.0':
+    resolution: {integrity: sha512-fYEvF3QAWZm6jUf74C2TT7gpllIGEghPEdBPRmdRGROesYSu0YZxikDdVwpQXnsymA5AnkaofCs/Sj+nvKyrXQ==}
+    cpu: [wasm32]
+
   '@rspack/binding-win32-arm64-msvc@2.0.8':
     resolution: {integrity: sha512-8NCuiQsAhXrwRBy57QZoypqrws/zLBkaQVGiB8hksr6v++8hNigNjqpQARLbd0iyMuHsQQ++8+auGk6xlDXmzw==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@rspack/binding-win32-arm64-msvc@2.1.0-beta.0':
+    resolution: {integrity: sha512-bRv74lkzMcloJGYwzIrabLa73L23FTYjcB/GuZkgP8qsYpM20qyMFYo6szElbc/x1NxNSW5mjR4QKaNaIxRDhA==}
     cpu: [arm64]
     os: [win32]
 
@@ -3066,16 +3134,29 @@ packages:
     cpu: [ia32]
     os: [win32]
 
+  '@rspack/binding-win32-ia32-msvc@2.1.0-beta.0':
+    resolution: {integrity: sha512-qvolIqHoH+KSJFi71jJde+HTIvAbVZ08VJvfzqjTQ6KktFoxAfg0FeM6zpq0aNDo14mCDzy5JFH2WGbYGxmYLQ==}
+    cpu: [ia32]
+    os: [win32]
+
   '@rspack/binding-win32-x64-msvc@2.0.8':
     resolution: {integrity: sha512-7zPs8YCe/ZVJTwd+5lpB0CP0tkn2pONf/T1ycmVY76u21Nrwt8mXQGc/2yH2eWP4B7fikYBr3hGr7mpR2fajqQ==}
+    cpu: [x64]
+    os: [win32]
+
+  '@rspack/binding-win32-x64-msvc@2.1.0-beta.0':
+    resolution: {integrity: sha512-Ge6VIpFH//LuN0ABCeHRMXuKYagRAN7rW8WIKAKO3R3WooTT8630W+dOCJ+6kiSQyTLyMrt5eg6Sufw0R6UUPg==}
     cpu: [x64]
     os: [win32]
 
   '@rspack/binding@2.0.8':
     resolution: {integrity: sha512-3uZ+y8aQxq33ty2srMxg2Nu0XuBI6vVrG50rkDaXqwWqOohfgGUSfFuQK7EnSUNy4aFUQlCG6NHialQHJov0wg==}
 
-  '@rspack/cli@2.0.8':
-    resolution: {integrity: sha512-b7MrVE9kvCs8L7hhPdHR6AvQ5wyD3KeBYD+DZMynt+545rvJYnT11LVNjqQJqAYHrgBTmf+9CNPYmeJvEZesWw==}
+  '@rspack/binding@2.1.0-beta.0':
+    resolution: {integrity: sha512-hSK6L966Y8l9z4ZMjRbz7lEmrk5IN+xSCQXkOL5VvtfBLvgk9AO91YEsDn5hCwNmTIdMFc2vScT2qwuIFF069w==}
+
+  '@rspack/cli@2.1.0-beta.0':
+    resolution: {integrity: sha512-JsGjFwMdDkyxrwDBvjHTT/OXskRqhreY669wORgtBVZvwc8CUSadExsNrBqViPhJvTv3m18ak/qdADc3GsYuhw==}
     hasBin: true
     peerDependencies:
       '@rspack/core': ^2.0.0-0
@@ -3096,20 +3177,32 @@ packages:
       '@swc/helpers':
         optional: true
 
-  '@rspack/dev-middleware@2.0.1':
-    resolution: {integrity: sha512-cXSubf5/C+dvkWV2/+rGTtiZ93wSLd3OlTQhwMvsmsmGDdPlkYqIvQ+BTkOk9UCXxKIaF0DDYYmCpBeRRYJfJw==}
+  '@rspack/core@2.1.0-beta.0':
+    resolution: {integrity: sha512-Trnjc1OPsAU+TamUtCoOfwFfqu0n1pClhmY6hX4hs55i8exv4muV6OR8g40j0I7fFPz1YdPArTQBeMKFlVSXsg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
-      '@rspack/core': ^2.0.0-0
+      '@module-federation/runtime-tools': ^0.24.1 || ^2.0.0
+      '@swc/helpers': ^0.5.23
+    peerDependenciesMeta:
+      '@module-federation/runtime-tools':
+        optional: true
+      '@swc/helpers':
+        optional: true
+
+  '@rspack/dev-middleware@2.0.3':
+    resolution: {integrity: sha512-GxnGj9jy76G3eCPyZei81fwKLAMLZaPEEqFz1/QDYquhwi/qYZX5fekFJ1XVpuwxGEK9KSX3hxZylfwrs4cmLA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    peerDependencies:
+      '@rspack/core': ^2.0.0
     peerDependenciesMeta:
       '@rspack/core':
         optional: true
 
-  '@rspack/dev-server@2.0.3':
-    resolution: {integrity: sha512-S29nOxXQS9o+0uGNe7SgND2dAKnte5ZTD5tiT3/B4lKbviqpXD4tbH7NZWA3hGwlSkmOIbFlysYPL1bVHuBcSg==}
+  '@rspack/dev-server@2.1.0':
+    resolution: {integrity: sha512-WkCi6bWThVX5Ziv04srPaRoCoUY5FJolO4gqzE7xPO0XbXShsGnwn0vGD0DFfnYFcw9VSsxlmeCDV799lNYclA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
-      '@rspack/core': ^2.0.0-0
+      '@rspack/core': ^2.0.0
       selfsigned: ^5.0.0
     peerDependenciesMeta:
       selfsigned:
@@ -3661,8 +3754,8 @@ packages:
   '@textlint/types@15.2.2':
     resolution: {integrity: sha512-X2BHGAR3yXJsCAjwYEDBIk9qUDWcH4pW61ISfmtejau+tVqKtnbbvEZnMTb6mWgKU1BvTmftd5DmB1XVDUtY3g==}
 
-  '@tybys/wasm-util@0.10.1':
-    resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
+  '@tybys/wasm-util@0.10.2':
+    resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
 
   '@types/argparse@1.0.38':
     resolution: {integrity: sha512-ebDJ9b0e702Yr7pWgB0jzm+CX4Srzz8RcXtLJDJB+BSccqMa36uyH/zUsSYao5+BD1ytv3k3rPYCq4mAE1hsXA==}
@@ -8622,12 +8715,28 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
+  '@emnapi/core@1.11.1':
+    dependencies:
+      '@emnapi/wasi-threads': 1.2.2
+      tslib: 2.8.1
+    optional: true
+
   '@emnapi/runtime@1.10.0':
     dependencies:
       tslib: 2.8.1
     optional: true
 
+  '@emnapi/runtime@1.11.1':
+    dependencies:
+      tslib: 2.8.1
+    optional: true
+
   '@emnapi/wasi-threads@1.2.1':
+    dependencies:
+      tslib: 2.8.1
+    optional: true
+
+  '@emnapi/wasi-threads@1.2.2':
     dependencies:
       tslib: 2.8.1
     optional: true
@@ -8900,16 +9009,30 @@ snapshots:
 
   '@napi-rs/wasm-runtime@0.2.12':
     dependencies:
-      '@emnapi/core': 1.10.0
-      '@emnapi/runtime': 1.10.0
-      '@tybys/wasm-util': 0.10.1
+      '@emnapi/core': 1.11.1
+      '@emnapi/runtime': 1.11.1
+      '@tybys/wasm-util': 0.10.2
     optional: true
 
   '@napi-rs/wasm-runtime@1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
     dependencies:
       '@emnapi/core': 1.10.0
       '@emnapi/runtime': 1.10.0
-      '@tybys/wasm-util': 0.10.1
+      '@tybys/wasm-util': 0.10.2
+    optional: true
+
+  '@napi-rs/wasm-runtime@1.1.5(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
+    dependencies:
+      '@emnapi/core': 1.10.0
+      '@emnapi/runtime': 1.10.0
+      '@tybys/wasm-util': 0.10.2
+    optional: true
+
+  '@napi-rs/wasm-runtime@1.1.5(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)':
+    dependencies:
+      '@emnapi/core': 1.11.1
+      '@emnapi/runtime': 1.11.1
+      '@tybys/wasm-util': 0.10.2
     optional: true
 
   '@node-rs/crc32-android-arm-eabi@1.10.6':
@@ -9039,7 +9162,7 @@ snapshots:
     dependencies:
       '@emnapi/core': 1.10.0
       '@emnapi/runtime': 1.10.0
-      '@napi-rs/wasm-runtime': 1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      '@napi-rs/wasm-runtime': 1.1.5(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
     optional: true
 
   '@oxc-parser/binding-win32-arm64-msvc@0.135.0':
@@ -9105,7 +9228,7 @@ snapshots:
     dependencies:
       '@emnapi/core': 1.10.0
       '@emnapi/runtime': 1.10.0
-      '@napi-rs/wasm-runtime': 1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      '@napi-rs/wasm-runtime': 1.1.5(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
     optional: true
 
   '@oxc-resolver/binding-win32-arm64-msvc@11.20.0':
@@ -9532,7 +9655,14 @@ snapshots:
     transitivePeerDependencies:
       - '@module-federation/runtime-tools'
 
-  '@rsbuild/plugin-babel@1.2.1(@rsbuild/core@2.0.15)':
+  '@rsbuild/core@2.1.0-beta.0':
+    dependencies:
+      '@rspack/core': 2.1.0-beta.0(@swc/helpers@0.5.23)
+      '@swc/helpers': 0.5.23
+    transitivePeerDependencies:
+      - '@module-federation/runtime-tools'
+
+  '@rsbuild/plugin-babel@1.2.1(@rsbuild/core@2.1.0-beta.0)':
     dependencies:
       '@babel/core': 7.29.0
       '@babel/plugin-proposal-decorators': 7.29.0(@babel/core@7.29.0)
@@ -9541,7 +9671,7 @@ snapshots:
       '@types/babel__core': 7.20.5
       reduce-configs: 1.1.2
     optionalDependencies:
-      '@rsbuild/core': 2.0.15
+      '@rsbuild/core': 2.1.0-beta.0
     transitivePeerDependencies:
       - supports-color
 
@@ -9555,19 +9685,19 @@ snapshots:
     optionalDependencies:
       '@rsbuild/core': 2.0.15
 
-  '@rsbuild/plugin-less@1.6.4(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)':
+  '@rsbuild/plugin-less@1.6.4(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)':
     dependencies:
       deepmerge: 4.3.1
       less: 4.6.4
       less-loader: 12.3.3(@rspack/core@2.0.8(@swc/helpers@0.5.23))(less@4.6.4)(webpack@5.107.2)
       reduce-configs: 1.1.2
     optionalDependencies:
-      '@rsbuild/core': 2.0.15
+      '@rsbuild/core': 2.1.0-beta.0
     transitivePeerDependencies:
       - '@rspack/core'
       - webpack
 
-  '@rsbuild/plugin-node-polyfill@1.4.6(@rsbuild/core@2.0.15)':
+  '@rsbuild/plugin-node-polyfill@1.4.6(@rsbuild/core@2.1.0-beta.0)':
     dependencies:
       assert: 2.1.0
       browserify-zlib: 0.2.0
@@ -9593,7 +9723,7 @@ snapshots:
       util: 0.12.5
       vm-browserify: 1.1.2
     optionalDependencies:
-      '@rsbuild/core': 2.0.15
+      '@rsbuild/core': 2.1.0-beta.0
 
   '@rsbuild/plugin-react@2.0.1(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))':
     dependencies:
@@ -9613,6 +9743,24 @@ snapshots:
     transitivePeerDependencies:
       - '@rspack/core'
 
+  '@rsbuild/plugin-react@2.1.0(@rsbuild/core@2.0.15)(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))':
+    dependencies:
+      '@rspack/plugin-react-refresh': 2.0.2(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))(react-refresh@0.18.0)
+      react-refresh: 0.18.0
+    optionalDependencies:
+      '@rsbuild/core': 2.0.15
+    transitivePeerDependencies:
+      - '@rspack/core'
+
+  '@rsbuild/plugin-react@2.1.0(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))':
+    dependencies:
+      '@rspack/plugin-react-refresh': 2.0.2(@rspack/core@2.0.8(@swc/helpers@0.5.23))(react-refresh@0.18.0)
+      react-refresh: 0.18.0
+    optionalDependencies:
+      '@rsbuild/core': 2.1.0-beta.0
+    transitivePeerDependencies:
+      - '@rspack/core'
+
   '@rsbuild/plugin-sass@1.5.3(@rsbuild/core@2.0.15)':
     dependencies:
       deepmerge: 4.3.1
@@ -9623,13 +9771,23 @@ snapshots:
     optionalDependencies:
       '@rsbuild/core': 2.0.15
 
-  '@rsbuild/plugin-svelte@2.0.0(@babel/core@7.29.0)(@rsbuild/core@2.0.15)(less@4.6.4)(postcss@8.5.15)(sass@1.100.0)(svelte@5.56.3)(typescript@6.0.3)':
+  '@rsbuild/plugin-sass@1.5.3(@rsbuild/core@2.1.0-beta.0)':
+    dependencies:
+      deepmerge: 4.3.1
+      loader-utils: 2.0.4
+      postcss: 8.5.15
+      reduce-configs: 1.1.2
+      sass-embedded: 1.100.0
+    optionalDependencies:
+      '@rsbuild/core': 2.1.0-beta.0
+
+  '@rsbuild/plugin-svelte@2.0.0(@babel/core@7.29.0)(@rsbuild/core@2.1.0-beta.0)(less@4.6.4)(postcss@8.5.15)(sass@1.100.0)(svelte@5.56.3)(typescript@6.0.3)':
     dependencies:
       svelte: 5.56.3
       svelte-loader: 3.2.4(svelte@5.56.3)
       svelte-preprocess: 6.0.5(@babel/core@7.29.0)(less@4.6.4)(postcss@8.5.15)(sass@1.100.0)(svelte@5.56.3)(typescript@6.0.3)
     optionalDependencies:
-      '@rsbuild/core': 2.0.15
+      '@rsbuild/core': 2.1.0-beta.0
     transitivePeerDependencies:
       - '@babel/core'
       - coffeescript
@@ -9642,37 +9800,37 @@ snapshots:
       - sugarss
       - typescript
 
-  '@rsbuild/plugin-svgr@2.0.4(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(typescript@6.0.3)':
+  '@rsbuild/plugin-svgr@2.0.4(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(typescript@6.0.3)':
     dependencies:
-      '@rsbuild/plugin-react': 2.1.0(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
+      '@rsbuild/plugin-react': 2.1.0(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))
       '@svgr/core': 8.1.0(typescript@6.0.3)
       '@svgr/plugin-jsx': 8.1.0(@svgr/core@8.1.0(typescript@6.0.3))
       '@svgr/plugin-svgo': 8.1.0(@svgr/core@8.1.0(typescript@6.0.3))(typescript@6.0.3)
       deepmerge: 4.3.1
       loader-utils: 3.3.1
     optionalDependencies:
-      '@rsbuild/core': 2.0.15
+      '@rsbuild/core': 2.1.0-beta.0
     transitivePeerDependencies:
       - '@rspack/core'
       - supports-color
       - typescript
 
-  '@rsbuild/plugin-vue-jsx@2.0.1(@babel/core@7.29.0)(@rsbuild/core@2.0.15)':
+  '@rsbuild/plugin-vue-jsx@2.0.1(@babel/core@7.29.0)(@rsbuild/core@2.1.0-beta.0)':
     dependencies:
-      '@rsbuild/plugin-babel': 1.2.1(@rsbuild/core@2.0.15)
+      '@rsbuild/plugin-babel': 1.2.1(@rsbuild/core@2.1.0-beta.0)
       '@vue/babel-plugin-jsx': 2.0.1(@babel/core@7.29.0)
       babel-plugin-vue-jsx-hmr: 1.0.0
     optionalDependencies:
-      '@rsbuild/core': 2.0.15
+      '@rsbuild/core': 2.1.0-beta.0
     transitivePeerDependencies:
       - '@babel/core'
       - supports-color
 
-  '@rsbuild/plugin-vue@1.2.9(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(vue@3.5.38(typescript@6.0.3))':
+  '@rsbuild/plugin-vue@1.2.9(@rsbuild/core@2.1.0-beta.0)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(vue@3.5.38(typescript@6.0.3))':
     dependencies:
       rspack-vue-loader: 17.5.0(@rspack/core@2.0.8(@swc/helpers@0.5.23))(vue@3.5.38(typescript@6.0.3))
     optionalDependencies:
-      '@rsbuild/core': 2.0.15
+      '@rsbuild/core': 2.1.0-beta.0
     transitivePeerDependencies:
       - '@rspack/core'
       - '@vue/compiler-sfc'
@@ -9680,14 +9838,14 @@ snapshots:
 
   '@rsdoctor/client@1.5.15': {}
 
-  '@rsdoctor/core@1.5.15(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)':
+  '@rsdoctor/core@1.5.15(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)':
     dependencies:
       '@rsbuild/plugin-check-syntax': 1.6.1(@rsbuild/core@2.0.15)
       '@rsdoctor/graph': 1.5.15(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)
       '@rsdoctor/sdk': 1.5.15(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)
       '@rsdoctor/types': 1.5.15(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)
       '@rsdoctor/utils': 1.5.15(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)
-      '@rspack/resolver': 0.2.8(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      '@rspack/resolver': 0.2.8(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)
       browserslist-load-config: 1.0.3
       es-toolkit: 1.47.1
       filesize: 11.0.17
@@ -9715,9 +9873,9 @@ snapshots:
       - '@rspack/core'
       - webpack
 
-  '@rsdoctor/rspack-plugin@1.5.15(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)':
+  '@rsdoctor/rspack-plugin@1.5.15(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)':
     dependencies:
-      '@rsdoctor/core': 1.5.15(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)
+      '@rsdoctor/core': 1.5.15(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)(@rsbuild/core@2.0.15)(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)
       '@rsdoctor/graph': 1.5.15(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)
       '@rsdoctor/sdk': 1.5.15(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)
       '@rsdoctor/types': 1.5.15(@rspack/core@2.0.8(@swc/helpers@0.5.23))(webpack@5.107.2)
@@ -9834,19 +9992,37 @@ snapshots:
   '@rspack/binding-darwin-arm64@2.0.8':
     optional: true
 
+  '@rspack/binding-darwin-arm64@2.1.0-beta.0':
+    optional: true
+
   '@rspack/binding-darwin-x64@2.0.8':
+    optional: true
+
+  '@rspack/binding-darwin-x64@2.1.0-beta.0':
     optional: true
 
   '@rspack/binding-linux-arm64-gnu@2.0.8':
     optional: true
 
+  '@rspack/binding-linux-arm64-gnu@2.1.0-beta.0':
+    optional: true
+
   '@rspack/binding-linux-arm64-musl@2.0.8':
+    optional: true
+
+  '@rspack/binding-linux-arm64-musl@2.1.0-beta.0':
     optional: true
 
   '@rspack/binding-linux-x64-gnu@2.0.8':
     optional: true
 
+  '@rspack/binding-linux-x64-gnu@2.1.0-beta.0':
+    optional: true
+
   '@rspack/binding-linux-x64-musl@2.0.8':
+    optional: true
+
+  '@rspack/binding-linux-x64-musl@2.1.0-beta.0':
     optional: true
 
   '@rspack/binding-wasm32-wasi@2.0.8':
@@ -9856,13 +10032,29 @@ snapshots:
       '@napi-rs/wasm-runtime': 1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
     optional: true
 
+  '@rspack/binding-wasm32-wasi@2.1.0-beta.0':
+    dependencies:
+      '@emnapi/core': 1.11.1
+      '@emnapi/runtime': 1.11.1
+      '@napi-rs/wasm-runtime': 1.1.5(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)
+    optional: true
+
   '@rspack/binding-win32-arm64-msvc@2.0.8':
+    optional: true
+
+  '@rspack/binding-win32-arm64-msvc@2.1.0-beta.0':
     optional: true
 
   '@rspack/binding-win32-ia32-msvc@2.0.8':
     optional: true
 
+  '@rspack/binding-win32-ia32-msvc@2.1.0-beta.0':
+    optional: true
+
   '@rspack/binding-win32-x64-msvc@2.0.8':
+    optional: true
+
+  '@rspack/binding-win32-x64-msvc@2.1.0-beta.0':
     optional: true
 
   '@rspack/binding@2.0.8':
@@ -9878,11 +10070,24 @@ snapshots:
       '@rspack/binding-win32-ia32-msvc': 2.0.8
       '@rspack/binding-win32-x64-msvc': 2.0.8
 
-  '@rspack/cli@2.0.8(@rspack/core@2.0.8(@swc/helpers@0.5.23))(@rspack/dev-server@2.0.3(@rspack/core@2.0.8(@swc/helpers@0.5.23)))':
-    dependencies:
-      '@rspack/core': 2.0.8(@swc/helpers@0.5.23)
+  '@rspack/binding@2.1.0-beta.0':
     optionalDependencies:
-      '@rspack/dev-server': 2.0.3(@rspack/core@2.0.8(@swc/helpers@0.5.23))
+      '@rspack/binding-darwin-arm64': 2.1.0-beta.0
+      '@rspack/binding-darwin-x64': 2.1.0-beta.0
+      '@rspack/binding-linux-arm64-gnu': 2.1.0-beta.0
+      '@rspack/binding-linux-arm64-musl': 2.1.0-beta.0
+      '@rspack/binding-linux-x64-gnu': 2.1.0-beta.0
+      '@rspack/binding-linux-x64-musl': 2.1.0-beta.0
+      '@rspack/binding-wasm32-wasi': 2.1.0-beta.0
+      '@rspack/binding-win32-arm64-msvc': 2.1.0-beta.0
+      '@rspack/binding-win32-ia32-msvc': 2.1.0-beta.0
+      '@rspack/binding-win32-x64-msvc': 2.1.0-beta.0
+
+  '@rspack/cli@2.1.0-beta.0(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))(@rspack/dev-server@2.1.0(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23)))':
+    dependencies:
+      '@rspack/core': 2.1.0-beta.0(@swc/helpers@0.5.23)
+    optionalDependencies:
+      '@rspack/dev-server': 2.1.0(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))
 
   '@rspack/core@2.0.8(@swc/helpers@0.5.23)':
     dependencies:
@@ -9890,14 +10095,20 @@ snapshots:
     optionalDependencies:
       '@swc/helpers': 0.5.23
 
-  '@rspack/dev-middleware@2.0.1(@rspack/core@2.0.8(@swc/helpers@0.5.23))':
-    optionalDependencies:
-      '@rspack/core': 2.0.8(@swc/helpers@0.5.23)
-
-  '@rspack/dev-server@2.0.3(@rspack/core@2.0.8(@swc/helpers@0.5.23))':
+  '@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23)':
     dependencies:
-      '@rspack/core': 2.0.8(@swc/helpers@0.5.23)
-      '@rspack/dev-middleware': 2.0.1(@rspack/core@2.0.8(@swc/helpers@0.5.23))
+      '@rspack/binding': 2.1.0-beta.0
+    optionalDependencies:
+      '@swc/helpers': 0.5.23
+
+  '@rspack/dev-middleware@2.0.3(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))':
+    optionalDependencies:
+      '@rspack/core': 2.1.0-beta.0(@swc/helpers@0.5.23)
+
+  '@rspack/dev-server@2.1.0(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))':
+    dependencies:
+      '@rspack/core': 2.1.0-beta.0(@swc/helpers@0.5.23)
+      '@rspack/dev-middleware': 2.0.3(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))
 
   '@rspack/lite-tapable@1.1.0': {}
 
@@ -9912,6 +10123,12 @@ snapshots:
       react-refresh: 0.18.0
     optionalDependencies:
       '@rspack/core': 2.0.8(@swc/helpers@0.5.23)
+
+  '@rspack/plugin-react-refresh@2.0.2(@rspack/core@2.1.0-beta.0(@swc/helpers@0.5.23))(react-refresh@0.18.0)':
+    dependencies:
+      react-refresh: 0.18.0
+    optionalDependencies:
+      '@rspack/core': 2.1.0-beta.0(@swc/helpers@0.5.23)
 
   '@rspack/resolver-binding-darwin-arm64@0.2.8':
     optional: true
@@ -9931,9 +10148,9 @@ snapshots:
   '@rspack/resolver-binding-linux-x64-musl@0.2.8':
     optional: true
 
-  '@rspack/resolver-binding-wasm32-wasi@0.2.8(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
+  '@rspack/resolver-binding-wasm32-wasi@0.2.8(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)':
     dependencies:
-      '@napi-rs/wasm-runtime': 1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      '@napi-rs/wasm-runtime': 1.1.5(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)
     transitivePeerDependencies:
       - '@emnapi/core'
       - '@emnapi/runtime'
@@ -9948,7 +10165,7 @@ snapshots:
   '@rspack/resolver-binding-win32-x64-msvc@0.2.8':
     optional: true
 
-  '@rspack/resolver@0.2.8(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
+  '@rspack/resolver@0.2.8(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)':
     optionalDependencies:
       '@rspack/resolver-binding-darwin-arm64': 0.2.8
       '@rspack/resolver-binding-darwin-x64': 0.2.8
@@ -9956,7 +10173,7 @@ snapshots:
       '@rspack/resolver-binding-linux-arm64-musl': 0.2.8
       '@rspack/resolver-binding-linux-x64-gnu': 0.2.8
       '@rspack/resolver-binding-linux-x64-musl': 0.2.8
-      '@rspack/resolver-binding-wasm32-wasi': 0.2.8(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      '@rspack/resolver-binding-wasm32-wasi': 0.2.8(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)
       '@rspack/resolver-binding-win32-arm64-msvc': 0.2.8
       '@rspack/resolver-binding-win32-ia32-msvc': 0.2.8
       '@rspack/resolver-binding-win32-x64-msvc': 0.2.8
@@ -10510,7 +10727,7 @@ snapshots:
     dependencies:
       '@textlint/ast-node-types': 15.2.2
 
-  '@tybys/wasm-util@0.10.1':
+  '@tybys/wasm-util@0.10.2':
     dependencies:
       tslib: 2.8.1
     optional: true
@@ -10699,8 +10916,8 @@ snapshots:
 
   '@typespec/ts-http-runtime@0.3.0':
     dependencies:
-      http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
+      http-proxy-agent: 7.0.2(supports-color@8.1.1)
+      https-proxy-agent: 7.0.6(supports-color@8.1.1)
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
@@ -10754,10 +10971,10 @@ snapshots:
     transitivePeerDependencies:
       - monocart-coverage-reports
 
-  '@vscode/test-electron@2.5.2':
+  '@vscode/test-electron@2.5.2(supports-color@8.1.1)':
     dependencies:
-      http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
+      http-proxy-agent: 7.0.2(supports-color@8.1.1)
+      https-proxy-agent: 7.0.6(supports-color@8.1.1)
       jszip: 3.10.1
       ora: 8.2.0
       semver: 7.8.5
@@ -10803,7 +11020,7 @@ snapshots:
       '@vscode/vsce-sign-win32-arm64': 2.0.5
       '@vscode/vsce-sign-win32-x64': 2.0.5
 
-  '@vscode/vsce@3.9.2':
+  '@vscode/vsce@3.9.2(supports-color@8.1.1)':
     dependencies:
       '@azure/identity': 4.12.0
       '@secretlint/node': 10.2.2
@@ -10826,7 +11043,7 @@ snapshots:
       minimatch: 10.2.3
       parse-semver: 1.1.1
       read: 1.0.7
-      secretlint: 10.2.2
+      secretlint: 10.2.2(supports-color@8.1.1)
       semver: 7.8.5
       tmp: 0.2.3
       typed-rest-client: 1.8.11
@@ -12486,7 +12703,7 @@ snapshots:
       domutils: 3.2.2
       entities: 6.0.1
 
-  http-proxy-agent@7.0.2:
+  http-proxy-agent@7.0.2(supports-color@8.1.1):
     dependencies:
       agent-base: 7.1.3
       debug: 4.4.3(supports-color@8.1.1)
@@ -12502,7 +12719,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  https-proxy-agent@7.0.6:
+  https-proxy-agent@7.0.6(supports-color@8.1.1):
     dependencies:
       agent-base: 7.1.3
       debug: 4.4.3(supports-color@8.1.1)
@@ -12681,7 +12898,7 @@ snapshots:
       make-dir: 4.0.0
       supports-color: 7.2.0
 
-  istanbul-lib-source-maps@5.0.6:
+  istanbul-lib-source-maps@5.0.6(supports-color@8.1.1):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       debug: 4.4.3(supports-color@8.1.1)
@@ -13854,7 +14071,7 @@ snapshots:
 
   ovsx@1.0.1:
     dependencies:
-      '@vscode/vsce': 3.9.2
+      '@vscode/vsce': 3.9.2(supports-color@8.1.1)
       commander: 6.2.1
       follow-redirects: 1.16.0
       is-ci: 2.0.0
@@ -14663,7 +14880,7 @@ snapshots:
     dependencies:
       compute-scroll-into-view: 3.1.1
 
-  secretlint@10.2.2:
+  secretlint@10.2.2(supports-color@8.1.1):
     dependencies:
       '@secretlint/config-creator': 10.2.2
       '@secretlint/formatter': 10.2.2

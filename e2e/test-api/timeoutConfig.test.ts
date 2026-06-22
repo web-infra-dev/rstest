@@ -19,7 +19,7 @@ describe('Test timeout configuration', () => {
 
     // The timeout set by the API is higher than the global configuration item
     expectStderrLog('Error: test timed out in 50ms');
-    expectStderrLog('timeout.test.ts:5:3');
+    expectStderrLog('timeout.test.ts:5:5');
     expectLog('Tests 1 failed | 1 passed');
   });
 });
