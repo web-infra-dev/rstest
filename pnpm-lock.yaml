@@ -1360,8 +1360,8 @@ importers:
         specifier: ^11.7.6
         version: 11.7.6
       ovsx:
-        specifier: ^0.10.12
-        version: 0.10.12
+        specifier: ^1.0.1
+        version: 1.0.1
       picomatch:
         specifier: ^4.0.4
         version: 4.0.4
@@ -6380,8 +6380,8 @@ packages:
   os-browserify@0.3.0:
     resolution: {integrity: sha512-gjcpUc3clBf9+210TRaDWbf+rZZZEshZ+DlXMRCeAjp0xhTrnQsKHypIy1J3d5hKdUzj69t708EHtU8P6bUn0A==}
 
-  ovsx@0.10.12:
-    resolution: {integrity: sha512-WwMj1iQDvCk02029oxPnkFXsPrHZ+WzmoNW5pJ8JGepHtL30i2JE4s3C3wqzQqj6a35vx2hp0gV3TdfefGmvMg==}
+  ovsx@1.0.1:
+    resolution: {integrity: sha512-dNIVv/33z/wURvH1wAw2PRicVM5CdQB3BRL3WhEeFEFMDUkKoujlBPpqMr/meIpf4xDYUEfRwFRBiDzs38vQvw==}
     engines: {node: '>= 20'}
     hasBin: true
 
@@ -13850,7 +13850,7 @@ snapshots:
 
   os-browserify@0.3.0: {}
 
-  ovsx@0.10.12:
+  ovsx@1.0.1:
     dependencies:
       '@vscode/vsce': 3.9.2
       commander: 6.2.1
