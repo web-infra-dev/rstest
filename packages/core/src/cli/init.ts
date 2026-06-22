@@ -17,6 +17,7 @@ import {
   filterProjects,
   formatRootStr,
   getAbsolutePath,
+  logger,
 } from '../utils';
 
 export type CommonOptions = {
@@ -188,6 +189,16 @@ export function mergeWithCLIOptions(
     config.reporters = castArray(options.reporters) as typeof config.reporters;
   }
 
+  // `shard` is CLI-only (`--shard`). Discard any value carried by the loaded
+  // config so sharding can never take effect without the flag, then populate
+  // it solely from the CLI option below.
+  if (config.shard) {
+    logger.warn(
+      'The `shard` config field is no longer supported and is ignored. Use the `--shard <index>/<count>` CLI flag instead.',
+    );
+    config.shard = undefined;
+  }
+
   if (options.shard) {
     const [index, count] = options.shard.split('/').map(Number);
     if (
@@ -202,8 +213,6 @@ export function mergeWithCLIOptions(
         `Invalid shard option: ${options.shard}. It must be in the format of <index>/<count> and 1-based.`,
       );
     }
-    // `shard` is injected from the `--shard` CLI flag onto the resolved
-    // config; it is deliberately absent from the public `RstestConfig` type.
     config.shard = {
       index,
       count,
