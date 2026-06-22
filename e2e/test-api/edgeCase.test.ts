@@ -40,6 +40,26 @@ describe('Test Edge Cases', () => {
     expectStderrLog('Unknown Error: aaaa');
   });
 
+  it('should show fullStack when filtered stack is empty', async () => {
+    const { cli, expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/fullStackFallback.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecFailed();
+
+    expectStderrLog(
+      "No user error stack found, showing fullStack. Set 'DEBUG=rstest' to always show fullStack.",
+    );
+    expect(cli.stderr).not.toContain('nativeFrame');
+    expectStderrLog('at fallbackFrame (node:internal/rstest_fallback:10:5)');
+    expectStderrLog('at hiddenFrame (node:internal/rstest_hidden:20:6)');
+  });
+
   it('test module not found', async () => {
     // Module not found errors should be silent at build time, and throw errors at runtime
     const { cli, expectExecSuccess } = await runRstestCli({
