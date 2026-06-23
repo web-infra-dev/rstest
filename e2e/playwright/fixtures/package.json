@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "devDependencies": {
-    "@rsbuild/core": "~2.0.14",
+    "@rsbuild/core": "~2.1.0-beta.0",
     "@rstest/core": "workspace:*",
     "@rstest/playwright": "workspace:*",
-    "playwright": "^1.60.0"
+    "playwright": "^1.61.0"
   }
 }

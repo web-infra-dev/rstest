@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { expect as rstestExpect } from '@rstest/core';
 import type { Assertion, ExpectStatic } from '@rstest/core';
 import type { Locator, Page } from 'playwright';
@@ -141,14 +142,8 @@ const matchesText = (
     : normalizedActual.includes(normalizedExpected);
 };
 
-const matchesValue = (actual: unknown, expected: unknown) => {
-  try {
-    rstestExpect(actual).toEqual(expected);
-    return true;
-  } catch {
-    return false;
-  }
-};
+const matchesValue = (actual: unknown, expected: unknown) =>
+  isDeepStrictEqual(actual, expected);
 
 const getLocatorTextContent = async (locator: Locator) => {
   const texts = await getLocatorTextContents(locator);
@@ -178,7 +173,7 @@ const getLocatorTextContents = (locator: Locator) =>
     return elements.map((element) => getDeepTextContent(element));
   });
 
-const assertExpectation = (
+const getAssertionError = (
   pass: boolean,
   isNot: boolean,
   defaultMessage: string,
@@ -188,10 +183,65 @@ const assertExpectation = (
   if (!shouldThrow) {
     return;
   }
-  throw new Error(
+
+  return new Error(
     customMessage ? `${customMessage}\n${defaultMessage}` : defaultMessage,
   );
 };
+
+const assertExpectation = (
+  pass: boolean,
+  isNot: boolean,
+  defaultMessage: string,
+  customMessage?: string,
+) => {
+  const error = getAssertionError(pass, isNot, defaultMessage, customMessage);
+  if (error) {
+    throw error;
+  }
+};
+
+const recordSoftFailure = (error: unknown, message?: string) => {
+  const state = rstestExpect.getState();
+  const assertionCalls = state.assertionCalls;
+  const normalizedError =
+    error instanceof Error ? error : new Error(String(error));
+
+  try {
+    rstestExpect
+      .soft(() => {
+        throw normalizedError;
+      }, message)
+      .not.toThrow();
+  } finally {
+    rstestExpect.setState({ assertionCalls });
+  }
+};
+
+const runPlaywrightAssertion = async (
+  check: () => Promise<void>,
+  soft: boolean,
+  message?: string,
+) => {
+  try {
+    await check();
+  } catch (error) {
+    if (!soft) {
+      throw error;
+    }
+
+    recordSoftFailure(error, message);
+  }
+};
+
+const createPlaywrightMatcher =
+  (soft: boolean, message: string | undefined) =>
+  (check: () => Promise<void>, options?: MatcherOptions) =>
+    runPlaywrightAssertion(
+      () => waitForExpectation(check, options),
+      soft,
+      message,
+    );
 
 const waitForExpectation = async (
   check: () => Promise<void>,
@@ -220,318 +270,335 @@ const waitForExpectation = async (
 const createLocatorAssertions = (
   locator: Locator,
   isNot: boolean,
+  soft: boolean,
   message?: string,
-): LocatorAssertions => ({
-  get not() {
-    return createLocatorAssertions(locator, !isNot, message);
-  },
+): LocatorAssertions => {
+  const assert = createPlaywrightMatcher(soft, message);
 
-  async toBeVisible(options) {
-    await waitForExpectation(async () => {
-      const pass = await locator.isVisible();
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to be visible.`,
-        message,
-      );
-    }, options);
-  },
+  return {
+    get not() {
+      return createLocatorAssertions(locator, !isNot, soft, message);
+    },
 
-  async toBeHidden(options) {
-    await waitForExpectation(async () => {
-      const pass = await locator.isHidden();
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to be hidden.`,
-        message,
-      );
-    }, options);
-  },
-
-  async toBeEnabled(options) {
-    await waitForExpectation(async () => {
-      const pass = await locator.isEnabled();
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to be enabled.`,
-        message,
-      );
-    }, options);
-  },
-
-  async toBeDisabled(options) {
-    await waitForExpectation(async () => {
-      const pass = await locator.isDisabled();
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to be disabled.`,
-        message,
-      );
-    }, options);
-  },
-
-  async toBeChecked(options) {
-    await waitForExpectation(async () => {
-      const pass = await locator.isChecked();
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to be checked.`,
-        message,
-      );
-    }, options);
-  },
-
-  async toBeUnchecked(options) {
-    await waitForExpectation(async () => {
-      const pass = !(await locator.isChecked());
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to be unchecked.`,
-        message,
-      );
-    }, options);
-  },
-
-  async toBeAttached(options) {
-    await waitForExpectation(async () => {
-      const count = await locator.count();
-      const pass = count > 0;
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to be attached, received count ${count}.`,
-        message,
-      );
-    }, options);
-  },
-
-  async toBeDetached(options) {
-    await waitForExpectation(async () => {
-      const count = await locator.count();
-      const pass = count === 0;
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to be detached, received count ${count}.`,
-        message,
-      );
-    }, options);
-  },
-
-  async toBeEditable(options) {
-    await waitForExpectation(async () => {
-      const pass = await locator.isEditable();
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to be editable.`,
-        message,
-      );
-    }, options);
-  },
-
-  async toBeFocused(options) {
-    await waitForExpectation(async () => {
-      const pass = await locator.evaluate(
-        (element) => element.ownerDocument.activeElement === element,
-      );
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to be focused.`,
-        message,
-      );
-    }, options);
-  },
-
-  async toBeEmpty(options) {
-    await waitForExpectation(async () => {
-      const pass = await locator.evaluate((element) => {
-        if (
-          typeof HTMLInputElement !== 'undefined' &&
-          element instanceof HTMLInputElement
-        ) {
-          return element.value === '';
-        }
-        if (
-          typeof HTMLTextAreaElement !== 'undefined' &&
-          element instanceof HTMLTextAreaElement
-        ) {
-          return element.value === '';
-        }
-        return (
-          element.children.length === 0 && (element.textContent ?? '') === ''
+    async toBeVisible(options) {
+      await assert(async () => {
+        const pass = await locator.isVisible();
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to be visible.`,
+          message,
         );
-      });
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to be empty.`,
-        message,
-      );
-    }, options);
-  },
+      }, options);
+    },
 
-  async toBeInViewport(options) {
-    await waitForExpectation(async () => {
-      const actualRatio = await locator.evaluate((element) => {
-        const rect = element.getBoundingClientRect();
-        const viewportWidth = globalThis.innerWidth;
-        const viewportHeight = globalThis.innerHeight;
-        const visibleWidth = Math.max(
-          0,
-          Math.min(rect.right, viewportWidth) - Math.max(rect.left, 0),
+    async toBeHidden(options) {
+      await assert(async () => {
+        const pass = await locator.isHidden();
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to be hidden.`,
+          message,
         );
-        const visibleHeight = Math.max(
-          0,
-          Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0),
+      }, options);
+    },
+
+    async toBeEnabled(options) {
+      await assert(async () => {
+        const pass = await locator.isEnabled();
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to be enabled.`,
+          message,
         );
-        const area = rect.width * rect.height;
-        return area > 0 ? (visibleWidth * visibleHeight) / area : 0;
-      });
-      const expectedRatio = options?.ratio ?? Number.MIN_VALUE;
-      const pass = actualRatio >= expectedRatio;
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to be in viewport, received ratio ${actualRatio}.`,
-        message,
-      );
-    }, options);
-  },
+      }, options);
+    },
 
-  async toContainText(expected, options) {
-    await waitForExpectation(async () => {
-      const actual = await getLocatorTextContent(locator);
-      const pass = matchesText(actual, expected, 'contain');
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to contain text ${formatValue(
-          expected,
-        )}, received ${formatValue(actual)}.`,
-        message,
-      );
-    }, options);
-  },
+    async toBeDisabled(options) {
+      await assert(async () => {
+        const pass = await locator.isDisabled();
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to be disabled.`,
+          message,
+        );
+      }, options);
+    },
 
-  async toHaveAttribute(name, expected, options) {
-    await waitForExpectation(async () => {
-      const actual = await locator.getAttribute(name);
-      const pass =
-        expected === undefined
-          ? actual !== null
-          : actual !== null && matchesText(actual, expected, 'exact');
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to have attribute ${name}${
-          expected === undefined ? '' : ` ${formatValue(expected)}`
-        }, received ${formatValue(actual)}.`,
-        message,
-      );
-    }, options);
-  },
+    async toBeChecked(options) {
+      await assert(async () => {
+        const pass = await locator.isChecked();
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to be checked.`,
+          message,
+        );
+      }, options);
+    },
 
-  async toHaveClass(expected, options) {
-    await waitForExpectation(async () => {
-      const actual = (await locator.getAttribute('class')) ?? '';
-      const pass = matchesText(actual, expected, 'exact');
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to have class ${formatValue(
-          expected,
-        )}, received ${formatValue(actual)}.`,
-        message,
-      );
-    }, options);
-  },
+    async toBeUnchecked(options) {
+      await assert(async () => {
+        const pass = !(await locator.isChecked());
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to be unchecked.`,
+          message,
+        );
+      }, options);
+    },
 
-  async toHaveCSS(propertyName, expected, options) {
-    await waitForExpectation(async () => {
-      const actual = await locator.evaluate(
-        (element, property) =>
-          getComputedStyle(element).getPropertyValue(property),
-        propertyName,
-      );
-      const pass = matchesText(actual, expected, 'exact');
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to have CSS ${propertyName}: ${formatValue(
-          expected,
-        )}, received ${formatValue(actual)}.`,
-        message,
-      );
-    }, options);
-  },
+    async toBeAttached(options) {
+      await assert(async () => {
+        const count = await locator.count();
+        const pass = count > 0;
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to be attached, received count ${count}.`,
+          message,
+        );
+      }, options);
+    },
 
-  async toHaveCount(expected, options) {
-    await waitForExpectation(async () => {
-      const actual = await locator.count();
-      const pass = actual === expected;
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to have count ${expected}, received ${actual}.`,
-        message,
-      );
-    }, options);
-  },
+    async toBeDetached(options) {
+      await assert(async () => {
+        const count = await locator.count();
+        const pass = count === 0;
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to be detached, received count ${count}.`,
+          message,
+        );
+      }, options);
+    },
 
-  async toHaveId(expected, options) {
-    await waitForExpectation(async () => {
-      const actual = (await locator.getAttribute('id')) ?? '';
-      const pass = matchesText(actual, expected, 'exact');
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to have id ${formatValue(
-          expected,
-        )}, received ${formatValue(actual)}.`,
-        message,
-      );
-    }, options);
-  },
+    async toBeEditable(options) {
+      await assert(async () => {
+        const pass = await locator.isEditable();
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to be editable.`,
+          message,
+        );
+      }, options);
+    },
 
-  async toHaveJSProperty(name, expected, options) {
-    await waitForExpectation(async () => {
-      const actual = await locator.evaluate(
-        (element, propertyName) =>
-          (element as unknown as Record<string, unknown>)[propertyName],
-        name,
-      );
-      const pass = matchesValue(actual, expected);
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to have JS property ${name}: ${formatValue(
-          expected,
-        )}, received ${formatValue(actual)}.`,
-        message,
-      );
-    }, options);
-  },
+    async toBeFocused(options) {
+      await assert(async () => {
+        const pass = await locator.evaluate(
+          (element) => element.ownerDocument.activeElement === element,
+        );
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to be focused.`,
+          message,
+        );
+      }, options);
+    },
 
-  async toHaveText(expected, options) {
-    await waitForExpectation(async () => {
-      if (Array.isArray(expected)) {
-        const actual = await getLocatorTextContents(locator);
+    async toBeEmpty(options) {
+      await assert(async () => {
+        const pass = await locator.evaluate((element) => {
+          if (
+            typeof HTMLInputElement !== 'undefined' &&
+            element instanceof HTMLInputElement
+          ) {
+            return element.value === '';
+          }
+          if (
+            typeof HTMLTextAreaElement !== 'undefined' &&
+            element instanceof HTMLTextAreaElement
+          ) {
+            return element.value === '';
+          }
+          return (
+            element.children.length === 0 && (element.textContent ?? '') === ''
+          );
+        });
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to be empty.`,
+          message,
+        );
+      }, options);
+    },
+
+    async toBeInViewport(options) {
+      await assert(async () => {
+        const actualRatio = await locator.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          const viewportWidth = globalThis.innerWidth;
+          const viewportHeight = globalThis.innerHeight;
+          const visibleWidth = Math.max(
+            0,
+            Math.min(rect.right, viewportWidth) - Math.max(rect.left, 0),
+          );
+          const visibleHeight = Math.max(
+            0,
+            Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0),
+          );
+          const area = rect.width * rect.height;
+          return area > 0 ? (visibleWidth * visibleHeight) / area : 0;
+        });
+        const expectedRatio = options?.ratio ?? Number.MIN_VALUE;
+        const pass = actualRatio >= expectedRatio;
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to be in viewport, received ratio ${actualRatio}.`,
+          message,
+        );
+      }, options);
+    },
+
+    async toContainText(expected, options) {
+      await assert(async () => {
+        const actual = await getLocatorTextContent(locator);
+        const pass = matchesText(actual, expected, 'contain');
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to contain text ${formatValue(
+            expected,
+          )}, received ${formatValue(actual)}.`,
+          message,
+        );
+      }, options);
+    },
+
+    async toHaveAttribute(name, expected, options) {
+      await assert(async () => {
+        const actual = await locator.getAttribute(name);
         const pass =
-          actual.length === expected.length &&
-          actual.every((item, index) => {
-            const expectedItem = expected[index];
-            return expectedItem !== undefined
-              ? matchesText(item, expectedItem, 'exact')
-              : false;
-          });
+          expected === undefined
+            ? actual !== null
+            : actual !== null && matchesText(actual, expected, 'exact');
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to have attribute ${name}${
+            expected === undefined ? '' : ` ${formatValue(expected)}`
+          }, received ${formatValue(actual)}.`,
+          message,
+        );
+      }, options);
+    },
+
+    async toHaveClass(expected, options) {
+      await assert(async () => {
+        const actual = (await locator.getAttribute('class')) ?? '';
+        const pass = matchesText(actual, expected, 'exact');
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to have class ${formatValue(
+            expected,
+          )}, received ${formatValue(actual)}.`,
+          message,
+        );
+      }, options);
+    },
+
+    async toHaveCSS(propertyName, expected, options) {
+      await assert(async () => {
+        const actual = await locator.evaluate(
+          (element, property) =>
+            getComputedStyle(element).getPropertyValue(property),
+          propertyName,
+        );
+        const pass = matchesText(actual, expected, 'exact');
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to have CSS ${propertyName}: ${formatValue(
+            expected,
+          )}, received ${formatValue(actual)}.`,
+          message,
+        );
+      }, options);
+    },
+
+    async toHaveCount(expected, options) {
+      await assert(async () => {
+        const actual = await locator.count();
+        const pass = actual === expected;
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to have count ${expected}, received ${actual}.`,
+          message,
+        );
+      }, options);
+    },
+
+    async toHaveId(expected, options) {
+      await assert(async () => {
+        const actual = (await locator.getAttribute('id')) ?? '';
+        const pass = matchesText(actual, expected, 'exact');
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to have id ${formatValue(
+            expected,
+          )}, received ${formatValue(actual)}.`,
+          message,
+        );
+      }, options);
+    },
+
+    async toHaveJSProperty(name, expected, options) {
+      await assert(async () => {
+        const actual = await locator.evaluate(
+          (element, propertyName) =>
+            (element as unknown as Record<string, unknown>)[propertyName],
+          name,
+        );
+        const pass = matchesValue(actual, expected);
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to have JS property ${name}: ${formatValue(
+            expected,
+          )}, received ${formatValue(actual)}.`,
+          message,
+        );
+      }, options);
+    },
+
+    async toHaveText(expected, options) {
+      await assert(async () => {
+        if (Array.isArray(expected)) {
+          const actual = await getLocatorTextContents(locator);
+          const pass =
+            actual.length === expected.length &&
+            actual.every((item, index) => {
+              const expectedItem = expected[index];
+              return expectedItem !== undefined
+                ? matchesText(item, expectedItem, 'exact')
+                : false;
+            });
+          assertExpectation(
+            pass,
+            isNot,
+            `Expected locator ${isNot ? 'not ' : ''}to have text ${formatValue(
+              expected,
+            )}, received ${formatValue(actual)}.`,
+            message,
+          );
+          return;
+        }
+
+        const actual = await getLocatorTextContent(locator);
+        const pass = matchesText(actual, expected, 'exact');
         assertExpectation(
           pass,
           isNot,
@@ -540,88 +607,82 @@ const createLocatorAssertions = (
           )}, received ${formatValue(actual)}.`,
           message,
         );
-        return;
-      }
+      }, options);
+    },
 
-      const actual = await getLocatorTextContent(locator);
-      const pass = matchesText(actual, expected, 'exact');
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to have text ${formatValue(
-          expected,
-        )}, received ${formatValue(actual)}.`,
-        message,
-      );
-    }, options);
-  },
-
-  async toHaveValue(expected, options) {
-    await waitForExpectation(async () => {
-      const actual = await locator.inputValue();
-      const pass = matchesText(actual, expected, 'exact');
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected locator ${isNot ? 'not ' : ''}to have value ${formatValue(
-          expected,
-        )}, received ${formatValue(actual)}.`,
-        message,
-      );
-    }, options);
-  },
-});
+    async toHaveValue(expected, options) {
+      await assert(async () => {
+        const actual = await locator.inputValue();
+        const pass = matchesText(actual, expected, 'exact');
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected locator ${isNot ? 'not ' : ''}to have value ${formatValue(
+            expected,
+          )}, received ${formatValue(actual)}.`,
+          message,
+        );
+      }, options);
+    },
+  };
+};
 
 const createPageAssertions = (
   page: Page,
   isNot: boolean,
+  soft: boolean,
   message?: string,
-): PageAssertions => ({
-  get not() {
-    return createPageAssertions(page, !isNot, message);
-  },
+): PageAssertions => {
+  const assert = createPlaywrightMatcher(soft, message);
 
-  async toHaveTitle(expected, options) {
-    await waitForExpectation(async () => {
-      const actual = await page.title();
-      const pass = matchesText(actual, expected, 'exact');
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected page ${isNot ? 'not ' : ''}to have title ${formatValue(
-          expected,
-        )}, received ${formatValue(actual)}.`,
-        message,
-      );
-    }, options);
-  },
+  return {
+    get not() {
+      return createPageAssertions(page, !isNot, soft, message);
+    },
 
-  async toHaveURL(expected, options) {
-    await waitForExpectation(async () => {
-      const actual = page.url();
-      const pass = matchesText(actual, expected, 'exact');
-      assertExpectation(
-        pass,
-        isNot,
-        `Expected page ${isNot ? 'not ' : ''}to have URL ${formatValue(
-          expected,
-        )}, received ${formatValue(actual)}.`,
-        message,
-      );
-    }, options);
-  },
-});
+    async toHaveTitle(expected, options) {
+      await assert(async () => {
+        const actual = await page.title();
+        const pass = matchesText(actual, expected, 'exact');
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected page ${isNot ? 'not ' : ''}to have title ${formatValue(
+            expected,
+          )}, received ${formatValue(actual)}.`,
+          message,
+        );
+      }, options);
+    },
+
+    async toHaveURL(expected, options) {
+      await assert(async () => {
+        const actual = page.url();
+        const pass = matchesText(actual, expected, 'exact');
+        assertExpectation(
+          pass,
+          isNot,
+          `Expected page ${isNot ? 'not ' : ''}to have URL ${formatValue(
+            expected,
+          )}, received ${formatValue(actual)}.`,
+          message,
+        );
+      }, options);
+    },
+  };
+};
 
 const createAssertion = <T>(
   actual: T,
   baseAssertion: Assertion<T>,
   isNot: boolean,
+  soft: boolean,
   message?: string,
 ): PlaywrightAssertion<T> => {
   const customAssertions = isLocator(actual)
-    ? createLocatorAssertions(actual, isNot, message)
+    ? createLocatorAssertions(actual, isNot, soft, message)
     : isPage(actual)
-      ? createPageAssertions(actual, isNot, message)
+      ? createPageAssertions(actual, isNot, soft, message)
       : undefined;
 
   if (!customAssertions) {
@@ -633,7 +694,7 @@ const createAssertion = <T>(
       if (key === 'not') {
         // Rstest's public Assertion type narrows `not` through the upstream Chai type.
         const baseNot = (baseAssertion as unknown as RstestNotAssertion<T>).not;
-        return createAssertion(actual, baseNot, !isNot, message);
+        return createAssertion(actual, baseNot, !isNot, soft, message);
       }
 
       if (key in customAssertions) {
@@ -654,6 +715,7 @@ const createExpectAssertion = <T>(
     actual,
     soft ? rstestExpect.soft(actual, message) : rstestExpect(actual, message),
     false,
+    soft,
     message,
   );
 

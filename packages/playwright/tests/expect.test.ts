@@ -155,6 +155,30 @@ describe('@rstest/playwright expect', () => {
     await expect(page).not.toHaveTitle('Other');
   });
 
+  it('counts custom Playwright assertions once', async () => {
+    const page = createPage('Example Domain');
+
+    expect.assertions(1);
+    await expect(page).toHaveTitle(/Example/);
+  });
+
+  it('does not overcount retried Playwright assertions', async () => {
+    const locator = createLocator({ count: 0, texts: ['Hello'] });
+
+    expect.assertions(2);
+    try {
+      await expect(locator).toBeAttached({ timeout: 1 });
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+    }
+  });
+
+  test.fails('records soft custom assertion failures', async () => {
+    const page = createPage('Example Domain');
+
+    await expect.soft(page).toHaveTitle('Other', { timeout: 1 });
+  });
+
   it('keeps regular Rstest assertions available', () => {
     const locator = createLocator({ texts: ['Hello'] });
 

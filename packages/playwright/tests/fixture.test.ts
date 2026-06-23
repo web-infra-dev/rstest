@@ -50,6 +50,14 @@ test.extend({
 });
 
 test.extend({
+  customFixture: async ({ page }, use) => {
+    await use(`viewport-${page.viewportSize()?.width ?? 0}`);
+  },
+})('preserves extended fixture types', async ({ customFixture }) => {
+  expect(customFixture).toContain('viewport');
+});
+
+test.extend({
   playwright: debugOptions,
 })('accepts headed debug options', async ({ playwright }) => {
   expect(playwright.debug).toEqual(debugOptions.debug);
@@ -95,6 +103,20 @@ test(
     const response = await request.get(`${url}/%E0%A4%A`);
 
     expect(response.status()).toBe(404);
+  },
+  { timeout: 30_000 },
+);
+
+test(
+  'allows closing a served static server multiple times',
+  async ({ serve }) => {
+    const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
+    await writeFile(join(root, 'index.html'), '<h1>ok</h1>');
+
+    const server = await serve(join(root, 'index.html'));
+
+    await server.close();
+    await server.close();
   },
   { timeout: 30_000 },
 );

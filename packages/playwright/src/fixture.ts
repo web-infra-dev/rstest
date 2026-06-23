@@ -146,6 +146,7 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 const browserCache = new Map<string, Promise<Browser>>();
+const browserCleanupFiles = new Set<string>();
 
 const browserTypes = {
   chromium,
@@ -228,19 +229,48 @@ const closeBrowser = async () => {
   await Promise.all(browsers.map(async (browser) => (await browser).close()));
 };
 
-rstestAfterAll(closeBrowser);
+const registerBrowserCleanup = (filepath?: string) => {
+  if (!filepath) {
+    rstestAfterAll(closeBrowser);
+    return;
+  }
 
-const closeStaticServer = (server: Server) =>
-  new Promise<void>((resolve, reject) => {
-    server.close((error) => {
-      if (error) {
-        reject(error);
+  if (browserCleanupFiles.has(filepath)) {
+    return;
+  }
+
+  browserCleanupFiles.add(filepath);
+  rstestAfterAll(closeBrowser);
+};
+
+const getTaskFilepath = (task: TestContext['task']) =>
+  'filepath' in task && typeof task.filepath === 'string'
+    ? task.filepath
+    : undefined;
+
+const createStaticServerClose = (server: Server) => {
+  let closePromise: Promise<void> | undefined;
+
+  return () => {
+    closePromise ??= new Promise<void>((resolve, reject) => {
+      if (!server.listening) {
+        resolve();
         return;
       }
 
-      resolve();
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
     });
-  });
+
+    return closePromise;
+  };
+};
 
 const listenStaticServer = async (
   server: Server,
@@ -352,9 +382,11 @@ const startStaticServer = async (
     ? origin
     : `${origin}/${basename(entryPath)}`;
 
+  const close = createStaticServerClose(server);
+
   return {
     url: basename(indexFile) === 'index.html' ? origin : entryUrl,
-    close: () => closeStaticServer(server),
+    close,
   };
 };
 
@@ -379,9 +411,10 @@ const cleanupServer = async ({
 
 const playwrightFixtures = {
   playwright: async (
-    _context: TestContext,
+    { task }: TestContext,
     use: (options: PlaywrightOptions) => Promise<void>,
   ) => {
+    registerBrowserCleanup(getTaskFilepath(task));
     await use({ browserName: DEFAULT_BROWSER_NAME });
   },
 
@@ -428,16 +461,23 @@ const playwrightFixtures = {
   context: async (
     {
       browser,
+      onTestFailed,
       playwright,
       task,
     }: TestContext & Pick<PlaywrightFixture, 'browser' | 'playwright'>,
     use: (context: BrowserContext) => Promise<void>,
   ) => {
     const context = await browser.newContext(playwright.contextOptions);
+    onTestFailed(async () => {
+      if (!shouldPauseOnFailure(playwright)) {
+        await context.close();
+      }
+    });
+
     try {
       await use(context);
     } finally {
-      if (!shouldPauseOnFailure(playwright) || task.result?.status !== 'fail') {
+      if (task.result?.status !== 'fail') {
         await context.close();
       }
     }
@@ -446,8 +486,8 @@ const playwrightFixtures = {
   page: async (
     {
       context,
-      playwright,
       onTestFailed,
+      playwright,
       task,
     }: TestContext & Pick<PlaywrightFixture, 'context' | 'playwright'>,
     use: (page: Page) => Promise<void>,
@@ -456,6 +496,7 @@ const playwrightFixtures = {
 
     onTestFailed(async () => {
       if (!shouldPauseOnFailure(playwright)) {
+        await page.close();
         return;
       }
 
@@ -466,7 +507,7 @@ const playwrightFixtures = {
     try {
       await use(page);
     } finally {
-      if (!shouldPauseOnFailure(playwright) || task.result?.status !== 'fail') {
+      if (task.result?.status !== 'fail') {
         await page.close();
       }
     }
@@ -487,22 +528,7 @@ const playwrightFixtures = {
   },
 };
 
-type TestCallbackFn<ExtraContext = object> = (
-  context: TestContext & ExtraContext,
-) => void | Promise<void>;
-
-type PlaywrightTestFn = (
-  description: string,
-  fn?: TestCallbackFn<PlaywrightFixture>,
-  options?: Parameters<typeof base>[2],
-) => void;
-
 type RstestTest = typeof base;
-type RstestAfterAll = typeof rstestAfterAll;
-type RstestAfterEach = typeof rstestAfterEach;
-type RstestBeforeAll = typeof rstestBeforeAll;
-type RstestBeforeEach = typeof rstestBeforeEach;
-type RstestDescribe = typeof rstestDescribe;
 
 type FixtureOptions = {
   auto?: boolean;
@@ -515,7 +541,7 @@ type Fixture<FixturesContext, K extends keyof FixturesContext, ExtraContext> =
       use: (value: FixturesContext[K]) => Promise<void>,
     ) => Promise<void>);
 
-type RstestFixtures<
+type PlaywrightFixtures<
   FixturesContext extends Record<string, any>,
   ExtraContext,
 > = {
@@ -523,6 +549,35 @@ type RstestFixtures<
     | Fixture<FixturesContext, K, ExtraContext>
     | [Fixture<FixturesContext, K, ExtraContext>, FixtureOptions?];
 };
+
+type PlaywrightTestBase<ExtraContext> = Omit<
+  RstestTest,
+  'extend' | 'fail' | 'fails' | 'for' | 'skip'
+> & {
+  (
+    description: string,
+    fn?: (context: TestContext & ExtraContext) => void | Promise<void>,
+    options?: Parameters<typeof base>[2],
+  ): void;
+  fail: PlaywrightTestBase<ExtraContext>;
+  fails: PlaywrightTestBase<ExtraContext>;
+  for: <T>(
+    cases: readonly T[],
+  ) => (
+    description: string,
+    fn?: (
+      param: T,
+      context: TestContext & ExtraContext,
+    ) => void | Promise<void>,
+    options?: Parameters<typeof base>[2],
+  ) => void;
+};
+
+type RstestAfterAll = typeof rstestAfterAll;
+type RstestAfterEach = typeof rstestAfterEach;
+type RstestBeforeAll = typeof rstestBeforeAll;
+type RstestBeforeEach = typeof rstestBeforeEach;
+type RstestDescribe = typeof rstestDescribe;
 
 type MergeContext<ExtraContext, FixturesContext> = {
   [K in
@@ -534,33 +589,29 @@ type MergeContext<ExtraContext, FixturesContext> = {
       : never;
 };
 
-type PlaywrightTestSkip = PlaywrightTestFn &
-  (() => void) &
-  Omit<RstestTest['skip'], 'skip'> & {
-    skip: PlaywrightTestSkip;
+type PlaywrightTestSkip<ExtraContext> = PlaywrightTestBase<ExtraContext> &
+  (() => void) & {
+    skip: PlaywrightTestSkip<ExtraContext>;
   };
 
-export type PlaywrightTest = PlaywrightTestFn &
-  Omit<RstestTest, 'extend' | 'skip'> & {
+export type PlaywrightTest<ExtraContext = PlaywrightFixture> =
+  PlaywrightTestBase<ExtraContext> & {
     extend: <T extends Record<string, any> = object>(
-      fixtures: RstestFixtures<T, PlaywrightFixture>,
-    ) => PlaywrightTestFn &
-      Omit<PlaywrightTest, 'extend'> & {
-        extend: <U extends Record<string, any> = object>(
-          fixtures: RstestFixtures<U, MergeContext<PlaywrightFixture, T>>,
-        ) => PlaywrightTestFn;
-      };
+      fixtures: PlaywrightFixtures<T, ExtraContext>,
+    ) => PlaywrightTest<MergeContext<ExtraContext, T>>;
     afterAll: typeof rstestAfterAll;
     afterEach: typeof rstestAfterEach;
     beforeAll: typeof rstestBeforeAll;
     beforeEach: typeof rstestBeforeEach;
     describe: typeof rstestDescribe;
-    fail: RstestTest['fails'];
-    skip: PlaywrightTestSkip;
+    fail: PlaywrightTestBase<ExtraContext>;
+    skip: PlaywrightTestSkip<ExtraContext>;
   };
 
-const createPlaywrightTest = (rstestTest: RstestTest): PlaywrightTest => {
-  const playwrightTest = rstestTest as unknown as PlaywrightTest;
+const createPlaywrightTest = <ExtraContext>(
+  rstestTest: RstestTest,
+): PlaywrightTest<ExtraContext> => {
+  const playwrightTest = rstestTest as unknown as PlaywrightTest<ExtraContext>;
   const extend = rstestTest.extend.bind(rstestTest);
 
   Object.assign(playwrightTest, {
@@ -572,15 +623,17 @@ const createPlaywrightTest = (rstestTest: RstestTest): PlaywrightTest => {
     fail: rstestTest.fails,
   });
 
-  playwrightTest.extend = ((fixtures: Parameters<RstestTest['extend']>[0]) => {
-    return createPlaywrightTest(extend(fixtures) as RstestTest);
-  }) as PlaywrightTest['extend'];
+  playwrightTest.extend = ((
+    fixtures: Parameters<PlaywrightTest<ExtraContext>['extend']>[0],
+  ) => {
+    return createPlaywrightTest(extend(fixtures));
+  }) as PlaywrightTest<ExtraContext>['extend'];
 
   return playwrightTest;
 };
 
 export const test: PlaywrightTest = createPlaywrightTest(
-  base.extend<PlaywrightFixture>(playwrightFixtures) as RstestTest,
+  base.extend<PlaywrightFixture>(playwrightFixtures),
 );
 
 export const afterAll: RstestAfterAll = rstestAfterAll;

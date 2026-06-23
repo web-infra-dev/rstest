@@ -341,8 +341,8 @@ importers:
   e2e/playwright/fixtures:
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.14
-        version: 2.0.14
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rstest/core':
         specifier: workspace:*
         version: link:../../../packages/core
@@ -350,8 +350,8 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/playwright
       playwright:
-        specifier: ^1.60.0
-        version: 1.60.0
+        specifier: ^1.61.0
+        version: 1.61.0
 
   e2e/projects/fixtures:
     devDependencies:
@@ -676,8 +676,8 @@ importers:
   examples/playwright:
     devDependencies:
       '@rsbuild/core':
-        specifier: ~2.0.14
-        version: 2.0.14
+        specifier: ~2.1.0-beta.0
+        version: 2.1.0-beta.0
       '@rstest/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -685,8 +685,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/playwright
       playwright:
-        specifier: ^1.60.0
-        version: 1.60.0
+        specifier: ^1.61.0
+        version: 1.61.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1354,8 +1354,8 @@ importers:
   packages/playwright:
     devDependencies:
       '@rslib/core':
-        specifier: 0.22.1
-        version: 0.22.1(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(typescript@6.0.3)
+        specifier: 0.23.0
+        version: 0.23.0(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1363,8 +1363,8 @@ importers:
         specifier: workspace:*
         version: link:../../scripts/tsconfig
       playwright:
-        specifier: ^1.60.0
-        version: 1.60.0
+        specifier: ^1.61.0
+        version: 1.61.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
