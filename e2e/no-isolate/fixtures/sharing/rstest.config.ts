@@ -7,5 +7,5 @@ export default defineConfig({
   // reset per test (surfaceSecond.test.ts); no-op for the other fixtures.
   clearMocks: true,
   // One worker so module sharing is deterministic.
-  pool: { maxWorkers: 1, minWorkers: 1 },
+  pool: { maxWorkers: 1 },
 });
