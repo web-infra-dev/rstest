@@ -563,6 +563,15 @@ importers:
         specifier: workspace:*
         version: link:../../../../packages/coverage-istanbul
 
+  e2e/test-coverage/test-dir-collision/packages/test:
+    devDependencies:
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../../../packages/core
+      '@rstest/coverage-istanbul':
+        specifier: workspace:*
+        version: link:../../../../../packages/coverage-istanbul
+
   e2e/vue/fixtures:
     dependencies:
       vue:

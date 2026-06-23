@@ -307,4 +307,27 @@ describe('test coverage-istanbul', () => {
       logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
     ).toMatchInlineSnapshot(`"Allfiles|0|0|0|0|"`);
   });
+
+  it('generates coverage for untested files when the project path contains a test directory', async () => {
+    const packagePath = join(__dirname, 'test-dir-collision/packages/test');
+
+    const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--coverage'],
+      options: {
+        nodeOptions: {
+          cwd: packagePath,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expectLog('Coverage enabled with istanbul', logs);
+    expect(
+      logs.find((log) => log.includes('untested.ts'))?.replaceAll(' ', ''),
+    ).toMatchInlineSnapshot(`"untested.ts|0|100|0|0|1"`);
+  });
 });

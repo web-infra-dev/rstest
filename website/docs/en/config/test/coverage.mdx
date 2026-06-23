@@ -221,7 +221,6 @@ npx rstest run --coverage.changed=origin/main
 ```ts
 [
   '**/node_modules/**',
-  '**/test/**',
   '**/__tests__/**',
   '**/__mocks__/**',
   '**/*.d.ts',
@@ -235,6 +234,8 @@ npx rstest run --coverage.changed=origin/main
 A glob pattern array to exclude files from test coverage collection. Repeat the CLI flag to specify multiple patterns.
 
 Any patterns specified here will be merged with default values.
+
+Rstest does not exclude directories named `test` by default. This avoids accidentally dropping source files from packages or workspaces whose path contains a `test` segment, such as `packages/test/src/index.ts`. To exclude those directories from coverage, add an explicit pattern such as `test/**` or `**/test/**`.
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
