@@ -130,9 +130,11 @@ jobs:
       - name: Install Dependencies
         # setup-node's `cache: pnpm` restores the store; `--prefer-offline`
         # reuses it. A standalone `pnpm fetch` only re-warms an already-warm
-        # store (~26s/job of no gain). Install still runs the root `prepare`
-        # lifecycle (`pnpm run build`), so packages are built as before.
+        # store (~26s/job of no gain).
         run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Build Packages
+        run: pnpm run build
 
       - name: Setup Playwright
         uses: ./.github/actions/setup-playwright
@@ -199,9 +201,11 @@ jobs:
       - name: Install Dependencies
         # setup-node's `cache: pnpm` restores the store; `--prefer-offline`
         # reuses it. A standalone `pnpm fetch` only re-warms an already-warm
-        # store (~26s/job of no gain). Install still runs the root `prepare`
-        # lifecycle (`pnpm run build`), so packages are built as before.
+        # store (~26s/job of no gain).
         run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Build Packages
+        run: pnpm run build
 
       - name: Setup Playwright
         uses: ./.github/actions/setup-playwright
