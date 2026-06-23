@@ -44,9 +44,17 @@ describe.skipIf(process.platform === 'win32')(
       fs.update(environmentPath, (content) => {
         return content.replace("'initial'", "'modified'");
       });
+      fs.update(path.join(fixturesTargetPath, 'index.test.ts'), (content) => {
+        return content.replace("'initial'", "'modified'");
+      });
 
       await cli.waitForStdout('Duration');
-      expect(cli.stdout).toMatch('Tests 1 failed');
+      expect(cli.stdout).toMatch('Tests 1 passed');
+
+      cli.resetStd();
+      fs.delete(environmentPath);
+
+      await cli.waitForStderr('Failed to resolve testEnvironment');
 
       cli.exec.kill();
     });

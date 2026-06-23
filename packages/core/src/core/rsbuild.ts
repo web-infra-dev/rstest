@@ -86,6 +86,16 @@ const isMultiCompiler = <
   return 'compilers' in compiler && Array.isArray(compiler.compilers);
 };
 
+const getChangedFiles = (
+  compiler: Rspack.Compiler | undefined,
+): Set<string> | undefined => {
+  if (!compiler) {
+    return undefined;
+  }
+
+  return new Set([...compiler.modifiedFiles, ...compiler.removedFiles]);
+};
+
 export const resolveTestEnvironmentWatchFiles = async (
   projects: ProjectContext[],
   command: RstestContext['command'],
@@ -660,10 +670,12 @@ export const createRsbuildServer = async ({
           entries,
           chunks,
           isMultiCompiler(compiler)
-            ? compiler.compilers.find(
-                (compiler) => compiler.name === environmentName,
-              )?.modifiedFiles
-            : compiler.modifiedFiles,
+            ? getChangedFiles(
+                compiler.compilers.find(
+                  (compiler) => compiler.name === environmentName,
+                ),
+              )
+            : getChangedFiles(compiler),
           buildData[environmentName],
           outputPath!,
           runtimeChunkNameForEnvironment(environmentName),

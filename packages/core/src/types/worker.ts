@@ -67,6 +67,7 @@ export type RuntimeConfig = Pick<
   | 'silent'
 > & {
   resolvedTestEnvironmentPaths?: string[];
+  testEnvironmentCacheKey?: string;
 };
 
 export type CurrentTaskInfo = Pick<

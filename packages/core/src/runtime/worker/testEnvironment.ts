@@ -46,9 +46,23 @@ const createImportTestEnvironmentError = (
     { cause },
   );
 
+const withImportCacheKey = (
+  resolvedPath: string,
+  cacheKey?: string,
+): string => {
+  if (!cacheKey) {
+    return resolvedPath;
+  }
+
+  const url = new URL(resolvedPath);
+  url.searchParams.set('rstest_env_cache_key', cacheKey);
+  return url.href;
+};
+
 export const loadTestEnvironment = async (
   name: string,
   resolvedPaths?: string[],
+  cacheKey?: string,
 ): Promise<TestEnvironment> => {
   if (Object.hasOwn(builtinEnvironments, name)) {
     return builtinEnvironments[name as keyof typeof builtinEnvironments];
@@ -65,7 +79,9 @@ export const loadTestEnvironment = async (
   for (const resolvedPath of resolvedPaths) {
     let environmentModule: unknown;
     try {
-      environmentModule = await import(resolvedPath);
+      environmentModule = await import(
+        withImportCacheKey(resolvedPath, cacheKey)
+      );
     } catch (error) {
       lastImportError = { resolvedPath, error };
       continue;

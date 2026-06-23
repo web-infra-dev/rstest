@@ -309,6 +309,38 @@ describe('testEnvironment', () => {
     expect(Reflect.get(globalThis, controllerImportMarker)).toBe(1);
   });
 
+  it('should bust cached environment imports with a cache key', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
+
+    const environmentPath = join(tempDir, 'cache-key-environment.mjs');
+    const resolvedPath = pathToFileURL(environmentPath).href;
+
+    writeFileSync(environmentPath, environmentModule('initial-environment'));
+
+    const initialEnvironment = await loadTestEnvironment(
+      './cache-key-environment.mjs',
+      [resolvedPath],
+      'initial',
+    );
+    expect(initialEnvironment.name).toBe('initial-environment');
+
+    writeFileSync(environmentPath, environmentModule('updated-environment'));
+
+    const cachedEnvironment = await loadTestEnvironment(
+      './cache-key-environment.mjs',
+      [resolvedPath],
+      'initial',
+    );
+    expect(cachedEnvironment.name).toBe('initial-environment');
+
+    const updatedEnvironment = await loadTestEnvironment(
+      './cache-key-environment.mjs',
+      [resolvedPath],
+      'updated',
+    );
+    expect(updatedEnvironment.name).toBe('updated-environment');
+  });
+
   it('should continue resolving package candidates after import failures', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
 
