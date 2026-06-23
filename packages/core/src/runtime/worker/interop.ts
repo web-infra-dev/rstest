@@ -185,3 +185,20 @@ export const clearCacheCleaners = (): void => {
     globalThis as { __rstest_cache_cleaners__?: Set<() => void> }
   ).__rstest_cache_cleaners__?.clear();
 };
+
+/**
+ * Fully flush every loader's module cache. A reused worker under `isolate: false`
+ * can serve both ESM- and CJS-output projects, each backed by a different loader
+ * (`loadEsModule` / `loadModule`) with its own cache. On a watch rebuild (bumped
+ * `buildId`) both must be cleared, or the loader not used by the first task to
+ * see the new build keeps serving its previous-build runtime cache. Centralized
+ * here so a new loader is wired in one place, not at every flush call site.
+ */
+export const flushAllLoaderCaches = async (): Promise<void> => {
+  const [esm, cjs] = await Promise.all([
+    import('./loadEsModule'),
+    import('./loadModule'),
+  ]);
+  esm.clearModuleCache();
+  cjs.clearModuleCache();
+};

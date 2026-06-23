@@ -418,10 +418,12 @@ export const runInPool = async (
 
   // Keeping the runtime chunk is correct within one compile, but a watch rebuild
   // (bumped `buildId`) would serve a changed shared module from the previous
-  // build's cache. Fully flush on the rebuild boundary before loading.
+  // build's cache. Fully flush every loader on the rebuild boundary before
+  // loading (see `flushAllLoaderCaches` for why both loaders, not just this
+  // task's).
   if (!isolate && lastBuildId !== undefined && lastBuildId !== buildId) {
-    const { clearModuleCache } = await importLoader();
-    clearModuleCache();
+    const { flushAllLoaderCaches } = await import('./interop');
+    await flushAllLoaderCaches();
   }
   lastBuildId = buildId;
 
