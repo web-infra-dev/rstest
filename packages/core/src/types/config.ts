@@ -10,9 +10,8 @@ import type {
 import type { ConsoleStreamType, MaybePromise } from './utils';
 import type { BrowserProvider } from '../utils/constants';
 
-// TODO: chaiConfig.includeStack seems not used
 export type ChaiConfig = Partial<
-  Omit<typeof config, 'useProxy' | 'proxyExcludedKeys' | 'deepEqual'>
+  Pick<typeof config, 'showDiff' | 'truncateThreshold'>
 >;
 
 export type RstestPoolType = 'forks' | 'threads';
@@ -22,8 +21,6 @@ export type RstestPoolOptions = {
   type?: RstestPoolType;
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
-  /** Minimum number or percentage of workers to run tests in. */
-  minWorkers?: number | string;
   /** Pass additional arguments to node process in the child processes. */
   execArgv?: string[];
 };
@@ -104,7 +101,6 @@ export type ProjectConfig = Omit<
   | 'onConsoleLog'
   | 'silent'
   | 'bail'
-  | 'shard'
   | 'output'
 > & {
   output?: Omit<RstestOutputConfig, 'distPath'>;
@@ -355,15 +351,6 @@ export interface RstestConfig {
   bail?: number;
 
   /**
-   * Split tests into several shards.
-   * This is useful for running tests in parallel on multiple machines.
-   */
-  shard?: {
-    count: number;
-    index: number;
-  };
-
-  /**
    * print console traces when calling any console method.
    *
    * @default false
@@ -573,6 +560,20 @@ export interface RstestConfig {
   >;
 }
 
+/**
+ * Per-invocation test sharding, resolved from the `--shard <index/count>` CLI
+ * flag. It is intentionally not a user config field: the index/count must
+ * differ on every CI runner, so it cannot be expressed by a value committed to
+ * the shared config file. Kept on the resolved/normalized config only.
+ */
+export type ShardConfig = { count: number; index: number };
+
+/**
+ * `RstestConfig` after CLI options are merged in. Carries the resolved
+ * `shard` value, which the CLI injects but the public config type omits.
+ */
+export type ResolvedRstestConfig = RstestConfig & { shard?: ShardConfig };
+
 type OptionalKeys =
   | 'testNamePattern'
   | 'plugins'
@@ -586,8 +587,7 @@ type OptionalKeys =
   | 'chaiConfig'
   | 'hideSkippedTestFiles'
   | 'resolveSnapshotPath'
-  | 'extends'
-  | 'shard';
+  | 'extends';
 
 export type NormalizedBrowserModeConfig = {
   enabled: boolean;
@@ -616,6 +616,7 @@ export type NormalizedConfig = Required<
   >
 > &
   Partial<Pick<RstestConfig, OptionalKeys>> & {
+    shard?: ShardConfig;
     pool: RstestPoolOptions;
     testEnvironment: EnvironmentWithOptions;
     coverage: NormalizedCoverageOptions;
@@ -636,6 +637,7 @@ export type NormalizedProjectConfig = Required<
     | 'projects'
     | 'reporters'
     | 'pool'
+    | 'shard'
     | 'setupFiles'
     | 'globalSetup'
     | 'output'

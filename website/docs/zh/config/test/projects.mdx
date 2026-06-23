@@ -9,7 +9,7 @@ description: 定义多个测试项目，可以是一个目录、配置文件或 
 ```ts
 type ProjectConfig = Omit<
   RstestConfig,
-  'projects' | 'reporters' | 'pool' | 'isolate' | 'coverage' | 'bail' | 'shard'
+  'projects' | 'reporters' | 'pool' | 'isolate' | 'coverage' | 'bail'
 >;
 
 type Projects = (string | ProjectConfig)[];

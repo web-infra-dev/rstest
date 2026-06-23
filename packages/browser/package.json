@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser",
-  "version": "0.10.4",
+  "version": "0.10.6",
   "description": "Browser mode support for Rstest testing framework.",
   "keywords": [
     "rstest",
@@ -14,7 +14,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/web-infra-dev/rstest",
+    "url": "git+https://github.com/web-infra-dev/rstest.git",
     "directory": "packages/browser"
   },
   "license": "MIT",
@@ -41,8 +41,7 @@
   ],
   "scripts": {
     "build": "rslib build",
-    "dev": "rslib build --watch",
-    "typecheck": "pnpm -w exec tsc --noEmit -p packages/browser/tsconfig.json"
+    "dev": "rslib build --watch"
   },
   "dependencies": {
     "@jridgewell/trace-mapping": "0.3.31",
@@ -53,7 +52,7 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@rslib/core": "0.22.0",
+    "@rslib/core": "0.23.0",
     "@rstest/browser-ui": "workspace:*",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
@@ -63,7 +62,7 @@
     "@vitest/snapshot": "^3.2.6",
     "birpc": "^4.0.0",
     "picomatch": "^4.0.4",
-    "playwright": "^1.60.0"
+    "playwright": "^1.61.0"
   },
   "peerDependencies": {
     "@rstest/core": "workspace:^",

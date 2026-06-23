@@ -17,8 +17,6 @@ export type RstestPoolOptions = {
   type?: RstestPoolType;
   /** 最大运行的线程池的数量或百分比 */
   maxWorkers?: number | string;
-  /** 最小运行的线程池的数量或百分比 */
-  minWorkers?: number | string;
   /** 向子进程中的 node 进程传递附加参数。 */
   execArgv?: string[];
 };
@@ -34,11 +32,11 @@ export type RstestConfig = {
 ```ts
 const defaultPool = {
   type: 'forks',
-  // maxWorkers/minWorkers 会根据 CPU 数量和运行模式自动计算
+  // maxWorkers 会根据 CPU 数量和运行模式自动计算
 };
 ```
 
-- **CLI：** `--pool <type>`, `--pool.type <type>`, `--pool.maxWorkers <value>`, `--pool.minWorkers <value>`, `--pool.execArgv <arg>`
+- **CLI：** `--pool <type>`, `--pool.type <type>`, `--pool.maxWorkers <value>`, `--pool.execArgv <arg>`
 
 用于运行测试的线程池的选项。
 
@@ -99,23 +97,6 @@ npx rstest --pool.maxWorkers 1
 - 固定数字，如 `4`：无论机器规模如何，都把资源占用限制在已知安全的范围内。
 
 `maxWorkers` 控制的是文件级并行度。它不会限制单个测试文件内的 `test.concurrent` 用例；如需限制这类用例，请使用 [`maxConcurrency`](/config/test/max-concurrency)。
-
-## 保持 worker 预热
-
-默认情况下，Rstest 会按需创建 worker，避免为当前运行用不到的 worker 槽付出启动成本。`pool.minWorkers` 控制需求下降后保留多少 idle worker。
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  pool: {
-    maxWorkers: 4,
-    minWorkers: 1,
-  },
-});
-```
-
-当 worker 启动成本较高，并且希望重复运行（尤其是 watch 模式）复用已预热的 worker 时，可以设置 `minWorkers`。如果更关注内存占用，建议保持较低取值。
 
 ## 向 worker 传递 Node.js flags
 

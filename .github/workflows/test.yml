@@ -8,6 +8,12 @@ on:
     branches: [main]
 
   workflow_dispatch:
+    inputs:
+      fullRun:
+        description: 'Run the full e2e matrix'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
@@ -26,7 +32,7 @@ jobs:
     outputs:
       changed: ${{ steps.changes.outputs.changed }}
       # Full e2e sweep: push to main (post-merge gate) or release PR (pre-publish gate)
-      is_full_run: ${{ github.event_name == 'push' || startsWith(github.event.pull_request.title, 'release:') }}
+      is_full_run: ${{ github.event_name == 'push' || startsWith(github.event.pull_request.title, 'release:') || inputs.fullRun }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -69,6 +75,10 @@ jobs:
 
       - name: Build Packages
         run: pnpm run build
+        env:
+          # Publish checks are comparatively expensive and only need to run once
+          # as part of the lint/static-check gate.
+          RSTEST_PUBLISH_CHECK: true
 
       - name: Lint
         run: pnpm run lint
@@ -76,11 +86,15 @@ jobs:
       - name: Check Dependency Version
         run: pnpm run check-dependency-version
 
-      - name: Check pnpm Dedupe
-        run: pnpm dedupe --check --config.minimum-release-age=0
-
       - name: Check Unused Code
         run: pnpm run check-unused
+
+      - name: Check pnpm Dedupe
+        # Keep dedupe last: `pnpm dedupe --check` may leave pnpm's modules
+        # state needing a reconcile. If another `pnpm run ...` follows it,
+        # pnpm can enter its implicit install path and rerun lifecycle scripts
+        # such as the root `prepare`.
+        run: pnpm dedupe --check --config.minimum-release-age=0
 
   # ======== ut ========
   ut:
@@ -116,19 +130,14 @@ jobs:
       - name: Install Dependencies
         # setup-node's `cache: pnpm` restores the store; `--prefer-offline`
         # reuses it. A standalone `pnpm fetch` only re-warms an already-warm
-        # store (~26s/job of no gain). Install still runs the root `prepare`
-        # lifecycle (`pnpm run build`), so packages are built as before.
+        # store (~26s/job of no gain).
         run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Build Packages
+        run: pnpm run build
 
       - name: Setup Playwright
         uses: ./.github/actions/setup-playwright
-
-      - name: Run Type Check
-        # tsc is OS-independent, so PR runs it on macOS only; the post-merge
-        # FULL run still typechecks both OSes so push-to-main stays a literal
-        # superset of PR coverage.
-        if: needs.prepare.outputs.is_full_run == 'true' || matrix.os == 'macos-latest'
-        run: pnpm run typecheck
 
       - name: Run Test
         run: pnpm run test
@@ -152,18 +161,18 @@ jobs:
         os: [macos-latest, windows-latest]
         # Trigger-dependent axes (gated by prepare.outputs.is_full_run):
         #
-        #   trigger      | node_version | test_script                           | exclude
-        #   -------------+--------------+---------------------------------------+-----------
-        #   PR (regular) | [24]         | [test]                                | -
-        #   push to main | [20, 22, 24] | [test, commonjs, no-isolate, threads] | test × 22
-        #   release PR   | [20, 22, 24] | [test, commonjs, no-isolate, threads] | test × 22
+        #   trigger      | node_version | test_script
+        #   -------------+--------------+--------------------------------------
+        #   PR (regular) | [24]         | [test]
+        #   push to main | [20, 24]     | [test, commonjs, no-isolate, threads]
+        #   release PR   | [20, 24]     | [test, commonjs, no-isolate, threads]
         #
         # Node 20 + test:no-isolate can hit upstream vm native crashes under worker
         # reuse; tolerated on full runs in exchange for coverage.
         node_version: >-
           ${{ fromJson(
             needs.prepare.outputs.is_full_run == 'true'
-              && '["20","22","24"]'
+              && '["20","24"]'
             || '["24"]'
           ) }}
         test_script: >-
@@ -171,12 +180,6 @@ jobs:
             needs.prepare.outputs.is_full_run == 'true'
               && '["test","test:commonjs","test:no-isolate","test:threads"]'
             || '["test"]'
-          ) }}
-        exclude: >-
-          ${{ fromJson(
-            needs.prepare.outputs.is_full_run == 'true'
-              && '[{"node_version":"22","test_script":"test"}]'
-            || '[]'
           ) }}
 
     steps:
@@ -201,9 +204,11 @@ jobs:
       - name: Install Dependencies
         # setup-node's `cache: pnpm` restores the store; `--prefer-offline`
         # reuses it. A standalone `pnpm fetch` only re-warms an already-warm
-        # store (~26s/job of no gain). Install still runs the root `prepare`
-        # lifecycle (`pnpm run build`), so packages are built as before.
+        # store (~26s/job of no gain).
         run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Build Packages
+        run: pnpm run build
 
       - name: Setup Playwright
         uses: ./.github/actions/setup-playwright

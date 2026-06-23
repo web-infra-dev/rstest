@@ -31,6 +31,7 @@ export const BROWSER_PORTS = {
   silent: 5230,
   'browser-coverage-multiproject': 5228,
   related: 5232,
+  'multi-project-config': 5234,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);
@@ -40,3 +41,6 @@ if (new Set(browserPortValues).size !== browserPortValues.length) {
     `Duplicate browser fixture ports detected: ${JSON.stringify(BROWSER_PORTS)}`,
   );
 }
+
+export const BROWSER_TEST_TIMEOUT =
+  process.platform === 'win32' ? 20_000 : 10_000;

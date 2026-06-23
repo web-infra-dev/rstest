@@ -3,6 +3,12 @@ dist
 compiled
 doc_build
 
+# Per-package third-party license bundles are generated and prettier-formatted by
+# each package's own build (`rslib build && prettier ./LICENSE.md --write`), so the
+# lint gate must not re-check them — nor race the build writing them when pre-push
+# runs format-spell and typecheck in parallel.
+LICENSE.md
+
 # Symlinks (prettier does not handle symlinks)
 CLAUDE.md
 

@@ -132,29 +132,6 @@ export default defineConfig({
       },
     },
     {
-      id: 'rstest_loaders',
-      format: 'esm',
-      syntax: 'es2023',
-      dts: false,
-      source: {
-        entry: {
-          cssFilterLoader: './src/core/plugins/css-filter/loader.ts',
-        },
-      },
-      output: {
-        filename: {
-          js: '[name].mjs',
-        },
-      },
-      tools: {
-        rspack: {
-          plugins: [
-            rsdoctorCIPlugin({ reportDir: '.rsdoctor/loaders' }),
-          ].filter(Boolean),
-        },
-      },
-    },
-    {
       id: 'browser_runtime',
       format: 'esm',
       syntax: 'es2023',

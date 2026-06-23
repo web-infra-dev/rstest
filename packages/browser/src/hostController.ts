@@ -102,15 +102,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const OPTIONS_PLACEHOLDER = '__RSTEST_OPTIONS_PLACEHOLDER__';
 
 /**
- * Extra time added on top of a file's `testTimeout` before the host gives up
- * waiting for that file's RPC to settle. Covers fixed per-file overhead (page
- * navigation, runner boot) that is not part of the user's test budget. The
- * headless and headed scheduling paths both apply this same buffer, so it lives
- * here as one constant to keep their per-file timeout semantics identical.
- */
-const PER_FILE_TIMEOUT_BUFFER_MS = 30_000;
-
-/**
  * Monotonic counter for synthetic per-file Perfetto `pid` values in `--trace`
  * mode. Browser host runs every test file inside the same Node process, so
  * without an override every file would emit events under the same `pid` and
@@ -629,6 +620,7 @@ const globToRegexp = (glob: string): RegExp => {
     fastpaths: false,
     noglobstar: false,
     bash: false,
+    dot: true,
   });
 
   if (!regex) {
@@ -676,44 +668,189 @@ const globPatternsToRegExp = (patterns: string[]): RegExp => {
   return new RegExp(`(?:${regexParts.join('|')})$`);
 };
 
+const REGEXP_SPECIAL_CHARACTERS = /[|\\{}()[\]^$+*?.]/g;
+const PATH_SEPARATOR_SOURCE = String.raw`[\\/]`;
+const WINDOWS_ABSOLUTE_PATH_SOURCE = String.raw`[A-Za-z]:[\\/]`;
+
+const escapeRegExp = (value: string): string =>
+  value.replace(REGEXP_SPECIAL_CHARACTERS, '\\$&');
+
+const normalizePathForRegExp = (value: string): string =>
+  normalize(value).replaceAll('\\', '/');
+
+const normalizeExcludePatternForRegExp = (value: string): string =>
+  value.startsWith('./')
+    ? `./${normalizePathForRegExp(value.substring(2))}`
+    : normalizePathForRegExp(value);
+
+const isAbsolutePatternForRegExp = (value: string): boolean =>
+  value.startsWith('/') || /^[A-Za-z]:\//.test(value);
+
+const isEscapedRegExpCharacter = (source: string, index: number): boolean => {
+  let backslashCount = 0;
+  for (
+    let current = index - 1;
+    current >= 0 && source[current] === '\\';
+    current--
+  ) {
+    backslashCount++;
+  }
+  return backslashCount % 2 === 1;
+};
+
+const replacePathSeparatorsInRegExpSource = (source: string): string => {
+  let result = '';
+  let inCharacterClass = false;
+
+  for (let index = 0; index < source.length; index++) {
+    const character = source[index];
+    const isEscaped = isEscapedRegExpCharacter(source, index);
+
+    if (character === '[' && !isEscaped) {
+      inCharacterClass = true;
+    }
+
+    if (!inCharacterClass && character === '\\' && source[index + 1] === '/') {
+      result += PATH_SEPARATOR_SOURCE;
+      index++;
+      continue;
+    }
+
+    result += character;
+
+    if (character === ']' && !isEscaped) {
+      inCharacterClass = false;
+    }
+  }
+
+  return result;
+};
+
+type BrowserContextExcludeSource = {
+  relative: string;
+  absolute: string;
+  isAbsolute: boolean;
+};
+
+const createRelativeContextExcludeSource = (
+  source: string,
+  normalizedPattern: string,
+): string => {
+  if (normalizedPattern.startsWith('./')) {
+    return source;
+  }
+
+  return normalizedPattern.startsWith('**/')
+    ? `(?:(?:${source})|\\.(?:${source}))`
+    : `(?:(?:${source})|\\.${PATH_SEPARATOR_SOURCE}(?:${source}))`;
+};
+
+const createProjectAbsoluteExcludeSource = (
+  source: string,
+  normalizedPattern: string,
+): string =>
+  normalizedPattern.startsWith('./') || normalizedPattern.startsWith('**/')
+    ? source
+    : `${PATH_SEPARATOR_SOURCE}(?:${source})`;
+
 /**
  * Convert exclude patterns to a RegExp for import.meta.webpackContext's exclude option
  * This is used at compile time to filter out files during bundling
  *
  * Example:
  *   Input: ['**\/node_modules\/**', '**\/dist\/**']
- *   Output: /[\\/](node_modules|dist)[\\/]/
+ *   Output: a regexp matching node_modules or dist path segments.
  */
-const excludePatternsToRegExp = (patterns: string[]): RegExp | null => {
-  const keywords: string[] = [];
-  for (const pattern of patterns) {
-    // Extract the core part between ** wildcards
-    // e.g., '**/node_modules/**' -> 'node_modules'
-    // e.g., '**/dist/**' -> 'dist'
-    // e.g., '**/.{idea,git,cache,output,temp}/**' -> extract each part
-    const match = pattern.match(
-      /\*\*\/\.?\{?([^/*{}]+(?:,[^/*{}]+)*)\}?\/?\*?\*?/,
-    );
-    if (match) {
-      // Handle {a,b,c} patterns
-      const parts = match[1]!.split(',');
-      for (const part of parts) {
-        // Clean up the part (remove leading dots for hidden dirs)
-        const cleaned = part.replace(/^\./, '');
-        if (cleaned && !keywords.includes(cleaned)) {
-          keywords.push(cleaned);
-        }
-      }
+const excludePatternsToRegExpSources = (
+  patterns: string[],
+): BrowserContextExcludeSource[] | null => {
+  const sources = patterns.map((pattern) => {
+    const normalizedPattern = normalizeExcludePatternForRegExp(pattern);
+    const regex = globToRegexp(normalizedPattern);
+    let source = regex.source;
+    if (source.startsWith('^')) {
+      source = source.substring(1);
     }
-  }
+    if (source.endsWith('$')) {
+      source = source.substring(0, source.length - 1);
+    }
 
-  if (keywords.length === 0) {
+    source = replacePathSeparatorsInRegExpSource(source);
+    const isAbsolute = isAbsolutePatternForRegExp(normalizedPattern);
+    const absolute = normalizedPattern.startsWith('./')
+      ? source.substring(2)
+      : source;
+
+    return {
+      relative: isAbsolute
+        ? source
+        : createRelativeContextExcludeSource(source, normalizedPattern),
+      absolute: isAbsolute
+        ? absolute
+        : createProjectAbsoluteExcludeSource(absolute, normalizedPattern),
+      isAbsolute,
+    };
+  });
+
+  if (sources.length === 0) {
     return null;
   }
 
-  // Create regex that matches paths containing these directory names
-  // Use [\\/] to match both forward and back slashes
-  return new RegExp(`[\\\\/](${keywords.join('|')})[\\\\/]`);
+  return sources;
+};
+
+export const createBrowserContextExcludeRegExp = (
+  patterns: string[],
+  projectRoot: string,
+): RegExp | null => {
+  const excludeSources = excludePatternsToRegExpSources(patterns);
+  if (!excludeSources) {
+    return null;
+  }
+
+  const normalizedProjectRoot = normalizePathForRegExp(projectRoot).replace(
+    /[\\/]$/,
+    '',
+  );
+  const projectRootSource = normalizedProjectRoot
+    .split('/')
+    .map(escapeRegExp)
+    .join(PATH_SEPARATOR_SOURCE);
+  const relativeExcludeSources = excludeSources.filter(
+    (source) => !source.isAbsolute,
+  );
+  const absoluteExcludeSources = excludeSources.filter(
+    (source) => source.isAbsolute,
+  );
+  const sourceBranches: string[] = [];
+
+  if (relativeExcludeSources.length > 0) {
+    const relativePatternSource = `(?:${relativeExcludeSources
+      .map((source) => source.relative)
+      .join('|')})`;
+    const absolutePatternSource = `(?:${relativeExcludeSources
+      .map((source) => source.absolute)
+      .join('|')})`;
+    const relativeSource = `(?:${relativePatternSource})`;
+    const absoluteSource = normalizedProjectRoot
+      ? `${projectRootSource}(?=${PATH_SEPARATOR_SOURCE})(?:${absolutePatternSource})`
+      : `(?:${absolutePatternSource})`;
+
+    sourceBranches.push(
+      `(?!${WINDOWS_ABSOLUTE_PATH_SOURCE}|${PATH_SEPARATOR_SOURCE})${relativeSource}`,
+      absoluteSource,
+    );
+  }
+
+  if (absoluteExcludeSources.length > 0) {
+    sourceBranches.push(
+      `(?:${absoluteExcludeSources
+        .map((source) => source.relative)
+        .join('|')})`,
+    );
+  }
+
+  return new RegExp(`^(?:${sourceBranches.join('|')})$`);
 };
 
 type StatsModule = {
@@ -1089,7 +1226,10 @@ const generateManifestModule = ({
       project.normalizedConfig.include,
     );
     const excludePatterns = project.normalizedConfig.exclude.patterns;
-    const excludeRegExp = excludePatternsToRegExp(excludePatterns);
+    const excludeRegExp = createBrowserContextExcludeRegExp(
+      excludePatterns,
+      projectRootPosix,
+    );
 
     lines.push(
       `const ${varName} = import.meta.webpackContext(${JSON.stringify(projectRootPosix)}, {`,
@@ -1287,7 +1427,6 @@ const createBrowserRuntime = async ({
     // Browser runtime APIs for entry.ts and public.ts
     // Uses dist file with extractSourceMap to preserve sourcemap chain for inline snapshots
     '@rstest/core/internal/browser-runtime': browserRuntimePath,
-    '@sinonjs/fake-timers': resolveBrowserFile('client/fakeTimersStub.ts'),
   };
 
   const rsbuildInstance = await createRsbuild({
@@ -2684,17 +2823,34 @@ export const runBrowserController = async (
         resolveDone = resolve;
       });
 
-      const projectRuntime = projectRuntimeConfigs.find(
-        (project) => project.name === file.projectName,
-      );
-      const perFileTimeoutMs =
-        (projectRuntime?.runtimeConfig.testTimeout ?? maxTestTimeoutForRpc) +
-        PER_FILE_TIMEOUT_BUFFER_MS;
-
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      // Event-driven death detection (vitest-style): a renderer crash or an
+      // unexpected page close produces no further messages, so fail the file at
+      // once. Per-test/hook timeouts are enforced inside the runner, so the host
+      // deliberately keeps no execution-duration watchdog. Our own teardown
+      // close is ignored because `settled`/`run.cancelled` are set by then.
+      const crashDeferred = createDeferredPromise<string>();
+      const onPageDead = (reason: string): void => {
+        if (
+          settled ||
+          run.cancelled ||
+          !runLifecycle.isTokenActive(run.token)
+        ) {
+          return;
+        }
+        settled = true;
+        crashDeferred.resolve(reason);
+      };
 
       try {
         page = await browserContext.newPage();
+        page.on('crash', () =>
+          onPageDead(`Browser page crashed while running ${file.testPath}.`),
+        );
+        page.on('close', () =>
+          onPageDead(
+            `Browser page closed unexpectedly while running ${file.testPath}.`,
+          ),
+        );
 
         const session = sessionRegistry.register({
           testFile: file.testPath,
@@ -2757,28 +2913,25 @@ export const runBrowserController = async (
           waitUntil: 'load',
         });
 
-        const timeoutPromise = new Promise<'timeout'>((resolve) => {
-          timeoutId = setTimeout(() => resolve('timeout'), perFileTimeoutMs);
-        });
-
         const state = await Promise.race([
-          donePromise.then(() => 'done' as const),
-          timeoutPromise,
-          run.cancelSignal.then(() => 'cancelled' as const),
+          donePromise.then(() => ({ type: 'done' as const })),
+          crashDeferred.promise.then((reason) => ({
+            type: 'crash' as const,
+            reason,
+          })),
+          run.cancelSignal.then(() => ({ type: 'cancelled' as const })),
         ]);
 
-        if (state === 'cancelled') {
+        if (state.type === 'cancelled') {
           return;
         }
 
         if (
-          state === 'timeout' &&
+          state.type === 'crash' &&
           runLifecycle.isTokenActive(run.token) &&
           !run.cancelled
         ) {
-          await handleFatal({
-            message: `Test execution timeout after ${perFileTimeoutMs / 1000}s for ${file.testPath}.`,
-          });
+          await handleFatal({ message: state.reason });
           await cancelRun(run, false);
         }
       } catch (error) {
@@ -2791,9 +2944,6 @@ export const runBrowserController = async (
           await cancelRun(run, false);
         }
       } finally {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
         if (page) {
           try {
             await page.close();
@@ -3175,16 +3325,6 @@ export const runBrowserController = async (
     return fileInfo;
   };
 
-  const getHeadedPerFileTimeoutMs = (file: TestFileInfo): number => {
-    const projectRuntime = projectRuntimeConfigs.find(
-      (project) => project.name === file.projectName,
-    );
-    return (
-      (projectRuntime?.runtimeConfig.testTimeout ?? maxTestTimeoutForRpc) +
-      PER_FILE_TIMEOUT_BUFFER_MS
-    );
-  };
-
   // Open a container page for user to view (reuse in watch mode)
   let containerContext: BrowserProviderContext;
   let containerPage: BrowserProviderPage;
@@ -3309,12 +3449,13 @@ export const runBrowserController = async (
     pending.deferred.resolve();
   };
 
-  const reloadTestFileWithTimeout = async (
+  // No execution-duration watchdog: per-test/hook timeouts are enforced inside
+  // the runner, and a dead container is caught event-driven by the WebSocket
+  // `close` handler, which rejects every pending reload via `onDisconnect`.
+  const reloadTestFileAndWait = async (
     file: TestFileInfo,
     testNamePattern?: string,
   ): Promise<void> => {
-    const timeoutMs = getHeadedPerFileTimeoutMs(file);
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     let reloadAck: ReloadTestFileAck | undefined;
 
     try {
@@ -3322,22 +3463,7 @@ export const runBrowserController = async (
         file.testPath,
         testNamePattern,
       );
-      const completionPromise = registerPendingHeadedReload(
-        file.testPath,
-        reloadAck.runId,
-      );
-      await Promise.race([
-        completionPromise,
-        new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => {
-            reject(
-              new Error(
-                `Headed test execution timeout after ${timeoutMs / 1000}s for ${file.testPath}.`,
-              ),
-            );
-          }, timeoutMs);
-        }),
-      ]);
+      await registerPendingHeadedReload(file.testPath, reloadAck.runId);
     } catch (error) {
       if (reloadAck?.runId) {
         rejectPendingHeadedReload(
@@ -3347,10 +3473,6 @@ export const runBrowserController = async (
         );
       }
       throw error;
-    } finally {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
     }
   };
 
@@ -3453,7 +3575,7 @@ export const runBrowserController = async (
       if (fatalError) {
         return;
       }
-      await reloadTestFileWithTimeout(file, testNamePattern);
+      await reloadTestFileAndWait(file, testNamePattern);
     });
   };
 

@@ -136,6 +136,36 @@ describe('rstest utilities wait APIs', () => {
   });
 });
 
+describe('rstest utilities plugin-managed APIs', () => {
+  it('throws when module mock APIs are not transformed by the Rstest plugin', async () => {
+    const rs = await createRstestUtilities(createWorkerState());
+
+    expect(() => rs.mock('./module')).toThrow(
+      'mock() was not transformed by Rstest',
+    );
+    expect(() => rs.doMock('./module')).toThrow(
+      'Module mock APIs must be called directly as rstest.doMock() or rs.doMock() in files processed by Rstest',
+    );
+    expect(() => rs.unmock('./module')).toThrow(
+      'This can happen when the calling file is not bundled by Rstest',
+    );
+  });
+
+  it('throws when module loader APIs are not transformed by the Rstest plugin', async () => {
+    const rs = await createRstestUtilities(createWorkerState());
+
+    expect(() => rs.importActual('./module')).toThrow(
+      'importActual() was not transformed by Rstest',
+    );
+    expect(() => rs.requireActual('./module')).toThrow(
+      'called directly as rstest.requireActual() or rs.requireActual() in files processed by Rstest',
+    );
+    expect(() => rs.hoisted(() => ({}))).toThrow(
+      'called directly as rstest.hoisted() or rs.hoisted() in files processed by Rstest',
+    );
+  });
+});
+
 describe('rstest utility scoped cleanup', () => {
   const envName = 'RSTEST_SCOPED_ENV';
 

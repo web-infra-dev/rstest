@@ -13,6 +13,7 @@ The environment that will be used for testing.
 The default environment in Rstest is a `Node.js` environment. If you are building a web application, you can use a browser-like environment through `jsdom` or `happy-dom` instead.
 
 import { Tab, Tabs } from '@theme';
+import { ApiMeta } from '@components/ApiMeta';
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
@@ -89,6 +90,36 @@ The `options` object is passed directly to the environment's constructor.
 
 - For `jsdom`, it's passed to the `JSDOM` constructor. You can find available options in the [jsdom documentation](https://github.com/jsdom/jsdom#customizing-jsdom).
 - For `happy-dom`, it's passed to the `Window` constructor. You can find available options in the [happy-dom documentation](https://github.com/capricorn86/happy-dom/wiki/Window).
+
+### Environment comments
+
+<ApiMeta addedVersion="0.10.5" />
+
+You can override the environment for a single test file by adding an environment comment near the top of the file:
+
+```ts title="example.test.ts"
+// @rstest-environment jsdom
+
+test('DOM test', () => {
+  document.body.innerHTML = '<p>hello world</p>';
+  expect(document.querySelector('p')?.textContent).toBe('hello world');
+});
+```
+
+Use `@rstest-environment-options` to pass environment options for the annotated file. The options must be a single-line JSON object:
+
+```ts title="example.test.ts"
+// @rstest-environment jsdom
+// @rstest-environment-options { "url": "https://example.com/" }
+
+test('sets the jsdom url', () => {
+  expect(window.location.href).toBe('https://example.com/');
+});
+```
+
+Rstest also recognizes `@vitest-environment` and `@jest-environment` aliases, including their `-options` variants, to make migration easier.
+
+Environment comments support the built-in Node runner environments: `node`, `jsdom`, and `happy-dom`. They do not apply to browser mode. If most files use the same environment, prefer configuring `testEnvironment` or separate `projects` in `rstest.config.ts`.
 
 ### Examples
 

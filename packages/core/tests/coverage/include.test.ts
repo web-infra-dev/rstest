@@ -18,6 +18,7 @@ describe('getIncludedFiles', () => {
       '/root/apps/node_modules/a.ts',
       '/root/apps/dist/a.ts',
       '/root/apps/test/a.ts',
+      '/root/apps/src/test/a.ts',
       '/root/apps/__tests__/a.ts',
       '/root/apps/__mocks__/a.ts',
       '/root/apps/a.d.ts',
@@ -34,6 +35,7 @@ describe('getIncludedFiles', () => {
       '/root/packages/a.ts',
       '/root/packages/b.js',
       '/root/packages/.c.ts',
+      '/root/packages/test/src/a.ts',
     ].forEach((file) => {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, '');
@@ -58,14 +60,16 @@ describe('getIncludedFiles', () => {
   it('should include visible files by default', async () => {
     expect(await glob(['**/*.{js,ts}', '../packages/*.{js,ts}']))
       .toMatchInlineSnapshot(`
-      [
-        "apps/a.ts",
-        "apps/b.js",
-        "apps/dist/a.ts",
-        "packages/a.ts",
-        "packages/b.js",
-      ]
-    `);
+        [
+          "apps/a.ts",
+          "apps/b.js",
+          "apps/dist/a.ts",
+          "apps/src/test/a.ts",
+          "apps/test/a.ts",
+          "packages/a.ts",
+          "packages/b.js",
+        ]
+      `);
   });
 
   it('should include hidden files if explicitly specified', async () => {
@@ -75,16 +79,28 @@ describe('getIncludedFiles', () => {
         "apps/a.ts",
         "apps/b.js",
         "apps/dist/a.ts",
+        "apps/src/test/a.ts",
+        "apps/test/a.ts",
       ]
     `);
   });
 
-  it('should exclude node_modules, dist, test, __tests__, __mocks__ by default', async () => {
+  it('should exclude node_modules, __tests__, and __mocks__ by default', async () => {
     expect(await glob(['**/*'])).toMatchInlineSnapshot(`
       [
         "apps/a.ts",
         "apps/b.js",
         "apps/dist/a.ts",
+        "apps/src/test/a.ts",
+        "apps/test/a.ts",
+      ]
+    `);
+  });
+
+  it('should not exclude files only because project root contains a test directory', async () => {
+    expect(await glob(['../packages/test/src/*.ts'])).toMatchInlineSnapshot(`
+      [
+        "packages/test/src/a.ts",
       ]
     `);
   });
@@ -99,6 +115,8 @@ describe('getIncludedFiles', () => {
       [
         "apps/a.ts",
         "apps/dist/a.ts",
+        "apps/src/test/a.ts",
+        "apps/test/a.ts",
       ]
     `);
   });
@@ -116,6 +134,8 @@ describe('getIncludedFiles', () => {
           "apps/b.js",
           "apps/dist/a.ts",
           "apps/src/rstest.setup.ts",
+          "apps/src/test/a.ts",
+          "apps/test/a.ts",
         ]
       `);
 
@@ -125,6 +145,8 @@ describe('getIncludedFiles', () => {
           "apps/a.ts",
           "apps/b.js",
           "apps/dist/a.ts",
+          "apps/src/test/a.ts",
+          "apps/test/a.ts",
         ]
       `);
 

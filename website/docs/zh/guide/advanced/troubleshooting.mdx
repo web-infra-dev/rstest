@@ -1,0 +1,133 @@
+---
+description: Rstest 常见问题排查，包括迁移和运行时差异。
+---
+
+# 问题排查
+
+本页说明一些由 Rstest 执行模型带来的常见问题。这类问题通常不是断言本身失败，而是 Rstest、Jest、Vitest 与 Node.js 原生运行时行为之间存在差异。
+
+## Bundle graph 之外的代码使用 Node.js 原生行为
+
+Rstest 采用基于 bundle 的执行模型来运行测试。进入 bundle graph 的文件会经过 Rstest 的构建流水线转换，因此 TypeScript、JSX、别名以及选中的依赖转换，都可以在 test worker 执行前完成。
+
+有些代码仍然会在运行时交给 Node.js 加载，而不是交给 bundler 处理。常见场景包括：
+
+- 后续动态执行的 `require()` 或 `import(dynamicPath)` 调用；
+- 被 external 到 bundle 之外的模块；
+- 通过自定义 Node.js loader 或 register hook 加载的代码；
+- test bundle 启动后，再通过 Node.js API 加载的代码。
+
+对于这些部分，Rstest 目前会保留 Node.js 原生语义。这让 Node.js flags、`--require`、`--import` 和 `node:module` register hooks 可以在 test worker 中使用，但也意味着 Rstest 不会模拟 Jest、`ts-jest` 或 Vitest 的每一种 transform-time 便利行为。
+
+经验规则是：
+
+- 静态 import 和进入 bundle graph 的模块 → 交给 Rstest 转换或打包。
+- 后续动态 `require()` 或 `import(dynamicPath)` / Node.js loader hook / 被 external 的模块 → 除非注册 loader 或调整打包策略，否则按 Node.js 原生行为处理。
+
+## `type: module` 中运行时 `require()` CommonJS 风格的 TypeScript 文件失败
+
+### 现象
+
+项目通过 `"type": "module"` 配置为 ESM，但某些运行时加载的 `.ts` 文件仍然包含 CommonJS 代码：
+
+```json title="package.json"
+{
+  "type": "module"
+}
+```
+
+```ts title="plugin.ts"
+module.exports = {
+  name: 'plugin',
+};
+```
+
+```ts title="loader.ts"
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const plugin = require('./plugin.ts');
+```
+
+在支持直接运行 `.ts` 文件的 Node.js 版本中，`require('./plugin.ts')` 会遵循 Node.js 原生模块判定。在 `type: module` 的 package scope 下，Node.js 会把 `plugin.ts` 当作 ESM 而不是 CommonJS，因此 `module.exports = ...` 这样的 CommonJS 赋值不会作为 CommonJS 值导出。
+
+### 原因
+
+Rstest 会转换进入 bundle graph 的文件。但后续交给 Node.js 加载的代码会保留 Node.js 原生 loader 语义。
+
+现代 Node.js 可以从 `.ts` 文件中 strip 掉支持的 TypeScript 语法，但它仍然使用和 JavaScript 文件相同的模块系统规则。在 `type: module` 包中，`.ts` 会像 `.js` 一样默认被视为 ESM。如果这个 `.ts` 文件包含 `module.exports`、`exports` 或 `require` 这类 CommonJS globals，Node.js 不会自动把它改写成 CommonJS。
+
+这和使用 `ts-jest` 的 Jest 项目可能不同，因为 `ts-jest` 可以注册 runtime loader hook，在 Node.js 应用相同原生边界之前先编译文件。它也可能和 Vitest 不同，因为 Vitest 的 transform/runtime 模型可能隐藏了一部分 Node.js loader 边界。
+
+### 解决方式
+
+优先让运行时加载的文件符合 Node.js 原生模块语义：
+
+- 如果文件必须保持 CommonJS，将 CommonJS TypeScript 文件改名为 `.cts`。
+- 或者在 `type: module` 作用域内把文件改成 ESM 语法。
+- 或者把它移到 `"type": "commonjs"` 的 package scope 下。
+
+如果这个动态加载依赖自定义转换，需要显式注册该转换。对从 Jest 迁移的项目来说，最简单的位置是 [`setupFiles`](/config/test/setup-files)：
+
+先安装你准备注册的 runtime loader。Rstest 不会默认安装这些 loader；例如，[@swc-node/register](https://github.com/swc-project/swc-node) 提供基于 SWC 的 TypeScript require hook，而 [ts-node](https://github.com/TypeStrong/ts-node) 提供 `ts-node/register` hook：
+
+```bash
+npm add -D @swc-node/register
+# 或：npm add -D ts-node
+```
+
+```ts title="test/rstest.setup.ts"
+import '@swc-node/register';
+// 或：import 'ts-node/register';
+```
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  setupFiles: ['./test/rstest.setup.ts'],
+});
+```
+
+如果这个 hook 必须在 worker runtime 代码启动前生效，可以通过 [`pool.execArgv`](/config/test/pool#向-worker-传递-nodejs-flags) 传递 Node.js register flags：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: {
+    execArgv: ['--require', 'ts-node/register'],
+    // 或：execArgv: ['--import', './register.mjs'],
+  },
+});
+```
+
+## 从 CommonJS 依赖导入 named exports 失败
+
+### 现象
+
+测试或源码文件从 CommonJS 依赖导入 named exports：
+
+```ts
+import { create } from 'enhanced-resolve';
+```
+
+当这个依赖由 Node.js 作为 native ESM 执行时，导入可能失败，因为 Node.js 只能暴露它的 CommonJS lexer 可以静态识别出的 named exports。
+
+### 原因
+
+有些 CommonJS 包会动态创建导出，例如通过 getter 或 `Object.defineProperty`。TypeScript 类型里仍然可能声明了 named exports，某些工具也可能通过转换或运行时包装让这些 named imports 生效。但 Node.js 原生 ESM interop 更严格：如果 Node.js 不能静态识别这个 named export，`import { create } from 'pkg'` 就会失败，即使 `import pkg from 'pkg'` 可以正常工作。
+
+这不是 Rstest 特有的问题，而是保留 Node.js 执行 bundle graph 之外代码时的结果。从 Vitest 迁移时可能更容易暴露这个差异，因为 Vitest 可能转换了更多依赖路径，并提供了更宽松的 CommonJS interop。
+
+### 解决方式
+
+优先使用符合 Node.js 原生 CommonJS interop 的导入方式：
+
+```ts
+import enhancedResolve from 'enhanced-resolve';
+
+const { create } = enhancedResolve;
+```
+
+如果你确实需要对某个依赖使用 bundler interop，可以将该依赖打进 bundle，让 Rstest 的构建流水线处理它，而不是交给 Node.js。在 `node` 环境中，第三方依赖默认会被 external，可以使用 [`output.bundleDependencies`](/config/build/output#outputbundledependencies) 打包少量需要转换的包。

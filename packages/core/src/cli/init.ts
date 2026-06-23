@@ -6,6 +6,7 @@ import { loadConfig, resolveExtends } from '../config';
 import type {
   BrowserName,
   Project,
+  ResolvedRstestConfig,
   RstestConfig,
   RstestOutputConfig,
 } from '../types';
@@ -16,6 +17,7 @@ import {
   filterProjects,
   formatRootStr,
   getAbsolutePath,
+  logger,
 } from '../utils';
 
 export type CommonOptions = {
@@ -36,7 +38,6 @@ export type CommonOptions = {
     | {
         type?: string;
         maxWorkers?: string | number;
-        minWorkers?: string | number;
         execArgv?: string[] | string;
       };
   /**
@@ -144,9 +145,9 @@ const normalizeBooleanLikeCliValue = (
 };
 
 export function mergeWithCLIOptions(
-  config: RstestConfig,
+  config: ResolvedRstestConfig,
   options: CommonOptions,
-): RstestConfig {
+): ResolvedRstestConfig {
   const keys: (keyof CommonOptions & keyof RstestConfig)[] = [
     'root',
     'globals',
@@ -187,6 +188,16 @@ export function mergeWithCLIOptions(
 
   if (options.reporters) {
     config.reporters = castArray(options.reporters) as typeof config.reporters;
+  }
+
+  // `shard` is CLI-only (`--shard`). Discard any value carried by the loaded
+  // config so sharding can never take effect without the flag, then populate
+  // it solely from the CLI option below.
+  if (config.shard) {
+    logger.warn(
+      'The `shard` config field is no longer supported and is ignored. Use the `--shard <index>/<count>` CLI flag instead.',
+    );
+    config.shard = undefined;
   }
 
   if (options.shard) {
@@ -377,10 +388,6 @@ export function mergeWithCLIOptions(
 
       if (poolFromCli.maxWorkers !== undefined) {
         pool.maxWorkers = poolFromCli.maxWorkers as any;
-      }
-
-      if (poolFromCli.minWorkers !== undefined) {
-        pool.minWorkers = poolFromCli.minWorkers as any;
       }
 
       if (poolFromCli.execArgv !== undefined) {

@@ -5,7 +5,7 @@ describe('Test timeout', () => {
   it('should throw timeout error when test timeout', async () => {
     const { cli, expectLog, expectStderrLog } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'fixtures/timeout.test'],
+      args: ['run', 'fixtures/timeout.test', '--testTimeout=50'],
       options: {
         nodeOptions: {
           cwd: __dirname,
@@ -21,14 +21,14 @@ describe('Test timeout', () => {
       /Error: test timed out in 50ms.*no expect assertions completed/,
     );
 
-    expectStderrLog(/timeout.test.ts:5:3/);
+    expectStderrLog(/timeout.test.ts:5:5/);
 
     expectStderrLog(
-      /Error: test timed out in 5000ms.*completed 1 expect assertion[^s]/,
+      /Error: test timed out in 50ms.*completed 1 expect assertion[^s]/,
     );
 
-    expectStderrLog(/timeout.test.ts:10:3/);
+    expectStderrLog(/timeout.test.ts:10:5/);
 
     expectLog(/Tests 2 failed/, logs);
-  }, 10000);
+  });
 });
