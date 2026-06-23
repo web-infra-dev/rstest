@@ -1,3 +1,4 @@
+import { normalize as nativeNormalize } from 'node:path';
 import {
   isAbsolute,
   join,
@@ -60,6 +61,18 @@ export const displayPath = (filePath: string, rootPath: string): string => {
   const rel = relative(rootPath, resolve(rootPath, filePath));
   return rel && !rel.startsWith('..') ? rel : filePath;
 };
+
+/**
+ * Convert a path to the OS-native separator form (`\` on Windows, no-op on
+ * POSIX). Internally `testPath` stays POSIX so the pathe-based consumers
+ * (snapshot, reporter relative paths, related-graph lookup) keep working, but
+ * the user-facing surfaces (`expect.getState().testPath`, hook `ctx.filepath`)
+ * must match `import.meta.filename`/`__filename`, which the rspack plugin
+ * injects in native form. Apply this only at those user-facing boundaries.
+ * See https://github.com/web-infra-dev/rstest/issues/1465.
+ */
+export const toNativePath = (filePath: string): string =>
+  nativeNormalize(filePath);
 
 export const parsePosix = (filePath: string): { dir: string; base: string } => {
   const { dir, base } = parse(filePath);
