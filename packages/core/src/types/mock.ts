@@ -8,6 +8,7 @@ import type { RuntimeConfig } from './worker';
 type FakeTimerTickTime = Parameters<FakeTimerClock['tick']>[0];
 type FakeTimerSystemTime = Parameters<FakeTimerClock['setSystemTime']>[0];
 type FakeTimerTickMode = Parameters<FakeTimerClock['setTickMode']>[0];
+type MockFactory<T = unknown> = () => Partial<T>;
 
 interface MockResultReturn<T> {
   type: 'return';
@@ -184,7 +185,6 @@ export interface Mock<
 }
 
 export type MockFn = <T extends FunctionLike = FunctionLike>(fn?: T) => Mock<T>;
-type MockFactory<T = unknown> = () => MaybePromise<Partial<T>>;
 
 export type WaitForCallback<T> = () => MaybePromise<T>;
 

@@ -9,7 +9,7 @@ Rstest supports mocking modules, which allows you to replace the implementation 
 
 ## rs.mock
 
-- **Type:** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Promise<Partial<T>> | Partial<T>) | { spy: true } | { mock: true }) => void`
+- **Type:** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true } | { mock: true }) => void`
 
 Mocks and replaces the module specified in the first parameter.
 
@@ -20,6 +20,8 @@ Mocks and replaces the module specified in the first parameter.
 ### With factory function
 
 If a factory function is provided as the second parameter, the module will be replaced with the return value of the factory function.
+
+Factory functions must be synchronous. To keep part of the original implementation, import the actual module with `with { rstest: 'importActual' }` before the mock factory and spread it into the returned object.
 
 #### Basic example
 
@@ -233,7 +235,7 @@ rs.mock(import('../src/b'), () => {
 
 ## rs.doMock
 
-- **Type:** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Promise<Partial<T>> | Partial<T>) | { spy: true } | { mock: true }) => void`
+- **Type:** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true } | { mock: true }) => void`
 
 Similar to `rs.mock`, but it is **not hoisted** to the top of the module. It is called when it's executed, which means that if a module has already been imported before calling `rs.doMock`, that module will not be mocked, while modules imported after calling `rs.doMock` will be mocked.
 
