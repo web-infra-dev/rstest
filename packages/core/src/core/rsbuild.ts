@@ -93,7 +93,10 @@ const getChangedFiles = (
     return undefined;
   }
 
-  return new Set([...compiler.modifiedFiles, ...compiler.removedFiles]);
+  return new Set([
+    ...(compiler.modifiedFiles ?? []),
+    ...(compiler.removedFiles ?? []),
+  ]);
 };
 
 export const resolveTestEnvironmentWatchFiles = async (
