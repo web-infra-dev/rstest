@@ -262,8 +262,11 @@ const getMockImplementation = (mockType = 'mock') => {
         const res = modFactory();
 
         if (isPromise(res)) {
-          __webpack_module__.exports = res;
-          return;
+          throw new Error(
+            `[Rstest] An async mock factory is not supported. ` +
+              `Use a sync factory; to keep part of the original module, ` +
+              `import it with \`with { rstest: 'importActual' }\` and spread it in.`,
+          );
         }
 
         if (isMockRequire) {
