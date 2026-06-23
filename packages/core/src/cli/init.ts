@@ -38,7 +38,6 @@ export type CommonOptions = {
     | {
         type?: string;
         maxWorkers?: string | number;
-        minWorkers?: string | number;
         execArgv?: string[] | string;
       };
   /**
@@ -387,10 +386,6 @@ export function mergeWithCLIOptions(
 
       if (poolFromCli.maxWorkers !== undefined) {
         pool.maxWorkers = poolFromCli.maxWorkers as any;
-      }
-
-      if (poolFromCli.minWorkers !== undefined) {
-        pool.minWorkers = poolFromCli.minWorkers as any;
       }
 
       if (poolFromCli.execArgv !== undefined) {

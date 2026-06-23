@@ -17,8 +17,6 @@ export type RstestPoolOptions = {
   type?: RstestPoolType;
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
-  /** Minimum number or percentage of workers to run tests in. */
-  minWorkers?: number | string;
   /** Pass additional arguments to node process in the child processes. */
   execArgv?: string[];
 };
@@ -34,11 +32,11 @@ export type RstestConfig = {
 ```ts
 const defaultPool = {
   type: 'forks',
-  // maxWorkers/minWorkers are computed from CPU count and command mode
+  // maxWorkers is computed from CPU count and command mode
 };
 ```
 
-- **CLI:** `--pool <type>`, `--pool.type <type>`, `--pool.maxWorkers <value>`, `--pool.minWorkers <value>`, `--pool.execArgv <arg>`
+- **CLI:** `--pool <type>`, `--pool.type <type>`, `--pool.maxWorkers <value>`, `--pool.execArgv <arg>`
 
 Options of pool used to run tests in.
 
@@ -99,23 +97,6 @@ Common values:
 - A fixed number such as `4`: cap resource usage to a known safe level regardless of machine size.
 
 `maxWorkers` is about file-level parallelism. It does not limit `test.concurrent` cases inside a single test file — use [`maxConcurrency`](/config/test/max-concurrency) for that.
-
-## Keep workers warm
-
-By default, Rstest creates workers on demand and avoids starting worker slots that are not needed for the current run. `pool.minWorkers` controls how many idle workers are retained after demand drops.
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  pool: {
-    maxWorkers: 4,
-    minWorkers: 1,
-  },
-});
-```
-
-Set `minWorkers` when worker startup is expensive and you want repeated runs, especially in watch mode, to reuse warm workers. Keep it low when memory is more important than rerun latency.
 
 ## Pass Node.js flags to workers
 

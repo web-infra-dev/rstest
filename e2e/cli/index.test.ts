@@ -172,7 +172,7 @@ describe.concurrent('test exit code', () => {
     });
     await expectExecFailed();
 
-    expectStderrLog(/Invalid pool configuration/);
+    expectStderrLog(/Intentional config error for testing/);
   });
 
   it('should get RSTEST flag correctly in config', async ({
