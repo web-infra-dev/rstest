@@ -657,9 +657,11 @@ export const runInPool = async (
     );
 
     if (asyncLeakDetector) {
-      if (api.rstest.isFakeTimers()) {
-        api.rstest.useRealTimers();
-      }
+      // Undo any time mocking before collecting leaks and before a reused worker
+      // runs the next file. This must cover BOTH full fake timers and a
+      // date-only `setSystemTime()` pin (which leaves `isFakeTimers()` false);
+      // `useRealTimers()` is an idempotent no-op when nothing is mocked.
+      api.rstest.useRealTimers();
       const asyncLeakErrors = await asyncLeakDetector.collectErrors();
       if (asyncLeakErrors.length > 0) {
         results.status = 'fail';

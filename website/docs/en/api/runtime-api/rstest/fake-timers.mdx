@@ -70,11 +70,16 @@ if (rs.isFakeTimers()) {
 
 Sets the current system time used by fake timers. Useful for testing code that depends on the current date or time.
 
+If fake timers are enabled, this simulates the user changing the system clock (affecting date-related APIs like `Date` and `performance.now`) without firing any timers. If fake timers are not enabled, this only mocks `Date.*` calls, so you can pin the clock without calling [`rs.useFakeTimers`](#rsusefaketimers) first.
+
 The `now` value can also be a Temporal-like object such as `Temporal.Instant` or `Temporal.ZonedDateTime`.
 
 ```ts
-rs.useFakeTimers();
 rs.setSystemTime(new Date('2020-01-01T00:00:00Z'));
+
+expect(new Date().toISOString()).toBe('2020-01-01T00:00:00.000Z');
+
+rs.useRealTimers();
 ```
 
 ## rs.getRealSystemTime

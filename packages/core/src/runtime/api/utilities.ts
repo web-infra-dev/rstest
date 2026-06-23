@@ -149,6 +149,9 @@ const buildRstestUtilities = async (): Promise<{
     config: FakeTimerInstallOpts | undefined;
     snapshot: FakeTimersSnapshot | undefined;
     wasFakeTimers: boolean;
+    // The Date-only pin (from a prior `setSystemTime()` without fake timers)
+    // active when this scope was entered, so it can be restored on dispose.
+    fakingDate: Date | null;
   };
 
   const originalEnvValues = new Map<string, EnvStackEntry[]>();
@@ -268,6 +271,7 @@ const buildRstestUtilities = async (): Promise<{
         laterEntry.config = entry.config;
         laterEntry.snapshot = entry.snapshot;
         laterEntry.wasFakeTimers = entry.wasFakeTimers;
+        laterEntry.fakingDate = entry.fakingDate;
       },
       onTail: () => {
         if (entry.wasFakeTimers) {
@@ -278,6 +282,10 @@ const buildRstestUtilities = async (): Promise<{
           currentFakeTimersConfig = entry.config;
         } else {
           timers().useRealTimers();
+          // Re-establish a Date-only pin that was active before this scope.
+          if (entry.fakingDate) {
+            timers().setSystemTime(entry.fakingDate);
+          }
           currentFakeTimersConfig = undefined;
         }
       },
@@ -457,6 +465,7 @@ const buildRstestUtilities = async (): Promise<{
         config: currentFakeTimersConfig,
         snapshot: wasFakeTimers ? timerApi.snapshot() : undefined,
         wasFakeTimers,
+        fakingDate: timerApi.getMockedSystemTime(),
       };
       timerStack.push(entry);
       timerApi.useFakeTimers(opts);
