@@ -2,14 +2,37 @@ pre-commit:
   parallel: true
   commands:
     prettier:
-      glob: '**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts,md,mdx,css,less,scss,json,jsonc,json5}'
-      exclude: 'CLAUDE.md'
+      # No glob: let prettier pick which staged files it can format (via
+      # --ignore-unknown, honoring .prettierignore), so this matches the whole-repo
+      # `prettier --check .` run on pre-push and in CI. An explicit extension list
+      # drifts (it was missing yaml) and **/*.x does not match repo-root files.
       stage_fixed: true
-      run: pnpm prettier --write {staged_files}
+      run: pnpm prettier --write --ignore-unknown {staged_files}
+
+pre-push:
+  parallel: true
+  commands:
+    # Build-free checks — whole-repo prettier + spell/heading-case. Runs on every
+    # push, including docs-only ones. Overlaps the typecheck build, so on a code
+    # push it adds no wall-clock. The build's only prettier-checked output,
+    # packages/*/LICENSE.md, is in .prettierignore so it cannot race this scan.
+    format-spell:
+      run: pnpm prettier --check . && pnpm run check-spell
+    # Type-check needs built package .d.ts, so build first. Runs unless the push
+    # is entirely markdown, so a docs-only push still skips the build while config
+    # inputs (tsconfig.json, rslint.config.mts, ...) keep gating it. An inclusive
+    # extension glob would miss those: lefthook's **/*.x does not match repo-root
+    # files such as rslint.config.mts.
+    typecheck:
+      exclude:
+        - '*.md'
+        - '*.mdx'
+      run: pnpm run build && pnpm run lint:type
+    # Dependency-version check lives here rather than on pre-commit; lefthook skips
+    # it instantly when no pushed file matches its glob, so a code-only push pays
+    # nothing. `pnpm dedupe --check` is intentionally left to CI: it can perturb
+    # pnpm's modules state, and CI keeps it last to stay safe — pre-push runs in
+    # parallel and gives no ordering control to isolate it from the build.
     check-dependency-version:
       glob: '**/package.json'
-      stage_fixed: true
-      run: pnpm run check-dependency-version && pnpm prettier --write {staged_files}
-    pnpm-dedupe:
-      glob: 'pnpm-lock.yaml'
-      run: pnpm dedupe --check --config.minimum-release-age=0
+      run: pnpm run check-dependency-version
