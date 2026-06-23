@@ -3,12 +3,13 @@ import type { RstestContext } from '../../types';
 import { castArray, getTempRstestOutputDirGlob } from '../../utils';
 
 class TestFileWatchPlugin {
+  #filesToWatch: string[];
+
   private readonly contextToWatch: string | null = null;
-  private readonly filesToWatch: string[];
 
   constructor(contextToWatch: string, filesToWatch: string[]) {
     this.contextToWatch = contextToWatch;
-    this.filesToWatch = filesToWatch;
+    this.#filesToWatch = filesToWatch;
   }
 
   apply(compiler: Rspack.Compiler) {
@@ -24,7 +25,7 @@ class TestFileWatchPlugin {
           contextDep.add(this.contextToWatch);
         }
 
-        for (const file of this.filesToWatch) {
+        for (const file of this.#filesToWatch) {
           compilation.fileDependencies.add(file);
         }
       },
