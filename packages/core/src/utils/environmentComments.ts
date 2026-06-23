@@ -256,12 +256,14 @@ export const applyEnvironmentComment = (
   comment: EnvironmentComment,
 ): EnvironmentWithOptions => {
   const name = comment.name ?? baseEnvironment.name;
+  const target =
+    name === baseEnvironment.name ? baseEnvironment.target : undefined;
   const options =
     name === baseEnvironment.name
       ? { ...(baseEnvironment.options || {}), ...(comment.options || {}) }
       : comment.options;
+  const environment =
+    options && Object.keys(options).length > 0 ? { name, options } : { name };
 
-  return options && Object.keys(options).length > 0
-    ? { name, options }
-    : { name };
+  return target ? { ...environment, target } : environment;
 };

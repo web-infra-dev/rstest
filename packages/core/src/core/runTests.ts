@@ -33,7 +33,11 @@ import {
   runGlobalSetup,
   runGlobalTeardown,
 } from './globalSetup';
-import { createRsbuildServer, prepareRsbuild } from './rsbuild';
+import {
+  createRsbuildServer,
+  prepareRsbuild,
+  resolveTestEnvironmentWatchFiles,
+} from './rsbuild';
 import { resolveRunnableProjectsByEntries } from './environmentEntries';
 import type { Rstest } from './rstest';
 
@@ -480,12 +484,20 @@ export async function runTests(context: Rstest): Promise<void> {
     }),
   );
 
+  const testEnvironmentFiles = await resolveTestEnvironmentWatchFiles(
+    projects,
+    command,
+    context.rootPath,
+  );
+
   const rsbuildInstance = await prepareRsbuild(
     context,
     globTestSourceEntries,
     setupFiles,
     globalSetupFiles,
     projects,
+    undefined,
+    testEnvironmentFiles,
   );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
@@ -498,6 +510,7 @@ export async function runTests(context: Rstest): Promise<void> {
     globTestSourceEntries,
     setupFiles,
     globalSetupFiles,
+    testEnvironmentFiles,
     rsbuildInstance,
     rootPath,
   });

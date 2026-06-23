@@ -23,6 +23,7 @@ import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
+import { resolveTestEnvironmentPath } from './resolveTestEnvironment';
 import { isRuntimeChunk, runtimeChunkNameForEnvironment } from './runtimeChunk';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -85,6 +86,32 @@ const isMultiCompiler = <
   return 'compilers' in compiler && Array.isArray(compiler.compilers);
 };
 
+export const resolveTestEnvironmentWatchFiles = async (
+  projects: ProjectContext[],
+  command: RstestContext['command'],
+  rootPath: string,
+): Promise<Record<string, string[]>> => {
+  if (command !== 'watch') {
+    return {};
+  }
+
+  const entries = await Promise.all(
+    projects.map(async (project) => {
+      const resolvedPaths = await resolveTestEnvironmentPath(
+        project.normalizedConfig.testEnvironment.name,
+        [project.rootPath, rootPath],
+      );
+
+      return [
+        project.environmentName,
+        resolvedPaths?.map((resolvedPath) => fileURLToPath(resolvedPath)) || [],
+      ] as const;
+    }),
+  );
+
+  return Object.fromEntries(entries);
+};
+
 export const prepareRsbuild = async (
   context: RstestContext,
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>,
@@ -100,6 +127,7 @@ export const prepareRsbuild = async (
    */
   targetProjects?: ProjectContext[],
   extraPlugins: RsbuildPlugin[] = [],
+  testEnvironmentFiles: Record<string, string[]> = {},
 ): Promise<RsbuildInstance> => {
   const {
     command,
@@ -155,6 +183,7 @@ export const prepareRsbuild = async (
           globTestSourceEntries,
           setupFiles,
           globalSetupFiles,
+          testEnvironmentFiles,
           context,
           isWatch: command === 'watch',
         }),
@@ -195,6 +224,7 @@ export const prepareRsbuild = async (
 const calcEntriesToRerun = (
   entries: EntryInfo[],
   chunks: Rspack.StatsChunk[] | undefined,
+  changedFiles: ReadonlySet<string> | undefined,
   buildData: {
     entryToChunkHashes?: TestEntryToChunkHashes;
     setupEntryToChunkHashes?: TestEntryToChunkHashes;
@@ -204,6 +234,7 @@ const calcEntriesToRerun = (
   outputPath: string,
   runtimeChunkName: string,
   setupEntries: EntryInfo[],
+  testEnvironmentFiles: string[],
 ): {
   affectedEntries: EntryInfo[];
   deletedEntries: string[];
@@ -291,6 +322,10 @@ const calcEntriesToRerun = (
   const previousSetupHashes = buildData.setupEntryToChunkHashes;
   const previousEntryHashes = buildData.entryToChunkHashes;
 
+  const hasChangedTestEnvironmentFile = testEnvironmentFiles.some((file) =>
+    changedFiles?.has(file),
+  );
+
   const setupEntryToChunkHashesMap = new Map<string, Record<string, string>>();
   setupEntries.forEach((entry) => {
     buildChunkHashes(entry, setupEntryToChunkHashesMap);
@@ -331,7 +366,11 @@ const calcEntriesToRerun = (
   const { affectedPaths: affectedSetupPaths, deletedPaths: deletedSetups } =
     processEntryChanges(previousSetupHashes, setupEntryToChunkHashesMap);
 
-  if (affectedSetupPaths.size > 0 || deletedSetups.length > 0) {
+  if (
+    hasChangedTestEnvironmentFile ||
+    affectedSetupPaths.size > 0 ||
+    deletedSetups.length > 0
+  ) {
     return { affectedEntries: entries, deletedEntries: [] };
   }
 
@@ -365,6 +404,7 @@ export const createRsbuildServer = async ({
   rsbuildInstance,
   inspectedConfig,
   isWatchMode,
+  testEnvironmentFiles = {},
 }: {
   isWatchMode: boolean;
   rsbuildInstance: RsbuildInstance;
@@ -374,6 +414,7 @@ export const createRsbuildServer = async ({
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
   globalSetupFiles: Record<string, Record<string, string>>;
+  testEnvironmentFiles?: Record<string, string[]>;
   rootPath: string;
 }): Promise<{
   getRsbuildStats: (options: {
@@ -437,11 +478,13 @@ export const createRsbuildServer = async ({
     throw new Error('rspackCompiler was not initialized');
   }
 
+  const compiler = rspackCompiler;
+
   const outputFileSystem: Rspack.OutputFileSystem | null = isMultiCompiler(
-    rspackCompiler,
+    compiler,
   )
-    ? rspackCompiler.compilers[0]!.outputFileSystem
-    : rspackCompiler.outputFileSystem;
+    ? compiler.compilers[0]!.outputFileSystem
+    : compiler.outputFileSystem;
 
   if (!outputFileSystem) {
     throw new Error(
@@ -616,10 +659,16 @@ export const createRsbuildServer = async ({
       ? calcEntriesToRerun(
           entries,
           chunks,
+          isMultiCompiler(compiler)
+            ? compiler.compilers.find(
+                (compiler) => compiler.name === environmentName,
+              )?.modifiedFiles
+            : compiler.modifiedFiles,
           buildData[environmentName],
           outputPath!,
           runtimeChunkNameForEnvironment(environmentName),
           setupEntries,
+          testEnvironmentFiles[environmentName] || [],
         )
       : { affectedEntries: [], deletedEntries: [] };
 

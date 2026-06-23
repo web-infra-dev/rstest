@@ -4,9 +4,11 @@ import { castArray, getTempRstestOutputDirGlob } from '../../utils';
 
 class TestFileWatchPlugin {
   private readonly contextToWatch: string | null = null;
+  private readonly filesToWatch: string[];
 
-  constructor(contextToWatch: string) {
+  constructor(contextToWatch: string, filesToWatch: string[]) {
     this.contextToWatch = contextToWatch;
+    this.filesToWatch = filesToWatch;
   }
 
   apply(compiler: Rspack.Compiler) {
@@ -21,6 +23,10 @@ class TestFileWatchPlugin {
         if (!contextDep.has(this.contextToWatch)) {
           contextDep.add(this.contextToWatch);
         }
+
+        for (const file of this.filesToWatch) {
+          compilation.fileDependencies.add(file);
+        }
       },
     );
   }
@@ -31,6 +37,7 @@ export const pluginEntryWatch: (params: {
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
   globalSetupFiles: Record<string, Record<string, string>>;
+  testEnvironmentFiles?: Record<string, string[]>;
   isWatch: boolean;
   configFilePath?: string;
 }) => RsbuildPlugin = ({
@@ -38,6 +45,7 @@ export const pluginEntryWatch: (params: {
   globTestSourceEntries,
   setupFiles,
   globalSetupFiles,
+  testEnvironmentFiles = {},
   context,
 }) => ({
   name: 'rstest:entry-watch',
@@ -45,7 +53,12 @@ export const pluginEntryWatch: (params: {
     const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
     api.modifyRspackConfig(async (config, { environment }) => {
       if (isWatch) {
-        config.plugins.push(new TestFileWatchPlugin(environment.config.root));
+        config.plugins.push(
+          new TestFileWatchPlugin(
+            environment.config.root,
+            testEnvironmentFiles[environment.name] || [],
+          ),
+        );
         config.entry = async () => {
           const sourceEntries = await globTestSourceEntries(environment.name);
           return {
