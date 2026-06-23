@@ -117,10 +117,11 @@ let utilitiesPromise:
  * without any forwarder/Proxy (the live-binding contract, see `./index`).
  * Per-file state is RESET, not rebuilt: the config methods resolve the running
  * file's worker state through `fileContext()` at call time, and `resetForFile`
- * drops the env/global/timer stub bookkeeping and the mock registry between
- * files, mirroring the previous per-file object rebuild exactly. The actual
- * globalThis side-effects are still unwound by the runner's config-gated
- * `unstubAll*`/`*AllMocks` and the per-file `useRealTimers`, unchanged.
+ * drops the env/global/timer stub bookkeeping between files. The mock registry
+ * is kept (it holds weak references) so a mock from a module shared across files
+ * stays tracked. The actual globalThis side-effects are still unwound by the
+ * runner's config-gated `unstubAll*`/`*AllMocks` and the per-file
+ * `useRealTimers`, unchanged.
  * See https://github.com/web-infra-dev/rstest/issues/1376.
  */
 export const createRstestUtilities = async (): Promise<RstestUtilities> => {
@@ -286,7 +287,7 @@ const buildRstestUtilities = async (): Promise<{
     fn,
     spyOn,
     isMockFunction,
-    mocks,
+    forEachMock,
     createMockInstance,
     resetCallOrder,
   } = initSpy();
@@ -319,21 +320,15 @@ const buildRstestUtilities = async (): Promise<{
     // The type transformation happens at compile time
     mocked: ((item: any) => item) as RstestUtilities['mocked'],
     clearAllMocks: () => {
-      for (const mock of mocks) {
-        mock.mockClear();
-      }
+      forEachMock((mock) => mock.mockClear());
       return rstest;
     },
     resetAllMocks: () => {
-      for (const mock of mocks) {
-        mock.mockReset();
-      }
+      forEachMock((mock) => mock.mockReset());
       return rstest;
     },
     restoreAllMocks: () => {
-      for (const mock of mocks) {
-        mock.mockRestore();
-      }
+      forEachMock((mock) => mock.mockRestore());
       return rstest;
     },
     mock: createPluginManagedApi('mock'),
@@ -610,13 +605,17 @@ const buildRstestUtilities = async (): Promise<{
     },
   };
 
-  // Drop the per-file bookkeeping so the next file starts clean — this mirrors
-  // the previous "rebuild a fresh utilities object per file" exactly. The actual
+  // Drop the per-file bookkeeping so the next file starts clean. The actual
   // globalThis side-effects (env/global stubs, fake timers, installed spies) are
   // unwound elsewhere (the runner's config-gated `unstubAll*`/`*AllMocks` and the
-  // per-file `useRealTimers`), so only the tracking maps/registry are cleared.
+  // per-file `useRealTimers`), so only the tracking maps are cleared.
+  //
+  // The mock registry is deliberately NOT reset here: under `isolate: false` a
+  // mock created in a module shared across files persists, so it must stay
+  // tracked for the per-test `*AllMocks` to keep reaching it. The registry holds
+  // weak references (see `initSpy`), so file-local mocks fall out on their own
+  // once their evicted module is collected.
   const resetForFile = (): void => {
-    mocks.clear();
     resetCallOrder();
     originalEnvValues.clear();
     originalGlobalValues.clear();

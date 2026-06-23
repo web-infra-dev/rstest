@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 
 describe('module state sharing under isolate: false', () => {
   // Runs the whole `sharing` fixture dir (one worker, isolate: false) and
-  // asserts every file passes. Covers two regressions:
+  // asserts every file passes. Covers three regressions:
   // - https://github.com/web-infra-dev/rstest/issues/1373: a module imported by
   //   multiple files is evaluated once per worker (state shared) while setup
   //   still re-runs per file (a/b.test.ts + shared.ts).
@@ -18,6 +18,11 @@ describe('module state sharing under isolate: false', () => {
   //   through one persisted helper from a non-first file (surfaceFirst/Second/
   //   Third + surfaceHelper.ts); the subtle `expect` self-delegation is
   //   unit-covered (tests/runtime/api/expect.test.ts).
+  // - https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3457255132: a
+  //   mock defined in a module shared across files persists, so `clearMocks`
+  //   must keep resetting it across the file boundary even though the per-file
+  //   reset no longer clears the (weakly-held) registry (mockShareFirst/Second +
+  //   sharedMock.ts).
   it('shares imported module state across files while re-running setup', async ({
     onTestFinished,
   }) => {

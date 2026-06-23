@@ -17,7 +17,12 @@ export const initSpy = (): Pick<
   RstestUtilities,
   'isMockFunction' | 'spyOn' | 'fn'
 > & {
-  mocks: Set<MockInstance>;
+  /**
+   * Run `callback` against every live registered mock, pruning entries whose
+   * mock has been garbage-collected. See `forEachMock` below for why the
+   * registry holds weak references.
+   */
+  forEachMock: (callback: (mock: MockInstance) => void) => void;
   createMockInstance: CreateMockInstanceFn;
   /**
    * Restart `invocationCallOrder` numbering. The spy state lives for the whole
@@ -27,7 +32,16 @@ export const initSpy = (): Pick<
   resetCallOrder: () => void;
 } => {
   let callOrder = 0;
-  const mocks: Set<MockInstance> = new Set<MockInstance>();
+  // Weak references so the registry never pins a mock alive. The `rstest`
+  // singleton (and this set) lives for the whole worker, but under
+  // `isolate: false` a mock created in a per-file (later evicted) module must
+  // be collectable once that module is gone, while a mock kept alive by a
+  // module shared across files stays tracked. A strong `Set` would leak every
+  // mock ever created for the worker's lifetime; clearing it per file (the
+  // previous approach) instead dropped shared mocks so `clearAllMocks` &c. could
+  // no longer reach them across files.
+  // See https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3457255132.
+  const mocks: Set<WeakRef<MockInstance>> = new Set<WeakRef<MockInstance>>();
 
   const wrapSpy = <T extends FunctionLike>(
     obj: Record<string, any>,
@@ -219,9 +233,20 @@ export const initSpy = (): Pick<
       });
     }
 
-    mocks.add(spyFn);
+    mocks.add(new WeakRef(spyFn));
 
     return spyFn;
+  };
+
+  const forEachMock = (callback: (mock: MockInstance) => void): void => {
+    for (const ref of mocks) {
+      const mock = ref.deref();
+      if (mock) {
+        callback(mock);
+      } else {
+        mocks.delete(ref);
+      }
+    }
   };
 
   const fn: MockFn = <T extends FunctionLike>(mockFn?: T) => {
@@ -373,7 +398,7 @@ export const initSpy = (): Pick<
     isMockFunction,
     spyOn,
     fn,
-    mocks,
+    forEachMock,
     createMockInstance,
     resetCallOrder: () => {
       callOrder = 0;
