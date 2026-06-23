@@ -307,4 +307,40 @@ describe('test coverage-istanbul', () => {
       logs.find((log) => log.includes('All files'))?.replaceAll(' ', ''),
     ).toMatchInlineSnapshot(`"Allfiles|0|0|0|0|"`);
   });
+
+  it('generates coverage for untested files when the project path contains a test directory', async () => {
+    const fixturePath = join(__dirname, 'test-dir-collision-fixture');
+    const fixtureRoot = join(__dirname, '.tmp/test-dir-collision');
+    const packagePath = join(fixtureRoot, 'packages/test');
+
+    try {
+      await fs.remove(fixtureRoot);
+      await fs.copy(fixturePath, packagePath);
+      await fs.ensureSymlink(
+        join(__dirname, '../../packages/coverage-istanbul'),
+        join(packagePath, 'node_modules/@rstest/coverage-istanbul'),
+      );
+
+      const { expectExecSuccess, expectLog, cli } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', '--coverage'],
+        options: {
+          nodeOptions: {
+            cwd: packagePath,
+          },
+        },
+      });
+
+      await expectExecSuccess();
+
+      const logs = cli.stdout.split('\n').filter(Boolean);
+
+      expectLog('Coverage enabled with istanbul', logs);
+      expect(
+        logs.find((log) => log.includes('untested.ts'))?.replaceAll(' ', ''),
+      ).toMatchInlineSnapshot(`"untested.ts|0|100|0|0|1"`);
+    } finally {
+      await fs.remove(fixtureRoot);
+    }
+  });
 });
