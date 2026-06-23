@@ -315,7 +315,10 @@ describe('test coverage-istanbul', () => {
 
     try {
       await fs.remove(fixtureRoot);
-      await fs.copy(fixturePath, packagePath);
+      await fs.copy(fixturePath, packagePath, {
+        filter: (src) => !src.includes(`${fixturePath}/node_modules`),
+      });
+      await fs.ensureDir(join(packagePath, 'node_modules/@rstest'));
       await fs.ensureSymlink(
         join(__dirname, '../../packages/coverage-istanbul'),
         join(packagePath, 'node_modules/@rstest/coverage-istanbul'),
