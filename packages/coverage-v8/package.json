@@ -1,6 +1,6 @@
 {
   "name": "@rstest/coverage-v8",
-  "version": "0.10.5",
+  "version": "0.10.6",
   "description": "V8 coverage provider for Rstest",
   "keywords": [
     "rstest",
@@ -41,8 +41,8 @@
     "v8-to-istanbul": "^9.3.0"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.0.14",
-    "@rslib/core": "0.22.1",
+    "@rsbuild/core": "~2.1.0-beta.0",
+    "@rslib/core": "0.23.0",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/istanbul-lib-coverage": "^2.0.6",

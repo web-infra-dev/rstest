@@ -221,7 +221,6 @@ npx rstest run --coverage.changed=origin/main
 ```ts
 [
   '**/node_modules/**',
-  '**/test/**',
   '**/__tests__/**',
   '**/__mocks__/**',
   '**/*.d.ts',
@@ -233,6 +232,8 @@ npx rstest run --coverage.changed=origin/main
 ```
 
 匹配 glob 规则的文件将从测试覆盖率收集中排除。自定义配置将与默认值合并。
+
+Rstest 默认不会排除名为 `test` 的目录。这样可以避免误排除路径中包含 `test` 片段的 package 或 workspace 源文件，例如 `packages/test/src/index.ts`。如果你希望从覆盖率中排除这些目录，可以显式添加 `test/**` 或 `**/test/**` 等规则。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';

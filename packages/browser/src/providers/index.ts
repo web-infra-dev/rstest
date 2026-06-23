@@ -49,6 +49,9 @@ export type BrowserProviderPage = {
       event: 'console',
       listener: (message: BrowserConsoleMessage) => void,
     ): void;
+    // Page died: renderer crash or unexpected close. Headless scheduling wires
+    // these to fail the file immediately. Listeners take no payload.
+    (event: 'crash' | 'close', listener: () => void): void;
   };
   close: () => Promise<void>;
   [Symbol.asyncDispose]: () => Promise<void>;

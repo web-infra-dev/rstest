@@ -83,7 +83,6 @@ export type CoverageOptions = {
    * This option accepts an array of wax(https://crates.io/crates/wax)-compatible glob patterns
    *
    * @default ['**\/node_modules/**',
-   *           '**\/test/**',
    *           '**\/__tests__/**',
    *           '**\/__mocks__/**',
    *           '**\/*.d.ts',

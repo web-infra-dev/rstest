@@ -58,7 +58,6 @@ describe('valueTakingOptions (derived from option definitions)', () => {
         '--pool',
         '--pool.execArgv',
         '--pool.maxWorkers',
-        '--pool.minWorkers',
         '--pool.type',
         '--project',
         '--reporter',
@@ -98,7 +97,6 @@ describe('requiredDotOptions (derived from option definitions)', () => {
         '--coverage.reportsDirectory',
         '--pool.execArgv',
         '--pool.maxWorkers',
-        '--pool.minWorkers',
         '--pool.type',
         '--source.tsconfigPath',
       ].sort(),
@@ -286,11 +284,6 @@ describe('CLI help output', () => {
         run: false,
       }),
     ).toThrow('option `--pool.maxWorkers <value>` value is missing');
-    expect(() =>
-      cli.parse(['node', 'rstest', 'run', '--pool.minWorkers'], {
-        run: false,
-      }),
-    ).toThrow('option `--pool.minWorkers <value>` value is missing');
     expect(() =>
       cli.parse(['node', 'rstest', 'run', '--pool.execArgv'], { run: false }),
     ).toThrow('option `--pool.execArgv <arg>` value is missing');

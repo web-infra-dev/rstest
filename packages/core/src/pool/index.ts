@@ -373,15 +373,9 @@ export const createPool = async ({
     ? parseWorkers(poolOptions.maxWorkers, numCpus)
     : recommendCount;
 
-  const minWorkers = poolOptions.minWorkers
-    ? parseWorkers(poolOptions.minWorkers, numCpus)
-    : maxWorkers < recommendCount
-      ? maxWorkers
-      : recommendCount;
-
-  if (maxWorkers < minWorkers) {
-    throw `Invalid pool configuration: maxWorkers(${maxWorkers}) cannot be less than minWorkers(${minWorkers}).`;
-  }
+  // Internal idle-runner floor for `isolate: false`. It is not user-tunable
+  // (no public `pool.minWorkers`), so it can never exceed `maxWorkers`.
+  const minWorkers = Math.min(maxWorkers, recommendCount);
 
   const pool = new Pool({
     workerEntry: resolve(__dirname, './worker.js'),

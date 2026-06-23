@@ -474,7 +474,7 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.9.3" />
 
-The blob reporter serializes test results into JSON files for later merging. This is designed for use with [test sharding](/config/test/shard) in CI environments, where tests are split across multiple machines and results need to be combined afterward.
+The blob reporter serializes test results into JSON files for later merging. This is designed for use with [test sharding](/guide/basic/cli#sharding-tests) in CI environments, where tests are split across multiple machines and results need to be combined afterward.
 
 <Tabs defaultValue='CLI'>
   <Tab label="CLI">
@@ -507,7 +507,7 @@ export default defineConfig({
 
 Blob files are saved to `.rstest-reports/` by default. After all shards complete, use [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) to combine them into a unified report.
 
-See the [shard configuration](/config/test/shard) for a complete CI workflow example.
+See [splitting tests with shards](/guide/advanced/ci#split-tests-with-shards) for a complete CI workflow example.
 
 ## Custom reporters
 

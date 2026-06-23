@@ -275,7 +275,14 @@ export async function prepareFixtures({
     force: true,
     // Exclude temp fixture directories created by other parallel tests
     // to avoid race conditions (e.g., ENOENT when a directory is deleted mid-copy)
-    filter: (src) => !path.basename(src).startsWith('fixtures-test-'),
+    filter: (src) => {
+      const basename = path.basename(src);
+      return (
+        !basename.startsWith('fixtures-test-') &&
+        basename !== 'dist' &&
+        basename !== '.cache'
+      );
+    },
   });
 
   const update = (

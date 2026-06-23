@@ -90,7 +90,6 @@ Browser mode must stay provider-neutral at the framework boundary.
   - `snapshot.ts` — Browser snapshot environment (proxies file ops to host)
   - `sourceMapSupport.ts` — Source map handling for browser
   - `public.ts` — Re-exports runtime API for browser
-  - `fakeTimersStub.ts` — Stub for @sinonjs/fake-timers in browser
 
 ## Commands
 

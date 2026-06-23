@@ -15,6 +15,7 @@ type PlaywrightPageLike = Omit<
       event: 'console',
       listener: (message: BrowserConsoleMessage) => void,
     ): void;
+    (event: 'crash' | 'close', listener: () => void): void;
   };
 };
 type PlaywrightContextLike = Omit<
@@ -63,15 +64,21 @@ const wrapPage = (page: PlaywrightPageLike): BrowserProviderPage => {
   patchedPages.add(page);
   const originalOn = page.on.bind(page);
   page.on = ((
-    event: 'popup' | 'console',
+    event: 'popup' | 'console' | 'crash' | 'close',
     listener:
       | ((page: BrowserProviderPage) => void)
-      | ((message: BrowserConsoleMessage) => void),
+      | ((message: BrowserConsoleMessage) => void)
+      | (() => void),
   ) => {
     if (event === 'popup') {
       originalOn(event, (popup) => {
         (listener as (page: BrowserProviderPage) => void)(wrapPage(popup));
       });
+      return;
+    }
+
+    if (event === 'crash' || event === 'close') {
+      originalOn(event, listener as () => void);
       return;
     }
 

@@ -128,6 +128,21 @@ describe('mergeWithCLIOptions', () => {
       },
     });
   });
+
+  it('ignores a `shard` field carried by the config file', () => {
+    const config = mergeWithCLIOptions({ shard: { count: 2, index: 1 } }, {});
+
+    expect(config.shard).toBeUndefined();
+  });
+
+  it('populates `shard` only from the --shard CLI flag', () => {
+    const config = mergeWithCLIOptions(
+      { shard: { count: 2, index: 1 } },
+      { shard: '1/3' },
+    );
+
+    expect(config.shard).toEqual({ index: 1, count: 3 });
+  });
 });
 
 describe('resolveProjects', () => {
@@ -826,13 +841,13 @@ describe('resolveProjects', () => {
         root: rootPath,
         options: {
           pool: {
-            minWorkers: 1,
+            maxWorkers: 1,
           },
         },
       });
 
       expect(projects[0]!.config.pool).toEqual({
-        minWorkers: 1,
+        maxWorkers: 1,
       });
     });
 

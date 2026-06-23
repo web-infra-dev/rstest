@@ -6,7 +6,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
   "devtool": "nosources-source-map",
   "entry": {},
   "experiments": {
-    "pureFunctions": true,
+    "sourceImport": true,
   },
   "externals": [
     [Function],
@@ -127,11 +127,21 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
               },
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
                 "options": {
-                  "importLoaders": 1,
+                  "importLoaders": 0,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -141,19 +151,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
                     "namedExport": false,
                   },
                   "sourceMap": false,
-                },
-              },
-              {
-                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-                "options": {
-                  "modules": {
-                    "auto": true,
-                    "exportGlobals": false,
-                    "exportLocalsConvention": "camelCase",
-                    "exportOnlyLocals": true,
-                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                    "namedExport": false,
-                  },
                 },
               },
             ],
@@ -597,7 +594,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
   "devtool": "nosources-source-map",
   "entry": {},
   "experiments": {
-    "pureFunctions": true,
+    "sourceImport": true,
   },
   "externals": [
     [Function],
@@ -717,11 +714,21 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
               },
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
                 "options": {
-                  "importLoaders": 1,
+                  "importLoaders": 0,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -731,19 +738,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
                     "namedExport": false,
                   },
                   "sourceMap": false,
-                },
-              },
-              {
-                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-                "options": {
-                  "modules": {
-                    "auto": true,
-                    "exportGlobals": false,
-                    "exportLocalsConvention": "camelCase",
-                    "exportOnlyLocals": true,
-                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                    "namedExport": false,
-                  },
                 },
               },
             ],
@@ -1173,7 +1167,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
   "devtool": "nosources-source-map",
   "entry": {},
   "experiments": {
-    "pureFunctions": true,
+    "sourceImport": true,
   },
   "externals": [
     [Function],
@@ -1294,11 +1288,21 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
               },
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
                 "options": {
-                  "importLoaders": 1,
+                  "importLoaders": 0,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -1308,19 +1312,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
                     "namedExport": false,
                   },
                   "sourceMap": false,
-                },
-              },
-              {
-                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-                "options": {
-                  "modules": {
-                    "auto": true,
-                    "exportGlobals": false,
-                    "exportLocalsConvention": "camelCase",
-                    "exportOnlyLocals": true,
-                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                    "namedExport": false,
-                  },
                 },
               },
             ],
@@ -1748,7 +1739,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   "devtool": "nosources-source-map",
   "entry": [Function],
   "experiments": {
-    "pureFunctions": true,
+    "sourceImport": true,
   },
   "externals": [
     [Function],
@@ -1869,11 +1860,21 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
               },
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
                 "options": {
-                  "importLoaders": 1,
+                  "importLoaders": 0,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -1883,19 +1884,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
                     "namedExport": false,
                   },
                   "sourceMap": false,
-                },
-              },
-              {
-                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-                "options": {
-                  "modules": {
-                    "auto": true,
-                    "exportGlobals": false,
-                    "exportLocalsConvention": "camelCase",
-                    "exportOnlyLocals": true,
-                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                    "namedExport": false,
-                  },
                 },
               },
             ],
@@ -2426,11 +2414,21 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
         "use": [
           {
             "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "options": {
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
+            },
           },
           {
             "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
-              "importLoaders": 2,
+              "importLoaders": 1,
               "modules": {
                 "auto": true,
                 "exportGlobals": false,
@@ -2452,19 +2450,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
                 ],
               },
               "sourceMap": false,
-            },
-          },
-          {
-            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-            "options": {
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
             },
           },
         ],
@@ -2597,11 +2582,21 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
         "use": [
           {
             "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+            "options": {
+              "modules": {
+                "auto": true,
+                "exportGlobals": false,
+                "exportLocalsConvention": "camelCase",
+                "exportOnlyLocals": true,
+                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                "namedExport": false,
+              },
+            },
           },
           {
             "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
             "options": {
-              "importLoaders": 3,
+              "importLoaders": 2,
               "modules": {
                 "auto": true,
                 "exportGlobals": false,
@@ -2634,19 +2629,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
               "sourceMap": true,
             },
           },
-          {
-            "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-            "options": {
-              "modules": {
-                "auto": true,
-                "exportGlobals": false,
-                "exportLocalsConvention": "camelCase",
-                "exportOnlyLocals": true,
-                "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                "namedExport": false,
-              },
-            },
-          },
         ],
       },
     ],
@@ -2664,7 +2646,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "devtool": "nosources-source-map",
   "entry": {},
   "experiments": {
-    "pureFunctions": true,
+    "sourceImport": true,
   },
   "externals": [
     [Function],
@@ -2784,11 +2766,21 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
               },
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
                 "options": {
-                  "importLoaders": 1,
+                  "importLoaders": 0,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -2798,19 +2790,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                     "namedExport": false,
                   },
                   "sourceMap": false,
-                },
-              },
-              {
-                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-                "options": {
-                  "modules": {
-                    "auto": true,
-                    "exportGlobals": false,
-                    "exportLocalsConvention": "camelCase",
-                    "exportOnlyLocals": true,
-                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                    "namedExport": false,
-                  },
                 },
               },
             ],
@@ -3240,7 +3219,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
   "devtool": "nosources-source-map",
   "entry": {},
   "experiments": {
-    "pureFunctions": true,
+    "sourceImport": true,
   },
   "externals": [
     [Function],
@@ -3361,11 +3340,21 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "use": [
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/dist/ignoreCssLoader.mjs",
+                "options": {
+                  "modules": {
+                    "auto": true,
+                    "exportGlobals": false,
+                    "exportLocalsConvention": "camelCase",
+                    "exportOnlyLocals": true,
+                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
+                    "namedExport": false,
+                  },
+                },
               },
               {
                 "loader": "<PNPM_INNER>/@rsbuild/core/compiled/css-loader/index.js",
                 "options": {
-                  "importLoaders": 1,
+                  "importLoaders": 0,
                   "modules": {
                     "auto": true,
                     "exportGlobals": false,
@@ -3375,19 +3364,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
                     "namedExport": false,
                   },
                   "sourceMap": false,
-                },
-              },
-              {
-                "loader": "<ROOT>/packages/core/src/core/plugins/css-filter/cssFilterLoader.mjs",
-                "options": {
-                  "modules": {
-                    "auto": true,
-                    "exportGlobals": false,
-                    "exportLocalsConvention": "camelCase",
-                    "exportOnlyLocals": true,
-                    "localIdentName": "[path][name]__[local]-[hash:base64:6]",
-                    "namedExport": false,
-                  },
                 },
               },
             ],

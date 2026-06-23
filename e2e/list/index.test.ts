@@ -270,12 +270,12 @@ describe('test list command', () => {
     // FIXME rspack trasnpiles describe.for to describe["for"] so the location is different from describe.each
     expect(logs).toMatchInlineSnapshot(`
       [
-        "a.test.ts:3:1 > test a",
-        "a.test.ts:4:3 > test a > test a-1",
-        "a.test.ts:9:1 > test a-2",
-        "b.test.ts:3:1 > test b",
-        "b.test.ts:4:3 > test b > test b-1",
-        "b.test.ts:9:1 > test b-2",
+        "a.test.ts:3:9 > test a",
+        "a.test.ts:4:5 > test a > test a-1",
+        "a.test.ts:9:3 > test a-2",
+        "b.test.ts:3:9 > test b",
+        "b.test.ts:4:5 > test b > test b-1",
+        "b.test.ts:9:3 > test b-2",
         "c.test.ts:3:1 > test c describe each 0",
         "c.test.ts:5:13 > test c describe for 0",
         "c.test.ts:7:1 > test c describe runIf",

@@ -5,6 +5,7 @@ import type {
   Duration,
   NormalizedConfig,
   Reporter,
+  ShardConfig,
   SnapshotSummary,
   TestFileResult,
   TestResult,
@@ -14,7 +15,7 @@ import type { BlobReporterOptions } from '../types/reporter';
 
 export type BlobData = {
   version: string;
-  shard?: { index: number; count: number };
+  shard?: ShardConfig;
   results: TestFileResult[];
   coverage?: CoverageMapData;
   testResults: TestResult[];
@@ -32,10 +33,8 @@ const DEFAULT_OUTPUT_DIR = '.rstest-reports';
  * `blob[-index-count].json` shape independently — a string template here and a
  * hand-written regexp there — so a rename would silently desync the two sides.
  */
-export const blobFileName = (shard?: {
-  index: number;
-  count: number;
-}): string => (shard ? `blob-${shard.index}-${shard.count}.json` : 'blob.json');
+export const blobFileName = (shard?: ShardConfig): string =>
+  shard ? `blob-${shard.index}-${shard.count}.json` : 'blob.json';
 
 export const BLOB_FILE_RE: RegExp = /^blob(-\d+-\d+)?\.json$/;
 

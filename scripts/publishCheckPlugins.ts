@@ -12,6 +12,10 @@ import { pluginPublint } from 'rsbuild-plugin-publint';
  * needing dynamic import are intentional, not bugs.
  */
 export function publishCheckPlugins() {
+  if (process.env.RSTEST_PUBLISH_CHECK !== 'true') {
+    return [];
+  }
+
   return [
     pluginPublint(),
     pluginAreTheTypesWrong({

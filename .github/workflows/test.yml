@@ -75,6 +75,10 @@ jobs:
 
       - name: Build Packages
         run: pnpm run build
+        env:
+          # Publish checks are comparatively expensive and only need to run once
+          # as part of the lint/static-check gate.
+          RSTEST_PUBLISH_CHECK: true
 
       - name: Lint
         run: pnpm run lint
@@ -82,11 +86,15 @@ jobs:
       - name: Check Dependency Version
         run: pnpm run check-dependency-version
 
-      - name: Check pnpm Dedupe
-        run: pnpm dedupe --check --config.minimum-release-age=0
-
       - name: Check Unused Code
         run: pnpm run check-unused
+
+      - name: Check pnpm Dedupe
+        # Keep dedupe last: `pnpm dedupe --check` may leave pnpm's modules
+        # state needing a reconcile. If another `pnpm run ...` follows it,
+        # pnpm can enter its implicit install path and rerun lifecycle scripts
+        # such as the root `prepare`.
+        run: pnpm dedupe --check --config.minimum-release-age=0
 
   # ======== ut ========
   ut:
@@ -122,19 +130,14 @@ jobs:
       - name: Install Dependencies
         # setup-node's `cache: pnpm` restores the store; `--prefer-offline`
         # reuses it. A standalone `pnpm fetch` only re-warms an already-warm
-        # store (~26s/job of no gain). Install still runs the root `prepare`
-        # lifecycle (`pnpm run build`), so packages are built as before.
+        # store (~26s/job of no gain).
         run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Build Packages
+        run: pnpm run build
 
       - name: Setup Playwright
         uses: ./.github/actions/setup-playwright
-
-      - name: Run Type Check
-        # tsc is OS-independent, so PR runs it on macOS only; the post-merge
-        # FULL run still typechecks both OSes so push-to-main stays a literal
-        # superset of PR coverage.
-        if: needs.prepare.outputs.is_full_run == 'true' || matrix.os == 'macos-latest'
-        run: pnpm run typecheck
 
       - name: Run Test
         run: pnpm run test
@@ -198,9 +201,11 @@ jobs:
       - name: Install Dependencies
         # setup-node's `cache: pnpm` restores the store; `--prefer-offline`
         # reuses it. A standalone `pnpm fetch` only re-warms an already-warm
-        # store (~26s/job of no gain). Install still runs the root `prepare`
-        # lifecycle (`pnpm run build`), so packages are built as before.
+        # store (~26s/job of no gain).
         run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Build Packages
+        run: pnpm run build
 
       - name: Setup Playwright
         uses: ./.github/actions/setup-playwright

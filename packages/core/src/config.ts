@@ -279,7 +279,6 @@ const createDefaultConfig = (): NormalizedConfig => ({
   coverage: {
     exclude: [
       '**/node_modules/**',
-      '**/test/**',
       '**/__tests__/**',
       '**/__mocks__/**',
       '**/*.d.ts',
