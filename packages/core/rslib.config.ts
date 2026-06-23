@@ -122,6 +122,10 @@ export default defineConfig({
                   from: 'src/core/plugins/importActualLoader.mjs',
                   to: 'importActualLoader.mjs',
                 },
+                {
+                  from: 'src/core/plugins/wasmLoader.mjs',
+                  to: 'wasmLoader.mjs',
+                },
               ],
             }),
             // only load & apply licensePlugin in lib build

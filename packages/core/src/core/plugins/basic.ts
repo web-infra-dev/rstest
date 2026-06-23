@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { RsbuildPlugin } from '@rsbuild/core';
 import pathe from 'pathe';
 import {
@@ -9,6 +10,8 @@ import {
 import type { RstestContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
 import { runtimeChunkNameForEnvironment } from '../runtimeChunk';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const requireShim = `// Rstest ESM shims
 import __rstest_shim_module__ from 'node:module';
@@ -162,6 +165,19 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 type: 'javascript/esm',
               });
 
+              // Disable rspack's built-in `webassembly/async` handling and turn
+              // every `.wasm` into a self-contained JS module via wasmLoader.mjs
+              // that reads its on-disk SOURCE bytes and instantiates them, so
+              // there is no `async_wasm_loading` runtime and no `readFile(`
+              // string-replace. All wasm reads resolve source-relative (#1455).
+              config.experiments ??= {};
+              config.experiments.asyncWebAssembly = false;
+              config.module.rules.push({
+                test: /\.wasm$/,
+                type: 'javascript/auto',
+                use: [path.resolve(__dirname, './wasmLoader.mjs')],
+              });
+
               if (outputModule) {
                 config.plugins.push(
                   new rspack.BannerPlugin({
@@ -185,6 +201,14 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 requireAsExpression: false,
                 // Keep require.resolve expressions.
                 requireResolve: false,
+                // Keep `new URL(<literal>, import.meta.url)` expressions instead
+                // of rewriting them into hashed bundled asset paths. Tests run
+                // against on-disk source, so this must resolve at runtime
+                // relative to the source module (Node/Vitest behavior), see #1455.
+                // Load-bearing for ALL URL-based source-relative reads (assets
+                // and the `new URL(...).href` wasm path), not just #1455's
+                // sibling case; re-enabling `url` re-breaks every one of them.
+                url: false,
                 ...(config.module.parser.javascript || {}),
                 // suppress ESModulesLinkingError for exports that might be implemented in mock
                 exportsPresence: 'warn',

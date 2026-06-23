@@ -241,15 +241,15 @@ Some setup adapters are Vitest-specific. For example, `@testing-library/jest-dom
 
 ### Path resolution
 
-Depending on your transform/runtime mode, `new URL(..., import.meta.url)` may fail in setup or helper files.
+`new URL('./file', import.meta.url)` resolves relative to the source module, the same as in Node.js and Vitest, so it can locate sibling files (assets, fixtures) from setup or helper files:
 
-If you see path errors such as `Cannot find module './'` or `Cannot find module '..'`, prefer Node-style path resolution with `__dirname`:
-
-```diff
-- const root = fileURLToPath(new URL('../..', import.meta.url));
-+ import { resolve } from 'node:path';
-+ const root = resolve(__dirname, '../..');
+```ts
+const fixtureUrl = new URL('./fixture.json', import.meta.url);
 ```
+
+Rstest keeps these expressions as-is instead of rewriting them into bundled asset paths, so the resolved URL points at the on-disk source file.
+
+Because these expressions stay out of the bundler's dependency graph, editing such a sibling file in watch mode does not automatically re-run the tests that read it at runtime.
 
 ### Auto-mocking modules
 
