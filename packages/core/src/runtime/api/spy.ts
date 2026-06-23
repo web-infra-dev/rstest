@@ -50,11 +50,8 @@ export const initSpy = (
 
   const projectMocks = (): Set<WeakRef<MockInstance>> => {
     const key = getProjectKey();
-    let set = mocksByProject.get(key);
-    if (!set) {
-      set = new Set<WeakRef<MockInstance>>();
-      mocksByProject.set(key, set);
-    }
+    const set = mocksByProject.get(key) ?? new Set<WeakRef<MockInstance>>();
+    mocksByProject.set(key, set);
     return set;
   };
 
