@@ -3,7 +3,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm, { type SourceTextModule } from 'node:vm';
 import path from 'pathe';
 import { logger } from '../../utils/logger';
-import { clearSyntheticModuleCache } from './interop';
+import { clearCacheCleaners, clearSyntheticModuleCache } from './interop';
 import {
   finalizeDynamicImport,
   loadWasmFromContent,
@@ -313,6 +313,7 @@ export const clearModuleCache = (keep?: string): void => {
     for (const key of Object.keys(accumulatedAssetFiles)) {
       delete accumulatedAssetFiles[key];
     }
+    clearCacheCleaners();
   }
   clearSyntheticModuleCache();
 };

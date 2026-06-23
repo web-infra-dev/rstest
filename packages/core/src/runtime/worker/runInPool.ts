@@ -342,11 +342,16 @@ const loadFiles = async ({
     ? await import('./loadEsModule')
     : await import('./loadModule');
 
-  // clean rstest core cache manually
+  // Clean each kept runtime chunk's webpack module cache before re-running setup
+  // + entry. A reused worker can hold several projects' runtime chunks at once
+  // (isolate: false), so invoke EVERY registered cleaner — each is self-scoped to
+  // its own chunk's cache, so over-calling is a harmless no-op. See
+  // `moduleCacheControl.ts` for why this is a per-chunk registry, not a single
+  // `global.__rstest_clean_core_cache__` slot.
   if (!isolate) {
     await loadModule({
-      codeContent: `if (global && typeof global.__rstest_clean_core_cache__ === 'function') {
-  global.__rstest_clean_core_cache__();
+      codeContent: `if (global && global.__rstest_cache_cleaners__) {
+  global.__rstest_cache_cleaners__.forEach((fn) => fn());
   }`,
       distPath: '',
       testPath,
