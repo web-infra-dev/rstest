@@ -13,14 +13,19 @@ import type { CreateMockInstanceFn } from './mockObject';
 const isMockFunction = (fn: any): fn is MockInstance =>
   typeof fn === 'function' && '_isMockFunction' in fn && fn._isMockFunction;
 
-export const initSpy = (): Pick<
-  RstestUtilities,
-  'isMockFunction' | 'spyOn' | 'fn'
-> & {
+export const initSpy = (
+  // The running file's project key (`workerState.project`). The `rstest`
+  // singleton is shared by a reused worker, which under `isolate: false` can
+  // serve several projects; scoping the registry by project keeps one project's
+  // `*AllMocks` from resetting another project's kept mocks. Defaults to a single
+  // bucket for callers (and unit tests) that don't run multiple projects.
+  // See https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3458343793.
+  getProjectKey: () => string = () => '',
+): Pick<RstestUtilities, 'isMockFunction' | 'spyOn' | 'fn'> & {
   /**
-   * Run `callback` against every live registered mock, pruning entries whose
-   * mock has been garbage-collected. See `forEachMock` below for why the
-   * registry holds weak references.
+   * Run `callback` against every live registered mock of the running file's
+   * project, pruning entries whose mock has been garbage-collected. See the
+   * registry comment below for why entries are weak and scoped per project.
    */
   forEachMock: (callback: (mock: MockInstance) => void) => void;
   createMockInstance: CreateMockInstanceFn;
@@ -32,16 +37,26 @@ export const initSpy = (): Pick<
   resetCallOrder: () => void;
 } => {
   let callOrder = 0;
-  // Weak references so the registry never pins a mock alive. The `rstest`
-  // singleton (and this set) lives for the whole worker, but under
-  // `isolate: false` a mock created in a per-file (later evicted) module must
-  // be collectable once that module is gone, while a mock kept alive by a
-  // module shared across files stays tracked. A strong `Set` would leak every
-  // mock ever created for the worker's lifetime; clearing it per file (the
-  // previous approach) instead dropped shared mocks so `clearAllMocks` &c. could
-  // no longer reach them across files.
-  // See https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3457255132.
-  const mocks: Set<WeakRef<MockInstance>> = new Set<WeakRef<MockInstance>>();
+  // Registry keyed by project, holding weak references. Weak so it never pins a
+  // mock alive: the `rstest` singleton lives for the whole worker, but under
+  // `isolate: false` a mock created in a per-file (later evicted) module must be
+  // collectable once that module is gone, while a mock kept alive by a module
+  // shared across files stays tracked. Keyed by project so a reused worker that
+  // serves several projects never lets one project's `*AllMocks` reach another's
+  // mocks (no module is shared across projects, so every mock belongs to one).
+  // See https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3457255132
+  // and https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3458343793.
+  const mocksByProject = new Map<string, Set<WeakRef<MockInstance>>>();
+
+  const projectMocks = (): Set<WeakRef<MockInstance>> => {
+    const key = getProjectKey();
+    let set = mocksByProject.get(key);
+    if (!set) {
+      set = new Set<WeakRef<MockInstance>>();
+      mocksByProject.set(key, set);
+    }
+    return set;
+  };
 
   const wrapSpy = <T extends FunctionLike>(
     obj: Record<string, any>,
@@ -233,12 +248,16 @@ export const initSpy = (): Pick<
       });
     }
 
-    mocks.add(new WeakRef(spyFn));
+    projectMocks().add(new WeakRef(spyFn));
 
     return spyFn;
   };
 
   const forEachMock = (callback: (mock: MockInstance) => void): void => {
+    const mocks = mocksByProject.get(getProjectKey());
+    if (!mocks) {
+      return;
+    }
     for (const ref of mocks) {
       const mock = ref.deref();
       if (mock) {

@@ -118,10 +118,11 @@ let utilitiesPromise:
  * Per-file state is RESET, not rebuilt: the config methods resolve the running
  * file's worker state through `fileContext()` at call time, and `resetForFile`
  * drops the env/global/timer stub bookkeeping between files. The mock registry
- * is kept (it holds weak references) so a mock from a module shared across files
- * stays tracked. The actual globalThis side-effects are still unwound by the
- * runner's config-gated `unstubAll*`/`*AllMocks` and the per-file
- * `useRealTimers`, unchanged.
+ * is kept (it holds weak references, keyed by project) so a mock from a module
+ * shared across files stays tracked without one project's `*AllMocks` reaching
+ * another project's mocks on a reused worker. The actual globalThis side-effects
+ * are still unwound by the runner's config-gated `unstubAll*`/`*AllMocks` and the
+ * per-file `useRealTimers`, unchanged.
  * See https://github.com/web-infra-dev/rstest/issues/1376.
  */
 export const createRstestUtilities = async (): Promise<RstestUtilities> => {
@@ -290,7 +291,7 @@ const buildRstestUtilities = async (): Promise<{
     forEachMock,
     createMockInstance,
     resetCallOrder,
-  } = initSpy();
+  } = initSpy(() => fileContext().workerState.project);
 
   const rstest: RstestUtilities = {
     fn,
