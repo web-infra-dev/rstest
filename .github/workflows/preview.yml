@@ -43,6 +43,9 @@ jobs:
       - name: Install Dependencies
         run: pnpm install
 
+      - name: Build Packages
+        run: pnpm run build
+
       - name: Publish Preview
         id: publish
         # `pnpm exec` (not `pnpx`/`pnpm dlx`) per pkg.pr.new CAUTION:

@@ -55,6 +55,9 @@ jobs:
       - name: Install Dependencies
         run: pnpm install
 
+      - name: Build Packages
+        run: pnpm run build
+
       - name: Publish to npm
         run: |
           pnpm --filter './packages/*' -r stage publish --tag ${{ github.event.inputs.npm_tag }} --no-git-checks
@@ -119,6 +122,9 @@ jobs:
 
       - name: Install Dependencies
         run: pnpm install
+
+      - name: Build Packages
+        run: pnpm run build
 
       - name: Package VS Code Extension
         run: pnpm --filter ./packages/vscode run package:vsce -o "rstest-${{ matrix.vsce-target }}.vsix"
