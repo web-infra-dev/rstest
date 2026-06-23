@@ -47,6 +47,15 @@ const normalizeWaitOptions = (
   ),
 });
 
+const createUntransformedRuntimeApiError = (apiName: string) =>
+  new Error(
+    `[Rstest] ${apiName}() was not transformed by Rstest. Module mock APIs must be called directly as rstest.${apiName}() or rs.${apiName}() in files processed by Rstest. This can happen when the calling file is not bundled by Rstest, or when the API is called through an import alias.`,
+  );
+
+const createPluginManagedApi = (apiName: string) => () => {
+  throw createUntransformedRuntimeApiError(apiName);
+};
+
 /**
  * Shared LIFO index-lifecycle for the three scoped-restore stacks behind
  * `stubEnv`, `stubGlobal`, and `useFakeTimers`. Each stub pushes an entry and
@@ -293,40 +302,20 @@ export const createRstestUtilities: (
       }
       return rstest;
     },
-    // The below methods are not implemented in the core package.
-    // The actual implementation is managed by the built-in Rstest plugin.
-    mock: () => undefined,
-    mockRequire: () => undefined,
-    doMock: () => undefined,
-    doMockRequire: () => undefined,
-    unmock: () => undefined,
-    doUnmock: () => undefined,
-    unmockRequire: () => undefined,
-    doUnmockRequire: () => undefined,
-    importMock: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-      return Promise.resolve({} as any);
-    },
-    requireMock: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-      return {} as any;
-    },
-    importActual: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-      return Promise.resolve({} as any);
-    },
-    requireActual: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-      return {} as any;
-    },
-    resetModules: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-      return {} as any;
-    },
-    hoisted: () => {
-      // The actual implementation is managed by the built-in Rstest plugin.
-      return {} as any;
-    },
+    mock: createPluginManagedApi('mock'),
+    mockRequire: createPluginManagedApi('mockRequire'),
+    doMock: createPluginManagedApi('doMock'),
+    doMockRequire: createPluginManagedApi('doMockRequire'),
+    unmock: createPluginManagedApi('unmock'),
+    doUnmock: createPluginManagedApi('doUnmock'),
+    unmockRequire: createPluginManagedApi('unmockRequire'),
+    doUnmockRequire: createPluginManagedApi('doUnmockRequire'),
+    importMock: createPluginManagedApi('importMock'),
+    requireMock: createPluginManagedApi('requireMock'),
+    importActual: createPluginManagedApi('importActual'),
+    requireActual: createPluginManagedApi('requireActual'),
+    resetModules: createPluginManagedApi('resetModules'),
+    hoisted: createPluginManagedApi('hoisted'),
 
     setConfig: (config) => {
       if (!originalConfig) {
@@ -449,7 +438,7 @@ export const createRstestUtilities: (
       timerStack.length = 0;
       return rstest;
     },
-    setSystemTime: (now?: number | Date) => {
+    setSystemTime: (now) => {
       timers().setSystemTime(now);
       return rstest;
     },
@@ -479,11 +468,11 @@ export const createRstestUtilities: (
       await timers().runOnlyPendingTimersAsync();
       return rstest;
     },
-    advanceTimersByTime: (ms: number) => {
+    advanceTimersByTime: (ms) => {
       timers().advanceTimersByTime(ms);
       return rstest;
     },
-    advanceTimersByTimeAsync: async (ms: number) => {
+    advanceTimersByTimeAsync: async (ms) => {
       await timers().advanceTimersByTimeAsync(ms);
       return rstest;
     },
@@ -497,6 +486,14 @@ export const createRstestUtilities: (
     },
     advanceTimersToNextFrame: () => {
       timers().advanceTimersToNextFrame();
+      return rstest;
+    },
+    jumpTimersByTime: (ms) => {
+      timers().jumpTimersByTime(ms);
+      return rstest;
+    },
+    setTickMode: (mode) => {
+      timers().setTickMode(mode);
       return rstest;
     },
     getTimerCount: () => {

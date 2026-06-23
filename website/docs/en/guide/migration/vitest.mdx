@@ -93,7 +93,7 @@ Walk through **every** option under `test` and match it against the table below 
 
 | Vitest (under `test`)         | Rstest (top-level)                                                                             | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ----------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `environment`                 | [`testEnvironment`](/config/test/test-environment)                                             | Fold `test.environmentOptions` into the object form: `testEnvironment: { name: 'jsdom', options: { ... } }`. Rstest supports custom environment packages and JavaScript file paths via a Rstest environment object. Package resolution also tries `rstest-environment-*`. For custom environment migration details, see [Migrating Vitest custom environments](#custom-environments). File-level `@vitest-environment` comments are temporarily not supported.                                                                                                               |
+| `environment`                 | [`testEnvironment`](/config/test/test-environment)                                             | Fold `test.environmentOptions` into the object form: `testEnvironment: { name: 'jsdom', options: { ... } }`. Rstest supports custom environment packages and JavaScript file paths via a Rstest environment object. Package resolution also tries `rstest-environment-*`. For custom environment migration details, see [Migrating Vitest custom environments](#custom-environments). File-level `@vitest-environment` comments are recognized for built-in environments.                                                                                                    |
 | `include` / `exclude`         | [`include`](/config/test/include) / [`exclude`](/config/test/exclude)                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `includeSource`               | [`includeSource`](/config/test/include-source)                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `setupFiles`                  | [`setupFiles`](/config/test/setup-files)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -175,11 +175,24 @@ When migrating a Vitest custom environment, the object shape is closer, but `vit
 
 Map `viteEnvironment: 'ssr'` to `target: 'node'` or omit `target`, and map `viteEnvironment: 'client'` to `target: 'web'`. For `vitest-environment-foo` packages, use the full package name or publish/rename them to `rstest-environment-foo`.
 
-Rstest temporarily does not support file-level `@vitest-environment` comments. If you need per-file environment switching, use separate projects or config files for now. For more custom environment API details, see [`testEnvironment`](/config/test/test-environment#custom-environments).
+For more custom environment API details, see [`testEnvironment`](/config/test/test-environment#custom-environments).
+
+### File-level environment comments
+
+If your Vitest tests use file-level environment comments, Rstest recognizes Vitest environment comments during migration:
+
+```ts
+// @vitest-environment jsdom
+// @vitest-environment-options { "url": "https://example.com/" }
+```
+
+You can keep these comments as-is or rename them to `@rstest-environment` / `@rstest-environment-options`. The options value must be a single-line JSON object. Supported environments are `node`, `jsdom`, and `happy-dom`.
 
 ### Build configuration
 
 Rstest uses Rsbuild as the default test build tool instead of Vite. You can view all available build configuration options in [Build Configurations](/config/#build-configurations).
+
+Rstest runs tests with a bundle-based execution model. Code outside the bundle graph keeps Node.js native loader behavior, which may differ from Vitest. If you dynamically load files at runtime, see [Code outside the bundle graph uses native Node.js behavior](/guide/advanced/troubleshooting#code-outside-the-bundle-graph-uses-native-nodejs-behavior).
 
 In most projects, these are the key build-side changes:
 

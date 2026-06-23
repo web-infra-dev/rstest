@@ -132,7 +132,14 @@ describe('test coverage-istanbul', () => {
   it('should switch coverage provider with `--coverage.provider v8`', async () => {
     const { expectExecSuccess, expectLog, cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', '--coverage', '--coverage.provider', 'v8'],
+      args: [
+        'run',
+        '--coverage',
+        '--coverage.provider',
+        'v8',
+        '--coverage.reportsDirectory',
+        'cli-provider-v8-coverage',
+      ],
       options: {
         nodeOptions: {
           cwd: join(__dirname, '../test-coverage-v8/fixtures'),
@@ -145,7 +152,9 @@ describe('test coverage-istanbul', () => {
     const logs = cli.stdout.split('\n').filter(Boolean);
 
     expectLog('Coverage enabled with v8', logs);
-    fs.removeSync(join(__dirname, '../test-coverage-v8/fixtures/coverage'));
+    fs.removeSync(
+      join(__dirname, '../test-coverage-v8/fixtures/cli-provider-v8-coverage'),
+    );
   });
 
   it('should disable coverage with `--no-coverage`', async () => {

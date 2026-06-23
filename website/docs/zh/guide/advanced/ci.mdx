@@ -1,0 +1,205 @@
+---
+description: 在 CI 中配置 Rstest，包括基础工作流、覆盖率、Browser Mode、分片和报告产物。
+---
+
+# CI
+
+Rstest 在 CI 中使用的 CLI 与本地相同。主要区别是，CI 应该通过 `rstest` 以 run mode 执行测试，然后上传其他工具需要读取的报告。
+
+## 基础工作流
+
+在 CI 中使用 `rstest`，这样进程会在一次测试完成后退出。如果项目已经有 `test` 脚本，可以让 CI 继续调用该脚本，并让脚本执行 `rstest`。
+
+```json title="package.json"
+{
+  "scripts": {
+    "test": "rstest"
+  }
+}
+```
+
+一个最小的 GitHub Actions 工作流会安装依赖、恢复包管理器缓存，并运行测试脚本：
+
+```yaml title=".github/workflows/test.yml"
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+```
+
+当 Rstest 检测到 GitHub Actions 且没有手动配置 reporter 时，会自动启用 `github-actions` reporter。失败断言会转换成 GitHub 注释，并在 workflow summary 中追加 Markdown 摘要。更多 reporter 细节请查看 [reporters](/guide/basic/reporters#github-actions-报告器)。
+
+其他 CI 系统也可以使用相同命令。关键是先运行 `pnpm install --frozen-lockfile`，再运行 `pnpm rstest` 或你的 package script。
+
+## 添加覆盖率
+
+覆盖率收集默认关闭。启用 `--coverage` 前，需要先安装你想使用的 provider：
+
+- [@rstest/coverage-istanbul](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-istanbul)：默认的 Istanbul provider，适用于 Node mode 和 Browser Mode。
+- [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8)：基于 V8 的 provider，仅适用于 Node mode。
+
+```bash
+pnpm add @rstest/coverage-istanbul -D
+pnpm rstest --coverage
+```
+
+如果 CI 需要保留 HTML 报告，或把覆盖率数据传给其他服务，可以上传生成的 `coverage/` 目录：
+
+```yaml
+- run: pnpm rstest --coverage --coverage.reportOnFailure
+
+- uses: actions/upload-artifact@v4
+  if: always()
+  with:
+    name: coverage
+    path: coverage
+```
+
+当失败运行中的报告也有调试价值时，可以使用 `if: always()`。可用的 provider、reporter、阈值和输出路径请查看 [coverage](/config/test/coverage)。
+
+## CI 中的 browser mode
+
+Browser Mode 会在真实浏览器中运行测试，因此 CI 需要同时安装 Rstest 浏览器包和浏览器二进制文件。在项目中安装 [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser)，然后安装配置中使用的 Playwright 浏览器。
+
+```bash
+pnpm add @rstest/browser playwright -D
+pnpm exec playwright install --with-deps chromium
+```
+
+在 CI 中，`browser.headless` 默认值为 `true`，所以浏览器会以无界面模式运行。GitHub Actions 工作流通常会在运行测试前添加浏览器安装步骤：
+
+```yaml
+jobs:
+  browser-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm rstest --browser
+```
+
+如果使用 `firefox` 或 `webkit` 测试，需要安装与 `browser.browser` 选择一致的浏览器。完整配置方式请查看 [Browser Mode 快速开始](/guide/browser-testing/getting-started) 和 [browser 配置](/config/test/browser)。
+
+## 使用分片拆分测试
+
+当完整测试套件已经稳定，但单台 CI 机器运行太慢时，可以使用 `--shard <index>/<count>`。每个分片会运行不同的测试文件子集。要在后续合并结果和覆盖率，需要让每个分片都使用 `blob` reporter，上传 blob 文件，然后在后续 job 中合并。
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm rstest --shard ${{ matrix.shard }}/3 --reporters=blob --coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rstest-blob-${{ matrix.shard }}
+          path: .rstest-reports
+          include-hidden-files: true
+
+  merge-reports:
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rstest-blob-*
+          path: .rstest-reports
+          merge-multiple: true
+      - run: pnpm rstest merge-reports --coverage --cleanup
+```
+
+每个分片会写入 `.rstest-reports/blob-{index}-{count}.json`。合并 job 会把这些文件收集到同一个 `.rstest-reports/` 目录，然后 `rstest merge-reports` 会基于统一结果运行已配置的 reporter，并合并覆盖率数据。更多细节请查看 [shard](/config/test/shard) 和 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports)。
+
+## 发布机器可读报告
+
+除了终端输出，CI 工具通常还需要结构化报告文件。当你需要 XML、JSON、Markdown 或 blob 输出时，可以添加 reporter：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: [
+    'default',
+    ['junit', { outputPath: './reports/junit.xml' }],
+    ['json', { outputPath: './reports/rstest.json' }],
+  ],
+});
+```
+
+然后上传报告目录：
+
+```yaml
+- run: pnpm rstest
+
+- uses: actions/upload-artifact@v4
+  if: always()
+  with:
+    name: rstest-reports
+    path: reports
+```
+
+`junit` 适合 CI 测试结果集成，`json` 适合自定义工具，`md` 适合 Markdown 摘要，`github-actions` 适合 GitHub 注释，`blob` 适合分片报告合并。完整列表和选项请查看 [reporters](/guide/basic/reporters)。
+
+## 缓存依赖
+
+建议先从包管理器缓存开始，因为它安全，通常也能带来最明显的 CI 优化。在 GitHub Actions 中，`actions/setup-node` 配合 `cache: pnpm` 会基于 lockfile 恢复 pnpm store。
+
+## 推荐检查清单
+
+- 使用 Node.js `^20.19.0` 或 `>=22.12.0`，以匹配 Rstest 支持的运行时范围。
+- 在 CI 中运行 `rstest`，可以直接运行，也可以通过 package script 运行。
+- 仅在 workflow 需要对应功能时安装 coverage 和 browser 包。
+- 如果 coverage、JUnit、JSON 或 blob artifact 有助于排查失败，使用 `if: always()` 上传。
+- 在单机 workflow 稳定后，再添加 sharding。
+- 保持 Browser Mode 的浏览器安装与 Rstest 配置中选择的浏览器一致。

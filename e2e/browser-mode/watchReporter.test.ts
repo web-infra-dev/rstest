@@ -1,8 +1,8 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from '@rstest/core';
-import treeKill from 'tree-kill';
 import { prepareFixtures, runRstestCli } from '../scripts';
+import { deleteFixtureTarget, killCliProcessTree } from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,6 +10,9 @@ const __dirname = path.dirname(__filename);
 const getHookCountFromLog = (content: string, hookName: string): number => {
   return content.split('\n').filter((line) => line.trim() === hookName).length;
 };
+
+const WATCH_REPORTER_HOOK_TIMEOUT_MS =
+  process.platform === 'win32' ? 15_000 : 5_000;
 
 describe('browser mode - watch reporter lifecycle', () => {
   it('should call onTestRunStart and onTestRunEnd on rerun', async () => {
@@ -37,11 +40,10 @@ describe('browser mode - watch reporter lifecycle', () => {
         expectedStartCount: number,
         expectedEndCount: number,
       ): Promise<void> => {
-        const timeoutMs = 15_000;
-        const pollIntervalMs = 100;
+        const pollIntervalMs = 25;
         const startTime = Date.now();
 
-        while (Date.now() - startTime < timeoutMs) {
+        while (Date.now() - startTime < WATCH_REPORTER_HOOK_TIMEOUT_MS) {
           let reportLog = '';
           try {
             reportLog = fs.read(reportLogPath);
@@ -81,20 +83,8 @@ describe('browser mode - watch reporter lifecycle', () => {
       await cli.waitForStdout('Re-running 1 affected test file(s)');
       await waitForHookCounts(2, 2);
     } finally {
-      const pid = cli.exec.process?.pid;
-      if (pid) {
-        treeKill(pid, 'SIGKILL');
-      } else {
-        cli.exec.kill();
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      try {
-        fs.delete(fixturesTargetPath);
-      } catch {
-        // ignore cleanup errors in watch teardown
-      }
+      await killCliProcessTree(cli);
+      await deleteFixtureTarget(fs, fixturesTargetPath);
     }
   }, 30_000);
 });

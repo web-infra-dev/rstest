@@ -39,8 +39,6 @@
         // Worker entries bundled by rslib
         "src/runtime/worker/index.ts",
         "src/runtime/worker/globalSetupWorker.ts",
-        // Loader entry bundled by rslib (rstest_loaders env)
-        "src/core/plugins/css-filter/loader.ts",
         // Runtime files copied to dist via CopyRspackPlugin (dynamically loaded)
         "src/core/plugins/mockRuntimeCode.js",
         "src/core/plugins/importActualLoader.mjs",
@@ -59,8 +57,6 @@
       "entry": [
         // Browser-side iframe entry (loaded at runtime by hostController)
         "src/client/entry.ts",
-        // Aliased at build time via rspack resolve.alias in hostController.ts
-        "src/client/fakeTimersStub.ts",
         "src/client/public.ts",
         // Test files
         "tests/**/*.ts",

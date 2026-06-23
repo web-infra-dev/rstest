@@ -11,9 +11,8 @@ import type {
 import type { ConsoleStreamType, MaybePromise } from './utils';
 import type { BrowserProvider } from '../utils/constants';
 
-// TODO: chaiConfig.includeStack seems not used
 export type ChaiConfig = Partial<
-  Omit<typeof config, 'useProxy' | 'proxyExcludedKeys' | 'deepEqual'>
+  Pick<typeof config, 'showDiff' | 'truncateThreshold'>
 >;
 
 export type RstestPoolType = 'forks' | 'threads';

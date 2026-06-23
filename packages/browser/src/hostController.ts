@@ -629,6 +629,7 @@ const globToRegexp = (glob: string): RegExp => {
     fastpaths: false,
     noglobstar: false,
     bash: false,
+    dot: true,
   });
 
   if (!regex) {
@@ -676,44 +677,189 @@ const globPatternsToRegExp = (patterns: string[]): RegExp => {
   return new RegExp(`(?:${regexParts.join('|')})$`);
 };
 
+const REGEXP_SPECIAL_CHARACTERS = /[|\\{}()[\]^$+*?.]/g;
+const PATH_SEPARATOR_SOURCE = String.raw`[\\/]`;
+const WINDOWS_ABSOLUTE_PATH_SOURCE = String.raw`[A-Za-z]:[\\/]`;
+
+const escapeRegExp = (value: string): string =>
+  value.replace(REGEXP_SPECIAL_CHARACTERS, '\\$&');
+
+const normalizePathForRegExp = (value: string): string =>
+  normalize(value).replaceAll('\\', '/');
+
+const normalizeExcludePatternForRegExp = (value: string): string =>
+  value.startsWith('./')
+    ? `./${normalizePathForRegExp(value.substring(2))}`
+    : normalizePathForRegExp(value);
+
+const isAbsolutePatternForRegExp = (value: string): boolean =>
+  value.startsWith('/') || /^[A-Za-z]:\//.test(value);
+
+const isEscapedRegExpCharacter = (source: string, index: number): boolean => {
+  let backslashCount = 0;
+  for (
+    let current = index - 1;
+    current >= 0 && source[current] === '\\';
+    current--
+  ) {
+    backslashCount++;
+  }
+  return backslashCount % 2 === 1;
+};
+
+const replacePathSeparatorsInRegExpSource = (source: string): string => {
+  let result = '';
+  let inCharacterClass = false;
+
+  for (let index = 0; index < source.length; index++) {
+    const character = source[index];
+    const isEscaped = isEscapedRegExpCharacter(source, index);
+
+    if (character === '[' && !isEscaped) {
+      inCharacterClass = true;
+    }
+
+    if (!inCharacterClass && character === '\\' && source[index + 1] === '/') {
+      result += PATH_SEPARATOR_SOURCE;
+      index++;
+      continue;
+    }
+
+    result += character;
+
+    if (character === ']' && !isEscaped) {
+      inCharacterClass = false;
+    }
+  }
+
+  return result;
+};
+
+type BrowserContextExcludeSource = {
+  relative: string;
+  absolute: string;
+  isAbsolute: boolean;
+};
+
+const createRelativeContextExcludeSource = (
+  source: string,
+  normalizedPattern: string,
+): string => {
+  if (normalizedPattern.startsWith('./')) {
+    return source;
+  }
+
+  return normalizedPattern.startsWith('**/')
+    ? `(?:(?:${source})|\\.(?:${source}))`
+    : `(?:(?:${source})|\\.${PATH_SEPARATOR_SOURCE}(?:${source}))`;
+};
+
+const createProjectAbsoluteExcludeSource = (
+  source: string,
+  normalizedPattern: string,
+): string =>
+  normalizedPattern.startsWith('./') || normalizedPattern.startsWith('**/')
+    ? source
+    : `${PATH_SEPARATOR_SOURCE}(?:${source})`;
+
 /**
  * Convert exclude patterns to a RegExp for import.meta.webpackContext's exclude option
  * This is used at compile time to filter out files during bundling
  *
  * Example:
  *   Input: ['**\/node_modules\/**', '**\/dist\/**']
- *   Output: /[\\/](node_modules|dist)[\\/]/
+ *   Output: a regexp matching node_modules or dist path segments.
  */
-const excludePatternsToRegExp = (patterns: string[]): RegExp | null => {
-  const keywords: string[] = [];
-  for (const pattern of patterns) {
-    // Extract the core part between ** wildcards
-    // e.g., '**/node_modules/**' -> 'node_modules'
-    // e.g., '**/dist/**' -> 'dist'
-    // e.g., '**/.{idea,git,cache,output,temp}/**' -> extract each part
-    const match = pattern.match(
-      /\*\*\/\.?\{?([^/*{}]+(?:,[^/*{}]+)*)\}?\/?\*?\*?/,
-    );
-    if (match) {
-      // Handle {a,b,c} patterns
-      const parts = match[1]!.split(',');
-      for (const part of parts) {
-        // Clean up the part (remove leading dots for hidden dirs)
-        const cleaned = part.replace(/^\./, '');
-        if (cleaned && !keywords.includes(cleaned)) {
-          keywords.push(cleaned);
-        }
-      }
+const excludePatternsToRegExpSources = (
+  patterns: string[],
+): BrowserContextExcludeSource[] | null => {
+  const sources = patterns.map((pattern) => {
+    const normalizedPattern = normalizeExcludePatternForRegExp(pattern);
+    const regex = globToRegexp(normalizedPattern);
+    let source = regex.source;
+    if (source.startsWith('^')) {
+      source = source.substring(1);
     }
-  }
+    if (source.endsWith('$')) {
+      source = source.substring(0, source.length - 1);
+    }
 
-  if (keywords.length === 0) {
+    source = replacePathSeparatorsInRegExpSource(source);
+    const isAbsolute = isAbsolutePatternForRegExp(normalizedPattern);
+    const absolute = normalizedPattern.startsWith('./')
+      ? source.substring(2)
+      : source;
+
+    return {
+      relative: isAbsolute
+        ? source
+        : createRelativeContextExcludeSource(source, normalizedPattern),
+      absolute: isAbsolute
+        ? absolute
+        : createProjectAbsoluteExcludeSource(absolute, normalizedPattern),
+      isAbsolute,
+    };
+  });
+
+  if (sources.length === 0) {
     return null;
   }
 
-  // Create regex that matches paths containing these directory names
-  // Use [\\/] to match both forward and back slashes
-  return new RegExp(`[\\\\/](${keywords.join('|')})[\\\\/]`);
+  return sources;
+};
+
+export const createBrowserContextExcludeRegExp = (
+  patterns: string[],
+  projectRoot: string,
+): RegExp | null => {
+  const excludeSources = excludePatternsToRegExpSources(patterns);
+  if (!excludeSources) {
+    return null;
+  }
+
+  const normalizedProjectRoot = normalizePathForRegExp(projectRoot).replace(
+    /[\\/]$/,
+    '',
+  );
+  const projectRootSource = normalizedProjectRoot
+    .split('/')
+    .map(escapeRegExp)
+    .join(PATH_SEPARATOR_SOURCE);
+  const relativeExcludeSources = excludeSources.filter(
+    (source) => !source.isAbsolute,
+  );
+  const absoluteExcludeSources = excludeSources.filter(
+    (source) => source.isAbsolute,
+  );
+  const sourceBranches: string[] = [];
+
+  if (relativeExcludeSources.length > 0) {
+    const relativePatternSource = `(?:${relativeExcludeSources
+      .map((source) => source.relative)
+      .join('|')})`;
+    const absolutePatternSource = `(?:${relativeExcludeSources
+      .map((source) => source.absolute)
+      .join('|')})`;
+    const relativeSource = `(?:${relativePatternSource})`;
+    const absoluteSource = normalizedProjectRoot
+      ? `${projectRootSource}(?=${PATH_SEPARATOR_SOURCE})(?:${absolutePatternSource})`
+      : `(?:${absolutePatternSource})`;
+
+    sourceBranches.push(
+      `(?!${WINDOWS_ABSOLUTE_PATH_SOURCE}|${PATH_SEPARATOR_SOURCE})${relativeSource}`,
+      absoluteSource,
+    );
+  }
+
+  if (absoluteExcludeSources.length > 0) {
+    sourceBranches.push(
+      `(?:${absoluteExcludeSources
+        .map((source) => source.relative)
+        .join('|')})`,
+    );
+  }
+
+  return new RegExp(`^(?:${sourceBranches.join('|')})$`);
 };
 
 type StatsModule = {
@@ -1087,7 +1233,10 @@ const generateManifestModule = ({
       project.normalizedConfig.include,
     );
     const excludePatterns = project.normalizedConfig.exclude.patterns;
-    const excludeRegExp = excludePatternsToRegExp(excludePatterns);
+    const excludeRegExp = createBrowserContextExcludeRegExp(
+      excludePatterns,
+      projectRootPosix,
+    );
 
     lines.push(
       `const ${varName} = import.meta.webpackContext(${JSON.stringify(projectRootPosix)}, {`,
@@ -1285,7 +1434,6 @@ const createBrowserRuntime = async ({
     // Browser runtime APIs for entry.ts and public.ts
     // Uses dist file with extractSourceMap to preserve sourcemap chain for inline snapshots
     '@rstest/core/internal/browser-runtime': browserRuntimePath,
-    '@sinonjs/fake-timers': resolveBrowserFile('client/fakeTimersStub.ts'),
   };
 
   const rsbuildInstance = await createRsbuild({

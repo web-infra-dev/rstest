@@ -266,7 +266,7 @@ describe('test list command', () => {
 
     const logs = cli.stdout?.split('\n').filter(Boolean);
 
-    // rspack transpiles describe() to (0,rstest.describe)(), so the location is end of the callee
+    // rspack maps describe()/it() calls to the start of the callee identifier
     // FIXME rspack trasnpiles describe.for to describe["for"] so the location is different from describe.each
     expect(logs).toMatchInlineSnapshot(`
       [

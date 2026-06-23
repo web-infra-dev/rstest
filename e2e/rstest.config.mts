@@ -9,6 +9,15 @@ import { defineConfig } from '@rstest/core';
  */
 const NO_ISOLATE_EXCLUDES = ['watch/**', 'mock/**', 'browser-mode/**'];
 
+/**
+ * Test directories to skip in threads mode.
+ *
+ * - browser-mode: browser tests run in Playwright-managed browser contexts/pages,
+ *   not in the Node.js worker pool, so they do not add coverage for the threads
+ *   transport while increasing CI runtime and flake surface.
+ */
+const THREADS_EXCLUDES = ['browser-mode/**'];
+
 export default defineConfig({
   name: 'rstest:e2e',
   setupFiles: ['../scripts/rstest.setup.ts'],
@@ -51,5 +60,8 @@ export default defineConfig({
     '**/fixtures/**',
     '**/fixtures-*/**',
     '**/flaky-fixtures/**',
-  ].concat(process.env.ISOLATE === 'false' ? NO_ISOLATE_EXCLUDES : []),
+  ].concat(
+    process.env.ISOLATE === 'false' ? NO_ISOLATE_EXCLUDES : [],
+    process.env.RSTEST_POOL_TYPE === 'threads' ? THREADS_EXCLUDES : [],
+  ),
 });

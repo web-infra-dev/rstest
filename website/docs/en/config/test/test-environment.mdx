@@ -98,7 +98,7 @@ The `options` object is passed directly to the environment's constructor.
 
 ### Custom environments
 
-<ApiMeta addedVersion="0.10.5" />
+<ApiMeta addedVersion="0.10.7" />
 
 :::warning Experimental API
 Custom environment APIs are experimental before Rstest 1.0. Their core shape is expected to stay stable, but type signatures and config details may receive minor adjustments based on migration feedback.
@@ -181,8 +181,6 @@ export default defineConfig({
 
 `target` does not create DOM APIs by itself and does not enable [browser mode](/config/test/browser). It only selects the build and resolution defaults. The environment implementation is still responsible for installing globals such as `window` and `document`.
 
-Rstest temporarily does not support file-level `@vitest-environment` or `@jest-environment` comments. If you need per-file environment switching, use separate projects or config files for now.
-
 If you are migrating a custom environment from Jest or Vitest, see [Migrating Jest custom environments](/guide/migration/jest#custom-environments) or [Migrating Vitest custom environments](/guide/migration/vitest#custom-environments).
 
 ### Custom environment vs setupFiles
@@ -200,6 +198,36 @@ Use `setupFiles` when the environment is already correct and you only need to co
 - Running project-level initialization code that depends on the selected environment already being available.
 
 In short: `testEnvironment` decides what globals and host APIs exist; `setupFiles` configures how your tests use that environment.
+
+### Environment comments
+
+<ApiMeta addedVersion="0.10.5" />
+
+You can override the environment for a single test file by adding an environment comment near the top of the file:
+
+```ts title="example.test.ts"
+// @rstest-environment jsdom
+
+test('DOM test', () => {
+  document.body.innerHTML = '<p>hello world</p>';
+  expect(document.querySelector('p')?.textContent).toBe('hello world');
+});
+```
+
+Use `@rstest-environment-options` to pass environment options for the annotated file. The options must be a single-line JSON object:
+
+```ts title="example.test.ts"
+// @rstest-environment jsdom
+// @rstest-environment-options { "url": "https://example.com/" }
+
+test('sets the jsdom url', () => {
+  expect(window.location.href).toBe('https://example.com/');
+});
+```
+
+Rstest also recognizes `@vitest-environment` and `@jest-environment` aliases, including their `-options` variants, to make migration easier.
+
+Environment comments support the built-in Node runner environments: `node`, `jsdom`, and `happy-dom`. They do not apply to browser mode. If most files use the same environment, prefer configuring `testEnvironment` or separate `projects` in `rstest.config.ts`.
 
 ### Examples
 

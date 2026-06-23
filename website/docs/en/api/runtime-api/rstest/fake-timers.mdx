@@ -24,6 +24,8 @@ rs.useFakeTimers();
 
 You can also pass a configuration object to customize the behavior of the fake timers.
 
+The configuration is forwarded to `@sinonjs/fake-timers`. For example, `toFake` and `toNotFake` control which timer APIs are mocked, `now` sets the initial fake system time, and `shouldAdvanceTime` / `advanceTimeDelta` enable automatic advancement.
+
 **Disposable / `using` syntax**
 
 <ApiMeta addedVersion="0.10.3" />
@@ -64,9 +66,11 @@ if (rs.isFakeTimers()) {
 ## rs.setSystemTime
 
 - **Alias:** `rstest.setSystemTime`
-- **Type:** `(now?: number | Date) => Rstest`
+- **Type:** `(now?: number | Date | { epochMilliseconds: number }) => Rstest`
 
 Sets the current system time used by fake timers. Useful for testing code that depends on the current date or time.
+
+The `now` value can also be a Temporal-like object such as `Temporal.Instant` or `Temporal.ZonedDateTime`.
 
 ```ts
 rs.useFakeTimers();
@@ -122,14 +126,16 @@ Asynchronously runs only the currently pending timers.
 ## rs.advanceTimersByTime
 
 - **Alias:** `rstest.advanceTimersByTime`
-- **Type:** `(ms: number) => Rstest`
+- **Type:** `(ms: number | string | Temporal.Duration) => Rstest`
 
 Advances the fake timers by the specified milliseconds, executing any timers scheduled within that time.
+
+String durations use the same format as `@sinonjs/fake-timers`, for example `'00:10'` for ten seconds.
 
 ## rs.advanceTimersByTimeAsync
 
 - **Alias:** `rstest.advanceTimersByTimeAsync`
-- **Type:** `(ms: number) => Promise<Rstest>`
+- **Type:** `(ms: number | string | Temporal.Duration) => Promise<Rstest>`
 
 Asynchronously advances the fake timers by the specified milliseconds.
 
@@ -153,6 +159,46 @@ Asynchronously advances the timers to the next scheduled timer.
 - **Type:** `() => Rstest`
 
 Advances the timers to the next animation frame.
+
+## rs.jumpTimersByTime
+
+<ApiMeta addedVersion="0.10.7" />
+
+- **Alias:** `rstest.jumpTimersByTime`
+- **Type:** `(ms: number | string | Temporal.Duration) => Rstest`
+
+Jumps the fake clock forward by the specified amount of time, firing each affected timer callback at most once. This is useful for simulating a JavaScript engine being suspended and resumed later, where intermediate interval ticks are skipped.
+
+```ts
+rs.useFakeTimers({ now: 0 });
+
+const cb = rs.fn();
+setInterval(cb, 1000);
+
+rs.jumpTimersByTime(5000);
+
+expect(cb).toHaveBeenCalledTimes(1);
+```
+
+## rs.setTickMode
+
+<ApiMeta addedVersion="0.10.7" />
+
+- **Alias:** `rstest.setTickMode`
+- **Type:** `(mode: { mode: 'manual' | 'nextAsync' } | { mode: 'interval'; delta?: number }) => Rstest`
+
+Configures how fake timers advance automatically.
+
+- `{ mode: 'manual' }`: timers only advance when you call APIs such as `rs.advanceTimersByTime()`.
+- `{ mode: 'nextAsync' }`: the clock continuously advances to the next scheduled timer and lets promise callbacks run between timers.
+- `{ mode: 'interval', delta?: number }`: advances fake time on an interval, equivalent to `shouldAdvanceTime` / `advanceTimeDelta`.
+
+```ts
+rs.useFakeTimers();
+rs.setTickMode({ mode: 'nextAsync' });
+
+await new Promise((resolve) => setTimeout(resolve, 1000));
+```
 
 ## rs.getTimerCount
 

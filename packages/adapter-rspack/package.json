@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rspack",
-  "version": "0.10.4",
+  "version": "0.10.6",
   "description": "Rstest adapter for rspack configuration",
   "keywords": [
     "rstest",
@@ -13,7 +13,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/web-infra-dev/rstest",
+    "url": "git+https://github.com/web-infra-dev/rstest.git",
     "directory": "packages/adapter-rspack"
   },
   "license": "MIT",
@@ -32,13 +32,12 @@
   "scripts": {
     "build": "rslib build",
     "dev": "rslib build --watch",
-    "test": "rstest",
-    "typecheck": "pnpm -w exec tsc --noEmit -p packages/adapter-rspack/tsconfig.json"
+    "test": "rstest"
   },
   "devDependencies": {
-    "@rslib/core": "0.22.0",
-    "@rspack/cli": "~2.0.6",
-    "@rspack/core": "~2.0.6",
+    "@rslib/core": "0.23.0",
+    "@rspack/cli": "~2.1.0-beta.0",
+    "@rspack/core": "~2.1.0-beta.0",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*"
   },

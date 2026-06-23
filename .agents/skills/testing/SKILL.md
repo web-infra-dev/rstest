@@ -1,6 +1,6 @@
 ---
 name: testing
-description: 'Testing workflow for the rstest monorepo. Use when running tests, writing test files, debugging test failures, or validating changes.'
+description: Testing workflow for the Rstest monorepo. Use when running unit tests, e2e tests, browser e2e, example tests, watch-mode checks, writing test fixtures, debugging local or CI test failures, validating code changes, or reproducing bugs from external projects.
 metadata:
   internal: true
 ---
@@ -72,6 +72,17 @@ Important:
 - Headed smoke tests are skipped locally by default (CI only)
 - To opt in locally: `cd e2e && RSTEST_E2E_RUN_HEADED=true pnpm test browser-mode/basic.test.ts`
 
+### Browser E2E debugging
+
+- Rebuild affected packages before retrying; stale `dist` is a common false signal.
+- Separate host/protocol/provider issues from UI issues before editing `@rstest/browser-ui`.
+- For flakes, check shared ports/cwd, persistent `dist/.rstest-temp/`, unawaited events, and order-dependent state before increasing timeouts.
+
+## Watch-mode and long-running tests
+
+- Use watch-mode tests only for file-change/rerun/invalidation behavior.
+- Assert stable events/final output, clean up watchers/processes, and inspect open handles before changing production code for hangs.
+
 ## Fixture strategy
 
 Before adding a fixture, list existing ones in the same area (`ls e2e/<area>/fixtures`) and name the closest match. Prefer extending it:
@@ -95,6 +106,14 @@ When your fixture enables persistent build output:
 - For package/unit tests from repository root, use `-u` / `--update`: `pnpm rstest -u packages/core/tests/core/rsbuild.test.ts`
 - Do **not** use snapshot updates as a default way to silence test failures — investigate first
 - When updating, review the snapshot diff to confirm it matches expected changes
+
+## External repro projects
+
+For external repos/fixtures: read README/scripts/deps, reproduce with the smallest command, classify the source, then port only the minimal regression case into this repo.
+
+## Performance and benchmark validation
+
+For performance work, compare like-for-like runs: same command/fixture/env/cache policy, enough samples to separate noise, and state whether the result covers startup, execution, transform/cache, browser startup, or reporter overhead.
 
 ## Validation before wrapping up
 

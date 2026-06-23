@@ -1,6 +1,13 @@
-import type { Config as FakeTimerInstallOpts } from '@sinonjs/fake-timers';
+import type {
+  Clock as FakeTimerClock,
+  Config as FakeTimerInstallOpts,
+} from '@sinonjs/fake-timers';
 import type { FunctionLike, MaybePromise } from './utils';
 import type { RuntimeConfig } from './worker';
+
+type FakeTimerTickTime = Parameters<FakeTimerClock['tick']>[0];
+type FakeTimerSystemTime = Parameters<FakeTimerClock['setSystemTime']>[0];
+type FakeTimerTickMode = Parameters<FakeTimerClock['setTickMode']>[0];
 
 interface MockResultReturn<T> {
   type: 'return';
@@ -553,7 +560,7 @@ export interface RstestUtilities {
   /**
    * Set the current system time used by fake timers.
    */
-  setSystemTime: (now?: number | Date) => RstestUtilities;
+  setSystemTime: (now?: FakeTimerSystemTime) => RstestUtilities;
   getRealSystemTime: () => number;
 
   runAllTicks: () => RstestUtilities;
@@ -562,11 +569,13 @@ export interface RstestUtilities {
   runOnlyPendingTimers: () => RstestUtilities;
   runOnlyPendingTimersAsync: () => Promise<RstestUtilities>;
 
-  advanceTimersByTime: (ms: number) => RstestUtilities;
-  advanceTimersByTimeAsync: (ms: number) => Promise<RstestUtilities>;
+  advanceTimersByTime: (ms: FakeTimerTickTime) => RstestUtilities;
+  advanceTimersByTimeAsync: (ms: FakeTimerTickTime) => Promise<RstestUtilities>;
   advanceTimersToNextTimer: (steps?: number) => RstestUtilities;
   advanceTimersToNextTimerAsync: (steps?: number) => Promise<RstestUtilities>;
   advanceTimersToNextFrame: () => RstestUtilities;
+  jumpTimersByTime: (ms: FakeTimerTickTime) => RstestUtilities;
+  setTickMode: (mode: FakeTimerTickMode) => RstestUtilities;
 
   /**
    * Returns the number of fake timers still left to run.

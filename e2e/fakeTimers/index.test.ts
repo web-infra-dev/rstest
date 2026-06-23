@@ -57,6 +57,15 @@ describe('fake timers', () => {
     expect(cb1).toHaveBeenCalledTimes(1);
   });
 
+  it('advanceTimersByTime with string duration', async () => {
+    const cb = rstest.fn();
+    setTimeout(cb, 1000);
+
+    rstest.advanceTimersByTime('00:01');
+
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+
   it('advanceTimersToNextTimer', () => {
     const cb = rstest.fn();
     const cb1 = rstest.fn();
@@ -78,6 +87,28 @@ describe('fake timers', () => {
 
     rstest.runAllTimers();
     expect(rstest.getTimerCount()).toBe(0);
+  });
+
+  it('jumpTimersByTime', () => {
+    rstest.setSystemTime(0);
+    const cb = rstest.fn();
+    setInterval(cb, 100);
+
+    rstest.jumpTimersByTime(1000);
+
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(Date.now()).toBe(1000);
+  });
+
+  it('setTickMode', async () => {
+    rstest.setSystemTime(0);
+    const result = new Promise((resolve) => {
+      setTimeout(() => resolve(Date.now()), 100);
+    });
+
+    rstest.setTickMode({ mode: 'nextAsync' });
+
+    await expect(result).resolves.toBe(100);
   });
 
   it('should work with node:timers', async () => {
