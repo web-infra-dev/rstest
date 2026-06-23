@@ -107,7 +107,7 @@ jobs:
 
 如果使用 `firefox` 或 `webkit` 测试，需要安装与 `browser.browser` 选择一致的浏览器。完整配置方式请查看 [Browser Mode 快速开始](/guide/browser-testing/getting-started) 和 [browser 配置](/config/test/browser)。
 
-## 使用分片拆分测试
+## 使用分片拆分测试 \{#split-tests-with-shards}
 
 当完整测试套件已经稳定，但单台 CI 机器运行太慢时，可以使用 `--shard <index>/<count>`。每个分片会运行不同的测试文件子集。要在后续合并结果和覆盖率，需要让每个分片都使用 `blob` reporter，上传 blob 文件，然后在后续 job 中合并。
 
@@ -159,7 +159,7 @@ jobs:
       - run: pnpm rstest merge-reports --coverage --cleanup
 ```
 
-每个分片会写入 `.rstest-reports/blob-{index}-{count}.json`。合并 job 会把这些文件收集到同一个 `.rstest-reports/` 目录，然后 `rstest merge-reports` 会基于统一结果运行已配置的 reporter，并合并覆盖率数据。更多细节请查看 [shard](/config/test/shard) 和 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports)。
+每个分片会写入 `.rstest-reports/blob-{index}-{count}.json`。合并 job 会把这些文件收集到同一个 `.rstest-reports/` 目录，然后 `rstest merge-reports` 会基于统一结果运行已配置的 reporter，并合并覆盖率数据。更多细节请查看 [测试分片](/guide/basic/cli#sharding-tests) 和 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports)。
 
 ## 发布机器可读报告
 

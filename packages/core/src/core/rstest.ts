@@ -164,21 +164,6 @@ export class Rstest implements RstestContext {
       ? projects.map((project) => {
           project.config.root = getAbsolutePath(rootPath, project.config.root!);
 
-          if (
-            project.config.shard &&
-            (project.config.shard.count !== rstestConfig.shard?.count ||
-              project.config.shard.index !== rstestConfig.shard?.index)
-          ) {
-            failConfig(
-              embedded,
-              'The `shard` option is a global option and cannot be set per-project.\n' +
-                'global `shard` option:\n' +
-                `  count: ${rstestConfig.shard?.count}, index: ${rstestConfig.shard?.index}\n` +
-                `project "${project.config.name}" shard option:\n` +
-                `  count: ${project.config.shard.count}, index: ${project.config.shard.index}`,
-            );
-          }
-
           // TODO: support extend projects config
           const config = withDefaultConfig(
             resolveBuildCacheDependencyPaths(

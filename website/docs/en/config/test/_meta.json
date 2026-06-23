@@ -20,7 +20,6 @@
   "test-timeout",
   "hook-timeout",
   "max-concurrency",
-  "shard",
 
   "pool",
   "isolate",
