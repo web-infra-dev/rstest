@@ -151,7 +151,6 @@ const preparePool = async (
       silent,
       testEnvironment,
       resolvedTestEnvironmentPaths,
-      testEnvironmentCacheKey,
       snapshotFormat,
       env,
     },
@@ -259,7 +258,6 @@ const preparePool = async (
   const environment = await loadTestEnvironment(
     testEnvironment.name,
     resolvedTestEnvironmentPaths,
-    testEnvironmentCacheKey,
   );
   const { teardown } = await environment.setup(
     global,

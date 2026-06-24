@@ -37,8 +37,6 @@ import type { PoolWorkerKind } from './types';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-let testEnvironmentCacheKeyVersion = 0;
-
 const getRuntimeConfig = async (
   context: RstestContext,
   project: ProjectContext,
@@ -70,11 +68,6 @@ const getRuntimeConfig = async (
     includeTaskLocation,
     silent,
   } = project.normalizedConfig;
-
-  const testEnvironmentCacheKey =
-    context.command === 'watch'
-      ? String(++testEnvironmentCacheKeyVersion)
-      : undefined;
 
   return {
     env: {
@@ -110,7 +103,6 @@ const getRuntimeConfig = async (
       testEnvironment.name,
       [project.rootPath, context.rootPath],
     ),
-    testEnvironmentCacheKey,
   };
 };
 

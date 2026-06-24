@@ -251,6 +251,7 @@ const calcEntriesToRerun = (
 ): {
   affectedEntries: EntryInfo[];
   deletedEntries: string[];
+  hasChangedTestEnvironmentFile: boolean;
 } => {
   const entryByTestPath = new Map(
     entries.map((entry) => [entry.testPath, entry] as const),
@@ -384,7 +385,11 @@ const calcEntriesToRerun = (
     affectedSetupPaths.size > 0 ||
     deletedSetups.length > 0
   ) {
-    return { affectedEntries: entries, deletedEntries: [] };
+    return {
+      affectedEntries: entries,
+      deletedEntries: [],
+      hasChangedTestEnvironmentFile,
+    };
   }
 
   const { affectedPaths: affectedTestPaths, deletedPaths } =
@@ -394,7 +399,11 @@ const calcEntriesToRerun = (
     .map((testPath) => entryByTestPath.get(testPath))
     .filter((entry): entry is EntryInfo => entry !== undefined);
 
-  return { affectedEntries, deletedEntries: deletedPaths };
+  return {
+    affectedEntries,
+    deletedEntries: deletedPaths,
+    hasChangedTestEnvironmentFile,
+  };
 };
 
 class AssetsMemorySafeMap extends Map<string, string> {
@@ -445,6 +454,7 @@ export const createRsbuildServer = async ({
     affectedEntries: EntryInfo[];
     /** deleted test entries only available in watch mode */
     deletedEntries: string[];
+    hasChangedTestEnvironmentFile: boolean;
   }>;
   closeServer: () => Promise<void>;
 }> => {
@@ -668,24 +678,29 @@ export const createRsbuildServer = async ({
 
     // affectedEntries: entries affected by source code.
     // deletedEntries: entry files deleted from compilation.
-    const { affectedEntries, deletedEntries } = isWatchMode
-      ? calcEntriesToRerun(
-          entries,
-          chunks,
-          isMultiCompiler(compiler)
-            ? getChangedFiles(
-                compiler.compilers.find(
-                  (compiler) => compiler.name === environmentName,
-                ),
-              )
-            : getChangedFiles(compiler),
-          buildData[environmentName],
-          outputPath!,
-          runtimeChunkNameForEnvironment(environmentName),
-          setupEntries,
-          testEnvironmentFiles[environmentName] || [],
-        )
-      : { affectedEntries: [], deletedEntries: [] };
+    const { affectedEntries, deletedEntries, hasChangedTestEnvironmentFile } =
+      isWatchMode
+        ? calcEntriesToRerun(
+            entries,
+            chunks,
+            isMultiCompiler(compiler)
+              ? getChangedFiles(
+                  compiler.compilers.find(
+                    (compiler) => compiler.name === environmentName,
+                  ),
+                )
+              : getChangedFiles(compiler),
+            buildData[environmentName],
+            outputPath!,
+            runtimeChunkNameForEnvironment(environmentName),
+            setupEntries,
+            testEnvironmentFiles[environmentName] || [],
+          )
+        : {
+            affectedEntries: [],
+            deletedEntries: [],
+            hasChangedTestEnvironmentFile: false,
+          };
 
     const cachedAssetFiles = new AssetsMemorySafeMap();
     const cachedSourceMaps = new AssetsMemorySafeMap();
@@ -733,6 +748,7 @@ export const createRsbuildServer = async ({
     return {
       affectedEntries,
       deletedEntries,
+      hasChangedTestEnvironmentFile,
       hash,
       entries,
       setupEntries,

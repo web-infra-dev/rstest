@@ -39,13 +39,31 @@ describe.skipIf(process.platform === 'win32')(
         fixturesTargetPath,
         'test-environment.mjs',
       );
+      const environmentHelperPath = path.join(
+        fixturesTargetPath,
+        'environment-helper.mjs',
+      );
 
       cli.resetStd();
       fs.update(environmentPath, (content) => {
-        return content.replace("'initial'", "'modified'");
+        return content.replace(
+          'global.__CUSTOM_ENV_MARKER__ = marker;',
+          'global.__CUSTOM_ENV_MARKER__ = `${marker}-modified`;',
+        );
       });
       fs.update(path.join(fixturesTargetPath, 'index.test.ts'), (content) => {
-        return content.replace("'initial'", "'modified'");
+        return content.replace("'initial'", "'initial-modified'");
+      });
+
+      await cli.waitForStdout('Duration');
+      expect(cli.stdout).toMatch('Tests 1 passed');
+
+      cli.resetStd();
+      fs.update(environmentHelperPath, (content) => {
+        return content.replace("'initial'", "'dependency'");
+      });
+      fs.update(path.join(fixturesTargetPath, 'index.test.ts'), (content) => {
+        return content.replace("'initial-modified'", "'dependency-modified'");
       });
 
       await cli.waitForStdout('Duration');
