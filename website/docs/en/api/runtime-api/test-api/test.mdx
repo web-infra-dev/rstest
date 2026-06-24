@@ -13,7 +13,12 @@ Alias: `it`.
 
 ## test
 
-- **Type:** `(name: string, options: TestOptions, fn?: (testContext: TestContext) => void | Promise<void>) => void`
+- **Type:**
+
+```ts
+(name: string, fn?: (testContext: TestContext) => void | Promise<void>, timeout?: number): void;
+(name: string, options: TestOptions, fn?: (testContext: TestContext) => void | Promise<void>): void;
+```
 
 Defines a test case.
 
@@ -106,7 +111,12 @@ test.todo('should implement this test');
 
 ## test.each
 
-- **Type:** `test.each(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>) => void`
+- **Type:**
+
+```ts
+test.each(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+test.each(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+```
 
 Runs the same test logic for each item in the provided array.
 
@@ -189,7 +199,12 @@ test.each([
 
 ## test.for
 
-- **Type:** `test.for(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T, testContext: TestContext) => void | Promise<void>) => void`
+- **Type:**
+
+```ts
+test.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number): void;
+test.for(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T, testContext: TestContext) => void | Promise<void>): void;
+```
 
 Alternative to `test.each` to provide `TestContext`.
 

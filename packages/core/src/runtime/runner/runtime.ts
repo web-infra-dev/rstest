@@ -200,6 +200,9 @@ export class RunnerRuntime {
     each = false,
     concurrent,
     sequential,
+    timeout,
+    retry,
+    repeats,
     location,
   }: {
     name: string;
@@ -208,6 +211,9 @@ export class RunnerRuntime {
     each?: boolean;
     concurrent?: boolean;
     sequential?: boolean;
+    timeout?: number;
+    retry?: number;
+    repeats?: number;
     location?: Location;
   }): void {
     this.checkStatus(name, 'suite');
@@ -221,6 +227,9 @@ export class RunnerRuntime {
       testPath: this.testPath,
       concurrent,
       sequential,
+      timeout,
+      retry,
+      repeats,
       location,
     };
 
@@ -298,7 +307,21 @@ export class RunnerRuntime {
           'Calling the test function inside another test function is not allowed. Please put it inside "describe" so it can be properly collected.',
         );
       }
+
+      // Inherit suite-level `TestOptions` as defaults. An explicit value on the
+      // child (case or nested suite) always wins; a nested describe carries the
+      // inherited value onto its own descendants. Mirrors concurrent/sequential.
+      test.timeout ??= current.timeout;
+      test.retry ??= current.retry;
+      test.repeats ??= current.repeats;
+
       current.tests.push(test);
+    }
+
+    // Cases must carry a concrete timeout for the runner; fall back to the
+    // configured default once suite inheritance (above) has been resolved.
+    if (test.type === 'case' && test.timeout === undefined) {
+      test.timeout = this.runtimeConfig.testTimeout;
     }
 
     this._currentTest.push(test);
@@ -357,7 +380,9 @@ export class RunnerRuntime {
     fn,
     originalFn = fn,
     fixtures,
-    timeout = this.runtimeConfig.testTimeout,
+    // Left undefined when the caller omits it; `addTest` resolves the effective
+    // timeout (explicit > enclosing suite > config.testTimeout).
+    timeout,
     retry,
     repeats,
     runMode = 'run',
@@ -413,15 +438,24 @@ export class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
     location?: Location;
-  }): (name: string, fn: (...args: any[]) => any) => void {
-    return (name: string, fn) => {
+  }): (
+    name: string,
+    arg2?: ((...args: any[]) => any) | TestOptions,
+    arg3?: ((...args: any[]) => any) | number,
+  ) => void {
+    return (name, arg2, arg3) => {
+      const { fn, options: suiteOptions } = resolveTestArgs(arg2, arg3);
+      const { timeout, retry, repeats } = suiteOptions;
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
-        const params = castArray(param) as Parameters<typeof fn>;
+        const params = castArray(param) as any[];
 
         this.describe({
           name: formatName(name, param, i),
           fn: () => fn?.(...params),
+          timeout,
+          retry,
+          repeats,
           ...options,
           each: true,
         });
@@ -438,14 +472,23 @@ export class RunnerRuntime {
     concurrent?: boolean;
     sequential?: boolean;
     location?: Location;
-  }): (name: string, fn: (...args: any[]) => any) => void {
-    return (name: string, fn) => {
+  }): (
+    name: string,
+    arg2?: ((...args: any[]) => any) | TestOptions,
+    arg3?: ((...args: any[]) => any) | number,
+  ) => void {
+    return (name, arg2, arg3) => {
+      const { fn, options: suiteOptions } = resolveTestArgs(arg2, arg3);
+      const { timeout, retry, repeats } = suiteOptions;
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
 
         this.describe({
           name: formatName(name, param, i),
           fn: () => fn?.(param),
+          timeout,
+          retry,
+          repeats,
           ...options,
           each: true,
         });
@@ -479,7 +522,7 @@ export class RunnerRuntime {
           name: formatName(name, param, i),
           originalFn: fn,
           fn: () => fn?.(...params),
-          timeout: timeout ?? this.runtimeConfig.testTimeout,
+          timeout,
           retry,
           repeats,
           ...options,
@@ -514,7 +557,7 @@ export class RunnerRuntime {
           name: formatName(name, param, i),
           originalFn: fn,
           fn: (context) => fn?.(param, context),
-          timeout: timeout ?? this.runtimeConfig.testTimeout,
+          timeout,
           retry,
           repeats,
           ...options,
@@ -651,11 +694,16 @@ const buildRuntimeAPI = (): CollectionAPI => {
       location?: Location;
     } = {},
   ): DescribeAPI => {
-    const describeFn = ((name, fn) => {
+    const describeFn = ((name, arg2, arg3) => {
+      const { fn, options: suiteOptions } = resolveTestArgs(arg2, arg3);
+      const { timeout, retry, repeats } = suiteOptions;
       const rt = currentRuntime();
       rt.describe({
         name,
         fn,
+        timeout,
+        retry,
+        repeats,
         ...options,
         location: options.location ?? rt.getLocation(),
       });
