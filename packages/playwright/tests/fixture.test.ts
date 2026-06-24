@@ -57,6 +57,14 @@ test.extend({
   expect(customFixture).toContain('viewport');
 });
 
+test.extend<{ createLabel: () => Promise<string> }>({
+  createLabel: async ({ page }, use) => {
+    await use(async () => `viewport-${page.viewportSize()?.width ?? 0}`);
+  },
+})('preserves function-valued fixture types', async ({ createLabel }) => {
+  await expect(createLabel()).resolves.toContain('viewport');
+});
+
 test.extend({
   playwright: debugOptions,
 })('accepts headed debug options', async ({ playwright }) => {

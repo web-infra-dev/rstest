@@ -19,6 +19,7 @@ import {
   describe as rstestDescribe,
   test as base,
 } from '@rstest/core';
+import type { Fixtures, TestAPIs } from '@rstest/core';
 import type { TestContext } from '@rstest/core';
 import { chromium, request as playwrightRequest } from 'playwright';
 import type {
@@ -528,30 +529,15 @@ const playwrightFixtures = {
   },
 };
 
-type RstestTest = typeof base;
-
-type FixtureOptions = {
-  auto?: boolean;
-};
-
-type Fixture<FixturesContext, K extends keyof FixturesContext, ExtraContext> =
-  | FixturesContext[K]
-  | ((
-      context: Omit<FixturesContext, K> & ExtraContext & TestContext,
-      use: (value: FixturesContext[K]) => Promise<void>,
-    ) => Promise<void>);
+type RstestTest<ExtraContext = object> = TestAPIs<ExtraContext>;
 
 type PlaywrightFixtures<
   FixturesContext extends Record<string, any>,
   ExtraContext,
-> = {
-  [K in keyof FixturesContext]?:
-    | Fixture<FixturesContext, K, ExtraContext>
-    | [Fixture<FixturesContext, K, ExtraContext>, FixtureOptions?];
-};
+> = Fixtures<FixturesContext, ExtraContext>;
 
 type PlaywrightTestBase<ExtraContext> = Omit<
-  RstestTest,
+  RstestTest<ExtraContext>,
   'extend' | 'fail' | 'fails' | 'for' | 'skip'
 > & {
   (
@@ -609,7 +595,7 @@ export type PlaywrightTest<ExtraContext = PlaywrightFixture> =
   };
 
 const createPlaywrightTest = <ExtraContext>(
-  rstestTest: RstestTest,
+  rstestTest: RstestTest<ExtraContext>,
 ): PlaywrightTest<ExtraContext> => {
   const playwrightTest = rstestTest as unknown as PlaywrightTest<ExtraContext>;
   const extend = rstestTest.extend.bind(rstestTest);
