@@ -70,11 +70,16 @@ if (rs.isFakeTimers()) {
 
 设置 fake timers 使用的当前系统时间。适用于需要测试依赖当前日期或时间的代码。
 
+启用 fake timers 时，该方法会模拟用户修改系统时钟（影响 `Date`、`performance.now` 等与日期相关的 API），但不会触发任何 timer。若未启用 fake timers，则仅 mock `Date.*` 调用，因此无需先调用 [`rs.useFakeTimers`](#rsusefaketimers) 即可固定时钟。
+
 `now` 也可以是类似 Temporal 的对象，例如 `Temporal.Instant` 或 `Temporal.ZonedDateTime`。
 
 ```ts
-rs.useFakeTimers();
 rs.setSystemTime(new Date('2020-01-01T00:00:00Z'));
+
+expect(new Date().toISOString()).toBe('2020-01-01T00:00:00.000Z');
+
+rs.useRealTimers();
 ```
 
 ## rs.getRealSystemTime
