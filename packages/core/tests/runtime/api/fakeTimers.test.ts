@@ -1,20 +1,5 @@
-import { createRstestUtilities } from '../../../src/runtime/api/utilities';
 import { setRealTimers } from '../../../src/runtime/util';
-import type { WorkerState } from '../../../src/types';
-
-function createWorkerState(): WorkerState {
-  return {
-    runtimeConfig: {
-      testTimeout: 1_000,
-      hookTimeout: 1_000,
-      clearMocks: false,
-      resetMocks: false,
-      restoreMocks: false,
-      maxConcurrency: 5,
-      retry: 0,
-    },
-  } as WorkerState;
-}
+import { createUtilities } from './helpers';
 
 describe('fake timers API', () => {
   beforeEach(() => {
@@ -22,7 +7,7 @@ describe('fake timers API', () => {
   });
 
   it('useFakeTimers not throws when specifies `toNotFake`', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     expect(() =>
       rs.useFakeTimers({ toNotFake: ['setImmediate'] }),
@@ -32,7 +17,7 @@ describe('fake timers API', () => {
   });
 
   it('useFakeTimers filters out timers in toNotFake', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
 
     rs.useFakeTimers({ toNotFake: ['setTimeout'] });
 
@@ -51,7 +36,7 @@ describe('fake timers API', () => {
   });
 
   it('advanceTimersByTime accepts string durations', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
     rs.useFakeTimers({ now: 0 });
 
     let fired = false;
@@ -68,7 +53,7 @@ describe('fake timers API', () => {
   });
 
   it('setSystemTime accepts Temporal-like values', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
     rs.useFakeTimers({ now: 0 });
 
     rs.setSystemTime({ epochMilliseconds: 1234 });
@@ -79,7 +64,7 @@ describe('fake timers API', () => {
   });
 
   it('jumpTimersByTime fires recurring timers at most once', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
     rs.useFakeTimers({ now: 0 });
 
     const cb = rs.fn();
@@ -94,7 +79,7 @@ describe('fake timers API', () => {
   });
 
   it('setTickMode supports nextAsync auto ticking', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
     rs.useFakeTimers({ now: 0 });
 
     const result = new Promise((resolve) => {
@@ -109,7 +94,7 @@ describe('fake timers API', () => {
   });
 
   it('restores tick mode after scoped fake timers dispose', async () => {
-    const rs = await createRstestUtilities(createWorkerState());
+    const rs = await createUtilities();
     rs.useFakeTimers({ now: 0 });
     rs.setTickMode({ mode: 'nextAsync' });
 

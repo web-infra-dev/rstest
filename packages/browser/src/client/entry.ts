@@ -482,6 +482,10 @@ const run = async () => {
         rootPath: options.rootPath,
         runtimeConfig,
         taskId: 0,
+        // The kept-module-cache flush keyed on `buildId` is node worker-pool
+        // only (#1373); browser runners never reuse a node worker, so a constant
+        // inert id is correct here.
+        buildId: 0,
         outputModule: false,
         environment: 'browser',
         testPath,
@@ -578,6 +582,8 @@ const run = async () => {
       rootPath: options.rootPath,
       runtimeConfig,
       taskId: 0,
+      // See the `buildId` note above: inert in browser mode.
+      buildId: 0,
       outputModule: false,
       environment: 'browser',
       currentTask: taskStack[0],

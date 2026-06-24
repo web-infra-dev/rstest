@@ -3,7 +3,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm, { type SourceTextModule } from 'node:vm';
 import path from 'pathe';
 import { logger } from '../../utils/logger';
-import { clearSyntheticModuleCache } from './interop';
+import { clearCacheCleaners, clearSyntheticModuleCache } from './interop';
 import {
   finalizeDynamicImport,
   loadWasmFromContent,
@@ -148,12 +148,30 @@ const defineRstestDynamicImport =
 
 const esmCache = new Map<string, SourceTextModule>();
 
+// With `isolate: false` the kept runtime chunk's `import.meta` hooks (wasm /
+// dynamic-import resolution) capture this asset map BY REFERENCE at creation
+// time. Folding every file's assets into one persistent map — the same
+// reference those hooks closed over — keeps a later file's chunks resolvable.
+// Paths are globally unique per build, so merging never collides; the map is
+// reset only on a full `clearModuleCache`.
+// See https://github.com/web-infra-dev/rstest/issues/1373.
+const accumulatedAssetFiles: Record<string, string> = {};
+
+// Every shared runtime chunk this (possibly reused) worker has loaded under
+// `isolate: false`. The pool has no environment affinity — with multiple node
+// projects dispatched concurrently a reused worker can run project A, then B,
+// then A again — so a single kept id would let B's teardown evict A's runtime
+// chunk and re-instantiate A's `__webpack_module_cache__` on its next file,
+// losing the cross-file module state we set out to share. Accumulate every
+// runtime chunk and keep all of them; reset only on a full clear.
+const keptRuntimeChunks = new Set<string>();
+
 // setup and rstest module should not be cached
 export const loadModule = async ({
   codeContent,
   distPath,
   testPath,
-  assetFiles,
+  assetFiles: assetFilesArg,
   interopDefault,
   esmMode = EsmMode.Unknown,
   runtimeDistPath,
@@ -167,6 +185,12 @@ export const loadModule = async ({
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
 }): Promise<any> => {
+  // Fold this file's assets into the persistent map. Recursive loads (dynamic
+  // imports) re-pass that same map, so skip the no-op self-merge.
+  if (assetFilesArg !== accumulatedAssetFiles) {
+    Object.assign(accumulatedAssetFiles, assetFilesArg);
+  }
+  const assetFiles = accumulatedAssetFiles;
   const code = shouldInjectSourceURL()
     ? appendSourceURL(codeContent, distPath)
     : codeContent;
@@ -262,7 +286,34 @@ export const loadModule = async ({
   return ns.default && ns.default instanceof Promise ? ns.default : ns;
 };
 
-export const clearModuleCache = (): void => {
-  esmCache.clear();
+/**
+ * Reset the per-worker module cache between test files.
+ *
+ * Under `isolate: false`, `keep` is the shared runtime chunk id that owns the
+ * only `__webpack_module_cache__`; preserving it keeps the module-scope state
+ * of every already-evaluated non-entry module across files (evaluated once per
+ * worker, not per file). Test-entry and setup modules are still evicted so
+ * their bodies re-run per file. A reused worker can serve more than one project
+ * (the pool has no environment affinity), so every project's runtime chunk is
+ * accumulated and kept — see `keptRuntimeChunks`.
+ * See https://github.com/web-infra-dev/rstest/issues/1373.
+ */
+export const clearModuleCache = (keep?: string): void => {
+  if (keep) {
+    keptRuntimeChunks.add(keep);
+    for (const key of esmCache.keys()) {
+      if (!keptRuntimeChunks.has(key)) {
+        esmCache.delete(key);
+      }
+    }
+  } else {
+    esmCache.clear();
+    keptRuntimeChunks.clear();
+    // Nothing is kept, so no hook holds a reference to the accumulated assets.
+    for (const key of Object.keys(accumulatedAssetFiles)) {
+      delete accumulatedAssetFiles[key];
+    }
+    clearCacheCleaners();
+  }
   clearSyntheticModuleCache();
 };

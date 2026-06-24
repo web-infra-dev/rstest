@@ -171,6 +171,57 @@ describe('loadEsModule', () => {
     expect(mod.default.foo).toBe('foo-val');
   });
 
+  // Regression: https://github.com/web-infra-dev/rstest/issues/1376
+  // Under `isolate: false` the pool has no environment affinity, so a reused
+  // worker can serve project A, then B, then A again. `clearModuleCache(keep)`
+  // must accumulate every project's runtime chunk — keeping only the latest id
+  // would let B's teardown evict A's runtime chunk and re-evaluate A's shared
+  // modules on its next file.
+  it('keeps every reused project runtime chunk across files', async () => {
+    const g = globalThis as Record<string, any>;
+    g.__evalA = 0;
+    g.__evalB = 0;
+    g.__evalEntry = 0;
+
+    const runtimeA = '/virtual/dist/runtimeA.mjs';
+    const runtimeB = '/virtual/dist/runtimeB.mjs';
+    const entry = '/virtual/dist/entry.mjs';
+
+    // Each module bumps its global counter when its body runs, so a cached
+    // (kept) module returns the same `default` while an evicted one re-runs.
+    const load = (distPath: string, counter: string) =>
+      loadModule({
+        codeContent: [
+          `globalThis.${counter} += 1;`,
+          `export default globalThis.${counter};`,
+        ].join('\n'),
+        distPath,
+        testPath: distPath,
+        rstestContext: {},
+        assetFiles: {},
+        interopDefault: false,
+      });
+
+    // Project A's first file: load its runtime chunk and a (never-kept) entry.
+    await load(runtimeA, '__evalA');
+    await load(entry, '__evalEntry');
+    clearModuleCache(runtimeA);
+
+    // Project B runs on the same worker; its teardown must NOT evict A.
+    await load(runtimeB, '__evalB');
+    clearModuleCache(runtimeB);
+
+    // Project A's next file: its runtime chunk is still cached (state shared),
+    // while the entry — never kept — was re-evaluated.
+    expect((await load(runtimeA, '__evalA')).default).toBe(1);
+    expect((await load(runtimeB, '__evalB')).default).toBe(1);
+    expect((await load(entry, '__evalEntry')).default).toBe(2);
+
+    delete g.__evalA;
+    delete g.__evalB;
+    delete g.__evalEntry;
+  });
+
   it('should only inject sourceURL in Bun runtime', async () => {
     const originalBunVersion = process.versions.bun;
 

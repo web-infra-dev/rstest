@@ -59,6 +59,20 @@ const registerGlobalApi = (api: Rstest) => {
 
 const globalCleanups: (() => void)[] = [];
 let isTeardown = false;
+/**
+ * Last per-compile `buildId` this (possibly reused) worker loaded; a change
+ * means a watch rebuild and triggers a full cache flush below (#1373).
+ *
+ * Invariant the `isolate: false` cache sharing rests on: `buildId` is a single
+ * `run()`-scoped counter shared by every concurrently-dispatched project, so a
+ * reused worker serving project A→B→A within one round sees an identical
+ * `buildId` for all of them — the full flush fires exactly once per rebuild,
+ * never spuriously between sibling projects. If `buildId` ever became
+ * per-project, this single module-global would ping-pong between concurrent
+ * projects on a reused worker and flush mid-round, evicting a sibling's live
+ * runtime chunk and reintroducing the cross-project regression (#1376).
+ */
+let lastBuildId: number | undefined;
 
 const setErrorName = (error: Error, type: string): Error => {
   try {
@@ -328,11 +342,16 @@ const loadFiles = async ({
     ? await import('./loadEsModule')
     : await import('./loadModule');
 
-  // clean rstest core cache manually
+  // Clean each kept runtime chunk's webpack module cache before re-running setup
+  // + entry. A reused worker can hold several projects' runtime chunks at once
+  // (isolate: false), so invoke EVERY registered cleaner — each is self-scoped to
+  // its own chunk's cache, so over-calling is a harmless no-op. See
+  // `moduleCacheControl.ts` for why this is a per-chunk registry, not a single
+  // `global.__rstest_clean_core_cache__` slot.
   if (!isolate) {
     await loadModule({
-      codeContent: `if (global && typeof global.__rstest_clean_core_cache__ === 'function') {
-  global.__rstest_clean_core_cache__();
+      codeContent: `if (global && global.__rstest_cache_cleaners__) {
+  global.__rstest_cache_cleaners__.forEach((fn) => fn());
   }`,
       distPath: '',
       testPath,
@@ -387,9 +406,26 @@ export const runInPool = async (
     type,
     context: {
       project,
+      buildId,
       runtimeConfig: { isolate, bail, detectAsyncLeaks },
     },
   } = options;
+
+  const importLoader = () =>
+    options.context.outputModule
+      ? import('./loadEsModule')
+      : import('./loadModule');
+
+  // Keeping the runtime chunk is correct within one compile, but a watch rebuild
+  // (bumped `buildId`) would serve a changed shared module from the previous
+  // build's cache. Fully flush every loader on the rebuild boundary before
+  // loading (see `flushAllLoaderCaches` for why both loaders, not just this
+  // task's).
+  if (!isolate && lastBuildId !== undefined && lastBuildId !== buildId) {
+    const { flushAllLoaderCaches } = await import('./interop');
+    await flushAllLoaderCaches();
+  }
+  lastBuildId = buildId;
 
   const cleanups: (() => MaybePromise<void>)[] = [];
 
@@ -420,10 +456,10 @@ export const runInPool = async (
     await Promise.all(cleanups.map((fn) => fn()));
 
     if (!isolate) {
-      const { clearModuleCache } = options.context.outputModule
-        ? await import('./loadEsModule')
-        : await import('./loadModule');
-      clearModuleCache();
+      const { clearModuleCache } = await importLoader();
+      // Keep the shared runtime chunk so imported module state survives across
+      // files; test-entry and setup modules are still evicted (see clearModuleCache).
+      clearModuleCache(runtimeDistPath);
     }
 
     isTeardown = true;
