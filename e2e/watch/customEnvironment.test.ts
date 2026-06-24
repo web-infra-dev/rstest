@@ -59,11 +59,15 @@ describe.skipIf(process.platform === 'win32')(
       expect(cli.stdout).toMatch('Tests 1 passed');
 
       cli.resetStd();
-      fs.update(environmentHelperPath, (content) => {
-        return content.replace("'initial'", "'dependency'");
-      });
       fs.update(path.join(fixturesTargetPath, 'index.test.ts'), (content) => {
         return content.replace("'initial-modified'", "'dependency-modified'");
+      });
+
+      await cli.waitForStdout('Tests 1 failed');
+
+      cli.resetStd();
+      fs.update(environmentHelperPath, (content) => {
+        return content.replace("'initial'", "'dependency'");
       });
 
       await cli.waitForStdout('Duration');

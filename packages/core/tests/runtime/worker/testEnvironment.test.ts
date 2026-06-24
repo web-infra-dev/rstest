@@ -199,6 +199,43 @@ describe('testEnvironment', () => {
     expect(environment.name).toBe('node-entry');
   });
 
+  it('should resolve default export conditions for package environments', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
+
+    const packageDir = join(tempDir, 'node_modules', 'package-marker');
+
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(
+      join(packageDir, 'package.json'),
+      JSON.stringify({
+        name: 'package-marker',
+        type: 'module',
+        exports: {
+          '.': {
+            default: './index.mjs',
+          },
+        },
+      }),
+    );
+    writeFileSync(
+      join(packageDir, 'index.mjs'),
+      environmentModule('default-entry'),
+    );
+
+    const resolvedPaths = await resolveTestEnvironmentPath('package-marker', [
+      realpathSync(tempDir),
+    ]);
+    const environment = await loadTestEnvironment(
+      'package-marker',
+      resolvedPaths,
+    );
+
+    expect(resolvedPaths).toEqual([
+      packageEnvironmentPath(tempDir, 'package-marker'),
+    ]);
+    expect(environment.name).toBe('default-entry');
+  });
+
   it('should resolve main before module when exports is absent', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'rstest-environment-'));
 

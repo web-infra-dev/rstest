@@ -1,3 +1,4 @@
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   createRsbuild,
@@ -99,6 +100,126 @@ const getChangedFiles = (
   ]);
 };
 
+const moduleFileExtensions = [
+  '.mjs',
+  '.js',
+  '.cjs',
+  '.mts',
+  '.ts',
+  '.cts',
+  '.jsx',
+  '.tsx',
+];
+
+const resolveFilePath = (filePath: string): string | undefined => {
+  try {
+    const stats = statSync(filePath);
+
+    if (stats.isFile()) {
+      return filePath;
+    }
+
+    return undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const resolveLocalDirectoryModule = (
+  directoryPath: string,
+): string | undefined => {
+  try {
+    const stats = statSync(directoryPath);
+    if (!stats.isDirectory()) {
+      return undefined;
+    }
+
+    for (const extension of moduleFileExtensions) {
+      const indexPath = path.join(directoryPath, `index${extension}`);
+      if (existsSync(indexPath)) {
+        return indexPath;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+};
+
+const resolveLocalModule = (
+  importerPath: string,
+  specifier: string,
+): string | undefined => {
+  if (!specifier.startsWith('.') && !path.isAbsolute(specifier)) {
+    return undefined;
+  }
+
+  const candidate = path.isAbsolute(specifier)
+    ? specifier
+    : path.join(path.dirname(importerPath), specifier);
+
+  const exactFile = resolveFilePath(candidate);
+  if (exactFile) {
+    return exactFile;
+  }
+
+  for (const extension of moduleFileExtensions) {
+    const file = resolveFilePath(`${candidate}${extension}`);
+    if (file) {
+      return file;
+    }
+  }
+
+  const indexFile = resolveLocalDirectoryModule(candidate);
+  if (indexFile) {
+    return indexFile;
+  }
+
+  return undefined;
+};
+
+const collectTestEnvironmentWatchFiles = (entryFiles: string[]) => {
+  const watchFiles = new Set<string>();
+
+  const visit = (filePath: string) => {
+    const resolvedFilePath = resolveFilePath(filePath);
+    if (!resolvedFilePath || watchFiles.has(resolvedFilePath)) {
+      return;
+    }
+
+    watchFiles.add(resolvedFilePath);
+
+    let source: string;
+    try {
+      source = readFileSync(resolvedFilePath, 'utf-8');
+    } catch {
+      return;
+    }
+
+    const importRegex =
+      /\b(?:import|export)\s+(?:[^'"()]*?\s+from\s+)?['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)|\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+
+    for (const match of source.matchAll(importRegex)) {
+      const specifier = match[1] || match[2] || match[3];
+      if (!specifier) {
+        continue;
+      }
+
+      const dependency = resolveLocalModule(resolvedFilePath, specifier);
+      if (dependency) {
+        visit(dependency);
+      }
+    }
+  };
+
+  for (const file of entryFiles) {
+    visit(file);
+  }
+
+  return Array.from(watchFiles);
+};
+
 export const resolveTestEnvironmentWatchFiles = async (
   projects: ProjectContext[],
   command: RstestContext['command'],
@@ -115,9 +236,12 @@ export const resolveTestEnvironmentWatchFiles = async (
         [project.rootPath, rootPath],
       );
 
+      const entryFiles =
+        resolvedPaths?.map((resolvedPath) => fileURLToPath(resolvedPath)) || [];
+
       return [
         project.environmentName,
-        resolvedPaths?.map((resolvedPath) => fileURLToPath(resolvedPath)) || [],
+        collectTestEnvironmentWatchFiles(entryFiles),
       ] as const;
     }),
   );

@@ -143,6 +143,7 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   testEnvironment: {
     name: './my-environment.mjs',
+    target: 'web',
     options: {
       marker: 'custom-marker',
     },
