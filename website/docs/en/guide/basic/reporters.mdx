@@ -49,6 +49,7 @@ Rstest provides several built-in reporters:
 | `github-actions` | CI error annotations       | GitHub Actions workflows |
 | `junit`          | JUnit XML format           | CI/CD integration        |
 | `json`           | Structured JSON report     | CI tooling and scripting |
+| `teamcity`       | TeamCity service messages  | TeamCity CI servers      |
 | `md`             | Markdown agent report      | Agent / LLM integrations |
 | `blob`           | Serialized JSON output     | Merging sharded reports  |
 
@@ -336,6 +337,47 @@ export default defineConfig({
 - `unhandledErrors`: Top-level unhandled errors when present
 
 The JSON reporter writes relative `testPath` values so the output remains stable across different machines and CI workspaces.
+
+### TeamCity reporter
+
+Emits [TeamCity service messages](https://www.jetbrains.com/help/teamcity/service-messages.html) to stdout, which TeamCity (and compatible CI servers) parse from the build log to populate the Tests tab. Unlike `junit`, no output file is written, so it is usually paired with `default`.
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+```bash
+npx rstest --reporters=teamcity
+```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: ['default', 'teamcity'],
+});
+```
+  </Tab>
+</Tabs>
+
+Each test file is reported as a `testSuite` (the file path is its name), and each case maps to TeamCity test messages:
+
+- `pass`: `testStarted` / `testFinished`
+- `fail`: `testStarted` / `testFailed` / `testFinished`; comparison failures add `expected`/`actual` via `type='comparisonFailure'`
+- `skip` / `todo`: `testIgnored`
+- a file that fails to load with no cases is reported as a synthetic `file setup` failed test
+
+The TeamCity reporter generates service messages as follows:
+
+```text
+##teamcity[testSuiteStarted flowId='test1.test.ts' name='test1.test.ts']
+##teamcity[testStarted flowId='test1.test.ts' name='should pass']
+##teamcity[testFinished duration='1' flowId='test1.test.ts' name='should pass']
+##teamcity[testStarted flowId='test1.test.ts' name='should fail']
+##teamcity[testFailed actual='hi' details='...' expected='hii' flowId='test1.test.ts' message='expected |'hi|' to be |'hii|'' name='should fail' type='comparisonFailure']
+##teamcity[testFinished duration='2' flowId='test1.test.ts' name='should fail']
+##teamcity[testIgnored flowId='test1.test.ts' name='should skip']
+##teamcity[testSuiteFinished flowId='test1.test.ts' name='test1.test.ts']
+```
 
 ### Markdown reporter
 

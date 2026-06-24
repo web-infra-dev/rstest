@@ -10,6 +10,7 @@ import { GithubActionsReporter } from '../reporter/githubActions';
 import { JsonReporter } from '../reporter/json';
 import { JUnitReporter } from '../reporter/junit';
 import { MdReporter } from '../reporter/md';
+import { TeamcityReporter } from '../reporter/teamcity';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
   BuiltInReporterNames,
@@ -313,6 +314,7 @@ const reportersMap = {
   'github-actions': GithubActionsReporter,
   junit: JUnitReporter,
   json: JsonReporter,
+  teamcity: TeamcityReporter,
   md: MdReporter,
   blob: BlobReporter,
 } satisfies Record<BuiltInReporterNames, new (...args: any[]) => unknown>;

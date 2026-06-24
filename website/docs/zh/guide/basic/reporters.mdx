@@ -49,6 +49,7 @@ Rstest 提供了多种内置报告器：
 | `github-actions` | CI 错误注释         | GitHub Actions 工作流 |
 | `junit`          | JUnit XML 格式      | CI/CD 集成            |
 | `json`           | 结构化 JSON 报告    | CI 工具和脚本处理     |
+| `teamcity`       | TeamCity 服务消息   | TeamCity CI 服务器    |
 | `md`             | Markdown agent 报告 | Agent / LLM 集成      |
 | `blob`           | 序列化 JSON 输出    | 合并分片报告          |
 
@@ -334,6 +335,47 @@ export default defineConfig({
 - `unhandledErrors`：顶层 unhandled errors（如果有）
 
 JSON 报告器会将 `testPath` 写成相对路径，这样在不同机器和 CI workspace 中输出更稳定。
+
+### TeamCity 报告器
+
+向 stdout 输出 [TeamCity 服务消息](https://www.jetbrains.com/help/teamcity/service-messages.html)，TeamCity（及兼容的 CI 服务器）会从构建日志中解析这些消息以填充 Tests 标签页。与 `junit` 不同，它不写入文件，因此通常与 `default` 搭配使用。
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+```bash
+npx rstest --reporters=teamcity
+```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: ['default', 'teamcity'],
+});
+```
+  </Tab>
+</Tabs>
+
+每个测试文件被报告为一个 `testSuite`（以文件路径作为名称），每个用例映射为对应的 TeamCity 测试消息：
+
+- `pass`: `testStarted` / `testFinished`
+- `fail`: `testStarted` / `testFailed` / `testFinished`；比较类失败会通过 `type='comparisonFailure'` 附带 `expected`/`actual`
+- `skip` / `todo`: `testIgnored`
+- 加载失败且没有任何用例的文件会被报告为一个合成的 `file setup` 失败测试
+
+TeamCity 报告器生成如下服务消息：
+
+```text
+##teamcity[testSuiteStarted flowId='test1.test.ts' name='test1.test.ts']
+##teamcity[testStarted flowId='test1.test.ts' name='should pass']
+##teamcity[testFinished duration='1' flowId='test1.test.ts' name='should pass']
+##teamcity[testStarted flowId='test1.test.ts' name='should fail']
+##teamcity[testFailed actual='hi' details='...' expected='hii' flowId='test1.test.ts' message='expected |'hi|' to be |'hii|'' name='should fail' type='comparisonFailure']
+##teamcity[testFinished duration='2' flowId='test1.test.ts' name='should fail']
+##teamcity[testIgnored flowId='test1.test.ts' name='should skip']
+##teamcity[testSuiteFinished flowId='test1.test.ts' name='test1.test.ts']
+```
 
 ### Markdown 报告器
 

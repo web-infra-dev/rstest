@@ -32,6 +32,7 @@ export type BuiltInReporterNames =
   | 'github-actions'
   | 'junit'
   | 'json'
+  | 'teamcity'
   | 'blob';
 
 export type DefaultReporterOptions = {
@@ -180,6 +181,7 @@ type BuiltinReporterOptions = {
   'github-actions': GithubActionsReporterOptions;
   junit: Record<string, unknown>;
   json: JsonReporterOptions;
+  teamcity: Record<string, unknown>;
   blob: BlobReporterOptions;
 };
 
