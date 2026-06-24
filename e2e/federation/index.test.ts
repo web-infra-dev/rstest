@@ -21,6 +21,20 @@ describe('federation', () => {
     await expectExecSuccess();
   });
 
+  it('should keep federation runtime shims when isolate is disabled', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--isolate', 'false'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/basic'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
   it('should not install federation runtime shims by default', async () => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
