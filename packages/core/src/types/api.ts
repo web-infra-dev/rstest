@@ -34,8 +34,9 @@ export type TestCallbackFn<ExtraContext = object> = (
 ) => MaybePromise<void>;
 
 /**
- * Per-test options accepted as the third argument of `test` / `it` / `test.each` /
- * `test.for`. Passing a plain `number` is equivalent to `{ timeout: n }`.
+ * Per-test options accepted as the second argument of `test` / `it` / `test.each` /
+ * `test.for`. Passing a plain `number` as the last argument is equivalent to
+ * `{ timeout: n }`.
  *
  * Declared as an `interface` so consumers can use module augmentation to add
  * fields in the future without breaking source compatibility.
@@ -62,60 +63,50 @@ export interface TestOptions {
   repeats?: number;
 }
 
-type TestFn<ExtraContext = object> = (
-  description: string,
-  fn?: TestCallbackFn<ExtraContext>,
-  options?: number | TestOptions,
-) => void;
+/**
+ * The two accepted call shapes shared by `test` / `it` and the functions returned
+ * by `test.each` / `test.for`:
+ * - `(name, fn, timeout?)` — test function second, with an optional numeric timeout
+ *   last (kept for Jest compatibility; shorthand for `{ timeout: n }`).
+ * - `(name, options, fn?)` — `TestOptions` object as the second argument.
+ *
+ * The function-first overload is listed first so the common `test(name, fn)` case
+ * binds the callback's context types — a function value is otherwise assignable to
+ * the all-optional `TestOptions`, which would swallow contextual typing.
+ */
+type TestCall<Fn> = {
+  (description: string, fn?: Fn, timeout?: number): void;
+  (description: string, options: TestOptions, fn?: Fn): void;
+};
+
+type TestFn<ExtraContext = object> = TestCall<TestCallbackFn<ExtraContext>>;
 
 export interface TestEachFn {
   <T extends Record<string, unknown>>(
     cases: readonly T[],
-  ): (
-    description: string,
-    fn?: (param: T) => MaybePromise<void>,
-    options?: number | TestOptions,
-  ) => void;
+  ): TestCall<(param: T) => MaybePromise<void>>;
   <T extends readonly [unknown, ...unknown[]]>(
     cases: readonly T[],
-  ): (
-    description: string,
-    fn?: (...args: [...T]) => MaybePromise<void>,
-    options?: number | TestOptions,
-  ) => void;
-  <T>(
-    cases: readonly T[],
-  ): (
-    description: string,
-    fn?: (...args: T[]) => MaybePromise<void>,
-    options?: number | TestOptions,
-  ) => void;
+  ): TestCall<(...args: [...T]) => MaybePromise<void>>;
+  <T>(cases: readonly T[]): TestCall<(...args: T[]) => MaybePromise<void>>;
   <T extends Record<string, unknown>>(
     strings: TemplateStringsArray,
     ...expressions: unknown[]
-  ): (
-    description: string,
-    fn?: (param: T) => MaybePromise<void>,
-    options?: number | TestOptions,
-  ) => void;
+  ): TestCall<(param: T) => MaybePromise<void>>;
 }
 
 export interface TestForFn<ExtraContext = object> {
   <T>(
     cases: readonly T[],
-  ): (
-    description: string,
-    fn?: (param: T, context: TestContext & ExtraContext) => MaybePromise<void>,
-    options?: number | TestOptions,
-  ) => void;
+  ): TestCall<
+    (param: T, context: TestContext & ExtraContext) => MaybePromise<void>
+  >;
   <T extends Record<string, unknown>>(
     strings: TemplateStringsArray,
     ...expressions: unknown[]
-  ): (
-    description: string,
-    fn?: (param: T, context: TestContext & ExtraContext) => MaybePromise<void>,
-    options?: number | TestOptions,
-  ) => void;
+  ): TestCall<
+    (param: T, context: TestContext & ExtraContext) => MaybePromise<void>
+  >;
 }
 
 export interface DescribeEachFn {

@@ -35,8 +35,8 @@ import { fileContext } from '../fileContext';
 import {
   formatName,
   isTemplateStringsArray,
-  normalizeTestOptions,
   parseTemplateTable,
+  resolveTestArgs,
   TestRegisterError,
 } from '../util';
 import { normalizeFixtures } from './fixtures';
@@ -465,11 +465,12 @@ export class RunnerRuntime {
     location?: Location;
   }): (
     name: string,
-    fn?: (...args: any[]) => any,
-    testOptions?: number | TestOptions,
+    arg2?: ((...args: any[]) => any) | TestOptions,
+    arg3?: ((...args: any[]) => any) | number,
   ) => void {
-    return (name, fn, testOptions) => {
-      const { timeout, retry, repeats } = normalizeTestOptions(testOptions);
+    return (name, arg2, arg3) => {
+      const { fn, options: testOptions } = resolveTestArgs(arg2, arg3);
+      const { timeout, retry, repeats } = testOptions;
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
         const params = castArray(param) as any[];
@@ -500,11 +501,12 @@ export class RunnerRuntime {
     location?: Location;
   }): (
     name: string,
-    fn?: (...args: any[]) => any,
-    testOptions?: number | TestOptions,
+    arg2?: ((...args: any[]) => any) | TestOptions,
+    arg3?: ((...args: any[]) => any) | number,
   ) => void {
-    return (name, fn, testOptions) => {
-      const { timeout, retry, repeats } = normalizeTestOptions(testOptions);
+    return (name, arg2, arg3) => {
+      const { fn, options: testOptions } = resolveTestArgs(arg2, arg3);
+      const { timeout, retry, repeats } = testOptions;
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
 
@@ -561,8 +563,9 @@ const buildRuntimeAPI = (): CollectionAPI => {
       location?: Location;
     } = {},
   ): TestAPI => {
-    const testFn = ((name, fn, testOptions) => {
-      const { timeout, retry, repeats } = normalizeTestOptions(testOptions);
+    const testFn = ((name, arg2, arg3) => {
+      const { fn, options: testOptions } = resolveTestArgs(arg2, arg3);
+      const { timeout, retry, repeats } = testOptions;
       const rt = currentRuntime();
       rt.it({
         name,
