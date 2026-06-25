@@ -55,6 +55,8 @@ afterAll(async (ctx) => {
 
 - **Type:** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
 
+The `ctx` argument is a [`TestContext`](/api/runtime-api/test-api/test#testcontext).
+
 Runs before each test in the current suite.
 
 ```ts
@@ -84,6 +86,8 @@ beforeEach(async () => {
 
 - **Type:** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
 
+The `ctx` argument is a [`TestContext`](/api/runtime-api/test-api/test#testcontext).
+
 Runs after each test in the current suite.
 
 ```ts
@@ -96,7 +100,9 @@ afterEach(async () => {
 
 ## onTestFinished
 
-- **Type:** `(fn: (ctx: { task: { result: Readonly<TestResult> } }) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
+
+The `ctx` argument is a [`TestContext`](/api/runtime-api/test-api/test#testcontext).
 
 Called after the test has finished running **whatever the test result is**. This can be used to perform cleanup actions. This hook will be called after `afterEach`.
 
@@ -129,7 +135,9 @@ describe.concurrent('concurrent suite', () => {
 
 ## onTestFailed
 
-- **Type:** `(fn: (ctx: { task: { result: Readonly<TestResult> } }) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
+
+The `ctx` argument is a [`TestContext`](/api/runtime-api/test-api/test#testcontext).
 
 Called after the test has failed.
 
