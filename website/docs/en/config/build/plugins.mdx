@@ -31,7 +31,7 @@ Check out the Rsbuild [plugin list](https://rsbuild.rs/plugins/list#official-plu
 
 ## Modify Rstest config in Rsbuild plugins \{#modify-rstest-config}
 
-<ApiMeta addedVersion="0.10.7" />
+<ApiMeta addedVersion="0.11.0" />
 
 When an Rsbuild plugin runs inside Rstest, it can get the Rstest exposed API through `api.useExposed('rstest')` and call `modifyRstestConfig` to adjust the Rstest config for the current project.
 
@@ -96,7 +96,5 @@ The `modifyRstestConfig` callback receives the normalized Rstest config for the 
 ### Limitation
 
 `modifyRstestConfig` is suitable for modifying existing project config such as `include`, `exclude`, `testEnvironment`, `resolve`, and `source`, but it does not support dynamically adding or removing Rstest projects, Rsbuild environments, or Rsbuild plugins.
-
-In particular, `modifyRstestConfig` cannot be used to add more Rsbuild plugins through `config.plugins`. Newly added plugins cannot reliably participate in plugin ordering, hooks, or environment ownership.
 
 If you need to add Rsbuild plugins dynamically, integrate through Rstest's `extends` adapter pattern instead. An adapter can prepare the Rstest config before Rsbuild plugin initialization starts.

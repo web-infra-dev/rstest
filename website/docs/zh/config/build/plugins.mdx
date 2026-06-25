@@ -31,7 +31,7 @@ export default defineConfig({
 
 ## 在 Rsbuild 插件中修改 Rstest 配置 \{#modify-rstest-config}
 
-<ApiMeta addedVersion="0.10.7" />
+<ApiMeta addedVersion="0.11.0" />
 
 当 Rsbuild 插件运行在 Rstest 中时，可以通过 `api.useExposed('rstest')` 获取 Rstest 暴露的 API，并调用 `modifyRstestConfig` 来调整当前 project 的 Rstest 配置。
 
@@ -96,7 +96,5 @@ export type RstestExposeAPI = {
 ### 不足
 
 `modifyRstestConfig` 适合修改 `include`、`exclude`、`testEnvironment`、`resolve`、`source` 等既有 project 配置，但不支持动态添加或删除 Rstest projects / Rsbuild environments / Rsbuild plugins。
-
-尤其是，`modifyRstestConfig` 不能用于通过 `config.plugins` 添加更多 Rsbuild 插件。新添加的插件无法可靠参与插件排序、hooks 或 environment 归属。
 
 如果你需要动态添加 Rsbuild 插件，请通过 Rstest 的 `extends` Adapter 方案集成。Adapter 可以在 Rsbuild 插件初始化开始之前准备好 Rstest 配置。
