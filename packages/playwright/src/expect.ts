@@ -83,8 +83,11 @@ export type PageAssertions = {
 };
 
 export type PlaywrightAssertion<T> = Assertion<T> &
-  LocatorAssertions &
-  PageAssertions;
+  (T extends Locator
+    ? LocatorAssertions
+    : T extends Page
+      ? PageAssertions
+      : object);
 
 export type PlaywrightExpect = Omit<ExpectStatic, 'soft'> & {
   <T>(actual: T, message?: string): PlaywrightAssertion<T>;
@@ -148,6 +151,18 @@ const matchesValue = (actual: unknown, expected: unknown) =>
 const getLocatorTextContent = async (locator: Locator) => {
   const texts = await getLocatorTextContents(locator);
   return texts.join('');
+};
+
+const getStrictLocatorTextContent = async (locator: Locator) => {
+  const count = await locator.count();
+
+  if (count !== 1) {
+    throw new Error(
+      `Expected locator to resolve to 1 element, received ${count}.`,
+    );
+  }
+
+  return locator.textContent().then((text) => text ?? '');
 };
 
 const getLocatorTextContents = (locator: Locator) =>
@@ -597,7 +612,7 @@ const createLocatorAssertions = (
           return;
         }
 
-        const actual = await getLocatorTextContent(locator);
+        const actual = await getStrictLocatorTextContent(locator);
         const pass = matchesText(actual, expected, 'exact');
         assertExpectation(
           pass,

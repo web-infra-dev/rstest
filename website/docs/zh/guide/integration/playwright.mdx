@@ -295,16 +295,12 @@ e2e('debug page', async ({ page }) => {
 如果需要在调试时停在当前页面，可以配合零测试超时使用 Playwright 的 `page.pause()`：
 
 ```ts
-test(
-  'debug page state',
-  async ({ page, serve }) => {
-    const { url } = await serve('./dist/index.html');
+test('debug page state', { timeout: 0 }, async ({ page, serve }) => {
+  const { url } = await serve('./dist/index.html');
 
-    await page.goto(url);
-    await page.pause();
-  },
-  { timeout: 0 },
-);
+  await page.goto(url);
+  await page.pause();
+});
 ```
 
 debug 模式下，失败测试会在关闭 page 和 context 前自动调用 `page.pause()`。如果不需要这个行为，可以在 `debug` 选项中设置 `pauseOnFailure: false`，或设置 `RSTEST_PLAYWRIGHT_PAUSE=false`。

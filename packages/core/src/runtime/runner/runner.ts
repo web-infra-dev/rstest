@@ -681,7 +681,7 @@ export class TestRunner {
     context.task = {
       id: test.testId,
       name: test.name,
-      filepath: test.testPath,
+      filepath: toNativePath(test.testPath),
     };
 
     Object.defineProperty(context, 'expect', {

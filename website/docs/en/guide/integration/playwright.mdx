@@ -295,16 +295,12 @@ e2e('debug page', async ({ page }) => {
 To stop on a page while debugging, use Playwright's `page.pause()` with a zero test timeout:
 
 ```ts
-test(
-  'debug page state',
-  async ({ page, serve }) => {
-    const { url } = await serve('./dist/index.html');
+test('debug page state', { timeout: 0 }, async ({ page, serve }) => {
+  const { url } = await serve('./dist/index.html');
 
-    await page.goto(url);
-    await page.pause();
-  },
-  { timeout: 0 },
-);
+  await page.goto(url);
+  await page.pause();
+});
 ```
 
 In debug mode, failed tests automatically call `page.pause()` before closing the page and context. Set `pauseOnFailure: false` in `debug` options, or `RSTEST_PLAYWRIGHT_PAUSE=false`, to disable this behavior.

@@ -68,9 +68,21 @@ describe('@rstest/playwright expect', () => {
   it('supports locator text assertions', async () => {
     const locator = createLocator({ texts: ['  Hello\n', ' Rstest  '] });
 
-    await expect(locator).toHaveText('Hello Rstest');
     await expect(locator).toContainText('Rstest');
-    await expect(locator).not.toHaveText('Hello');
+    await expect(createLocator({ texts: ['  Hello\n Rstest  '] })).toHaveText(
+      'Hello Rstest',
+    );
+    await expect(createLocator({ texts: ['Hello Rstest'] })).not.toHaveText(
+      'Hello',
+    );
+  });
+
+  it('preserves locator strictness for single text assertions', async () => {
+    const locator = createLocator({ count: 2, texts: ['Save', 'Cancel'] });
+
+    await rstestExpect(
+      expect(locator).toHaveText('SaveCancel', { timeout: 1 }),
+    ).rejects.toThrow('Expected locator to resolve to 1 element');
   });
 
   it('supports locator list, count, and css assertions', async () => {

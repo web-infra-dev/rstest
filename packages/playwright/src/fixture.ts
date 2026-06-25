@@ -149,7 +149,6 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 const browserCache = new Map<string, Promise<Browser>>();
-const browserCleanupFiles = new Set<string>();
 
 const browserTypes = {
   chromium,
@@ -234,24 +233,7 @@ const closeBrowser = async () => {
   await Promise.all(browsers.map(async (browser) => (await browser).close()));
 };
 
-const registerBrowserCleanup = (filepath?: string) => {
-  if (!filepath) {
-    rstestAfterAll(closeBrowser);
-    return;
-  }
-
-  if (browserCleanupFiles.has(filepath)) {
-    return;
-  }
-
-  browserCleanupFiles.add(filepath);
-  rstestAfterAll(closeBrowser);
-};
-
-const getTaskFilepath = (task: TestContext['task']) =>
-  'filepath' in task && typeof task.filepath === 'string'
-    ? task.filepath
-    : undefined;
+rstestAfterAll(closeBrowser);
 
 const createStaticServerClose = (server: Server) => {
   let closePromise: Promise<void> | undefined;
@@ -414,14 +396,15 @@ const cleanupServer = async ({
   await server.close();
 };
 
+const defaultPlaywrightFixture = async (
+  _context: TestContext,
+  use: (options: PlaywrightOptions) => Promise<void>,
+) => {
+  await use({ browserName: DEFAULT_BROWSER_NAME });
+};
+
 const playwrightFixtures = {
-  playwright: async (
-    { task }: TestContext,
-    use: (options: PlaywrightOptions) => Promise<void>,
-  ) => {
-    registerBrowserCleanup(getTaskFilepath(task));
-    await use({ browserName: DEFAULT_BROWSER_NAME });
-  },
+  playwright: defaultPlaywrightFixture,
 
   serve: async (
     { playwright }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
@@ -542,7 +525,7 @@ export type PlaywrightFixtures<
 
 type PlaywrightTestBase<ExtraContext> = Omit<
   RstestTest<ExtraContext>,
-  'extend' | 'fail' | 'fails' | 'for' | 'skip'
+  'extend' | 'fail' | 'fails' | 'for'
 > & {
   (
     description: string,
@@ -591,11 +574,6 @@ type MergeContext<ExtraContext, FixturesContext> = {
       : never;
 };
 
-type PlaywrightTestSkip<ExtraContext> = PlaywrightTestBase<ExtraContext> &
-  (() => void) & {
-    skip: PlaywrightTestSkip<ExtraContext>;
-  };
-
 export type PlaywrightTest<ExtraContext = PlaywrightFixture> =
   PlaywrightTestBase<ExtraContext> & {
     extend: <T extends Record<string, any> = object>(
@@ -607,7 +585,6 @@ export type PlaywrightTest<ExtraContext = PlaywrightFixture> =
     beforeEach: typeof rstestBeforeEach;
     describe: typeof rstestDescribe;
     fail: PlaywrightTestBase<ExtraContext>;
-    skip: PlaywrightTestSkip<ExtraContext>;
   };
 
 const createPlaywrightTest = <ExtraContext>(
