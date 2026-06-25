@@ -15,8 +15,9 @@ const getHookCountFromLog = (content: string, hookName: string): number => {
   return content.split('\n').filter((line) => line.trim() === hookName).length;
 };
 
-const WATCH_REPORTER_HOOK_TIMEOUT_MS =
-  process.platform === 'win32' ? 15_000 : 5_000;
+// Real Chrome (channel=chrome) cold-launch on loaded CI runners can push the
+// first run past a tight budget, so keep this generous across platforms.
+const WATCH_REPORTER_HOOK_TIMEOUT_MS = 15_000;
 
 describe('browser mode - watch reporter lifecycle', () => {
   it('should call onTestRunStart and onTestRunEnd on rerun', async () => {
