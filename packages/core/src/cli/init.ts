@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import type { LoadConfigOptions } from '@rsbuild/core';
 import { basename, dirname, resolve } from 'pathe';
 import { type GlobOptions, glob, isDynamicPattern } from 'tinyglobby';
-import { loadConfig, resolveExtends } from '../config';
+import { loadConfig, plainDeepMerge, resolveExtends } from '../config';
 import type {
   BrowserName,
   Project,
@@ -352,7 +352,12 @@ export function mergeWithCLIOptions(
         config.browser.strictPort = options.browser.strictPort;
       }
       if (options.browser.providerOptions !== undefined) {
-        config.browser.providerOptions = options.browser.providerOptions;
+        // Deep-merge so a CLI leaf override keeps unrelated config keys (e.g.
+        // config `providerOptions.context`); see plainDeepMerge.
+        config.browser.providerOptions = plainDeepMerge(
+          config.browser.providerOptions ?? {},
+          options.browser.providerOptions,
+        );
       }
     }
   }
