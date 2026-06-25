@@ -13,7 +13,7 @@ import { PackageManagerTabs } from '@theme';
 
 ## Rstest browser mode vs playwright
 
-The main difference is the testing scenario: Rstest browser mode prepares a browser runtime for your test modules, while `@rstest/playwright` controls a page that is already prepared by your app or server.
+The main difference is the testing scenario: Rstest browser mode web-bundles test modules and runs test code in a browser runtime, while `@rstest/playwright` controls a page that is already prepared by your app or server.
 
 | Scenario                                                        | Recommended                                                          |
 | --------------------------------------------------------------- | -------------------------------------------------------------------- |
@@ -22,7 +22,7 @@ The main difference is the testing scenario: Rstest browser mode prepares a brow
 | Drive an existing dev server, preview server, or deployed URL   | `@rstest/playwright`                                                 |
 | Need in-browser component test utilities                        | [Rstest browser mode](/guide/browser-testing)                        |
 
-Because `@rstest/playwright` controls an external page instead of running the test in Rstest's browser runner, it does not use the Browser UI preview iframe. For visual debugging, use headed mode with `RSTEST_PLAYWRIGHT_DEBUG=true`.
+Because `@rstest/playwright` controls an external page instead of running the test in Rstest's browser runner, it does not use the Browser UI preview iframe. For visual debugging, use headed mode with `PWDEBUG=1`.
 
 ## Rstest playwright vs native playwright
 
@@ -76,6 +76,17 @@ describe('checkout', () => {
 });
 ```
 
+If your test modules do not rely on Node-side side effects that need isolation, set `isolate: false` in `rstest.config.ts` to reuse the worker module cache across test files and avoid repeated Playwright startup cost:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  isolate: false,
+  testEnvironment: 'node',
+});
+```
+
 ## Fixtures
 
 `@rstest/playwright` provides these fixtures:
@@ -88,6 +99,51 @@ describe('checkout', () => {
 | `request` | A new `APIRequestContext` for each test that uses it. It is disposed after the test. |
 | `serve`   | Starts a static server from inside the test and cleans it up automatically.          |
 
+The sections below show how each fixture is commonly used. `page` and `serve` link to the existing examples to avoid repeating the same code.
+
+### `browser`
+
+Use `browser` when you need to create a custom browser context yourself:
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('custom browser context', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'en-US' });
+  const page = await context.newPage();
+
+  await page.goto('https://example.com');
+  await expect(page).toHaveTitle(/Example/);
+
+  await context.close();
+});
+```
+
+### `context`
+
+Use `context` when one test needs multiple pages that share the same browser context:
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('multiple pages', async ({ context }) => {
+  const page = await context.newPage();
+  const popup = await context.newPage();
+
+  await page.goto('https://example.com');
+  await popup.goto('https://example.com');
+
+  await expect(page).toHaveTitle(/Example/);
+  await expect(popup).toHaveTitle(/Example/);
+});
+```
+
+### `page`
+
+See [Basic usage](#basic-usage) for the common E2E flow of opening and asserting a page.
+
+### `request`
+
 Use `request` when you only need Playwright's API client and do not need to launch a browser:
 
 ```ts
@@ -99,6 +155,10 @@ test('health check', async ({ request }) => {
   expect(response.ok()).toBe(true);
 });
 ```
+
+### `serve`
+
+See [Local app server](#local-app-server) for serving a built app from local files.
 
 ## Assertions
 
@@ -148,7 +208,7 @@ await expect(page.locator('.error')).not.toBeAttached();
 await expect.soft(page).toHaveTitle(/Dashboard/);
 ```
 
-## Configuration
+## Configure Playwright options
 
 Global `playwright` configuration is not supported yet. Override the `playwright` fixture when a test file needs custom Playwright options:
 
@@ -180,17 +240,6 @@ The `playwright` fixture supports these options:
 | `requestOptions` | Options passed to `request.newContext()`.            |
 | `debug`          | Convenience options for local headed debugging.      |
 
-For Playwright E2E projects, set `isolate: false` in `rstest.config.ts` to reuse the worker module cache across test files and avoid repeated Playwright startup cost:
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  isolate: false,
-  testEnvironment: 'node',
-});
-```
-
 ## Local app server
 
 Use the `serve` fixture when a test needs to serve a built app. It starts a static server for the entry file and automatically stops the server after the test.
@@ -206,14 +255,14 @@ test('home page', async ({ page, serve }) => {
 });
 ```
 
-When `RSTEST_PLAYWRIGHT_DEBUG=true` is enabled, `serve` keeps the server alive by default so the opened page remains available for inspection. Set `keepAliveOnDebug: false` if you want the server to close even in debug mode.
+When `PWDEBUG=1` is enabled, `serve` keeps the server alive by default so the opened page remains available for inspection. Set `keepAliveOnDebug: false` if you want the server to close even in debug mode.
 
 ## Headed debugging
 
-Set `RSTEST_PLAYWRIGHT_DEBUG=true` to launch Chromium in headed mode while debugging locally:
+Set `PWDEBUG=1` to launch Chromium in headed mode while debugging locally:
 
 ```bash
-RSTEST_PLAYWRIGHT_DEBUG=true rstest watch
+PWDEBUG=1 rstest watch
 ```
 
 This environment variable keeps your tests unchanged and applies these defaults:

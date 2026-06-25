@@ -13,7 +13,7 @@ Use `@rstest/playwright` for E2E tests against a complete page or app, such as a
 | Drive an existing dev server, preview server, or deployed URL   | `@rstest/playwright`                       |
 | Need in-browser component test utilities                        | Rstest browser mode                        |
 
-Because `@rstest/playwright` controls an external page instead of running the test in Rstest's browser runner, it does not use the Browser UI preview iframe. For visual debugging, use headed mode with `RSTEST_PLAYWRIGHT_DEBUG=true`.
+Because `@rstest/playwright` controls an external page instead of running the test in Rstest's browser runner, it does not use the Browser UI preview iframe. For visual debugging, use headed mode with `PWDEBUG=1`.
 
 ## Rstest playwright vs native playwright
 
@@ -56,6 +56,67 @@ test('page title', async ({ page }) => {
 - `request`: an isolated `APIRequestContext` that is disposed after each test.
 - `serve`: starts a static server from inside the test and cleans it up automatically.
 
+The sections below show how each fixture is commonly used. `page` and `serve` link to the existing examples to avoid repeating the same code.
+
+### `browser`
+
+Use `browser` when you need to create a custom browser context yourself:
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('custom browser context', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'en-US' });
+  const page = await context.newPage();
+
+  await page.goto('https://example.com');
+  await expect(page).toHaveTitle(/Example/);
+
+  await context.close();
+});
+```
+
+### `context`
+
+Use `context` when one test needs multiple pages that share the same browser context:
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('multiple pages', async ({ context }) => {
+  const page = await context.newPage();
+  const popup = await context.newPage();
+
+  await page.goto('https://example.com');
+  await popup.goto('https://example.com');
+
+  await expect(page).toHaveTitle(/Example/);
+  await expect(popup).toHaveTitle(/Example/);
+});
+```
+
+### `page`
+
+See [Usage](#usage) for the common E2E flow of opening and asserting a page.
+
+### `request`
+
+Use `request` when you only need Playwright's API client and do not need to launch a browser:
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('health check', async ({ request }) => {
+  const response = await request.get('http://localhost:3000/health');
+
+  expect(response.ok()).toBe(true);
+});
+```
+
+### `serve`
+
+See [Local app server](#local-app-server) for serving a built app from local files.
+
 Lifecycle helpers can be imported from `@rstest/playwright`:
 
 ```ts
@@ -64,6 +125,17 @@ import { afterEach, beforeEach, describe } from '@rstest/playwright';
 beforeEach(() => {});
 afterEach(() => {});
 describe('suite', () => {});
+```
+
+If your test modules do not rely on Node-side side effects that need isolation, set `isolate: false` in `rstest.config.ts` to reuse the worker module cache across test files and avoid repeated Playwright startup cost:
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  isolate: false,
+  testEnvironment: 'node',
+});
 ```
 
 ## Assertions
@@ -101,7 +173,7 @@ describe('suite', () => {});
 
 String text assertions normalize whitespace. Each Playwright-style assertion retries until it passes or reaches `options.timeout`.
 
-## Configuration
+## Configure Playwright options
 
 Global `playwright` configuration is not supported yet. Override the `playwright` fixture when a test file needs custom Playwright options:
 
@@ -123,16 +195,7 @@ e2e('mobile page', async ({ page }) => {
 });
 ```
 
-For Playwright E2E projects, set `isolate: false` in `rstest.config.ts` to reuse the worker module cache across test files and avoid repeated Playwright startup cost:
-
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  isolate: false,
-  testEnvironment: 'node',
-});
-```
+## Local app server
 
 Use the `serve` fixture when a test needs to serve a built app. It starts a static server for the entry file and automatically stops the server after the test:
 
@@ -149,10 +212,10 @@ test('home page', async ({ page, serve }) => {
 
 In debug mode, `serve` keeps the server alive by default so the opened page remains available for inspection.
 
-For local debugging, set `RSTEST_PLAYWRIGHT_DEBUG=true` to launch Chromium in headed mode with slow motion and DevTools enabled:
+For local debugging, set `PWDEBUG=1` to launch Chromium in headed mode with slow motion and DevTools enabled:
 
 ```bash
-RSTEST_PLAYWRIGHT_DEBUG=true rstest watch
+PWDEBUG=1 rstest watch
 ```
 
 You can also override the debug defaults from the test:

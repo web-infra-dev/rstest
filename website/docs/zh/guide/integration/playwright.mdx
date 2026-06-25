@@ -13,7 +13,7 @@ import { PackageManagerTabs } from '@theme';
 
 ## 与 Rstest browser mode 的区别
 
-两者的主要区别是适用场景：Rstest browser mode 会为测试模块准备浏览器运行时，而 `@rstest/playwright` 会控制一个由应用或服务端准备好的页面。
+两者的主要区别是适用场景：Rstest browser mode 会对测试模块进行 web 打包，并在浏览器运行时中执行测试代码；`@rstest/playwright` 会控制一个由应用或服务端准备好的页面。
 
 | 场景                                              | 推荐方案                                                           |
 | ------------------------------------------------- | ------------------------------------------------------------------ |
@@ -22,7 +22,7 @@ import { PackageManagerTabs } from '@theme';
 | 驱动已有 dev server、preview server 或线上 URL    | `@rstest/playwright`                                               |
 | 需要浏览器内组件测试能力                          | [Rstest browser mode](/guide/browser-testing)                      |
 
-由于 `@rstest/playwright` 控制的是外部页面，而不是 Rstest browser mode 的 runner iframe，因此它不走 Browser UI 的预览 iframe。需要本地可视化调试时，可以使用 `RSTEST_PLAYWRIGHT_DEBUG=true` 开启 headed 模式。
+由于 `@rstest/playwright` 控制的是外部页面，而不是 Rstest browser mode 的 runner iframe，因此它不走 Browser UI 的预览 iframe。需要本地可视化调试时，可以使用 `PWDEBUG=1` 开启 headed 模式。
 
 ## 与原生 Playwright 的区别
 
@@ -76,6 +76,17 @@ describe('checkout', () => {
 });
 ```
 
+如果测试模块在 Node 侧没有需要隔离的副作用，可以在 `rstest.config.ts` 中设置 `isolate: false`，从而在不同测试文件间复用 worker module cache，减少重复启动 Playwright 的开销：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  isolate: false,
+  testEnvironment: 'node',
+});
+```
+
 ## Fixtures
 
 `@rstest/playwright` 提供以下 fixtures：
@@ -88,6 +99,51 @@ describe('checkout', () => {
 | `request` | 每个使用它的测试都会创建一个新的 `APIRequestContext`，并在测试结束后 dispose。 |
 | `serve`   | 在测试内启动静态 server，并在测试结束后自动清理。                              |
 
+下面说明每个 fixture 的常见用法。`page` 和 `serve` 会链接到已有示例，避免重复展示相同代码。
+
+### `browser`
+
+当你需要自己创建自定义 browser context 时，可以使用 `browser`：
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('custom browser context', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'en-US' });
+  const page = await context.newPage();
+
+  await page.goto('https://example.com');
+  await expect(page).toHaveTitle(/Example/);
+
+  await context.close();
+});
+```
+
+### `context`
+
+当一个测试需要多个共享同一个 browser context 的页面时，可以使用 `context`：
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('multiple pages', async ({ context }) => {
+  const page = await context.newPage();
+  const popup = await context.newPage();
+
+  await page.goto('https://example.com');
+  await popup.goto('https://example.com');
+
+  await expect(page).toHaveTitle(/Example/);
+  await expect(popup).toHaveTitle(/Example/);
+});
+```
+
+### `page`
+
+常见的 E2E 页面访问和断言流程见[基本用法](#基本用法)。
+
+### `request`
+
 当你只需要 Playwright 的 API client，而不需要启动 browser 时，可以使用 `request`：
 
 ```ts
@@ -99,6 +155,10 @@ test('health check', async ({ request }) => {
   expect(response.ok()).toBe(true);
 });
 ```
+
+### `serve`
+
+从本地文件启动静态应用的示例见[本地应用 server](#本地应用-server)。
 
 ## 断言
 
@@ -148,7 +208,7 @@ await expect(page.locator('.error')).not.toBeAttached();
 await expect.soft(page).toHaveTitle(/Dashboard/);
 ```
 
-## 配置
+## 配置 Playwright 选项
 
 暂不支持在 rstest.config.ts 中添加全局 playwright 配置项。当某个测试文件需要自定义 Playwright 选项时，可以覆盖 `playwright` fixture：
 
@@ -180,17 +240,6 @@ e2e('mobile page', async ({ page }) => {
 | `requestOptions` | 传给 `request.newContext()` 的选项。        |
 | `debug`          | 用于本地 headed 调试的便捷选项。            |
 
-对于 Playwright E2E 项目，建议在 `rstest.config.ts` 中设置 `isolate: false`，从而在不同测试文件间复用 worker module cache，减少重复启动 Playwright 的开销：
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  isolate: false,
-  testEnvironment: 'node',
-});
-```
-
 ## 本地应用 server
 
 当测试需要访问已构建的本地应用时，可以使用 `serve` fixture。它会为入口文件启动静态 server，并在测试结束后自动停止 server。
@@ -206,14 +255,14 @@ test('home page', async ({ page, serve }) => {
 });
 ```
 
-启用 `RSTEST_PLAYWRIGHT_DEBUG=true` 时，`serve` 默认会保留 server，避免已打开页面失去可访问的应用服务。如果即使在 debug 模式下也希望关闭 server，可以设置 `keepAliveOnDebug: false`。
+启用 `PWDEBUG=1` 时，`serve` 默认会保留 server，避免已打开页面失去可访问的应用服务。如果即使在 debug 模式下也希望关闭 server，可以设置 `keepAliveOnDebug: false`。
 
 ## Headed 调试
 
-设置 `RSTEST_PLAYWRIGHT_DEBUG=true` 可以在本地调试时以 headed 模式启动 Chromium：
+设置 `PWDEBUG=1` 可以在本地调试时以 headed 模式启动 Chromium：
 
 ```bash
-RSTEST_PLAYWRIGHT_DEBUG=true rstest watch
+PWDEBUG=1 rstest watch
 ```
 
 这个环境变量不需要修改测试代码，并会应用以下默认值：

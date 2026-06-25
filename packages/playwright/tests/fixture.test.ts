@@ -2,6 +2,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '../src';
+import { getDebugOptions, resolveLaunchOptions } from '../src/fixture';
 import type { BrowserContext, Page } from 'playwright';
 import type {
   PlaywrightFixtures,
@@ -151,6 +152,26 @@ test.extend({
   playwright: debugOptions,
 })('accepts headed debug options', async ({ playwright }) => {
   expect(playwright.debug).toEqual(debugOptions.debug);
+});
+
+test('enables headed debug mode from PWDEBUG', () => {
+  const original = process.env.PWDEBUG;
+  process.env.PWDEBUG = '1';
+
+  try {
+    expect(getDebugOptions(undefined)).toEqual({});
+    expect(resolveLaunchOptions({})).toEqual({
+      headless: false,
+      slowMo: 100,
+      devtools: true,
+    });
+  } finally {
+    if (original === undefined) {
+      delete process.env.PWDEBUG;
+    } else {
+      process.env.PWDEBUG = original;
+    }
+  }
 });
 
 test.extend({}).describe('extended test API', () => {

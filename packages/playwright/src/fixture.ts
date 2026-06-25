@@ -128,7 +128,7 @@ export type PlaywrightUse<T> = Use<T>;
 
 const DEFAULT_BROWSER_NAME = 'chromium' satisfies PlaywrightBrowserName;
 
-const DEBUG_ENV = 'RSTEST_PLAYWRIGHT_DEBUG';
+const DEBUG_ENV = 'PWDEBUG';
 const PAUSE_ENV = 'RSTEST_PLAYWRIGHT_PAUSE';
 const DEBUG_PAUSE_TIMEOUT = 24 * 60 * 60 * 1000;
 const DEFAULT_STATIC_SERVER_HOST = '127.0.0.1';
@@ -155,8 +155,10 @@ const browserTypes = {
   chromium,
 } satisfies Record<PlaywrightBrowserName, BrowserType>;
 
-const getDebugOptions = (debug: PlaywrightOptions['debug']) => {
-  const normalizedDebug = debug ?? process.env[DEBUG_ENV] === 'true';
+export const getDebugOptions = (
+  debug: PlaywrightOptions['debug'],
+): PlaywrightDebugOptions | undefined => {
+  const normalizedDebug = debug ?? Boolean(process.env[DEBUG_ENV]);
 
   if (
     !normalizedDebug ||
@@ -185,7 +187,7 @@ const shouldPauseOnFailure = (playwright: PlaywrightOptions) => {
   return debugOptions.pauseOnFailure ?? true;
 };
 
-const resolveLaunchOptions = ({
+export const resolveLaunchOptions = ({
   debug,
   launchOptions,
 }: PlaywrightOptions): LaunchOptions => {
