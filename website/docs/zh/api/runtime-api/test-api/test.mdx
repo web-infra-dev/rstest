@@ -13,7 +13,12 @@ import { ApiMeta } from '@components/ApiMeta';
 
 ## test
 
-- **类型：** `(name: string, options: TestOptions, fn?: (testContext: TestContext) => void | Promise<void>) => void`
+- **类型：**
+
+```ts
+(name: string, fn?: (testContext: TestContext) => void | Promise<void>, timeout?: number): void;
+(name: string, options: TestOptions, fn?: (testContext: TestContext) => void | Promise<void>): void;
+```
 
 定义一个测试用例。
 
@@ -106,7 +111,12 @@ test.todo('should implement this test');
 
 ## test.each
 
-- **类型：** `test.each(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>) => void`
+- **类型：**
+
+```ts
+test.each(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+test.each(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+```
 
 对提供的数组中的每一项运行相同的测试逻辑。
 
@@ -189,7 +199,12 @@ test.each([
 
 ## test.for
 
-- **类型：** `test.for(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T, testContext: TestContext) => void | Promise<void>) => void`
+- **类型：**
+
+```ts
+test.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number): void;
+test.for(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T, testContext: TestContext) => void | Promise<void>): void;
+```
 
 `test.each` 的替代方案，提供 `TestContext`。
 

@@ -109,33 +109,39 @@ export interface TestForFn<ExtraContext = object> {
   >;
 }
 
+/**
+ * The two accepted call shapes for `describe` and the functions returned by
+ * `describe.each` / `describe.for`, mirroring `TestCall`:
+ * - `(name, fn, timeout?)` — suite function second, optional numeric timeout last.
+ * - `(name, options, fn?)` — `TestOptions` object as the second argument.
+ *
+ * Suite-level options propagate to descendant cases as inheritable defaults.
+ */
+type DescribeCall<Fn> = {
+  (description: string, fn?: Fn, timeout?: number): void;
+  (description: string, options: TestOptions, fn?: Fn): void;
+};
+
 export interface DescribeEachFn {
   <T extends Record<string, unknown>>(
     cases: readonly T[],
-  ): (description: string, fn?: (param: T) => MaybePromise<void>) => void;
+  ): DescribeCall<(param: T) => MaybePromise<void>>;
   <T extends readonly [unknown, ...unknown[]]>(
     cases: readonly T[],
-  ): (
-    description: string,
-    fn?: (...args: [...T]) => MaybePromise<void>,
-  ) => void;
-  <T>(
-    cases: readonly T[],
-  ): (description: string, fn?: (param: T) => MaybePromise<void>) => void;
+  ): DescribeCall<(...args: [...T]) => MaybePromise<void>>;
+  <T>(cases: readonly T[]): DescribeCall<(param: T) => MaybePromise<void>>;
   <T extends Record<string, unknown>>(
     strings: TemplateStringsArray,
     ...expressions: unknown[]
-  ): (description: string, fn?: (param: T) => MaybePromise<void>) => void;
+  ): DescribeCall<(param: T) => MaybePromise<void>>;
 }
 
 export interface DescribeForFn {
-  <T>(
-    cases: readonly T[],
-  ): (description: string, fn?: (param: T) => MaybePromise<void>) => void;
+  <T>(cases: readonly T[]): DescribeCall<(param: T) => MaybePromise<void>>;
   <T extends Record<string, unknown>>(
     strings: TemplateStringsArray,
     ...expressions: unknown[]
-  ): (description: string, fn?: (param: T) => MaybePromise<void>) => void;
+  ): DescribeCall<(param: T) => MaybePromise<void>>;
 }
 
 export type TestAPI<ExtraContext = object> = TestFn<ExtraContext> & {
@@ -151,7 +157,7 @@ export type TestAPI<ExtraContext = object> = TestFn<ExtraContext> & {
   skipIf: (condition: boolean) => TestAPI<ExtraContext>;
 };
 
-type DescribeFn = (description: string, fn?: () => MaybePromise<void>) => void;
+type DescribeFn = DescribeCall<() => MaybePromise<void>>;
 
 export type DescribeAPI = DescribeFn & {
   each: DescribeEachFn;
