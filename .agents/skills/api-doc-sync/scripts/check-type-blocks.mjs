@@ -120,6 +120,32 @@ function tryParse(file) {
 }
 
 /**
+ * Normalize a heading for en/zh comparison. Headings are API names that should
+ * be identical across locales, but legitimately differ in punctuation width and
+ * spacing (`expect.element (Browser Mode)` vs `expect.element（Browser Mode）`),
+ * so fold fullwidth forms via NFKC and drop whitespace before comparing.
+ */
+function normalizeHeading(heading) {
+  return heading.normalize('NFKC').replace(/\s+/g, '');
+}
+
+/** Exit with a configuration error if `root` is not an existing directory. */
+function assertRoot(root) {
+  try {
+    if (statSync(root).isDirectory()) {
+      return;
+    }
+  } catch {
+    // fall through to the error below
+  }
+  stdout.write(
+    `✖ docs root not found: ${relative(cwd(), root) || root}\n` +
+      '  Pass the correct docsRoot (defaults to website/docs); run from the repo root.\n',
+  );
+  exit(1);
+}
+
+/**
  * Normalize a signature for en/zh comparison. Inline comments are prose and
  * are legitimately translated (`// default: 1000` vs `// 默认: 1000`), so they
  * are stripped before comparing — only the structural type must be identical.
@@ -136,6 +162,12 @@ function normalizeForCompare(signature) {
 
 const enRoot = join(docsRoot, 'en', 'api');
 const zhRoot = join(docsRoot, 'zh', 'api');
+
+// A missing root means a bad docsRoot or wrong cwd — fail loudly rather than
+// scanning an empty union and reporting a vacuous "in sync" that disables the
+// gate it advertises.
+assertRoot(enRoot);
+assertRoot(zhRoot);
 
 const findings = [];
 let pagesWithTypes = 0;
@@ -181,6 +213,17 @@ for (const rel of pages) {
   for (let k = 0; k < enBlocks.length; k++) {
     const en = enBlocks[k];
     const zh = zhBlocks[k];
+    if (normalizeHeading(en.heading) !== normalizeHeading(zh.heading)) {
+      // Blocks are paired by position; divergent headings mean a block moved or
+      // a section was renamed on one side, so the locales no longer document the
+      // same APIs even when the signatures still line up.
+      findings.push({
+        page: rel,
+        kind: 'heading-mismatch',
+        detail: { en: en.heading, zh: zh.heading },
+      });
+      continue;
+    }
     if (
       normalizeForCompare(en.signature) !== normalizeForCompare(zh.signature)
     ) {
@@ -216,6 +259,10 @@ for (const f of findings) {
     stdout.write(`  [${f.page}] under "${f.heading}":\n`);
     stdout.write(`    en: ${f.detail.en.replace(/\n/g, '\\n')}\n`);
     stdout.write(`    zh: ${f.detail.zh.replace(/\n/g, '\\n')}\n`);
+  } else if (f.kind === 'heading-mismatch') {
+    stdout.write(`  [${f.page}] heading-mismatch:\n`);
+    stdout.write(`    en: ${f.detail.en}\n`);
+    stdout.write(`    zh: ${f.detail.zh}\n`);
   } else {
     stdout.write(`  [${f.page}] ${f.kind}: ${f.detail}\n`);
   }
