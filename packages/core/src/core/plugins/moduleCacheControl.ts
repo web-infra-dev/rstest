@@ -69,39 +69,37 @@ function __rstest_clean_core_cache__() {
  * By default, modules are isolated between different tests (each test runs in
  * a fresh worker process spawned by rstest's pool).
  */
-export const pluginCacheControl: (setupFiles: string[]) => RsbuildPlugin = (
-  setupFiles: string[],
-) => ({
+export const pluginCacheControl: (
+  getSetupFiles: () => string[],
+) => RsbuildPlugin = (getSetupFiles) => ({
   name: 'rstest:cache-control',
   setup: (api) => {
-    if (setupFiles.length) {
-      // `setupFiles` are posix-style paths (pathe), but rspack matches `test`
-      // against the native resource path, which uses `\` on Windows — a raw
-      // string/array `test` would never match there, so the setup-id registration
-      // below would not be injected and setup files would stop re-running per
-      // file under `isolate: false`. Compare paths normalized to posix instead.
-      const setupFileSet = new Set(
-        setupFiles.map((file) => path.normalize(file)),
-      );
-      api.transform(
-        {
-          test: (resourcePath) =>
-            setupFileSet.has(path.normalize(resourcePath)),
-        },
-        ({ code }) => {
-          // Register via this chunk's own `__webpack_require__` (not a shared
-          // `global.setupIds`) so each project's setup ids stay isolated under
-          // `isolate: false`.
-          return {
-            code: `${code}
+    const getSetupFileSet = () =>
+      new Set(getSetupFiles().map((file) => path.normalize(file)));
+
+    // `setupFiles` are posix-style paths (pathe), but rspack matches `test`
+    // against the native resource path, which uses `\` on Windows — a raw
+    // string/array `test` would never match there, so the setup-id registration
+    // below would not be injected and setup files would stop re-running per
+    // file under `isolate: false`. Compare paths normalized to posix instead.
+    api.transform(
+      {
+        test: (resourcePath) =>
+          getSetupFileSet().has(path.normalize(resourcePath)),
+      },
+      ({ code }) => {
+        // Register via this chunk's own `__webpack_require__` (not a shared
+        // `global.setupIds`) so each project's setup ids stay isolated under
+        // `isolate: false`.
+        return {
+          code: `${code}
 if (__webpack_require__.rstest_register_setup_id && __webpack_module__.id) {
   __webpack_require__.rstest_register_setup_id(__webpack_module__.id);
 }
         `,
-          };
-        },
-      );
-    }
+        };
+      },
+    );
 
     api.modifyRspackConfig((config) => {
       config.plugins.push(new RstestCacheControlPlugin());

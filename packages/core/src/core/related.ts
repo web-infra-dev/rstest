@@ -323,7 +323,25 @@ export async function resolveRelatedTestFiles(
     );
   }
 
-  const projectEntries = await collectProjectEntries(context);
+  let projectEntries = new Map<string, Record<string, string>>();
+  const globTestSourceEntries = async (environmentName: string) =>
+    projectEntries.get(environmentName) ?? {};
+
+  const setupFiles: Record<string, Record<string, string>> = {};
+  const globalSetupFiles: Record<string, Record<string, string>> = {};
+
+  const rsbuildInstance = await prepareRsbuild(
+    context,
+    globTestSourceEntries,
+    setupFiles,
+    globalSetupFiles,
+    context.projects,
+    [createRelatedBuildSafeguardsPlugin()],
+  );
+
+  await rsbuildInstance.initConfigs({ action: 'dev' });
+
+  projectEntries = await collectProjectEntries(context);
   const matchedTestFiles = new Set(
     collectDirectlyMatchedFiles({
       files: Array.from(projectEntries.values()).flatMap((entries) =>
@@ -334,19 +352,10 @@ export async function resolveRelatedTestFiles(
     }),
   );
 
-  const globTestSourceEntries = async (environmentName: string) =>
-    projectEntries.get(environmentName) ?? {};
-
-  const setupFiles = buildSetupFiles(context.projects, 'setupFiles');
-  const globalSetupFiles = buildSetupFiles(context.projects, 'globalSetup');
-
-  const rsbuildInstance = await prepareRsbuild(
-    context,
-    globTestSourceEntries,
-    setupFiles,
+  Object.assign(setupFiles, buildSetupFiles(context.projects, 'setupFiles'));
+  Object.assign(
     globalSetupFiles,
-    context.projects,
-    [createRelatedBuildSafeguardsPlugin()],
+    buildSetupFiles(context.projects, 'globalSetup'),
   );
 
   const devServer = await rsbuildInstance.createDevServer({

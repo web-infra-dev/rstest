@@ -318,6 +318,11 @@ export async function runTests(context: Rstest): Promise<void> {
     context;
   const { coverage, shard } = normalizedConfig;
 
+  const { getSetupFiles } = await import('../utils/getSetupFiles');
+
+  const setupFiles: Record<string, Record<string, string>> = {};
+  const globalSetupFiles: Record<string, Record<string, string>> = {};
+
   let entriesCache: Map<string, ProjectEntries> =
     (await resolveShardedEntries(context)) || new Map();
 
@@ -331,9 +336,13 @@ export async function runTests(context: Rstest): Promise<void> {
     if (entriesCache.has(name)) {
       return entriesCache.get(name)!.entries;
     }
-    const { include, exclude, includeSource, root } = allProjects.find(
-      (p) => p.environmentName === name,
-    )!.normalizedConfig;
+    const project = allProjects.find((p) => p.environmentName === name);
+
+    if (!project) {
+      return {};
+    }
+
+    const { include, exclude, includeSource, root } = project.normalizedConfig;
     const entries = await getTestEntries({
       include,
       exclude: exclude.patterns,
@@ -352,14 +361,31 @@ export async function runTests(context: Rstest): Promise<void> {
     return entries;
   };
 
-  let browserProjectsToRun = browserProjects;
-  let nodeProjectsToRun = nodeProjects;
+  const rsbuildInstance = await prepareRsbuild(
+    context,
+    globTestSourceEntries,
+    setupFiles,
+    globalSetupFiles,
+    nodeProjects,
+    [],
+    { includeCompilerPlugin: true },
+  );
+
+  await rsbuildInstance.initConfigs({ action: 'dev' });
+
+  let browserProjectsToRun = context.projects.filter(
+    (project) => project.normalizedConfig.browser.enabled,
+  );
+  let nodeProjectsToRun = context.projects.filter(
+    (project) => !project.normalizedConfig.browser.enabled,
+  );
 
   const runnable = await resolveRunnableProjectsByEntries({
     entriesCache,
-    projects: allProjects,
+    projects: context.projects,
     globTestSourceEntries,
     skipEmptyProjects: !isWatchMode,
+    groupByEnvironment: false,
   });
   allProjects = runnable.projects;
   entriesCache = runnable.entriesCache;
@@ -453,40 +479,25 @@ export async function runTests(context: Rstest): Promise<void> {
   // The `projects` variable now refers to node projects that have tests to run.
   const projects = nodeProjectsToRun;
 
-  const { getSetupFiles } = await import('../utils/getSetupFiles');
+  for (const project of projects) {
+    const {
+      environmentName,
+      rootPath,
+      normalizedConfig: { setupFiles: projectSetupFiles },
+    } = project;
 
-  const setupFiles = Object.fromEntries(
-    projects.map((project) => {
-      const {
-        environmentName,
-        rootPath,
-        normalizedConfig: { setupFiles },
-      } = project;
+    setupFiles[environmentName] = getSetupFiles(projectSetupFiles, rootPath);
+  }
 
-      return [environmentName, getSetupFiles(setupFiles, rootPath)];
-    }),
-  );
+  for (const project of context.projects) {
+    const {
+      environmentName,
+      rootPath,
+      normalizedConfig: { globalSetup },
+    } = project;
 
-  const globalSetupFiles = Object.fromEntries(
-    // Global setup still applies to all original projects in context
-    context.projects.map((project) => {
-      const {
-        environmentName,
-        rootPath,
-        normalizedConfig: { globalSetup },
-      } = project;
-
-      return [environmentName, getSetupFiles(globalSetup, rootPath)];
-    }),
-  );
-
-  const rsbuildInstance = await prepareRsbuild(
-    context,
-    globTestSourceEntries,
-    setupFiles,
-    globalSetupFiles,
-    projects,
-  );
+    globalSetupFiles[environmentName] = getSetupFiles(globalSetup, rootPath);
+  }
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     inspectedConfig: {

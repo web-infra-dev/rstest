@@ -1,7 +1,7 @@
-import type { Rspack } from '@rsbuild/core';
+import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { join, normalize } from 'pathe';
 import { prepareRsbuild } from '../../src/core/rsbuild';
-import type { RstestContext } from '../../src/types';
+import type { RstestContext, RstestExposeAPI } from '../../src/types';
 import { TEMP_RSTEST_OUTPUT_DIR } from '../../src/utils';
 
 process.env.DEBUG = 'false';
@@ -42,6 +42,165 @@ export function matchRules(
 }
 
 describe('prepareRsbuild', () => {
+  it('should expose project-scoped rstest API to Rsbuild plugins', async () => {
+    const createModifyRstestConfigPlugin = (
+      include: string,
+    ): RsbuildPlugin => ({
+      name: `modify-rstest-config-${include}`,
+      setup(api) {
+        const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+        rstestApi?.modifyRstestConfig((config) => {
+          config.include = [include];
+        });
+      },
+    });
+
+    const projectA = {
+      name: 'project-a',
+      rootPath,
+      environmentName: 'project-a',
+      normalizedConfig: {
+        include: ['original-a'],
+        plugins: [createModifyRstestConfigPlugin('from-project-a')],
+        resolve: {},
+        source: {},
+        output: {},
+        tools: {},
+        testEnvironment: {
+          name: 'node',
+        },
+        browser: { enabled: false },
+      },
+    };
+    const projectB = {
+      name: 'project-b',
+      rootPath,
+      environmentName: 'project-b',
+      normalizedConfig: {
+        include: ['original-b'],
+        plugins: [createModifyRstestConfigPlugin('from-project-b')],
+        resolve: {},
+        source: {},
+        output: {},
+        tools: {},
+        testEnvironment: {
+          name: 'node',
+        },
+        browser: { enabled: false },
+      },
+    };
+
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        rootPath,
+        command: 'run',
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          pool: { type: 'forks' },
+        },
+        projects: [projectA, projectB],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+      {},
+    );
+
+    await rsbuildInstance.initConfigs();
+
+    expect(projectA.normalizedConfig.include).toEqual(['from-project-a']);
+    expect(projectB.normalizedConfig.include).toEqual(['from-project-b']);
+  });
+
+  it('should apply modified rstest config before generating rsbuild config', async () => {
+    const modifyRstestConfigPlugin: RsbuildPlugin = {
+      name: 'modify-rstest-config-before-rsbuild-config',
+      setup(api) {
+        const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+        rstestApi?.modifyRstestConfig((config) => {
+          config.include = ['**/*.modified.test.ts'];
+          config.testEnvironment = {
+            name: 'jsdom',
+          };
+          config.resolve = {
+            ...config.resolve,
+            alias: {
+              ...(config.resolve?.alias || {}),
+              '@modified': '/virtual/modified',
+            },
+          };
+          config.source = {
+            ...config.source,
+            define: {
+              ...(config.source?.define || {}),
+              __RSTEST_MODIFIED__: JSON.stringify('yes'),
+            },
+          };
+        });
+      },
+    };
+
+    const project = {
+      name: 'test',
+      rootPath,
+      environmentName: 'test',
+      normalizedConfig: {
+        include: ['original.test.ts'],
+        plugins: [modifyRstestConfigPlugin],
+        resolve: {},
+        source: {},
+        output: {},
+        tools: {},
+        testEnvironment: {
+          name: 'node',
+        },
+        browser: { enabled: false },
+      },
+    };
+
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        rootPath,
+        command: 'run',
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          pool: { type: 'forks' },
+        },
+        projects: [project],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+      {},
+    );
+
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+
+    expect(project.normalizedConfig.include).toEqual(['**/*.modified.test.ts']);
+    expect(project.normalizedConfig.testEnvironment.name).toBe('jsdom');
+    expect(bundlerConfigs[0]?.resolve?.alias).toMatchObject({
+      '@modified': '/virtual/modified',
+    });
+    expect(bundlerConfigs[0]?.resolve?.conditionNames).toContain('browser');
+    expect(JSON.stringify(bundlerConfigs[0]?.plugins)).toContain(
+      '__RSTEST_MODIFIED__',
+    );
+  });
+
   it('should generate rspack config correctly (jsdom)', async () => {
     const rsbuildInstance = await prepareRsbuild(
       {

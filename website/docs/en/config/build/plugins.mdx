@@ -3,6 +3,7 @@ description: plugins is used to register Rsbuild plugins. Includes practical gui
 overviewHeaders: []
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 # plugins <RsbuildDocBadge path="/config/plugins" text="plugins" />
@@ -27,3 +28,75 @@ export default defineConfig({
 ## Discover plugins
 
 Check out the Rsbuild [plugin list](https://rsbuild.rs/plugins/list#official-plugins) to discover available plugins. These plugins can also be used with Rstest.
+
+## Modify Rstest config in Rsbuild plugins \{#modify-rstest-config}
+
+<ApiMeta addedVersion="0.10.7" />
+
+When an Rsbuild plugin runs inside Rstest, it can get the Rstest exposed API through `api.useExposed('rstest')` and call `modifyRstestConfig` to adjust the Rstest config for the current project.
+
+```ts title="rstest-plugin.ts"
+import type { RsbuildPlugin } from '@rsbuild/core';
+import type { RstestExposeAPI } from '@rstest/core';
+
+export const myPlugin = (): RsbuildPlugin => ({
+  name: 'my-plugin',
+  setup(api) {
+    if (!api.context.callerName?.startsWith('rstest')) {
+      return;
+    }
+
+    const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+    rstestApi?.modifyRstestConfig((config) => {
+      config.include = ['**/*.test.ts'];
+    });
+  },
+});
+```
+
+In multi-project mode, Rstest exposes one API for each Rsbuild environment. A plugin registered in one project only modifies that project's Rstest config and does not affect other projects.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { myPlugin } from './rstest-plugin';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'node',
+      plugins: [myPlugin()],
+    },
+    {
+      name: 'browser',
+      plugins: [],
+    },
+  ],
+});
+```
+
+### Type definitions
+
+`RstestExposeAPI` is exported from `@rstest/core` and is the type of the API exposed by Rstest to Rsbuild plugins through `api.useExposed('rstest')`.
+
+```ts
+import type { MaybePromise, RstestConfig } from '@rstest/core';
+
+export type ModifyRstestConfigCallback = (
+  config: RstestConfig,
+) => MaybePromise<RstestConfig | void>;
+
+export type RstestExposeAPI = {
+  modifyRstestConfig: (callback: ModifyRstestConfigCallback) => void;
+};
+```
+
+The `modifyRstestConfig` callback receives the normalized Rstest config for the current project. You can either mutate the received `config` object directly or return a new config object. The callback can also be asynchronous.
+
+### Limitation
+
+`modifyRstestConfig` is suitable for modifying existing project config such as `include`, `exclude`, `testEnvironment`, `resolve`, and `source`, but it does not support dynamically adding or removing Rstest projects, Rsbuild environments, or Rsbuild plugins.
+
+In particular, `modifyRstestConfig` cannot be used to add more Rsbuild plugins through `config.plugins`. Newly added plugins cannot reliably participate in plugin ordering, hooks, or environment ownership.
+
+If you need to add Rsbuild plugins dynamically, integrate through Rstest's `extends` adapter pattern instead. An adapter can prepare the Rstest config before Rsbuild plugin initialization starts.

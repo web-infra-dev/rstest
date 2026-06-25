@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
+import type { RsbuildInstance } from '@rsbuild/core';
 import { relative } from 'pathe';
 import { createPool } from '../pool';
 import type {
@@ -148,10 +149,16 @@ const collectNodeTests = async ({
   context,
   nodeProjects,
   globTestSourceEntries,
+  rsbuildInstance: preparedRsbuildInstance,
+  setupFiles: preparedSetupFiles,
+  globalSetupFiles: preparedGlobalSetupFiles,
 }: {
   context: RstestContext;
   nodeProjects: ProjectContext[];
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+  rsbuildInstance?: RsbuildInstance;
+  setupFiles?: Record<string, Record<string, string>>;
+  globalSetupFiles?: Record<string, Record<string, string>>;
 }) => {
   const { getSetupFiles } = await import('../utils/getSetupFiles');
   if (nodeProjects.length === 0) {
@@ -162,37 +169,72 @@ const collectNodeTests = async ({
     };
   }
 
-  const setupFiles = Object.fromEntries(
-    nodeProjects.map((project) => {
+  const setupFiles =
+    preparedSetupFiles ??
+    Object.fromEntries(
+      nodeProjects.map((project) => {
+        const {
+          environmentName,
+          rootPath,
+          normalizedConfig: { setupFiles },
+        } = project;
+
+        return [environmentName, getSetupFiles(setupFiles, rootPath)];
+      }),
+    );
+
+  if (preparedSetupFiles) {
+    for (const project of nodeProjects) {
       const {
         environmentName,
         rootPath,
         normalizedConfig: { setupFiles },
       } = project;
 
-      return [environmentName, getSetupFiles(setupFiles, rootPath)];
-    }),
-  );
+      preparedSetupFiles[environmentName] = getSetupFiles(setupFiles, rootPath);
+    }
+  }
 
-  const globalSetupFiles = Object.fromEntries(
-    context.projects.map((project) => {
+  const globalSetupFiles =
+    preparedGlobalSetupFiles ??
+    Object.fromEntries(
+      context.projects.map((project) => {
+        const {
+          environmentName,
+          rootPath,
+          normalizedConfig: { globalSetup },
+        } = project;
+
+        return [environmentName, getSetupFiles(globalSetup, rootPath)];
+      }),
+    );
+
+  if (preparedGlobalSetupFiles) {
+    for (const project of context.projects) {
       const {
         environmentName,
         rootPath,
         normalizedConfig: { globalSetup },
       } = project;
 
-      return [environmentName, getSetupFiles(globalSetup, rootPath)];
-    }),
-  );
+      preparedGlobalSetupFiles[environmentName] = getSetupFiles(
+        globalSetup,
+        rootPath,
+      );
+    }
+  }
 
-  const rsbuildInstance = await prepareRsbuild(
-    context,
-    globTestSourceEntries,
-    setupFiles,
-    globalSetupFiles,
-    nodeProjects,
-  );
+  const rsbuildInstance =
+    preparedRsbuildInstance ??
+    (await prepareRsbuild(
+      context,
+      globTestSourceEntries,
+      setupFiles,
+      globalSetupFiles,
+      nodeProjects,
+      [],
+      { includeCompilerPlugin: true },
+    ));
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     globTestSourceEntries,
@@ -352,10 +394,16 @@ const collectAllTests = async ({
   context,
   globTestSourceEntries,
   shardedEntries,
+  rsbuildInstance,
+  setupFiles,
+  globalSetupFiles,
 }: {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
+  rsbuildInstance?: RsbuildInstance;
+  setupFiles?: Record<string, Record<string, string>>;
+  globalSetupFiles?: Record<string, Record<string, string>>;
 }): Promise<{
   errors?: FormattedError[];
   list: ListCommandResult[];
@@ -376,6 +424,9 @@ const collectAllTests = async ({
       context,
       nodeProjects,
       globTestSourceEntries,
+      rsbuildInstance,
+      setupFiles,
+      globalSetupFiles,
     }),
     collectBrowserTests({
       context,
@@ -474,9 +525,13 @@ export async function listTests(
     if (testEntries[name]) {
       return testEntries[name];
     }
-    const { include, exclude, includeSource, root } = context.projects.find(
-      (p) => p.environmentName === name,
-    )!.normalizedConfig;
+    const project = context.projects.find((p) => p.environmentName === name);
+
+    if (!project) {
+      return {};
+    }
+
+    const { include, exclude, includeSource, root } = project.normalizedConfig;
 
     const entries = await getTestEntries({
       include,
@@ -493,10 +548,32 @@ export async function listTests(
     return entries;
   };
 
+  let preparedRsbuildInstance: RsbuildInstance | undefined;
+  const preparedSetupFiles: Record<string, Record<string, string>> = {};
+  const preparedGlobalSetupFiles: Record<string, Record<string, string>> = {};
+  const nodeProjects = context.projects.filter(
+    (project) => !project.normalizedConfig.browser.enabled,
+  );
+
+  if (nodeProjects.length > 0) {
+    preparedRsbuildInstance = await prepareRsbuild(
+      context,
+      globTestSourceEntries,
+      preparedSetupFiles,
+      preparedGlobalSetupFiles,
+      nodeProjects,
+      [],
+      { includeCompilerPlugin: !filesOnly },
+    );
+
+    await preparedRsbuildInstance.initConfigs({ action: 'dev' });
+  }
+
   await applyEnvironmentGroupsToListEntries({
     context,
     testEntries,
     globTestSourceEntries,
+    groupByEnvironment: false,
   });
 
   const {
@@ -513,6 +590,9 @@ export async function listTests(
         context,
         globTestSourceEntries,
         shardedEntries: shardedBrowserEntries,
+        rsbuildInstance: preparedRsbuildInstance,
+        setupFiles: preparedSetupFiles,
+        globalSetupFiles: preparedGlobalSetupFiles,
       });
 
   const tests: ListedTest[] = [];

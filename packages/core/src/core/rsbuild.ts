@@ -10,9 +10,12 @@ import {
 import path from 'pathe';
 import type {
   EntryInfo,
+  ModifyRstestConfigCallback,
   NormalizedProjectConfig,
   ProjectContext,
+  RstestConfig,
   RstestContext,
+  RstestExposeAPI,
 } from '../types';
 import { isDebug } from '../utils';
 import { collectSetupPaths } from '../utils/getSetupFiles';
@@ -27,6 +30,22 @@ import { pluginCacheControl } from './plugins/moduleCacheControl';
 import { isRuntimeChunk, runtimeChunkNameForEnvironment } from './runtimeChunk';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const rstestCompilerPlugin: RsbuildPlugin = {
+  name: 'rstest:compiler',
+  setup: (api) => {
+    api.modifyBundlerChain((chain) => {
+      // add mock-loader to this rule
+      chain.module
+        .rule('rstest-mock-module-doppelgangers')
+        .test(/\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/)
+        .with({ rstest: 'importActual' })
+        .use('import-actual-loader')
+        .loader(path.resolve(__dirname, './importActualLoader.mjs'))
+        .end();
+    });
+  },
+};
 
 type TestEntryToChunkHashes = {
   name: string;
@@ -86,6 +105,73 @@ const isMultiCompiler = <
   return 'compilers' in compiler && Array.isArray(compiler.compilers);
 };
 
+const applyModifyRstestConfig = async (
+  config: RstestConfig,
+  callbacks: ModifyRstestConfigCallback[],
+): Promise<RstestConfig> => {
+  let currentConfig = config;
+
+  for (const callback of callbacks) {
+    const result = await callback(currentConfig);
+
+    if (result) {
+      currentConfig = result;
+    }
+  }
+
+  return currentConfig;
+};
+
+export const initModifyRstestConfigHooks = (
+  rsbuildInstance: RsbuildInstance,
+  projects: ProjectContext[],
+): void => {
+  const modifyRstestConfigCallbacks = new Map<
+    string,
+    ModifyRstestConfigCallback[]
+  >();
+
+  const createRstestExposeAPI = (environmentName: string): RstestExposeAPI => ({
+    modifyRstestConfig: (callback) => {
+      const callbacks = modifyRstestConfigCallbacks.get(environmentName) ?? [];
+      callbacks.push(callback);
+      modifyRstestConfigCallbacks.set(environmentName, callbacks);
+    },
+  });
+
+  for (const project of projects) {
+    rsbuildInstance.expose(
+      'rstest',
+      createRstestExposeAPI(project.environmentName),
+      {
+        environment: project.environmentName,
+      },
+    );
+  }
+
+  const applyModifyRstestConfigCallbacks = async () => {
+    for (const project of projects) {
+      const callbacks = modifyRstestConfigCallbacks.get(
+        project.environmentName,
+      );
+
+      if (!callbacks?.length) {
+        continue;
+      }
+
+      project.normalizedConfig = (await applyModifyRstestConfig(
+        project.normalizedConfig,
+        callbacks,
+      )) as NormalizedProjectConfig;
+    }
+  };
+
+  rsbuildInstance.modifyRsbuildConfig({
+    order: 'pre',
+    handler: applyModifyRstestConfigCallbacks,
+  });
+};
+
 export const prepareRsbuild = async (
   context: RstestContext,
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>,
@@ -101,11 +187,15 @@ export const prepareRsbuild = async (
    */
   targetProjects?: ProjectContext[],
   extraPlugins: RsbuildPlugin[] = [],
+  options: {
+    includeCompilerPlugin?: boolean;
+  } = {},
 ): Promise<RsbuildInstance> => {
   const {
     command,
     normalizedConfig: { isolate, dev = {}, coverage, pool },
   } = context;
+  const getSetupPaths = () => collectSetupPaths(setupFiles, globalSetupFiles);
 
   // Default execution still excludes browser projects. Callers can opt in to a
   // broader project set when they only need graph information.
@@ -160,14 +250,15 @@ export const prepareRsbuild = async (
           isWatch: command === 'watch',
         }),
         pluginExternal(context),
-        !isolate
-          ? pluginCacheControl(collectSetupPaths(setupFiles, globalSetupFiles))
-          : null,
+        !isolate ? pluginCacheControl(getSetupPaths) : null,
         pluginInspect({ poolExecArgv: pool.execArgv }),
+        options.includeCompilerPlugin ? rstestCompilerPlugin : null,
         ...extraPlugins,
       ].filter(Boolean) as RsbuildPlugin[],
     },
   });
+
+  initModifyRstestConfigHooks(rsbuildInstance, projects);
 
   if (coverage?.enabled && command !== 'list') {
     const { loadCoverageProvider } = await import('../coverage');
@@ -175,11 +266,17 @@ export const prepareRsbuild = async (
       coverage,
       context.rootPath,
     );
-    coverage.exclude.push(
-      ...collectSetupPaths(setupFiles, globalSetupFiles || {}),
-    );
+    const coverageOptions = new Proxy(coverage, {
+      get(target, prop, receiver) {
+        if (prop === 'exclude') {
+          return [...target.exclude, ...getSetupPaths()];
+        }
 
-    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+
+    rsbuildInstance.addPlugins([pluginCoverage(coverageOptions)]);
   }
 
   return rsbuildInstance;
@@ -390,28 +487,10 @@ export const createRsbuildServer = async ({
   // Read files from memory via `rspackCompiler.outputFileSystem`
   let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler | undefined;
 
-  const rstestCompilerPlugin: RsbuildPlugin = {
-    name: 'rstest:compiler',
-    setup: (api) => {
-      api.modifyBundlerChain((chain) => {
-        // add mock-loader to this rule
-        chain.module
-          .rule('rstest-mock-module-doppelgangers')
-          .test(/\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/)
-          .with({ rstest: 'importActual' })
-          .use('import-actual-loader')
-          .loader(path.resolve(__dirname, './importActualLoader.mjs'))
-          .end();
-      });
-
-      api.onAfterCreateCompiler(({ compiler }) => {
-        // outputFileSystem to be updated later by `rsbuild-dev-middleware`
-        rspackCompiler = compiler;
-      });
-    },
-  };
-
-  rsbuildInstance.addPlugins([rstestCompilerPlugin]);
+  rsbuildInstance.onAfterCreateCompiler(({ compiler }) => {
+    // outputFileSystem to be updated later by `rsbuild-dev-middleware`
+    rspackCompiler = compiler;
+  });
 
   const devServer = await rsbuildInstance.createDevServer({
     getPortSilently: true,

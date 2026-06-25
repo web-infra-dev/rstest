@@ -422,6 +422,18 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         ],
       },
       {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
+            },
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.mts\\$/,
         "type": "javascript/esm",
       },
@@ -1004,6 +1016,18 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
+            },
+          },
+        ],
+      },
+      {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
             },
           },
         ],
@@ -3061,6 +3085,18 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         ],
       },
       {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
+            },
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.mts\\$/,
         "type": "javascript/esm",
       },
@@ -3630,6 +3666,18 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
+            },
+          },
+        ],
+      },
+      {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
             },
           },
         ],

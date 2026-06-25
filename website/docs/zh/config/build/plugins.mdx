@@ -3,6 +3,7 @@ description: plugins 选项用于注册 Rsbuild 插件。
 overviewHeaders: []
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 # plugins <RsbuildDocBadge path="/config/plugins" text="plugins" />
@@ -27,3 +28,75 @@ export default defineConfig({
 ## 发现插件
 
 查看 Rsbuild 的 [插件列表](https://rsbuild.rs/zh/plugins/list/#%E5%AE%98%E6%96%B9%E6%8F%92%E4%BB%B6) 来发现可用的插件，这些插件也适用于 Rstest。
+
+## 在 Rsbuild 插件中修改 Rstest 配置 \{#modify-rstest-config}
+
+<ApiMeta addedVersion="0.10.7" />
+
+当 Rsbuild 插件运行在 Rstest 中时，可以通过 `api.useExposed('rstest')` 获取 Rstest 暴露的 API，并调用 `modifyRstestConfig` 来调整当前 project 的 Rstest 配置。
+
+```ts title="rstest-plugin.ts"
+import type { RsbuildPlugin } from '@rsbuild/core';
+import type { RstestExposeAPI } from '@rstest/core';
+
+export const myPlugin = (): RsbuildPlugin => ({
+  name: 'my-plugin',
+  setup(api) {
+    if (!api.context.callerName?.startsWith('rstest')) {
+      return;
+    }
+
+    const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+    rstestApi?.modifyRstestConfig((config) => {
+      config.include = ['**/*.test.ts'];
+    });
+  },
+});
+```
+
+在多 project 模式下，Rstest 会为每个 Rsbuild environment 暴露独立的 API。注册在某个 project 中的插件只会修改该 project 的 Rstest 配置，不会影响其他 project。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { myPlugin } from './rstest-plugin';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'node',
+      plugins: [myPlugin()],
+    },
+    {
+      name: 'browser',
+      plugins: [],
+    },
+  ],
+});
+```
+
+### 类型说明
+
+`RstestExposeAPI` 从 `@rstest/core` 导出，用于描述 Rstest 通过 `api.useExposed('rstest')` 暴露给 Rsbuild 插件的 API。
+
+```ts
+import type { MaybePromise, RstestConfig } from '@rstest/core';
+
+export type ModifyRstestConfigCallback = (
+  config: RstestConfig,
+) => MaybePromise<RstestConfig | void>;
+
+export type RstestExposeAPI = {
+  modifyRstestConfig: (callback: ModifyRstestConfigCallback) => void;
+};
+```
+
+`modifyRstestConfig` 的回调会收到当前 project 的 normalized Rstest 配置。你可以直接修改传入的 `config` 对象，也可以返回一个新的配置对象；该回调也可以是异步函数。
+
+### 不足
+
+`modifyRstestConfig` 适合修改 `include`、`exclude`、`testEnvironment`、`resolve`、`source` 等既有 project 配置，但不支持动态添加或删除 Rstest projects / Rsbuild environments / Rsbuild plugins。
+
+尤其是，`modifyRstestConfig` 不能用于通过 `config.plugins` 添加更多 Rsbuild 插件。新添加的插件无法可靠参与插件排序、hooks 或 environment 归属。
+
+如果你需要动态添加 Rsbuild 插件，请通过 Rstest 的 `extends` Adapter 方案集成。Adapter 可以在 Rsbuild 插件初始化开始之前准备好 Rstest 配置。

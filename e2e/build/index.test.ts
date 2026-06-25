@@ -12,6 +12,7 @@ describe('test build config', () => {
     { name: 'define' },
     { name: 'alias' },
     { name: 'plugin' },
+    { name: 'modifyRstestConfig' },
     { name: 'tools/rspack' },
     { name: 'decorators' },
   ])(
