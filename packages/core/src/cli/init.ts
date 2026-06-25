@@ -53,6 +53,7 @@ export type CommonOptions = {
         headless?: boolean;
         port?: number;
         strictPort?: boolean;
+        providerOptions?: Record<string, unknown>;
       };
   isolate?: boolean;
   include?: string[];
@@ -349,6 +350,9 @@ export function mergeWithCLIOptions(
       }
       if (options.browser.strictPort !== undefined) {
         config.browser.strictPort = options.browser.strictPort;
+      }
+      if (options.browser.providerOptions !== undefined) {
+        config.browser.providerOptions = options.browser.providerOptions;
       }
     }
   }

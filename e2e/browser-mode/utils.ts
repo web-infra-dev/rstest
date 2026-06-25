@@ -18,6 +18,20 @@ const defaultEnvOverrides: Record<string, string> = {
   GITHUB_ACTIONS: '',
 };
 
+const useGithubActionsChrome = (fixtureName?: string): boolean =>
+  Boolean(process.env.CI) && fixtureName !== 'webkit';
+
+const applyGithubActionsChrome = (args: string[], fixtureName?: string) => {
+  if (
+    !useGithubActionsChrome(fixtureName) ||
+    args.some((arg) => arg.startsWith('--browser.providerOptions.launch.'))
+  ) {
+    return;
+  }
+
+  args.push('--browser.providerOptions.launch.channel=chrome');
+};
+
 const canRunHeadedBrowser =
   process.platform === 'darwin' ||
   process.platform === 'win32' ||
@@ -133,6 +147,8 @@ export const runBrowserCli = async (
 ) => {
   const args = extra?.args || [];
 
+  applyGithubActionsChrome(args, fixtureName);
+
   const result = await runRstestCli({
     command: 'rstest',
     args: ['run', ...args],
@@ -162,12 +178,46 @@ export const runBrowserWatchCli = async (
     env?: Record<string, string>;
   },
 ) => {
+  const args = extra?.args || [];
+
+  applyGithubActionsChrome(args, fixtureName);
+
   const result = await runRstestCli({
     command: 'rstest',
-    args: ['watch', '--disableConsoleIntercept', ...(extra?.args || [])],
+    args: ['watch', '--disableConsoleIntercept', ...args],
     options: {
       nodeOptions: {
         cwd: join(__dirname, 'fixtures', fixtureName),
+        env: { ...defaultEnvOverrides, DEBUG: 'rstest', ...extra?.env },
+      },
+    },
+  });
+  return {
+    ...result,
+    expectExecSuccess: async () => {
+      await result.expectExecSuccess();
+      expectNoFrameworkWarnings(result.cli);
+    },
+  };
+};
+
+export const runBrowserWatchCliWithCwd = async (
+  cwd: string,
+  extra?: {
+    args?: string[];
+    env?: Record<string, string>;
+  },
+) => {
+  const args = extra?.args || [];
+
+  applyGithubActionsChrome(args);
+
+  const result = await runRstestCli({
+    command: 'rstest',
+    args: ['watch', '--disableConsoleIntercept', ...args],
+    options: {
+      nodeOptions: {
+        cwd,
         env: { ...defaultEnvOverrides, DEBUG: 'rstest', ...extra?.env },
       },
     },
@@ -187,13 +237,18 @@ export const runBrowserWatchCli = async (
 export const runBrowserCliWithCwd = async (
   cwd: string,
   extra?: {
+    command?: 'run' | 'list';
     args?: string[];
     env?: Record<string, string>;
   },
 ) => {
+  const args = extra?.args || [];
+
+  applyGithubActionsChrome(args);
+
   const result = await runRstestCli({
     command: 'rstest',
-    args: ['run', ...(extra?.args || [])],
+    args: [extra?.command ?? 'run', ...args],
     options: {
       nodeOptions: {
         cwd,

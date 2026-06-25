@@ -136,9 +136,6 @@ jobs:
       - name: Build Packages
         run: pnpm run build
 
-      - name: Setup Playwright
-        uses: ./.github/actions/setup-playwright
-
       - name: Run Test
         run: pnpm run test
 
@@ -208,7 +205,10 @@ jobs:
         run: pnpm run build
 
       - name: Setup Playwright
+        if: matrix.test_script != 'test:no-isolate'
         uses: ./.github/actions/setup-playwright
+        with:
+          install-webkit: 'true'
 
       - name: E2E Test (${{ matrix.test_script }})
         run: cd e2e && pnpm ${{ matrix.test_script }}

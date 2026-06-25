@@ -337,6 +337,7 @@ export default defineConfig({
 
 - **类型：** `Record<string, unknown>`
 - **默认值：** `{}`
+- **CLI：** `--browser.providerOptions.*`
 
 传递给选定 browser provider 的特定选项。Rstest 不会验证或解析该对象的内容——它会在浏览器启动和 context 创建时原样转发给 provider。
 
@@ -356,6 +357,12 @@ export default defineConfig({
     },
   },
 });
+```
+
+也可以通过 CLI 传入嵌套的 provider 选项：
+
+```bash
+npx rstest --browser.providerOptions.launch.channel=chrome
 ```
 
 ## 当前限制：同一次 run 的 browser 启动配置必须一致

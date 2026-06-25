@@ -6,6 +6,13 @@ export default defineConfig({
   browser: {
     enabled: true,
     provider: 'playwright',
+    providerOptions: process.env.CI
+      ? {
+          launch: {
+            channel: 'chrome',
+          },
+        }
+      : undefined,
   },
   include: ['tests/**/*.test.tsx'],
 });

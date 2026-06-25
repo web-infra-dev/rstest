@@ -2,22 +2,17 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import pathe from 'pathe';
-import { runRstestCli } from '../scripts';
+import { runBrowserCliWithCwd } from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('browser mode - list (collect mode)', () => {
   it('should list browser tests without executing them', async () => {
-    const { cli, expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['list'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures', 'list'),
-        },
-      },
-    });
+    const { cli, expectExecSuccess } = await runBrowserCliWithCwd(
+      join(__dirname, 'fixtures', 'list'),
+      { command: 'list' },
+    );
 
     await expectExecSuccess();
 
