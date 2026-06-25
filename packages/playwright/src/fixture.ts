@@ -19,7 +19,7 @@ import {
   describe as rstestDescribe,
   test as base,
 } from '@rstest/core';
-import type { Fixtures, TestAPIs, Use } from '@rstest/core';
+import type { Fixtures, TestAPIs, TestOptions, Use } from '@rstest/core';
 import type { TestContext } from '@rstest/core';
 import { chromium, request as playwrightRequest } from 'playwright';
 import type {
@@ -547,7 +547,12 @@ type PlaywrightTestBase<ExtraContext> = Omit<
   (
     description: string,
     fn?: (context: TestContext & ExtraContext) => void | Promise<void>,
-    options?: Parameters<typeof base>[2],
+    timeout?: number,
+  ): void;
+  (
+    description: string,
+    options: TestOptions,
+    fn?: (context: TestContext & ExtraContext) => void | Promise<void>,
   ): void;
   fail: PlaywrightTestBase<ExtraContext>;
   fails: PlaywrightTestBase<ExtraContext>;
@@ -555,11 +560,18 @@ type PlaywrightTestBase<ExtraContext> = Omit<
     cases: readonly T[],
   ) => (
     description: string,
-    fn?: (
-      param: T,
-      context: TestContext & ExtraContext,
-    ) => void | Promise<void>,
-    options?: Parameters<typeof base>[2],
+    fnOrOptions?:
+      | TestOptions
+      | ((
+          param: T,
+          context: TestContext & ExtraContext,
+        ) => void | Promise<void>),
+    timeoutOrFn?:
+      | number
+      | ((
+          param: T,
+          context: TestContext & ExtraContext,
+        ) => void | Promise<void>),
   ) => void;
 };
 

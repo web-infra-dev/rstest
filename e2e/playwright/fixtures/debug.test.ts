@@ -31,6 +31,7 @@ const buildApp = async () => {
 
 test(
   'can enable headed debug mode from env',
+  { timeout: 30_000 },
   async ({ page, serve }) => {
     await buildApp();
 
@@ -46,11 +47,11 @@ test(
         : 'RSTEST_PLAYWRIGHT_DEBUG_OFF',
     );
   },
-  { timeout: 30_000 },
 );
 
 test.skip(
   'can pause during headed debugging',
+  { timeout: 0 },
   async ({ page, serve }) => {
     await buildApp();
 
@@ -59,5 +60,4 @@ test.skip(
     await page.goto(url);
     await page.pause();
   },
-  { timeout: 0 },
 );

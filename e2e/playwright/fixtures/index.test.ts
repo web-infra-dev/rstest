@@ -8,6 +8,7 @@ const entry = join(cwd, distPath, 'index.html');
 
 test(
   'opens an Rsbuild page with Playwright',
+  { timeout: 30_000 },
   async ({ page, serve }) => {
     const rsbuild = await createRsbuild({
       cwd,
@@ -40,5 +41,4 @@ test(
     await expect(page.locator('.message')).toContainText('Rsbuild page loaded');
     console.log('RSTEST_PLAYWRIGHT_E2E_OK');
   },
-  { timeout: 30_000 },
 );

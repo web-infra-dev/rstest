@@ -114,6 +114,7 @@ export type {
   TestFileInfo,
   TestFileResult,
   TestInfo,
+  TestOptions,
   TestResult,
   TestSuiteInfo,
   Use,
