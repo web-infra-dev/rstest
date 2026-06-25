@@ -149,7 +149,8 @@ import { mergeProjectConfig } from '@rstest/core';
 
 const config = mergeProjectConfig(
   {
-    projects: ['packages/*'],
+    name: 'node',
+    include: ['src/**/*.test.ts'],
   },
   {
     testTimeout: 10000,
@@ -164,7 +165,7 @@ const config = mergeProjectConfig(
 - **类型：**
 
 ```ts
-function loadConfig(params?: {
+function loadConfig(params: {
   // 默认为 process.cwd()
   cwd?: string;
   // 指定配置文件（相对路径或绝对路径）

@@ -118,3 +118,4 @@ Available workflow skills in `.agents/skills/`:
 | pr-creator                 | Create a PR for the current branch                                                |
 | create-draft-release-notes | Create or update draft GitHub releases and organize generated release notes       |
 | create-release-blog        | Draft bilingual release blog posts from a version range                           |
+| api-doc-sync               | Verify/fix that hand-written API doc signatures stay faithful to exported types   |

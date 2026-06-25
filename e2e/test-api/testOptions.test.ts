@@ -149,4 +149,37 @@ describe('TestOptions', () => {
     // Both tests (shorthand + options) should report the same 50ms timeout.
     expectStderrLog(/test timed out in 50ms/);
   }, 10000);
+
+  it('describe options propagate retry to inner tests, per-test wins', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/describeOptionsRetry.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await expectExecSuccess();
+  });
+
+  it('describe options propagate timeout to inner tests, per-test wins', async () => {
+    const { cli, expectLog, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/describeOptionsTimeout.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+    const logs = cli.stdout.split('\n').filter(Boolean);
+    // Inherited 50ms timeout trips; the per-test 200ms override passes.
+    expectLog(/Tests 1 failed/, logs);
+    expectLog(/1 passed/, logs);
+    expectStderrLog(/test timed out in 50ms/);
+    expect(cli.stderr).not.toContain('test timed out in 200ms');
+  }, 10000);
 });

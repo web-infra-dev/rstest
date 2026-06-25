@@ -21,7 +21,11 @@ import type {
   WorkerState,
 } from '../../types';
 import { SYNTHETIC_STACK_ERROR_MESSAGE } from '../../utils/constants';
-import { getFileTaskId, getTaskNameWithPrefix } from '../../utils/helper';
+import {
+  getFileTaskId,
+  getTaskNameWithPrefix,
+  toNativePath,
+} from '../../utils/helper';
 import { createExpect } from '../api/expect';
 import { formatTestError, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
@@ -409,7 +413,9 @@ export class TestRunner {
               try {
                 for (const fn of test.beforeAllListeners) {
                   const cleanupFn = await fn({
-                    filepath: testPath,
+                    // `ctx.filepath` is user-facing; expose the OS-native path
+                    // so it matches `__filename`/`import.meta.filename` (#1465).
+                    filepath: toNativePath(testPath),
                   });
                   if (cleanupFn) cleanups.push(cleanupFn);
                 }
@@ -440,7 +446,9 @@ export class TestRunner {
               try {
                 for (const fn of afterAllFns) {
                   await fn({
-                    filepath: testPath,
+                    // `ctx.filepath` is user-facing; expose the OS-native path
+                    // so it matches `__filename`/`import.meta.filename` (#1465).
+                    filepath: toNativePath(testPath),
                   });
                 }
               } catch (error) {
@@ -767,7 +775,10 @@ export class TestRunner {
         isExpectingAssertionsError: null,
         expectedAssertionsNumber: null,
         expectedAssertionsNumberErrorGen: null,
-        testPath: test.testPath,
+        // `expect.getState().testPath` is user-facing; expose the OS-native
+        // path (equal to `import.meta.filename`). Internal consumers
+        // (snapshot, reporter, related) keep the POSIX `test.testPath` (#1465).
+        testPath: toNativePath(test.testPath),
         snapshotState,
         currentTestName: getTaskNameWithPrefix(test),
       },

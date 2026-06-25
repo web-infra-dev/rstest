@@ -9,10 +9,10 @@ describe('timeout shorthand vs options', () => {
 
   it(
     'options.timeout trips on slow body',
+    { timeout: 50 },
     async ({ expect }) => {
       await sleep(100);
       expect(1 + 1).toBe(2);
     },
-    { timeout: 50 },
   );
 });

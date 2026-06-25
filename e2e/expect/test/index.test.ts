@@ -107,4 +107,19 @@ describe('Expect API', () => {
     expect(1 + 2).toBe(3);
     expect(1 + 3).toBe(4);
   });
+
+  // testPath must be the OS-native absolute path so it equals
+  // `import.meta.filename`/`__filename` on every platform (incl. Windows).
+  // https://github.com/web-infra-dev/rstest/issues/1465
+  it('expect.getState().testPath should be the native file path', () => {
+    expect(expect.getState().testPath).toBe(import.meta.filename);
+  });
+
+  // The public per-test `context.expect` reads testPath through a separate
+  // state getter, so it must agree with the global `expect` (#1465).
+  it('context.expect.getState().testPath should also be native', ({
+    expect,
+  }) => {
+    expect(expect.getState().testPath).toBe(import.meta.filename);
+  });
 });

@@ -9,6 +9,7 @@ import {
   setFileContext,
 } from '../../../src/runtime/fileContext';
 import type { TestCase, WorkerState } from '../../../src/types';
+import { toNativePath } from '../../../src/utils/helper';
 
 const fakeTest = (name: string) => ({ name }) as unknown as TestCase;
 
@@ -62,7 +63,8 @@ describe('file-level expect singleton (isolate: false)', () => {
       'vitest-test',
     ) as TestCase;
     expect(attributed.name).toBe('t2');
-    expect(captured.getState().testPath).toBe('/f2');
+    // `getState().testPath` is normalized to OS-native separators (#1465).
+    expect(captured.getState().testPath).toBe(toNativePath('/f2'));
   });
 
   it('resets per-file bookkeeping between files', () => {
@@ -86,7 +88,7 @@ describe('file-level expect singleton (isolate: false)', () => {
     publishFile('/f2', 't2');
     createFileExpect(() => {});
 
-    expect(fileExpect.getState().testPath).toBe('/f2');
+    expect(fileExpect.getState().testPath).toBe(toNativePath('/f2'));
   });
 
   it('keeps the per-test local expect pinned (concurrent isolation)', () => {

@@ -44,6 +44,7 @@ import type {
   TestCase,
   WorkerState,
 } from '../../types';
+import { toNativePath } from '../../utils/helper';
 import { fileContext } from '../fileContext';
 import { createExpectPoll } from './poll';
 
@@ -66,8 +67,11 @@ const freshExpectState = (
   isExpectingAssertionsError: null,
   expectedAssertionsNumber: null,
   expectedAssertionsNumberErrorGen: null,
+  // `testPath` is user-facing; expose the OS-native path (equal to
+  // `import.meta.filename`) for every expect instance — global and the
+  // public per-test `context.expect` alike. Internally it stays POSIX (#1465).
   get testPath() {
-    return getWorkerState().testPath;
+    return toNativePath(getWorkerState().testPath);
   },
 });
 

@@ -76,6 +76,7 @@ jsdom
 jsesc
 jsxs
 koppers
+Lauer
 lightningcss
 liyincode
 llms

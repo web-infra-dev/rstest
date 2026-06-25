@@ -18,6 +18,13 @@ const createPublishedRuntimeAPI = (
 };
 
 describe('RunnerRuntime', () => {
+  const createApi = (testTimeout = 5000) =>
+    createPublishedRuntimeAPI({
+      testPath: __filename,
+      runtimeConfig: { testTimeout } as RuntimeConfig,
+      project: 'rstest',
+    });
+
   it('should add test correctly', async () => {
     const instance = createPublishedRuntimeAPI({
       testPath: __filename,
@@ -123,14 +130,7 @@ describe('RunnerRuntime', () => {
     ).toEqual(['test - 1 - 1']);
   });
 
-  describe('TestOptions third argument', () => {
-    const createApi = (testTimeout = 5000) =>
-      createPublishedRuntimeAPI({
-        testPath: __filename,
-        runtimeConfig: { testTimeout } as RuntimeConfig,
-        project: 'rstest',
-      });
-
+  describe('TestOptions second argument', () => {
     it('treats a numeric third arg as timeout shorthand', async () => {
       const instance = createApi();
       runtimeAPI.it('case', () => {}, 250);
@@ -145,7 +145,7 @@ describe('RunnerRuntime', () => {
 
     it('reads timeout/retry/repeats from a TestOptions object', async () => {
       const instance = createApi();
-      runtimeAPI.it('case', () => {}, { timeout: 250, retry: 2, repeats: 3 });
+      runtimeAPI.it('case', { timeout: 250, retry: 2, repeats: 3 }, () => {});
 
       const testCase = (await instance.getTests())[0] as TestCase;
       expect(testCase.timeout).toBe(250);
@@ -153,9 +153,20 @@ describe('RunnerRuntime', () => {
       expect(testCase.repeats).toBe(3);
     });
 
+    it('ignores an options object passed as the third argument', async () => {
+      const instance = createApi(123);
+      // The legacy third-arg object form is no longer supported: it is a type
+      // error and must not leak retry/repeats onto the case at runtime.
+      runtimeAPI.it('case', () => {}, { timeout: 250, retry: 2 } as any);
+
+      const testCase = (await instance.getTests())[0] as TestCase;
+      expect(testCase.timeout).toBe(123);
+      expect(testCase.retry).toBeUndefined();
+    });
+
     it('falls back to config.testTimeout when timeout omitted', async () => {
       const instance = createApi(123);
-      runtimeAPI.it('case', () => {}, { retry: 1 });
+      runtimeAPI.it('case', { retry: 1 }, () => {});
 
       const testCase = (await instance.getTests())[0] as TestCase;
       expect(testCase.timeout).toBe(123);
@@ -164,10 +175,11 @@ describe('RunnerRuntime', () => {
 
     it('propagates options through test.each', async () => {
       const instance = createApi();
-      runtimeAPI.it.each([1, 2])('case %s', () => {}, {
-        timeout: 50,
-        retry: 1,
-      });
+      runtimeAPI.it.each([1, 2])(
+        'case %s',
+        { timeout: 50, retry: 1 },
+        () => {},
+      );
 
       const cases = (await instance.getTests()) as TestCase[];
       expect(cases).toHaveLength(2);
@@ -179,10 +191,11 @@ describe('RunnerRuntime', () => {
 
     it('propagates options through test.for', async () => {
       const instance = createApi();
-      runtimeAPI.it.for([1, 2])('case %s', () => {}, {
-        timeout: 50,
-        repeats: 2,
-      });
+      runtimeAPI.it.for([1, 2])(
+        'case %s',
+        { timeout: 50, repeats: 2 },
+        () => {},
+      );
 
       const cases = (await instance.getTests()) as TestCase[];
       expect(cases).toHaveLength(2);
@@ -200,6 +213,94 @@ describe('RunnerRuntime', () => {
       const [a, b] = (await instance.getTests()) as TestCase[];
       expect(a!.timeout).toBe(99);
       expect(b!.timeout).toBe(88);
+    });
+  });
+
+  describe('describe TestOptions second argument', () => {
+    const firstCase = async (instance: RunnerRuntime): Promise<TestCase> => {
+      const suite = (await instance.getTests())[0] as TestSuite;
+      return suite.tests[0] as TestCase;
+    };
+
+    it('propagates suite-level options to inner tests', async () => {
+      const instance = createApi(123);
+      runtimeAPI.describe(
+        'suite',
+        { timeout: 250, retry: 2, repeats: 3 },
+        () => {
+          runtimeAPI.it('case', () => {});
+        },
+      );
+
+      const testCase = await firstCase(instance);
+      expect(testCase.timeout).toBe(250);
+      expect(testCase.retry).toBe(2);
+      expect(testCase.repeats).toBe(3);
+    });
+
+    it('lets an inner test override the suite-level options', async () => {
+      const instance = createApi(123);
+      runtimeAPI.describe('suite', { timeout: 250, retry: 2 }, () => {
+        runtimeAPI.it('case', { timeout: 999, retry: 5 }, () => {});
+      });
+
+      const testCase = await firstCase(instance);
+      expect(testCase.timeout).toBe(999);
+      expect(testCase.retry).toBe(5);
+    });
+
+    it('falls back to config.testTimeout when neither suite nor test set timeout', async () => {
+      const instance = createApi(123);
+      runtimeAPI.describe('suite', { retry: 1 }, () => {
+        runtimeAPI.it('case', () => {});
+      });
+
+      const testCase = await firstCase(instance);
+      expect(testCase.timeout).toBe(123);
+      expect(testCase.retry).toBe(1);
+    });
+
+    it('inherits options through nested describe, nearest wins', async () => {
+      const instance = createApi();
+      runtimeAPI.describe('outer', { timeout: 100, retry: 1 }, () => {
+        runtimeAPI.describe('inner', { timeout: 200 }, () => {
+          runtimeAPI.it('case', () => {});
+        });
+      });
+
+      const outer = (await instance.getTests())[0] as TestSuite;
+      const inner = outer.tests[0] as TestSuite;
+      const testCase = inner.tests[0] as TestCase;
+      // nearest suite wins for timeout, retry inherited from the outer suite
+      expect(testCase.timeout).toBe(200);
+      expect(testCase.retry).toBe(1);
+    });
+
+    it('accepts the numeric timeout shorthand as the third argument', async () => {
+      const instance = createApi();
+      runtimeAPI.describe(
+        'suite',
+        () => {
+          runtimeAPI.it('case', () => {});
+        },
+        321,
+      );
+
+      const testCase = await firstCase(instance);
+      expect(testCase.timeout).toBe(321);
+    });
+
+    it('propagates options through describe.each', async () => {
+      const instance = createApi();
+      runtimeAPI.describe.each([1, 2])('suite %s', { timeout: 50 }, () => {
+        runtimeAPI.it('case', () => {});
+      });
+
+      const suites = (await instance.getTests()) as TestSuite[];
+      expect(suites).toHaveLength(2);
+      for (const suite of suites) {
+        expect((suite.tests[0] as TestCase).timeout).toBe(50);
+      }
     });
   });
 });

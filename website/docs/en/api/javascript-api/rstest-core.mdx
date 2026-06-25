@@ -149,7 +149,8 @@ import { mergeProjectConfig } from '@rstest/core';
 
 const config = mergeProjectConfig(
   {
-    projects: ['packages/*'],
+    name: 'node',
+    include: ['src/**/*.test.ts'],
   },
   {
     testTimeout: 10000,
@@ -164,7 +165,7 @@ Load Rstest configuration.
 - **Type:**
 
 ```ts
-function loadConfig(params?: {
+function loadConfig(params: {
   // Default is process.cwd()
   cwd?: string;
   // Specify the configuration file (relative or absolute path)
