@@ -6,6 +6,13 @@ pre-commit:
       # --ignore-unknown, honoring .prettierignore), so this matches the whole-repo
       # `prettier --check .` run on pre-push and in CI. An explicit extension list
       # drifts (it was missing yaml) and **/*.x does not match repo-root files.
+      #
+      # `exclude` is still needed for CLAUDE.md: prettier hard-errors on an
+      # explicitly-passed symlink before .prettierignore is consulted, so a
+      # staged CLAUDE.md (symlink -> AGENTS.md) would otherwise fail pre-commit.
+      exclude:
+        - '**/CLAUDE.md'
+        - 'CLAUDE.md'
       stage_fixed: true
       run: pnpm prettier --write --ignore-unknown {staged_files}
 
