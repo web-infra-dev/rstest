@@ -1,11 +1,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { prepareFixtures, runRstestCli } from '../scripts';
+import { prepareFixtures } from '../scripts';
 import {
   deleteFixtureTarget,
   killCliProcessTree,
   runBrowserWatchCli,
+  runBrowserWatchCliWithCwd,
 } from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -20,16 +21,7 @@ describe('browser mode - watch', () => {
       fixturesTargetPath,
     });
 
-    const { cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['watch', '--disableConsoleIntercept'],
-      options: {
-        nodeOptions: {
-          env: { DEBUG: 'rstest' },
-          cwd: fixturesTargetPath,
-        },
-      },
-    });
+    const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath);
 
     // ========== Initial Run ==========
     // Fixture has 2 test files: index.test.ts and another.test.ts
@@ -93,16 +85,7 @@ describe('browser mode - watch', () => {
       fixturesTargetPath,
     });
 
-    const { cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['watch', '--disableConsoleIntercept'],
-      options: {
-        nodeOptions: {
-          env: { DEBUG: 'rstest' },
-          cwd: fixturesTargetPath,
-        },
-      },
-    });
+    const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath);
 
     // ========== Initial Run ==========
     // Initial run outputs full summary with Duration

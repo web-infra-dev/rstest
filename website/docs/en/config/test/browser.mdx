@@ -337,6 +337,7 @@ export default defineConfig({
 
 - **Type:** `Record<string, unknown>`
 - **Default:** `{}`
+- **CLI:** `--browser.providerOptions.*`
 
 Provider-specific options passed through to the selected browser provider. Rstest does not validate or interpret the contents of this object — it is forwarded as-is to the provider at both browser launch and context creation time.
 
@@ -356,6 +357,12 @@ export default defineConfig({
     },
   },
 });
+```
+
+You can also pass nested provider options from the CLI:
+
+```bash
+npx rstest --browser.providerOptions.launch.channel=chrome
 ```
 
 ## Current limitation: browser launch options must match in one run

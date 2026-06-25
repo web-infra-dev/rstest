@@ -565,6 +565,45 @@ describe('resolveProjects', () => {
         port: 6000, // overridden by CLI
       });
     });
+
+    it('should override browser provider options with CLI options', async () => {
+      const config: RstestConfig = {
+        projects: [
+          {
+            name: 'test-project',
+            browser: {
+              enabled: true,
+              provider: 'playwright',
+              providerOptions: {
+                launch: {
+                  channel: 'chromium',
+                },
+              },
+            },
+          },
+        ],
+      };
+
+      const projects = await resolveProjects({
+        config,
+        root: rootPath,
+        options: {
+          browser: {
+            providerOptions: {
+              launch: {
+                channel: 'chrome',
+              },
+            },
+          },
+        },
+      });
+
+      expect(projects[0]!.config.browser.providerOptions).toEqual({
+        launch: {
+          channel: 'chrome',
+        },
+      });
+    });
   });
 
   describe('coverage CLI options', () => {

@@ -1,8 +1,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from '@rstest/core';
-import { prepareFixtures, runRstestCli } from '../scripts';
-import { deleteFixtureTarget, killCliProcessTree } from './utils';
+import { prepareFixtures } from '../scripts';
+import {
+  deleteFixtureTarget,
+  killCliProcessTree,
+  runBrowserWatchCliWithCwd,
+} from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,16 +28,7 @@ describe('browser mode - watch reporter lifecycle', () => {
     });
     const reportLogPath = path.join(fixturesTargetPath, 'watch-reporter.log');
 
-    const { cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['watch', '--disableConsoleIntercept'],
-      options: {
-        nodeOptions: {
-          env: { DEBUG: 'rstest' },
-          cwd: fixturesTargetPath,
-        },
-      },
-    });
+    const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath);
 
     try {
       const waitForHookCounts = async (
