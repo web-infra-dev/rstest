@@ -46,12 +46,17 @@ function listMdx(dir) {
 /**
  * Parse `**Type:**` blocks from a doc file. Each block is anchored to the
  * nearest preceding heading so en/zh entries can be compared position-free.
- * Supports both the inline form (`- **Type:** \`...\``) and the fenced form
- * (`- **Type:**` followed by a ```ts code block).
+ * Supports the inline form (`- **Type:** \`...\``), the fenced form
+ * (`- **Type:**` followed by a ```ts code block), and the list form
+ * (`- **Type:**` followed by `-` bullet overloads).
  */
 function parseTypeBlocks(file) {
   const lines = readFileSync(file, 'utf8').split('\n');
   const blocks = [];
+  // Count every `**Type:**` label so the caller can assert each one produced a
+  // block — a label with no block means a signature form the parser does not
+  // recognize, which must fail loudly instead of being silently under-counted.
+  let labels = 0;
   let heading = '';
 
   for (let i = 0; i < lines.length; i++) {
@@ -67,6 +72,7 @@ function parseTypeBlocks(file) {
     if (!labelMatch) {
       continue;
     }
+    labels++;
 
     const inline = labelMatch[1].trim();
     if (inline) {
@@ -75,12 +81,14 @@ function parseTypeBlocks(file) {
       continue;
     }
 
-    // Fenced form: skip blank lines, then collect the next ``` block.
+    // Label alone on the line: the signature follows as either a fenced code
+    // block or a bullet list of overloads. Skip blank lines, then dispatch.
     let j = i + 1;
     while (j < lines.length && lines[j].trim() === '') {
       j++;
     }
     if (j < lines.length && lines[j].trim().startsWith('```')) {
+      // Fenced form: collect the next ``` block.
       const body = [];
       j++;
       while (j < lines.length && !lines[j].trim().startsWith('```')) {
@@ -89,10 +97,22 @@ function parseTypeBlocks(file) {
       }
       blocks.push({ heading, signature: body.join('\n').trim() });
       i = j;
+    } else if (j < lines.length && /^\s*-\s/.test(lines[j])) {
+      // List form: contiguous `-` bullet overloads, e.g.
+      //   - **Type:**
+      //     - `(a: string) => void`
+      //     - `(a: string, b: number) => void`
+      const body = [];
+      while (j < lines.length && /^\s*-\s/.test(lines[j])) {
+        body.push(lines[j].trim());
+        j++;
+      }
+      blocks.push({ heading, signature: body.join('\n') });
+      i = j - 1;
     }
   }
 
-  return blocks;
+  return { blocks, labels };
 }
 
 /** Drop surrounding backticks from an inline signature. */
@@ -110,7 +130,7 @@ function listRel(root) {
   }
 }
 
-/** Parse a page's Type blocks; `null` distinguishes "file missing" from "0 blocks". */
+/** Parse a page; returns `{ blocks, labels }`, or `null` when the file is missing. */
 function tryParse(file) {
   try {
     return parseTypeBlocks(file);
@@ -181,22 +201,46 @@ for (const rel of pages) {
   const enFile = join(enRoot, rel);
   const zhFile = join(zhRoot, rel);
 
-  const enBlocks = tryParse(enFile);
-  const zhBlocks = tryParse(zhFile);
+  const en = tryParse(enFile);
+  const zh = tryParse(zhFile);
 
-  // No Type blocks on either side → nothing to compare.
-  if ((enBlocks?.length ?? 0) === 0 && (zhBlocks?.length ?? 0) === 0) {
+  // No Type labels on either side → nothing to compare.
+  if ((en?.labels ?? 0) === 0 && (zh?.labels ?? 0) === 0) {
     continue;
   }
 
-  if (enBlocks === null) {
+  if (en === null) {
     findings.push({ page: rel, kind: 'missing-en-page', detail: enFile });
     continue;
   }
-  if (zhBlocks === null) {
+  if (zh === null) {
     findings.push({ page: rel, kind: 'missing-zh-page', detail: zhFile });
     continue;
   }
+
+  // Coverage self-check: every `**Type:**` label must have produced a block. A
+  // shortfall means a signature form the parser does not recognize was silently
+  // dropped — fail loudly and skip the (now unreliable) comparison for this page.
+  let coverageGap = false;
+  for (const [loc, parsed] of [
+    ['en', en],
+    ['zh', zh],
+  ]) {
+    if (parsed.blocks.length !== parsed.labels) {
+      coverageGap = true;
+      findings.push({
+        page: rel,
+        kind: 'parser-coverage',
+        detail: `${loc}: ${parsed.labels} **Type:** label(s) but parsed ${parsed.blocks.length} block(s) — an unrecognized Type block form was dropped`,
+      });
+    }
+  }
+  if (coverageGap) {
+    continue;
+  }
+
+  const enBlocks = en.blocks;
+  const zhBlocks = zh.blocks;
 
   pagesWithTypes++;
   blockCount += enBlocks.length;
