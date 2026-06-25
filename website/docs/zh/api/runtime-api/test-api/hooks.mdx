@@ -55,7 +55,7 @@ afterAll(async (ctx) => {
 
 - **类型：** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
 
-其中 `ctx` 的类型为 [`TestContext`](/api/runtime-api/test-api/test#testcontext)。
+`ctx` 的字段详见 [`TestContext`](/api/runtime-api/test-api/test#testcontext)(以下测试级 hook 同理)。
 
 在当前套件的每个测试之前运行。
 
@@ -86,8 +86,6 @@ beforeEach(async () => {
 
 - **类型：** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
 
-其中 `ctx` 的类型为 [`TestContext`](/api/runtime-api/test-api/test#testcontext)。
-
 在当前套件的每个测试之后运行。
 
 ```ts
@@ -101,8 +99,6 @@ afterEach(async () => {
 ## onTestFinished
 
 - **类型：** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
-
-其中 `ctx` 的类型为 [`TestContext`](/api/runtime-api/test-api/test#testcontext)。
 
 测试运行完成后调用，无论测试成功或失败。可用于执行清理操作。该 hook 会在 `afterEach` 之后执行。
 
@@ -136,8 +132,6 @@ describe.concurrent('并发套件', () => {
 ## onTestFailed
 
 - **类型：** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
-
-其中 `ctx` 的类型为 [`TestContext`](/api/runtime-api/test-api/test#testcontext)。
 
 测试运行失败后调用。
 
