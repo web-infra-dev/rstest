@@ -205,7 +205,10 @@ jobs:
         run: pnpm run build
 
       - name: Setup Playwright
-        if: matrix.test_script != 'test:no-isolate'
+        # Only test/test:commonjs run browser-mode e2e (incl. the WebKit
+        # fixture). test:no-isolate and test:threads exclude browser-mode/**,
+        # so they need no Playwright browsers.
+        if: matrix.test_script == 'test' || matrix.test_script == 'test:commonjs'
         uses: ./.github/actions/setup-playwright
         with:
           install-webkit: 'true'
