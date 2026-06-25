@@ -14,7 +14,7 @@ Rstest provides some utility functions to help you fake timers powered by [@sino
 ## rs.useFakeTimers
 
 - **Alias:** `rstest.useFakeTimers`
-- **Type:** `(config?: FakeTimerInstallOpts) => Rstest & Disposable`
+- **Type:** `(config?: FakeTimerInstallOpts) => RstestUtilities & Disposable`
 
 To enable mocking timers, you need to call this method. It uses [@sinonjs/fake-timers](https://github.com/sinonjs/fake-timers) under the hood.
 
@@ -42,7 +42,7 @@ Rstest supports the `using` syntax to restore real timers automatically when the
 ## rs.useRealTimers
 
 - **Alias:** `rstest.useRealTimers`
-- **Type:** `() => Rstest`
+- **Type:** `() => RstestUtilities`
 
 Restores the original timer functions (such as `setTimeout`, `setInterval`, etc.), disabling the fake timers.
 
@@ -66,7 +66,7 @@ if (rs.isFakeTimers()) {
 ## rs.setSystemTime
 
 - **Alias:** `rstest.setSystemTime`
-- **Type:** `(now?: number | Date | { epochMilliseconds: number }) => Rstest`
+- **Type:** `(now?: number | Date | { epochMilliseconds: number }) => RstestUtilities`
 
 Sets the current system time used by fake timers. Useful for testing code that depends on the current date or time.
 
@@ -96,42 +96,42 @@ const realTime = rs.getRealSystemTime();
 ## rs.runAllTicks
 
 - **Alias:** `rstest.runAllTicks`
-- **Type:** `() => Rstest`
+- **Type:** `() => RstestUtilities`
 
 Runs all queued microtasks (e.g., `process.nextTick`).
 
 ## rs.runAllTimers
 
 - **Alias:** `rstest.runAllTimers`
-- **Type:** `() => Rstest`
+- **Type:** `() => RstestUtilities`
 
 Executes all pending timers (both timeouts and intervals).
 
 ## rs.runAllTimersAsync
 
 - **Alias:** `rstest.runAllTimersAsync`
-- **Type:** `() => Promise<Rstest>`
+- **Type:** `() => Promise<RstestUtilities>`
 
 Asynchronously executes all pending timers.
 
 ## rs.runOnlyPendingTimers
 
 - **Alias:** `rstest.runOnlyPendingTimers`
-- **Type:** `() => Rstest`
+- **Type:** `() => RstestUtilities`
 
 Runs only the currently pending timers (does not schedule new ones).
 
 ## rs.runOnlyPendingTimersAsync
 
 - **Alias:** `rstest.runOnlyPendingTimersAsync`
-- **Type:** `() => Promise<Rstest>`
+- **Type:** `() => Promise<RstestUtilities>`
 
 Asynchronously runs only the currently pending timers.
 
 ## rs.advanceTimersByTime
 
 - **Alias:** `rstest.advanceTimersByTime`
-- **Type:** `(ms: number | string | Temporal.Duration) => Rstest`
+- **Type:** `(ms: number | string | Temporal.Duration) => RstestUtilities`
 
 Advances the fake timers by the specified milliseconds, executing any timers scheduled within that time.
 
@@ -140,28 +140,28 @@ String durations use the same format as `@sinonjs/fake-timers`, for example `'00
 ## rs.advanceTimersByTimeAsync
 
 - **Alias:** `rstest.advanceTimersByTimeAsync`
-- **Type:** `(ms: number | string | Temporal.Duration) => Promise<Rstest>`
+- **Type:** `(ms: number | string | Temporal.Duration) => Promise<RstestUtilities>`
 
 Asynchronously advances the fake timers by the specified milliseconds.
 
 ## rs.advanceTimersToNextTimer
 
 - **Alias:** `rstest.advanceTimersToNextTimer`
-- **Type:** `(steps?: number) => Rstest`
+- **Type:** `(steps?: number) => RstestUtilities`
 
 Advances the timers to the next scheduled timer, optionally for a given number of steps.
 
 ## rs.advanceTimersToNextTimerAsync
 
 - **Alias:** `rstest.advanceTimersToNextTimerAsync`
-- **Type:** `(steps?: number) => Promise<Rstest>`
+- **Type:** `(steps?: number) => Promise<RstestUtilities>`
 
 Asynchronously advances the timers to the next scheduled timer.
 
 ## rs.advanceTimersToNextFrame
 
 - **Alias:** `rstest.advanceTimersToNextFrame`
-- **Type:** `() => Rstest`
+- **Type:** `() => RstestUtilities`
 
 Advances the timers to the next animation frame.
 
@@ -170,7 +170,7 @@ Advances the timers to the next animation frame.
 <ApiMeta addedVersion="0.10.7" />
 
 - **Alias:** `rstest.jumpTimersByTime`
-- **Type:** `(ms: number | string | Temporal.Duration) => Rstest`
+- **Type:** `(ms: number | string | Temporal.Duration) => RstestUtilities`
 
 Jumps the fake clock forward by the specified amount of time, firing each affected timer callback at most once. This is useful for simulating a JavaScript engine being suspended and resumed later, where intermediate interval ticks are skipped.
 
@@ -190,7 +190,7 @@ expect(cb).toHaveBeenCalledTimes(1);
 <ApiMeta addedVersion="0.10.7" />
 
 - **Alias:** `rstest.setTickMode`
-- **Type:** `(mode: { mode: 'manual' | 'nextAsync' } | { mode: 'interval'; delta?: number }) => Rstest`
+- **Type:** `(mode: { mode: 'manual' | 'nextAsync' } | { mode: 'interval'; delta?: number }) => RstestUtilities`
 
 Configures how fake timers advance automatically.
 
@@ -219,7 +219,7 @@ const count = rs.getTimerCount();
 ## rs.clearAllTimers
 
 - **Alias:** `rstest.clearAllTimers`
-- **Type:** `() => Rstest`
+- **Type:** `() => RstestUtilities`
 
 Removes all timers that are scheduled to run.
 

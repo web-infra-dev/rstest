@@ -12,7 +12,7 @@ A set of useful utility functions.
 
 - **Alias:** `rstest.stubEnv`
 
-- **Type:** `(name: string, value: string | undefined) => Rstest & Disposable`
+- **Type:** `(name: string, value: string | undefined) => RstestUtilities & Disposable`
 
 Temporarily sets an environment variable in `process.env` and `import.meta.env` to the specified value. Useful for testing code that depends on environment variables.
 
@@ -49,7 +49,7 @@ expect(import.meta.env.MY_VAR).toBeUndefined();
 
 - **Alias:** `rstest.unstubAllEnvs`
 
-- **Type:** `() => Rstest`
+- **Type:** `() => RstestUtilities`
 
 Restores all environment variables that were changed using `rs.stubEnv` to their original values.
 
@@ -69,7 +69,7 @@ expect(process.env.NODE_ENV).not.toBe('test');
 
 - **Alias:** `rstest.stubGlobal`
 
-- **Type:** `(name: string | number | symbol, value: unknown) => Rstest & Disposable`
+- **Type:** `(name: string | number | symbol, value: unknown) => RstestUtilities & Disposable`
 
 Temporarily sets a global variable to the specified value. Useful for mocking global objects or functions.
 
@@ -103,7 +103,7 @@ expect(globalThis[Symbol.for('foo')]).toBe('bar');
 
 - **Alias:** `rstest.unstubAllGlobals`
 
-- **Type:** `() => Rstest`
+- **Type:** `() => RstestUtilities`
 
 Restores all global variables that were changed using `rs.stubGlobal` to their original values.
 

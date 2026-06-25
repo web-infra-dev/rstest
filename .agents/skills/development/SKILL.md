@@ -142,6 +142,7 @@ Documentation is not a follow-up task — it ships with the code. **Do not merge
 - Use Rspress frontmatter conventions (see existing docs for examples).
 - When adding `ApiMeta` markers for a new API or config option, default `addedVersion` to the current package version with its patch segment incremented by 1. For example, if `@rstest/core` is currently `0.10.6`, a newly documented core API should use `<ApiMeta addedVersion="0.10.7" />`.
 - Include code examples that are copy-pasteable.
+- **Signature fidelity:** if you changed a public type in `packages/core/src/types/`, or edited a `**Type:**` / `**类型：**` block, run the `api-doc-sync` skill. The doc signatures are hand-written copies of the real types and drift silently (missing overloads, wrong arg order, en/zh divergence); `api-doc-sync` grounds them against source and `tsc`.
 
 ## Self-Check Before Committing
 
