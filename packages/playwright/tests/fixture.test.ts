@@ -90,7 +90,7 @@ agentTest('supports third-party fixture wrappers', async ({ agent, page }) => {
 });
 
 test.extend({
-  playwright: async ({}, use) => {
+  playwright: async (_, use) => {
     await use({
       browserName: 'chromium',
       launchOptions: {

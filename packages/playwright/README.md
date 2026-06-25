@@ -173,7 +173,7 @@ export default defineConfig({
 
 String text assertions normalize whitespace. Each Playwright-style assertion retries until it passes or reaches `options.timeout`.
 
-## Configure Playwright options
+## Configure playwright options
 
 Global `playwright` configuration is not supported yet. Override the `playwright` fixture when a test file needs custom Playwright options:
 
