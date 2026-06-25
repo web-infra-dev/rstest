@@ -10,8 +10,9 @@
 //
 // Usage:
 //   node check-type-blocks.mjs [docsRoot]
-//     docsRoot defaults to website/docs. Scans <root>/en/api and pairs each
-//     page with its <root>/zh/api counterpart.
+//     docsRoot defaults to website/docs. Scans the union of <root>/en/api and
+//     <root>/zh/api pages so a one-sided edit (a zh-only page, or a `**类型：**`
+//     block added where the en page has none) cannot slip past the guard.
 //   node check-type-blocks.mjs --json [docsRoot]
 //     Emit machine-readable JSON instead of the human report.
 //
@@ -100,6 +101,24 @@ function stripFence(text) {
   return (m ? m[1] : text).trim();
 }
 
+/** Relative `.mdx` paths under `root`; `[]` if the root does not exist. */
+function listRel(root) {
+  try {
+    return listMdx(root).map((f) => relative(root, f));
+  } catch {
+    return [];
+  }
+}
+
+/** Parse a page's Type blocks; `null` distinguishes "file missing" from "0 blocks". */
+function tryParse(file) {
+  try {
+    return parseTypeBlocks(file);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Normalize a signature for en/zh comparison. Inline comments are prose and
  * are legitimately translated (`// default: 1000` vs `// 默认: 1000`), so they
@@ -122,24 +141,33 @@ const findings = [];
 let pagesWithTypes = 0;
 let blockCount = 0;
 
-for (const enFile of listMdx(enRoot)) {
-  const rel = relative(enRoot, enFile);
+// Iterate the union of en/zh relative paths: anchoring on en alone would let a
+// zh-only page, or a zh block added where the en page has none, slip past.
+const pages = [...new Set([...listRel(enRoot), ...listRel(zhRoot)])].sort();
+
+for (const rel of pages) {
+  const enFile = join(enRoot, rel);
   const zhFile = join(zhRoot, rel);
 
-  const enBlocks = parseTypeBlocks(enFile);
-  if (enBlocks.length === 0) {
+  const enBlocks = tryParse(enFile);
+  const zhBlocks = tryParse(zhFile);
+
+  // No Type blocks on either side → nothing to compare.
+  if ((enBlocks?.length ?? 0) === 0 && (zhBlocks?.length ?? 0) === 0) {
     continue;
   }
-  pagesWithTypes++;
-  blockCount += enBlocks.length;
 
-  let zhBlocks;
-  try {
-    zhBlocks = parseTypeBlocks(zhFile);
-  } catch {
+  if (enBlocks === null) {
+    findings.push({ page: rel, kind: 'missing-en-page', detail: enFile });
+    continue;
+  }
+  if (zhBlocks === null) {
     findings.push({ page: rel, kind: 'missing-zh-page', detail: zhFile });
     continue;
   }
+
+  pagesWithTypes++;
+  blockCount += enBlocks.length;
 
   if (enBlocks.length !== zhBlocks.length) {
     findings.push({
@@ -174,7 +202,7 @@ if (asJson) {
 }
 
 stdout.write(
-  `Scanned ${blockCount} **Type:** block(s) across ${pagesWithTypes} API page(s) in ${relative(cwd(), enRoot) || enRoot}.\n`,
+  `Scanned ${blockCount} **Type:** block(s) across ${pagesWithTypes} en/zh API page(s) in ${relative(cwd(), docsRoot) || docsRoot}.\n`,
 );
 
 if (findings.length === 0) {

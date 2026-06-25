@@ -1,6 +1,6 @@
 ---
 name: api-doc-sync
-description: Verify and fix that hand-written API doc signatures stay faithful to the exported TypeScript types. Use after changing a public type in packages/core/src/types/, after editing a `**Type:**`/`**类型：**` block in website/docs, or when reviewing whether documented runtime/JS API signatures match source.
+description: Verify hand-written API doc signatures match the exported types. Use after changing a public type in packages/core/src/types/, editing a `**Type:**`/`**类型：**` block in website/docs, or reviewing signature drift.
 metadata:
   internal: true
 ---
@@ -79,6 +79,30 @@ For each documented symbol whose page changed (or whose type changed):
 4. **Check field-level claims.** When the prose lists option fields
    (`timeout`, `retry`, …), confirm each exists on the type with the stated
    optionality and meaning, and that no real field is omitted.
+
+5. **Check named-type linkability.** A signature that names another type
+   (`TestContext`, `TestOptions`, `RstestUtilities`, …) can be a bare, unlinked
+   black box. For each named type a signature references, confirm the page
+   either links it to its canonical definition or documents it inline. Only add
+   a link when **both** hold:
+
+   - (a) the type has a **canonical anchor** to point at — a real heading
+     (`### TestContext` → `#testcontext`), not a loose bullet in a list (a
+     bullet generates no anchor); and
+   - (b) the type is **foreign** to the page — a data structure the reader must
+     navigate elsewhere to understand, _not_ a fluent/chaining return type that
+     names the very object the current page documents.
+
+   When both hold (e.g. `TestContext` at
+   `/api/runtime-api/test-api/test#testcontext`), add a short prose link after
+   the signature — do **not** re-inline the type's members, which creates a
+   second copy that drifts. The link goes in an adjacent sentence, since a
+   markdown link cannot live inside the backticked `**Type:**` code span.
+
+   When either test fails, treat the type as already inline-documented and skip
+   it — no link noise. `RstestUtilities` is the canonical skip: no heading anchor
+   (only a bullet gloss in `types.mdx`), and `=> RstestUtilities` is a fluent
+   self-reference to the `rs`/`rstest` object these pages already document.
 
 ### 3. Fix drift at the doc layer
 
