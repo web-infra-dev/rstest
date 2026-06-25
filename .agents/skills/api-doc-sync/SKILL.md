@@ -54,11 +54,14 @@ For each documented symbol whose page changed (or whose type changed):
    exact surface users consume; build with `pnpm --filter @rstest/core build`
    if needed.
 
-2. **Turn the doc into compile assertions.** Write a throwaway `.ts` file (under
-   the scratchpad, not the repo) that imports the real type and exercises
-   **every call form the docs show** as a positive case, plus a
-   `// @ts-expect-error` for **every form the docs say is invalid** (e.g. "the
-   options object cannot be the third argument"). Run it:
+2. **Turn the doc into compile assertions.** Write a throwaway `.ts` file
+   **inside the repo** (e.g. the repo root or `packages/core/`, with a temp name
+   like `__doc-probe.ts`) that imports the real type and exercises **every call
+   form the docs show** as a positive case, plus a `// @ts-expect-error` for
+   **every form the docs say is invalid** (e.g. "the options object cannot be the
+   third argument"). It must live in the repo, not the external scratchpad: `tsc`
+   resolves `node_modules` upward from the file's own directory, so only an
+   in-workspace file can resolve `@rstest/core`. Run it, then delete it:
 
    ```bash
    npx tsc --noEmit --strict --skipLibCheck <scratch>.ts
