@@ -2,7 +2,13 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '../src';
-import type { PlaywrightOptions } from '../src';
+import type { BrowserContext, Page } from 'playwright';
+import type {
+  PlaywrightFixtures,
+  PlaywrightOptions,
+  PlaywrightTest,
+  PlaywrightUse,
+} from '../src';
 
 const debugOptions = {
   debug: {
@@ -63,6 +69,82 @@ test.extend<{ createLabel: () => Promise<string> }>({
   },
 })('preserves function-valued fixture types', async ({ createLabel }) => {
   await expect(createLabel()).resolves.toContain('viewport');
+});
+
+type Agent = {
+  page: Page;
+};
+
+const createAgentTest = (baseTest: PlaywrightTest) =>
+  baseTest.extend<{ agent: Agent }>({
+    agent: async ({ page }, use) => {
+      await use({ page });
+    },
+  });
+
+const agentTest = createAgentTest(test);
+
+agentTest('supports third-party fixture wrappers', async ({ agent, page }) => {
+  expect(agent.page).toBe(page);
+});
+
+test.extend({
+  playwright: async ({}, use) => {
+    await use({
+      browserName: 'chromium',
+      launchOptions: {
+        headless: true,
+      },
+    });
+  },
+})('allows overriding the playwright fixture', async ({ playwright }) => {
+  expect(playwright.launchOptions).toEqual({ headless: true });
+});
+
+test.extend<{ url: string }>({
+  url: 'about:blank',
+  page: async ({ context, url }, use) => {
+    const page = await context.newPage();
+    await page.goto(url);
+
+    try {
+      await use(page);
+    } finally {
+      await page.close();
+    }
+  },
+})('allows overriding the page fixture', async ({ page, url }) => {
+  expect(page.url()).toBe(url);
+});
+
+const thirdPartyFixtures = {
+  customContext: async ({ browser }, use) => {
+    const context = await browser.newContext();
+
+    try {
+      await use(context);
+    } finally {
+      await context.close();
+    }
+  },
+} satisfies PlaywrightFixtures<
+  { customContext: BrowserContext },
+  { playwright: PlaywrightOptions }
+>;
+
+test.extend(thirdPartyFixtures)(
+  'exposes fixture and use types for third-party packages',
+  async ({ customContext }) => {
+    expect(customContext.pages()).toEqual([]);
+  },
+);
+
+const customUse: PlaywrightUse<string> = async (value) => {
+  expect(value).toBe('ok');
+};
+
+test('exposes the fixture use type', async () => {
+  await customUse('ok');
 });
 
 test.extend({

@@ -19,7 +19,7 @@ import {
   describe as rstestDescribe,
   test as base,
 } from '@rstest/core';
-import type { Fixtures, TestAPIs } from '@rstest/core';
+import type { Fixtures, TestAPIs, Use } from '@rstest/core';
 import type { TestContext } from '@rstest/core';
 import { chromium, request as playwrightRequest } from 'playwright';
 import type {
@@ -123,6 +123,8 @@ export type PlaywrightFixture = {
   /** Start a static server from inside the test and clean it up automatically. */
   serve: PlaywrightServe;
 };
+
+export type PlaywrightUse<T> = Use<T>;
 
 const DEFAULT_BROWSER_NAME = 'chromium' satisfies PlaywrightBrowserName;
 
@@ -531,7 +533,7 @@ const playwrightFixtures = {
 
 type RstestTest<ExtraContext = object> = TestAPIs<ExtraContext>;
 
-type PlaywrightFixtures<
+export type PlaywrightFixtures<
   FixturesContext extends Record<string, any>,
   ExtraContext,
 > = Fixtures<FixturesContext, ExtraContext>;

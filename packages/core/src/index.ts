@@ -116,4 +116,5 @@ export type {
   TestInfo,
   TestResult,
   TestSuiteInfo,
+  Use,
 } from './types';

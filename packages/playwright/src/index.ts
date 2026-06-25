@@ -20,10 +20,12 @@ export type {
   PlaywrightBrowserName,
   PlaywrightDebugOptions,
   PlaywrightFixture,
+  PlaywrightFixtures,
   PlaywrightOptions,
   PlaywrightRequestOptions,
   PlaywrightServe,
   PlaywrightServeOptions,
   PlaywrightServeResult,
   PlaywrightTest,
+  PlaywrightUse,
 } from './fixture';

@@ -183,7 +183,7 @@ interface FixtureOptions {
   auto?: boolean;
 }
 
-type Use<T> = (value: T) => Promise<void>;
+export type Use<T> = (value: T) => Promise<void>;
 
 type FixtureFn<T, K extends keyof T, ExtraContext> = (
   context: Omit<T, K> & ExtraContext,
