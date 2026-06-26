@@ -182,6 +182,19 @@ const runLifecycleStep = async <T>(
 };
 
 export async function runTests(context: Rstest): Promise<void> {
+  // High-level flow:
+  // 1. Split browser and node projects. Pure-browser runs take a fast path
+  //    because they do not need Rsbuild's node-side server or worker pool.
+  // 2. For node or mixed runs, prepare Rsbuild first so plugin-provided
+  //    `modifyRstestConfig` hooks can finalize project config before we decide
+  //    which entries/projects actually run.
+  // 3. Create the Rsbuild dev server to trigger config hooks, then start
+  //    browser tests early for mixed runs and initialize the node worker pool.
+  // 4. The inner `run()` handles one compile cycle: read Rsbuild stats, run
+  //    global setup, execute workers, merge browser/node results for reporters,
+  //    generate coverage, and finalize trace data.
+  // 5. Watch mode wires `run()` to Rsbuild rebuild callbacks and CLI shortcuts;
+  //    non-watch mode calls it once and then tears everything down.
   cleanCoverageReports(context.normalizedConfig.coverage);
 
   if (context.relatedRerunReason === 'forceRerunTrigger') {
@@ -312,6 +325,7 @@ export async function runTests(context: Rstest): Promise<void> {
     ? (events: TraceEvent[]) => activeTraceRun.onEvents?.(events)
     : undefined;
 
+  const rsbuildProjects = [...nodeProjects];
   let allProjects = context.projects;
 
   const { rootPath, reporters, snapshotManager, command, normalizedConfig } =
@@ -361,51 +375,103 @@ export async function runTests(context: Rstest): Promise<void> {
     return entries;
   };
 
+  let browserProjectsToRun: typeof context.projects = [];
+  let nodeProjectsToRun: typeof context.projects = [];
+  let runnableProjectsResolved = false;
+
+  const resolveRunnableProjects = async (): Promise<void> => {
+    if (runnableProjectsResolved) {
+      return;
+    }
+
+    const runnable = await resolveRunnableProjectsByEntries({
+      entriesCache,
+      projects: context.projects,
+      globTestSourceEntries,
+      skipEmptyProjects: !isWatchMode,
+    });
+    allProjects = runnable.projects;
+    entriesCache = runnable.entriesCache;
+    context.projects = allProjects;
+    rsbuildProjects.splice(
+      0,
+      rsbuildProjects.length,
+      ...runnable.projects.filter(
+        (project) => !project.normalizedConfig.browser.enabled,
+      ),
+    );
+    browserProjectsToRun = runnable.browserProjectsToRun;
+    nodeProjectsToRun = runnable.nodeProjectsToRun;
+
+    if (isWatchMode && shard) {
+      // In watch mode with sharding, only run projects that have sharded entries
+      browserProjectsToRun = browserProjectsToRun.filter((p) => {
+        return (
+          Object.keys(entriesCache.get(p.environmentName)?.entries || {})
+            .length > 0
+        );
+      });
+      nodeProjectsToRun = nodeProjectsToRun.filter((p) => {
+        return (
+          Object.keys(entriesCache.get(p.environmentName)?.entries || {})
+            .length > 0
+        );
+      });
+    }
+
+    if (isWatchMode && context.relatedResolutionEmpty) {
+      browserProjectsToRun = browserProjects;
+      nodeProjectsToRun = [];
+    }
+
+    for (const project of nodeProjectsToRun) {
+      const {
+        environmentName,
+        rootPath,
+        normalizedConfig: { setupFiles: projectSetupFiles },
+      } = project;
+
+      setupFiles[environmentName] = getSetupFiles(projectSetupFiles, rootPath);
+    }
+
+    for (const project of context.projects) {
+      const {
+        environmentName,
+        rootPath,
+        normalizedConfig: { globalSetup },
+      } = project;
+
+      globalSetupFiles[environmentName] = getSetupFiles(globalSetup, rootPath);
+    }
+
+    runnableProjectsResolved = true;
+  };
+
   const rsbuildInstance = await prepareRsbuild(
     context,
     globTestSourceEntries,
     setupFiles,
     globalSetupFiles,
-    nodeProjects,
+    rsbuildProjects,
     [],
+    resolveRunnableProjects,
   );
 
-  let browserProjectsToRun: typeof context.projects;
-  let nodeProjectsToRun: typeof context.projects;
-
-  const runnable = await resolveRunnableProjectsByEntries({
-    entriesCache,
-    projects: context.projects,
+  const { getRsbuildStats, closeServer } = await createRsbuildServer({
+    inspectedConfig: {
+      ...context.normalizedConfig,
+      // Pass only the relevant node projects for Rsbuild processing
+      projects: rsbuildProjects.map((p) => p.normalizedConfig),
+    },
+    isWatchMode,
     globTestSourceEntries,
-    skipEmptyProjects: !isWatchMode,
-    groupByEnvironment: false,
+    setupFiles,
+    globalSetupFiles,
+    rsbuildInstance,
+    rootPath,
   });
-  allProjects = runnable.projects;
-  entriesCache = runnable.entriesCache;
-  context.projects = allProjects;
-  browserProjectsToRun = runnable.browserProjectsToRun;
-  nodeProjectsToRun = runnable.nodeProjectsToRun;
 
-  if (isWatchMode && shard) {
-    // In watch mode with sharding, only run projects that have sharded entries
-    browserProjectsToRun = browserProjectsToRun.filter((p) => {
-      return (
-        Object.keys(entriesCache.get(p.environmentName)?.entries || {}).length >
-        0
-      );
-    });
-    nodeProjectsToRun = nodeProjectsToRun.filter((p) => {
-      return (
-        Object.keys(entriesCache.get(p.environmentName)?.entries || {}).length >
-        0
-      );
-    });
-  }
-
-  if (isWatchMode && context.relatedResolutionEmpty) {
-    browserProjectsToRun = browserProjects;
-    nodeProjectsToRun = [];
-  }
+  await resolveRunnableProjects();
 
   const hasBrowserTestsToRun = browserProjectsToRun.length > 0;
   const hasNodeTestsToRun = nodeProjectsToRun.length > 0;
@@ -457,6 +523,7 @@ export async function runTests(context: Rstest): Promise<void> {
       // fires for the pre-allocated buffer. Flush any browser events the
       // host emitted into it before exiting so `--trace` still produces a
       // file for filtered mixed-mode runs.
+      await runLifecycleStep('rsbuild server cleanup', () => closeServer());
       await runLifecycleStep('trace shutdown', () =>
         traceController.shutdown(activeTraceRun),
       );
@@ -465,46 +532,13 @@ export async function runTests(context: Rstest): Promise<void> {
     // If no node projects at all, and no browser tests to run,
     // then nothing to do here. This handles the original early exit for no node projects.
     if (!hasNodeProjects) {
+      await runLifecycleStep('rsbuild server cleanup', () => closeServer());
       return;
     }
   }
 
   // The `projects` variable now refers to node projects that have tests to run.
   const projects = nodeProjectsToRun;
-
-  for (const project of projects) {
-    const {
-      environmentName,
-      rootPath,
-      normalizedConfig: { setupFiles: projectSetupFiles },
-    } = project;
-
-    setupFiles[environmentName] = getSetupFiles(projectSetupFiles, rootPath);
-  }
-
-  for (const project of context.projects) {
-    const {
-      environmentName,
-      rootPath,
-      normalizedConfig: { globalSetup },
-    } = project;
-
-    globalSetupFiles[environmentName] = getSetupFiles(globalSetup, rootPath);
-  }
-
-  const { getRsbuildStats, closeServer } = await createRsbuildServer({
-    inspectedConfig: {
-      ...context.normalizedConfig,
-      // Pass only the relevant node projects for Rsbuild processing
-      projects: projects.map((p) => p.normalizedConfig),
-    },
-    isWatchMode,
-    globTestSourceEntries,
-    setupFiles,
-    globalSetupFiles,
-    rsbuildInstance,
-    rootPath,
-  });
 
   const entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
     (acc, entry) => acc.concat(Object.values(entry.entries) || []),

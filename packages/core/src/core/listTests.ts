@@ -502,7 +502,6 @@ export async function listTests(
     context,
     testEntries,
     globTestSourceEntries,
-    groupByEnvironment: false,
   });
 
   const {

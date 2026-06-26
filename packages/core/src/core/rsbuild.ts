@@ -34,6 +34,23 @@ type TestEntryToChunkHashes = {
   chunks: Record<string, string>;
 }[];
 
+const modifyRstestConfigApplied = Symbol('modifyRstestConfigApplied');
+
+type ModifiedRstestConfig = NormalizedProjectConfig & {
+  [modifyRstestConfigApplied]?: true;
+};
+
+const hasAppliedModifyRstestConfig = (
+  config: NormalizedProjectConfig,
+): boolean =>
+  Boolean((config as ModifiedRstestConfig)[modifyRstestConfigApplied]);
+
+const markModifyRstestConfigApplied = (
+  config: NormalizedProjectConfig,
+): void => {
+  (config as ModifiedRstestConfig)[modifyRstestConfigApplied] = true;
+};
+
 const getRuntimeChunkFiles = ({
   chunks,
   outputPath,
@@ -110,53 +127,91 @@ const applyModifyRstestConfig = async (
   return currentConfig;
 };
 
+const applyProjectModifyRstestConfig = async (
+  project: ProjectContext,
+  callbacks: ModifyRstestConfigCallback[] | undefined,
+): Promise<void> => {
+  if (
+    !callbacks?.length ||
+    hasAppliedModifyRstestConfig(project.normalizedConfig)
+  ) {
+    return;
+  }
+
+  project.normalizedConfig = (await applyModifyRstestConfig(
+    project.normalizedConfig,
+    callbacks,
+  )) as NormalizedProjectConfig;
+  markModifyRstestConfigApplied(project.normalizedConfig);
+};
+
+const getRsbuildEnvironmentConfig = (project: ProjectContext) => ({
+  plugins: project.normalizedConfig.plugins,
+  root: project.rootPath,
+  output: {
+    target: 'node' as const,
+  },
+});
+
+const createRstestExposeAPI = (
+  environmentName: string,
+  modifyRstestConfigCallbacks: Map<string, ModifyRstestConfigCallback[]>,
+): RstestExposeAPI => ({
+  modifyRstestConfig: (callback) => {
+    const callbacks = modifyRstestConfigCallbacks.get(environmentName) ?? [];
+    callbacks.push(callback);
+    modifyRstestConfigCallbacks.set(environmentName, callbacks);
+  },
+});
+
 export const initModifyRstestConfigHooks = (
   rsbuildInstance: RsbuildInstance,
   projects: ProjectContext[],
+  onModifyRstestConfigApplied?: () => Promise<void>,
 ): void => {
   const modifyRstestConfigCallbacks = new Map<
     string,
     ModifyRstestConfigCallback[]
   >();
 
-  const createRstestExposeAPI = (environmentName: string): RstestExposeAPI => ({
-    modifyRstestConfig: (callback) => {
-      const callbacks = modifyRstestConfigCallbacks.get(environmentName) ?? [];
-      callbacks.push(callback);
-      modifyRstestConfigCallbacks.set(environmentName, callbacks);
-    },
-  });
+  const applyModifyRstestConfigCallbacks = async () => {
+    for (const project of projects) {
+      await applyProjectModifyRstestConfig(
+        project,
+        modifyRstestConfigCallbacks.get(project.environmentName),
+      );
+    }
+  };
 
   for (const project of projects) {
     rsbuildInstance.expose(
       'rstest',
-      createRstestExposeAPI(project.environmentName),
+      createRstestExposeAPI(
+        project.environmentName,
+        modifyRstestConfigCallbacks,
+      ),
       {
         environment: project.environmentName,
       },
     );
   }
 
-  const applyModifyRstestConfigCallbacks = async () => {
-    for (const project of projects) {
-      const callbacks = modifyRstestConfigCallbacks.get(
-        project.environmentName,
-      );
-
-      if (!callbacks?.length) {
-        continue;
-      }
-
-      project.normalizedConfig = (await applyModifyRstestConfig(
-        project.normalizedConfig,
-        callbacks,
-      )) as NormalizedProjectConfig;
-    }
-  };
-
   rsbuildInstance.modifyRsbuildConfig({
     order: 'pre',
-    handler: applyModifyRstestConfigCallbacks,
+    handler: async (config) => {
+      await applyModifyRstestConfigCallbacks();
+      await onModifyRstestConfigApplied?.();
+
+      return {
+        ...config,
+        environments: Object.fromEntries(
+          projects.map((project) => [
+            project.environmentName,
+            getRsbuildEnvironmentConfig(project),
+          ]),
+        ),
+      };
+    },
   });
 };
 
@@ -175,6 +230,7 @@ export const prepareRsbuild = async (
    */
   targetProjects?: ProjectContext[],
   extraPlugins: RsbuildPlugin[] = [],
+  onModifyRstestConfigApplied?: () => Promise<void>,
 ): Promise<RsbuildInstance> => {
   const {
     command,
@@ -214,13 +270,7 @@ export const prepareRsbuild = async (
       environments: Object.fromEntries(
         projects.map((project) => [
           project.environmentName,
-          {
-            plugins: project.normalizedConfig.plugins,
-            root: project.rootPath,
-            output: {
-              target: 'node',
-            },
-          },
+          getRsbuildEnvironmentConfig(project),
         ]),
       ),
       plugins: [
@@ -242,7 +292,11 @@ export const prepareRsbuild = async (
     },
   });
 
-  initModifyRstestConfigHooks(rsbuildInstance, projects);
+  initModifyRstestConfigHooks(
+    rsbuildInstance,
+    projects,
+    onModifyRstestConfigApplied,
+  );
 
   if (coverage?.enabled && command !== 'list') {
     const { loadCoverageProvider } = await import('../coverage');

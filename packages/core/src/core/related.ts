@@ -337,9 +337,27 @@ export async function resolveRelatedTestFiles(
     globalSetupFiles,
     context.projects,
     [createRelatedBuildSafeguardsPlugin()],
+    async () => {
+      projectEntries = await collectProjectEntries(context);
+
+      Object.assign(
+        setupFiles,
+        buildSetupFiles(context.projects, 'setupFiles'),
+      );
+      Object.assign(
+        globalSetupFiles,
+        buildSetupFiles(context.projects, 'globalSetup'),
+      );
+    },
   );
 
-  projectEntries = await collectProjectEntries(context);
+  const devServer = await rsbuildInstance.createDevServer({
+    getPortSilently: true,
+  });
+
+  projectEntries = projectEntries.size
+    ? projectEntries
+    : await collectProjectEntries(context);
   const matchedTestFiles = new Set(
     collectDirectlyMatchedFiles({
       files: Array.from(projectEntries.values()).flatMap((entries) =>
@@ -349,16 +367,6 @@ export async function resolveRelatedTestFiles(
       rootPath: context.rootPath,
     }),
   );
-
-  Object.assign(setupFiles, buildSetupFiles(context.projects, 'setupFiles'));
-  Object.assign(
-    globalSetupFiles,
-    buildSetupFiles(context.projects, 'globalSetup'),
-  );
-
-  const devServer = await rsbuildInstance.createDevServer({
-    getPortSilently: true,
-  });
 
   try {
     for (const project of context.projects) {
