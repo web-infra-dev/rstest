@@ -201,6 +201,65 @@ describe('prepareRsbuild', () => {
     );
   });
 
+  it('should not allow modifyRstestConfig to switch browser mode', async () => {
+    const modifyBrowserModePlugin: RsbuildPlugin = {
+      name: 'modify-rstest-browser-mode',
+      setup(api) {
+        const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+        rstestApi?.modifyRstestConfig((config) => {
+          config.browser = {
+            ...config.browser,
+            enabled: true,
+          };
+        });
+      },
+    };
+
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        rootPath,
+        command: 'run',
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          pool: { type: 'forks' },
+        },
+        projects: [
+          {
+            name: 'test',
+            rootPath,
+            environmentName: 'test',
+            normalizedConfig: {
+              include: ['original.test.ts'],
+              plugins: [modifyBrowserModePlugin],
+              resolve: {},
+              source: {},
+              output: {},
+              tools: {},
+              testEnvironment: {
+                name: 'node',
+              },
+              browser: { enabled: false },
+            },
+          },
+        ],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+      {},
+    );
+
+    await expect(rsbuildInstance.initConfigs()).rejects.toThrow(
+      'Cannot modify `browser.enabled` in `modifyRstestConfig`',
+    );
+  });
+
   it('should generate rspack config correctly (jsdom)', async () => {
     const rsbuildInstance = await prepareRsbuild(
       {

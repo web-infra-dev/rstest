@@ -109,6 +109,7 @@ const applyModifyRstestConfig = async (
   config: RstestConfig,
   callbacks: ModifyRstestConfigCallback[],
 ): Promise<RstestConfig> => {
+  const browserEnabled = config.browser?.enabled;
   let currentConfig = config;
 
   for (const callback of callbacks) {
@@ -116,6 +117,12 @@ const applyModifyRstestConfig = async (
 
     if (result) {
       currentConfig = result;
+    }
+
+    if (currentConfig.browser?.enabled !== browserEnabled) {
+      throw new Error(
+        'Cannot modify `browser.enabled` in `modifyRstestConfig`. Configure Browser Mode in the Rstest project config instead.',
+      );
     }
   }
 

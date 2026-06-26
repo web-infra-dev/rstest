@@ -339,8 +339,6 @@ export async function resolveRelatedTestFiles(
     [createRelatedBuildSafeguardsPlugin()],
   );
 
-  await rsbuildInstance.initConfigs({ action: 'dev' });
-
   projectEntries = await collectProjectEntries(context);
   const matchedTestFiles = new Set(
     collectDirectlyMatchedFiles({

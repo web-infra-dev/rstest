@@ -565,8 +565,6 @@ export async function listTests(
       [],
       { includeCompilerPlugin: !filesOnly },
     );
-
-    await preparedRsbuildInstance.initConfigs({ action: 'dev' });
   }
 
   await applyEnvironmentGroupsToListEntries({

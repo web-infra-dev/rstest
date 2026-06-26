@@ -371,14 +371,8 @@ export async function runTests(context: Rstest): Promise<void> {
     { includeCompilerPlugin: true },
   );
 
-  await rsbuildInstance.initConfigs({ action: 'dev' });
-
-  let browserProjectsToRun = context.projects.filter(
-    (project) => project.normalizedConfig.browser.enabled,
-  );
-  let nodeProjectsToRun = context.projects.filter(
-    (project) => !project.normalizedConfig.browser.enabled,
-  );
+  let browserProjectsToRun: typeof context.projects;
+  let nodeProjectsToRun: typeof context.projects;
 
   const runnable = await resolveRunnableProjectsByEntries({
     entriesCache,
