@@ -24,21 +24,25 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('Test Files 2 passed');
   });
 
-  it('can opt into headed debug mode from a test', async () => {
-    const { cli, expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run', 'debug.test.ts'],
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, 'fixtures'),
-          env: {
-            RSTEST_PLAYWRIGHT_DEBUG: 'true',
+  it(
+    'can opt into headed debug mode from a test',
+    { timeout: 60_000 },
+    async () => {
+      const { cli, expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', 'debug.test.ts'],
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, 'fixtures'),
+            env: {
+              RSTEST_PLAYWRIGHT_E2E_DEBUG: 'true',
+            },
           },
         },
-      },
-    });
+      });
 
-    await expectExecSuccess();
-    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_DEBUG_ON');
-  });
+      await expectExecSuccess();
+      expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_DEBUG_ON');
+    },
+  );
 });

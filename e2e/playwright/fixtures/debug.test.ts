@@ -1,8 +1,17 @@
 import { join } from 'node:path';
 import { createRsbuild } from '@rsbuild/core';
-import { expect, test } from '@rstest/playwright';
+import { expect, test as base } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
 
-const debugEnabled = process.env.RSTEST_PLAYWRIGHT_DEBUG === 'true';
+const debugEnabled = process.env.RSTEST_PLAYWRIGHT_E2E_DEBUG === 'true';
+const test = base.extend({
+  playwright: {
+    browserName: 'chromium',
+    launchOptions: process.env.CI ? { channel: 'chrome' } : undefined,
+    debug: debugEnabled,
+  } satisfies PlaywrightOptions,
+});
+
 const cwd = import.meta.dirname;
 const distPath = 'dist-debug';
 const entry = join(cwd, distPath, 'index.html');
