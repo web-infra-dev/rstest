@@ -4,6 +4,7 @@ import {
   loadConfig as loadRsbuildConfig,
   mergeRsbuildConfig,
 } from '@rsbuild/core';
+import deepmerge from 'deepmerge';
 import { dirname, isAbsolute, join, resolve } from 'pathe';
 import { isCI } from 'std-env';
 import type {
@@ -22,6 +23,7 @@ import {
   formatRootStr,
   getOutputDistPathRoot,
   getTempRstestOutputDirGlob,
+  isPlainObject,
   logger,
   normalizeBuildCache,
   TEMP_RSTEST_OUTPUT_DIR,
@@ -150,6 +152,23 @@ export const resolveExtends = async (
   return merged;
 };
 
+/**
+ * Deep-merge plain data: recurse into plain objects, replace everything else
+ * (arrays, functions, class instances) with the later value.
+ *
+ * For `browser.providerOptions` — an opaque provider payload that must NOT use
+ * `mergeRsbuildConfig`, whose function-chaining / array-concat would corrupt
+ * callable options (`launch.logger.log`) or append `launch.args`.
+ */
+export const plainDeepMerge = <T>(base: T, override: T): T =>
+  deepmerge(base ?? {}, override ?? {}, {
+    // Recurse only into plain records; arrays, functions and class instances are
+    // leaves that get replaced (or kept) by reference, never cloned or merged —
+    // otherwise deepmerge would clone a class-instance option (e.g. a Playwright
+    // `launch.logger`) into a prototype-less plain object.
+    isMergeableObject: isPlainObject,
+  }) as T;
+
 export const mergeProjectConfig = (
   ...configs: ProjectConfig[]
 ): ProjectConfig => {
@@ -160,6 +179,8 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
   return configs.reduce<RstestConfig>((result, config) => {
     const merged = mergeRsbuildConfig(result, {
       ...config,
+      // Plain-merged below instead of via mergeRsbuildConfig; see plainDeepMerge.
+      browser: undefined,
       exclude: Array.isArray(config.exclude)
         ? {
             patterns: config.exclude,
@@ -175,10 +196,8 @@ export const mergeRstestConfig = (...configs: RstestConfig[]): RstestConfig => {
     }
 
     if (config.browser) {
-      merged.browser = {
-        ...(merged.browser || {}),
-        ...config.browser,
-      };
+      // An absent base resolves to `override`, so undefined result.browser is fine.
+      merged.browser = plainDeepMerge(result.browser, config.browser);
     }
 
     // The following configurations need overrides

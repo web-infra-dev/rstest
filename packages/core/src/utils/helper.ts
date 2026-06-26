@@ -93,7 +93,7 @@ export const castArray = <T>(arr?: T | T[]): T[] => {
   return Array.isArray(arr) ? arr : [arr];
 };
 
-const isPlainObject = (obj: unknown): obj is Record<string, any> => {
+export const isPlainObject = (obj: unknown): obj is Record<string, any> => {
   return (
     obj !== null &&
     typeof obj === 'object' &&

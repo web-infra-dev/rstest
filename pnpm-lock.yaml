@@ -1163,6 +1163,9 @@ importers:
       chokidar:
         specifier: ^5.0.0
         version: 5.0.0
+      deepmerge:
+        specifier: ^4.3.1
+        version: 4.3.1
       happy-dom:
         specifier: ^20.10.6
         version: 20.10.6
