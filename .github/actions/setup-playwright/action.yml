@@ -1,37 +1,18 @@
 name: 'Setup Playwright'
-description: 'Resolve the Playwright browser cache path + version, restore the browser cache, and install browsers (chromium + webkit). Run after dependencies are installed.'
+description: 'Install only Playwright browsers that are not provided by GitHub-hosted runners. Run after dependencies are installed.'
+
+inputs:
+  install-webkit:
+    description: 'Install Playwright WebKit.'
+    required: false
+    default: 'false'
 
 runs:
   using: 'composite'
   steps:
-    - name: Set Playwright cache path and version
+    - name: Install Playwright WebKit
+      if: inputs.install-webkit == 'true'
       shell: bash
+      # Only browser-mode e2e includes the explicit WebKit fixture.
       run: |
-        if [ "$RUNNER_OS" = "Windows" ]; then
-          echo "PLAYWRIGHT_BROWSERS_PATH=$USERPROFILE/AppData/Local/ms-playwright" >> "$GITHUB_ENV"
-        else
-          echo "PLAYWRIGHT_BROWSERS_PATH=$HOME/Library/Caches/ms-playwright" >> "$GITHUB_ENV"
-        fi
-        # Resolve the installed Playwright version so the browser cache key
-        # invalidates exactly when Playwright (and thus its browser builds)
-        # changes — not on every unrelated lockfile bump.
-        echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('playwright/package.json').version)")" >> "$GITHUB_ENV"
-
-    - name: Cache Playwright Browsers
-      continue-on-error: true
-      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-      with:
-        path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
-        key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
-        # Keyed on the Playwright version (set in the step above): unrelated
-        # lockfile bumps no longer cold-miss, and a Playwright version bump
-        # invalidates correctly. restore-keys lets `playwright install` patch
-        # from the previous version's cache instead of a full cold download.
-        restore-keys: |
-          playwright-${{ runner.os }}-
-
-    - name: Install Playwright Browsers
-      shell: bash
-      # chromium + webkit: browser-mode e2e (e.g. browser-mode/webkit.test.ts,
-      # which runs under the default `test` script) needs both.
-      run: npx playwright install chromium webkit
+        npx playwright install webkit

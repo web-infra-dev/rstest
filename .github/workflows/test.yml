@@ -136,9 +136,6 @@ jobs:
       - name: Build Packages
         run: pnpm run build
 
-      - name: Setup Playwright
-        uses: ./.github/actions/setup-playwright
-
       - name: Run Test
         run: pnpm run test
 
@@ -208,7 +205,13 @@ jobs:
         run: pnpm run build
 
       - name: Setup Playwright
+        # Only test/test:commonjs run browser-mode e2e (incl. the WebKit
+        # fixture). test:no-isolate and test:threads exclude browser-mode/**,
+        # so they need no Playwright browsers.
+        if: matrix.test_script == 'test' || matrix.test_script == 'test:commonjs'
         uses: ./.github/actions/setup-playwright
+        with:
+          install-webkit: 'true'
 
       - name: E2E Test (${{ matrix.test_script }})
         run: cd e2e && pnpm ${{ matrix.test_script }}

@@ -144,6 +144,7 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['--browser.headless', 'Run browser in headless mode (default: true in CI)'],
   ['--browser.port <port>', 'Port for the browser mode dev server'],
   ['--browser.strictPort', 'Exit if the specified port is already in use'],
+  ['--browser.providerOptions.*', 'Provider-specific browser options'],
   [
     '--unstubGlobals',
     'Restores all global variables that were changed with `rstest.stubGlobal` before every test',
@@ -440,9 +441,21 @@ const normalizeCliArgs = (argv: string[]): string[] =>
   normalizePoolCliArgs(normalizeBrowserCliArgs(normalizeCoverageCliArgs(argv)));
 
 const allowedWildcardOptions = {
+  browser: new Set([
+    'enabled',
+    'name',
+    'headless',
+    'port',
+    'strictPort',
+    'providerOptions',
+  ]),
   source: new Set(['tsconfigPath']),
   dev: new Set(['writeToDisk']),
   output: new Set(['emitAssets', 'cleanDistPath', 'module']),
+};
+
+const allowedNestedWildcardOptions = {
+  browser: new Set(['providerOptions']),
 };
 
 const validateWildcardOptions = (options: Record<string, unknown>): void => {
@@ -465,7 +478,10 @@ const validateWildcardOptions = (options: Record<string, unknown>): void => {
       if (
         typeof optionValue === 'object' &&
         optionValue !== null &&
-        !Array.isArray(optionValue)
+        !Array.isArray(optionValue) &&
+        !allowedNestedWildcardOptions[
+          name as keyof typeof allowedNestedWildcardOptions
+        ]?.has(key)
       ) {
         const nestedKey = Object.keys(optionValue)[0];
         throw new Error(
