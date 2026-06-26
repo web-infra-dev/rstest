@@ -368,7 +368,6 @@ export async function runTests(context: Rstest): Promise<void> {
     globalSetupFiles,
     nodeProjects,
     [],
-    { includeCompilerPlugin: true },
   );
 
   let browserProjectsToRun: typeof context.projects;

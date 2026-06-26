@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url';
 import {
   createRsbuild,
   type ManifestData,
@@ -28,24 +27,6 @@ import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
 import { isRuntimeChunk, runtimeChunkNameForEnvironment } from './runtimeChunk';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const rstestCompilerPlugin: RsbuildPlugin = {
-  name: 'rstest:compiler',
-  setup: (api) => {
-    api.modifyBundlerChain((chain) => {
-      // add mock-loader to this rule
-      chain.module
-        .rule('rstest-mock-module-doppelgangers')
-        .test(/\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/)
-        .with({ rstest: 'importActual' })
-        .use('import-actual-loader')
-        .loader(path.resolve(__dirname, './importActualLoader.mjs'))
-        .end();
-    });
-  },
-};
 
 type TestEntryToChunkHashes = {
   name: string;
@@ -194,9 +175,6 @@ export const prepareRsbuild = async (
    */
   targetProjects?: ProjectContext[],
   extraPlugins: RsbuildPlugin[] = [],
-  options: {
-    includeCompilerPlugin?: boolean;
-  } = {},
 ): Promise<RsbuildInstance> => {
   const {
     command,
@@ -259,7 +237,6 @@ export const prepareRsbuild = async (
         pluginExternal(context),
         !isolate ? pluginCacheControl(getSetupPaths) : null,
         pluginInspect({ poolExecArgv: pool.execArgv }),
-        options.includeCompilerPlugin ? rstestCompilerPlugin : null,
         ...extraPlugins,
       ].filter(Boolean) as RsbuildPlugin[],
     },
