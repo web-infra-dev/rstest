@@ -19,6 +19,15 @@ const debugOptions = {
   },
 } satisfies PlaywrightOptions;
 
+const ciPlaywrightOptions = {
+  browserName: 'chromium',
+  launchOptions: process.env.CI ? { channel: 'chrome' } : undefined,
+} satisfies PlaywrightOptions;
+
+const browserTest = test.extend({
+  playwright: ciPlaywrightOptions,
+});
+
 test('provides an isolated request fixture', async ({ request }) => {
   expect(request).toBeTruthy();
 });
@@ -43,8 +52,9 @@ test.sequential(
   },
 );
 
-test.extend({
+browserTest.extend({
   playwright: {
+    ...ciPlaywrightOptions,
     contextOptions: {
       viewport: {
         width: 390,
@@ -56,7 +66,7 @@ test.extend({
   expect(page.viewportSize()).toEqual({ width: 390, height: 844 });
 });
 
-test.extend({
+browserTest.extend({
   customFixture: async ({ page }, use) => {
     await use(`viewport-${page.viewportSize()?.width ?? 0}`);
   },
@@ -64,7 +74,7 @@ test.extend({
   expect(customFixture).toContain('viewport');
 });
 
-test.extend<{ createLabel: () => Promise<string> }>({
+browserTest.extend<{ createLabel: () => Promise<string> }>({
   createLabel: async ({ page }, use) => {
     await use(async () => `viewport-${page.viewportSize()?.width ?? 0}`);
   },
@@ -83,7 +93,7 @@ const createAgentTest = (baseTest: PlaywrightTest) =>
     },
   });
 
-const agentTest = createAgentTest(test);
+const agentTest = createAgentTest(browserTest);
 
 agentTest('supports third-party fixture wrappers', async ({ agent, page }) => {
   expect(agent.page).toBe(page);
@@ -102,7 +112,7 @@ test.extend({
   expect(playwright.launchOptions).toEqual({ headless: true });
 });
 
-test.extend<{ url: string }>({
+browserTest.extend<{ url: string }>({
   url: 'about:blank',
   page: async ({ context, url }, use) => {
     const page = await context.newPage();
@@ -133,7 +143,7 @@ const thirdPartyFixtures = {
   { playwright: PlaywrightOptions }
 >;
 
-test.extend(thirdPartyFixtures)(
+browserTest.extend(thirdPartyFixtures)(
   'exposes fixture and use types for third-party packages',
   async ({ customContext }) => {
     expect(customContext.pages()).toEqual([]);
