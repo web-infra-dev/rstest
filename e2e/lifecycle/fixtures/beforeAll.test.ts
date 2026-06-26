@@ -1,10 +1,10 @@
 import { beforeAll, describe, expect, it } from '@rstest/core';
-import pathe from 'pathe';
 import { sleep } from '../../scripts';
 
 beforeAll((ctx) => {
   console.log('[beforeAll] root');
-  expect(ctx.filepath).toBe(pathe.normalize(__filename));
+  // `ctx.filepath` is the OS-native test path, equal to `__filename` (#1465).
+  expect(ctx.filepath).toBe(__filename);
 });
 
 beforeAll(async () => {

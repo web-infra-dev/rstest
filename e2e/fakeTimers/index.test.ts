@@ -133,3 +133,30 @@ describe('fake timers', () => {
       .toBe(3);
   });
 });
+
+describe('setSystemTime without a prior useFakeTimers', () => {
+  const pinned = new Date('2025-01-01T00:00:00.000Z');
+
+  afterEach(() => {
+    rstest.useRealTimers();
+  });
+
+  it('pins the clock on its own', () => {
+    rstest.setSystemTime(pinned);
+
+    expect(new Date().toISOString()).toBe('2025-01-01T00:00:00.000Z');
+    expect(Date.now()).toBe(pinned.getTime());
+  });
+
+  it('upgrades to fake timers while keeping the pinned time', () => {
+    rstest.setSystemTime(pinned);
+    rstest.useFakeTimers();
+
+    expect(Date.now()).toBe(pinned.getTime());
+
+    const cb = rstest.fn();
+    setTimeout(cb, 1000);
+    rstest.advanceTimersByTime(1000);
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+});

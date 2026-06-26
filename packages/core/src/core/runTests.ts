@@ -541,6 +541,11 @@ export async function runTests(context: Rstest): Promise<void> {
 
   type Mode = 'all' | 'on-demand';
 
+  // Per-compile id, bumped on every `run()` (initial build + each watch
+  // rebuild) and threaded to the worker so it can flush its kept cache on a
+  // rebuild boundary (#1373).
+  let buildId = 0;
+
   const run = async ({
     fileFilters,
     mode = 'all',
@@ -550,6 +555,8 @@ export async function runTests(context: Rstest): Promise<void> {
     mode?: Mode;
     buildStart?: number;
   } = {}) => {
+    buildId += 1;
+
     for (const reporter of reporters) {
       await reporter.onTestRunStart?.();
     }
@@ -679,6 +686,7 @@ export async function runTests(context: Rstest): Promise<void> {
           setupEntries,
           getAssetFiles,
           project: p,
+          buildId,
           updateSnapshot: context.snapshotManager.options.updateSnapshot,
           onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
           onTraceEvents: traceRun.onEvents,

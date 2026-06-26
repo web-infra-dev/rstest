@@ -16,11 +16,7 @@ afterEach(() => {
   expect(beforeEachCalls).toBe(afterEachCalls);
 });
 
-it(
-  'repeats 3 times when all pass',
-  () => {
-    runs++;
-    expect(beforeEachCalls).toBe(runs);
-  },
-  { repeats: 2 },
-);
+it('repeats 3 times when all pass', { repeats: 2 }, () => {
+  runs++;
+  expect(beforeEachCalls).toBe(runs);
+});

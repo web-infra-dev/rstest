@@ -11,6 +11,7 @@ import type {
   Clock as InstalledClock,
   Timer as FakeTimerRecord,
 } from '@sinonjs/fake-timers';
+import { mockDate, RealDate, resetDate } from './mockDate';
 
 export type { FakeTimerInstallOpts };
 
@@ -18,7 +19,6 @@ type FakeTimerTickTime = Parameters<InstalledClock['tick']>[0];
 type FakeTimerSystemTime = Parameters<InstalledClock['setSystemTime']>[0];
 type FakeTimerTickMode = Parameters<InstalledClock['setTickMode']>[0];
 
-const RealDate = Date;
 type FakeMethod = NonNullable<FakeTimerInstallOpts['toFake']>[number];
 
 export type FakeTimersSnapshot = {
@@ -33,6 +33,11 @@ const cloneFakeTimerRecord = (record: FakeTimerRecord): FakeTimerRecord => ({
   args: record.args ? [...record.args] : undefined,
 });
 
+// Detect `Date` structurally rather than with `instanceof`, so a `Date` from
+// another realm (iframe / vm context) or created via a mocked global is matched.
+const isDate = (value: unknown): value is Date =>
+  Object.prototype.toString.call(value) === '[object Date]';
+
 const loadFakeTimersModule = () => {
   // TODO: Switch back to createRequire(import.meta.url) once Rspack supports
   // preserving that pattern without breaking bundling/runtime resolution.
@@ -46,7 +51,14 @@ const loadFakeTimersModule = () => {
 export class FakeTimers {
   private _clock!: InstalledClock;
   private readonly _config: FakeTimerInstallOpts;
+  // | _fakingTime | _fakingDate |
+  // +-------------+-------------+
+  // | false       | falsy       | initial
+  // | false       | truthy      | setSystemTime called first (mock only Date without fake timers)
+  // | true        | falsy       | useFakeTimers called first
+  // | true        | truthy      | unreachable
   private _fakingTime: boolean;
+  private _fakingDate: Date | null;
   private readonly _fakeTimers: FakeTimerWithContext;
 
   constructor({
@@ -58,6 +70,7 @@ export class FakeTimers {
   }) {
     this._config = config;
     this._fakingTime = false;
+    this._fakingDate = null;
     this._fakeTimers = loadFakeTimersModule().withGlobal(global);
   }
 
@@ -159,7 +172,16 @@ export class FakeTimers {
     }
   }
 
+  private _resetFakingDate(): void {
+    if (this._fakingDate) {
+      resetDate();
+      this._fakingDate = null;
+    }
+  }
+
   useRealTimers(): void {
+    this._resetFakingDate();
+
     if (this._fakingTime) {
       this._clock.uninstall();
       this._fakingTime = false;
@@ -170,6 +192,11 @@ export class FakeTimers {
     toNotFake = [],
     ...restFakeTimersConfig
   }: FakeTimerInstallOpts = {}): void {
+    // Carry over the time pinned by a prior Date-only setSystemTime() so that
+    // promoting to full fake timers keeps the same "now".
+    const fakeDate = this._fakingDate ?? Date.now();
+    this._resetFakingDate();
+
     if (this._fakingTime) {
       this._clock.uninstall();
     }
@@ -191,7 +218,7 @@ export class FakeTimers {
     this._clock = this._fakeTimers.install({
       loopLimit: 10_000,
       shouldClearNativeTimers: true,
-      now: Date.now(),
+      now: fakeDate,
       toFake: [...toFake],
       ignoreMissingTimers: true,
       ...restFakeTimersConfig,
@@ -211,9 +238,35 @@ export class FakeTimers {
   }
 
   setSystemTime(now?: FakeTimerSystemTime): void {
-    if (this._checkFakeTimers()) {
+    if (this._fakingTime) {
+      // `@sinonjs/fake-timers` accepts `number | Date | { epochMilliseconds }`
+      // directly, so forward it untouched.
       this._clock.setSystemTime(now);
+      return;
     }
+    // Mock only the global `Date` without installing full fake timers, so
+    // setSystemTime() works on its own (matching Vitest). Assign `_fakingDate`
+    // only after `mockDate` validates the input, so an invalid value throws
+    // without corrupting a previously pinned date.
+    const date = this._toFakeDate(now);
+    mockDate(date);
+    this._fakingDate = date;
+  }
+
+  private _toFakeDate(now?: FakeTimerSystemTime): Date {
+    if (now === undefined) {
+      return new Date(this.getRealSystemTime());
+    }
+    if (typeof now === 'number') {
+      return new Date(now);
+    }
+    // Clone the Date so a later mutation of the caller's object can't leak into
+    // the pin (which a promotion or scoped restore would otherwise pick up).
+    if (isDate(now)) {
+      return new RealDate(now.valueOf());
+    }
+    // Temporal-like value, e.g. `{ epochMilliseconds }`.
+    return new Date(now.epochMilliseconds);
   }
 
   snapshot(): FakeTimersSnapshot | undefined {
@@ -261,6 +314,15 @@ export class FakeTimers {
 
   getRealSystemTime(): number {
     return RealDate.now();
+  }
+
+  /**
+   * The time pinned by a Date-only `setSystemTime()` (i.e. without full fake
+   * timers), or `null`. Used to restore that pin after a scoped
+   * `useFakeTimers()` disposes.
+   */
+  getMockedSystemTime(): Date | null {
+    return this._fakingDate;
   }
 
   now(): number {

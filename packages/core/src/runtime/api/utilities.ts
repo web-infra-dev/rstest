@@ -5,9 +5,9 @@ import type {
   RuntimeConfig,
   WaitForOptions,
   WaitUntilOptions,
-  WorkerState,
 } from '../../types';
 import { RSTEST_ENV_SYMBOL_KEY } from '../../utils/constants';
+import { fileContext } from '../fileContext';
 import { getRealTimers } from '../util';
 import type { FakeTimerInstallOpts, FakeTimersSnapshot } from './fakeTimers';
 import { mockObject as mockObjectImpl } from './mockObject';
@@ -107,9 +107,38 @@ export const restoreScopedEntry = <E>(
   }
 };
 
-export const createRstestUtilities: (
-  workerState: WorkerState,
-) => Promise<RstestUtilities> = async (workerState) => {
+let utilitiesPromise:
+  | Promise<{ rstest: RstestUtilities; resetForFile: () => void }>
+  | undefined;
+
+/**
+ * `rstest`/`rs` is a build-once singleton with a STABLE identity across files,
+ * so a reference captured in a module shared under `isolate: false` stays live
+ * without any forwarder/Proxy (the live-binding contract, see `./index`).
+ * Per-file state is RESET, not rebuilt: the config methods resolve the running
+ * file's worker state through `fileContext()` at call time, and `resetForFile`
+ * drops the env/global/timer stub bookkeeping between files. The mock registry
+ * is kept (it holds weak references, keyed by project) so a mock from a module
+ * shared across files stays tracked without one project's `*AllMocks` reaching
+ * another project's mocks on a reused worker. The actual globalThis side-effects
+ * are still unwound by the runner's config-gated `unstubAll*`/`*AllMocks` and the
+ * per-file `useRealTimers`, unchanged.
+ * See https://github.com/web-infra-dev/rstest/issues/1376.
+ */
+export const createRstestUtilities = async (): Promise<RstestUtilities> => {
+  utilitiesPromise ??= buildRstestUtilities();
+  const bound = await utilitiesPromise;
+  // On the first file this is a no-op (the fresh singleton already has empty
+  // maps/registry); every later file returns it to a clean slate, mirroring the
+  // previous per-file rebuild.
+  bound.resetForFile();
+  return bound.rstest;
+};
+
+const buildRstestUtilities = async (): Promise<{
+  rstest: RstestUtilities;
+  resetForFile: () => void;
+}> => {
   type RuntimeEnvStore = Record<string, string | undefined>;
   const RSTEST_ENV_SYMBOL = Symbol.for(RSTEST_ENV_SYMBOL_KEY);
   type GlobalWithRuntimeEnv = typeof globalThis & Record<symbol, unknown>;
@@ -120,6 +149,9 @@ export const createRstestUtilities: (
     config: FakeTimerInstallOpts | undefined;
     snapshot: FakeTimersSnapshot | undefined;
     wasFakeTimers: boolean;
+    // The Date-only pin (from a prior `setSystemTime()` without fake timers)
+    // active when this scope was entered, so it can be restored on dispose.
+    fakingDate: Date | null;
   };
 
   const originalEnvValues = new Map<string, EnvStackEntry[]>();
@@ -239,6 +271,7 @@ export const createRstestUtilities: (
         laterEntry.config = entry.config;
         laterEntry.snapshot = entry.snapshot;
         laterEntry.wasFakeTimers = entry.wasFakeTimers;
+        laterEntry.fakingDate = entry.fakingDate;
       },
       onTail: () => {
         if (entry.wasFakeTimers) {
@@ -249,13 +282,24 @@ export const createRstestUtilities: (
           currentFakeTimersConfig = entry.config;
         } else {
           timers().useRealTimers();
+          // Re-establish a Date-only pin that was active before this scope.
+          if (entry.fakingDate) {
+            timers().setSystemTime(entry.fakingDate);
+          }
           currentFakeTimersConfig = undefined;
         }
       },
     });
   };
 
-  const { fn, spyOn, isMockFunction, mocks, createMockInstance } = initSpy();
+  const {
+    fn,
+    spyOn,
+    isMockFunction,
+    forEachMock,
+    createMockInstance,
+    resetCallOrder,
+  } = initSpy(() => fileContext().workerState.project);
 
   const rstest: RstestUtilities = {
     fn,
@@ -285,21 +329,15 @@ export const createRstestUtilities: (
     // The type transformation happens at compile time
     mocked: ((item: any) => item) as RstestUtilities['mocked'],
     clearAllMocks: () => {
-      for (const mock of mocks) {
-        mock.mockClear();
-      }
+      forEachMock((mock) => mock.mockClear());
       return rstest;
     },
     resetAllMocks: () => {
-      for (const mock of mocks) {
-        mock.mockReset();
-      }
+      forEachMock((mock) => mock.mockReset());
       return rstest;
     },
     restoreAllMocks: () => {
-      for (const mock of mocks) {
-        mock.mockRestore();
-      }
+      forEachMock((mock) => mock.mockRestore());
       return rstest;
     },
     mock: createPluginManagedApi('mock'),
@@ -318,10 +356,11 @@ export const createRstestUtilities: (
     hoisted: createPluginManagedApi('hoisted'),
 
     setConfig: (config) => {
+      const { runtimeConfig } = fileContext().workerState;
       if (!originalConfig) {
-        originalConfig = { ...workerState.runtimeConfig };
+        originalConfig = { ...runtimeConfig };
       }
-      Object.assign(workerState.runtimeConfig, config);
+      Object.assign(runtimeConfig, config);
     },
 
     getConfig: () => {
@@ -333,7 +372,7 @@ export const createRstestUtilities: (
         restoreMocks,
         maxConcurrency,
         retry,
-      } = workerState.runtimeConfig;
+      } = fileContext().workerState.runtimeConfig;
       return {
         testTimeout,
         hookTimeout,
@@ -347,7 +386,7 @@ export const createRstestUtilities: (
 
     resetConfig: () => {
       if (originalConfig) {
-        Object.assign(workerState.runtimeConfig, originalConfig);
+        Object.assign(fileContext().workerState.runtimeConfig, originalConfig);
       }
     },
 
@@ -426,6 +465,7 @@ export const createRstestUtilities: (
         config: currentFakeTimersConfig,
         snapshot: wasFakeTimers ? timerApi.snapshot() : undefined,
         wasFakeTimers,
+        fakingDate: timerApi.getMockedSystemTime(),
       };
       timerStack.push(entry);
       timerApi.useFakeTimers(opts);
@@ -575,5 +615,24 @@ export const createRstestUtilities: (
     },
   };
 
-  return rstest;
+  // Drop the per-file bookkeeping so the next file starts clean. The actual
+  // globalThis side-effects (env/global stubs, fake timers, installed spies) are
+  // unwound elsewhere (the runner's config-gated `unstubAll*`/`*AllMocks` and the
+  // per-file `useRealTimers`), so only the tracking maps are cleared.
+  //
+  // The mock registry is deliberately NOT reset here: under `isolate: false` a
+  // mock created in a module shared across files persists, so it must stay
+  // tracked for the per-test `*AllMocks` to keep reaching it. The registry holds
+  // weak references (see `initSpy`), so file-local mocks fall out on their own
+  // once their evicted module is collected.
+  const resetForFile = (): void => {
+    resetCallOrder();
+    originalEnvValues.clear();
+    originalGlobalValues.clear();
+    timerStack.length = 0;
+    originalConfig = undefined;
+    currentFakeTimersConfig = undefined;
+  };
+
+  return { rstest, resetForFile };
 };

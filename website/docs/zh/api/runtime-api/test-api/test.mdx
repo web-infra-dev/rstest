@@ -13,7 +13,12 @@ import { ApiMeta } from '@components/ApiMeta';
 
 ## test
 
-- **类型：** `(name: string, fn?: (testContext: TestContext) => void | Promise<void>, options?: number | TestOptions) => void`
+- **类型：**
+
+```ts
+(name: string, fn?: (testContext: TestContext) => void | Promise<void>, timeout?: number): void;
+(name: string, options: TestOptions, fn?: (testContext: TestContext) => void | Promise<void>): void;
+```
 
 定义一个测试用例。
 
@@ -28,23 +33,22 @@ test('should add two numbers correctly', () => {
 
 ### TestOptions
 
-<ApiMeta addedVersion="0.10.3" />
+<ApiMeta addedVersion="0.11.0" />
 
-第三个参数用于细化单个测试的运行行为。传入数字等价于 `{ timeout: n }`，原有写法保持兼容：
+将 `TestOptions` 对象作为**第二个参数**（位于测试函数之前）传入，用于细化单个测试的运行行为：
+
+```ts
+test('flaky network call', { retry: 3 }, async () => {
+  /* ... */
+});
+```
+
+作为简写，你仍可以将数字作为**最后一个参数**传入，仅用于设置超时（等价于 `{ timeout: n }`）：
 
 ```ts
 test('runs within 3s', async () => {
   /* ... */
 }, 3000);
-
-// 等价于：
-test(
-  'runs within 3s',
-  async () => {
-    /* ... */
-  },
-  { timeout: 3000 },
-);
 ```
 
 `TestOptions` 支持以下字段：
@@ -54,24 +58,17 @@ test(
 - `repeats?: number` — 在通过的前提下额外重跑指定次数，任一次失败则整体判定为失败。每次重跑会完整执行 `beforeEach` / `afterEach`，并各自享有独立的 `retry` 配额。
 
 ```ts
-test(
-  'flaky network call',
-  async () => {
-    /* ... */
-  },
-  { retry: 3 },
-);
+test('flaky network call', { retry: 3 }, async () => {
+  /* ... */
+});
 
-test(
-  'stays green across runs',
-  async () => {
-    /* ... */
-  },
-  { repeats: 9 },
-); // 共执行 10 次；任一次失败即短路后续重跑
+// 共执行 10 次；任一次失败即短路后续重跑
+test('stays green across runs', { repeats: 9 }, async () => {
+  /* ... */
+});
 ```
 
-`test.each` 与 `test.for` 第三参语义相同，会作用于生成的每个 case。
+`test.each` 与 `test.for` 的第二个参数语义相同，会作用于生成的每个 case。
 
 ## test.only
 
@@ -114,7 +111,12 @@ test.todo('should implement this test');
 
 ## test.each
 
-- **类型：** `test.each(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, options?: number | TestOptions) => void`
+- **类型：**
+
+```ts
+test.each(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+test.each(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+```
 
 对提供的数组中的每一项运行相同的测试逻辑。
 
@@ -197,7 +199,12 @@ test.each([
 
 ## test.for
 
-- **类型：** `test.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T, testContext: TestContext) => void | Promise<void>, options?: number | TestOptions) => void`
+- **类型：**
+
+```ts
+test.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T, testContext: TestContext) => void | Promise<void>, timeout?: number): void;
+test.for(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T, testContext: TestContext) => void | Promise<void>): void;
+```
 
 `test.each` 的替代方案，提供 `TestContext`。
 

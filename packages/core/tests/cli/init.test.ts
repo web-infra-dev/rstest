@@ -565,6 +565,94 @@ describe('resolveProjects', () => {
         port: 6000, // overridden by CLI
       });
     });
+
+    it('should override browser provider options with CLI options', async () => {
+      const config: RstestConfig = {
+        projects: [
+          {
+            name: 'test-project',
+            browser: {
+              enabled: true,
+              provider: 'playwright',
+              providerOptions: {
+                launch: {
+                  channel: 'chromium',
+                },
+              },
+            },
+          },
+        ],
+      };
+
+      const projects = await resolveProjects({
+        config,
+        root: rootPath,
+        options: {
+          browser: {
+            providerOptions: {
+              launch: {
+                channel: 'chrome',
+              },
+            },
+          },
+        },
+      });
+
+      expect(projects[0]!.config.browser.providerOptions).toEqual({
+        launch: {
+          channel: 'chrome',
+        },
+      });
+    });
+
+    it('should deep-merge browser provider options instead of replacing the config object', async () => {
+      const config: RstestConfig = {
+        projects: [
+          {
+            name: 'test-project',
+            browser: {
+              enabled: true,
+              provider: 'playwright',
+              providerOptions: {
+                launch: {
+                  channel: 'chromium',
+                  args: ['--no-sandbox'],
+                },
+                context: {
+                  locale: 'en-US',
+                },
+              },
+            },
+          },
+        ],
+      };
+
+      const projects = await resolveProjects({
+        config,
+        root: rootPath,
+        options: {
+          browser: {
+            providerOptions: {
+              launch: {
+                channel: 'chrome',
+              },
+            },
+          },
+        },
+      });
+
+      // CLI overrides only `launch.channel`; sibling leaves (`launch.args`) and
+      // the unrelated `context` object from config are preserved.
+      expect(projects[0]!.config.browser.providerOptions).toEqual({
+        launch: {
+          channel: 'chrome',
+          args: ['--no-sandbox'],
+        },
+        context: {
+          locale: 'en-US',
+        },
+      });
+    });
   });
 
   describe('coverage CLI options', () => {

@@ -89,6 +89,7 @@ Before adding a fixture, list existing ones in the same area (`ls e2e/<area>/fix
 
 - Adding a project, config flag, or test file is additive reuse — "different config" alone does not justify a new fixture. **After extending, re-run every test using that fixture** to confirm none broke.
 - A new fixture is right when reuse would force an **incompatible** change to config other tests depend on, or contort the fixture's intent.
+- Prefer **one consolidated regression fixture** that exercises the whole surface over many near-duplicate per-feature files. When several cases share a structural root cause, assert them together.
 
 ## E2E rstest spawns with persistent `dist/.rstest-temp/`
 

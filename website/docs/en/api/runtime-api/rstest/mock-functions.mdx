@@ -220,21 +220,21 @@ The function simply returns the same object at runtime - it only affects TypeScr
 ## rs.clearAllMocks
 
 - **Alias:** `rstest.clearAllMocks`
-- **Type:** `() => Rstest`
+- **Type:** `() => RstestUtilities`
 
 Clears the `mock.calls`, `mock.instances`, `mock.contexts` and `mock.results` properties of all mocks.
 
 ## rs.resetAllMocks
 
 - **Alias:** `rstest.resetAllMocks`
-- **Type:** `() => Rstest`
+- **Type:** `() => RstestUtilities`
 
 Clears all mocks properties and reset each mock's implementation to its original.
 
 ## rs.restoreAllMocks
 
 - **Alias:** `rstest.restoreAllMocks`
-- **Type:** `() => Rstest`
+- **Type:** `() => RstestUtilities`
 
 Reset all mocks and restore original descriptors of spied-on objects.
 
