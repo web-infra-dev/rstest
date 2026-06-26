@@ -1,4 +1,12 @@
-import { expect, test } from '@rstest/playwright';
+import { expect, test as base } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+const test = base.extend({
+  playwright: {
+    browserName: 'chromium',
+    launchOptions: process.env.CI ? { channel: 'chrome' } : undefined,
+  } satisfies PlaywrightOptions,
+});
 
 test('opens the built Rsbuild page', async ({ onTestFailed, page, serve }) => {
   onTestFailed(async ({ task }) => {
