@@ -111,6 +111,7 @@ export type {
   TestCaseInfo,
   TestContext,
   TestAPIs,
+  TestForFn,
   TestFileInfo,
   TestFileResult,
   TestInfo,

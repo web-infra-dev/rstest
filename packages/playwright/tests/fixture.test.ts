@@ -177,6 +177,13 @@ test('enables headed debug mode from PWDEBUG', () => {
 test.extend({}).describe('extended test API', () => {
   test.extend({}).beforeEach(() => {});
 
+  test.extend({}).for<{ value: string }>`
+    value
+    ${'ok'}
+  `('preserves tagged-template test.for types', ({ value }) => {
+    expect(value).toBe('ok');
+  });
+
   test.extend({})('preserves playwright-style helpers', () => {
     const extendedTest = test.extend({});
 

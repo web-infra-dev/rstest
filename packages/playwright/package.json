@@ -1,6 +1,6 @@
 {
   "name": "@rstest/playwright",
-  "version": "0.10.5",
+  "version": "0.10.6",
   "description": "Playwright fixture integration for Rstest",
   "keywords": [
     "rstest",

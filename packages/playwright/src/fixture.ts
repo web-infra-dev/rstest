@@ -19,7 +19,13 @@ import {
   describe as rstestDescribe,
   test as base,
 } from '@rstest/core';
-import type { Fixtures, TestAPIs, TestOptions, Use } from '@rstest/core';
+import type {
+  Fixtures,
+  TestAPIs,
+  TestForFn,
+  TestOptions,
+  Use,
+} from '@rstest/core';
 import type { TestContext } from '@rstest/core';
 import { chromium, request as playwrightRequest } from 'playwright';
 import type {
@@ -226,14 +232,12 @@ const getBrowser = (options: PlaywrightOptions) => {
   return browser;
 };
 
-const closeBrowser = async () => {
+const closeBrowser = async (): Promise<void> => {
   const browsers = [...browserCache.values()];
   browserCache.clear();
 
   await Promise.all(browsers.map(async (browser) => (await browser).close()));
 };
-
-rstestAfterAll(closeBrowser);
 
 const createStaticServerClose = (server: Server) => {
   let closePromise: Promise<void> | undefined;
@@ -403,7 +407,22 @@ const defaultPlaywrightFixture = async (
   await use({ browserName: DEFAULT_BROWSER_NAME });
 };
 
+const cleanupBrowserFixture = [
+  async (_context: TestContext, use: (value: undefined) => Promise<void>) => {
+    try {
+      await use(undefined);
+    } finally {
+      await closeBrowser();
+    }
+  },
+  { auto: true },
+] satisfies Fixtures<
+  { cleanupBrowser: undefined },
+  PlaywrightFixture
+>['cleanupBrowser'];
+
 const playwrightFixtures = {
+  cleanupBrowser: cleanupBrowserFixture,
   playwright: defaultPlaywrightFixture,
 
   serve: async (
@@ -539,23 +558,7 @@ type PlaywrightTestBase<ExtraContext> = Omit<
   ): void;
   fail: PlaywrightTestBase<ExtraContext>;
   fails: PlaywrightTestBase<ExtraContext>;
-  for: <T>(
-    cases: readonly T[],
-  ) => (
-    description: string,
-    fnOrOptions?:
-      | TestOptions
-      | ((
-          param: T,
-          context: TestContext & ExtraContext,
-        ) => void | Promise<void>),
-    timeoutOrFn?:
-      | number
-      | ((
-          param: T,
-          context: TestContext & ExtraContext,
-        ) => void | Promise<void>),
-  ) => void;
+  for: TestForFn<ExtraContext>;
 };
 
 type RstestAfterAll = typeof rstestAfterAll;

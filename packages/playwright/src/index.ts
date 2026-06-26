@@ -9,6 +9,7 @@ export {
 } from './fixture';
 export type {
   LocatorAssertions,
+  InViewportOptions,
   MatcherOptions,
   PageAssertions,
   PlaywrightAssertion,
