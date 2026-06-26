@@ -93,6 +93,8 @@ export type RstestExposeAPI = {
 
 The `modifyRstestConfig` callback receives the normalized Rstest config for the current project. You can either mutate the received `config` object directly or return a new config object. The callback can also be asynchronous.
 
+Register `modifyRstestConfig` during the Rsbuild plugin `setup` phase. Do not register it from later Rsbuild config hooks such as `api.modifyRsbuildConfig`, because Rstest applies collected callbacks while resolving the Rsbuild config; callbacks registered inside those hooks are too late for the current resolution pass.
+
 ### Limitation
 
 `modifyRstestConfig` is suitable for modifying existing project config such as `include`, `exclude`, `testEnvironment`, `resolve`, and `source`, but it does not support dynamically adding or removing Rstest projects, switching `browser.enabled`, Rsbuild environments, or Rsbuild plugins.
