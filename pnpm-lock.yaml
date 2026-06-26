@@ -662,16 +662,16 @@ importers:
     devDependencies:
       '@module-federation/rsbuild-plugin':
         specifier: https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a
-        version: https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a(@rsbuild/core@2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)
+        version: https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a(@rsbuild/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)
       '@module-federation/rstest':
         specifier: https://pkg.pr.new/module-federation/core/@module-federation/rstest@58cc69a
-        version: https://pkg.pr.new/module-federation/core/@module-federation/rstest@58cc69a(@rsbuild/core@2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)
+        version: https://pkg.pr.new/module-federation/core/@module-federation/rstest@58cc69a(@rsbuild/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)
       '@rsbuild/core':
-        specifier: ~2.1.0-beta.0
-        version: 2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
+        specifier: ~2.1.0
+        version: 2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
       '@rsbuild/plugin-react':
         specifier: ^2.1.0
-        version: 2.1.0(@rsbuild/core@2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))
+        version: 2.1.0(@rsbuild/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))
       '@rstest/core':
         specifier: workspace:*
         version: link:../../../packages/core
@@ -693,16 +693,16 @@ importers:
     devDependencies:
       '@module-federation/rsbuild-plugin':
         specifier: https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a
-        version: https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a(@rsbuild/core@2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)
+        version: https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a(@rsbuild/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)
       '@module-federation/rstest':
         specifier: https://pkg.pr.new/module-federation/core/@module-federation/rstest@58cc69a
-        version: https://pkg.pr.new/module-federation/core/@module-federation/rstest@58cc69a(@rsbuild/core@2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)
+        version: https://pkg.pr.new/module-federation/core/@module-federation/rstest@58cc69a(@rsbuild/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)
       '@rsbuild/core':
-        specifier: ~2.1.0-beta.0
-        version: 2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
+        specifier: ~2.1.0
+        version: 2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
       '@rsbuild/plugin-react':
         specifier: ^2.1.0
-        version: 2.1.0(@rsbuild/core@2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))
+        version: 2.1.0(@rsbuild/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))
       '@rstest/core':
         specifier: workspace:*
         version: link:../../../packages/core
@@ -726,10 +726,10 @@ importers:
     devDependencies:
       '@module-federation/rsbuild-plugin':
         specifier: https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a
-        version: https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a(@rsbuild/core@2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)
+        version: https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a(@rsbuild/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)
       '@rsbuild/core':
-        specifier: ~2.1.0-beta.0
-        version: 2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
+        specifier: ~2.1.0
+        version: 2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
       serve:
         specifier: 14.2.3
         version: 14.2.3
@@ -3105,16 +3105,6 @@ packages:
       core-js:
         optional: true
 
-  '@rsbuild/core@2.1.0-beta.0':
-    resolution: {integrity: sha512-uiVwiLWjrOXORRoj6FkrtqiAP2qtl1ynxs26uyS/29gaOJLiAjDT7q0lpuToxJ4JPQQ2O65H/tOt0IBFvMjGOg==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    hasBin: true
-    peerDependencies:
-      core-js: '>= 3.0.0'
-    peerDependenciesMeta:
-      core-js:
-        optional: true
-
   '@rsbuild/plugin-babel@1.2.1':
     resolution: {integrity: sha512-6Zad7Ff/RUNc91AtftemJcJ1wcZRGOiwuJy349qlLJl9F++oRYwUhx+MxLSpNnVeIywWx2mKdZZBtD1hLqfj9w==}
     peerDependencies:
@@ -3314,11 +3304,6 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
-  '@rspack/binding-darwin-arm64@2.1.0-beta.0':
-    resolution: {integrity: sha512-BE2O8aq/tzG9c3BHlsmH/cDnwr86wG68AQ/n1uaYEB5hoBJMk2eBJo/q2/CZ37ZT5ntVsCGkJpCPBT/Dh7q9PA==}
-    cpu: [arm64]
-    os: [darwin]
-
   '@rspack/binding-darwin-x64@2.0.8':
     resolution: {integrity: sha512-satPm2PD4B7jDTVlVAdvMVdUszwLvWUEnUDzLb77mvVkezKNDZmuhb+e8s+FfKs8hJpNbZ9VAejuA2rr8o985w==}
     cpu: [x64]
@@ -3326,11 +3311,6 @@ packages:
 
   '@rspack/binding-darwin-x64@2.1.0':
     resolution: {integrity: sha512-PJB6n/BaupvfLaErsfvC7q9W07WozkPe2Xw7sQqX6fblK+4tooBp0ZdAtKi76L+U2fR8t8/nQb0Jokco0co7Fg==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@rspack/binding-darwin-x64@2.1.0-beta.0':
-    resolution: {integrity: sha512-9icL31+mGJRKaU1i0IVbsBcmRWpUVfTM9TuLUHZOy0fnPhoZPDT0C/BZJxjvlvSeV2NNhh/NBEzUP3taZj7Zcg==}
     cpu: [x64]
     os: [darwin]
 
@@ -3346,12 +3326,6 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@rspack/binding-linux-arm64-gnu@2.1.0-beta.0':
-    resolution: {integrity: sha512-92OuAccIQx5AQIWdhF5GaXmW0nsW+cApQYZ1PZ2kMfCe0kq8t4R5gLL2cuJ6a3Qo66TerFsj+ii5wx0qfP7aFA==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
   '@rspack/binding-linux-arm64-musl@2.0.8':
     resolution: {integrity: sha512-igjJ43yxWQ72GZqjDDZSSHax9/Vg+6rLMmOvFglTJUkQpB4Tyvu/YjW+WRjYj2xRw6blOjLxUSJWASvuSqqlvg==}
     cpu: [arm64]
@@ -3360,12 +3334,6 @@ packages:
 
   '@rspack/binding-linux-arm64-musl@2.1.0':
     resolution: {integrity: sha512-HJzw5gG62qjj9fRQgj948naLucwE1Vg1bfcYHAxOr1/bVVIm4I4QvWGuqvd3XOu0MfLXPWvEyMAvJL+rtgamsw==}
-    cpu: [arm64]
-    os: [linux]
-    libc: [musl]
-
-  '@rspack/binding-linux-arm64-musl@2.1.0-beta.0':
-    resolution: {integrity: sha512-YuaHU9A+vLBYNEbjUGHlEE/K4Ctt7kp34DaKlv9iShtOz7bIc3NRfFUIZEHjExhJ+wWYInrcIAIJeviOQJnHig==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
@@ -3394,12 +3362,6 @@ packages:
     os: [linux]
     libc: [glibc]
 
-  '@rspack/binding-linux-x64-gnu@2.1.0-beta.0':
-    resolution: {integrity: sha512-BA2j6CS8MJfT7o7oP2UFpucf3EAv4Does/D35SfRCdBKlgMXy8kG6zJXKLW3gzKSNUez5SZ26n/mPcHcX8A6zg==}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
   '@rspack/binding-linux-x64-musl@2.0.8':
     resolution: {integrity: sha512-6CtDaGZjNDvJd9TBp7a9zABbrPORO21W96+3ZcGBn0YNUPUk4ARxIxrTTpeJ/1F41QDM8AYIkGDdqEYMqTYBsA==}
     cpu: [x64]
@@ -3412,22 +3374,12 @@ packages:
     os: [linux]
     libc: [musl]
 
-  '@rspack/binding-linux-x64-musl@2.1.0-beta.0':
-    resolution: {integrity: sha512-riLlSAgbyGRXclLeK0y/FN0Qd+hHlwNj0lCdgh98sADUX62gaFcWFYizC8cnfxzlIUaTjQsPCy8PjWFEbSOmuQ==}
-    cpu: [x64]
-    os: [linux]
-    libc: [musl]
-
   '@rspack/binding-wasm32-wasi@2.0.8':
     resolution: {integrity: sha512-Yf4SiqTUroT5Ju+te0YAY2xxKOb35tECsO21v7hYyGa705wrgoAK/MmF7enOvs9GR1iZIqgiLD/wxsIxl8GjJw==}
     cpu: [wasm32]
 
   '@rspack/binding-wasm32-wasi@2.1.0':
     resolution: {integrity: sha512-ZsDDduXaEF1SpyGz2OFuEU9Tzm0pKtbtCYviymiNtQS+3lx6rXyv+FaK0oIWn+gWL+gVNamplxKnNNR2jZsp5w==}
-    cpu: [wasm32]
-
-  '@rspack/binding-wasm32-wasi@2.1.0-beta.0':
-    resolution: {integrity: sha512-fYEvF3QAWZm6jUf74C2TT7gpllIGEghPEdBPRmdRGROesYSu0YZxikDdVwpQXnsymA5AnkaofCs/Sj+nvKyrXQ==}
     cpu: [wasm32]
 
   '@rspack/binding-win32-arm64-msvc@2.0.8':
@@ -3437,11 +3389,6 @@ packages:
 
   '@rspack/binding-win32-arm64-msvc@2.1.0':
     resolution: {integrity: sha512-0uMWAZYgwdkk0ocE4X85w/0BNWT5GaKJTEZDVYxfSYcfVAxJvIsuM0VH/cjRjsQtEeE1rcY7JvJyd0rQ6j0DqA==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@rspack/binding-win32-arm64-msvc@2.1.0-beta.0':
-    resolution: {integrity: sha512-bRv74lkzMcloJGYwzIrabLa73L23FTYjcB/GuZkgP8qsYpM20qyMFYo6szElbc/x1NxNSW5mjR4QKaNaIxRDhA==}
     cpu: [arm64]
     os: [win32]
 
@@ -3455,11 +3402,6 @@ packages:
     cpu: [ia32]
     os: [win32]
 
-  '@rspack/binding-win32-ia32-msvc@2.1.0-beta.0':
-    resolution: {integrity: sha512-qvolIqHoH+KSJFi71jJde+HTIvAbVZ08VJvfzqjTQ6KktFoxAfg0FeM6zpq0aNDo14mCDzy5JFH2WGbYGxmYLQ==}
-    cpu: [ia32]
-    os: [win32]
-
   '@rspack/binding-win32-x64-msvc@2.0.8':
     resolution: {integrity: sha512-7zPs8YCe/ZVJTwd+5lpB0CP0tkn2pONf/T1ycmVY76u21Nrwt8mXQGc/2yH2eWP4B7fikYBr3hGr7mpR2fajqQ==}
     cpu: [x64]
@@ -3470,19 +3412,11 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@rspack/binding-win32-x64-msvc@2.1.0-beta.0':
-    resolution: {integrity: sha512-Ge6VIpFH//LuN0ABCeHRMXuKYagRAN7rW8WIKAKO3R3WooTT8630W+dOCJ+6kiSQyTLyMrt5eg6Sufw0R6UUPg==}
-    cpu: [x64]
-    os: [win32]
-
   '@rspack/binding@2.0.8':
     resolution: {integrity: sha512-3uZ+y8aQxq33ty2srMxg2Nu0XuBI6vVrG50rkDaXqwWqOohfgGUSfFuQK7EnSUNy4aFUQlCG6NHialQHJov0wg==}
 
   '@rspack/binding@2.1.0':
     resolution: {integrity: sha512-LsXFIOOYDutHk44SAOcVQa5iA7lhYwEbD+nZhgmCiGJvKKh0UIpBj6EAsBsB6omEK5GEXvjDeLFieKgbYW08QQ==}
-
-  '@rspack/binding@2.1.0-beta.0':
-    resolution: {integrity: sha512-hSK6L966Y8l9z4ZMjRbz7lEmrk5IN+xSCQXkOL5VvtfBLvgk9AO91YEsDn5hCwNmTIdMFc2vScT2qwuIFF069w==}
 
   '@rspack/cli@2.1.0':
     resolution: {integrity: sha512-CgzYKX+GIjMn7VMo3TIeZvUGHKIpbtp8u+HigSAOeGTjA1uccP06fPBgaWEnOlhCrU3r5c2XHz7Jlfeb4DxiWA==}
@@ -3508,18 +3442,6 @@ packages:
 
   '@rspack/core@2.1.0':
     resolution: {integrity: sha512-dlZRzWQi90HzLYErGh0/xnEWAEMEAtDKXvNxERCEj5uIVIOVu9+uYwpNyAkKc9cK5sPhOz05kk9MIb1EaUJ5gg==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    peerDependencies:
-      '@module-federation/runtime-tools': ^0.24.1 || ^2.0.0
-      '@swc/helpers': ^0.5.23
-    peerDependenciesMeta:
-      '@module-federation/runtime-tools':
-        optional: true
-      '@swc/helpers':
-        optional: true
-
-  '@rspack/core@2.1.0-beta.0':
-    resolution: {integrity: sha512-Trnjc1OPsAU+TamUtCoOfwFfqu0n1pClhmY6hX4hs55i8exv4muV6OR8g40j0I7fFPz1YdPArTQBeMKFlVSXsg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
       '@module-federation/runtime-tools': ^0.24.1 || ^2.0.0
@@ -9784,13 +9706,13 @@ snapshots:
       - utf-8-validate
       - vue-tsc
 
-  '@module-federation/rsbuild-plugin@https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a(@rsbuild/core@2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)':
+  '@module-federation/rsbuild-plugin@https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a(@rsbuild/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)':
     dependencies:
       '@module-federation/enhanced': https://pkg.pr.new/module-federation/core/@module-federation/enhanced@58cc69a1bc557e2d2cb4f220ce08da735afacafc(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)
       '@module-federation/node': https://pkg.pr.new/module-federation/core/@module-federation/node@58cc69a1bc557e2d2cb4f220ce08da735afacafc(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(typescript@6.0.3)(webpack@5.107.2)
       '@module-federation/sdk': https://pkg.pr.new/module-federation/core/@module-federation/sdk@58cc69a1bc557e2d2cb4f220ce08da735afacafc(node-fetch@2.7.0(encoding@0.1.13))
     optionalDependencies:
-      '@rsbuild/core': 2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
+      '@rsbuild/core': 2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
     transitivePeerDependencies:
       - '@rspack/core'
       - bufferutil
@@ -9817,13 +9739,13 @@ snapshots:
       - node-fetch
       - utf-8-validate
 
-  '@module-federation/rstest@https://pkg.pr.new/module-federation/core/@module-federation/rstest@58cc69a(@rsbuild/core@2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)':
+  '@module-federation/rstest@https://pkg.pr.new/module-federation/core/@module-federation/rstest@58cc69a(@rsbuild/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)':
     dependencies:
       '@module-federation/enhanced': https://pkg.pr.new/module-federation/core/@module-federation/enhanced@58cc69a1bc557e2d2cb4f220ce08da735afacafc(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.107.2)
       '@module-federation/node': https://pkg.pr.new/module-federation/core/@module-federation/node@58cc69a1bc557e2d2cb4f220ce08da735afacafc(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(typescript@6.0.3)(webpack@5.107.2)
       '@module-federation/sdk': https://pkg.pr.new/module-federation/core/@module-federation/sdk@58cc69a1bc557e2d2cb4f220ce08da735afacafc(node-fetch@2.7.0(encoding@0.1.13))
     optionalDependencies:
-      '@rsbuild/core': 2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
+      '@rsbuild/core': 2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
     transitivePeerDependencies:
       - '@rspack/core'
       - bufferutil
@@ -10563,13 +10485,6 @@ snapshots:
     transitivePeerDependencies:
       - '@module-federation/runtime-tools'
 
-  '@rsbuild/core@2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))':
-    dependencies:
-      '@rspack/core': 2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23)
-      '@swc/helpers': 0.5.23
-    transitivePeerDependencies:
-      - '@module-federation/runtime-tools'
-
   '@rsbuild/plugin-babel@1.2.1(@rsbuild/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))':
     dependencies:
       '@babel/core': 7.29.0
@@ -10633,12 +10548,12 @@ snapshots:
     optionalDependencies:
       '@rsbuild/core': 2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
 
-  '@rsbuild/plugin-react@2.0.1(@rsbuild/core@2.0.15(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))':
+  '@rsbuild/plugin-react@2.0.1(@rsbuild/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))':
     dependencies:
       '@rspack/plugin-react-refresh': 2.0.0(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(react-refresh@0.18.0)
       react-refresh: 0.18.0
     optionalDependencies:
-      '@rsbuild/core': 2.0.15(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
+      '@rsbuild/core': 2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
     transitivePeerDependencies:
       - '@rspack/core'
 
@@ -10648,15 +10563,6 @@ snapshots:
       react-refresh: 0.18.0
     optionalDependencies:
       '@rsbuild/core': 2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
-    transitivePeerDependencies:
-      - '@rspack/core'
-
-  '@rsbuild/plugin-react@2.1.0(@rsbuild/core@2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))':
-    dependencies:
-      '@rspack/plugin-react-refresh': 2.0.2(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(react-refresh@0.18.0)
-      react-refresh: 0.18.0
-    optionalDependencies:
-      '@rsbuild/core': 2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
     transitivePeerDependencies:
       - '@rspack/core'
 
@@ -10884,16 +10790,10 @@ snapshots:
   '@rspack/binding-darwin-arm64@2.1.0':
     optional: true
 
-  '@rspack/binding-darwin-arm64@2.1.0-beta.0':
-    optional: true
-
   '@rspack/binding-darwin-x64@2.0.8':
     optional: true
 
   '@rspack/binding-darwin-x64@2.1.0':
-    optional: true
-
-  '@rspack/binding-darwin-x64@2.1.0-beta.0':
     optional: true
 
   '@rspack/binding-linux-arm64-gnu@2.0.8':
@@ -10902,16 +10802,10 @@ snapshots:
   '@rspack/binding-linux-arm64-gnu@2.1.0':
     optional: true
 
-  '@rspack/binding-linux-arm64-gnu@2.1.0-beta.0':
-    optional: true
-
   '@rspack/binding-linux-arm64-musl@2.0.8':
     optional: true
 
   '@rspack/binding-linux-arm64-musl@2.1.0':
-    optional: true
-
-  '@rspack/binding-linux-arm64-musl@2.1.0-beta.0':
     optional: true
 
   '@rspack/binding-linux-riscv64-gnu@2.1.0':
@@ -10926,16 +10820,10 @@ snapshots:
   '@rspack/binding-linux-x64-gnu@2.1.0':
     optional: true
 
-  '@rspack/binding-linux-x64-gnu@2.1.0-beta.0':
-    optional: true
-
   '@rspack/binding-linux-x64-musl@2.0.8':
     optional: true
 
   '@rspack/binding-linux-x64-musl@2.1.0':
-    optional: true
-
-  '@rspack/binding-linux-x64-musl@2.1.0-beta.0':
     optional: true
 
   '@rspack/binding-wasm32-wasi@2.0.8':
@@ -10952,20 +10840,10 @@ snapshots:
       '@napi-rs/wasm-runtime': 1.1.5(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)
     optional: true
 
-  '@rspack/binding-wasm32-wasi@2.1.0-beta.0':
-    dependencies:
-      '@emnapi/core': 1.11.1
-      '@emnapi/runtime': 1.11.1
-      '@napi-rs/wasm-runtime': 1.1.5(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)
-    optional: true
-
   '@rspack/binding-win32-arm64-msvc@2.0.8':
     optional: true
 
   '@rspack/binding-win32-arm64-msvc@2.1.0':
-    optional: true
-
-  '@rspack/binding-win32-arm64-msvc@2.1.0-beta.0':
     optional: true
 
   '@rspack/binding-win32-ia32-msvc@2.0.8':
@@ -10974,16 +10852,10 @@ snapshots:
   '@rspack/binding-win32-ia32-msvc@2.1.0':
     optional: true
 
-  '@rspack/binding-win32-ia32-msvc@2.1.0-beta.0':
-    optional: true
-
   '@rspack/binding-win32-x64-msvc@2.0.8':
     optional: true
 
   '@rspack/binding-win32-x64-msvc@2.1.0':
-    optional: true
-
-  '@rspack/binding-win32-x64-msvc@2.1.0-beta.0':
     optional: true
 
   '@rspack/binding@2.0.8':
@@ -11014,19 +10886,6 @@ snapshots:
       '@rspack/binding-win32-ia32-msvc': 2.1.0
       '@rspack/binding-win32-x64-msvc': 2.1.0
 
-  '@rspack/binding@2.1.0-beta.0':
-    optionalDependencies:
-      '@rspack/binding-darwin-arm64': 2.1.0-beta.0
-      '@rspack/binding-darwin-x64': 2.1.0-beta.0
-      '@rspack/binding-linux-arm64-gnu': 2.1.0-beta.0
-      '@rspack/binding-linux-arm64-musl': 2.1.0-beta.0
-      '@rspack/binding-linux-x64-gnu': 2.1.0-beta.0
-      '@rspack/binding-linux-x64-musl': 2.1.0-beta.0
-      '@rspack/binding-wasm32-wasi': 2.1.0-beta.0
-      '@rspack/binding-win32-arm64-msvc': 2.1.0-beta.0
-      '@rspack/binding-win32-ia32-msvc': 2.1.0-beta.0
-      '@rspack/binding-win32-x64-msvc': 2.1.0-beta.0
-
   '@rspack/cli@2.1.0(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(@rspack/dev-server@2.1.0(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23)))':
     dependencies:
       '@rspack/core': 2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23)
@@ -11043,13 +10902,6 @@ snapshots:
   '@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23)':
     dependencies:
       '@rspack/binding': 2.1.0
-    optionalDependencies:
-      '@module-federation/runtime-tools': 2.5.1(node-fetch@2.7.0(encoding@0.1.13))
-      '@swc/helpers': 0.5.23
-
-  '@rspack/core@2.1.0-beta.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23)':
-    dependencies:
-      '@rspack/binding': 2.1.0-beta.0
     optionalDependencies:
       '@module-federation/runtime-tools': 2.5.1(node-fetch@2.7.0(encoding@0.1.13))
       '@swc/helpers': 0.5.23
@@ -11132,8 +10984,8 @@ snapshots:
     dependencies:
       '@mdx-js/mdx': 3.1.1
       '@mdx-js/react': 3.1.1(@types/react@19.2.17)(react@19.2.7)
-      '@rsbuild/core': 2.0.15(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
-      '@rsbuild/plugin-react': 2.0.1(@rsbuild/core@2.0.15(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))
+      '@rsbuild/core': 2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
+      '@rsbuild/plugin-react': 2.0.1(@rsbuild/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))
       '@rspress/shared': 2.0.14(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
       '@shikijs/rehype': 4.0.2
       '@types/unist': 3.0.3
@@ -11193,7 +11045,7 @@ snapshots:
 
   '@rspress/shared@2.0.14(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))':
     dependencies:
-      '@rsbuild/core': 2.0.15(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
+      '@rsbuild/core': 2.1.0(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
       '@shikijs/rehype': 4.0.2
       unified: 11.0.5
     transitivePeerDependencies:
