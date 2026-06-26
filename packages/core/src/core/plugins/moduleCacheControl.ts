@@ -74,8 +74,13 @@ export const pluginCacheControl: (
 ) => RsbuildPlugin = (getSetupFiles) => ({
   name: 'rstest:cache-control',
   setup: (api) => {
-    const getSetupFileSet = () =>
-      new Set(getSetupFiles().map((file) => path.normalize(file)));
+    let setupFileSet: Set<string> | undefined;
+    const getSetupFileSet = () => {
+      setupFileSet ??= new Set(
+        getSetupFiles().map((file) => path.normalize(file)),
+      );
+      return setupFileSet;
+    };
 
     // `setupFiles` are posix-style paths (pathe), but rspack matches `test`
     // against the native resource path, which uses `\` on Windows — a raw

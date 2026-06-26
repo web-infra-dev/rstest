@@ -260,6 +260,78 @@ describe('prepareRsbuild', () => {
     );
   });
 
+  it('should keep normalized rstest config after modifyRstestConfig returns partial config', async () => {
+    const modifyRstestConfigPlugin: RsbuildPlugin = {
+      name: 'modify-rstest-config-partial-return',
+      setup(api) {
+        const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+        rstestApi?.modifyRstestConfig(() => ({
+          include: ['**/*.partial.test.ts'],
+          exclude: ['**/ignored.test.ts'],
+          setupFiles: './setup.ts',
+          globalSetup: './globalSetup.ts',
+        }));
+      },
+    };
+
+    const project = {
+      name: 'test',
+      rootPath,
+      environmentName: 'test',
+      normalizedConfig: {
+        include: ['original.test.ts'],
+        exclude: {
+          patterns: ['**/original-ignored.test.ts'],
+          override: false,
+        },
+        setupFiles: [],
+        globalSetup: [],
+        plugins: [modifyRstestConfigPlugin],
+        resolve: {},
+        source: {},
+        output: {},
+        tools: {},
+        testEnvironment: {
+          name: 'node',
+        },
+        browser: { enabled: false },
+      },
+    };
+
+    const rsbuildInstance = await prepareRsbuild(
+      {
+        rootPath,
+        command: 'run',
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          pool: { type: 'forks' },
+        },
+        projects: [project],
+      } as unknown as RstestContext,
+      async () => ({}),
+      {},
+      {},
+    );
+
+    await rsbuildInstance.initConfigs();
+
+    expect(project.normalizedConfig.include).toEqual(['**/*.partial.test.ts']);
+    expect(project.normalizedConfig.browser.enabled).toBe(false);
+    expect(project.normalizedConfig.exclude).toEqual({
+      patterns: ['**/original-ignored.test.ts', '**/ignored.test.ts'],
+      override: false,
+    });
+    expect(project.normalizedConfig.setupFiles).toEqual(['./setup.ts']);
+    expect(project.normalizedConfig.globalSetup).toEqual(['./globalSetup.ts']);
+  });
+
   it('should generate rspack config correctly (jsdom)', async () => {
     const rsbuildInstance = await prepareRsbuild(
       {

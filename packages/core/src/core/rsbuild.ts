@@ -7,16 +7,16 @@ import {
   type Rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
+import { mergeRstestConfig } from '../config';
 import type {
   EntryInfo,
   ModifyRstestConfigCallback,
   NormalizedProjectConfig,
   ProjectContext,
-  RstestConfig,
   RstestContext,
   RstestExposeAPI,
 } from '../types';
-import { isDebug } from '../utils';
+import { castArray, isDebug } from '../utils';
 import { collectSetupPaths } from '../utils/getSetupFiles';
 import { isMemorySufficient } from '../utils/memory';
 import { pluginBasic } from './plugins/basic';
@@ -104,18 +104,31 @@ const isMultiCompiler = <
 };
 
 const applyModifyRstestConfig = async (
-  config: RstestConfig,
+  config: NormalizedProjectConfig,
   callbacks: ModifyRstestConfigCallback[],
-): Promise<RstestConfig> => {
+): Promise<NormalizedProjectConfig> => {
   const browserEnabled = config.browser?.enabled;
   let currentConfig = config;
 
   for (const callback of callbacks) {
+    const previousConfig = {
+      ...currentConfig,
+      browser: { ...currentConfig.browser },
+    };
     const result = await callback(currentConfig);
 
-    if (result) {
-      currentConfig = result;
+    if (currentConfig.browser?.enabled !== browserEnabled) {
+      throw new Error(
+        'Cannot modify `browser.enabled` in `modifyRstestConfig`. Configure Browser Mode in the Rstest project config instead.',
+      );
     }
+
+    currentConfig = mergeRstestConfig(
+      result ? previousConfig : currentConfig,
+      result || {},
+    ) as NormalizedProjectConfig;
+    currentConfig.setupFiles = castArray(currentConfig.setupFiles);
+    currentConfig.globalSetup = castArray(currentConfig.globalSetup);
 
     if (currentConfig.browser?.enabled !== browserEnabled) {
       throw new Error(
@@ -138,10 +151,10 @@ const applyProjectModifyRstestConfig = async (
     return;
   }
 
-  project.normalizedConfig = (await applyModifyRstestConfig(
+  project.normalizedConfig = await applyModifyRstestConfig(
     project.normalizedConfig,
     callbacks,
-  )) as NormalizedProjectConfig;
+  );
   markModifyRstestConfigApplied(project.normalizedConfig);
 };
 
