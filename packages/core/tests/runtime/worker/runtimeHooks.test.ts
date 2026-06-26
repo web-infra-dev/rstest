@@ -2,6 +2,7 @@ import { describe, expect, it } from '@rstest/core';
 import {
   importMetaHook,
   RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from '../../../src/runtime/worker/runtimeHooks';
 
@@ -11,6 +12,9 @@ describe('runtime hook identifier contract', () => {
     // require.resolve() callees to them and the VM loaders must expose the
     // byte-identical names. An accidental rename must break this unit test.
     expect(RSTEST_DYNAMIC_IMPORT_HOOK).toBe('__rstest_dynamic_import__');
+    expect(RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK).toBe(
+      '__rstest_dynamic_import_origin__',
+    );
     expect(RSTEST_REQUIRE_RESOLVE_HOOK).toBe('__rstest_require_resolve__');
   });
 

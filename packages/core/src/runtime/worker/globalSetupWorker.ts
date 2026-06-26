@@ -3,12 +3,28 @@ import { install } from 'source-map-support';
 import type { FormattedError } from '../../types';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
-import { RSTEST_DYNAMIC_IMPORT_HOOK } from './runtimeHooks';
+import {
+  RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK,
+} from './runtimeHooks';
 
 let teardownCallbacks: (() => Promise<void> | void)[] = [];
 // Track environment variable changes
 let initialEnv: Record<string, string | undefined> = {};
 let envChanges: Record<string, string | undefined> = {};
+
+const setFederationDynamicImportOrigin = (
+  federation: boolean,
+  origin: string,
+) => {
+  const runtimeGlobal = globalThis as Record<string, unknown>;
+  if (federation) {
+    runtimeGlobal[RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK] = origin;
+  } else {
+    delete runtimeGlobal[RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK];
+  }
+  delete runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK];
+};
 
 function trackEnvChanges() {
   // Store initial environment before setup
@@ -77,16 +93,13 @@ const runGlobalSetup = async (data: {
 
     // `mockRuntimeCode.js` gates its Module Federation shims on this
     // worker-wide flag, so it must be set before any setup code is evaluated.
-    (globalThis as any).__rstest_federation__ = data.federation === true;
+    (globalThis as Record<string, unknown>).__rstest_federation__ =
+      data.federation === true;
 
     for (const entry of data.entries) {
       const { distPath, runtimeDistPath, testPath } = entry;
       const setupCodeContent = data.assetFiles[distPath]!;
-      if (data.federation) {
-        delete (globalThis as Record<string, unknown>)[
-          RSTEST_DYNAMIC_IMPORT_HOOK
-        ];
-      }
+      setFederationDynamicImportOrigin(data.federation, testPath);
       const { loadModule } = data.outputModule
         ? await import('./loadEsModule')
         : await import('./loadModule');

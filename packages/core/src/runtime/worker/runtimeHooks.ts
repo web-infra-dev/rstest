@@ -10,6 +10,8 @@
  * public/internal barrel.
  */
 export const RSTEST_DYNAMIC_IMPORT_HOOK = '__rstest_dynamic_import__' as const;
+export const RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK =
+  '__rstest_dynamic_import_origin__' as const;
 export const RSTEST_REQUIRE_RESOLVE_HOOK =
   '__rstest_require_resolve__' as const;
 
