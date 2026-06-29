@@ -1,7 +1,7 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, test } from '../src';
+import { beforeEach, expect, test } from '../src';
 import { getDebugOptions, resolveLaunchOptions } from '../src/fixture';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type {
@@ -29,6 +29,13 @@ const browserTest = test.extend({
 });
 
 let sharedBrowser: Browser | undefined;
+
+const createPage = (title: string) =>
+  ({
+    goto: async () => null,
+    locator: () => null,
+    title: async () => title,
+  }) as unknown as Page;
 
 test('provides an isolated request fixture', async ({ request }) => {
   expect(request).toBeTruthy();
@@ -208,6 +215,20 @@ test('enables headed debug mode from PWDEBUG', () => {
 });
 
 test.extend({}).describe('extended test API', () => {
+  const hookExpectTest = test.extend<{ hookTitle: string }>({
+    hookTitle: 'hook title',
+  });
+
+  hookExpectTest.describe('wrapped hooks', () => {
+    hookExpectTest.beforeEach(async () => {
+      expect.assertions(2);
+      expect('hook title').toBe('hook title');
+      await expect(createPage('hook title')).toHaveTitle('hook title');
+    });
+
+    hookExpectTest('counts Playwright assertions in extended hooks', () => {});
+  });
+
   test.extend({}).beforeEach(() => {});
 
   test.extend({}).for<{ value: string }>`
@@ -216,6 +237,15 @@ test.extend({}).describe('extended test API', () => {
   `('preserves tagged-template test.for types', ({ value }) => {
     expect(value).toBe('ok');
   });
+
+  browserTest.for([{ path: 'about:blank' }])(
+    'detects fixtures from test.for callback context',
+    async ({ path }, { page }) => {
+      await page.goto(path);
+
+      expect(page.url()).toBe(path);
+    },
+  );
 
   test.extend({})('preserves playwright-style helpers', () => {
     const extendedTest = test.extend({});
@@ -229,23 +259,32 @@ test.extend({}).describe('extended test API', () => {
   });
 });
 
+test.describe('imported hooks', () => {
+  beforeEach(async ({ expect: localExpect }) => {
+    localExpect.assertions(1);
+    await expect(createPage('imported hook')).toHaveTitle('imported hook');
+  });
+
+  test('counts Playwright assertions in imported hooks', () => {});
+});
+
 test(
   'starts a static server from the serve fixture',
+  { timeout: 30_000 },
   async ({ request, serve }) => {
     const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
     await writeFile(join(root, 'index.html'), '<h1>ok</h1>');
 
     const { url } = await serve(join(root, 'index.html'));
     const response = await request.get(url);
-
     expect(response.ok()).toBe(true);
     expect(await response.text()).toBe('<h1>ok</h1>');
   },
-  { timeout: 30_000 },
 );
 
 test(
   'returns 404 for malformed static server paths',
+  { timeout: 30_000 },
   async ({ request, serve }) => {
     const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
     await writeFile(join(root, 'index.html'), '<h1>ok</h1>');
@@ -255,11 +294,11 @@ test(
 
     expect(response.status()).toBe(404);
   },
-  { timeout: 30_000 },
 );
 
 test(
   'allows closing a served static server multiple times',
+  { timeout: 30_000 },
   async ({ serve }) => {
     const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
     await writeFile(join(root, 'index.html'), '<h1>ok</h1>');
@@ -269,5 +308,4 @@ test(
     await server.close();
     await server.close();
   },
-  { timeout: 30_000 },
 );

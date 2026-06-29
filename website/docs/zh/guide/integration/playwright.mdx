@@ -45,6 +45,12 @@ import { PackageManagerTabs } from '@theme';
 
 <PackageManagerTabs command="add @rstest/playwright playwright -D" />
 
+安装 Playwright 使用的 Chromium browser binary：
+
+```bash
+pnpm exec playwright install chromium
+```
+
 ## 基本用法
 
 从 `@rstest/playwright` 导入 `test` 和 `expect`，而不是从 `@rstest/core` 导入：

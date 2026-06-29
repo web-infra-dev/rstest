@@ -31,6 +31,7 @@ Use `@rstest/playwright` when you want Playwright-driven E2E tests to run in the
 
 ```bash
 pnpm add -D @rstest/playwright playwright
+pnpm exec playwright install chromium
 ```
 
 ## Usage

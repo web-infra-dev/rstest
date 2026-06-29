@@ -45,6 +45,12 @@ Install both packages:
 
 <PackageManagerTabs command="add @rstest/playwright playwright -D" />
 
+Install the Chromium browser binary used by Playwright:
+
+```bash
+pnpm exec playwright install chromium
+```
+
 ## Basic usage
 
 Import `test` and `expect` from `@rstest/playwright` instead of `@rstest/core`:

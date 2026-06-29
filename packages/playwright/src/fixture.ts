@@ -450,18 +450,32 @@ const cleanupBrowserFixture = [
   ) => {
     clearBrowserCleanupTimer();
     activeBrowserFixtureCount++;
+    let released = false;
+
+    const release = async (scheduleCleanup: boolean) => {
+      if (released) {
+        return;
+      }
+
+      released = true;
+      activeBrowserFixtureCount--;
+
+      if (scheduleCleanup) {
+        scheduleBrowserCleanupWhenIdle();
+      } else {
+        await closeBrowserWhenIdle();
+      }
+    };
 
     onTestFailed(async () => {
-      activeBrowserFixtureCount--;
-      await closeBrowserWhenIdle();
+      await release(false);
     }, DEBUG_PAUSE_TIMEOUT);
 
     try {
       await use(undefined);
     } finally {
       if (task.result?.status !== 'fail') {
-        activeBrowserFixtureCount--;
-        scheduleBrowserCleanupWhenIdle();
+        await release(true);
       }
     }
   },
@@ -611,6 +625,69 @@ const preserveFixtureSource = <Fn extends (...args: never[]) => unknown>(
   return wrapped;
 };
 
+const splitByTopLevelComma = (source: string) => {
+  const result: string[] = [];
+  const stack: string[] = [];
+  let start = 0;
+
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+    if (char === '{' || char === '[' || char === '(') {
+      stack.push(char === '{' ? '}' : char === '[' ? ']' : ')');
+    } else if (char === stack[stack.length - 1]) {
+      stack.pop();
+    } else if (!stack.length && char === ',') {
+      const token = source.substring(start, i).trim();
+      if (token) {
+        result.push(token);
+      }
+      start = i + 1;
+    }
+  }
+
+  const token = source.substring(start).trim();
+  if (token) {
+    result.push(token);
+  }
+
+  return result;
+};
+
+const getFunctionParameterSource = (fn: (...args: never[]) => unknown) => {
+  const match = /(?:async)?(?:\s+function)?[^(]*\(([^)]*)/.exec(fn.toString());
+
+  return match ? splitByTopLevelComma(match[1]!.trim()) : [];
+};
+
+const preserveForFixtureSource = <Fn extends (...args: never[]) => unknown>(
+  original: Fn,
+  wrapped: Fn,
+): Fn => {
+  const [, contextParam] = getFunctionParameterSource(original);
+
+  Object.defineProperty(wrapped, 'toString', {
+    configurable: true,
+    value: () => `(${contextParam ?? '_'}) => {}`,
+  });
+
+  return wrapped;
+};
+
+const wrapTestContextCallback = <Fn extends (...args: any[]) => unknown>(
+  fn: Fn,
+): Fn => {
+  return preserveFixtureSource(fn, (async (context: TestContext | object) => {
+    const expect = 'expect' in context ? context.expect : undefined;
+    const result = expect
+      ? await withPlaywrightExpect(expect, () => fn(context))
+      : await fn(context);
+
+    return typeof result === 'function'
+      ? wrapTestContextCallback(result as (...args: any[]) => unknown)
+      : result;
+  }) as Fn);
+};
+
 export type PlaywrightFixtures<
   FixturesContext extends Record<string, any>,
   ExtraContext,
@@ -640,6 +717,26 @@ type RstestAfterEach = typeof rstestAfterEach;
 type RstestBeforeAll = typeof rstestBeforeAll;
 type RstestBeforeEach = typeof rstestBeforeEach;
 type RstestDescribe = typeof rstestDescribe;
+
+const wrapBeforeAll = (hook: RstestBeforeAll): RstestBeforeAll => {
+  return ((fn, timeout) =>
+    hook(wrapTestContextCallback(fn), timeout)) as RstestBeforeAll;
+};
+
+const wrapAfterAll = (hook: RstestAfterAll): RstestAfterAll => {
+  return ((fn, timeout) =>
+    hook(wrapTestContextCallback(fn), timeout)) as RstestAfterAll;
+};
+
+const wrapAfterEach = (hook: RstestAfterEach): RstestAfterEach => {
+  return ((fn, timeout) =>
+    hook(wrapTestContextCallback(fn), timeout)) as RstestAfterEach;
+};
+
+const wrapBeforeEach = (hook: RstestBeforeEach): RstestBeforeEach => {
+  return ((fn, timeout) =>
+    hook(wrapTestContextCallback(fn), timeout)) as RstestBeforeEach;
+};
 
 type MergeContext<ExtraContext, FixturesContext> = {
   [
@@ -676,7 +773,7 @@ const createPlaywrightTest = <ExtraContext>(
   const wrapForCallback = (
     fn: TestForCallback<ExtraContext>,
   ): TestForCallback<ExtraContext> => {
-    return preserveFixtureSource(fn, ((param, context) =>
+    return preserveForFixtureSource(fn, ((param, context) =>
       withPlaywrightExpect(context.expect, () =>
         fn(param, context),
       )) as typeof fn);
@@ -727,16 +824,16 @@ const createPlaywrightTest = <ExtraContext>(
     },
     get(target, key, receiver) {
       if (key === 'afterAll') {
-        return rstestAfterAll;
+        return wrapAfterAll(rstestAfterAll);
       }
       if (key === 'afterEach') {
-        return rstestAfterEach;
+        return wrapAfterEach(rstestAfterEach);
       }
       if (key === 'beforeAll') {
-        return rstestBeforeAll;
+        return wrapBeforeAll(rstestBeforeAll);
       }
       if (key === 'beforeEach') {
-        return rstestBeforeEach;
+        return wrapBeforeEach(rstestBeforeEach);
       }
       if (key === 'describe') {
         return rstestDescribe;
@@ -788,8 +885,8 @@ export const test: PlaywrightTest = createPlaywrightTest(
   base.extend<PlaywrightFixture>(playwrightFixtures),
 );
 
-export const afterAll: RstestAfterAll = rstestAfterAll;
-export const afterEach: RstestAfterEach = rstestAfterEach;
-export const beforeAll: RstestBeforeAll = rstestBeforeAll;
-export const beforeEach: RstestBeforeEach = rstestBeforeEach;
+export const afterAll: RstestAfterAll = wrapAfterAll(rstestAfterAll);
+export const afterEach: RstestAfterEach = wrapAfterEach(rstestAfterEach);
+export const beforeAll: RstestBeforeAll = wrapBeforeAll(rstestBeforeAll);
+export const beforeEach: RstestBeforeEach = wrapBeforeEach(rstestBeforeEach);
 export const describe: RstestDescribe = rstestDescribe;
