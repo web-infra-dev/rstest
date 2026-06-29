@@ -7,7 +7,8 @@
 // evaluated via vm/eval — instead of the worker's `loadModule` — never receive
 // the function-argument injection that normally provides that hook, so the
 // free-identifier lookup falls through to `globalThis`. Provide a fallback
-// there that preserves the injected origin before falling back to Node's native
+// there that preserves the injected origin, or the worker's current source file
+// origin when injection is unavailable, before falling back to Node's native
 // dynamic import. (This runtime module is emitted inside its own IIFE, so a
 // local binding could never be observed by module factories — the global is the
 // only effective channel.)
@@ -15,6 +16,8 @@ if (globalThis.__rstest_federation__) {
   globalThis.__rstest_dynamic_import__ =
     globalThis.__rstest_dynamic_import__ ||
     function (specifier, importAttributes, origin) {
+      const fallbackOrigin =
+        origin || globalThis.__rstest_dynamic_import_origin__;
       // Absolute filesystem paths must round-trip through `pathToFileURL`
       // before reaching native `import()`: Windows drive letters (`C:\...`)
       // would otherwise be parsed as a URL scheme, and `#` / `%` in paths
@@ -25,7 +28,7 @@ if (globalThis.__rstest_federation__) {
           (url) => import(url.pathToFileURL(specifier).href, importAttributes),
         );
       }
-      if (origin && !/^[A-Za-z][A-Za-z\d+\-.]*:/.test(specifier)) {
+      if (fallbackOrigin && !/^[A-Za-z][A-Za-z\d+\-.]*:/.test(specifier)) {
         return Promise.all([import('node:module'), import('node:url')]).then(
           ([module, url]) => {
             if (
@@ -36,14 +39,14 @@ if (globalThis.__rstest_federation__) {
             }
             if (/^\.\.?(?:[\\/]|$)/.test(specifier)) {
               return import(
-                new URL(specifier, url.pathToFileURL(origin)).href,
+                new URL(specifier, url.pathToFileURL(fallbackOrigin)).href,
                 importAttributes
               );
             }
             return import(
               url.pathToFileURL(
                 module
-                  .createRequire(url.pathToFileURL(origin).href)
+                  .createRequire(url.pathToFileURL(fallbackOrigin).href)
                   .resolve(specifier),
               ).href,
               importAttributes

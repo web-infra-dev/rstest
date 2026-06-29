@@ -14,7 +14,7 @@
   "devDependencies": {
     "@module-federation/rsbuild-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a",
     "@module-federation/rstest": "https://pkg.pr.new/module-federation/core/@module-federation/rstest@58cc69a",
-    "@rsbuild/core": "~2.1.0-beta.0",
+    "@rsbuild/core": "~2.1.0",
     "@rsbuild/plugin-react": "^2.1.0",
     "@rstest/core": "workspace:*",
     "@testing-library/jest-dom": "^6.9.1",

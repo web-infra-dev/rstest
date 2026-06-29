@@ -23,6 +23,7 @@ import {
 import {
   importMetaHook,
   RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK,
 } from '../../src/runtime/worker/runtimeHooks';
 
 const getFederationFallbackCode = () => {
@@ -121,6 +122,38 @@ describe('federation dynamic import fallback', () => {
       );
 
       expect(mod?.marker).toBe('from-origin');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('uses the worker origin when the injected origin is unavailable', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rstest-federation-import-'));
+    try {
+      const depPath = join(dir, 'dep.mjs');
+      writeFileSync(depPath, 'export const marker = "from-worker-origin";');
+
+      const runtimeGlobal = {
+        __rstest_federation__: true,
+        [RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK]: join(dir, 'source.mjs'),
+      } as {
+        __rstest_federation__: boolean;
+        [RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK]: string;
+        __rstest_dynamic_import__?: (
+          specifier: string,
+          importAttributes: ImportCallOptions,
+          origin?: string,
+        ) => Promise<{ marker: string }>;
+      };
+
+      new Function('globalThis', getFederationFallbackCode())(runtimeGlobal);
+
+      const mod = await runtimeGlobal.__rstest_dynamic_import__?.(
+        './dep.mjs',
+        {},
+      );
+
+      expect(mod?.marker).toBe('from-worker-origin');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
