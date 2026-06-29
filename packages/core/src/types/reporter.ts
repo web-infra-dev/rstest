@@ -134,8 +134,7 @@ export type MdReporterOptions = {
    * @default { maxLogsPerTestPath: 10, maxCharsPerEntry: 500 }
    */
   console?:
-    | boolean
-    | { maxLogsPerTestPath?: number; maxCharsPerEntry?: number };
+    boolean | { maxLogsPerTestPath?: number; maxCharsPerEntry?: number };
 
   /**
    * Error section controls.

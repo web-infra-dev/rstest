@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import path from 'pathe';
 import { logger } from '../../utils/logger';
-import { clearSyntheticModuleCache } from './interop';
+import { clearCacheCleaners, clearSyntheticModuleCache } from './interop';
 import {
   finalizeDynamicImport,
   loadWasmFromContent,
@@ -15,6 +15,76 @@ import {
 } from './runtimeHooks';
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
+
+const getAssetContent = (
+  assetFiles: Record<string, string>,
+  filePath: unknown,
+): string | undefined => {
+  if (typeof filePath === 'string') {
+    return assetFiles[path.normalize(filePath)];
+  }
+  if (filePath instanceof URL && filePath.protocol === 'file:') {
+    return assetFiles[path.normalize(fileURLToPath(filePath))];
+  }
+};
+
+const createFsAssetProxy = (
+  fsModule: typeof import('node:fs'),
+  assetFiles: Record<string, string>,
+): typeof import('node:fs') =>
+  new Proxy(fsModule, {
+    get(target, property, receiver) {
+      if (property === 'existsSync') {
+        return (filePath: unknown) =>
+          getAssetContent(assetFiles, filePath) !== undefined ||
+          target.existsSync(
+            filePath as Parameters<typeof target.existsSync>[0],
+          );
+      }
+
+      if (property === 'readFile') {
+        return (
+          filePath: unknown,
+          optionsOrCallback: unknown,
+          maybeCallback?: unknown,
+        ) => {
+          const callback =
+            typeof optionsOrCallback === 'function'
+              ? optionsOrCallback
+              : maybeCallback;
+          const content = getAssetContent(assetFiles, filePath);
+
+          if (content !== undefined && typeof callback === 'function') {
+            queueMicrotask(() => callback(null, content));
+            return;
+          }
+
+          return Reflect.apply(
+            target.readFile,
+            target,
+            [filePath, optionsOrCallback, maybeCallback].filter(
+              (value) => value !== undefined,
+            ),
+          );
+        };
+      }
+
+      if (property === 'readFileSync') {
+        return (filePath: unknown, options?: unknown) => {
+          const content = getAssetContent(assetFiles, filePath);
+          if (content !== undefined) {
+            return content;
+          }
+          return target.readFileSync(
+            filePath as Parameters<typeof target.readFileSync>[0],
+            options as Parameters<typeof target.readFileSync>[1],
+          );
+        };
+      }
+
+      return Reflect.get(target, property, receiver);
+    },
+  });
 
 const defineRstestRequireResolve =
   ({
@@ -71,6 +141,10 @@ const createRequire = (
   })();
 
   const require = ((id: string) => {
+    if (id === 'fs' || id === 'node:fs') {
+      return createFsAssetProxy(_require(id), assetFiles);
+    }
+
     const currentDirectory = path.dirname(distPath);
 
     const joinedPath = isRelativePath(id)
@@ -153,13 +227,25 @@ const defineRstestDynamicImport =
     });
   };
 
+// Persistent asset map for the kept runtime chunk under `isolate: false` (the
+// per-module hooks closed over this reference). Mirrors the ESM loader — see
+// `loadEsModule.ts` for the full rationale.
+const accumulatedAssetFiles: Record<string, string> = {};
+
+// Every shared runtime chunk this (possibly reused) worker has loaded under
+// `isolate: false`. Mirrors the ESM loader — a reused worker can serve multiple
+// projects (the pool has no environment affinity), so keeping a single id would
+// let one project's teardown evict another's runtime chunk. Accumulate all and
+// reset only on a full clear; see `loadEsModule.ts` for the full rationale.
+const keptRuntimeChunks = new Set<string>();
+
 // setup and rstest module should not be cached
 export const loadModule = ({
   codeContent,
   distPath,
   testPath,
   rstestContext,
-  assetFiles,
+  assetFiles: assetFilesArg,
   interopDefault,
 }: {
   interopDefault: boolean;
@@ -169,6 +255,12 @@ export const loadModule = ({
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
 }): any => {
+  // Fold this file's assets into the persistent map. Recursive loads (require /
+  // dynamic imports) re-pass that same map, so skip the no-op self-merge.
+  if (assetFilesArg !== accumulatedAssetFiles) {
+    Object.assign(accumulatedAssetFiles, assetFilesArg);
+  }
+  const assetFiles = accumulatedAssetFiles;
   const fileDir = path.dirname(testPath);
 
   const localModule = {
@@ -276,7 +368,32 @@ export const cacheableLoadModule = ({
   return mod;
 };
 
-export const clearModuleCache = (): void => {
-  moduleCache.clear();
+/**
+ * Reset the per-worker module cache between test files.
+ *
+ * Mirrors the ESM loader: with `isolate: false` the shared runtime chunk owns
+ * the only `__webpack_module_cache__`, so keeping it (via `keep`) preserves the
+ * module-scope state of every already-evaluated non-entry module across files.
+ * A reused worker can serve more than one project, so every project's runtime
+ * chunk is accumulated and kept — see `keptRuntimeChunks`.
+ * See https://github.com/web-infra-dev/rstest/issues/1373.
+ */
+export const clearModuleCache = (keep?: string): void => {
+  if (keep) {
+    keptRuntimeChunks.add(keep);
+    for (const key of moduleCache.keys()) {
+      if (!keptRuntimeChunks.has(key)) {
+        moduleCache.delete(key);
+      }
+    }
+  } else {
+    moduleCache.clear();
+    keptRuntimeChunks.clear();
+    // Nothing is kept, so no hook holds a reference to the accumulated assets.
+    for (const key of Object.keys(accumulatedAssetFiles)) {
+      delete accumulatedAssetFiles[key];
+    }
+    clearCacheCleaners();
+  }
   clearSyntheticModuleCache();
 };

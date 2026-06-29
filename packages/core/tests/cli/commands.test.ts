@@ -79,6 +79,7 @@ describe('valueTakingOptions (derived from option definitions)', () => {
     expect(valueTakingOptions.has('--globals')).toBe(false);
     expect(valueTakingOptions.has('--isolate')).toBe(false);
     expect(valueTakingOptions.has('--coverage')).toBe(false);
+    expect(valueTakingOptions.has('--browser.providerOptions.*')).toBe(false);
     expect(valueTakingOptions.has('--output.emitAssets')).toBe(false);
     expect(valueTakingOptions.has('--output.cssModules')).toBe(false);
   });
@@ -107,6 +108,7 @@ describe('requiredDotOptions (derived from option definitions)', () => {
     expect(requiredDotOptions.has('--coverage.changed')).toBe(false);
     expect(requiredDotOptions.has('--coverage.enabled')).toBe(false);
     expect(requiredDotOptions.has('--browser.enabled')).toBe(false);
+    expect(requiredDotOptions.has('--browser.providerOptions.*')).toBe(false);
     expect(requiredDotOptions.has('--output.emitAssets')).toBe(false);
   });
 });
@@ -360,6 +362,26 @@ describe('CLI help output', () => {
     expect(parsed.options.browser).toEqual({
       enabled: false,
       name: 'chromium',
+    });
+  });
+
+  it('allows provider-specific browser options', () => {
+    const parsed = createCli().parse(
+      [
+        'node',
+        'rstest',
+        'run',
+        '--browser.providerOptions.launch.channel=chrome',
+      ],
+      { run: false },
+    );
+
+    expect(parsed.options.browser).toEqual({
+      providerOptions: {
+        launch: {
+          channel: 'chrome',
+        },
+      },
     });
   });
 

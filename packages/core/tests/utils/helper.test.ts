@@ -5,12 +5,29 @@ import {
   needFlagExperimentalDetectModule,
   parsePosix,
   prettyTime,
+  toNativePath,
 } from '../../src/utils/helper';
 
 it('getFileTaskId builds the file: task-id grammar', () => {
   // Locks the single source of truth so the worker/pool/runner consumers and
   // the tests/pool/fixtures/testWorker.mjs literal copy cannot drift.
   expect(getFileTaskId('/abs/foo.test.ts')).toBe('file:/abs/foo.test.ts');
+});
+
+it('toNativePath converts forward-slash paths to OS-native separators', () => {
+  // The runtime `testPath` must use OS-native separators so it matches
+  // `import.meta.filename` on Windows (#1465). `join(sep)` keeps this
+  // assertion meaningful on both platforms: on Windows the result must use
+  // backslashes, on POSIX it stays `/` (native == POSIX there).
+  expect(toNativePath('packages/core/a.test.ts')).toBe(
+    'packages/core/a.test.ts'.replaceAll('/', sep),
+  );
+  // Absolute paths are converted too.
+  expect(toNativePath('/abs/foo.test.ts')).toBe(
+    '/abs/foo.test.ts'.replaceAll('/', sep),
+  );
+  // The output must never keep `/` unless `/` is the native separator.
+  expect(toNativePath('a/b/c').includes('/')).toBe(sep === '/');
 });
 
 it('parsePosix correctly', () => {

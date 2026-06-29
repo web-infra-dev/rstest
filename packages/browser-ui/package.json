@@ -26,14 +26,14 @@
     "dev": "rsbuild dev --config ./rsbuild.config.ts"
   },
   "dependencies": {
-    "antd": "^6.4.4",
+    "antd": "^6.5.0",
     "birpc": "^4.0.0",
     "lucide-react": "^1.21.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.1.0-beta.0",
+    "@rsbuild/core": "~2.1.1",
     "@rsbuild/plugin-react": "^2.1.0",
     "@rsbuild/plugin-svgr": "^2.0.4",
     "@tailwindcss/postcss": "^4.3.1",

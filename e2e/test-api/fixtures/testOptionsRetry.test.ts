@@ -8,14 +8,10 @@ beforeEach(() => {
   beforeEachCalls++;
 });
 
-it(
-  'per-test retry overrides config retry',
-  () => {
-    attempts++;
-    // Pass on the third attempt (initial + 2 retries).
-    expect(attempts).toBe(3);
-    // beforeEach should have run for every attempt, including the passing one.
-    expect(beforeEachCalls).toBe(attempts);
-  },
-  { retry: 2 },
-);
+it('per-test retry overrides config retry', { retry: 2 }, () => {
+  attempts++;
+  // Pass on the third attempt (initial + 2 retries).
+  expect(attempts).toBe(3);
+  // beforeEach should have run for every attempt, including the passing one.
+  expect(beforeEachCalls).toBe(attempts);
+});

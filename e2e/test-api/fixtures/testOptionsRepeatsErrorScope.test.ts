@@ -5,6 +5,7 @@ import { expect, it } from '@rstest/core';
 let runs = 0;
 it(
   'each repeat reports only its own retry errors',
+  { retry: 1, repeats: 1 },
   () => {
     runs++;
     // Repeat 0: fail then pass on retry.
@@ -20,7 +21,6 @@ it(
     }
     throw new Error('REPEAT_1_ATTEMPT_B');
   },
-  { retry: 1, repeats: 1 },
 );
 
 // Sanity guard: ensure the test fn ran exactly 4 times. If runner short-circuits

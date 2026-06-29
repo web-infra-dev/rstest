@@ -118,7 +118,7 @@ test('formatDate 被 mock，parseDate 保持原实现', () => {
 
 ### 使用 `__mocks__` 目录
 
-如果 `rs.mock` 调用时没有提供工厂函数，则会尝试去解析与被 mock 的模块在同级的 `__mocks__` 目录下的同名模块。
+如果 `rs.mock` 调用时没有提供工厂函数或选项对象，则会先尝试解析 `__mocks__` 目录下的同名模块。如果没有找到手写 mock，Rstest 会回退到自动 mock 目标模块，等价于传入 `{ mock: true }`。
 
 **解析规则：**
 
@@ -152,6 +152,20 @@ rs.mock('lodash');
 rs.mock('../src/multiple');
 
 lodash.random(multiple(1, 2), multiple(3, 4));
+```
+
+如果对应的手写 mock 文件不存在，Rstest 会改为自动 mock 原始模块：
+
+```ts title="src/math.test.ts"
+import { expect, rs, test } from '@rstest/core';
+import { add } from './math';
+
+rs.mock('./math');
+
+test('falls back to auto-mocking', () => {
+  expect(rs.isMockFunction(add)).toBe(true);
+  expect(add(1, 2)).toBeUndefined();
+});
 ```
 
 ### 使用 `{ spy: true }` 选项
@@ -192,7 +206,7 @@ spy 包装的是模块的**导出**。当一个导出在同一模块内调用另
 
 ### 使用 `{ mock: true }` 选项
 
-如果第二个参数提供了 `{ mock: true }`，模块将被自动 mock，所有函数导出都会被替换为 mock 函数。与 `{ spy: true }` 不同，原始实现**不会**被保留 - mock 函数默认返回 `undefined`。
+如果第二个参数提供了 `{ mock: true }`，模块将被自动 mock，所有函数导出都会被替换为 mock 函数。与 `{ spy: true }` 不同，原始实现**不会**被保留 —— mock 函数默认返回 `undefined`。当 `rs.mock('./module')` 找不到对应手写 mock 时，也会使用这个回退行为。
 
 这在你想要完全替换模块的行为并配置 mock 返回值或实现时非常有用。
 

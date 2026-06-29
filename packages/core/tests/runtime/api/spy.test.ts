@@ -90,23 +90,44 @@ describe('initSpy reset semantics', () => {
     expect(spy()).toBe('base');
   });
 
-  it('registers every created mock in the shared mocks set', () => {
-    const { fn, spyOn, mocks } = initSpy();
+  it('visits and clears every created mock through forEachMock', () => {
+    const { fn, spyOn, forEachMock } = initSpy();
     const a = fn();
     const obj = { method: () => 'real' };
     const b = spyOn(obj, 'method');
 
-    expect(mocks.has(a)).toBe(true);
-    expect(mocks.has(b)).toBe(true);
+    const visited = new Set();
+    forEachMock((mock) => visited.add(mock));
+    expect(visited.has(a)).toBe(true);
+    expect(visited.has(b)).toBe(true);
 
     a();
     obj.method();
-    // Mirror clearAllMocks: iterate the returned set.
-    for (const mock of mocks) {
-      mock.mockClear();
-    }
+    // Mirror clearAllMocks: iterate the live registry.
+    forEachMock((mock) => mock.mockClear());
     expect(a.mock.calls).toHaveLength(0);
     expect(b.mock.calls).toHaveLength(0);
+  });
+
+  it('scopes mocks per project so one project does not reset another', () => {
+    // A reused worker under `isolate: false` serves several projects through one
+    // `rstest` singleton; the project key resolves the running file's project.
+    let project = 'A';
+    const { fn, forEachMock } = initSpy(() => project);
+
+    const mockA = fn();
+    mockA();
+    expect(mockA.mock.calls).toHaveLength(1);
+
+    // Project B's `*AllMocks` iteration must not see A's mock.
+    project = 'B';
+    forEachMock((mock) => mock.mockClear());
+    project = 'A';
+    expect(mockA.mock.calls).toHaveLength(1);
+
+    // A's own iteration still reaches it.
+    forEachMock((mock) => mock.mockClear());
+    expect(mockA.mock.calls).toHaveLength(0);
   });
 });
 

@@ -105,8 +105,14 @@ const filterAssetsByEntry = async (
   getAssetFiles: (names: string[]) => Promise<Record<string, string>>,
   getSourceMaps: (names: string[]) => Promise<Record<string, string>>,
   setupAssets: string[],
+  allAssetNames: string[] | undefined,
+  federation: boolean,
 ) => {
-  const assetNames = Array.from(new Set([...entryInfo.files!, ...setupAssets]));
+  const entryAssetNames =
+    federation && allAssetNames
+      ? allAssetNames.filter((name) => !name.endsWith('.map'))
+      : entryInfo.files!;
+  const assetNames = Array.from(new Set([...entryAssetNames, ...setupAssets]));
   const [neededFiles, neededSourceMaps] = await Promise.all([
     getAssetFiles(assetNames),
     getSourceMaps(assetNames),
@@ -132,11 +138,14 @@ const getNodeExecArgv = () => {
 /** Shared parameter type for `runTests` and `collectTests`. */
 type PoolDispatchParams = {
   entries: EntryInfo[];
+  assetNames: string[];
   getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
   getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
   setupEntries: EntryInfo[];
   updateSnapshot: SnapshotUpdateState;
   project: ProjectContext;
+  /** Per-compile id threaded to the worker for rebuild-boundary cache flushing (#1373). Defaults to `0`. */
+  buildId?: number;
 };
 
 /**
@@ -153,11 +162,13 @@ const buildTask = async ({
   runtimeConfig,
   setupEntries,
   setupAssets,
+  assetNames,
   updateSnapshot,
   getAssetFiles,
   getSourceMaps,
   rpcMethods,
   traceSpan,
+  buildId = 0,
 }: {
   type: 'run' | 'collect';
   workerKind: PoolWorkerKind;
@@ -168,14 +179,23 @@ const buildTask = async ({
   runtimeConfig: RuntimeConfig;
   setupEntries: EntryInfo[];
   setupAssets: string[];
+  assetNames: string[];
   updateSnapshot: SnapshotUpdateState;
   getAssetFiles: PoolDispatchParams['getAssetFiles'];
   getSourceMaps: PoolDispatchParams['getSourceMaps'];
   rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
   traceSpan: TraceSpan;
+  buildId?: number;
 }) => {
   const getAssets = () =>
-    filterAssetsByEntry(entryInfo, getAssetFiles, getSourceMaps, setupAssets);
+    filterAssetsByEntry(
+      entryInfo,
+      getAssetFiles,
+      getSourceMaps,
+      setupAssets,
+      assetNames,
+      project.normalizedConfig.federation,
+    );
   const traceArgs = {
     project: project.name,
     testPath: entryInfo.testPath,
@@ -190,6 +210,7 @@ const buildTask = async ({
       context: {
         outputModule: project.outputModule,
         taskId: index + 1,
+        buildId,
         project: project.name,
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
@@ -277,6 +298,8 @@ export const createPool = async ({
     setupEntries: EntryInfo[];
     updateSnapshot: SnapshotUpdateState;
     project: ProjectContext;
+    /** Per-compile id; bumped on each watch rebuild so reused workers flush their kept module cache. */
+    buildId?: number;
     /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
     onCoverageResult?: (coverage: CoverageMapData) => void;
     /** Perfetto trace events forwarded for caller-owned dumping. */
@@ -467,11 +490,13 @@ export const createPool = async ({
   return {
     runTests: async ({
       entries,
+      assetNames,
       getAssetFiles,
       getSourceMaps,
       setupEntries,
       project,
       updateSnapshot,
+      buildId,
       onCoverageResult,
       onTraceEvents,
       traceSpan,
@@ -504,11 +529,13 @@ export const createPool = async ({
                 runtimeConfig,
                 setupEntries,
                 setupAssets,
+                assetNames,
                 updateSnapshot,
                 getAssetFiles,
                 getSourceMaps,
                 rpcMethods,
                 traceSpan,
+                buildId,
               }),
             traceArgs,
           );
@@ -553,6 +580,7 @@ export const createPool = async ({
     },
     collectTests: async ({
       entries,
+      assetNames,
       getAssetFiles,
       getSourceMaps,
       setupEntries,
@@ -579,6 +607,7 @@ export const createPool = async ({
             runtimeConfig,
             setupEntries,
             setupAssets,
+            assetNames,
             updateSnapshot,
             getAssetFiles,
             getSourceMaps,

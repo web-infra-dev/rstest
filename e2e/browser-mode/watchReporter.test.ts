@@ -1,8 +1,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from '@rstest/core';
-import { prepareFixtures, runRstestCli } from '../scripts';
-import { deleteFixtureTarget, killCliProcessTree } from './utils';
+import { prepareFixtures } from '../scripts';
+import {
+  deleteFixtureTarget,
+  killCliProcessTree,
+  runBrowserWatchCliWithCwd,
+} from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,8 +15,9 @@ const getHookCountFromLog = (content: string, hookName: string): number => {
   return content.split('\n').filter((line) => line.trim() === hookName).length;
 };
 
-const WATCH_REPORTER_HOOK_TIMEOUT_MS =
-  process.platform === 'win32' ? 15_000 : 5_000;
+// Real Chrome (channel=chrome) cold-launch on loaded CI runners can push the
+// first run past a tight budget, so keep this generous across platforms.
+const WATCH_REPORTER_HOOK_TIMEOUT_MS = 15_000;
 
 describe('browser mode - watch reporter lifecycle', () => {
   it('should call onTestRunStart and onTestRunEnd on rerun', async () => {
@@ -24,16 +29,7 @@ describe('browser mode - watch reporter lifecycle', () => {
     });
     const reportLogPath = path.join(fixturesTargetPath, 'watch-reporter.log');
 
-    const { cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['watch', '--disableConsoleIntercept'],
-      options: {
-        nodeOptions: {
-          env: { DEBUG: 'rstest' },
-          cwd: fixturesTargetPath,
-        },
-      },
-    });
+    const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath);
 
     try {
       const waitForHookCounts = async (

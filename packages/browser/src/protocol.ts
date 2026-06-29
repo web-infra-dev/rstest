@@ -91,9 +91,16 @@ export type BrowserHostConfig = {
    */
   runId?: string;
   /**
-   * Base URL for runner (iframe) pages.
+   * Base URL for runner (iframe) pages. Container origin; used as a fallback
+   * when a project has no entry in `projectRunnerUrls`.
    */
   runnerUrl?: string;
+  /**
+   * Per-project runner origin base URLs, keyed by project name. Each browser
+   * project runs on its own dev server, so the container must load each test
+   * file's iframe from that project's own origin.
+   */
+  projectRunnerUrls?: Record<string, string>;
   /**
    * WebSocket port for container RPC.
    */
@@ -149,10 +156,7 @@ export type BrowserClientMessage =
  * host router.
  */
 export type RunnerLifecycleMethod =
-  | 'file-ready'
-  | 'suite-start'
-  | 'suite-result'
-  | 'case-start';
+  'file-ready' | 'suite-start' | 'suite-result' | 'case-start';
 
 /**
  * {@link BrowserClientMessage} types that are forwarded to the `runner`

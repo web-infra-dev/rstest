@@ -26,9 +26,7 @@ export type RstestConfigAsyncFn = () => Promise<RstestConfig>;
 export type RstestConfigSyncFn = () => RstestConfig;
 
 export type RstestConfigExport =
-  | RstestConfig
-  | RstestConfigSyncFn
-  | RstestConfigAsyncFn;
+  RstestConfig | RstestConfigSyncFn | RstestConfigAsyncFn;
 
 /**
  * This function helps you to autocomplete configuration types.

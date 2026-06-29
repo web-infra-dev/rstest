@@ -12,7 +12,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 - **别名：** `rstest.stubEnv`
 
-- **类型：** `(name: string, value: string | undefined) => Rstest & Disposable`
+- **类型：** `(name: string, value: string | undefined) => RstestUtilities & Disposable`
 
 临时设置 `process.env` 和 `import.meta.env` 中的环境变量为指定值。适用于测试依赖环境变量的代码。
 
@@ -49,7 +49,7 @@ expect(import.meta.env.MY_VAR).toBeUndefined();
 
 - **别名：** `rstest.unstubAllEnvs`
 
-- **类型：** `() => Rstest`
+- **类型：** `() => RstestUtilities`
 
 恢复所有通过 `rs.stubEnv` 更改的环境变量到原始值。
 
@@ -69,7 +69,7 @@ expect(process.env.NODE_ENV).not.toBe('test');
 
 - **别名：** `rstest.stubGlobal`
 
-- **类型：** `(name: string | number | symbol, value: unknown) => Rstest & Disposable`
+- **类型：** `(name: string | number | symbol, value: unknown) => RstestUtilities & Disposable`
 
 临时设置全局变量为指定值。适用于模拟全局对象或函数。
 
@@ -103,7 +103,7 @@ expect(globalThis[Symbol.for('foo')]).toBe('bar');
 
 - **别名：** `rstest.unstubAllGlobals`
 
-- **类型：** `() => Rstest`
+- **类型：** `() => RstestUtilities`
 
 恢复所有通过 `rs.stubGlobal` 更改的全局变量到原始值。
 

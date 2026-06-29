@@ -76,9 +76,7 @@ export type WorkerResponseEnvelope = {
 };
 
 export type Envelope =
-  | WorkerRequestEnvelope
-  | WorkerResponseEnvelope
-  | RpcEnvelope;
+  WorkerRequestEnvelope | WorkerResponseEnvelope | RpcEnvelope;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null;

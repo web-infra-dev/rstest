@@ -28,12 +28,7 @@ function formatCapturedStderr(text: string): string {
 }
 
 type RunnerState =
-  | 'IDLE'
-  | 'STARTING'
-  | 'STARTED'
-  | 'START_FAILURE'
-  | 'STOPPING'
-  | 'STOPPED';
+  'IDLE' | 'STARTING' | 'STARTED' | 'START_FAILURE' | 'STOPPING' | 'STOPPED';
 
 type TaskKind = 'run' | 'collect';
 
@@ -84,8 +79,7 @@ export class PoolRunner {
   private currentTask: PendingTask | undefined;
   private currentRpc: BirpcReturn<RuntimeRPC, ServerRPC> | undefined;
   private currentRpcDispatch:
-    | ((data: unknown, ...extras: unknown[]) => void)
-    | undefined;
+    ((data: unknown, ...extras: unknown[]) => void) | undefined;
   private startDeferred: Deferred | undefined;
   private stopDeferred: Deferred | undefined;
   private startTimer: NodeJS.Timeout | undefined;

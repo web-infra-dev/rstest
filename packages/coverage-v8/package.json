@@ -41,8 +41,8 @@
     "v8-to-istanbul": "^9.3.0"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.1.0-beta.0",
-    "@rslib/core": "0.23.0",
+    "@rsbuild/core": "~2.1.1",
+    "@rslib/core": "0.23.1",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/istanbul-lib-coverage": "^2.0.6",

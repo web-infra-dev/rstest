@@ -9,9 +9,9 @@
     "test:threads": "cross-env RSTEST_POOL_TYPE=threads rstest run --pool.type threads"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.1.0-beta.0",
+    "@rsbuild/core": "~2.1.1",
     "@rsbuild/plugin-react": "^2.1.0",
-    "@rslib/core": "0.23.0",
+    "@rslib/core": "0.23.1",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",
@@ -26,7 +26,7 @@
     "@types/jest-image-snapshot": "^6.4.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "axios": "^1.18.0",
+    "axios": "^1.18.1",
     "cross-env": "^10.1.0",
     "fs-extra": "^11.3.5",
     "is-url": "^1.2.4",

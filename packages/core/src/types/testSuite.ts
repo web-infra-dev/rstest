@@ -116,6 +116,15 @@ export type TestSuite = TestSuiteInfo & {
   inTestEach?: boolean;
   concurrent?: boolean;
   sequential?: boolean;
+  /**
+   * Suite-level `TestOptions` passed to `describe(name, options, fn)`. Applied
+   * as inheritable defaults to descendant cases: an explicit case-level value
+   * wins, and a nested `describe` inherits its parent's value. Stored on the
+   * suite only to propagate down — suites are not executed themselves.
+   */
+  timeout?: number;
+  retry?: number;
+  repeats?: number;
   /** nested cases and suite could in a suite */
   tests: Test[];
   afterAllListeners?: AfterAllListener[];

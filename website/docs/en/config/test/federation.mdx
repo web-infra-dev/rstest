@@ -21,6 +21,7 @@ Rstest evaluates test bundles inside a single worker runtime so that module mock
 - Externalized dynamic imports get a `globalThis` fallback, so federation runtime chunks evaluated via `vm`/`eval` can still load modules with Node's native dynamic import.
 - Module Federation's placeholder chunk handlers (`consumes` / `remotes`) are kept from throwing before the federation runtime initializes.
 - Federation runtime plugins cannot replace Rstest's chunk-loading handlers, which would otherwise evaluate chunks outside the test runtime and lose mocks.
+- Node-targeted federation runs use Rstest's CommonJS worker loader and can serve virtual async-node chunks from the in-memory build output.
 
 import { Tab, Tabs } from '@theme';
 

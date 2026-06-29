@@ -43,13 +43,11 @@ export const exportedProject = defineProject({
   include: ['tests/node/**/*.test.ts'],
 });
 
-export const exportedProjectFactory = defineProject(
-  (): ProjectConfig => ({
-    root: __dirname,
-    testEnvironment: 'jsdom',
-    include: ['tests/dom/**/*.test.ts'],
-  }),
-);
+export const exportedProjectFactory = defineProject((): ProjectConfig => ({
+  root: __dirname,
+  testEnvironment: 'jsdom',
+  include: ['tests/dom/**/*.test.ts'],
+}));
 
 export const exportedNestedProjects = defineProject({
   projects: [

@@ -29,11 +29,7 @@ export type LocatorTextOptions = {
 };
 
 export type LocatorKeyboardModifier =
-  | 'Alt'
-  | 'Control'
-  | 'ControlOrMeta'
-  | 'Meta'
-  | 'Shift';
+  'Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift';
 
 export type LocatorMouseButton = 'left' | 'right' | 'middle';
 

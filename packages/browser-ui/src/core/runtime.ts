@@ -12,6 +12,25 @@ export const createWebSocketUrl = (wsPort: number): string => {
   return `${protocol}//${window.location.hostname}:${wsPort}`;
 };
 
+/**
+ * Resolve the runner origin for a test file's project. Each browser project
+ * runs on its own dev server, so the container must load that file's iframe
+ * from the project's own origin. Falls back to the container-level `runnerUrl`
+ * (and ultimately the container origin) when no per-project URL is known.
+ */
+export const resolveRunnerBase = (
+  options: {
+    projectRunnerUrls?: Record<string, string>;
+    runnerUrl?: string;
+  },
+  projectName: string | undefined,
+): string | undefined => {
+  if (projectName && options.projectRunnerUrls?.[projectName]) {
+    return options.projectRunnerUrls[projectName];
+  }
+  return options.runnerUrl;
+};
+
 export const createRunnerUrl = (
   testFile: string,
   runnerBase?: string,

@@ -449,6 +449,102 @@ describe('mergeRstestConfig', () => {
       },
     });
   });
+
+  it('should deep-merge browser.providerOptions across config layers', () => {
+    expect(
+      mergeRstestConfig(
+        {
+          browser: {
+            enabled: true,
+            provider: 'playwright',
+            providerOptions: {
+              launch: { channel: 'chromium', timeout: 30_000 },
+            },
+          },
+        },
+        {
+          browser: {
+            providerOptions: {
+              launch: { channel: 'chrome' },
+              context: { locale: 'en-US' },
+            },
+          },
+        },
+      ).browser,
+    ).toEqual({
+      enabled: true,
+      provider: 'playwright',
+      providerOptions: {
+        // `channel` overridden, sibling `timeout` and unrelated `context` kept.
+        launch: { channel: 'chrome', timeout: 30_000 },
+        context: { locale: 'en-US' },
+      },
+    });
+  });
+
+  it('should replace (not chain/concat) non-plain providerOptions values', () => {
+    const baseLog = () => {};
+    const overrideLog = () => {};
+    const merged = mergeRstestConfig(
+      {
+        browser: {
+          enabled: true,
+          provider: 'playwright',
+          providerOptions: {
+            launch: {
+              args: ['--no-sandbox'],
+              logger: { log: baseLog },
+            },
+          },
+        },
+      },
+      {
+        browser: {
+          providerOptions: {
+            launch: {
+              args: ['--headless=new'],
+              logger: { log: overrideLog },
+            },
+          },
+        },
+      },
+    );
+    const launch = (merged.browser!.providerOptions as any).launch;
+    // Opaque provider payload: arrays replace (not concat), functions stay
+    // callable and are replaced (not chained into `[baseLog, overrideLog]`).
+    expect(launch.args).toEqual(['--headless=new']);
+    expect(launch.logger.log).toBe(overrideLog);
+    expect(typeof launch.logger.log).toBe('function');
+  });
+
+  it('should keep a class-instance providerOptions value intact when a sibling leaf is overridden', () => {
+    class Logger {
+      log() {
+        return 'logged';
+      }
+    }
+    const logger = new Logger();
+    const merged = mergeRstestConfig(
+      {
+        browser: {
+          enabled: true,
+          provider: 'playwright',
+          providerOptions: { launch: { logger } },
+        },
+      },
+      {
+        browser: {
+          providerOptions: { launch: { channel: 'chrome' } },
+        },
+      },
+    );
+    const launch = (merged.browser!.providerOptions as any).launch;
+    // A class instance is a leaf: it must keep its prototype (deepmerge would
+    // otherwise clone it into a prototype-less plain object).
+    expect(launch.channel).toBe('chrome');
+    expect(launch.logger).toBeInstanceOf(Logger);
+    expect(launch.logger.log()).toBe('logged');
+  });
 });
 
 describe('withDefaultConfig browser normalization', () => {
