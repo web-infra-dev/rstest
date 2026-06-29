@@ -186,14 +186,13 @@ const collectNodeTests = async ({
     }),
   );
 
-  const rsbuildInstance = await prepareRsbuild(
+  const rsbuildInstance = await prepareRsbuild({
     context,
     globTestSourceEntries,
     setupFiles,
     globalSetupFiles,
-    nodeProjects,
-    [],
-  );
+    targetProjects: nodeProjects,
+  });
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     globTestSourceEntries,

@@ -447,15 +447,14 @@ export async function runTests(context: Rstest): Promise<void> {
     runnableProjectsResolved = true;
   };
 
-  const rsbuildInstance = await prepareRsbuild(
+  const rsbuildInstance = await prepareRsbuild({
     context,
     globTestSourceEntries,
     setupFiles,
     globalSetupFiles,
-    rsbuildProjects,
-    [],
-    resolveRunnableProjects,
-  );
+    targetProjects: rsbuildProjects,
+    onModifyRstestConfigApplied: resolveRunnableProjects,
+  });
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     inspectedConfig: {

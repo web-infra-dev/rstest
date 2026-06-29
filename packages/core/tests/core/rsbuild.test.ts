@@ -91,8 +91,8 @@ describe('prepareRsbuild', () => {
       },
     };
 
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         command: 'run',
         normalizedConfig: {
@@ -107,10 +107,10 @@ describe('prepareRsbuild', () => {
         },
         projects: [projectA, projectB],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
 
     await rsbuildInstance.initConfigs();
 
@@ -165,8 +165,8 @@ describe('prepareRsbuild', () => {
       },
     };
 
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         command: 'run',
         normalizedConfig: {
@@ -181,10 +181,10 @@ describe('prepareRsbuild', () => {
         },
         projects: [project],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
 
     const {
       origin: { bundlerConfigs },
@@ -216,8 +216,8 @@ describe('prepareRsbuild', () => {
       },
     };
 
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         command: 'run',
         normalizedConfig: {
@@ -250,10 +250,10 @@ describe('prepareRsbuild', () => {
           },
         ],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
 
     await expect(rsbuildInstance.initConfigs()).rejects.toThrow(
       'Cannot modify `browser.enabled` in `modifyRstestConfig`',
@@ -299,8 +299,8 @@ describe('prepareRsbuild', () => {
       },
     };
 
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         command: 'run',
         normalizedConfig: {
@@ -315,10 +315,10 @@ describe('prepareRsbuild', () => {
         },
         projects: [project],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
 
     await rsbuildInstance.initConfigs();
 
@@ -333,8 +333,8 @@ describe('prepareRsbuild', () => {
   });
 
   it('should generate rspack config correctly (jsdom)', async () => {
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         normalizedConfig: {
           root: rootPath,
@@ -372,10 +372,10 @@ describe('prepareRsbuild', () => {
           },
         ],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
     expect(rsbuildInstance).toBeDefined();
     const {
       origin: { bundlerConfigs },
@@ -385,8 +385,8 @@ describe('prepareRsbuild', () => {
   });
 
   it('should generate rspack config correctly (node)', async () => {
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         normalizedConfig: {
           root: rootPath,
@@ -426,10 +426,10 @@ describe('prepareRsbuild', () => {
           },
         ],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
     expect(rsbuildInstance).toBeDefined();
     const {
       origin: { bundlerConfigs },
@@ -439,8 +439,8 @@ describe('prepareRsbuild', () => {
   });
 
   it('should generate rspack config correctly with projects', async () => {
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         normalizedConfig: {
           root: rootPath,
@@ -487,10 +487,10 @@ describe('prepareRsbuild', () => {
           },
         ],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
     expect(rsbuildInstance).toBeDefined();
     const {
       origin: { bundlerConfigs },
@@ -501,8 +501,8 @@ describe('prepareRsbuild', () => {
   });
 
   it('should respect output.distPath.root in rspack config', async () => {
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         normalizedConfig: {
           root: rootPath,
@@ -541,10 +541,10 @@ describe('prepareRsbuild', () => {
           },
         ],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
 
     const {
       origin: { bundlerConfigs },
@@ -556,8 +556,8 @@ describe('prepareRsbuild', () => {
   });
 
   it('should use global output.distPath.root for project rspack config', async () => {
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         normalizedConfig: {
           root: rootPath,
@@ -601,10 +601,10 @@ describe('prepareRsbuild', () => {
           },
         ],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
 
     const {
       origin: { bundlerConfigs },
@@ -616,8 +616,8 @@ describe('prepareRsbuild', () => {
   });
 
   it('should generate swc config correctly with user customize', async () => {
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         normalizedConfig: {
           root: rootPath,
@@ -665,10 +665,10 @@ describe('prepareRsbuild', () => {
           },
         ],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
     expect(rsbuildInstance).toBeDefined();
     const {
       origin: { bundlerConfigs },
@@ -687,8 +687,8 @@ describe('prepareRsbuild', () => {
   });
 
   it('should respect user resolve.conditionNames and resolve.mainFields', async () => {
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         normalizedConfig: {
           root: rootPath,
@@ -731,10 +731,10 @@ describe('prepareRsbuild', () => {
           },
         ],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
 
     const {
       origin: { bundlerConfigs },
@@ -749,8 +749,8 @@ describe('prepareRsbuild', () => {
   });
 
   it('should use web conditionNames by default for jsdom environment', async () => {
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         normalizedConfig: {
           root: rootPath,
@@ -790,10 +790,10 @@ describe('prepareRsbuild', () => {
           },
         ],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
 
     const {
       origin: { bundlerConfigs },
@@ -806,8 +806,8 @@ describe('prepareRsbuild', () => {
   });
 
   it('should append user resolve.conditionNames in jsdom environment', async () => {
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         normalizedConfig: {
           root: rootPath,
@@ -849,10 +849,10 @@ describe('prepareRsbuild', () => {
           },
         ],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
 
     const {
       origin: { bundlerConfigs },
@@ -867,8 +867,8 @@ describe('prepareRsbuild', () => {
   });
 
   it('should generate rspack config correctly in watch mode', async () => {
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         command: 'watch',
         normalizedConfig: {
@@ -912,10 +912,10 @@ describe('prepareRsbuild', () => {
           },
         ],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
     expect(rsbuildInstance).toBeDefined();
     const {
       origin: { bundlerConfigs },
@@ -925,8 +925,8 @@ describe('prepareRsbuild', () => {
   });
 
   it('should pass normalized performance.buildCache to rsbuild config', async () => {
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         command: 'run',
         configFilePath: join(rootPath, 'rstest.config.ts'),
@@ -988,10 +988,10 @@ describe('prepareRsbuild', () => {
           },
         ],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
 
     const { origin } = await rsbuildInstance.inspectConfig();
 
@@ -1018,8 +1018,8 @@ describe('prepareRsbuild', () => {
   });
 
   it('should generate rspack config correctly (esm output)', async () => {
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         normalizedConfig: {
           root: rootPath,
@@ -1060,10 +1060,10 @@ describe('prepareRsbuild', () => {
           },
         ],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
     expect(rsbuildInstance).toBeDefined();
     const {
       origin: { bundlerConfigs },
@@ -1075,8 +1075,8 @@ describe('prepareRsbuild', () => {
   it('should generate rspack config correctly with less / sass plugin', async () => {
     const { pluginLess } = await import('@rsbuild/plugin-less');
     const { pluginSass } = await import('@rsbuild/plugin-sass');
-    const rsbuildInstance = await prepareRsbuild(
-      {
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
         rootPath,
         normalizedConfig: {
           root: rootPath,
@@ -1116,10 +1116,10 @@ describe('prepareRsbuild', () => {
           },
         ],
       } as unknown as RstestContext,
-      async () => ({}),
-      {},
-      {},
-    );
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
     expect(rsbuildInstance).toBeDefined();
     const {
       origin: { bundlerConfigs },

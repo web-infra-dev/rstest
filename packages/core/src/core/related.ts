@@ -330,14 +330,14 @@ export async function resolveRelatedTestFiles(
   const setupFiles: Record<string, Record<string, string>> = {};
   const globalSetupFiles: Record<string, Record<string, string>> = {};
 
-  const rsbuildInstance = await prepareRsbuild(
+  const rsbuildInstance = await prepareRsbuild({
     context,
     globTestSourceEntries,
     setupFiles,
     globalSetupFiles,
-    context.projects,
-    [createRelatedBuildSafeguardsPlugin()],
-    async () => {
+    targetProjects: context.projects,
+    extraPlugins: [createRelatedBuildSafeguardsPlugin()],
+    onModifyRstestConfigApplied: async () => {
       projectEntries = await collectProjectEntries(context);
 
       Object.assign(
@@ -349,7 +349,7 @@ export async function resolveRelatedTestFiles(
         buildSetupFiles(context.projects, 'globalSetup'),
       );
     },
-  );
+  });
 
   const devServer = await rsbuildInstance.createDevServer({
     getPortSilently: true,

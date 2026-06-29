@@ -228,11 +228,11 @@ export const initModifyRstestConfigHooks = (
   });
 };
 
-export const prepareRsbuild = async (
-  context: RstestContext,
-  globTestSourceEntries: (name: string) => Promise<Record<string, string>>,
-  setupFiles: Record<string, Record<string, string>>,
-  globalSetupFiles: Record<string, Record<string, string>>,
+type PrepareRsbuildOptions = {
+  context: RstestContext;
+  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+  setupFiles: Record<string, Record<string, string>>;
+  globalSetupFiles: Record<string, Record<string, string>>;
   /**
    * Explicit list of projects to include in the Rsbuild instance.
    *
@@ -241,10 +241,20 @@ export const prepareRsbuild = async (
    * graph for browser projects. If browser graph collection ever needs a
    * materially different build pipeline, split that behavior at the caller.
    */
-  targetProjects?: ProjectContext[],
-  extraPlugins: RsbuildPlugin[] = [],
-  onModifyRstestConfigApplied?: () => Promise<void>,
-): Promise<RsbuildInstance> => {
+  targetProjects?: ProjectContext[];
+  extraPlugins?: RsbuildPlugin[];
+  onModifyRstestConfigApplied?: () => Promise<void>;
+};
+
+export const prepareRsbuild = async ({
+  context,
+  globTestSourceEntries,
+  setupFiles,
+  globalSetupFiles,
+  targetProjects,
+  extraPlugins = [],
+  onModifyRstestConfigApplied,
+}: PrepareRsbuildOptions): Promise<RsbuildInstance> => {
   const {
     command,
     normalizedConfig: { isolate, dev = {}, coverage, pool },
