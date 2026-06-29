@@ -35,6 +35,8 @@ export default defineConfig({
 
 当 Rsbuild 插件运行在 Rstest 中时，可以通过 `api.useExposed('rstest')` 获取 Rstest 暴露的 API，并调用 `modifyRstestConfig` 来调整当前 project 的 Rstest 配置。
 
+该 API 目前仅在 Node Mode project 中暴露。Browser Mode project 不会收到 `rstest` 暴露 API，因此在这些 project 中 `api.useExposed('rstest')` 会返回 `undefined`。
+
 ```ts title="rstest-plugin.ts"
 import type { RsbuildPlugin } from '@rsbuild/core';
 import type { RstestExposeAPI } from '@rstest/core';
@@ -80,11 +82,11 @@ export default defineConfig({
 `RstestExposeAPI` 从 `@rstest/core` 导出，用于描述 Rstest 通过 `api.useExposed('rstest')` 暴露给 Rsbuild 插件的 API。
 
 ```ts
-import type { MaybePromise, RstestConfig } from '@rstest/core';
+import type { RstestConfig } from '@rstest/core';
 
 export type ModifyRstestConfigCallback = (
   config: RstestConfig,
-) => MaybePromise<RstestConfig | void>;
+) => RstestConfig | void | Promise<RstestConfig | void>;
 
 export type RstestExposeAPI = {
   modifyRstestConfig: (callback: ModifyRstestConfigCallback) => void;

@@ -271,6 +271,11 @@ describe('prepareRsbuild', () => {
           exclude: ['**/ignored.test.ts'],
           setupFiles: './setup.ts',
           globalSetup: './globalSetup.ts',
+          testEnvironment: 'jsdom',
+          root: join(rootPath, 'fixtures'),
+          output: {
+            module: false,
+          },
         }));
       },
     };
@@ -323,6 +328,8 @@ describe('prepareRsbuild', () => {
     await rsbuildInstance.initConfigs();
 
     expect(project.normalizedConfig.include).toEqual(['**/*.partial.test.ts']);
+    expect(project.rootPath).toBe(join(rootPath, 'fixtures'));
+    expect(project.outputModule).toBe(false);
     expect(project.normalizedConfig.browser.enabled).toBe(false);
     expect(project.normalizedConfig.exclude).toEqual({
       patterns: ['**/original-ignored.test.ts', '**/ignored.test.ts'],
@@ -330,6 +337,9 @@ describe('prepareRsbuild', () => {
     });
     expect(project.normalizedConfig.setupFiles).toEqual(['./setup.ts']);
     expect(project.normalizedConfig.globalSetup).toEqual(['./globalSetup.ts']);
+    expect(project.normalizedConfig.testEnvironment).toEqual({
+      name: 'jsdom',
+    });
   });
 
   it('should generate rspack config correctly (jsdom)', async () => {

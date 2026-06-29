@@ -337,8 +337,7 @@ export async function runTests(context: Rstest): Promise<void> {
   const setupFiles: Record<string, Record<string, string>> = {};
   const globalSetupFiles: Record<string, Record<string, string>> = {};
 
-  let entriesCache: Map<string, ProjectEntries> =
-    (await resolveShardedEntries(context)) || new Map();
+  let entriesCache: Map<string, ProjectEntries> = new Map();
 
   // Define globTestSourceEntries after entriesCache is potentially populated
   const globTestSourceEntries = async (
@@ -382,6 +381,10 @@ export async function runTests(context: Rstest): Promise<void> {
   const resolveRunnableProjects = async (): Promise<void> => {
     if (runnableProjectsResolved) {
       return;
+    }
+
+    if (shard) {
+      entriesCache = (await resolveShardedEntries(context)) || new Map();
     }
 
     const runnable = await resolveRunnableProjectsByEntries({
@@ -470,17 +473,29 @@ export async function runTests(context: Rstest): Promise<void> {
     rootPath,
   });
 
-  await resolveRunnableProjects();
+  let hasBrowserTestsToRun: boolean;
+  let hasNodeTestsToRun: boolean;
 
-  const hasBrowserTestsToRun = browserProjectsToRun.length > 0;
-  const hasNodeTestsToRun = nodeProjectsToRun.length > 0;
+  try {
+    await resolveRunnableProjects();
 
-  if (hasNodeTestsToRun || hasBrowserTestsToRun) {
-    await ensureRunDependencies({
-      projects: nodeProjectsToRun,
-      rootPath,
-      coverage,
-    });
+    hasBrowserTestsToRun = browserProjectsToRun.length > 0;
+    hasNodeTestsToRun = nodeProjectsToRun.length > 0;
+
+    if (hasNodeTestsToRun || hasBrowserTestsToRun) {
+      await ensureRunDependencies({
+        projects: nodeProjectsToRun,
+        rootPath,
+        coverage,
+      });
+    }
+  } catch (error) {
+    try {
+      await runLifecycleStep('rsbuild server cleanup', () => closeServer());
+    } catch (cleanupError) {
+      logger.debug(`Failed to cleanup Rsbuild server: ${cleanupError}`);
+    }
+    throw error;
   }
 
   // If there are browser tests to run, start them.

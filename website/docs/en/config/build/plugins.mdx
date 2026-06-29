@@ -35,6 +35,8 @@ Check out the Rsbuild [plugin list](https://rsbuild.rs/plugins/list#official-plu
 
 When an Rsbuild plugin runs inside Rstest, it can get the Rstest exposed API through `api.useExposed('rstest')` and call `modifyRstestConfig` to adjust the Rstest config for the current project.
 
+This API is currently exposed only for Node-mode projects. Browser Mode projects do not receive the `rstest` exposed API, so `api.useExposed('rstest')` returns `undefined` there.
+
 ```ts title="rstest-plugin.ts"
 import type { RsbuildPlugin } from '@rsbuild/core';
 import type { RstestExposeAPI } from '@rstest/core';
@@ -80,11 +82,11 @@ export default defineConfig({
 `RstestExposeAPI` is exported from `@rstest/core` and is the type of the API exposed by Rstest to Rsbuild plugins through `api.useExposed('rstest')`.
 
 ```ts
-import type { MaybePromise, RstestConfig } from '@rstest/core';
+import type { RstestConfig } from '@rstest/core';
 
 export type ModifyRstestConfigCallback = (
   config: RstestConfig,
-) => MaybePromise<RstestConfig | void>;
+) => RstestConfig | void | Promise<RstestConfig | void>;
 
 export type RstestExposeAPI = {
   modifyRstestConfig: (callback: ModifyRstestConfigCallback) => void;

@@ -9,6 +9,7 @@ import {
 import path from 'pathe';
 import { mergeRstestConfig } from '../config';
 import type {
+  EnvironmentWithOptions,
   EntryInfo,
   ModifyRstestConfigCallback,
   NormalizedProjectConfig,
@@ -16,7 +17,7 @@ import type {
   RstestContext,
   RstestExposeAPI,
 } from '../types';
-import { castArray, isDebug } from '../utils';
+import { castArray, ENV, isDebug } from '../utils';
 import { collectSetupPaths } from '../utils/getSetupFiles';
 import { isMemorySufficient } from '../utils/memory';
 import { pluginBasic } from './plugins/basic';
@@ -49,6 +50,25 @@ const markModifyRstestConfigApplied = (
   config: NormalizedProjectConfig,
 ): void => {
   (config as ModifiedRstestConfig)[modifyRstestConfigApplied] = true;
+};
+
+const normalizeMutableConfigFields = (
+  config: NormalizedProjectConfig,
+): void => {
+  config.setupFiles = castArray(config.setupFiles);
+  config.globalSetup = castArray(config.globalSetup);
+  if (typeof config.testEnvironment === 'string') {
+    config.testEnvironment = {
+      name: config.testEnvironment,
+    } satisfies EnvironmentWithOptions;
+  }
+};
+
+const syncProjectDerivedFields = (project: ProjectContext): void => {
+  project.rootPath = project.normalizedConfig.root || project.rootPath;
+  project.outputModule =
+    project.normalizedConfig.output?.module ??
+    process.env[ENV.OUTPUT_MODULE] !== 'false';
 };
 
 const getRuntimeChunkFiles = ({
@@ -127,8 +147,7 @@ const applyModifyRstestConfig = async (
       result ? previousConfig : currentConfig,
       result || {},
     ) as NormalizedProjectConfig;
-    currentConfig.setupFiles = castArray(currentConfig.setupFiles);
-    currentConfig.globalSetup = castArray(currentConfig.globalSetup);
+    normalizeMutableConfigFields(currentConfig);
 
     if (currentConfig.browser?.enabled !== browserEnabled) {
       throw new Error(
@@ -155,6 +174,7 @@ const applyProjectModifyRstestConfig = async (
     project.normalizedConfig,
     callbacks,
   );
+  syncProjectDerivedFields(project);
   markModifyRstestConfigApplied(project.normalizedConfig);
 };
 
