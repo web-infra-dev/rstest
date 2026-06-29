@@ -152,7 +152,7 @@ const createRequire = (
       ? path.join(currentDirectory, id)
       : id;
 
-    const content = assetFiles[joinedPath];
+    const content = getAssetContent(assetFiles, joinedPath);
 
     if (content) {
       try {
@@ -291,7 +291,7 @@ export const loadModule = ({
       const joinedPath = isRelativePath(wasmPath)
         ? path.join(path.dirname(distPath), wasmPath)
         : wasmPath;
-      const content = assetFiles[path.normalize(joinedPath)];
+      const content = getAssetContent(assetFiles, joinedPath);
 
       if (content) {
         callback(null, Buffer.from(content, 'base64'));
