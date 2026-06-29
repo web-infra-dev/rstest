@@ -145,6 +145,15 @@ const matchesText = (
     : normalizedActual.includes(normalizedExpected);
 };
 
+const matchesFormValue = (actual: string, expected: TextMatcher) => {
+  if (expected instanceof RegExp) {
+    expected.lastIndex = 0;
+    return expected.test(actual);
+  }
+
+  return actual === expected;
+};
+
 const matchesValue = (actual: unknown, expected: unknown) =>
   isDeepStrictEqual(actual, expected);
 
@@ -258,21 +267,44 @@ const createPlaywrightMatcher =
       message,
     );
 
+const runWithTimeout = (check: () => Promise<void>, timeout: number) => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  return Promise.race([
+    check(),
+    new Promise<void>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`Playwright assertion timed out after ${timeout}ms.`));
+      }, timeout);
+    }),
+  ]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  });
+};
+
 const waitForExpectation = async (
   check: () => Promise<void>,
   options?: MatcherOptions,
 ) => {
   const timeout = options?.timeout ?? DEFAULT_EXPECT_TIMEOUT;
-  const start = Date.now();
+  const deadline = Date.now() + timeout;
   let lastError: unknown;
 
-  while (Date.now() - start <= timeout) {
+  while (Date.now() <= deadline) {
     try {
-      await check();
+      await runWithTimeout(check, Math.max(deadline - Date.now(), 0));
       return;
     } catch (error) {
       lastError = error;
-      await sleep(EXPECT_POLL_INTERVAL);
+
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        break;
+      }
+
+      await sleep(Math.min(EXPECT_POLL_INTERVAL, remaining));
     }
   }
 
@@ -628,7 +660,7 @@ const createLocatorAssertions = (
     async toHaveValue(expected, options) {
       await assert(async () => {
         const actual = await locator.inputValue();
-        const pass = matchesText(actual, expected, 'exact');
+        const pass = matchesFormValue(actual, expected);
         assertExpectation(
           pass,
           isNot,

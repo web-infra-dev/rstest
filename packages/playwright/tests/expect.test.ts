@@ -6,10 +6,12 @@ const createLocator = ({
   count = 1,
   css = '',
   texts,
+  value = 'Hello',
 }: {
   count?: number;
   css?: string;
   texts: string[];
+  value?: string;
 }) =>
   ({
     count: async () => count,
@@ -31,7 +33,7 @@ const createLocator = ({
         id: 'app',
         ownerDocument: {},
         textContent: texts.join(''),
-        value: 'Hello',
+        value,
       } as unknown as Element;
       Object.defineProperty(element, 'id', {
         configurable: true,
@@ -46,7 +48,7 @@ const createLocator = ({
     evaluateAll: async () => texts,
     getAttribute: async (name: string) =>
       name === 'class' ? 'card title' : name === 'id' ? 'app' : null,
-    inputValue: async () => 'Hello',
+    inputValue: async () => value,
     isChecked: async () => true,
     isDisabled: async () => false,
     isEditable: async () => true,
@@ -147,6 +149,14 @@ describe('@rstest/playwright expect', () => {
     await expect(locator).toHaveValue('Hello');
   });
 
+  it('preserves significant whitespace in value assertions', async () => {
+    const locator = createLocator({ texts: ['Hello'], value: 'a b' });
+
+    await rstestExpect(
+      expect(locator).toHaveValue('a  b', { timeout: 1 }),
+    ).rejects.toThrow('Expected locator to have value');
+  });
+
   it('supports attribute presence assertions', async () => {
     const locator = createLocator({ texts: ['Hello'] });
 
@@ -204,5 +214,19 @@ describe('@rstest/playwright expect', () => {
     await rstestExpect(
       expect(locator, 'custom message').toBeAttached({ timeout: 1 }),
     ).rejects.toThrow('custom message');
+  });
+
+  it('bounds each Playwright polling attempt by the assertion timeout', async () => {
+    const locator = {
+      ...createLocator({ texts: ['Hello'] }),
+      evaluate: () => new Promise<void>(() => {}),
+    } as unknown as Locator;
+    const start = Date.now();
+
+    await rstestExpect(
+      expect(locator).toHaveCSS('display', 'block', { timeout: 20 }),
+    ).rejects.toThrow('Playwright assertion timed out after');
+
+    expect(Date.now() - start).toBeLessThan(1000);
   });
 });

@@ -155,6 +155,8 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 const browserCache = new Map<string, Promise<Browser>>();
+let activeBrowserFixtureCount = 0;
+let browserCleanupPromise: Promise<void> | undefined;
 
 const browserTypes = {
   chromium,
@@ -237,6 +239,18 @@ const closeBrowser = async (): Promise<void> => {
   browserCache.clear();
 
   await Promise.all(browsers.map(async (browser) => (await browser).close()));
+};
+
+const closeBrowserWhenIdle = async () => {
+  if (activeBrowserFixtureCount > 0 || browserCache.size === 0) {
+    return;
+  }
+
+  browserCleanupPromise ??= closeBrowser().finally(() => {
+    browserCleanupPromise = undefined;
+  });
+
+  await browserCleanupPromise;
 };
 
 const createStaticServerClose = (server: Server) => {
@@ -408,11 +422,22 @@ const defaultPlaywrightFixture = async (
 };
 
 const cleanupBrowserFixture = [
-  async (_context: TestContext, use: (value: undefined) => Promise<void>) => {
+  async (
+    { playwright, task }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
+    use: (value: undefined) => Promise<void>,
+  ) => {
+    activeBrowserFixtureCount++;
+
     try {
       await use(undefined);
     } finally {
-      await closeBrowser();
+      activeBrowserFixtureCount--;
+
+      if (
+        !(task.result?.status === 'fail' && shouldPauseOnFailure(playwright))
+      ) {
+        await closeBrowserWhenIdle();
+      }
     }
   },
   { auto: true },
