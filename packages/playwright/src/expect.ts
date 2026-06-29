@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { isDeepStrictEqual } from 'node:util';
 import { expect as rstestExpect } from '@rstest/core';
 import type { Assertion, ExpectStatic } from '@rstest/core';
@@ -98,6 +99,18 @@ type RstestNotAssertion<T> = {
   readonly not: Assertion<T>;
 };
 
+const expectStorage = new AsyncLocalStorage<ExpectStatic>();
+
+export const withPlaywrightExpect = <T>(expect: ExpectStatic, fn: () => T): T =>
+  expectStorage.run(expect, fn);
+
+const getRstestExpect = () => expectStorage.getStore() ?? rstestExpect;
+
+const bindExpectStaticMethod = <K extends keyof ExpectStatic>(key: K) => {
+  const expect = getRstestExpect();
+  return Reflect.get(expect, key);
+};
+
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
@@ -145,7 +158,7 @@ const matchesText = (
     : normalizedActual.includes(normalizedExpected);
 };
 
-const matchesFormValue = (actual: string, expected: TextMatcher) => {
+const matchesRawText = (actual: string, expected: TextMatcher) => {
   if (expected instanceof RegExp) {
     expected.lastIndex = 0;
     return expected.test(actual);
@@ -221,19 +234,20 @@ const assertExpectation = (
 };
 
 const recordSoftFailure = (error: unknown, message?: string) => {
-  const state = rstestExpect.getState();
+  const expect = getRstestExpect();
+  const state = expect.getState();
   const assertionCalls = state.assertionCalls;
   const normalizedError =
     error instanceof Error ? error : new Error(String(error));
 
   try {
-    rstestExpect
+    expect
       .soft(() => {
         throw normalizedError;
       }, message)
       .not.toThrow();
   } finally {
-    rstestExpect.setState({ assertionCalls });
+    expect.setState({ assertionCalls });
   }
 };
 
@@ -523,7 +537,7 @@ const createLocatorAssertions = (
         const pass =
           expected === undefined
             ? actual !== null
-            : actual !== null && matchesText(actual, expected, 'exact');
+            : actual !== null && matchesRawText(actual, expected);
         assertExpectation(
           pass,
           isNot,
@@ -538,7 +552,7 @@ const createLocatorAssertions = (
     async toHaveClass(expected, options) {
       await assert(async () => {
         const actual = (await locator.getAttribute('class')) ?? '';
-        const pass = matchesText(actual, expected, 'exact');
+        const pass = matchesRawText(actual, expected);
         assertExpectation(
           pass,
           isNot,
@@ -557,7 +571,7 @@ const createLocatorAssertions = (
             getComputedStyle(element).getPropertyValue(property),
           propertyName,
         );
-        const pass = matchesText(actual, expected, 'exact');
+        const pass = matchesRawText(actual, expected);
         assertExpectation(
           pass,
           isNot,
@@ -585,7 +599,7 @@ const createLocatorAssertions = (
     async toHaveId(expected, options) {
       await assert(async () => {
         const actual = (await locator.getAttribute('id')) ?? '';
-        const pass = matchesText(actual, expected, 'exact');
+        const pass = matchesRawText(actual, expected);
         assertExpectation(
           pass,
           isNot,
@@ -655,7 +669,7 @@ const createLocatorAssertions = (
     async toHaveValue(expected, options) {
       await assert(async () => {
         const actual = await locator.inputValue();
-        const pass = matchesFormValue(actual, expected);
+        const pass = matchesRawText(actual, expected);
         assertExpectation(
           pass,
           isNot,
@@ -700,7 +714,7 @@ const createPageAssertions = (
     async toHaveURL(expected, options) {
       await assert(async () => {
         const actual = page.url();
-        const pass = matchesText(actual, expected, 'exact');
+        const pass = matchesRawText(actual, expected);
         assertExpectation(
           pass,
           isNot,
@@ -755,7 +769,9 @@ const createExpectAssertion = <T>(
 ) =>
   createAssertion(
     actual,
-    soft ? rstestExpect.soft(actual, message) : rstestExpect(actual, message),
+    soft
+      ? getRstestExpect().soft(actual, message)
+      : getRstestExpect()(actual, message),
     false,
     soft,
     message,
@@ -773,10 +789,10 @@ export const expect = new Proxy(expectFn, {
       return soft;
     }
 
-    const value = Reflect.get(rstestExpect, key, receiver);
+    const value = bindExpectStaticMethod(key as keyof ExpectStatic);
     return value ?? Reflect.get(target, key, receiver);
   },
   set(_target, key, value, receiver) {
-    return Reflect.set(rstestExpect, key, value, receiver);
+    return Reflect.set(getRstestExpect(), key, value, receiver);
   },
 }) as PlaywrightExpect;
