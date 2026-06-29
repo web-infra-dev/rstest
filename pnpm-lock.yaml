@@ -667,7 +667,7 @@ importers:
         specifier: https://pkg.pr.new/module-federation/core/@module-federation/rstest@58cc69a
         version: https://pkg.pr.new/module-federation/core/@module-federation/rstest@58cc69a(@rsbuild/core@2.1.1(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.1(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.108.1)
       '@rsbuild/core':
-        specifier: ~2.1.0
+        specifier: ~2.1.1
         version: 2.1.1(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
       '@rsbuild/plugin-react':
         specifier: ^2.1.0
@@ -698,7 +698,7 @@ importers:
         specifier: https://pkg.pr.new/module-federation/core/@module-federation/rstest@58cc69a
         version: https://pkg.pr.new/module-federation/core/@module-federation/rstest@58cc69a(@rsbuild/core@2.1.1(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.1(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.108.1)
       '@rsbuild/core':
-        specifier: ~2.1.0
+        specifier: ~2.1.1
         version: 2.1.1(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
       '@rsbuild/plugin-react':
         specifier: ^2.1.0
@@ -728,7 +728,7 @@ importers:
         specifier: https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a
         version: https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@58cc69a(@rsbuild/core@2.1.1(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13))))(@rspack/core@2.1.1(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))(@swc/helpers@0.5.23))(node-fetch@2.7.0(encoding@0.1.13))(typescript@6.0.3)(webpack@5.108.1)
       '@rsbuild/core':
-        specifier: ~2.1.0
+        specifier: ~2.1.1
         version: 2.1.1(@module-federation/runtime-tools@2.5.1(node-fetch@2.7.0(encoding@0.1.13)))
       serve:
         specifier: 14.2.3
