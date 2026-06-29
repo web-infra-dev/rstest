@@ -18,10 +18,7 @@ type CustomReporter = string | [string, Record<string, unknown>];
 
 /** Union type for all supported reporter types */
 type SupportedReporter =
-  | keyof ReportOptions
-  | ReportWithOptions
-  | ReportBase
-  | CustomReporter;
+  keyof ReportOptions | ReportWithOptions | ReportBase | CustomReporter;
 
 export type CoverageThreshold = {
   /** Threshold for statements */
@@ -39,8 +36,7 @@ export type CoverageSummaryTotals = Totals;
 export type { CoverageMap, CoverageMapData, CoverageSummary };
 
 export type CoverageThresholds =
-  | CoverageThreshold
-  | (CoverageThreshold & ThresholdGlobRecord);
+  CoverageThreshold | (CoverageThreshold & ThresholdGlobRecord);
 
 /** check thresholds for matched files */
 type ThresholdGlobRecord = Record<

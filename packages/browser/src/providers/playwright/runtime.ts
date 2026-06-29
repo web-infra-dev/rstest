@@ -119,8 +119,7 @@ export async function launchPlaywrightBrowser({
   const playwright = await import('playwright');
   const browserType = playwright[browserName];
   const launchOptions = providerOptions.launch as
-    | Record<string, unknown>
-    | undefined;
+    Record<string, unknown> | undefined;
   const launchArgs = Array.isArray(launchOptions?.args)
     ? launchOptions.args
     : browserName === 'chromium'
@@ -144,8 +143,7 @@ export async function launchPlaywrightBrowser({
       viewport,
     }) => {
       const contextOptions = contextProviderOptions?.context as
-        | Record<string, unknown>
-        | undefined;
+        Record<string, unknown> | undefined;
       const context = await browser.newContext({
         ...contextOptions,
         viewport,

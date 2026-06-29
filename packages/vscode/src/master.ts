@@ -86,8 +86,7 @@ export class RstestApi {
       };
       const extension = vscode.extensions.getExtension('rstack.rstest');
       const extensionVersion = extension?.packageJSON?.version as
-        | string
-        | undefined;
+        string | undefined;
       const coreVersion = corePackageJson.version;
 
       if (coreVersion && extensionVersion && coreVersion !== extensionVersion) {
