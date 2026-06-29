@@ -44,6 +44,12 @@ __webpack_require__.rstest_mocked_ids_by_request = Object.create(null);
 
 const hasOwn = (target, property) => Object.hasOwn(target, property);
 
+// The other builtin spelling of a request (`os` <-> `node:os`). Used to treat
+// both spellings as one mock: the resolver reads under either, and unmock clears
+// both. A non-builtin's toggled key is never in the map, so it's a harmless miss.
+const altBuiltinSpelling = (request) =>
+  request.startsWith('node:') ? request.slice(5) : `node:${request}`;
+
 const isPromise = (value) => value instanceof Promise;
 
 // Restore a module id to its captured original factory and drop its cache
@@ -96,6 +102,61 @@ const createMockedModule = (originalModule, isSpy) => {
   );
 };
 
+// #1454: register a mock's exports PRODUCER with the worker-realm native-mock
+// registry so a Node `registerHooks` load hook can serve them to a module loaded
+// NATIVELY by Node — a true-external `A` (a node_modules package), or a local
+// module reached via a non-literal `import(variable)` (loaded outside the
+// bundle) — that internally imports this mocked module. Routed over the existing
+// RSTEST_API channel (same as `mockObject`). `request` is `undefined` under an
+// older @rspack/core that omits the request literal — skip then.
+//
+// `produce` yields the mock's exports: the already-built mocked module for the
+// spy/mock-option path (the SAME instance bundle consumers see, via its getters),
+// or the raw factory for a function mock. It is NOT run here — only the thunk is
+// handed to the worker, which runs it LAZILY (once, memoized) the first time the
+// load hook actually serves this mock. This preserves `rs.mock`/`doMock` lazy
+// factory semantics: a factory with side effects, or one referencing module-level
+// imports not yet evaluated when the hoisted `rs.mock` runs, never runs at
+// registration time and never runs at all when no natively-loaded module imports
+// the mock. Still queued on a microtask so publish/unpublish stay ordered (see
+// `unpublishNativeMock`).
+//
+// LIMITATION (function factory only): the factory runs a second time on the
+// worker side (at native-import time), so the native-realm mock is a SEPARATE
+// instance from the bundle's. A spy created inside the factory (`rs.fn()`) is
+// therefore a different object on each side, so asserting — through the bundle
+// handle — calls made via the natively-loaded module will not see them. Sync
+// object-returning factories (the #1454 repro) and the spy/mock-option path are
+// unaffected.
+const publishNativeMock = (request, produce) => {
+  if (request === undefined) {
+    return;
+  }
+  const api = globalThis.RSTEST_API?.rstest;
+  if (!api || typeof api.__setNativeMock !== 'function') {
+    return;
+  }
+  queueMicrotask(() => {
+    api.__setNativeMock(request, produce);
+  });
+};
+
+// Deferred on a microtask like `publishNativeMock` so install→uninstall order is
+// preserved: a synchronous unpublish would run BEFORE the deferred publish
+// microtask, which would then re-add a stale entry. Queuing both keeps the last
+// operation winning (`rs.mock` then `rs.unmock` ⇒ removed).
+const unpublishNativeMock = (request) => {
+  if (request === undefined) {
+    return;
+  }
+  queueMicrotask(() => {
+    const api = globalThis.RSTEST_API?.rstest;
+    if (api && typeof api.__unsetNativeMock === 'function') {
+      api.__unsetNativeMock(request);
+    }
+  });
+};
+
 //#region rs.unmock
 __webpack_require__.rstest_unmock = (id, request) => {
   restoreOriginalFactory(id);
@@ -103,8 +164,13 @@ __webpack_require__.rstest_unmock = (id, request) => {
   // `request` is `undefined` under an older @rspack/core that omits the request
   // literal; the guard can be dropped once the minimum @rspack/core always emits it.
   if (request !== undefined) {
-    delete __webpack_require__.rstest_mocked_ids_by_request[request];
+    const map = __webpack_require__.rstest_mocked_ids_by_request;
+    delete map[request];
+    // `os` and `node:os` are equivalent, so an unmock with either spelling must
+    // clear both (mirrors the resolver's read-side alt lookup).
+    delete map[altBuiltinSpelling(request)];
   }
+  unpublishNativeMock(request);
 };
 //#endregion
 
@@ -239,6 +305,7 @@ const getMockImplementation = (mockType = 'mock') => {
       };
 
       installFactory(finalModFactory);
+      publishNativeMock(request, () => mockedModule);
       return;
     }
 
@@ -253,6 +320,11 @@ const getMockImplementation = (mockType = 'mock') => {
       };
 
       installFactory(finalModFactory);
+      // Manual mock (`__mocks__`) — publish the SAME bundled instance so a
+      // natively-loaded module that imports this mocked module sees it too.
+      // `__webpack_require__(modFactory)` is cache-safe (same call as the factory
+      // above), so there is no separate-instance divergence here.
+      publishNativeMock(request, () => __webpack_require__(modFactory));
     } else if (typeof modFactory === 'function') {
       const finalModFactory = function (
         __webpack_module__,
@@ -282,6 +354,7 @@ const getMockImplementation = (mockType = 'mock') => {
       };
 
       installFactory(finalModFactory);
+      publishNativeMock(request, modFactory);
     }
   };
 };
@@ -315,6 +388,28 @@ __webpack_require__.rstest_do_mock_require =
 __webpack_require__.rstest_dynamic_require = (id, request) => {
   const mockedId = __webpack_require__.rstest_mocked_ids_by_request[request];
   return __webpack_require__(mockedId !== undefined ? mockedId : id);
+};
+//#endregion
+
+//#region non-literal dynamic import() mock resolution
+/**
+ * Expose the mocked instance for a clean `request` to the worker's native import
+ * hook (loadEsModule/loadModule `defineRstestDynamicImport`), which handles a
+ * non-literal `import(variable)` outside the webpack runtime. `const s='node:os';
+ * import(s)` then resolves `s` to the mocked module here instead of natively
+ * loading the real one. Published on the shared `globalThis` because the worker
+ * hook has no `__webpack_require__`; returns `undefined` when the request isn't
+ * mocked, so the hook performs its normal native import.
+ */
+globalThis.__rstest_resolve_mocked_dynamic_request__ = (request) => {
+  const map = __webpack_require__.rstest_mocked_ids_by_request;
+  let mockedId = map[request];
+  if (mockedId === undefined) {
+    // A builtin may be mocked under its other spelling (`os` vs `node:os`),
+    // mirroring the native hook's builtin canonicalization.
+    mockedId = map[altBuiltinSpelling(request)];
+  }
+  return mockedId !== undefined ? __webpack_require__(mockedId) : undefined;
 };
 //#endregion
 
