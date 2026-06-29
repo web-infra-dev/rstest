@@ -291,22 +291,18 @@ export const createPool = async ({
   context: RstestContext;
   recommendWorkerCount?: number;
 }): Promise<{
-  runTests: (params: {
-    entries: EntryInfo[];
-    getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
-    getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
-    setupEntries: EntryInfo[];
-    updateSnapshot: SnapshotUpdateState;
-    project: ProjectContext;
-    /** Per-compile id; bumped on each watch rebuild so reused workers flush their kept module cache. */
-    buildId?: number;
-    /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
-    onCoverageResult?: (coverage: CoverageMapData) => void;
-    /** Perfetto trace events forwarded for caller-owned dumping. */
-    onTraceEvents?: (events: TraceEvent[]) => void;
-    /** Records host-side pool slices in the caller-owned Perfetto trace. */
-    traceSpan: TraceSpan;
-  }) => Promise<{
+  runTests: (
+    params: PoolDispatchParams & {
+      /** Per-compile id; bumped on each watch rebuild so reused workers flush their kept module cache. */
+      buildId?: number;
+      /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
+      onCoverageResult?: (coverage: CoverageMapData) => void;
+      /** Perfetto trace events forwarded for caller-owned dumping. */
+      onTraceEvents?: (events: TraceEvent[]) => void;
+      /** Records host-side pool slices in the caller-owned Perfetto trace. */
+      traceSpan: TraceSpan;
+    },
+  ) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
   }>;

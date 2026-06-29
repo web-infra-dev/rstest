@@ -57,7 +57,14 @@ function failConfig(embedded: boolean, message: string): never {
   process.exit(1);
 }
 
-const resolveOutputModule = (config: NormalizedConfig): boolean =>
+type OutputModuleConfig = {
+  federation: boolean;
+  output?: {
+    module?: boolean;
+  };
+};
+
+const resolveOutputModule = (config: OutputModuleConfig): boolean =>
   config.federation
     ? false
     : (config.output?.module ?? process.env[ENV.OUTPUT_MODULE] !== 'false');

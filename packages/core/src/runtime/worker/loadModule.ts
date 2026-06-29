@@ -26,6 +26,7 @@ const getAssetContent = (
   if (filePath instanceof URL && filePath.protocol === 'file:') {
     return assetFiles[path.normalize(fileURLToPath(filePath))];
   }
+  return undefined;
 };
 
 const createFsAssetProxy = (
