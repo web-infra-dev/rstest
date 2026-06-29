@@ -29,6 +29,7 @@ function getShardedFiles<T extends { testPath: string }>(
  */
 export async function resolveShardedEntries(
   context: RstestContext,
+  { silent = false }: { silent?: boolean } = {},
 ): Promise<Map<string, ProjectEntries> | undefined> {
   const {
     normalizedConfig,
@@ -69,11 +70,13 @@ export async function resolveShardedEntries(
   const totalTestFileCount = allTestEntriesBeforeSharding.length;
   const testFilesInShardCount = shardedEntries.length;
 
-  logger.log(
-    color.green(
-      `Running shard ${shard.index} of ${shard.count} (${testFilesInShardCount} of ${totalTestFileCount} test files)\n`,
-    ),
-  );
+  if (!silent) {
+    logger.log(
+      color.green(
+        `Running shard ${shard.index} of ${shard.count} (${testFilesInShardCount} of ${totalTestFileCount} test files)\n`,
+      ),
+    );
+  }
 
   const shardedEntriesByProject = new Map<string, Record<string, string>>();
   for (const { project, alias, testPath } of shardedEntries) {

@@ -170,10 +170,11 @@ const applyProjectModifyRstestConfig = async (
     return;
   }
 
-  project.normalizedConfig = await applyModifyRstestConfig(
+  const modifiedConfig = await applyModifyRstestConfig(
     project.normalizedConfig,
     callbacks,
   );
+  Object.assign(project.normalizedConfig, modifiedConfig);
   syncProjectDerivedFields(project);
   markModifyRstestConfigApplied(project.normalizedConfig);
 };
@@ -200,6 +201,7 @@ const createRstestExposeAPI = (
 export const initModifyRstestConfigHooks = (
   rsbuildInstance: RsbuildInstance,
   projects: ProjectContext[],
+  exposeProjects: ProjectContext[] = projects,
   onModifyRstestConfigApplied?: () => Promise<void>,
 ): void => {
   const modifyRstestConfigCallbacks = new Map<
@@ -208,7 +210,7 @@ export const initModifyRstestConfigHooks = (
   >();
 
   const applyModifyRstestConfigCallbacks = async () => {
-    for (const project of projects) {
+    for (const project of exposeProjects) {
       await applyProjectModifyRstestConfig(
         project,
         modifyRstestConfigCallbacks.get(project.environmentName),
@@ -216,7 +218,7 @@ export const initModifyRstestConfigHooks = (
     }
   };
 
-  for (const project of projects) {
+  for (const project of exposeProjects) {
     rsbuildInstance.expose(
       'rstest',
       createRstestExposeAPI(
@@ -262,6 +264,7 @@ type PrepareRsbuildOptions = {
    * materially different build pipeline, split that behavior at the caller.
    */
   targetProjects?: ProjectContext[];
+  exposeRstestAPIProjects?: ProjectContext[];
   extraPlugins?: RsbuildPlugin[];
   onModifyRstestConfigApplied?: () => Promise<void>;
 };
@@ -272,6 +275,7 @@ export const prepareRsbuild = async ({
   setupFiles,
   globalSetupFiles,
   targetProjects,
+  exposeRstestAPIProjects,
   extraPlugins = [],
   onModifyRstestConfigApplied,
 }: PrepareRsbuildOptions): Promise<RsbuildInstance> => {
@@ -338,6 +342,7 @@ export const prepareRsbuild = async ({
   initModifyRstestConfigHooks(
     rsbuildInstance,
     projects,
+    exposeRstestAPIProjects,
     onModifyRstestConfigApplied,
   );
 

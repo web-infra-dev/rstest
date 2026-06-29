@@ -205,8 +205,15 @@ const collectNodeTests = async ({
     globalSetupFiles,
     targetProjects: nodeProjects,
     onModifyRstestConfigApplied: async () => {
-      refreshSetupFiles();
       await onModifyRstestConfigApplied?.();
+      nodeProjects.splice(
+        0,
+        nodeProjects.length,
+        ...context.projects.filter(
+          (project) => !project.normalizedConfig.browser.enabled,
+        ),
+      );
+      refreshSetupFiles();
     },
   });
 
@@ -499,12 +506,16 @@ export async function listTests(
     return entries;
   };
 
-  const refreshListEntries = async () => {
+  const refreshListEntries = async ({
+    silentShardMessage = true,
+  }: { silentShardMessage?: boolean } = {}) => {
     for (const key of Object.keys(testEntries)) {
       delete testEntries[key];
     }
 
-    const shardedEntries = await resolveShardedEntries(context);
+    const shardedEntries = await resolveShardedEntries(context, {
+      silent: silentShardMessage,
+    });
     shardedBrowserEntries = undefined;
 
     if (shard && shardedEntries) {
@@ -542,12 +553,21 @@ export async function listTests(
       setupFiles: {},
       globalSetupFiles: {},
       targetProjects: nodeProjects,
-      onModifyRstestConfigApplied: refreshListEntries,
+      onModifyRstestConfigApplied: async () => {
+        await refreshListEntries();
+        nodeProjects.splice(
+          0,
+          nodeProjects.length,
+          ...context.projects.filter(
+            (project) => !project.normalizedConfig.browser.enabled,
+          ),
+        );
+      },
     });
     await rsbuildInstance.initConfigs({ action: 'dev' });
   }
 
-  await refreshListEntries();
+  await refreshListEntries({ silentShardMessage: false });
 
   const {
     list,
@@ -563,7 +583,7 @@ export async function listTests(
         context,
         globTestSourceEntries,
         shardedEntries: shardedBrowserEntries,
-        onModifyRstestConfigApplied: refreshListEntries,
+        onModifyRstestConfigApplied: () => refreshListEntries(),
       });
 
   const tests: ListedTest[] = [];

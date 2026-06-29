@@ -329,6 +329,9 @@ export async function resolveRelatedTestFiles(
 
   const setupFiles: Record<string, Record<string, string>> = {};
   const globalSetupFiles: Record<string, Record<string, string>> = {};
+  const nodeProjects = context.projects.filter(
+    (project) => !project.normalizedConfig.browser.enabled,
+  );
 
   const rsbuildInstance = await prepareRsbuild({
     context,
@@ -336,6 +339,7 @@ export async function resolveRelatedTestFiles(
     setupFiles,
     globalSetupFiles,
     targetProjects: context.projects,
+    exposeRstestAPIProjects: nodeProjects,
     extraPlugins: [createRelatedBuildSafeguardsPlugin()],
     onModifyRstestConfigApplied: async () => {
       projectEntries = await collectProjectEntries(context);
@@ -370,6 +374,10 @@ export async function resolveRelatedTestFiles(
 
   try {
     for (const project of context.projects) {
+      if (!projectEntries.has(project.environmentName)) {
+        continue;
+      }
+
       const environment = devServer.environments[project.environmentName]!;
       const stats = await environment.getStats();
       const { modules } = stats.toJson({
