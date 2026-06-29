@@ -1,13 +1,15 @@
 import { describe, expect as rstestExpect, it } from '@rstest/core';
 import type { Locator, Page } from 'playwright';
-import { expect } from '../src';
+import { expect, test } from '../src';
 
 const createLocator = ({
+  attributes = {},
   count = 1,
   css = '',
   texts,
   value = 'Hello',
 }: {
+  attributes?: Record<string, string>;
   count?: number;
   css?: string;
   texts: string[];
@@ -47,7 +49,8 @@ const createLocator = ({
     },
     evaluateAll: async () => texts,
     getAttribute: async (name: string) =>
-      name === 'class' ? 'card title' : name === 'id' ? 'app' : null,
+      attributes[name] ??
+      (name === 'class' ? 'card title' : name === 'id' ? 'app' : null),
     inputValue: async () => value,
     isChecked: async () => true,
     isDisabled: async () => false,
@@ -160,6 +163,31 @@ describe('@rstest/playwright expect', () => {
     ).rejects.toThrow('Expected locator to have value');
   });
 
+  it('preserves significant whitespace in non-text exact assertions', async () => {
+    const locator = createLocator({
+      attributes: {
+        class: 'card title',
+        'data-value': 'a b',
+        id: 'app',
+      },
+      css: '10px 20px',
+      texts: ['Hello'],
+    });
+
+    await rstestExpect(
+      expect(locator).toHaveAttribute('data-value', 'a  b', { timeout: 1 }),
+    ).rejects.toThrow('Expected locator to have attribute data-value');
+    await rstestExpect(
+      expect(locator).toHaveClass('card  title', { timeout: 1 }),
+    ).rejects.toThrow('Expected locator to have class');
+    await rstestExpect(
+      expect(locator).toHaveCSS('margin', '10px   20px', { timeout: 1 }),
+    ).rejects.toThrow('Expected locator to have CSS margin');
+    await rstestExpect(
+      expect(locator).toHaveId(' app ', { timeout: 1 }),
+    ).rejects.toThrow('Expected locator to have id');
+  });
+
   it('supports attribute presence assertions', async () => {
     const locator = createLocator({ texts: ['Hello'] });
 
@@ -233,3 +261,21 @@ describe('@rstest/playwright expect', () => {
     expect(Date.now() - start).toBeLessThan(1000);
   });
 });
+
+test.concurrent(
+  'keeps Playwright assertion counts isolated in concurrent test A',
+  async ({ expect: localExpect }) => {
+    localExpect.assertions(1);
+
+    await expect(createPage('Concurrent A')).toHaveTitle('Concurrent A');
+  },
+);
+
+test.concurrent(
+  'keeps Playwright assertion counts isolated in concurrent test B',
+  async ({ expect: localExpect }) => {
+    localExpect.assertions(1);
+
+    await expect(createPage('Concurrent B')).toHaveTitle('Concurrent B');
+  },
+);
