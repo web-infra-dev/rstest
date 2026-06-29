@@ -450,8 +450,7 @@ export async function listTests(
   const shardedEntries = await resolveShardedEntries(context);
   const testEntries: Record<string, Record<string, string>> = {};
   let shardedBrowserEntries:
-    | Map<string, { entries: Record<string, string> }>
-    | undefined;
+    Map<string, { entries: Record<string, string> }> | undefined;
 
   if (shard && shardedEntries) {
     for (const [key, value] of shardedEntries.entries()) {

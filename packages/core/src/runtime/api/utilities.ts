@@ -108,8 +108,7 @@ export const restoreScopedEntry = <E>(
 };
 
 let utilitiesPromise:
-  | Promise<{ rstest: RstestUtilities; resetForFile: () => void }>
-  | undefined;
+  Promise<{ rstest: RstestUtilities; resetForFile: () => void }> | undefined;
 
 /**
  * `rstest`/`rs` is a build-once singleton with a STABLE identity across files,

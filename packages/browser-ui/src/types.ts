@@ -72,8 +72,7 @@ export type FatalPayload = Extract<
 >['payload'];
 
 export type BrowserClientMessage =
-  | ProtocolBrowserClientMessage
-  | { type: string; payload?: unknown };
+  ProtocolBrowserClientMessage | { type: string; payload?: unknown };
 
 export type HostRPC = {
   rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;

@@ -191,11 +191,10 @@ type Fixture<T, K extends keyof T, ExtraContext = object> = ((
   ? T[K] extends any
     ? FixtureFn<T, K, Omit<ExtraContext, Exclude<keyof T, K>>>
     : never
-  :
-      | T[K]
-      | (T[K] extends any
-          ? FixtureFn<T, K, Omit<ExtraContext, Exclude<keyof T, K>>>
-          : never);
+  : | T[K]
+    | (T[K] extends any
+        ? FixtureFn<T, K, Omit<ExtraContext, Exclude<keyof T, K>>>
+        : never);
 
 export type Fixtures<
   T extends Record<string, any> = object,
