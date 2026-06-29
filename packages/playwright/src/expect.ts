@@ -157,11 +157,6 @@ const matchesFormValue = (actual: string, expected: TextMatcher) => {
 const matchesValue = (actual: unknown, expected: unknown) =>
   isDeepStrictEqual(actual, expected);
 
-const getLocatorTextContent = async (locator: Locator) => {
-  const texts = await getLocatorTextContents(locator);
-  return texts.join('');
-};
-
 const getStrictLocatorTextContent = async (locator: Locator) => {
   const count = await locator.count();
 
@@ -509,7 +504,7 @@ const createLocatorAssertions = (
 
     async toContainText(expected, options) {
       await assert(async () => {
-        const actual = await getLocatorTextContent(locator);
+        const actual = await getStrictLocatorTextContent(locator);
         const pass = matchesText(actual, expected, 'contain');
         assertExpectation(
           pass,

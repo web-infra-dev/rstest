@@ -137,6 +137,7 @@ const DEFAULT_BROWSER_NAME = 'chromium' satisfies PlaywrightBrowserName;
 const DEBUG_ENV = 'PWDEBUG';
 const PAUSE_ENV = 'RSTEST_PLAYWRIGHT_PAUSE';
 const DEBUG_PAUSE_TIMEOUT = 24 * 60 * 60 * 1000;
+const BROWSER_IDLE_CLOSE_DELAY = 1000;
 const DEFAULT_STATIC_SERVER_HOST = '127.0.0.1';
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -157,6 +158,7 @@ const CONTENT_TYPES: Record<string, string> = {
 const browserCache = new Map<string, Promise<Browser>>();
 let activeBrowserFixtureCount = 0;
 let browserCleanupPromise: Promise<void> | undefined;
+let browserCleanupTimer: ReturnType<typeof setTimeout> | undefined;
 
 const browserTypes = {
   chromium,
@@ -241,6 +243,13 @@ const closeBrowser = async (): Promise<void> => {
   await Promise.all(browsers.map(async (browser) => (await browser).close()));
 };
 
+const clearBrowserCleanupTimer = () => {
+  if (browserCleanupTimer) {
+    clearTimeout(browserCleanupTimer);
+    browserCleanupTimer = undefined;
+  }
+};
+
 const closeBrowserWhenIdle = async () => {
   if (activeBrowserFixtureCount > 0 || browserCache.size === 0) {
     return;
@@ -251,6 +260,18 @@ const closeBrowserWhenIdle = async () => {
   });
 
   await browserCleanupPromise;
+};
+
+const scheduleBrowserCleanupWhenIdle = () => {
+  if (activeBrowserFixtureCount > 0 || browserCache.size === 0) {
+    return;
+  }
+
+  clearBrowserCleanupTimer();
+  browserCleanupTimer = setTimeout(() => {
+    browserCleanupTimer = undefined;
+    void closeBrowserWhenIdle();
+  }, BROWSER_IDLE_CLOSE_DELAY);
 };
 
 const createStaticServerClose = (server: Server) => {
@@ -423,20 +444,30 @@ const defaultPlaywrightFixture = async (
 
 const cleanupBrowserFixture = [
   async (
-    { playwright, task }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
+    {
+      onTestFailed,
+      playwright,
+      task,
+    }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
     use: (value: undefined) => Promise<void>,
   ) => {
+    clearBrowserCleanupTimer();
     activeBrowserFixtureCount++;
+
+    onTestFailed(async () => {
+      activeBrowserFixtureCount--;
+
+      if (!shouldPauseOnFailure(playwright)) {
+        await closeBrowserWhenIdle();
+      }
+    }, DEBUG_PAUSE_TIMEOUT);
 
     try {
       await use(undefined);
     } finally {
-      activeBrowserFixtureCount--;
-
-      if (!(
-        task.result?.status === 'fail' && shouldPauseOnFailure(playwright)
-      )) {
-        await closeBrowserWhenIdle();
+      if (task.result?.status !== 'fail') {
+        activeBrowserFixtureCount--;
+        scheduleBrowserCleanupWhenIdle();
       }
     }
   },

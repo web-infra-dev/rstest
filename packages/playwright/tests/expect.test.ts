@@ -85,6 +85,9 @@ describe('@rstest/playwright expect', () => {
     await rstestExpect(
       expect(locator).toHaveText('SaveCancel', { timeout: 1 }),
     ).rejects.toThrow('Expected locator to resolve to 1 element');
+    await rstestExpect(
+      expect(locator).toContainText('SaveCancel', { timeout: 1 }),
+    ).rejects.toThrow('Expected locator to resolve to 1 element');
   });
 
   it('supports locator list, count, and css assertions', async () => {

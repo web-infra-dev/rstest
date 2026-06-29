@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '../src';
 import { getDebugOptions, resolveLaunchOptions } from '../src/fixture';
-import type { BrowserContext, Page } from 'playwright';
+import type { Browser, BrowserContext, Page } from 'playwright';
 import type {
   PlaywrightFixtures,
   PlaywrightOptions,
@@ -27,6 +27,8 @@ const ciPlaywrightOptions = {
 const browserTest = test.extend({
   playwright: ciPlaywrightOptions,
 });
+
+let sharedBrowser: Browser | undefined;
 
 test('provides an isolated request fixture', async ({ request }) => {
   expect(request).toBeTruthy();
@@ -52,6 +54,14 @@ test.sequential(
   },
 );
 
+browserTest.sequential('stores the shared browser', ({ browser }) => {
+  sharedBrowser = browser;
+});
+
+browserTest.sequential('reuses the shared browser', ({ browser }) => {
+  expect(browser).toBe(sharedBrowser);
+});
+
 browserTest.extend({
   playwright: {
     ...ciPlaywrightOptions,
@@ -73,6 +83,19 @@ browserTest.extend({
 })('preserves extended fixture types', async ({ customFixture }) => {
   expect(customFixture).toContain('viewport');
 });
+
+browserTest
+  .extend({
+    customFixture: async ({ page }, use) => {
+      await use(`viewport-${page.viewportSize()?.width ?? 0}`);
+    },
+  })
+  .concurrent(
+    'keeps the shared browser alive for concurrent tests',
+    async ({ customFixture }) => {
+      expect(customFixture).toContain('viewport');
+    },
+  );
 
 browserTest.extend<{ createLabel: () => Promise<string> }>({
   createLabel: async ({ page }, use) => {
