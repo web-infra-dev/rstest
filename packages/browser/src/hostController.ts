@@ -2273,8 +2273,7 @@ export const runBrowserController = async (
 
   let activeContainerPage: BrowserProviderPage | null = null;
   let getHeadlessRunnerPageBySessionId:
-    | ((sessionId: string) => BrowserProviderPage | undefined)
-    | undefined;
+    ((sessionId: string) => BrowserProviderPage | undefined) | undefined;
 
   const dispatchBrowserRpcRequest = async ({
     request,
