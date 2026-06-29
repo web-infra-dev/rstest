@@ -28,6 +28,7 @@ import type {
 } from '@rstest/core';
 import type { TestContext } from '@rstest/core';
 import { chromium, request as playwrightRequest } from 'playwright';
+import { withPlaywrightExpect } from './expect';
 import type {
   APIRequestContext,
   Browser,
@@ -444,11 +445,7 @@ const defaultPlaywrightFixture = async (
 
 const cleanupBrowserFixture = [
   async (
-    {
-      onTestFailed,
-      playwright,
-      task,
-    }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
+    { onTestFailed, task }: TestContext,
     use: (value: undefined) => Promise<void>,
   ) => {
     clearBrowserCleanupTimer();
@@ -456,10 +453,7 @@ const cleanupBrowserFixture = [
 
     onTestFailed(async () => {
       activeBrowserFixtureCount--;
-
-      if (!shouldPauseOnFailure(playwright)) {
-        await closeBrowserWhenIdle();
-      }
+      await closeBrowserWhenIdle();
     }, DEBUG_PAUSE_TIMEOUT);
 
     try {
@@ -532,9 +526,7 @@ const playwrightFixtures = {
   ) => {
     const context = await browser.newContext(playwright.contextOptions);
     onTestFailed(async () => {
-      if (!shouldPauseOnFailure(playwright)) {
-        await context.close();
-      }
+      await context.close();
     });
 
     try {
@@ -565,6 +557,7 @@ const playwrightFixtures = {
 
       console.log('[rstest-playwright] Paused on failed test for debugging.');
       await page.pause();
+      await page.close();
     }, DEBUG_PAUSE_TIMEOUT);
 
     try {
@@ -592,6 +585,31 @@ const playwrightFixtures = {
 };
 
 type RstestTest<ExtraContext = object> = TestAPIs<ExtraContext>;
+type TestCallback<ExtraContext> = (
+  context: TestContext & ExtraContext,
+) => void | Promise<void>;
+type TestForCallback<ExtraContext> = (
+  param: unknown,
+  context: TestContext & ExtraContext,
+) => void | Promise<void>;
+type RstestTestAPI<ExtraContext> =
+  RstestTest<ExtraContext> | TestAPIs<ExtraContext>;
+type CallableTest = (
+  description: string,
+  arg2?: unknown,
+  arg3?: unknown,
+) => void;
+
+const preserveFixtureSource = <Fn extends (...args: never[]) => unknown>(
+  original: Fn,
+  wrapped: Fn,
+): Fn => {
+  Object.defineProperty(wrapped, 'toString', {
+    configurable: true,
+    value: () => original.toString(),
+  });
+  return wrapped;
+};
 
 export type PlaywrightFixtures<
   FixturesContext extends Record<string, any>,
@@ -647,27 +665,123 @@ export type PlaywrightTest<ExtraContext = PlaywrightFixture> =
   };
 
 const createPlaywrightTest = <ExtraContext>(
-  rstestTest: RstestTest<ExtraContext>,
+  rstestTest: RstestTestAPI<ExtraContext>,
 ): PlaywrightTest<ExtraContext> => {
-  const playwrightTest = rstestTest as unknown as PlaywrightTest<ExtraContext>;
-  const extend = rstestTest.extend.bind(rstestTest);
+  const wrapTestCallback = (
+    fn: TestCallback<ExtraContext>,
+  ): TestCallback<ExtraContext> => {
+    return preserveFixtureSource(fn, ((context) =>
+      withPlaywrightExpect(context.expect, () => fn(context))) as typeof fn);
+  };
+  const wrapForCallback = (
+    fn: TestForCallback<ExtraContext>,
+  ): TestForCallback<ExtraContext> => {
+    return preserveFixtureSource(fn, ((param, context) =>
+      withPlaywrightExpect(context.expect, () =>
+        fn(param, context),
+      )) as typeof fn);
+  };
+  const wrapForTestCall = (
+    testCall: ReturnType<TestForFn<ExtraContext>>,
+  ): ReturnType<TestForFn<ExtraContext>> => {
+    return ((description, arg2, arg3) => {
+      if (typeof arg2 === 'function') {
+        return (testCall as CallableTest)(
+          description,
+          wrapForCallback(arg2 as TestForCallback<ExtraContext>),
+          arg3 as number | undefined,
+        );
+      }
 
-  Object.assign(playwrightTest, {
-    afterAll: rstestAfterAll,
-    afterEach: rstestAfterEach,
-    beforeAll: rstestBeforeAll,
-    beforeEach: rstestBeforeEach,
-    describe: rstestDescribe,
-    fail: rstestTest.fails,
-  });
+      return (testCall as CallableTest)(
+        description,
+        arg2,
+        typeof arg3 === 'function'
+          ? wrapForCallback(arg3 as TestForCallback<ExtraContext>)
+          : undefined,
+      );
+    }) as ReturnType<TestForFn<ExtraContext>>;
+  };
+  const extend =
+    'extend' in rstestTest ? rstestTest.extend.bind(rstestTest) : undefined;
 
-  playwrightTest.extend = ((
-    fixtures: Parameters<PlaywrightTest<ExtraContext>['extend']>[0],
-  ) => {
-    return createPlaywrightTest(extend(fixtures));
-  }) as PlaywrightTest<ExtraContext>['extend'];
+  return new Proxy(rstestTest, {
+    apply(target, _thisArg, args) {
+      const [description, arg2, arg3] = args;
 
-  return playwrightTest;
+      if (typeof arg2 === 'function') {
+        return target(
+          description as string,
+          wrapTestCallback(arg2 as TestCallback<ExtraContext>),
+          arg3 as number | undefined,
+        );
+      }
+
+      return target(
+        description as string,
+        arg2 as TestOptions,
+        typeof arg3 === 'function'
+          ? wrapTestCallback(arg3 as TestCallback<ExtraContext>)
+          : undefined,
+      );
+    },
+    get(target, key, receiver) {
+      if (key === 'afterAll') {
+        return rstestAfterAll;
+      }
+      if (key === 'afterEach') {
+        return rstestAfterEach;
+      }
+      if (key === 'beforeAll') {
+        return rstestBeforeAll;
+      }
+      if (key === 'beforeEach') {
+        return rstestBeforeEach;
+      }
+      if (key === 'describe') {
+        return rstestDescribe;
+      }
+      if (key === 'extend') {
+        return extend
+          ? (fixtures: Parameters<PlaywrightTest<ExtraContext>['extend']>[0]) =>
+              createPlaywrightTest(extend(fixtures))
+          : undefined;
+      }
+      if (key === 'fail') {
+        return createPlaywrightTest(
+          target.fails as unknown as RstestTestAPI<ExtraContext>,
+        );
+      }
+      if (
+        key === 'fails' ||
+        key === 'only' ||
+        key === 'skip' ||
+        key === 'todo' ||
+        key === 'concurrent' ||
+        key === 'sequential'
+      ) {
+        return createPlaywrightTest(
+          Reflect.get(target, key, receiver) as RstestTestAPI<ExtraContext>,
+        );
+      }
+      if (key === 'runIf' || key === 'skipIf') {
+        return (condition: boolean) =>
+          createPlaywrightTest(
+            Reflect.get(
+              target,
+              key,
+              receiver,
+            )(condition) as RstestTestAPI<ExtraContext>,
+          );
+      }
+      if (key === 'for') {
+        return (...args: Parameters<TestForFn<ExtraContext>>) =>
+          wrapForTestCall(Reflect.get(target, key, receiver)(...args));
+      }
+
+      return Reflect.get(target, key, receiver);
+    },
+  }) as unknown as PlaywrightTest<ExtraContext>;
 };
 
 export const test: PlaywrightTest = createPlaywrightTest(
