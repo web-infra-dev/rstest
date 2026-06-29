@@ -253,38 +253,28 @@ If you see path errors such as `Cannot find module './'` or `Cannot find module 
 
 ### Auto-mocking modules
 
-In Vitest, calling `vi.mock()` with just the module path first attempts to load a manual mock from the corresponding `__mocks__` directory. If no manual mock is found, it automatically mocks the module, replacing all its exports with empty mock functions.
+Both Vitest and Rstest support auto-mocking when the mock call only includes the module path. Rstest first attempts to load a manual mock from the corresponding `__mocks__` directory. If no manual mock is found, it automatically mocks the module, replacing all function exports with empty mock functions.
+
+This behavior is supported starting from Rstest 0.11.0. In earlier versions, pass `{ mock: true }` explicitly to request auto-mocking when no manual mock exists.
 
 ```ts
-// Vitest
-import { vi, test, expect } from 'vitest';
-import { someFunction } from './module';
-
-// Looks for __mocks__/module.js first, then auto-mocks.
-vi.mock('./module');
-
-test('should be mocked', () => {
-  expect(vi.isMockFunction(someFunction)).toBe(true);
-  someFunction(); // returns undefined
-});
-```
-
-Rstest handles this differently. Calling `rs.mock()` with only the module path will _only_ look for a mock in the `__mocks__` directory and will throw an error if one isn't found. Auto-mocking requires explicitly passing the `{ mock: true }` option.
-
-```diff
 // Rstest
 import { rs, test, expect } from '@rstest/core';
 import { someFunction } from './module';
 
-- // Looks for __mocks__/module.js first, then auto-mocks.
-- vi.mock('./module');
-+ // Auto-mocks the module because { mock: true } is passed.
-+ rs.mock('./module', { mock: true });
+// Looks for __mocks__/module.js first, then auto-mocks.
+rs.mock('./module');
 
 test('should be mocked', () => {
   expect(rs.isMockFunction(someFunction)).toBe(true);
   someFunction(); // returns undefined
 });
+```
+
+If you want to skip the `__mocks__` lookup and request auto-mocking directly, pass `{ mock: true }` explicitly:
+
+```ts
+rs.mock('./module', { mock: true });
 ```
 
 ### Mock async modules

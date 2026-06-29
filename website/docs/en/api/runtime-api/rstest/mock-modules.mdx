@@ -116,7 +116,7 @@ test('formatDate is mocked, parseDate is real', () => {
 
 ### With `__mocks__` directory
 
-If `rs.mock` is called without providing a factory function, it will attempt to resolve a module with the same name in the `__mocks__` directory at the same level as the mocked module.
+If `rs.mock` is called without providing a factory function or options object, it first attempts to resolve a module with the same name in the `__mocks__` directory. If no manual mock is found, Rstest falls back to auto-mocking the target module, equivalent to passing `{ mock: true }`.
 
 **Resolution rules:**
 
@@ -150,6 +150,20 @@ rs.mock('lodash');
 rs.mock('../src/multiple');
 
 lodash.random(multiple(1, 2), multiple(3, 4));
+```
+
+If the corresponding manual mock file does not exist, Rstest auto-mocks the original module instead:
+
+```ts title="src/math.test.ts"
+import { expect, rs, test } from '@rstest/core';
+import { add } from './math';
+
+rs.mock('./math');
+
+test('falls back to auto-mocking', () => {
+  expect(rs.isMockFunction(add)).toBe(true);
+  expect(add(1, 2)).toBeUndefined();
+});
 ```
 
 ### With `{ spy: true }` option
@@ -190,7 +204,7 @@ The spy wraps the module's **exports**. When one export calls another inside the
 
 ### With `{ mock: true }` option
 
-If `{ mock: true }` is provided as the second parameter, the module will be auto-mocked with all function exports replaced by mock functions. Unlike `{ spy: true }`, the original implementations are **not** preserved - mock functions return `undefined` by default.
+If `{ mock: true }` is provided as the second parameter, the module will be auto-mocked with all function exports replaced by mock functions. Unlike `{ spy: true }`, the original implementations are **not** preserved - mock functions return `undefined` by default. This is also the fallback behavior of `rs.mock('./module')` when no matching manual mock exists.
 
 This is useful when you want to completely replace a module's behavior and configure mock return values or implementations.
 
