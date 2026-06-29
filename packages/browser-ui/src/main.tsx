@@ -27,7 +27,11 @@ import {
 } from './core/caseMap';
 import { projectKey as toProjectKey, suiteKey } from './core/treeNodeKey';
 import { forwardDispatchRpcRequest, readDispatchMessage } from './core/channel';
-import { createRunId, createRunnerUrl } from './core/runtime';
+import {
+  createRunId,
+  createRunnerUrl,
+  resolveRunnerBase,
+} from './core/runtime';
 import { useRpc } from './hooks/useRpc';
 import type {
   BrowserClientFileResult,
@@ -242,9 +246,10 @@ const BrowserRunner: React.FC<{
         }
         return { ...prev, [testFile]: updatedCases };
       });
+      const projectName = iframe.getAttribute('data-test-project') ?? undefined;
       const newSrc = createRunnerUrl(
         testFile,
-        options.runnerUrl,
+        resolveRunnerBase(options, projectName),
         testNamePattern,
         false,
         nextRunId,
@@ -256,7 +261,7 @@ const BrowserRunner: React.FC<{
         runId: nextRunId,
       };
     },
-    [options.runnerUrl],
+    [options.runnerUrl, options.projectRunnerUrls],
   );
 
   const { rpc, loading, connected } = useRpc(
@@ -866,7 +871,10 @@ const BrowserRunner: React.FC<{
                             runId
                               ? createRunnerUrl(
                                   fileInfo.testPath,
-                                  options.runnerUrl,
+                                  resolveRunnerBase(
+                                    options,
+                                    fileInfo.projectName,
+                                  ),
                                   undefined,
                                   false,
                                   runId,
