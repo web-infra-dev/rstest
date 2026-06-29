@@ -14,8 +14,7 @@ function updateActEnvironment(): void {
 // See https://github.com/facebook/react/commit/f1338f8080abd1386454a10bbf93d67bfe37ce85
 const _act = ((React as Record<string, unknown>).act ??
   (React as Record<string, unknown>).unstable_act) as
-  | ((callback: () => unknown) => Promise<void>)
-  | undefined;
+  ((callback: () => unknown) => Promise<void>) | undefined;
 
 type ActFunction = (callback: () => unknown) => Promise<void>;
 

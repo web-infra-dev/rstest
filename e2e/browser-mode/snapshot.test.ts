@@ -19,8 +19,7 @@ describe('browser mode - snapshot', () => {
   let fileSnapshotDir = '';
   let fixturesFs: Awaited<ReturnType<typeof prepareFixtures>>['fs'] | undefined;
   let cliToKill:
-    | Awaited<ReturnType<typeof runBrowserCliWithCwd>>['cli']
-    | undefined;
+    Awaited<ReturnType<typeof runBrowserCliWithCwd>>['cli'] | undefined;
 
   const runSnapshot = async (args?: string[]) => {
     const result = await runBrowserCliWithCwd(fixtureDir, {

@@ -30,9 +30,7 @@ interface MockResultThrow {
 }
 
 type MockResult<T> =
-  | MockResultReturn<T>
-  | MockResultThrow
-  | MockResultIncomplete;
+  MockResultReturn<T> | MockResultThrow | MockResultIncomplete;
 
 interface MockSettledResultFulfilled<T> {
   type: 'fulfilled';
@@ -44,8 +42,7 @@ interface MockSettledResultRejected {
 }
 
 type MockSettledResult<T> =
-  | MockSettledResultFulfilled<T>
-  | MockSettledResultRejected;
+  MockSettledResultFulfilled<T> | MockSettledResultRejected;
 
 type RuntimeOptions = Partial<
   Pick<

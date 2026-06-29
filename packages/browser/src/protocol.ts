@@ -149,10 +149,7 @@ export type BrowserClientMessage =
  * host router.
  */
 export type RunnerLifecycleMethod =
-  | 'file-ready'
-  | 'suite-start'
-  | 'suite-result'
-  | 'case-start';
+  'file-ready' | 'suite-start' | 'suite-result' | 'case-start';
 
 /**
  * {@link BrowserClientMessage} types that are forwarded to the `runner`
