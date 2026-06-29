@@ -866,6 +866,7 @@ const BrowserRunner: React.FC<{
                       >
                         <iframe
                           data-test-file={fileInfo.testPath}
+                          data-test-project={fileInfo.projectName}
                           title={`Test runner for ${getDisplayName(fileInfo.testPath)}`}
                           src={
                             runId
