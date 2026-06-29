@@ -433,9 +433,9 @@ const cleanupBrowserFixture = [
     } finally {
       activeBrowserFixtureCount--;
 
-      if (
-        !(task.result?.status === 'fail' && shouldPauseOnFailure(playwright))
-      ) {
+      if (!(
+        task.result?.status === 'fail' && shouldPauseOnFailure(playwright)
+      )) {
         await closeBrowserWhenIdle();
       }
     }
@@ -593,9 +593,9 @@ type RstestBeforeEach = typeof rstestBeforeEach;
 type RstestDescribe = typeof rstestDescribe;
 
 type MergeContext<ExtraContext, FixturesContext> = {
-  [K in
-    | keyof FixturesContext
-    | keyof ExtraContext]: K extends keyof FixturesContext
+  [
+    K in keyof FixturesContext | keyof ExtraContext
+  ]: K extends keyof FixturesContext
     ? FixturesContext[K]
     : K extends keyof ExtraContext
       ? ExtraContext[K]
