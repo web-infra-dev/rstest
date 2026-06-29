@@ -69,12 +69,14 @@ function __rstest_clean_core_cache__() {
  * By default, modules are isolated between different tests (each test runs in
  * a fresh worker process spawned by rstest's pool).
  */
-export const pluginCacheControl: (
-  getSetupFiles: () => string[],
-) => RsbuildPlugin = (getSetupFiles) => ({
+export const pluginCacheControl: (options: {
+  getSetupFiles: () => string[];
+  getIsolate: () => boolean | undefined;
+}) => RsbuildPlugin = ({ getSetupFiles, getIsolate }) => ({
   name: 'rstest:cache-control',
   setup: (api) => {
     let setupFileSet: Set<string> | undefined;
+    const isCacheControlEnabled = () => getIsolate() !== true;
     const getSetupFileSet = () => {
       setupFileSet ??= new Set(
         getSetupFiles().map((file) => path.normalize(file)),
@@ -87,27 +89,38 @@ export const pluginCacheControl: (
     // string/array `test` would never match there, so the setup-id registration
     // below would not be injected and setup files would stop re-running per
     // file under `isolate: false`. Compare paths normalized to posix instead.
-    api.transform(
-      {
-        test: (resourcePath) =>
-          getSetupFileSet().has(path.normalize(resourcePath)),
-      },
-      ({ code }) => {
-        // Register via this chunk's own `__webpack_require__` (not a shared
-        // `global.setupIds`) so each project's setup ids stay isolated under
-        // `isolate: false`.
-        return {
-          code: `${code}
+    api.modifyRsbuildConfig({
+      order: 'post',
+      handler: () => {
+        if (!isCacheControlEnabled()) {
+          return;
+        }
+
+        api.transform(
+          {
+            test: (resourcePath) =>
+              getSetupFileSet().has(path.normalize(resourcePath)),
+          },
+          ({ code }) => {
+            // Register via this chunk's own `__webpack_require__` (not a shared
+            // `global.setupIds`) so each project's setup ids stay isolated under
+            // `isolate: false`.
+            return {
+              code: `${code}
 if (__webpack_require__.rstest_register_setup_id && __webpack_module__.id) {
   __webpack_require__.rstest_register_setup_id(__webpack_module__.id);
 }
         `,
-        };
+            };
+          },
+        );
       },
-    );
+    });
 
     api.modifyRspackConfig((config) => {
-      config.plugins.push(new RstestCacheControlPlugin());
+      if (isCacheControlEnabled()) {
+        config.plugins.push(new RstestCacheControlPlugin());
+      }
     });
   },
 });

@@ -342,6 +342,177 @@ describe('prepareRsbuild', () => {
     });
   });
 
+  it('should preserve normalized defaults after modifyRstestConfig mutates public config shape', async () => {
+    const modifyRstestConfigPlugin: RsbuildPlugin = {
+      name: 'modify-rstest-config-public-mutation',
+      setup(api) {
+        const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+        rstestApi?.modifyRstestConfig((config) => {
+          config.exclude = ['**/ignored.test.ts'];
+          config.coverage = {
+            enabled: true,
+          };
+          config.pool = 'threads';
+          config.root = './fixtures';
+        });
+      },
+    };
+
+    const project = {
+      name: 'test',
+      rootPath,
+      environmentName: 'test',
+      normalizedConfig: {
+        root: rootPath,
+        include: ['original.test.ts'],
+        exclude: {
+          patterns: ['**/node_modules/**', '**/dist/**'],
+          override: false,
+        },
+        setupFiles: [],
+        globalSetup: [],
+        plugins: [modifyRstestConfigPlugin],
+        resolve: {},
+        source: {},
+        output: {},
+        tools: {},
+        coverage: {
+          enabled: false,
+          exclude: ['**/node_modules/**'],
+          provider: 'istanbul',
+          reporters: ['text'],
+          reportsDirectory: join(rootPath, 'coverage'),
+          clean: true,
+          reportOnFailure: false,
+          allowExternal: false,
+        },
+        pool: { type: 'forks' },
+        testEnvironment: {
+          name: 'node',
+        },
+        browser: { enabled: false },
+      },
+    };
+
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
+        rootPath,
+        command: 'run',
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          coverage: project.normalizedConfig.coverage,
+          isolate: true,
+          pool: { type: 'forks' },
+        },
+        projects: [project],
+      } as unknown as RstestContext,
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
+
+    await rsbuildInstance.initConfigs();
+
+    expect(project.normalizedConfig.exclude).toEqual({
+      patterns: ['**/node_modules/**', '**/dist/**', '**/ignored.test.ts'],
+      override: false,
+    });
+    expect(project.normalizedConfig.coverage).toMatchObject({
+      enabled: true,
+      exclude: ['**/node_modules/**'],
+      provider: 'istanbul',
+    });
+    expect(project.normalizedConfig.pool).toEqual({ type: 'threads' });
+    expect(project.rootPath).toBe(join(rootPath, 'fixtures'));
+  });
+
+  it('should apply coverage plugin when modifyRstestConfig enables coverage', async () => {
+    const modifyRstestConfigPlugin: RsbuildPlugin = {
+      name: 'modify-rstest-config-coverage',
+      setup(api) {
+        const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+        rstestApi?.modifyRstestConfig((config) => {
+          config.coverage = {
+            enabled: true,
+          };
+        });
+      },
+    };
+
+    const coverage = {
+      enabled: false,
+      exclude: ['**/node_modules/**'],
+      provider: 'istanbul',
+      reporters: ['text'],
+      reportsDirectory: join(rootPath, 'coverage'),
+      clean: true,
+      reportOnFailure: false,
+      allowExternal: false,
+    };
+    const providerRootPath = join(rootPath, '../../e2e/test-coverage/fixtures');
+    const normalizedConfig = {
+      root: rootPath,
+      name: 'test',
+      include: ['original.test.ts'],
+      exclude: {
+        patterns: ['**/node_modules/**'],
+        override: false,
+      },
+      setupFiles: [],
+      globalSetup: [],
+      plugins: [modifyRstestConfigPlugin],
+      resolve: {},
+      source: {},
+      output: {
+        distPath: {
+          root: TEMP_RSTEST_OUTPUT_DIR,
+        },
+      },
+      tools: {},
+      coverage,
+      pool: { type: 'forks' },
+      testEnvironment: {
+        name: 'node',
+      },
+      browser: { enabled: false },
+    };
+
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
+        rootPath: providerRootPath,
+        command: 'run',
+        normalizedConfig,
+        projects: [
+          {
+            name: 'test',
+            rootPath,
+            environmentName: 'test',
+            normalizedConfig,
+          },
+        ],
+      } as unknown as RstestContext,
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
+
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+    const configText = JSON.stringify(bundlerConfigs[0]);
+
+    expect(configText).toContain('swc-plugin-coverage-instrument');
+    expect(configText).toContain('**/node_modules/**');
+  });
+
   it('should generate rspack config correctly (jsdom)', async () => {
     const rsbuildInstance = await prepareRsbuild({
       context: {
@@ -1141,5 +1312,78 @@ describe('prepareRsbuild', () => {
     expect(matchRules(bundlerConfigs[0]!, 'a.sass')).toMatchSnapshot(
       'sass rules',
     );
+  });
+
+  it('should apply cache-control plugin when modifyRstestConfig disables isolate', async () => {
+    const modifyRstestConfigPlugin: RsbuildPlugin = {
+      name: 'modify-rstest-config-isolate',
+      setup(api) {
+        const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+        rstestApi?.modifyRstestConfig((config) => {
+          config.isolate = false;
+          config.setupFiles = [join(rootPath, 'setup.ts')];
+        });
+      },
+    };
+    const normalizedConfig = {
+      root: rootPath,
+      name: 'test',
+      output: {
+        distPath: {
+          root: TEMP_RSTEST_OUTPUT_DIR,
+        },
+      },
+      plugins: [modifyRstestConfigPlugin],
+      resolve: {},
+      source: {},
+      tools: {},
+      setupFiles: [],
+      testEnvironment: {
+        name: 'node',
+      },
+      isolate: true,
+      pool: { type: 'forks' },
+      browser: { enabled: false },
+    };
+
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
+        rootPath,
+        command: 'run',
+        normalizedConfig,
+        projects: [
+          {
+            name: 'test',
+            rootPath,
+            environmentName: 'test',
+            normalizedConfig,
+          },
+        ],
+      } as unknown as RstestContext,
+      globTestSourceEntries: async () => ({}),
+      setupFiles: { test: { setup: join(rootPath, 'setup.ts') } },
+      globalSetupFiles: {},
+    });
+
+    const {
+      origin: { bundlerConfigs },
+    } = await rsbuildInstance.inspectConfig();
+
+    expect(
+      bundlerConfigs[0]?.plugins?.some(
+        (plugin) => plugin?.constructor.name === 'RstestCacheControlPlugin',
+      ),
+    ).toBeTruthy();
+    expect(
+      bundlerConfigs[0]?.module?.rules?.some((rule) =>
+        Boolean(
+          rule &&
+          typeof rule === 'object' &&
+          typeof rule.test === 'function' &&
+          JSON.stringify(rule).includes('transformLoader.mjs'),
+        ),
+      ),
+    ).toBeTruthy();
   });
 });

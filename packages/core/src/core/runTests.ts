@@ -528,19 +528,22 @@ export async function runTests(context: Rstest): Promise<void> {
 
   // If there are no node tests to run, we can potentially exit early.
   if (!hasNodeTestsToRun) {
-    if (browserResultPromise) {
-      await browserResultPromise;
-    }
     // If only browser tests were to run and they ran, we should return.
     if (hasBrowserTestsToRun) {
-      // `run()` was never invoked on this path, so no node-side finalize
-      // fires for the pre-allocated buffer. Flush any browser events the
-      // host emitted into it before exiting so `--trace` still produces a
-      // file for filtered mixed-mode runs.
-      await runLifecycleStep('rsbuild server cleanup', () => closeServer());
-      await runLifecycleStep('trace shutdown', () =>
-        traceController.shutdown(activeTraceRun),
-      );
+      try {
+        if (browserResultPromise) {
+          await browserResultPromise;
+        }
+      } finally {
+        // `run()` was never invoked on this path, so no node-side finalize
+        // fires for the pre-allocated buffer. Flush any browser events the
+        // host emitted into it before exiting so `--trace` still produces a
+        // file for filtered mixed-mode runs.
+        await runLifecycleStep('rsbuild server cleanup', () => closeServer());
+        await runLifecycleStep('trace shutdown', () =>
+          traceController.shutdown(activeTraceRun),
+        );
+      }
       return;
     }
     // If no node projects at all, and no browser tests to run,
