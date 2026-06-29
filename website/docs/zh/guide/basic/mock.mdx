@@ -84,13 +84,13 @@ test('mocks a CommonJS module loaded with require', () => {
 
 ### 自动 mock 模块
 
-如果你希望先把模块中的函数导出替换成 mock 函数，再由测试补充少数导出的行为，可以使用 `{ mock: true }`。
+如果你希望先把模块中的函数导出替换成 mock 函数，再由测试补充少数导出的行为，可以只传模块路径调用 `rs.mock()`。Rstest 会先检查 `__mocks__` 中是否存在匹配的手写 mock；如果不存在，则回退为自动 mock 该模块。你也可以显式传入 `{ mock: true }`，直接请求自动 mock，并跳过手写 mock 查找。
 
 ```ts title="math.test.ts"
 import { expect, rs, test } from '@rstest/core';
 import { add } from './math';
 
-rs.mock('./math', { mock: true });
+rs.mock('./math');
 
 test('overrides one export', () => {
   rs.mocked(add).mockReturnValue(100);
@@ -140,7 +140,7 @@ test('keeps parseDate real', () => {
 
 ### 复用 `__mocks__` 里的手写 mock
 
-如果多个测试会复用同一个 fake 实现，可以把它放进 `__mocks__` 目录，并在不传 factory 的情况下直接加载。
+如果多个测试会复用同一个 fake 实现，可以把它放进 `__mocks__` 目录，并在不传 factory 的情况下直接加载。手写 mock 的优先级高于自动 mock 回退。
 
 ```txt
 src/
