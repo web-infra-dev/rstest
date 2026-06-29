@@ -255,6 +255,8 @@ If you see path errors such as `Cannot find module './'` or `Cannot find module 
 
 Both Vitest and Rstest support auto-mocking when the mock call only includes the module path. Rstest first attempts to load a manual mock from the corresponding `__mocks__` directory. If no manual mock is found, it automatically mocks the module, replacing all function exports with empty mock functions.
 
+This behavior is supported starting from Rstest 0.11.0. In earlier versions, pass `{ mock: true }` explicitly to request auto-mocking when no manual mock exists.
+
 ```ts
 // Rstest
 import { rs, test, expect } from '@rstest/core';
