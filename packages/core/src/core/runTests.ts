@@ -22,6 +22,7 @@ import {
   resolveShardedEntries,
   type TraceEvent,
 } from '../utils';
+import { collectSetupPaths } from '../utils/getSetupFiles';
 import {
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
@@ -33,7 +34,11 @@ import {
   runGlobalSetup,
   runGlobalTeardown,
 } from './globalSetup';
-import { createRsbuildServer, prepareRsbuild } from './rsbuild';
+import {
+  createRsbuildServer,
+  prepareRsbuild,
+  syncCoverageSetupExcludes,
+} from './rsbuild';
 import { resolveRunnableProjectsByEntries } from './environmentEntries';
 import type { Rstest } from './rstest';
 
@@ -446,6 +451,11 @@ export async function runTests(context: Rstest): Promise<void> {
 
       globalSetupFiles[environmentName] = getSetupFiles(globalSetup, rootPath);
     }
+
+    syncCoverageSetupExcludes(
+      coverage,
+      collectSetupPaths(setupFiles, globalSetupFiles),
+    );
 
     runnableProjectsResolved = true;
   };

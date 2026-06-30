@@ -35,6 +35,17 @@ type TestEntryToChunkHashes = {
   chunks: Record<string, string>;
 }[];
 
+export const syncCoverageSetupExcludes = (
+  coverage: NormalizedProjectConfig['coverage'],
+  setupPaths: string[],
+): void => {
+  if (!coverage.enabled || !setupPaths.length) {
+    return;
+  }
+
+  coverage.exclude = Array.from(new Set([...coverage.exclude, ...setupPaths]));
+};
+
 const getRuntimeChunkFiles = ({
   chunks,
   outputPath,
@@ -188,17 +199,8 @@ export const prepareRsbuild = async ({
       coverage,
       context.rootPath,
     );
-    const coverageOptions = new Proxy(coverage, {
-      get(target, prop, receiver) {
-        if (prop === 'exclude') {
-          return [...target.exclude, ...getSetupPaths()];
-        }
-
-        return Reflect.get(target, prop, receiver);
-      },
-    });
-
-    rsbuildInstance.addPlugins([pluginCoverage(coverageOptions)]);
+    syncCoverageSetupExcludes(coverage, getSetupPaths());
+    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
   }
 
   return rsbuildInstance;

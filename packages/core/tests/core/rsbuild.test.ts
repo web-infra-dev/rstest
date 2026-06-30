@@ -1,12 +1,65 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { join, normalize } from 'pathe';
-import { prepareRsbuild } from '../../src/core/rsbuild';
+import {
+  prepareRsbuild,
+  syncCoverageSetupExcludes,
+} from '../../src/core/rsbuild';
 import type { RstestContext, RstestExposeAPI } from '../../src/types';
+import { listTests } from '../../src/core/listTests';
+import { Rstest } from '../../src/core/rstest';
 import { TEMP_RSTEST_OUTPUT_DIR } from '../../src/utils';
 
 process.env.DEBUG = 'false';
 
 const rootPath = join(__dirname, '../..');
+
+rs.mock('../../src/core/browserLoader', () => ({
+  loadBrowserModule: async () => ({
+    validateBrowserConfig: () => undefined,
+    listBrowserTests: async (
+      context: RstestContext,
+      options?: {
+        shardedEntries?: Map<string, { entries: Record<string, string> }>;
+      },
+    ) => ({
+      close: async () => undefined,
+      list: context.projects
+        .filter((project) => project.normalizedConfig.browser.enabled)
+        .flatMap((project) =>
+          Object.values(
+            options?.shardedEntries?.get(project.environmentName)?.entries ||
+              {},
+          ).map((testPath) => ({
+            project: project.name,
+            testPath,
+            tests: [],
+          })),
+        ),
+    }),
+    runBrowserTests: async () => undefined,
+  }),
+}));
+
+rs.mock('../../src/pool', () => ({
+  createPool: async () => ({
+    close: async () => undefined,
+    collectTests: async ({
+      entries,
+      project,
+    }: Parameters<
+      Awaited<
+        ReturnType<typeof import('../../src/pool').createPool>
+      >['collectTests']
+    >[0]) =>
+      entries.map((entry) => ({
+        project: project.name,
+        testPath: entry.testPath,
+        tests: [],
+      })),
+  }),
+}));
 
 export function matchRules(
   config: Rspack.Configuration,
@@ -42,6 +95,103 @@ export function matchRules(
 }
 
 describe('prepareRsbuild', () => {
+  it('should add setup files to coverage excludes without duplicates', () => {
+    const coverage = {
+      enabled: true,
+      exclude: ['**/node_modules/**', '/project/setup.ts'],
+      provider: 'istanbul',
+      reporters: [],
+      reportsDirectory: 'coverage',
+      clean: true,
+      reportOnFailure: false,
+      allowExternal: false,
+    } satisfies RstestContext['normalizedConfig']['coverage'];
+
+    syncCoverageSetupExcludes(coverage, [
+      '/project/setup.ts',
+      '/project/globalSetup.ts',
+    ]);
+
+    expect(coverage.exclude).toEqual([
+      '**/node_modules/**',
+      '/project/setup.ts',
+      '/project/globalSetup.ts',
+    ]);
+  });
+
+  it('should list browser shard entries after node modifyRstestConfig hooks', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'rstest-list-shard-'));
+
+    try {
+      for (const file of [
+        'aa-node.test.ts',
+        'ab-node.test.ts',
+        'b-browser.test.ts',
+        'c-node.test.ts',
+      ]) {
+        writeFileSync(join(tempRoot, file), 'export {};\n');
+      }
+
+      const modifyIncludePlugin: RsbuildPlugin = {
+        name: 'modify-rstest-list-shard-include',
+        setup(api) {
+          const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+          rstestApi?.modifyRstestConfig((config) => {
+            config.include = [
+              'aa-node.test.ts',
+              'ab-node.test.ts',
+              'c-node.test.ts',
+            ];
+          });
+        },
+      };
+
+      const context = new Rstest(
+        {
+          cwd: tempRoot,
+          command: 'list',
+          embedded: true,
+          projects: [
+            {
+              config: {
+                name: 'node',
+                root: tempRoot,
+                include: ['c-node.test.ts'],
+                plugins: [modifyIncludePlugin],
+              },
+            },
+            {
+              config: {
+                name: 'browser',
+                root: tempRoot,
+                include: ['b-browser.test.ts'],
+                browser: { enabled: true, provider: 'playwright' },
+              },
+            },
+          ],
+        },
+        {
+          root: tempRoot,
+          shard: { index: 1, count: 2 },
+        },
+      );
+
+      const list = await listTests(context, { json: false });
+
+      expect(list.map((item) => item.testPath)).not.toContain(
+        join(tempRoot, 'b-browser.test.ts'),
+      );
+      expect(context.projects[0]!.normalizedConfig.include).toEqual([
+        'aa-node.test.ts',
+        'ab-node.test.ts',
+        'c-node.test.ts',
+      ]);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it('should expose project-scoped rstest API to Rsbuild plugins', async () => {
     const createModifyRstestConfigPlugin = (
       include: string,

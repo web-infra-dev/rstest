@@ -21,8 +21,6 @@ import {
 
 type RstestEnvironmentConfig = EnvironmentConfig & Pick<RsbuildConfig, 'root'>;
 
-const appliedModifyRstestConfigs = new WeakSet<NormalizedProjectConfig>();
-
 const immutableModifyRstestConfigKeys = new Set<string>([
   'browser',
   'bail',
@@ -165,16 +163,6 @@ const normalizeMutableConfigFields = (
   }
 };
 
-const hasAppliedModifyRstestConfig = (
-  config: NormalizedProjectConfig,
-): boolean => appliedModifyRstestConfigs.has(config);
-
-const markModifyRstestConfigApplied = (
-  config: NormalizedProjectConfig,
-): void => {
-  appliedModifyRstestConfigs.add(config);
-};
-
 const syncProjectDerivedFields = (project: ProjectContext): void => {
   project.rootPath = project.normalizedConfig.root || project.rootPath;
   project.outputModule =
@@ -209,10 +197,7 @@ const applyProjectModifyRstestConfig = async (
   project: ProjectContext,
   callbacks: ModifyRstestConfigCallback[] | undefined,
 ): Promise<void> => {
-  if (
-    !callbacks?.length ||
-    hasAppliedModifyRstestConfig(project.normalizedConfig)
-  ) {
+  if (!callbacks?.length) {
     return;
   }
 
@@ -222,7 +207,6 @@ const applyProjectModifyRstestConfig = async (
   );
   Object.assign(project.normalizedConfig, modifiedConfig);
   syncProjectDerivedFields(project);
-  markModifyRstestConfigApplied(project.normalizedConfig);
 };
 
 export const getRsbuildEnvironmentConfig = (
@@ -256,13 +240,21 @@ export const initModifyRstestConfigHooks = (
     string,
     ModifyRstestConfigCallback[]
   >();
+  const appliedEnvironmentNames = new Set<string>();
 
   const applyModifyRstestConfigCallbacks = async () => {
     for (const project of exposeProjects) {
-      await applyProjectModifyRstestConfig(
-        project,
-        modifyRstestConfigCallbacks.get(project.environmentName),
+      if (appliedEnvironmentNames.has(project.environmentName)) {
+        continue;
+      }
+      const callbacks = modifyRstestConfigCallbacks.get(
+        project.environmentName,
       );
+      if (!callbacks?.length) {
+        continue;
+      }
+      await applyProjectModifyRstestConfig(project, callbacks);
+      appliedEnvironmentNames.add(project.environmentName);
     }
   };
 

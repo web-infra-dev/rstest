@@ -374,12 +374,15 @@ const collectTestFiles = async ({
 const collectAllTests = async ({
   context,
   globTestSourceEntries,
-  shardedEntries,
+  getShardedEntries,
+  collectBrowserAfterConfigHooks,
   onModifyRstestConfigApplied,
 }: {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
-  shardedEntries?: Map<string, { entries: Record<string, string> }>;
+  getShardedEntries?: () =>
+    Map<string, { entries: Record<string, string> }> | undefined;
+  collectBrowserAfterConfigHooks?: boolean;
   onModifyRstestConfigApplied?: () => Promise<void>;
 }): Promise<{
   errors?: FormattedError[];
@@ -395,7 +398,38 @@ const collectAllTests = async ({
     (p) => !p.normalizedConfig.browser.enabled,
   );
 
-  // Collect from both in parallel
+  const collectBrowser = () =>
+    collectBrowserTests({
+      context,
+      browserProjects,
+      shardedEntries: getShardedEntries?.(),
+    });
+
+  if (collectBrowserAfterConfigHooks && nodeProjects.length) {
+    const nodeResult = await collectNodeTests({
+      context,
+      nodeProjects,
+      globTestSourceEntries,
+      onModifyRstestConfigApplied,
+    });
+    let browserResult: Awaited<ReturnType<typeof collectBrowser>>;
+    try {
+      browserResult = await collectBrowser();
+    } catch (error) {
+      await nodeResult.close();
+      throw error;
+    }
+
+    return {
+      errors: nodeResult.errors,
+      list: [...nodeResult.list, ...browserResult.list],
+      getSourceMap: nodeResult.getSourceMap,
+      close: async () => {
+        await Promise.all([nodeResult.close(), browserResult.close()]);
+      },
+    };
+  }
+
   const [nodeResult, browserResult] = await Promise.all([
     collectNodeTests({
       context,
@@ -403,11 +437,7 @@ const collectAllTests = async ({
       globTestSourceEntries,
       onModifyRstestConfigApplied,
     }),
-    collectBrowserTests({
-      context,
-      browserProjects,
-      shardedEntries,
-    }),
+    collectBrowser(),
   ]);
 
   return {
@@ -543,10 +573,11 @@ export async function listTests(
   const nodeProjects = context.projects.filter(
     (project) => !project.normalizedConfig.browser.enabled,
   );
+  const shouldPrintShardAfterConfigHooks = Boolean(
+    shard && !filesOnly && nodeProjects.length,
+  );
 
-  const shouldPrepareBeforeCollect = filesOnly || shard;
-
-  if (nodeProjects.length && shouldPrepareBeforeCollect) {
+  if (nodeProjects.length && filesOnly) {
     const rsbuildInstance = await prepareRsbuild({
       context,
       globTestSourceEntries,
@@ -567,7 +598,9 @@ export async function listTests(
     await rsbuildInstance.initConfigs({ action: 'dev' });
   }
 
-  await refreshListEntries({ silentShardMessage: false });
+  await refreshListEntries({
+    silentShardMessage: shouldPrintShardAfterConfigHooks,
+  });
 
   const {
     list,
@@ -582,8 +615,12 @@ export async function listTests(
     : await collectAllTests({
         context,
         globTestSourceEntries,
-        shardedEntries: shardedBrowserEntries,
-        onModifyRstestConfigApplied: () => refreshListEntries(),
+        getShardedEntries: shard ? () => shardedBrowserEntries : undefined,
+        collectBrowserAfterConfigHooks: shouldPrintShardAfterConfigHooks,
+        onModifyRstestConfigApplied: () =>
+          refreshListEntries({
+            silentShardMessage: !shouldPrintShardAfterConfigHooks,
+          }),
       });
 
   const tests: ListedTest[] = [];
