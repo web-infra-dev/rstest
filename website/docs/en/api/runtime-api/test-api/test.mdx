@@ -487,8 +487,6 @@ Fixture types only take effect on the new API returned by `test.extend`. The typ
 
 ### TestContext
 
-<ApiMeta addedVersion="0.11.0" />
-
 `TestContext` provides some APIs, context information, and custom fixtures related to the current test.
 
 ```ts
@@ -504,7 +502,7 @@ export interface TestContext {
     id: string;
     /** Test name provided by user */
     name: string;
-    /** Absolute path of the current test file when provided by the runner */
+    /** Absolute path of the current test file when provided by the runner. Added in 0.11.0. */
     filepath?: string;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;

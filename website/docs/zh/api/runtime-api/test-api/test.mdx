@@ -476,8 +476,6 @@ myTest('typed fixture', ({ user, expect }) => {
 
 ### TestContext
 
-<ApiMeta addedVersion="0.11.0" />
-
 `TestContext` 提供一些和当前测试有关的 API、上下文信息，以及自定义的 fixture。
 
 ```ts
@@ -493,7 +491,7 @@ export interface TestContext {
     id: string;
     /** Test name provided by user */
     name: string;
-    /** Absolute path of the current test file when provided by the runner */
+    /** Absolute path of the current test file when provided by the runner. Added in 0.11.0. */
     filepath?: string;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;

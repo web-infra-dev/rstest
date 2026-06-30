@@ -256,6 +256,27 @@ test.extend({}).describe('extended test API', () => {
     expect(value).toBe('ok');
   });
 
+  test.extend({}).concurrent.each(['each title'])(
+    'counts Playwright assertions in test.each callbacks',
+    async (title) => {
+      expect.assertions(1);
+      await expect(createPage(title)).toHaveTitle(title);
+    },
+  );
+
+  test.extend({
+    fixtureTitle: async ({ expect: localExpect }, use) => {
+      localExpect.assertions(1);
+      await expect(createPage('fixture title')).toHaveTitle('fixture title');
+      await use('fixture title');
+    },
+  })(
+    'counts Playwright assertions in extended fixtures',
+    ({ fixtureTitle }) => {
+      void fixtureTitle;
+    },
+  );
+
   browserTest.for([{ path: 'about:blank' }])(
     'detects fixtures from test.for callback context',
     async ({ path }, { page }) => {

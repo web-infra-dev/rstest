@@ -17,6 +17,7 @@ import {
   beforeAll as rstestBeforeAll,
   beforeEach as rstestBeforeEach,
   describe as rstestDescribe,
+  rstest,
   test as base,
 } from '@rstest/core';
 import type {
@@ -140,6 +141,7 @@ const PAUSE_ENV = 'RSTEST_PLAYWRIGHT_PAUSE';
 const DEBUG_PAUSE_TIMEOUT = 24 * 60 * 60 * 1000;
 const BROWSER_IDLE_CLOSE_DELAY = 1000;
 const DEFAULT_STATIC_SERVER_HOST = '127.0.0.1';
+const TEST_EACH_CONTEXT_SYMBOL = Symbol.for('rstest.test.each.context');
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -244,9 +246,27 @@ const closeBrowser = async (): Promise<void> => {
   await Promise.all(browsers.map(async (browser) => (await browser).close()));
 };
 
+const getRealTimers = () => {
+  try {
+    const realTimers = rstest.getRealTimers();
+
+    return {
+      setTimeout:
+        realTimers.setTimeout ?? globalThis.setTimeout.bind(globalThis),
+      clearTimeout:
+        realTimers.clearTimeout ?? globalThis.clearTimeout.bind(globalThis),
+    };
+  } catch {
+    return {
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+    };
+  }
+};
+
 const clearBrowserCleanupTimer = () => {
   if (browserCleanupTimer) {
-    clearTimeout(browserCleanupTimer);
+    getRealTimers().clearTimeout(browserCleanupTimer);
     browserCleanupTimer = undefined;
   }
 };
@@ -269,7 +289,7 @@ const scheduleBrowserCleanupWhenIdle = () => {
   }
 
   clearBrowserCleanupTimer();
-  browserCleanupTimer = setTimeout(() => {
+  browserCleanupTimer = getRealTimers().setTimeout(() => {
     browserCleanupTimer = undefined;
     void closeBrowserWhenIdle();
   }, BROWSER_IDLE_CLOSE_DELAY);
@@ -731,19 +751,61 @@ const preserveForFixtureSource = <Fn extends (...args: never[]) => unknown>(
   return wrapped;
 };
 
+const preserveEachFixtureSource = <Fn extends (...args: never[]) => unknown>(
+  wrapped: Fn,
+): Fn => {
+  Object.defineProperty(wrapped, 'toString', {
+    configurable: true,
+    value: () => '() => {}',
+  });
+
+  return wrapped;
+};
+
 const wrapTestContextCallback = <Fn extends (...args: any[]) => unknown>(
   fn: Fn,
 ): Fn => {
-  return preserveFixtureSource(fn, (async (context: TestContext | object) => {
+  return preserveFixtureSource(fn, (async (...args: Parameters<Fn>) => {
+    const [context] = args as unknown as [TestContext | object, ...unknown[]];
     const expect = 'expect' in context ? context.expect : undefined;
     const result = expect
-      ? await withPlaywrightExpect(expect, () => fn(context))
-      : await fn(context);
+      ? await withPlaywrightExpect(expect, () => fn(...args))
+      : await fn(...args);
 
     return typeof result === 'function'
       ? wrapTestContextCallback(result as (...args: any[]) => unknown)
       : result;
   }) as Fn);
+};
+
+const wrapFixtureEntry = <T>(fixture: T): T => {
+  if (Array.isArray(fixture)) {
+    const [value, ...options] = fixture;
+
+    return [
+      typeof value === 'function'
+        ? wrapTestContextCallback(value as (...args: any[]) => unknown)
+        : value,
+      ...options,
+    ] as T;
+  }
+
+  return typeof fixture === 'function'
+    ? (wrapTestContextCallback(
+        fixture as (...args: any[]) => unknown,
+      ) as unknown as T)
+    : fixture;
+};
+
+const wrapFixtures = <T extends Record<string, any>, ExtraContext>(
+  fixtures: PlaywrightFixtures<T, ExtraContext>,
+): PlaywrightFixtures<T, ExtraContext> => {
+  return Object.fromEntries(
+    Object.entries(fixtures).map(([key, value]) => [
+      key,
+      wrapFixtureEntry(value),
+    ]),
+  ) as PlaywrightFixtures<T, ExtraContext>;
 };
 
 export type PlaywrightFixtures<
@@ -753,7 +815,7 @@ export type PlaywrightFixtures<
 
 type PlaywrightTestBase<ExtraContext> = Omit<
   RstestTest<ExtraContext>,
-  'extend' | 'fail' | 'fails' | 'for'
+  'each' | 'extend' | 'fail' | 'fails' | 'for'
 > & {
   (
     description: string,
@@ -765,6 +827,7 @@ type PlaywrightTestBase<ExtraContext> = Omit<
     options: TestOptions,
     fn?: (context: TestContext & ExtraContext) => void | Promise<void>,
   ): void;
+  each: RstestTest<ExtraContext>['each'];
   fail: PlaywrightTestBase<ExtraContext>;
   fails: PlaywrightTestBase<ExtraContext>;
   for: TestForFn<ExtraContext>;
@@ -827,6 +890,42 @@ const createPlaywrightTest = <ExtraContext>(
   ): TestCallback<ExtraContext> => {
     return preserveFixtureSource(fn, ((context) =>
       withPlaywrightExpect(context.expect, () => fn(context))) as typeof fn);
+  };
+  const wrapEachCallback = <Fn extends (...args: any[]) => unknown>(
+    fn: Fn,
+  ): Fn => {
+    const wrapped = preserveEachFixtureSource(((...args) => {
+      const context = args[args.length - 1] as TestContext | undefined;
+
+      return context?.expect
+        ? withPlaywrightExpect(context.expect, () => fn(...args))
+        : fn(...args);
+    }) as Fn);
+
+    Object.defineProperty(wrapped, TEST_EACH_CONTEXT_SYMBOL, {
+      value: true,
+    });
+
+    return wrapped;
+  };
+  const wrapEachTestCall = (
+    testCall: ReturnType<RstestTest<ExtraContext>['each']>,
+  ): ReturnType<RstestTest<ExtraContext>['each']> => {
+    return ((description, arg2, arg3) => {
+      if (typeof arg2 === 'function') {
+        return (testCall as CallableTest)(
+          description,
+          wrapEachCallback(arg2),
+          arg3 as number | undefined,
+        );
+      }
+
+      return (testCall as CallableTest)(
+        description,
+        arg2,
+        typeof arg3 === 'function' ? wrapEachCallback(arg3) : undefined,
+      );
+    }) as ReturnType<RstestTest<ExtraContext>['each']>;
   };
   const wrapForCallback = (
     fn: TestForCallback<ExtraContext>,
@@ -899,7 +998,7 @@ const createPlaywrightTest = <ExtraContext>(
 
         return extend
           ? (fixtures: Parameters<PlaywrightTest<ExtraContext>['extend']>[0]) =>
-              createPlaywrightTest(extend(fixtures))
+              createPlaywrightTest(extend(wrapFixtures(fixtures)))
           : undefined;
       }
       if (key === 'fail') {
@@ -930,6 +1029,13 @@ const createPlaywrightTest = <ExtraContext>(
               createPlaywrightTest(
                 value(condition) as RstestTestAPI<ExtraContext>,
               )
+          : value;
+      }
+      if (key === 'each') {
+        const value = Reflect.get(target, key, receiver);
+        return typeof value === 'function'
+          ? (...args: Parameters<RstestTest<ExtraContext>['each']>) =>
+              wrapEachTestCall(value(...args))
           : value;
       }
       if (key === 'for') {
