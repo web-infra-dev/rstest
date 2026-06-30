@@ -17,10 +17,7 @@ import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
 import { PhaseTracker } from './phaseTracker';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
-import {
-  RSTEST_DYNAMIC_IMPORT_HOOK,
-  RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK,
-} from './runtimeHooks';
+import { setFederationDynamicImportOrigin } from './runtimeHooks';
 import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
 import { createNodeTaskContext } from './taskContext.node';
@@ -77,19 +74,6 @@ let isTeardown = false;
  * runtime chunk and reintroducing the cross-project regression (#1376).
  */
 let lastBuildId: number | undefined;
-
-const setFederationDynamicImportOrigin = (
-  federation: boolean,
-  origin: string,
-) => {
-  const runtimeGlobal = globalThis as Record<string, unknown>;
-  if (federation) {
-    runtimeGlobal[RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK] = origin;
-  } else {
-    delete runtimeGlobal[RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK];
-  }
-  delete runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK];
-};
 
 const setErrorName = (error: Error, type: string): Error => {
   try {
@@ -372,6 +356,7 @@ const loadFiles = async ({
   const { loadModule } = outputModule
     ? await import('./loadEsModule')
     : await import('./loadModule');
+  const virtualFsAssetFiles = federation ? assetFiles : undefined;
 
   // Clean each kept runtime chunk's webpack module cache before re-running setup
   // + entry. A reused worker can hold several projects' runtime chunks at once
@@ -389,6 +374,7 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
+      virtualFsAssetFiles,
     });
   }
 
@@ -409,6 +395,7 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
+      virtualFsAssetFiles,
     });
   }
 
@@ -422,6 +409,7 @@ const loadFiles = async ({
     rstestContext,
     assetFiles,
     interopDefault,
+    virtualFsAssetFiles,
   });
 };
 

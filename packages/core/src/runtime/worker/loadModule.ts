@@ -29,7 +29,7 @@ const getAssetContent = (
   return undefined;
 };
 
-const createFsAssetProxy = (
+const createVirtualFsAssetProxy = (
   fsModule: typeof import('node:fs'),
   assetFiles: Record<string, string>,
 ): typeof import('node:fs') =>
@@ -131,6 +131,7 @@ const createRequire = (
   rstestContext: Record<string, any>,
   assetFiles: Record<string, string>,
   interopDefault: boolean,
+  virtualFsAssetFiles?: Record<string, string>,
 ): NodeJS.Require => {
   const _require = (() => {
     try {
@@ -143,7 +144,10 @@ const createRequire = (
 
   const require = ((id: string) => {
     if (id === 'fs' || id === 'node:fs') {
-      return createFsAssetProxy(_require(id), assetFiles);
+      const fsModule = _require(id);
+      return virtualFsAssetFiles
+        ? createVirtualFsAssetProxy(fsModule, virtualFsAssetFiles)
+        : fsModule;
     }
 
     const currentDirectory = path.dirname(distPath);
@@ -163,6 +167,7 @@ const createRequire = (
           rstestContext,
           assetFiles,
           interopDefault,
+          virtualFsAssetFiles,
         });
       } catch (err) {
         logger.error(
@@ -248,6 +253,7 @@ export const loadModule = ({
   rstestContext,
   assetFiles: assetFilesArg,
   interopDefault,
+  virtualFsAssetFiles: virtualFsAssetFilesArg,
 }: {
   interopDefault: boolean;
   codeContent: string;
@@ -255,6 +261,7 @@ export const loadModule = ({
   testPath: string;
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
+  virtualFsAssetFiles?: Record<string, string>;
 }): any => {
   // Fold this file's assets into the persistent map. Recursive loads (require /
   // dynamic imports) re-pass that same map, so skip the no-op self-merge.
@@ -262,6 +269,7 @@ export const loadModule = ({
     Object.assign(accumulatedAssetFiles, assetFilesArg);
   }
   const assetFiles = accumulatedAssetFiles;
+  const virtualFsAssetFiles = virtualFsAssetFilesArg ? assetFiles : undefined;
   const fileDir = path.dirname(testPath);
 
   const localModule = {
@@ -283,6 +291,7 @@ export const loadModule = ({
       rstestContext,
       assetFiles,
       interopDefault,
+      virtualFsAssetFiles,
     ),
     readWasmFile: (
       wasmPath: string,
@@ -346,6 +355,7 @@ export const cacheableLoadModule = ({
   rstestContext,
   assetFiles,
   interopDefault,
+  virtualFsAssetFiles,
 }: {
   interopDefault: boolean;
   codeContent: string;
@@ -353,6 +363,7 @@ export const cacheableLoadModule = ({
   testPath: string;
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
+  virtualFsAssetFiles?: Record<string, string>;
 }): any => {
   if (moduleCache.has(testPath)) {
     return moduleCache.get(testPath);
@@ -364,6 +375,7 @@ export const cacheableLoadModule = ({
     rstestContext,
     assetFiles,
     interopDefault,
+    virtualFsAssetFiles,
   });
   moduleCache.set(testPath, mod);
   return mod;

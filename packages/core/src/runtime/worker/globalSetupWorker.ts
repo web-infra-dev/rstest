@@ -3,28 +3,12 @@ import { install } from 'source-map-support';
 import type { FormattedError } from '../../types';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
-import {
-  RSTEST_DYNAMIC_IMPORT_HOOK,
-  RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK,
-} from './runtimeHooks';
+import { setFederationDynamicImportOrigin } from './runtimeHooks';
 
 let teardownCallbacks: (() => Promise<void> | void)[] = [];
 // Track environment variable changes
 let initialEnv: Record<string, string | undefined> = {};
 let envChanges: Record<string, string | undefined> = {};
-
-const setFederationDynamicImportOrigin = (
-  federation: boolean,
-  origin: string,
-) => {
-  const runtimeGlobal = globalThis as Record<string, unknown>;
-  if (federation) {
-    runtimeGlobal[RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK] = origin;
-  } else {
-    delete runtimeGlobal[RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK];
-  }
-  delete runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK];
-};
 
 function trackEnvChanges() {
   // Store initial environment before setup
@@ -103,6 +87,7 @@ const runGlobalSetup = async (data: {
       const { loadModule } = data.outputModule
         ? await import('./loadEsModule')
         : await import('./loadModule');
+      const virtualFsAssetFiles = data.federation ? data.assetFiles : undefined;
 
       const module = await loadModule({
         codeContent: setupCodeContent,
@@ -116,6 +101,7 @@ const runGlobalSetup = async (data: {
         },
         assetFiles: data.assetFiles,
         interopDefault: data.interopDefault,
+        virtualFsAssetFiles,
       });
 
       let teardownCallback: (() => Promise<void> | void) | undefined;
