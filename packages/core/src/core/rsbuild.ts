@@ -1,11 +1,9 @@
 import {
   createRsbuild,
   type ManifestData,
-  type ModifyBundlerChainFn,
   type RsbuildInstance,
   logger as RsbuildLogger,
   type RsbuildPlugin,
-  type RsbuildPluginAPI,
   type Rspack,
 } from '@rsbuild/core';
 import path from 'pathe';
@@ -14,7 +12,6 @@ import type {
   EnvironmentWithOptions,
   EntryInfo,
   ModifyRstestConfigCallback,
-  NormalizedCoverageOptions,
   NormalizedProjectConfig,
   ProjectContext,
   RstestContext,
@@ -76,6 +73,93 @@ const clonePlainConfig = <T>(value: T): T => {
   return value;
 };
 
+const immutableModifyRstestConfigKeys = [
+  'browser',
+  'bail',
+  'coverage',
+  'extends',
+  'isolate',
+  'onConsoleLog',
+  'pool',
+  'plugins',
+  'projects',
+  'reporters',
+  'resolveSnapshotPath',
+  'silent',
+] as const;
+
+const isConfigValueEqual = (left: unknown, right: unknown): boolean => {
+  if (Object.is(left, right)) {
+    return true;
+  }
+
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return (
+      left.length === right.length &&
+      left.every((item, index) => isConfigValueEqual(item, right[index]))
+    );
+  }
+
+  if (isPlainObject(left) && isPlainObject(right)) {
+    const leftKeys = Object.keys(left);
+    const rightKeys = Object.keys(right);
+
+    return (
+      leftKeys.length === rightKeys.length &&
+      leftKeys.every(
+        (key) =>
+          Object.prototype.hasOwnProperty.call(right, key) &&
+          isConfigValueEqual(left[key], right[key]),
+      )
+    );
+  }
+
+  return false;
+};
+
+const getImmutableConfigChangeError = (key: string): Error => {
+  if (key === 'browser.enabled') {
+    return new Error(
+      'Cannot modify `browser.enabled` in `modifyRstestConfig`. Configure Browser Mode in the Rstest project config instead.',
+    );
+  }
+
+  return new Error(
+    `Cannot modify \`${key}\` in \`modifyRstestConfig\`. Configure global options in the Rstest config instead.`,
+  );
+};
+
+const assertImmutableConfigFields = (
+  previousConfig: NormalizedProjectConfig,
+  currentConfig: NormalizedProjectConfig,
+): void => {
+  const previous = previousConfig as Record<string, unknown>;
+  const current = currentConfig as Record<string, unknown>;
+  const previousOutput = previousConfig.output as
+    { distPath?: unknown } | undefined;
+  const currentOutput = currentConfig.output as
+    { distPath?: unknown } | undefined;
+
+  if (
+    !isConfigValueEqual(
+      previousConfig.browser?.enabled,
+      currentConfig.browser?.enabled,
+    )
+  ) {
+    throw getImmutableConfigChangeError('browser.enabled');
+  }
+
+  for (const key of immutableModifyRstestConfigKeys) {
+    if (!isConfigValueEqual(current[key], previous[key])) {
+      throw getImmutableConfigChangeError(key);
+    }
+  }
+
+  if (!isConfigValueEqual(previousOutput?.distPath, currentOutput?.distPath)) {
+    throw getImmutableConfigChangeError('output.distPath');
+  }
+};
+
 const createMutableConfigOverrides = (
   previousConfig: NormalizedProjectConfig,
   currentConfig: NormalizedProjectConfig,
@@ -85,9 +169,15 @@ const createMutableConfigOverrides = (
   for (const key of Object.keys(currentConfig) as Array<
     keyof NormalizedProjectConfig
   >) {
-    if (currentConfig[key] !== previousConfig[key]) {
-      Object.assign(overrides, { [key]: currentConfig[key] });
+    if (isConfigValueEqual(currentConfig[key], previousConfig[key])) {
+      continue;
     }
+
+    if ((immutableModifyRstestConfigKeys as readonly string[]).includes(key)) {
+      throw getImmutableConfigChangeError(key);
+    }
+
+    Object.assign(overrides, { [key]: currentConfig[key] });
   }
 
   return overrides;
@@ -105,12 +195,6 @@ const normalizeMutableConfigFields = (
   }
   config.setupFiles = castArray(config.setupFiles);
   config.globalSetup = castArray(config.globalSetup);
-  const pool = (config as Partial<RstestContext['originalConfig']>).pool;
-  if (typeof pool === 'string') {
-    (config as Partial<RstestContext['normalizedConfig']>).pool = {
-      type: pool,
-    };
-  }
   if (typeof config.testEnvironment === 'string') {
     config.testEnvironment = {
       name: config.testEnvironment,
@@ -181,30 +265,20 @@ const applyModifyRstestConfig = async (
   config: NormalizedProjectConfig,
   callbacks: ModifyRstestConfigCallback[],
 ): Promise<NormalizedProjectConfig> => {
-  const browserEnabled = config.browser?.enabled;
   let currentConfig = config;
 
   for (const callback of callbacks) {
     const previousConfig = clonePlainConfig(currentConfig);
     const result = await callback(currentConfig);
 
-    if (currentConfig.browser?.enabled !== browserEnabled) {
-      throw new Error(
-        'Cannot modify `browser.enabled` in `modifyRstestConfig`. Configure Browser Mode in the Rstest project config instead.',
-      );
-    }
+    assertImmutableConfigFields(previousConfig, currentConfig);
 
     currentConfig = mergeRstestConfig(
       previousConfig,
       result || createMutableConfigOverrides(previousConfig, currentConfig),
     ) as NormalizedProjectConfig;
     normalizeMutableConfigFields(currentConfig, previousConfig.root);
-
-    if (currentConfig.browser?.enabled !== browserEnabled) {
-      throw new Error(
-        'Cannot modify `browser.enabled` in `modifyRstestConfig`. Configure Browser Mode in the Rstest project config instead.',
-      );
-    }
+    assertImmutableConfigFields(previousConfig, currentConfig);
   }
 
   return currentConfig;
@@ -235,62 +309,6 @@ const getRsbuildEnvironmentConfig = (project: ProjectContext) => ({
   root: project.rootPath,
   output: {
     target: 'node' as const,
-  },
-});
-
-type ModifyBundlerChainDescriptor = Parameters<
-  RsbuildPluginAPI['modifyBundlerChain']
->[0];
-
-const getModifyBundlerChainHandler = (
-  descriptor: ModifyBundlerChainDescriptor,
-): ModifyBundlerChainFn =>
-  typeof descriptor === 'function' ? descriptor : descriptor.handler;
-
-const pluginDeferredCoverage = ({
-  getCoverage,
-  coverageOptions,
-  rootPath,
-}: {
-  getCoverage: () => NormalizedCoverageOptions;
-  coverageOptions: NormalizedCoverageOptions;
-  rootPath: string;
-}): RsbuildPlugin => ({
-  name: 'rstest:coverage-loader',
-  async setup(api) {
-    let setupCoveragePlugin: Promise<void> | undefined;
-    let coverageBundlerChainHandler: ModifyBundlerChainFn | undefined;
-    const setupCoveragePluginOnce = async () => {
-      setupCoveragePlugin ??= (async () => {
-        const { loadCoverageProvider } = await import('../coverage');
-        const { pluginCoverage } = await loadCoverageProvider(
-          getCoverage(),
-          rootPath,
-        );
-
-        await pluginCoverage(coverageOptions).setup({
-          ...api,
-          modifyBundlerChain: (descriptor) => {
-            coverageBundlerChainHandler =
-              getModifyBundlerChainHandler(descriptor);
-          },
-        });
-      })();
-
-      return setupCoveragePlugin;
-    };
-
-    api.modifyBundlerChain({
-      order: 'post',
-      handler: async (chain, utils) => {
-        if (!getCoverage()?.enabled) {
-          return;
-        }
-
-        await setupCoveragePluginOnce();
-        await coverageBundlerChainHandler?.(chain, utils);
-      },
-    });
   },
 });
 
@@ -388,7 +406,7 @@ export const prepareRsbuild = async ({
 }: PrepareRsbuildOptions): Promise<RsbuildInstance> => {
   const {
     command,
-    normalizedConfig: { dev = {}, pool },
+    normalizedConfig: { coverage, dev = {}, isolate, pool },
   } = context;
   const getSetupPaths = () => collectSetupPaths(setupFiles, globalSetupFiles);
 
@@ -404,19 +422,6 @@ export const prepareRsbuild = async ({
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
 
   const writeToDisk = dev.writeToDisk || debugMode;
-  const getCoverage = () => context.normalizedConfig.coverage;
-  const coverageOptions = new Proxy({} as NormalizedCoverageOptions, {
-    get(_target, prop) {
-      const coverage = getCoverage();
-
-      if (prop === 'exclude') {
-        return [...coverage.exclude, ...getSetupPaths()];
-      }
-
-      return Reflect.get(coverage, prop);
-    },
-  });
-
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest',
     config: {
@@ -451,17 +456,7 @@ export const prepareRsbuild = async ({
           isWatch: command === 'watch',
         }),
         pluginExternal(context),
-        pluginCacheControl({
-          getSetupFiles: getSetupPaths,
-          getIsolate: () => context.normalizedConfig.isolate,
-        }),
-        command !== 'list'
-          ? pluginDeferredCoverage({
-              getCoverage,
-              coverageOptions,
-              rootPath: context.rootPath,
-            })
-          : null,
+        !isolate ? pluginCacheControl(getSetupPaths) : null,
         pluginInspect({ poolExecArgv: pool.execArgv }),
         ...extraPlugins,
       ].filter(Boolean) as RsbuildPlugin[],
@@ -474,6 +469,25 @@ export const prepareRsbuild = async ({
     exposeRstestAPIProjects,
     onModifyRstestConfigApplied,
   );
+
+  if (coverage?.enabled && command !== 'list') {
+    const { loadCoverageProvider } = await import('../coverage');
+    const { pluginCoverage } = await loadCoverageProvider(
+      coverage,
+      context.rootPath,
+    );
+    const coverageOptions = new Proxy(coverage, {
+      get(target, prop, receiver) {
+        if (prop === 'exclude') {
+          return [...target.exclude, ...getSetupPaths()];
+        }
+
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+
+    rsbuildInstance.addPlugins([pluginCoverage(coverageOptions)]);
+  }
 
   return rsbuildInstance;
 };

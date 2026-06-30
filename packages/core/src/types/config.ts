@@ -24,7 +24,8 @@ export type RstestExposeAPI = {
    *
    * This API is suitable for modifying existing project config, but it cannot
    * be used to dynamically add or remove Rstest projects, switch Browser Mode,
-   * or add or remove Rsbuild environments or plugins.
+   * or modify global options such as reporters, pool, isolate, coverage,
+   * output.distPath, or plugins.
    */
   modifyRstestConfig: (callback: ModifyRstestConfigCallback) => void;
 };
