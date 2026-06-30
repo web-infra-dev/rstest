@@ -898,12 +898,11 @@ function normalizeWithCoverageArray(
   const normalized: NormalizedRange[] = [];
   let start = 0;
 
-  for (let end = 1; end <= hits.length; end++) {
-    const isLast = end === hits.length;
-    const current = isLast ? null : hits[end];
+  for (let end = 1; end < hits.length; end++) {
+    const current = hits[end];
     const previous = hits[start];
 
-    if (current !== previous || isLast) {
+    if (current !== previous) {
       normalized.push({
         start,
         end: end - 1,
@@ -912,6 +911,12 @@ function normalizeWithCoverageArray(
       start = end;
     }
   }
+
+  normalized.push({
+    start,
+    end: hits.length - 1,
+    count: hits[start] ?? 0,
+  });
 
   return normalized;
 }
