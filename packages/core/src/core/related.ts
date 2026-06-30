@@ -3,7 +3,7 @@ import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { isAbsolute, normalize, relative, resolve } from 'pathe';
 import type { RstestContext } from '../types';
 import { getTestEntries } from '../utils';
-import { refreshSetupFileMaps } from './setupFileMaps';
+import { createSetupFileState } from './setupFileState';
 import { prepareRsbuild } from './rsbuild';
 
 type StatsModuleReason = NonNullable<Rspack.StatsModule['reasons']>[number];
@@ -315,8 +315,7 @@ export async function resolveRelatedTestFiles(
   const globTestSourceEntries = async (environmentName: string) =>
     projectEntries.get(environmentName) ?? {};
 
-  const setupFiles: Record<string, Record<string, string>> = {};
-  const globalSetupFiles: Record<string, Record<string, string>> = {};
+  const setupFileState = createSetupFileState();
   const nodeProjects = context.projects.filter(
     (project) => !project.normalizedConfig.browser.enabled,
   );
@@ -324,19 +323,16 @@ export async function resolveRelatedTestFiles(
   const rsbuildInstance = await prepareRsbuild({
     context,
     globTestSourceEntries,
-    setupFiles,
-    globalSetupFiles,
+    setupFileState,
     targetProjects: context.projects,
     exposeRstestAPIProjects: nodeProjects,
     extraPlugins: [createRelatedBuildSafeguardsPlugin()],
+    getSetupFileProjects: () => ({
+      setupProjects: context.projects,
+      globalSetupProjects: context.projects,
+    }),
     onModifyRstestConfigApplied: async () => {
       projectEntries = await collectProjectEntries(context);
-      refreshSetupFileMaps({
-        setupFiles,
-        globalSetupFiles,
-        setupProjects: context.projects,
-        globalSetupProjects: context.projects,
-      });
     },
   });
 
@@ -380,10 +376,10 @@ export async function resolveRelatedTestFiles(
         projectEntries.get(project.environmentName) || {},
       );
       const setupPaths = Object.values(
-        setupFiles[project.environmentName] || {},
+        setupFileState.setupFiles[project.environmentName] || {},
       );
       const globalSetupPaths = Object.values(
-        globalSetupFiles[project.environmentName] || {},
+        setupFileState.globalSetupFiles[project.environmentName] || {},
       );
       const matchedSources = collectDirectlyMatchedFiles({
         files: Array.from(moduleGraph.allSources),

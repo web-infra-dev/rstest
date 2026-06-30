@@ -14,7 +14,6 @@ import type {
   RstestContext,
 } from '../types';
 import { isDebug } from '../utils';
-import { collectSetupPaths } from '../utils/getSetupFiles';
 import { isMemorySufficient } from '../utils/memory';
 import { pluginBasic } from './plugins/basic';
 import { pluginEntryWatch } from './plugins/entry';
@@ -28,6 +27,11 @@ import {
   initModifyRstestConfigHooks,
 } from './modifyRstestConfig';
 import { isRuntimeChunk, runtimeChunkNameForEnvironment } from './runtimeChunk';
+import {
+  createSetupFileState,
+  type SetupFileProjects,
+  type SetupFileState,
+} from './setupFileState';
 
 type TestEntryToChunkHashes = {
   name: string;
@@ -36,10 +40,10 @@ type TestEntryToChunkHashes = {
 }[];
 
 export const syncCoverageSetupExcludes = (
-  coverage: NormalizedProjectConfig['coverage'],
+  coverage: NormalizedProjectConfig['coverage'] | undefined,
   setupPaths: string[],
 ): void => {
-  if (!coverage.enabled || !setupPaths.length) {
+  if (!coverage?.enabled || !setupPaths.length) {
     return;
   }
 
@@ -101,8 +105,8 @@ const isMultiCompiler = <
 type PrepareRsbuildOptions = {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
-  setupFiles: Record<string, Record<string, string>>;
-  globalSetupFiles: Record<string, Record<string, string>>;
+  setupFileState?: SetupFileState;
+  getSetupFileProjects?: () => SetupFileProjects;
   /**
    * Explicit list of projects to include in the Rsbuild instance.
    *
@@ -120,8 +124,8 @@ type PrepareRsbuildOptions = {
 export const prepareRsbuild = async ({
   context,
   globTestSourceEntries,
-  setupFiles,
-  globalSetupFiles,
+  setupFileState = createSetupFileState(),
+  getSetupFileProjects,
   targetProjects,
   exposeRstestAPIProjects,
   extraPlugins = [],
@@ -131,7 +135,7 @@ export const prepareRsbuild = async ({
     command,
     normalizedConfig: { coverage, dev = {}, isolate, pool },
   } = context;
-  const getSetupPaths = () => collectSetupPaths(setupFiles, globalSetupFiles);
+  const { setupFiles, globalSetupFiles, getSetupPaths } = setupFileState;
 
   // Default execution still excludes browser projects. Callers can opt in to a
   // broader project set when they only need graph information.
@@ -141,6 +145,17 @@ export const prepareRsbuild = async ({
         (project) => !project.normalizedConfig.browser.enabled,
       );
   const debugMode = isDebug();
+
+  const updateSetupFileMaps = () => {
+    const setupFileProjects = getSetupFileProjects?.() ?? {
+      setupProjects: projects,
+      globalSetupProjects: context.projects,
+    };
+    setupFileState.refresh(setupFileProjects);
+    if (command !== 'list') {
+      syncCoverageSetupExcludes(coverage, getSetupPaths());
+    }
+  };
 
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
 
@@ -190,7 +205,10 @@ export const prepareRsbuild = async ({
     rsbuildInstance,
     projects,
     exposeRstestAPIProjects,
-    onModifyRstestConfigApplied,
+    async () => {
+      await onModifyRstestConfigApplied?.();
+      updateSetupFileMaps();
+    },
   );
 
   if (coverage?.enabled && command !== 'list') {
@@ -199,7 +217,6 @@ export const prepareRsbuild = async ({
       coverage,
       context.rootPath,
     );
-    syncCoverageSetupExcludes(coverage, getSetupPaths());
     rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
   }
 

@@ -15,20 +15,18 @@ import {
   bgColor,
   color,
   getTaskNameWithPrefix,
-  getTestEntries,
   logger,
   prettyTestPath,
   ROOT_SUITE_NAME,
-  resolveShardedEntries,
 } from '../utils';
 import {
   claimGlobalSetupOnce,
   runGlobalSetup,
   runGlobalTeardown,
 } from './globalSetup';
-import { refreshSetupFileMaps } from './setupFileMaps';
-import { applyEnvironmentGroupsToListEntries } from './environmentEntries';
+import { createSetupFileState } from './setupFileState';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
+import { createListProjectPlanState } from './projectPlan';
 
 type ListedTest = {
   file: string;
@@ -164,25 +162,17 @@ const collectNodeTests = async ({
     };
   }
 
-  const setupFiles: Record<string, Record<string, string>> = {};
-  const globalSetupFiles: Record<string, Record<string, string>> = {};
-
-  const refreshSetupFiles = () =>
-    refreshSetupFileMaps({
-      setupFiles,
-      globalSetupFiles,
-      setupProjects: nodeProjects,
-      globalSetupProjects: context.projects,
-    });
-
-  refreshSetupFiles();
+  const setupFileState = createSetupFileState();
 
   const rsbuildInstance = await prepareRsbuild({
     context,
     globTestSourceEntries,
-    setupFiles,
-    globalSetupFiles,
+    setupFileState,
     targetProjects: nodeProjects,
+    getSetupFileProjects: () => ({
+      setupProjects: nodeProjects,
+      globalSetupProjects: context.projects,
+    }),
     onModifyRstestConfigApplied: async () => {
       await onModifyRstestConfigApplied?.();
       nodeProjects.splice(
@@ -192,19 +182,18 @@ const collectNodeTests = async ({
           (project) => !project.normalizedConfig.browser.enabled,
         ),
       );
-      refreshSetupFiles();
     },
   });
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     globTestSourceEntries,
-    globalSetupFiles,
+    globalSetupFiles: setupFileState.globalSetupFiles,
     isWatchMode: false,
     inspectedConfig: {
       ...context.normalizedConfig,
       projects: nodeProjects.map((p) => p.normalizedConfig),
     },
-    setupFiles,
+    setupFiles: setupFileState.setupFiles,
     rsbuildInstance,
     rootPath: context.rootPath,
   });
@@ -482,72 +471,8 @@ export async function listTests(
     return [];
   }
 
-  const testEntries: Record<string, Record<string, string>> = {};
-  let shardedBrowserEntries:
-    Map<string, { entries: Record<string, string> }> | undefined;
-
-  const globTestSourceEntries = async (
-    name: string,
-  ): Promise<Record<string, string>> => {
-    if (testEntries[name]) {
-      return testEntries[name];
-    }
-    const project = context.projects.find((p) => p.environmentName === name);
-
-    if (!project) {
-      return {};
-    }
-
-    const { include, exclude, includeSource, root } = project.normalizedConfig;
-
-    const entries = await getTestEntries({
-      include,
-      exclude: exclude.patterns,
-      rootPath,
-      projectRoot: root,
-      fileFilters: context.fileFilters || [],
-      fileFilterMode: context.fileFilterMode,
-      includeSource,
-    });
-
-    testEntries[name] = entries;
-
-    return entries;
-  };
-
-  const refreshListEntries = async ({
-    silentShardMessage = true,
-  }: { silentShardMessage?: boolean } = {}) => {
-    for (const key of Object.keys(testEntries)) {
-      delete testEntries[key];
-    }
-
-    const shardedEntries = await resolveShardedEntries(context, {
-      silent: silentShardMessage,
-    });
-    shardedBrowserEntries = undefined;
-
-    if (shard && shardedEntries) {
-      for (const [key, value] of shardedEntries.entries()) {
-        testEntries[key] = value.entries;
-      }
-
-      shardedBrowserEntries = new Map();
-      for (const p of context.projects.filter(
-        (p) => p.normalizedConfig.browser.enabled,
-      )) {
-        shardedBrowserEntries.set(p.environmentName, {
-          entries: testEntries[p.environmentName] || {},
-        });
-      }
-    }
-
-    await applyEnvironmentGroupsToListEntries({
-      context,
-      testEntries,
-      globTestSourceEntries,
-    });
-  };
+  const listPlanState = createListProjectPlanState(context);
+  const { globTestSourceEntries, refreshListEntries } = listPlanState;
 
   const nodeProjects = context.projects.filter(
     (project) => !project.normalizedConfig.browser.enabled,
@@ -560,8 +485,7 @@ export async function listTests(
     const rsbuildInstance = await prepareRsbuild({
       context,
       globTestSourceEntries,
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
       targetProjects: nodeProjects,
       onModifyRstestConfigApplied: async () => {
         await refreshListEntries();
@@ -594,7 +518,9 @@ export async function listTests(
     : await collectAllTests({
         context,
         globTestSourceEntries,
-        getShardedEntries: shard ? () => shardedBrowserEntries : undefined,
+        getShardedEntries: shard
+          ? listPlanState.getShardedBrowserEntries
+          : undefined,
         collectBrowserAfterConfigHooks: shouldPrintShardAfterConfigHooks,
         onModifyRstestConfigApplied: () =>
           refreshListEntries({

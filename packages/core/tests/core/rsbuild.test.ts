@@ -6,6 +6,7 @@ import {
   prepareRsbuild,
   syncCoverageSetupExcludes,
 } from '../../src/core/rsbuild';
+import { createSetupFileState } from '../../src/core/setupFileState';
 import type { RstestContext, RstestExposeAPI } from '../../src/types';
 import { listTests } from '../../src/core/listTests';
 import { Rstest } from '../../src/core/rstest';
@@ -258,8 +259,7 @@ describe('prepareRsbuild', () => {
         projects: [projectA, projectB],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
 
     await rsbuildInstance.initConfigs();
@@ -332,8 +332,7 @@ describe('prepareRsbuild', () => {
         projects: [project],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
 
     const {
@@ -401,8 +400,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
 
     await expect(rsbuildInstance.initConfigs()).rejects.toThrow(
@@ -411,6 +409,10 @@ describe('prepareRsbuild', () => {
   });
 
   it('should keep normalized rstest config after modifyRstestConfig returns partial config', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'rstest-partial-config-'));
+    writeFileSync(join(tempRoot, 'setup.ts'), 'export {};\n');
+    writeFileSync(join(tempRoot, 'globalSetup.ts'), 'export {};\n');
+
     const modifyRstestConfigPlugin: RsbuildPlugin = {
       name: 'modify-rstest-config-partial-return',
       setup(api) {
@@ -422,7 +424,7 @@ describe('prepareRsbuild', () => {
           setupFiles: './setup.ts',
           globalSetup: './globalSetup.ts',
           testEnvironment: 'jsdom',
-          root: join(rootPath, 'fixtures'),
+          root: tempRoot,
           output: {
             module: false,
           },
@@ -454,42 +456,126 @@ describe('prepareRsbuild', () => {
       },
     };
 
-    const rsbuildInstance = await prepareRsbuild({
-      context: {
-        rootPath,
-        command: 'run',
-        normalizedConfig: {
-          root: rootPath,
-          name: 'test',
-          output: {
-            distPath: {
-              root: TEMP_RSTEST_OUTPUT_DIR,
+    try {
+      const rsbuildInstance = await prepareRsbuild({
+        context: {
+          rootPath,
+          command: 'run',
+          normalizedConfig: {
+            root: rootPath,
+            name: 'test',
+            output: {
+              distPath: {
+                root: TEMP_RSTEST_OUTPUT_DIR,
+              },
             },
+            pool: { type: 'forks' },
           },
-          pool: { type: 'forks' },
-        },
-        projects: [project],
-      } as unknown as RstestContext,
-      globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
-    });
+          projects: [project],
+        } as unknown as RstestContext,
+        globTestSourceEntries: async () => ({}),
+        setupFileState: createSetupFileState(),
+      });
 
-    await rsbuildInstance.initConfigs();
+      await rsbuildInstance.initConfigs();
 
-    expect(project.normalizedConfig.include).toEqual(['**/*.partial.test.ts']);
-    expect(project.rootPath).toBe(join(rootPath, 'fixtures'));
-    expect(project.outputModule).toBe(false);
-    expect(project.normalizedConfig.browser.enabled).toBe(false);
-    expect(project.normalizedConfig.exclude).toEqual({
-      patterns: ['**/original-ignored.test.ts', '**/ignored.test.ts'],
-      override: false,
-    });
-    expect(project.normalizedConfig.setupFiles).toEqual(['./setup.ts']);
-    expect(project.normalizedConfig.globalSetup).toEqual(['./globalSetup.ts']);
-    expect(project.normalizedConfig.testEnvironment).toEqual({
-      name: 'jsdom',
-    });
+      expect(project.normalizedConfig.include).toEqual([
+        '**/*.partial.test.ts',
+      ]);
+      expect(project.rootPath).toBe(tempRoot);
+      expect(project.outputModule).toBe(false);
+      expect(project.normalizedConfig.browser.enabled).toBe(false);
+      expect(project.normalizedConfig.exclude).toEqual({
+        patterns: ['**/original-ignored.test.ts', '**/ignored.test.ts'],
+        override: false,
+      });
+      expect(project.normalizedConfig.setupFiles).toEqual(['./setup.ts']);
+      expect(project.normalizedConfig.globalSetup).toEqual([
+        './globalSetup.ts',
+      ]);
+      expect(project.normalizedConfig.testEnvironment).toEqual({
+        name: 'jsdom',
+      });
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('should derive setup file maps after modifyRstestConfig is applied', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'rstest-setup-maps-'));
+    writeFileSync(join(tempRoot, 'setup.ts'), 'export {};\n');
+    writeFileSync(join(tempRoot, 'globalSetup.ts'), 'export {};\n');
+
+    const modifySetupPlugin: RsbuildPlugin = {
+      name: 'modify-rstest-setup-files',
+      setup(api) {
+        const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+        rstestApi?.modifyRstestConfig((config) => {
+          config.root = tempRoot;
+          config.setupFiles = ['./setup.ts'];
+          config.globalSetup = ['./globalSetup.ts'];
+        });
+      },
+    };
+
+    const setupFileState = createSetupFileState();
+
+    try {
+      const rsbuildInstance = await prepareRsbuild({
+        context: {
+          rootPath,
+          command: 'run',
+          normalizedConfig: {
+            root: rootPath,
+            name: 'test',
+            output: {
+              distPath: {
+                root: TEMP_RSTEST_OUTPUT_DIR,
+              },
+            },
+            pool: { type: 'forks' },
+          },
+          projects: [
+            {
+              name: 'test',
+              rootPath,
+              environmentName: 'test',
+              normalizedConfig: {
+                root: rootPath,
+                setupFiles: [],
+                globalSetup: [],
+                plugins: [modifySetupPlugin],
+                resolve: {},
+                source: {},
+                output: {},
+                tools: {},
+                testEnvironment: {
+                  name: 'node',
+                },
+                browser: { enabled: false },
+              },
+            },
+          ],
+        } as unknown as RstestContext,
+        globTestSourceEntries: async () => ({}),
+        setupFileState,
+      });
+
+      expect(setupFileState.setupFiles).toEqual({});
+      expect(setupFileState.globalSetupFiles).toEqual({});
+
+      await rsbuildInstance.initConfigs();
+
+      expect(setupFileState.setupFiles.test).toEqual({
+        'setup~ts': join(tempRoot, 'setup.ts'),
+      });
+      expect(setupFileState.globalSetupFiles.test).toEqual({
+        'globalSetup~ts': join(tempRoot, 'globalSetup.ts'),
+      });
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
   });
 
   it('should preserve normalized defaults after modifyRstestConfig mutates public config shape', async () => {
@@ -560,8 +646,7 @@ describe('prepareRsbuild', () => {
         projects: [project],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
 
     await rsbuildInstance.initConfigs();
@@ -614,8 +699,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
     expect(rsbuildInstance).toBeDefined();
     const {
@@ -668,8 +752,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
     expect(rsbuildInstance).toBeDefined();
     const {
@@ -729,8 +812,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
     expect(rsbuildInstance).toBeDefined();
     const {
@@ -783,8 +865,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
 
     const {
@@ -843,8 +924,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
 
     const {
@@ -907,8 +987,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
     expect(rsbuildInstance).toBeDefined();
     const {
@@ -973,8 +1052,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
 
     const {
@@ -1032,8 +1110,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
 
     const {
@@ -1091,8 +1168,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
 
     const {
@@ -1154,8 +1230,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
     expect(rsbuildInstance).toBeDefined();
     const {
@@ -1230,8 +1305,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
 
     const { origin } = await rsbuildInstance.inspectConfig();
@@ -1341,8 +1415,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
 
     const { origin } = await rsbuildInstance.inspectConfig();
@@ -1426,8 +1499,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
     expect(rsbuildInstance).toBeDefined();
     const {
@@ -1482,8 +1554,7 @@ describe('prepareRsbuild', () => {
         ],
       } as unknown as RstestContext,
       globTestSourceEntries: async () => ({}),
-      setupFiles: {},
-      globalSetupFiles: {},
+      setupFileState: createSetupFileState(),
     });
     expect(rsbuildInstance).toBeDefined();
     const {
@@ -1622,8 +1693,7 @@ describe('prepareRsbuild', () => {
           ],
         } as unknown as RstestContext,
         globTestSourceEntries: async () => ({}),
-        setupFiles: {},
-        globalSetupFiles: {},
+        setupFileState: createSetupFileState(),
       });
 
       await expect(rsbuildInstance.initConfigs()).rejects.toThrow(
