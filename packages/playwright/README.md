@@ -211,7 +211,7 @@ test('home page', async ({ page, serve }) => {
 });
 ```
 
-In debug mode, `serve` keeps the server alive by default so the opened page remains available for inspection.
+In debug mode, `serve` keeps the server alive by default so the opened page remains available for inspection. In non-watch runs, this may keep the Rstest process open until you stop it manually. Pass `keepAliveOnDebug: false` to `serve` when the process should exit after the test.
 
 For local debugging, set `PWDEBUG=1` to launch Chromium in headed mode with slow motion and DevTools enabled:
 

@@ -25,6 +25,8 @@ const execFileAsync = promisify(execFile);
 
 const ciPlaywrightOptions = {
   browserName: 'chromium',
+  // These package tests use the CI-provided Chrome binary to avoid installing
+  // Playwright Chromium. This does not change @rstest/playwright defaults.
   launchOptions: process.env.CI ? { channel: 'chrome' } : undefined,
 } satisfies PlaywrightOptions;
 
@@ -325,3 +327,53 @@ test(
     await server.close();
   },
 );
+
+test('cleans up request and serve fixtures after a failed cleanup', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
+  await writeFile(join(root, 'index.html'), '<h1>ok</h1>');
+
+  const fixturePath = join(root, 'cleanup.test.mjs');
+  await writeFile(
+    fixturePath,
+    `
+      import { test, expect } from ${JSON.stringify(join(__dirname, '../dist/index.js'))};
+
+      let request;
+      let url;
+
+      const cleanupFailureTest = test.extend({
+        userCleanup: async (_, use) => {
+          await use(undefined);
+          throw new Error('user cleanup failed');
+        },
+      });
+
+      cleanupFailureTest.sequential('uses request and serve before cleanup failure', async ({ request: currentRequest, serve, userCleanup }) => {
+        expect(userCleanup).toBeUndefined();
+        request = currentRequest;
+        url = (await serve(${JSON.stringify(join(root, 'index.html'))})).url;
+
+        const response = await request.get(url);
+        expect(response.ok()).toBe(true);
+      });
+
+      test.sequential('verifies cleanup', async () => {
+        await expect(request.get('https://example.com')).rejects.toThrow();
+        await expect(fetch(url)).rejects.toThrow();
+        console.log('RSTEST_PLAYWRIGHT_CLEANUP_OK');
+      });
+    `,
+  );
+
+  const rootDir = join(__dirname, '../../..');
+  const { stdout, stderr } = await execFileAsync(
+    join(rootDir, 'node_modules/.bin/rstest'),
+    ['--root', root, '--include', './cleanup.test.mjs'],
+    { cwd: rootDir },
+  ).catch((error: { stderr?: string; stdout?: string }) => ({
+    stderr: error.stderr ?? '',
+    stdout: error.stdout ?? '',
+  }));
+
+  expect(`${stdout}\n${stderr}`).toContain('RSTEST_PLAYWRIGHT_CLEANUP_OK');
+});

@@ -10,6 +10,12 @@ type FakeTimerSystemTime = Parameters<FakeTimerClock['setSystemTime']>[0];
 type FakeTimerTickMode = Parameters<FakeTimerClock['setTickMode']>[0];
 type MockFactory<T = unknown> = () => Partial<T>;
 
+export type RealTimers = {
+  setTimeout: typeof globalThis.setTimeout;
+  clearTimeout: typeof globalThis.clearTimeout;
+  setImmediate?: typeof globalThis.setImmediate;
+};
+
 interface MockResultReturn<T> {
   type: 'return';
   /**
@@ -559,6 +565,7 @@ export interface RstestUtilities {
    */
   setSystemTime: (now?: FakeTimerSystemTime) => RstestUtilities;
   getRealSystemTime: () => number;
+  getRealTimers: () => RealTimers;
 
   runAllTicks: () => RstestUtilities;
   runAllTimers: () => RstestUtilities;

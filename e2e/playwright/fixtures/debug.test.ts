@@ -7,6 +7,8 @@ const debugEnabled = process.env.RSTEST_PLAYWRIGHT_E2E_DEBUG === 'true';
 const test = base.extend({
   playwright: {
     browserName: 'chromium',
+    // This e2e test uses the CI-provided Chrome binary to avoid installing
+    // Playwright Chromium. This does not change @rstest/playwright defaults.
     launchOptions: process.env.CI ? { channel: 'chrome' } : undefined,
     debug: debugEnabled,
   } satisfies PlaywrightOptions,

@@ -1,4 +1,4 @@
-import { describe, expect as rstestExpect, it } from '@rstest/core';
+import { describe, expect as rstestExpect, it, rs, rstest } from '@rstest/core';
 import type { Locator, Page } from 'playwright';
 import { expect, test } from '../src';
 
@@ -68,6 +68,8 @@ const createPage = (title: string) =>
     title: async () => title,
     url: () => 'https://example.com/dashboard',
   }) as unknown as Page;
+
+const realPerformanceNow = performance.now.bind(performance);
 
 describe('@rstest/playwright expect', () => {
   it('supports locator text assertions', async () => {
@@ -259,6 +261,44 @@ describe('@rstest/playwright expect', () => {
     ).rejects.toThrow('Playwright assertion timed out after');
 
     expect(Date.now() - start).toBeLessThan(1000);
+  });
+
+  test('uses real timers for Playwright assertion retries', async () => {
+    try {
+      rstest.useFakeTimers({ now: 0 });
+      const realStart = realPerformanceNow();
+
+      await rstestExpect(
+        expect(createPage('Example Domain')).toHaveTitle('Other', {
+          timeout: 20,
+        }),
+      ).rejects.toThrow('Expected page to have title');
+
+      expect(Date.now()).toBe(0);
+      expect(realPerformanceNow() - realStart).toBeLessThan(1000);
+    } finally {
+      rstest.useRealTimers();
+    }
+  });
+
+  test('clears timeout timers after successful Playwright assertions', async () => {
+    const realTimers = rstest.getRealTimers();
+    const clearTimeout = rs.fn(realTimers.clearTimeout);
+    const setTimeout = rs.fn(realTimers.setTimeout);
+    const getRealTimers = rs.spyOn(rstest, 'getRealTimers').mockReturnValue({
+      ...realTimers,
+      setTimeout,
+      clearTimeout,
+    });
+
+    try {
+      await expect(createPage('Example Domain')).toHaveTitle('Example Domain');
+
+      expect(setTimeout).toHaveBeenCalled();
+      expect(clearTimeout).toHaveBeenCalledTimes(setTimeout.mock.calls.length);
+    } finally {
+      getRealTimers.mockRestore();
+    }
   });
 });
 

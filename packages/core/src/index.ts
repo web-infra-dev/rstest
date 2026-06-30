@@ -101,6 +101,7 @@ export type {
   ExtendConfigFn,
   Fixtures,
   ProjectConfig,
+  RealTimers,
   Reporter,
   Rstest,
   RstestCommand,

@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { isDeepStrictEqual } from 'node:util';
-import { expect as rstestExpect } from '@rstest/core';
-import type { Assertion, ExpectStatic } from '@rstest/core';
+import { expect as rstestExpect, rstest } from '@rstest/core';
+import type { Assertion, ExpectStatic, RealTimers } from '@rstest/core';
 import type { Locator, Page } from 'playwright';
 
 const DEFAULT_EXPECT_TIMEOUT = 5000;
@@ -111,9 +111,32 @@ const bindExpectStaticMethod = <K extends keyof ExpectStatic>(key: K) => {
   return Reflect.get(expect, key);
 };
 
-const sleep = (ms: number) =>
+const getRealNow = () => {
+  try {
+    return rstest.getRealSystemTime();
+  } catch {
+    return Date.now();
+  }
+};
+
+const getRealTimers = (): RealTimers => {
+  try {
+    return rstest.getRealTimers();
+  } catch {
+    return {
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      setImmediate:
+        typeof globalThis.setImmediate === 'function'
+          ? globalThis.setImmediate.bind(globalThis)
+          : undefined,
+    };
+  }
+};
+
+const waitForRealTime = (ms: number) =>
   new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
+    getRealTimers().setTimeout(resolve, ms);
   });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -276,21 +299,26 @@ const createPlaywrightMatcher =
       message,
     );
 
-const runWithTimeout = (check: () => Promise<void>, timeout: number) => {
+const runWithTimeout = async (check: () => Promise<void>, timeout: number) => {
+  const timers = getRealTimers();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-  return Promise.race([
-    check(),
-    new Promise<void>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        reject(new Error(`Playwright assertion timed out after ${timeout}ms.`));
-      }, timeout);
-    }),
-  ]).finally(() => {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
+  try {
+    await Promise.race([
+      check(),
+      new Promise<never>((_, reject) => {
+        timeoutId = timers.setTimeout(() => {
+          reject(
+            new Error(`Playwright assertion timed out after ${timeout}ms.`),
+          );
+        }, timeout);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) {
+      timers.clearTimeout(timeoutId);
     }
-  });
+  }
 };
 
 const waitForExpectation = async (
@@ -298,22 +326,22 @@ const waitForExpectation = async (
   options?: MatcherOptions,
 ) => {
   const timeout = options?.timeout ?? DEFAULT_EXPECT_TIMEOUT;
-  const deadline = Date.now() + timeout;
+  const deadline = getRealNow() + timeout;
   let lastError: unknown;
 
-  while (Date.now() <= deadline) {
+  while (getRealNow() <= deadline) {
     try {
-      await runWithTimeout(check, Math.max(deadline - Date.now(), 0));
+      await runWithTimeout(check, Math.max(deadline - getRealNow(), 0));
       return;
     } catch (error) {
       lastError = error;
 
-      const remaining = deadline - Date.now();
+      const remaining = deadline - getRealNow();
       if (remaining <= 0) {
         break;
       }
 
-      await sleep(Math.min(EXPECT_POLL_INTERVAL, remaining));
+      await waitForRealTime(Math.min(EXPECT_POLL_INTERVAL, remaining));
     }
   }
 

@@ -490,19 +490,54 @@ const playwrightFixtures = {
   playwright: defaultPlaywrightFixture,
 
   serve: async (
-    { playwright }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
+    {
+      onTestFailed,
+      playwright,
+      task,
+    }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
     use: (serve: PlaywrightServe) => Promise<void>,
   ) => {
     const servers: {
       keepAliveOnDebug?: boolean;
+      released: boolean;
       server: PlaywrightServeResult;
     }[] = [];
+
+    const cleanupServers = async () => {
+      const errors: unknown[] = [];
+
+      for (const entry of servers.toReversed()) {
+        if (entry.released) {
+          continue;
+        }
+
+        entry.released = true;
+        try {
+          await cleanupServer({
+            ...entry,
+            playwright,
+          });
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+
+      if (errors.length === 1) {
+        throw errors[0];
+      }
+      if (errors.length > 1) {
+        throw new AggregateError(errors, 'Failed to close Playwright servers.');
+      }
+    };
+
+    onTestFailed(cleanupServers);
 
     const serve: PlaywrightServe = async (entry, options) => {
       const server = await startStaticServer(entry, options);
 
       servers.push({
         keepAliveOnDebug: options?.keepAliveOnDebug,
+        released: false,
         server,
       });
 
@@ -512,11 +547,8 @@ const playwrightFixtures = {
     try {
       await use(serve);
     } finally {
-      for (const server of servers.toReversed()) {
-        await cleanupServer({
-          ...server,
-          playwright,
-        });
+      if (task.result?.status !== 'fail') {
+        await cleanupServers();
       }
     }
   },
@@ -584,16 +616,35 @@ const playwrightFixtures = {
   },
 
   request: async (
-    { playwright }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
+    {
+      onTestFailed,
+      playwright,
+      task,
+    }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
     use: (request: APIRequestContext) => Promise<void>,
   ) => {
     const request = await playwrightRequest.newContext(
       playwright.requestOptions,
     );
+    let released = false;
+
+    const cleanupRequest = async () => {
+      if (released) {
+        return;
+      }
+
+      released = true;
+      await request.dispose();
+    };
+
+    onTestFailed(cleanupRequest);
+
     try {
       await use(request);
     } finally {
-      await request.dispose();
+      if (task.result?.status !== 'fail') {
+        await cleanupRequest();
+      }
     }
   },
 };

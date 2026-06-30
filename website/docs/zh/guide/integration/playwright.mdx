@@ -261,7 +261,7 @@ test('home page', async ({ page, serve }) => {
 });
 ```
 
-启用 `PWDEBUG=1` 时，`serve` 默认会保留 server，避免已打开页面失去可访问的应用服务。如果即使在 debug 模式下也希望关闭 server，可以设置 `keepAliveOnDebug: false`。
+启用 `PWDEBUG=1` 时，`serve` 默认会保留 server，避免已打开页面失去可访问的应用服务。在非 watch 运行中，这可能会让 Rstest 进程保持运行，直到你手动停止。如果即使在 debug 模式下也希望关闭 server，可以设置 `keepAliveOnDebug: false`。
 
 ## Headed 调试
 

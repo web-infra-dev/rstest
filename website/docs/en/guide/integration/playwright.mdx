@@ -261,7 +261,7 @@ test('home page', async ({ page, serve }) => {
 });
 ```
 
-When `PWDEBUG=1` is enabled, `serve` keeps the server alive by default so the opened page remains available for inspection. Set `keepAliveOnDebug: false` if you want the server to close even in debug mode.
+When `PWDEBUG=1` is enabled, `serve` keeps the server alive by default so the opened page remains available for inspection. In non-watch runs, this may keep the Rstest process open until you stop it manually. Set `keepAliveOnDebug: false` if you want the server to close even in debug mode.
 
 ## Headed debugging
 
