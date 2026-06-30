@@ -20,6 +20,7 @@ export default defineConfig({
     'Rstest is a testing framework powered by Rspack. It delivers comprehensive, first-class support for the Rspack ecosystem, enabling seamless integration into existing Rspack-based projects.',
   markdown: {
     link: {
+      checkAnchors: true,
       checkDeadLinks: true,
     },
   },
