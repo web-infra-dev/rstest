@@ -170,6 +170,57 @@ export default defineConfig({
 });
 ```
 
+### `toRstestConfig(options)`
+
+将已有的 Rsbuild 配置对象转换为 Rstest 配置，而不会加载配置文件。
+
+```ts
+import type { RsbuildConfig } from '@rsbuild/core';
+import { defineConfig } from '@rstest/core';
+import { toRstestConfig } from '@rstest/adapter-rsbuild';
+
+const rsbuildConfig: RsbuildConfig = {
+  resolve: {
+    alias: {
+      '@': './src',
+    },
+  },
+};
+
+export default defineConfig({
+  extends: toRstestConfig({
+    rsbuildConfig,
+  }),
+});
+```
+
+#### `rsbuildConfig`
+
+- **类型：** `RsbuildConfig`
+
+要转换的 Rsbuild 配置对象。
+
+#### `configPath`
+
+- **类型：** `string`
+- **默认值：** `undefined`
+
+传入的 `rsbuildConfig` 对应的来源文件路径；它不会从该路径加载配置。适配器只用它将该文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers) 和 [performance.buildCache.buildDependencies](https://rsbuild.rs/zh/config/performance/build-cache#builddependencies)。
+
+#### `environmentName`
+
+- **类型：** `string`
+- **默认值：** `undefined`
+
+要从 `environments` 字段中合并到通用配置的环境名称。
+
+#### `modifyRsbuildConfig`
+
+- **类型：** `(config: RsbuildConfig) => RsbuildConfig`
+- **默认值：** `undefined`
+
+在将合并后的 Rsbuild 配置对象转换为 Rstest 配置之前对其进行修改。
+
 ## 配置映射
 
 适配器会自动将这些 Rsbuild 选项映射到 Rstest：
