@@ -1258,6 +1258,130 @@ describe('prepareRsbuild', () => {
     });
   });
 
+  it('should apply modifyRstestConfig performance.buildCache per project', async () => {
+    const modifyCachePlugin = (cacheDigest: string): RsbuildPlugin => ({
+      name: `modify-cache-${cacheDigest}`,
+      setup(api) {
+        const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+        rstestApi?.modifyRstestConfig((config) => {
+          config.performance = {
+            buildCache: {
+              cacheDirectory: `node_modules/.cache/${cacheDigest}`,
+              cacheDigest: [cacheDigest],
+              buildDependencies: [`${cacheDigest}.config.ts`],
+            },
+          };
+        });
+      },
+    });
+
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
+        rootPath,
+        command: 'run',
+        configFilePath: join(rootPath, 'rstest.config.ts'),
+        normalizedConfig: {
+          root: rootPath,
+          name: 'root',
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          plugins: [],
+          resolve: {},
+          source: {},
+          tools: {},
+          testEnvironment: {
+            name: 'node',
+          },
+          isolate: true,
+          pool: { type: 'forks' },
+        },
+        projects: [
+          {
+            name: 'project-a',
+            rootPath,
+            environmentName: 'project-a',
+            normalizedConfig: {
+              root: rootPath,
+              name: 'project-a',
+              plugins: [modifyCachePlugin('project-a')],
+              resolve: {},
+              source: {},
+              output: {},
+              tools: {},
+              testEnvironment: {
+                name: 'node',
+              },
+              isolate: true,
+              browser: { enabled: false },
+            },
+          },
+          {
+            name: 'project-b',
+            rootPath,
+            environmentName: 'project-b',
+            normalizedConfig: {
+              root: rootPath,
+              name: 'project-b',
+              plugins: [modifyCachePlugin('project-b')],
+              resolve: {},
+              source: {},
+              output: {},
+              tools: {},
+              testEnvironment: {
+                name: 'node',
+              },
+              isolate: true,
+              browser: { enabled: false },
+            },
+          },
+        ],
+      } as unknown as RstestContext,
+      globTestSourceEntries: async () => ({}),
+      setupFiles: {},
+      globalSetupFiles: {},
+    });
+
+    const { origin } = await rsbuildInstance.inspectConfig();
+    const environmentConfigs = (origin as any).environmentConfigs;
+
+    expect(environmentConfigs?.['project-a']?.performance?.buildCache).toEqual({
+      cacheDirectory: join(rootPath, 'node_modules/.cache/project-a'),
+      cacheDigest: [
+        'rstest',
+        'run',
+        'project-a',
+        'node',
+        'no-coverage',
+        TEMP_RSTEST_OUTPUT_DIR,
+        'project-a',
+      ],
+      buildDependencies: [
+        join(rootPath, 'rstest.config.ts'),
+        join(rootPath, 'project-a.config.ts'),
+      ],
+    });
+    expect(environmentConfigs?.['project-b']?.performance?.buildCache).toEqual({
+      cacheDirectory: join(rootPath, 'node_modules/.cache/project-b'),
+      cacheDigest: [
+        'rstest',
+        'run',
+        'project-b',
+        'node',
+        'no-coverage',
+        TEMP_RSTEST_OUTPUT_DIR,
+        'project-b',
+      ],
+      buildDependencies: [
+        join(rootPath, 'rstest.config.ts'),
+        join(rootPath, 'project-b.config.ts'),
+      ],
+    });
+  });
+
   it('should generate rspack config correctly (esm output)', async () => {
     const rsbuildInstance = await prepareRsbuild({
       context: {
@@ -1376,6 +1500,12 @@ describe('prepareRsbuild', () => {
 
   it('should not allow modifyRstestConfig to modify global config fields', async () => {
     const cases = [
+      {
+        name: 'name',
+        modify: (config: Record<string, unknown>) => {
+          config.name = 'modified';
+        },
+      },
       {
         name: 'coverage',
         modify: (config: Record<string, unknown>) => {

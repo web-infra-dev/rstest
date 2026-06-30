@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { isAbsolute, normalize, relative, resolve } from 'pathe';
-import type { ProjectContext, RstestContext } from '../types';
+import type { RstestContext } from '../types';
 import { getTestEntries } from '../utils';
-import { getSetupFiles } from '../utils/getSetupFiles';
+import { refreshSetupFileMaps } from './setupFileMaps';
 import { prepareRsbuild } from './rsbuild';
 
 type StatsModuleReason = NonNullable<Rspack.StatsModule['reasons']>[number];
@@ -224,18 +224,6 @@ const collectProjectEntries = async (
   return entries;
 };
 
-const buildSetupFiles = (
-  projects: ProjectContext[],
-  key: 'setupFiles' | 'globalSetup',
-): Record<string, Record<string, string>> => {
-  return Object.fromEntries(
-    projects.map((project) => [
-      project.environmentName,
-      getSetupFiles(project.normalizedConfig[key], project.rootPath),
-    ]),
-  );
-};
-
 const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
   name: 'rstest:related-build-safeguards',
   setup(api) {
@@ -343,15 +331,12 @@ export async function resolveRelatedTestFiles(
     extraPlugins: [createRelatedBuildSafeguardsPlugin()],
     onModifyRstestConfigApplied: async () => {
       projectEntries = await collectProjectEntries(context);
-
-      Object.assign(
+      refreshSetupFileMaps({
         setupFiles,
-        buildSetupFiles(context.projects, 'setupFiles'),
-      );
-      Object.assign(
         globalSetupFiles,
-        buildSetupFiles(context.projects, 'globalSetup'),
-      );
+        setupProjects: context.projects,
+        globalSetupProjects: context.projects,
+      });
     },
   });
 

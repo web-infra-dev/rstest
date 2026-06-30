@@ -29,6 +29,7 @@ import {
   loadBrowserModule,
 } from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
+import { refreshSetupFileMaps } from './setupFileMaps';
 import {
   claimGlobalSetupOnce,
   runGlobalSetup,
@@ -337,8 +338,6 @@ export async function runTests(context: Rstest): Promise<void> {
     context;
   const { coverage, shard } = normalizedConfig;
 
-  const { getSetupFiles } = await import('../utils/getSetupFiles');
-
   const setupFiles: Record<string, Record<string, string>> = {};
   const globalSetupFiles: Record<string, Record<string, string>> = {};
 
@@ -432,25 +431,12 @@ export async function runTests(context: Rstest): Promise<void> {
       nodeProjectsToRun = [];
     }
 
-    for (const project of nodeProjectsToRun) {
-      const {
-        environmentName,
-        rootPath,
-        normalizedConfig: { setupFiles: projectSetupFiles },
-      } = project;
-
-      setupFiles[environmentName] = getSetupFiles(projectSetupFiles, rootPath);
-    }
-
-    for (const project of context.projects) {
-      const {
-        environmentName,
-        rootPath,
-        normalizedConfig: { globalSetup },
-      } = project;
-
-      globalSetupFiles[environmentName] = getSetupFiles(globalSetup, rootPath);
-    }
+    refreshSetupFileMaps({
+      setupFiles,
+      globalSetupFiles,
+      setupProjects: nodeProjectsToRun,
+      globalSetupProjects: context.projects,
+    });
 
     syncCoverageSetupExcludes(
       coverage,

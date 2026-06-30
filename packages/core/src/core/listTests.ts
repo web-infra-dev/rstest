@@ -26,6 +26,7 @@ import {
   runGlobalSetup,
   runGlobalTeardown,
 } from './globalSetup';
+import { refreshSetupFileMaps } from './setupFileMaps';
 import { applyEnvironmentGroupsToListEntries } from './environmentEntries';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 
@@ -155,7 +156,6 @@ const collectNodeTests = async ({
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   onModifyRstestConfigApplied?: () => Promise<void>;
 }) => {
-  const { getSetupFiles } = await import('../utils/getSetupFiles');
   if (nodeProjects.length === 0) {
     return {
       list: [],
@@ -167,34 +167,13 @@ const collectNodeTests = async ({
   const setupFiles: Record<string, Record<string, string>> = {};
   const globalSetupFiles: Record<string, Record<string, string>> = {};
 
-  const refreshSetupFiles = () => {
-    for (const key of Object.keys(setupFiles)) {
-      delete setupFiles[key];
-    }
-    for (const key of Object.keys(globalSetupFiles)) {
-      delete globalSetupFiles[key];
-    }
-
-    for (const project of nodeProjects) {
-      const {
-        environmentName,
-        rootPath,
-        normalizedConfig: { setupFiles: projectSetupFiles },
-      } = project;
-
-      setupFiles[environmentName] = getSetupFiles(projectSetupFiles, rootPath);
-    }
-
-    for (const project of context.projects) {
-      const {
-        environmentName,
-        rootPath,
-        normalizedConfig: { globalSetup },
-      } = project;
-
-      globalSetupFiles[environmentName] = getSetupFiles(globalSetup, rootPath);
-    }
-  };
+  const refreshSetupFiles = () =>
+    refreshSetupFileMaps({
+      setupFiles,
+      globalSetupFiles,
+      setupProjects: nodeProjects,
+      globalSetupProjects: context.projects,
+    });
 
   refreshSetupFiles();
 

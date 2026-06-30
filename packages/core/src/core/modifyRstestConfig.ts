@@ -21,19 +21,45 @@ import {
 
 type RstestEnvironmentConfig = EnvironmentConfig & Pick<RsbuildConfig, 'root'>;
 
-const immutableModifyRstestConfigKeys = new Set<string>([
-  'browser',
-  'bail',
-  'coverage',
-  'extends',
-  'isolate',
-  'onConsoleLog',
-  'pool',
-  'plugins',
-  'projects',
-  'reporters',
-  'resolveSnapshotPath',
-  'silent',
+const mutableModifyRstestConfigKeys = new Set<keyof NormalizedProjectConfig>([
+  'root',
+  'include',
+  'exclude',
+  'includeSource',
+  'forceRerunTriggers',
+  'setupFiles',
+  'globalSetup',
+  'retry',
+  'passWithNoTests',
+  'globals',
+  'testEnvironment',
+  'printConsoleTrace',
+  'disableConsoleIntercept',
+  'update',
+  'hideSkippedTests',
+  'hideSkippedTestFiles',
+  'testNamePattern',
+  'testTimeout',
+  'hookTimeout',
+  'clearMocks',
+  'resetMocks',
+  'restoreMocks',
+  'slowTestThreshold',
+  'detectAsyncLeaks',
+  'unstubGlobals',
+  'unstubEnvs',
+  'maxConcurrency',
+  'logHeapUsage',
+  'snapshotFormat',
+  'env',
+  'performance',
+  'chaiConfig',
+  'includeTaskLocation',
+  'source',
+  'dev',
+  'output',
+  'resolve',
+  'tools',
 ]);
 
 const clonePlainConfig = <T>(value: T): T => {
@@ -86,12 +112,27 @@ const getImmutableConfigChangeError = (key: string): Error => {
     );
   }
 
+  if (key === 'name') {
+    return new Error(
+      'Cannot modify `name` in `modifyRstestConfig`. Configure the project name in the Rstest config instead.',
+    );
+  }
+
   return new Error(
     `Cannot modify \`${key}\` in \`modifyRstestConfig\`. Configure global options in the Rstest config instead.`,
   );
 };
 
-const assertImmutableConfigFields = (
+const getConfigKeys = (
+  previousConfig: NormalizedProjectConfig,
+  currentConfig: NormalizedProjectConfig,
+): Array<keyof NormalizedProjectConfig> => {
+  return Array.from(
+    new Set([...Object.keys(previousConfig), ...Object.keys(currentConfig)]),
+  ) as Array<keyof NormalizedProjectConfig>;
+};
+
+const assertMutableConfigFields = (
   previousConfig: NormalizedProjectConfig,
   currentConfig: NormalizedProjectConfig,
 ): void => {
@@ -107,9 +148,11 @@ const assertImmutableConfigFields = (
     throw getImmutableConfigChangeError('browser.enabled');
   }
 
-  for (const key of immutableModifyRstestConfigKeys) {
+  for (const key of getConfigKeys(previousConfig, currentConfig)) {
     if (!isConfigValueEqual(current[key], previous[key])) {
-      throw getImmutableConfigChangeError(key);
+      if (!mutableModifyRstestConfigKeys.has(key)) {
+        throw getImmutableConfigChangeError(key);
+      }
     }
   }
 
@@ -127,14 +170,12 @@ const createMutableConfigOverrides = (
 ): Partial<NormalizedProjectConfig> => {
   const overrides: Partial<NormalizedProjectConfig> = {};
 
-  for (const key of Object.keys(currentConfig) as Array<
-    keyof NormalizedProjectConfig
-  >) {
+  for (const key of getConfigKeys(previousConfig, currentConfig)) {
     if (isConfigValueEqual(currentConfig[key], previousConfig[key])) {
       continue;
     }
 
-    if (immutableModifyRstestConfigKeys.has(key)) {
+    if (!mutableModifyRstestConfigKeys.has(key)) {
       throw getImmutableConfigChangeError(key);
     }
 
@@ -180,14 +221,14 @@ const applyModifyRstestConfig = async (
     const previousConfig = clonePlainConfig(currentConfig);
     const result = await callback(currentConfig);
 
-    assertImmutableConfigFields(previousConfig, currentConfig);
+    assertMutableConfigFields(previousConfig, currentConfig);
 
     currentConfig = mergeRstestConfig(
       previousConfig,
       result || createMutableConfigOverrides(previousConfig, currentConfig),
     ) as NormalizedProjectConfig;
     normalizeMutableConfigFields(currentConfig, previousConfig.root);
-    assertImmutableConfigFields(previousConfig, currentConfig);
+    assertMutableConfigFields(previousConfig, currentConfig);
   }
 
   return currentConfig;
