@@ -1,6 +1,8 @@
+import { execFile } from 'node:child_process';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { beforeEach, expect, test } from '../src';
 import { getDebugOptions, resolveLaunchOptions } from '../src/fixture';
 import type { Browser, BrowserContext, Page } from 'playwright';
@@ -18,6 +20,8 @@ const debugOptions = {
     devtools: false,
   },
 } satisfies PlaywrightOptions;
+
+const execFileAsync = promisify(execFile);
 
 const ciPlaywrightOptions = {
   browserName: 'chromium',
@@ -39,6 +43,18 @@ const createPage = (title: string) =>
 
 test('provides an isolated request fixture', async ({ request }) => {
   expect(request).toBeTruthy();
+});
+
+test('can be imported outside a rstest worker', async () => {
+  await execFileAsync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      "import { test } from './packages/playwright/dist/index.js'; console.log(typeof test, typeof test.extend);",
+    ],
+    { cwd: join(__dirname, '../../..') },
+  );
 });
 
 test('exposes playwright options fixture overrides', async ({ playwright }) => {
