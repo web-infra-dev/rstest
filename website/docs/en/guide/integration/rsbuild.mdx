@@ -170,6 +170,57 @@ export default defineConfig({
 });
 ```
 
+### `toRstestConfig(options)`
+
+Converts an Rsbuild config object to Rstest configuration without loading a config file. Use this when your project or framework already creates an Rsbuild config object in memory.
+
+```ts
+import type { RsbuildConfig } from '@rsbuild/core';
+import { defineConfig } from '@rstest/core';
+import { toRstestConfig } from '@rstest/adapter-rsbuild';
+
+const rsbuildConfig: RsbuildConfig = {
+  resolve: {
+    alias: {
+      '@': './src',
+    },
+  },
+};
+
+export default defineConfig({
+  extends: toRstestConfig({
+    rsbuildConfig,
+  }),
+});
+```
+
+#### `rsbuildConfig`
+
+- **Type:** `RsbuildConfig`
+
+The Rsbuild config object to convert.
+
+#### `configPath`
+
+- **Type:** `string`
+- **Default:** `undefined`
+
+Source file path for the provided `rsbuildConfig`; it does not load config from this path. The adapter uses it only to add the file to [`forceRerunTriggers`](/config/test/force-rerun-triggers) and [`performance.buildCache.buildDependencies`](https://rsbuild.rs/config/performance/build-cache#builddependencies).
+
+#### `environmentName`
+
+- **Type:** `string`
+- **Default:** `undefined`
+
+The environment name in the `environments` field to merge with the common config.
+
+#### `modifyRsbuildConfig`
+
+- **Type:** `(config: RsbuildConfig) => RsbuildConfig`
+- **Default:** `undefined`
+
+Modify the merged Rsbuild config object before it gets converted to Rstest config.
+
 ## Configuration mapping
 
 The adapter automatically maps these Rsbuild options to Rstest:
