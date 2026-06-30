@@ -114,8 +114,11 @@ type ConvertOptions = {
 
 const WORD_PATTERN = /(\w+|\s|[^\w\s])/g;
 const INLINE_MAP_PATTERN = /[#@]\s*sourceMappingURL\s*=\s*(\S+)\s*$/m;
+const DATA_SOURCE_MAP_PATTERN = /^data:application\/json(?:;[^,]*)?,/i;
 const BASE_64_SOURCE_MAP_PATTERN =
   /^data:application\/json(?:;[^,]*)?;base64,/i;
+const URL_SCHEME_PATTERN = /^[a-zA-Z][a-zA-Z\d+.-]*:/;
+const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-zA-Z]:[\\/]/;
 const IGNORE_PATTERN =
   /^\s*(?:istanbul|[cv]8|node:coverage)\s+ignore\s+(if|else|next|file)(?=\W|$)/;
 const IGNORE_LINES_PATTERN =
@@ -257,6 +260,7 @@ async function prepareCoverage(
             builder.addFunction(current, {
               loc: value.body as AstNode,
               decl: current.key as AstNode,
+              coverage: value,
             });
           }
           return;
@@ -459,9 +463,7 @@ class CoverageBuilder {
       let filePath = filename;
 
       if (source) {
-        filePath = source.startsWith('file://')
-          ? fileURLToPath(source)
-          : resolve(generatedDirectory, source);
+        filePath = resolveSourceFilename(source, generatedDirectory);
       }
 
       if (sourceFilter && !sourceFilter(filePath)) {
@@ -487,6 +489,7 @@ class CoverageBuilder {
     positions: {
       loc: Pick<AstNode, 'start' | 'end'>;
       decl: Pick<AstNode, 'start' | 'end'>;
+      coverage?: Pick<AstNode, 'start' | 'end'>;
     },
   ) {
     const loc = this.locator.getLoc(positions.loc);
@@ -532,11 +535,12 @@ class CoverageBuilder {
       };
     }
 
+    const coverage = positions.coverage || node;
     this.functions.push({
       filename,
       index,
-      startOffset: node.start,
-      endOffset: node.end,
+      startOffset: coverage.start,
+      endOffset: coverage.end,
     });
   }
 
@@ -651,11 +655,7 @@ class CoverageBuilder {
       );
     }
 
-    if (sourceFilename.startsWith('file://')) {
-      return fileURLToPath(sourceFilename);
-    }
-
-    return resolve(this.directory, sourceFilename);
+    return resolveSourceFilename(sourceFilename, this.directory);
   }
 }
 
@@ -715,7 +715,7 @@ class Locator {
     const endNeedle = this.offsetToNeedle(node.end);
     endNeedle.column -= 1;
 
-    let end = getPosition(endNeedle, this.sourceMap);
+    let end = getPosition(endNeedle, this.sourceMap, true);
 
     if (end === null) {
       for (
@@ -723,7 +723,7 @@ class Locator {
         line >= startNeedle.line && end === null;
         line--
       ) {
-        end = getPosition({ line, column: Infinity }, this.sourceMap);
+        end = getPosition({ line, column: Infinity }, this.sourceMap, true);
       }
 
       if (end === null) return null;
@@ -1031,10 +1031,14 @@ function getCount(
   return count;
 }
 
-function getPosition(needle: Needle, sourceMap: TraceMap): Position | null {
+function getPosition(
+  needle: Needle,
+  sourceMap: TraceMap,
+  allowNextMapping = false,
+): Position | null {
   let position = originalPositionFor(sourceMap, needle);
 
-  if (position.source == null) {
+  if (position.source == null && allowNextMapping) {
     position = originalPositionFor(sourceMap, {
       column: needle.column,
       line: needle.line,
@@ -1093,6 +1097,11 @@ async function getInlineSourceMap(filename: string, code: string) {
       const encoded = match.replace(BASE_64_SOURCE_MAP_PATTERN, '');
       const decoded = Buffer.from(encoded, 'base64').toString('utf8');
       return JSON.parse(decoded) as SourceMapLike;
+    }
+
+    if (DATA_SOURCE_MAP_PATTERN.test(match)) {
+      const encoded = match.replace(DATA_SOURCE_MAP_PATTERN, '');
+      return JSON.parse(decodeURIComponent(encoded)) as SourceMapLike;
     }
 
     const directory = dirname(filename);
@@ -1201,6 +1210,21 @@ function tryReadFileSync(filename: string) {
   } catch {
     return undefined;
   }
+}
+
+function resolveSourceFilename(source: string, directory: string) {
+  if (source.startsWith('file://')) {
+    return fileURLToPath(source);
+  }
+
+  if (
+    URL_SCHEME_PATTERN.test(source) &&
+    !WINDOWS_ABSOLUTE_PATH_PATTERN.test(source)
+  ) {
+    return source;
+  }
+
+  return resolve(directory, source);
 }
 
 function getFunctionName(node: AstNode): string | undefined {

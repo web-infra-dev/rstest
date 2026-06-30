@@ -109,6 +109,15 @@ function getProviderInternals(provider: CoverageProvider): ProviderInternals {
   return provider as unknown as ProviderInternals;
 }
 
+function parseModule(code: string) {
+  return Parser.parse(code, {
+    ecmaVersion: 'latest',
+    locations: true,
+    ranges: true,
+    sourceType: 'module',
+  });
+}
+
 describe('coverage-v8 provider', () => {
   it('reads charset base64 inline source maps in the AST converter', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-inline-map-charset');
@@ -125,12 +134,7 @@ describe('coverage-v8 provider', () => {
     const code = `const value = 1;\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${Buffer.from(
       JSON.stringify(sourceMap),
     ).toString('base64')}`;
-    const ast = Parser.parse(code, {
-      ecmaVersion: 'latest',
-      locations: true,
-      ranges: true,
-      sourceType: 'module',
-    });
+    const ast = parseModule(code);
 
     const coverage = await convertV8CoverageWithAst({
       ast,
@@ -149,6 +153,151 @@ describe('coverage-v8 provider', () => {
     });
 
     expect(Object.keys(coverage)).toEqual([originalFile]);
+  });
+
+  it('reads non-base64 inline data source maps in the AST converter', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-inline-map-data-url');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const sourceMap = {
+      version: 3,
+      file: generatedFile,
+      sources: ['../src/original.ts'],
+      sourcesContent: ['const value = 1;'],
+      names: [],
+      mappings: 'AAAA',
+    };
+    const code = `const value = 1;\n//# sourceMappingURL=data:application/json;charset=UTF-8,${encodeURIComponent(
+      JSON.stringify(sourceMap),
+    )}`;
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:inline-data-url`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([originalFile]);
+  });
+
+  it('uses value offsets for object property function coverage', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-property-function.js');
+    const code = 'const o = { a: function () {} };\no.a;';
+    const functionStart = code.indexOf('function');
+    const functionEnd = functionStart + 'function () {}'.length;
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:property-function`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+          {
+            functionName: 'a',
+            isBlockCoverage: true,
+            ranges: [
+              { startOffset: functionStart, endOffset: functionEnd, count: 0 },
+            ],
+          },
+        ],
+      },
+    });
+
+    const fileCoverage = coverage[file]!;
+    expect(fileCoverage.fnMap[0]?.name).toBe('a');
+    expect(fileCoverage.f).toEqual({ 0: 0 });
+  });
+
+  it('preserves non-file source map URLs as coverage filenames', async () => {
+    const generatedFile = join(
+      tmpdir(),
+      'rstest-coverage-v8-webpack-source.js',
+    );
+    const sourceUrl = 'webpack://rstest/src/original.ts';
+    const code = 'const value = 1;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:webpack-source`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+      sourceMap: {
+        version: 3,
+        sources: [sourceUrl],
+        sourcesContent: [code],
+        names: [],
+        mappings: 'AAAA',
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([sourceUrl]);
+  });
+
+  it('does not remap unmapped wrapper statements to the next source', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-unmapped-wrapper');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const code = '(function(){})();\nconst value = 1;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:unmapped-wrapper`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+      sourceMap: {
+        version: 3,
+        sources: ['../src/original.ts'],
+        sourcesContent: ['const value = 1;'],
+        names: [],
+        mappings: ';AAAA',
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([originalFile]);
+    expect(coverage[originalFile]?.statementMap).toEqual({
+      0: {
+        start: { line: 1, column: 0 },
+        end: { line: 1, column: Number.POSITIVE_INFINITY },
+      },
+    });
   });
 
   it('loads custom coverage reporters from relative config paths', async () => {
