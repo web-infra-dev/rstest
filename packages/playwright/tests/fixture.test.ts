@@ -336,7 +336,7 @@ test('cleans up request and serve fixtures after a failed cleanup', async () => 
   await writeFile(
     fixturePath,
     `
-      import { test, expect } from ${JSON.stringify(join(__dirname, '../dist/index.js'))};
+      import { test, expect } from ${JSON.stringify(join(__dirname, '../dist/index.js').replaceAll('\\', '/'))};
 
       let request;
       let url;
@@ -367,11 +367,17 @@ test('cleans up request and serve fixtures after a failed cleanup', async () => 
 
   const rootDir = join(__dirname, '../../..');
   const { stdout, stderr } = await execFileAsync(
-    join(rootDir, 'node_modules/.bin/rstest'),
-    ['--root', root, '--include', './cleanup.test.mjs'],
+    process.execPath,
+    [
+      join(rootDir, 'packages/core/bin/rstest.js'),
+      '--root',
+      root,
+      '--include',
+      './cleanup.test.mjs',
+    ],
     { cwd: rootDir },
-  ).catch((error: { stderr?: string; stdout?: string }) => ({
-    stderr: error.stderr ?? '',
+  ).catch((error: { message?: string; stderr?: string; stdout?: string }) => ({
+    stderr: `${error.message ?? ''}\n${error.stderr ?? ''}`,
     stdout: error.stdout ?? '',
   }));
 
