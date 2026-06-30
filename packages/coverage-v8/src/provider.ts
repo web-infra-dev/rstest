@@ -6,7 +6,6 @@ import type {
   NormalizedCoverageOptions,
   CoverageProvider as RstestCoverageProvider,
 } from '@rstest/core';
-import astV8ToIstanbul from 'ast-v8-to-istanbul';
 import { Parser } from 'acorn';
 import { type CoverageMap, type FileCoverageData } from 'istanbul-lib-coverage';
 import type { ReportBase } from 'istanbul-lib-report';
@@ -15,6 +14,7 @@ import reports from 'istanbul-reports';
 import picomatch from 'picomatch';
 import v8ToIstanbul from 'v8-to-istanbul';
 import { createFastCoverageMap } from './utils';
+import { convertV8CoverageWithAst } from './v8AstConverter';
 
 type SourceMapLike = {
   version: number;
@@ -30,6 +30,15 @@ type CoverageReporterConstructor = new (
   options: Record<string, unknown>,
 ) => ReportBase;
 
+const MAX_PARSED_AST_CACHE_SIZE = 50;
+const INLINE_SOURCE_MAP_PATTERN =
+  /[#@]\s*sourceMappingURL\s*=\s*data:application\/json(?:;[^'",\s]*)*,/i;
+const parsedAstCache = new Map<string, ReturnType<typeof Parser.parse>>();
+
+type CoverageEntry = inspector.Profiler.ScriptCoverage & {
+  filePath: string;
+};
+
 export class CoverageProvider implements RstestCoverageProvider {
   private session: inspector.Session | null = null;
   private isMatch: (filePath: string) => boolean;
@@ -39,6 +48,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     Record<string, string>,
     Map<string, string>
   >();
+  private diskInlineSourceMapCache = new Map<string, Promise<boolean>>();
 
   constructor(
     public options: NormalizedCoverageOptions,
@@ -195,18 +205,34 @@ export class CoverageProvider implements RstestCoverageProvider {
     );
   }
 
-  private hasInlineSourceMap(code: string): boolean {
-    return /[#@]\s*sourceMappingURL\s*=\s*data:application\/json(?:;[^'",\s]*)*,/i.test(
-      code,
+  private shouldKeepOriginalSource(filePath: string): boolean {
+    const normalizedKey = filePath.replace(/\\/g, '/');
+
+    if (this.shouldIgnoreTransformedFile(normalizedKey)) {
+      return false;
+    }
+
+    const originalTestPath = this.toProjectRelativePath(normalizedKey);
+    return (
+      !this.isExcluded(originalTestPath) && this.isIncluded(originalTestPath)
     );
   }
 
+  private hasInlineSourceMap(code: string): boolean {
+    return INLINE_SOURCE_MAP_PATTERN.test(code);
+  }
+
   private async hasInlineSourceMapOnDisk(filePath: string): Promise<boolean> {
-    try {
-      return this.hasInlineSourceMap(await fs.readFile(filePath, 'utf-8'));
-    } catch (_err) {
-      return false;
+    let cached = this.diskInlineSourceMapCache.get(filePath);
+    if (!cached) {
+      cached = fs
+        .readFile(filePath, 'utf-8')
+        .then((code) => this.hasInlineSourceMap(code))
+        .catch(() => false);
+      this.diskInlineSourceMapCache.set(filePath, cached);
     }
+
+    return cached;
   }
 
   private async getTransformedSource(
@@ -218,6 +244,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   ): Promise<{
     code: string;
     sourceMap?: SourceMapLike;
+    sourceMapStr?: string;
   }> {
     const assetSource = this.findInDict(options?.assetFiles, filePath);
     const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
@@ -230,16 +257,33 @@ export class CoverageProvider implements RstestCoverageProvider {
             ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
           } as SourceMapLike)
         : undefined,
+      sourceMapStr,
     };
   }
 
-  private parseAst(code: string, outputModule: boolean) {
-    return Parser.parse(code, {
+  private parseAst(code: string, outputModule: boolean, cacheKey: string) {
+    const cachedAst = parsedAstCache.get(cacheKey);
+    if (cachedAst) {
+      return cachedAst;
+    }
+
+    const ast = Parser.parse(code, {
       ecmaVersion: 'latest',
       locations: true,
       ranges: true,
       sourceType: outputModule ? 'module' : 'script',
     });
+
+    parsedAstCache.set(cacheKey, ast);
+
+    if (parsedAstCache.size > MAX_PARSED_AST_CACHE_SIZE) {
+      const firstKey = parsedAstCache.keys().next().value;
+      if (firstKey) {
+        parsedAstCache.delete(firstKey);
+      }
+    }
+
+    return ast;
   }
 
   private async convertWithAst(
@@ -251,7 +295,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       outputModule?: boolean;
     },
   ): Promise<Record<string, FileCoverageData>> {
-    const { code, sourceMap } = await this.getTransformedSource(
+    const { code, sourceMap, sourceMapStr } = await this.getTransformedSource(
       filePath,
       options,
     );
@@ -260,37 +304,79 @@ export class CoverageProvider implements RstestCoverageProvider {
       return {};
     }
 
-    const ast = this.parseAst(code, options?.outputModule ?? true);
-
-    return (await astV8ToIstanbul({
-      ast,
+    const outputModule = options?.outputModule ?? true;
+    const codeHash = this.hashString(code);
+    const astCacheKey = this.getAstCacheKey(
+      filePath,
       code,
+      codeHash,
+      outputModule,
+    );
+    const converterCacheKey = this.getConverterCacheKey(
+      filePath,
+      code,
+      codeHash,
+      sourceMapStr,
+      outputModule,
+    );
+    const ast = this.parseAst(code, outputModule, astCacheKey);
+
+    return convertV8CoverageWithAst({
+      ast,
+      cacheKey: converterCacheKey,
+      code,
+      sourceFilter: (sourcePath) => this.shouldKeepOriginalSource(sourcePath),
       sourceMap,
       coverage: {
         url: entry.url,
         functions: entry.functions,
       },
-    })) as Record<string, FileCoverageData>;
+    });
+  }
+
+  private getConverterCacheKey(
+    filePath: string,
+    code: string,
+    codeHash: number,
+    sourceMapStr: string | undefined,
+    outputModule: boolean,
+  ): string {
+    return [
+      this.getAstCacheKey(filePath, code, codeHash, outputModule),
+      sourceMapStr?.length ?? 0,
+      sourceMapStr ? this.hashString(sourceMapStr) : 0,
+      this.root ?? '',
+      this.options.allowExternal ? 'external' : 'root-only',
+      this.options.include?.join('\n') ?? '',
+      this.options.exclude.join('\n'),
+    ].join('\0');
+  }
+
+  private getAstCacheKey(
+    filePath: string,
+    code: string,
+    codeHash: number,
+    outputModule: boolean,
+  ): string {
+    return [
+      filePath,
+      outputModule ? 'module' : 'script',
+      code.length,
+      codeHash,
+    ].join('\0');
+  }
+
+  private hashString(value: string): number {
+    let hash = 0;
+    for (let index = 0; index < value.length; index++) {
+      hash = Math.imul(31, hash) + value.charCodeAt(index);
+    }
+    return hash >>> 0;
   }
 
   private filterCoverageData(istanbulData: Record<string, FileCoverageData>) {
     for (const key of Object.keys(istanbulData)) {
-      const normalizedKey = key.replace(/\\/g, '/');
-
-      // AST remapping can emit original-source entries that differ from the
-      // executed script URL. Re-apply the same internal-file guard here so
-      // remapped dependency files do not leak into the final map.
-      if (this.shouldIgnoreTransformedFile(normalizedKey)) {
-        delete istanbulData[key];
-        continue;
-      }
-
-      const originalTestPath = this.toProjectRelativePath(normalizedKey);
-
-      if (
-        this.isExcluded(originalTestPath) ||
-        !this.isIncluded(originalTestPath)
-      ) {
+      if (!this.shouldKeepOriginalSource(key)) {
         delete istanbulData[key];
         continue;
       }
@@ -315,6 +401,67 @@ export class CoverageProvider implements RstestCoverageProvider {
     return this.collectImpl(options);
   }
 
+  private async takeRawCoverage(): Promise<CoverageEntry[]> {
+    if (!this.session) return [];
+
+    const coverage = await this.session.post('Profiler.takePreciseCoverage');
+    const entries: CoverageEntry[] = [];
+
+    for (const entry of coverage.result) {
+      if (!entry.url.startsWith('file://')) continue;
+
+      const filePath = fileURLToPath(entry.url).replace(/\\/g, '/');
+      if (!this.isMatch(filePath)) continue;
+
+      entries.push({ ...entry, filePath });
+    }
+
+    return entries;
+  }
+
+  private async filterRawCoverageEntries(
+    entries: CoverageEntry[],
+    options?: {
+      assetFiles?: Record<string, string>;
+      sourceMaps?: Record<string, string>;
+    },
+  ): Promise<CoverageEntry[]> {
+    const filtered: CoverageEntry[] = [];
+
+    for (const entry of entries) {
+      if (await this.shouldKeepRawCoverageEntry(entry, options)) {
+        filtered.push(entry);
+      }
+    }
+
+    return filtered;
+  }
+
+  private async shouldKeepRawCoverageEntry(
+    entry: CoverageEntry,
+    options?: {
+      assetFiles?: Record<string, string>;
+      sourceMaps?: Record<string, string>;
+    },
+  ): Promise<boolean> {
+    const { filePath } = entry;
+    const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
+    const assetSource = this.findInDict(options?.assetFiles, filePath);
+
+    if (sourceMapStr || (assetSource && this.hasInlineSourceMap(assetSource))) {
+      return true;
+    }
+
+    if (
+      this.shouldProcessEntry(filePath) &&
+      this.shouldKeepOriginalSource(filePath)
+    ) {
+      return true;
+    }
+
+    return assetSource === undefined && this.hasInlineSourceMapOnDisk(filePath);
+  }
+
   private async collectImpl(options?: {
     assetFiles?: Record<string, string>;
     sourceMaps?: Record<string, string>;
@@ -322,9 +469,9 @@ export class CoverageProvider implements RstestCoverageProvider {
   }): Promise<CoverageMap | null> {
     if (!this.session) return null;
 
-    let coverage: inspector.Profiler.TakePreciseCoverageReturnType;
+    let entries: CoverageEntry[];
     try {
-      coverage = await this.session.post('Profiler.takePreciseCoverage');
+      entries = await this.takeRawCoverage();
     } finally {
       try {
         await this.session.post('Profiler.stopPreciseCoverage');
@@ -334,41 +481,17 @@ export class CoverageProvider implements RstestCoverageProvider {
       }
     }
 
+    const filteredEntries = await this.filterRawCoverageEntries(
+      entries,
+      options,
+    );
     const coverageMap = this.createCoverageMap();
 
     await Promise.all(
-      coverage.result.map(async (entry) => {
-        if (!entry.url.startsWith('file://')) return;
-
-        const filePath = fileURLToPath(entry.url).replace(/\\/g, '/');
-
-        if (!this.isMatch(filePath)) return;
-
-        const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
-        const assetSource = this.findInDict(options?.assetFiles, filePath);
-        let hasSourceMap = Boolean(
-          sourceMapStr || (assetSource && this.hasInlineSourceMap(assetSource)),
-        );
-
-        if (!this.shouldProcessEntry(filePath) && !hasSourceMap) {
-          hasSourceMap = await this.hasInlineSourceMapOnDisk(filePath);
-          if (!hasSourceMap) return;
-        }
-
-        if (!hasSourceMap) {
-          const originalTestPath = this.toProjectRelativePath(filePath);
-          if (
-            this.isExcluded(originalTestPath) ||
-            !this.isIncluded(originalTestPath)
-          ) {
-            hasSourceMap = await this.hasInlineSourceMapOnDisk(filePath);
-            if (!hasSourceMap) return;
-          }
-        }
-
+      filteredEntries.map(async (entry) => {
         try {
           const istanbulData = await this.convertWithAst(
-            filePath,
+            entry.filePath,
             entry,
             options,
           );
@@ -495,14 +618,6 @@ export class CoverageProvider implements RstestCoverageProvider {
     return reporterName;
   }
 
-  private toImportSpecifier(reporterName: string): string {
-    if (isAbsolute(reporterName)) {
-      return pathToFileURL(reporterName).toString();
-    }
-
-    return reporterName;
-  }
-
   private isRequireEsmError(error: unknown): boolean {
     if (typeof error !== 'object' || error === null || !('code' in error)) {
       return false;
@@ -511,6 +626,13 @@ export class CoverageProvider implements RstestCoverageProvider {
     return error.code === 'ERR_REQUIRE_ESM';
   }
 
+  private toImportSpecifier(reporterName: string): string {
+    if (isAbsolute(reporterName)) {
+      return pathToFileURL(reporterName).toString();
+    }
+
+    return reporterName;
+  }
   cleanup(): void {
     this.session?.disconnect();
     this.session = null;

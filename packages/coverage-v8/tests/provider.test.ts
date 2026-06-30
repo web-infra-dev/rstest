@@ -9,8 +9,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import type { NormalizedCoverageOptions } from '@rstest/core';
+import { Parser } from 'acorn';
 import type { FileCoverageData } from 'istanbul-lib-coverage';
 import { CoverageProvider } from '../src/provider';
+import { convertV8CoverageWithAst } from '../src/v8AstConverter';
 
 const createOptions = (
   overrides: Partial<NormalizedCoverageOptions> = {},
@@ -98,6 +100,7 @@ type ProviderInternals = CoverageProvider & {
       outputModule?: boolean;
     },
   ) => Promise<Record<string, FileCoverageData>>;
+  takeRawCoverage: () => Promise<unknown[]>;
 };
 
 function getProviderInternals(provider: CoverageProvider): ProviderInternals {
@@ -107,6 +110,47 @@ function getProviderInternals(provider: CoverageProvider): ProviderInternals {
 }
 
 describe('coverage-v8 provider', () => {
+  it('reads charset base64 inline source maps in the AST converter', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-inline-map-charset');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const sourceMap = {
+      version: 3,
+      file: generatedFile,
+      sources: ['../src/original.ts'],
+      sourcesContent: ['const value = 1;'],
+      names: [],
+      mappings: 'AAAA',
+    };
+    const code = `const value = 1;\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${Buffer.from(
+      JSON.stringify(sourceMap),
+    ).toString('base64')}`;
+    const ast = Parser.parse(code, {
+      ecmaVersion: 'latest',
+      locations: true,
+      ranges: true,
+      sourceType: 'module',
+    });
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:inline-charset`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([originalFile]);
+  });
+
   it('loads custom coverage reporters from relative config paths', async () => {
     const root = mkdtempSync(join(tmpdir(), 'rstest-coverage-reporter-'));
     const outputFile = join(root, 'custom-reporter-output.json');
@@ -322,6 +366,68 @@ export default class CustomCoverageReporter {
     } finally {
       console.error = originalError;
       process.exitCode = originalExitCode;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('filters raw coverage entries before source lookup and conversion', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-filter');
+    const includedFile = join(root, 'src', 'included.js');
+    const nodeModuleFile = join(root, 'node_modules', 'dep', 'index.js');
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    const fileCoverage = {
+      path: includedFile,
+      statementMap: {},
+      fnMap: {},
+      branchMap: {},
+      s: {},
+      f: {},
+      b: {},
+    } satisfies FileCoverageData;
+    const convertedFiles: string[] = [];
+
+    Object.defineProperty(providerInternals, 'takeRawCoverage', {
+      configurable: true,
+      value: async () => [
+        {
+          url: pathToFileURL(nodeModuleFile).href,
+          filePath: nodeModuleFile,
+          scriptId: '1',
+          functions: [],
+        },
+        {
+          url: pathToFileURL(includedFile).href,
+          filePath: includedFile,
+          scriptId: '2',
+          functions: [],
+        },
+      ],
+    });
+    Object.defineProperty(provider, 'session', {
+      configurable: true,
+      value: {},
+    });
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (filePath: string) => {
+        convertedFiles.push(filePath);
+        return { [includedFile]: fileCoverage };
+      },
+    });
+
+    try {
+      const coverageMap = await provider.collect({
+        assetFiles: {
+          [includedFile]: 'value();',
+          [nodeModuleFile]: 'dep();',
+        },
+        sourceMaps: {},
+      });
+
+      expect(convertedFiles).toEqual([includedFile]);
+      expect(coverageMap?.files()).toEqual([includedFile]);
+    } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
