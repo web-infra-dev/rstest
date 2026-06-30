@@ -613,6 +613,13 @@ type CallableTest = (
   arg2?: unknown,
   arg3?: unknown,
 ) => void;
+type RstestGlobal = typeof globalThis & {
+  RSTEST_API?: {
+    test?: {
+      extend?: unknown;
+    };
+  };
+};
 
 const preserveFixtureSource = <Fn extends (...args: never[]) => unknown>(
   original: Fn,
@@ -799,9 +806,6 @@ const createPlaywrightTest = <ExtraContext>(
       );
     }) as ReturnType<TestForFn<ExtraContext>>;
   };
-  const extend =
-    'extend' in rstestTest ? rstestTest.extend.bind(rstestTest) : undefined;
-
   return new Proxy(rstestTest, {
     apply(target, _thisArg, args) {
       const [description, arg2, arg3] = args;
@@ -839,15 +843,21 @@ const createPlaywrightTest = <ExtraContext>(
         return rstestDescribe;
       }
       if (key === 'extend') {
+        const extend =
+          'extend' in target ? target.extend.bind(target) : undefined;
+
         return extend
           ? (fixtures: Parameters<PlaywrightTest<ExtraContext>['extend']>[0]) =>
               createPlaywrightTest(extend(fixtures))
           : undefined;
       }
       if (key === 'fail') {
-        return createPlaywrightTest(
-          target.fails as unknown as RstestTestAPI<ExtraContext>,
-        );
+        const fails = target.fails;
+        return typeof fails === 'function'
+          ? createPlaywrightTest(
+              fails as unknown as RstestTestAPI<ExtraContext>,
+            )
+          : fails;
       }
       if (
         key === 'fails' ||
@@ -857,23 +867,26 @@ const createPlaywrightTest = <ExtraContext>(
         key === 'concurrent' ||
         key === 'sequential'
       ) {
-        return createPlaywrightTest(
-          Reflect.get(target, key, receiver) as RstestTestAPI<ExtraContext>,
-        );
+        const value = Reflect.get(target, key, receiver);
+        return typeof value === 'function'
+          ? createPlaywrightTest(value as RstestTestAPI<ExtraContext>)
+          : value;
       }
       if (key === 'runIf' || key === 'skipIf') {
-        return (condition: boolean) =>
-          createPlaywrightTest(
-            Reflect.get(
-              target,
-              key,
-              receiver,
-            )(condition) as RstestTestAPI<ExtraContext>,
-          );
+        const value = Reflect.get(target, key, receiver);
+        return typeof value === 'function'
+          ? (condition: boolean) =>
+              createPlaywrightTest(
+                value(condition) as RstestTestAPI<ExtraContext>,
+              )
+          : value;
       }
       if (key === 'for') {
-        return (...args: Parameters<TestForFn<ExtraContext>>) =>
-          wrapForTestCall(Reflect.get(target, key, receiver)(...args));
+        const value = Reflect.get(target, key, receiver);
+        return typeof value === 'function'
+          ? (...args: Parameters<TestForFn<ExtraContext>>) =>
+              wrapForTestCall(value(...args))
+          : value;
       }
 
       return Reflect.get(target, key, receiver);
@@ -881,9 +894,33 @@ const createPlaywrightTest = <ExtraContext>(
   }) as unknown as PlaywrightTest<ExtraContext>;
 };
 
-export const test: PlaywrightTest = createPlaywrightTest(
-  base.extend<PlaywrightFixture>(playwrightFixtures),
-);
+const getPlaywrightBase = () =>
+  base.extend<PlaywrightFixture>(playwrightFixtures);
+
+const hasPlaywrightBase = () =>
+  typeof (globalThis as RstestGlobal).RSTEST_API?.test?.extend === 'function';
+
+const lazyPlaywrightBase = new Proxy(base as RstestTestAPI<PlaywrightFixture>, {
+  apply(_target, thisArg, args) {
+    if (!hasPlaywrightBase()) {
+      return Reflect.apply(base, thisArg, args);
+    }
+
+    return Reflect.apply(getPlaywrightBase(), thisArg, args);
+  },
+  get(_target, key, receiver) {
+    if (!hasPlaywrightBase()) {
+      return Reflect.get(base, key, receiver);
+    }
+
+    return Reflect.get(getPlaywrightBase(), key, receiver);
+  },
+  has(_target, key) {
+    return hasPlaywrightBase() && key === 'extend';
+  },
+});
+
+export const test: PlaywrightTest = createPlaywrightTest(lazyPlaywrightBase);
 
 export const afterAll: RstestAfterAll = wrapAfterAll(rstestAfterAll);
 export const afterEach: RstestAfterEach = wrapAfterEach(rstestAfterEach);
