@@ -12,7 +12,7 @@
   },
   "devDependencies": {
     "@rsbuild/core": "~2.1.1",
-    "@rsbuild/plugin-vue": "^1.2.9",
+    "@rsbuild/plugin-vue": "^2.0.0",
     "@rstest/core": "workspace:*",
     "@vue/compiler-dom": "^3.5.39",
     "@vue/server-renderer": "^3.5.39",
