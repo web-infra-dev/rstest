@@ -1269,7 +1269,7 @@ importers:
   packages/coverage-v8:
     dependencies:
       '@jridgewell/trace-mapping':
-        specifier: ^0.3.31
+        specifier: 0.3.31
         version: 0.3.31
       acorn:
         specifier: ^8.17.0

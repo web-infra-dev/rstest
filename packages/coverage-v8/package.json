@@ -32,7 +32,7 @@
     "test": "rstest"
   },
   "dependencies": {
-    "@jridgewell/trace-mapping": "^0.3.31",
+    "@jridgewell/trace-mapping": "0.3.31",
     "acorn": "^8.17.0",
     "estree-walker": "^3.0.3",
     "istanbul-lib-coverage": "^3.2.2",
