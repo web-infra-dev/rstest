@@ -12,7 +12,7 @@
     "preview": "rspress preview"
   },
   "devDependencies": {
-    "@rsbuild/plugin-sass": "^1.5.3",
+    "@rsbuild/plugin-sass": "^2.0.0",
     "@rspress/core": "2.0.15",
     "@rspress/plugin-algolia": "2.0.15",
     "@rstack-dev/doc-ui": "1.14.5",
