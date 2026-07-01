@@ -5,6 +5,7 @@ import {
   createBrowserRsbuildDevConfig,
   createBrowserContextExcludeRegExp,
   resolveListenPort,
+  toContextKey,
 } from '../src/hostController';
 
 /**
@@ -106,10 +107,10 @@ describe('browser config resolution', () => {
     expect(browserConfig.strictPort).toBe(true);
   });
 
-  it('should enable HMR in non-watch mode and keep error-only client log', () => {
+  it('should disable HMR in non-watch mode and keep error-only client log', () => {
     const devConfig = createBrowserRsbuildDevConfig(false);
 
-    expect(devConfig.hmr).toBe(true);
+    expect(devConfig.hmr).toBe(false);
     expect(devConfig.client.logLevel).toBe('error');
   });
 
@@ -118,6 +119,18 @@ describe('browser config resolution', () => {
 
     expect(devConfig.hmr).toBe(true);
     expect(devConfig.client.logLevel).toBe('error');
+  });
+
+  it('should derive the non-watch import-map key like the runtime toContextKey', () => {
+    // Keys must match the browser runtime's `toContextKey` so `loadTest(key)`
+    // resolves against the manifest import map.
+    expect(toContextKey('/project/tests/a.test.ts', '/project')).toBe(
+      './tests/a.test.ts',
+    );
+    // Paths outside the project root are left as-is with a `./` prefix.
+    expect(toContextKey('/elsewhere/x.test.ts', '/project')).toBe(
+      './elsewhere/x.test.ts',
+    );
   });
 
   it('should keep setup files out of lazy compilation', () => {
