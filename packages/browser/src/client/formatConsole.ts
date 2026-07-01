@@ -23,7 +23,7 @@ export const formatArg = (arg: unknown): string => {
 // and dropped (matching how Node's `util.format` handles it). `%%` is a literal
 // percent sign. Kept aligned with the browser console spec (no Node-only `%j`,
 // since these logs originate in the browser).
-// cspell:ignore sdifo
+// cspell:ignore sdifo WHATWG
 const HAS_SPECIFIER = /%[sdifoOc%]/;
 const SPECIFIER = /%[sdifoOc%]/g;
 
@@ -55,16 +55,15 @@ export const formatConsoleArgs = (args: unknown[]): string => {
         return typeof arg === 'string' ? arg : formatArg(arg);
       case '%d':
       case '%i': {
-        // `Number(symbol)` throws; a real console forwards NaN instead of
-        // letting the log call fail the test.
-        if (typeof arg === 'symbol') return 'NaN';
-        if (typeof arg === 'bigint') return String(arg);
-        const num = Number(arg);
-        return Number.isNaN(num) ? 'NaN' : String(Math.trunc(num));
+        // Match the browser console formatter (WHATWG): parseInt on the value,
+        // so unit-suffixed strings like '42px' format as 42 (not NaN).
+        // `String()` first keeps Symbol safe — a bare `parseInt(symbol)` throws
+        // via ToString, whereas the spec maps a Symbol to NaN.
+        const num = Number.parseInt(String(arg), 10);
+        return Number.isNaN(num) ? 'NaN' : String(num);
       }
       case '%f': {
-        if (typeof arg === 'symbol') return 'NaN';
-        const num = Number(arg);
+        const num = Number.parseFloat(String(arg));
         return Number.isNaN(num) ? 'NaN' : String(num);
       }
       default: // %o, %O

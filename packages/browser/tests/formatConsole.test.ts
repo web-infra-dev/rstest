@@ -21,14 +21,18 @@ describe('formatConsoleArgs', () => {
     expect(formatConsoleArgs(['%s world', 'hello'])).toBe('hello world');
   });
 
-  it('truncates %d and %i to an integer', () => {
+  it('parses %d and %i as an integer like the browser console', () => {
     expect(formatConsoleArgs(['%d', 3.7])).toBe('3');
     expect(formatConsoleArgs(['%i things', 5.9])).toBe('5 things');
     expect(formatConsoleArgs(['%d', 'nope'])).toBe('NaN');
+    // Unit-suffixed strings parse to their leading integer (parseInt), not NaN.
+    expect(formatConsoleArgs(['%i', '42px'])).toBe('42');
   });
 
-  it('keeps %f as a float', () => {
+  it('parses %f as a float like the browser console', () => {
     expect(formatConsoleArgs(['%f', 3.5])).toBe('3.5');
+    // Unit-suffixed strings parse to their leading float (parseFloat), not NaN.
+    expect(formatConsoleArgs(['%f', '3.5ms'])).toBe('3.5');
   });
 
   it('formats a Symbol under numeric specifiers as NaN without throwing', () => {
