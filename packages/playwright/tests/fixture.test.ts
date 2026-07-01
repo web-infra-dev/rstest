@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -264,6 +264,13 @@ test.extend({}).describe('extended test API', () => {
     },
   );
 
+  test.extend({}).each([[1, 2]])(
+    'does not expose test.each context to user callbacks',
+    (...args) => {
+      expect(args).toEqual([1, 2]);
+    },
+  );
+
   test.extend({
     fixtureTitle: async ({ expect: localExpect }, use) => {
       localExpect.assertions(1);
@@ -318,6 +325,58 @@ test(
     const response = await request.get(url);
     expect(response.ok()).toBe(true);
     expect(await response.text()).toBe('<h1>ok</h1>');
+  },
+);
+
+test(
+  'resolves relative static server entries from the current test file',
+  { timeout: 30_000 },
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
+    const fixtureDir = join(root, 'fixture');
+    await mkdir(join(fixtureDir, 'dist'), { recursive: true });
+    await writeFile(join(fixtureDir, 'dist/index.html'), '<h1>relative</h1>');
+
+    const fixturePath = join(fixtureDir, 'relative.test.mjs');
+    await writeFile(
+      fixturePath,
+      `
+        import { test, expect } from ${JSON.stringify(join(__dirname, '../dist/index.js').replaceAll('\\', '/'))};
+
+        test('serves a file relative to this test file', async ({ request, serve }) => {
+          const { url } = await serve('./dist/index.html');
+          const response = await request.get(url);
+
+          expect(await response.text()).toBe('<h1>relative</h1>');
+        });
+      `,
+    );
+
+    const rootDir = join(__dirname, '../../..');
+    await execFileAsync(
+      process.execPath,
+      [
+        join(rootDir, 'packages/core/bin/rstest.js'),
+        '--root',
+        root,
+        '--include',
+        './fixture/relative.test.mjs',
+      ],
+      { cwd: rootDir },
+    );
+  },
+);
+
+test(
+  'formats IPv6 static server hosts as valid URLs',
+  { timeout: 30_000 },
+  async ({ serve }) => {
+    const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
+    await writeFile(join(root, 'index.html'), '<h1>ok</h1>');
+
+    const { url } = await serve(join(root, 'index.html'), { host: '::1' });
+
+    expect(url).toMatch(/^http:\/\/\[::1\]:\d+$/);
   },
 );
 

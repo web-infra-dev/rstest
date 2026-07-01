@@ -334,11 +334,13 @@ const listenStaticServer = async (
 
   const address = server.address();
 
+  const urlHost = host.includes(':') ? `[${host}]` : host;
+
   if (!address || typeof address === 'string') {
-    return `http://${host}:${port}`;
+    return `http://${urlHost}:${port}`;
   }
 
-  return `http://${host}:${address.port}`;
+  return `http://${urlHost}:${address.port}`;
 };
 
 const resolveStaticFile = async (root: string, pathName: string) => {
@@ -384,8 +386,11 @@ const startStaticServer = async (
     host = DEFAULT_STATIC_SERVER_HOST,
     port = 0,
   }: PlaywrightServeOptions = {},
+  testFilepath?: string,
 ): Promise<PlaywrightServeResult> => {
-  const entryPath = resolve(entry);
+  const entryPath = isAbsolute(entry)
+    ? entry
+    : resolve(testFilepath ? dirname(testFilepath) : process.cwd(), entry);
   const entryStat = await stat(entryPath);
   const root = entryStat.isDirectory() ? entryPath : dirname(entryPath);
   const indexFile = entryStat.isDirectory()
@@ -553,7 +558,7 @@ const playwrightFixtures = {
     onTestFailed(cleanupServers);
 
     const serve: PlaywrightServe = async (entry, options) => {
-      const server = await startStaticServer(entry, options);
+      const server = await startStaticServer(entry, options, task.filepath);
 
       servers.push({
         keepAliveOnDebug: options?.keepAliveOnDebug,
@@ -898,7 +903,7 @@ const createPlaywrightTest = <ExtraContext>(
       const context = args[args.length - 1] as TestContext | undefined;
 
       return context?.expect
-        ? withPlaywrightExpect(context.expect, () => fn(...args))
+        ? withPlaywrightExpect(context.expect, () => fn(...args.slice(0, -1)))
         : fn(...args);
     }) as Fn);
 
