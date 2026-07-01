@@ -587,6 +587,14 @@ export async function runCli(
   const { _: positionals, ...commonOptions } = argv;
   const filters = positionals ?? [];
 
+  // `isRelatedRun` treats any defined `changed` as changed-mode. An embedder
+  // forwarding parsed argv with boolean defaults (`changed: false`) would then
+  // wrongly run only git-changed tests / reject positional filters, so drop the
+  // explicit `false` here the same way `toCommonOptions` does for `run()`.
+  if (commonOptions.changed === false) {
+    commonOptions.changed = undefined;
+  }
+
   return executeHostSafeRun(async () => {
     // Match the CLI's environment setup so workers (spawned per run) observe
     // `NODE_ENV=test` / `RSTEST=true`. Run it *inside* the guarded section so the
