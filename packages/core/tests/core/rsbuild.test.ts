@@ -421,8 +421,9 @@ describe('prepareRsbuild', () => {
         rstestApi?.modifyRstestConfig(() => ({
           include: ['**/*.partial.test.ts'],
           exclude: ['**/ignored.test.ts'],
-          setupFiles: './setup.ts',
-          globalSetup: './globalSetup.ts',
+          setupFiles: ['./setup.ts'],
+          globalSetup: ['./globalSetup.ts'],
+          includeSource: ['./new-src.ts'],
           testEnvironment: 'jsdom',
           root: tempRoot,
           output: {
@@ -442,8 +443,9 @@ describe('prepareRsbuild', () => {
           patterns: ['**/original-ignored.test.ts'],
           override: false,
         },
-        setupFiles: [],
-        globalSetup: [],
+        includeSource: ['original-src.ts'],
+        setupFiles: ['original-setup.ts'],
+        globalSetup: ['original-globalSetup.ts'],
         plugins: [modifyRstestConfigPlugin],
         resolve: {},
         source: {},
@@ -497,6 +499,7 @@ describe('prepareRsbuild', () => {
       expect(project.normalizedConfig.globalSetup).toEqual([
         './globalSetup.ts',
       ]);
+      expect(project.normalizedConfig.includeSource).toEqual(['./new-src.ts']);
       expect(project.normalizedConfig.testEnvironment).toEqual({
         name: 'jsdom',
       });
@@ -866,6 +869,109 @@ describe('prepareRsbuild', () => {
         '**/node_modules/**',
         expect.stringContaining(TEMP_RSTEST_OUTPUT_DIR),
       ]);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('should preserve explicit tsconfigPath after modifyRstestConfig changes root', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'rstest-root-tsconfig-'));
+    const newRoot = join(tempRoot, 'fixture');
+    const customTsconfigPath = join(newRoot, 'tsconfig.custom.json');
+    mkdirSync(newRoot, { recursive: true });
+    writeFileSync(join(tempRoot, 'tsconfig.json'), '{}\n');
+    writeFileSync(join(newRoot, 'tsconfig.json'), '{}\n');
+    writeFileSync(customTsconfigPath, '{}\n');
+
+    const modifyRstestConfigPlugin: RsbuildPlugin = {
+      name: 'modify-rstest-config-root-custom-tsconfig',
+      setup(api) {
+        const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+        rstestApi?.modifyRstestConfig((config) => {
+          config.root = './fixture';
+          config.source = {
+            tsconfigPath: customTsconfigPath,
+          };
+        });
+      },
+    };
+
+    const project = {
+      name: 'test',
+      rootPath: tempRoot,
+      environmentName: 'test',
+      normalizedConfig: {
+        root: tempRoot,
+        include: ['base.test.ts'],
+        exclude: {
+          patterns: ['**/node_modules/**'],
+          override: false,
+        },
+        setupFiles: [],
+        globalSetup: [],
+        plugins: [modifyRstestConfigPlugin],
+        resolve: {},
+        source: {
+          tsconfigPath: join(tempRoot, 'tsconfig.json'),
+        },
+        output: {
+          distPath: {
+            root: TEMP_RSTEST_OUTPUT_DIR,
+          },
+        },
+        tools: {},
+        testEnvironment: {
+          name: 'node',
+        },
+        performance: {
+          buildCache: true,
+        },
+        coverage: {
+          enabled: false,
+          exclude: [],
+          provider: 'v8',
+          reporters: ['text'],
+          reportsDirectory: join(tempRoot, 'coverage'),
+          clean: true,
+          reportOnFailure: false,
+          allowExternal: false,
+        },
+        browser: { enabled: false },
+      },
+    };
+
+    try {
+      const rsbuildInstance = await prepareRsbuild({
+        context: {
+          rootPath: tempRoot,
+          command: 'run',
+          normalizedConfig: {
+            root: tempRoot,
+            name: 'test',
+            output: {
+              distPath: {
+                root: TEMP_RSTEST_OUTPUT_DIR,
+              },
+            },
+            pool: { type: 'forks' },
+          },
+          projects: [project],
+        } as unknown as RstestContext,
+        globTestSourceEntries: async () => ({}),
+        setupFileState: createSetupFileState(),
+      });
+
+      await rsbuildInstance.initConfigs();
+
+      expect(project.rootPath).toBe(newRoot);
+      expect(project.normalizedConfig.source.tsconfigPath).toBe(
+        customTsconfigPath,
+      );
+      expect(project.normalizedConfig.performance?.buildCache).toMatchObject({
+        cacheDirectory: join(newRoot, 'node_modules/.cache/rstest-test'),
+        buildDependencies: [customTsconfigPath],
+      });
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
@@ -1794,6 +1900,12 @@ describe('prepareRsbuild', () => {
         name: 'coverage',
         modify: (config: Record<string, unknown>) => {
           config.coverage = { enabled: true };
+        },
+      },
+      {
+        name: 'forceRerunTriggers',
+        modify: (config: Record<string, unknown>) => {
+          config.forceRerunTriggers = ['plugin.config.ts'];
         },
       },
       {

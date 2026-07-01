@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { isAbsolute, join, relative } from 'pathe';
+import { join } from 'pathe';
 import type {
   EnvironmentConfig,
   RsbuildConfig,
@@ -42,7 +42,6 @@ const mutableModifyRstestConfigKeys = new Set<keyof NormalizedProjectConfig>([
   'include',
   'exclude',
   'includeSource',
-  'forceRerunTriggers',
   'setupFiles',
   'globalSetup',
   'retry',
@@ -229,14 +228,6 @@ const arrayReplacementKeys = [
 const normalizeRootPath = (root: string, baseRoot: string): string =>
   getAbsolutePath(baseRoot, formatRootStr(root, baseRoot));
 
-const isSubPath = (base: string, target: string): boolean => {
-  const relativePath = relative(base, target);
-  return (
-    relativePath === '' ||
-    (!relativePath.startsWith('..') && !isAbsolute(relativePath))
-  );
-};
-
 const shouldRefreshDefaultBuildCacheRoot = (
   buildCache: NonNullable<NormalizedProjectConfig['performance']>['buildCache'],
   previousRoot: string,
@@ -270,9 +261,14 @@ const normalizeRootDerivedConfigFields = (
   }
 
   config.source ??= {};
+  const previousTsconfigPath = previousConfig.source?.tsconfigPath;
+  const currentTsconfigPath = config.source.tsconfigPath;
+  const previousDefaultTsconfigPath = join(previousConfig.root, TS_CONFIG_FILE);
   if (
-    !config.source.tsconfigPath ||
-    isSubPath(previousConfig.root, config.source.tsconfigPath)
+    !currentTsconfigPath ||
+    (currentTsconfigPath === previousTsconfigPath &&
+      (!previousTsconfigPath ||
+        previousTsconfigPath === previousDefaultTsconfigPath))
   ) {
     const tsconfigPath = join(root, TS_CONFIG_FILE);
     config.source.tsconfigPath = existsSync(tsconfigPath)
@@ -400,11 +396,9 @@ const applyModifyRstestConfig = async (
       : createMutableConfigOverrides(previousConfig, currentConfig);
     const overrides = result ?? mutatedOverrides!;
     const arrayOverrides: Partial<NormalizedProjectConfig> = {};
-    if (mutatedOverrides) {
-      for (const key of arrayReplacementKeys) {
-        if (key in mutatedOverrides) {
-          Object.assign(arrayOverrides, { [key]: mutatedOverrides[key] });
-        }
+    for (const key of arrayReplacementKeys) {
+      if (key in overrides) {
+        Object.assign(arrayOverrides, { [key]: overrides[key] });
       }
     }
     const mergeOverrides = {
