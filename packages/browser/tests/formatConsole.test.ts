@@ -1,0 +1,53 @@
+import { describe, expect, it } from '@rstest/core';
+import { formatConsoleArgs } from '../src/client/formatConsole';
+
+describe('formatConsoleArgs', () => {
+  it('joins plain arguments with a space when there is no specifier', () => {
+    expect(formatConsoleArgs(['a', 'b', 1])).toBe('a b 1');
+  });
+
+  it('consumes %c and drops its style argument (React DevTools notice)', () => {
+    expect(
+      formatConsoleArgs([
+        '%cDownload the React DevTools: https://react.dev/link/react-devtools',
+        'font-weight:bold',
+      ]),
+    ).toBe(
+      'Download the React DevTools: https://react.dev/link/react-devtools',
+    );
+  });
+
+  it('substitutes %s with the following argument', () => {
+    expect(formatConsoleArgs(['%s world', 'hello'])).toBe('hello world');
+  });
+
+  it('truncates %d and %i to an integer', () => {
+    expect(formatConsoleArgs(['%d', 3.7])).toBe('3');
+    expect(formatConsoleArgs(['%i things', 5.9])).toBe('5 things');
+    expect(formatConsoleArgs(['%d', 'nope'])).toBe('NaN');
+  });
+
+  it('keeps %f as a float', () => {
+    expect(formatConsoleArgs(['%f', 3.5])).toBe('3.5');
+  });
+
+  it('renders %o / %O objects', () => {
+    expect(formatConsoleArgs(['%o', { a: 1 }])).toBe('{\n  "a": 1\n}');
+  });
+
+  it('turns %% into a literal percent sign without consuming an argument', () => {
+    expect(formatConsoleArgs(['100%% done', 'extra'])).toBe('100% done extra');
+  });
+
+  it('appends leftover arguments after substitution', () => {
+    expect(formatConsoleArgs(['%s', 'a', 'b', 'c'])).toBe('a b c');
+  });
+
+  it('keeps a specifier literal when no argument is left to consume', () => {
+    expect(formatConsoleArgs(['%s %s', 'a'])).toBe('a %s');
+  });
+
+  it('does not substitute when the first argument is not a string', () => {
+    expect(formatConsoleArgs([{ a: 1 }, '%s'])).toBe('{\n  "a": 1\n} %s');
+  });
+});
