@@ -32,6 +32,7 @@ import {
   createRunnerLifecycleRequest,
   sendRunnerLifecycle,
 } from './dispatchTransport';
+import { formatConsoleArgs } from './formatConsole';
 import { BrowserSnapshotEnvironment } from './snapshot';
 import {
   findNewScriptUrl,
@@ -109,24 +110,6 @@ const ensureRuntimeEnv = (env: RuntimeConfig['env'] | undefined): void => {
   }
 };
 
-/**
- * Format an argument for console output.
- */
-const formatArg = (arg: unknown): string => {
-  if (arg === null) return 'null';
-  if (arg === undefined) return 'undefined';
-  if (typeof arg === 'string') return arg;
-  if (typeof arg === 'number' || typeof arg === 'boolean') return String(arg);
-  if (arg instanceof Error) {
-    return arg.stack || `${arg.name}: ${arg.message}`;
-  }
-  try {
-    return JSON.stringify(arg, null, 2);
-  } catch {
-    return String(arg);
-  }
-};
-
 const getFileTaskId = (testPath: string): string => {
   return `file:${testPath}`;
 };
@@ -161,8 +144,7 @@ const interceptConsole = (
       // Call original for browser DevTools
       originalConsole[level](...args);
 
-      // Format message
-      const content = args.map(formatArg).join(' ');
+      const content = formatConsoleArgs(args);
       const currentTask = getCurrentTask();
 
       // Send to host
