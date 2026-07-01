@@ -37,44 +37,52 @@ type NormalizedProjectConfigWithDistPath = NormalizedProjectConfig & {
   };
 };
 
-const mutableModifyRstestConfigKeys = new Set<keyof NormalizedProjectConfig>([
-  'root',
-  'include',
-  'exclude',
-  'includeSource',
-  'setupFiles',
-  'globalSetup',
-  'retry',
-  'passWithNoTests',
-  'globals',
-  'testEnvironment',
-  'printConsoleTrace',
-  'disableConsoleIntercept',
-  'hideSkippedTests',
-  'hideSkippedTestFiles',
-  'testNamePattern',
-  'testTimeout',
-  'hookTimeout',
-  'clearMocks',
-  'resetMocks',
-  'restoreMocks',
-  'slowTestThreshold',
-  'detectAsyncLeaks',
-  'unstubGlobals',
-  'unstubEnvs',
-  'maxConcurrency',
-  'logHeapUsage',
-  'snapshotFormat',
-  'env',
-  'performance',
-  'chaiConfig',
-  'includeTaskLocation',
-  'source',
-  'dev',
-  'output',
-  'resolve',
-  'tools',
-]);
+type MutableProjectConfigRuntimeShape = NormalizedProjectConfigWithDistPath &
+  Record<string, unknown>;
+
+type ForbiddenModifyRstestConfigPath = {
+  path: string;
+  get: (config: MutableProjectConfigRuntimeShape) => unknown;
+};
+
+// Keep runtime guards focused on a few high-risk fields that would change
+// project identity or execution model in ways this hook cannot safely rewire.
+// The remaining project-scoped fields are left to merge + normalization rather
+// than maintaining a brittle allowlist for every possible config key.
+const forbiddenModifyRstestConfigPaths: ForbiddenModifyRstestConfigPath[] = [
+  {
+    path: 'browser.enabled',
+    get: (config) => config.browser?.enabled,
+  },
+  {
+    path: 'name',
+    get: (config) => config.name,
+  },
+  {
+    path: 'coverage',
+    get: (config) => config.coverage,
+  },
+  {
+    path: 'isolate',
+    get: (config) => config.isolate,
+  },
+  {
+    path: 'pool',
+    get: (config) => config.pool,
+  },
+  {
+    path: 'reporters',
+    get: (config) => config.reporters,
+  },
+  {
+    path: 'update',
+    get: (config) => config.update,
+  },
+  {
+    path: 'output.distPath',
+    get: (config) => config.output?.distPath,
+  },
+];
 
 const clonePlainConfig = <T>(value: T): T => {
   if (Array.isArray(value)) {
@@ -133,7 +141,7 @@ const getImmutableConfigChangeError = (key: string): Error => {
   }
 
   return new Error(
-    `Cannot modify \`${key}\` in \`modifyRstestConfig\`. Configure global options in the Rstest config instead.`,
+    `Cannot modify \`${key}\` in \`modifyRstestConfig\`. Configure this option in the Rstest config instead.`,
   );
 };
 
@@ -166,35 +174,21 @@ const preservePartialOutputDistPath = (
   }
 };
 
-const assertMutableConfigFields = (
+const assertForbiddenConfigFields = (
   previousConfig: NormalizedProjectConfig,
   currentConfig: NormalizedProjectConfig,
 ): void => {
-  const previous = previousConfig as Record<string, unknown>;
-  const current = currentConfig as Record<string, unknown>;
+  const previousRuntimeConfig =
+    previousConfig as MutableProjectConfigRuntimeShape;
+  const currentRuntimeConfig =
+    currentConfig as MutableProjectConfigRuntimeShape;
 
-  if (
-    !isConfigValueEqual(
-      previousConfig.browser?.enabled,
-      currentConfig.browser?.enabled,
-    )
-  ) {
-    throw getImmutableConfigChangeError('browser.enabled');
-  }
-
-  for (const key of getConfigKeys(previousConfig, currentConfig)) {
-    if (!isConfigValueEqual(current[key], previous[key])) {
-      if (!mutableModifyRstestConfigKeys.has(key)) {
-        throw getImmutableConfigChangeError(key);
-      }
+  for (const { path, get } of forbiddenModifyRstestConfigPaths) {
+    if (
+      !isConfigValueEqual(get(previousRuntimeConfig), get(currentRuntimeConfig))
+    ) {
+      throw getImmutableConfigChangeError(path);
     }
-  }
-
-  const previousOutput = previous.output as { distPath?: unknown } | undefined;
-  const currentOutput = current.output as { distPath?: unknown } | undefined;
-
-  if (!isConfigValueEqual(previousOutput?.distPath, currentOutput?.distPath)) {
-    throw getImmutableConfigChangeError('output.distPath');
   }
 };
 
@@ -207,10 +201,6 @@ const createMutableConfigOverrides = (
   for (const key of getConfigKeys(previousConfig, currentConfig)) {
     if (isConfigValueEqual(currentConfig[key], previousConfig[key])) {
       continue;
-    }
-
-    if (!mutableModifyRstestConfigKeys.has(key)) {
-      throw getImmutableConfigChangeError(key);
     }
 
     Object.assign(overrides, { [key]: currentConfig[key] });
@@ -389,7 +379,7 @@ const applyModifyRstestConfig = async (
     const result = await callback(currentConfig);
 
     preservePartialOutputDistPath(previousConfig, currentConfig);
-    assertMutableConfigFields(previousConfig, currentConfig);
+    assertForbiddenConfigFields(previousConfig, currentConfig);
 
     const mutatedOverrides = result
       ? undefined
@@ -422,7 +412,7 @@ const applyModifyRstestConfig = async (
       context,
       project.configFilePath,
     );
-    assertMutableConfigFields(previousConfig, currentConfig);
+    assertForbiddenConfigFields(previousConfig, currentConfig);
   }
 
   return currentConfig;

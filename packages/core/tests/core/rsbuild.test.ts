@@ -1888,7 +1888,7 @@ describe('prepareRsbuild', () => {
     );
   });
 
-  it('should not allow modifyRstestConfig to modify global config fields', async () => {
+  it('should not allow modifyRstestConfig to modify high-risk config fields', async () => {
     const cases = [
       {
         name: 'name',
@@ -1903,27 +1903,9 @@ describe('prepareRsbuild', () => {
         },
       },
       {
-        name: 'forceRerunTriggers',
-        modify: (config: Record<string, unknown>) => {
-          config.forceRerunTriggers = ['plugin.config.ts'];
-        },
-      },
-      {
-        name: 'bail',
-        modify: (config: Record<string, unknown>) => {
-          config.bail = 1;
-        },
-      },
-      {
         name: 'isolate',
         modify: (config: Record<string, unknown>) => {
           config.isolate = false;
-        },
-      },
-      {
-        name: 'onConsoleLog',
-        modify: (config: Record<string, unknown>) => {
-          config.onConsoleLog = () => false;
         },
       },
       {
@@ -1942,18 +1924,6 @@ describe('prepareRsbuild', () => {
         name: 'update',
         modify: (config: Record<string, unknown>) => {
           config.update = true;
-        },
-      },
-      {
-        name: 'resolveSnapshotPath',
-        modify: (config: Record<string, unknown>) => {
-          config.resolveSnapshotPath = (testPath: string) => testPath;
-        },
-      },
-      {
-        name: 'silent',
-        modify: (config: Record<string, unknown>) => {
-          config.silent = true;
         },
       },
       {
