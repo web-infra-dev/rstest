@@ -1192,7 +1192,13 @@ export const toContextKey = (
   const withinRoot =
     posixPath === projectRootPosix ||
     posixPath.startsWith(`${projectRootPosix}/`);
-  const rel = withinRoot ? posixPath.slice(projectRootPosix.length) : posixPath;
+  if (!withinRoot) {
+    // Test file outside the project root: use the absolute path as the key so
+    // the runtime `toAbsolutePath` can round-trip it. A `./`-prefixed relative
+    // key would be re-rooted under projectRoot and point at a nonexistent file.
+    return posixPath;
+  }
+  const rel = posixPath.slice(projectRootPosix.length);
   return rel.startsWith('/') ? `.${rel}` : `./${rel}`;
 };
 

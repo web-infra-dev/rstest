@@ -127,14 +127,16 @@ describe('browser config resolution', () => {
     expect(toContextKey('/project/tests/a.test.ts', '/project')).toBe(
       './tests/a.test.ts',
     );
-    // Paths outside the project root are left as-is with a `./` prefix.
+    // Paths outside the project root keep their absolute form so the runtime
+    // `toAbsolutePath` round-trips them instead of re-rooting under projectRoot.
     expect(toContextKey('/elsewhere/x.test.ts', '/project')).toBe(
-      './elsewhere/x.test.ts',
+      '/elsewhere/x.test.ts',
     );
     // A sibling that only shares a string prefix with the root is not stripped
-    // at a non-boundary (would otherwise mangle to `./-extra/a.test.ts`).
+    // at a non-boundary (would otherwise mangle to `./-extra/a.test.ts`); it is
+    // outside the root, so it is also kept absolute.
     expect(toContextKey('/repo/pkg-extra/a.test.ts', '/repo/pkg')).toBe(
-      './repo/pkg-extra/a.test.ts',
+      '/repo/pkg-extra/a.test.ts',
     );
   });
 
