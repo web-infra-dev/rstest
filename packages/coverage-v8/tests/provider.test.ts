@@ -352,6 +352,31 @@ describe('coverage-v8 provider', () => {
     expect(coverage[file]?.b[0]).toEqual([1]);
   });
 
+  it('honors ignore-next comments before ternary separators', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-ignore-ternary-next.js');
+    const code = "const os = flag ? 'OSX' /* v8 ignore next */ : 'Windows';";
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:ignore-ternary-next`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.branchMap[0]?.locations).toHaveLength(1);
+    expect(coverage[file]?.b[0]).toEqual([1]);
+  });
+
   it('invalidates prepared AST coverage when an external source map changes', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-external-map-cache');
     const generatedFile = join(root, 'dist', 'bundle.js');
@@ -407,6 +432,64 @@ describe('coverage-v8 provider', () => {
 
       expect(Object.keys(firstCoverage)).toEqual([firstOriginalFile]);
       expect(Object.keys(secondCoverage)).toEqual([secondOriginalFile]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('uses the final sourceMappingURL comment for external source maps', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-final-source-map-url');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const staleOriginalFile = join(root, 'src', 'stale.ts');
+    const finalOriginalFile = join(root, 'src', 'final.ts');
+    const code = [
+      'const value = 1;',
+      '//# sourceMappingURL=stale.js.map',
+      '//# sourceMappingURL=final.js.map',
+    ].join('\n');
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    const entry = {
+      url: pathToFileURL(generatedFile).href,
+      scriptId: '1',
+      functions: [
+        {
+          functionName: '',
+          isBlockCoverage: true,
+          ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+        },
+      ],
+    };
+
+    const createSourceMap = (source: string) =>
+      JSON.stringify({
+        version: 3,
+        file: generatedFile,
+        sources: [source],
+        sourcesContent: ['const value = 1;'],
+        names: [],
+        mappings: 'AAAA',
+      });
+
+    try {
+      mkdirSync(join(root, 'dist'), { recursive: true });
+      writeFileSync(generatedFile, code);
+      writeFileSync(
+        join(root, 'dist', 'stale.js.map'),
+        createSourceMap('../src/stale.ts'),
+      );
+      writeFileSync(
+        join(root, 'dist', 'final.js.map'),
+        createSourceMap('../src/final.ts'),
+      );
+
+      const coverage = await providerInternals.convertWithAst(
+        generatedFile,
+        entry,
+      );
+
+      expect(Object.keys(coverage)).toEqual([finalOriginalFile]);
+      expect(Object.keys(coverage)).not.toEqual([staleOriginalFile]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

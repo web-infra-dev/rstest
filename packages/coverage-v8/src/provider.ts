@@ -31,7 +31,11 @@ type CoverageReporterConstructor = new (
 ) => ReportBase;
 
 const MAX_PARSED_AST_CACHE_SIZE = 50;
-const SOURCE_MAP_URL_PATTERN = /[#@]\s*sourceMappingURL\s*=\s*(\S+)\s*$/m;
+const SOURCE_MAP_INNER_PATTERN =
+  /\s*[#@]\s*sourceMappingURL\s*=\s*([^\s'"]*)\s*/;
+const SOURCE_MAP_URL_PATTERN = new RegExp(
+  `(?:/\\*(?:\\s*\\r?\\n(?://)?)?${SOURCE_MAP_INNER_PATTERN.source}\\s*\\*/|//${SOURCE_MAP_INNER_PATTERN.source})\\s*`,
+);
 const parsedAstCache = new Map<string, ReturnType<typeof Parser.parse>>();
 
 type CoverageEntry = inspector.Profiler.ScriptCoverage & {
@@ -232,7 +236,26 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   private getSourceMapUrl(code: string): string | undefined {
-    return code.match(SOURCE_MAP_URL_PATTERN)?.[1];
+    let searchIndex = code.lastIndexOf('sourceMappingURL');
+
+    while (searchIndex !== -1) {
+      const lineStart = code.lastIndexOf('\n', searchIndex);
+      const lineEnd = code.indexOf('\n', searchIndex);
+      const line = code.slice(
+        lineStart + 1,
+        lineEnd === -1 ? code.length : lineEnd,
+      );
+      const match = line.match(SOURCE_MAP_URL_PATTERN);
+
+      if (match) {
+        const sourceMapUrl = match[1] || match[2] || '';
+        return sourceMapUrl ? decodeURI(sourceMapUrl) : undefined;
+      }
+
+      searchIndex = code.lastIndexOf('sourceMappingURL', lineStart - 1);
+    }
+
+    return undefined;
   }
 
   private isInlineSourceMapUrl(url: string): boolean {

@@ -183,6 +183,14 @@ async function prepareCoverage(
       if (hint.loc.end === node.start) {
         return hint.type;
       }
+
+      if (
+        hint.type === 'next' &&
+        hint.loc.end < node.start &&
+        isTernarySeparatorOnly(options.code.slice(hint.loc.end, node.start))
+      ) {
+        return hint.type;
+      }
     }
 
     return null;
@@ -1116,6 +1124,10 @@ async function getInlineSourceMap(filename: string, code: string) {
   } catch {
     return null;
   }
+}
+
+function isTernarySeparatorOnly(code: string): boolean {
+  return /^[?:\s]*$/.test(code);
 }
 
 function getIgnoreHints(code: string): IgnoreHint[] {
