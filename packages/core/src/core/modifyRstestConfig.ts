@@ -79,6 +79,10 @@ const forbiddenModifyRstestConfigPaths: ForbiddenModifyRstestConfigPath[] = [
     get: (config) => config.update,
   },
   {
+    path: 'forceRerunTriggers',
+    get: (config) => config.forceRerunTriggers,
+  },
+  {
     path: 'output.distPath',
     get: (config) => config.output?.distPath,
   },
@@ -230,6 +234,9 @@ const arrayReplacementKeys = [
 const normalizeRootPath = (root: string, baseRoot: string): string =>
   getAbsolutePath(baseRoot, formatRootStr(root, baseRoot));
 
+const formatRootPatterns = (patterns: string[], root: string): string[] =>
+  patterns.map((pattern) => formatRootStr(pattern, root));
+
 const shouldRefreshDefaultBuildCacheRoot = (
   buildCache: NonNullable<NormalizedProjectConfig['performance']>['buildCache'],
   previousRoot: string,
@@ -312,12 +319,27 @@ const normalizeMutableConfigFields = (
   }
   normalizeRootDerivedConfigFields(config, previousConfig, environmentName);
 
-  config.setupFiles = castArray(config.setupFiles);
-  config.globalSetup = castArray(config.globalSetup);
+  config.include = formatRootPatterns(config.include ?? [], config.root);
+  config.setupFiles = formatRootPatterns(
+    castArray(config.setupFiles),
+    config.root,
+  );
+  config.globalSetup = formatRootPatterns(
+    castArray(config.globalSetup),
+    config.root,
+  );
+  config.includeSource = formatRootPatterns(
+    config.includeSource ?? [],
+    config.root,
+  );
   config.exclude ??= {
     patterns: [],
     override: false,
   };
+  config.exclude.patterns = formatRootPatterns(
+    config.exclude.patterns,
+    config.root,
+  );
 
   const outputDistPathRoot = getOutputDistPathRoot(
     configWithDistPath.output?.distPath,

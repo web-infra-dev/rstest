@@ -772,6 +772,109 @@ describe('prepareRsbuild', () => {
     }
   });
 
+  it('should expand root placeholders after modifyRstestConfig changes path fields', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'rstest-root-placeholder-'));
+    for (const file of ['setup.ts', 'globalSetup.ts']) {
+      writeFileSync(join(tempRoot, file), 'export {}\n');
+    }
+
+    const modifyRstestConfigPlugin: RsbuildPlugin = {
+      name: 'modify-rstest-config-root-placeholders',
+      setup(api) {
+        const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+        rstestApi?.modifyRstestConfig(() => ({
+          include: ['<rootDir>/src/**/*.test.ts'],
+          exclude: ['<rootDir>/src/ignored.test.ts'],
+          setupFiles: ['<rootDir>/setup.ts'],
+          globalSetup: ['<rootDir>/globalSetup.ts'],
+          includeSource: ['<rootDir>/src/**/*.ts'],
+        }));
+      },
+    };
+
+    const project = {
+      name: 'test',
+      rootPath: tempRoot,
+      environmentName: 'test',
+      normalizedConfig: {
+        root: tempRoot,
+        include: ['base.test.ts'],
+        exclude: {
+          patterns: ['**/node_modules/**'],
+          override: false,
+        },
+        setupFiles: [],
+        globalSetup: [],
+        includeSource: [],
+        plugins: [modifyRstestConfigPlugin],
+        resolve: {},
+        source: {},
+        output: {
+          distPath: {
+            root: TEMP_RSTEST_OUTPUT_DIR,
+          },
+        },
+        tools: {},
+        testEnvironment: {
+          name: 'node',
+        },
+        browser: { enabled: false },
+      },
+    };
+
+    try {
+      const setupFileState = createSetupFileState();
+      const rsbuildInstance = await prepareRsbuild({
+        context: {
+          rootPath: tempRoot,
+          command: 'run',
+          normalizedConfig: {
+            root: tempRoot,
+            name: 'test',
+            output: {
+              distPath: {
+                root: TEMP_RSTEST_OUTPUT_DIR,
+              },
+            },
+            pool: { type: 'forks' },
+          },
+          projects: [project],
+        } as unknown as RstestContext,
+        globTestSourceEntries: async () => ({}),
+        setupFileState,
+      });
+
+      await rsbuildInstance.initConfigs();
+
+      expect(project.normalizedConfig.include).toEqual([
+        join(tempRoot, 'src/**/*.test.ts'),
+      ]);
+      expect(project.normalizedConfig.exclude.patterns).toEqual([
+        '**/node_modules/**',
+        join(tempRoot, 'src/ignored.test.ts'),
+        expect.stringContaining(TEMP_RSTEST_OUTPUT_DIR),
+      ]);
+      expect(project.normalizedConfig.setupFiles).toEqual([
+        join(tempRoot, 'setup.ts'),
+      ]);
+      expect(project.normalizedConfig.globalSetup).toEqual([
+        join(tempRoot, 'globalSetup.ts'),
+      ]);
+      expect(project.normalizedConfig.includeSource).toEqual([
+        join(tempRoot, 'src/**/*.ts'),
+      ]);
+      expect(setupFileState.setupFiles.test).toEqual({
+        'setup~ts': join(tempRoot, 'setup.ts'),
+      });
+      expect(setupFileState.globalSetupFiles.test).toEqual({
+        'globalSetup~ts': join(tempRoot, 'globalSetup.ts'),
+      });
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it('should refresh root-derived fields after modifyRstestConfig changes root', async () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'rstest-root-derived-'));
     const newRoot = join(tempRoot, 'fixture');
@@ -2021,6 +2124,12 @@ describe('prepareRsbuild', () => {
         name: 'update',
         modify: (config: Record<string, unknown>) => {
           config.update = true;
+        },
+      },
+      {
+        name: 'forceRerunTriggers',
+        modify: (config: Record<string, unknown>) => {
+          config.forceRerunTriggers = ['custom.config.ts'];
         },
       },
       {
