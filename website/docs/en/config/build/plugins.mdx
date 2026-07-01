@@ -99,7 +99,7 @@ For compatibility, the callback is typed with `RstestConfig`, but runtime valida
 
 Register `modifyRstestConfig` during the Rsbuild plugin `setup` phase. Do not register it from later Rsbuild config hooks such as `api.modifyRsbuildConfig`, because Rstest applies collected callbacks while resolving the Rsbuild config; callbacks registered inside those hooks are too late for the current resolution pass.
 
-### Limitation
+### Limitations
 
 `modifyRstestConfig` is suitable for modifying existing project config such as `include`, `exclude`, `testEnvironment`, `resolve`, `source`, and `output.module`, but it does not support dynamically adding or removing Rstest projects, changing project `name`, switching `browser.enabled`, modifying global options such as `coverage`, `reporters`, `pool`, `isolate`, and `update`, or changing Rsbuild environments and Rsbuild plugins.
 
