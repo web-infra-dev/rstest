@@ -499,13 +499,13 @@ export interface TestContext {
      * A unique identifier for the test.
      * The format is `{fileHash}_{suiteIndex}_{testIndex}_...`, for example `419cefd87e_0_0`.
      */
-   id: string;
-   /** Test name provided by user */
-   name: string;
-   /** Absolute path of the current test file when provided by the runner. Added in 0.11.0. */
-   filepath?: string;
-   /** Absolute path of the current project's root directory when provided by the runner. Added in 0.11.0. */
-   projectRoot?: string;
+    id: string;
+    /** Test name provided by user */
+    name: string;
+    /** Absolute path of the current test file when provided by the runner. Added in 0.11.0. */
+    filepath?: string;
+    /** Absolute path of the current project's root directory when provided by the runner. Added in 0.11.0. */
+    projectRoot?: string;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
   };
