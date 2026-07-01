@@ -602,7 +602,7 @@ export const createBrowserLazyCompilationConfig = (
 };
 
 export const createBrowserRsbuildDevConfig = (
-  _isWatchMode: boolean,
+  isWatchMode: boolean,
 ): {
   writeToDisk: boolean;
   hmr: boolean;
@@ -612,9 +612,12 @@ export const createBrowserRsbuildDevConfig = (
 } => {
   return {
     writeToDisk: isDebug(),
-    // Keep HMR enabled in browser mode even for one-shot runs.
-    // lazyCompilation depends on HMR runtime wiring for async import chains.
-    hmr: true,
+    // HMR is only wired in watch mode. One-shot runs load each test file in a
+    // fresh page against a persistent dev server; leaving HMR on makes the
+    // server push chunk updates into a page that is still resolving its module
+    // graph, which races factory registration for chunk-split node_modules
+    // (many-small-files packages like lodash-es) — see rspack#11922.
+    hmr: isWatchMode,
     client: {
       logLevel: 'error' as const,
     },
@@ -1175,12 +1178,38 @@ const toSafeVarName = (name: string): string => {
   return name.replace(/[^a-zA-Z0-9_]/g, '_');
 };
 
+// Host-side mirror of the browser runtime's `toContextKey` (client/entry.ts):
+// `./<path-relative-to-project-root>` with forward slashes. The runtime derives
+// the same key from the target test file, so the non-watch import map below must
+// key by the identical form for `loadTest(key)` to resolve.
+export const toContextKey = (
+  filePath: string,
+  projectRootPosix: string,
+): string => {
+  const posixPath = normalize(filePath);
+  // Only strip the root at a path boundary: a bare `startsWith` would mangle a
+  // sibling like `/repo/pkg-extra/a.test.ts` under root `/repo/pkg`.
+  const withinRoot =
+    posixPath === projectRootPosix ||
+    posixPath.startsWith(`${projectRootPosix}/`);
+  if (!withinRoot) {
+    // Test file outside the project root: use the absolute path as the key so
+    // the runtime `toAbsolutePath` can round-trip it. A `./`-prefixed relative
+    // key would be re-rooted under projectRoot and point at a nonexistent file.
+    return posixPath;
+  }
+  const rel = posixPath.slice(projectRootPosix.length);
+  return rel.startsWith('/') ? `.${rel}` : `./${rel}`;
+};
+
 const generateManifestModule = ({
   manifestPath,
   entries,
+  isWatchMode,
 }: {
   manifestPath: string;
   entries: BrowserProjectEntries[];
+  isWatchMode: boolean;
 }): string => {
   const manifestDirPosix = normalize(dirname(manifestPath));
 
@@ -1226,30 +1255,53 @@ const generateManifestModule = ({
   lines.push('};');
   lines.push('');
 
-  // 3. Test context for each project
+  // 3. Test context for each project. Both branches expose the same shape as a
+  // webpackContext (callable by key, plus `keys()`), consumed in section 4.
   lines.push('// Test context for each project');
-  for (const { project } of entries) {
+  for (const { project, testFiles } of entries) {
     const varName = `context_${toSafeVarName(project.environmentName)}`;
     const projectRootPosix = normalize(project.rootPath);
-    const includeRegExp = globPatternsToRegExp(
-      project.normalizedConfig.include,
-    );
-    const excludePatterns = project.normalizedConfig.exclude.patterns;
-    const excludeRegExp = createBrowserContextExcludeRegExp(
-      excludePatterns,
-      projectRootPosix,
-    );
 
-    lines.push(
-      `const ${varName} = import.meta.webpackContext(${JSON.stringify(projectRootPosix)}, {`,
-    );
-    lines.push('  recursive: true,');
-    lines.push(`  regExp: ${includeRegExp.toString()},`);
-    if (excludeRegExp) {
-      lines.push(`  exclude: ${excludeRegExp.toString()},`);
+    if (isWatchMode) {
+      // Watch mode keeps the include-glob context so newly added files are
+      // picked up on rebuild (and pairs with lazyCompilation to stay cheap).
+      const includeRegExp = globPatternsToRegExp(
+        project.normalizedConfig.include,
+      );
+      const excludeRegExp = createBrowserContextExcludeRegExp(
+        project.normalizedConfig.exclude.patterns,
+        projectRootPosix,
+      );
+      lines.push(
+        `const ${varName} = import.meta.webpackContext(${JSON.stringify(projectRootPosix)}, {`,
+      );
+      lines.push('  recursive: true,');
+      lines.push(`  regExp: ${includeRegExp.toString()},`);
+      if (excludeRegExp) {
+        lines.push(`  exclude: ${excludeRegExp.toString()},`);
+      }
+      lines.push("  mode: 'lazy',");
+      lines.push('});');
+    } else {
+      // One-shot runs: the file set is fixed and already filtered, so emit an
+      // explicit lazy-import map (one chunk per literal `import()`, like the
+      // setup loaders above). The eager, non-lazyCompilation build then compiles
+      // only the run set instead of every included test file.
+      lines.push(`const ${varName}_modules = {`);
+      for (const filePath of testFiles) {
+        const key = toContextKey(filePath, projectRootPosix);
+        const importPath = toRelativeImport(filePath);
+        lines.push(
+          `  ${JSON.stringify(key)}: () => import(${JSON.stringify(importPath)}),`,
+        );
+      }
+      lines.push('};');
+      lines.push(
+        `const ${varName} = Object.assign((key) => ${varName}_modules[key](), {`,
+      );
+      lines.push(`  keys: () => Object.keys(${varName}_modules),`);
+      lines.push('});');
     }
-    lines.push("  mode: 'lazy',");
-    lines.push('});');
     lines.push('');
   }
 
@@ -1546,6 +1598,7 @@ const createBrowserRuntime = async ({
           setupFiles: entry?.setupFiles ?? [],
         },
       ],
+      isWatchMode,
     });
     const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin({
       [manifestPath]: manifestSource,
@@ -1648,8 +1701,13 @@ const createBrowserRuntime = async ({
                   tools: {
                     rspack: (rspackConfig) => {
                       rspackConfig.mode = 'development';
-                      rspackConfig.lazyCompilation =
-                        createBrowserLazyCompilationConfig(setupFiles);
+                      // lazyCompilation relies on the HMR runtime to deliver
+                      // on-demand modules, so it is only safe in watch mode.
+                      // One-shot runs compile eagerly to avoid the HMR chunk
+                      // registration race (see createBrowserRsbuildDevConfig).
+                      rspackConfig.lazyCompilation = isWatchMode
+                        ? createBrowserLazyCompilationConfig(setupFiles)
+                        : false;
                       rspackConfig.plugins = rspackConfig.plugins || [];
                       rspackConfig.plugins.push(virtualManifestPlugin);
 

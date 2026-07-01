@@ -284,10 +284,19 @@ const toContextKey = (absolutePath: string, projectRoot: string): string => {
   const normalizedAbsolute = normalize(absolutePath);
   const normalizedRoot = normalize(projectRoot);
 
-  let relative = normalizedAbsolute;
-  if (normalizedAbsolute.startsWith(normalizedRoot)) {
-    relative = normalizedAbsolute.slice(normalizedRoot.length);
+  // Only strip the root at a path boundary: a bare `startsWith` would mangle a
+  // sibling like `/repo/pkg-extra/a.test.ts` under root `/repo/pkg`. Must stay
+  // in sync with the host `toContextKey` (hostController.ts) so the non-watch
+  // import-map keys resolve.
+  const withinRoot =
+    normalizedAbsolute === normalizedRoot ||
+    normalizedAbsolute.startsWith(`${normalizedRoot}/`);
+  if (!withinRoot) {
+    // Test file outside the project root: keep the absolute path as the key so
+    // `toAbsolutePath` round-trips it instead of re-rooting under projectRoot.
+    return normalizedAbsolute;
   }
+  const relative = normalizedAbsolute.slice(normalizedRoot.length);
   return relative.startsWith('/') ? `.${relative}` : `./${relative}`;
 };
 
@@ -296,6 +305,11 @@ const toContextKey = (absolutePath: string, projectRoot: string): string => {
  * e.g., './src/foo.test.ts' -> '/project/src/foo.test.ts'
  */
 const toAbsolutePath = (key: string, projectRoot: string): string => {
+  // An absolute key (test file outside the project root, see `toContextKey`)
+  // round-trips as-is; only `./`-prefixed relative keys are re-rooted.
+  if (!key.startsWith('.')) {
+    return key;
+  }
   // key format: ./src/foo.test.ts
   // Ensure no double slashes by removing trailing slash from projectRoot
   const normalizedRoot = normalize(projectRoot).replace(/\/$/, '');
