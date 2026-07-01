@@ -47,7 +47,9 @@ import type { FileCoverageData } from 'istanbul-lib-coverage';
 import jsTokens from 'js-tokens';
 import { walk } from 'estree-walker';
 
-type SourceMapLike = Omit<EncodedSourceMap, 'version'> & { version: number };
+type SourceMapLike = Omit<EncodedSourceMap | DecodedSourceMap, 'version'> & {
+  version: number;
+};
 type AstNode = {
   type: string;
   start: number;
@@ -347,7 +349,7 @@ async function prepareCoverage(
 
           if (hint === 'else' && alternate) {
             setSkipped(alternate);
-          } else if (hint !== 'if' && hint !== 'else') {
+          } else {
             branches.push(alternate);
           }
 
@@ -600,9 +602,11 @@ class CoverageBuilder {
       }
 
       const location = this.locator.getLoc(branch);
-      if (location !== null) {
-        locations.push(location);
+      if (location === null) {
+        continue;
       }
+
+      locations.push(location);
 
       const bias = branch.type === 'BlockStatement' ? 1 : 0;
       ranges.push({
@@ -815,7 +819,7 @@ function applyCoverage(
   }
 
   for (const descriptor of prepared.statements) {
-    data[descriptor.filename]!.s[descriptor.index] = getCount(
+    data[descriptor.filename]!.s[descriptor.index]! += getCount(
       descriptor,
       ranges,
     );
@@ -892,7 +896,7 @@ function normalizeWithCoverageArray(
   const hits = new Uint32Array(maxEnd + 1);
 
   for (const range of ranges) {
-    hits.fill(range.count, range.start, range.end + 1);
+    hits.fill(range.count, range.start, range.end);
   }
 
   const normalized: NormalizedRange[] = [];
@@ -930,7 +934,7 @@ function normalizeWithCoverageEvents(ranges: RawCoverageRange[]) {
 
   for (const range of ranges) {
     events.push({ offset: range.start, range, type: 'add' });
-    events.push({ offset: range.end + 1, range, type: 'remove' });
+    events.push({ offset: range.end, range, type: 'remove' });
   }
 
   events.sort((a, b) => a.offset - b.offset);

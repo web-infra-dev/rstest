@@ -300,6 +300,163 @@ describe('coverage-v8 provider', () => {
     });
   });
 
+  it('preserves the else branch when ignoring the if branch', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-ignore-if-else.js');
+    const code = `const flag = true;
+/* istanbul ignore if */ if (flag) { foo(); } else { bar(); }`;
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:ignore-if-else`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.branchMap[0]?.locations).toHaveLength(1);
+    expect(coverage[file]?.b[0]).toEqual([1]);
+  });
+
+  it('keeps branch counts aligned when an arm has no source mapping', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-branch-range-alignment');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const code = `if (flag)
+{
+  foo();
+}
+else { bar(); }`;
+    const ast = parseModule(code);
+    const consequentStart = code.indexOf('{');
+    const consequentEnd = code.indexOf('}') + 1;
+    const alternateStart = code.lastIndexOf('{');
+    const alternateEnd = code.lastIndexOf('}') + 1;
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:branch-range-alignment`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [
+              { startOffset: 0, endOffset: code.length, count: 1 },
+              {
+                startOffset: consequentStart,
+                endOffset: consequentEnd,
+                count: 0,
+              },
+              {
+                startOffset: alternateStart,
+                endOffset: alternateEnd,
+                count: 1,
+              },
+            ],
+          },
+        ],
+      },
+      sourceMap: {
+        version: 3,
+        sources: ['../src/original.ts'],
+        sourcesContent: ['if (flag) { bar(); }'],
+        names: [],
+        mappings: [[[0, 0, 0, 0]], [], [], [], [[0, 0, 0, 1]]],
+      },
+    });
+
+    expect(coverage[originalFile]?.branchMap[0]?.locations).toHaveLength(1);
+    expect(coverage[originalFile]?.b[0]).toEqual([1]);
+  });
+
+  it('treats V8 end offsets as exclusive for adjacent ranges', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-exclusive-end-offset.js');
+    const code = 'function f(){}g();';
+    const ast = parseModule(code);
+    const functionEnd = code.indexOf('g();');
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:exclusive-end-offset`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+          {
+            functionName: 'f',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: functionEnd, count: 0 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.s).toEqual({ 0: 1 });
+  });
+
+  it('accumulates duplicate statement hits from the same source mapping', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-duplicate-statement-hit');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const code = 'foo();\nbar();';
+    const ast = parseModule(code);
+    const secondStatementStart = code.indexOf('bar();');
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:duplicate-statement-hit`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [
+              { startOffset: 0, endOffset: code.length, count: 1 },
+              {
+                startOffset: secondStatementStart,
+                endOffset: code.length,
+                count: 0,
+              },
+            ],
+          },
+        ],
+      },
+      sourceMap: {
+        version: 3,
+        sources: ['../src/original.ts'],
+        sourcesContent: ['call();'],
+        names: [],
+        mappings: [[[0, 0, 0, 0]], [[0, 0, 0, 0]]],
+      },
+    });
+
+    expect(coverage[originalFile]?.statementMap).toEqual({
+      0: {
+        start: { line: 1, column: 0 },
+        end: { line: 1, column: Number.POSITIVE_INFINITY },
+      },
+    });
+    expect(coverage[originalFile]?.s).toEqual({ 0: 1 });
+  });
+
   it('loads custom coverage reporters from relative config paths', async () => {
     const root = mkdtempSync(join(tmpdir(), 'rstest-coverage-reporter-'));
     const outputFile = join(root, 'custom-reporter-output.json');
