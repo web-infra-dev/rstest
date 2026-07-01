@@ -110,9 +110,6 @@ const ensureRuntimeEnv = (env: RuntimeConfig['env'] | undefined): void => {
   }
 };
 
-/**
- * Format an argument for console output.
- */
 const getFileTaskId = (testPath: string): string => {
   return `file:${testPath}`;
 };
@@ -147,7 +144,6 @@ const interceptConsole = (
       // Call original for browser DevTools
       originalConsole[level](...args);
 
-      // Format message
       const content = formatConsoleArgs(args);
       const currentTask = getCurrentTask();
 

@@ -1,8 +1,4 @@
-/**
- * Format a single console argument to a string for terminal forwarding.
- * Objects are JSON-stringified; Errors keep their stack. This mirrors the
- * browser console's default stringification closely enough for log forwarding.
- */
+/** Stringify a single console argument for terminal forwarding. */
 export const formatArg = (arg: unknown): string => {
   if (arg === null) return 'null';
   if (arg === undefined) return 'undefined';
@@ -49,13 +45,13 @@ export const formatConsoleArgs = (args: unknown[]): string => {
   let next = 1;
   const substituted = first.replace(SPECIFIER, (spec) => {
     if (spec === '%%') return '%';
-    if (next >= args.length) return spec; // no argument left to consume
+    if (next >= args.length) return spec;
     const arg = args[next++];
     switch (spec) {
       case '%c':
         return ''; // CSS directive: swallow the style argument
       case '%s':
-        return typeof arg === 'string' ? arg : formatArg(arg);
+        return formatArg(arg);
       case '%d':
       case '%i': {
         // Match the browser console formatter (WHATWG): parseInt on the value,
