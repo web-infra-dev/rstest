@@ -6,22 +6,24 @@ import {
 
 describe('versionCheck', () => {
   it('should keep MIN_CORE_VERSION stable', () => {
-    expect(MIN_CORE_VERSION).toBe('0.6.0');
+    expect(MIN_CORE_VERSION).toBe('0.10.7');
   });
 
   it('should warn when core is lower than minimum', () => {
-    expect(shouldWarnCoreVersion('0.5.9')).toBe(true);
+    // 0.10.6 is the last release without the `@rstest/core/api` surface.
+    expect(shouldWarnCoreVersion('0.10.6')).toBe(true);
+    expect(shouldWarnCoreVersion('0.6.0')).toBe(true);
   });
 
   it('should not warn when core meets or exceeds minimum', () => {
-    expect(shouldWarnCoreVersion('0.6.0')).toBe(false);
-    expect(shouldWarnCoreVersion('0.6.1')).toBe(false);
-    expect(shouldWarnCoreVersion('0.8.1')).toBe(false);
+    expect(shouldWarnCoreVersion('0.10.7')).toBe(false);
+    expect(shouldWarnCoreVersion('0.10.8')).toBe(false);
+    expect(shouldWarnCoreVersion('0.11.0')).toBe(false);
   });
 
   it('should handle prerelease versions', () => {
-    expect(shouldWarnCoreVersion('0.6.0-beta.1')).toBe(true);
-    expect(shouldWarnCoreVersion('0.6.1-beta.1')).toBe(false);
+    expect(shouldWarnCoreVersion('0.10.7-beta.1')).toBe(true);
+    expect(shouldWarnCoreVersion('0.10.8-beta.1')).toBe(false);
   });
 
   it('should ignore missing versions', () => {

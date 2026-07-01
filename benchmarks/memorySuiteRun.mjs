@@ -9,7 +9,7 @@ import { withCodSpeed } from '@codspeed/tinybench-plugin';
 import { Bench } from 'tinybench';
 import { createFrontendMemoryFixture } from './createFrontendMemoryFixture.mjs';
 
-const { initCli, createRstest } = await import('@rstest/core');
+const { runCli } = await import('@rstest/core/api');
 
 const bench = withCodSpeed(
   new Bench({
@@ -23,21 +23,16 @@ const bench = withCodSpeed(
 const fixture = await createFrontendMemoryFixture();
 
 async function runSyntheticFrontendProject() {
-  const { config, configFilePath, projects } = await initCli({
-    reporter: [],
+  // `runCli` is host-safe: it resolves a structured result instead of setting
+  // `process.exitCode`, so no per-iteration exit-code reset is needed.
+  const result = await runCli({
+    reporters: [],
     root: fixture.root,
   });
 
-  const rstest = createRstest({ config, configFilePath, projects }, 'run', []);
-  await rstest.runTests();
-
-  if (process.exitCode && process.exitCode !== 0) {
-    throw new Error(
-      `Synthetic frontend memory benchmark failed with exit code ${process.exitCode}`,
-    );
+  if (!result.ok) {
+    throw new Error('Synthetic frontend memory benchmark failed');
   }
-
-  process.exitCode = undefined;
 }
 
 bench.add('frontend-memory-full-run', async () => {

@@ -16,10 +16,10 @@ import { Bench } from 'tinybench';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = resolve(__dirname, 'fixtures');
 
-const { initCli, createRstest } = await import('@rstest/core');
+const { runCli } = await import('@rstest/core/api');
 
 const benchmarkOptions = {
-  reporter: [],
+  reporters: [],
 };
 
 const bench = withCodSpeed(
@@ -32,23 +32,16 @@ const bench = withCodSpeed(
 );
 
 async function runFixture(fixtureName) {
-  const { config, configFilePath, projects } = await initCli({
+  // `runCli` is host-safe: it resolves a structured result instead of setting
+  // `process.exitCode`, so no per-iteration exit-code reset is needed.
+  const result = await runCli({
     root: resolve(fixturesRoot, fixtureName),
     ...benchmarkOptions,
   });
 
-  const rstest = createRstest({ config, configFilePath, projects }, 'run', []);
-  await rstest.runTests();
-
-  if (process.exitCode && process.exitCode !== 0) {
-    throw new Error(
-      `CPU benchmark fixture "${fixtureName}" failed with exit code ${process.exitCode}`,
-    );
+  if (!result.ok) {
+    throw new Error(`CPU benchmark fixture "${fixtureName}" failed`);
   }
-
-  // Reset process.exitCode between iterations because runTests() uses it to
-  // signal failures to the CLI.
-  process.exitCode = undefined;
 }
 
 bench.add('compile', async () => {

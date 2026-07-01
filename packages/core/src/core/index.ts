@@ -5,6 +5,7 @@ import type {
   RstestCommand,
   RstestConfig,
   RstestRunner,
+  RstestWatchHandle,
 } from '../types';
 import { Rstest } from './rstest';
 
@@ -56,9 +57,9 @@ export function createRstestContext(
     config,
   );
 
-  const runTests = async (): Promise<void> => {
+  const runTests = async (): Promise<void | RstestWatchHandle> => {
     const { runTests } = await import('./runTests');
-    await runTests(context);
+    return runTests(context);
   };
 
   const listTests = async (options: ListCommandOptions) => {

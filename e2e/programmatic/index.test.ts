@@ -87,6 +87,70 @@ describe('programmatic createRstest', () => {
     expect(result.stats.files.total).toBe(1);
   });
 
+  it('restores host process.env after the instance is closed', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-env-restore.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    expect(result.ok).toBe(true);
+    // Host started without NODE_ENV / RSTEST.
+    expect(result.before).toEqual({ NODE_ENV: null, RSTEST: null });
+    // While the instance is live, workers observe test-mode env.
+    expect(result.during).toEqual({ NODE_ENV: 'test', RSTEST: 'true' });
+    // close() puts the host environment back the way it found it.
+    expect(result.after).toEqual(result.before);
+    expect(result.hostExitCode).toBe(0);
+  });
+
+  it('collects task locations when listTests({ printLocation: true })', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-list-location.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // printLocation drives includeTaskLocation, so locations are collected.
+    expect(result.withLocation).toEqual({ line: true });
+    // Without it, the runtime skips location collection.
+    expect(result.withoutLocation).toBe(null);
+    expect(result.hostExitCode).toBe(0);
+  });
+
+  it('watch() runs, exposes a closeable watcher, and tears down cleanly', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-watch.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    // If close() leaked the dev server / worker pool, the host would hang and
+    // this exec would never resolve.
+    const exec = await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    expect(result.ranAtLeastOnce).toBe(true);
+    expect(result.hasClose).toBe(true);
+    expect(result.hostExitCode).toBe(0);
+    expect(exec.exitCode).toBe(0);
+  });
+
   it('accepts inline config + virtual modules plugin (Midscene shape)', async ({
     onTestFinished,
   }) => {

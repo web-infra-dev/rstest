@@ -3,7 +3,7 @@ import {
   createCoverageProviderWithLog,
 } from '../coverage';
 import { ensureRunDependencies } from './dependencies';
-import type { TestExecutor } from '../types';
+import type { RstestWatchHandle, TestExecutor } from '../types';
 import {
   clearScreen,
   color,
@@ -42,7 +42,9 @@ import {
   prepareWatchRerunState,
 } from './watchState';
 
-export async function runTests(context: Rstest): Promise<void> {
+export async function runTests(
+  context: Rstest,
+): Promise<void | RstestWatchHandle> {
   // High-level flow (post-executor-seam):
   // 1. Split browser/node projects (the single `isBrowserProject` predicate).
   // 2. Browser-only runs (no node projects) take a fast path so they skip the
@@ -609,4 +611,9 @@ export async function runTests(context: Rstest): Promise<void> {
   // failures never leave a browser host running (the same ordering the
   // pre-seam code had). Node reruns above never restart it.
   browserWatch.startBackground();
+
+  // The Rsbuild dev server keeps watching after this returns; hand the caller
+  // a teardown so a programmatic (embedded) host can stop watching. The CLI
+  // ignores this and tears down via its signal handlers instead.
+  return { close: cleanup };
 }

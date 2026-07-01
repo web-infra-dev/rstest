@@ -758,6 +758,8 @@ const resolveEffectiveCliFilters = async ({
   config,
   configFilePath,
   projects,
+  cwd,
+  embedded,
 }: {
   options: CommonOptions;
   filters: Array<string | number>;
@@ -765,6 +767,8 @@ const resolveEffectiveCliFilters = async ({
   config: RstestConfig;
   configFilePath?: string;
   projects: Project[];
+  cwd?: string;
+  embedded?: boolean;
 }): Promise<{
   effectiveFilters: string[];
   fileFilterMode: FileFilterMode;
@@ -790,7 +794,15 @@ const resolveEffectiveCliFilters = async ({
   }
 
   const { resolveRelatedTestFiles } = await import('../core/related');
-  const rstest = createRstest({ config, configFilePath, projects }, 'list', []);
+  // Carry `embedded`/`cwd` into this pre-resolution context so constructor-time
+  // config validation (e.g. a project-level `shard` mismatch) surfaces as a
+  // programmatic `unhandledError` instead of calling `process.exit(1)` on an
+  // embedded host, matching the real runner built below.
+  const rstest = createRstest(
+    { config, configFilePath, projects, cwd, embedded },
+    'list',
+    [],
+  );
 
   const sourceFilters =
     options.changed !== undefined
@@ -943,6 +955,8 @@ export const buildResolvedRunner = async ({
     config,
     configFilePath,
     projects,
+    cwd,
+    embedded,
   });
 
   // Related/changed runs force exact matching; otherwise honor an explicit
