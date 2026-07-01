@@ -31,6 +31,13 @@ describe('formatConsoleArgs', () => {
     expect(formatConsoleArgs(['%f', 3.5])).toBe('3.5');
   });
 
+  it('formats a Symbol under numeric specifiers as NaN without throwing', () => {
+    const sym = Symbol('id');
+    expect(formatConsoleArgs(['%d', sym])).toBe('NaN');
+    expect(formatConsoleArgs(['%i', sym])).toBe('NaN');
+    expect(formatConsoleArgs(['%f', sym])).toBe('NaN');
+  });
+
   it('renders %o / %O objects', () => {
     expect(formatConsoleArgs(['%o', { a: 1 }])).toBe('{\n  "a": 1\n}');
   });

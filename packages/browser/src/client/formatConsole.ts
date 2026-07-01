@@ -55,11 +55,15 @@ export const formatConsoleArgs = (args: unknown[]): string => {
         return typeof arg === 'string' ? arg : formatArg(arg);
       case '%d':
       case '%i': {
+        // `Number(symbol)` throws; a real console forwards NaN instead of
+        // letting the log call fail the test.
+        if (typeof arg === 'symbol') return 'NaN';
         if (typeof arg === 'bigint') return String(arg);
         const num = Number(arg);
         return Number.isNaN(num) ? 'NaN' : String(Math.trunc(num));
       }
       case '%f': {
+        if (typeof arg === 'symbol') return 'NaN';
         const num = Number(arg);
         return Number.isNaN(num) ? 'NaN' : String(num);
       }
