@@ -326,6 +326,92 @@ describe('coverage-v8 provider', () => {
     expect(coverage[file]?.b[0]).toEqual([1]);
   });
 
+  it('does not add an implicit else branch when ignoring an absent else branch', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-ignore-implicit-else.js');
+    const code = `const flag = true;
+/* istanbul ignore else */ if (flag) { foo(); }`;
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:ignore-implicit-else`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.branchMap[0]?.locations).toHaveLength(1);
+    expect(coverage[file]?.b[0]).toEqual([1]);
+  });
+
+  it('invalidates prepared AST coverage when an external source map changes', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-external-map-cache');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const firstOriginalFile = join(root, 'src', 'first.ts');
+    const secondOriginalFile = join(root, 'src', 'second.ts');
+    const code = 'const value = 1;\n//# sourceMappingURL=bundle.js.map';
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    const entry = {
+      url: pathToFileURL(generatedFile).href,
+      scriptId: '1',
+      functions: [
+        {
+          functionName: '',
+          isBlockCoverage: true,
+          ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+        },
+      ],
+    };
+
+    const createSourceMap = (source: string) =>
+      JSON.stringify({
+        version: 3,
+        file: generatedFile,
+        sources: [source],
+        sourcesContent: ['const value = 1;'],
+        names: [],
+        mappings: 'AAAA',
+      });
+
+    try {
+      mkdirSync(join(root, 'dist'), { recursive: true });
+      writeFileSync(generatedFile, code);
+      writeFileSync(
+        join(root, 'dist', 'bundle.js.map'),
+        createSourceMap('../src/first.ts'),
+      );
+
+      const firstCoverage = await providerInternals.convertWithAst(
+        generatedFile,
+        entry,
+      );
+
+      writeFileSync(
+        join(root, 'dist', 'bundle.js.map'),
+        createSourceMap('../src/second.ts'),
+      );
+
+      const secondCoverage = await providerInternals.convertWithAst(
+        generatedFile,
+        entry,
+      );
+
+      expect(Object.keys(firstCoverage)).toEqual([firstOriginalFile]);
+      expect(Object.keys(secondCoverage)).toEqual([secondOriginalFile]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('keeps branch counts aligned when an arm has no source mapping', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-branch-range-alignment');
     const generatedFile = join(root, 'dist', 'bundle.js');

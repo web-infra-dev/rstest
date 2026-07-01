@@ -347,9 +347,11 @@ async function prepareCoverage(
             branches.push(consequent);
           }
 
-          if (hint === 'else' && alternate) {
-            setSkipped(alternate);
-          } else {
+          if (hint === 'else') {
+            if (alternate) {
+              setSkipped(alternate);
+            }
+          } else if (alternate || hint !== 'if') {
             branches.push(alternate);
           }
 

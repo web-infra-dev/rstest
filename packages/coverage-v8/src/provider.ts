@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import inspector from 'node:inspector/promises';
-import { isAbsolute, posix, resolve, win32 } from 'node:path';
+import { dirname, isAbsolute, posix, resolve, win32 } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type {
   NormalizedCoverageOptions,
@@ -31,8 +31,7 @@ type CoverageReporterConstructor = new (
 ) => ReportBase;
 
 const MAX_PARSED_AST_CACHE_SIZE = 50;
-const INLINE_SOURCE_MAP_PATTERN =
-  /[#@]\s*sourceMappingURL\s*=\s*data:application\/json(?:;[^'",\s]*)*,/i;
+const SOURCE_MAP_URL_PATTERN = /[#@]\s*sourceMappingURL\s*=\s*(\S+)\s*$/m;
 const parsedAstCache = new Map<string, ReturnType<typeof Parser.parse>>();
 
 type CoverageEntry = inspector.Profiler.ScriptCoverage & {
@@ -48,7 +47,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     Record<string, string>,
     Map<string, string>
   >();
-  private diskInlineSourceMapCache = new Map<string, Promise<boolean>>();
+  private diskSourceMapCache = new Map<string, Promise<boolean>>();
 
   constructor(
     public options: NormalizedCoverageOptions,
@@ -219,17 +218,65 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   private hasInlineSourceMap(code: string): boolean {
-    return INLINE_SOURCE_MAP_PATTERN.test(code);
+    const sourceMapUrl = this.getSourceMapUrl(code);
+    return (
+      sourceMapUrl !== undefined && this.isInlineSourceMapUrl(sourceMapUrl)
+    );
   }
 
-  private async hasInlineSourceMapOnDisk(filePath: string): Promise<boolean> {
-    let cached = this.diskInlineSourceMapCache.get(filePath);
+  private hasExternalSourceMap(code: string): boolean {
+    const sourceMapUrl = this.getSourceMapUrl(code);
+    return (
+      sourceMapUrl !== undefined && !this.isInlineSourceMapUrl(sourceMapUrl)
+    );
+  }
+
+  private getSourceMapUrl(code: string): string | undefined {
+    return code.match(SOURCE_MAP_URL_PATTERN)?.[1];
+  }
+
+  private isInlineSourceMapUrl(url: string): boolean {
+    return url.startsWith('data:');
+  }
+
+  private async loadExternalSourceMap(
+    filePath: string,
+    code: string,
+  ): Promise<{
+    sourceMap?: SourceMapLike;
+    sourceMapStr?: string;
+  }> {
+    const sourceMapUrl = this.getSourceMapUrl(code);
+    if (!sourceMapUrl || this.isInlineSourceMapUrl(sourceMapUrl)) {
+      return {};
+    }
+
+    try {
+      const sourceMapStr = await fs.readFile(
+        resolve(dirname(filePath), sourceMapUrl),
+        'utf-8',
+      );
+
+      return {
+        sourceMap: {
+          names: [],
+          ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
+        } as SourceMapLike,
+        sourceMapStr,
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  private async hasSourceMapOnDisk(filePath: string): Promise<boolean> {
+    let cached = this.diskSourceMapCache.get(filePath);
     if (!cached) {
       cached = fs
         .readFile(filePath, 'utf-8')
-        .then((code) => this.hasInlineSourceMap(code))
+        .then((code) => this.getSourceMapUrl(code) !== undefined)
         .catch(() => false);
-      this.diskInlineSourceMapCache.set(filePath, cached);
+      this.diskSourceMapCache.set(filePath, cached);
     }
 
     return cached;
@@ -248,16 +295,22 @@ export class CoverageProvider implements RstestCoverageProvider {
   }> {
     const assetSource = this.findInDict(options?.assetFiles, filePath);
     const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
+    const code = assetSource ?? (await fs.readFile(filePath, 'utf-8'));
+
+    if (sourceMapStr) {
+      return {
+        code,
+        sourceMap: {
+          names: [],
+          ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
+        } as SourceMapLike,
+        sourceMapStr,
+      };
+    }
 
     return {
-      code: assetSource ?? (await fs.readFile(filePath, 'utf-8')),
-      sourceMap: sourceMapStr
-        ? ({
-            names: [],
-            ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
-          } as SourceMapLike)
-        : undefined,
-      sourceMapStr,
+      code,
+      ...(await this.loadExternalSourceMap(filePath, code)),
     };
   }
 
@@ -448,7 +501,14 @@ export class CoverageProvider implements RstestCoverageProvider {
     const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
     const assetSource = this.findInDict(options?.assetFiles, filePath);
 
-    if (sourceMapStr || (assetSource && this.hasInlineSourceMap(assetSource))) {
+    if (
+      sourceMapStr ||
+      (assetSource && this.hasExternalSourceMap(assetSource))
+    ) {
+      return true;
+    }
+
+    if (assetSource && this.hasInlineSourceMap(assetSource)) {
       return true;
     }
 
@@ -459,7 +519,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       return true;
     }
 
-    return assetSource === undefined && this.hasInlineSourceMapOnDisk(filePath);
+    return assetSource === undefined && this.hasSourceMapOnDisk(filePath);
   }
 
   private async collectImpl(options?: {
