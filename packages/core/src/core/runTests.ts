@@ -352,10 +352,13 @@ export async function runTests(context: Rstest): Promise<void> {
     }),
     onModifyRstestConfigApplied: async () => {
       const plan = await resolveRunnableProjects();
+      const nodeProjectsToPrepare = plan.nodeProjectsToRun.length
+        ? plan.nodeProjectsToRun
+        : nodeProjects;
       rsbuildProjects.splice(
         0,
         rsbuildProjects.length,
-        ...plan.nodeProjectsToRun,
+        ...nodeProjectsToPrepare,
       );
     },
   });
