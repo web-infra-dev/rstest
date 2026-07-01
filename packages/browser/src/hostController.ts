@@ -601,8 +601,24 @@ export const createBrowserLazyCompilationConfig = (
   };
 };
 
-export const createBrowserRsbuildDevConfig = (
+/**
+ * HMR — and the lazyCompilation transport it carries — is wired only for headed
+ * watch, the sole path that reuses a persistent page and applies module updates
+ * in place. Headless always loads each test file in a fresh page (pulling the
+ * latest incrementally-built chunks over HTTP), and one-shot runs never rerun,
+ * so pushing HMR updates there is dead weight that only races factory
+ * registration for chunk-split node_modules (rspack#11922) and lets
+ * lazyCompilation's accept-chain walk abort the next spec when no boundary
+ * exists (#1472). Disabling HMR does not make watch rebuilds any less
+ * incremental — HMR is only the client push transport.
+ */
+export const shouldEnableBrowserHmr = (
   isWatchMode: boolean,
+  isHeadless: boolean,
+): boolean => isWatchMode && !isHeadless;
+
+export const createBrowserRsbuildDevConfig = (
+  enableHmr: boolean,
 ): {
   writeToDisk: boolean;
   hmr: boolean;
@@ -612,12 +628,10 @@ export const createBrowserRsbuildDevConfig = (
 } => {
   return {
     writeToDisk: isDebug(),
-    // HMR is only wired in watch mode. One-shot runs load each test file in a
-    // fresh page against a persistent dev server; leaving HMR on makes the
-    // server push chunk updates into a page that is still resolving its module
-    // graph, which races factory registration for chunk-split node_modules
-    // (many-small-files packages like lodash-es) — see rspack#11922.
-    hmr: isWatchMode,
+    // `enableHmr` is gated to headed watch by `shouldEnableBrowserHmr` — the one
+    // path that reuses a page. See that helper for why fresh-page runs (headless,
+    // or any one-shot) must not receive HMR pushes.
+    hmr: enableHmr,
     client: {
       logLevel: 'error' as const,
     },
@@ -1264,7 +1278,10 @@ const generateManifestModule = ({
 
     if (isWatchMode) {
       // Watch mode keeps the include-glob context so newly added files are
-      // picked up on rebuild (and pairs with lazyCompilation to stay cheap).
+      // picked up on rebuild via `keys()` without regenerating the manifest.
+      // `mode: 'lazy'` is plain code-splitting (async chunks over HTTP), so it
+      // works with or without lazyCompilation; headed watch additionally layers
+      // lazyCompilation on top to keep the initial build cheap.
       const includeRegExp = globPatternsToRegExp(
         project.normalizedConfig.include,
       );
@@ -1609,6 +1626,10 @@ const createBrowserRuntime = async ({
       ...staticRstestAliases,
     };
 
+    const isHeadless =
+      forceHeadless || project.normalizedConfig.browser.headless;
+    const enableHmr = shouldEnableBrowserHmr(isWatchMode, isHeadless);
+
     const rsbuildInstance = await createRsbuild({
       callerName: 'rstest-browser',
       rsbuildConfig: {
@@ -1626,7 +1647,7 @@ const createBrowserRuntime = async ({
             (isContainerServer ? 4000 : 0),
           strictPort: project.normalizedConfig.browser.strictPort,
         },
-        dev: createBrowserRsbuildDevConfig(isWatchMode),
+        dev: createBrowserRsbuildDevConfig(enableHmr),
         environments: {
           [project.environmentName]: {},
         },
@@ -1701,11 +1722,11 @@ const createBrowserRuntime = async ({
                   tools: {
                     rspack: (rspackConfig) => {
                       rspackConfig.mode = 'development';
-                      // lazyCompilation relies on the HMR runtime to deliver
-                      // on-demand modules, so it is only safe in watch mode.
-                      // One-shot runs compile eagerly to avoid the HMR chunk
-                      // registration race (see createBrowserRsbuildDevConfig).
-                      rspackConfig.lazyCompilation = isWatchMode
+                      // lazyCompilation's only delivery transport is the HMR
+                      // runtime, so it follows the same gate as HMR (see
+                      // `shouldEnableBrowserHmr`): headed watch only, everything
+                      // else compiles eagerly.
+                      rspackConfig.lazyCompilation = enableHmr
                         ? createBrowserLazyCompilationConfig(setupFiles)
                         : false;
                       rspackConfig.plugins = rspackConfig.plugins || [];

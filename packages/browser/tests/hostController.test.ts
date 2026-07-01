@@ -5,6 +5,7 @@ import {
   createBrowserRsbuildDevConfig,
   createBrowserContextExcludeRegExp,
   resolveListenPort,
+  shouldEnableBrowserHmr,
   toContextKey,
 } from '../src/hostController';
 
@@ -107,18 +108,29 @@ describe('browser config resolution', () => {
     expect(browserConfig.strictPort).toBe(true);
   });
 
-  it('should disable HMR in non-watch mode and keep error-only client log', () => {
+  it('should disable HMR when enableHmr is false and keep error-only client log', () => {
     const devConfig = createBrowserRsbuildDevConfig(false);
 
     expect(devConfig.hmr).toBe(false);
     expect(devConfig.client.logLevel).toBe('error');
   });
 
-  it('should enable HMR in watch mode', () => {
+  it('should enable HMR when enableHmr is true', () => {
     const devConfig = createBrowserRsbuildDevConfig(true);
 
     expect(devConfig.hmr).toBe(true);
     expect(devConfig.client.logLevel).toBe('error');
+  });
+
+  it('should only enable HMR for headed watch', () => {
+    // Headless never reuses a page, so it never consumes HMR — enabling it only
+    // exposes the #11922 factory race and the #1472 accept-chain throw. One-shot
+    // runs never rerun. So HMR (and the lazyCompilation transport it carries) is
+    // gated to headed watch alone.
+    expect(shouldEnableBrowserHmr(true, false)).toBe(true); // headed watch
+    expect(shouldEnableBrowserHmr(true, true)).toBe(false); // headless watch
+    expect(shouldEnableBrowserHmr(false, false)).toBe(false); // headed one-shot
+    expect(shouldEnableBrowserHmr(false, true)).toBe(false); // headless one-shot
   });
 
   it('should derive the non-watch import-map key like the runtime toContextKey', () => {
