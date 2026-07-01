@@ -312,7 +312,10 @@ const snapshotProcessGuards = (): (() => void) => {
 const toCommonOptions = (options: RunOptions): CommonOptions => ({
   testNamePattern: options.testNamePattern,
   related: options.related,
-  changed: options.changed,
+  // `isRelatedRun` treats any defined `changed` as changed-mode, so drop an
+  // explicit `false` — otherwise `run({ changed: false })` would run only
+  // git-changed tests (and reject positional filters).
+  changed: options.changed === false ? undefined : options.changed,
   update: options.update,
   bail: options.bail,
   passWithNoTests: options.passWithNoTests,
@@ -402,9 +405,13 @@ export async function createRstest(
   const build = async (
     command: RstestCommand,
     runOptions: RunOptions,
-    prepareConfig?: (config: RstestConfig) => void,
+    prepareOptions?: (options: CommonOptions) => void,
   ): Promise<RstestRunner> => {
     const commonOptions = toCommonOptions(runOptions);
+    // Mutate the option bag (not the root config) so the tweak reaches both the
+    // root config and — via `resolveProjects` — every project config, which
+    // both derive from `commonOptions`.
+    prepareOptions?.(commonOptions);
 
     const { content: userConfig, filePath: configFilePath } =
       await loadConfigForApi({
@@ -416,7 +423,6 @@ export async function createRstest(
     // Propagate per-invocation config-shaped options to the root config and —
     // via `resolveProjects` — to every project config.
     mergeWithCLIOptions(userConfig, commonOptions);
-    prepareConfig?.(userConfig);
     userConfig.root = userConfig.root
       ? getAbsolutePath(cwd, userConfig.root)
       : cwd;
@@ -451,8 +457,8 @@ export async function createRstest(
   // `process.stdout`/`stderr` and registers a `process.on('exit')` handler at
   // construction time, which a host that only inspects `context` (or calls
   // `close()`) must not incur. `run()` rebuilds with the real reporters.
-  await build('run', {}, (config) => {
-    config.reporters = [];
+  await build('run', {}, (opts) => {
+    opts.reporters = [];
   });
 
   const run = (runOptions: RunOptions = {}): Promise<TestRunResult> =>
@@ -496,11 +502,12 @@ export async function createRstest(
     // the host process so an embedded caller isn't left marked as failed.
     const restore = snapshotProcessGuards();
     try {
-      const runner = await build('list', listOptions, (config) => {
+      const runner = await build('list', listOptions, (opts) => {
         // Mirror the CLI: enable location collection before the runner is built,
-        // otherwise `printLocation` is silently ineffective.
+        // otherwise `printLocation` is silently ineffective. Route it through the
+        // option bag so it reaches per-project configs too (not just the root).
         if (listOptions.printLocation) {
-          config.includeTaskLocation = true;
+          opts.includeTaskLocation = true;
         }
       });
       return await runner.listTests({
