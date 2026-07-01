@@ -8,6 +8,9 @@ export const formatArg = (arg: unknown): string => {
   if (arg === undefined) return 'undefined';
   if (typeof arg === 'string') return arg;
   if (typeof arg === 'number' || typeof arg === 'boolean') return String(arg);
+  // `JSON.stringify(symbol)` is `undefined`, so a symbol must be handled before
+  // the JSON path or it would forward as an empty/`undefined` log.
+  if (typeof arg === 'symbol') return arg.toString();
   if (arg instanceof Error) {
     return arg.stack || `${arg.name}: ${arg.message}`;
   }

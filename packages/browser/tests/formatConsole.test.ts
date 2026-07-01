@@ -21,6 +21,12 @@ describe('formatConsoleArgs', () => {
     expect(formatConsoleArgs(['%s world', 'hello'])).toBe('hello world');
   });
 
+  it('stringifies a Symbol under %s and as a bare argument', () => {
+    const sym = Symbol('id');
+    expect(formatConsoleArgs(['%s', sym])).toBe('Symbol(id)');
+    expect(formatConsoleArgs([sym])).toBe('Symbol(id)');
+  });
+
   it('parses %d and %i as an integer like the browser console', () => {
     expect(formatConsoleArgs(['%d', 3.7])).toBe('3');
     expect(formatConsoleArgs(['%i things', 5.9])).toBe('5 things');
