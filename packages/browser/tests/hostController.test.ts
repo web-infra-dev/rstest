@@ -131,6 +131,11 @@ describe('browser config resolution', () => {
     expect(toContextKey('/elsewhere/x.test.ts', '/project')).toBe(
       './elsewhere/x.test.ts',
     );
+    // A sibling that only shares a string prefix with the root is not stripped
+    // at a non-boundary (would otherwise mangle to `./-extra/a.test.ts`).
+    expect(toContextKey('/repo/pkg-extra/a.test.ts', '/repo/pkg')).toBe(
+      './repo/pkg-extra/a.test.ts',
+    );
   });
 
   it('should keep setup files out of lazy compilation', () => {

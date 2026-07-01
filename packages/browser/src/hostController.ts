@@ -1187,9 +1187,12 @@ export const toContextKey = (
   projectRootPosix: string,
 ): string => {
   const posixPath = normalize(filePath);
-  const rel = posixPath.startsWith(projectRootPosix)
-    ? posixPath.slice(projectRootPosix.length)
-    : posixPath;
+  // Only strip the root at a path boundary: a bare `startsWith` would mangle a
+  // sibling like `/repo/pkg-extra/a.test.ts` under root `/repo/pkg`.
+  const withinRoot =
+    posixPath === projectRootPosix ||
+    posixPath.startsWith(`${projectRootPosix}/`);
+  const rel = withinRoot ? posixPath.slice(projectRootPosix.length) : posixPath;
   return rel.startsWith('/') ? `.${rel}` : `./${rel}`;
 };
 

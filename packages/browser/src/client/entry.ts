@@ -284,10 +284,16 @@ const toContextKey = (absolutePath: string, projectRoot: string): string => {
   const normalizedAbsolute = normalize(absolutePath);
   const normalizedRoot = normalize(projectRoot);
 
-  let relative = normalizedAbsolute;
-  if (normalizedAbsolute.startsWith(normalizedRoot)) {
-    relative = normalizedAbsolute.slice(normalizedRoot.length);
-  }
+  // Only strip the root at a path boundary: a bare `startsWith` would mangle a
+  // sibling like `/repo/pkg-extra/a.test.ts` under root `/repo/pkg`. Must stay
+  // in sync with the host `toContextKey` (hostController.ts) so the non-watch
+  // import-map keys resolve.
+  const withinRoot =
+    normalizedAbsolute === normalizedRoot ||
+    normalizedAbsolute.startsWith(`${normalizedRoot}/`);
+  const relative = withinRoot
+    ? normalizedAbsolute.slice(normalizedRoot.length)
+    : normalizedAbsolute;
   return relative.startsWith('/') ? `.${relative}` : `./${relative}`;
 };
 
