@@ -415,7 +415,11 @@ export async function runTests(
     activeTraceRun = traceController.beginRun();
   };
 
-  const enableCliShortcuts = isCliShortcutsEnabled();
+  // Interactive CLI shortcuts put stdin in raw mode, install a keypress
+  // listener, and let `q` call `process.exit()`. An embedded (programmatic)
+  // host owns its own process + stdin, and `watcher.close()` doesn't dispose
+  // them, so never install them in embedded mode — even with a TTY stdin.
+  const enableCliShortcuts = isCliShortcutsEnabled() && !context.embedded;
 
   let isCleaningUp = false;
   const cleanup = async () => {
