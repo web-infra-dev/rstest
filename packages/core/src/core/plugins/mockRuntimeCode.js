@@ -50,7 +50,10 @@ const hasOwn = (target, property) => Object.hasOwn(target, property);
 const altBuiltinSpelling = (request) =>
   request.startsWith('node:') ? request.slice(5) : `node:${request}`;
 
-const isPromise = (value) => value instanceof Promise;
+// Realm-safe (a cross-realm Promise fails `instanceof`), matching the worker
+// registry's async detection in `mockRegistry.getNativeMock`.
+const isPromise = (value) =>
+  Object.prototype.toString.call(value) === '[object Promise]';
 
 // Restore a module id to its captured original factory and drop its cache
 // entry — undoing a mock.
@@ -107,8 +110,7 @@ const createMockedModule = (originalModule, isSpy) => {
 // NATIVELY by Node — a true-external `A` (a node_modules package), or a local
 // module reached via a non-literal `import(variable)` (loaded outside the
 // bundle) — that internally imports this mocked module. Routed over the existing
-// RSTEST_API channel (same as `mockObject`). `request` is `undefined` under an
-// older @rspack/core that omits the request literal — skip then.
+// RSTEST_API channel (same as `mockObject`).
 //
 // `produce` yields the mock's exports: the already-built mocked module for the
 // spy/mock-option path (the SAME instance bundle consumers see, via its getters),
@@ -129,9 +131,6 @@ const createMockedModule = (originalModule, isSpy) => {
 // object-returning factories (the #1454 repro) and the spy/mock-option path are
 // unaffected.
 const publishNativeMock = (request, produce) => {
-  if (request === undefined) {
-    return;
-  }
   const api = globalThis.RSTEST_API?.rstest;
   if (!api || typeof api.__setNativeMock !== 'function') {
     return;
@@ -146,9 +145,6 @@ const publishNativeMock = (request, produce) => {
 // microtask, which would then re-add a stale entry. Queuing both keeps the last
 // operation winning (`rs.mock` then `rs.unmock` ⇒ removed).
 const unpublishNativeMock = (request) => {
-  if (request === undefined) {
-    return;
-  }
   queueMicrotask(() => {
     const api = globalThis.RSTEST_API?.rstest;
     if (api && typeof api.__unsetNativeMock === 'function') {
@@ -161,15 +157,11 @@ const unpublishNativeMock = (request) => {
 __webpack_require__.rstest_unmock = (id, request) => {
   restoreOriginalFactory(id);
 
-  // `request` is `undefined` under an older @rspack/core that omits the request
-  // literal; the guard can be dropped once the minimum @rspack/core always emits it.
-  if (request !== undefined) {
-    const map = __webpack_require__.rstest_mocked_ids_by_request;
-    delete map[request];
-    // `os` and `node:os` are equivalent, so an unmock with either spelling must
-    // clear both (mirrors the resolver's read-side alt lookup).
-    delete map[altBuiltinSpelling(request)];
-  }
+  const map = __webpack_require__.rstest_mocked_ids_by_request;
+  delete map[request];
+  // `os` and `node:os` are equivalent, so an unmock with either spelling must
+  // clear both (mirrors the resolver's read-side alt lookup).
+  delete map[altBuiltinSpelling(request)];
   unpublishNativeMock(request);
 };
 //#endregion
@@ -213,12 +205,9 @@ const getMockImplementation = (mockType = 'mock') => {
   // The mock and mockRequire will resolve to different module ids when the module is a dual package.
   return (id, modFactory, request) => {
     // Point a dynamic `import(request)` — which carries a different external
-    // module id — at this mocked id, so `rstest_dynamic_require` resolves it
-    // here. No-ops under an older @rspack/core that omits the request literal.
+    // module id — at this mocked id, so `rstest_dynamic_require` resolves it here.
     const registerRequestAlias = () => {
-      if (request !== undefined) {
-        __webpack_require__.rstest_mocked_ids_by_request[request] = id;
-      }
+      __webpack_require__.rstest_mocked_ids_by_request[request] = id;
     };
 
     // Swap in a mock factory: install it, drop the stale cache entry, and
