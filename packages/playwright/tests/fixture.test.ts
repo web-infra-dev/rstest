@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -22,6 +23,21 @@ const debugOptions = {
 } satisfies PlaywrightOptions;
 
 const execFileAsync = promisify(execFile);
+
+const supportsIpv6Loopback = async () => {
+  const server = createServer();
+
+  return new Promise<boolean>((resolve) => {
+    server.once('error', () => {
+      resolve(false);
+    });
+    server.listen(0, '::1', () => {
+      server.close(() => {
+        resolve(true);
+      });
+    });
+  });
+};
 
 const ciPlaywrightOptions = {
   browserName: 'chromium',
@@ -370,7 +386,11 @@ test(
 test(
   'formats IPv6 static server hosts as valid URLs',
   { timeout: 30_000 },
-  async ({ serve }) => {
+  async ({ serve, skip }) => {
+    if (!(await supportsIpv6Loopback())) {
+      skip();
+    }
+
     const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
     await writeFile(join(root, 'index.html'), '<h1>ok</h1>');
 
