@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { isAbsolute, join, relative } from 'pathe';
 import type {
   EnvironmentConfig,
   RsbuildConfig,
@@ -7,8 +9,10 @@ import { mergeRstestConfig } from '../config';
 import type {
   EnvironmentWithOptions,
   ModifyRstestConfigCallback,
+  NormalizedConfig,
   NormalizedProjectConfig,
   ProjectContext,
+  RstestContext,
   RstestExposeAPI,
 } from '../types';
 import {
@@ -16,10 +20,22 @@ import {
   ENV,
   formatRootStr,
   getAbsolutePath,
+  getDefaultBuildCacheDir,
+  getOutputDistPathRoot,
+  getTempRstestOutputDirGlob,
+  isDefaultBuildCache,
   isPlainObject,
+  normalizeBuildCache,
+  TS_CONFIG_FILE,
 } from '../utils';
 
 type RstestEnvironmentConfig = EnvironmentConfig & Pick<RsbuildConfig, 'root'>;
+
+type NormalizedProjectConfigWithDistPath = NormalizedProjectConfig & {
+  output?: NormalizedProjectConfig['output'] & {
+    distPath?: NormalizedConfig['output']['distPath'];
+  };
+};
 
 const mutableModifyRstestConfigKeys = new Set<keyof NormalizedProjectConfig>([
   'root',
@@ -35,7 +51,6 @@ const mutableModifyRstestConfigKeys = new Set<keyof NormalizedProjectConfig>([
   'testEnvironment',
   'printConsoleTrace',
   'disableConsoleIntercept',
-  'update',
   'hideSkippedTests',
   'hideSkippedTestFiles',
   'testNamePattern',
@@ -185,23 +200,157 @@ const createMutableConfigOverrides = (
   return overrides;
 };
 
+const arrayReplacementKeys = [
+  'setupFiles',
+  'globalSetup',
+  'includeSource',
+] satisfies Array<keyof NormalizedProjectConfig>;
+
+const normalizeRootPath = (root: string, baseRoot: string): string =>
+  getAbsolutePath(baseRoot, formatRootStr(root, baseRoot));
+
+const isSubPath = (base: string, target: string): boolean => {
+  const relativePath = relative(base, target);
+  return (
+    relativePath === '' ||
+    (!relativePath.startsWith('..') && !isAbsolute(relativePath))
+  );
+};
+
+const shouldRefreshDefaultBuildCacheRoot = (
+  buildCache: NonNullable<NormalizedProjectConfig['performance']>['buildCache'],
+  previousRoot: string,
+  environmentName: string,
+): boolean => {
+  if (!buildCache) {
+    return false;
+  }
+
+  if (buildCache === true) {
+    return true;
+  }
+
+  const defaultCacheDir = getDefaultBuildCacheDir(environmentName);
+  const previousDefaultCachePath = join(previousRoot, defaultCacheDir);
+
+  return (
+    isDefaultBuildCache(buildCache) ||
+    buildCache.cacheDirectory === previousDefaultCachePath
+  );
+};
+
+const normalizeRootDerivedConfigFields = (
+  config: NormalizedProjectConfig,
+  previousConfig: NormalizedProjectConfig,
+  environmentName: string,
+): void => {
+  const root = config.root;
+  if (!root || root === previousConfig.root) {
+    return;
+  }
+
+  config.source ??= {};
+  if (
+    !config.source.tsconfigPath ||
+    isSubPath(previousConfig.root, config.source.tsconfigPath)
+  ) {
+    const tsconfigPath = join(root, TS_CONFIG_FILE);
+    config.source.tsconfigPath = existsSync(tsconfigPath)
+      ? tsconfigPath
+      : undefined;
+  }
+
+  if (
+    shouldRefreshDefaultBuildCacheRoot(
+      config.performance?.buildCache,
+      previousConfig.root,
+      environmentName,
+    )
+  ) {
+    config.performance ??= {};
+    config.performance.buildCache = true;
+  }
+};
+
 const normalizeMutableConfigFields = (
   config: NormalizedProjectConfig,
-  baseRoot: string,
+  previousConfig: NormalizedProjectConfig,
+  environmentName: string,
+  context: RstestContext,
+  configFilePath: string | undefined,
 ): void => {
+  const configWithDistPath = config as NormalizedProjectConfigWithDistPath;
+  const previousConfigWithDistPath =
+    previousConfig as NormalizedProjectConfigWithDistPath;
+
   if (config.root) {
-    config.root = getAbsolutePath(
-      baseRoot,
-      formatRootStr(config.root, baseRoot),
-    );
+    config.root = normalizeRootPath(config.root, previousConfig.root);
   }
+  normalizeRootDerivedConfigFields(config, previousConfig, environmentName);
+
   config.setupFiles = castArray(config.setupFiles);
   config.globalSetup = castArray(config.globalSetup);
+  config.exclude ??= {
+    patterns: [],
+    override: false,
+  };
+
+  const outputDistPathRoot = getOutputDistPathRoot(
+    configWithDistPath.output?.distPath,
+  );
+  const previousOutputDistPathRoot = getOutputDistPathRoot(
+    previousConfigWithDistPath.output?.distPath,
+  );
+  if (
+    configWithDistPath.output?.distPath ||
+    previousConfigWithDistPath.output?.distPath
+  ) {
+    config.output ??= {};
+    configWithDistPath.output!.distPath = {
+      root: formatRootStr(outputDistPathRoot, config.root),
+    };
+  }
+
   if (typeof config.testEnvironment === 'string') {
     config.testEnvironment = {
       name: config.testEnvironment,
     } satisfies EnvironmentWithOptions;
   }
+
+  const buildCache = config.performance?.buildCache;
+  if (buildCache) {
+    config.performance ??= {};
+    config.performance.buildCache = normalizeBuildCache({
+      buildCache,
+      root: config.root,
+      configFilePath: configFilePath ?? context.configFilePath,
+      tsconfigPaths: config.source?.tsconfigPath
+        ? [config.source.tsconfigPath]
+        : [],
+      command: context.command,
+      environmentName,
+      browserEnabled: config.browser.enabled,
+      coverageEnabled: config.coverage?.enabled,
+      coverageProvider: config.coverage?.provider,
+      outputDistPathRoot: context.normalizedConfig.output.distPath.root,
+      assumeNormalized: true,
+    });
+  }
+
+  const previousTempOutputGlob = getTempRstestOutputDirGlob(
+    previousOutputDistPathRoot,
+  );
+  const tempOutputGlob = getTempRstestOutputDirGlob(
+    configWithDistPath.output?.distPath?.root ?? outputDistPathRoot,
+  );
+  config.exclude.patterns = Array.from(
+    new Set([
+      ...config.exclude.patterns.filter(
+        (pattern) => pattern !== previousTempOutputGlob,
+      ),
+      tempOutputGlob,
+    ]),
+  );
 };
 
 const syncProjectDerivedFields = (project: ProjectContext): void => {
@@ -213,6 +362,8 @@ const syncProjectDerivedFields = (project: ProjectContext): void => {
 
 const applyModifyRstestConfig = async (
   config: NormalizedProjectConfig,
+  context: RstestContext,
+  project: ProjectContext,
   callbacks: ModifyRstestConfigCallback[],
 ): Promise<NormalizedProjectConfig> => {
   let currentConfig = config;
@@ -223,11 +374,39 @@ const applyModifyRstestConfig = async (
 
     assertMutableConfigFields(previousConfig, currentConfig);
 
+    const mutatedOverrides = result
+      ? undefined
+      : createMutableConfigOverrides(previousConfig, currentConfig);
+    const overrides = result ?? mutatedOverrides!;
+    const arrayOverrides: Partial<NormalizedProjectConfig> = {};
+    if (mutatedOverrides) {
+      for (const key of arrayReplacementKeys) {
+        if (key in mutatedOverrides) {
+          Object.assign(arrayOverrides, { [key]: mutatedOverrides[key] });
+        }
+      }
+    }
+    const mergeOverrides = {
+      ...overrides,
+    };
+    for (const key of arrayReplacementKeys) {
+      if (key in arrayOverrides) {
+        Object.assign(mergeOverrides, { [key]: undefined });
+      }
+    }
+
     currentConfig = mergeRstestConfig(
       previousConfig,
-      result || createMutableConfigOverrides(previousConfig, currentConfig),
+      mergeOverrides,
     ) as NormalizedProjectConfig;
-    normalizeMutableConfigFields(currentConfig, previousConfig.root);
+    Object.assign(currentConfig, arrayOverrides);
+    normalizeMutableConfigFields(
+      currentConfig,
+      previousConfig,
+      project.environmentName,
+      context,
+      project.configFilePath,
+    );
     assertMutableConfigFields(previousConfig, currentConfig);
   }
 
@@ -235,6 +414,7 @@ const applyModifyRstestConfig = async (
 };
 
 const applyProjectModifyRstestConfig = async (
+  context: RstestContext,
   project: ProjectContext,
   callbacks: ModifyRstestConfigCallback[] | undefined,
 ): Promise<void> => {
@@ -244,6 +424,8 @@ const applyProjectModifyRstestConfig = async (
 
   const modifiedConfig = await applyModifyRstestConfig(
     project.normalizedConfig,
+    context,
+    project,
     callbacks,
   );
   Object.assign(project.normalizedConfig, modifiedConfig);
@@ -272,6 +454,7 @@ const createRstestExposeAPI = (
 });
 
 export const initModifyRstestConfigHooks = (
+  context: RstestContext,
   rsbuildInstance: RsbuildInstance,
   projects: ProjectContext[],
   exposeProjects: ProjectContext[] = projects,
@@ -294,7 +477,7 @@ export const initModifyRstestConfigHooks = (
       if (!callbacks?.length) {
         continue;
       }
-      await applyProjectModifyRstestConfig(project, callbacks);
+      await applyProjectModifyRstestConfig(context, project, callbacks);
       appliedEnvironmentNames.add(project.environmentName);
     }
   };

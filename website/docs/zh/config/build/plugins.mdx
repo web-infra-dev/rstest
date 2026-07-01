@@ -95,12 +95,12 @@ export type RstestExposeAPI = {
 
 `modifyRstestConfig` 的回调会收到当前 project 的 normalized Rstest 配置。你可以直接修改传入的 `config` 对象，也可以返回一个新的配置对象；该回调也可以是异步函数。
 
-为了兼容已有用法，该回调仍然使用 `RstestConfig` 作为类型，但运行时会校验并拒绝修改影响全局测试计划、project 派生身份或 Rsbuild environment 拓扑的字段。例如修改 `name`、`coverage`、`reporters`、`pool`、`isolate`、`projects`、`browser.enabled`、`plugins`、`extends` 或 `output.distPath` 时，会抛出错误并提示应改为在 Rstest 配置中声明这些选项。
+为了兼容已有用法，该回调仍然使用 `RstestConfig` 作为类型，但运行时会校验并拒绝修改影响全局测试计划、project 派生身份或 Rsbuild environment 拓扑的字段。例如修改 `name`、`coverage`、`reporters`、`pool`、`isolate`、`update`、`projects`、`browser.enabled`、`plugins`、`extends` 或 `output.distPath` 时，会抛出错误并提示应改为在 Rstest 配置中声明这些选项。
 
 请在 Rsbuild 插件的 `setup` 阶段注册 `modifyRstestConfig`。不要在 `api.modifyRsbuildConfig` 等更晚的 Rsbuild config hook 中注册它，因为 Rstest 会在解析 Rsbuild config 时应用已经收集到的回调；在这些 hook 内注册的回调对于当前解析流程来说已经太晚。
 
 ### 不足
 
-`modifyRstestConfig` 适合修改 `include`、`exclude`、`testEnvironment`、`resolve`、`source`、`output.module` 等既有 project 配置，但不支持动态添加或删除 Rstest projects、修改 project `name`、切换 `browser.enabled`、修改 `coverage`、`reporters`、`pool`、`isolate` 等全局选项，或变更 Rsbuild environments 和 Rsbuild plugins。
+`modifyRstestConfig` 适合修改 `include`、`exclude`、`testEnvironment`、`resolve`、`source`、`output.module` 等既有 project 配置，但不支持动态添加或删除 Rstest projects、修改 project `name`、切换 `browser.enabled`、修改 `coverage`、`reporters`、`pool`、`isolate`、`update` 等全局选项，或变更 Rsbuild environments 和 Rsbuild plugins。
 
 如果你需要动态添加 Rsbuild 插件，请通过 Rstest 的 `extends` Adapter 方案集成。Adapter 可以在 Rsbuild 插件初始化开始之前准备好 Rstest 配置。

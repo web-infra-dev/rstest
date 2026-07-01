@@ -92,7 +92,7 @@ type BuildCacheInput = {
   assumeNormalized?: boolean;
 };
 
-const getDefaultBuildCacheDir = (environmentName?: string): string =>
+export const getDefaultBuildCacheDir = (environmentName?: string): string =>
   environmentName
     ? `${DEFAULT_BUILD_CACHE_PREFIX}-${environmentName}`
     : DEFAULT_BUILD_CACHE_PREFIX;
@@ -178,6 +178,16 @@ export const normalizeBuildCache = ({
 
   return normalized;
 };
+
+export const isDefaultBuildCache = (
+  buildCache: boolean | RstestBuildCacheConfig | undefined,
+): boolean =>
+  buildCache === true ||
+  Boolean(
+    buildCache &&
+      typeof buildCache === 'object' &&
+      (buildCache as InternalBuildCacheConfig)[DEFAULT_BUILD_CACHE_DIRECTORY_MARKER],
+  );
 
 export const resolveBuildCacheDependencyPaths = <
   T extends {
