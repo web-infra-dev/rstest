@@ -457,9 +457,16 @@ export async function createRstest(
   // `process.stdout`/`stderr` and registers a `process.on('exit')` handler at
   // construction time, which a host that only inspects `context` (or calls
   // `close()`) must not incur. `run()` rebuilds with the real reporters.
-  await build('run', {}, (opts) => {
-    opts.reporters = [];
-  });
+  try {
+    await build('run', {}, (opts) => {
+      opts.reporters = [];
+    });
+  } catch (err) {
+    // Creation failed, so the caller never gets an instance to `close()` —
+    // restore the host snapshot here instead of leaving it in test mode.
+    restoreHostState();
+    throw err;
+  }
 
   const run = (runOptions: RunOptions = {}): Promise<TestRunResult> =>
     executeHostSafeRun(() => build('run', runOptions));
