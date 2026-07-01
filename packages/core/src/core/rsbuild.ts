@@ -203,6 +203,7 @@ export const prepareRsbuild = async ({
 
   initModifyRstestConfigHooks(
     rsbuildInstance,
+    context,
     projects,
     exposeRstestAPIProjects,
     async () => {

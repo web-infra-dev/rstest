@@ -1,8 +1,10 @@
+import { existsSync } from 'node:fs';
 import type {
   EnvironmentConfig,
   RsbuildConfig,
   RsbuildInstance,
 } from '@rsbuild/core';
+import { join } from 'pathe';
 import { mergeRstestConfig } from '../config';
 import type {
   EnvironmentWithOptions,
@@ -10,6 +12,7 @@ import type {
   NormalizedProjectConfig,
   ProjectContext,
   RstestExposeAPI,
+  RstestContext,
 } from '../types';
 import {
   castArray,
@@ -17,6 +20,9 @@ import {
   formatRootStr,
   getAbsolutePath,
   isPlainObject,
+  normalizeBuildCache,
+  resolveBuildCacheDependencyPaths,
+  TS_CONFIG_FILE,
 } from '../utils';
 
 type RstestEnvironmentConfig = EnvironmentConfig & Pick<RsbuildConfig, 'root'>;
@@ -62,15 +68,33 @@ const mutableModifyRstestConfigKeys = new Set<keyof NormalizedProjectConfig>([
   'tools',
 ]);
 
+const replaceMutatedConfigKeys = new Set<keyof NormalizedProjectConfig>([
+  'setupFiles',
+  'globalSetup',
+  'includeSource',
+  'forceRerunTriggers',
+]);
+
 const clonePlainConfig = <T>(value: T): T => {
   if (Array.isArray(value)) {
     return value.map((item) => clonePlainConfig(item)) as T;
   }
 
   if (isPlainObject(value)) {
-    return Object.fromEntries(
+    const cloned = Object.fromEntries(
       Object.entries(value).map(([key, item]) => [key, clonePlainConfig(item)]),
-    ) as T;
+    );
+    for (const symbol of Object.getOwnPropertySymbols(value)) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, symbol);
+      if (descriptor?.value !== undefined) {
+        descriptor.value = clonePlainConfig(descriptor.value);
+      }
+      if (descriptor) {
+        Object.defineProperty(cloned, symbol, descriptor);
+      }
+    }
+
+    return cloned as T;
   }
 
   return value;
@@ -185,9 +209,85 @@ const createMutableConfigOverrides = (
   return overrides;
 };
 
+const applyReplacementConfigOverrides = (
+  config: NormalizedProjectConfig,
+  overrides: Partial<NormalizedProjectConfig>,
+): void => {
+  for (const key of replaceMutatedConfigKeys) {
+    if (Object.prototype.hasOwnProperty.call(overrides, key)) {
+      Object.assign(config, { [key]: overrides[key] });
+    }
+  }
+};
+
+const syncRootDerivedConfigFields = (
+  config: NormalizedProjectConfig,
+  previousConfig: NormalizedProjectConfig,
+  context: RstestContext,
+  project: ProjectContext,
+): void => {
+  config.source ??= {};
+  const previousDefaultTsconfigPath = join(previousConfig.root, TS_CONFIG_FILE);
+  if (config.root !== previousConfig.root) {
+    if (config.source.tsconfigPath === previousDefaultTsconfigPath) {
+      delete config.source.tsconfigPath;
+    }
+    const buildCache = config.performance?.buildCache;
+    if (buildCache && buildCache !== true) {
+      const previousBuildCache = previousConfig.performance?.buildCache;
+      if (
+        previousBuildCache &&
+        previousBuildCache !== true &&
+        buildCache.cacheDirectory === previousBuildCache.cacheDirectory
+      ) {
+        delete buildCache.cacheDirectory;
+      }
+      if (buildCache.buildDependencies) {
+        buildCache.buildDependencies = buildCache.buildDependencies.filter(
+          (filePath) => filePath !== previousDefaultTsconfigPath,
+        );
+      }
+    }
+  }
+
+  if (!config.source.tsconfigPath) {
+    const tsconfigPath = join(config.root, TS_CONFIG_FILE);
+
+    if (existsSync(tsconfigPath)) {
+      config.source.tsconfigPath = tsconfigPath;
+    }
+  } else {
+    config.source.tsconfigPath = getAbsolutePath(
+      config.root,
+      config.source.tsconfigPath,
+    );
+  }
+
+  if (config.performance?.buildCache) {
+    config.performance.buildCache = normalizeBuildCache({
+      buildCache: config.performance.buildCache,
+      root: config.root,
+      configFilePath: project.configFilePath ?? context.configFilePath,
+      tsconfigPaths: config.source.tsconfigPath
+        ? [config.source.tsconfigPath]
+        : [],
+      command: context.command,
+      environmentName: project.environmentName,
+      browserEnabled: config.browser.enabled,
+      coverageEnabled: config.coverage?.enabled,
+      coverageProvider: config.coverage?.provider,
+      outputDistPathRoot: context.normalizedConfig.output.distPath.root,
+      assumeNormalized: true,
+    });
+  }
+};
+
 const normalizeMutableConfigFields = (
   config: NormalizedProjectConfig,
   baseRoot: string,
+  previousConfig: NormalizedProjectConfig,
+  context: RstestContext,
+  project: ProjectContext,
 ): void => {
   if (config.root) {
     config.root = getAbsolutePath(
@@ -202,6 +302,7 @@ const normalizeMutableConfigFields = (
       name: config.testEnvironment,
     } satisfies EnvironmentWithOptions;
   }
+  syncRootDerivedConfigFields(config, previousConfig, context, project);
 };
 
 const syncProjectDerivedFields = (project: ProjectContext): void => {
@@ -213,6 +314,8 @@ const syncProjectDerivedFields = (project: ProjectContext): void => {
 
 const applyModifyRstestConfig = async (
   config: NormalizedProjectConfig,
+  context: RstestContext,
+  project: ProjectContext,
   callbacks: ModifyRstestConfigCallback[],
 ): Promise<NormalizedProjectConfig> => {
   let currentConfig = config;
@@ -223,11 +326,27 @@ const applyModifyRstestConfig = async (
 
     assertMutableConfigFields(previousConfig, currentConfig);
 
+    const mutableOverrides = result
+      ? undefined
+      : createMutableConfigOverrides(previousConfig, currentConfig);
+
     currentConfig = mergeRstestConfig(
-      previousConfig,
-      result || createMutableConfigOverrides(previousConfig, currentConfig),
+      resolveBuildCacheDependencyPaths(
+        previousConfig,
+        project.configFilePath ?? context.configFilePath,
+      ),
+      result ?? mutableOverrides ?? {},
     ) as NormalizedProjectConfig;
-    normalizeMutableConfigFields(currentConfig, previousConfig.root);
+    if (mutableOverrides) {
+      applyReplacementConfigOverrides(currentConfig, mutableOverrides);
+    }
+    normalizeMutableConfigFields(
+      currentConfig,
+      previousConfig.root,
+      previousConfig,
+      context,
+      project,
+    );
     assertMutableConfigFields(previousConfig, currentConfig);
   }
 
@@ -235,6 +354,7 @@ const applyModifyRstestConfig = async (
 };
 
 const applyProjectModifyRstestConfig = async (
+  context: RstestContext,
   project: ProjectContext,
   callbacks: ModifyRstestConfigCallback[] | undefined,
 ): Promise<void> => {
@@ -244,10 +364,15 @@ const applyProjectModifyRstestConfig = async (
 
   const modifiedConfig = await applyModifyRstestConfig(
     project.normalizedConfig,
+    context,
+    project,
     callbacks,
   );
   Object.assign(project.normalizedConfig, modifiedConfig);
   syncProjectDerivedFields(project);
+  if (project.normalizedConfig.update) {
+    context.snapshotManager.options.updateSnapshot = 'all';
+  }
 };
 
 export const getRsbuildEnvironmentConfig = (
@@ -273,6 +398,7 @@ const createRstestExposeAPI = (
 
 export const initModifyRstestConfigHooks = (
   rsbuildInstance: RsbuildInstance,
+  context: RstestContext,
   projects: ProjectContext[],
   exposeProjects: ProjectContext[] = projects,
   onModifyRstestConfigApplied?: () => Promise<void>,
@@ -294,7 +420,7 @@ export const initModifyRstestConfigHooks = (
       if (!callbacks?.length) {
         continue;
       }
-      await applyProjectModifyRstestConfig(project, callbacks);
+      await applyProjectModifyRstestConfig(context, project, callbacks);
       appliedEnvironmentNames.add(project.environmentName);
     }
   };
