@@ -27,29 +27,49 @@ export class Worker {
     const { createRstest } = rstestApi;
 
     const coverageEnabled = !!overrideConfig.coverage?.enabled;
+    const { coverage: coverageOverride, ...restOverride } = overrideConfig;
 
     const rstest = await createRstest({
       configFile: configFilePath,
-      config: {
-        ...overrideConfig,
-        reporters: [
-          // place default reporter first to ensure output is flushed
-          ['default', { logger: new ProgressLogger() }],
-          new ProgressReporter(),
-        ],
-        coverage: {
-          ...overrideConfig.coverage,
-          // The coverage report runs per `run()`, so the reporter must be part
-          // of the resolved config rather than pushed after construction.
-          ...(coverageEnabled
-            ? {
-                reporters: [
-                  ...(overrideConfig.coverage?.reporters ?? []),
-                  new CoverageReporter(),
-                ],
-              }
-            : {}),
-        },
+      // Use the function form so the extension's coverage reporter is *appended*
+      // to the user's configured `coverage.reporters` (lcov/html/…) rather than
+      // replacing them. The object form goes through `mergeRstestConfig`, which
+      // overrides `coverage.reporters`, so a workspace that configures reporters
+      // would silently lose them when running coverage from the extension.
+      config: (loaded) => {
+        // `coverage` is pulled out of the overrides above and handled explicitly
+        // so a `coverage: undefined` override can't wipe the disk coverage
+        // config, and so the extension's reporter is appended to (not replacing)
+        // the user's configured coverage reporters.
+        const coverage = coverageEnabled
+          ? {
+              ...loaded.coverage,
+              ...coverageOverride,
+              // The coverage report runs per `run()`, so the reporter must be
+              // part of the resolved config rather than pushed after
+              // construction.
+              reporters: [
+                ...(loaded.coverage?.reporters ?? []),
+                ...(coverageOverride?.reporters ?? []),
+                new CoverageReporter(),
+              ],
+            }
+          : coverageOverride
+            ? { ...loaded.coverage, ...coverageOverride }
+            : loaded.coverage;
+
+        // Shallow-merge the per-invocation overrides over the disk config; the
+        // worker drives the run over RPC, so force its own top-level reporters.
+        return {
+          ...loaded,
+          ...restOverride,
+          reporters: [
+            // place default reporter first to ensure output is flushed
+            ['default', { logger: new ProgressLogger() }],
+            new ProgressReporter(),
+          ],
+          coverage,
+        };
       },
     });
 
@@ -69,8 +89,31 @@ export class Worker {
     logger.debug('Received runTest request', JSON.stringify(data, null, 2));
     try {
       const rstest = await this.init(data);
+
+      if (data.command === 'watch') {
+        // Continuous run: keep the worker process alive, re-running tests on
+        // file changes. Per-run results reach the extension via the
+        // `ProgressReporter`; the master stops watching by closing (killing)
+        // the worker process.
+        await rstest.watch({ filters: data.fileFilters });
+        logger.debug('Watch mode started');
+        return;
+      }
+
       const res = await rstest.run({ filters: data.fileFilters });
       logger.debug('Test run completed', { result: res });
+      // `run()` resolves (never throws) even on run-level failures such as an
+      // Rsbuild build error or a worker crash, surfacing them as
+      // `unhandledErrors`. The extension only ends a run from reporter
+      // `onTestRunEnd` or this RPC `catch`, so forward these here — otherwise a
+      // failure that aborts before reporters are notified leaves the UI hanging.
+      if (res.unhandledErrors.length > 0) {
+        throw new Error(
+          res.unhandledErrors
+            .map((err) => err.stack ?? `${err.name}: ${err.message}`)
+            .join('\n\n'),
+        );
+      }
     } catch (error) {
       logger.error('Test run failed', error);
       throw error;

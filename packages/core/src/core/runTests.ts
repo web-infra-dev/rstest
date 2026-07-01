@@ -6,6 +6,7 @@ import type {
   Duration,
   EntryInfo,
   ProjectEntries,
+  RstestWatchHandle,
   SourceMapInput,
 } from '../types';
 import type { CoverageMap } from '../types/coverage';
@@ -181,7 +182,9 @@ const runLifecycleStep = async <T>(
   }
 };
 
-export async function runTests(context: Rstest): Promise<void> {
+export async function runTests(
+  context: Rstest,
+): Promise<void | RstestWatchHandle> {
   cleanCoverageReports(context.normalizedConfig.coverage);
 
   if (context.relatedRerunReason === 'forceRerunTrigger') {
@@ -1078,6 +1081,11 @@ export async function runTests(context: Rstest): Promise<void> {
 
       afterTestsWatchRun();
     });
+
+    // The Rsbuild dev server keeps watching after this returns; hand the caller
+    // a teardown so a programmatic (embedded) host can stop watching. The CLI
+    // ignores this and tears down via its signal handlers instead.
+    return { close: cleanup };
   } else {
     let isTeardown = false;
     let isCleaningUp = false;

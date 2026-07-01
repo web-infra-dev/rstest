@@ -187,6 +187,19 @@ export type RstestArgv = CommonOptions & {
 };
 
 /**
+ * Handle for an active watch session started by {@link RstestInstance.watch}.
+ * Watch keeps re-running the matching tests on file changes; per-run results
+ * surface via the configured reporters, not a return value. `close()` stops
+ * watching and releases the Rsbuild dev server + worker pool.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export interface RstestWatcher {
+  /** Stop watching and release the dev server + worker pool. */
+  close: () => Promise<void>;
+}
+
+/**
  * A programmatic Rstest instance. Created by {@link createRstest}; holds the
  * resolved config identity and runs tests against it per invocation.
  *
@@ -198,6 +211,15 @@ export interface RstestInstance {
 
   /** Run tests once with `options`; resolves a structured {@link TestRunResult}. */
   run(options?: RunOptions): Promise<TestRunResult>;
+
+  /**
+   * Start a watch session: run the matching tests, then keep re-running them as
+   * files change. Accepts the same file-selection options as `run`. Per-run
+   * results surface via the configured reporters (not the resolved value);
+   * resolves once watching is established. Call {@link RstestWatcher.close} to
+   * stop watching. Mirrors the CLI's `--watch`, exposed programmatically here.
+   */
+  watch(options?: RunOptions): Promise<RstestWatcher>;
 
   /**
    * Collect matching test files / cases without executing. Accepts the same
@@ -350,13 +372,19 @@ const executeHostSafeRun = async (
  *
  * Resolves config-load errors at creation time. `run()` resolves on every
  * termination path — including worker crashes — with `ok` reflecting success.
- * Watch mode is intentionally CLI-only and has no programmatic entry here.
+ * For continuous, re-run-on-change execution use {@link RstestInstance.watch}.
  *
  * @experimental Subject to change until 1.0.0.
  */
 export async function createRstest(
   options: CreateRstestOptions = {},
 ): Promise<RstestInstance> {
+  // Snapshot the host's process state *before* `initRstestEnv()` mutates it so
+  // `close()` can restore the embedding process. Otherwise a host that never set
+  // `NODE_ENV`/`RSTEST` would be left permanently in test mode after simply
+  // creating (and closing) an instance.
+  const restoreHostState = snapshotProcessGuards();
+
   // Match the CLI's environment setup so workers (spawned per run) observe
   // `NODE_ENV=test` / `RSTEST=true`.
   initRstestEnv();
@@ -374,6 +402,7 @@ export async function createRstest(
   const build = async (
     command: RstestCommand,
     runOptions: RunOptions,
+    prepareConfig?: (config: RstestConfig) => void,
   ): Promise<RstestRunner> => {
     const commonOptions = toCommonOptions(runOptions);
 
@@ -387,6 +416,7 @@ export async function createRstest(
     // Propagate per-invocation config-shaped options to the root config and —
     // via `resolveProjects` — to every project config.
     mergeWithCLIOptions(userConfig, commonOptions);
+    prepareConfig?.(userConfig);
     userConfig.root = userConfig.root
       ? getAbsolutePath(cwd, userConfig.root)
       : cwd;
@@ -416,36 +446,96 @@ export async function createRstest(
   };
 
   // Resolve up front so `context` is available for inspection and config-load
-  // errors surface at creation time rather than on first run.
-  await build('run', {});
+  // errors surface at creation time rather than on first run. Build with no
+  // reporters: the default reporter constructs a TTY renderer that intercepts
+  // `process.stdout`/`stderr` and registers a `process.on('exit')` handler at
+  // construction time, which a host that only inspects `context` (or calls
+  // `close()`) must not incur. `run()` rebuilds with the real reporters.
+  await build('run', {}, (config) => {
+    config.reporters = [];
+  });
 
   const run = (runOptions: RunOptions = {}): Promise<TestRunResult> =>
     executeHostSafeRun(() => build('run', runOptions));
 
+  const watch = async (
+    watchOptions: RunOptions = {},
+  ): Promise<RstestWatcher> => {
+    // Contain `process.exitCode` around the watch session so a failing run
+    // doesn't leave the embedding host marked as failed; the dev server keeps
+    // running after `runTests()` resolves, so restore only when `close()` is
+    // called. `env` stays test-mode for the instance's lifetime (restored by
+    // the instance's own `close()`), which is what re-run workers need.
+    const restore = snapshotProcessGuards();
+    try {
+      const runner = await build('watch', watchOptions);
+      const handle = await runner.runTests();
+      return {
+        close: async () => {
+          try {
+            if (handle) {
+              await handle.close();
+            }
+          } finally {
+            restore();
+          }
+        },
+      };
+    } catch (err) {
+      // Setup failed before a watcher handle could be returned, so `close()`
+      // will never run — restore the host snapshot here instead of leaking it.
+      restore();
+      throw err;
+    }
+  };
+
   const listTests = async (
     listOptions: ListCommandOptions & RunOptions = {},
   ): Promise<ListCommandResult[]> => {
-    const runner = await build('list', listOptions);
-    return runner.listTests({
-      filesOnly: listOptions.filesOnly,
-      json: listOptions.json,
-      includeSuites: listOptions.includeSuites,
-      printLocation: listOptions.printLocation,
-      summary: listOptions.summary,
-    });
+    // `listTests` sets `process.exitCode = 1` on collection/parse errors; guard
+    // the host process so an embedded caller isn't left marked as failed.
+    const restore = snapshotProcessGuards();
+    try {
+      const runner = await build('list', listOptions, (config) => {
+        // Mirror the CLI: enable location collection before the runner is built,
+        // otherwise `printLocation` is silently ineffective.
+        if (listOptions.printLocation) {
+          config.includeTaskLocation = true;
+        }
+      });
+      return await runner.listTests({
+        filesOnly: listOptions.filesOnly,
+        json: listOptions.json,
+        includeSuites: listOptions.includeSuites,
+        printLocation: listOptions.printLocation,
+        summary: listOptions.summary,
+      });
+    } finally {
+      restore();
+    }
   };
 
   const mergeReports = async (mergeOptions?: {
     path?: string;
     cleanup?: boolean;
   }): Promise<void> => {
-    const runner = await build('merge-reports', {});
-    return runner.mergeReports(mergeOptions);
+    // `mergeReports` sets `process.exitCode = 1` when a blob report contains
+    // failed tests / unhandled errors; guard the host process so the merge
+    // doesn't leave the embedding process marked as failed.
+    const restore = snapshotProcessGuards();
+    try {
+      const runner = await build('merge-reports', {});
+      return await runner.mergeReports(mergeOptions);
+    } finally {
+      restore();
+    }
   };
 
   const close = async (): Promise<void> => {
     // Each run() builds and tears down its own worker pool + Rsbuild server, so
-    // there are no instance-held resources to release in 1.0.
+    // there are no instance-held resources to release in 1.0. Restore the host
+    // `process.env`/`exitCode` snapshot taken before `initRstestEnv()`.
+    restoreHostState();
   };
 
   return {
@@ -453,6 +543,7 @@ export async function createRstest(
       return context;
     },
     run,
+    watch,
     listTests,
     mergeReports,
     close,
@@ -469,8 +560,8 @@ export async function createRstest(
  * Unlike {@link createRstest}, this mirrors the `rstest run` CLI command:
  * it auto-discovers the config file from `cwd` and applies CLI defaults. It is
  * host-safe (never calls `process.exit`) and one-shot — for repeated runs,
- * config inspection, listing, or report merging, use {@link createRstest}.
- * Watch mode is intentionally CLI-only and has no programmatic entry here.
+ * config inspection, listing, report merging, or watch mode, use
+ * {@link createRstest}.
  *
  * @experimental Subject to change until 1.0.0.
  */
@@ -478,15 +569,16 @@ export async function runCli(
   argv: RstestArgv = {},
   options: { cwd?: string } = {},
 ): Promise<TestRunResult> {
-  // Match the CLI's environment setup so workers (spawned per run) observe
-  // `NODE_ENV=test` / `RSTEST=true`.
-  initRstestEnv();
-
   const cwd = resolveCwd(options.cwd);
   const { _: positionals, ...commonOptions } = argv;
   const filters = positionals ?? [];
 
   return executeHostSafeRun(async () => {
+    // Match the CLI's environment setup so workers (spawned per run) observe
+    // `NODE_ENV=test` / `RSTEST=true`. Run it *inside* the guarded section so the
+    // env mutation is captured by `executeHostSafeRun`'s snapshot and restored
+    // afterwards, keeping the embedding host's environment intact.
+    initRstestEnv();
     const { config, configFilePath, projects } = await initCli(
       commonOptions,
       cwd,
