@@ -21,6 +21,8 @@ export interface TestContext {
     name: string;
     /** Absolute path of the current test file when provided by the runner */
     filepath?: string;
+    /** Absolute path of the current project's root directory. */
+    projectRoot?: string;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
   };

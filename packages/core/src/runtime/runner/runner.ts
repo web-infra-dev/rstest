@@ -682,6 +682,7 @@ export class TestRunner {
       id: test.testId,
       name: test.name,
       filepath: toNativePath(test.testPath),
+      projectRoot: toNativePath(this.workerState!.projectRoot),
     };
 
     Object.defineProperty(context, 'expect', {

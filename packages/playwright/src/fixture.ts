@@ -386,11 +386,9 @@ const startStaticServer = async (
     host = DEFAULT_STATIC_SERVER_HOST,
     port = 0,
   }: PlaywrightServeOptions = {},
-  testFilepath?: string,
+  projectRoot = process.cwd(),
 ): Promise<PlaywrightServeResult> => {
-  const entryPath = isAbsolute(entry)
-    ? entry
-    : resolve(testFilepath ? dirname(testFilepath) : process.cwd(), entry);
+  const entryPath = isAbsolute(entry) ? entry : resolve(projectRoot, entry);
   const entryStat = await stat(entryPath);
   const root = entryStat.isDirectory() ? entryPath : dirname(entryPath);
   const indexFile = entryStat.isDirectory()
@@ -558,7 +556,7 @@ const playwrightFixtures = {
     onTestFailed(cleanupServers);
 
     const serve: PlaywrightServe = async (entry, options) => {
-      const server = await startStaticServer(entry, options, task.filepath);
+      const server = await startStaticServer(entry, options, task.projectRoot);
 
       servers.push({
         keepAliveOnDebug: options?.keepAliveOnDebug,

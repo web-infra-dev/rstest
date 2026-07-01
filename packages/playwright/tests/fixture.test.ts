@@ -345,21 +345,22 @@ test(
 );
 
 test(
-  'resolves relative static server entries from the current test file',
+  'resolves relative static server entries from the project root',
   { timeout: 30_000 },
   async () => {
     const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
-    const fixtureDir = join(root, 'fixture');
-    await mkdir(join(fixtureDir, 'dist'), { recursive: true });
-    await writeFile(join(fixtureDir, 'dist/index.html'), '<h1>relative</h1>');
+    const testDir = join(root, 'test');
+    await mkdir(join(root, 'dist'), { recursive: true });
+    await mkdir(testDir, { recursive: true });
+    await writeFile(join(root, 'dist/index.html'), '<h1>relative</h1>');
 
-    const fixturePath = join(fixtureDir, 'relative.test.mjs');
+    const fixturePath = join(testDir, 'relative.test.mjs');
     await writeFile(
       fixturePath,
       `
         import { test, expect } from ${JSON.stringify(join(__dirname, '../dist/index.js').replaceAll('\\', '/'))};
 
-        test('serves a file relative to this test file', async ({ request, serve }) => {
+        test('serves a file relative to the project root', async ({ request, serve }) => {
           const { url } = await serve('./dist/index.html');
           const response = await request.get(url);
 
@@ -376,7 +377,7 @@ test(
         '--root',
         root,
         '--include',
-        './fixture/relative.test.mjs',
+        './test/relative.test.mjs',
       ],
       { cwd: rootDir },
     );
