@@ -453,11 +453,7 @@ export const createRsbuildServer = async ({
           reject(err);
         }
         const content =
-          typeof data === 'string'
-            ? data
-            : fileName.endsWith('.wasm')
-              ? data!.toString('base64')
-              : data!.toString('utf-8');
+          typeof data === 'string' ? data : data!.toString('utf-8');
 
         resolve(content);
       });
@@ -536,13 +532,10 @@ export const createRsbuildServer = async ({
 
     for (const entry of Object.keys(entrypoints!)) {
       const e = entrypoints![entry]!;
-      const filteredAssets = e.assets!.filter(
-        (asset) => !asset.name.endsWith('.wasm'),
-      );
 
       const distPath = path.join(
         outputPath!,
-        filteredAssets[filteredAssets.length - 1]!.name,
+        e.assets![e.assets!.length - 1]!.name,
       );
       const runtimeDistPath = entryFiles[entry]?.find((file) =>
         runtimeChunkFiles.has(file),
