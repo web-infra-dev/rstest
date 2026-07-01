@@ -333,6 +333,14 @@ export async function runTests(context: Rstest): Promise<void> {
   });
   const { globTestSourceEntries, resolveRunnableProjects } = projectPlanState;
 
+  if (coverage.enabled) {
+    await ensureRunDependencies({
+      projects: [],
+      rootPath,
+      coverage,
+    });
+  }
+
   const rsbuildInstance = await prepareRsbuild({
     context,
     globTestSourceEntries,
@@ -382,6 +390,7 @@ export async function runTests(context: Rstest): Promise<void> {
         projects: plan.nodeProjectsToRun,
         rootPath,
         coverage,
+        checkCoverage: !coverage.enabled,
       });
     }
   } catch (error) {

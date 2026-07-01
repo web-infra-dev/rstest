@@ -185,8 +185,10 @@ export const isDefaultBuildCache = (
   buildCache === true ||
   Boolean(
     buildCache &&
-      typeof buildCache === 'object' &&
-      (buildCache as InternalBuildCacheConfig)[DEFAULT_BUILD_CACHE_DIRECTORY_MARKER],
+    typeof buildCache === 'object' &&
+    (buildCache as InternalBuildCacheConfig)[
+      DEFAULT_BUILD_CACHE_DIRECTORY_MARKER
+    ],
   );
 
 export const resolveBuildCacheDependencyPaths = <

@@ -590,6 +590,7 @@ describe('prepareRsbuild', () => {
 
         rstestApi?.modifyRstestConfig((config) => {
           config.exclude = ['**/ignored.test.ts'];
+          config.output = { module: false };
           config.root = './fixtures';
         });
       },
@@ -611,7 +612,11 @@ describe('prepareRsbuild', () => {
         plugins: [modifyRstestConfigPlugin],
         resolve: {},
         source: {},
-        output: {},
+        output: {
+          distPath: {
+            root: TEMP_RSTEST_OUTPUT_DIR,
+          },
+        },
         tools: {},
         coverage: {
           enabled: false,
@@ -665,6 +670,10 @@ describe('prepareRsbuild', () => {
       override: false,
     });
     expect(project.rootPath).toBe(join(rootPath, 'fixtures'));
+    expect(project.outputModule).toBe(false);
+    expect(project.normalizedConfig.output?.distPath).toEqual({
+      root: TEMP_RSTEST_OUTPUT_DIR,
+    });
   });
 
   it('should replace arrays when modifyRstestConfig mutates public config arrays', async () => {
@@ -849,9 +858,7 @@ describe('prepareRsbuild', () => {
       expect(project.normalizedConfig.source.tsconfigPath).toBe(
         join(newRoot, 'tsconfig.json'),
       );
-      expect(
-        project.normalizedConfig.performance?.buildCache,
-      ).toMatchObject({
+      expect(project.normalizedConfig.performance?.buildCache).toMatchObject({
         cacheDirectory: join(newRoot, 'node_modules/.cache/rstest-test'),
         buildDependencies: [join(newRoot, 'tsconfig.json')],
       });

@@ -147,6 +147,26 @@ const getConfigKeys = (
   ) as Array<keyof NormalizedProjectConfig>;
 };
 
+const preservePartialOutputDistPath = (
+  previousConfig: NormalizedProjectConfig,
+  currentConfig: NormalizedProjectConfig,
+): void => {
+  const currentOutput = currentConfig.output as
+    ({ distPath?: unknown } & Record<string, unknown>) | undefined;
+  if (
+    !currentOutput ||
+    Object.prototype.hasOwnProperty.call(currentOutput, 'distPath')
+  ) {
+    return;
+  }
+
+  const previousOutput = previousConfig.output as
+    { distPath?: unknown } | undefined;
+  if (previousOutput?.distPath) {
+    currentOutput.distPath = previousOutput.distPath;
+  }
+};
+
 const assertMutableConfigFields = (
   previousConfig: NormalizedProjectConfig,
   currentConfig: NormalizedProjectConfig,
@@ -372,6 +392,7 @@ const applyModifyRstestConfig = async (
     const previousConfig = clonePlainConfig(currentConfig);
     const result = await callback(currentConfig);
 
+    preservePartialOutputDistPath(previousConfig, currentConfig);
     assertMutableConfigFields(previousConfig, currentConfig);
 
     const mutatedOverrides = result
