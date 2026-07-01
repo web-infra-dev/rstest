@@ -355,9 +355,7 @@ export async function runTests(context: Rstest): Promise<void> {
       rsbuildProjects.splice(
         0,
         rsbuildProjects.length,
-        ...plan.projects.filter(
-          (project) => !project.normalizedConfig.browser.enabled,
-        ),
+        ...plan.nodeProjectsToRun,
       );
     },
   });

@@ -82,6 +82,18 @@ const forbiddenModifyRstestConfigPaths: ForbiddenModifyRstestConfigPath[] = [
     path: 'output.distPath',
     get: (config) => config.output?.distPath,
   },
+  {
+    path: 'plugins',
+    get: (config) => config.plugins,
+  },
+  {
+    path: 'extends',
+    get: (config) => config.extends,
+  },
+  {
+    path: 'projects',
+    get: (config) => config.projects,
+  },
 ];
 
 const clonePlainConfig = <T>(value: T): T => {
@@ -291,6 +303,12 @@ const normalizeMutableConfigFields = (
 
   if (config.root) {
     config.root = normalizeRootPath(config.root, previousConfig.root);
+  }
+  if (config.source?.tsconfigPath) {
+    config.source.tsconfigPath = getAbsolutePath(
+      config.root,
+      config.source.tsconfigPath,
+    );
   }
   normalizeRootDerivedConfigFields(config, previousConfig, environmentName);
 
