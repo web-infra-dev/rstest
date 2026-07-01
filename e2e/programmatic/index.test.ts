@@ -110,6 +110,25 @@ describe('programmatic createRstest', () => {
     expect(result.hostExitCode).toBe(0);
   });
 
+  it('restores host process.env when creation fails', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-create-failure.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    expect(result.threw).toBe(true);
+    expect(result.before).toEqual({ NODE_ENV: null, RSTEST: null });
+    // A creation failure must not leave the host permanently in test mode.
+    expect(result.after).toEqual(result.before);
+  });
+
   it('collects task locations when listTests({ printLocation: true })', async ({
     onTestFinished,
   }) => {
