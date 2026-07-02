@@ -359,6 +359,9 @@ const executeHostSafeRun = async (
         toPublicTestFileResult,
       );
     }
+    // Observe the run's final exit code before the guard restores it, so `ok`
+    // reflects exit-code-only failures (coverage thresholds, teardown).
+    captured.exitCode = process.exitCode;
     restoreProcessGuards();
   }
 
