@@ -7,7 +7,7 @@ import type {
   Project,
   RstestCommand,
   RstestConfig,
-  RstestInstance,
+  RstestRunner,
 } from '../types';
 import { color, determineAgent, formatError, logger } from '../utils';
 import type { CommonOptions } from './init';
@@ -533,7 +533,7 @@ const filterHelpOptions = (
     };
   });
 
-const handleUnexpectedExit = (rstest: RstestInstance | undefined, err: any) => {
+const handleUnexpectedExit = (rstest: RstestRunner | undefined, err: any) => {
   for (const reporter of rstest?.context.reporters || []) {
     reporter.onExit?.();
   }
@@ -542,18 +542,18 @@ const handleUnexpectedExit = (rstest: RstestInstance | undefined, err: any) => {
   process.exit(1);
 };
 
-const resolveCliRuntime = async (options: CommonOptions) => {
-  const [{ initCli }, { createRstest }] = await Promise.all([
+const resolveCliRuntime = async (options: CommonOptions, cwd?: string) => {
+  const [{ initCli }, { createRstestContext }] = await Promise.all([
     import('./init'),
     import('../core'),
   ]);
-  const { config, configFilePath, projects } = await initCli(options);
+  const { config, configFilePath, projects } = await initCli(options, cwd);
 
   return {
     config,
     configFilePath,
     projects,
-    createRstest,
+    createRstest: createRstestContext,
   };
 };
 
@@ -727,6 +727,26 @@ const getCoverageChangedOption = (options: CommonOptions) => {
   return options.coverage.changed;
 };
 
+/**
+ * The internal `createRstestContext` factory, injected into the CLI helpers
+ * (rather than imported) so this module stays free of a static `../core`
+ * runtime dependency. Mirrors `createRstestContext`'s real signature so the two
+ * cannot drift.
+ */
+export type CreateRstestContextFn = (
+  input: {
+    config: RstestConfig;
+    configFilePath?: string;
+    projects: Project[];
+    trace?: boolean;
+    cwd?: string;
+    embedded?: boolean;
+  },
+  command: RstestCommand,
+  fileFilters: string[],
+  fileFilterMode?: FileFilterMode,
+) => RstestRunner;
+
 const resolveEffectiveCliFilters = async ({
   options,
   filters,
@@ -734,21 +754,17 @@ const resolveEffectiveCliFilters = async ({
   config,
   configFilePath,
   projects,
+  cwd,
+  embedded,
 }: {
   options: CommonOptions;
   filters: Array<string | number>;
-  createRstest: (
-    input: {
-      config: RstestConfig;
-      configFilePath?: string;
-      projects: Project[];
-    },
-    command: RstestCommand,
-    fileFilters: string[],
-  ) => RstestInstance;
+  createRstest: CreateRstestContextFn;
   config: RstestConfig;
   configFilePath?: string;
   projects: Project[];
+  cwd?: string;
+  embedded?: boolean;
 }): Promise<{
   effectiveFilters: string[];
   fileFilterMode: FileFilterMode;
@@ -774,7 +790,15 @@ const resolveEffectiveCliFilters = async ({
   }
 
   const { resolveRelatedTestFiles } = await import('../core/related');
-  const rstest = createRstest({ config, configFilePath, projects }, 'list', []);
+  // Carry `embedded`/`cwd` into this pre-resolution context so constructor-time
+  // config validation (e.g. a project-level `shard` mismatch) surfaces as a
+  // programmatic `unhandledError` instead of calling `process.exit(1)` on an
+  // embedded host, matching the real runner built below.
+  const rstest = createRstest(
+    { config, configFilePath, projects, cwd, embedded },
+    'list',
+    [],
+  );
 
   const sourceFilters =
     options.changed !== undefined
@@ -831,12 +855,13 @@ const resolveEffectiveCliFilters = async ({
 };
 
 const resolveCoverageChangedFilters = async (
-  rstest: RstestInstance,
+  rstest: RstestRunner,
+  seed: string[] | undefined,
 ): Promise<string[] | undefined> => {
   const { changed } = rstest.context.normalizedConfig.coverage;
 
   if (changed === undefined) {
-    return rstest.context.changedCoverageFilters;
+    return seed;
   }
   if (changed === false) {
     return undefined;
@@ -856,57 +881,127 @@ const resolveCoverageChangedFilters = async (
   }
 };
 
-export const runRest = async ({
+/**
+ * Apply a {@link resolveEffectiveCliFilters} result onto a freshly-built
+ * runner's context. Shared by the CLI `run`/`list` paths and the programmatic
+ * `createRstest` build so the related/changed context wiring lives in one place.
+ *
+ * The resolved `changedCoverageFilters` is passed as the fallback that
+ * `resolveCoverageChangedFilters` returns when `coverage.changed` is unset.
+ */
+const applyResolvedFilters = async (
+  rstest: RstestRunner,
+  resolved: Awaited<ReturnType<typeof resolveEffectiveCliFilters>>,
+): Promise<void> => {
+  const { context } = rstest;
+  context.relatedFilters = resolved.relatedFilters;
+  context.relatedMode = resolved.relatedMode;
+  context.relatedResolutionEmpty = resolved.relatedResolutionEmpty;
+  context.changedCoverageFilters = await resolveCoverageChangedFilters(
+    rstest,
+    resolved.changedCoverageFilters,
+  );
+  context.relatedRerunReason = resolved.relatedRerunReason;
+  context.relatedRerunFiles = resolved.relatedRerunFiles;
+};
+
+/**
+ * Resolve related/changed filters, build the internal runner, and apply the
+ * resolved filter context onto it — the shared "post-config-resolution build
+ * tail" used by every entry (`runTestCommand`, the `list` and `merge-reports` actions,
+ * and the programmatic `runCLI` / `createRstest` build). Keeping the
+ * `resolveEffectiveCliFilters` →
+ * `createRstestContext` → `applyResolvedFilters` sequence in one place prevents
+ * the per-site drift that previously duplicated/mis-ordered these assignments.
+ *
+ * `createRstest` is injected (rather than imported) so this stays free of a
+ * static `../core` dependency, mirroring {@link resolveEffectiveCliFilters}.
+ * `filterMode` is an explicit override honored only for non-related runs;
+ * related/changed always match exactly.
+ */
+export const buildResolvedRunner = async ({
+  createRstest,
+  config,
+  configFilePath,
+  projects,
+  command,
+  options,
+  filters,
+  cwd,
+  embedded,
+  trace,
+  filterMode,
+}: {
+  createRstest: CreateRstestContextFn;
+  config: RstestConfig;
+  configFilePath?: string;
+  projects: Project[];
+  command: RstestCommand;
+  options: CommonOptions;
+  filters: Array<string | number>;
+  cwd?: string;
+  embedded?: boolean;
+  trace?: boolean;
+  filterMode?: FileFilterMode;
+}): Promise<RstestRunner> => {
+  const resolved = await resolveEffectiveCliFilters({
+    options,
+    filters,
+    createRstest,
+    config,
+    configFilePath,
+    projects,
+    cwd,
+    embedded,
+  });
+
+  // Related/changed runs force exact matching; otherwise honor an explicit
+  // `filterMode` (default fuzzy, matching the CLI's positional behavior).
+  const fileFilterMode = isRelatedRun(options)
+    ? resolved.fileFilterMode
+    : (filterMode ?? resolved.fileFilterMode);
+
+  const rstest = createRstest(
+    { config, configFilePath, projects, cwd, embedded, trace },
+    command,
+    resolved.effectiveFilters,
+    fileFilterMode,
+  );
+  await applyResolvedFilters(rstest, resolved);
+
+  return rstest;
+};
+
+export const runTestCommand = async ({
   options,
   filters,
   command,
+  cwd,
 }: {
   options: CommonOptions;
   filters: Array<string | number>;
   command: RstestCommand;
+  cwd?: string;
 }): Promise<void> => {
-  let rstest: RstestInstance | undefined;
+  let rstest: RstestRunner | undefined;
   const unexpectedlyExitHandler = (err: any) => {
     handleUnexpectedExit(rstest, err);
   };
 
   try {
     const { config, configFilePath, projects, createRstest } =
-      await resolveCliRuntime(options);
-    const {
-      effectiveFilters,
-      fileFilterMode,
-      relatedFilters,
-      relatedMode,
-      relatedResolutionEmpty,
-      changedCoverageFilters,
-      relatedRerunReason,
-      relatedRerunFiles,
-    } = await resolveEffectiveCliFilters({
-      options,
-      filters,
+      await resolveCliRuntime(options, cwd);
+
+    rstest = await buildResolvedRunner({
       createRstest,
       config,
       configFilePath,
       projects,
-    });
-
-    rstest = createRstest(
-      { config, configFilePath, projects, trace: options.trace },
       command,
-      effectiveFilters,
-      fileFilterMode,
-    );
-    rstest.context.relatedFilters = relatedFilters;
-    rstest.context.relatedMode = relatedMode;
-    rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
-    rstest.context.changedCoverageFilters = changedCoverageFilters;
-    rstest.context.changedCoverageFilters =
-      await resolveCoverageChangedFilters(rstest);
-    rstest.context.relatedRerunReason = relatedRerunReason;
-    rstest.context.relatedRerunFiles = relatedRerunFiles;
-    rstest.context.relatedRerunReason = relatedRerunReason;
-    rstest.context.relatedRerunFiles = relatedRerunFiles;
+      options,
+      filters,
+      trace: options.trace,
+    });
 
     process.on('uncaughtException', unexpectedlyExitHandler);
 
@@ -934,7 +1029,7 @@ export const runRest = async ({
   }
 };
 
-export function createCli(): CAC {
+export function createCli({ cwd }: { cwd?: string } = {}): CAC {
   const cli = cac('rstest');
 
   cli.help((sections) => {
@@ -966,11 +1061,12 @@ export function createCli(): CAC {
       if (!determineAgent().isAgent) {
         showRstest();
       }
-      if (options.watch) {
-        await runRest({ options, filters, command: 'watch' });
-      } else {
-        await runRest({ options, filters, command: 'run' });
-      }
+      return runTestCommand({
+        options,
+        filters,
+        command: options.watch ? 'watch' : 'run',
+        cwd,
+      });
     },
   );
 
@@ -983,7 +1079,7 @@ export function createCli(): CAC {
     if (!determineAgent().isAgent) {
       showRstest();
     }
-    await runRest({ options, filters, command: 'run' });
+    return runTestCommand({ options, filters, command: 'run', cwd });
   });
 
   const watchCommand = cli.command(
@@ -995,7 +1091,7 @@ export function createCli(): CAC {
     if (!determineAgent().isAgent) {
       showRstest();
     }
-    await runRest({ options, filters, command: 'watch' });
+    return runTestCommand({ options, filters, command: 'watch', cwd });
   });
 
   const listCommand = cli.command(
@@ -1008,46 +1104,21 @@ export function createCli(): CAC {
     async (filters: string[], options: CommonOptions & ListCommandOptions) => {
       try {
         const { config, configFilePath, projects, createRstest } =
-          await resolveCliRuntime(options);
+          await resolveCliRuntime(options, cwd);
 
         if (options.printLocation) {
           config.includeTaskLocation = true;
         }
 
-        const {
-          effectiveFilters,
-          fileFilterMode,
-          relatedFilters,
-          relatedMode,
-          relatedResolutionEmpty,
-          changedCoverageFilters,
-          relatedRerunReason,
-          relatedRerunFiles,
-        } = await resolveEffectiveCliFilters({
-          options,
-          filters,
+        const rstest = await buildResolvedRunner({
           createRstest,
           config,
           configFilePath,
           projects,
+          command: 'list',
+          options,
+          filters,
         });
-
-        const rstest = createRstest(
-          { config, configFilePath, projects },
-          'list',
-          effectiveFilters,
-          fileFilterMode,
-        );
-        rstest.context.relatedFilters = relatedFilters;
-        rstest.context.relatedMode = relatedMode;
-        rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
-        rstest.context.changedCoverageFilters = changedCoverageFilters;
-        rstest.context.changedCoverageFilters =
-          await resolveCoverageChangedFilters(rstest);
-        rstest.context.relatedRerunReason = relatedRerunReason;
-        rstest.context.relatedRerunFiles = relatedRerunFiles;
-        rstest.context.relatedRerunReason = relatedRerunReason;
-        rstest.context.relatedRerunFiles = relatedRerunFiles;
 
         await rstest.listTests({
           filesOnly: options.filesOnly,
@@ -1080,12 +1151,18 @@ export function createCli(): CAC {
       }
       try {
         const { config, configFilePath, projects, createRstest } =
-          await resolveCliRuntime(options);
-        const rstest = createRstest(
-          { config, configFilePath, projects },
-          'merge-reports',
-          [],
-        );
+          await resolveCliRuntime(options, cwd);
+        // Build through the shared tail (like `list` and the programmatic
+        // `mergeReports`) so every command constructs its runner identically.
+        const rstest = await buildResolvedRunner({
+          createRstest,
+          config,
+          configFilePath,
+          projects,
+          command: 'merge-reports',
+          options,
+          filters: [],
+        });
 
         await rstest.mergeReports({ path, cleanup: options.cleanup });
       } catch (err) {
@@ -1150,7 +1227,19 @@ export function createCli(): CAC {
   return cli;
 }
 
-export function setupCommands(): void {
-  const cli = createCli();
-  cli.parse(process.argv);
+/**
+ * Build the CLI, parse `argv`, and run the matched command to completion.
+ *
+ * `parse(..., { run: false })` splits parsing (including the `--help` /
+ * `--version` short-circuit) from execution, so the matched action runs via
+ * cac's own `runMatchedCommand()`. Structured results are produced only by the
+ * programmatic entries (`runCLI` / `createRstest`), never the CLI path.
+ */
+export async function setupCommands(
+  argv: string[] = process.argv,
+  cwd?: string,
+): Promise<void> {
+  const cli = createCli({ cwd });
+  cli.parse(argv, { run: false });
+  await cli.runMatchedCommand();
 }

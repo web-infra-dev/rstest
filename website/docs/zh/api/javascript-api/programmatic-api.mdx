@@ -1,0 +1,377 @@
+---
+description: 以编程方式运行 Rstest —— 通过 createRstest 创建可复用的实例，或用 runCLI 从已解析的 CLI 参数一次性运行。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# 编程式 API
+
+<ApiMeta addedVersion="0.11.0" />
+
+除了 CLI，你还可以通过 `@rstest/core/api` 这个 subpath 在自己的 Node.js 代码中驱动 Rstest —— 用于构建工具、自定义 runner、编辑器集成或脚本。
+
+```ts
+import { createRstest, runCLI } from '@rstest/core/api';
+```
+
+`@rstest/core/api` 与主入口 `@rstest/core` 相互独立。主入口暴露测试运行时的 globals（`test`、`expect`、`rs` 等）、config 辅助函数（`defineConfig`、`loadConfig`、`merge*`）以及类型；编程式 runner 则位于 `@rstest/core/api` 下。
+
+:::warning 实验性
+编程式 API 目前为实验性功能，在 `1.0.0` 之前其形态可能变化。如果你依赖它，请锁定 `@rstest/core` 的精确版本。
+:::
+
+Rstest 提供两个编程式入口：
+
+- [`createRstest`](#createrstest) —— 一个异步 factory，返回可复用的实例。用于一次解析 config 后反复 run、list、watch 或 merge，或用于检查解析后的 context。
+- [`runCLI`](#runcli) —— 一个一次性 runner，与 Jest 的 `runCLI` 兼容。用于手上已有 argv 形态选项（例如转发一段解析过的命令行）的场景。
+
+两者都是 host-safe 的：它们从不调用 `process.exit`，并且会对 `process.env` 和 `process.exitCode` 做快照与还原，因此一次运行不会让你的进程遗留在测试模式或被标记为失败。
+
+## createRstest
+
+创建一个编程式的 Rstest 实例。
+
+- **类型：**
+
+```ts
+function createRstest(options?: CreateRstestOptions): Promise<RstestInstance>;
+```
+
+Config 在 `createRstest` 阶段就完成解析，因此 config 加载错误会在此处抛出，而不是等到首次 `run()`。
+
+- **示例：**
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  cwd: './my-project',
+  config: {
+    include: ['**/*.test.ts'],
+    reporters: [],
+  },
+});
+
+const result = await rstest.run();
+console.log(result.ok, result.stats.tests);
+```
+
+### Options
+
+第一个参数是一个 `options` 对象，包含以下属性：
+
+```ts
+interface CreateRstestOptions {
+  cwd?: string;
+  config?: RstestConfig | RstestConfigFn;
+}
+```
+
+- `cwd`：工作目录，默认为 `process.cwd()`，是解析 `root` 的基准。
+- `config`：要运行的配置。与 CLI 不同，编程式 API 不会从 `cwd` 自动发现或读取 config 文件 —— 由你自己负责加载 config。它是所有 config 内容的唯一通道，包括 `projects` 和 `reporters`。
+  - **对象**：直接作为 inline config 使用。
+  - **函数**（`RstestConfigFn`）：一个零参数的 factory，返回最终 config。在其中自行加载 config 文件 —— 见 [使用 config 文件](#使用-config-文件)。
+
+### 使用 config 文件
+
+编程式 API 不会替你读取 config 文件。若要针对磁盘上的 config 文件运行，请在 `config` 的函数形式里用 [`loadConfig`](/api/javascript-api/rstest-core#loadconfig) 加载它，再按需变换或合并：
+
+```ts
+import { loadConfig, mergeRstestConfig } from '@rstest/core';
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  cwd: './my-project',
+  config: async () => {
+    const { content } = await loadConfig({ path: 'rstest.config.ts' });
+    // 在磁盘 config 之上合并一个覆盖……
+    return mergeRstestConfig(content, { testTimeout: 10000 });
+    // ……或直接对其变换，例如 `return { ...content, include: ['a.test.ts'] };`
+  },
+});
+```
+
+## RstestInstance
+
+`createRstest` 返回的对象。它持有解析后的 config，并在每次调用时针对该 config 运行测试。它暴露以下成员。
+
+### rstest.context
+
+最近一次构建解析出的 context：包含 config、projects 与 command。在 `createRstest` resolve 后即可访问，因此你无需运行任何测试就能检查解析后的配置。
+
+- **类型：**
+
+```ts
+readonly context: RstestContext;
+```
+
+### rstest.run
+
+运行一次测试，并 resolve 出结构化的 [`TestRunResult`](#testrunresult)。
+
+- **类型：**
+
+```ts
+function run(options?: RunOptions): Promise<TestRunResult>;
+```
+
+- **示例：**
+
+```ts
+const result = await rstest.run({
+  filters: ['math'],
+  testNamePattern: 'adds',
+  bail: 1,
+});
+```
+
+### rstest.watch
+
+启动一个 watch 会话：先运行匹配的测试，随后在文件变化时重跑。promise 在 watch 启动后 resolve；调用返回句柄的 `close()` 可停止 watch 并释放 dev server 与 worker pool。
+
+watch 不会以 resolve 值形式返回每次重跑的结果。若要观察每次重跑，传入 `onResult` 回调 —— 它在每次运行后（包括首次）以该次运行的 [`TestRunResult`](#testrunresult) 触发，与 `run()` 的 resolve 值同型。无需注册 reporter 即可拿到失败与 `unhandledErrors`；你也可以通过 config 注册自己的 reporter。
+
+- **类型：**
+
+```ts
+function watch(options?: WatchOptions & RunOptions): Promise<RstestWatcher>;
+
+interface WatchOptions {
+  onResult?: (result: TestRunResult) => void;
+}
+```
+
+`onResult` 收到的 [`TestRunResult`](#testrunresult) 与 `run()` 相同，但仅体现在 exit code 上的失败（未达成的 coverage 阈值、global teardown）不计入它的 `ok` —— 测试/文件失败与 `unhandledErrors` 会计入。`onResult` 抛出的错误会被隔离，不会中断 watch 会话。
+
+- **示例：**
+
+```ts
+const watcher = await rstest.watch({
+  filters: ['math'],
+  onResult: (result) => {
+    if (!result.ok) {
+      console.error(
+        result.stats.tests.failed,
+        'failed',
+        result.unhandledErrors,
+      );
+    }
+  },
+});
+// …… 稍后 ……
+await watcher.close();
+```
+
+### rstest.listTests
+
+收集匹配的测试文件与用例，但不运行它们。它接收与 `run` 相同的文件筛选 [`RunOptions`](#runoptions)，外加 list 专属选项；仅用于执行的字段（`update`、`bail`、`shard`）会被忽略。
+
+`printLocation` 会自行开启 task-location 收集 —— 不设置它时，结果中的 `test.location` 为 `undefined`。
+
+- **类型：**
+
+```ts
+function listTests(
+  options?: ListCommandOptions & RunOptions,
+): Promise<ListCommandResult[]>;
+
+type ListCommandOptions = {
+  filesOnly?: boolean;
+  json?: boolean | string;
+  includeSuites?: boolean;
+  printLocation?: boolean;
+  summary?: boolean;
+};
+```
+
+- **示例：**
+
+```ts
+const list = await rstest.listTests({ printLocation: true });
+for (const file of list) {
+  console.log(file.testPath, file.tests.length);
+}
+```
+
+### rstest.mergeReports
+
+将磁盘上的 blob reports 合并为单个聚合报告。
+
+- **类型：**
+
+```ts
+function mergeReports(options?: {
+  path?: string;
+  cleanup?: boolean;
+}): Promise<void>;
+```
+
+- **示例：**
+
+```ts
+await rstest.mergeReports({ path: './.rstest-reports', cleanup: true });
+```
+
+:::tip 天然 host-safe
+实例上没有 `close()`。每次 `run()` 都会自行构建并拆除其 worker pool 与 Rsbuild server，且每次调用都会对 `process.env` / `process.exitCode` 做快照与还原，因此实例在两次调用之间不持有任何资源，也永远不会让宿主遗留在测试模式。唯一的例外是 [`watch`](#rstestwatch) 会话 —— 它会保持一个 dev server 常驻，用完后请调用返回的 watcher 的 `close()`。
+:::
+
+## RunOptions
+
+用于 `run`、`watch` 和 `listTests` 的每次调用选项。它们对应 CLI 的位置参数加上每次运行的 flags。
+
+```ts
+interface RunOptions {
+  filters?: string[];
+  filterMode?: 'fuzzy' | 'exact';
+  testNamePattern?: RegExp | string;
+  related?: boolean;
+  changed?: boolean | string;
+  update?: boolean;
+  bail?: number | boolean;
+  shard?: string | { index: number; count: number };
+  project?: string[];
+  passWithNoTests?: boolean;
+}
+```
+
+- `filters`：位置形式的测试文件筛选，按 `filterMode` 匹配。
+- `filterMode`：`filters` 的匹配策略：`'fuzzy'`（默认；大小写不敏感的子串匹配）或 `'exact'`（归一化路径相等）。对 `related` / `changed` 无效，它们始终精确匹配。
+- `testNamePattern`：仅运行完整名称匹配的测试。字符串会经 `new RegExp` 转换。
+- `related`：将位置形式的 `filters` 视为源文件，只运行与它们相关的测试。
+- `changed`：从 git 推导运行集合：`true` = 工作区 + 暂存区改动；字符串 = 一个 `since` ref。不能与位置形式的 `filters` 同时使用。
+- `update`：更新过期的 snapshots。
+- `bail`：在 N 个测试失败后停止运行（`0` / `false` = 运行全部）。
+- `shard`：只运行文件的一个切片，形式为 `'<index>/<count>'`（从 1 开始）或 `{ index, count }`。
+- `project`：只运行指定名称的 projects（支持 `*` 通配、`!` 取反）。
+- `passWithNoTests`：将未匹配到任何文件的运行视为通过而非失败。
+
+## runCLI
+
+从已解析的 CLI 参数一次性运行 Rstest。这是与 Jest 兼容的入口，类似 `@jest/core` 的 `runCLI(argv, projects)`。它接收完整的 CLI 选项面（[`RstestArgv`](#rstestargv)），并 resolve 出 [`TestRunResult`](#testrunresult)。
+
+与 `createRstest` 不同，`runCLI` 对齐 `rstest run` CLI 命令：它会从 `cwd` 自动发现 config 文件并套用 CLI 默认值。它只运行一次。若需反复运行、检查 config、列举、合并报告或 watch 模式，请使用 [`createRstest`](#createrstest)。
+
+- **类型：**
+
+```ts
+function runCLI(
+  argv?: RstestArgv,
+  options?: { cwd?: string },
+): Promise<TestRunResult>;
+```
+
+- **示例：**
+
+```ts
+import { runCLI } from '@rstest/core/api';
+
+// 位置形式的源文件位于 `_`，而 `related` 会把它们重新解读为源文件以解析相关测试。
+const result = await runCLI({ _: ['src/math.ts'], related: true }, { cwd });
+
+console.log(result.ok, result.stats.tests);
+```
+
+### RstestArgv
+
+`runCLI` 接收的已解析 CLI 参数。它对应解析后的 `rstest <args>` 所产生的形态：命名 flags 加上位于 `_` 的位置文件。这是完整的 CLI 选项面（类似 Jest 的 `Config.Argv`），而 `RunOptions` 则是更小的每次运行子集。
+
+```ts
+type RstestArgv = CommonOptions & {
+  // 位置参数。默认为测试文件筛选；当设置了 `related` / `findRelatedTests`
+  // 时被视为源文件。
+  _?: (string | number)[];
+};
+```
+
+## TestRunResult
+
+`rstest.run` 与 `runCLI` resolve 出的值。
+
+```ts
+interface TestRunResult {
+  ok: boolean;
+  files: TestFileResult[];
+  stats: {
+    tests: {
+      total: number;
+      passed: number;
+      failed: number;
+      skipped: number;
+      todo: number;
+    };
+    files: {
+      total: number;
+      failed: number;
+    };
+  };
+  unhandledErrors: SerializedError[];
+  duration: { total: number };
+  snapshot?: SnapshotSummary;
+  coverage?: CoverageMapData;
+}
+```
+
+- `ok`：当没有测试、没有文件失败且没有 unhandled error 时为 `true`。当未匹配到任何测试文件时也为 `false`，除非设置了 `passWithNoTests`。它对齐 CLI 的 exit code。
+- `files`：按文件聚合的结果（见 [`TestFileResult`](#testfileresult)）。
+- `stats`：预先计算好的测试与文件计数。
+- `unhandledErrors`：无法归因到单个测试的错误（worker 崩溃、config 加载失败）。
+- `duration`：以毫秒计的墙钟耗时。
+- `snapshot`：snapshot 汇总。仅当运行在任何测试执行前就中止时（例如 config 加载错误）才缺失。
+- `coverage`：覆盖率数据。仅当解析后的 config 中 `coverage.enabled` 时存在。
+
+### TestFileResult
+
+按文件的结果。在 [`TestResult`](#testresult) 基础上扩展出逐用例的明细。
+
+```ts
+interface TestFileResult extends TestResult {
+  // 该文件中发现的测试用例的扁平列表。
+  results: TestResult[];
+}
+```
+
+### TestResult
+
+公开的单测试结果。它是 Rstest 内部 reporter 类型的稳定子集，因此内部重构不会破坏这一面。
+
+```ts
+interface TestResult {
+  status: TestResultStatus;
+  name: string;
+  testPath: string;
+  parentNames?: string[];
+  duration?: number;
+  errors?: SerializedError[];
+  retryErrors?: SerializedError[];
+  retryCount?: number;
+  project: string;
+}
+```
+
+- `status`：测试用例的最终状态。
+- `name`：测试用例名（不含父级 suite 名）。
+- `testPath`：测试文件的绝对路径。
+- `parentNames`：父级 `describe` 块的名称，最外层在前。
+- `duration`：以毫秒计的墙钟耗时；对 skipped / todo 测试缺失。
+- `errors`：最后一次尝试产生的错误。
+- `retryErrors`：配置了 `retry` 时，此前失败尝试产生的错误。
+- `retryCount`：已执行的重试次数（首次尝试即通过时为 `0`）。
+- `project`：来自 `projects` config 的 project 名；默认 project 为 `'default'`。
+
+### SerializedError
+
+一个可序列化的普通错误形态，贯穿于结果类型中使用（workers 运行在独立进程，因此错误会跨越进程边界）。
+
+```ts
+interface SerializedError {
+  name: string;
+  message: string;
+  stack?: string;
+  diff?: string;
+  actual?: string;
+  expected?: string;
+  retryCount?: number;
+  cause?: SerializedError;
+}
+```

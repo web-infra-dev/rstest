@@ -610,12 +610,14 @@ ${conflictProjects.map((p) => `- ${p.configFilePath || p.config.root}`).join('\n
   return projects;
 }
 
-export async function initCli(options: CommonOptions): Promise<{
+export async function initCli(
+  options: CommonOptions,
+  cwd: string = process.cwd(),
+): Promise<{
   config: RstestConfig;
   configFilePath?: string;
   projects: Project[];
 }> {
-  const cwd = process.cwd();
   const root = options.root ? getAbsolutePath(cwd, options.root) : cwd;
 
   const { config, configFilePath } = await resolveConfig({

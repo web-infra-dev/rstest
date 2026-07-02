@@ -6,6 +6,7 @@ import type {
   Duration,
   EntryInfo,
   ProjectEntries,
+  RstestWatchHandle,
   SourceMapInput,
 } from '../types';
 import type { CoverageMap } from '../types/coverage';
@@ -89,8 +90,8 @@ const reportNoTestFiles = ({
 
     // `process.exitCode` mutations here (and in deeper layers such as
     // globalSetup teardown, coverage threshold checks) are restored to their
-    // pre-run value by `runRstest` in the embedded path via try/finally, so
-    // we don't need to gate them per-call site.
+    // pre-run value by the embedded `@rstest/core/api` runner
+    // (`executeHostSafeRun`) via try/finally, so we don't gate them per-call site.
     process.exitCode = code;
   }
 
@@ -181,7 +182,9 @@ const runLifecycleStep = async <T>(
   }
 };
 
-export async function runTests(context: Rstest): Promise<void> {
+export async function runTests(
+  context: Rstest,
+): Promise<void | RstestWatchHandle> {
   cleanCoverageReports(context.normalizedConfig.coverage);
 
   if (context.relatedRerunReason === 'forceRerunTrigger') {
@@ -862,7 +865,11 @@ export async function runTests(context: Rstest): Promise<void> {
   };
 
   if (command === 'watch') {
-    const enableCliShortcuts = isCliShortcutsEnabled();
+    // Interactive CLI shortcuts put stdin in raw mode, install a keypress
+    // listener, and let `q` call `process.exit()`. An embedded (programmatic)
+    // host owns its own process + stdin, and `watcher.close()` doesn't dispose
+    // them, so never install them in embedded mode — even with a TTY stdin.
+    const enableCliShortcuts = isCliShortcutsEnabled() && !context.embedded;
 
     let isCleaningUp = false;
 
@@ -1078,6 +1085,11 @@ export async function runTests(context: Rstest): Promise<void> {
 
       afterTestsWatchRun();
     });
+
+    // The Rsbuild dev server keeps watching after this returns; hand the caller
+    // a teardown so a programmatic (embedded) host can stop watching. The CLI
+    // ignores this and tears down via its signal handlers instead.
+    return { close: cleanup };
   } else {
     let isTeardown = false;
     let isCleaningUp = false;

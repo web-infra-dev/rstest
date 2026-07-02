@@ -134,9 +134,29 @@ export type ListCommandResult = {
   errors?: FormattedError[];
 };
 
-export type RstestInstance = {
+/**
+ * Handle returned by `runTests()` when it runs in `watch` mode: watch keeps the
+ * Rsbuild dev server and worker pool alive re-running tests on file changes, so
+ * a programmatic caller needs an explicit teardown. `close()` stops watching and
+ * releases the pool + dev server. Absent for one-shot (`run`) runs.
+ */
+export type RstestWatchHandle = {
+  close: () => Promise<void>;
+};
+
+/**
+ * Internal runner returned by the sync `createRstestContext` factory: a context
+ * bound to one command + filter set, plus the side-effecting drive methods. The
+ * public, async, instance-shaped API (`run`/`listTests`/`close`) lives in
+ * `@rstest/core/api` and is built on top of this.
+ */
+export type RstestRunner = {
   context: RstestContext;
-  runTests: () => Promise<void>;
+  /**
+   * Drive the run. Resolves to an {@link RstestWatchHandle} in `watch` mode (the
+   * dev server keeps running after this resolves), or `void` for one-shot runs.
+   */
+  runTests: () => Promise<void | RstestWatchHandle>;
   listTests: (options: ListCommandOptions) => Promise<ListCommandResult[]>;
   mergeReports: (options?: {
     path?: string;
