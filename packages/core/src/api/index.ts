@@ -343,6 +343,10 @@ const executeHostSafeRun = async (
   buildRunner: () => Promise<RstestRunner>,
 ): Promise<TestRunResult> => {
   const restoreProcessGuards = snapshotProcessGuards();
+  // Start from a clean exit code (like the CLI) so `ok` reflects only failures
+  // this run produced — not a non-zero code the embedding host set earlier. The
+  // guard restores the host's original value afterwards.
+  process.exitCode = undefined;
   const captured = createCapturedRunState();
   let files: TestFileResult[] = [];
   let runner: RstestRunner | undefined;

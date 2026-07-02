@@ -193,6 +193,27 @@ describe('programmatic createRstest', () => {
     expect(result.hostExitCode).toBe(0);
   });
 
+  it('ignores a pre-existing host exitCode when computing ok', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-preexisting-exitcode.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // The run passes, so ok stays true even though the host had marked itself
+    // failed (exitCode=1) before calling run().
+    expect(result.stats.tests.failed).toBe(0);
+    expect(result.ok).toBe(true);
+    // The host's own pre-existing exit code is restored, not clobbered.
+    expect(result.hostExitCode).toBe(1);
+  });
+
   it('accepts inline config + virtual modules plugin (Midscene shape)', async ({
     onTestFinished,
   }) => {
