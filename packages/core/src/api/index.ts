@@ -433,15 +433,17 @@ export async function createRstest(
   // errors surface at creation time rather than on first run. Snapshot and
   // restore process globals around this eager build so merely creating an
   // instance never leaves the host in test mode or with a mutated exit code.
-  // Build with no reporters: the default reporter constructs a TTY renderer that
-  // intercepts `process.stdout`/`stderr` and registers a `process.on('exit')`
-  // handler at construction time, which a host that only inspects `context` must
-  // not incur. `run()` rebuilds with the real reporters.
+  // Build with the `list` command: it resolves the full config/projects but
+  // constructs no reporter instances (see `createReporters` gating), so the
+  // default reporter's TTY renderer + `process.on('exit')` handler — installed
+  // at construction time — are never incurred by a host that only inspects
+  // `context`. Crucially, unlike forcing `reporters: []`, this leaves the
+  // resolved `normalizedConfig.reporters` (and per-project reporter config)
+  // intact, so config inspection sees the real reporters. `run()`/`watch()`
+  // rebuild with the real command + reporters.
   const restoreCreation = snapshotProcessGuards();
   try {
-    await build('run', {}, (opts) => {
-      opts.reporters = [];
-    });
+    await build('list', {});
   } finally {
     restoreCreation();
   }

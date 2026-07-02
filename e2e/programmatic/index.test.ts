@@ -45,6 +45,28 @@ describe('programmatic createRstest', () => {
     expect(result.snapshotPresent).toBe(true);
   });
 
+  it('eager context build preserves the resolved reporter config', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['create-context-reporters.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // The eager build resolves config for inspection without running or
+    // constructing reporters — so the configured reporters survive on both the
+    // root and per-project normalized config.
+    expect(result.command).toBe('list');
+    expect(result.rootReporters).toEqual(['dot']);
+    expect(result.projectReporters).toEqual(['dot']);
+    expect(result.hostExitCode).toBe(0);
+  });
+
   it('reports failures via ok=false without poisoning host process.exitCode', async ({
     onTestFinished,
   }) => {
