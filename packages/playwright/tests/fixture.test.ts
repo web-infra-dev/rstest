@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { beforeEach, expect, test } from '../src';
 import { getDebugOptions, resolveLaunchOptions } from '../src/fixture';
@@ -108,7 +109,7 @@ test('can be imported outside a rstest worker', async () => {
     await execFileAsync(process.execPath, [
       '--input-type=module',
       '-e',
-      `import { test } from ${JSON.stringify(join(root, 'fixture.ts').replaceAll('\\', '/'))}; console.log(typeof test, typeof test.extend);`,
+      `import { test } from ${JSON.stringify(pathToFileURL(join(root, 'fixture.ts')).href)}; console.log(typeof test, typeof test.extend);`,
     ]);
   } finally {
     await rm(root, { recursive: true, force: true });
