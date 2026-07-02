@@ -17,7 +17,6 @@ const rstest = await createRstest({
 // CLI — without it the runtime skips locations and `test.location` is undefined.
 const withLocation = await rstest.listTests({ printLocation: true });
 const withoutLocation = await rstest.listTests({ printLocation: false });
-await rstest.close();
 
 const firstCaseLocation = (results) => {
   const cases = results.flatMap((r) => r.tests);

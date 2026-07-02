@@ -1,5 +1,5 @@
 ---
-description: Run Rstest programmatically from Node.js — create a reusable instance with createRstest, or run once from parsed CLI options with runCli.
+description: Run Rstest programmatically from Node.js — create a reusable instance with createRstest, or run once from parsed CLI options with runCLI.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
@@ -11,7 +11,7 @@ import { ApiMeta } from '@components/ApiMeta';
 Besides the CLI, Rstest can be driven from your own Node.js code through the `@rstest/core/api` subpath — for build tools, custom runners, editor integrations, or scripts.
 
 ```ts
-import { createRstest, runCli } from '@rstest/core/api';
+import { createRstest, runCLI } from '@rstest/core/api';
 ```
 
 `@rstest/core/api` is separate from the main `@rstest/core` entry. The main entry exposes the in-test runtime globals (`test`, `expect`, `rs`, …), config helpers (`defineConfig`, `loadConfig`, `merge*`), and types; the programmatic runners live under `@rstest/core/api`.
@@ -23,7 +23,7 @@ The programmatic API is experimental and its shape may change until `1.0.0`. Pin
 Rstest offers two programmatic entries:
 
 - [`createRstest`](#createrstest) — an async factory that returns a reusable instance. Use it to resolve config once and then run, list, watch, or merge repeatedly, or to inspect the resolved context.
-- [`runCli`](#runcli) — a one-shot runner compatible with Jest's `runCLI`. Use it when you already have argv-shaped options, such as forwarding a parsed command line.
+- [`runCLI`](#runcli) — a one-shot runner compatible with Jest's `runCLI`. Use it when you already have argv-shaped options, such as forwarding a parsed command line.
 
 Both are host-safe: they never call `process.exit`, and they snapshot and restore `process.env` and `process.exitCode`, so a run cannot leave your process stuck in test mode or marked as failed.
 
@@ -54,8 +54,6 @@ const rstest = await createRstest({
 
 const result = await rstest.run();
 console.log(result.ok, result.stats.tests);
-
-await rstest.close();
 ```
 
 ### Options
@@ -65,47 +63,31 @@ The first argument is an `options` object with the following properties:
 ```ts
 interface CreateRstestOptions {
   cwd?: string;
-  configFile?: string;
   config?: RstestConfig | RstestConfigFn;
-  embedded?: boolean;
 }
 ```
 
 - `cwd`: Working directory. Defaults to `process.cwd()`, and is the base for resolving `root`.
-- `configFile`: Path to a config file, relative to `cwd` or absolute. Unlike the CLI, the programmatic API does not auto-discover a config file from `cwd`; pass an explicit path, or omit it to run with `config` only.
-- `config`: Inline configuration applied on top of `configFile`, or used alone. This is the single override channel for all config content, including `projects` and `reporters`.
-  - **Object**: deep-merged over the disk config. Inline values win for scalars; arrays follow [`mergeRstestConfig`](/api/javascript-api/rstest-core#mergerstestconfig) semantics.
-  - **Function** (`RstestConfigFn`): receives the disk-loaded config (an empty object when no `configFile` is set) and returns the final config, so you can transform it directly instead of merging an override on top.
-- `embedded`: Defaults to `true` for the programmatic API, so a run cannot kill the host process. When `false`, Rstest installs `process.on('exit' | 'SIG*')` handlers and calls `process.exit()` on config errors, matching the CLI behavior.
+- `config`: The configuration to run with. Unlike the CLI, the programmatic API does not auto-discover or read a config file from `cwd` — you own config loading. This is the single channel for all config content, including `projects` and `reporters`.
+  - **Object**: used as the inline config directly.
+  - **Function** (`RstestConfigFn`): a zero-argument factory that returns the final config. Load a config file yourself inside it — see [With a config file](#with-a-config-file).
 
 ### With a config file
 
-Point at a config file on disk. `config` then becomes an optional override on top of it:
+The programmatic API never reads a config file for you. To run against one on disk, load it in the factory form of `config` with [`loadConfig`](/api/javascript-api/rstest-core#loadconfig), then transform or merge as needed:
 
 ```ts
+import { loadConfig, mergeRstestConfig } from '@rstest/core';
+import { createRstest } from '@rstest/core/api';
+
 const rstest = await createRstest({
   cwd: './my-project',
-  configFile: 'rstest.config.ts',
-  config: {
-    // overrides whatever the disk config declared
-    testTimeout: 10000,
+  config: async () => {
+    const { content } = await loadConfig({ path: 'rstest.config.ts' });
+    // merge an override over the disk config…
+    return mergeRstestConfig(content, { testTimeout: 10000 });
+    // …or transform it directly, e.g. `return { ...content, include: ['a.test.ts'] };`
   },
-});
-```
-
-### With a config function
-
-The function form receives the resolved disk config and returns the final config, so you can transform it directly instead of merging an override object over it:
-
-```ts
-const rstest = await createRstest({
-  cwd: './my-project',
-  configFile: 'rstest.config.ts',
-  config: (loaded) => ({
-    ...loaded,
-    // only run one of the files the disk config included
-    include: ['a.test.ts'],
-  }),
 });
 ```
 
@@ -145,18 +127,37 @@ const result = await rstest.run({
 
 ### rstest.watch
 
-Start a watch session: run the matching tests, then re-run them as files change. Each run reports through the configured reporters rather than the resolved value; the promise resolves once watching has started. Call `close()` on the returned handle to stop watching and release the dev server and worker pool.
+Start a watch session: run the matching tests, then re-run them as files change. The promise resolves once watching has started; call `close()` on the returned handle to stop watching and release the dev server and worker pool.
+
+Watch does not resolve per-run results. To observe each run, pass an `onResult` callback — it fires after every run (including the first) with that run's [`TestRunResult`](#testrunresult), the same value `run()` resolves. This surfaces failures and `unhandledErrors` without registering a reporter. Alternatively, register your own reporter through config.
 
 - **Type:**
 
 ```ts
-function watch(options?: RunOptions): Promise<RstestWatcher>;
+function watch(options?: WatchOptions & RunOptions): Promise<RstestWatcher>;
+
+interface WatchOptions {
+  onResult?: (result: TestRunResult) => void;
+}
 ```
+
+`onResult` receives the same [`TestRunResult`](#testrunresult) as `run()`, except exit-code-only failures (unmet coverage thresholds, global teardown) are not reflected in its `ok` — test/file failures and `unhandledErrors` are. A throwing `onResult` is isolated so it cannot tear down the watch session.
 
 - **Example:**
 
 ```ts
-const watcher = await rstest.watch({ filters: ['math'] });
+const watcher = await rstest.watch({
+  filters: ['math'],
+  onResult: (result) => {
+    if (!result.ok) {
+      console.error(
+        result.stats.tests.failed,
+        'failed',
+        result.unhandledErrors,
+      );
+    }
+  },
+});
 // … later …
 await watcher.close();
 ```
@@ -211,15 +212,9 @@ function mergeReports(options?: {
 await rstest.mergeReports({ path: './.rstest-reports', cleanup: true });
 ```
 
-### rstest.close
-
-Release instance resources and restore the `process.env` / `process.exitCode` snapshot taken at creation. Each `run()` already builds and tears down its own worker pool and Rsbuild server, so `close()` does little on the current happy path, but you should always call it to restore host state.
-
-- **Type:**
-
-```ts
-function close(): Promise<void>;
-```
+:::tip Host-safe by design
+There is no `close()` on the instance. Each `run()` builds and tears down its own worker pool and Rsbuild server, and every call snapshots and restores `process.env` / `process.exitCode`, so an instance holds no resources between calls and never leaves your host in test mode. A [`watch`](#rstestwatch) session is the exception — it keeps a dev server alive, so call `close()` on the returned watcher when you're done.
+:::
 
 ## RunOptions
 
@@ -251,16 +246,16 @@ interface RunOptions {
 - `project`: Run only the named projects (`*` wildcards, `!` negation).
 - `passWithNoTests`: Treat a run that matched no files as a pass instead of a failure.
 
-## runCli
+## runCLI
 
 Run Rstest once from parsed CLI options. This is the Jest-compatible entry, similar to `@jest/core`'s `runCLI(argv, projects)`. It accepts the full CLI option surface ([`RstestArgv`](#rstestargv)) and resolves to a [`TestRunResult`](#testrunresult).
 
-Unlike `createRstest`, `runCli` matches the `rstest run` CLI command: it auto-discovers the config file from `cwd` and applies the CLI defaults. It runs once. For repeated runs, config inspection, listing, report merging, or watch mode, use [`createRstest`](#createrstest).
+Unlike `createRstest`, `runCLI` matches the `rstest run` CLI command: it auto-discovers the config file from `cwd` and applies the CLI defaults. It runs once. For repeated runs, config inspection, listing, report merging, or watch mode, use [`createRstest`](#createrstest).
 
 - **Type:**
 
 ```ts
-function runCli(
+function runCLI(
   argv?: RstestArgv,
   options?: { cwd?: string },
 ): Promise<TestRunResult>;
@@ -269,18 +264,18 @@ function runCli(
 - **Example:**
 
 ```ts
-import { runCli } from '@rstest/core/api';
+import { runCLI } from '@rstest/core/api';
 
 // Positional source files live in `_`, and `related` reinterprets them as
 // source files to resolve related tests.
-const result = await runCli({ _: ['src/math.ts'], related: true }, { cwd });
+const result = await runCLI({ _: ['src/math.ts'], related: true }, { cwd });
 
 console.log(result.ok, result.stats.tests);
 ```
 
 ### RstestArgv
 
-The parsed CLI options accepted by `runCli`. It matches what a parsed `rstest <args>` produces: named flags plus positional files in `_`. This is the full CLI option surface (similar to Jest's `Config.Argv`), whereas `RunOptions` is a smaller per-run subset.
+The parsed CLI options accepted by `runCLI`. It matches what a parsed `rstest <args>` produces: named flags plus positional files in `_`. This is the full CLI option surface (similar to Jest's `Config.Argv`), whereas `RunOptions` is a smaller per-run subset.
 
 ```ts
 type RstestArgv = CommonOptions & {
@@ -292,7 +287,7 @@ type RstestArgv = CommonOptions & {
 
 ## TestRunResult
 
-The value resolved by `rstest.run` and `runCli`.
+The value resolved by `rstest.run` and `runCLI`.
 
 ```ts
 interface TestRunResult {

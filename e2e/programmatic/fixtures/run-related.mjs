@@ -1,13 +1,13 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runCli } from '@rstest/core/api';
+import { runCLI } from '@rstest/core/api';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const cwd = join(__dirname, 'related');
 
-// jest-compatible parsed-argv entry: positional source files live in `_`, and
+// Jest-compatible parsed-argv entry: positional source files live in `_`, and
 // `related` reinterprets them as source files to resolve related tests from.
-const result = await runCli({ _: ['src/math.ts'], related: true }, { cwd });
+const result = await runCLI({ _: ['src/math.ts'], related: true }, { cwd });
 
 console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({

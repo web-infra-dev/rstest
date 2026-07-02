@@ -38,7 +38,6 @@ const hasClose = typeof watcher.close === 'function';
 // Tearing down must release the dev server + worker pool so this host process
 // can exit cleanly (a leaked handle would hang the e2e runner).
 await watcher.close();
-await rstest.close();
 
 console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({

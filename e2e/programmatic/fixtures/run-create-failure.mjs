@@ -18,8 +18,8 @@ const before = snapshot();
 
 let threw = false;
 try {
-  // A throwing config callback fails the eager build before an instance (whose
-  // close() restores the env) is ever returned.
+  // A throwing config factory fails the eager build; construction must still
+  // restore the host env it touched, even though no instance is returned.
   await createRstest({
     cwd,
     config: () => {

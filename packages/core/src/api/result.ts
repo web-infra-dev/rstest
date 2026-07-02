@@ -1,6 +1,6 @@
 /**
  * Public result types + assembly helpers shared by the programmatic
- * `RstestInstance.run()` and the `runCli` entry. Kept separate from the engine
+ * `RstestInstance.run()` and the `runCLI` entry. Kept separate from the engine
  * so internal reporter-state refactors don't leak into the public surface.
  */
 import type {
@@ -72,7 +72,7 @@ export interface TestFileResult extends TestResult {
 }
 
 /**
- * Result of a {@link createRstest} instance `run()` (or a `runCli` run).
+ * Result of a {@link createRstest} instance `run()` (or a `runCLI` run).
  *
  * @experimental Subject to change until 1.0.0.
  */
@@ -210,6 +210,25 @@ export const createCapturedRunState = (): CapturedRunState => ({
   duration: { total: 0 },
 });
 
+/** Record a run's `onTestRunEnd` summary into `captured` (errors mapped to the
+ * serializable shape). `exitCode` is filled separately by the run caller. */
+const fillCapturedFromRunEnd = (
+  captured: CapturedRunState,
+  {
+    unhandledErrors,
+    duration,
+    coverage,
+    snapshotSummary,
+  }: Parameters<NonNullable<Reporter['onTestRunEnd']>>[0],
+): void => {
+  captured.unhandledErrors = (unhandledErrors ?? []).map((err) =>
+    toSerializedError(err),
+  );
+  captured.duration = { total: duration.totalTime };
+  captured.coverage = coverage;
+  captured.snapshot = snapshotSummary;
+};
+
 /**
  * A reporter that records the run-level summary (errors, duration, coverage,
  * snapshot) into `captured`. Added to a run's reporter list so a structured
@@ -218,13 +237,34 @@ export const createCapturedRunState = (): CapturedRunState => ({
 export const createCaptureReporter = (
   captured: CapturedRunState,
 ): Reporter => ({
-  onTestRunEnd: ({ unhandledErrors, duration, coverage, snapshotSummary }) => {
-    captured.unhandledErrors = (unhandledErrors ?? []).map((err) =>
-      toSerializedError(err),
-    );
-    captured.duration = { total: duration.totalTime };
-    captured.coverage = coverage;
-    captured.snapshot = snapshotSummary;
+  onTestRunEnd: (args) => fillCapturedFromRunEnd(captured, args),
+});
+
+/**
+ * A reporter that assembles the public {@link TestRunResult} at the end of each
+ * run and hands it to `onResult`. Used by the programmatic watch session so a
+ * caller receives structured results on every rerun without implementing a
+ * reporter. `context` is the (session-stable) runner context, used for `ok`'s
+ * no-tests / `passWithNoTests` derivation. A throwing `onResult` is isolated so
+ * a caller callback can't tear down the watch session. Exit-code-only failures
+ * (coverage thresholds, teardown) are not folded into `ok` here — watch has no
+ * post-run point to observe `process.exitCode` per rerun — but test/file
+ * failures and `unhandledErrors` are.
+ */
+export const createResultReporter = (
+  onResult: (result: TestRunResult) => void,
+  context: RstestContext | undefined,
+): Reporter => ({
+  onTestRunEnd: (args) => {
+    const captured = createCapturedRunState();
+    fillCapturedFromRunEnd(captured, args);
+    const files = args.results.map(toPublicTestFileResult);
+    const result = assembleTestRunResult(files, captured, context);
+    try {
+      onResult(result);
+    } catch {
+      // A caller callback error must not tear down the watch session.
+    }
   },
 });
 
