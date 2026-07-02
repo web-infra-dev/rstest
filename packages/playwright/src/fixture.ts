@@ -745,10 +745,11 @@ const preserveForFixtureSource = <Fn extends (...args: never[]) => unknown>(
   wrapped: Fn,
 ): Fn => {
   const [, contextParam] = getFunctionParameterSource(original);
+  const fixtureParam = contextParam?.startsWith('{') ? contextParam : '_';
 
   Object.defineProperty(wrapped, 'toString', {
     configurable: true,
-    value: () => `(${contextParam ?? '_'}) => {}`,
+    value: () => `(${fixtureParam}) => {}`,
   });
 
   return wrapped;

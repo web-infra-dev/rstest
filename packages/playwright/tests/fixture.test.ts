@@ -309,6 +309,16 @@ test.extend({}).describe('extended test API', () => {
     },
   );
 
+  browserTest.for([{ path: 'about:blank' }])(
+    'allows named test.for callback context',
+    ({ path }, testContext) => {
+      expect(testContext.task.name).toBe(
+        'allows named test.for callback context',
+      );
+      expect(path).toBe('about:blank');
+    },
+  );
+
   test.extend({})('preserves playwright-style helpers', () => {
     const extendedTest = test.extend({});
 
