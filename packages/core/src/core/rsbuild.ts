@@ -120,6 +120,7 @@ type PrepareRsbuildOptions = {
   extraPlugins?: RsbuildPlugin[];
   onModifyRstestConfigApplied?: () => Promise<void>;
   loadCoveragePlugin?: boolean;
+  onCoveragePluginLoadError?: (error: unknown) => void;
 };
 
 export const addCoveragePlugin = async (
@@ -151,6 +152,7 @@ export const prepareRsbuild = async ({
   extraPlugins = [],
   onModifyRstestConfigApplied,
   loadCoveragePlugin = true,
+  onCoveragePluginLoadError,
 }: PrepareRsbuildOptions): Promise<RsbuildInstance> => {
   const {
     command,
@@ -234,7 +236,14 @@ export const prepareRsbuild = async ({
   );
 
   if (loadCoveragePlugin) {
-    await addCoveragePlugin(rsbuildInstance, context);
+    try {
+      await addCoveragePlugin(rsbuildInstance, context);
+    } catch (error) {
+      if (!onCoveragePluginLoadError) {
+        throw error;
+      }
+      onCoveragePluginLoadError(error);
+    }
   }
 
   return rsbuildInstance;

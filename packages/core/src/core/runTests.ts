@@ -27,11 +27,7 @@ import {
   runGlobalTeardown,
 } from './globalSetup';
 import { createSetupFileState } from './setupFileState';
-import {
-  addCoveragePlugin,
-  createRsbuildServer,
-  prepareRsbuild,
-} from './rsbuild';
+import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import { createRunProjectPlanState } from './projectPlan';
 import type { Rstest } from './rstest';
 
@@ -336,13 +332,16 @@ export async function runTests(context: Rstest): Promise<void> {
     isWatchMode,
   });
   const { globTestSourceEntries, resolveRunnableProjects } = projectPlanState;
+  let coveragePluginLoadError: unknown;
 
   const rsbuildInstance = await prepareRsbuild({
     context,
     globTestSourceEntries,
     setupFileState,
     targetProjects: rsbuildProjects,
-    loadCoveragePlugin: false,
+    onCoveragePluginLoadError: (error) => {
+      coveragePluginLoadError = error;
+    },
     getSetupFileProjects: () => ({
       setupProjects: projectPlanState.getPlan().nodeProjectsToRun,
       globalSetupProjects: context.projects,
@@ -373,16 +372,43 @@ export async function runTests(context: Rstest): Promise<void> {
       coverage,
     });
 
-    await addCoveragePlugin(rsbuildInstance, context);
+    if (coveragePluginLoadError) {
+      throw coveragePluginLoadError;
+    }
   }
 
   if (!hasNodeTestsToRun && !hasBrowserTestsToRun) {
     reportNoTestFiles({ context });
+    const coverageProvider =
+      coverage.enabled && !coveragePluginLoadError
+        ? await createCoverageProvider(coverage, context.rootPath)
+        : null;
+    const coverageMap = coverageProvider?.createCoverageMap();
+
+    if (coverageProvider) {
+      logger.log(
+        ` ${color.gray('Coverage enabled with')} %s\n`,
+        color.yellow(coverage.provider),
+      );
+    }
+
     await notifyReportersOnTestRunEnd({
       context,
+      coverage: coverageMap,
       duration: getEmptyRunDuration(),
       getSourcemap: async () => null,
     });
+    if (coverageProvider && coverageMap) {
+      const { generateCoverage } = await import('../coverage/generate');
+      await runLifecycleStep('coverage report generation', () =>
+        generateCoverage(
+          context,
+          coverageMap,
+          coverageProvider,
+          activeTraceRun.span,
+        ),
+      );
+    }
     await runLifecycleStep('trace shutdown', () =>
       traceController.shutdown(activeTraceRun),
     );
