@@ -191,6 +191,52 @@ describe('coverage-v8 provider', () => {
     expect(Object.keys(coverage)).toEqual([originalFile]);
   });
 
+  it('uses the final inline sourceMappingURL comment in the AST converter', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-final-inline-map');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const staleOriginalFile = join(root, 'src', 'stale.ts');
+    const finalOriginalFile = join(root, 'src', 'final.ts');
+    const createSourceMap = (source: string) => ({
+      version: 3,
+      file: generatedFile,
+      sources: [source],
+      sourcesContent: ['const value = 1;'],
+      names: [],
+      mappings: 'AAAA',
+    });
+    const staleMap = Buffer.from(
+      JSON.stringify(createSourceMap('../src/stale.ts')),
+    ).toString('base64');
+    const finalMap = Buffer.from(
+      JSON.stringify(createSourceMap('../src/final.ts')),
+    ).toString('base64');
+    const code = [
+      'const value = 1;',
+      `//# sourceMappingURL=data:application/json;base64,${staleMap}`,
+      `//# sourceMappingURL=data:application/json;base64,${finalMap}`,
+    ].join('\n');
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:final-inline-map`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([finalOriginalFile]);
+    expect(Object.keys(coverage)).not.toEqual([staleOriginalFile]);
+  });
+
   it('uses value offsets for object property function coverage', async () => {
     const file = join(tmpdir(), 'rstest-coverage-v8-property-function.js');
     const code = 'const o = { a: function () {} };\no.a;';
@@ -259,6 +305,40 @@ describe('coverage-v8 provider', () => {
     });
 
     expect(Object.keys(coverage)).toEqual([sourceUrl]);
+  });
+
+  it('resolves external source map sources relative to the map file', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-nested-external-map');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const code = 'const value = 1;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:nested-external-map`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+      sourceMap: {
+        version: 3,
+        sources: ['../../src/original.ts'],
+        sourcesContent: [code],
+        names: [],
+        mappings: 'AAAA',
+      },
+      sourceMapUrl: join(root, 'dist', 'maps', 'bundle.js.map'),
+    });
+
+    expect(Object.keys(coverage)).toEqual([originalFile]);
   });
 
   it('does not remap unmapped wrapper statements to the next source', async () => {
@@ -350,6 +430,39 @@ describe('coverage-v8 provider', () => {
 
     expect(coverage[file]?.branchMap[0]?.locations).toHaveLength(1);
     expect(coverage[file]?.b[0]).toEqual([1]);
+  });
+
+  it('gives implicit else branches numeric locations', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-implicit-else-location.js');
+    const code = 'if (flag) { foo(); }';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:implicit-else-location`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.branchMap[0]?.locations).toEqual([
+      {
+        start: { line: 1, column: 0 },
+        end: { line: 1, column: Number.POSITIVE_INFINITY },
+      },
+      {
+        start: { line: 1, column: 0 },
+        end: { line: 1, column: Number.POSITIVE_INFINITY },
+      },
+    ]);
   });
 
   it('honors ignore-next comments before ternary separators', async () => {

@@ -111,11 +111,12 @@ type ConvertOptions = {
   code: string;
   coverage: Pick<Profiler.ScriptCoverage, 'functions' | 'url'>;
   sourceMap?: SourceMapLike;
+  sourceMapUrl?: string;
   sourceFilter?: (filePath: string) => boolean;
 };
 
 const WORD_PATTERN = /(\w+|\s|[^\w\s])/g;
-const INLINE_MAP_PATTERN = /[#@]\s*sourceMappingURL\s*=\s*(\S+)\s*$/m;
+const SOURCE_MAP_URL_PATTERN = /[#@]\s*sourceMappingURL\s*=\s*(\S+)\s*$/gm;
 const DATA_SOURCE_MAP_PATTERN = /^data:application\/json(?:;[^,]*)?,/i;
 const BASE_64_SOURCE_MAP_PATTERN =
   /^data:application\/json(?:;[^,]*)?;base64,/i;
@@ -161,11 +162,15 @@ async function prepareCoverage(
 ): Promise<PreparedCoverage> {
   const filename = fileURLToPath(options.coverage.url);
   const directory = dirname(filename);
+  const sourceMapResult = options.sourceMap
+    ? { sourceMap: options.sourceMap, sourceMapUrl: options.sourceMapUrl }
+    : await getSourceMap(filename, options.code);
   const mapInput =
-    options.sourceMap ||
-    (await getInlineSourceMap(filename, options.code)) ||
-    createEmptySourceMap(filename, options.code);
-  const sourceMap = new TraceMap(mapInput as SourceMapInput);
+    sourceMapResult?.sourceMap || createEmptySourceMap(filename, options.code);
+  const sourceMap = new TraceMap(
+    mapInput as SourceMapInput,
+    sourceMapResult?.sourceMapUrl,
+  );
   const locator = new Locator(sourceMap, options.code);
   const builder = new CoverageBuilder(
     filename,
@@ -599,10 +604,7 @@ class CoverageBuilder {
 
     for (const branch of branches) {
       if (!branch) {
-        locations.push({
-          start: { line: undefined, column: undefined },
-          end: { line: undefined, column: undefined },
-        });
+        locations.push(loc);
         ranges.push({
           startOffset: node.start,
           endOffset: node.end,
@@ -1100,9 +1102,15 @@ function createEmptySourceMap(
   };
 }
 
-async function getInlineSourceMap(filename: string, code: string) {
-  const matches = code.match(INLINE_MAP_PATTERN);
-  const match = matches?.[1];
+async function getSourceMap(
+  filename: string,
+  code: string,
+): Promise<{ sourceMap: SourceMapLike; sourceMapUrl?: string } | null> {
+  let match: string | undefined;
+
+  for (const matches of code.matchAll(SOURCE_MAP_URL_PATTERN)) {
+    match = matches[1];
+  }
 
   if (!match) return null;
 
@@ -1110,17 +1118,20 @@ async function getInlineSourceMap(filename: string, code: string) {
     if (BASE_64_SOURCE_MAP_PATTERN.test(match)) {
       const encoded = match.replace(BASE_64_SOURCE_MAP_PATTERN, '');
       const decoded = Buffer.from(encoded, 'base64').toString('utf8');
-      return JSON.parse(decoded) as SourceMapLike;
+      return { sourceMap: JSON.parse(decoded) as SourceMapLike };
     }
 
     if (DATA_SOURCE_MAP_PATTERN.test(match)) {
       const encoded = match.replace(DATA_SOURCE_MAP_PATTERN, '');
-      return JSON.parse(decodeURIComponent(encoded)) as SourceMapLike;
+      return {
+        sourceMap: JSON.parse(decodeURIComponent(encoded)) as SourceMapLike,
+      };
     }
 
     const directory = dirname(filename);
-    const content = await fs.readFile(resolve(directory, match), 'utf-8');
-    return JSON.parse(content) as SourceMapLike;
+    const sourceMapUrl = resolve(directory, match);
+    const content = await fs.readFile(sourceMapUrl, 'utf-8');
+    return { sourceMap: JSON.parse(content) as SourceMapLike, sourceMapUrl };
   } catch {
     return null;
   }
