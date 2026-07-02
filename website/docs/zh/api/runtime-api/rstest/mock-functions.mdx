@@ -74,6 +74,18 @@ expect(hi.sayHi()).toBe('hello');
 expect(rs.spyOn(hi, 'sayHi')).toBeCalled();
 ```
 
+:::note 对 re-export 或第三方模块的导出进行 spy
+
+`rs.spyOn` 能作用于你所导入模块中**直接定义**的导出，但对从其他模块 **re-export**（`export * from '...'`）或由第三方依赖提供的导出可能不生效。
+
+这种情况下，请改用 [`{ spy: true }`](/api/runtime-api/rstest/mock-modules#with-spy-true-option) 来 mock 该模块。它会在保留真实实现的同时，为每个导出装上 spy：
+
+```ts
+rs.mock('pkg', { spy: true });
+```
+
+:::
+
 ## rs.isMockFunction
 
 - **别名：** `rstest.isMockFunction`
