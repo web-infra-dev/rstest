@@ -8,7 +8,7 @@ import type {
   NormalizedProcedure,
   RstestUtilities,
 } from '../../types';
-import type { CreateMockInstanceFn } from './mockObject';
+import { type CreateMockInstanceFn, isModuleObject } from './mockObject';
 
 const isMockFunction = (fn: any): fn is MockInstance =>
   typeof fn === 'function' && '_isMockFunction' in fn && fn._isMockFunction;
@@ -296,6 +296,23 @@ export const initSpy = (
       if (isMockFunction(method)) {
         return method;
       }
+    }
+
+    // A frozen ES module namespace — a native ES module (e.g. an externalized
+    // `node_modules` dependency in the `node` test environment) or an
+    // `__esModule` interop object — exposes non-configurable exports, so
+    // redefining one to install a spy fails with a bare "Cannot redefine
+    // property". Detect exactly that shape and throw an actionable error
+    // instead. The check is deliberately narrow: bundled deps expose
+    // *configurable* getters (so this never fires for them), and ordinary
+    // non-configurable object properties are not module namespaces (so their
+    // errors are left untouched). See
+    // https://github.com/web-infra-dev/rstest/issues/1492
+    const targetDescriptor = Object.getOwnPropertyDescriptor(obj, methodName);
+    if (targetDescriptor?.configurable === false && isModuleObject(obj)) {
+      throw new Error(
+        `[Rstest] Cannot spy on "${String(methodName)}": it is a read-only export of a third-party or native ES module. Mock the module instead with \`rs.mock('<module>', { spy: true })\`. See https://rstest.rs/api/runtime-api/rstest/mock-functions#rsspyon`,
+      );
     }
 
     const accessTypeMap = {

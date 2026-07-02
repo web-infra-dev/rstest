@@ -58,7 +58,7 @@ function isFunction(value: unknown): value is (...args: any[]) => any {
   return typeof value === 'function';
 }
 
-function isModuleObject(value: Record<Key, any>): boolean {
+export function isModuleObject(value: Record<Key, any>): boolean {
   return getTypeName(value) === 'Module' || value.__esModule;
 }
 
