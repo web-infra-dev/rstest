@@ -54,6 +54,7 @@ describe('test build config', () => {
 
     expect(cli.stdout).toContain('project-a.test.ts');
     expect(cli.stdout).toContain('project-b.test.ts');
+    expect(cli.stdout).toContain('return-project.test.ts');
     expect(cli.stdout).not.toContain('ignored.test.ts');
   });
 

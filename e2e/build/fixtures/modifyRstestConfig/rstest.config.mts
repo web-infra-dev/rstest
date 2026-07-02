@@ -50,6 +50,42 @@ const modifyRstestConfigPlugin = (projectName: string): RsbuildPlugin => ({
   },
 });
 
+const returnRstestConfigPlugin = (projectName: string): RsbuildPlugin => ({
+  name: `return-rstest-config-${projectName}`,
+  setup(api) {
+    if (api.context.callerName !== 'rstest') {
+      return;
+    }
+
+    const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+    rstestApi?.modifyRstestConfig((config) => ({
+      include: [`<rootDir>/${projectName}.test.ts`],
+      setupFiles: [`<rootDir>/setup/${projectName}.ts`],
+      env: {
+        ...config.env,
+        RSTEST_MODIFIED_RUNTIME: projectName,
+      },
+      source: {
+        ...config.source,
+        define: {
+          ...(config.source?.define || {}),
+          __MODIFIED_PROJECT__: JSON.stringify(projectName),
+        },
+      },
+      resolve: {
+        ...config.resolve,
+        alias: {
+          ...(config.resolve?.alias || {}),
+          '@project-value': fileURLToPath(
+            new URL(`./src/${projectName}.ts`, import.meta.url),
+          ),
+        },
+      },
+    }));
+  },
+});
+
 export default defineConfig({
   projects: [
     {
@@ -59,6 +95,10 @@ export default defineConfig({
     {
       name: 'project-b',
       plugins: [modifyRstestConfigPlugin('project-b')],
+    },
+    {
+      name: 'return-project',
+      plugins: [returnRstestConfigPlugin('return-project')],
     },
   ],
 });
