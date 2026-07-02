@@ -57,6 +57,18 @@ function failConfig(embedded: boolean, message: string): never {
   process.exit(1);
 }
 
+type OutputModuleConfig = {
+  federation: boolean;
+  output?: {
+    module?: boolean;
+  };
+};
+
+const resolveOutputModule = (config: OutputModuleConfig): boolean =>
+  config.federation
+    ? false
+    : (config.output?.module ?? process.env[ENV.OUTPUT_MODULE] !== 'false');
+
 type Options = {
   cwd: string;
   command: RstestCommand;
@@ -212,9 +224,7 @@ export class Rstest implements RstestContext {
             rootPath: config.root,
             name: config.name,
             _globalSetups: false,
-            outputModule:
-              config.output?.module ??
-              process.env[ENV.OUTPUT_MODULE] !== 'false',
+            outputModule: resolveOutputModule(config),
             environmentName,
             normalizedConfig: config,
           };
@@ -225,9 +235,7 @@ export class Rstest implements RstestContext {
             rootPath,
             _globalSetups: false,
             name: rstestConfig.name,
-            outputModule:
-              rstestConfig.output?.module ??
-              process.env[ENV.OUTPUT_MODULE] !== 'false',
+            outputModule: resolveOutputModule(rstestConfig),
             environmentName: formatEnvironmentName(rstestConfig.name),
             normalizedConfig: rstestConfig,
           },

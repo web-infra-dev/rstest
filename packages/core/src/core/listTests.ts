@@ -241,6 +241,7 @@ const collectNodeTests = async ({
           sourceMaps,
           interopDefault: true,
           outputModule: project.outputModule,
+          federation: project.normalizedConfig.federation,
         });
         if (!success) {
           return {
@@ -254,6 +255,7 @@ const collectNodeTests = async ({
 
       const list = await pool.collectTests({
         entries,
+        assetNames,
         setupEntries,
         getAssetFiles,
         getSourceMaps,

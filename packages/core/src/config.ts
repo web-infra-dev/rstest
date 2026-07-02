@@ -287,6 +287,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   detectAsyncLeaks: false,
   bail: 0,
   includeTaskLocation: false,
+  federation: false,
   browser: {
     enabled: false,
     provider: 'playwright',

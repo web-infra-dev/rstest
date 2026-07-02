@@ -157,6 +157,7 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     '--includeTaskLocation',
     'Collect test and suite locations. This might increase the running time.',
   ],
+  ['--federation', 'Enable Module Federation compatibility mode'],
   ['--source.*', 'Internal parser helper for source.* options'],
   ['--source.tsconfigPath <path>', 'Path to the tsconfig.json file'],
   ['--dev.*', 'Internal parser helper for dev.* options'],

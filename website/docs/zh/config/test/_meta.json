@@ -24,6 +24,7 @@
   "pool",
   "isolate",
   "test-environment",
+  "federation",
   "browser",
   "clear-mocks",
   "reset-mocks",

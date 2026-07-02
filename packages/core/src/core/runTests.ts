@@ -633,6 +633,7 @@ export async function runTests(context: Rstest): Promise<void> {
                 sourceMaps,
                 interopDefault: true,
                 outputModule: p.outputModule,
+                federation: p.normalizedConfig.federation,
               }),
             globalSetupTraceArgs,
           );
@@ -681,6 +682,7 @@ export async function runTests(context: Rstest): Promise<void> {
         currentEntries.push(...finalEntries);
         const { results, testResults } = await pool.runTests({
           entries: finalEntries,
+          assetNames,
           getSourceMaps,
           setupEntries,
           getAssetFiles,

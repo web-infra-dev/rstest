@@ -1,0 +1,15 @@
+{
+  "name": "@examples/federation-node-local-remote",
+  "private": true,
+  "scripts": {
+    "build": "rsbuild build --config rsbuild.browser.config.js",
+    "build:node": "rsbuild build --config rsbuild.node.config.js",
+    "serve": "serve dist -p 3004",
+    "serve:node": "serve dist-node -p 3004"
+  },
+  "devDependencies": {
+    "@module-federation/rsbuild-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@a48a1fa",
+    "@rsbuild/core": "~2.1.1",
+    "serve": "14.2.3"
+  }
+}

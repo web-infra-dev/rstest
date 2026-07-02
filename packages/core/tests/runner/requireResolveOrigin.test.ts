@@ -90,6 +90,51 @@ describe('require.resolve origin runtime helper', () => {
     expect(exports).toEqual(createRequire(testPath).resolve.paths('foo'));
   });
 
+  it('serves virtual assets through fs only when opted in', () => {
+    const virtualFile = path.join(
+      os.tmpdir(),
+      `rstest-virtual-fs-${Date.now()}`,
+      'dist',
+      'chunk.js',
+    );
+    const assetFiles = {
+      [virtualFile]: 'virtual chunk',
+    };
+    const loadOptions = {
+      codeContent: `
+        const fs = require('node:fs');
+        module.exports = {
+          exists: fs.existsSync(${JSON.stringify(virtualFile)}),
+          content: fs.existsSync(${JSON.stringify(virtualFile)})
+            ? fs.readFileSync(${JSON.stringify(virtualFile)}, 'utf-8')
+            : undefined,
+        };
+      `,
+      distPath: path.join(os.tmpdir(), `rstest-virtual-fs-${Date.now()}.js`),
+      testPath: path.join(
+        os.tmpdir(),
+        `rstest-virtual-fs-${Date.now()}.test.ts`,
+      ),
+      rstestContext: {},
+      assetFiles,
+      interopDefault: true,
+    };
+
+    expect(loadModule(loadOptions)).toEqual({
+      exists: false,
+      content: undefined,
+    });
+    expect(
+      loadModule({
+        ...loadOptions,
+        virtualFsAssetFiles: assetFiles,
+      }),
+    ).toEqual({
+      exists: true,
+      content: 'virtual chunk',
+    });
+  });
+
   it('binds top-level this to exports in CommonJS modules', () => {
     const dir = path.join(os.tmpdir(), `rstest-cjs-this-${Date.now()}`);
 
