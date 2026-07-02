@@ -84,13 +84,13 @@ Note that this distinction matters when a package exposes both ESM and CommonJS 
 
 ### Auto-mock modules
 
-If you want to replace the module's function exports with mock functions first and then configure only selected exports in the test, you can use `{ mock: true }`.
+If you want to replace the module's function exports with mock functions first and then configure only selected exports in the test, call `rs.mock()` with only the module path. Rstest first checks for a matching manual mock in `__mocks__`; when none exists, it falls back to auto-mocking the module. You can also pass `{ mock: true }` explicitly to skip the manual mock lookup and request auto-mocking directly.
 
 ```ts title="math.test.ts"
 import { expect, rs, test } from '@rstest/core';
 import { add } from './math';
 
-rs.mock('./math', { mock: true });
+rs.mock('./math');
 
 test('overrides one export', () => {
   rs.mocked(add).mockReturnValue(100);
@@ -140,7 +140,7 @@ Note that factory functions are hoisted, so they should not read values that are
 
 ### Reuse manual mocks from `__mocks__`
 
-If multiple tests reuse the same fake implementation, you can place it in `__mocks__` and load it without passing a factory.
+If multiple tests reuse the same fake implementation, you can place it in `__mocks__` and load it without passing a factory. Manual mocks take precedence over the auto-mock fallback.
 
 ```txt
 src/

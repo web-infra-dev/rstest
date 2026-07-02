@@ -4,6 +4,7 @@ antd
 apng
 apos
 applescript
+artboard
 Asus
 atrules
 autodocs
@@ -63,6 +64,7 @@ fnames
 frontends
 fullhash
 gzipped
+Grotesk
 icss
 idents
 iife
@@ -105,6 +107,7 @@ onclosetag
 onopentag
 ontext
 opencode
+Optim
 osascript
 outbase
 outro
@@ -117,6 +120,7 @@ PIPEWRAP
 pjpeg
 pluggable
 pmmmwh
+pngquant
 pnpx
 postcssrc
 preact
@@ -131,7 +135,9 @@ pxtorem
 quasis
 quxx
 RANDOMBYTESREQUEST
+rasterizes
 rebranded
+resvg
 rolldown
 rootdir
 rsbuild
@@ -152,6 +158,7 @@ SIGNREQUEST
 sirv
 sokra
 speedscope
+Squoosh
 srcset
 stacktracey
 styl

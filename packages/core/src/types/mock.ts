@@ -2,7 +2,7 @@ import type {
   Clock as FakeTimerClock,
   Config as FakeTimerInstallOpts,
 } from '@sinonjs/fake-timers';
-import type { FunctionLike, MaybePromise } from './utils';
+import type { FunctionLike, MaybePromise, Truthy } from './utils';
 import type { RuntimeConfig } from './worker';
 
 type FakeTimerTickTime = Parameters<FakeTimerClock['tick']>[0];
@@ -607,5 +607,5 @@ export interface RstestUtilities {
   waitUntil: <T>(
     callback: () => MaybePromise<T>,
     options?: number | WaitUntilOptions,
-  ) => Promise<T>;
+  ) => Promise<Truthy<Awaited<T>>>;
 }

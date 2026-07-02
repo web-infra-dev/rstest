@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@rstest/core';
 
 /**
@@ -40,6 +41,16 @@ export default defineConfig({
   output: {
     externals: {
       react: 'commonjs react',
+    },
+  },
+  resolve: {
+    alias: {
+      // Fixture-only: lets wasm-imports/src/aliasmod.wasm reach its glue through
+      // a non-relative specifier, exercising the wasm loader's resolver-based
+      // import wiring (bare/alias, not just `./` paths).
+      '@e2e/wasm-glue': fileURLToPath(
+        new URL('./wasm-imports/src/alias-glue.js', import.meta.url),
+      ),
     },
   },
   pool: {

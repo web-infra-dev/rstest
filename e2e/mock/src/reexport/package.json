@@ -1,0 +1,7 @@
+{
+  "name": "@rstest/tests-mock-reexport",
+  "version": "1.0.0",
+  "private": true,
+  "sideEffects": false,
+  "type": "module"
+}

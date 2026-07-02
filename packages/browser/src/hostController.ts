@@ -129,10 +129,6 @@ const serializeForInlineScript = (value: unknown): string => {
 // Type Definitions
 // ============================================================================
 
-type VirtualModulesPluginInstance = InstanceType<
-  (typeof rspack.experiments)['VirtualModulesPlugin']
->;
-
 type BrowserProjectEntries = {
   project: ProjectContext;
   setupFiles: string[];
@@ -406,16 +402,30 @@ class ContainerRpcManager {
 // Browser Runtime - Core runtime state
 // ============================================================================
 
-type BrowserRuntime = {
+// One isolated rsbuild instance + dev server per browser project. Physical
+// isolation (separate compiler, dev server, port, virtual manifest, runner)
+// prevents one project's build/resolve config from leaking into another's
+// compilation and avoids shared-dev-server races (chunk filenames,
+// lazyCompilation backend) between projects.
+type BrowserProjectServer = {
+  projectName: string;
+  environmentName: string;
   rsbuildInstance: RsbuildInstance;
   devServer: RsbuildDevServer;
+  port: number;
+  manifestPath: string;
+};
+
+type BrowserRuntime = {
+  // Per-project servers, keyed by project name.
+  projectServers: Map<string, BrowserProjectServer>;
+  // The server that hosts the container UI HTML (headed mode). The WebSocket
+  // server below is shared and reachable from any origin.
+  containerServer: BrowserProjectServer;
   browser: BrowserProviderBrowser;
   browserLaunchOptions: BrowserLaunchOptions;
-  port: number;
   wsPort: number;
-  manifestPath: string;
   tempDir: string;
-  manifestPlugin: VirtualModulesPluginInstance;
   containerPage?: BrowserProviderPage;
   containerContext?: BrowserProviderContext;
   setContainerOptions: (options: BrowserHostConfig) => void;
@@ -591,8 +601,24 @@ export const createBrowserLazyCompilationConfig = (
   };
 };
 
+/**
+ * HMR — and the lazyCompilation transport it carries — is wired only for headed
+ * watch, the sole path that reuses a persistent page and applies module updates
+ * in place. Headless always loads each test file in a fresh page (pulling the
+ * latest incrementally-built chunks over HTTP), and one-shot runs never rerun,
+ * so pushing HMR updates there is dead weight that only races factory
+ * registration for chunk-split node_modules (rspack#11922) and lets
+ * lazyCompilation's accept-chain walk abort the next spec when no boundary
+ * exists (#1472). Disabling HMR does not make watch rebuilds any less
+ * incremental — HMR is only the client push transport.
+ */
+export const shouldEnableBrowserHmr = (
+  isWatchMode: boolean,
+  isHeadless: boolean,
+): boolean => isWatchMode && !isHeadless;
+
 export const createBrowserRsbuildDevConfig = (
-  _isWatchMode: boolean,
+  enableHmr: boolean,
 ): {
   writeToDisk: boolean;
   hmr: boolean;
@@ -602,9 +628,10 @@ export const createBrowserRsbuildDevConfig = (
 } => {
   return {
     writeToDisk: isDebug(),
-    // Keep HMR enabled in browser mode even for one-shot runs.
-    // lazyCompilation depends on HMR runtime wiring for async import chains.
-    hmr: true,
+    // `enableHmr` is gated to headed watch by `shouldEnableBrowserHmr` — the one
+    // path that reuses a page. See that helper for why fresh-page runs (headless,
+    // or any one-shot) must not receive HMR pushes.
+    hmr: enableHmr,
     client: {
       logLevel: 'error' as const,
     },
@@ -1046,17 +1073,18 @@ const ensureConsistentBrowserLaunchOptions = (
 
   for (const project of projects.slice(1)) {
     const options = getBrowserLaunchOptions(project);
+    // Each browser project now runs on its own rsbuild dev server, so ports may
+    // differ per project. Only the shared single Playwright browser forces
+    // provider/browser/headless/providerOptions to match across projects.
     if (
       options.provider !== firstOptions.provider ||
       options.browser !== firstOptions.browser ||
       options.headless !== firstOptions.headless ||
-      options.port !== firstOptions.port ||
-      options.strictPort !== firstOptions.strictPort ||
       !isDeepStrictEqual(options.providerOptions, firstOptions.providerOptions)
     ) {
       throw new Error(
         `Browser launch config mismatch between projects "${firstProject.name}" and "${project.name}". ` +
-          'All browser-enabled projects in one run must share provider/browser/headless/port/strictPort/providerOptions.',
+          'All browser-enabled projects in one run must share provider/browser/headless/providerOptions.',
       );
     }
   }
@@ -1164,12 +1192,38 @@ const toSafeVarName = (name: string): string => {
   return name.replace(/[^a-zA-Z0-9_]/g, '_');
 };
 
+// Host-side mirror of the browser runtime's `toContextKey` (client/entry.ts):
+// `./<path-relative-to-project-root>` with forward slashes. The runtime derives
+// the same key from the target test file, so the non-watch import map below must
+// key by the identical form for `loadTest(key)` to resolve.
+export const toContextKey = (
+  filePath: string,
+  projectRootPosix: string,
+): string => {
+  const posixPath = normalize(filePath);
+  // Only strip the root at a path boundary: a bare `startsWith` would mangle a
+  // sibling like `/repo/pkg-extra/a.test.ts` under root `/repo/pkg`.
+  const withinRoot =
+    posixPath === projectRootPosix ||
+    posixPath.startsWith(`${projectRootPosix}/`);
+  if (!withinRoot) {
+    // Test file outside the project root: use the absolute path as the key so
+    // the runtime `toAbsolutePath` can round-trip it. A `./`-prefixed relative
+    // key would be re-rooted under projectRoot and point at a nonexistent file.
+    return posixPath;
+  }
+  const rel = posixPath.slice(projectRootPosix.length);
+  return rel.startsWith('/') ? `.${rel}` : `./${rel}`;
+};
+
 const generateManifestModule = ({
   manifestPath,
   entries,
+  isWatchMode,
 }: {
   manifestPath: string;
   entries: BrowserProjectEntries[];
+  isWatchMode: boolean;
 }): string => {
   const manifestDirPosix = normalize(dirname(manifestPath));
 
@@ -1215,30 +1269,56 @@ const generateManifestModule = ({
   lines.push('};');
   lines.push('');
 
-  // 3. Test context for each project
+  // 3. Test context for each project. Both branches expose the same shape as a
+  // webpackContext (callable by key, plus `keys()`), consumed in section 4.
   lines.push('// Test context for each project');
-  for (const { project } of entries) {
+  for (const { project, testFiles } of entries) {
     const varName = `context_${toSafeVarName(project.environmentName)}`;
     const projectRootPosix = normalize(project.rootPath);
-    const includeRegExp = globPatternsToRegExp(
-      project.normalizedConfig.include,
-    );
-    const excludePatterns = project.normalizedConfig.exclude.patterns;
-    const excludeRegExp = createBrowserContextExcludeRegExp(
-      excludePatterns,
-      projectRootPosix,
-    );
 
-    lines.push(
-      `const ${varName} = import.meta.webpackContext(${JSON.stringify(projectRootPosix)}, {`,
-    );
-    lines.push('  recursive: true,');
-    lines.push(`  regExp: ${includeRegExp.toString()},`);
-    if (excludeRegExp) {
-      lines.push(`  exclude: ${excludeRegExp.toString()},`);
+    if (isWatchMode) {
+      // Watch mode keeps the include-glob context so newly added files are
+      // picked up on rebuild via `keys()` without regenerating the manifest.
+      // `mode: 'lazy'` is plain code-splitting (async chunks over HTTP), so it
+      // works with or without lazyCompilation; headed watch additionally layers
+      // lazyCompilation on top to keep the initial build cheap.
+      const includeRegExp = globPatternsToRegExp(
+        project.normalizedConfig.include,
+      );
+      const excludeRegExp = createBrowserContextExcludeRegExp(
+        project.normalizedConfig.exclude.patterns,
+        projectRootPosix,
+      );
+      lines.push(
+        `const ${varName} = import.meta.webpackContext(${JSON.stringify(projectRootPosix)}, {`,
+      );
+      lines.push('  recursive: true,');
+      lines.push(`  regExp: ${includeRegExp.toString()},`);
+      if (excludeRegExp) {
+        lines.push(`  exclude: ${excludeRegExp.toString()},`);
+      }
+      lines.push("  mode: 'lazy',");
+      lines.push('});');
+    } else {
+      // One-shot runs: the file set is fixed and already filtered, so emit an
+      // explicit lazy-import map (one chunk per literal `import()`, like the
+      // setup loaders above). The eager, non-lazyCompilation build then compiles
+      // only the run set instead of every included test file.
+      lines.push(`const ${varName}_modules = {`);
+      for (const filePath of testFiles) {
+        const key = toContextKey(filePath, projectRootPosix);
+        const importPath = toRelativeImport(filePath);
+        lines.push(
+          `  ${JSON.stringify(key)}: () => import(${JSON.stringify(importPath)}),`,
+        );
+      }
+      lines.push('};');
+      lines.push(
+        `const ${varName} = Object.assign((key) => ${varName}_modules[key](), {`,
+      );
+      lines.push(`  keys: () => Object.keys(${varName}_modules),`);
+      lines.push('});');
     }
-    lines.push("  mode: 'lazy',");
-    lines.push('});');
     lines.push('');
   }
 
@@ -1295,6 +1375,27 @@ const VIRTUAL_MANIFEST_FILENAME = 'virtual-manifest.ts';
 // Browser Runtime Lifecycle
 // ============================================================================
 
+const closeAllProjectServers = (
+  servers: Iterable<BrowserProjectServer>,
+): Promise<unknown> =>
+  Promise.allSettled([...servers].map((server) => server.devServer.close()));
+
+// Copy a proxied fetch Response's status + headers onto the Node response,
+// dropping content-length (the body is re-sent, so the original length may not
+// match).
+const copyProxyResponseHeaders = (
+  response: Response,
+  res: ServerResponse,
+): void => {
+  res.statusCode = response.status;
+  response.headers.forEach((value, key) => {
+    if (key.toLowerCase() === 'content-length') {
+      return;
+    }
+    res.setHeader(key, value);
+  });
+};
+
 const destroyBrowserRuntime = async (
   runtime: BrowserRuntime,
 ): Promise<void> => {
@@ -1303,11 +1404,7 @@ const destroyBrowserRuntime = async (
   } catch {
     // ignore
   }
-  try {
-    await runtime.devServer?.close?.();
-  } catch {
-    // ignore
-  }
+  await closeAllProjectServers(runtime.projectServers.values());
   try {
     runtime.wss?.close();
   } catch {
@@ -1358,8 +1455,7 @@ const registerWatchCleanup = (): void => {
 
 const createBrowserRuntime = async ({
   context,
-  manifestPath,
-  manifestSource,
+  projectEntries,
   tempDir,
   isWatchMode,
   onTriggerRerun,
@@ -1368,8 +1464,7 @@ const createBrowserRuntime = async ({
   forceHeadless,
 }: {
   context: RstestContext;
-  manifestPath: string;
-  manifestSource: string;
+  projectEntries: BrowserProjectEntries[];
   tempDir: string;
   isWatchMode: boolean;
   onTriggerRerun?: () => Promise<void>;
@@ -1378,10 +1473,7 @@ const createBrowserRuntime = async ({
   /** Force headless mode regardless of user config (used for list command) */
   forceHeadless?: boolean;
 }): Promise<BrowserRuntime> => {
-  const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin({
-    [manifestPath]: manifestSource,
-  });
-
+  // ---- Shared singletons (created once, wired into every project server) ----
   const containerHtmlTemplate = containerDistPath
     ? await fs.readFile(join(containerDistPath, 'index.html'), 'utf-8')
     : null;
@@ -1402,12 +1494,6 @@ const createBrowserRuntime = async ({
   };
 
   const browserProjects = getBrowserProjects(context);
-  const projectByEnvironmentName = new Map(
-    browserProjects.map((project) => [project.environmentName, project]),
-  );
-  const userPlugins = browserProjects.flatMap(
-    (project) => project.normalizedConfig.plugins || [],
-  );
   const browserLaunchOptions =
     ensureConsistentBrowserLaunchOptions(browserProjects);
 
@@ -1416,8 +1502,9 @@ const createBrowserRuntime = async ({
     import.meta.resolve('@rstest/core/internal/browser-runtime'),
   );
 
-  const rstestInternalAliases = {
-    '@rstest/browser-manifest': manifestPath,
+  // Shared by every project — only the per-project `@rstest/browser-manifest`
+  // alias varies (one virtual manifest per server).
+  const staticRstestAliases = {
     // User test code: import { describe, it } from '@rstest/core'
     '@rstest/core': resolveBrowserFile('client/public.ts'),
     // User test code: import { page } from '@rstest/browser'
@@ -1427,225 +1514,15 @@ const createBrowserRuntime = async ({
     '@rstest/core/internal/browser-runtime': browserRuntimePath,
   };
 
-  const rsbuildInstance = await createRsbuild({
-    callerName: 'rstest-browser',
-    rsbuildConfig: {
-      root: context.rootPath,
-      mode: 'development',
-      plugins: userPlugins,
-      server: {
-        printUrls: false,
-        port: browserLaunchOptions.port ?? 4000,
-        strictPort: browserLaunchOptions.strictPort,
-      },
-      dev: createBrowserRsbuildDevConfig(isWatchMode),
-      environments: {
-        ...Object.fromEntries(
-          browserProjects.map((project) => [project.environmentName, {}]),
-        ),
-      },
-    },
-  });
+  // rspack `define` replaces `process.env` / `import.meta.env` with this literal
+  // expression. JSON.stringify reproduces the exact double-quoted `"rstest.env"`
+  // text, so the owned key can never drift from the runtime
+  // `Symbol.for(RSTEST_ENV_SYMBOL_KEY)` sites.
+  const rstestEnvDefine = `globalThis[Symbol.for(${JSON.stringify(
+    RSTEST_ENV_SYMBOL_KEY,
+  )})]`;
 
-  // Add plugin to merge user Rsbuild config with rstest required config
-  rsbuildInstance.addPlugins([
-    {
-      name: 'rstest:browser-user-config',
-      setup(api) {
-        // Internal extension entry: register host dispatch handlers without
-        // coupling scheduling to individual capability implementations.
-        (api as { expose?: (name: string, value: unknown) => void }).expose?.(
-          'rstest:browser',
-          {
-            registerDispatchHandler: (
-              namespace: string,
-              handler: BrowserDispatchHandler,
-            ) => {
-              dispatchHandlers.set(namespace, handler);
-            },
-          },
-        );
-
-        api.modifyEnvironmentConfig({
-          handler: (config, { mergeEnvironmentConfig, name }) => {
-            const project = projectByEnvironmentName.get(name);
-            if (!project) {
-              return config;
-            }
-
-            const userRsbuildConfig = project.normalizedConfig;
-            const buildCache = resolveProjectBuildCache({
-              context,
-              project,
-            });
-            const setupFiles = Object.values(
-              getSetupFiles(
-                project.normalizedConfig.setupFiles,
-                project.rootPath,
-              ),
-            );
-            // rspack `define` replaces `process.env` / `import.meta.env` with
-            // this literal expression. JSON.stringify reproduces the exact
-            // double-quoted `"rstest.env"` text, so the owned key can never
-            // drift from the runtime `Symbol.for(RSTEST_ENV_SYMBOL_KEY)` sites.
-            const rstestEnvDefine = `globalThis[Symbol.for(${JSON.stringify(
-              RSTEST_ENV_SYMBOL_KEY,
-            )})]`;
-            // Merge order: current config -> userConfig -> rstest required config (highest priority)
-            const merged = mergeEnvironmentConfig(
-              config,
-              {
-                ...userRsbuildConfig,
-                performance: buildCache
-                  ? {
-                      ...userRsbuildConfig.performance,
-                      buildCache,
-                    }
-                  : userRsbuildConfig.performance,
-              },
-              {
-                resolve: {
-                  alias: rstestInternalAliases,
-                },
-                source: {
-                  define: {
-                    'process.env': rstestEnvDefine,
-                    'import.meta.env': rstestEnvDefine,
-                  },
-                },
-                output: {
-                  target: 'web',
-                  // Enable source map for inline snapshot support
-                  sourceMap: {
-                    js: 'source-map',
-                  },
-                },
-                tools: {
-                  rspack: (rspackConfig) => {
-                    rspackConfig.mode = 'development';
-                    rspackConfig.lazyCompilation =
-                      createBrowserLazyCompilationConfig(setupFiles);
-                    rspackConfig.plugins = rspackConfig.plugins || [];
-                    rspackConfig.plugins.push(virtualManifestPlugin);
-
-                    applyDefaultWatchOptions(rspackConfig, isWatchMode);
-
-                    // Extract and merge sourcemaps from pre-built @rstest/core files
-                    // This preserves the sourcemap chain for inline snapshot support
-                    // See: https://rspack.dev/config/module-rules#rulesextractsourcemap
-                    const browserRuntimeDir = dirname(browserRuntimePath);
-                    rspackConfig.module = rspackConfig.module || {};
-                    rspackConfig.module.rules = rspackConfig.module.rules || [];
-                    rspackConfig.module.rules.unshift({
-                      test: /\.js$/,
-                      include: browserRuntimeDir,
-                      extractSourceMap: true,
-                    });
-
-                    if (isDebug()) {
-                      logger.log(
-                        `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
-                      );
-                    }
-                  },
-                },
-              },
-            );
-
-            // Completely overwrite entry to prevent Rsbuild default entry detection from taking effect.
-            // In browser mode, entry is fully controlled by rstest (not user's src/index.ts).
-            // This must be done after mergeEnvironmentConfig to ensure highest priority.
-            merged.source = merged.source || {};
-            merged.source.entry = {
-              runner: resolveBrowserFile('client/entry.ts'),
-            };
-
-            return merged;
-          },
-          // Execute after all other plugins to ensure rstest's entry config has the highest priority
-          order: 'post',
-        });
-      },
-    },
-  ]);
-
-  // Register watch plugin if in watch mode
-  if (isWatchMode && onTriggerRerun) {
-    rsbuildInstance.addPlugins([
-      {
-        name: 'rstest:browser-watch',
-        setup(api) {
-          api.onBeforeDevCompile(() => {
-            if (!watchContext.hooksEnabled) {
-              return;
-            }
-            logger.log(color.cyan('\nFile changed, re-running tests...\n'));
-          });
-
-          api.onAfterDevCompile(async ({ stats }) => {
-            // Collect hashes even during initial build to establish baseline
-            if (stats) {
-              const projectEntries = await collectProjectEntries(context);
-              const entryTestFiles = new Set<string>(
-                collectWatchTestFiles(projectEntries).map(
-                  (file) => file.testPath,
-                ),
-              );
-
-              const statsJson = stats.toJson({ all: true });
-              const affected = getAffectedTestFiles(
-                statsJson.chunks,
-                entryTestFiles,
-              );
-              watchContext.affectedTestFiles = affected;
-
-              if (affected.length > 0) {
-                logger.debug(
-                  `[Watch] Affected test files: ${affected.join(', ')}`,
-                );
-              }
-            }
-
-            if (!watchContext.hooksEnabled) {
-              return;
-            }
-
-            await onTriggerRerun();
-          });
-        },
-      },
-    ]);
-  }
-
-  // Register coverage plugin for browser mode
-  const coverage = browserProjects.find(
-    (project) => project.normalizedConfig.coverage?.enabled,
-  )?.normalizedConfig.coverage;
-  if (coverage?.enabled && context.command !== 'list') {
-    const { pluginCoverage } = await loadCoverageProvider(
-      coverage,
-      context.rootPath,
-    );
-    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
-  }
-
-  const devServer = await rsbuildInstance.createDevServer({
-    getPortSilently: true,
-  });
-
-  if (isDebug()) {
-    await rsbuildInstance.inspectConfig({
-      writeToDisk: true,
-      extraConfigs: {
-        rstest: {
-          ...context.normalizedConfig,
-          projects: browserProjects.map((p) => p.normalizedConfig),
-        },
-      },
-    });
-  }
-
-  // Serve prebuilt container assets (SPA) via sirv
+  // Serve prebuilt container assets (SPA) via sirv (container origin only)
   const serveContainer = containerDistPath
     ? sirv(containerDistPath, {
         dev: false,
@@ -1675,13 +1552,7 @@ const createBrowserRuntime = async ({
       let html = await response.text();
       html = html.replace(OPTIONS_PLACEHOLDER, serializedOptions);
 
-      res.statusCode = response.status;
-      response.headers.forEach((value, key) => {
-        if (key.toLowerCase() === 'content-length') {
-          return;
-        }
-        res.setHeader(key, value);
-      });
+      copyProxyResponseHeaders(response, res);
       res.setHeader('Content-Type', 'text/html');
       res.end(html);
       return true;
@@ -1709,13 +1580,7 @@ const createBrowserRuntime = async ({
       }
 
       const buffer = Buffer.from(await response.arrayBuffer());
-      res.statusCode = response.status;
-      response.headers.forEach((value, key) => {
-        if (key.toLowerCase() === 'content-length') {
-          return;
-        }
-        res.setHeader(key, value);
-      });
+      copyProxyResponseHeaders(response, res);
       res.end(buffer);
       return true;
     } catch (error) {
@@ -1726,75 +1591,366 @@ const createBrowserRuntime = async ({
     }
   };
 
-  devServer.middlewares.use(
-    async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
-      if (!req.url) {
-        next();
-        return;
-      }
-      const url = new URL(req.url, 'http://localhost');
-      if (url.pathname === '/__open-in-editor') {
-        const file = url.searchParams.get('file');
-        if (!file) {
-          res.statusCode = 400;
-          res.end('Missing file');
-          return;
-        }
-        try {
-          await openEditor([{ file }]);
-          res.statusCode = 204;
-          res.end();
-        } catch (error) {
-          logger.debug(`[Browser UI] Failed to open editor: ${String(error)}`);
-          res.statusCode = 500;
-          res.end('Failed to open editor');
-        }
-        return;
-      }
-      if (url.pathname === '/') {
-        if (await respondWithDevServerHtml(url, res)) {
-          return;
-        }
-
-        const html =
-          injectedContainerHtml ||
-          containerHtmlTemplate?.replace(OPTIONS_PLACEHOLDER, 'null');
-
-        if (html) {
-          res.setHeader('Content-Type', 'text/html');
-          res.end(html);
-          return;
-        }
-
-        res.statusCode = 502;
-        res.end('Container UI is not available.');
-        return;
-      }
-      if (url.pathname.startsWith('/container-static/')) {
-        if (await proxyDevServerAsset(req, res)) {
-          return;
-        }
-
-        if (serveContainer) {
-          serveContainer(req, res, next);
-          return;
-        }
-
-        res.statusCode = 502;
-        res.end('Container assets are not available.');
-        return;
-      }
-      if (url.pathname === '/runner.html') {
-        res.setHeader('Content-Type', 'text/html');
-        res.end(htmlTemplate);
-        return;
-      }
-      next();
-    },
+  const entryByEnvironmentName = new Map(
+    projectEntries.map((entry) => [entry.project.environmentName, entry]),
   );
 
-  const { port: listenPort } = await devServer.listen();
-  const port = resolveListenPort(listenPort, devServer.httpServer);
+  // ---- Build one isolated rsbuild instance + dev server per project ----
+  const buildProjectServer = async (
+    project: ProjectContext,
+    isContainerServer: boolean,
+  ): Promise<BrowserProjectServer> => {
+    const manifestPath = join(
+      tempDir,
+      toSafeVarName(project.environmentName),
+      VIRTUAL_MANIFEST_FILENAME,
+    );
+    const entry = entryByEnvironmentName.get(project.environmentName);
+    const manifestSource = generateManifestModule({
+      manifestPath,
+      entries: [
+        {
+          project,
+          testFiles: entry?.testFiles ?? [],
+          setupFiles: entry?.setupFiles ?? [],
+        },
+      ],
+      isWatchMode,
+    });
+    const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin({
+      [manifestPath]: manifestSource,
+    });
+
+    const rstestInternalAliases = {
+      '@rstest/browser-manifest': manifestPath,
+      ...staticRstestAliases,
+    };
+
+    const isHeadless =
+      forceHeadless || project.normalizedConfig.browser.headless;
+    const enableHmr = shouldEnableBrowserHmr(isWatchMode, isHeadless);
+
+    const rsbuildInstance = await createRsbuild({
+      callerName: 'rstest-browser',
+      rsbuildConfig: {
+        root: context.rootPath,
+        mode: 'development',
+        plugins: project.normalizedConfig.plugins || [],
+        server: {
+          printUrls: false,
+          // Each project gets its own dev server. Honor an explicitly
+          // configured port; otherwise keep the historical 4000 default for the
+          // container server and let the OS assign free ports for the rest, so
+          // multiple projects never collide on one port.
+          port:
+            project.normalizedConfig.browser.port ??
+            (isContainerServer ? 4000 : 0),
+          strictPort: project.normalizedConfig.browser.strictPort,
+        },
+        dev: createBrowserRsbuildDevConfig(enableHmr),
+        environments: {
+          [project.environmentName]: {},
+        },
+      },
+    });
+
+    // Add plugin to merge user Rsbuild config with rstest required config
+    rsbuildInstance.addPlugins([
+      {
+        name: 'rstest:browser-user-config',
+        setup(api) {
+          // Internal extension entry: register host dispatch handlers without
+          // coupling scheduling to individual capability implementations.
+          (api as { expose?: (name: string, value: unknown) => void }).expose?.(
+            'rstest:browser',
+            {
+              registerDispatchHandler: (
+                namespace: string,
+                handler: BrowserDispatchHandler,
+              ) => {
+                dispatchHandlers.set(namespace, handler);
+              },
+            },
+          );
+
+          api.modifyEnvironmentConfig({
+            handler: (config, { mergeEnvironmentConfig, name }) => {
+              if (name !== project.environmentName) {
+                return config;
+              }
+
+              const userRsbuildConfig = project.normalizedConfig;
+              const buildCache = resolveProjectBuildCache({
+                context,
+                project,
+              });
+              const setupFiles = Object.values(
+                getSetupFiles(
+                  project.normalizedConfig.setupFiles,
+                  project.rootPath,
+                ),
+              );
+              // Merge order: current config -> userConfig -> rstest required config (highest priority)
+              const merged = mergeEnvironmentConfig(
+                config,
+                {
+                  ...userRsbuildConfig,
+                  performance: buildCache
+                    ? {
+                        ...userRsbuildConfig.performance,
+                        buildCache,
+                      }
+                    : userRsbuildConfig.performance,
+                },
+                {
+                  resolve: {
+                    alias: rstestInternalAliases,
+                  },
+                  source: {
+                    define: {
+                      'process.env': rstestEnvDefine,
+                      'import.meta.env': rstestEnvDefine,
+                    },
+                  },
+                  output: {
+                    target: 'web',
+                    // Enable source map for inline snapshot support
+                    sourceMap: {
+                      js: 'source-map',
+                    },
+                  },
+                  tools: {
+                    rspack: (rspackConfig) => {
+                      rspackConfig.mode = 'development';
+                      // lazyCompilation's only delivery transport is the HMR
+                      // runtime, so it follows the same gate as HMR (see
+                      // `shouldEnableBrowserHmr`): headed watch only, everything
+                      // else compiles eagerly.
+                      rspackConfig.lazyCompilation = enableHmr
+                        ? createBrowserLazyCompilationConfig(setupFiles)
+                        : false;
+                      rspackConfig.plugins = rspackConfig.plugins || [];
+                      rspackConfig.plugins.push(virtualManifestPlugin);
+
+                      applyDefaultWatchOptions(rspackConfig, isWatchMode);
+
+                      // Extract and merge sourcemaps from pre-built @rstest/core files
+                      // This preserves the sourcemap chain for inline snapshot support
+                      // See: https://rspack.dev/config/module-rules#rulesextractsourcemap
+                      const browserRuntimeDir = dirname(browserRuntimePath);
+                      rspackConfig.module = rspackConfig.module || {};
+                      rspackConfig.module.rules =
+                        rspackConfig.module.rules || [];
+                      rspackConfig.module.rules.unshift({
+                        test: /\.js$/,
+                        include: browserRuntimeDir,
+                        extractSourceMap: true,
+                      });
+
+                      if (isDebug()) {
+                        logger.log(
+                          `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
+                        );
+                      }
+                    },
+                  },
+                },
+              );
+
+              // Completely overwrite entry to prevent Rsbuild default entry detection from taking effect.
+              // In browser mode, entry is fully controlled by rstest (not user's src/index.ts).
+              // This must be done after mergeEnvironmentConfig to ensure highest priority.
+              merged.source = merged.source || {};
+              merged.source.entry = {
+                runner: resolveBrowserFile('client/entry.ts'),
+              };
+
+              return merged;
+            },
+            // Execute after all other plugins to ensure rstest's entry config has the highest priority
+            order: 'post',
+          });
+        },
+      },
+    ]);
+
+    // Register watch plugin if in watch mode
+    if (isWatchMode && onTriggerRerun) {
+      rsbuildInstance.addPlugins([
+        {
+          name: 'rstest:browser-watch',
+          setup(api) {
+            api.onBeforeDevCompile(() => {
+              if (!watchContext.hooksEnabled) {
+                return;
+              }
+              logger.log(color.cyan('\nFile changed, re-running tests...\n'));
+            });
+
+            api.onAfterDevCompile(async ({ stats }) => {
+              // Collect hashes even during initial build to establish baseline
+              if (stats) {
+                const allProjectEntries = await collectProjectEntries(context);
+                const entryTestFiles = new Set<string>(
+                  collectWatchTestFiles(allProjectEntries).map(
+                    (file) => file.testPath,
+                  ),
+                );
+
+                const statsJson = stats.toJson({ all: true });
+                const affected = getAffectedTestFiles(
+                  statsJson.chunks,
+                  entryTestFiles,
+                );
+                watchContext.affectedTestFiles = affected;
+
+                if (affected.length > 0) {
+                  logger.debug(
+                    `[Watch] Affected test files: ${affected.join(', ')}`,
+                  );
+                }
+              }
+
+              if (!watchContext.hooksEnabled) {
+                return;
+              }
+
+              await onTriggerRerun();
+            });
+          },
+        },
+      ]);
+    }
+
+    // Register coverage plugin if this project enables coverage
+    const coverage = project.normalizedConfig.coverage;
+    if (coverage?.enabled && context.command !== 'list') {
+      const { pluginCoverage } = await loadCoverageProvider(
+        coverage,
+        context.rootPath,
+      );
+      rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
+    }
+
+    const devServer = await rsbuildInstance.createDevServer({
+      getPortSilently: true,
+    });
+
+    if (isDebug()) {
+      await rsbuildInstance.inspectConfig({
+        writeToDisk: true,
+        extraConfigs: {
+          rstest: {
+            ...context.normalizedConfig,
+            projects: [project.normalizedConfig],
+          },
+        },
+      });
+    }
+
+    devServer.middlewares.use(
+      async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+        if (!req.url) {
+          next();
+          return;
+        }
+        const url = new URL(req.url, 'http://localhost');
+        if (url.pathname === '/__open-in-editor') {
+          const file = url.searchParams.get('file');
+          if (!file) {
+            res.statusCode = 400;
+            res.end('Missing file');
+            return;
+          }
+          try {
+            await openEditor([{ file }]);
+            res.statusCode = 204;
+            res.end();
+          } catch (error) {
+            logger.debug(
+              `[Browser UI] Failed to open editor: ${String(error)}`,
+            );
+            res.statusCode = 500;
+            res.end('Failed to open editor');
+          }
+          return;
+        }
+        // Container UI HTML + static assets are served by the container origin
+        // only. Per-project runner servers expose just /runner.html + assets.
+        if (isContainerServer) {
+          if (url.pathname === '/') {
+            if (await respondWithDevServerHtml(url, res)) {
+              return;
+            }
+
+            const html =
+              injectedContainerHtml ||
+              containerHtmlTemplate?.replace(OPTIONS_PLACEHOLDER, 'null');
+
+            if (html) {
+              res.setHeader('Content-Type', 'text/html');
+              res.end(html);
+              return;
+            }
+
+            res.statusCode = 502;
+            res.end('Container UI is not available.');
+            return;
+          }
+          if (url.pathname.startsWith('/container-static/')) {
+            if (await proxyDevServerAsset(req, res)) {
+              return;
+            }
+
+            if (serveContainer) {
+              serveContainer(req, res, next);
+              return;
+            }
+
+            res.statusCode = 502;
+            res.end('Container assets are not available.');
+            return;
+          }
+        }
+        if (url.pathname === '/runner.html') {
+          res.setHeader('Content-Type', 'text/html');
+          res.end(htmlTemplate);
+          return;
+        }
+        next();
+      },
+    );
+
+    const { port: listenPort } = await devServer.listen();
+    const port = resolveListenPort(listenPort, devServer.httpServer);
+
+    return {
+      projectName: project.name,
+      environmentName: project.environmentName,
+      rsbuildInstance,
+      devServer,
+      port,
+      manifestPath,
+    };
+  };
+
+  // Build each project's server sequentially. Servers must bind ports one at a
+  // time: projects may share a configured port and rely on strictPort:false
+  // bumping to the next free one, which races under concurrent listen().
+  const projectServers = new Map<string, BrowserProjectServer>();
+  try {
+    for (const [index, project] of browserProjects.entries()) {
+      const server = await buildProjectServer(project, index === 0);
+      projectServers.set(server.projectName, server);
+    }
+  } catch (error) {
+    await closeAllProjectServers(projectServers.values());
+    throw error;
+  }
+
+  // browserProjects is non-empty (ensureConsistentBrowserLaunchOptions throws
+  // otherwise) and index 0 is the designated container origin.
+  const containerServer = projectServers.get(browserProjects[0]!.name)!;
 
   // Create WebSocket server on an available port
   // Using port: 0 lets the OS assign an available port, avoiding conflicts
@@ -1818,22 +1974,19 @@ const createBrowserRuntime = async ({
       providerOptions: browserLaunchOptions.providerOptions,
     });
     return {
-      rsbuildInstance,
-      devServer,
+      projectServers,
+      containerServer,
       browser: runtime.browser,
       browserLaunchOptions,
-      port,
       wsPort,
-      manifestPath,
       tempDir,
-      manifestPlugin: virtualManifestPlugin,
       setContainerOptions,
       dispatchHandlers,
       wss,
     };
   } catch (error) {
     wss.close();
-    await devServer.close();
+    await closeAllProjectServers(projectServers.values());
     throw error;
   }
 };
@@ -2159,12 +2312,6 @@ export const runBrowserController = async (
             Date.now().toString(),
           );
 
-  const manifestPath = join(tempDir, VIRTUAL_MANIFEST_FILENAME);
-  const manifestSource = generateManifestModule({
-    manifestPath,
-    entries: projectEntries,
-  });
-
   // Track initial test files for watch mode
   if (isWatchMode) {
     watchContext.lastTestFiles = collectWatchTestFiles(projectEntries);
@@ -2179,8 +2326,7 @@ export const runBrowserController = async (
     try {
       runtime = await createBrowserRuntime({
         context,
-        manifestPath,
-        manifestSource,
+        projectEntries,
         tempDir,
         isWatchMode,
         onTriggerRerun: isWatchMode
@@ -2209,7 +2355,7 @@ export const runBrowserController = async (
     }
   }
 
-  const { browser, browserLaunchOptions, port, wsPort, wss } = runtime;
+  const { browser, browserLaunchOptions, wsPort, wss } = runtime;
   const buildTime = Date.now() - buildStart;
 
   // Collect all test files from project entries with project info
@@ -2240,13 +2386,22 @@ export const runBrowserController = async (
     ),
   );
 
+  const projectRunnerUrls = Object.fromEntries(
+    [...runtime.projectServers].map(([name, server]) => [
+      name,
+      `http://localhost:${server.port}`,
+    ]),
+  );
+
   const hostOptions: BrowserHostConfig = {
     rootPath: normalize(context.rootPath),
     projects: projectRuntimeConfigs,
     snapshot: {
       updateSnapshot: context.snapshotManager.options.updateSnapshot,
     },
-    runnerUrl: `http://localhost:${port}`,
+    // Container origin (fallback). Per-project runner origins below.
+    runnerUrl: `http://localhost:${runtime.containerServer.port}`,
+    projectRunnerUrls,
     wsPort,
     debug: isDebug(),
     rpcTimeout: maxTestTimeoutForRpc,
@@ -2906,7 +3061,13 @@ export const runBrowserController = async (
           `window.__RSTEST_BROWSER_OPTIONS__ = ${serializedOptions};`,
         );
 
-        await page.goto(`http://localhost:${port}/runner.html`, {
+        const projectServer = runtime.projectServers.get(file.projectName);
+        if (!projectServer) {
+          throw new Error(
+            `No browser dev server for project "${file.projectName}" (test file: ${file.testPath}).`,
+          );
+        }
+        await page.goto(`http://localhost:${projectServer.port}/runner.html`, {
           waitUntil: 'load',
         });
 
@@ -3553,13 +3714,14 @@ export const runBrowserController = async (
   // Only navigate on first creation
   if (isNewPage) {
     const pagePath = '/';
-    await containerPage.goto(`http://localhost:${port}${pagePath}`, {
+    const containerPort = runtime.containerServer.port;
+    await containerPage.goto(`http://localhost:${containerPort}${pagePath}`, {
       waitUntil: 'load',
     });
 
     logger.log(
       color.cyan(
-        `\nBrowser mode opened at http://localhost:${port}${pagePath}\n`,
+        `\nBrowser mode opened at http://localhost:${containerPort}${pagePath}\n`,
       ),
     );
   }
@@ -3791,11 +3953,6 @@ export const listBrowserTests = async (
     `list-${Date.now()}`,
   );
 
-  const manifestPath = join(tempDir, VIRTUAL_MANIFEST_FILENAME);
-  const manifestSource = generateManifestModule({
-    manifestPath,
-    entries: projectEntries,
-  });
   const browserProjects = getBrowserProjects(context);
 
   // Create a simplified browser runtime for collect mode
@@ -3803,8 +3960,7 @@ export const listBrowserTests = async (
   try {
     runtime = await createBrowserRuntime({
       context,
-      manifestPath,
-      manifestSource,
+      projectEntries,
       tempDir,
       isWatchMode: false,
       containerDistPath: undefined,
@@ -3826,7 +3982,7 @@ export const listBrowserTests = async (
     throw error;
   }
 
-  const { browser, browserLaunchOptions, port } = runtime;
+  const { browser, browserLaunchOptions } = runtime;
 
   // Get browser projects for runtime config
   // Normalize projectRoot to posix format for cross-platform compatibility
@@ -3860,105 +4016,122 @@ export const listBrowserTests = async (
 
   runtime.setContainerOptions(hostOptions);
 
-  // Collect results
-  const collectResults: ListCommandResult[] = [];
-  let fatalError: Error | null = null;
-  let collectCompleted = false;
-
-  // Promise that resolves when collection is complete
-  let resolveCollect: (() => void) | undefined;
-  const collectPromise = new Promise<void>((resolve) => {
-    resolveCollect = resolve;
-  });
-
-  // Create a headless page to run collection
+  // Collect results across every project's isolated dev server. Each server
+  // serves only its own project's manifest, so collection navigates one page
+  // per project; each page returns its own results, aggregated afterwards.
   const browserContext = await browser.newContext({
     providerOptions: browserLaunchOptions.providerOptions,
     viewport: null,
   });
-  const page = await browserContext.newPage();
 
-  // Expose dispatch function for browser client to send messages
-  await page.exposeFunction(
-    DISPATCH_MESSAGE_TYPE,
-    (message: { type: string; payload?: unknown }) => {
-      switch (message.type) {
-        case 'collect-result': {
-          const payload = message.payload as {
-            testPath: string;
-            project: string;
-            tests: Test[];
-          };
-          collectResults.push({
-            testPath: payload.testPath,
-            project: payload.project,
-            tests: payload.tests,
-          });
-          break;
-        }
-        case 'collect-complete':
-          collectCompleted = true;
-          resolveCollect?.();
-          break;
-        case 'fatal': {
-          const payload = message.payload as {
-            message: string;
-            stack?: string;
-          };
-          fatalError = new Error(payload.message);
-          fatalError.stack = payload.stack;
-          resolveCollect?.();
-          break;
-        }
-        case 'ready':
-        case 'log':
-          // Ignore these messages during collection
-          break;
-        default:
-          // Log unexpected messages for debugging
-          logger.debug(`[List] Unexpected message: ${message.type}`);
-      }
-    },
-  );
-
-  // Inject host options before navigation so the runner can access them
   const serializedOptions = serializeForInlineScript(hostOptions);
-  await page.addInitScript(
-    `window.__RSTEST_BROWSER_OPTIONS__ = ${serializedOptions};`,
+
+  const collectFromServer = async (
+    server: BrowserProjectServer,
+  ): Promise<{ results: ListCommandResult[]; error: Error | null }> => {
+    const results: ListCommandResult[] = [];
+    let error: Error | null = null;
+    let collectCompleted = false;
+    let resolveCollect: (() => void) | undefined;
+    const collectPromise = new Promise<void>((resolve) => {
+      resolveCollect = resolve;
+    });
+
+    const page = await browserContext.newPage();
+
+    // Expose dispatch function for browser client to send messages
+    await page.exposeFunction(
+      DISPATCH_MESSAGE_TYPE,
+      (message: { type: string; payload?: unknown }) => {
+        switch (message.type) {
+          case 'collect-result': {
+            const payload = message.payload as {
+              testPath: string;
+              project: string;
+              tests: Test[];
+            };
+            results.push({
+              testPath: payload.testPath,
+              project: payload.project,
+              tests: payload.tests,
+            });
+            break;
+          }
+          case 'collect-complete':
+            collectCompleted = true;
+            resolveCollect?.();
+            break;
+          case 'fatal': {
+            const payload = message.payload as {
+              message: string;
+              stack?: string;
+            };
+            error = new Error(payload.message);
+            error.stack = payload.stack;
+            resolveCollect?.();
+            break;
+          }
+          case 'ready':
+          case 'log':
+            // Ignore these messages during collection
+            break;
+          default:
+            // Log unexpected messages for debugging
+            logger.debug(`[List] Unexpected message: ${message.type}`);
+        }
+      },
+    );
+
+    // Inject host options before navigation so the runner can access them
+    await page.addInitScript(
+      `window.__RSTEST_BROWSER_OPTIONS__ = ${serializedOptions};`,
+    );
+
+    // Navigate to this project's runner page
+    await page.goto(`http://localhost:${server.port}/runner.html`, {
+      waitUntil: 'load',
+    });
+
+    // Wait for collection to complete with timeout
+    const timeoutMs = 30000;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<void>((resolve) => {
+      timeoutId = setTimeout(() => {
+        if (!collectCompleted) {
+          logger.warn(
+            color.yellow(
+              `[List] Browser test collection timed out after ${timeoutMs}ms`,
+            ),
+          );
+        }
+        resolve();
+      }, timeoutMs);
+    });
+
+    await Promise.race([collectPromise, timeoutPromise]);
+
+    // Clear timeout to prevent Node.js from waiting for it
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+
+    await page.close().catch(() => {});
+    return { results, error };
+  };
+
+  // Collect every project concurrently — each navigates its own page against
+  // its own dev server and returns its own results.
+  const collected = await Promise.all(
+    [...runtime.projectServers.values()].map((server) =>
+      collectFromServer(server),
+    ),
   );
-
-  // Navigate to runner page
-  await page.goto(`http://localhost:${port}/runner.html`, {
-    waitUntil: 'load',
-  });
-
-  // Wait for collection to complete with timeout
-  const timeoutMs = 30000;
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<void>((resolve) => {
-    timeoutId = setTimeout(() => {
-      if (!collectCompleted) {
-        logger.warn(
-          color.yellow(
-            `[List] Browser test collection timed out after ${timeoutMs}ms`,
-          ),
-        );
-      }
-      resolve();
-    }, timeoutMs);
-  });
-
-  await Promise.race([collectPromise, timeoutPromise]);
-
-  // Clear timeout to prevent Node.js from waiting for it
-  if (timeoutId) {
-    clearTimeout(timeoutId);
-  }
+  const collectResults = collected.flatMap((entry) => entry.results);
+  const fatalError = collected.find((entry) => entry.error)?.error ?? null;
 
   // Cleanup
   const cleanup = async () => {
     try {
-      await page.close();
       await browserContext.close();
     } catch {
       // ignore
@@ -3976,8 +4149,8 @@ export const listBrowserTests = async (
       errors: [
         {
           name: 'BrowserCollectError',
-          message: (fatalError as Error).message,
-          stack: (fatalError as Error).stack,
+          message: fatalError.message,
+          stack: fatalError.stack,
         } as FormattedError,
       ],
     };

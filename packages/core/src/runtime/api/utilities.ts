@@ -5,6 +5,7 @@ import type {
   RuntimeConfig,
   WaitForOptions,
   WaitUntilOptions,
+  Truthy,
 } from '../../types';
 import { RSTEST_ENV_SYMBOL_KEY } from '../../utils/constants';
 import { fileContext } from '../fileContext';
@@ -608,7 +609,7 @@ const buildRstestUtilities = async (): Promise<{
             throw createWaitUntilTimeoutError(timeout);
           }
           if (value) {
-            return value;
+            return value as Truthy<typeof value>;
           }
 
           if (timedOut) {

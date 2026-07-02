@@ -73,6 +73,18 @@ expect(hi.sayHi()).toBe('hello');
 expect(rs.spyOn(hi, 'sayHi')).toBeCalled();
 ```
 
+:::note Spying on re-exported or third-party exports
+
+`rs.spyOn` works on an export defined in the module you import from, but not on one **re-exported** from another module (`export * from '...'`) or provided by a third-party dependency — there the spy may not take effect.
+
+For those, mock the module with [`{ spy: true }`](/api/runtime-api/rstest/mock-modules#with-spy-true-option) instead. It spies every export while keeping its real implementation:
+
+```ts
+rs.mock('pkg', { spy: true });
+```
+
+:::
+
 ## rs.isMockFunction
 
 - **Alias:** `rstest.isMockFunction`

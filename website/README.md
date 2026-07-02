@@ -15,3 +15,7 @@ The same as Rspack: [Writing style guide](https://github.com/web-infra-dev/rspac
 For images you use in the document, it's better to upload them to the [rstackjs/rstack-design-resources](https://github.com/rstackjs/rstack-design-resources) repository, so the size of the current repository doesn't get too big.
 
 After you upload the images there, they will be automatically deployed under the <https://assets.rspack.rs/>.
+
+## Open Graph images
+
+`scripts/og-image/` generates per-release Open Graph images used by the `og:image` and `twitter:image` meta tags on each release blog post. See [AGENTS.md](./AGENTS.md#open-graph-image-generation) for the template architecture and release workflow.
