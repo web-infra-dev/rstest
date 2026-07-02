@@ -26,8 +26,12 @@ import {
 
 const importMetaResolve = import.meta.resolve?.bind(import.meta);
 
+// Set, not array scan: `isBuiltinSpecifier` sits on the native-mock resolve
+// hook's per-resolution hot path (nativeMockHooks.ts).
+const BUILTIN_MODULES = new Set(builtinModules);
+
 export const isBuiltinSpecifier = (specifier: string): boolean =>
-  specifier.startsWith('node:') || builtinModules.includes(specifier);
+  specifier.startsWith('node:') || BUILTIN_MODULES.has(specifier);
 
 /**
  * Normalize a builtin specifier to its `node:` canonical form. Node treats the

@@ -13,14 +13,13 @@ import { getRealTimers } from '../util';
 import type { FakeTimerInstallOpts, FakeTimersSnapshot } from './fakeTimers';
 import {
   getNativeMock,
+  type NativeMockResolvedInfo,
+  resolveNativeMockKeys,
   setNativeMock,
   unsetNativeMock,
 } from '../worker/mockRegistry';
 import { mockObject as mockObjectImpl } from './mockObject';
 import { initSpy } from './spy';
-// Browser-safe path/URL helpers (no `node:url`/`node:path`); keeps this shared
-// module linkable in the browser runtime build.
-import { pathToFileURL } from 'url-extras';
 
 const DEFAULT_WAIT_TIMEOUT = 1000;
 const DEFAULT_WAIT_INTERVAL = 50;
@@ -133,36 +132,6 @@ let utilitiesPromise:
  * per-file `useRealTimers`, unchanged.
  * See https://github.com/web-infra-dev/rstest/issues/1376.
  */
-// #1454: browser-safe key computation for the native-mock bridge.
-// Mirrors the Node-only hook key (nativeMockHooks.ts) but imports nothing from
-// `node:url` / `node:module`, so this shared module stays linkable in the
-// browser runtime build. `import.meta.resolve` is undefined in browser mode, so
-// only the trivial `node:` short-circuit survives there (native mocks are
-// meaningless without Node's loader anyway).
-const nativeImportMetaResolve = RSTEST_TARGET_BROWSER
-  ? undefined
-  : import.meta.resolve?.bind(import.meta);
-
-const resolveNativeMockKey = (
-  request: string,
-  base: string,
-): string | undefined => {
-  // `import.meta.resolve` returns the `node:`-prefixed form for bare builtins
-  // ('os' → 'node:os'), matching `toNodeBuiltin` on the hook side; an explicit
-  // `node:` specifier needs no resolution.
-  if (request.startsWith('node:')) {
-    return request;
-  }
-  if (!nativeImportMetaResolve) {
-    return undefined;
-  }
-  try {
-    return nativeImportMetaResolve(request, pathToFileURL(base).href);
-  } catch {
-    return undefined;
-  }
-};
-
 export const createRstestUtilities = async (): Promise<RstestUtilities> => {
   utilitiesPromise ??= buildRstestUtilities();
   const bound = await utilitiesPromise;
@@ -675,49 +644,44 @@ const buildRstestUtilities = async (): Promise<{
   // #1454: bridge the bundle's mock runtime to the worker-realm `mockRegistry`
   // that the Node `registerHooks` load hook reads. Called from
   // `mockRuntimeCode.js` at rs.mock/unmock time over the existing RSTEST_API
-  // channel (the same one `mockObject` uses). Keyed by the specifier resolved
-  // against the test file so a natively-loaded module's internal `import 'B'` —
-  // resolved by Node against that module's own URL — lands on the same key for
-  // builtins and same-realpath npm deps.
-  // Node-only: `registerHooks`, the synthetic mock module, and native ESM
-  // loading don't exist in the browser, and this bridge's key resolution uses
-  // `import.meta.resolve`/`pathToFileURL`, which crash there. The build strips
-  // this whole block from the `browser_runtime` bundle via `RSTEST_TARGET_BROWSER`.
-  if (!RSTEST_TARGET_BROWSER) {
-    const bridge = rstest as RstestUtilities & {
-      __setNativeMock?: (request: string, produce: () => unknown) => void;
-      __unsetNativeMock?: (request: string) => void;
-      // Bundler retention anchor, not runtime API — see the assignment below.
-      __getNativeMock?: typeof getNativeMock;
-    };
-    // Bundler anchor (never invoked): the synthetic mock module the Node load
-    // hook generates does `import { getNativeMock } from <REGISTRY_URL>` at
-    // RUNTIME, so the registry chunk must keep `getNativeMock` as a NAMED
-    // export. mockRegistry and nativeMockHooks share one chunk, so their
-    // internal use is inlined and does NOT retain the export; this assignment
-    // from the api chunk is a real cross-chunk consumer, which forces the
-    // bundler to keep it. (Verified: drop it and the synthetic import fails to
-    // link — `does not provide an export`.)
-    bridge.__getNativeMock = getNativeMock;
-    bridge.__setNativeMock = (request, produce) => {
-      const key = resolveNativeMockKey(
-        request,
-        fileContext().workerState.testPath,
-      );
-      if (key !== undefined && typeof produce === 'function') {
-        setNativeMock(key, produce);
-      }
-    };
-    bridge.__unsetNativeMock = (request) => {
-      const key = resolveNativeMockKey(
-        request,
-        fileContext().workerState.testPath,
-      );
-      if (key !== undefined) {
-        unsetNativeMock(key);
-      }
-    };
-  }
+  // channel (the same one `mockObject` uses). Key derivation lives with the
+  // hook (nativeMockHooks.ts, reached through the registry's injected
+  // resolver), so the write-side keys and the hook's read-side keys stay in
+  // one module; in the browser build no resolver is ever injected, keys
+  // resolve to none, and every registration is a no-op.
+  const bridge = rstest as RstestUtilities & {
+    __setNativeMock?: (
+      request: string,
+      produce: () => unknown,
+      info?: NativeMockResolvedInfo,
+    ) => void;
+    __unsetNativeMock?: (
+      request: string,
+      info?: NativeMockResolvedInfo,
+    ) => void;
+    // Bundler retention anchor, not runtime API — see the assignment below.
+    __getNativeMock?: typeof getNativeMock;
+  };
+  // Bundler anchor (never invoked): the synthetic mock module the Node load
+  // hook generates does `import { getNativeMock } from <REGISTRY_URL>` at
+  // RUNTIME, so the registry chunk must keep `getNativeMock` as a NAMED
+  // export. mockRegistry and nativeMockHooks share one chunk, so their
+  // internal use is inlined and does NOT retain the export; this assignment
+  // from the api chunk is a real cross-chunk consumer, which forces the
+  // bundler to keep it. (Verified: drop it and the synthetic import fails to
+  // link — `does not provide an export`.)
+  bridge.__getNativeMock = getNativeMock;
+  bridge.__setNativeMock = (request, produce, info) => {
+    setNativeMock(
+      resolveNativeMockKeys(request, info, fileContext().workerState.testPath),
+      produce,
+    );
+  };
+  bridge.__unsetNativeMock = (request, info) => {
+    unsetNativeMock(
+      resolveNativeMockKeys(request, info, fileContext().workerState.testPath),
+    );
+  };
 
   return { rstest, resetForFile };
 };

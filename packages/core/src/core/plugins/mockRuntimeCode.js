@@ -44,9 +44,10 @@ __webpack_require__.rstest_mocked_ids_by_request = Object.create(null);
 
 const hasOwn = (target, property) => Object.hasOwn(target, property);
 
-// The other builtin spelling of a request (`os` <-> `node:os`). Used to treat
-// both spellings as one mock: the resolver reads under either, and unmock clears
-// both. A non-builtin's toggled key is never in the map, so it's a harmless miss.
+// The other builtin spelling of a request (`os` <-> `node:os`). Both spellings
+// are one mock: `registerRequestAlias` registers BOTH at mock time so every
+// lookup stays a plain single read, and unmock deletes both. A non-builtin's
+// toggled key (e.g. `node:./dep.js`) is junk no lookup ever queries — harmless.
 const altBuiltinSpelling = (request) =>
   request.startsWith('node:') ? request.slice(5) : `node:${request}`;
 
@@ -121,7 +122,7 @@ const createMockedModule = (originalModule, isSpy) => {
 // imports not yet evaluated when the hoisted `rs.mock` runs, never runs at
 // registration time and never runs at all when no natively-loaded module imports
 // the mock. Still queued on a microtask so publish/unpublish stay ordered (see
-// `unpublishNativeMock`).
+// `queueNativeMockCall`).
 //
 // LIMITATION (function factory only): the factory runs a second time on the
 // worker side (at native-import time), so the native-realm mock is a SEPARATE
@@ -130,39 +131,38 @@ const createMockedModule = (originalModule, isSpy) => {
 // handle — calls made via the natively-loaded module will not see them. Sync
 // object-returning factories (the #1454 repro) and the spy/mock-option path are
 // unaffected.
-const publishNativeMock = (request, produce) => {
-  const api = globalThis.RSTEST_API?.rstest;
-  if (!api || typeof api.__setNativeMock !== 'function') {
-    return;
-  }
-  queueMicrotask(() => {
-    api.__setNativeMock(request, produce);
-  });
-};
-
-// Deferred on a microtask like `publishNativeMock` so install→uninstall order is
-// preserved: a synchronous unpublish would run BEFORE the deferred publish
-// microtask, which would then re-add a stale entry. Queuing both keeps the last
-// operation winning (`rs.mock` then `rs.unmock` ⇒ removed).
-const unpublishNativeMock = (request) => {
+// Publish and unpublish are BOTH deferred on a microtask so install→uninstall
+// order is preserved: a synchronous unpublish would run BEFORE a deferred
+// publish, which would then re-add a stale entry. Queuing both keeps the last
+// operation winning (`rs.mock` then `rs.unmock` ⇒ removed). The API is
+// feature-detected inside the tick, one shape for both directions.
+const queueNativeMockCall = (method, ...args) => {
   queueMicrotask(() => {
     const api = globalThis.RSTEST_API?.rstest;
-    if (api && typeof api.__unsetNativeMock === 'function') {
-      api.__unsetNativeMock(request);
+    if (api && typeof api[method] === 'function') {
+      api[method](...args);
     }
   });
 };
 
+const publishNativeMock = (request, produce, info) =>
+  queueNativeMockCall('__setNativeMock', request, produce, info);
+
+const unpublishNativeMock = (request, info) =>
+  queueNativeMockCall('__unsetNativeMock', request, info);
+
 //#region rs.unmock
-__webpack_require__.rstest_unmock = (id, request) => {
+__webpack_require__.rstest_unmock = (id, request, info) => {
   restoreOriginalFactory(id);
 
+  // Delete the same alias set `registerRequestAlias` writes.
   const map = __webpack_require__.rstest_mocked_ids_by_request;
   delete map[request];
-  // `os` and `node:os` are equivalent, so an unmock with either spelling must
-  // clear both (mirrors the resolver's read-side alt lookup).
   delete map[altBuiltinSpelling(request)];
-  unpublishNativeMock(request);
+  if (info && typeof info.r === 'string') {
+    delete map[info.r];
+  }
+  unpublishNativeMock(request, info);
 };
 //#endregion
 
@@ -203,11 +203,24 @@ const getMockImplementation = (mockType = 'mock') => {
     mockType === 'mockRequire' || mockType === 'doMockRequire';
 
   // The mock and mockRequire will resolve to different module ids when the module is a dual package.
-  return (id, modFactory, request) => {
+  // `info` is the build-resolved mock identity `{o: <declaring file>, r:
+  // <resolved target | null>}` appended by newer rspack when
+  // `emitMockResolvedInfo` is on; absent on older rspack, so every consumer
+  // treats it as optional (feature-detect by argument presence, never version).
+  return (id, modFactory, request, info) => {
     // Point a dynamic `import(request)` — which carries a different external
-    // module id — at this mocked id, so `rstest_dynamic_require` resolves it here.
+    // module id — at this mocked id, so `rstest_dynamic_require` resolves it
+    // here. Every spelling the import might carry is registered at this ONE
+    // write point — the raw request, its other builtin spelling, and the
+    // build-resolved target from newer rspack (`info.r`, e.g. an absolute
+    // path) — so every reader is a plain single lookup.
     const registerRequestAlias = () => {
-      __webpack_require__.rstest_mocked_ids_by_request[request] = id;
+      const map = __webpack_require__.rstest_mocked_ids_by_request;
+      map[request] = id;
+      map[altBuiltinSpelling(request)] = id;
+      if (info && typeof info.r === 'string') {
+        map[info.r] = id;
+      }
     };
 
     // Swap in a mock factory: install it, drop the stale cache entry, and
@@ -294,7 +307,7 @@ const getMockImplementation = (mockType = 'mock') => {
       };
 
       installFactory(finalModFactory);
-      publishNativeMock(request, () => mockedModule);
+      publishNativeMock(request, () => mockedModule, info);
       return;
     }
 
@@ -313,7 +326,7 @@ const getMockImplementation = (mockType = 'mock') => {
       // natively-loaded module that imports this mocked module sees it too.
       // `__webpack_require__(modFactory)` is cache-safe (same call as the factory
       // above), so there is no separate-instance divergence here.
-      publishNativeMock(request, () => __webpack_require__(modFactory));
+      publishNativeMock(request, () => __webpack_require__(modFactory), info);
     } else if (typeof modFactory === 'function') {
       const finalModFactory = function (
         __webpack_module__,
@@ -343,7 +356,7 @@ const getMockImplementation = (mockType = 'mock') => {
       };
 
       installFactory(finalModFactory);
-      publishNativeMock(request, modFactory);
+      publishNativeMock(request, modFactory, info);
     }
   };
 };
@@ -391,13 +404,7 @@ __webpack_require__.rstest_dynamic_require = (id, request) => {
  * mocked, so the hook performs its normal native import.
  */
 globalThis.__rstest_resolve_mocked_dynamic_request__ = (request) => {
-  const map = __webpack_require__.rstest_mocked_ids_by_request;
-  let mockedId = map[request];
-  if (mockedId === undefined) {
-    // A builtin may be mocked under its other spelling (`os` vs `node:os`),
-    // mirroring the native hook's builtin canonicalization.
-    mockedId = map[altBuiltinSpelling(request)];
-  }
+  const mockedId = __webpack_require__.rstest_mocked_ids_by_request[request];
   return mockedId !== undefined ? __webpack_require__(mockedId) : undefined;
 };
 //#endregion

@@ -115,16 +115,16 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               config.mode = isProd ? 'production' : 'development';
               config.output ??= {};
               config.output.iife = false;
-              // polyfill interop
-              // TODO: if we ever expose `output.importFunctionName` as a user
-              // option, rspack#13849's rewrite still reads it directly to pick
-              // the callee for non-string-literal `import()`. Either bind the
-              // runtime helper under the user-configured name as well, or move
-              // the dynamic-import-origin rewrite onto a dedicated rspack
-              // option so the two concerns stop sharing one identifier.
-              config.output.importFunctionName = outputModule
+              // Callee for the dynamic-import runtime hook, assigned to BOTH
+              // `output.importFunctionName` (external/dynamic import codegen —
+              // polyfills interop) and `injectDynamicImportOrigin.functionName`
+              // (the non-string-literal `import()` rewrite). Pinning the
+              // rewrite explicitly means exposing `output.importFunctionName`
+              // as a user option would not break it.
+              const dynamicImportCallee = outputModule
                 ? importMetaHook(RSTEST_DYNAMIC_IMPORT_HOOK)
                 : RSTEST_DYNAMIC_IMPORT_HOOK;
+              config.output.importFunctionName = dynamicImportCallee;
               config.output.devtoolModuleFilenameTemplate =
                 '[absolute-resource-path]';
 
@@ -143,7 +143,15 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 // The runtime hook below resolves relative dynamic-import
                 // specifiers against the source module that produced the
                 // call, instead of the test entry, fixing #1207.
-                injectDynamicImportOrigin: true,
+                injectDynamicImportOrigin: {
+                  functionName: dynamicImportCallee,
+                },
+                // Newer rspack appends the build-resolved mock identity
+                // `{o, r}` to generated `rstest_mock`/`rstest_unmock` calls;
+                // the pinned rspack ignores this unknown field, and the
+                // runtime feature-detects the extra argument, so the option
+                // is safe to pass unconditionally.
+                emitMockResolvedInfo: true,
                 // The runtime hook below resolves relative require.resolve
                 // specifiers against the source module that produced the
                 // call, instead of the test entry, fixing #848.

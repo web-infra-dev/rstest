@@ -78,6 +78,15 @@ it('non-literal import where the variable IS a mocked builtin applies the mock (
   expect(os.hostname()).toBe('MOCKED');
 });
 
+it('LITERAL dynamic import of the other builtin spelling applies the mock (all Node)', async () => {
+  // Mocked as `node:os`, imported as a literal `import('os')`. The external
+  // dynamic import routes through `rstest_dynamic_require`, keyed by the raw
+  // request — its alt-spelling lookup must find the `node:` registration.
+  // Regression pin: this lookup used to miss, serving the REAL module.
+  const os = (await import('os')) as unknown as { hostname: () => string };
+  expect(os.hostname()).toBe('MOCKED');
+});
+
 it('non-literal import of the other builtin spelling applies the mock (all Node)', async () => {
   // Mocked as `node:os`; imported via the bare `os` spelling. The request-key
   // bridge canonicalizes builtin spellings, so this matches without registerHooks.

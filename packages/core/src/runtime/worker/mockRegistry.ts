@@ -33,6 +33,12 @@ type NativeMockEntry = {
   status: 'pending' | 'resolved' | 'errored';
   exports: Record<string, unknown> | undefined;
   error: unknown;
+  /** Every registry key this entry is registered under. One mock may be keyed
+   * by several equivalent spellings of the same module (the build-resolved
+   * path from the rspack plugin, the Node-resolved URL, the legacy
+   * testPath-based resolution), so registration and removal operate on the
+   * whole alias group — an unmock computed from ANY spelling clears them all. */
+  aliases: readonly string[];
 };
 
 const registry = new Map<string, NativeMockEntry>();
@@ -53,7 +59,62 @@ export const setNativeMockInstaller = (install: () => void): void => {
   installHooks = install;
 };
 
-export const setNativeMock = (key: string, produce: () => unknown): void => {
+/** Build-resolved mock identity appended by newer rspack (see
+ * `emitMockResolvedInfo` in `core/plugins/basic.ts`): `o` is the absolute path
+ * of the module declaring the `rs.mock` call, `r` the build-resolved target —
+ * an absolute file path, an external request (e.g. a builtin spelling), or
+ * `null` when the build could not resolve it. Absent entirely on older rspack. */
+export type NativeMockResolvedInfo = { o?: string; r?: string | null };
+
+type NativeMockKeyResolver = (
+  request: string,
+  info: NativeMockResolvedInfo | undefined,
+  testPath: string,
+) => string[];
+
+// Node-only registry-key derivation, injected by nativeMockHooks at load time
+// (the same inversion as `setNativeMockInstaller`) so the WRITE-side keying
+// lives in the same module as the READ-side resolve hook that consumes the
+// keys. Stays `undefined` in the browser build, where key resolution — and
+// with it every registration — degrades to a no-op.
+let keyResolver: NativeMockKeyResolver | undefined;
+
+/** Register the key derivation; called by nativeMockHooks at load time. */
+export const setNativeMockKeyResolver = (
+  resolve: NativeMockKeyResolver,
+): void => {
+  keyResolver = resolve;
+};
+
+export const resolveNativeMockKeys: NativeMockKeyResolver = (
+  request,
+  info,
+  testPath,
+) => keyResolver?.(request, info, testPath) ?? [];
+
+// Delete every alias of any entry reachable through `keys`; returns whether
+// the registry changed. Removal always operates on the WHOLE alias group so
+// an unmock computed from any spelling clears them all.
+const deleteAliasGroups = (keys: readonly string[]): boolean => {
+  let changed = false;
+  for (const key of keys) {
+    const entry = registry.get(key);
+    if (entry) {
+      for (const alias of entry.aliases) {
+        changed = registry.delete(alias) || changed;
+      }
+    }
+  }
+  return changed;
+};
+
+export const setNativeMock = (
+  keys: readonly string[],
+  produce: () => unknown,
+): void => {
+  if (keys.length === 0) {
+    return;
+  }
   // Install the loader hooks on the first published mock, then null the
   // installer: later mocks skip it, and an unsupported-Node attempt is not
   // retried (the install is a no-op there).
@@ -61,17 +122,24 @@ export const setNativeMock = (key: string, produce: () => unknown): void => {
     installHooks();
     installHooks = undefined;
   }
-  registry.set(key, {
+  // Evict any entry reachable through the new keys first, so a re-mock whose
+  // alias group shrank leaves no stale key serving the previous mock.
+  deleteAliasGroups(keys);
+  const entry: NativeMockEntry = {
     produce,
     status: 'pending',
     exports: undefined,
     error: undefined,
-  });
+    aliases: keys,
+  };
+  for (const key of keys) {
+    registry.set(key, entry);
+  }
   version++;
 };
 
-export const unsetNativeMock = (key: string): void => {
-  if (registry.delete(key)) {
+export const unsetNativeMock = (keys: readonly string[]): void => {
+  if (deleteAliasGroups(keys)) {
     version++;
   }
 };

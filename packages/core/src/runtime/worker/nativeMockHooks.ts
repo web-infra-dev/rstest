@@ -3,16 +3,25 @@
 // export (the `Module` class) carries `registerHooks` as a static when present,
 // so a property read feature-detects safely.
 import nodeModule from 'node:module';
+import { isAbsolute } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   getNativeMock,
   getRegistryVersion,
   isRegistryEmpty,
+  type NativeMockResolvedInfo,
   REGISTRY_URL,
   setNativeMockInstaller,
+  setNativeMockKeyResolver,
 } from './mockRegistry';
 import { isBuiltinSpecifier, toNodeBuiltin } from './resolveDynamicImport';
 
 const VIRTUAL_PREFIX = 'rstest-mock:';
+
+const virtual = (key: string) => ({
+  url: `${VIRTUAL_PREFIX}${encodeURIComponent(key)}?v=${getRegistryVersion()}`,
+  shortCircuit: true,
+});
 
 // Export names that are valid JS identifiers — only these can be re-emitted as
 // `export const <name>` in the synthetic module the load hook generates.
@@ -29,6 +38,82 @@ const RSTEST_DIST_DIR = REGISTRY_URL.slice(
   0,
   REGISTRY_URL.lastIndexOf('/') + 1,
 );
+
+const importMetaResolve = import.meta.resolve?.bind(import.meta);
+
+// True while `deriveKey` runs `import.meta.resolve`, whose resolution passes
+// through the resolve hook below once it is installed. The hook passes straight
+// through then: key derivation must observe the REAL resolution — an already
+// mocked module would otherwise resolve to its virtual URL and a re-mock/unmock
+// would be keyed by that virtual URL instead of the module's. Keying and hook
+// live in this one module precisely so they can coordinate like this.
+let derivingKey = false;
+
+const deriveKey = (request: string, base: string): string | undefined => {
+  // Builtins key by their canonical `node:` id — the same `toNodeBuiltin` the
+  // resolve hook uses on the read side — without any resolution work.
+  if (isBuiltinSpecifier(request)) {
+    return toNodeBuiltin(request);
+  }
+  if (!importMetaResolve) {
+    return undefined;
+  }
+  derivingKey = true;
+  try {
+    return importMetaResolve(request, pathToFileURL(base).href);
+  } catch {
+    return undefined;
+  } finally {
+    derivingKey = false;
+  }
+};
+
+/**
+ * Registry-key derivation for one native mock (the write side of the resolve
+ * hook's read-side keying below). Several derivations may disagree on spelling
+ * for the same module (pnpm realpath, exports conditions, extension aliases),
+ * so every derivation that succeeds is registered as an alias of the same
+ * entry, best-first:
+ * 1. the build-resolved target from the rspack plugin (`info.r`) — exact,
+ *    no runtime re-resolution;
+ * 2. `request` resolved against the DECLARING module (`info.o`) — correct
+ *    base for a relative `rs.mock` living in a helper file;
+ * 3. `request` resolved against the test file — the pre-info behavior, kept
+ *    as the old-rspack fallback and divergence absorber (skipped when `info.o`
+ *    IS the test file, where it could only repeat derivation 2).
+ */
+const deriveNativeMockKeys = (
+  request: string,
+  info: NativeMockResolvedInfo | undefined,
+  testPath: string,
+): string[] => {
+  const keys: string[] = [];
+  const add = (key: string | undefined) => {
+    if (key !== undefined && !keys.includes(key)) {
+      keys.push(key);
+    }
+  };
+  const resolved = info?.r;
+  if (typeof resolved === 'string') {
+    if (isAbsolute(resolved)) {
+      // The resolve hook keys non-builtins by their resolved URL.
+      add(pathToFileURL(resolved).href);
+    } else {
+      // External request: a `node:` builtin spelling is the hook's canonical
+      // key already; a bare spelling ('os', or an uninstalled package rstest
+      // externalized by raw request) is registered verbatim — the canonical
+      // form comes from derivations 2/3 below.
+      add(resolved);
+    }
+  }
+  if (info?.o !== undefined) {
+    add(deriveKey(request, info.o));
+  }
+  if (info?.o !== testPath) {
+    add(deriveKey(request, testPath));
+  }
+  return keys;
+};
 
 /**
  * #1454: install the Node `module.registerHooks` resolve/load pair that makes
@@ -62,9 +147,14 @@ export const installNativeMockHooks = (): void => {
   nodeModule.registerHooks({
     resolve(specifier, context, nextResolve) {
       // Hot path: fires on EVERY native resolution. Bail before any work while
-      // no mock is active (also covers the worker's own bootstrap imports), or
-      // when the importer is rstest's own runtime (see RSTEST_DIST_DIR).
-      if (isRegistryEmpty() || context.parentURL?.startsWith(RSTEST_DIST_DIR)) {
+      // no mock is active (also covers the worker's own bootstrap imports),
+      // when this resolution IS a key derivation (see `derivingKey`), or when
+      // the importer is rstest's own runtime (see RSTEST_DIST_DIR).
+      if (
+        isRegistryEmpty() ||
+        derivingKey ||
+        context.parentURL?.startsWith(RSTEST_DIST_DIR)
+      ) {
         return nextResolve(specifier, context);
       }
       // `registerHooks` also fires for `require()`, but the load hook only serves
@@ -75,10 +165,6 @@ export const installNativeMockHooks = (): void => {
       if (context.conditions?.includes('require')) {
         return nextResolve(specifier, context);
       }
-      const virtual = (key: string) => ({
-        url: `${VIRTUAL_PREFIX}${encodeURIComponent(key)}?v=${getRegistryVersion()}`,
-        shortCircuit: true,
-      });
       // `getNativeMock` (not a bare presence check) so we only short-circuit when
       // the mock yields SERVABLE exports: an async producer settles to `undefined`
       // here and the resolution falls through to the real module rather than an
@@ -147,5 +233,8 @@ export const installNativeMockHooks = (): void => {
 };
 
 // Registered at worker bootstrap (this module is side-effect imported by
-// `setup.ts`); `mockRegistry.setNativeMock` invokes it on the first published mock.
+// `setup.ts`); `mockRegistry.setNativeMock` invokes the installer on the first
+// published mock, and the RSTEST_API bridge (`api/utilities.ts`) reaches the
+// key derivation through `mockRegistry.resolveNativeMockKeys`.
 setNativeMockInstaller(installNativeMockHooks);
+setNativeMockKeyResolver(deriveNativeMockKeys);

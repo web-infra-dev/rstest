@@ -147,11 +147,6 @@ export default defineConfig({
         entry: {
           index: './src/browserRuntime.ts',
         },
-        // Strip the Node-only native-mock bridge (import.meta.resolve /
-        // pathToFileURL) from the browser bundle via dead-code elimination.
-        define: {
-          RSTEST_TARGET_BROWSER: JSON.stringify(true),
-        },
       },
       output: {
         target: 'web',
@@ -196,9 +191,6 @@ export default defineConfig({
     define: {
       RSTEST_VERSION: JSON.stringify(version),
       PLAYWRIGHT_VERSION: JSON.stringify(peerDependencies.playwright),
-      // Node builds keep the native-mock bridge; the `browser_runtime` entry
-      // overrides this to `true` so that code is stripped from the web bundle.
-      RSTEST_TARGET_BROWSER: JSON.stringify(false),
     },
   },
   tools: {
