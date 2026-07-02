@@ -319,6 +319,15 @@ test.extend({}).describe('extended test API', () => {
     },
   );
 
+  browserTest.for([{ path: 'about:blank' }])(
+    'detects fixtures from named test.for callback context',
+    async ({ path }, context) => {
+      await context.page.goto(path);
+
+      expect(context.page.url()).toBe(path);
+    },
+  );
+
   test.extend({})('preserves playwright-style helpers', () => {
     const extendedTest = test.extend({});
 
@@ -351,6 +360,23 @@ test(
     const response = await request.get(url);
     expect(response.ok()).toBe(true);
     expect(await response.text()).toBe('<h1>ok</h1>');
+  },
+);
+
+test(
+  'encodes static server entry filenames in returned URLs',
+  { timeout: 30_000 },
+  async ({ request, serve }) => {
+    const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
+    const filename = 'entry #%?.html';
+    await writeFile(join(root, filename), '<h1>encoded</h1>');
+
+    const { url } = await serve(join(root, filename));
+    const response = await request.get(url);
+
+    expect(url).toContain(encodeURIComponent(filename));
+    expect(response.ok()).toBe(true);
+    expect(await response.text()).toBe('<h1>encoded</h1>');
   },
 );
 

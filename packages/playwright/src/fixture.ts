@@ -430,7 +430,7 @@ const startStaticServer = async (
   const origin = await listenStaticServer(server, host, port);
   const entryUrl = entryStat.isDirectory()
     ? origin
-    : `${origin}/${basename(entryPath)}`;
+    : `${origin}/${encodeURIComponent(basename(entryPath))}`;
 
   const close = createStaticServerClose(server);
 
@@ -740,12 +740,95 @@ const getFunctionParameterSource = (fn: (...args: never[]) => unknown) => {
   return match ? splitByTopLevelComma(match[1]!.trim()) : [];
 };
 
+const stripCommentsAndStrings = (source: string) => {
+  let result = '';
+  let quote: '"' | "'" | '`' | undefined;
+
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+    const next = source[i + 1];
+
+    if (quote) {
+      if (char === '\\') {
+        result += '  ';
+        i++;
+        continue;
+      }
+      if (char === quote) {
+        quote = undefined;
+      }
+      result += char === '\n' ? '\n' : ' ';
+      continue;
+    }
+
+    if (char === '/' && next === '/') {
+      while (i < source.length && source[i] !== '\n') {
+        result += ' ';
+        i++;
+      }
+      result += '\n';
+      continue;
+    }
+
+    if (char === '/' && next === '*') {
+      result += '  ';
+      i++;
+      while (i + 1 < source.length) {
+        if (source[i] === '*' && source[i + 1] === '/') {
+          result += '  ';
+          i++;
+          break;
+        }
+        result += source[i] === '\n' ? '\n' : ' ';
+        i++;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      result += ' ';
+      continue;
+    }
+
+    result += char;
+  }
+
+  return result;
+};
+
+const getPropertyFixtureParam = (
+  source: string,
+  contextParam: string | undefined,
+) => {
+  const match = /^[$A-Z_a-z][$\w]*$/.exec(contextParam ?? '');
+  if (!match) {
+    return '_';
+  }
+
+  const fixtureProps = new Set<string>();
+  const escapedParam = match[0].replaceAll('$', '\\$');
+  const propertyPattern = new RegExp(
+    `(?<![$\\w])${escapedParam}\\s*(?:\\?\\.|\\.)\\s*([$A-Z_a-z][$\\w]*)`,
+    'g',
+  );
+  const strippedSource = stripCommentsAndStrings(source);
+
+  for (const propertyMatch of strippedSource.matchAll(propertyPattern)) {
+    fixtureProps.add(propertyMatch[1]!);
+  }
+
+  return fixtureProps.size ? `{ ${Array.from(fixtureProps).join(', ')} }` : '_';
+};
+
 const preserveForFixtureSource = <Fn extends (...args: never[]) => unknown>(
   original: Fn,
   wrapped: Fn,
 ): Fn => {
   const [, contextParam] = getFunctionParameterSource(original);
-  const fixtureParam = contextParam?.startsWith('{') ? contextParam : '_';
+  const fixtureParam = contextParam?.startsWith('{')
+    ? contextParam
+    : getPropertyFixtureParam(original.toString(), contextParam);
 
   Object.defineProperty(wrapped, 'toString', {
     configurable: true,
