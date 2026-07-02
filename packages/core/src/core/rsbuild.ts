@@ -119,6 +119,26 @@ type PrepareRsbuildOptions = {
   exposeRstestAPIProjects?: ProjectContext[];
   extraPlugins?: RsbuildPlugin[];
   onModifyRstestConfigApplied?: () => Promise<void>;
+  loadCoveragePlugin?: boolean;
+};
+
+export const addCoveragePlugin = async (
+  rsbuildInstance: RsbuildInstance,
+  context: RstestContext,
+): Promise<void> => {
+  const {
+    command,
+    normalizedConfig: { coverage },
+  } = context;
+
+  if (coverage?.enabled && command !== 'list') {
+    const { loadCoverageProvider } = await import('../coverage');
+    const { pluginCoverage } = await loadCoverageProvider(
+      coverage,
+      context.rootPath,
+    );
+    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
+  }
 };
 
 export const prepareRsbuild = async ({
@@ -130,6 +150,7 @@ export const prepareRsbuild = async ({
   exposeRstestAPIProjects,
   extraPlugins = [],
   onModifyRstestConfigApplied,
+  loadCoveragePlugin = true,
 }: PrepareRsbuildOptions): Promise<RsbuildInstance> => {
   const {
     command,
@@ -212,13 +233,8 @@ export const prepareRsbuild = async ({
     },
   );
 
-  if (coverage?.enabled && command !== 'list') {
-    const { loadCoverageProvider } = await import('../coverage');
-    const { pluginCoverage } = await loadCoverageProvider(
-      coverage,
-      context.rootPath,
-    );
-    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
+  if (loadCoveragePlugin) {
+    await addCoveragePlugin(rsbuildInstance, context);
   }
 
   return rsbuildInstance;

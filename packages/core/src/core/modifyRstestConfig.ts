@@ -83,6 +83,10 @@ const forbiddenModifyRstestConfigPaths: ForbiddenModifyRstestConfigPath[] = [
     get: (config) => config.forceRerunTriggers,
   },
   {
+    path: 'shard',
+    get: (config) => config.shard,
+  },
+  {
     path: 'output.distPath',
     get: (config) => config.output?.distPath,
   },

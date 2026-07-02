@@ -27,7 +27,11 @@ import {
   runGlobalTeardown,
 } from './globalSetup';
 import { createSetupFileState } from './setupFileState';
-import { createRsbuildServer, prepareRsbuild } from './rsbuild';
+import {
+  addCoveragePlugin,
+  createRsbuildServer,
+  prepareRsbuild,
+} from './rsbuild';
 import { createRunProjectPlanState } from './projectPlan';
 import type { Rstest } from './rstest';
 
@@ -333,19 +337,12 @@ export async function runTests(context: Rstest): Promise<void> {
   });
   const { globTestSourceEntries, resolveRunnableProjects } = projectPlanState;
 
-  if (coverage.enabled) {
-    await ensureRunDependencies({
-      projects: [],
-      rootPath,
-      coverage,
-    });
-  }
-
   const rsbuildInstance = await prepareRsbuild({
     context,
     globTestSourceEntries,
     setupFileState,
     targetProjects: rsbuildProjects,
+    loadCoveragePlugin: false,
     getSetupFileProjects: () => ({
       setupProjects: projectPlanState.getPlan().nodeProjectsToRun,
       globalSetupProjects: context.projects,
@@ -363,6 +360,35 @@ export async function runTests(context: Rstest): Promise<void> {
     },
   });
 
+  await rsbuildInstance.initConfigs({ action: 'dev' });
+  const plan = await resolveRunnableProjects();
+
+  const hasBrowserTestsToRun = plan.browserProjectsToRun.length > 0;
+  const hasNodeTestsToRun = plan.nodeProjectsToRun.length > 0;
+
+  if (hasNodeTestsToRun || hasBrowserTestsToRun) {
+    await ensureRunDependencies({
+      projects: plan.nodeProjectsToRun,
+      rootPath,
+      coverage,
+    });
+
+    await addCoveragePlugin(rsbuildInstance, context);
+  }
+
+  if (!hasNodeTestsToRun && !hasBrowserTestsToRun) {
+    reportNoTestFiles({ context });
+    await notifyReportersOnTestRunEnd({
+      context,
+      duration: getEmptyRunDuration(),
+      getSourcemap: async () => null,
+    });
+    await runLifecycleStep('trace shutdown', () =>
+      traceController.shutdown(activeTraceRun),
+    );
+    return;
+  }
+
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     inspectedConfig: {
       ...context.normalizedConfig,
@@ -376,32 +402,6 @@ export async function runTests(context: Rstest): Promise<void> {
     rsbuildInstance,
     rootPath,
   });
-
-  let hasBrowserTestsToRun: boolean;
-  let hasNodeTestsToRun: boolean;
-
-  try {
-    const plan = await resolveRunnableProjects();
-
-    hasBrowserTestsToRun = plan.browserProjectsToRun.length > 0;
-    hasNodeTestsToRun = plan.nodeProjectsToRun.length > 0;
-
-    if (hasNodeTestsToRun || hasBrowserTestsToRun) {
-      await ensureRunDependencies({
-        projects: plan.nodeProjectsToRun,
-        rootPath,
-        coverage,
-        checkCoverage: !coverage.enabled,
-      });
-    }
-  } catch (error) {
-    try {
-      await runLifecycleStep('rsbuild server cleanup', () => closeServer());
-    } catch (cleanupError) {
-      logger.debug(`Failed to cleanup Rsbuild server: ${cleanupError}`);
-    }
-    throw error;
-  }
 
   // If there are browser tests to run, start them.
   if (hasBrowserTestsToRun) {

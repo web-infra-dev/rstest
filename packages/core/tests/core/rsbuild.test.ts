@@ -2133,6 +2133,12 @@ describe('prepareRsbuild', () => {
         },
       },
       {
+        name: 'shard',
+        modify: (config: Record<string, unknown>) => {
+          config.shard = { index: 1, count: 2 };
+        },
+      },
+      {
         name: 'output.distPath',
         modify: (config: Record<string, unknown>) => {
           config.output = { distPath: { root: 'modified' } };

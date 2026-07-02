@@ -340,20 +340,23 @@ export async function resolveRelatedTestFiles(
     getPortSilently: true,
   });
 
-  projectEntries = projectEntries.size
-    ? projectEntries
-    : await collectProjectEntries(context);
-  const matchedTestFiles = new Set(
-    collectDirectlyMatchedFiles({
+  const matchedTestFiles = new Set<string>();
+
+  try {
+    projectEntries = projectEntries.size
+      ? projectEntries
+      : await collectProjectEntries(context);
+
+    for (const file of collectDirectlyMatchedFiles({
       files: Array.from(projectEntries.values()).flatMap((entries) =>
         Object.values(entries),
       ),
       sourceFilters,
       rootPath: context.rootPath,
-    }),
-  );
+    })) {
+      matchedTestFiles.add(file);
+    }
 
-  try {
     for (const project of context.projects) {
       if (!projectEntries.has(project.environmentName)) {
         continue;
