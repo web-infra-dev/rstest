@@ -8,7 +8,7 @@ import type {
   NormalizedProcedure,
   RstestUtilities,
 } from '../../types';
-import { type CreateMockInstanceFn, isModuleObject } from './mockObject';
+import type { CreateMockInstanceFn } from './mockObject';
 
 const isMockFunction = (fn: any): fn is MockInstance =>
   typeof fn === 'function' && '_isMockFunction' in fn && fn._isMockFunction;
@@ -298,18 +298,21 @@ export const initSpy = (
       }
     }
 
-    // A frozen ES module namespace — a native ES module (e.g. an externalized
-    // `node_modules` dependency in the `node` test environment) or an
-    // `__esModule` interop object — exposes non-configurable exports, so
-    // redefining one to install a spy fails with a bare "Cannot redefine
-    // property". Detect exactly that shape and throw an actionable error
-    // instead. The check is deliberately narrow: bundled deps expose
-    // *configurable* getters (so this never fires for them), and ordinary
-    // non-configurable object properties are not module namespaces (so their
-    // errors are left untouched). See
+    // A native ES module namespace is an exotic object whose exports can't be
+    // redefined — even when the descriptor reports `writable: true` — so
+    // installing a spy fails with a bare "Cannot redefine property". Detect that
+    // exact object (a `[object Module]`) and throw an actionable error instead.
+    // The check matches ONLY a real module namespace, deliberately NOT an
+    // `__esModule` interop object from a transpiled CommonJS module: those are
+    // ordinary objects whose writable exports tinyspy can still spy, so they
+    // must fall through untouched. Bundled deps expose *configurable* getters,
+    // so this never fires for them either. See
     // https://github.com/web-infra-dev/rstest/issues/1492
     const targetDescriptor = Object.getOwnPropertyDescriptor(obj, methodName);
-    if (targetDescriptor?.configurable === false && isModuleObject(obj)) {
+    if (
+      targetDescriptor?.configurable === false &&
+      (obj as Record<PropertyKey, unknown>)[Symbol.toStringTag] === 'Module'
+    ) {
       throw new Error(
         `[Rstest] Cannot spy on "${String(methodName)}": it is a read-only export of a third-party or native ES module. Mock the module instead with \`rs.mock('<module>', { spy: true })\`. See https://rstest.rs/api/runtime-api/rstest/mock-functions#rsspyon`,
       );

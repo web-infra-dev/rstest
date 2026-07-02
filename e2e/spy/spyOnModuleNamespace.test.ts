@@ -62,4 +62,22 @@ describe('spyOn on a frozen ES module namespace export', () => {
     ns.greet();
     expect(spy).toHaveBeenCalled();
   });
+
+  it('still spies a writable non-configurable export of a transpiled CJS (__esModule) object', () => {
+    // An `__esModule` interop object is an ordinary object, not a real module
+    // namespace; a writable (even if non-configurable) export can still be
+    // redefined, so the guard must NOT fire and the spy must work.
+    const mod = {} as { fn: () => string };
+    Object.defineProperty(mod, '__esModule', { value: true });
+    Object.defineProperty(mod, 'fn', {
+      value: () => 'real',
+      writable: true,
+      configurable: false,
+      enumerable: true,
+    });
+
+    const spy = rstest.spyOn(mod, 'fn').mockReturnValue('mocked');
+    expect(mod.fn()).toBe('mocked');
+    expect(spy).toHaveBeenCalled();
+  });
 });
