@@ -168,7 +168,7 @@ test('falls back to auto-mocking', () => {
 });
 ```
 
-### 使用 `{ spy: true }` 选项
+### 使用 `{ spy: true }` 选项 \{#with-spy-true-option}
 
 如果第二个参数提供了 `{ spy: true }`，模块将被自动 mock，但原始实现会被保留。所有导出都会被包装在 spy 函数中，这些函数会追踪调用同时仍然执行原始代码。
 
