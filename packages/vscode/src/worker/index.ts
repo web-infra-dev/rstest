@@ -5,6 +5,13 @@ import type { WorkerInitOptions } from '../types';
 import { logger } from './logger';
 import { CoverageReporter, ProgressLogger, ProgressReporter } from './reporter';
 
+// Rstest applies these default coverage reporters only when `coverage.reporters`
+// is left undefined (see the `@rstest/core` coverage `reporters` @default). The
+// function form below sets `reporters` explicitly, which would otherwise drop
+// those defaults, so mirror them here — a workspace that never configured
+// reporters still gets the normal reports alongside the extension reporter.
+const DEFAULT_COVERAGE_REPORTERS = ['text', 'html', 'clover', 'json'] as const;
+
 export class Worker {
   private async init({
     configFilePath,
@@ -41,16 +48,24 @@ export class Worker {
         // so a `coverage: undefined` override can't wipe the disk coverage
         // config, and so the extension's reporter is appended to (not replacing)
         // the user's configured coverage reporters.
+        const configuredReporters = [
+          ...(loaded.coverage?.reporters ?? []),
+          ...(coverageOverride?.reporters ?? []),
+        ];
         const coverage = coverageEnabled
           ? {
               ...loaded.coverage,
               ...coverageOverride,
               // The coverage report runs per `run()`, so the reporter must be
               // part of the resolved config rather than pushed after
-              // construction.
+              // construction. When the workspace configured no reporters, keep
+              // Rstest's defaults — they are only auto-applied for an undefined
+              // `reporters`, which setting this explicitly would otherwise
+              // suppress.
               reporters: [
-                ...(loaded.coverage?.reporters ?? []),
-                ...(coverageOverride?.reporters ?? []),
+                ...(configuredReporters.length
+                  ? configuredReporters
+                  : DEFAULT_COVERAGE_REPORTERS),
                 new CoverageReporter(),
               ],
             }
