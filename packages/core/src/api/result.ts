@@ -196,6 +196,13 @@ type CapturedRunState = {
   duration: { total: number };
   coverage?: CoverageMapData;
   snapshot?: SnapshotSummary;
+  /**
+   * `process.exitCode` observed at the end of the run, before the host-safe
+   * guard restores it. Captures failures that only surface as a non-zero exit
+   * code (coverage thresholds/report generation, global teardown) — the CLI
+   * fails on these, so `ok` must too.
+   */
+  exitCode?: number | string;
 };
 
 export const createCapturedRunState = (): CapturedRunState => ({
@@ -245,7 +252,11 @@ export const assembleTestRunResult = (
     stats.tests.failed === 0 &&
     stats.files.failed === 0 &&
     captured.unhandledErrors.length === 0 &&
-    !noTestsFailure;
+    !noTestsFailure &&
+    // Exit-code-only failures (coverage thresholds/report generation, global
+    // teardown) never touch the stats above, so fold in the run's final
+    // `process.exitCode` to mirror the CLI's pass/fail.
+    !captured.exitCode;
 
   return {
     ok,

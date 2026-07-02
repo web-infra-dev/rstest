@@ -170,6 +170,29 @@ describe('programmatic createRstest', () => {
     expect(exec.exitCode).toBe(0);
   });
 
+  it('fails the run (ok=false) when a coverage threshold is not met, even though every test passes', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-coverage-threshold.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // The test itself passes...
+    expect(result.stats.tests.failed).toBe(0);
+    expect(result.stats.files.failed).toBe(0);
+    // ...but the unmet coverage threshold (an exit-code-only failure) must
+    // still surface as ok=false, mirroring the CLI.
+    expect(result.ok).toBe(false);
+    // close() restored the host exit code, so the embedder isn't poisoned.
+    expect(result.hostExitCode).toBe(0);
+  });
+
   it('accepts inline config + virtual modules plugin (Midscene shape)', async ({
     onTestFinished,
   }) => {
