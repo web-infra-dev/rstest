@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import {
   builtinModules,
   createRequire as createNativeRequire,
@@ -91,21 +92,32 @@ export const resolveImportSpecifier = ({
 };
 
 /**
- * Compile and instantiate a bundled `.wasm` asset from its base64 content.
- * Both loaders emit `.wasm` chunks as in-memory asset files because Node's
- * loader cannot import the virtual dist path.
+ * Compile and instantiate a `.wasm` module from its on-disk source, with no
+ * importObject. This is the runtime path for `import(new URL('./x.wasm',
+ * import.meta.url).href)` and other non-literal `.wasm` specifiers (#1455);
+ * direct `import './x.wasm'` is instead turned into a self-contained module by
+ * `wasmLoader.mjs`, which builds its own importObject and never reaches here.
+ *
+ * `Buffer.from` normalizes the read to an `ArrayBuffer`-backed buffer so it
+ * satisfies `WebAssembly.compile`'s `BufferSource` (a raw `readFile` result is
+ * typed as possibly `SharedArrayBuffer`-backed).
  */
-export const loadWasmFromContent = async (
-  content: string,
-  resolvedId: string,
+export const loadWasm = async (
+  filePath: string,
   returnModule?: boolean,
 ): Promise<any> => {
-  const wasmModule = await WebAssembly.compile(Buffer.from(content, 'base64'));
+  const wasmModule = await WebAssembly.compile(
+    Buffer.from(await readFile(filePath)),
+  );
   const exports = (await WebAssembly.instantiate(wasmModule)).exports as Record<
     string,
     any
   >;
-  return returnModule ? asModule(exports, resolvedId, exports) : exports;
+  // Node's WebAssembly ESM namespace exposes the wasm exports as named exports
+  // with no synthetic `default` (`'default' in ns === false`), so pass no
+  // default export — `returnModule` then matches that shape unless the wasm
+  // itself exports a member named `default`.
+  return returnModule ? asModule(exports, filePath) : exports;
 };
 
 /**

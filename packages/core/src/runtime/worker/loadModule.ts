@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { createRequire as createNativeRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -6,7 +7,7 @@ import { logger } from '../../utils/logger';
 import { clearCacheCleaners, clearSyntheticModuleCache } from './interop';
 import {
   finalizeDynamicImport,
-  loadWasmFromContent,
+  loadWasm,
   resolveImportSpecifier,
 } from './resolveDynamicImport';
 import {
@@ -195,12 +196,10 @@ const defineRstestDynamicImport =
     testPath,
     interopDefault,
     returnModule = false,
-    assetFiles,
   }: {
     returnModule?: boolean;
     testPath: string;
     interopDefault: boolean;
-    assetFiles: Record<string, string>;
   }) =>
   async (
     specifier: string,
@@ -209,19 +208,18 @@ const defineRstestDynamicImport =
   ) => {
     const modulePath = resolveImportSpecifier({ specifier, origin, testPath });
 
-    // Bundled `.wasm` is emitted as an in-memory asset file and must be
-    // instantiated from that content — Node's loader cannot import the virtual
-    // dist path. Every other specifier resolves and imports natively below.
+    // `.wasm` always resolves to an on-disk source file (wasmLoader.mjs rewrites
+    // direct imports; `new URL(...)` resolves source-relative, #1455). rstest
+    // instantiates it itself so the pattern is flag-free on every Node version.
     if (modulePath.endsWith('.wasm')) {
       const normalizedPath = path.normalize(
         modulePath.startsWith('file://')
           ? fileURLToPath(modulePath)
           : modulePath,
       );
-      const content = assetFiles[normalizedPath];
 
-      if (content) {
-        return loadWasmFromContent(content, modulePath, returnModule);
+      if (existsSync(normalizedPath)) {
+        return loadWasm(normalizedPath, returnModule);
       }
     }
 
@@ -293,27 +291,9 @@ export const loadModule = ({
       interopDefault,
       virtualFsAssetFiles,
     ),
-    readWasmFile: (
-      wasmPath: string,
-      callback: (err: Error | null, data?: Buffer) => void,
-    ) => {
-      const joinedPath = isRelativePath(wasmPath)
-        ? path.join(path.dirname(distPath), wasmPath)
-        : wasmPath;
-      const content = getAssetContent(assetFiles, joinedPath);
-
-      if (content) {
-        callback(null, Buffer.from(content, 'base64'));
-      } else {
-        callback(
-          new Error(`WASM file ${joinedPath} not found in asset files.`),
-        );
-      }
-    },
     [RSTEST_DYNAMIC_IMPORT_HOOK]: defineRstestDynamicImport({
       testPath,
       interopDefault,
-      assetFiles,
     }),
     [RSTEST_REQUIRE_RESOLVE_HOOK]: defineRstestRequireResolve({
       testPath,
@@ -337,7 +317,6 @@ export const loadModule = ({
         testPath,
         interopDefault,
         returnModule: true,
-        assetFiles,
       })(specifier, importAttributes as ImportCallOptions);
     },
   });

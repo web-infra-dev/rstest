@@ -5,6 +5,8 @@ import {
   createBrowserRsbuildDevConfig,
   createBrowserContextExcludeRegExp,
   resolveListenPort,
+  shouldEnableBrowserHmr,
+  toContextKey,
 } from '../src/hostController';
 
 /**
@@ -106,18 +108,48 @@ describe('browser config resolution', () => {
     expect(browserConfig.strictPort).toBe(true);
   });
 
-  it('should enable HMR in non-watch mode and keep error-only client log', () => {
+  it('should disable HMR when enableHmr is false and keep error-only client log', () => {
     const devConfig = createBrowserRsbuildDevConfig(false);
+
+    expect(devConfig.hmr).toBe(false);
+    expect(devConfig.client.logLevel).toBe('error');
+  });
+
+  it('should enable HMR when enableHmr is true', () => {
+    const devConfig = createBrowserRsbuildDevConfig(true);
 
     expect(devConfig.hmr).toBe(true);
     expect(devConfig.client.logLevel).toBe('error');
   });
 
-  it('should enable HMR in watch mode', () => {
-    const devConfig = createBrowserRsbuildDevConfig(true);
+  it('should only enable HMR for headed watch', () => {
+    // Headless never reuses a page, so it never consumes HMR — enabling it only
+    // exposes the #11922 factory race and the #1472 accept-chain throw. One-shot
+    // runs never rerun. So HMR (and the lazyCompilation transport it carries) is
+    // gated to headed watch alone.
+    expect(shouldEnableBrowserHmr(true, false)).toBe(true); // headed watch
+    expect(shouldEnableBrowserHmr(true, true)).toBe(false); // headless watch
+    expect(shouldEnableBrowserHmr(false, false)).toBe(false); // headed one-shot
+    expect(shouldEnableBrowserHmr(false, true)).toBe(false); // headless one-shot
+  });
 
-    expect(devConfig.hmr).toBe(true);
-    expect(devConfig.client.logLevel).toBe('error');
+  it('should derive the non-watch import-map key like the runtime toContextKey', () => {
+    // Keys must match the browser runtime's `toContextKey` so `loadTest(key)`
+    // resolves against the manifest import map.
+    expect(toContextKey('/project/tests/a.test.ts', '/project')).toBe(
+      './tests/a.test.ts',
+    );
+    // Paths outside the project root keep their absolute form so the runtime
+    // `toAbsolutePath` round-trips them instead of re-rooting under projectRoot.
+    expect(toContextKey('/elsewhere/x.test.ts', '/project')).toBe(
+      '/elsewhere/x.test.ts',
+    );
+    // A sibling that only shares a string prefix with the root is not stripped
+    // at a non-boundary (would otherwise mangle to `./-extra/a.test.ts`); it is
+    // outside the root, so it is also kept absolute.
+    expect(toContextKey('/repo/pkg-extra/a.test.ts', '/repo/pkg')).toBe(
+      '/repo/pkg-extra/a.test.ts',
+    );
   });
 
   it('should keep setup files out of lazy compilation', () => {
