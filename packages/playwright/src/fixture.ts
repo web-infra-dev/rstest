@@ -18,6 +18,7 @@ import {
   beforeEach as rstestBeforeEach,
   describe as rstestDescribe,
   rstest,
+  expect as rstestExpect,
   test as base,
 } from '@rstest/core';
 import type {
@@ -142,6 +143,7 @@ const DEBUG_PAUSE_TIMEOUT = 24 * 60 * 60 * 1000;
 const BROWSER_IDLE_CLOSE_DELAY = 1000;
 const DEFAULT_STATIC_SERVER_HOST = '127.0.0.1';
 const TEST_EACH_CONTEXT_SYMBOL = Symbol.for('rstest.test.each.context');
+const TEST_EACH_CONTEXT_PARAM = '__rstestPlaywrightContext';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.css': 'text/css; charset=utf-8',
@@ -695,6 +697,34 @@ type RstestGlobal = typeof globalThis & {
   };
 };
 
+type MaybeLocalExpectContext = TestContext & {
+  _useLocalExpect?: boolean;
+};
+
+const getExpectForContext = (context: TestContext) => {
+  const maybeLocalExpectContext = context as MaybeLocalExpectContext;
+  const globalState = rstestExpect.getState();
+
+  if (maybeLocalExpectContext._useLocalExpect) {
+    return context.expect;
+  }
+
+  if (
+    globalState.assertionCalls > 0 ||
+    globalState.expectedAssertionsNumber !== null ||
+    globalState.isExpectingAssertions
+  ) {
+    return rstestExpect;
+  }
+
+  return context.expect;
+};
+
+const hasExpectContext = (context: unknown): context is TestContext =>
+  (typeof context === 'object' || typeof context === 'function') &&
+  context !== null &&
+  'expect' in context;
+
 const preserveFixtureSource = <Fn extends (...args: never[]) => unknown>(
   original: Fn,
   wrapped: Fn,
@@ -812,10 +842,23 @@ const getPropertyFixtureParam = (
     `(?<![$\\w])${escapedParam}\\s*(?:\\?\\.|\\.)\\s*([$A-Z_a-z][$\\w]*)`,
     'g',
   );
+  const destructurePattern = new RegExp(
+    `(?:const|let|var)\\s*\\{([^}]*)\\}\\s*=\\s*${escapedParam}(?![$\\w])`,
+    'g',
+  );
   const strippedSource = stripCommentsAndStrings(source);
 
   for (const propertyMatch of strippedSource.matchAll(propertyPattern)) {
     fixtureProps.add(propertyMatch[1]!);
+  }
+
+  for (const destructureMatch of strippedSource.matchAll(destructurePattern)) {
+    for (const prop of splitByTopLevelComma(destructureMatch[1]!)) {
+      const name = prop.split(':', 1)[0]!.trim();
+      if (name && !name.startsWith('...')) {
+        fixtureProps.add(name);
+      }
+    }
   }
 
   return fixtureProps.size ? `{ ${Array.from(fixtureProps).join(', ')} }` : '_';
@@ -843,10 +886,25 @@ const preserveEachFixtureSource = <Fn extends (...args: never[]) => unknown>(
 ): Fn => {
   Object.defineProperty(wrapped, 'toString', {
     configurable: true,
-    value: () => '() => {}',
+    value: () => `(${TEST_EACH_CONTEXT_PARAM}) => {}`,
   });
 
   return wrapped;
+};
+
+const isFixtureOptions = (value: unknown) => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Object.prototype.hasOwnProperty.call(value, 'auto')
+  );
+};
+
+const isFixtureTuple = (fixture: readonly unknown[]) => {
+  return (
+    (fixture.length === 1 && typeof fixture[0] === 'function') ||
+    isFixtureOptions(fixture[1])
+  );
 };
 
 const wrapTestContextCallback = <Fn extends (...args: any[]) => unknown>(
@@ -854,9 +912,11 @@ const wrapTestContextCallback = <Fn extends (...args: any[]) => unknown>(
 ): Fn => {
   return preserveFixtureSource(fn, (async (...args: Parameters<Fn>) => {
     const [context] = args as unknown as [TestContext | object, ...unknown[]];
-    const expect = 'expect' in context ? context.expect : undefined;
-    const result = expect
-      ? await withPlaywrightExpect(expect, () => fn(...args))
+    const result = hasExpectContext(context)
+      ? await withPlaywrightExpect(
+          () => getExpectForContext(context),
+          () => fn(...args),
+        )
       : await fn(...args);
 
     return typeof result === 'function'
@@ -867,6 +927,10 @@ const wrapTestContextCallback = <Fn extends (...args: any[]) => unknown>(
 
 const wrapFixtureEntry = <T>(fixture: T): T => {
   if (Array.isArray(fixture)) {
+    if (!isFixtureTuple(fixture)) {
+      return fixture;
+    }
+
     const [value, ...options] = fixture;
 
     return [
@@ -976,7 +1040,10 @@ const createPlaywrightTest = <ExtraContext>(
     fn: TestCallback<ExtraContext>,
   ): TestCallback<ExtraContext> => {
     return preserveFixtureSource(fn, ((context) =>
-      withPlaywrightExpect(context.expect, () => fn(context))) as typeof fn);
+      withPlaywrightExpect(
+        () => getExpectForContext(context),
+        () => fn(context),
+      )) as typeof fn);
   };
   const wrapEachCallback = <Fn extends (...args: any[]) => unknown>(
     fn: Fn,
@@ -984,8 +1051,11 @@ const createPlaywrightTest = <ExtraContext>(
     const wrapped = preserveEachFixtureSource(((...args) => {
       const context = args[args.length - 1] as TestContext | undefined;
 
-      return context?.expect
-        ? withPlaywrightExpect(context.expect, () => fn(...args.slice(0, -1)))
+      return hasExpectContext(context)
+        ? withPlaywrightExpect(
+            () => getExpectForContext(context),
+            () => fn(...args.slice(0, -1)),
+          )
         : fn(...args);
     }) as Fn);
 
@@ -1018,8 +1088,9 @@ const createPlaywrightTest = <ExtraContext>(
     fn: TestForCallback<ExtraContext>,
   ): TestForCallback<ExtraContext> => {
     return preserveForFixtureSource(fn, ((param, context) =>
-      withPlaywrightExpect(context.expect, () =>
-        fn(param, context),
+      withPlaywrightExpect(
+        () => getExpectForContext(context),
+        () => fn(param, context),
       )) as typeof fn);
   };
   const wrapForTestCall = (

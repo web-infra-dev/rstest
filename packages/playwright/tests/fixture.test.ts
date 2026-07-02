@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -23,6 +23,42 @@ const debugOptions = {
 } satisfies PlaywrightOptions;
 
 const execFileAsync = promisify(execFile);
+
+const createPlaywrightTempRoot = () =>
+  mkdtemp(join(__dirname, '../.tmp-rstest-playwright-'));
+
+const writePlaywrightFixtureProject = async (root: string) => {
+  await mkdir(root, { recursive: true });
+  await writeFile(
+    join(root, 'rstest.config.mjs'),
+    `
+      import { defineConfig } from '@rstest/core';
+      import { withRslibConfig } from ${JSON.stringify(join(__dirname, '../../adapter-rslib/src/index.ts').replaceAll('\\', '/'))};
+
+      export default defineConfig({
+        extends: withRslibConfig({ cwd: ${JSON.stringify(join(__dirname, '..').replaceAll('\\', '/'))} }),
+        globals: true,
+        include: ['<rootDir>/**/*.test.mjs'],
+        source: { tsconfigPath: ${JSON.stringify(join(__dirname, '../tests/tsconfig.json').replaceAll('\\', '/'))} },
+      });
+    `,
+  );
+};
+
+const writeNodeImportablePlaywrightSource = async (root: string) => {
+  await mkdir(root, { recursive: true });
+  const source = await readFile(join(__dirname, '../src/fixture.ts'), 'utf-8');
+  const expectSource = await readFile(
+    join(__dirname, '../src/expect.ts'),
+    'utf-8',
+  );
+
+  await writeFile(
+    join(root, 'fixture.ts'),
+    source.replace("from './expect';", "from './expect.ts';"),
+  );
+  await writeFile(join(root, 'expect.ts'), expectSource);
+};
 
 const supportsIpv6Loopback = async () => {
   const server = createServer();
@@ -64,15 +100,56 @@ test('provides an isolated request fixture', async ({ request }) => {
 });
 
 test('can be imported outside a rstest worker', async () => {
-  await execFileAsync(
-    process.execPath,
-    [
+  const root = await createPlaywrightTempRoot();
+
+  try {
+    await writeNodeImportablePlaywrightSource(root);
+
+    await execFileAsync(process.execPath, [
       '--input-type=module',
       '-e',
-      "import { test } from './packages/playwright/dist/index.js'; console.log(typeof test, typeof test.extend);",
-    ],
-    { cwd: join(__dirname, '../../..') },
-  );
+      `import { test } from ${JSON.stringify(join(root, 'fixture.ts').replaceAll('\\', '/'))}; console.log(typeof test, typeof test.extend);`,
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('does not force a local expect for core expect users', async () => {
+  const { rejects } = await import('node:assert/strict');
+  const root = await createPlaywrightTempRoot();
+
+  try {
+    await writePlaywrightFixtureProject(root);
+    await writeFile(
+      join(root, 'core-expect.test.mjs'),
+      `
+        import { expect } from '@rstest/core';
+        import { test } from ${JSON.stringify(join(__dirname, '../src/index.ts').replaceAll('\\', '/'))};
+
+        test('uses the core expect state', () => {
+          expect.assertions(1);
+        });
+      `,
+    );
+
+    await rejects(
+      execFileAsync(
+        process.execPath,
+        [
+          join(__dirname, '../../core/bin/rstest.js'),
+          '--root',
+          root,
+          '--config',
+          './rstest.config.mjs',
+        ],
+        { cwd: root },
+      ),
+      /expected number of assertions to be 1, but got 0/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('exposes playwright options fixture overrides', async ({ playwright }) => {
@@ -328,6 +405,23 @@ test.extend({}).describe('extended test API', () => {
     },
   );
 
+  browserTest.for([{ path: 'about:blank' }])(
+    'detects destructured fixtures from named test.for callback context',
+    async ({ path }, context) => {
+      const { page } = context;
+      await page.goto(path);
+
+      expect(page.url()).toBe(path);
+    },
+  );
+
+  test.extend<{ pair: [() => string, number] }>({
+    pair: [() => 'static value', 1],
+  })('preserves static array fixture values', ({ pair }) => {
+    expect(pair[0]()).toBe('static value');
+    expect(pair[1]).toBe(1);
+  });
+
   test.extend({})('preserves playwright-style helpers', () => {
     const extendedTest = test.extend({});
 
@@ -384,39 +478,44 @@ test(
   'resolves relative static server entries from the project root',
   { timeout: 30_000 },
   async () => {
-    const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
-    const testDir = join(root, 'test');
-    await mkdir(join(root, 'dist'), { recursive: true });
-    await mkdir(testDir, { recursive: true });
-    await writeFile(join(root, 'dist/index.html'), '<h1>relative</h1>');
+    const root = await createPlaywrightTempRoot();
 
-    const fixturePath = join(testDir, 'relative.test.mjs');
-    await writeFile(
-      fixturePath,
-      `
-        import { test, expect } from ${JSON.stringify(join(__dirname, '../dist/index.js').replaceAll('\\', '/'))};
+    try {
+      await writePlaywrightFixtureProject(root);
+      const testDir = join(root, 'test');
+      await mkdir(join(root, 'dist'), { recursive: true });
+      await mkdir(testDir, { recursive: true });
+      await writeFile(join(root, 'dist/index.html'), '<h1>relative</h1>');
 
-        test('serves a file relative to the project root', async ({ request, serve }) => {
-          const { url } = await serve('./dist/index.html');
-          const response = await request.get(url);
+      const fixturePath = join(testDir, 'relative.test.mjs');
+      await writeFile(
+        fixturePath,
+        `
+          import { test, expect } from ${JSON.stringify(join(__dirname, '../src/index.ts').replaceAll('\\', '/'))};
 
-          expect(await response.text()).toBe('<h1>relative</h1>');
-        });
-      `,
-    );
+          test('serves a file relative to the project root', async ({ request, serve }) => {
+            const { url } = await serve('./dist/index.html');
+            const response = await request.get(url);
 
-    const rootDir = join(__dirname, '../../..');
-    await execFileAsync(
-      process.execPath,
-      [
-        join(rootDir, 'packages/core/bin/rstest.js'),
-        '--root',
-        root,
-        '--include',
-        './test/relative.test.mjs',
-      ],
-      { cwd: rootDir },
-    );
+            expect(await response.text()).toBe('<h1>relative</h1>');
+          });
+        `,
+      );
+
+      await execFileAsync(
+        process.execPath,
+        [
+          join(__dirname, '../../core/bin/rstest.js'),
+          '--root',
+          root,
+          '--config',
+          './rstest.config.mjs',
+        ],
+        { cwd: root },
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   },
 );
 
@@ -466,57 +565,64 @@ test(
 );
 
 test('cleans up request and serve fixtures after a failed cleanup', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
-  await writeFile(join(root, 'index.html'), '<h1>ok</h1>');
+  const root = await createPlaywrightTempRoot();
 
-  const fixturePath = join(root, 'cleanup.test.mjs');
-  await writeFile(
-    fixturePath,
-    `
-      import { test, expect } from ${JSON.stringify(join(__dirname, '../dist/index.js').replaceAll('\\', '/'))};
+  try {
+    await writePlaywrightFixtureProject(root);
+    await writeFile(join(root, 'index.html'), '<h1>ok</h1>');
 
-      let request;
-      let url;
+    const fixturePath = join(root, 'cleanup.test.mjs');
+    await writeFile(
+      fixturePath,
+      `
+        import { test, expect } from ${JSON.stringify(join(__dirname, '../src/index.ts').replaceAll('\\', '/'))};
 
-      const cleanupFailureTest = test.extend({
-        userCleanup: async (_, use) => {
-          await use(undefined);
-          throw new Error('user cleanup failed');
-        },
-      });
+        let request;
+        let url;
 
-      cleanupFailureTest.sequential('uses request and serve before cleanup failure', async ({ request: currentRequest, serve, userCleanup }) => {
-        expect(userCleanup).toBeUndefined();
-        request = currentRequest;
-        url = (await serve(${JSON.stringify(join(root, 'index.html'))})).url;
+        const cleanupFailureTest = test.extend({
+          userCleanup: async (_, use) => {
+            await use(undefined);
+            throw new Error('user cleanup failed');
+          },
+        });
 
-        const response = await request.get(url);
-        expect(response.ok()).toBe(true);
-      });
+        cleanupFailureTest.sequential('uses request and serve before cleanup failure', async ({ request: currentRequest, serve, userCleanup }) => {
+          expect(userCleanup).toBeUndefined();
+          request = currentRequest;
+          url = (await serve(${JSON.stringify(join(root, 'index.html'))})).url;
 
-      test.sequential('verifies cleanup', async () => {
-        await expect(request.get('https://example.com')).rejects.toThrow();
-        await expect(fetch(url)).rejects.toThrow();
-        console.log('RSTEST_PLAYWRIGHT_CLEANUP_OK');
-      });
-    `,
-  );
+          const response = await request.get(url);
+          expect(response.ok()).toBe(true);
+        });
 
-  const rootDir = join(__dirname, '../../..');
-  const { stdout, stderr } = await execFileAsync(
-    process.execPath,
-    [
-      join(rootDir, 'packages/core/bin/rstest.js'),
-      '--root',
-      root,
-      '--include',
-      './cleanup.test.mjs',
-    ],
-    { cwd: rootDir },
-  ).catch((error: { message?: string; stderr?: string; stdout?: string }) => ({
-    stderr: `${error.message ?? ''}\n${error.stderr ?? ''}`,
-    stdout: error.stdout ?? '',
-  }));
+        test.sequential('verifies cleanup', async () => {
+          await expect(request.get('https://example.com')).rejects.toThrow();
+          await expect(fetch(url)).rejects.toThrow();
+          console.log('RSTEST_PLAYWRIGHT_CLEANUP_OK');
+        });
+      `,
+    );
 
-  expect(`${stdout}\n${stderr}`).toContain('RSTEST_PLAYWRIGHT_CLEANUP_OK');
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      [
+        join(__dirname, '../../core/bin/rstest.js'),
+        '--root',
+        root,
+        '--config',
+        './rstest.config.mjs',
+      ],
+      { cwd: root },
+    ).catch(
+      (error: { message?: string; stderr?: string; stdout?: string }) => ({
+        stderr: `${error.message ?? ''}\n${error.stderr ?? ''}`,
+        stdout: error.stdout ?? '',
+      }),
+    );
+
+    expect(`${stdout}\n${stderr}`).toContain('RSTEST_PLAYWRIGHT_CLEANUP_OK');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

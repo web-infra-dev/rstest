@@ -99,12 +99,14 @@ type RstestNotAssertion<T> = {
   readonly not: Assertion<T>;
 };
 
-const expectStorage = new AsyncLocalStorage<ExpectStatic>();
+const expectStorage = new AsyncLocalStorage<() => ExpectStatic>();
 
-export const withPlaywrightExpect = <T>(expect: ExpectStatic, fn: () => T): T =>
-  expectStorage.run(expect, fn);
+export const withPlaywrightExpect = <T>(
+  getExpect: () => ExpectStatic,
+  fn: () => T,
+): T => expectStorage.run(getExpect, fn);
 
-const getRstestExpect = () => expectStorage.getStore() ?? rstestExpect;
+const getRstestExpect = () => expectStorage.getStore()?.() ?? rstestExpect;
 
 const bindExpectStaticMethod = <K extends keyof ExpectStatic>(key: K) => {
   const expect = getRstestExpect();
