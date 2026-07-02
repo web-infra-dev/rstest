@@ -26,8 +26,12 @@ import {
 
 const importMetaResolve = import.meta.resolve?.bind(import.meta);
 
-const isBuiltinSpecifier = (specifier: string): boolean =>
-  specifier.startsWith('node:') || builtinModules.includes(specifier);
+// Set, not array scan: `isBuiltinSpecifier` sits on the native-mock resolve
+// hook's per-resolution hot path (nativeMockHooks.ts).
+const BUILTIN_MODULES = new Set(builtinModules);
+
+export const isBuiltinSpecifier = (specifier: string): boolean =>
+  specifier.startsWith('node:') || BUILTIN_MODULES.has(specifier);
 
 /**
  * Normalize a builtin specifier to its `node:` canonical form. Node treats the
@@ -37,7 +41,7 @@ const isBuiltinSpecifier = (specifier: string): boolean =>
  * module instances. Every `builtinModules` entry is importable with the `node:`
  * prefix, so prefixing is always safe.
  */
-const toNodeBuiltin = (specifier: string): string =>
+export const toNodeBuiltin = (specifier: string): string =>
   specifier.startsWith('node:') ? specifier : `node:${specifier}`;
 
 const resolveModule = (specifier: string, resolveBase: string): string => {
@@ -89,6 +93,40 @@ export const resolveImportSpecifier = ({
     : isBuiltinSpecifier(specifier)
       ? toNodeBuiltin(specifier)
       : resolveModule(specifier, resolveBase);
+};
+
+/**
+ * #1454: a non-literal `import(request)` is routed to this worker's native
+ * import hook, which loads outside the webpack runtime and so bypasses
+ * `rs.mock`. When the `request` itself names a mocked module (e.g.
+ * `const s = 'node:os'; import(s)`), the bundle's mock runtime publishes a
+ * resolver on the shared global that maps the clean request to the
+ * already-installed mocked instance. Consulting it before the native import
+ * keeps `import(variable)` of a mocked module mock-aware on every Node version.
+ *
+ * Gated on `returnModule` being false: only the `import()` call site can reach a
+ * mocked request — static imports are mock-rewritten in the bundle and never
+ * hit the loaders. Also skipped for `importActual` (carried as the internal
+ * `with: { rstest }` attribute), which must reach the REAL module — so
+ * `rs.importActual(variable)` of a mocked module is never served the mock.
+ * Returns `undefined` (caller falls through to a real native import) for a static
+ * import, an `importActual`, or an unmocked request. Both loaders share this
+ * single policy rather than re-implementing the gate at each call site.
+ */
+export const maybeResolveMockedDynamicImport = (
+  specifier: string,
+  returnModule: boolean | undefined,
+  importAttributes?: ImportCallOptions,
+): unknown => {
+  if (returnModule || importAttributes?.with?.rstest) {
+    return undefined;
+  }
+  const resolver = (
+    globalThis as {
+      __rstest_resolve_mocked_dynamic_request__?: (request: string) => unknown;
+    }
+  ).__rstest_resolve_mocked_dynamic_request__;
+  return typeof resolver === 'function' ? resolver(specifier) : undefined;
 };
 
 /**

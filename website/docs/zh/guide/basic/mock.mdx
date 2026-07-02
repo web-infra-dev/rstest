@@ -169,6 +169,41 @@ rs.mock('../src/api');
 
 关于完整 API 和更多示例，可以参考 [Mock modules](/api/runtime-api/rstest/mock-modules)。
 
+### Mock 通过动态 `import()` 加载的模块
+
+当模块在 bundle 之外被加载时——通过 specifier **不是静态字符串字面量**（例如变量）的动态 `import()`，或通过被 external 化的 `node_modules` 依赖在其内部 import 了被 mock 的模块——`rs.mock()` 同样会生效：
+
+```ts
+rs.mock('node:os', () => ({ hostname: () => 'MOCKED' }));
+
+// 1. The variable specifier IS the mocked module:
+const id = 'node:os';
+const os = await import(id); // os.hostname() === 'MOCKED'
+
+// 2. The variable specifier resolves to a module that imports `node:os`:
+const launch = await import(launchScriptPath);
+// the loaded module's internal `os.hostname()` returns 'MOCKED'
+
+// 3. An externalized dependency imports the mocked module internally:
+const dep = await import('some-dep'); // dep's internal `os.hostname()` is mocked
+```
+
+:::warning 要求与限制
+
+情况 1（specifier 解析到被 mock 的模块本身）在所有受支持的 Node.js 版本上都生效。情况 2 和 3——需要 mock 一个由 Node 原生加载的模块的**内部** import——还需要满足：
+
+- **Node.js 版本**：依赖 [`module.registerHooks`](https://nodejs.org/api/module.html#moduleregisterhooksoptions)，仅在 Node.js `>= 22.15.0` 与 `>= 23.5.0` 上可用。在更低版本上，对原生加载模块的 mock 会被静默跳过（不会报错）；字面量 `import()` 与静态 `import` 的 mock 行为不变。
+- **编译型语言**：由 Node 原生加载的 TypeScript/JSX 模块——对 `.ts` 文件的变量 `import()`，或一个 TS 依赖——不在 Rstest 的编译范围内，因此其内部 import 不会被改写。请改用静态字符串字面量 specifier，让该模块被编译进 bundle。
+- **工厂实例**：以工厂函数形式创建的 mock（`rs.mock(id, () => ({ fn: rs.fn() }))`）为原生加载的引用方提供的是一个独立实例，因此在工厂内创建的 spy 与 bundle 看到的并非同一个对象。建议使用同步的、返回普通对象的工厂；异步工厂无法被同步的原生 load hook 产出，因此原生加载它的引用方会回退到真实模块。
+- **具名导出的标识**：原生路径在 import 时按值重新导出 mock 的每个具名导出。原地 mutate 的 spy 不受影响（binding 仍指向同一对象），但在原生加载的模块已经 import 之后再重新赋值某个具名导出 binding，该消费者不会观察到这次更新。
+- **`mockRequire` 仅适用于 CommonJS**：`rs.mockRequire` 针对 `require()` / CJS 入口。若要 mock 一个通过 `import()` 加载的模块，请使用 `rs.mock`。
+- **原生路径上的 `require()`**：在原生加载的 CommonJS 模块中通过 `require()` 访问的 mocked 模块不会被 mock——native mock 仅作用于 ESM `import`，因此该 `require()` 会拿到真实模块。
+- **`isolate: false`**：原生加载的模块会被 Node 的 ESM loader 跨文件缓存，因此对它应用的 mock 可能会保留到同一 worker 运行的后续测试文件中。
+- **跨项目的 `isolate: false`**：非字面量 `import(variable)` 的 mock 解析发布在共享全局上，因此当一个 worker 运行多个项目时，该解析器反映的是最后执行的那个项目的 runtime——较早项目中对 mocked 模块的变量 `import()` 可能会查到较晚项目的 mock。静态与字面量 import 不受影响。
+- **相对 specifier**：相对路径的 mock 以**测试文件**为基准解析。写在 setup 文件或共享 helper 中的相对 `rs.mock('./dep')`，或来自其他目录模块的非字面量相对 `import('./dep')`，可能无法命中原生加载路径。请改用绝对路径或包名 specifier，或将 mock 声明在测试文件中。
+
+:::
+
 ## Mock 函数
 
 如果依赖是以回调或注入实现的形式传入的，可以使用 [rs.fn()](/api/runtime-api/rstest/mock-functions#rsfn) 创建 mock 函数。

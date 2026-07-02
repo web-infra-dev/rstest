@@ -517,9 +517,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
     RstestPlugin {
       "_args": [
         {
+          "emitMockResolvedInfo": true,
           "hoistMockModule": true,
           "importMetaPathName": true,
-          "injectDynamicImportOrigin": true,
+          "injectDynamicImportOrigin": {
+            "functionName": "import.meta.__rstest_dynamic_import__",
+          },
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
             "functionName": "import.meta.__rstest_require_resolve__",
@@ -1111,9 +1114,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     RstestPlugin {
       "_args": [
         {
+          "emitMockResolvedInfo": true,
           "hoistMockModule": true,
           "importMetaPathName": true,
-          "injectDynamicImportOrigin": true,
+          "injectDynamicImportOrigin": {
+            "functionName": "__rstest_dynamic_import__",
+          },
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
             "functionName": "__rstest_require_resolve__",
@@ -1691,9 +1697,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     RstestPlugin {
       "_args": [
         {
+          "emitMockResolvedInfo": true,
           "hoistMockModule": true,
           "importMetaPathName": true,
-          "injectDynamicImportOrigin": true,
+          "injectDynamicImportOrigin": {
+            "functionName": "__rstest_dynamic_import__",
+          },
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
             "functionName": "__rstest_require_resolve__",
@@ -2273,9 +2282,12 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
     RstestPlugin {
       "_args": [
         {
+          "emitMockResolvedInfo": true,
           "hoistMockModule": true,
           "importMetaPathName": true,
-          "injectDynamicImportOrigin": true,
+          "injectDynamicImportOrigin": {
+            "functionName": "__rstest_dynamic_import__",
+          },
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
             "functionName": "__rstest_require_resolve__",
@@ -3184,9 +3196,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     RstestPlugin {
       "_args": [
         {
+          "emitMockResolvedInfo": true,
           "hoistMockModule": true,
           "importMetaPathName": true,
-          "injectDynamicImportOrigin": true,
+          "injectDynamicImportOrigin": {
+            "functionName": "__rstest_dynamic_import__",
+          },
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
             "functionName": "__rstest_require_resolve__",
@@ -3765,9 +3780,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     RstestPlugin {
       "_args": [
         {
+          "emitMockResolvedInfo": true,
           "hoistMockModule": true,
           "importMetaPathName": true,
-          "injectDynamicImportOrigin": true,
+          "injectDynamicImportOrigin": {
+            "functionName": "__rstest_dynamic_import__",
+          },
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
             "functionName": "__rstest_require_resolve__",

@@ -169,6 +169,41 @@ Note that `rs.resetModules()` does not cancel module mocking. To cancel module m
 
 For the full API and more examples, see [Mock modules](/api/runtime-api/rstest/mock-modules).
 
+### Mock modules behind a dynamic `import()`
+
+`rs.mock()` also applies when a module is reached outside the bundle — through a dynamic `import()` whose specifier is **not a static string literal** (for example a variable), or through an externalized `node_modules` dependency that internally imports a mocked module:
+
+```ts
+rs.mock('node:os', () => ({ hostname: () => 'MOCKED' }));
+
+// 1. The variable specifier IS the mocked module:
+const id = 'node:os';
+const os = await import(id); // os.hostname() === 'MOCKED'
+
+// 2. The variable specifier resolves to a module that imports `node:os`:
+const launch = await import(launchScriptPath);
+// the loaded module's internal `os.hostname()` returns 'MOCKED'
+
+// 3. An externalized dependency imports the mocked module internally:
+const dep = await import('some-dep'); // dep's internal `os.hostname()` is mocked
+```
+
+:::warning Requirements and limitations
+
+Case 1 (the specifier resolves to the mocked module itself) works on every supported Node.js version. Cases 2 and 3 — where the **inner** import of a natively-loaded module must be mocked — additionally require:
+
+- **Node.js version**: they rely on [`module.registerHooks`](https://nodejs.org/api/module.html#moduleregisterhooksoptions), available in Node.js `>= 22.15.0` and `>= 23.5.0`. On older versions the mock is silently not applied to natively-loaded modules (no error); literal `import()` and static `import` mocking is unchanged.
+- **Compiled languages**: a TypeScript/JSX module loaded natively by Node — a variable `import()` of a `.ts` file, or a TS dependency — is outside Rstest's compilation, so its imports are not rewritten. Use a static string literal specifier so the module is compiled into the bundle instead.
+- **Factory instance**: a function-factory mock (`rs.mock(id, () => ({ fn: rs.fn() }))`) backs the natively-loaded importer with a separate instance, so a spy created inside the factory is a different object from the one the bundle sees. Prefer a synchronous, plain-object factory; an async factory cannot be produced by the synchronous native load hook, so a natively-loaded importer of it falls through to the real module.
+- **Named-export identity**: the native path re-exports each of a mock's named exports by value at import time. A mutated spy is unaffected (the binding still points at the same object), but reassigning a named export binding after a natively-loaded module has imported it is not observed by that consumer.
+- **`mockRequire` is CommonJS-only**: `rs.mockRequire` targets `require()` / CJS entries. To mock a module that is loaded through `import()`, use `rs.mock`.
+- **`require()` on the native path**: a mocked module reached through `require()` inside a natively-loaded CommonJS module is not mocked — native mocks apply to ESM `import`, so the `require()` receives the real module.
+- **`isolate: false`**: a natively-loaded module is cached by Node's ESM loader across files, so a mock applied to it can persist into a later test file run by the same worker.
+- **`isolate: false` across projects**: the non-literal `import(variable)` mock resolver is published on a shared global, so when one worker runs multiple projects the resolver reflects whichever project's runtime executed last — a variable `import()` of a mocked module in an earlier project may then consult a later project's mocks. Static and literal imports are unaffected.
+- **Relative specifiers**: a relative mock is resolved against the **test file**. A relative `rs.mock('./dep')` declared in a setup file or shared helper, or a non-literal relative `import('./dep')` from a module in a different directory, may not reach the natively-loaded path. Mock such modules with an absolute or package specifier, or declare the mock in the test file.
+
+:::
+
 ## Mock functions
 
 If a dependency is passed in as a callback or injected implementation, you can use [rs.fn()](/api/runtime-api/rstest/mock-functions#rsfn) to create a mock function.

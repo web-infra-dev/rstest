@@ -11,6 +11,13 @@ import { RSTEST_ENV_SYMBOL_KEY } from '../../utils/constants';
 import { fileContext } from '../fileContext';
 import { getRealTimers } from '../util';
 import type { FakeTimerInstallOpts, FakeTimersSnapshot } from './fakeTimers';
+import {
+  getNativeMock,
+  type NativeMockResolvedInfo,
+  resolveNativeMockKeys,
+  setNativeMock,
+  unsetNativeMock,
+} from '../worker/mockRegistry';
 import { mockObject as mockObjectImpl } from './mockObject';
 import { initSpy } from './spy';
 
@@ -632,6 +639,48 @@ const buildRstestUtilities = async (): Promise<{
     timerStack.length = 0;
     originalConfig = undefined;
     currentFakeTimersConfig = undefined;
+  };
+
+  // #1454: bridge the bundle's mock runtime to the worker-realm `mockRegistry`
+  // that the Node `registerHooks` load hook reads. Called from
+  // `mockRuntimeCode.js` at rs.mock/unmock time over the existing RSTEST_API
+  // channel (the same one `mockObject` uses). Key derivation lives with the
+  // hook (nativeMockHooks.ts, reached through the registry's injected
+  // resolver), so the write-side keys and the hook's read-side keys stay in
+  // one module; in the browser build no resolver is ever injected, keys
+  // resolve to none, and every registration is a no-op.
+  const bridge = rstest as RstestUtilities & {
+    __setNativeMock?: (
+      request: string,
+      produce: () => unknown,
+      info?: NativeMockResolvedInfo,
+    ) => void;
+    __unsetNativeMock?: (
+      request: string,
+      info?: NativeMockResolvedInfo,
+    ) => void;
+    // Bundler retention anchor, not runtime API — see the assignment below.
+    __getNativeMock?: typeof getNativeMock;
+  };
+  // Bundler anchor (never invoked): the synthetic mock module the Node load
+  // hook generates does `import { getNativeMock } from <REGISTRY_URL>` at
+  // RUNTIME, so the registry chunk must keep `getNativeMock` as a NAMED
+  // export. mockRegistry and nativeMockHooks share one chunk, so their
+  // internal use is inlined and does NOT retain the export; this assignment
+  // from the api chunk is a real cross-chunk consumer, which forces the
+  // bundler to keep it. (Verified: drop it and the synthetic import fails to
+  // link — `does not provide an export`.)
+  bridge.__getNativeMock = getNativeMock;
+  bridge.__setNativeMock = (request, produce, info) => {
+    setNativeMock(
+      resolveNativeMockKeys(request, info, fileContext().workerState.testPath),
+      produce,
+    );
+  };
+  bridge.__unsetNativeMock = (request, info) => {
+    unsetNativeMock(
+      resolveNativeMockKeys(request, info, fileContext().workerState.testPath),
+    );
   };
 
   return { rstest, resetForFile };

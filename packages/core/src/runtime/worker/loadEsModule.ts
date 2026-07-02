@@ -9,6 +9,7 @@ import {
   finalizeDynamicImport,
   loadWasm,
   resolveImportSpecifier,
+  maybeResolveMockedDynamicImport,
 } from './resolveDynamicImport';
 import {
   RSTEST_DYNAMIC_IMPORT_HOOK,
@@ -105,6 +106,17 @@ const defineRstestDynamicImport =
     importAttributes: ImportCallOptions,
     origin?: string,
   ) => {
+    // #1454: route `import(variable)` of a mocked module to the bundle's mock
+    // instance before any native load (policy in resolveDynamicImport.ts).
+    const mocked = maybeResolveMockedDynamicImport(
+      specifier,
+      returnModule,
+      importAttributes,
+    );
+    if (mocked !== undefined) {
+      return mocked;
+    }
+
     const currentDirectory = path.dirname(distPath);
 
     const joinedPath = isRelativePath(specifier)
