@@ -424,6 +424,29 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         ],
       },
       {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
+            },
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.mts\\$/,
         "type": "javascript/esm",
       },
@@ -1018,6 +1041,29 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         ],
       },
       {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
+            },
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.mts\\$/,
         "type": "javascript/esm",
       },
@@ -1599,6 +1645,17 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         ],
       },
       {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
         "test": /\\\\\\.mts\\$/,
         "type": "javascript/esm",
       },
@@ -2176,6 +2233,17 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             },
           },
         ],
+      },
+      {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
       },
       {
         "test": /\\\\\\.mts\\$/,
@@ -3091,6 +3159,29 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         ],
       },
       {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
+            },
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.mts\\$/,
         "type": "javascript/esm",
       },
@@ -3672,6 +3763,29 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         ],
       },
       {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
+            },
+          },
+        ],
+      },
+      {
         "test": /\\\\\\.mts\\$/,
         "type": "javascript/esm",
       },
@@ -3901,6 +4015,17 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
       },
     ],
     "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+  },
+  {
+    "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+    "use": [
+      {
+        "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+      },
+    ],
+    "with": {
+      "rstest": "importActual",
+    },
   },
 ]
 `;
