@@ -268,6 +268,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   ): Promise<{
     sourceMap?: SourceMapLike;
     sourceMapStr?: string;
+    sourceMapUrl?: string;
   }> {
     const sourceMapUrl = this.getSourceMapUrl(code);
     if (!sourceMapUrl || this.isInlineSourceMapUrl(sourceMapUrl)) {
@@ -275,10 +276,8 @@ export class CoverageProvider implements RstestCoverageProvider {
     }
 
     try {
-      const sourceMapStr = await fs.readFile(
-        resolve(dirname(filePath), sourceMapUrl),
-        'utf-8',
-      );
+      const resolvedSourceMapUrl = resolve(dirname(filePath), sourceMapUrl);
+      const sourceMapStr = await fs.readFile(resolvedSourceMapUrl, 'utf-8');
 
       return {
         sourceMap: {
@@ -286,6 +285,7 @@ export class CoverageProvider implements RstestCoverageProvider {
           ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
         } as SourceMapLike,
         sourceMapStr,
+        sourceMapUrl: resolvedSourceMapUrl,
       };
     } catch {
       return {};
@@ -315,6 +315,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     code: string;
     sourceMap?: SourceMapLike;
     sourceMapStr?: string;
+    sourceMapUrl?: string;
   }> {
     const assetSource = this.findInDict(options?.assetFiles, filePath);
     const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
@@ -371,10 +372,8 @@ export class CoverageProvider implements RstestCoverageProvider {
       outputModule?: boolean;
     },
   ): Promise<Record<string, FileCoverageData>> {
-    const { code, sourceMap, sourceMapStr } = await this.getTransformedSource(
-      filePath,
-      options,
-    );
+    const { code, sourceMap, sourceMapStr, sourceMapUrl } =
+      await this.getTransformedSource(filePath, options);
 
     if (this.shouldSkipSourceMapEntry(sourceMap)) {
       return {};
@@ -403,6 +402,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       code,
       sourceFilter: (sourcePath) => this.shouldKeepOriginalSource(sourcePath),
       sourceMap,
+      sourceMapUrl,
       coverage: {
         url: entry.url,
         functions: entry.functions,
