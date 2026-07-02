@@ -1,5 +1,5 @@
 import { open, stat } from 'node:fs/promises';
-import type { EnvironmentName, EnvironmentWithOptions } from '../types';
+import type { BuiltinEnvironmentName, EnvironmentWithOptions } from '../types';
 
 const MAX_COMMENT_BYTES = 4096;
 const SUPPORTED_ENVIRONMENTS = ['node', 'jsdom', 'happy-dom'] as const;
@@ -8,7 +8,7 @@ const environmentOptionsCommentRE =
   /@(?:rstest|vitest|jest)-environment-options\s+(.+?)(?:\r?\n|$)/;
 
 export type EnvironmentComment = {
-  name?: EnvironmentName;
+  name?: BuiltinEnvironmentName;
   options?: Record<string, unknown>;
 };
 
@@ -20,8 +20,10 @@ type CachedEnvironmentComment = {
 
 const environmentCommentCache = new Map<string, CachedEnvironmentComment>();
 
-const isEnvironmentName = (name: string): name is EnvironmentName =>
-  SUPPORTED_ENVIRONMENTS.includes(name as EnvironmentName);
+const supportedEnvironmentNames = new Set<string>(SUPPORTED_ENVIRONMENTS);
+
+const isEnvironmentName = (name: string): name is BuiltinEnvironmentName =>
+  supportedEnvironmentNames.has(name);
 
 const canStartRegexLiteral = (code: string, index: number): boolean => {
   let cursor = index - 1;
@@ -254,12 +256,14 @@ export const applyEnvironmentComment = (
   comment: EnvironmentComment,
 ): EnvironmentWithOptions => {
   const name = comment.name ?? baseEnvironment.name;
+  const target =
+    name === baseEnvironment.name ? baseEnvironment.target : undefined;
   const options =
     name === baseEnvironment.name
       ? { ...(baseEnvironment.options || {}), ...(comment.options || {}) }
       : comment.options;
+  const environment =
+    options && Object.keys(options).length > 0 ? { name, options } : { name };
 
-  return options && Object.keys(options).length > 0
-    ? { name, options }
-    : { name };
+  return target ? { ...environment, target } : environment;
 };

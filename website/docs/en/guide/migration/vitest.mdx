@@ -93,7 +93,7 @@ Walk through **every** option under `test` and match it against the table below 
 
 | Vitest (under `test`)         | Rstest (top-level)                                                                             | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ----------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `environment`                 | [`testEnvironment`](/config/test/test-environment)                                             | Fold `test.environmentOptions` into the object form: `testEnvironment: { name: 'jsdom', options: { ... } }`. Custom environment packages are not supported.                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `environment`                 | [`testEnvironment`](/config/test/test-environment)                                             | Fold `test.environmentOptions` into the object form: `testEnvironment: { name: 'jsdom', options: { ... } }`. Rstest supports custom environment packages and JavaScript file paths via a Rstest environment object. Package resolution also tries `rstest-environment-*`. For custom environment migration details, see [Migrating Vitest custom environments](#custom-environments). File-level `@vitest-environment` comments are recognized for built-in environments.                                                                                                    |
 | `include` / `exclude`         | [`include`](/config/test/include) / [`exclude`](/config/test/exclude)                          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `includeSource`               | [`includeSource`](/config/test/include-source)                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `setupFiles`                  | [`setupFiles`](/config/test/setup-files)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -131,6 +131,51 @@ Walk through **every** option under `test` and match it against the table below 
 | `unstubGlobals`               | [`unstubGlobals`](/config/test/unstub-globals)                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `unstubEnvs`                  | [`unstubEnvs`](/config/test/unstub-envs)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `chaiConfig`                  | [`chaiConfig`](/config/test/chai-config)                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+
+### Migrating custom environments {#custom-environments}
+
+When migrating a Vitest custom environment, the object shape is closer, but `viteEnvironment` must be moved into Rstest config as `target`:
+
+```diff title="Vitest to Rstest custom environment"
+  export default {
+    name: 'custom-client',
+-   viteEnvironment: 'client',
+    async setup(global, options) {
+      global.__MARKER__ = options.marker;
+
+      return {
+        async teardown() {
+          delete global.__MARKER__;
+        },
+      };
+    },
+  };
+```
+
+```diff title="Vitest config to Rstest config"
+- import { defineConfig } from 'vitest/config';
++ import { defineConfig } from '@rstest/core';
+
+  export default defineConfig({
+-   test: {
+-     environment: './custom-client-environment.mjs',
+-     environmentOptions: {
+-       marker: 'custom-marker',
+-     },
+-   },
++   testEnvironment: {
++     name: './custom-client-environment.mjs',
++     target: 'web',
++     options: {
++       marker: 'custom-marker',
++     },
++   },
+  });
+```
+
+Map `viteEnvironment: 'ssr'` to `target: 'node'` or omit `target`, and map `viteEnvironment: 'client'` to `target: 'web'`. For `vitest-environment-foo` packages, use the full package name or publish/rename them to `rstest-environment-foo`.
+
+For more custom environment API details, see [`testEnvironment`](/config/test/test-environment#custom-environments).
 
 ### File-level environment comments
 

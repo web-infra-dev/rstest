@@ -14,12 +14,12 @@ import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createAsyncLeakDetector } from './asyncLeaks';
-import { environmentLoaders } from './env/registry';
 import { PhaseTracker } from './phaseTracker';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
 import { createNodeTaskContext } from './taskContext.node';
+import { loadTestEnvironment } from './testEnvironment';
 import type { TaskContext } from './taskContext';
 
 let sourceMaps: Record<string, string> = {};
@@ -164,6 +164,7 @@ const preparePool = async (
       disableConsoleIntercept,
       silent,
       testEnvironment,
+      resolvedTestEnvironmentPaths,
       snapshotFormat,
       env,
     },
@@ -268,23 +269,15 @@ const preparePool = async (
   });
 
   tracker?.transition('envSetup');
-  // `node` is the no-op fast path; every other environment is resolved through
-  // the registry so adding one is a single entry instead of a new switch arm.
-  // teardown is `MaybePromise<void>` and is awaited via `Promise.all` in
-  // `cleanup`, so a single uniform wrapper preserves both the sync (jsdom) and
-  // async (happy-dom) teardown shapes.
-  if (testEnvironment.name !== 'node') {
-    const loadEnvironment = environmentLoaders[testEnvironment.name];
-    if (!loadEnvironment) {
-      throw new Error(`Unknown test environment: ${testEnvironment.name}`);
-    }
-    const { environment } = await loadEnvironment();
-    const { teardown } = await environment.setup(
-      global,
-      testEnvironment.options || {},
-    );
-    cleanupFns.push(() => teardown(global));
-  }
+  const environment = await loadTestEnvironment(
+    testEnvironment.name,
+    resolvedTestEnvironmentPaths,
+  );
+  const { teardown } = await environment.setup(
+    global,
+    testEnvironment.options || {},
+  );
+  cleanupFns.push(async () => teardown());
   tracker?.transition('prepare');
 
   if (globals) {

@@ -33,7 +33,11 @@ import {
   runGlobalSetup,
   runGlobalTeardown,
 } from './globalSetup';
-import { createRsbuildServer, prepareRsbuild } from './rsbuild';
+import {
+  createRsbuildServer,
+  prepareRsbuild,
+  resolveTestEnvironmentWatchFiles,
+} from './rsbuild';
 import { resolveRunnableProjectsByEntries } from './environmentEntries';
 import type { Rstest } from './rstest';
 
@@ -480,12 +484,20 @@ export async function runTests(context: Rstest): Promise<void> {
     }),
   );
 
+  const testEnvironmentFiles = await resolveTestEnvironmentWatchFiles(
+    projects,
+    command,
+    context.rootPath,
+  );
+
   const rsbuildInstance = await prepareRsbuild(
     context,
     globTestSourceEntries,
     setupFiles,
     globalSetupFiles,
     projects,
+    undefined,
+    testEnvironmentFiles,
   );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
@@ -498,6 +510,7 @@ export async function runTests(context: Rstest): Promise<void> {
     globTestSourceEntries,
     setupFiles,
     globalSetupFiles,
+    testEnvironmentFiles,
     rsbuildInstance,
     rootPath,
   });
@@ -522,10 +535,22 @@ export async function runTests(context: Rstest): Promise<void> {
   const recommendWorkerCount =
     command === 'watch' ? Number.POSITIVE_INFINITY : getRecommendWorkerCount();
 
-  const pool = await createPool({
+  let pool = await createPool({
     context,
     recommendWorkerCount,
   });
+
+  const hasWatchTestEnvironmentFiles = Object.values(testEnvironmentFiles).some(
+    (files) => files.length > 0,
+  );
+
+  const refreshWorkerPool = async () => {
+    await runLifecycleStep('worker pool cleanup', () => pool.close());
+    pool = await createPool({
+      context,
+      recommendWorkerCount,
+    });
+  };
 
   // Initialize coverage collector
   const coverageProvider = coverage.enabled
@@ -582,8 +607,32 @@ export async function runTests(context: Rstest): Promise<void> {
     // (see `beginRun` in utils/trace.ts), so call sites stay branch-free.
     const { span } = traceRun;
 
+    const projectStats = await Promise.all(
+      projects.map(async (p) => ({
+        project: p,
+        stats: await span(
+          'host:get-rsbuild-stats',
+          'host',
+          () =>
+            getRsbuildStats({
+              environmentName: p.environmentName,
+              fileFilters,
+            }),
+          { project: p.name, testPath: '<project>' },
+        ),
+      })),
+    );
+
+    if (
+      mode === 'on-demand' &&
+      (hasWatchTestEnvironmentFiles ||
+        projectStats.some(({ stats }) => stats.hasChangedTestEnvironmentFile))
+    ) {
+      await refreshWorkerPool();
+    }
+
     const returns = await Promise.all(
-      projects.map(async (p) => {
+      projectStats.map(async ({ project: p, stats }) => {
         const {
           assetNames,
           entries,
@@ -593,16 +642,7 @@ export async function runTests(context: Rstest): Promise<void> {
           getSourceMaps,
           affectedEntries,
           deletedEntries,
-        } = await span(
-          'host:get-rsbuild-stats',
-          'host',
-          () =>
-            getRsbuildStats({
-              environmentName: p.environmentName,
-              fileFilters,
-            }),
-          { project: p.name, testPath: '<project>' },
-        );
+        } = stats;
 
         testStart ??= Date.now();
 

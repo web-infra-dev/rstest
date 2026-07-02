@@ -25,6 +25,18 @@ describe('custom-environment', () => {
     );
     await expectExecFailed();
 
-    expectStderrLog(/Unknown test environment: custom-environment/);
+    expectStderrLog(/Failed to resolve testEnvironment "custom-environment"/);
+  });
+});
+
+describe('prototype-environment-name', () => {
+  it('should throw an explicit resolution error for prototype property names', async () => {
+    const { expectExecFailed, expectStderrLog } = await runCli(
+      filters,
+      'toString',
+    );
+    await expectExecFailed();
+
+    expectStderrLog(/Failed to resolve testEnvironment "toString"/);
   });
 });
