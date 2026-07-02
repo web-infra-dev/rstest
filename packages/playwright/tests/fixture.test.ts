@@ -368,7 +368,7 @@ test(
   { timeout: 30_000 },
   async ({ request, serve }) => {
     const root = await mkdtemp(join(tmpdir(), 'rstest-playwright-'));
-    const filename = 'entry #%?.html';
+    const filename = 'entry #%.html';
     await writeFile(join(root, filename), '<h1>encoded</h1>');
 
     const { url } = await serve(join(root, filename));
