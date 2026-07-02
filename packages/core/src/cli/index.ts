@@ -9,7 +9,7 @@ import { prepareCli } from './prepare';
  * `process.exit` on fatal errors.
  *
  * This is the raw-argv layer (analogous to jest-cli's `run`); the public,
- * parsed-object, host-safe entry that returns a structured result is `runCli`
+ * parsed-object, host-safe entry that returns a structured result is `runCLI`
  * in `@rstest/core/api` (analogous to `@jest/core`'s `runCLI`). This module is
  * built as its own `dist/cli.js` chunk and loaded by the `rstest` bin directly;
  * it is intentionally NOT a `package.json` export, so `startCli` never reaches

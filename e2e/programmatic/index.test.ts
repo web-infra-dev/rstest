@@ -66,7 +66,7 @@ describe('programmatic createRstest', () => {
     expect(exec.exitCode).toBe(0);
   });
 
-  it('config callback receives the disk config and transforms it', async ({
+  it('config factory loads the disk config itself and transforms it', async ({
     onTestFinished,
   }) => {
     const { cli } = await runRstestCli({
@@ -79,15 +79,14 @@ describe('programmatic createRstest', () => {
     await cli.exec;
     const result = parsePayload(cli.stdout);
 
-    // Disk config included a.test.ts + b.test.ts; the callback narrowed
-    // `include` to a.test.ts, so only it runs (the returned config replaces
-    // the disk config rather than merging onto it).
+    // The zero-arg factory loaded the disk config (a.test.ts + b.test.ts) via
+    // `loadConfig`, then narrowed `include` to a.test.ts, so only it runs.
     expect(result.ok).toBe(true);
     expect(result.files).toEqual([{ status: 'pass', testPath: 'a.test.ts' }]);
     expect(result.stats.files.total).toBe(1);
   });
 
-  it('restores host process.env after the instance is closed', async ({
+  it('never leaves host process.env mutated (construction or run)', async ({
     onTestFinished,
   }) => {
     const { cli } = await runRstestCli({
@@ -103,10 +102,10 @@ describe('programmatic createRstest', () => {
     expect(result.ok).toBe(true);
     // Host started without NODE_ENV / RSTEST.
     expect(result.before).toEqual({ NODE_ENV: null, RSTEST: null });
-    // While the instance is live, workers observe test-mode env.
-    expect(result.during).toEqual({ NODE_ENV: 'test', RSTEST: 'true' });
-    // close() puts the host environment back the way it found it.
-    expect(result.after).toEqual(result.before);
+    // Creating the instance is host-safe — it doesn't leave the host in test mode.
+    expect(result.afterCreate).toEqual(result.before);
+    // run() restores the host environment the way it found it.
+    expect(result.afterRun).toEqual(result.before);
     expect(result.hostExitCode).toBe(0);
   });
 
@@ -170,6 +169,32 @@ describe('programmatic createRstest', () => {
     expect(exec.exitCode).toBe(0);
   });
 
+  it('watch() onResult delivers each run as a run()-parity TestRunResult, surfacing failures', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-watch-onresult.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    const exec = await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // The failing file's failure reaches the caller through `onResult` rather
+    // than being silently swallowed — with no custom reporter registered.
+    expect(result.ok).toBe(false);
+    expect(result.stats.tests.passed).toBe(2);
+    expect(result.stats.tests.failed).toBe(1);
+    expect(result.stats.files.failed).toBe(1);
+    expect(result.hasFiles).toBe(true);
+    expect(result.unhandledErrorsCount).toBe(0);
+    // A failing watch run must not leak a non-zero exit code onto the host.
+    expect(result.hostExitCode).toBe(0);
+    expect(exec.exitCode).toBe(0);
+  });
+
   it('fails the run (ok=false) when a coverage threshold is not met, even though every test passes', async ({
     onTestFinished,
   }) => {
@@ -189,7 +214,7 @@ describe('programmatic createRstest', () => {
     // ...but the unmet coverage threshold (an exit-code-only failure) must
     // still surface as ok=false, mirroring the CLI.
     expect(result.ok).toBe(false);
-    // close() restored the host exit code, so the embedder isn't poisoned.
+    // run() restored the host exit code, so the embedder isn't poisoned.
     expect(result.hostExitCode).toBe(0);
   });
 

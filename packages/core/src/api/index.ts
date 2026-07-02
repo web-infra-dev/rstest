@@ -16,7 +16,7 @@ import {
   resolveProjects,
 } from '../cli/init';
 import { initRstestEnv } from '../cli/prepare';
-import { loadConfig, mergeRstestConfig, resolveExtends } from '../config';
+import { mergeRstestConfig, resolveExtends } from '../config';
 import { createRstestContext } from '../core';
 import type {
   FileFilterMode,
@@ -32,6 +32,7 @@ import {
   assembleTestRunResult,
   createCaptureReporter,
   createCapturedRunState,
+  createResultReporter,
   type TestFileResult,
   type TestRunResult,
   toPublicTestFileResult,
@@ -65,21 +66,18 @@ export type {
 } from './result';
 
 /**
- * Function form of {@link CreateRstestOptions.config}: receives the config
- * loaded from `configFile` (an empty object when none is set) and returns the
- * final config to run with. Letting you transform the disk config directly
- * rather than deep-merging an override object over it.
+ * Function form of {@link CreateRstestOptions.config}: a zero-argument factory
+ * that returns the final config to run with. Load a config file yourself inside
+ * it (e.g. via `loadConfig` from `@rstest/core`) — the programmatic API does not
+ * read one for you. Mirrors rsbuild's `createRsbuild({ config })` factory.
  *
  * @experimental Subject to change until 1.0.0.
  */
-export type RstestConfigFn = (
-  loadedConfig: RstestConfig,
-) => RstestConfig | Promise<RstestConfig>;
+export type RstestConfigFn = () => RstestConfig | Promise<RstestConfig>;
 
 /**
  * Options for {@link createRstest}. Construction carries only the static
- * config + host wiring; per-invocation selection/control lives in
- * {@link RunOptions}.
+ * config; per-invocation selection/control lives in {@link RunOptions}.
  *
  * @experimental Subject to change until 1.0.0.
  */
@@ -88,33 +86,18 @@ export interface CreateRstestOptions {
   cwd?: string;
 
   /**
-   * Path to a config file. Unlike the CLI, the programmatic API does NOT
-   * auto-discover a config file from `cwd` — pass an explicit path or omit to
-   * run with `config` only.
-   */
-  configFile?: string;
-
-  /**
-   * Inline configuration applied on top of `configFile` (or used alone). The
-   * single override channel for all config content — including `projects` and
-   * `reporters`.
+   * The configuration to run with. Unlike the CLI, the programmatic API does
+   * NOT auto-discover or read a config file from `cwd` — you own config
+   * loading. This is the single channel for all config content, including
+   * `projects` and `reporters`.
    *
-   * - **Object**: deep-merged over the disk config (inline wins for scalars;
-   *   arrays follow `mergeRstestConfig` semantics).
-   * - **Function**: receives the disk-loaded config (an empty object when no
-   *   `configFile` is set) and returns the final config, letting you mutate or
-   *   replace it directly instead of merging. Mirrors rsbuild's
-   *   `createRsbuild({ config })` factory, but the callback is handed the
-   *   resolved disk config so it can transform it.
+   * - **Object**: used as the inline config directly.
+   * - **Function** ({@link RstestConfigFn}): a zero-argument factory returning
+   *   the final config. Load a config file yourself inside it via `loadConfig`
+   *   from `@rstest/core` (optionally merging an override with
+   *   `mergeRstestConfig`). Mirrors rsbuild's `createRsbuild({ config })`.
    */
   config?: RstestConfig | RstestConfigFn;
-
-  /**
-   * When `false`, install host `process.on('exit' | 'SIG*')` handlers and call
-   * `process.exit()` on config errors (CLI behavior). Defaults to `true` for
-   * the programmatic API so a run can't kill the embedding host.
-   */
-  embedded?: boolean;
 
   /**
    * CLI-only `--trace`; dumps a Perfetto-compatible performance trace. Not
@@ -171,10 +154,10 @@ export interface RunOptions {
 }
 
 /**
- * Parsed CLI flag bag accepted by {@link runCli} — mirrors what a parsed
+ * Parsed CLI options accepted by {@link runCLI} — mirrors what a parsed
  * `rstest <args>` produces: named flags plus positional files in `_`. This is
- * the full, undifferentiated CLI option surface (analogous to jest's
- * `Config.Argv`), as opposed to {@link RunOptions}'s curated per-run subset.
+ * the full CLI option surface (analogous to Jest's `Config.Argv`), as opposed
+ * to {@link RunOptions}'s curated per-run subset.
  *
  * @experimental Subject to change until 1.0.0.
  */
@@ -187,10 +170,29 @@ export type RstestArgv = CommonOptions & {
 };
 
 /**
+ * Watch-only options for {@link RstestInstance.watch}, merged with the
+ * per-invocation {@link RunOptions}. Mirrors how `listTests` takes
+ * `ListCommandOptions & RunOptions`.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export interface WatchOptions {
+  /**
+   * Called after each run in the session — including the first — with that
+   * run's {@link TestRunResult}, the same shape {@link RstestInstance.run}
+   * resolves. Lets a caller observe every rerun (pass/fail, `unhandledErrors`)
+   * without implementing a reporter. A throwing callback is isolated so it
+   * can't tear down the watch session.
+   */
+  onResult?: (result: TestRunResult) => void;
+}
+
+/**
  * Handle for an active watch session started by {@link RstestInstance.watch}.
  * Watch keeps re-running the matching tests on file changes; per-run results
- * surface via the configured reporters, not a return value. `close()` stops
- * watching and releases the Rsbuild dev server + worker pool.
+ * surface via the configured reporters or {@link WatchOptions.onResult}, not a
+ * return value. `close()` stops watching and releases the Rsbuild dev server +
+ * worker pool.
  *
  * @experimental Subject to change until 1.0.0.
  */
@@ -214,12 +216,13 @@ export interface RstestInstance {
 
   /**
    * Start a watch session: run the matching tests, then keep re-running them as
-   * files change. Accepts the same file-selection options as `run`. Per-run
-   * results surface via the configured reporters (not the resolved value);
+   * files change. Accepts the same file-selection options as `run`, plus
+   * {@link WatchOptions.onResult} to observe each run. Per-run results surface
+   * via the configured reporters and/or `onResult` (not the resolved value);
    * resolves once watching is established. Call {@link RstestWatcher.close} to
    * stop watching. Mirrors the CLI's `--watch`, exposed programmatically here.
    */
-  watch(options?: RunOptions): Promise<RstestWatcher>;
+  watch(options?: WatchOptions & RunOptions): Promise<RstestWatcher>;
 
   /**
    * Collect matching test files / cases without executing. Accepts the same
@@ -232,50 +235,26 @@ export interface RstestInstance {
 
   /** Merge on-disk blob reports into a single aggregate report. */
   mergeReports(options?: { path?: string; cleanup?: boolean }): Promise<void>;
-
-  /** Release instance resources. No-op on the 1.0 happy path (each run self-cleans). */
-  close(): Promise<void>;
 }
 
 /** Resolve an optional caller-supplied cwd against the current process cwd. */
 const resolveCwd = (cwd?: string): string =>
   cwd ? getAbsolutePath(process.cwd(), cwd) : process.cwd();
 
-const loadConfigForApi = async ({
-  cwd,
-  configFile,
-  config,
-}: {
-  cwd: string;
-  configFile?: string;
-  config?: RstestConfig | RstestConfigFn;
-}): Promise<{ content: RstestConfig; filePath?: string }> => {
-  let diskContent: RstestConfig = {};
-  let filePath: string | undefined;
-
-  if (configFile) {
-    const loaded = await loadConfig({ cwd, path: configFile });
-    diskContent = loaded.content;
-    filePath = loaded.filePath ?? undefined;
-  }
-
-  // `resolveExtends` is a no-op when a config has no `extends`, so both branches
-  // call it unconditionally.
-
-  // Function form: hand the resolved disk config to the caller and use whatever
-  // they return as the final config (no auto-merge — they own the result).
-  if (typeof config === 'function') {
-    const content = await resolveExtends(await config(diskContent));
-    return { content, filePath };
-  }
-
-  // Object form. `loadConfig` already resolved `extends` on disk content;
-  // resolve inline extends *before* merging so the merged result doesn't carry
-  // both copies (which would double-apply disk extends if re-run afterwards).
-  const resolvedInline = await resolveExtends(config ?? {});
-  const merged = mergeRstestConfig(diskContent, resolvedInline);
-
-  return { content: merged, filePath };
+const loadConfigForApi = async (
+  config?: RstestConfig | RstestConfigFn,
+): Promise<RstestConfig> => {
+  // The programmatic API never reads a config file itself — the caller owns
+  // loading (e.g. via `loadConfig` from `@rstest/core`). Object form is used
+  // as-is; function form is a zero-arg factory whose return value is the config.
+  const resolved =
+    typeof config === 'function' ? await config() : (config ?? {});
+  // Clone up front so neither `resolveExtends` nor the later `build` mutations
+  // (root resolution, CLI-option merge, e.g. reporters/includeTaskLocation)
+  // touch the caller's `config` object — the same object is reused across every
+  // `run` / `listTests` / `watch` call (and the eager creation build).
+  // `resolveExtends` is a no-op when there's no `extends`.
+  return resolveExtends(mergeRstestConfig({}, resolved));
 };
 
 /**
@@ -333,7 +312,7 @@ const toCommonOptions = (options: RunOptions): CommonOptions => ({
  * snapshot/restore process globals so the embedding host isn't left with leaked
  * `exitCode`/`env` state, and contain any build/run error as an `unhandledError`
  * (with `ok: false`) instead of throwing or exiting. Shared by
- * {@link createRstest}'s `run` and the standalone {@link runCli} entry.
+ * {@link createRstest}'s `run` and the standalone {@link runCLI} entry.
  *
  * `buildRunner` runs inside the guarded `try` so config/build errors are
  * captured too; results are read in `finally` so a failure in a post-run step
@@ -373,10 +352,10 @@ const executeHostSafeRun = async (
 };
 
 /**
- * Create a programmatic Rstest instance. The static inputs (`configFile` +
- * inline `config`) are the instance's identity, but the config is
- * **re-resolved on every** `run()` / `listTests()` / `mergeReports()` (and once
- * eagerly at creation), so no mutable state is shared across runs and
+ * Create a programmatic Rstest instance. The static `config` is the instance's
+ * identity, but it is **re-resolved on every** `run()` / `listTests()` /
+ * `mergeReports()` (and once eagerly at creation), so no mutable state is
+ * shared across runs and
  * {@link RstestInstance.context} reflects the most recent build rather than a
  * creation-time snapshot. Each call performs a full build → execute → teardown.
  *
@@ -389,18 +368,7 @@ const executeHostSafeRun = async (
 export async function createRstest(
   options: CreateRstestOptions = {},
 ): Promise<RstestInstance> {
-  // Snapshot the host's process state *before* `initRstestEnv()` mutates it so
-  // `close()` can restore the embedding process. Otherwise a host that never set
-  // `NODE_ENV`/`RSTEST` would be left permanently in test mode after simply
-  // creating (and closing) an instance.
-  const restoreHostState = snapshotProcessGuards();
-
-  // Match the CLI's environment setup so workers (spawned per run) observe
-  // `NODE_ENV=test` / `RSTEST=true`.
-  initRstestEnv();
-
   const cwd = resolveCwd(options.cwd);
-  const embedded = options.embedded ?? true;
   const trace = options.trace ?? false;
 
   // Holds the most recent build's context, exposed via `instance.context`.
@@ -414,18 +382,19 @@ export async function createRstest(
     runOptions: RunOptions,
     prepareOptions?: (options: CommonOptions) => void,
   ): Promise<RstestRunner> => {
+    // Match the CLI's environment setup so workers (spawned per run) observe
+    // `NODE_ENV=test` / `RSTEST=true`. Every entry that calls `build` snapshots
+    // and restores process globals around it (construction, `run`, `watch`,
+    // `listTests`, `mergeReports`), so this mutation never leaks to the host.
+    initRstestEnv();
+
     const commonOptions = toCommonOptions(runOptions);
     // Mutate the option bag (not the root config) so the tweak reaches both the
     // root config and — via `resolveProjects` — every project config, which
     // both derive from `commonOptions`.
     prepareOptions?.(commonOptions);
 
-    const { content: userConfig, filePath: configFilePath } =
-      await loadConfigForApi({
-        cwd,
-        configFile: options.configFile,
-        config: options.config,
-      });
+    const userConfig = await loadConfigForApi(options.config);
 
     // Propagate per-invocation config-shaped options to the root config and —
     // via `resolveProjects` — to every project config.
@@ -443,13 +412,15 @@ export async function createRstest(
     const runner = await buildResolvedRunner({
       createRstest: createRstestContext,
       config: userConfig,
-      configFilePath,
+      // The programmatic API doesn't read a config file, so there's no path to
+      // track (the caller's factory owns any file it loads).
+      configFilePath: undefined,
       projects,
       command,
       options: commonOptions,
       filters: runOptions.filters ?? [],
       cwd,
-      embedded,
+      embedded: true,
       trace,
       filterMode: runOptions.filterMode,
     });
@@ -459,28 +430,29 @@ export async function createRstest(
   };
 
   // Resolve up front so `context` is available for inspection and config-load
-  // errors surface at creation time rather than on first run. Build with no
-  // reporters: the default reporter constructs a TTY renderer that intercepts
-  // `process.stdout`/`stderr` and registers a `process.on('exit')` handler at
-  // construction time, which a host that only inspects `context` (or calls
-  // `close()`) must not incur. `run()` rebuilds with the real reporters.
+  // errors surface at creation time rather than on first run. Snapshot and
+  // restore process globals around this eager build so merely creating an
+  // instance never leaves the host in test mode or with a mutated exit code.
+  // Build with no reporters: the default reporter constructs a TTY renderer that
+  // intercepts `process.stdout`/`stderr` and registers a `process.on('exit')`
+  // handler at construction time, which a host that only inspects `context` must
+  // not incur. `run()` rebuilds with the real reporters.
+  const restoreCreation = snapshotProcessGuards();
   try {
     await build('run', {}, (opts) => {
       opts.reporters = [];
     });
-  } catch (err) {
-    // Creation failed, so the caller never gets an instance to `close()` —
-    // restore the host snapshot here instead of leaving it in test mode.
-    restoreHostState();
-    throw err;
+  } finally {
+    restoreCreation();
   }
 
   const run = (runOptions: RunOptions = {}): Promise<TestRunResult> =>
     executeHostSafeRun(() => build('run', runOptions));
 
   const watch = async (
-    watchOptions: RunOptions = {},
+    watchOptions: WatchOptions & RunOptions = {},
   ): Promise<RstestWatcher> => {
+    const { onResult, ...runOptions } = watchOptions;
     // Contain `process.exitCode` around the watch session so a failing run
     // doesn't leave the embedding host marked as failed; the dev server keeps
     // running after `runTests()` resolves, so restore only when `close()` is
@@ -488,7 +460,16 @@ export async function createRstest(
     // the instance's own `close()`), which is what re-run workers need.
     const restore = snapshotProcessGuards();
     try {
-      const runner = await build('watch', watchOptions);
+      const runner = await build('watch', runOptions);
+      if (onResult) {
+        // Bridge each run's summary to `onResult` as the public TestRunResult,
+        // so a caller gets structured per-rerun results without writing a
+        // reporter. The runner is built once for the session, so `context` is a
+        // fixed reference; `createResultReporter` isolates a throwing callback.
+        runner.context.reporters.push(
+          createResultReporter(onResult, runner.context),
+        );
+      }
       const handle = await runner.runTests();
       return {
         close: async () => {
@@ -552,13 +533,6 @@ export async function createRstest(
     }
   };
 
-  const close = async (): Promise<void> => {
-    // Each run() builds and tears down its own worker pool + Rsbuild server, so
-    // there are no instance-held resources to release in 1.0. Restore the host
-    // `process.env`/`exitCode` snapshot taken before `initRstestEnv()`.
-    restoreHostState();
-  };
-
   return {
     get context() {
       return context;
@@ -567,16 +541,14 @@ export async function createRstest(
     watch,
     listTests,
     mergeReports,
-    close,
   };
 }
 
 /**
- * Run Rstest once from a parsed CLI flag bag — the jest-compatible programmatic
+ * Run Rstest once from parsed CLI options — the Jest-compatible programmatic
  * entry, analogous to `@jest/core`'s `runCLI(argv, projects)`. It accepts the
- * full, undifferentiated CLI option bag ({@link RstestArgv}: named flags plus
- * positional files in `argv._`) and resolves to a structured
- * {@link TestRunResult}.
+ * full CLI option surface ({@link RstestArgv}: named flags plus positional files
+ * in `argv._`) and resolves to a structured {@link TestRunResult}.
  *
  * Unlike {@link createRstest}, this mirrors the `rstest run` CLI command:
  * it auto-discovers the config file from `cwd` and applies CLI defaults. It is
@@ -586,7 +558,7 @@ export async function createRstest(
  *
  * @experimental Subject to change until 1.0.0.
  */
-export async function runCli(
+export async function runCLI(
   argv: RstestArgv = {},
   options: { cwd?: string } = {},
 ): Promise<TestRunResult> {

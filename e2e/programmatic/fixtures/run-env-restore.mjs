@@ -5,8 +5,8 @@ import { createRstest } from '@rstest/core/api';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const cwd = join(__dirname, 'disk');
 
-// Simulate a host that never set these itself, so the API must not leave them
-// behind after the instance is closed.
+// Simulate a host that never set these itself, so the API must never leave them
+// behind — neither at construction nor after a run.
 delete process.env.NODE_ENV;
 delete process.env.RSTEST;
 
@@ -26,20 +26,22 @@ const rstest = await createRstest({
   },
 });
 
-// Instance is live: workers must observe test-mode env.
-const during = snapshot();
+// Construction is host-safe: creating an instance must not leave the host in
+// test mode (workers only spawn per run, with their own contained env).
+const afterCreate = snapshot();
 
 const result = await rstest.run();
-await rstest.close();
 
-const after = snapshot();
+// run() snapshots and restores process globals, so the host env is back the way
+// it found it once the run resolves.
+const afterRun = snapshot();
 
 console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({
     ok: result.ok,
     before,
-    during,
-    after,
+    afterCreate,
+    afterRun,
     hostExitCode: process.exitCode ?? 0,
   })}__END__`,
 );

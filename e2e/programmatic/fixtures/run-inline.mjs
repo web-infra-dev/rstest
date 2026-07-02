@@ -14,7 +14,6 @@ const rstest = await createRstest({
   },
 });
 const result = await rstest.run();
-await rstest.close();
 
 console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({

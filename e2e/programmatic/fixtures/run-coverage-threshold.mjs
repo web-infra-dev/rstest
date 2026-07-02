@@ -26,13 +26,12 @@ const rstest = await createRstest({
   },
 });
 const result = await rstest.run();
-await rstest.close();
 
 console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({
     ok: result.ok,
     stats: result.stats,
-    // close() restores the host exit code the coverage failure set during the run.
+    // run() restores the host exit code the coverage failure set during the run.
     hostExitCode: process.exitCode ?? 0,
   })}__END__`,
 );

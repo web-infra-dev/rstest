@@ -30,20 +30,27 @@ export class Worker {
     const rstestApi = (await import(
       rstestApiUrl
     )) as typeof import('@rstest/core/api');
+    // `loadConfig` lives on the main `@rstest/core` entry — the programmatic API
+    // no longer reads a config file itself, so we load it and hand it to `config`.
+    const rstestMain = (await import(
+      pathToFileURL(rstestPath).href
+    )) as typeof import('@rstest/core');
     logger.debug('Loaded Rstest API module');
     const { createRstest } = rstestApi;
+    const { loadConfig } = rstestMain;
 
     const coverageEnabled = !!overrideConfig.coverage?.enabled;
     const { coverage: coverageOverride, ...restOverride } = overrideConfig;
 
     const rstest = await createRstest({
-      configFile: configFilePath,
-      // Use the function form so the extension's coverage reporter is *appended*
-      // to the user's configured `coverage.reporters` (lcov/html/…) rather than
-      // replacing them. The object form goes through `mergeRstestConfig`, which
-      // overrides `coverage.reporters`, so a workspace that configures reporters
-      // would silently lose them when running coverage from the extension.
-      config: (loaded) => {
+      // The programmatic API doesn't read a config file itself, so this factory
+      // loads the resolved disk config and hands it to us. Use the function form
+      // so the extension's coverage reporter is *appended* to the user's
+      // configured `coverage.reporters` (lcov/html/…) rather than replacing
+      // them — returning a plain override object would drop whatever the
+      // workspace configured.
+      config: async () => {
+        const { content: loaded } = await loadConfig({ path: configFilePath });
         // `coverage` is pulled out of the overrides above and handled explicitly
         // so a `coverage: undefined` override can't wipe the disk coverage
         // config, and so the extension's reporter is appended to (not replacing)
