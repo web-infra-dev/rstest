@@ -338,6 +338,20 @@ importers:
         specifier: ^6.30.4
         version: 6.30.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
+  e2e/playwright/fixtures:
+    devDependencies:
+      '@rsbuild/core':
+        specifier: ~2.1.1
+        version: 2.1.1
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../packages/core
+      '@rstest/playwright':
+        specifier: workspace:*
+        version: link:../../../packages/playwright
+      playwright:
+        specifier: ^1.61.1
+        version: 1.61.1
   e2e/mock/src/reexport: {}
 
   e2e/projects/fixtures:
@@ -656,6 +670,24 @@ importers:
       '@types/node':
         specifier: ^22.16.5
         version: 22.18.6
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  examples/playwright:
+    devDependencies:
+      '@rsbuild/core':
+        specifier: ~2.1.1
+        version: 2.1.1
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@rstest/playwright':
+        specifier: workspace:*
+        version: link:../../packages/playwright
+      playwright:
+        specifier: ^1.61.1
+        version: 1.61.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1319,6 +1351,24 @@ importers:
       '@types/picomatch':
         specifier: ^4.0.3
         version: 4.0.3
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/playwright:
+    devDependencies:
+      '@rslib/core':
+        specifier: 0.23.1
+        version: 0.23.1(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(typescript@6.0.3)
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../core
+      '@rstest/tsconfig':
+        specifier: workspace:*
+        version: link:../../scripts/tsconfig
+      playwright:
+        specifier: ^1.61.1
+        version: 1.61.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

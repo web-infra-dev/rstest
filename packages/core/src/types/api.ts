@@ -19,6 +19,10 @@ export interface TestContext {
     id: string;
     /** Test name provided by user */
     name: string;
+    /** Absolute path of the current test file when provided by the runner */
+    filepath?: string;
+    /** Absolute path of the current project's root directory. */
+    projectRoot?: string;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
   };
@@ -178,7 +182,7 @@ interface FixtureOptions {
   auto?: boolean;
 }
 
-type Use<T> = (value: T) => Promise<void>;
+export type Use<T> = (value: T) => Promise<void>;
 
 type FixtureFn<T, K extends keyof T, ExtraContext> = (
   context: Omit<T, K> & ExtraContext,

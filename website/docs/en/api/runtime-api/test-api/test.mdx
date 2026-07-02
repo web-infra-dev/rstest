@@ -502,6 +502,10 @@ export interface TestContext {
     id: string;
     /** Test name provided by user */
     name: string;
+    /** Absolute path of the current test file when provided by the runner. Added in 0.11.0. */
+    filepath?: string;
+    /** Absolute path of the current project's root directory when provided by the runner. Added in 0.11.0. */
+    projectRoot?: string;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
   };

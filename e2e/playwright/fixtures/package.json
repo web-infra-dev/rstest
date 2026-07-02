@@ -1,0 +1,12 @@
+{
+  "name": "@rstest/tests-playwright",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@rsbuild/core": "~2.1.1",
+    "@rstest/core": "workspace:*",
+    "@rstest/playwright": "workspace:*",
+    "playwright": "^1.61.1"
+  }
+}

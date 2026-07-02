@@ -93,6 +93,25 @@ Returns the real system time (as a timestamp), even when fake timers are enabled
 const realTime = rs.getRealSystemTime();
 ```
 
+## rs.getRealTimers
+
+<ApiMeta addedVersion="0.11.0" />
+
+- **Alias:** `rstest.getRealTimers`
+- **Type:** `() => { setTimeout: typeof globalThis.setTimeout; clearTimeout: typeof globalThis.clearTimeout; setImmediate?: typeof globalThis.setImmediate }`
+
+Returns real timer functions captured by Rstest, even when fake timers are enabled.
+
+```ts
+const { setTimeout, clearTimeout } = rs.getRealTimers();
+
+const timeout = setTimeout(() => {
+  // This timer uses real time.
+}, 1000);
+
+clearTimeout(timeout);
+```
+
 ## rs.runAllTicks
 
 - **Alias:** `rstest.runAllTicks`
