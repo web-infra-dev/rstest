@@ -29,7 +29,7 @@
 import fs from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   allGeneratedPositionsFor,
   LEAST_UPPER_BOUND,
@@ -169,7 +169,7 @@ async function prepareCoverage(
     sourceMapResult?.sourceMap || createEmptySourceMap(filename, options.code);
   const sourceMap = new TraceMap(
     mapInput as SourceMapInput,
-    sourceMapResult?.sourceMapUrl,
+    normalizeSourceMapUrl(sourceMapResult?.sourceMapUrl),
   );
   const locator = new Locator(sourceMap, options.code);
   const builder = new CoverageBuilder(
@@ -1254,6 +1254,18 @@ function resolveSourceFilename(source: string, directory: string) {
   }
 
   return resolve(directory, source);
+}
+
+function normalizeSourceMapUrl(sourceMapUrl: string | undefined) {
+  if (
+    !sourceMapUrl ||
+    (URL_SCHEME_PATTERN.test(sourceMapUrl) &&
+      !WINDOWS_ABSOLUTE_PATH_PATTERN.test(sourceMapUrl))
+  ) {
+    return sourceMapUrl;
+  }
+
+  return pathToFileURL(sourceMapUrl).href;
 }
 
 function getFunctionName(node: AstNode): string | undefined {
