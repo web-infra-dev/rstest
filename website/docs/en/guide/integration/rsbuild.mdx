@@ -2,6 +2,8 @@
 description: This guide covers how to integrate Rstest with Rsbuild for seamless testing in your Rsbuild projects.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Rsbuild
 
 This guide covers how to integrate Rstest with [Rsbuild](https://rsbuild.dev) for seamless testing in your Rsbuild projects.
@@ -55,13 +57,13 @@ This will automatically:
 
 The adapter does not reuse the entire Rsbuild config as-is. It keeps the parts that matter for test execution, such as module resolution, transforms, CSS Modules, static asset handling, and `target`, and automatically drops options like `dev`, `server`, and `html` that are specific to the dev server, page entry, or production output.
 
-By default, the adapter uses `process.cwd()` to resolve the Rsbuild config. If your config lives elsewhere, you can use the `cwd` option. See [API](#api) for more details.
+By default, the adapter uses `process.cwd()` to resolve the Rsbuild config. If your config lives elsewhere, you can use the `cwd` option. You can also pass an Rsbuild config object directly with the `config` option. See [API](#api) for more details.
 
 ## API
 
 ### `withRsbuildConfig(options)`
 
-Returns a configuration function that loads Rsbuild config and converts it to Rstest configuration.
+Returns a configuration function that loads or accepts Rsbuild config and converts it to Rstest configuration.
 
 #### `cwd`
 
@@ -86,6 +88,41 @@ export default defineConfig({
 - **Default:** `'./rsbuild.config.ts'`
 
 Path to rsbuild config file.
+
+:::tip
+If both `config` and `configPath` are provided, `config` takes precedence as the config content.
+:::
+
+#### `config`
+
+<ApiMeta addedVersion="0.11.0" />
+
+- **Type:** `RsbuildConfig`
+- **Default:** `undefined`
+
+The inline Rsbuild config object to convert directly. When `config` is provided, the adapter does not call Rsbuild's `loadConfig`.
+
+If `configPath` is also provided, the adapter uses it as config file metadata for [`forceRerunTriggers`](/config/test/force-rerun-triggers) and build cache dependency resolution, but the inline `config` still takes precedence as the config content.
+
+```ts
+import { defineConfig as defineRsbuildConfig } from '@rsbuild/core';
+import { defineConfig } from '@rstest/core';
+import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
+
+const rsbuildConfig = defineRsbuildConfig({
+  source: {
+    define: {
+      __DEV__: 'true',
+    },
+  },
+});
+
+export default defineConfig({
+  extends: withRsbuildConfig({
+    config: rsbuildConfig,
+  }),
+});
+```
 
 #### `environmentName`
 
