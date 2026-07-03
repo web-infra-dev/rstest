@@ -913,7 +913,7 @@ const applyResolvedFilters = async (
  * Resolve related/changed filters, build the internal runner, and apply the
  * resolved filter context onto it — the shared "post-config-resolution build
  * tail" used by every entry (`runTestCommand`, the `list` and `merge-reports` actions,
- * and the programmatic `runCLI` / `createRstest` build). Keeping the
+ * and the programmatic `createRstest` build). Keeping the
  * `resolveEffectiveCliFilters` →
  * `createRstestContext` → `applyResolvedFilters` sequence in one place prevents
  * the per-site drift that previously duplicated/mis-ordered these assignments.
@@ -1243,7 +1243,8 @@ export function createCli({ cwd }: { cwd?: string } = {}): CAC {
  * `parse(..., { run: false })` splits parsing (including the `--help` /
  * `--version` short-circuit) from execution, so the matched action runs via
  * cac's own `runMatchedCommand()`. Structured results are produced only by the
- * programmatic entries (`runCLI` / `createRstest`), never the CLI path.
+ * in-process `createRstest` API, never the CLI path (including the `runCLI`
+ * bridge, which owns the process and returns nothing).
  */
 export async function setupCommands(
   argv: string[] = process.argv,

@@ -1,7 +1,7 @@
 /**
- * Public result types + assembly helpers shared by the programmatic
- * `RstestInstance.run()` and the `runCLI` entry. Kept separate from the engine
- * so internal reporter-state refactors don't leak into the public surface.
+ * Public result types + assembly helpers for the programmatic
+ * `RstestInstance.run()` / `watch()` results. Kept separate from the engine so
+ * internal reporter-state refactors don't leak into the public surface.
  */
 import type {
   CoverageMapData,
@@ -75,7 +75,7 @@ export interface TestFileResult extends TestResult {
 }
 
 /**
- * Result of a {@link createRstest} instance `run()` (or a `runCLI` run).
+ * Result of a {@link createRstest} instance `run()` (and each `watch()` rerun).
  *
  * @experimental Subject to change until 1.0.0.
  */

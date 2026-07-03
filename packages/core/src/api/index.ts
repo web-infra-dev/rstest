@@ -1,5 +1,7 @@
 /**
- * Programmatic Node API for running Rstest in-process.
+ * Programmatic Node API for Rstest: an in-process, host-safe instance factory
+ * (`createRstest`) plus a process-owning CLI passthrough (`runCLI`) for bridging
+ * Rstest into another CLI.
  *
  * @experimental
  * All exports from this entrypoint are **experimental** and subject to change
@@ -11,7 +13,6 @@
 import { buildResolvedRunner } from '../cli/commands';
 import {
   type CommonOptions,
-  initCli,
   mergeWithCLIOptions,
   resolveProjects,
 } from '../cli/init';
@@ -38,6 +39,9 @@ import {
   toPublicTestFileResult,
   toSerializedError,
 } from './result';
+
+// The CLI passthrough entry — canonical declaration + docs in `../cli`.
+export { runCLI, type RunCLIOptions } from '../cli';
 
 /**
  * @experimental Subject to change until 1.0.0.
@@ -152,22 +156,6 @@ export interface RunOptions {
   /** Treat a run that matched no files as pass instead of failure. */
   passWithNoTests?: boolean;
 }
-
-/**
- * Parsed CLI options accepted by {@link runCLI} — mirrors what a parsed
- * `rstest <args>` produces: named flags plus positional files in `_`. This is
- * the full CLI option surface (analogous to Jest's `Config.Argv`), as opposed
- * to {@link RunOptions}'s curated per-run subset.
- *
- * @experimental Subject to change until 1.0.0.
- */
-export type RstestArgv = CommonOptions & {
-  /**
-   * Positional arguments. Test-file filters by default; treated as source files
-   * when `related` / `findRelatedTests` is set.
-   */
-  _?: (string | number)[];
-};
 
 /**
  * Watch-only options for {@link RstestInstance.watch}, merged with the
@@ -311,8 +299,8 @@ const toCommonOptions = (options: RunOptions): CommonOptions => ({
  * Run a freshly-built runner host-safely and assemble a {@link TestRunResult}:
  * snapshot/restore process globals so the embedding host isn't left with leaked
  * `exitCode`/`env` state, and contain any build/run error as an `unhandledError`
- * (with `ok: false`) instead of throwing or exiting. Shared by
- * {@link createRstest}'s `run` and the standalone {@link runCLI} entry.
+ * (with `ok: false`) instead of throwing or exiting. Used by
+ * {@link createRstest}'s `run`.
  *
  * `buildRunner` runs inside the guarded `try` so config/build errors are
  * captured too; results are read in `finally` so a failure in a post-run step
@@ -544,59 +532,4 @@ export async function createRstest(
     listTests,
     mergeReports,
   };
-}
-
-/**
- * Run Rstest once from parsed CLI options — the Jest-compatible programmatic
- * entry, analogous to `@jest/core`'s `runCLI(argv, projects)`. It accepts the
- * full CLI option surface ({@link RstestArgv}: named flags plus positional files
- * in `argv._`) and resolves to a structured {@link TestRunResult}.
- *
- * Unlike {@link createRstest}, this mirrors the `rstest run` CLI command:
- * it auto-discovers the config file from `cwd` and applies CLI defaults. It is
- * host-safe (never calls `process.exit`) and one-shot — for repeated runs,
- * config inspection, listing, report merging, or watch mode, use
- * {@link createRstest}.
- *
- * @experimental Subject to change until 1.0.0.
- */
-export async function runCLI(
-  argv: RstestArgv = {},
-  options: { cwd?: string } = {},
-): Promise<TestRunResult> {
-  const cwd = resolveCwd(options.cwd);
-  const { _: positionals, ...commonOptions } = argv;
-  const filters = positionals ?? [];
-
-  // `isRelatedRun` treats any defined `changed` as changed-mode. An embedder
-  // forwarding parsed argv with boolean defaults (`changed: false`) would then
-  // wrongly run only git-changed tests / reject positional filters, so drop the
-  // explicit `false` here the same way `toCommonOptions` does for `run()`.
-  if (commonOptions.changed === false) {
-    commonOptions.changed = undefined;
-  }
-
-  return executeHostSafeRun(async () => {
-    // Match the CLI's environment setup so workers (spawned per run) observe
-    // `NODE_ENV=test` / `RSTEST=true`. Run it *inside* the guarded section so the
-    // env mutation is captured by `executeHostSafeRun`'s snapshot and restored
-    // afterwards, keeping the embedding host's environment intact.
-    initRstestEnv();
-    const { config, configFilePath, projects } = await initCli(
-      commonOptions,
-      cwd,
-    );
-    return buildResolvedRunner({
-      createRstest: createRstestContext,
-      config,
-      configFilePath,
-      projects,
-      command: 'run',
-      options: commonOptions,
-      filters,
-      cwd,
-      embedded: true,
-      trace: commonOptions.trace,
-    });
-  });
 }

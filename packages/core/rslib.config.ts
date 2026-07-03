@@ -110,10 +110,10 @@ export default defineConfig({
           index: './src/index.ts',
           'api/index': './src/api/index.ts',
           adapter: './src/adapter.ts',
-          // Internal raw-argv entry for the `rstest` bin only. A build chunk,
-          // not a package export — intentionally absent from `package.json`
-          // `exports` so it stays off the public surface (the public
-          // programmatic API lives in `./api`).
+          // Source of the public `runCLI` (re-exported by `./api`) and the
+          // entry the `rstest` bin loads. The built `dist/cli.js` chunk is
+          // intentionally absent from `package.json` `exports` so the bin can
+          // load it directly while the public surface stays on `./api`.
           cli: './src/cli/index.ts',
           browser: './src/browser.ts',
           worker: './src/runtime/worker/index.ts',

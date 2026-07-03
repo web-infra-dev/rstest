@@ -321,10 +321,8 @@ describe('programmatic createRstest', () => {
       { fromSuite: true, shared: 'suite', suiteHook: 'afterAll' },
     ]);
   });
-});
 
-describe('programmatic runCli', () => {
-  it('runs only related test files for a source file (jest findRelatedTests parity)', async ({
+  it('run({ related }) runs only related test files for a source file (jest findRelatedTests parity)', async ({
     onTestFinished,
   }) => {
     const { cli } = await runRstestCli({
@@ -344,5 +342,27 @@ describe('programmatic runCli', () => {
     ]);
     expect(result.stats.files.total).toBe(1);
     expect(result.hostExitCode).toBe(0);
+  });
+});
+
+describe('programmatic runCLI (CLI passthrough)', () => {
+  it('runs the matched command from a raw process.argv-shaped array, like the bin', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-runcli.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    const exec = await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // runCLI forwarded the argv through the CLI's own parser + command router,
+    // ran sum.test.ts to completion, and left the CLI's exit code (0) on the
+    // host without a structured return value.
+    expect(result.hostExitCode).toBe(0);
+    expect(exec.exitCode).toBe(0);
   });
 });

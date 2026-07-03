@@ -3,23 +3,43 @@ import { setupCommands } from './commands';
 import { prepareCli } from './prepare';
 
 /**
- * Internal entry for the `rstest` bin: parse a raw `process.argv`-shaped string
- * array, route it to the matched command (run/watch/list/merge-reports/init),
- * and run it to completion. Owns the CLI process — shows the banner and may call
- * `process.exit` on fatal errors.
+ * Options for {@link runCLI}.
  *
- * This is the raw-argv layer (analogous to jest-cli's `run`); the public,
- * parsed-object, host-safe entry that returns a structured result is `runCLI`
- * in `@rstest/core/api` (analogous to `@jest/core`'s `runCLI`). This module is
- * built as its own `dist/cli.js` chunk and loaded by the `rstest` bin directly;
- * it is intentionally NOT a `package.json` export, so `startCli` never reaches
- * the public surface.
- *
- * @internal
+ * @experimental Subject to change until 1.0.0.
  */
-export async function startCli(
-  options: { argv?: string[]; cwd?: string } = {},
-): Promise<void> {
+export interface RunCLIOptions {
+  /**
+   * CLI arguments to parse, matching the shape of Node.js `process.argv`
+   * (i.e. including the leading `node` / bin entries).
+   *
+   * @default process.argv
+   */
+  argv?: string[];
+
+  /**
+   * Working directory to resolve the config file and test files from.
+   *
+   * @default process.cwd()
+   */
+  cwd?: string;
+}
+
+/**
+ * Run the Rstest CLI programmatically: parse a raw `process.argv`-shaped `argv`,
+ * route it to the matched command (run/watch/list/merge-reports/init), and run
+ * it to completion. This is the same entry the `rstest` bin uses, so it mirrors
+ * the CLI exactly — it auto-discovers the config file from `cwd`, prints the
+ * banner, sets the exit code, and **owns the process** (may call `process.exit`
+ * on fatal errors).
+ *
+ * Built for CLI bridges — e.g. a unified `rs` CLI forwarding a reconstructed
+ * `argv` to Rstest — mirroring rsbuild's `runCLI`. For host-safe, in-process
+ * runs that return a structured {@link import('../api').TestRunResult} instead
+ * of owning the process, use {@link import('../api').createRstest}.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export async function runCLI(options: RunCLIOptions = {}): Promise<void> {
   prepareCli();
 
   try {

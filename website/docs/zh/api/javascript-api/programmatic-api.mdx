@@ -1,5 +1,5 @@
 ---
-description: 以编程方式运行 Rstest —— 通过 createRstest 创建可复用的实例，或用 runCLI 从已解析的 CLI 参数一次性运行。
+description: 以编程方式运行 Rstest —— 通过 createRstest 创建可复用的进程内实例，或用 runCLI 从原始 argv 驱动 CLI。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
@@ -20,12 +20,10 @@ import { createRstest, runCLI } from '@rstest/core/api';
 编程式 API 目前为实验性功能，在 `1.0.0` 之前其形态可能变化。如果你依赖它，请锁定 `@rstest/core` 的精确版本。
 :::
 
-Rstest 提供两个编程式入口：
+Rstest 提供两个编程式入口，各司其职：
 
-- [`createRstest`](#createrstest) —— 一个异步 factory，返回可复用的实例。用于一次解析 config 后反复 run、list、watch 或 merge，或用于检查解析后的 context。
-- [`runCLI`](#runcli) —— 一个一次性 runner，与 Jest 的 `runCLI` 兼容。用于手上已有 argv 形态选项（例如转发一段解析过的命令行）的场景。
-
-两者都是 host-safe 的：它们从不调用 `process.exit`，并且会对 `process.env` 和 `process.exitCode` 做快照与还原，因此一次运行不会让你的进程遗留在测试模式或被标记为失败。
+- [`createRstest`](#createrstest) —— 一个异步 factory，返回可复用的进程内实例。用于一次解析 config 后反复 run、list、watch 或 merge，或用于检查解析后的 context。它是 **host-safe** 的：从不调用 `process.exit`，并且会对 `process.env` 和 `process.exitCode` 做快照与还原，因此一次运行不会让你的进程遗留在测试模式或被标记为失败，每次 `run()` 都会 resolve 出结构化的 [`TestRunResult`](#testrunresult)。
+- [`runCLI`](#runcli) —— 从一个原始的 `process.argv` 形态数组运行 Rstest **CLI**，行为与 `rstest` bin 完全一致。用于把 Rstest 桥接进另一个 CLI（例如统一的 `rs` 命令）。与 `createRstest` 不同，它**拥有进程**（路由全部命令、打印 banner、可能调用 `process.exit`），且不返回任何值。
 
 ## createRstest
 
@@ -248,17 +246,22 @@ interface RunOptions {
 
 ## runCLI
 
-从已解析的 CLI 参数一次性运行 Rstest。这是与 Jest 兼容的入口，类似 `@jest/core` 的 `runCLI(argv, projects)`。它接收完整的 CLI 选项面（[`RstestArgv`](#rstestargv)），并 resolve 出 [`TestRunResult`](#testrunresult)。
+以编程方式运行 Rstest CLI。`runCLI` 解析一个原始的 `process.argv` 形态 `argv`，将其路由到匹配的命令（`run` / `watch` / `list` / `merge-reports` / `init`）并运行到结束 —— 与 `rstest` bin 使用的是同一个入口。它会从 `cwd` 自动发现 config 文件、打印 banner，并**拥有进程**：不返回结果，遇到致命错误时可能调用 `process.exit`。
 
-与 `createRstest` 不同，`runCLI` 对齐 `rstest run` CLI 命令：它会从 `cwd` 自动发现 config 文件并套用 CLI 默认值。它只运行一次。若需反复运行、检查 config、列举、合并报告或 watch 模式，请使用 [`createRstest`](#createrstest)。
+它对齐 rsbuild 的 `runCLI`，因此在**把 Rstest 桥接进另一个 CLI** 时应选它 —— 例如一个统一的 `rs` 命令，把重建后的 `argv` 转发给 Rstest。若需要 host-safe、进程内、返回结构化 [`TestRunResult`](#testrunresult) 而非拥有进程的运行，请使用 [`createRstest`](#createrstest)。
 
 - **类型：**
 
 ```ts
-function runCLI(
-  argv?: RstestArgv,
-  options?: { cwd?: string },
-): Promise<TestRunResult>;
+interface RunCLIOptions {
+  // CLI 参数，与 Node.js `process.argv` 同形状
+  //（即包含开头的 `node` / bin 两项）。默认为 `process.argv`。
+  argv?: string[];
+  // 解析 config 文件与测试文件的工作目录。默认为 `process.cwd()`。
+  cwd?: string;
+}
+
+function runCLI(options?: RunCLIOptions): Promise<void>;
 ```
 
 - **示例：**
@@ -266,27 +269,17 @@ function runCLI(
 ```ts
 import { runCLI } from '@rstest/core/api';
 
-// 位置形式的源文件位于 `_`，而 `related` 会把它们重新解读为源文件以解析相关测试。
-const result = await runCLI({ _: ['src/math.ts'], related: true }, { cwd });
-
-console.log(result.ok, result.stats.tests);
-```
-
-### RstestArgv
-
-`runCLI` 接收的已解析 CLI 参数。它对应解析后的 `rstest <args>` 所产生的形态：命名 flags 加上位于 `_` 的位置文件。这是完整的 CLI 选项面（类似 Jest 的 `Config.Argv`），而 `RunOptions` 则是更小的每次运行子集。
-
-```ts
-type RstestArgv = CommonOptions & {
-  // 位置参数。默认为测试文件筛选；当设置了 `related` / `findRelatedTests`
-  // 时被视为源文件。
-  _?: (string | number)[];
-};
+// 把重建后的 argv 转发给 Rstest，等价于键入 `rstest run foo.test.ts --coverage`。
+// 从此 Rstest 拥有进程。
+await runCLI({
+  argv: ['node', 'rstest', 'run', 'foo.test.ts', '--coverage'],
+  cwd: process.cwd(),
+});
 ```
 
 ## TestRunResult
 
-`rstest.run` 与 `runCLI` resolve 出的值。
+`rstest.run` resolve 出的值（也传给每次 `watch` 重跑）。
 
 ```ts
 interface TestRunResult {

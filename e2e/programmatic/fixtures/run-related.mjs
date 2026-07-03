@@ -1,13 +1,18 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runCLI } from '@rstest/core/api';
+import { createRstest } from '@rstest/core/api';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const cwd = join(__dirname, 'related');
 
-// Jest-compatible parsed-argv entry: positional source files live in `_`, and
-// `related` reinterprets them as source files to resolve related tests from.
-const result = await runCLI({ _: ['src/math.ts'], related: true }, { cwd });
+// findRelatedTests parity via the programmatic instance: positional `filters`
+// are the changed source files, and `related` reinterprets them so only the
+// tests that import them run. Only `math.test.ts` depends on `src/math.ts`.
+const rstest = await createRstest({
+  cwd,
+  config: { include: ['**/*.test.ts'], reporters: [] },
+});
+const result = await rstest.run({ filters: ['src/math.ts'], related: true });
 
 console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({
