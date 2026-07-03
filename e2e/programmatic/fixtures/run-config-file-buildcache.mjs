@@ -1,5 +1,9 @@
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// `pathe.resolve` emits forward slashes on every platform — the same form
+// Rstest normalizes resolved buildDependency paths to — so the assertion below
+// compares like-for-like on Windows too.
+import { resolve } from 'pathe';
 import { loadConfig } from '@rstest/core';
 import { createRstest } from '@rstest/core/api';
 
@@ -18,18 +22,13 @@ const rstest = await createRstest({
 const buildCache = rstest.context.normalizedConfig.performance?.buildCache;
 const deps =
   buildCache && buildCache !== true ? buildCache.buildDependencies : undefined;
-const foundDep = deps?.find((d) => d.endsWith('extra.js'));
-
-// Rstest normalizes resolved paths to forward slashes; compare both sides in
-// that form so the assertion is stable on Windows too.
-const toPosix = (p) => p.replace(/\\/g, '/');
 
 console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({
     // The config-relative `./extra.js` must resolve against the config file's
     // directory (nested/), proving the config file path threaded through.
-    resolvedDep: foundDep ? toPosix(foundDep) : null,
-    expected: toPosix(resolve(cwd, 'nested', 'extra.js')),
+    resolvedDep: deps?.find((d) => d.endsWith('extra.js')) ?? null,
+    expected: resolve(cwd, 'nested', 'extra.js'),
     hostExitCode: process.exitCode ?? 0,
   })}__END__`,
 );
