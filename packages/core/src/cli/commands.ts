@@ -1150,7 +1150,7 @@ export function createCli(): CAC {
   return cli;
 }
 
-export function setupCommands(): void {
+export function setupCommands(argv: string[]): void {
   const cli = createCli();
-  cli.parse(process.argv);
+  cli.parse(argv);
 }
