@@ -92,6 +92,8 @@ const rstest = await createRstest({
 });
 ```
 
+`loadConfig` records the resolved config file path on the config it returns, and returning that config (directly or merged) carries the path through. Rstest never reads the file — your factory owns loading — but it uses the path the way the CLI does: adding it to `performance.buildCache.buildDependencies` (so the cache invalidates when the file changes) and to the watch set.
+
 ## RstestInstance
 
 The object returned by `createRstest`. It holds the resolved config and runs tests against it on each call. It exposes the following members.

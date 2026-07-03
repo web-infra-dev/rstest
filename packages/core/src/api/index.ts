@@ -384,6 +384,16 @@ export async function createRstest(
 
     const userConfig = await loadConfigForApi(options.config);
 
+    // `loadConfig` (via rsbuild's) stamps the resolved config file path onto the
+    // config as `_privateMeta.configFilePath`, and it survives the merge/spread
+    // in a `config` factory. Read it here — mirroring rsbuild's own cache plugin
+    // — so a factory that returns the loaded config tracks the file for free
+    // (buildCache dependency + the watch set) without a separate option; a fully
+    // inline config simply has no path to track.
+    const configFilePath = (
+      userConfig as { _privateMeta?: { configFilePath?: string } }
+    )._privateMeta?.configFilePath;
+
     // Propagate per-invocation config-shaped options to the root config and —
     // via `resolveProjects` — to every project config.
     mergeWithCLIOptions(userConfig, commonOptions);
@@ -400,9 +410,7 @@ export async function createRstest(
     const runner = await buildResolvedRunner({
       createRstest: createRstestContext,
       config: userConfig,
-      // The programmatic API doesn't read a config file, so there's no path to
-      // track (the caller's factory owns any file it loads).
-      configFilePath: undefined,
+      configFilePath,
       projects,
       command,
       options: commonOptions,

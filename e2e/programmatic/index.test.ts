@@ -190,6 +190,25 @@ describe('programmatic createRstest', () => {
     expect(result.hostExitCode).toBe(0);
   });
 
+  it('tracks the loaded config file for buildCache dependency resolution', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-config-file-buildcache.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // The config-relative buildDependency resolved against the config file's
+    // directory, so the config file path threaded through from `loadConfig`.
+    expect(result.resolvedDep).toBe(result.expected);
+    expect(result.hostExitCode).toBe(0);
+  });
+
   it('watch() runs, exposes a closeable watcher, and tears down cleanly', async ({
     onTestFinished,
   }) => {

@@ -92,6 +92,8 @@ const rstest = await createRstest({
 });
 ```
 
+`loadConfig` 会把解析出的 config 文件路径记录在它返回的 config 上，将该 config（直接返回或合并后返回）传出即可带上这个路径。Rstest 始终不读取该文件 —— 加载由你的 factory 负责 —— 但会像 CLI 那样使用这个路径：将其加入 `performance.buildCache.buildDependencies`（使 config 文件变更时缓存失效），并加入 watch 集合。
+
 ## RstestInstance
 
 `createRstest` 返回的对象。它持有解析后的 config，并在每次调用时针对该 config 运行测试。它暴露以下成员。
