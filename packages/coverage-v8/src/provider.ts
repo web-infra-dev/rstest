@@ -42,6 +42,24 @@ type CoverageEntry = inspector.Profiler.ScriptCoverage & {
   filePath: string;
 };
 
+type CollectOptions = {
+  assetFiles?: Record<string, string>;
+  sourceMaps?: Record<string, string>;
+  outputModule?: boolean;
+};
+
+type TransformedSource = {
+  code: string;
+  sourceMap?: SourceMapLike;
+  sourceMapStr?: string;
+  sourceMapUrl?: string;
+};
+
+type RawCoveragePayload = {
+  entries: CoverageEntry[];
+  options?: CollectOptions;
+};
+
 export class CoverageProvider implements RstestCoverageProvider {
   private session: inspector.Session | null = null;
   private isMatch: (filePath: string) => boolean;
@@ -307,16 +325,8 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private async getTransformedSource(
     filePath: string,
-    options?: {
-      assetFiles?: Record<string, string>;
-      sourceMaps?: Record<string, string>;
-    },
-  ): Promise<{
-    code: string;
-    sourceMap?: SourceMapLike;
-    sourceMapStr?: string;
-    sourceMapUrl?: string;
-  }> {
+    options?: Pick<CollectOptions, 'assetFiles' | 'sourceMaps'>,
+  ): Promise<TransformedSource> {
     const assetSource = this.findInDict(options?.assetFiles, filePath);
     const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
     const code = assetSource ?? (await fs.readFile(filePath, 'utf-8'));
@@ -366,14 +376,11 @@ export class CoverageProvider implements RstestCoverageProvider {
   private async convertWithAst(
     filePath: string,
     entry: inspector.Profiler.ScriptCoverage,
-    options?: {
-      assetFiles?: Record<string, string>;
-      sourceMaps?: Record<string, string>;
-      outputModule?: boolean;
-    },
+    options?: CollectOptions,
+    transformedSource?: TransformedSource,
   ): Promise<Record<string, FileCoverageData>> {
     const { code, sourceMap, sourceMapStr, sourceMapUrl } =
-      await this.getTransformedSource(filePath, options);
+      transformedSource ?? (await this.getTransformedSource(filePath, options));
 
     if (this.shouldSkipSourceMapEntry(sourceMap)) {
       return {};
@@ -469,12 +476,63 @@ export class CoverageProvider implements RstestCoverageProvider {
     });
   }
 
-  collect(options?: {
-    assetFiles?: Record<string, string>;
-    sourceMaps?: Record<string, string>;
-    outputModule?: boolean;
-  }): Promise<CoverageMap | null> {
+  collect(options?: CollectOptions): Promise<CoverageMap | null> {
     return this.collectImpl(options);
+  }
+
+  resolveRawCoverage(payloads: unknown[]): Promise<CoverageMap | null> {
+    return this.collectRawPayloads(payloads as RawCoveragePayload[]);
+  }
+
+  async collectRaw(
+    options?: CollectOptions,
+  ): Promise<RawCoveragePayload | null> {
+    if (!this.session) return null;
+
+    let entries: CoverageEntry[];
+    try {
+      entries = await this.takeRawCoverage();
+    } finally {
+      await this.stopCoverage();
+    }
+
+    const filteredEntries = await this.filterRawCoverageEntries(
+      entries,
+      options,
+    );
+
+    return {
+      entries: filteredEntries,
+      options: this.pickRawCoverageOptions(filteredEntries, options),
+    };
+  }
+
+  private pickRawCoverageOptions(
+    entries: CoverageEntry[],
+    options?: CollectOptions,
+  ): CollectOptions | undefined {
+    if (!options) return undefined;
+
+    const assetFiles: Record<string, string> = {};
+    const sourceMaps: Record<string, string> = {};
+
+    for (const entry of entries) {
+      const assetSource = this.findInDict(options.assetFiles, entry.filePath);
+      if (assetSource) {
+        assetFiles[entry.filePath] = assetSource;
+      }
+
+      const sourceMap = this.findInDict(options.sourceMaps, entry.filePath);
+      if (sourceMap) {
+        sourceMaps[entry.filePath] = sourceMap;
+      }
+    }
+
+    return {
+      ...(Object.keys(assetFiles).length ? { assetFiles } : {}),
+      ...(Object.keys(sourceMaps).length ? { sourceMaps } : {}),
+      outputModule: options.outputModule,
+    };
   }
 
   private async takeRawCoverage(): Promise<CoverageEntry[]> {
@@ -497,10 +555,7 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private async filterRawCoverageEntries(
     entries: CoverageEntry[],
-    options?: {
-      assetFiles?: Record<string, string>;
-      sourceMaps?: Record<string, string>;
-    },
+    options?: Pick<CollectOptions, 'assetFiles' | 'sourceMaps'>,
   ): Promise<CoverageEntry[]> {
     const filtered: CoverageEntry[] = [];
 
@@ -515,10 +570,7 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private async shouldKeepRawCoverageEntry(
     entry: CoverageEntry,
-    options?: {
-      assetFiles?: Record<string, string>;
-      sourceMaps?: Record<string, string>;
-    },
+    options?: Pick<CollectOptions, 'assetFiles' | 'sourceMaps'>,
   ): Promise<boolean> {
     const { filePath } = entry;
     const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
@@ -545,23 +597,16 @@ export class CoverageProvider implements RstestCoverageProvider {
     return assetSource === undefined && this.hasSourceMapOnDisk(filePath);
   }
 
-  private async collectImpl(options?: {
-    assetFiles?: Record<string, string>;
-    sourceMaps?: Record<string, string>;
-    outputModule?: boolean;
-  }): Promise<CoverageMap | null> {
+  private async collectImpl(
+    options?: CollectOptions,
+  ): Promise<CoverageMap | null> {
     if (!this.session) return null;
 
     let entries: CoverageEntry[];
     try {
       entries = await this.takeRawCoverage();
     } finally {
-      try {
-        await this.session.post('Profiler.stopPreciseCoverage');
-        await this.session.post('Profiler.disable');
-      } catch (_err) {
-        // Ignore teardown errors to prevent masking original errors
-      }
+      await this.stopCoverage();
     }
 
     const filteredEntries = await this.filterRawCoverageEntries(
@@ -589,6 +634,161 @@ export class CoverageProvider implements RstestCoverageProvider {
     );
 
     return coverageMap;
+  }
+
+  private async collectRawPayloads(
+    payloads: RawCoveragePayload[],
+  ): Promise<CoverageMap | null> {
+    const coverageMap = this.createCoverageMap();
+    const groups = new Map<
+      string,
+      { entries: CoverageEntry[]; options?: CollectOptions }
+    >();
+
+    for (const payload of payloads) {
+      for (const entry of payload.entries) {
+        const outputModule = payload.options?.outputModule ?? true;
+        const key = `${entry.filePath}\0${outputModule ? 'module' : 'script'}`;
+        this.mergeIntoCoverageEntries(groups, key, entry, payload.options);
+      }
+    }
+
+    await Promise.all(
+      Array.from(groups.values()).map(async ({ entries, options }) => {
+        const transformedSource = await this.getTransformedSource(
+          entries[0]!.filePath,
+          options,
+        );
+
+        await Promise.all(
+          entries.map(async (entry) => {
+            try {
+              const istanbulData = await this.convertWithAst(
+                entry.filePath,
+                entry,
+                options,
+                transformedSource,
+              );
+
+              this.filterCoverageData(istanbulData);
+              coverageMap.merge(istanbulData);
+            } catch (e) {
+              console.error(`Failed to process coverage for ${entry.url}:`, e);
+              process.exitCode = 1;
+            }
+          }),
+        );
+      }),
+    );
+
+    return coverageMap;
+  }
+
+  private async stopCoverage(): Promise<void> {
+    if (!this.session) return;
+
+    try {
+      await this.session.post('Profiler.stopPreciseCoverage');
+      await this.session.post('Profiler.disable');
+    } catch (_err) {
+      // Ignore teardown errors to prevent masking original errors
+    }
+  }
+
+  private mergeIntoCoverageEntries(
+    groups: Map<string, { entries: CoverageEntry[]; options?: CollectOptions }>,
+    key: string,
+    entry: CoverageEntry,
+    options?: CollectOptions,
+  ): void {
+    let group = groups.get(key);
+    if (!group) {
+      group = { entries: [], options };
+      groups.set(key, group);
+    } else if (options) {
+      group.options = {
+        assetFiles: { ...group.options?.assetFiles, ...options.assetFiles },
+        sourceMaps: { ...group.options?.sourceMaps, ...options.sourceMaps },
+        outputModule: group.options?.outputModule ?? options.outputModule,
+      };
+    }
+
+    for (const target of group.entries) {
+      if (this.tryMergeCoverageEntry(target, entry)) {
+        return;
+      }
+    }
+
+    group.entries.push(this.cloneCoverageEntry(entry));
+  }
+
+  private tryMergeCoverageEntry(
+    target: CoverageEntry,
+    incoming: CoverageEntry,
+  ): boolean {
+    if (target.functions.length !== incoming.functions.length) {
+      return false;
+    }
+
+    for (
+      let functionIndex = 0;
+      functionIndex < target.functions.length;
+      functionIndex++
+    ) {
+      const targetFunction = target.functions[functionIndex]!;
+      const incomingFunction = incoming.functions[functionIndex]!;
+      if (
+        targetFunction.functionName !== incomingFunction.functionName ||
+        targetFunction.isBlockCoverage !== incomingFunction.isBlockCoverage ||
+        targetFunction.ranges.length !== incomingFunction.ranges.length
+      ) {
+        return false;
+      }
+
+      for (
+        let rangeIndex = 0;
+        rangeIndex < targetFunction.ranges.length;
+        rangeIndex++
+      ) {
+        const targetRange = targetFunction.ranges[rangeIndex]!;
+        const incomingRange = incomingFunction.ranges[rangeIndex]!;
+        if (
+          targetRange.startOffset !== incomingRange.startOffset ||
+          targetRange.endOffset !== incomingRange.endOffset
+        ) {
+          return false;
+        }
+      }
+    }
+
+    for (
+      let functionIndex = 0;
+      functionIndex < target.functions.length;
+      functionIndex++
+    ) {
+      const targetFunction = target.functions[functionIndex]!;
+      const incomingFunction = incoming.functions[functionIndex]!;
+      for (
+        let rangeIndex = 0;
+        rangeIndex < targetFunction.ranges.length;
+        rangeIndex++
+      ) {
+        targetFunction.ranges[rangeIndex]!.count +=
+          incomingFunction.ranges[rangeIndex]!.count;
+      }
+    }
+
+    return true;
+  }
+
+  private cloneCoverageEntry(entry: CoverageEntry): CoverageEntry {
+    return {
+      ...entry,
+      functions: entry.functions.map((fn) => ({
+        ...fn,
+        ranges: fn.ranges.map((range) => ({ ...range })),
+      })),
+    };
   }
 
   createCoverageMap(): CoverageMap {

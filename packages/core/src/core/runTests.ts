@@ -160,12 +160,38 @@ const notifyReportersOnTestRunEnd = async ({
 
 const isLifecycleDebugEnabled = isDebug();
 
+type LifecycleStepOptions = {
+  slowAfter?: number;
+  slowMessage?: string;
+  slowDoneMessage?: string;
+};
+
 const runLifecycleStep = async <T>(
   label: string,
   fn: () => Promise<T>,
+  options?: LifecycleStepOptions,
 ): Promise<T> => {
+  const { slowAfter, slowMessage, slowDoneMessage } = options ?? {};
+  let didShowSlowMessage = false;
+  const slowTimer = slowMessage
+    ? setTimeout(() => {
+        didShowSlowMessage = true;
+        logger.info(slowMessage);
+      }, slowAfter ?? 1000)
+    : undefined;
+
   if (!isLifecycleDebugEnabled) {
-    return fn();
+    try {
+      const result = await fn();
+      if (didShowSlowMessage && slowDoneMessage) {
+        logger.info(slowDoneMessage);
+      }
+      return result;
+    } finally {
+      if (slowTimer) {
+        clearTimeout(slowTimer);
+      }
+    }
   }
 
   const startTime = Date.now();
@@ -174,10 +200,17 @@ const runLifecycleStep = async <T>(
   try {
     const result = await fn();
     logger.debug(`lifecycle: finish ${label} (${Date.now() - startTime}ms)`);
+    if (didShowSlowMessage && slowDoneMessage) {
+      logger.info(slowDoneMessage);
+    }
     return result;
   } catch (error) {
     logger.debug(`lifecycle: fail ${label} (${Date.now() - startTime}ms)`);
     throw error;
+  } finally {
+    if (slowTimer) {
+      clearTimeout(slowTimer);
+    }
   }
 };
 
@@ -573,6 +606,7 @@ export async function runTests(context: Rstest): Promise<void> {
     const mergedCoverageMap: CoverageMap | undefined = coverageProvider
       ? coverageProvider.createCoverageMap()
       : undefined;
+    const rawCoverageResults: unknown[] = [];
 
     // Adopt the pre-allocated buffer (set above `runTests` or at the end of
     // the previous rerun's `finalize`) so browser events emitted before
@@ -688,6 +722,7 @@ export async function runTests(context: Rstest): Promise<void> {
           buildId,
           updateSnapshot: context.snapshotManager.options.updateSnapshot,
           onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
+          onRawCoverageResult: (coverage) => rawCoverageResults.push(coverage),
           onTraceEvents: traceRun.onEvents,
           traceSpan: span,
         });
@@ -784,6 +819,22 @@ export async function runTests(context: Rstest): Promise<void> {
       }
       if (shouldUnifyReporter && browserResult?.unhandledErrors) {
         errors.push(...browserResult.unhandledErrors);
+      }
+
+      const resolveRawCoverage =
+        coverageProvider?.resolveRawCoverage?.bind(coverageProvider);
+      if (rawCoverageResults.length && resolveRawCoverage) {
+        const rawCoverageMap = await runLifecycleStep(
+          'coverage collect',
+          async () => resolveRawCoverage(rawCoverageResults),
+          {
+            slowMessage: 'processing coverage results...',
+            slowDoneMessage: 'coverage results processed.',
+          },
+        );
+        if (rawCoverageMap) {
+          mergedCoverageMap?.merge(rawCoverageMap);
+        }
       }
 
       // Check for failures including browser results when unified

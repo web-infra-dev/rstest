@@ -1020,6 +1020,67 @@ export default class CustomCoverageReporter {
     }
   });
 
+  it('collects raw v8 coverage before converting to Istanbul coverage', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-merge');
+    const file = join(root, 'src', 'covered.js');
+    const code = 'function covered() { return 1; }\ncovered();';
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    const convertedCounts: number[] = [];
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (
+        _filePath: string,
+        entry: { functions: { ranges: { count: number }[] }[] },
+      ) => {
+        const count = entry.functions[0]!.ranges[0]!.count;
+        convertedCounts.push(count);
+        return {
+          [file]: {
+            ...createFileCoverage(file),
+            s: { 0: count },
+            f: { 0: count },
+            b: { 0: [count, count] },
+          },
+        };
+      },
+    });
+
+    try {
+      const createEntry = (count: number) => ({
+        url: pathToFileURL(file).href,
+        filePath: file,
+        scriptId: String(count),
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count }],
+          },
+        ],
+      });
+
+      const coverageMap = await provider.resolveRawCoverage([
+        {
+          entries: [createEntry(1)],
+          options: { assetFiles: { [file]: code }, outputModule: true },
+        },
+        {
+          entries: [createEntry(2)],
+          options: { assetFiles: { [file]: code }, outputModule: true },
+        },
+      ]);
+
+      expect(convertedCounts).toEqual([3]);
+      expect(
+        coverageMap?.fileCoverageFor(file).toSummary().statements.pct,
+      ).toBe(100);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('keeps excluded asset files with inline source maps for remapping', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-inline-asset-map');
     const file = join(root, 'dist', 'bundle.js');

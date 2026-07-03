@@ -153,6 +153,12 @@ export type NormalizedCoverageOptions = Required<
   changed?: boolean | string;
 };
 
+export type CoverageCollectOptions = {
+  assetFiles?: Record<string, string>;
+  sourceMaps?: Record<string, string>;
+  outputModule?: boolean;
+};
+
 export declare class CoverageProvider {
   constructor(options: NormalizedCoverageOptions, root?: string);
   /**
@@ -161,13 +167,19 @@ export declare class CoverageProvider {
   init(): void | Promise<void>;
 
   /**
-   * Collect coverage data from global coverage object
+   * Collect coverage data into an Istanbul coverage map.
    */
-  collect(options?: {
-    assetFiles?: Record<string, string>;
-    sourceMaps?: Record<string, string>;
-    outputModule?: boolean;
-  }): CoverageMap | null | Promise<CoverageMap | null>;
+  collect(
+    options?: CoverageCollectOptions,
+  ): CoverageMap | null | Promise<CoverageMap | null>;
+
+  collectRaw?(
+    options?: CoverageCollectOptions,
+  ): unknown | null | Promise<unknown | null>;
+
+  resolveRawCoverage?(
+    payloads: unknown[],
+  ): CoverageMap | null | Promise<CoverageMap | null>;
 
   /**
    * Create a new coverage map

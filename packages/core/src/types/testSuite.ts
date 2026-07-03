@@ -182,6 +182,7 @@ export type TestFileResult = TestResult & {
   results: TestResult[];
   snapshotResult?: SnapshotResult;
   coverage?: Record<string, FileCoverageData>;
+  coverageRaw?: unknown;
   /**
    * Perfetto-compatible trace events. Stripped at the pool boundary.
    *

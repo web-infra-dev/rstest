@@ -687,19 +687,24 @@ export const runInPool = async (
     // Collect coverage data after test file completes
     if (coverageProvider) {
       tracker.transition('coverage');
-      const coverageMap = await coverageProvider.collect({
+      const collectOptions = {
         assetFiles,
         sourceMaps,
         outputModule: options.context.outputModule,
-      });
-      if (coverageMap) {
-        // Attach coverage data to test result
-        results.coverage = {};
-        Object.entries(coverageMap.toJSON()).forEach(([key, value]) => {
-          if ('toJSON' in value)
-            results.coverage![key] = value.toJSON() as FileCoverageData;
-          else results.coverage![key] = value;
-        });
+      };
+      const rawCoverage = await coverageProvider.collectRaw?.(collectOptions);
+      if (rawCoverage) {
+        results.coverageRaw = rawCoverage;
+      } else {
+        const coverageMap = await coverageProvider.collect(collectOptions);
+        if (coverageMap) {
+          results.coverage = {};
+          Object.entries(coverageMap.toJSON()).forEach(([key, value]) => {
+            if ('toJSON' in value)
+              results.coverage![key] = value.toJSON() as FileCoverageData;
+            else results.coverage![key] = value;
+          });
+        }
       }
     }
 
