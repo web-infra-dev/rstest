@@ -487,7 +487,13 @@ export async function createRstest(
     // the host process so an embedded caller isn't left marked as failed.
     const restore = snapshotProcessGuards();
     try {
-      const runner = await build('list', listOptions, (opts) => {
+      // Listing never executes, so drop execution-only `RunOptions` fields
+      // before building the list runner (see the `listTests` contract above).
+      // `shard` in particular would otherwise reach `normalizedConfig.shard`
+      // and make the runner return only one shard of the collected files; a
+      // caller reusing run options must still see the full listing.
+      const { shard, update, bail, ...listBuildOptions } = listOptions;
+      const runner = await build('list', listBuildOptions, (opts) => {
         // Mirror the CLI: enable location collection before the runner is built,
         // otherwise `printLocation` is silently ineffective. Route it through the
         // option bag so it reaches per-project configs too (not just the root).

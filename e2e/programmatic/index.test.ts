@@ -170,6 +170,26 @@ describe('programmatic createRstest', () => {
     expect(result.hostExitCode).toBe(0);
   });
 
+  it('listTests ignores execution-only shard and returns the full set', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-list-shard.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // Listing never executes, so `shard` must not slice the collected files:
+    // both calls see every file.
+    expect(result.fullFiles).toBeGreaterThan(1);
+    expect(result.shardedFiles).toBe(result.fullFiles);
+    expect(result.hostExitCode).toBe(0);
+  });
+
   it('watch() runs, exposes a closeable watcher, and tears down cleanly', async ({
     onTestFinished,
   }) => {
