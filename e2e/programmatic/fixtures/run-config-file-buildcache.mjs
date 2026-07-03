@@ -18,13 +18,18 @@ const rstest = await createRstest({
 const buildCache = rstest.context.normalizedConfig.performance?.buildCache;
 const deps =
   buildCache && buildCache !== true ? buildCache.buildDependencies : undefined;
+const foundDep = deps?.find((d) => d.endsWith('extra.js'));
+
+// Rstest normalizes resolved paths to forward slashes; compare both sides in
+// that form so the assertion is stable on Windows too.
+const toPosix = (p) => p.replace(/\\/g, '/');
 
 console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({
     // The config-relative `./extra.js` must resolve against the config file's
     // directory (nested/), proving the config file path threaded through.
-    resolvedDep: deps?.find((d) => d.endsWith('extra.js')) ?? null,
-    expected: resolve(cwd, 'nested', 'extra.js'),
+    resolvedDep: foundDep ? toPosix(foundDep) : null,
+    expected: toPosix(resolve(cwd, 'nested', 'extra.js')),
     hostExitCode: process.exitCode ?? 0,
   })}__END__`,
 );
