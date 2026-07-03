@@ -14,40 +14,44 @@ const createLocator = ({
   css?: string;
   texts: string[];
   value?: string;
-}) =>
-  ({
+}) => {
+  const createElement = (textContent: string) => {
+    const element = {
+      children: [],
+      getBoundingClientRect: () => ({
+        bottom: 10,
+        height: 10,
+        left: 0,
+        right: 10,
+        top: 0,
+        width: 10,
+      }),
+      getComputedStyle: () => ({ getPropertyValue: () => css }),
+      id: 'app',
+      ownerDocument: {},
+      textContent,
+      value,
+    } as unknown as Element;
+    Object.defineProperty(element, 'id', {
+      configurable: true,
+      value: 'app',
+    });
+    return element;
+  };
+
+  return {
     count: async () => count,
     evaluate: async (
       callback: (element: Element, arg?: string) => unknown,
       arg?: string,
     ) => {
-      const element = {
-        children: [],
-        getBoundingClientRect: () => ({
-          bottom: 10,
-          height: 10,
-          left: 0,
-          right: 10,
-          top: 0,
-          width: 10,
-        }),
-        getComputedStyle: () => ({ getPropertyValue: () => css }),
-        id: 'app',
-        ownerDocument: {},
-        textContent: texts.join(''),
-        value,
-      } as unknown as Element;
-      Object.defineProperty(element, 'id', {
-        configurable: true,
-        value: 'app',
-      });
       globalThis.getComputedStyle = () =>
         ({ getPropertyValue: () => css }) as unknown as CSSStyleDeclaration;
       globalThis.innerHeight = 100;
       globalThis.innerWidth = 100;
-      return callback(element, arg);
+      return callback(createElement(texts.join('')), arg);
     },
-    evaluateAll: async () => texts,
+    evaluateAll: async () => (count === 1 ? [texts.join('')] : texts),
     getAttribute: async (name: string) =>
       attributes[name] ??
       (name === 'class' ? 'card title' : name === 'id' ? 'app' : null),
@@ -59,7 +63,8 @@ const createLocator = ({
     isHidden: async () => false,
     isVisible: async () => true,
     textContent: async () => texts.join(''),
-  }) as unknown as Locator;
+  } as unknown as Locator;
+};
 
 const createPage = (title: string) =>
   ({

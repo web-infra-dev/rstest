@@ -196,15 +196,15 @@ const matchesValue = (actual: unknown, expected: unknown) =>
   isDeepStrictEqual(actual, expected);
 
 const getStrictLocatorTextContent = async (locator: Locator) => {
-  const count = await locator.count();
+  const texts = await getLocatorTextContents(locator);
 
-  if (count !== 1) {
+  if (texts.length !== 1) {
     throw new Error(
-      `Expected locator to resolve to 1 element, received ${count}.`,
+      `Expected locator to resolve to 1 element, received ${texts.length}.`,
     );
   }
 
-  return locator.textContent().then((text) => text ?? '');
+  return texts[0] ?? '';
 };
 
 const getLocatorTextContents = (locator: Locator) =>

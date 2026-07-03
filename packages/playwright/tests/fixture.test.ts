@@ -195,6 +195,23 @@ browserTest.extend({
   expect(page.viewportSize()).toEqual({ width: 390, height: 844 });
 });
 
+browserTest(
+  'includes shadow DOM text in locator assertions',
+  async ({ page }) => {
+    await page.setContent(`
+    <div id="host">Light text</div>
+    <script>
+      const root = document.querySelector('#host').attachShadow({ mode: 'open' });
+      root.innerHTML = '<span>Shadow text</span>';
+    </script>
+  `);
+
+    const host = page.locator('#host');
+    await expect(host).toContainText('Shadow text');
+    await expect(host).toHaveText('Shadow textLight text');
+  },
+);
+
 browserTest.extend({
   customFixture: async ({ page }, use) => {
     await use(`viewport-${page.viewportSize()?.width ?? 0}`);
