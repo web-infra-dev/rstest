@@ -45,11 +45,45 @@ __webpack_require__.rstest_mocked_ids_by_request = Object.create(null);
 const hasOwn = (target, property) => Object.hasOwn(target, property);
 
 // The other builtin spelling of a request (`os` <-> `node:os`). Both spellings
-// are one mock: `registerRequestAlias` registers BOTH at mock time so every
-// lookup stays a plain single read, and unmock deletes both. A non-builtin's
-// toggled key (e.g. `node:./dep.js`) is junk no lookup ever queries — harmless.
+// are one mock: `requestAliasKeys` yields BOTH at mock time so every lookup
+// stays a plain single read, and unmock deletes both. A non-builtin's toggled
+// key (e.g. `node:some-pkg`) is junk no lookup ever queries — harmless.
 const altBuiltinSpelling = (request) =>
   request.startsWith('node:') ? request.slice(5) : `node:${request}`;
+
+const isRelativeRequest = (request) =>
+  request.startsWith('./') || request.startsWith('../');
+
+// Every generated `rstest_mock`/`rstest_unmock` call must carry the
+// build-resolved identity `{o, r}` (`o`: declaring module's absolute path,
+// `r`: resolved target — absolute path, external request, or null). Emitted
+// unconditionally by @rspack/core >= 2.1.3; absence means the build ran on an
+// older rspack, where the identity-keyed mock paths below would silently miss.
+const requireResolvedInfo = (info, method) => {
+  if (!info || typeof info.o !== 'string') {
+    throw new Error(
+      `[Rstest] rs.${method}() did not receive its build-resolved identity. ` +
+        'Module mocking requires @rspack/core >= 2.1.3 — upgrade the ' +
+        '@rspack/core (or @rsbuild/core) dependency compiling the tests.',
+    );
+  }
+};
+
+// Every spelling `rstest_mocked_ids_by_request` keys this mock under. A
+// RELATIVE request is NOT keyed raw — `./foo` names different modules from
+// different directories, so it is only reachable through its build-resolved
+// absolute target (`info.r`; the worker resolves a runtime specifier to the
+// same absolute path before querying). Bare/builtin/absolute spellings stay
+// raw, builtins under both spellings.
+const requestAliasKeys = (request, info) => {
+  const keys = isRelativeRequest(request)
+    ? []
+    : [request, altBuiltinSpelling(request)];
+  if (typeof info.r === 'string' && !keys.includes(info.r)) {
+    keys.push(info.r);
+  }
+  return keys;
+};
 
 // Realm-safe (a cross-realm Promise fails `instanceof`), matching the worker
 // registry's async detection in `mockRegistry.getNativeMock`.
@@ -153,14 +187,13 @@ const unpublishNativeMock = (request, info) =>
 
 //#region rs.unmock
 __webpack_require__.rstest_unmock = (id, request, info) => {
+  requireResolvedInfo(info, 'unmock');
   restoreOriginalFactory(id);
 
   // Delete the same alias set `registerRequestAlias` writes.
   const map = __webpack_require__.rstest_mocked_ids_by_request;
-  delete map[request];
-  delete map[altBuiltinSpelling(request)];
-  if (info && typeof info.r === 'string') {
-    delete map[info.r];
+  for (const key of requestAliasKeys(request, info)) {
+    delete map[key];
   }
   unpublishNativeMock(request, info);
 };
@@ -203,23 +236,18 @@ const getMockImplementation = (mockType = 'mock') => {
     mockType === 'mockRequire' || mockType === 'doMockRequire';
 
   // The mock and mockRequire will resolve to different module ids when the module is a dual package.
-  // `info` is the build-resolved mock identity `{o: <declaring file>, r:
-  // <resolved target | null>}` appended by newer rspack when
-  // `emitMockResolvedInfo` is on; absent on older rspack, so every consumer
-  // treats it as optional (feature-detect by argument presence, never version).
   return (id, modFactory, request, info) => {
+    requireResolvedInfo(info, mockType);
+
     // Point a dynamic `import(request)` — which carries a different external
     // module id — at this mocked id, so `rstest_dynamic_require` resolves it
     // here. Every spelling the import might carry is registered at this ONE
-    // write point — the raw request, its other builtin spelling, and the
-    // build-resolved target from newer rspack (`info.r`, e.g. an absolute
-    // path) — so every reader is a plain single lookup.
+    // write point (`requestAliasKeys`), so every reader is a plain single
+    // lookup.
     const registerRequestAlias = () => {
       const map = __webpack_require__.rstest_mocked_ids_by_request;
-      map[request] = id;
-      map[altBuiltinSpelling(request)] = id;
-      if (info && typeof info.r === 'string') {
-        map[info.r] = id;
+      for (const key of requestAliasKeys(request, info)) {
+        map[key] = id;
       }
     };
 
@@ -402,9 +430,29 @@ __webpack_require__.rstest_dynamic_require = (id, request) => {
  * loading the real one. Published on the shared `globalThis` because the worker
  * hook has no `__webpack_require__`; returns `undefined` when the request isn't
  * mocked, so the hook performs its normal native import.
+ *
+ * Resolved-first retry: a raw miss does not settle it — relative requests are
+ * not keyed raw (`requestAliasKeys`). `resolveToPath` (provided by the worker)
+ * resolves the specifier against its importing module's directory, and the
+ * lookup retries by that absolute path (the `info.r` key). Invoked only when
+ * at least one mock is registered.
  */
-globalThis.__rstest_resolve_mocked_dynamic_request__ = (request) => {
-  const mockedId = __webpack_require__.rstest_mocked_ids_by_request[request];
+globalThis.__rstest_resolve_mocked_dynamic_request__ = (
+  request,
+  resolveToPath,
+) => {
+  const map = __webpack_require__.rstest_mocked_ids_by_request;
+  let mockedId = map[request];
+  if (
+    mockedId === undefined &&
+    typeof resolveToPath === 'function' &&
+    Object.keys(map).length > 0
+  ) {
+    const resolved = resolveToPath(request);
+    if (typeof resolved === 'string') {
+      mockedId = map[resolved];
+    }
+  }
   return mockedId !== undefined ? __webpack_require__(mockedId) : undefined;
 };
 //#endregion

@@ -653,12 +653,9 @@ const buildRstestUtilities = async (): Promise<{
     __setNativeMock?: (
       request: string,
       produce: () => unknown,
-      info?: NativeMockResolvedInfo,
+      info: NativeMockResolvedInfo,
     ) => void;
-    __unsetNativeMock?: (
-      request: string,
-      info?: NativeMockResolvedInfo,
-    ) => void;
+    __unsetNativeMock?: (request: string, info: NativeMockResolvedInfo) => void;
     // Bundler retention anchor, not runtime API — see the assignment below.
     __getNativeMock?: typeof getNativeMock;
   };
@@ -672,15 +669,10 @@ const buildRstestUtilities = async (): Promise<{
   // link — `does not provide an export`.)
   bridge.__getNativeMock = getNativeMock;
   bridge.__setNativeMock = (request, produce, info) => {
-    setNativeMock(
-      resolveNativeMockKeys(request, info, fileContext().workerState.testPath),
-      produce,
-    );
+    setNativeMock(resolveNativeMockKeys(request, info), produce);
   };
   bridge.__unsetNativeMock = (request, info) => {
-    unsetNativeMock(
-      resolveNativeMockKeys(request, info, fileContext().workerState.testPath),
-    );
+    unsetNativeMock(resolveNativeMockKeys(request, info));
   };
 
   return { rstest, resetForFile };

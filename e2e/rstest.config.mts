@@ -51,6 +51,11 @@ export default defineConfig({
       '@e2e/wasm-glue': fileURLToPath(
         new URL('./wasm-imports/src/alias-glue.js', import.meta.url),
       ),
+      // Fixture-only: an alias spelling for the dynamic-import mock gate's
+      // raw-key + resolved-key matching (mock/tests/mockDynamicImportResolvedFirst).
+      '@e2e/mock-alias-dep': fileURLToPath(
+        new URL('./mock/fixtures/resolvedFirst/aliasDep.mjs', import.meta.url),
+      ),
     },
   },
   pool: {

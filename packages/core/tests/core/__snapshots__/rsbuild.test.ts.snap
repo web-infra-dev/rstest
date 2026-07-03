@@ -517,7 +517,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
     RstestPlugin {
       "_args": [
         {
-          "emitMockResolvedInfo": true,
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": {
@@ -1114,7 +1113,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
     RstestPlugin {
       "_args": [
         {
-          "emitMockResolvedInfo": true,
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": {
@@ -1697,7 +1695,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
     RstestPlugin {
       "_args": [
         {
-          "emitMockResolvedInfo": true,
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": {
@@ -2282,7 +2279,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
     RstestPlugin {
       "_args": [
         {
-          "emitMockResolvedInfo": true,
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": {
@@ -3196,7 +3192,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     RstestPlugin {
       "_args": [
         {
-          "emitMockResolvedInfo": true,
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": {
@@ -3780,7 +3775,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
     RstestPlugin {
       "_args": [
         {
-          "emitMockResolvedInfo": true,
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": {

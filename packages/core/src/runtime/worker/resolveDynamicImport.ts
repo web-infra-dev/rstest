@@ -3,8 +3,8 @@ import {
   builtinModules,
   createRequire as createNativeRequire,
 } from 'node:module';
-import { isAbsolute } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { dirname, isAbsolute, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   asModule,
   createInteropProxy,
@@ -112,21 +112,57 @@ export const resolveImportSpecifier = ({
  * Returns `undefined` (caller falls through to a real native import) for a static
  * import, an `importActual`, or an unmocked request. Both loaders share this
  * single policy rather than re-implementing the gate at each call site.
+ *
+ * Lookup is RESOLVED-FIRST: the bundle map keys relative mocks only by their
+ * build-resolved absolute target (a raw `./foo` means different modules from
+ * different directories), so on a raw miss the bundle calls back into
+ * `resolveToPath`, which resolves a relative specifier against the importing
+ * module's directory (`resolveBase`, the rspack-injected origin) — the
+ * relative, absolute, and `file://` spellings then meet the map's absolute
+ * keys. Alias / tsconfig-paths spellings are NOT expanded (that would need the
+ * build's resolve config at runtime); they match only when the mock was
+ * declared with the same spelling — and Node cannot natively load such a
+ * specifier anyway, so an unmocked one fails loudly rather than silently
+ * loading something else. The callback only runs when at least one mock is
+ * registered.
  */
 export const maybeResolveMockedDynamicImport = (
   specifier: string,
   returnModule: boolean | undefined,
-  importAttributes?: ImportCallOptions,
+  importAttributes: ImportCallOptions | undefined,
+  resolveBase: string,
 ): unknown => {
   if (returnModule || importAttributes?.with?.rstest) {
     return undefined;
   }
   const resolver = (
     globalThis as {
-      __rstest_resolve_mocked_dynamic_request__?: (request: string) => unknown;
+      __rstest_resolve_mocked_dynamic_request__?: (
+        request: string,
+        resolveToPath?: (request: string) => string | undefined,
+      ) => unknown;
     }
   ).__rstest_resolve_mocked_dynamic_request__;
-  return typeof resolver === 'function' ? resolver(specifier) : undefined;
+  if (typeof resolver !== 'function') {
+    return undefined;
+  }
+  const resolveToPath = (request: string): string | undefined => {
+    // Builtins are fully covered by raw keys (both spellings registered).
+    if (isBuiltinSpecifier(request)) {
+      return undefined;
+    }
+    // A `file://` spelling of an absolute target only needs normalizing to
+    // the plain-path form the map keys carry.
+    if (request.startsWith('file:')) {
+      return fileURLToPath(request);
+    }
+    if (request.startsWith('./') || request.startsWith('../')) {
+      return resolve(dirname(resolveBase), request);
+    }
+    // Bare/alias spellings: raw-key matches only (see the doc block above).
+    return undefined;
+  };
+  return resolver(specifier, resolveToPath);
 };
 
 /**

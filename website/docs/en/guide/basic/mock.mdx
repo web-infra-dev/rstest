@@ -188,6 +188,8 @@ const launch = await import(launchScriptPath);
 const dep = await import('some-dep'); // dep's internal `os.hostname()` is mocked
 ```
 
+Before mock matching, a non-literal relative specifier is resolved against the **importing module's directory**. Relative paths, absolute paths, and `file://` URLs therefore all reach a mock declared for the same module — two `import('./foo')` calls from different directories are matched independently, and a relative `rs.mock('./dep')` declared in a shared helper resolves against the helper's own directory.
+
 :::warning Requirements and limitations
 
 Case 1 (the specifier resolves to the mocked module itself) works on every supported Node.js version. Cases 2 and 3 — where the **inner** import of a natively-loaded module must be mocked — additionally require:
@@ -200,7 +202,8 @@ Case 1 (the specifier resolves to the mocked module itself) works on every suppo
 - **`require()` on the native path**: a mocked module reached through `require()` inside a natively-loaded CommonJS module is not mocked — native mocks apply to ESM `import`, so the `require()` receives the real module.
 - **`isolate: false`**: a natively-loaded module is cached by Node's ESM loader across files, so a mock applied to it can persist into a later test file run by the same worker.
 - **`isolate: false` across projects**: the non-literal `import(variable)` mock resolver is published on a shared global, so when one worker runs multiple projects the resolver reflects whichever project's runtime executed last — a variable `import()` of a mocked module in an earlier project may then consult a later project's mocks. Static and literal imports are unaffected.
-- **Relative specifiers**: a relative mock is resolved against the **test file**. A relative `rs.mock('./dep')` declared in a setup file or shared helper, or a non-literal relative `import('./dep')` from a module in a different directory, may not reach the natively-loaded path. Mock such modules with an absolute or package specifier, or declare the mock in the test file.
+- **Rspack version**: module mocking requires the test build to run on `@rspack/core >= 2.1.3` — every generated mock call carries a build-resolved identity the runtime depends on. On an older rspack, `rs.mock()` fails at runtime with an upgrade hint instead of silently missing.
+- **Alias specifiers**: a non-literal `import(variable)` whose value uses a `resolve.alias` / tsconfig-paths spelling matches a mock only when the mock was declared with the **same spelling** — the alias is not expanded at runtime. An unmocked one fails loudly (Node's loader cannot resolve it natively either). Literal imports and static imports are unaffected — the build expands them.
 
 :::
 

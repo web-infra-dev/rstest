@@ -146,12 +146,6 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 injectDynamicImportOrigin: {
                   functionName: dynamicImportCallee,
                 },
-                // Newer rspack appends the build-resolved mock identity
-                // `{o, r}` to generated `rstest_mock`/`rstest_unmock` calls;
-                // the pinned rspack ignores this unknown field, and the
-                // runtime feature-detects the extra argument, so the option
-                // is safe to pass unconditionally.
-                emitMockResolvedInfo: true,
                 // The runtime hook below resolves relative require.resolve
                 // specifiers against the source module that produced the
                 // call, instead of the test entry, fixing #848.

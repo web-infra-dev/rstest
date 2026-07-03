@@ -133,6 +133,7 @@ const defineRstestDynamicImport =
       specifier,
       returnModule,
       importAttributes,
+      origin ?? testPath,
     );
     if (mocked !== undefined) {
       return mocked;

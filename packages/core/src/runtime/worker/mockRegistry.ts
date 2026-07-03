@@ -35,9 +35,9 @@ type NativeMockEntry = {
   error: unknown;
   /** Every registry key this entry is registered under. One mock may be keyed
    * by several equivalent spellings of the same module (the build-resolved
-   * path from the rspack plugin, the Node-resolved URL, the legacy
-   * testPath-based resolution), so registration and removal operate on the
-   * whole alias group — an unmock computed from ANY spelling clears them all. */
+   * path from the rspack plugin, the Node-resolved URL), so registration and
+   * removal operate on the whole alias group — an unmock computed from ANY
+   * spelling clears them all. */
   aliases: readonly string[];
 };
 
@@ -59,17 +59,17 @@ export const setNativeMockInstaller = (install: () => void): void => {
   installHooks = install;
 };
 
-/** Build-resolved mock identity appended by newer rspack (see
- * `emitMockResolvedInfo` in `core/plugins/basic.ts`): `o` is the absolute path
- * of the module declaring the `rs.mock` call, `r` the build-resolved target —
- * an absolute file path, an external request (e.g. a builtin spelling), or
- * `null` when the build could not resolve it. Absent entirely on older rspack. */
-export type NativeMockResolvedInfo = { o?: string; r?: string | null };
+/** Build-resolved mock identity appended to every generated `rstest_mock`/
+ * `rstest_unmock` call (hard contract, enforced by `mockRuntimeCode.js` —
+ * requires @rspack/core >= 2.1.3): `o` is the absolute path of the module
+ * declaring the `rs.mock` call, `r` the build-resolved target — an absolute
+ * file path, an external request (e.g. a builtin spelling), or `null` when
+ * the build could not resolve it. */
+export type NativeMockResolvedInfo = { o: string; r: string | null };
 
 type NativeMockKeyResolver = (
   request: string,
-  info: NativeMockResolvedInfo | undefined,
-  testPath: string,
+  info: NativeMockResolvedInfo,
 ) => string[];
 
 // Node-only registry-key derivation, injected by nativeMockHooks at load time
@@ -86,11 +86,8 @@ export const setNativeMockKeyResolver = (
   keyResolver = resolve;
 };
 
-export const resolveNativeMockKeys: NativeMockKeyResolver = (
-  request,
-  info,
-  testPath,
-) => keyResolver?.(request, info, testPath) ?? [];
+export const resolveNativeMockKeys: NativeMockKeyResolver = (request, info) =>
+  keyResolver?.(request, info) ?? [];
 
 // Delete every alias of any entry reachable through `keys`; returns whether
 // the registry changed. Removal always operates on the WHOLE alias group so

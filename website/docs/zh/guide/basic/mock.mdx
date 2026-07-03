@@ -188,6 +188,8 @@ const launch = await import(launchScriptPath);
 const dep = await import('some-dep'); // dep's internal `os.hostname()` is mocked
 ```
 
+在进行 mock 匹配之前，非字面量的相对 specifier 会以**发起 import 的模块所在目录**为基准进行解析。因此相对路径、绝对路径、`file://` URL 都能命中为同一模块声明的 mock——来自不同目录的两个 `import('./foo')` 会被独立匹配，写在共享 helper 中的相对 `rs.mock('./dep')` 也会以 helper 自身目录为基准解析。
+
 :::warning 要求与限制
 
 情况 1（specifier 解析到被 mock 的模块本身）在所有受支持的 Node.js 版本上都生效。情况 2 和 3——需要 mock 一个由 Node 原生加载的模块的**内部** import——还需要满足：
@@ -200,7 +202,8 @@ const dep = await import('some-dep'); // dep's internal `os.hostname()` is mocke
 - **原生路径上的 `require()`**：在原生加载的 CommonJS 模块中通过 `require()` 访问的 mocked 模块不会被 mock——native mock 仅作用于 ESM `import`，因此该 `require()` 会拿到真实模块。
 - **`isolate: false`**：原生加载的模块会被 Node 的 ESM loader 跨文件缓存，因此对它应用的 mock 可能会保留到同一 worker 运行的后续测试文件中。
 - **跨项目的 `isolate: false`**：非字面量 `import(variable)` 的 mock 解析发布在共享全局上，因此当一个 worker 运行多个项目时，该解析器反映的是最后执行的那个项目的 runtime——较早项目中对 mocked 模块的变量 `import()` 可能会查到较晚项目的 mock。静态与字面量 import 不受影响。
-- **相对 specifier**：相对路径的 mock 以**测试文件**为基准解析。写在 setup 文件或共享 helper 中的相对 `rs.mock('./dep')`，或来自其他目录模块的非字面量相对 `import('./dep')`，可能无法命中原生加载路径。请改用绝对路径或包名 specifier，或将 mock 声明在测试文件中。
+- **Rspack 版本**：模块 mock 要求测试构建运行在 `@rspack/core >= 2.1.3` 上——每个生成的 mock 调用都携带 runtime 依赖的构建期解析标识。在更低版本的 rspack 上，`rs.mock()` 会在运行时报错并提示升级，而不是静默失效。
+- **Alias specifier**：值为 `resolve.alias` / tsconfig-paths 拼写的非字面量 `import(variable)`，只有当 mock 以**相同拼写**声明时才会命中——alias 不会在运行时被展开。未被 mock 时会显式报错（Node 的 loader 同样无法原生解析这类 specifier）。字面量 import 与静态 import 不受影响——它们由构建展开。
 
 :::
 

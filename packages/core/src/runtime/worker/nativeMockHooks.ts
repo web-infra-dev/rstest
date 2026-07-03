@@ -70,22 +70,20 @@ const deriveKey = (request: string, base: string): string | undefined => {
 
 /**
  * Registry-key derivation for one native mock (the write side of the resolve
- * hook's read-side keying below). Several derivations may disagree on spelling
+ * hook's read-side keying below). Two derivations may disagree on spelling
  * for the same module (pnpm realpath, exports conditions, extension aliases),
  * so every derivation that succeeds is registered as an alias of the same
  * entry, best-first:
  * 1. the build-resolved target from the rspack plugin (`info.r`) — exact,
  *    no runtime re-resolution;
  * 2. `request` resolved against the DECLARING module (`info.o`) — correct
- *    base for a relative `rs.mock` living in a helper file;
- * 3. `request` resolved against the test file — the pre-info behavior, kept
- *    as the old-rspack fallback and divergence absorber (skipped when `info.o`
- *    IS the test file, where it could only repeat derivation 2).
+ *    base for a relative `rs.mock` living in a helper file, and the
+ *    divergence absorber when Node's runtime resolution disagrees with the
+ *    build's.
  */
 const deriveNativeMockKeys = (
   request: string,
-  info: NativeMockResolvedInfo | undefined,
-  testPath: string,
+  info: NativeMockResolvedInfo,
 ): string[] => {
   const keys: string[] = [];
   const add = (key: string | undefined) => {
@@ -93,7 +91,7 @@ const deriveNativeMockKeys = (
       keys.push(key);
     }
   };
-  const resolved = info?.r;
+  const resolved = info.r;
   if (typeof resolved === 'string') {
     if (isAbsolute(resolved)) {
       // The resolve hook keys non-builtins by their resolved URL.
@@ -102,16 +100,11 @@ const deriveNativeMockKeys = (
       // External request: a `node:` builtin spelling is the hook's canonical
       // key already; a bare spelling ('os', or an uninstalled package rstest
       // externalized by raw request) is registered verbatim — the canonical
-      // form comes from derivations 2/3 below.
+      // form comes from derivation 2 below.
       add(resolved);
     }
   }
-  if (info?.o !== undefined) {
-    add(deriveKey(request, info.o));
-  }
-  if (info?.o !== testPath) {
-    add(deriveKey(request, testPath));
-  }
+  add(deriveKey(request, info.o));
   return keys;
 };
 
