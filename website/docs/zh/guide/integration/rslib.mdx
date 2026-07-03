@@ -2,6 +2,8 @@
 description: 本指南介绍如何将 Rstest 集成到 Rslib 项目中，为你的 Rslib 项目提供无缝的测试体验。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Rslib
 
 本指南介绍如何将 Rstest 集成到 [Rslib](https://rslib.rs) 项目中，为你的 Rslib 项目提供无缝的测试体验。
@@ -71,13 +73,13 @@ export default defineConfig({
 
 适配器不会原样复用整份 Rslib 配置，而是只保留测试运行需要的部分，例如模块解析、代码转换、CSS Modules、装饰器相关配置、静态资源处理和 `target`。像 `dev`、`server`、`html` 等未映射字段，以及其他仅用于开发服务器、页面入口或构建产物的配置，会在转换时自动裁剪掉。
 
-默认情况下，适配器使用 `process.cwd()` 来解析 Rslib 配置。如果配置文件在其他目录，可以使用 `cwd` 选项。更多详情请参阅 [API](#api)。
+默认情况下，适配器使用 `process.cwd()` 来解析 Rslib 配置。如果配置文件在其他目录，可以使用 `cwd` 选项。你也可以通过 `config` 选项直接传入 Rslib 配置对象。更多详情请参阅 [API](#api)。
 
 ## API
 
 ### `withRslibConfig(options)`
 
-返回一个加载 Rslib 配置并将其转换为 Rstest 配置的函数。
+返回一个加载或接收 Rslib 配置并将其转换为 Rstest 配置的函数。
 
 #### `cwd`
 
@@ -102,6 +104,37 @@ export default defineConfig({
 - **默认值：** `'./rslib.config.ts'`
 
 Rslib 配置文件的路径。
+
+:::tip
+如果同时提供 `config` 和 `configPath`，配置内容以 `config` 为准。
+:::
+
+#### `config`
+
+<ApiMeta addedVersion="0.11.0" />
+
+- **类型：** `RslibConfig`
+- **默认值：** `undefined`
+
+要直接转换的内联 Rslib 配置对象。提供 `config` 后，适配器不会调用 Rslib 的 `loadConfig`。
+
+如果同时提供了 `configPath`，适配器会将它作为配置文件元信息，用于 [`forceRerunTriggers`](/config/test/force-rerun-triggers) 和 build cache 依赖解析，但配置内容仍以传入的 `config` 为准。
+
+```ts
+import { defineConfig as defineRslibConfig } from '@rslib/core';
+import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '@rstest/adapter-rslib';
+
+const rslibConfig = defineRslibConfig({
+  lib: [{ format: 'esm' }],
+});
+
+export default defineConfig({
+  extends: withRslibConfig({
+    config: rslibConfig,
+  }),
+});
+```
 
 #### `libId`
 
