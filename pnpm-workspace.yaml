@@ -17,6 +17,10 @@ allowBuilds:
 
 autoInstallPeers: false
 
+# TEMP (do not commit): validate rspack canary with build-resolved mock info (PR web-infra-dev/rspack#14665)
+overrides:
+  '@rspack/core': 'npm:@rspack-canary/core@2.1.3-canary-7caa6eff-20260703032940'
+
 # for vsce
 hoistPattern: ['@secretlint/*']
 
@@ -24,6 +28,7 @@ hoistPattern: ['@secretlint/*']
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@rspack/*'
+  - '@rspack-canary/*'
   - '@rsbuild/*'
   - '@rslib/*'
   - '@rspress/*'
