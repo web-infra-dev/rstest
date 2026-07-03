@@ -33,7 +33,7 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.11.0" />
 
-当 Rsbuild 插件运行在 Rstest 中时，可以通过 Rsbuild [Plugin API](https://rsbuild.rs/zh/plugins/dev/core) 中的 `api.useExposed('rstest')` 获取 Rstest 暴露的 API，并调用 `modifyRstestConfig` 来调整当前 project 的 Rstest 配置。
+当 Rsbuild 插件运行在 Rstest 中时，可以通过 Rsbuild Plugin API 中的 [`api.useExposed`](https://rsbuild.rs/zh/plugins/dev/core) 获取 Rstest 暴露的 API，并调用 `modifyRstestConfig` 来调整当前 project 的 Rstest 配置。
 
 该 API 目前仅在 Node Mode project 中暴露。Browser Mode project 不会收到 `rstest` 暴露 API，因此在这些 project 中 `api.useExposed('rstest')` 会返回 `undefined`。
 
@@ -95,7 +95,7 @@ export type RstestExposeAPI = {
 };
 ```
 
-`modifyRstestConfig` 的回调参数在运行时是当前 project 已经规范化后的 Rstest 配置。为了保持 API 易用性，TypeScript 类型仍复用面向用户配置的 `RstestConfig`：你可以直接修改传入的 `config` 对象，也可以返回一个符合 `RstestConfig` 结构的局部配置。Rstest 会在回调完成后重新合并、规范化并校验这些改动。该回调也可以是异步函数。
+`modifyRstestConfig` 的回调参数在运行时是当前 project 已经规范化后的配置对象，但公开 API 不要求你返回内部的 normalized config。为了保持 API 易用性，TypeScript 类型复用面向用户配置的 `RstestConfig`：你可以直接修改传入的 `config` 对象，也可以返回一个符合 `RstestConfig` 结构的局部配置。Rstest 会在回调完成后重新合并、规范化并校验这些改动。该回调也可以是异步函数。
 
 这个 API 只用于调整当前 project 的配置。会改变 project 身份、全局执行策略或 Rsbuild environment 拓扑的字段不能在这里修改，例如 `name`、`coverage`、`reporters`、`pool`、`isolate`、`update`、`projects`、`browser.enabled`、`plugins`、`extends` 或 `output.distPath`。如果回调修改了这些字段，Rstest 会抛出错误并提示应改为在 `rstest.config.*` 中声明。`include`、`exclude` 这类 project 级测试发现配置虽然会影响当前 project 的测试计划，但 Rstest 会在应用回调后重新收集该 project 的测试入口，因此可以在这里修改。
 
