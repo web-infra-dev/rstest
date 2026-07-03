@@ -65,6 +65,51 @@ type CoverageEntryGroup = {
   root?: string;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object';
+
+const isStringDict = (value: unknown): value is Record<string, string> =>
+  isRecord(value) &&
+  Object.values(value).every((item) => typeof item === 'string');
+
+const isCollectOptions = (value: unknown): value is CollectOptions =>
+  isRecord(value) &&
+  (value.assetFiles === undefined || isStringDict(value.assetFiles)) &&
+  (value.sourceMaps === undefined || isStringDict(value.sourceMaps)) &&
+  (value.outputModule === undefined || typeof value.outputModule === 'boolean');
+
+const isCoverageRange = (
+  value: unknown,
+): value is inspector.Profiler.CoverageRange =>
+  isRecord(value) &&
+  typeof value.startOffset === 'number' &&
+  typeof value.endOffset === 'number' &&
+  typeof value.count === 'number';
+
+const isFunctionCoverage = (
+  value: unknown,
+): value is inspector.Profiler.FunctionCoverage =>
+  isRecord(value) &&
+  typeof value.functionName === 'string' &&
+  typeof value.isBlockCoverage === 'boolean' &&
+  Array.isArray(value.ranges) &&
+  value.ranges.every(isCoverageRange);
+
+const isCoverageEntry = (value: unknown): value is CoverageEntry =>
+  isRecord(value) &&
+  typeof value.url === 'string' &&
+  typeof value.scriptId === 'string' &&
+  typeof value.filePath === 'string' &&
+  Array.isArray(value.functions) &&
+  value.functions.every(isFunctionCoverage);
+
+const isRawCoveragePayload = (value: unknown): value is RawCoveragePayload =>
+  isRecord(value) &&
+  Array.isArray(value.entries) &&
+  value.entries.every(isCoverageEntry) &&
+  (value.options === undefined || isCollectOptions(value.options)) &&
+  (value.root === undefined || typeof value.root === 'string');
+
 export class CoverageProvider implements RstestCoverageProvider {
   private session: inspector.Session | null = null;
   private isMatch: (filePath: string) => boolean;
@@ -141,7 +186,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     filePath: string,
   ): string | undefined {
     if (!dict) return undefined;
-    if (dict[filePath]) return dict[filePath];
+    if (dict[filePath] !== undefined) return dict[filePath];
 
     let lookup = this.dictLookupCache.get(dict);
     if (!lookup) {
@@ -162,11 +207,11 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     const normalizedPath = filePath.replace(/\\/g, '/');
     const directMatch = lookup.get(normalizedPath);
-    if (directMatch) return directMatch;
+    if (directMatch !== undefined) return directMatch;
 
     if (filePath.startsWith('/private/')) {
       const privateMatch = lookup.get(filePath.slice('/private'.length));
-      if (privateMatch) return privateMatch;
+      if (privateMatch !== undefined) return privateMatch;
     }
 
     return lookup.get(normalizedPath.toLowerCase());
@@ -504,7 +549,22 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   resolveRawCoverage(payloads: unknown[]): Promise<CoverageMap | null> {
-    return this.collectRawPayloads(payloads as RawCoveragePayload[]);
+    const validPayloads: RawCoveragePayload[] = [];
+
+    for (const payload of payloads) {
+      if (isRawCoveragePayload(payload)) {
+        validPayloads.push(payload);
+      } else {
+        console.error('Failed to resolve malformed raw V8 coverage payload.');
+        process.exitCode = 1;
+      }
+    }
+
+    if (!validPayloads.length) {
+      return Promise.resolve(null);
+    }
+
+    return this.collectRawPayloads(validPayloads);
   }
 
   async collectRaw(
@@ -665,15 +725,15 @@ export class CoverageProvider implements RstestCoverageProvider {
   ): Promise<CoverageMap | null> {
     const coverageMap = this.createCoverageMap();
     const groups = new Map<string, CoverageEntryGroup>();
+    const sourceIdentityIds = new Map<string, number>();
 
     for (const payload of payloads) {
       for (const entry of payload.entries) {
-        const outputModule = payload.options?.outputModule ?? true;
-        const key = [
-          payload.root ?? '',
-          entry.filePath,
-          outputModule ? 'module' : 'script',
-        ].join('\0');
+        const key = this.getRawCoverageGroupKey(
+          payload,
+          entry,
+          sourceIdentityIds,
+        );
         this.mergeIntoCoverageEntries(
           groups,
           key,
@@ -725,6 +785,45 @@ export class CoverageProvider implements RstestCoverageProvider {
     );
 
     return coverageMap;
+  }
+
+  private getRawCoverageGroupKey(
+    payload: RawCoveragePayload,
+    entry: CoverageEntry,
+    sourceIdentityIds: Map<string, number>,
+  ): string {
+    const outputModule = payload.options?.outputModule ?? true;
+    const assetSource = this.findInDict(
+      payload.options?.assetFiles,
+      entry.filePath,
+    );
+    const sourceMap = this.findInDict(
+      payload.options?.sourceMaps,
+      entry.filePath,
+    );
+
+    return [
+      payload.root ?? '',
+      entry.filePath,
+      outputModule ? 'module' : 'script',
+      this.getStringIdentity(assetSource, sourceIdentityIds),
+      this.getStringIdentity(sourceMap, sourceIdentityIds),
+    ].join('\0');
+  }
+
+  private getStringIdentity(
+    value: string | undefined,
+    sourceIdentityIds: Map<string, number>,
+  ): string {
+    if (value === undefined) return 'missing';
+
+    let id = sourceIdentityIds.get(value);
+    if (id === undefined) {
+      id = sourceIdentityIds.size;
+      sourceIdentityIds.set(value, id);
+    }
+
+    return String(id);
   }
 
   private async stopCoverage(): Promise<void> {

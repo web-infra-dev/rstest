@@ -540,7 +540,7 @@ export const createPool = async ({
             onCoverageResult?.(result.coverage);
             delete result.coverage;
           }
-          if (result.coverageRaw) {
+          if (result.coverageRaw != null) {
             onRawCoverageResult?.(result.coverageRaw);
             delete result.coverageRaw;
           }

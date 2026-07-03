@@ -739,8 +739,6 @@ export async function runTests(context: Rstest): Promise<void> {
     testStart ??= buildStart;
     const buildTime = testStart - buildStart;
 
-    const testTime = Date.now() - testStart;
-
     // Wait for browser tests to complete if running in parallel
     const browserResult = browserResultPromise
       ? await browserResultPromise
@@ -780,21 +778,6 @@ export async function runTests(context: Rstest): Promise<void> {
       // are merging browser coverage into `mergedCoverageMap` and stripping it
       // from the browser results to avoid reporter/state cache bloat (mirrors
       // the node-side pool layer's `delete result.coverage`).
-
-      // When unifying reporter output, combine browser and node durations
-      const duration: Duration =
-        shouldUnifyReporter && browserResult
-          ? {
-              totalTime:
-                testTime + buildTime + browserResult.duration.totalTime,
-              buildTime: buildTime + browserResult.duration.buildTime,
-              testTime: testTime + browserResult.duration.testTime,
-            }
-          : {
-              totalTime: testTime + buildTime,
-              buildTime,
-              testTime,
-            };
 
       const results = returns.flatMap((r) => r.results);
       const testResults = returns.flatMap((r) => r.testResults);
@@ -836,6 +819,21 @@ export async function runTests(context: Rstest): Promise<void> {
           mergedCoverageMap?.merge(rawCoverageMap);
         }
       }
+
+      const testTime = Date.now() - testStart;
+      const duration: Duration =
+        shouldUnifyReporter && browserResult
+          ? {
+              totalTime:
+                testTime + buildTime + browserResult.duration.totalTime,
+              buildTime: buildTime + browserResult.duration.buildTime,
+              testTime: testTime + browserResult.duration.testTime,
+            }
+          : {
+              totalTime: testTime + buildTime,
+              buildTime,
+              testTime,
+            };
 
       // Check for failures including browser results when unified
       const nodeHasFailure =
