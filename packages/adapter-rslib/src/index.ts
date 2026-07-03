@@ -1,9 +1,15 @@
-import { normalize } from 'node:path';
+import { isAbsolute, join, normalize } from 'node:path';
 import { loadConfig, type RslibConfig, mergeRslibConfig } from '@rslib/core';
 import type { ExtendConfig, ExtendConfigFn } from '@rstest/core';
 import { resolveBuildCache } from '@rstest/core/internal/adapter';
 
 export interface WithRslibConfigOptions {
+  /**
+   * Rslib config object to convert directly.
+   * When provided, `configPath` is only used as file metadata.
+   * @default undefined
+   */
+  config?: RslibConfig;
   /**
    * `cwd` passed to loadConfig of Rslib
    * @default process.cwd()
@@ -30,20 +36,39 @@ export function withRslibConfig(
   options: WithRslibConfigOptions = {},
 ): ExtendConfigFn {
   return async (userConfig) => {
-    const { configPath, modifyLibConfig, libId, cwd = process.cwd() } = options;
-
-    // Load rslib config
     const {
-      content: { lib, ...rawLibConfig },
-      filePath,
-    } = await loadConfig({
-      cwd,
-      path: configPath,
-    });
+      config: inlineConfig,
+      configPath,
+      modifyLibConfig,
+      libId,
+      cwd = process.cwd(),
+    } = options;
 
-    if (!filePath) {
+    let rslibConfig: RslibConfig;
+    let filePath: string | null | undefined;
+
+    if (inlineConfig) {
+      rslibConfig = inlineConfig;
+      if (configPath) {
+        filePath = configPath;
+        if (!isAbsolute(configPath)) {
+          filePath = join(cwd, configPath);
+        }
+      }
+    } else {
+      const loadedConfig = await loadConfig({
+        cwd,
+        path: configPath,
+      });
+      rslibConfig = loadedConfig.content;
+      filePath = loadedConfig.filePath;
+    }
+
+    if (!filePath && !inlineConfig) {
       return {};
     }
+
+    const { lib, ...rawLibConfig } = rslibConfig;
 
     const libConfig =
       libId && Array.isArray(lib) ? lib.find((l) => l.id === libId) || {} : {};
@@ -56,14 +81,14 @@ export function withRslibConfig(
       resolve: libConfig.resolve,
     };
 
-    const rslibConfig = Array.isArray(lib)
+    const mergedRslibConfig = Array.isArray(lib)
       ? (mergeRslibConfig(
           rawLibConfig as RslibConfig,
           libTestConfig as RslibConfig,
         ) as RslibConfig)
       : (rawLibConfig as RslibConfig);
 
-    let libDecoratorsVersion = rslibConfig.source?.decorators?.version;
+    let libDecoratorsVersion = mergedRslibConfig.source?.decorators?.version;
 
     if (
       !userConfig.source?.tsconfigPath &&
@@ -74,7 +99,7 @@ export function withRslibConfig(
       const { loadTsconfig } = await import('./tsconfig');
       const tsconfig = await loadTsconfig(
         cwd,
-        rslibConfig.source?.tsconfigPath,
+        mergedRslibConfig.source?.tsconfigPath,
       );
 
       if (tsconfig.compilerOptions?.experimentalDecorators) {
@@ -84,8 +109,8 @@ export function withRslibConfig(
 
     // Allow modification of rslib config
     const finalLibConfig = modifyLibConfig
-      ? modifyLibConfig(rslibConfig)
-      : rslibConfig;
+      ? modifyLibConfig(mergedRslibConfig)
+      : mergedRslibConfig;
 
     const { rspack, swc, bundlerChain } = finalLibConfig.tools || {};
     const { buildCache } = finalLibConfig.performance || {};
@@ -105,7 +130,7 @@ export function withRslibConfig(
       // Copy over compatible configurations
       root: finalLibConfig.root,
       name: libId,
-      forceRerunTriggers: [normalize(filePath)],
+      forceRerunTriggers: filePath ? [normalize(filePath)] : undefined,
       plugins: finalLibConfig.plugins,
       source: {
         assetsInclude,
@@ -127,7 +152,7 @@ export function withRslibConfig(
       performance: {
         buildCache: resolveBuildCache({
           buildCache,
-          configPath: filePath,
+          configPath: filePath || undefined,
           root: finalLibConfig.root,
         }),
       },
