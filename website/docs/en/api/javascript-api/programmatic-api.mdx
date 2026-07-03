@@ -78,10 +78,13 @@ The programmatic API never reads a config file for you. To run against one on di
 import { loadConfig, mergeRstestConfig } from '@rstest/core';
 import { createRstest } from '@rstest/core/api';
 
+const cwd = './my-project';
 const rstest = await createRstest({
-  cwd: './my-project',
+  cwd,
   config: async () => {
-    const { content } = await loadConfig({ path: 'rstest.config.ts' });
+    // Resolve the config file against the same `cwd`; `loadConfig` defaults to
+    // `process.cwd()`, which may not be `cwd`.
+    const { content } = await loadConfig({ cwd, path: 'rstest.config.ts' });
     // merge an override over the disk config…
     return mergeRstestConfig(content, { testTimeout: 10000 });
     // …or transform it directly, e.g. `return { ...content, include: ['a.test.ts'] };`

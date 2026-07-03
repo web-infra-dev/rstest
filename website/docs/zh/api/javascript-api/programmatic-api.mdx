@@ -78,10 +78,13 @@ interface CreateRstestOptions {
 import { loadConfig, mergeRstestConfig } from '@rstest/core';
 import { createRstest } from '@rstest/core/api';
 
+const cwd = './my-project';
 const rstest = await createRstest({
-  cwd: './my-project',
+  cwd,
   config: async () => {
-    const { content } = await loadConfig({ path: 'rstest.config.ts' });
+    // 用同一个 `cwd` 解析 config 文件；`loadConfig` 默认使用 `process.cwd()`，
+    // 二者未必一致。
+    const { content } = await loadConfig({ cwd, path: 'rstest.config.ts' });
     // 在磁盘 config 之上合并一个覆盖……
     return mergeRstestConfig(content, { testTimeout: 10000 });
     // ……或直接对其变换，例如 `return { ...content, include: ['a.test.ts'] };`
