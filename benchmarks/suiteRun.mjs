@@ -16,7 +16,7 @@ import { Bench } from 'tinybench';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = resolve(__dirname, 'fixtures');
 
-const { runCli } = await import('@rstest/core/api');
+const { createRstest } = await import('@rstest/core/api');
 
 const benchmarkOptions = {
   reporters: [],
@@ -31,30 +31,24 @@ const bench = withCodSpeed(
   }),
 );
 
-async function runFixture(fixtureName) {
-  // `runCli` is host-safe: it resolves a structured result instead of setting
-  // `process.exitCode`, so no per-iteration exit-code reset is needed.
-  const result = await runCli({
-    root: resolve(fixturesRoot, fixtureName),
-    ...benchmarkOptions,
+// Create one reusable instance per fixture up front so the eager creation build
+// is amortized out of the measured iterations; each iteration then measures a
+// single host-safe `run()`, which resolves a structured result instead of
+// setting `process.exitCode` (no per-iteration exit-code reset needed).
+const fixtureNames = ['compile', 'runner', 'integration'];
+for (const fixtureName of fixtureNames) {
+  const instance = await createRstest({
+    config: { root: resolve(fixturesRoot, fixtureName), ...benchmarkOptions },
   });
 
-  if (!result.ok) {
-    throw new Error(`CPU benchmark fixture "${fixtureName}" failed`);
-  }
+  bench.add(fixtureName, async () => {
+    const result = await instance.run();
+
+    if (!result.ok) {
+      throw new Error(`CPU benchmark fixture "${fixtureName}" failed`);
+    }
+  });
 }
-
-bench.add('compile', async () => {
-  await runFixture('compile');
-});
-
-bench.add('runner', async () => {
-  await runFixture('runner');
-});
-
-bench.add('integration', async () => {
-  await runFixture('integration');
-});
 
 await bench.run();
 

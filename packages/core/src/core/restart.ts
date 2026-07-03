@@ -54,16 +54,21 @@ const restart = async ({
   options,
   filters,
   root,
+  cwd,
 }: {
   root: string;
   options: CommonOptions;
   filters: Array<string | number>;
   filePath?: string;
   clear?: boolean;
+  cwd?: string;
 }): Promise<boolean> => {
   await beforeRestart({ filePath, root, clear });
 
-  await runTestCommand({ options, filters, command: 'watch' });
+  // Carry the original `cwd` (e.g. from `runCLI({ cwd })` bridges launched in
+  // another directory) so the restarted run resolves config/root against the
+  // same directory as the initial run rather than the parent process cwd.
+  await runTestCommand({ options, filters, command: 'watch', cwd });
 
   return true;
 };
@@ -73,11 +78,13 @@ export async function watchFilesForRestart({
   watchOptions,
   options,
   filters,
+  cwd,
 }: {
   options: CommonOptions;
   filters: Array<string | number>;
   rstest: RstestRunner;
   watchOptions?: ChokidarOptions;
+  cwd?: string;
 }): Promise<void> {
   const configFilePaths = [
     rstest.context.configFilePath,
@@ -104,7 +111,7 @@ export async function watchFilesForRestart({
     }
     restarting = true;
 
-    const restarted = await restart({ options, root, filters, filePath });
+    const restarted = await restart({ options, root, filters, filePath, cwd });
 
     if (restarted) {
       await watcher.close();

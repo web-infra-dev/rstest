@@ -1004,6 +1004,7 @@ export const runTestCommand = async ({
       command,
       options,
       filters,
+      cwd,
       trace: options.trace,
     });
 
@@ -1024,6 +1025,7 @@ export const runTestCommand = async ({
         rstest,
         options,
         filters,
+        cwd,
       });
     }
 
@@ -1128,6 +1130,7 @@ export function createCli({ cwd }: { cwd?: string } = {}): CAC {
           command: 'list',
           options,
           filters,
+          cwd,
         });
 
         await rstest.listTests({
@@ -1172,6 +1175,7 @@ export function createCli({ cwd }: { cwd?: string } = {}): CAC {
           command: 'merge-reports',
           options,
           filters: [],
+          cwd,
         });
 
         await rstest.mergeReports({ path, cleanup: options.cleanup });
