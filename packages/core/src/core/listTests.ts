@@ -26,7 +26,7 @@ import {
 } from './globalSetup';
 import { createSetupFileState } from './setupFileState';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
-import { createListProjectPlanState } from './projectPlan';
+import { createListProjectPlanState, syncNodeProjects } from './projectPlan';
 
 type ListedTest = {
   file: string;
@@ -175,13 +175,7 @@ const collectNodeTests = async ({
     }),
     onModifyRstestConfigApplied: async () => {
       await onModifyRstestConfigApplied?.();
-      nodeProjects.splice(
-        0,
-        nodeProjects.length,
-        ...context.projects.filter(
-          (project) => !project.normalizedConfig.browser.enabled,
-        ),
-      );
+      syncNodeProjects(nodeProjects, context.projects);
     },
   });
 
@@ -489,13 +483,7 @@ export async function listTests(
       targetProjects: nodeProjects,
       onModifyRstestConfigApplied: async () => {
         await refreshListEntries();
-        nodeProjects.splice(
-          0,
-          nodeProjects.length,
-          ...context.projects.filter(
-            (project) => !project.normalizedConfig.browser.enabled,
-          ),
-        );
+        syncNodeProjects(nodeProjects, context.projects);
       },
     });
     await rsbuildInstance.initConfigs({ action: 'dev' });

@@ -119,7 +119,6 @@ type PrepareRsbuildOptions = {
   exposeRstestAPIProjects?: ProjectContext[];
   extraPlugins?: RsbuildPlugin[];
   onModifyRstestConfigApplied?: () => Promise<void>;
-  loadCoveragePlugin?: boolean;
   onCoveragePluginLoadError?: (error: unknown) => void;
 };
 
@@ -151,7 +150,6 @@ export const prepareRsbuild = async ({
   exposeRstestAPIProjects,
   extraPlugins = [],
   onModifyRstestConfigApplied,
-  loadCoveragePlugin = true,
   onCoveragePluginLoadError,
 }: PrepareRsbuildOptions): Promise<RsbuildInstance> => {
   const {
@@ -235,15 +233,13 @@ export const prepareRsbuild = async ({
     },
   );
 
-  if (loadCoveragePlugin) {
-    try {
-      await addCoveragePlugin(rsbuildInstance, context);
-    } catch (error) {
-      if (!onCoveragePluginLoadError) {
-        throw error;
-      }
-      onCoveragePluginLoadError(error);
+  try {
+    await addCoveragePlugin(rsbuildInstance, context);
+  } catch (error) {
+    if (!onCoveragePluginLoadError) {
+      throw error;
     }
+    onCoveragePluginLoadError(error);
   }
 
   return rsbuildInstance;

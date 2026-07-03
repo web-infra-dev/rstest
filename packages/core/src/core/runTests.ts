@@ -28,7 +28,7 @@ import {
 } from './globalSetup';
 import { createSetupFileState } from './setupFileState';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
-import { createRunProjectPlanState } from './projectPlan';
+import { createRunProjectPlanState, syncNodeProjects } from './projectPlan';
 import type { Rstest } from './rstest';
 
 /**
@@ -348,13 +348,9 @@ export async function runTests(context: Rstest): Promise<void> {
     }),
     onModifyRstestConfigApplied: async () => {
       const plan = await resolveRunnableProjects();
-      const nodeProjectsToPrepare = plan.nodeProjectsToRun.length
-        ? plan.nodeProjectsToRun
-        : nodeProjects;
-      rsbuildProjects.splice(
-        0,
-        rsbuildProjects.length,
-        ...nodeProjectsToPrepare,
+      syncNodeProjects(
+        rsbuildProjects,
+        plan.nodeProjectsToRun.length ? plan.nodeProjectsToRun : nodeProjects,
       );
     },
   });
@@ -415,20 +411,6 @@ export async function runTests(context: Rstest): Promise<void> {
     return;
   }
 
-  const { getRsbuildStats, closeServer } = await createRsbuildServer({
-    inspectedConfig: {
-      ...context.normalizedConfig,
-      // Pass only the relevant node projects for Rsbuild processing
-      projects: rsbuildProjects.map((p) => p.normalizedConfig),
-    },
-    isWatchMode,
-    globTestSourceEntries,
-    setupFiles: setupFileState.setupFiles,
-    globalSetupFiles: setupFileState.globalSetupFiles,
-    rsbuildInstance,
-    rootPath,
-  });
-
   // If there are browser tests to run, start them.
   if (hasBrowserTestsToRun) {
     const browserEntries = new Map();
@@ -475,7 +457,6 @@ export async function runTests(context: Rstest): Promise<void> {
         // fires for the pre-allocated buffer. Flush any browser events the
         // host emitted into it before exiting so `--trace` still produces a
         // file for filtered mixed-mode runs.
-        await runLifecycleStep('rsbuild server cleanup', () => closeServer());
         await runLifecycleStep('trace shutdown', () =>
           traceController.shutdown(activeTraceRun),
         );
@@ -485,10 +466,23 @@ export async function runTests(context: Rstest): Promise<void> {
     // If no node projects at all, and no browser tests to run,
     // then nothing to do here. This handles the original early exit for no node projects.
     if (!hasNodeProjects) {
-      await runLifecycleStep('rsbuild server cleanup', () => closeServer());
       return;
     }
   }
+
+  const { getRsbuildStats, closeServer } = await createRsbuildServer({
+    inspectedConfig: {
+      ...context.normalizedConfig,
+      // Pass only the relevant node projects for Rsbuild processing
+      projects: rsbuildProjects.map((p) => p.normalizedConfig),
+    },
+    isWatchMode,
+    globTestSourceEntries,
+    setupFiles: setupFileState.setupFiles,
+    globalSetupFiles: setupFileState.globalSetupFiles,
+    rsbuildInstance,
+    rootPath,
+  });
 
   // The `projects` variable now refers to node projects that have tests to run.
   const { entriesCache, nodeProjectsToRun: projects } =

@@ -32,6 +32,17 @@ export type RunProjectPlan = {
   nodeProjectsToRun: ProjectContext[];
 };
 
+export const syncNodeProjects = (
+  target: ProjectContext[],
+  projects: ProjectContext[],
+): void => {
+  target.splice(
+    0,
+    target.length,
+    ...projects.filter((project) => !project.normalizedConfig.browser.enabled),
+  );
+};
+
 export const createRunProjectPlanState = ({
   context,
   browserProjects,

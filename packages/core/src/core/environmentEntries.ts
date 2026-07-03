@@ -17,13 +17,11 @@ export const resolveRunnableProjectsByEntries = async ({
   entriesCache,
   globTestSourceEntries,
   skipEmptyProjects = true,
-  groupByEnvironment = true,
 }: {
   projects: ProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
   globTestSourceEntries: GlobTestSourceEntries;
   skipEmptyProjects?: boolean;
-  groupByEnvironment?: boolean;
 }): Promise<{
   projects: ProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
@@ -35,20 +33,6 @@ export const resolveRunnableProjectsByEntries = async ({
   );
 
   const browserProjects = projects.filter(isBrowserProject);
-  if (!groupByEnvironment) {
-    const shouldRunProject = (project: ProjectContext): boolean =>
-      !skipEmptyProjects || hasEntries(entriesCache, project.environmentName);
-
-    return {
-      projects,
-      entriesCache,
-      browserProjectsToRun: browserProjects.filter(shouldRunProject),
-      nodeProjectsToRun: projects
-        .filter((project) => !isBrowserProject(project))
-        .filter(shouldRunProject),
-    };
-  }
-
   const grouped = await groupProjectEntriesByEnvironment({
     entriesCache,
     projects: projects.filter((project) => !isBrowserProject(project)),
@@ -87,12 +71,10 @@ export const applyEnvironmentGroupsToListEntries = async ({
   context,
   testEntries,
   globTestSourceEntries,
-  groupByEnvironment = true,
 }: {
   context: RstestContext;
   testEntries: Record<string, Record<string, string>>;
   globTestSourceEntries: GlobTestSourceEntries;
-  groupByEnvironment?: boolean;
 }): Promise<void> => {
   if (!context.normalizedConfig.shard) {
     await Promise.all(
@@ -100,10 +82,6 @@ export const applyEnvironmentGroupsToListEntries = async ({
         globTestSourceEntries(project.environmentName),
       ),
     );
-  }
-
-  if (!groupByEnvironment) {
-    return;
   }
 
   const grouped = await groupProjectEntriesByEnvironment({
