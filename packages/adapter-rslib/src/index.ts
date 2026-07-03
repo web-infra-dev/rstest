@@ -45,7 +45,7 @@ export function withRslibConfig(
     } = options;
 
     let rslibConfig: RslibConfig;
-    let filePath: string | null | undefined;
+    let filePath: string | undefined;
 
     if (inlineConfig) {
       rslibConfig = inlineConfig;
@@ -61,7 +61,9 @@ export function withRslibConfig(
         path: configPath,
       });
       rslibConfig = loadedConfig.content;
-      filePath = loadedConfig.filePath;
+      if (loadedConfig.filePath) {
+        filePath = loadedConfig.filePath;
+      }
     }
 
     if (!filePath && !inlineConfig) {
@@ -152,7 +154,7 @@ export function withRslibConfig(
       performance: {
         buildCache: resolveBuildCache({
           buildCache,
-          configPath: filePath || undefined,
+          configPath: filePath,
           root: finalLibConfig.root,
         }),
       },
