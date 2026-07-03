@@ -42,11 +42,9 @@ type CoverageEntry = inspector.Profiler.ScriptCoverage & {
   filePath: string;
 };
 
-type CollectOptions = {
-  assetFiles?: Record<string, string>;
-  sourceMaps?: Record<string, string>;
-  outputModule?: boolean;
-};
+type CollectOptions = NonNullable<
+  Parameters<RstestCoverageProvider['collect']>[0]
+>;
 
 type TransformedSource = {
   code: string;
@@ -544,12 +542,12 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     for (const entry of entries) {
       const assetSource = this.findInDict(options.assetFiles, entry.filePath);
-      if (assetSource) {
+      if (assetSource !== undefined) {
         assetFiles[entry.filePath] = assetSource;
       }
 
       const sourceMap = this.findInDict(options.sourceMaps, entry.filePath);
-      if (sourceMap) {
+      if (sourceMap !== undefined) {
         sourceMaps[entry.filePath] = sourceMap;
       }
     }

@@ -173,10 +173,26 @@ export declare class CoverageProvider {
     options?: CoverageCollectOptions,
   ): CoverageMap | null | Promise<CoverageMap | null>;
 
+  /**
+   * Collect lightweight, serializable raw coverage payloads in workers.
+   *
+   * Providers may implement this with `resolveRawCoverage` to defer expensive
+   * conversion work to the main process. Return `null` to indicate that no raw
+   * coverage was collected and the runner should not call `resolveRawCoverage`
+   * for that worker result.
+   */
   collectRaw?(
     options?: CoverageCollectOptions,
   ): unknown | null | Promise<unknown | null>;
 
+  /**
+   * Resolve raw payloads produced by `collectRaw` into an Istanbul coverage map.
+   *
+   * The runner passes only non-null payloads returned by the same provider.
+   * Implementations should ignore malformed payloads only when they can still
+   * produce a valid partial report; otherwise they may reject to fail coverage
+   * finalization.
+   */
   resolveRawCoverage?(
     payloads: unknown[],
   ): CoverageMap | null | Promise<CoverageMap | null>;

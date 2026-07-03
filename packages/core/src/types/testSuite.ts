@@ -182,6 +182,12 @@ export type TestFileResult = TestResult & {
   results: TestResult[];
   snapshotResult?: SnapshotResult;
   coverage?: Record<string, FileCoverageData>;
+  /**
+   * Raw coverage payload used internally between workers and the pool.
+   * Stripped at the pool boundary before results are exposed to reporters.
+   *
+   * @internal
+   */
   coverageRaw?: unknown;
   /**
    * Perfetto-compatible trace events. Stripped at the pool boundary.
