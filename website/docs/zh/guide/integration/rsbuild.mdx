@@ -2,6 +2,8 @@
 description: 本指南介绍了如何将 Rstest 与 Rsbuild 集成，以便在你的 Rsbuild 项目中进行无缝测试。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Rsbuild
 
 本指南介绍了如何将 Rstest 与 [Rsbuild](https://rsbuild.dev) 集成，以便在你的 Rsbuild 项目中进行无缝测试。
@@ -55,13 +57,13 @@ export default defineConfig({
 
 适配器不会原样复用整份 Rsbuild 配置，而是只保留测试运行需要的部分，例如模块解析、代码转换、CSS Modules、静态资源处理和 `target`。像 `dev`、`server`、`html` 这类面向开发服务器、页面入口或产物输出的配置，会在转换时自动裁剪掉，避免把测试无关配置带入 Rstest。
 
-默认情况下，适配器使用 `process.cwd()` 来解析 Rsbuild 配置。如果你的配置文件在其他地方，你可以使用 `cwd` 选项。更多详情请参阅 [API](#api) 部分。
+默认情况下，适配器使用 `process.cwd()` 来解析 Rsbuild 配置。如果配置文件在其他目录，可以使用 `cwd` 选项。你也可以通过 `config` 选项直接传入 Rsbuild 配置对象。更多详情请参阅 [API](#api)。
 
 ## API
 
 ### `withRsbuildConfig(options)`
 
-返回一个配置函数，该函数加载 Rsbuild 配置并将其转换为 Rstest 配置。
+返回一个配置函数，该函数加载或接收 Rsbuild 配置并将其转换为 Rstest 配置。
 
 #### `cwd`
 
@@ -86,6 +88,41 @@ export default defineConfig({
 - **默认值：** `'./rsbuild.config.ts'`
 
 Rsbuild 配置文件的路径。
+
+:::tip
+如果同时提供 `config` 和 `configPath`，配置内容以 `config` 为准。
+:::
+
+#### `config`
+
+<ApiMeta addedVersion="0.11.0" />
+
+- **类型：** `RsbuildConfig`
+- **默认值：** `undefined`
+
+要直接转换的内联 Rsbuild 配置对象。提供 `config` 后，适配器不会调用 Rsbuild 的 `loadConfig`。
+
+如果同时提供了 `configPath`，适配器会将它作为配置文件元信息，用于 [`forceRerunTriggers`](/config/test/force-rerun-triggers) 和 build cache 依赖解析，但配置内容仍以传入的 `config` 为准。
+
+```ts
+import { defineConfig as defineRsbuildConfig } from '@rsbuild/core';
+import { defineConfig } from '@rstest/core';
+import { withRsbuildConfig } from '@rstest/adapter-rsbuild';
+
+const rsbuildConfig = defineRsbuildConfig({
+  source: {
+    define: {
+      __DEV__: 'true',
+    },
+  },
+});
+
+export default defineConfig({
+  extends: withRsbuildConfig({
+    config: rsbuildConfig,
+  }),
+});
+```
 
 #### `environmentName`
 
