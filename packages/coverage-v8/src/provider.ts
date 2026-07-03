@@ -58,6 +58,13 @@ type TransformedSource = {
 type RawCoveragePayload = {
   entries: CoverageEntry[];
   options?: CollectOptions;
+  root?: string;
+};
+
+type CoverageEntryGroup = {
+  entries: CoverageEntry[];
+  options?: CollectOptions;
+  root?: string;
 };
 
 export class CoverageProvider implements RstestCoverageProvider {
@@ -103,25 +110,32 @@ export class CoverageProvider implements RstestCoverageProvider {
     return posix.isAbsolute(filePath) || win32.isAbsolute(filePath);
   }
 
-  private toProjectRelativePath(filePath: string): string {
+  private toProjectRelativePath(filePath: string, root = this.root): string {
     const normalizedFilePath = this.normalizeSlashes(filePath);
 
-    if (!this.root || !this.isAbsolutePath(normalizedFilePath)) {
+    if (!root || !this.isAbsolutePath(normalizedFilePath)) {
       return normalizedFilePath;
     }
 
+    const normalizedRoot = this.normalizeSlashes(root);
+
     if (
       this.normalizeForMatching(normalizedFilePath) ===
-      this.normalizeForMatching(this.root)
+      this.normalizeForMatching(normalizedRoot)
     ) {
       return '';
     }
 
-    if (win32.isAbsolute(normalizedFilePath) || win32.isAbsolute(this.root)) {
-      return win32.relative(this.root, normalizedFilePath).replace(/\\/g, '/');
+    if (
+      win32.isAbsolute(normalizedFilePath) ||
+      win32.isAbsolute(normalizedRoot)
+    ) {
+      return win32
+        .relative(normalizedRoot, normalizedFilePath)
+        .replace(/\\/g, '/');
     }
 
-    return posix.relative(this.root, normalizedFilePath);
+    return posix.relative(normalizedRoot, normalizedFilePath);
   }
 
   private findInDict(
@@ -182,18 +196,19 @@ export class CoverageProvider implements RstestCoverageProvider {
     );
   }
 
-  private shouldProcessEntry(filePath: string): boolean {
+  private shouldProcessEntry(filePath: string, root = this.root): boolean {
     const normalizedFilePath = this.normalizeForMatching(filePath);
-    const normalizedRoot = this.root
-      ? this.normalizeForMatching(this.root)
-      : undefined;
+    const normalizedRoot = root ? this.normalizeForMatching(root) : undefined;
 
     if (this.shouldIgnoreTransformedFile(normalizedFilePath)) {
       return false;
     }
 
     if (!this.options.allowExternal && normalizedRoot) {
-      const relativeFilePath = this.toProjectRelativePath(normalizedFilePath);
+      const relativeFilePath = this.toProjectRelativePath(
+        normalizedFilePath,
+        normalizedRoot,
+      );
       if (
         this.isAbsolutePath(relativeFilePath) ||
         relativeFilePath.startsWith('../')
@@ -226,14 +241,17 @@ export class CoverageProvider implements RstestCoverageProvider {
     );
   }
 
-  private shouldKeepOriginalSource(filePath: string): boolean {
+  private shouldKeepOriginalSource(
+    filePath: string,
+    root = this.root,
+  ): boolean {
     const normalizedKey = filePath.replace(/\\/g, '/');
 
     if (this.shouldIgnoreTransformedFile(normalizedKey)) {
       return false;
     }
 
-    const originalTestPath = this.toProjectRelativePath(normalizedKey);
+    const originalTestPath = this.toProjectRelativePath(normalizedKey, root);
     return (
       !this.isExcluded(originalTestPath) && this.isIncluded(originalTestPath)
     );
@@ -378,6 +396,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     entry: inspector.Profiler.ScriptCoverage,
     options?: CollectOptions,
     transformedSource?: TransformedSource,
+    root = this.root,
   ): Promise<Record<string, FileCoverageData>> {
     const { code, sourceMap, sourceMapStr, sourceMapUrl } =
       transformedSource ?? (await this.getTransformedSource(filePath, options));
@@ -400,6 +419,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       codeHash,
       sourceMapStr,
       outputModule,
+      root,
     );
     const ast = this.parseAst(code, outputModule, astCacheKey);
 
@@ -407,7 +427,8 @@ export class CoverageProvider implements RstestCoverageProvider {
       ast,
       cacheKey: converterCacheKey,
       code,
-      sourceFilter: (sourcePath) => this.shouldKeepOriginalSource(sourcePath),
+      sourceFilter: (sourcePath) =>
+        this.shouldKeepOriginalSource(sourcePath, root),
       sourceMap,
       sourceMapUrl,
       coverage: {
@@ -423,12 +444,13 @@ export class CoverageProvider implements RstestCoverageProvider {
     codeHash: number,
     sourceMapStr: string | undefined,
     outputModule: boolean,
+    root: string | undefined,
   ): string {
     return [
       this.getAstCacheKey(filePath, code, codeHash, outputModule),
       sourceMapStr?.length ?? 0,
       sourceMapStr ? this.hashString(sourceMapStr) : 0,
-      this.root ?? '',
+      root ?? '',
       this.options.allowExternal ? 'external' : 'root-only',
       this.options.include?.join('\n') ?? '',
       this.options.exclude.join('\n'),
@@ -457,9 +479,12 @@ export class CoverageProvider implements RstestCoverageProvider {
     return hash >>> 0;
   }
 
-  private filterCoverageData(istanbulData: Record<string, FileCoverageData>) {
+  private filterCoverageData(
+    istanbulData: Record<string, FileCoverageData>,
+    root = this.root,
+  ) {
     for (const key of Object.keys(istanbulData)) {
-      if (!this.shouldKeepOriginalSource(key)) {
+      if (!this.shouldKeepOriginalSource(key, root)) {
         delete istanbulData[key];
         continue;
       }
@@ -504,6 +529,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     return {
       entries: filteredEntries,
       options: this.pickRawCoverageOptions(filteredEntries, options),
+      root: this.root,
     };
   }
 
@@ -640,44 +666,63 @@ export class CoverageProvider implements RstestCoverageProvider {
     payloads: RawCoveragePayload[],
   ): Promise<CoverageMap | null> {
     const coverageMap = this.createCoverageMap();
-    const groups = new Map<
-      string,
-      { entries: CoverageEntry[]; options?: CollectOptions }
-    >();
+    const groups = new Map<string, CoverageEntryGroup>();
 
     for (const payload of payloads) {
       for (const entry of payload.entries) {
         const outputModule = payload.options?.outputModule ?? true;
-        const key = `${entry.filePath}\0${outputModule ? 'module' : 'script'}`;
-        this.mergeIntoCoverageEntries(groups, key, entry, payload.options);
+        const key = [
+          payload.root ?? '',
+          entry.filePath,
+          outputModule ? 'module' : 'script',
+        ].join('\0');
+        this.mergeIntoCoverageEntries(
+          groups,
+          key,
+          entry,
+          payload.options,
+          payload.root,
+        );
       }
     }
 
     await Promise.all(
-      Array.from(groups.values()).map(async ({ entries, options }) => {
-        const transformedSource = await this.getTransformedSource(
-          entries[0]!.filePath,
-          options,
-        );
+      Array.from(groups.values()).map(async ({ entries, options, root }) => {
+        try {
+          const transformedSource = await this.getTransformedSource(
+            entries[0]!.filePath,
+            options,
+          );
 
-        await Promise.all(
-          entries.map(async (entry) => {
-            try {
-              const istanbulData = await this.convertWithAst(
-                entry.filePath,
-                entry,
-                options,
-                transformedSource,
-              );
+          await Promise.all(
+            entries.map(async (entry) => {
+              try {
+                const istanbulData = await this.convertWithAst(
+                  entry.filePath,
+                  entry,
+                  options,
+                  transformedSource,
+                  root,
+                );
 
-              this.filterCoverageData(istanbulData);
-              coverageMap.merge(istanbulData);
-            } catch (e) {
-              console.error(`Failed to process coverage for ${entry.url}:`, e);
-              process.exitCode = 1;
-            }
-          }),
-        );
+                this.filterCoverageData(istanbulData, root);
+                coverageMap.merge(istanbulData);
+              } catch (e) {
+                console.error(
+                  `Failed to process coverage for ${entry.url}:`,
+                  e,
+                );
+                process.exitCode = 1;
+              }
+            }),
+          );
+        } catch (e) {
+          console.error(
+            `Failed to process coverage for ${entries[0]!.url}:`,
+            e,
+          );
+          process.exitCode = 1;
+        }
       }),
     );
 
@@ -696,14 +741,15 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   private mergeIntoCoverageEntries(
-    groups: Map<string, { entries: CoverageEntry[]; options?: CollectOptions }>,
+    groups: Map<string, CoverageEntryGroup>,
     key: string,
     entry: CoverageEntry,
     options?: CollectOptions,
+    root?: string,
   ): void {
     let group = groups.get(key);
     if (!group) {
-      group = { entries: [], options };
+      group = { entries: [], options, root };
       groups.set(key, group);
     } else if (options) {
       group.options = {

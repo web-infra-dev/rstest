@@ -1081,6 +1081,108 @@ export default class CustomCoverageReporter {
     }
   });
 
+  it('continues resolving raw coverage when a source lookup fails', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-source-error');
+    const missingFile = join(root, 'missing.js');
+    const validFile = join(root, 'valid.js');
+    const code = 'function covered() { return 1; }\ncovered();';
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    const originalError = console.error;
+    const originalExitCode = process.exitCode;
+    let hasError = false;
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (filePath: string) => ({
+        [filePath]: createFileCoverage(filePath),
+      }),
+    });
+
+    console.error = () => {
+      hasError = true;
+    };
+
+    try {
+      mkdirSync(root, { recursive: true });
+
+      const createEntry = (filePath: string) => ({
+        url: pathToFileURL(filePath).href,
+        filePath,
+        scriptId: filePath,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      });
+
+      const coverageMap = await provider.resolveRawCoverage([
+        {
+          entries: [createEntry(missingFile)],
+          options: { outputModule: true },
+        },
+        {
+          entries: [createEntry(validFile)],
+          options: { assetFiles: { [validFile]: code }, outputModule: true },
+        },
+      ]);
+
+      expect(coverageMap?.files()).toEqual([validFile]);
+      expect(hasError).toBe(true);
+      expect(process.exitCode).toBe(1);
+    } finally {
+      console.error = originalError;
+      process.exitCode = originalExitCode;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('uses raw coverage project root for include matching', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-project-root');
+    const projectRoot = join(root, 'packages', 'app');
+    const generatedFile = join(projectRoot, 'dist', 'counter.js');
+    const originalFile = join(projectRoot, 'src', 'counter.ts');
+    const code = 'function double(value) { return value * 2; }';
+    const provider = new CoverageProvider(
+      createOptions({ include: ['src/**/*.ts'] }),
+      root,
+    );
+    const providerInternals = getProviderInternals(provider);
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async () => ({
+        [originalFile]: createFileCoverage(originalFile),
+      }),
+    });
+
+    const coverageMap = await provider.resolveRawCoverage([
+      {
+        entries: [
+          {
+            url: pathToFileURL(generatedFile).href,
+            filePath: generatedFile,
+            scriptId: generatedFile,
+            functions: [
+              {
+                functionName: '',
+                isBlockCoverage: true,
+                ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+              },
+            ],
+          },
+        ],
+        options: { assetFiles: { [generatedFile]: code }, outputModule: true },
+        root: projectRoot,
+      },
+    ]);
+
+    expect(coverageMap?.files()).toEqual([originalFile]);
+  });
+
   it('keeps excluded asset files with inline source maps for remapping', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-inline-asset-map');
     const file = join(root, 'dist', 'bundle.js');
