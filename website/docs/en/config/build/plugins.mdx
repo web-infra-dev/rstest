@@ -33,9 +33,11 @@ Check out the Rsbuild [plugin list](https://rsbuild.rs/plugins/list#official-plu
 
 <ApiMeta addedVersion="0.11.0" />
 
-When an Rsbuild plugin runs inside Rstest, it can get the Rstest exposed API through `api.useExposed('rstest')` and call `modifyRstestConfig` to adjust the Rstest config for the current project.
+When an Rsbuild plugin runs inside Rstest, it can get the Rstest exposed API through `api.useExposed('rstest')` from the Rsbuild [Plugin API](https://rsbuild.rs/plugins/dev/core) and call `modifyRstestConfig` to adjust the Rstest config for the current project.
 
 This API is currently exposed only for Node-mode projects. Browser Mode projects do not receive the `rstest` exposed API, so `api.useExposed('rstest')` returns `undefined` there.
+
+This API is intended for framework integrations and toolchain plugins. When a plugin already knows the current framework, Rsbuild environment, or project conventions, it can centrally add project config such as test entries, exclude rules, setup files, aliases, defines, or `testEnvironment` so users do not need to duplicate the same information in their Rstest config.
 
 ```ts title="rstest-plugin.ts"
 import type { RsbuildPlugin } from '@rsbuild/core';
@@ -44,7 +46,7 @@ import type { RstestExposeAPI } from '@rstest/core';
 export const myPlugin = (): RsbuildPlugin => ({
   name: 'my-plugin',
   setup(api) {
-    if (!api.context.callerName?.startsWith('rstest')) {
+    if (api.context.callerName !== 'rstest') {
       return;
     }
 
@@ -93,14 +95,14 @@ export type RstestExposeAPI = {
 };
 ```
 
-The `modifyRstestConfig` callback receives the normalized Rstest config for the current project. You can either mutate the received `config` object directly or return a new config object. The callback can also be asynchronous.
+The `modifyRstestConfig` callback receives the runtime-normalized Rstest config for the current project. To keep the API easy to use, its TypeScript type reuses `RstestConfig`, the user-facing config shape: you can either mutate the received `config` object directly or return a partial config object that matches the `RstestConfig` shape. Rstest merges, normalizes, and validates these changes again after the callback finishes. The callback can also be asynchronous.
 
-For compatibility, the callback is typed with `RstestConfig`, but runtime validation still rejects fields that affect the global test plan, derived project identity, or Rsbuild environment topology. For example, modifying `name`, `coverage`, `reporters`, `pool`, `isolate`, `update`, `projects`, `browser.enabled`, `plugins`, `extends`, or `output.distPath` will throw an error that tells you to configure those options in the Rstest config instead.
+This API only adjusts the current project's config. Fields that change project identity, the global execution strategy, or Rsbuild environment topology cannot be modified here, such as `name`, `coverage`, `reporters`, `pool`, `isolate`, `update`, `projects`, `browser.enabled`, `plugins`, `extends`, or `output.distPath`. If a callback modifies these fields, Rstest throws an error that tells you to configure them in `rstest.config.*` instead. Project-scoped discovery fields such as `include` and `exclude` also affect the current project's test plan, but Rstest recollects that project's test entries after applying the callbacks, so they can be modified here.
 
 Register `modifyRstestConfig` during the Rsbuild plugin `setup` phase. Do not register it from later Rsbuild config hooks such as `api.modifyRsbuildConfig`, because Rstest applies collected callbacks while resolving the Rsbuild config; callbacks registered inside those hooks are too late for the current resolution pass.
 
 ### Limitations
 
-`modifyRstestConfig` is suitable for modifying existing project config such as `include`, `exclude`, `testEnvironment`, `resolve`, `source`, and `output.module`, but it does not support dynamically adding or removing Rstest projects, changing project `name`, switching `browser.enabled`, modifying global options such as `coverage`, `reporters`, `pool`, `isolate`, and `update`, or changing Rsbuild environments and Rsbuild plugins.
+`modifyRstestConfig` is suitable for modifying existing project config such as `include`, `exclude`, `testEnvironment`, `resolve`, `source`, and `output.module`, but it does not support dynamically adding or removing Rstest projects, changing project `name`, switching `browser.enabled`, modifying global options such as `coverage`, `reporters`, `pool`, `isolate`, `update`, `shard`, and `forceRerunTriggers`, or changing Rsbuild environments and Rsbuild plugins.
 
 If you need to add Rsbuild plugins dynamically, integrate through Rstest's `extends` adapter pattern instead. An adapter can prepare the Rstest config before Rsbuild plugin initialization starts.
