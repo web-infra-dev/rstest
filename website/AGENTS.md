@@ -14,7 +14,35 @@ This is the documentation website for Rstest, built with [Rspress](https://rspre
 pnpm dev      # Start dev server
 pnpm build    # Build for production
 pnpm preview  # Preview production build
+pnpm gen:og   # Generate a release Open Graph image (see below)
 ```
+
+## Open Graph image generation
+
+Per-release og images live in [rstackjs/rstack-design-resources](https://github.com/rstackjs/rstack-design-resources) and are served by the `assets.rspack.rs` CDN. The template lives **in this repo** to keep design-resources as a passive PNG store.
+
+- `scripts/og-image/cli.mts` — entry, parses `--version`/`--description`/`--out`
+- `scripts/og-image/render.mts` — fetches the Rstest logo SVG → rasterizes → composes with [satori](https://github.com/vercel/satori) → renders with [@resvg/resvg-js](https://github.com/yisibl/resvg-js) at 2x zoom for retina
+- `scripts/og-image/template.mts` — [satori-html](https://github.com/natemoo-re/satori-html) template, modeled after the `Rsbuild og image 1.0` artboard in design-resources
+
+### Release workflow
+
+1. Run `pnpm gen:og --version <ver> --description "<tagline>"` from `website/`. Use `--out` to write directly into a local clone of the design-resources repo at `rstest/assets/rstest-og-image-v{version-with-hyphens}.png` (e.g. `v0-5.png`). The background gradient is randomized (color scheme, blob count, placement) on every run and there is no seed flag — re-run until you get a composition you like before committing.
+2. Commit the PNG in the design-resources repo and open a PR — that repo is the only place release PNGs are stored.
+3. After CDN deploy, the PNG is reachable at `assets.rspack.rs/rstest/assets/rstest-og-image-v0-5.png`. Wiring it up per blog `routePath` in `rspress.config.ts` is a separate follow-up — the site currently sets a single static `og:image` via `pluginOpenGraph`.
+
+### Do
+
+- Use Space Grotesk (committed under `scripts/og-image/assets/fonts/` with SIL OFL license)
+- Render at 2x via `Resvg({ fitTo: { mode: 'zoom', value: 2 } })` so the PNG stays crisp on retina displays
+- Before committing the PNG to design-resources, run it through [TinyPNG](https://tinypng.com) (or Squoosh / ImageOptim / `pngquant`) — the raw resvg output is ~300 KB and palette quantization typically drops it to ~1/4 the size with no visible loss
+- Fetch the logo from the canonical CDN URL at generation time, not from a committed copy
+
+### Don't
+
+- Don't depend on packages like `geist` that pull in framework peer deps (`next>=13.2`); commit raw `.ttf` files directly instead
+- Don't write generated PNGs into this repo; they belong in design-resources
+- Don't bake the logo into a static asset; always fetch the SVG so logo updates propagate automatically
 
 ## Writing style guidelines
 

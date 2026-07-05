@@ -51,6 +51,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
         },
         "oneOf": [
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resolve": {
               "preferRelative": true,
             },
@@ -181,6 +187,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             ],
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -284,6 +296,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -313,6 +331,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -346,6 +370,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -377,6 +407,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -396,6 +432,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
       },
       {
         "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -645,6 +687,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
         },
         "oneOf": [
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resolve": {
               "preferRelative": true,
             },
@@ -775,6 +823,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             ],
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -878,6 +932,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -907,6 +967,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -940,6 +1006,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -971,6 +1043,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -990,6 +1068,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       },
       {
         "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -1226,6 +1310,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
         },
         "oneOf": [
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resolve": {
               "preferRelative": true,
             },
@@ -1356,6 +1446,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             ],
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -1459,6 +1555,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -1488,6 +1590,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -1521,6 +1629,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -1552,6 +1666,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -1571,6 +1691,12 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       },
       {
         "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -1805,6 +1931,12 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
         },
         "oneOf": [
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resolve": {
               "preferRelative": true,
             },
@@ -1935,6 +2067,12 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             ],
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -2038,6 +2176,12 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -2067,6 +2211,12 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -2100,6 +2250,12 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -2131,6 +2287,12 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -2150,6 +2312,12 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       },
       {
         "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -2434,6 +2602,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
         ],
       },
       {
+        "type": "asset/source",
+        "with": {
+          "type": "text",
+        },
+      },
+      {
         "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         "type": "asset/source",
       },
@@ -2602,6 +2776,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with less / sa
         ],
       },
       {
+        "type": "asset/source",
+        "with": {
+          "type": "text",
+        },
+      },
+      {
         "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
         "type": "asset/source",
       },
@@ -2717,6 +2897,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "not": "url",
         },
         "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resolve": {
               "preferRelative": true,
@@ -2848,6 +3034,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             ],
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -2951,6 +3143,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -2980,6 +3178,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -3013,6 +3217,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -3044,6 +3254,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -3063,6 +3279,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       },
       {
         "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -3299,6 +3521,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
         },
         "oneOf": [
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resolve": {
               "preferRelative": true,
             },
@@ -3429,6 +3657,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             ],
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -3532,6 +3766,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -3561,6 +3801,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           {
             "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
           },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
@@ -3594,6 +3840,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -3625,6 +3877,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset/inline",
           },
           {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
           },
@@ -3644,6 +3902,12 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       },
       {
         "oneOf": [
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
           {
             "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
             "type": "asset/source",
@@ -3856,6 +4120,12 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
             "loader": "<PNPM_INNER>/@rsbuild/core/dist/workerLoader.mjs",
           },
         ],
+      },
+      {
+        "type": "asset/source",
+        "with": {
+          "type": "text",
+        },
       },
       {
         "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
