@@ -2,6 +2,8 @@
 description: This guide covers how to integrate Rstest with Rslib for seamless testing in your Rslib projects.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Rslib
 
 This guide covers how to integrate Rstest with [Rslib](https://rslib.rs) for seamless testing in your Rslib projects.
@@ -71,13 +73,13 @@ export default defineConfig({
 
 The adapter does not reuse the entire Rslib config as-is. It keeps the parts that matter for test execution, such as module resolution, transforms, CSS Modules, decorator-related settings, static asset handling, and `target`, and automatically drops unmapped fields like `dev`, `server`, and `html`, along with other options that only exist for dev server, page entry, or build output.
 
-By default, the adapter uses `process.cwd()` to resolve the Rslib config. If your config lives elsewhere, you can use the `cwd` option. See [API](#api) for more details.
+By default, the adapter uses `process.cwd()` to resolve the Rslib config. If your config lives elsewhere, you can use the `cwd` option. You can also pass a Rslib config object directly with the `config` option. See [API](#api) for more details.
 
 ## API
 
 ### `withRslibConfig(options)`
 
-Returns a configuration function that loads Rslib config and converts it to Rstest configuration.
+Returns a configuration function that loads or accepts Rslib config and converts it to Rstest configuration.
 
 #### `cwd`
 
@@ -102,6 +104,37 @@ export default defineConfig({
 - **Default:** `'./rslib.config.ts'`
 
 Path to rslib config file.
+
+:::tip
+If both `config` and `configPath` are provided, `config` takes precedence as the config content.
+:::
+
+#### `config`
+
+<ApiMeta addedVersion="0.11.0" />
+
+- **Type:** `RslibConfig`
+- **Default:** `undefined`
+
+The inline Rslib config object to convert directly. When `config` is provided, the adapter does not call Rslib's `loadConfig`.
+
+If `configPath` is also provided, the adapter uses it as config file metadata for [`forceRerunTriggers`](/config/test/force-rerun-triggers) and build cache dependency resolution, but the inline `config` still takes precedence as the config content.
+
+```ts
+import { defineConfig as defineRslibConfig } from '@rslib/core';
+import { defineConfig } from '@rstest/core';
+import { withRslibConfig } from '@rstest/adapter-rslib';
+
+const rslibConfig = defineRslibConfig({
+  lib: [{ format: 'esm' }],
+});
+
+export default defineConfig({
+  extends: withRslibConfig({
+    config: rslibConfig,
+  }),
+});
+```
 
 #### `libId`
 
