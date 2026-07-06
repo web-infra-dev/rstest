@@ -41,6 +41,7 @@ import {
   TestRegisterError,
 } from '../util';
 import { normalizeFixtures } from './fixtures';
+import { cloneTaskMeta, mergeTaskMeta } from './metadata';
 import { registerTestSuiteListener, wrapTimeout } from './task';
 
 type CollectStatus = 'lazy' | 'running';
@@ -227,7 +228,7 @@ export class RunnerRuntime {
       runMode,
       tests: [],
       type: 'suite',
-      meta: { ...meta },
+      meta: cloneTaskMeta(meta),
       each,
       testPath: this.testPath,
       concurrent,
@@ -319,7 +320,7 @@ export class RunnerRuntime {
       test.timeout ??= current.timeout;
       test.retry ??= current.retry;
       test.repeats ??= current.repeats;
-      test.meta = { ...current.meta, ...test.meta };
+      test.meta = mergeTaskMeta(current.meta, test.meta);
 
       current.tests.push(test);
     }
@@ -423,7 +424,7 @@ export class RunnerRuntime {
       stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       runMode,
       type: 'case',
-      meta: { ...meta },
+      meta: cloneTaskMeta(meta),
       timeout,
       retry,
       repeats,

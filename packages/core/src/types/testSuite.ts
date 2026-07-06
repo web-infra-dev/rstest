@@ -10,7 +10,15 @@ import type { ConsoleStreamType, MaybePromise, TestPath } from './utils';
 
 export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
 
-export type TaskMeta = Record<string, unknown>;
+export type TaskMetaValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TaskMetaValue[]
+  | { [key: string]: TaskMetaValue };
+
+export type TaskMeta = Record<string, TaskMetaValue>;
 
 export type TaskState = 'pass' | 'fail';
 

@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from '@rstest/core';
+import { afterAll, afterEach, describe, expect, it } from '@rstest/core';
 
 afterAll((ctx) => {
   ctx.meta.fileHook = 'afterAll';
@@ -17,11 +17,21 @@ describe(
       expect(1 + 1).toBe(2);
     });
 
+    afterEach((ctx) => {
+      if (ctx.task.name === 'overrides metadata') {
+        ctx.task.meta = { ...ctx.task.meta, afterEach: true };
+      }
+    });
+
     it(
       'overrides metadata',
       { meta: { shared: 'case', caseOnly: true } },
       (ctx) => {
-        ctx.task.meta.runtime = 'second';
+        ctx.task.meta = {
+          ...ctx.task.meta,
+          runtime: 'second',
+          replaced: true,
+        };
         expect('hello').toBe('hello');
       },
     );

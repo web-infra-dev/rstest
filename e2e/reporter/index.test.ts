@@ -370,6 +370,8 @@ describe.concurrent('reporters', () => {
           shared: 'case',
           caseOnly: true,
           runtime: 'second',
+          replaced: true,
+          afterEach: true,
         },
       },
     ]);

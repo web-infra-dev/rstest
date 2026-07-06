@@ -334,6 +334,32 @@ describe('RunnerRuntime', () => {
       expect(b!.meta).toEqual({ inherited: true, name: 'b' });
     });
 
+    it('does not share inherited nested metadata values between descendants', async () => {
+      const instance = createApi();
+      runtimeAPI.describe(
+        'suite',
+        { meta: { nested: { labels: ['suite'] } } },
+        () => {
+          runtimeAPI.it('a', () => {});
+          runtimeAPI.it('b', () => {});
+        },
+      );
+
+      const suite = (await instance.getTests())[0] as TestSuite;
+      const [a, b] = suite.tests as TestCase[];
+      const aNested = a!.meta!.nested as { labels: string[] };
+      const bNested = b!.meta!.nested as { labels: string[] };
+      const suiteNested = suite.meta!.nested as { labels: string[] };
+
+      aNested.labels.push('a');
+
+      expect(aNested).toEqual({ labels: ['suite', 'a'] });
+      expect(bNested).toEqual({ labels: ['suite'] });
+      expect(suiteNested).toEqual({ labels: ['suite'] });
+      expect(aNested).not.toBe(bNested);
+      expect(aNested.labels).not.toBe(bNested.labels);
+    });
+
     it('inherits metadata through describe.each', async () => {
       const instance = createApi();
       runtimeAPI.describe.each([1, 2])(

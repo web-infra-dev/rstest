@@ -33,6 +33,7 @@ import { createExpect } from '../api/expect';
 import { formatTestError, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
 import { handleFixtures } from './fixtures';
+import { cloneTaskMeta } from './metadata';
 import {
   getTestStatus,
   limitConcurrency,
@@ -301,6 +302,8 @@ export class TestRunner {
         // should not be updated for snapshots that have not been run when the test run fails
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
       }
+
+      result.meta = test.meta;
 
       test.onFinished.length = onFinishedSnapshot;
       test.onFailed.length = onFailedSnapshot;
@@ -699,7 +702,12 @@ export class TestRunner {
     context.task = {
       id: test.testId,
       name: test.name,
-      meta: (test.meta ??= {}),
+      get meta() {
+        return (test.meta ??= {});
+      },
+      set meta(value) {
+        test.meta = cloneTaskMeta(value);
+      },
     };
 
     Object.defineProperty(context, 'expect', {

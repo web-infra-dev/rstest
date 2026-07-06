@@ -73,7 +73,7 @@ describe('slow suite', () => {
 - A test-level option always wins over the suite-level value.
 - A nested `describe` inherits its parent's options, and the nearest enclosing value applies.
 - A test without its own `timeout` falls back to the nearest suite's `timeout`, then to [`test.testTimeout`](/config/test/test-timeout).
-- Metadata is shallow-merged from parent suite to child suite or test; child metadata overrides keys from the parent.
+- Metadata is merged from parent suite to child suite or test; child top-level keys override keys from the parent, and inherited values are copied per descendant.
 
 ```ts
 describe('parent', { retry: 2, timeout: 100 }, () => {

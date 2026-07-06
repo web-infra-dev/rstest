@@ -113,6 +113,7 @@ describe('programmatic runRstest', () => {
         shared: 'case',
         caseOnly: true,
         caseValue: 'second',
+        replaced: true,
       },
     ]);
     expect(result.reporterFileMeta).toEqual({ fileHook: 'afterAll' });
@@ -123,6 +124,7 @@ describe('programmatic runRstest', () => {
         shared: 'case',
         caseOnly: true,
         caseValue: 'second',
+        replaced: true,
       },
     ]);
     expect(result.suiteMeta).toEqual([

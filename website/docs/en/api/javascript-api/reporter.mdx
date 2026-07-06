@@ -72,7 +72,7 @@ interface Reporter {
 }
 ```
 
-Runtime metadata written through `context.task.meta` is available on the `TestResult` passed to `onTestCaseResult`. Metadata written by hooks through `ctx.meta` is available on the corresponding suite result in `onTestSuiteResult`, and file-level hook metadata is available on `TestFileResult.meta` in `onTestFileResult`.
+JSON-serializable runtime metadata written through `context.task.meta` is available on the `TestResult` passed to `onTestCaseResult`. Metadata written by hooks through `ctx.meta` is available on the corresponding suite result in `onTestSuiteResult`, and file-level hook metadata is available on `TestFileResult.meta` in `onTestFileResult`.
 
 ## Examples
 

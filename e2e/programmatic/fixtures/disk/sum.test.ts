@@ -17,7 +17,11 @@ describe('disk sum', { meta: { fromSuite: true, shared: 'suite' } }, () => {
     'passes second case',
     { meta: { shared: 'case', caseOnly: true } },
     (ctx) => {
-      ctx.task.meta.caseValue = 'second';
+      ctx.task.meta = {
+        ...ctx.task.meta,
+        caseValue: 'second',
+        replaced: true,
+      };
       expect('hello').toBe('hello');
     },
   );
