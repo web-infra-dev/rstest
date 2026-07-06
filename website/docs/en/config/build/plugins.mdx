@@ -95,14 +95,24 @@ export type RstestExposeAPI = {
 };
 ```
 
-The `modifyRstestConfig` callback receives the runtime-normalized config object for the current project, but the public API does not require you to return the internal normalized config shape. To keep the API easy to use, its TypeScript type reuses `RstestConfig`, the user-facing config shape: you can either mutate the received `config` object directly or return a partial config object that matches the `RstestConfig` shape. Rstest merges, normalizes, and validates these changes again after the callback finishes. The callback can also be asynchronous.
-
-This API only adjusts the current project's config. Fields that change project identity, the global execution strategy, or Rsbuild environment topology cannot be modified here, such as `name`, `coverage`, `reporters`, `pool`, `isolate`, `update`, `projects`, `browser.enabled`, `plugins`, `extends`, or `output.distPath`. If a callback modifies these fields, Rstest throws an error that tells you to configure them in `rstest.config.*` instead. Project-scoped discovery fields such as `include` and `exclude` also affect the current project's test plan, but Rstest recollects that project's test entries after applying the callbacks, so they can be modified here.
+`RstestConfig` is the same user-facing config shape accepted by `defineConfig`. You can either mutate the received `config` object directly or return a config fragment that matches the `RstestConfig` shape. Rstest merges, normalizes, and validates these changes again after the callback finishes. The callback can also be asynchronous.
 
 Register `modifyRstestConfig` during the Rsbuild plugin `setup` phase. Do not register it from later Rsbuild config hooks such as `api.modifyRsbuildConfig`, because Rstest applies collected callbacks while resolving the Rsbuild config; callbacks registered inside those hooks are too late for the current resolution pass.
 
-### Limitations
+### Modifiable config fields
 
-`modifyRstestConfig` is suitable for modifying existing project config such as `include`, `exclude`, `testEnvironment`, `resolve`, `source`, and `output.module`, but it does not support dynamically adding or removing Rstest projects, changing project `name`, switching `browser.enabled`, modifying global options such as `coverage`, `reporters`, `pool`, `isolate`, `update`, `shard`, and `forceRerunTriggers`, or changing Rsbuild environments and Rsbuild plugins.
+`modifyRstestConfig` only adjusts the current project's config. If a callback modifies an unsupported field, Rstest throws an error that tells you to configure it in `rstest.config.*` instead.
+
+| Config scope                                                                        | Supported | Notes                                                                                                            |
+| ----------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------- |
+| `include`, `exclude`, `includeSource`                                               | Yes       | Affect test discovery for the current project; Rstest recollects test entries after the callback.                |
+| `setupFiles`, `globalSetup`                                                         | Yes       | Affect setup files for the current project; Rstest resolves them again after the callback.                       |
+| `testEnvironment`                                                                   | Yes       | Only affects the current project's test environment.                                                             |
+| `resolve`, `source`, `performance.buildCache`                                       | Yes       | Reapplied to Rsbuild as build config for the current project.                                                    |
+| `root`, `output.module`                                                             | Yes       | Re-normalized as path or output module config for the current project.                                           |
+| `name`, `browser.enabled`                                                           | No        | They change project identity or runtime mode and must be declared in `rstest.config.*`.                          |
+| `projects`, `plugins`, `extends`                                                    | No        | They change project topology or plugin initialization order and must be declared in Rstest config or an adapter. |
+| `coverage`, `reporters`, `pool`, `isolate`, `update`, `shard`, `forceRerunTriggers` | No        | They are global execution strategy fields or participate in scheduling before Rsbuild plugins run.               |
+| `output.distPath`                                                                   | No        | It changes the Rstest/Rsbuild output directory topology and must be declared in Rstest config.                   |
 
 If you need to add Rsbuild plugins dynamically, integrate through Rstest's `extends` adapter pattern instead. An adapter can prepare the Rstest config before Rsbuild plugin initialization starts.
