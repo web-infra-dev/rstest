@@ -72,6 +72,8 @@ interface Reporter {
 }
 ```
 
+Runtime metadata written through `context.task.meta` is available on the `TestResult` passed to `onTestCaseResult`. Metadata written by hooks through `ctx.meta` is available on the corresponding suite result in `onTestSuiteResult`, and file-level hook metadata is available on `TestFileResult.meta` in `onTestFileResult`.
+
 ## Examples
 
 ### Simple custom reporter
@@ -116,6 +118,26 @@ const jsonReporter: Reporter = {
     };
 
     writeFileSync('test-report.json', JSON.stringify(report, null, 2));
+  },
+};
+```
+
+### Reading runtime metadata
+
+```ts
+import type { Reporter } from '@rstest/core';
+
+const metadataReporter: Reporter = {
+  onTestCaseResult(result) {
+    console.log(result.name, result.meta);
+  },
+
+  onTestSuiteResult(result) {
+    console.log(result.name, result.meta);
+  },
+
+  onTestFileResult(result) {
+    console.log(result.testPath, result.meta);
   },
 };
 ```

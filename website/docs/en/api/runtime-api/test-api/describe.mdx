@@ -68,11 +68,12 @@ describe('slow suite', () => {
 }, 10000);
 ```
 
-`TestOptions` accepts the same fields as on [`test`](/api/runtime-api/test-api/test#testoptions): `timeout`, `retry`, and `repeats`. These propagate to the tests in the suite as **inheritable defaults**:
+`TestOptions` accepts the same fields as on [`test`](/api/runtime-api/test-api/test#testoptions): `timeout`, `retry`, `repeats`, and `meta`. These propagate to descendant suites and tests as **inheritable defaults**:
 
 - A test-level option always wins over the suite-level value.
 - A nested `describe` inherits its parent's options, and the nearest enclosing value applies.
 - A test without its own `timeout` falls back to the nearest suite's `timeout`, then to [`test.testTimeout`](/config/test/test-timeout).
+- Metadata is shallow-merged from parent suite to child suite or test; child metadata overrides keys from the parent.
 
 ```ts
 describe('parent', { retry: 2, timeout: 100 }, () => {
@@ -90,6 +91,26 @@ describe('parent', { retry: 2, timeout: 100 }, () => {
     });
   });
 });
+```
+
+```ts
+describe(
+  'mutation run',
+  { meta: { runner: 'stryker', shared: 'suite' } },
+  () => {
+    test('inherits suite metadata', ({ task }) => {
+      // task.meta is { runner: 'stryker', shared: 'suite' }
+    });
+
+    test(
+      'overrides suite metadata',
+      { meta: { shared: 'test' } },
+      ({ task }) => {
+        // task.meta is { runner: 'stryker', shared: 'test' }
+      },
+    );
+  },
+);
 ```
 
 ## describe.only

@@ -136,6 +136,20 @@ import type {
 
 For reporter implementation details, see [Reporter](/api/javascript-api/reporter).
 
+`TestResult.meta` contains JSON-serializable metadata initialized from `TestOptions.meta` and written at runtime through `context.task.meta`. Suite metadata is shallow-inherited by descendant suites and tests, with child keys overriding parent keys. `TestFileResult.meta` contains metadata written by file-level `beforeAll` / `afterAll` hooks through `ctx.meta`, and suite results passed to `onTestSuiteResult` contain metadata written by that suite's lifecycle hooks.
+
+```ts
+import { afterAll, test } from '@rstest/core';
+
+afterAll((ctx) => {
+  ctx.meta.fileTag = 'mutation-run';
+});
+
+test('records metadata', { meta: { owner: 'stryker' } }, (ctx) => {
+  ctx.task.meta.hitCount = 1;
+});
+```
+
 ## Assertion types
 
 Use `Assertion` or `ExpectStatic` when typing custom assertion helpers.

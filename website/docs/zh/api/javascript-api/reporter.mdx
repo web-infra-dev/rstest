@@ -72,6 +72,8 @@ interface Reporter {
 }
 ```
 
+通过 `context.task.meta` 写入的运行时 metadata 可以在 `onTestCaseResult` 收到的 `TestResult` 上读取。通过 hooks 的 `ctx.meta` 写入的 metadata 可以在 `onTestSuiteResult` 收到的对应 suite result 上读取，文件级 hook metadata 可以在 `onTestFileResult` 的 `TestFileResult.meta` 上读取。
+
 ## 示例
 
 ### 简单自定义报告器
@@ -116,6 +118,26 @@ const jsonReporter: Reporter = {
     };
 
     writeFileSync('test-report.json', JSON.stringify(report, null, 2));
+  },
+};
+```
+
+### 读取运行时 metadata
+
+```ts
+import type { Reporter } from '@rstest/core';
+
+const metadataReporter: Reporter = {
+  onTestCaseResult(result) {
+    console.log(result.name, result.meta);
+  },
+
+  onTestSuiteResult(result) {
+    console.log(result.name, result.meta);
+  },
+
+  onTestFileResult(result) {
+    console.log(result.testPath, result.meta);
   },
 };
 ```
