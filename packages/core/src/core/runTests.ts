@@ -1,5 +1,9 @@
 import { constants as osConstants } from 'node:os';
-import { cleanCoverageReports, createCoverageProvider } from '../coverage';
+import {
+  cleanCoverageReports,
+  createCoverageProvider,
+  resolveAndMergeRawCoverage,
+} from '../coverage';
 import { ensureRunDependencies } from './dependencies';
 import { createPool } from '../pool';
 import type {
@@ -804,21 +808,12 @@ export async function runTests(context: Rstest): Promise<void> {
         errors.push(...browserResult.unhandledErrors);
       }
 
-      const resolveRawCoverage =
-        coverageProvider?.resolveRawCoverage?.bind(coverageProvider);
-      if (rawCoverageResults.length && resolveRawCoverage) {
-        const rawCoverageMap = await runLifecycleStep(
-          'coverage collect',
-          async () => resolveRawCoverage(rawCoverageResults),
-          {
-            slowMessage: 'processing coverage results...',
-            slowDoneMessage: 'coverage results processed.',
-          },
-        );
-        if (rawCoverageMap) {
-          mergedCoverageMap?.merge(rawCoverageMap);
-        }
-      }
+      await resolveAndMergeRawCoverage({
+        coverageProvider,
+        mergedCoverageMap,
+        rawCoverageResults,
+        runCoverageStep: runLifecycleStep,
+      });
 
       const testTime = Date.now() - testStart;
       const duration: Duration =
