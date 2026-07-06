@@ -270,7 +270,7 @@ export type EnvironmentName = 'node' | 'jsdom' | 'happy-dom';
 
 export type EnvironmentWithOptions = {
   name: EnvironmentName;
-  options?: Record<string, any>;
+  options?: Record<string, unknown>;
 };
 
 export interface RstestConfig {

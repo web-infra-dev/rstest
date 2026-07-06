@@ -8,22 +8,22 @@ import { ApiMeta } from '@components/ApiMeta';
 
 <ApiMeta addedVersion="0.11.0" />
 
-除了 CLI，你还可以通过 `@rstest/core/api` 这个 subpath 在自己的 Node.js 代码中驱动 Rstest —— 用于构建工具、自定义 runner、编辑器集成或脚本。
+:::warning 实验性
+编程式 API 目前为实验性功能，在 `1.0.0` 之前其形态可能变化。如果你依赖它，请锁定 `@rstest/core` 的精确版本。
+:::
+
+除了 CLI，你还可以通过 `@rstest/core/api` 这个 subpath 在自己的 Node.js 代码中驱动 Rstest —— 用于构建工具、编辑器集成、CI 脚本或你自己的工具链。
 
 ```ts
 import { createRstest, runCLI } from '@rstest/core/api';
 ```
 
-`@rstest/core/api` 与主入口 `@rstest/core` 相互独立。主入口暴露测试运行时的 globals（`test`、`expect`、`rs` 等）、config 辅助函数（`defineConfig`、`loadConfig`、`merge*`）以及类型；编程式 runner 则位于 `@rstest/core/api` 下。
-
-:::warning 实验性
-编程式 API 目前为实验性功能，在 `1.0.0` 之前其形态可能变化。如果你依赖它，请锁定 `@rstest/core` 的精确版本。
-:::
+`@rstest/core/api` 与主入口 `@rstest/core` 相互独立。主入口暴露测试运行时的 globals（`test`、`expect`、`rs` 等）、config 辅助函数（`defineConfig`、`loadConfig`、`merge*`）以及类型；编程式 API（`createRstest`、`runCLI`）则位于 `@rstest/core/api` 下。
 
 Rstest 提供两个编程式入口，各司其职：
 
-- [`createRstest`](#createrstest) —— 一个异步 factory，返回可复用的进程内实例。用于一次解析 config 后反复 run、list、watch 或 merge，或用于检查解析后的 context。它是 **host-safe** 的：从不调用 `process.exit`，并且会对 `process.env` 和 `process.exitCode` 做快照与还原，因此一次运行不会让你的进程遗留在测试模式或被标记为失败，每次 `run()` 都会 resolve 出结构化的 [`TestRunResult`](#testrunresult)。
-- [`runCLI`](#runcli) —— 从一个原始的 `process.argv` 形态数组运行 Rstest **CLI**，行为与 `rstest` bin 完全一致。用于把 Rstest 桥接进另一个 CLI（例如统一的 `rs` 命令）。与 `createRstest` 不同，它**拥有进程**（路由全部命令、打印 banner、可能调用 `process.exit`），且不返回任何值。
+- [`createRstest`](#createrstest) —— 一个异步 factory，返回可复用的进程内实例。用于一次解析 config 后反复 run、list、watch 或 merge，或用于检查解析后的 context。每次 `run()` 都会 resolve 出结构化的 [`TestRunResult`](#testrunresult)，而不是打印结果并退出进程。
+- [`runCLI`](#runcli) —— 从一个原始的 `process.argv` 形态数组运行 Rstest **CLI**。用于把 Rstest 桥接进另一个 CLI（例如统一的 `rs` 命令）。调用它和运行 `rstest` CLI 一样：会把全部输出直接打印到终端，并可能调用 `process.exit` —— 因此在任何需要保持存活的宿主里，请改用 `createRstest`。
 
 ## createRstest
 
@@ -66,33 +66,25 @@ interface CreateRstestOptions {
 ```
 
 - `cwd`：工作目录，默认为 `process.cwd()`，是解析 `root` 的基准。
-- `config`：要运行的配置。与 CLI 不同，编程式 API 不会从 `cwd` 自动发现或读取 config 文件 —— 由你自己负责加载 config。它是所有 config 内容的唯一通道，包括 `projects` 和 `reporters`。
-  - **对象**：直接作为 inline config 使用。
-  - **函数**（`RstestConfigFn`）：一个零参数的 factory，返回最终 config。在其中自行加载 config 文件 —— 见 [使用 config 文件](#使用-config-文件)。
+- `config`：要运行的配置。编程式 API 不会自动发现 config 文件 —— 它是所有 config 内容的唯一来源，包括 `projects` 和 `reporters`。
+  - **对象**：直接作为 config 使用。
+  - **函数**（`RstestConfigFn`）：一个零参数的 factory，返回 config。若要针对磁盘上的 config 文件运行，请在此用 [`loadConfig`](/api/javascript-api/rstest-core#loadconfig) 加载它，然后原样返回、合并后返回或变换后返回：
 
-### 使用 config 文件
+    ```ts
+    import { loadConfig, mergeRstestConfig } from '@rstest/core';
+    import { createRstest } from '@rstest/core/api';
 
-编程式 API 不会替你读取 config 文件。若要针对磁盘上的 config 文件运行，请在 `config` 的函数形式里用 [`loadConfig`](/api/javascript-api/rstest-core#loadconfig) 加载它，再按需变换或合并：
-
-```ts
-import { loadConfig, mergeRstestConfig } from '@rstest/core';
-import { createRstest } from '@rstest/core/api';
-
-const cwd = './my-project';
-const rstest = await createRstest({
-  cwd,
-  config: async () => {
-    // 用同一个 `cwd` 解析 config 文件；`loadConfig` 默认使用 `process.cwd()`，
-    // 二者未必一致。
-    const { content } = await loadConfig({ cwd, path: 'rstest.config.ts' });
-    // 在磁盘 config 之上合并一个覆盖……
-    return mergeRstestConfig(content, { testTimeout: 10000 });
-    // ……或直接对其变换，例如 `return { ...content, include: ['a.test.ts'] };`
-  },
-});
-```
-
-`loadConfig` 会把解析出的 config 文件路径记录在它返回的 config 上，将该 config（直接返回或合并后返回）传出即可带上这个路径。Rstest 始终不读取该文件 —— 加载由你的 factory 负责 —— 但会像 CLI 那样使用这个路径：将其加入 `performance.buildCache.buildDependencies`（使 config 文件变更时缓存失效），并加入 watch 集合。
+    const cwd = './my-project';
+    const rstest = await createRstest({
+      cwd,
+      config: async () => {
+        // `loadConfig` 默认使用 `process.cwd()`，所以传入同一个 `cwd`
+        const { content } = await loadConfig({ cwd, path: 'rstest.config.ts' });
+        // 可原样返回 `content`，也可在返回前合并 / 变换
+        return mergeRstestConfig(content, { testTimeout: 10000 });
+      },
+    });
+    ```
 
 ## RstestInstance
 
@@ -100,13 +92,23 @@ const rstest = await createRstest({
 
 ### rstest.context
 
-最近一次构建解析出的 context：包含 config、projects 与 command。在 `createRstest` resolve 后即可访问，因此你无需运行任何测试就能检查解析后的配置。
+解析后 context 的只读视图 —— 包含解析后的 config 与 projects。在 `createRstest` resolve 后即可访问，因此你无需运行任何测试就能检查配置。
 
 - **类型：**
 
 ```ts
-readonly context: RstestContext;
+readonly context: RstestInstanceContext;
+
+interface RstestInstanceContext {
+  version: string;
+  rootPath: string;
+  normalizedConfig: NormalizedConfig;
+  projects: { name: string; rootPath: string }[];
+  configFilePath?: string;
+}
 ```
+
+`NormalizedConfig` 是 Rstest 实际运行所用 config 的解析归一化形式 —— 你所编写的 [`RstestConfig`](/api/javascript-api/types#configuration-types) 的对应产物。它同样从 `@rstest/core/api` 导出。
 
 ### rstest.run
 
@@ -130,9 +132,9 @@ const result = await rstest.run({
 
 ### rstest.watch
 
-启动一个 watch 会话：先运行匹配的测试，随后在文件变化时重跑。promise 在 watch 启动后 resolve；调用返回句柄的 `close()` 可停止 watch 并释放 dev server 与 worker pool。
+启动一个 watch 会话：先运行匹配的测试，随后在文件变化时重跑。promise 在 watch 启动后 resolve —— 调用返回句柄的 `close()` 可停止并释放 dev server 与 worker pool。
 
-watch 不会以 resolve 值形式返回每次重跑的结果。若要观察每次重跑，传入 `onResult` 回调 —— 它在每次运行后（包括首次）以该次运行的 [`TestRunResult`](#testrunresult) 触发，与 `run()` 的 resolve 值同型。无需注册 reporter 即可拿到失败与 `unhandledErrors`；你也可以通过 config 注册自己的 reporter。
+该会话不会以 resolve 值形式返回每次重跑的结果。若要观察每次重跑，传入 `onResult` 回调：它在每次运行后（包括首次）以该次运行的 [`TestRunResult`](#testrunresult) 触发，无需注册 reporter 即可读到失败与 `unhandledErrors`。
 
 - **类型：**
 
@@ -215,8 +217,8 @@ function mergeReports(options?: {
 await rstest.mergeReports({ path: './.rstest-reports', cleanup: true });
 ```
 
-:::tip 天然 host-safe
-实例上没有 `close()`。每次 `run()` 都会自行构建并拆除其 worker pool 与 Rsbuild server，且每次调用都会对 `process.env` / `process.exitCode` 做快照与还原，因此实例在两次调用之间不持有任何资源，也永远不会让宿主遗留在测试模式。唯一的例外是 [`watch`](#rstestwatch) 会话 —— 它会保持一个 dev server 常驻，用完后请调用返回的 watcher 的 `close()`。
+:::tip 无需调用 `close()`
+实例上没有 `close()`。每次 `run()` 都会自行构建并拆除其 worker pool 与 Rsbuild server，因此实例在两次调用之间不持有任何资源。唯一的例外是 [`watch`](#rstestwatch) 会话 —— 它会保持一个 dev server 常驻，用完后请调用返回的 watcher 的 `close()`。
 :::
 
 ## RunOptions
@@ -251,9 +253,9 @@ interface RunOptions {
 
 ## runCLI
 
-以编程方式运行 Rstest CLI。`runCLI` 解析一个原始的 `process.argv` 形态 `argv`，将其路由到匹配的命令（`run` / `watch` / `list` / `merge-reports` / `init`）并运行到结束 —— 与 `rstest` bin 使用的是同一个入口。它会从 `cwd` 自动发现 config 文件、打印 banner，并**拥有进程**：不返回结果，遇到致命错误时可能调用 `process.exit`。
+以编程方式运行 Rstest CLI。`runCLI` 解析一个原始的 `process.argv` 形态 `argv`，将其路由到匹配的命令（`run` / `watch` / `list` / `merge-reports` / `init`）并运行到结束 —— 与 `rstest` CLI 使用的是同一个入口。它会从 `cwd` 自动发现 config 文件、把全部输出直接打印到终端，遇到致命错误时可能调用 `process.exit`，且不返回任何结果。
 
-它对齐 rsbuild 的 `runCLI`，因此在**把 Rstest 桥接进另一个 CLI** 时应选它 —— 例如一个统一的 `rs` 命令，把重建后的 `argv` 转发给 Rstest。若需要 host-safe、进程内、返回结构化 [`TestRunResult`](#testrunresult) 而非拥有进程的运行，请使用 [`createRstest`](#createrstest)。
+它对齐 rsbuild 的 `runCLI`，因此在**把 Rstest 桥接进另一个 CLI** 时应选它 —— 例如一个统一的 `rs` 命令，把重建后的 `argv` 转发给 Rstest。若希望进程内运行并返回结构化的 [`TestRunResult`](#testrunresult)、而不是把进程交给 CLI，请使用 [`createRstest`](#createrstest)。
 
 - **类型：**
 

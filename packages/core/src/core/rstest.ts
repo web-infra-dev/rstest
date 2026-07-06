@@ -65,7 +65,7 @@ type Options = {
   configFilePath?: string;
   projects: Project[];
   trace?: boolean;
-  /** See the `embedded` option on `createRstest`. */
+  /** True in programmatic (`@rstest/core/api`) mode: the caller owns the process. */
   embedded?: boolean;
 };
 

@@ -115,7 +115,13 @@ export type RstestContext = {
    * @internal
    */
   trace: boolean;
-  /** See the `embedded` option on `createRstest`. */
+  /**
+   * True when running inside a programmatic host (via `@rstest/core/api`)
+   * rather than the CLI: the caller owns the process, so Rstest installs no
+   * signal handlers and never calls `process.exit`.
+   *
+   * @internal
+   */
   embedded: boolean;
   reporters: Reporter[];
   snapshotManager: SnapshotManager;

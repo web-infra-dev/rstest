@@ -8,22 +8,22 @@ import { ApiMeta } from '@components/ApiMeta';
 
 <ApiMeta addedVersion="0.11.0" />
 
-Besides the CLI, Rstest can be driven from your own Node.js code through the `@rstest/core/api` subpath — for build tools, custom runners, editor integrations, or scripts.
+:::warning Experimental
+The programmatic API is experimental and its shape may change until `1.0.0`. Pin an exact `@rstest/core` version if you depend on it.
+:::
+
+Besides the CLI, Rstest can be driven from your own Node.js code through the `@rstest/core/api` subpath — for build tools, editor integrations, CI scripts, or your own tooling.
 
 ```ts
 import { createRstest, runCLI } from '@rstest/core/api';
 ```
 
-`@rstest/core/api` is separate from the main `@rstest/core` entry. The main entry exposes the in-test runtime globals (`test`, `expect`, `rs`, …), config helpers (`defineConfig`, `loadConfig`, `merge*`), and types; the programmatic runners live under `@rstest/core/api`.
-
-:::warning Experimental
-The programmatic API is experimental and its shape may change until `1.0.0`. Pin an exact `@rstest/core` version if you depend on it.
-:::
+`@rstest/core/api` is separate from the main `@rstest/core` entry. The main entry exposes the in-test runtime globals (`test`, `expect`, `rs`, …), config helpers (`defineConfig`, `loadConfig`, `merge*`), and types; the programmatic API (`createRstest`, `runCLI`) lives under `@rstest/core/api`.
 
 Rstest offers two programmatic entries for two different jobs:
 
-- [`createRstest`](#createrstest) — an async factory that returns a reusable in-process instance. Use it to resolve config once and then run, list, watch, or merge repeatedly, or to inspect the resolved context. It is **host-safe**: it never calls `process.exit`, and it snapshots and restores `process.env` and `process.exitCode`, so a run cannot leave your process stuck in test mode or marked as failed, and each `run()` resolves a structured [`TestRunResult`](#testrunresult).
-- [`runCLI`](#runcli) — runs the Rstest **CLI** from a raw `process.argv`-shaped array, exactly like the `rstest` bin. Use it to bridge Rstest into another CLI (e.g. a unified `rs` command). Unlike `createRstest`, it **owns the process** (routes every command, prints the banner, and may call `process.exit`) and returns nothing.
+- [`createRstest`](#createrstest) — an async factory that returns a reusable in-process instance. Use it to resolve config once and then run, list, watch, or merge repeatedly, or to inspect the resolved context. Each `run()` resolves a structured [`TestRunResult`](#testrunresult) rather than printing and exiting.
+- [`runCLI`](#runcli) — runs the Rstest **CLI** from a raw `process.argv`-shaped array. Use it to bridge Rstest into another CLI (e.g. a unified `rs` command). Calling it behaves just like running the `rstest` CLI — it prints all its output to the terminal and may call `process.exit` — so reach for `createRstest` in any host you need to keep running.
 
 ## createRstest
 
@@ -66,33 +66,25 @@ interface CreateRstestOptions {
 ```
 
 - `cwd`: Working directory. Defaults to `process.cwd()`, and is the base for resolving `root`.
-- `config`: The configuration to run with. Unlike the CLI, the programmatic API does not auto-discover or read a config file from `cwd` — you own config loading. This is the single channel for all config content, including `projects` and `reporters`.
-  - **Object**: used as the inline config directly.
-  - **Function** (`RstestConfigFn`): a zero-argument factory that returns the final config. Load a config file yourself inside it — see [With a config file](#with-a-config-file).
+- `config`: Config to run with. The programmatic API never auto-discovers a config file — this is the single source for all config, including `projects` and `reporters`.
+  - **Object**: used as the config directly.
+  - **Function** (`RstestConfigFn`): a zero-argument factory returning the config. To run against a config file on disk, load it here with [`loadConfig`](/api/javascript-api/rstest-core#loadconfig) and return it as-is, merged, or transformed:
 
-### With a config file
+    ```ts
+    import { loadConfig, mergeRstestConfig } from '@rstest/core';
+    import { createRstest } from '@rstest/core/api';
 
-The programmatic API never reads a config file for you. To run against one on disk, load it in the factory form of `config` with [`loadConfig`](/api/javascript-api/rstest-core#loadconfig), then transform or merge as needed:
-
-```ts
-import { loadConfig, mergeRstestConfig } from '@rstest/core';
-import { createRstest } from '@rstest/core/api';
-
-const cwd = './my-project';
-const rstest = await createRstest({
-  cwd,
-  config: async () => {
-    // Resolve the config file against the same `cwd`; `loadConfig` defaults to
-    // `process.cwd()`, which may not be `cwd`.
-    const { content } = await loadConfig({ cwd, path: 'rstest.config.ts' });
-    // merge an override over the disk config…
-    return mergeRstestConfig(content, { testTimeout: 10000 });
-    // …or transform it directly, e.g. `return { ...content, include: ['a.test.ts'] };`
-  },
-});
-```
-
-`loadConfig` records the resolved config file path on the config it returns, and returning that config (directly or merged) carries the path through. Rstest never reads the file — your factory owns loading — but it uses the path the way the CLI does: adding it to `performance.buildCache.buildDependencies` (so the cache invalidates when the file changes) and to the watch set.
+    const cwd = './my-project';
+    const rstest = await createRstest({
+      cwd,
+      config: async () => {
+        // `loadConfig` defaults to `process.cwd()`, so pass the same `cwd`
+        const { content } = await loadConfig({ cwd, path: 'rstest.config.ts' });
+        // return `content` as-is, or merge / transform it before returning
+        return mergeRstestConfig(content, { testTimeout: 10000 });
+      },
+    });
+    ```
 
 ## RstestInstance
 
@@ -100,13 +92,23 @@ The object returned by `createRstest`. It holds the resolved config and runs tes
 
 ### rstest.context
 
-The resolved context for the most recent build: the config, projects, and command. It is available as soon as `createRstest` resolves, so you can inspect the configuration without running any tests.
+A read-only view of the resolved context — the resolved config and projects. Available as soon as `createRstest` resolves, so you can inspect config without running any tests.
 
 - **Type:**
 
 ```ts
-readonly context: RstestContext;
+readonly context: RstestInstanceContext;
+
+interface RstestInstanceContext {
+  version: string;
+  rootPath: string;
+  normalizedConfig: NormalizedConfig;
+  projects: { name: string; rootPath: string }[];
+  configFilePath?: string;
+}
 ```
+
+`NormalizedConfig` is the resolved, normalized form of the config Rstest runs with — the counterpart of the [`RstestConfig`](/api/javascript-api/types#configuration-types) you write. It is also exported from `@rstest/core/api`.
 
 ### rstest.run
 
@@ -130,9 +132,9 @@ const result = await rstest.run({
 
 ### rstest.watch
 
-Start a watch session: run the matching tests, then re-run them as files change. The promise resolves once watching has started; call `close()` on the returned handle to stop watching and release the dev server and worker pool.
+Start a watch session: run the matching tests, then re-run them as files change. The promise resolves once watching starts — call `close()` on the returned handle to stop and release the dev server and worker pool.
 
-Watch does not resolve per-run results. To observe each run, pass an `onResult` callback — it fires after every run (including the first) with that run's [`TestRunResult`](#testrunresult), the same value `run()` resolves. This surfaces failures and `unhandledErrors` without registering a reporter. Alternatively, register your own reporter through config.
+The session resolves no per-run results. To observe each run, pass an `onResult` callback: it fires after every run (including the first) with that run's [`TestRunResult`](#testrunresult), so you can read failures and `unhandledErrors` without registering a reporter.
 
 - **Type:**
 
@@ -215,8 +217,8 @@ function mergeReports(options?: {
 await rstest.mergeReports({ path: './.rstest-reports', cleanup: true });
 ```
 
-:::tip Host-safe by design
-There is no `close()` on the instance. Each `run()` builds and tears down its own worker pool and Rsbuild server, and every call snapshots and restores `process.env` / `process.exitCode`, so an instance holds no resources between calls and never leaves your host in test mode. A [`watch`](#rstestwatch) session is the exception — it keeps a dev server alive, so call `close()` on the returned watcher when you're done.
+:::tip No `close()` to call
+There is no `close()` on the instance. Each `run()` builds and tears down its own worker pool and Rsbuild server, so an instance holds no resources between calls. A [`watch`](#rstestwatch) session is the exception — it keeps a dev server alive, so call `close()` on the returned watcher when you're done.
 :::
 
 ## RunOptions
@@ -251,9 +253,9 @@ interface RunOptions {
 
 ## runCLI
 
-Run the Rstest CLI programmatically. `runCLI` parses a raw `process.argv`-shaped `argv`, routes it to the matched command (`run` / `watch` / `list` / `merge-reports` / `init`), and runs it to completion — the same entry the `rstest` bin uses. It auto-discovers the config file from `cwd`, prints the banner, and **owns the process**: it does not return a result and may call `process.exit` on a fatal error.
+Run the Rstest CLI programmatically. `runCLI` parses a raw `process.argv`-shaped `argv`, routes it to the matched command (`run` / `watch` / `list` / `merge-reports` / `init`), and runs it to completion — the same entry point the `rstest` CLI uses. It auto-discovers the config file from `cwd`, prints all output to the terminal, and may call `process.exit` on a fatal error. It returns nothing.
 
-It mirrors rsbuild's `runCLI`, so it is the entry to reach for when **bridging Rstest into another CLI** — for example a unified `rs` command that forwards a reconstructed `argv` to Rstest. For host-safe, in-process runs that return a structured [`TestRunResult`](#testrunresult) instead of owning the process, use [`createRstest`](#createrstest).
+It mirrors rsbuild's `runCLI`, so it is the entry to reach for when **bridging Rstest into another CLI** — for example a unified `rs` command that forwards a reconstructed `argv` to Rstest. For in-process runs that return a structured [`TestRunResult`](#testrunresult) instead of handing the process to the CLI, use [`createRstest`](#createrstest).
 
 - **Type:**
 

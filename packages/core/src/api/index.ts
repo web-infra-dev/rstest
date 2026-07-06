@@ -23,6 +23,7 @@ import type {
   FileFilterMode,
   ListCommandOptions,
   ListCommandResult,
+  NormalizedConfig,
   RstestCommand,
   RstestConfig,
   RstestContext,
@@ -54,6 +55,14 @@ export type { Reporter } from '../types';
  * @experimental Subject to change until 1.0.0.
  */
 export type { RstestConfig as RstestUserConfig } from '../types';
+
+/**
+ * Resolved configuration Rstest runs with; the normalized form of
+ * {@link RstestUserConfig}, surfaced on {@link RstestInstanceContext}.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export type { NormalizedConfig } from '../types';
 
 /**
  * Per-test result status.
@@ -189,6 +198,35 @@ export interface RstestWatcher {
   close: () => Promise<void>;
 }
 
+/** A single resolved project, as surfaced on {@link RstestInstanceContext}. */
+export interface RstestProjectSummary {
+  /** Project name; `'default'` for the default project. */
+  name: string;
+  /** Absolute root path of this project. */
+  rootPath: string;
+}
+
+/**
+ * Read-only view of the resolved context exposed on
+ * {@link RstestInstance.context}. A stable projection of Rstest's internal
+ * context — the resolved config and projects — without the internal run state
+ * or the reporter/snapshot managers.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export interface RstestInstanceContext {
+  /** The Rstest core version. */
+  version: string;
+  /** Absolute root path resolved from `cwd` and `root`. */
+  rootPath: string;
+  /** The resolved config Rstest runs with. */
+  normalizedConfig: NormalizedConfig;
+  /** Resolved projects. */
+  projects: RstestProjectSummary[];
+  /** Absolute path to the loaded config file, if one was loaded. */
+  configFilePath?: string;
+}
+
 /**
  * A programmatic Rstest instance. Created by {@link createRstest}; holds the
  * resolved config identity and runs tests against it per invocation.
@@ -196,8 +234,8 @@ export interface RstestWatcher {
  * @experimental Subject to change until 1.0.0.
  */
 export interface RstestInstance {
-  /** Resolved host context for the most recent build (config, projects, command). */
-  readonly context: RstestContext;
+  /** Resolved context for the most recent build (config and projects). */
+  readonly context: RstestInstanceContext;
 
   /** Run tests once with `options`; resolves a structured {@link TestRunResult}. */
   run(options?: RunOptions): Promise<TestRunResult>;
