@@ -1,0 +1,136 @@
+---
+description: 'Rstest 0.11 is a transitional release on the way to 1.0: it breaks and settles the test options, mock, pool, and shard APIs, and also makes V8 coverage faster and aligns fake timers with the latest @sinonjs/fake-timers.'
+date: 2026-07-06 16:00:00
+sidebar: false
+authors:
+  - name: 9aoy
+    avatar: 'https://github.com/9aoy.png'
+    github: '9aoy'
+  - name: fi3ework
+    avatar: 'https://github.com/fi3ework.png'
+    github: 'fi3ework'
+---
+
+import { BlogAuthors } from '@rstack-dev/doc-ui/blog-authors';
+
+# Announcing Rstest 0.11
+
+_July 6, 2026_
+
+<BlogAuthors />
+
+<img
+  src="https://assets.rspack.rs/rstest/rstest-banner-v0-11.png"
+  alt="Rstest 0.11"
+  style={{
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+  }}
+/>
+
+Rstest 0.11 is a transitional release on the road to 1.0. Its focus is to settle several public APIs through breaking changes ahead of the stable release; alongside that, it also brings faster V8 coverage and updated fake timers.
+
+Notable changes:
+
+- [API changes on the road to 1.0](#api-changes)
+- [Faster V8 coverage](#coverage-v8)
+- [Fake timers aligned with `@sinonjs/fake-timers` 15](#fake-timers)
+- [Other improvements](#other-improvements)
+
+## API changes on the road to 1.0 \{#api-changes}
+
+To stabilize the public API before 1.0, Rstest 0.11 adjusts a few surfaces. These are breaking changes, but the migrations are straightforward.
+
+### `TestOptions` moves to the second argument
+
+The [`TestOptions`](/api/runtime-api/test-api/test#testoptions) object (`retry` / `repeats` / `timeout`) for `test` / `it` / `test.each` / `test.for` was previously accepted as the **last** argument, after the test function. With a long test body it was easy to miss, and formatters tended to push it onto a separate trailing line. It now goes in the **second** position, before the test function, matching the shape used by Vitest and Node.js' built-in test runner (`node:test`).
+
+```diff
+- test('name', () => {}, { retry: 2 });
++ test('name', { retry: 2 }, () => {});
+```
+
+The numeric timeout shorthand is unchanged — the Jest-style `test('name', fn, 1000)` still works as the last argument. `describe` now accepts a `TestOptions` object in the same second-argument position.
+
+### Mock factories are synchronous-only
+
+The `rs.mock` / `rs.doMock` factory type is now synchronous-only. Async factories are prone to hoisting and module-initialization issues, so TypeScript no longer suggests them. For partial mocks, keep the real module via a synchronous `importActual` import attribute and override only the exports you need:
+
+```ts
+import * as actual from './date-utils' with { rstest: 'importActual' };
+
+rs.mock('./date-utils', () => ({
+  ...actual,
+  formatDate: rs.fn().mockReturnValue('2026-03-19'),
+}));
+```
+
+See [Partially mock modules](/guide/basic/mock#partially-mock-modules) for more details.
+
+### `pool.minWorkers` is removed
+
+`pool.minWorkers` set a floor on retained idle workers, but it only applied under `isolate: false` — the default `isolate: true` never reuses workers, so the option had no effect. It is removed so that `pool` settles on the flat `{ type?, maxWorkers?, execArgv? }` shape; use `pool.maxWorkers` to control file-level parallelism. The internal floor still defaults to `min(maxWorkers, recommended)`, so default warm-worker behavior is unchanged.
+
+### `shard` is CLI-only
+
+Sharding is inherently per-invocation — every CI runner passes a different index, which a value committed to a shared config file cannot express. The `shard` config field is removed from `RstestConfig`; use the [`--shard <index>/<count>`](/guide/basic/cli#sharding-tests) CLI flag instead. The flag and its behavior are unchanged.
+
+```bash
+npx rstest run --shard=1/3
+```
+
+## Faster V8 coverage \{#coverage-v8}
+
+On a large bundled project, collecting V8 coverage could spend tens of seconds turning raw V8 data into Istanbul coverage. Rstest 0.11 reworks the conversion path.
+
+Previously, the provider ran every raw V8 entry through the generic `ast-v8-to-istanbul` converter, including many that never reach the final report. Rstest 0.11 uses a converter tailored for Rstest's output, filters out irrelevant entries before converting, and moves the conversion from each worker into the main process.
+
+Measured on the [Rsbuild](https://github.com/web-infra-dev/rsbuild) repository's own test suite (`pnpm test --coverage --coverage.provider=v8`):
+
+| Version                         | Wall span | Phase sum |
+| ------------------------------- | --------: | --------: |
+| baseline (`ast-v8-to-istanbul`) |     6.05s |    60.11s |
+| Rstest 0.11                     |     1.81s |    10.28s |
+
+Compared with the baseline, the reworked path is about **3.34x faster**, and the summed per-file phase time drops **5.85x**. Resolving raw coverage in the main process further cuts Rstest's own processing time (about **2x** on the same project) and lowers CPU usage. The coverage output is unchanged.
+
+There is no configuration change — projects using `coverage.provider: 'v8'` get the speedup automatically.
+
+## Fake timers aligned with `@sinonjs/fake-timers` 15 \{#fake-timers}
+
+Rstest 0.11 upgrades to `@sinonjs/fake-timers@15.4.0` and aligns the fake timers runtime with its API. Two methods are now available:
+
+- `rstest.jumpTimersByTime(ms)` jumps the clock forward by `ms` without running the timers in between, so any timer scheduled within that span fires at most once, at the destination.
+- `rstest.setTickMode({ mode })` switches the clock between manual and auto-advancing modes.
+
+```ts title="example.test.ts"
+import { expect, rstest, test } from '@rstest/core';
+
+test('jump without running intermediate timers', () => {
+  rstest.useFakeTimers();
+  const fn = rstest.fn();
+
+  setInterval(fn, 1000);
+  rstest.jumpTimersByTime(5000);
+
+  expect(fn).toHaveBeenCalledTimes(1);
+});
+```
+
+`rstest.setSystemTime(date)` also works on its own now — without a prior `rstest.useFakeTimers()` call it pins only the global `Date` and leaves the real timers intact, so you can freeze the system clock without taking over `setTimeout` / `setInterval`.
+
+This release also closes a Browser Mode gap. Browser Mode previously aliased `@sinonjs/fake-timers` to a minimal stub that kept a clock-shaped object but did not actually fake browser globals such as `setTimeout` or `Date`. Rstest 0.11 removes that stub and bundles the real implementation, so fake timers behave consistently across Node mode and Browser Mode — including `Date` / `performance`, animation frames, microtasks, and string durations. See [Fake Timers](/api/runtime-api/rstest/fake-timers) for more details.
+
+## Other improvements \{#other-improvements}
+
+- **Clearer error for `rs.spyOn` on ESM namespace exports.** Previously, spying on a read-only ESM namespace export produced an opaque failure; it now produces an actionable error explaining why the binding cannot be reassigned.
+- **`new URL()` and Wasm resolve from on-disk source.** Assets referenced via `new URL(..., import.meta.url)` and Wasm modules now resolve from the original source location, matching runtime behavior.
+- **Shared module state under `isolate: false`.** Imported module state is now shared and context-bound APIs stay live across files when `isolate: false`, so cross-file singletons behave as expected.
+- **Browser Mode project isolation.** Each project now runs in its own Rsbuild instance, fixing cross-project module resolution in multi-project browser runs.
+- **OS-native `testPath`.** `testPath` is now surfaced with the platform's native path separators.
+- **Custom `runCLI` argv.** Programmatic callers can pass a custom `argv` array to `runCLI`, while `process.argv` remains the default.
+
+## Upgrade
+
+Upgrade the `@rstest/*` packages to version 0.11 to get these improvements. Rstest 0.11 includes a few breaking API changes — see [API changes on the road to 1.0](#api-changes) for the migration steps.
+
+For a full list of changes, see the [v0.11.0 release notes](https://github.com/web-infra-dev/rstest/releases/tag/v0.11.0).

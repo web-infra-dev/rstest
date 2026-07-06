@@ -16,6 +16,6 @@ For images you use in the document, it's better to upload them to the [rstackjs/
 
 After you upload the images there, they will be automatically deployed under the <https://assets.rspack.rs/>.
 
-## Open Graph images
+## Release images
 
-`scripts/og-image/` generates per-release Open Graph images used by the `og:image` and `twitter:image` meta tags on each release blog post. See [AGENTS.md](./AGENTS.md#open-graph-image-generation) for the template architecture and release workflow.
+`scripts/release-image/` generates each release's banner and Open Graph image (the latter used by the `og:image` / `twitter:image` meta tags on the release blog post). See [AGENTS.md](./AGENTS.md#release-image-generation) for the template architecture and release workflow.

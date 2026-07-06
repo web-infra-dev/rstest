@@ -3,7 +3,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
 import satori from 'satori';
-import { buildTemplate, type TemplateOptions } from './template.mts';
+import {
+  buildTemplate,
+  type Layout,
+  LAYOUTS,
+  type TemplateOptions,
+} from './template.mts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fontsDir = path.join(here, 'assets/fonts');
@@ -64,7 +69,7 @@ function pick<T>(arr: T[]): T {
  * `transparent == rgba(0,0,0,0)`) and produce a grey halo around the
  * bright center.
  */
-function randomBackground(): string {
+export function randomBackground(): string {
   const base = pick(HUE_PALETTE);
 
   const schemeRoll = Math.random();
@@ -171,9 +176,19 @@ async function fetchLogoAsPng(): Promise<Buffer> {
   return resvg.render().asPng();
 }
 
-export type RenderOptions = Omit<TemplateOptions, 'logoDataUrl' | 'background'>;
+export type RenderOptions = Omit<
+  TemplateOptions,
+  'logoDataUrl' | 'background' | 'layout'
+> & {
+  layout: Layout;
+  /**
+   * Shared gradient to reuse across a banner/og pair so both images of a
+   * release match. Omit to roll a fresh one.
+   */
+  background?: string;
+};
 
-export async function renderOgImage(opts: RenderOptions): Promise<Buffer> {
+async function render(opts: RenderOptions): Promise<Buffer> {
   const [regular, bold, logoPng] = await Promise.all([
     readFile(path.join(fontsDir, 'SpaceGrotesk-Regular.ttf')),
     readFile(path.join(fontsDir, 'SpaceGrotesk-Bold.ttf')),
@@ -184,21 +199,34 @@ export async function renderOgImage(opts: RenderOptions): Promise<Buffer> {
   const tree = buildTemplate({
     ...opts,
     logoDataUrl,
-    background: randomBackground(),
+    background: opts.background ?? randomBackground(),
   });
 
   const svg = await satori(tree, {
-    width: 1200,
-    height: 630,
+    width: opts.layout.width,
+    height: opts.layout.height,
     fonts: [
       { name: 'Space Grotesk', data: regular, weight: 400, style: 'normal' },
       { name: 'Space Grotesk', data: bold, weight: 700, style: 'normal' },
     ],
   });
 
-  // Render at 2x for crisp output on high-DPI displays (Twitter/Facebook
-  // accept any reasonable aspect-correct size; 2400x1260 is well within their
-  // ~5MB / 8192px limits).
+  // Render at 2x for crisp output on high-DPI displays. The og card (2400x1260)
+  // stays well within social preview limits; the banner renders to 4096x1152.
   const resvg = new Resvg(svg, { fitTo: { mode: 'zoom', value: 2 } });
   return resvg.render().asPng();
+}
+
+/** 1200x630 → 2400x1260 social card, rendered with the tagline. */
+export function renderOgImage(
+  opts: Omit<RenderOptions, 'layout'>,
+): Promise<Buffer> {
+  return render({ ...opts, layout: LAYOUTS.og });
+}
+
+/** 2048x576 → 4096x1152 in-page blog banner, no tagline. */
+export function renderBanner(
+  opts: Omit<RenderOptions, 'layout' | 'description'>,
+): Promise<Buffer> {
+  return render({ ...opts, layout: LAYOUTS.banner });
 }
