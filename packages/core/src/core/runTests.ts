@@ -1,5 +1,9 @@
 import { constants as osConstants } from 'node:os';
-import { cleanCoverageReports, createCoverageProvider } from '../coverage';
+import {
+  cleanCoverageReports,
+  createCoverageProvider,
+  resolveAndMergeRawCoverage,
+} from '../coverage';
 import { ensureRunDependencies } from './dependencies';
 import { createPool } from '../pool';
 import type {
@@ -160,12 +164,38 @@ const notifyReportersOnTestRunEnd = async ({
 
 const isLifecycleDebugEnabled = isDebug();
 
+type LifecycleStepOptions = {
+  slowAfter?: number;
+  slowMessage?: string;
+  slowDoneMessage?: string;
+};
+
 const runLifecycleStep = async <T>(
   label: string,
   fn: () => Promise<T>,
+  options?: LifecycleStepOptions,
 ): Promise<T> => {
+  const { slowAfter, slowMessage, slowDoneMessage } = options ?? {};
+  let didShowSlowMessage = false;
+  const slowTimer = slowMessage
+    ? setTimeout(() => {
+        didShowSlowMessage = true;
+        logger.info(slowMessage);
+      }, slowAfter ?? 1000)
+    : undefined;
+
   if (!isLifecycleDebugEnabled) {
-    return fn();
+    try {
+      const result = await fn();
+      if (didShowSlowMessage && slowDoneMessage) {
+        logger.info(slowDoneMessage);
+      }
+      return result;
+    } finally {
+      if (slowTimer) {
+        clearTimeout(slowTimer);
+      }
+    }
   }
 
   const startTime = Date.now();
@@ -174,10 +204,17 @@ const runLifecycleStep = async <T>(
   try {
     const result = await fn();
     logger.debug(`lifecycle: finish ${label} (${Date.now() - startTime}ms)`);
+    if (didShowSlowMessage && slowDoneMessage) {
+      logger.info(slowDoneMessage);
+    }
     return result;
   } catch (error) {
     logger.debug(`lifecycle: fail ${label} (${Date.now() - startTime}ms)`);
     throw error;
+  } finally {
+    if (slowTimer) {
+      clearTimeout(slowTimer);
+    }
   }
 };
 
@@ -573,6 +610,7 @@ export async function runTests(context: Rstest): Promise<void> {
     const mergedCoverageMap: CoverageMap | undefined = coverageProvider
       ? coverageProvider.createCoverageMap()
       : undefined;
+    const rawCoverageResults: unknown[] = [];
 
     // Adopt the pre-allocated buffer (set above `runTests` or at the end of
     // the previous rerun's `finalize`) so browser events emitted before
@@ -688,6 +726,7 @@ export async function runTests(context: Rstest): Promise<void> {
           buildId,
           updateSnapshot: context.snapshotManager.options.updateSnapshot,
           onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
+          onRawCoverageResult: (coverage) => rawCoverageResults.push(coverage),
           onTraceEvents: traceRun.onEvents,
           traceSpan: span,
         });
@@ -703,8 +742,6 @@ export async function runTests(context: Rstest): Promise<void> {
 
     testStart ??= buildStart;
     const buildTime = testStart - buildStart;
-
-    const testTime = Date.now() - testStart;
 
     // Wait for browser tests to complete if running in parallel
     const browserResult = browserResultPromise
@@ -746,21 +783,6 @@ export async function runTests(context: Rstest): Promise<void> {
       // from the browser results to avoid reporter/state cache bloat (mirrors
       // the node-side pool layer's `delete result.coverage`).
 
-      // When unifying reporter output, combine browser and node durations
-      const duration: Duration =
-        shouldUnifyReporter && browserResult
-          ? {
-              totalTime:
-                testTime + buildTime + browserResult.duration.totalTime,
-              buildTime: buildTime + browserResult.duration.buildTime,
-              testTime: testTime + browserResult.duration.testTime,
-            }
-          : {
-              totalTime: testTime + buildTime,
-              buildTime,
-              testTime,
-            };
-
       const results = returns.flatMap((r) => r.results);
       const testResults = returns.flatMap((r) => r.testResults);
       const errors = returns.flatMap((r) => r.errors || []);
@@ -785,6 +807,28 @@ export async function runTests(context: Rstest): Promise<void> {
       if (shouldUnifyReporter && browserResult?.unhandledErrors) {
         errors.push(...browserResult.unhandledErrors);
       }
+
+      await resolveAndMergeRawCoverage({
+        coverageProvider,
+        mergedCoverageMap,
+        rawCoverageResults,
+        runCoverageStep: runLifecycleStep,
+      });
+
+      const testTime = Date.now() - testStart;
+      const duration: Duration =
+        shouldUnifyReporter && browserResult
+          ? {
+              totalTime:
+                testTime + buildTime + browserResult.duration.totalTime,
+              buildTime: buildTime + browserResult.duration.buildTime,
+              testTime: testTime + browserResult.duration.testTime,
+            }
+          : {
+              totalTime: testTime + buildTime,
+              buildTime,
+              testTime,
+            };
 
       // Check for failures including browser results when unified
       const nodeHasFailure =

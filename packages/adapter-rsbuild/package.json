@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rsbuild",
-  "version": "0.10.6",
+  "version": "0.11.0",
   "description": "Rstest adapter for rsbuild configuration",
   "keywords": [
     "rstest",
@@ -35,8 +35,8 @@
     "test": "rstest"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.1.3",
-    "@rslib/core": "0.23.1",
+    "@rsbuild/core": "~2.1.4",
+    "@rslib/core": "0.23.2",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*"
   },

@@ -153,6 +153,12 @@ export type NormalizedCoverageOptions = Required<
   changed?: boolean | string;
 };
 
+export type CoverageCollectOptions = {
+  assetFiles?: Record<string, string>;
+  sourceMaps?: Record<string, string>;
+  outputModule?: boolean;
+};
+
 export declare class CoverageProvider {
   constructor(options: NormalizedCoverageOptions, root?: string);
   /**
@@ -161,13 +167,35 @@ export declare class CoverageProvider {
   init(): void | Promise<void>;
 
   /**
-   * Collect coverage data from global coverage object
+   * Collect coverage data into an Istanbul coverage map.
    */
-  collect(options?: {
-    assetFiles?: Record<string, string>;
-    sourceMaps?: Record<string, string>;
-    outputModule?: boolean;
-  }): CoverageMap | null | Promise<CoverageMap | null>;
+  collect(
+    options?: CoverageCollectOptions,
+  ): CoverageMap | null | Promise<CoverageMap | null>;
+
+  /**
+   * Collect lightweight, serializable raw coverage payloads in workers.
+   *
+   * Providers may implement this with `resolveRawCoverage` to defer expensive
+   * conversion work to the main process. Return `null` to indicate that no raw
+   * coverage was collected and the runner should not call `resolveRawCoverage`
+   * for that worker result.
+   */
+  collectRaw?(
+    options?: CoverageCollectOptions,
+  ): unknown | null | Promise<unknown | null>;
+
+  /**
+   * Resolve raw payloads produced by `collectRaw` into an Istanbul coverage map.
+   *
+   * The runner passes only non-null payloads returned by the same provider.
+   * Implementations should ignore malformed payloads only when they can still
+   * produce a valid partial report; otherwise they may reject to fail coverage
+   * finalization.
+   */
+  resolveRawCoverage?(
+    payloads: unknown[],
+  ): CoverageMap | null | Promise<CoverageMap | null>;
 
   /**
    * Create a new coverage map

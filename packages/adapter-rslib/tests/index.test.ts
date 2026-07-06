@@ -128,6 +128,32 @@ export default defineConfig({
     });
   });
 
+  it('should use inline rslib config before configPath', async () => {
+    const inlineConfigPath = join(__dirname, 'missing-inline-rslib.config.ts');
+    const config = await withRslibConfig({
+      configPath: inlineConfigPath,
+      config: {
+        lib: [{ format: 'esm' }],
+        performance: {
+          buildCache: true,
+        },
+        source: {
+          define: {
+            INLINE_CONFIG: '"inline"',
+          },
+        },
+      },
+    })({});
+
+    expect(config.source?.define).toEqual({
+      INLINE_CONFIG: '"inline"',
+    });
+    expect(config.forceRerunTriggers).toEqual([inlineConfigPath]);
+    expect((config as any).performance?.buildCache).toEqual({
+      buildDependencies: [inlineConfigPath],
+    });
+  });
+
   it('should throw error when config file not found', async () => {
     await expect(() =>
       withRslibConfig({
