@@ -39,12 +39,12 @@
     "istanbul-lib-report": "^3.0.1",
     "istanbul-reports": "^3.2.0",
     "js-tokens": "^10.0.0",
-    "picomatch": "^4.0.4",
+    "picomatch": "^4.0.5",
     "v8-to-istanbul": "^9.3.0"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.1.3",
-    "@rslib/core": "0.23.1",
+    "@rsbuild/core": "~2.1.4",
+    "@rslib/core": "0.23.2",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/istanbul-lib-coverage": "^2.0.6",

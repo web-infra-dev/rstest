@@ -35,7 +35,7 @@
     "test": "rstest"
   },
   "devDependencies": {
-    "@rslib/core": "0.23.1",
+    "@rslib/core": "0.23.2",
     "@rspack/cli": "~2.1.2",
     "@rspack/core": "~2.1.2",
     "@rstest/core": "workspace:*",
