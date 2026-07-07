@@ -55,6 +55,13 @@ export class Worker {
         // so a `coverage: undefined` override can't wipe the disk coverage
         // config, and so the extension's reporter is appended to (not replacing)
         // the user's configured coverage reporters.
+        // Distinguish "never configured" (undefined → Rstest's defaults) from
+        // an explicit empty array (suppress all report files). `??`-merging
+        // mirrors core, which keeps an explicit `[]` and only falls back to the
+        // defaults for an undefined `reporters`.
+        const hasConfiguredReporters =
+          loaded.coverage?.reporters !== undefined ||
+          coverageOverride?.reporters !== undefined;
         const configuredReporters = [
           ...(loaded.coverage?.reporters ?? []),
           ...(coverageOverride?.reporters ?? []),
@@ -65,12 +72,12 @@ export class Worker {
               ...coverageOverride,
               // The coverage report runs per `run()`, so the reporter must be
               // part of the resolved config rather than pushed after
-              // construction. When the workspace configured no reporters, keep
-              // Rstest's defaults — they are only auto-applied for an undefined
-              // `reporters`, which setting this explicitly would otherwise
-              // suppress.
+              // construction. When the workspace never configured reporters,
+              // keep Rstest's defaults — they are only auto-applied for an
+              // undefined `reporters`, which setting this explicitly (including
+              // an empty array to suppress reports) would otherwise drop.
               reporters: [
-                ...(configuredReporters.length
+                ...(hasConfiguredReporters
                   ? configuredReporters
                   : DEFAULT_COVERAGE_REPORTERS),
                 new CoverageReporter(),
