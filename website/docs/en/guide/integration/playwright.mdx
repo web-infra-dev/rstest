@@ -82,7 +82,7 @@ describe('checkout', () => {
 });
 ```
 
-If your test modules do not rely on Node-side side effects that need isolation, set `isolate: false` in `rstest.config.ts` to reuse the worker module cache across test files and avoid repeated Playwright startup cost:
+If your test modules do not rely on side effects that need isolation, set `isolate: false` in `rstest.config.ts` to reuse the worker module cache across test files and avoid repeated Playwright startup cost:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -170,7 +170,7 @@ See [Local app server](#local-app-server) for serving a built app from local fil
 
 `expect` keeps normal Rstest assertions. When the actual value is a Playwright `Locator` or `Page`, it also provides retrying Playwright-style async assertions.
 
-Locator assertions are aligned with the element assertions already supported by `@rstest/browser` where possible:
+Locator assertions target Playwright [`Locator`](https://playwright.dev/docs/api/class-locator) values and follow the naming of [Playwright Locator assertions](https://playwright.dev/docs/test-assertions#locator-assertions) where possible. They are aligned with the element assertions already supported by `@rstest/browser` where possible:
 
 - `toBeVisible(options?)`
 - `toBeHidden(options?)`

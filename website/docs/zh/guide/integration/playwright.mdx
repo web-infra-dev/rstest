@@ -170,7 +170,7 @@ test('health check', async ({ request }) => {
 
 `expect` 保留常规 Rstest 断言；当传入 Playwright `Locator` 或 `Page` 时，会提供可重试的 Playwright 风格异步断言。
 
-Locator 断言会优先对齐 `@rstest/browser` 已支持的元素断言能力：
+Locator 断言面向 Playwright 的 [`Locator`](https://playwright.dev/docs/api/class-locator)，并尽量参考 [Playwright Locator assertions](https://playwright.dev/docs/test-assertions#locator-assertions) 的命名。当前会优先对齐 `@rstest/browser` 已支持的元素断言能力：
 
 - `toBeVisible(options?)`
 - `toBeHidden(options?)`
