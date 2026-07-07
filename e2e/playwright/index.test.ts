@@ -6,6 +6,16 @@ import { runRstestCli } from '../scripts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const canRunHeadedPlaywrightTests =
+  process.platform === 'darwin' ||
+  process.platform === 'win32' ||
+  (process.platform === 'linux' &&
+    Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
+
+const shouldRunHeadedPlaywrightTests =
+  canRunHeadedPlaywrightTests &&
+  Boolean(process.env.CI || process.env.RSTEST_E2E_RUN_HEADED);
+
 describe('@rstest/playwright', () => {
   it('runs with Playwright fixtures and assertions', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
@@ -24,7 +34,7 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('Test Files 2 passed');
   });
 
-  it(
+  it.skipIf(!shouldRunHeadedPlaywrightTests)(
     'can opt into headed debug mode from a test',
     { timeout: 60_000 },
     async () => {
