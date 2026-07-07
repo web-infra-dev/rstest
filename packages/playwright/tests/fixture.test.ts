@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, type ExecFileOptions } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -24,6 +24,16 @@ const debugOptions = {
 } satisfies PlaywrightOptions;
 
 const execFileAsync = promisify(execFile);
+
+const runRstestSubprocess = (args: string[], options: ExecFileOptions = {}) =>
+  execFileAsync(process.execPath, args, {
+    ...options,
+    env: {
+      ...process.env,
+      ...options.env,
+      GITHUB_STEP_SUMMARY: undefined,
+    },
+  });
 
 const createPlaywrightTempRoot = () =>
   mkdtemp(join(__dirname, '../.tmp-rstest-playwright-'));
@@ -135,8 +145,7 @@ test('does not force a local expect for core expect users', async () => {
     );
 
     await rejects(
-      execFileAsync(
-        process.execPath,
+      runRstestSubprocess(
         [
           join(__dirname, '../../core/bin/rstest.js'),
           '--root',
@@ -520,8 +529,7 @@ test(
         `,
       );
 
-      await execFileAsync(
-        process.execPath,
+      await runRstestSubprocess(
         [
           join(__dirname, '../../core/bin/rstest.js'),
           '--root',
@@ -622,8 +630,7 @@ test('cleans up request and serve fixtures after a failed cleanup', async () => 
       `,
     );
 
-    const { stdout, stderr } = await execFileAsync(
-      process.execPath,
+    const { stdout, stderr } = await runRstestSubprocess(
       [
         join(__dirname, '../../core/bin/rstest.js'),
         '--root',
