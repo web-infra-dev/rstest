@@ -10,6 +10,26 @@ import type {
 import type { ConsoleStreamType, MaybePromise } from './utils';
 import type { BrowserProvider } from '../utils/constants';
 
+export type ModifyRstestConfigCallback = (
+  config: RstestConfig,
+) => MaybePromise<RstestConfig | void>;
+
+export type RstestExposeAPI = {
+  /**
+   * Modify the Rstest config for the current Rsbuild environment.
+   *
+   * This API is exposed to Rsbuild plugins through `api.useExposed('rstest')`.
+   * In multi-project mode, the callback only applies to the Rstest project
+   * that owns the current Rsbuild environment.
+   *
+   * This API is suitable for modifying existing project config, but it cannot
+   * be used to dynamically add or remove Rstest projects, switch Browser Mode,
+   * modify the project name, or modify global options such as reporters, pool,
+   * isolate, coverage, update, output.distPath, or plugins.
+   */
+  modifyRstestConfig: (callback: ModifyRstestConfigCallback) => void;
+};
+
 export type ChaiConfig = Partial<
   Pick<typeof config, 'showDiff' | 'truncateThreshold'>
 >;

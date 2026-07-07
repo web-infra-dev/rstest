@@ -4,6 +4,7 @@ import type {
   CoverageProvider,
   InlineProjectConfig,
   NormalizedCoverageOptions,
+  RstestExposeAPI,
   ProjectConfig,
   RstestConfig,
 } from './types';
@@ -19,6 +20,7 @@ export type {
   NormalizedCoverageOptions,
   RsbuildPlugin,
   RstestConfig,
+  RstestExposeAPI,
 };
 
 export type RstestConfigAsyncFn = () => Promise<RstestConfig>;

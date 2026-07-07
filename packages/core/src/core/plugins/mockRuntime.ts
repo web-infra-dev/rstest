@@ -38,6 +38,16 @@ class MockRuntimeRspackPlugin {
 export const pluginMockRuntime: RsbuildPlugin = {
   name: 'rstest:mock-runtime',
   setup: (api) => {
+    api.modifyBundlerChain((chain) => {
+      chain.module
+        .rule('rstest-mock-module-doppelgangers')
+        .test(/\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/)
+        .with({ rstest: 'importActual' })
+        .use('import-actual-loader')
+        .loader(path.resolve(__dirname, './importActualLoader.mjs'))
+        .end();
+    });
+
     api.modifyRspackConfig((config) => {
       config.plugins.push(new MockRuntimeRspackPlugin());
     });
