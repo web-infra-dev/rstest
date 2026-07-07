@@ -33,9 +33,20 @@ for (const name of readdirSync(packagesDir)) {
     continue;
   }
 
-  if (pkg.version) {
-    packages.push({ name: pkg.name ?? name, version: pkg.version });
-  }
+  packages.push({ name: pkg.name ?? name, version: pkg.version });
+}
+
+// A release-train package with no version is a worse drift than a mismatch, and
+// silently skipping it would let CI pass. Fail loudly instead.
+const missing = packages.filter((pkg) => !pkg.version);
+if (missing.length > 0) {
+  console.error(
+    '✗ Packages under packages/ are missing a version field:\n' +
+      missing.map((pkg) => `  ${pkg.name}`).join('\n') +
+      '\n\nEvery package in the release train must declare a version. ' +
+      'See bump.config.mts.',
+  );
+  process.exit(1);
 }
 
 const versions = new Set(packages.map((pkg) => pkg.version));
