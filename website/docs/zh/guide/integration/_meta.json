@@ -1,1 +1,1 @@
-["adapters", "rslib", "rsbuild", "rspack"]
+["adapters", "rslib", "rsbuild", "rspack", "playwright"]
