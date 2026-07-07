@@ -287,8 +287,12 @@ export const assembleTestRunResult = (
   // Mirror the CLI: discovering no test files is a failure unless
   // `passWithNoTests` is set. `process.exitCode` is restored by the caller's
   // guards, so `ok` must derive this independently rather than reading it.
+  // Watch is exempt — the CLI never fails a watch rerun for zero test files
+  // (a benign no-op rerun logs "No test files need re-run" without an exit
+  // code), so a watch `onResult` must not report `ok: false` for it either.
   const noTestsFailure =
     !!context &&
+    context.command !== 'watch' &&
     files.length === 0 &&
     !context.normalizedConfig.passWithNoTests;
 
