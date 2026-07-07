@@ -85,6 +85,9 @@ jobs:
       - name: Check Dependency Version
         run: pnpm run check-dependency-version
 
+      - name: Check Version Consistency
+        run: pnpm run check-version-consistency
+
       - name: Check Unused Code
         run: pnpm run check-unused
 
