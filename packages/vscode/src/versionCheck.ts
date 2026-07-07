@@ -5,10 +5,11 @@ import semver from 'semver';
  *
  * Keep this value updated manually when the extension starts depending on
  * newer core APIs. This build drives the worker through the programmatic
- * `@rstest/core/api` (`createRstest`), first shipped in 0.10.7, so cores below
- * that lack the export and would fail at worker startup.
+ * `@rstest/core/api` (`createRstest`), first shipped in 0.12.0. Core 0.11.0 has
+ * the `/api` subpath but only the old `runRstest` — not `createRstest` — so
+ * cores below 0.12.0 would fail at worker startup.
  */
-export const MIN_CORE_VERSION = '0.10.7';
+export const MIN_CORE_VERSION = '0.12.0';
 
 export function shouldWarnCoreVersion(coreVersion?: string): boolean {
   if (!coreVersion) return false;

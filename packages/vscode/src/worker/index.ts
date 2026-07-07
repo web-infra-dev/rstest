@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url';
+import type { RstestInstance, RstestWatcher } from '@rstest/core/api';
 import { createBirpc } from 'birpc';
 import type { TestRunReporter } from '../testRunReporter';
 import type { WorkerInitOptions } from '../types';
@@ -10,10 +11,46 @@ import { CoverageReporter, ProgressLogger, ProgressReporter } from './reporter';
 // function form below sets `reporters` explicitly, which would otherwise drop
 // those defaults, so mirror them here — a workspace that never configured
 // reporters still gets the normal reports alongside the extension reporter.
+// Mirror of the coverage.reporters default in packages/core/src/config.ts (the
+// worker loads the workspace's core, so it can't import the constant) — keep in
+// sync.
 const DEFAULT_COVERAGE_REPORTERS = ['text', 'html', 'clover', 'json'] as const;
 
 export class Worker {
-  private async init({
+  /** Active watch session for a continuous run, if any. */
+  private watcher?: RstestWatcher;
+
+  /**
+   * Instances cached by init-identity (config file + core path + override
+   * config), so repeated `runTest` / `listTests` / `getNormalizedConfig` RPCs
+   * on the same target reuse one instance instead of re-running `loadConfig`
+   * (TS config compile) + `resolveProjects` (glob walk) on every call. Per-call
+   * `run()` re-resolves config from disk, so a cached instance stays fresh.
+   */
+  private instances = new Map<string, Promise<RstestInstance>>();
+
+  private init(options: WorkerInitOptions): Promise<RstestInstance> {
+    // Key on everything except the per-invocation `fileFilters`/`command`,
+    // which don't affect the instance's identity (they're applied per
+    // `run()`/`listTests()`).
+    const {
+      fileFilters: _fileFilters,
+      command: _command,
+      ...identity
+    } = options;
+    const key = JSON.stringify(identity);
+    let instance = this.instances.get(key);
+    if (!instance) {
+      instance = this.createInstance(options);
+      this.instances.set(key, instance);
+      // Drop a failed creation so the next RPC retries instead of caching the
+      // rejected promise.
+      instance.catch(() => this.instances.delete(key));
+    }
+    return instance;
+  }
+
+  private async createInstance({
     configFilePath,
     // `fileFilters`/`command` are per-invocation concerns handled by
     // `run()`/`listTests()`; destructure them out so they don't leak into the
@@ -22,19 +59,20 @@ export class Worker {
     rstestPath,
     command: _command,
     ...overrideConfig
-  }: WorkerInitOptions) {
+  }: WorkerInitOptions): Promise<RstestInstance> {
     // Load the programmatic API from the resolved core package (sibling of the
-    // main entry under `dist/api/index.js`).
+    // main entry under `dist/api/index.js`), plus the main `@rstest/core` entry
+    // where `loadConfig` lives (the programmatic API no longer reads a config
+    // file itself, so we load it and hand it to `config`). The two imports are
+    // independent — load them concurrently.
     const rstestApiUrl = new URL('./api/index.js', pathToFileURL(rstestPath))
       .href;
-    const rstestApi = (await import(
-      rstestApiUrl
-    )) as typeof import('@rstest/core/api');
-    // `loadConfig` lives on the main `@rstest/core` entry — the programmatic API
-    // no longer reads a config file itself, so we load it and hand it to `config`.
-    const rstestMain = (await import(
-      pathToFileURL(rstestPath).href
-    )) as typeof import('@rstest/core');
+    const [rstestApi, rstestMain] = await Promise.all([
+      import(rstestApiUrl) as Promise<typeof import('@rstest/core/api')>,
+      import(pathToFileURL(rstestPath).href) as Promise<
+        typeof import('@rstest/core')
+      >,
+    ]);
     logger.debug('Loaded Rstest API module');
     const { createRstest } = rstestApi;
     const { loadConfig } = rstestMain;
@@ -141,9 +179,10 @@ export class Worker {
       if (data.command === 'watch') {
         // Continuous run: keep the worker process alive, re-running tests on
         // file changes. Per-run results reach the extension via the
-        // `ProgressReporter`; the master stops watching by closing (killing)
-        // the worker process.
-        await rstest.watch({ filters: data.fileFilters });
+        // `ProgressReporter`. Store the watcher so the master can release its
+        // pool / dev server / globalSetup resources via `closeWatch()` before
+        // the worker process is killed.
+        this.watcher = await rstest.watch({ filters: data.fileFilters });
         logger.debug('Watch mode started');
         return;
       }
@@ -173,10 +212,51 @@ export class Worker {
     const res = await rstest.listTests({ filters: data.fileFilters });
     return res;
   }
+
+  /**
+   * Stop an active watch session and release its worker pool / dev server /
+   * globalSetup resources. Idempotent: a no-op when no watch session is active.
+   * Invoked both by the master's `closeWatch()` RPC (the fast, awaited graceful
+   * path) and by this process's own termination-signal handler below.
+   */
+  public async closeWatch(): Promise<void> {
+    const watcher = this.watcher;
+    this.watcher = undefined;
+    await watcher?.close();
+  }
 }
 
-export const masterApi = createBirpc<TestRunReporter, Worker>(new Worker(), {
+const worker = new Worker();
+
+export const masterApi = createBirpc<TestRunReporter, Worker>(worker, {
   post: (data) => process.send?.(data),
   on: (fn) => process.on('message', fn),
   bind: 'functions',
 });
+
+// The master stops a continuous run by killing this worker process. The embedded
+// core API installs no signal handlers (the host owns the process), so install
+// one here in the worker wrapper: on termination, release any active watch
+// session's pool / dev server before exiting. This is the robust floor covering
+// every kill path — including the master's synchronous `dispose()` hard kill,
+// which can't await the `closeWatch()` RPC — not just the graceful RPC path.
+// `closeWatch()` is idempotent, so the master calling it first then killing is
+// safe (the handler's call becomes a no-op). POSIX-only: on Windows `kill()`
+// terminates without delivering a signal, so the RPC path remains the primary
+// graceful route there.
+let shuttingDown = false;
+const gracefulShutdown = (): void => {
+  if (shuttingDown) {
+    return;
+  }
+  shuttingDown = true;
+  // Never let a stalled teardown wedge the process: force-exit as a backstop.
+  const force = setTimeout(() => process.exit(0), 5000);
+  force.unref();
+  void worker
+    .closeWatch()
+    .catch(() => {})
+    .finally(() => process.exit(0));
+};
+process.once('SIGTERM', gracefulShutdown);
+process.once('SIGINT', gracefulShutdown);
