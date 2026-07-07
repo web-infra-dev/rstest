@@ -26,7 +26,6 @@ import type {
   NormalizedConfig,
   RstestCommand,
   RstestConfig,
-  RstestContext,
   RstestRunner,
 } from '../types';
 import { getAbsolutePath } from '../utils';
@@ -219,7 +218,10 @@ export interface RstestInstanceContext {
   version: string;
   /** Absolute root path resolved from `cwd` and `root`. */
   rootPath: string;
-  /** The resolved config Rstest runs with. */
+  /**
+   * The resolved config Rstest runs with. This is a live reference to the
+   * resolved config; treat it as read-only — mutating it is unsupported.
+   */
   normalizedConfig: NormalizedConfig;
   /** Resolved projects. */
   projects: RstestProjectSummary[];
@@ -247,6 +249,10 @@ export interface RstestInstance {
    * via the configured reporters and/or `onResult` (not the resolved value);
    * resolves once watching is established. Call {@link RstestWatcher.close} to
    * stop watching. Mirrors the CLI's `--watch`, exposed programmatically here.
+   *
+   * Browser mode is not supported yet: `watch()` rejects when the resolved
+   * config has any browser-mode project (use `run()`, or the CLI `rstest
+   * watch`). Browser watch support is planned.
    */
   watch(options?: WatchOptions & RunOptions): Promise<RstestWatcher>;
 
@@ -259,8 +265,16 @@ export interface RstestInstance {
     options?: ListCommandOptions & RunOptions,
   ): Promise<ListCommandResult[]>;
 
-  /** Merge on-disk blob reports into a single aggregate report. */
-  mergeReports(options?: { path?: string; cleanup?: boolean }): Promise<void>;
+  /**
+   * Merge on-disk blob reports into a single aggregate report. Resolves
+   * `{ ok: false }` when the merged blobs contain failed tests or unhandled
+   * errors (mirroring the CLI `rstest merge-reports` exit code); `{ ok: true }`
+   * otherwise. The host's `process.exitCode` is left untouched.
+   */
+  mergeReports(options?: {
+    path?: string;
+    cleanup?: boolean;
+  }): Promise<{ ok: boolean }>;
 }
 
 /** Resolve an optional caller-supplied cwd against the current process cwd. */
@@ -397,8 +411,9 @@ export async function createRstest(
   const cwd = resolveCwd(options.cwd);
   const trace = options.trace ?? false;
 
-  // Holds the most recent build's context, exposed via `instance.context`.
-  let context!: RstestContext;
+  // Holds the most recent build's context projection, exposed via
+  // `instance.context`.
+  let context!: RstestInstanceContext;
 
   // Resolve config + projects from the static inputs and build an internal
   // runner for `command`, applying the per-invocation `runOptions`. Re-runs the
@@ -459,7 +474,25 @@ export async function createRstest(
       filterMode: runOptions.filterMode,
     });
 
-    context = runner.context;
+    // Expose a real plain projection of the internal context, not the live
+    // `Rstest` engine object narrowed by a type. The internal context reaches
+    // the reporter/snapshot/state managers and mutable run state; returning it
+    // would let untyped callers mutate live internals and make
+    // `structuredClone(instance.context)` throw on the reporter functions. Copy
+    // only the documented public fields. `normalizedConfig` stays a live
+    // reference to the resolved config (documented read-only; see the JSDoc on
+    // RstestInstanceContext).
+    const internal = runner.context;
+    context = {
+      version: internal.version,
+      rootPath: internal.rootPath,
+      normalizedConfig: internal.normalizedConfig,
+      projects: internal.projects.map((project) => ({
+        name: project.name,
+        rootPath: project.rootPath,
+      })),
+      configFilePath: internal.configFilePath,
+    };
     return runner;
   };
 
@@ -491,12 +524,30 @@ export async function createRstest(
     const { onResult, ...runOptions } = watchOptions;
     // Contain `process.exitCode` around the watch session so a failing run
     // doesn't leave the embedding host marked as failed; the dev server keeps
-    // running after `runTests()` resolves, so restore only when `close()` is
-    // called. `env` stays test-mode for the instance's lifetime (restored by
-    // the instance's own `close()`), which is what re-run workers need.
+    // running after `runTests()` resolves, so restore only when the returned
+    // watcher's `close()` is called. `env` stays test-mode until then — which is
+    // what re-run workers need — and is put back by the same `restore()` inside
+    // that `close()`.
     const restore = snapshotProcessGuards();
     try {
       const runner = await build('watch', runOptions);
+      // Browser-mode watch is not wired up for the programmatic API yet: the
+      // node watch path returns a close handle, but the browser watch session
+      // (Playwright browser, WebSocket server, Rsbuild dev server) has no
+      // teardown here, so a returned watcher would be a dead handle leaking
+      // those resources. Fail fast pre-run (before `runTests()` starts the dev
+      // server / pool) instead of leaking; full support is tracked by the
+      // browser-executor unification RFC. Throwing here is safe — the `catch`
+      // below restores the host snapshot and re-throws.
+      const hasBrowserProject = runner.context.projects.some(
+        (project) => project.normalizedConfig.browser.enabled,
+      );
+      if (hasBrowserProject) {
+        throw new Error(
+          'The programmatic watch() does not support browser mode yet. ' +
+            'Run browser-mode tests with run(), or use the CLI `rstest watch`.',
+        );
+      }
       if (onResult) {
         // Bridge each run's summary to `onResult` as the public TestRunResult,
         // so a caller gets structured per-rerun results without writing a
@@ -562,14 +613,18 @@ export async function createRstest(
   const mergeReports = async (mergeOptions?: {
     path?: string;
     cleanup?: boolean;
-  }): Promise<void> => {
-    // `mergeReports` sets `process.exitCode = 1` when a blob report contains
-    // failed tests / unhandled errors; guard the host process so the merge
-    // doesn't leave the embedding process marked as failed.
+  }): Promise<{ ok: boolean }> => {
+    // `mergeReports` reports failure only via `process.exitCode = 1` (set when a
+    // blob report contains failed tests / unhandled errors) — it never throws.
+    // Start from a clean exit code (like `run()`), observe it after the merge to
+    // derive `ok`, then restore the host's original value in `finally` so the
+    // merge doesn't leave the embedding process marked as failed.
     const restore = snapshotProcessGuards();
+    process.exitCode = undefined;
     try {
       const runner = await build('merge-reports', {});
-      return await runner.mergeReports(mergeOptions);
+      await runner.mergeReports(mergeOptions);
+      return { ok: !process.exitCode };
     } finally {
       restore();
     }

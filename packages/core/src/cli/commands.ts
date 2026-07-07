@@ -948,6 +948,20 @@ export const buildResolvedRunner = async ({
   trace?: boolean;
   filterMode?: FileFilterMode;
 }): Promise<RstestRunner> => {
+  // `merge-reports` only reads on-disk blob files: it has no positional filters
+  // and no related/changed semantics, so skip filter resolution entirely. Going
+  // through `resolveEffectiveCliFilters` would otherwise shell out to git (and
+  // stamp `changedCoverageFilters`) whenever `coverage.changed` is configured —
+  // pointless work that logs a spurious warning on a checkout-less aggregation
+  // runner. Both the CLI and the programmatic `mergeReports()` build here.
+  if (command === 'merge-reports') {
+    return createRstest(
+      { config, configFilePath, projects, cwd, embedded, trace },
+      command,
+      [],
+    );
+  }
+
   const resolved = await resolveEffectiveCliFilters({
     options,
     filters,
@@ -1222,7 +1236,9 @@ export function createCli({ cwd }: { cwd?: string } = {}): CAC {
 
         if (selectedProject === 'browser') {
           const { create } = await import('./init/browser');
-          await create({ yes: options.yes });
+          // Thread the CLI's `cwd` so `runCLI({ cwd })` scaffolds into the
+          // targeted project, not the bridge's own working directory.
+          await create({ yes: options.yes, cwd });
         } else {
           logger.error(
             `Unknown project type: "${selectedProject}". Available: browser`,

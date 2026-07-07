@@ -133,6 +133,15 @@ export const resolveExtends = async (
   );
 
   const merged = mergeRstestConfig(...resolvedExtends, config);
+  // `extends` is consumed here. Leaving the key on the output would make a
+  // second `resolveExtends` pass re-apply every preset (array fields such as
+  // `setupFiles` / `plugins` / `coverage.exclude` would concat twice, and
+  // function-form entries would run again) — this keeps `resolveExtends`
+  // idempotent, which the programmatic API relies on (`loadConfig` already
+  // resolves extends on disk content, and the API resolves again). Set
+  // `undefined` rather than `delete` to keep the object shape stable; a falsy
+  // `extends` makes the next pass return early.
+  merged.extends = undefined;
 
   if (config.forceRerunTriggers === undefined) {
     const extendedForceRerunTriggers = resolvedExtends.flatMap(
@@ -314,6 +323,8 @@ const createDefaultConfig = (): NormalizedConfig => ({
     enabled: false,
     changed: undefined,
     provider: 'istanbul',
+    // Mirrored as DEFAULT_COVERAGE_REPORTERS in packages/vscode/src/worker/index.ts
+    // (the worker loads the workspace's core, so it can't import this) — keep in sync.
     reporters: ['text', 'html', 'clover', 'json'],
     reportsDirectory: './coverage',
     clean: true,

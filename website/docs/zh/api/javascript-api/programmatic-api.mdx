@@ -6,7 +6,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 # 编程式 API
 
-<ApiMeta addedVersion="0.11.0" />
+<ApiMeta addedVersion="0.12.0" />
 
 :::warning 实验性
 编程式 API 目前为实验性功能，在 `1.0.0` 之前其形态可能变化。如果你依赖它，请锁定 `@rstest/core` 的精确版本。
@@ -148,6 +148,10 @@ interface WatchOptions {
 
 `onResult` 收到的 [`TestRunResult`](#testrunresult) 与 `run()` 相同，但仅体现在 exit code 上的失败（未达成的 coverage 阈值、global teardown）不计入它的 `ok` —— 测试/文件失败与 `unhandledErrors` 会计入。`onResult` 抛出的错误会被隔离，不会中断 watch 会话。
 
+:::warning 暂不支持 browser mode
+当解析后的配置包含任何 browser mode project 时，`watch()` 会 reject。请改用 [`run()`](#rstestrun) 运行 browser mode 测试，或使用 CLI `rstest watch`。browser watch 支持已在规划中。
+:::
+
 - **示例：**
 
 ```ts
@@ -208,14 +212,19 @@ for (const file of list) {
 function mergeReports(options?: {
   path?: string;
   cleanup?: boolean;
-}): Promise<void>;
+}): Promise<{ ok: boolean }>;
 ```
 
 - **示例：**
 
 ```ts
-await rstest.mergeReports({ path: './.rstest-reports', cleanup: true });
+const { ok } = await rstest.mergeReports({
+  path: './.rstest-reports',
+  cleanup: true,
+});
 ```
+
+当合并的 blob reports 中包含失败的测试或未处理的错误时，`ok` 为 `false`，与 `rstest merge-reports` CLI 的退出码保持一致。与 CLI 不同，宿主进程的 `process.exitCode` 不会被修改，因此请检查 `ok` 来决定是否让流水线失败。
 
 :::tip 无需调用 `close()`
 实例上没有 `close()`。每次 `run()` 都会自行构建并拆除其 worker pool 与 Rsbuild server，因此实例在两次调用之间不持有任何资源。唯一的例外是 [`watch`](#rstestwatch) 会话 —— 它会保持一个 dev server 常驻，用完后请调用返回的 watcher 的 `close()`。

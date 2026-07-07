@@ -6,7 +6,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 # Programmatic API
 
-<ApiMeta addedVersion="0.11.0" />
+<ApiMeta addedVersion="0.12.0" />
 
 :::warning Experimental
 The programmatic API is experimental and its shape may change until `1.0.0`. Pin an exact `@rstest/core` version if you depend on it.
@@ -148,6 +148,10 @@ interface WatchOptions {
 
 `onResult` receives the same [`TestRunResult`](#testrunresult) as `run()`, except exit-code-only failures (unmet coverage thresholds, global teardown) are not reflected in its `ok` — test/file failures and `unhandledErrors` are. A throwing `onResult` is isolated so it cannot tear down the watch session.
 
+:::warning Browser mode not supported yet
+`watch()` rejects when the resolved config has any browser-mode project. Run browser-mode tests with [`run()`](#rstestrun), or use the CLI `rstest watch`. Browser watch support is planned.
+:::
+
 - **Example:**
 
 ```ts
@@ -208,14 +212,19 @@ Merge on-disk blob reports into a single aggregate report.
 function mergeReports(options?: {
   path?: string;
   cleanup?: boolean;
-}): Promise<void>;
+}): Promise<{ ok: boolean }>;
 ```
 
 - **Example:**
 
 ```ts
-await rstest.mergeReports({ path: './.rstest-reports', cleanup: true });
+const { ok } = await rstest.mergeReports({
+  path: './.rstest-reports',
+  cleanup: true,
+});
 ```
+
+`ok` is `false` when the merged blobs contain failed tests or unhandled errors, mirroring the `rstest merge-reports` CLI exit code. Unlike the CLI, the host's `process.exitCode` is left untouched, so check `ok` to fail your pipeline.
 
 :::tip No `close()` to call
 There is no `close()` on the instance. Each `run()` builds and tears down its own worker pool and Rsbuild server, so an instance holds no resources between calls. A [`watch`](#rstestwatch) session is the exception — it keeps a dev server alive, so call `close()` on the returned watcher when you're done.

@@ -59,11 +59,13 @@ describe('programmatic createRstest', () => {
     const result = parsePayload(cli.stdout);
 
     // The eager build resolves config for inspection without running or
-    // constructing reporters — so the configured reporters survive on both the
-    // root and per-project normalized config.
-    expect(result.command).toBe('list');
+    // constructing reporters — so the configured reporters survive on the
+    // resolved normalized config.
     expect(result.rootReporters).toEqual(['dot']);
-    expect(result.projectReporters).toEqual(['dot']);
+    // `context` is a plain projection: it exposes the resolved projects and is
+    // structured-clonable (the raw engine object would throw on its reporters).
+    expect(result.projectNames.length).toBeGreaterThan(0);
+    expect(result.cloneOk).toBe(true);
     expect(result.hostExitCode).toBe(0);
   });
 
@@ -106,6 +108,28 @@ describe('programmatic createRstest', () => {
     expect(result.ok).toBe(true);
     expect(result.files).toEqual([{ status: 'pass', testPath: 'a.test.ts' }]);
     expect(result.stats.files.total).toBe(1);
+  });
+
+  it('resolves a disk config idempotently: extends preset is applied once, not twice', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-extends-once.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // `loadConfig` already resolved `extends`; resolving again in the API must
+    // not duplicate the preset's setupFiles entry, so the setup file runs once.
+    expect(result.setupFiles).toEqual(['setup.ts']);
+    expect(result.ok).toBe(true);
+    expect(result.testsPassed).toBe(1);
+    expect(result.testsFailed).toBe(0);
+    expect(result.hostExitCode).toBe(0);
   });
 
   it('never leaves host process.env mutated (construction or run)', async ({
@@ -228,6 +252,26 @@ describe('programmatic createRstest', () => {
     expect(result.hasClose).toBe(true);
     expect(result.hostExitCode).toBe(0);
     expect(exec.exitCode).toBe(0);
+  });
+
+  it('watch() rejects for browser-mode config instead of leaking a dead handle', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-watch-browser.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // The guard fires pre-run, so no watcher is ever returned...
+    expect(result.hadWatcher).toBe(false);
+    expect(result.message).toContain('does not support browser mode yet');
+    // ...and the rejected watch leaves the host exit code clean.
+    expect(result.hostExitCode).toBe(0);
   });
 
   it('watch() onResult delivers each run as a run()-parity TestRunResult, surfacing failures', async ({
@@ -361,6 +405,27 @@ describe('programmatic createRstest', () => {
     ]);
   });
 
+  it('mergeReports() reports blob failures via ok=false without poisoning host process.exitCode', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-merge-reports.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    // A merged report containing a failed test surfaces as ok=false (mirroring
+    // the CLI exit code), while all-passing blobs merge to ok=true...
+    expect(result.failingOk).toBe(false);
+    expect(result.passingOk).toBe(true);
+    // ...and neither merge leaks a non-zero exit code onto the host.
+    expect(result.hostExitCode).toBe(0);
+  });
+
   it('run({ related }) runs only related test files for a source file (jest findRelatedTests parity)', async ({
     onTestFinished,
   }) => {
@@ -403,5 +468,24 @@ describe('programmatic runCLI (CLI passthrough)', () => {
     // host without a structured return value.
     expect(result.hostExitCode).toBe(0);
     expect(exec.exitCode).toBe(0);
+  });
+
+  it('honors runCLI({ cwd }) for the init command (scaffolds into the targeted dir)', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-runcli-init-cwd.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    expect(result.error).toBe(null);
+    // init scaffolds into runCLI's `cwd`, not the bridge's own working directory.
+    expect(result.scaffoldedInTarget).toBe(true);
+    expect(result.leakedIntoCwd).toBe(false);
   });
 });

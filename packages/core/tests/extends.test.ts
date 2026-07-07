@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from '@rstest/core';
-import { loadConfig } from '../src/config';
+import { loadConfig, resolveExtends } from '../src/config';
 
 describe('Config Extends Mechanism', () => {
   let testConfigPath: string;
@@ -244,5 +244,27 @@ export default defineConfig({
     expect(config.globals).toBe(true);
     expect(config.testTimeout).toBe(10000);
     expect(config.retry).toBe(2);
+  });
+
+  it('should be idempotent: resolving an already-resolved config re-applies nothing', async () => {
+    const config = {
+      extends: {
+        setupFiles: ['./setup-a.ts'],
+      },
+      setupFiles: ['./setup-local.ts'],
+    };
+
+    const once = await resolveExtends(config);
+    // The preset's setupFiles are merged in exactly once, and `extends` is
+    // consumed off the output.
+    expect(once.setupFiles).toEqual(['./setup-a.ts', './setup-local.ts']);
+    expect(once.extends).toBeUndefined();
+
+    // A second pass over the resolved config is a no-op — no duplicated
+    // setupFiles from re-applying the preset. This is what lets the programmatic
+    // API resolve a disk config (already extends-resolved by `loadConfig`)
+    // without double-applying presets.
+    const twice = await resolveExtends(once);
+    expect(twice).toEqual(once);
   });
 });
