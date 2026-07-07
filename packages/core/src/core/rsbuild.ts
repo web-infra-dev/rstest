@@ -1,3 +1,4 @@
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   createRsbuild,
@@ -24,6 +25,7 @@ import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
+import { resolveTestEnvironmentPath } from './resolveTestEnvironment';
 import { isRuntimeChunk, runtimeChunkNameForEnvironment } from './runtimeChunk';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -86,6 +88,168 @@ const isMultiCompiler = <
   return 'compilers' in compiler && Array.isArray(compiler.compilers);
 };
 
+const getChangedFiles = (
+  compiler: Rspack.Compiler | undefined,
+): Set<string> | undefined => {
+  if (!compiler) {
+    return undefined;
+  }
+
+  return new Set([
+    ...(compiler.modifiedFiles ?? []),
+    ...(compiler.removedFiles ?? []),
+  ]);
+};
+
+const moduleFileExtensions = [
+  '.mjs',
+  '.js',
+  '.cjs',
+  '.mts',
+  '.ts',
+  '.cts',
+  '.jsx',
+  '.tsx',
+];
+
+const resolveFilePath = (filePath: string): string | undefined => {
+  try {
+    const stats = statSync(filePath);
+
+    if (stats.isFile()) {
+      return filePath;
+    }
+
+    return undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const resolveLocalDirectoryModule = (
+  directoryPath: string,
+): string | undefined => {
+  try {
+    const stats = statSync(directoryPath);
+    if (!stats.isDirectory()) {
+      return undefined;
+    }
+
+    for (const extension of moduleFileExtensions) {
+      const indexPath = path.join(directoryPath, `index${extension}`);
+      if (existsSync(indexPath)) {
+        return indexPath;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+};
+
+const resolveLocalModule = (
+  importerPath: string,
+  specifier: string,
+): string | undefined => {
+  if (!specifier.startsWith('.') && !path.isAbsolute(specifier)) {
+    return undefined;
+  }
+
+  const candidate = path.isAbsolute(specifier)
+    ? specifier
+    : path.join(path.dirname(importerPath), specifier);
+
+  const exactFile = resolveFilePath(candidate);
+  if (exactFile) {
+    return exactFile;
+  }
+
+  for (const extension of moduleFileExtensions) {
+    const file = resolveFilePath(`${candidate}${extension}`);
+    if (file) {
+      return file;
+    }
+  }
+
+  const indexFile = resolveLocalDirectoryModule(candidate);
+  if (indexFile) {
+    return indexFile;
+  }
+
+  return undefined;
+};
+
+const collectTestEnvironmentWatchFiles = (entryFiles: string[]) => {
+  const watchFiles = new Set<string>();
+
+  const visit = (filePath: string) => {
+    const resolvedFilePath = resolveFilePath(filePath);
+    if (!resolvedFilePath || watchFiles.has(resolvedFilePath)) {
+      return;
+    }
+
+    watchFiles.add(resolvedFilePath);
+
+    let source: string;
+    try {
+      source = readFileSync(resolvedFilePath, 'utf-8');
+    } catch {
+      return;
+    }
+
+    const importRegex =
+      /\b(?:import|export)\s+(?:[^'"()]*?\s+from\s+)?['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)|\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+
+    for (const match of source.matchAll(importRegex)) {
+      const specifier = match[1] || match[2] || match[3];
+      if (!specifier) {
+        continue;
+      }
+
+      const dependency = resolveLocalModule(resolvedFilePath, specifier);
+      if (dependency) {
+        visit(dependency);
+      }
+    }
+  };
+
+  for (const file of entryFiles) {
+    visit(file);
+  }
+
+  return Array.from(watchFiles);
+};
+
+export const resolveTestEnvironmentWatchFiles = async (
+  projects: ProjectContext[],
+  command: RstestContext['command'],
+  rootPath: string,
+): Promise<Record<string, string[]>> => {
+  if (command !== 'watch') {
+    return {};
+  }
+
+  const entries = await Promise.all(
+    projects.map(async (project) => {
+      const resolvedPaths = await resolveTestEnvironmentPath(
+        project.normalizedConfig.testEnvironment.name,
+        [project.rootPath, rootPath],
+      );
+
+      const entryFiles =
+        resolvedPaths?.map((resolvedPath) => fileURLToPath(resolvedPath)) || [];
+
+      return [
+        project.environmentName,
+        collectTestEnvironmentWatchFiles(entryFiles),
+      ] as const;
+    }),
+  );
+
+  return Object.fromEntries(entries);
+};
+
 export const prepareRsbuild = async (
   context: RstestContext,
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>,
@@ -101,6 +265,7 @@ export const prepareRsbuild = async (
    */
   targetProjects?: ProjectContext[],
   extraPlugins: RsbuildPlugin[] = [],
+  testEnvironmentFiles: Record<string, string[]> = {},
 ): Promise<RsbuildInstance> => {
   const {
     command,
@@ -156,6 +321,7 @@ export const prepareRsbuild = async (
           globTestSourceEntries,
           setupFiles,
           globalSetupFiles,
+          testEnvironmentFiles,
           context,
           isWatch: command === 'watch',
         }),
@@ -188,6 +354,7 @@ export const prepareRsbuild = async (
 const calcEntriesToRerun = (
   entries: EntryInfo[],
   chunks: Rspack.StatsChunk[] | undefined,
+  changedFiles: ReadonlySet<string> | undefined,
   buildData: {
     entryToChunkHashes?: TestEntryToChunkHashes;
     setupEntryToChunkHashes?: TestEntryToChunkHashes;
@@ -197,9 +364,11 @@ const calcEntriesToRerun = (
   outputPath: string,
   runtimeChunkName: string,
   setupEntries: EntryInfo[],
+  testEnvironmentFiles: string[],
 ): {
   affectedEntries: EntryInfo[];
   deletedEntries: string[];
+  hasChangedTestEnvironmentFile: boolean;
 } => {
   const entryByTestPath = new Map(
     entries.map((entry) => [entry.testPath, entry] as const),
@@ -284,6 +453,10 @@ const calcEntriesToRerun = (
   const previousSetupHashes = buildData.setupEntryToChunkHashes;
   const previousEntryHashes = buildData.entryToChunkHashes;
 
+  const hasChangedTestEnvironmentFile = testEnvironmentFiles.some((file) =>
+    changedFiles?.has(file),
+  );
+
   const setupEntryToChunkHashesMap = new Map<string, Record<string, string>>();
   setupEntries.forEach((entry) => {
     buildChunkHashes(entry, setupEntryToChunkHashesMap);
@@ -324,8 +497,16 @@ const calcEntriesToRerun = (
   const { affectedPaths: affectedSetupPaths, deletedPaths: deletedSetups } =
     processEntryChanges(previousSetupHashes, setupEntryToChunkHashesMap);
 
-  if (affectedSetupPaths.size > 0 || deletedSetups.length > 0) {
-    return { affectedEntries: entries, deletedEntries: [] };
+  if (
+    hasChangedTestEnvironmentFile ||
+    affectedSetupPaths.size > 0 ||
+    deletedSetups.length > 0
+  ) {
+    return {
+      affectedEntries: entries,
+      deletedEntries: [],
+      hasChangedTestEnvironmentFile,
+    };
   }
 
   const { affectedPaths: affectedTestPaths, deletedPaths } =
@@ -335,7 +516,11 @@ const calcEntriesToRerun = (
     .map((testPath) => entryByTestPath.get(testPath))
     .filter((entry): entry is EntryInfo => entry !== undefined);
 
-  return { affectedEntries, deletedEntries: deletedPaths };
+  return {
+    affectedEntries,
+    deletedEntries: deletedPaths,
+    hasChangedTestEnvironmentFile,
+  };
 };
 
 class AssetsMemorySafeMap extends Map<string, string> {
@@ -358,6 +543,7 @@ export const createRsbuildServer = async ({
   rsbuildInstance,
   inspectedConfig,
   isWatchMode,
+  testEnvironmentFiles = {},
 }: {
   isWatchMode: boolean;
   rsbuildInstance: RsbuildInstance;
@@ -367,6 +553,7 @@ export const createRsbuildServer = async ({
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
   globalSetupFiles: Record<string, Record<string, string>>;
+  testEnvironmentFiles?: Record<string, string[]>;
   rootPath: string;
 }): Promise<{
   getRsbuildStats: (options: {
@@ -384,6 +571,7 @@ export const createRsbuildServer = async ({
     affectedEntries: EntryInfo[];
     /** deleted test entries only available in watch mode */
     deletedEntries: string[];
+    hasChangedTestEnvironmentFile: boolean;
   }>;
   closeServer: () => Promise<void>;
 }> => {
@@ -430,11 +618,13 @@ export const createRsbuildServer = async ({
     throw new Error('rspackCompiler was not initialized');
   }
 
+  const compiler = rspackCompiler;
+
   const outputFileSystem: Rspack.OutputFileSystem | null = isMultiCompiler(
-    rspackCompiler,
+    compiler,
   )
-    ? rspackCompiler.compilers[0]!.outputFileSystem
-    : rspackCompiler.outputFileSystem;
+    ? compiler.compilers[0]!.outputFileSystem
+    : compiler.outputFileSystem;
 
   if (!outputFileSystem) {
     throw new Error(
@@ -598,16 +788,29 @@ export const createRsbuildServer = async ({
 
     // affectedEntries: entries affected by source code.
     // deletedEntries: entry files deleted from compilation.
-    const { affectedEntries, deletedEntries } = isWatchMode
-      ? calcEntriesToRerun(
-          entries,
-          chunks,
-          buildData[environmentName],
-          outputPath!,
-          runtimeChunkNameForEnvironment(environmentName),
-          setupEntries,
-        )
-      : { affectedEntries: [], deletedEntries: [] };
+    const { affectedEntries, deletedEntries, hasChangedTestEnvironmentFile } =
+      isWatchMode
+        ? calcEntriesToRerun(
+            entries,
+            chunks,
+            isMultiCompiler(compiler)
+              ? getChangedFiles(
+                  compiler.compilers.find(
+                    (compiler) => compiler.name === environmentName,
+                  ),
+                )
+              : getChangedFiles(compiler),
+            buildData[environmentName],
+            outputPath!,
+            runtimeChunkNameForEnvironment(environmentName),
+            setupEntries,
+            testEnvironmentFiles[environmentName] || [],
+          )
+        : {
+            affectedEntries: [],
+            deletedEntries: [],
+            hasChangedTestEnvironmentFile: false,
+          };
 
     const cachedAssetFiles = new AssetsMemorySafeMap();
     const cachedSourceMaps = new AssetsMemorySafeMap();
@@ -655,6 +858,7 @@ export const createRsbuildServer = async ({
     return {
       affectedEntries,
       deletedEntries,
+      hasChangedTestEnvironmentFile,
       hash,
       entries,
       setupEntries,

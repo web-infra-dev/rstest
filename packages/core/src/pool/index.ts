@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { basename, dirname, join, resolve } from 'pathe';
+import { resolveTestEnvironmentPath } from '../core/resolveTestEnvironment';
 import type {
   CoverageMapData,
   EntryInfo,
@@ -26,8 +27,8 @@ import {
   needFlagExperimentalDetectModule,
   toError,
 } from '../utils';
-import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
+import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { getNumCpus, parseWorkers } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
 import { Pool } from './pool';
@@ -36,7 +37,10 @@ import type { PoolWorkerKind } from './types';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
+const getRuntimeConfig = async (
+  context: RstestContext,
+  project: ProjectContext,
+): Promise<RuntimeConfig> => {
   const {
     testNamePattern,
     testTimeout,
@@ -63,7 +67,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     chaiConfig,
     includeTaskLocation,
     silent,
-  } = context.normalizedConfig;
+  } = project.normalizedConfig;
 
   return {
     env: {
@@ -95,6 +99,10 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
     chaiConfig,
     includeTaskLocation,
     silent,
+    resolvedTestEnvironmentPaths: await resolveTestEnvironmentPath(
+      testEnvironment.name,
+      [project.rootPath, context.rootPath],
+    ),
   };
 };
 
@@ -485,7 +493,7 @@ export const createPool = async ({
       traceSpan,
     }) => {
       const projectName = project.name;
-      const runtimeConfig = getRuntimeConfig(project);
+      const runtimeConfig = await getRuntimeConfig(context, project);
       const rpcMethods = createRpcMethods({
         runtimeConfig,
         projectConfig: project.normalizedConfig,
@@ -572,7 +580,7 @@ export const createPool = async ({
       project,
       updateSnapshot,
     }) => {
-      const runtimeConfig = getRuntimeConfig(project);
+      const runtimeConfig = await getRuntimeConfig(context, project);
       const projectName = project.normalizedConfig.name;
       const rpcMethods = createRpcMethods({
         runtimeConfig,

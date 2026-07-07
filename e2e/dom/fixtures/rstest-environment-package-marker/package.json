@@ -1,0 +1,8 @@
+{
+  "name": "rstest-environment-package-marker",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "import": "./index.mjs"
+  }
+}

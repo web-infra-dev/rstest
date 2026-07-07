@@ -3,6 +3,7 @@ import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
 import type { BundleDependencyPattern } from '../../types/config';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
+import { isNodeLikeTestEnvironment } from '../testEnvironment';
 
 const NODE_MODULES_PATH_SEGMENT = '/node_modules/';
 const SCRIPT_EXTENSION_RE = /\.(?:[cm]?[jt]sx?)$/;
@@ -267,7 +268,7 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
 
       const shouldExternalize =
         bundleDependencies === undefined
-          ? testEnvironment.name === 'node'
+          ? isNodeLikeTestEnvironment(testEnvironment)
           : Array.isArray(bundleDependencies)
             ? true
             : !bundleDependencies;

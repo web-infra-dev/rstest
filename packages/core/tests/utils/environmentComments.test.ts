@@ -96,6 +96,7 @@ const regexp = /"/;
       applyEnvironmentComment(
         {
           name: 'jsdom',
+          target: 'web',
           options: {
             url: 'https://base.test/',
             pretendToBeVisual: true,
@@ -109,9 +110,32 @@ const regexp = /"/;
       ),
     ).toEqual({
       name: 'jsdom',
+      target: 'web',
       options: {
         url: 'https://comment.test/',
         pretendToBeVisual: true,
+      },
+    });
+  });
+
+  it('preserves target when comment adds options to a custom environment', () => {
+    expect(
+      applyEnvironmentComment(
+        {
+          name: './env.mjs',
+          target: 'web',
+        },
+        {
+          options: {
+            marker: true,
+          },
+        },
+      ),
+    ).toEqual({
+      name: './env.mjs',
+      target: 'web',
+      options: {
+        marker: true,
       },
     });
   });

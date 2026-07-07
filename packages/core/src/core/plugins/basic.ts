@@ -10,6 +10,7 @@ import {
 import type { RstestContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
 import { runtimeChunkNameForEnvironment } from '../runtimeChunk';
+import { isNodeLikeTestEnvironment } from '../testEnvironment';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -86,7 +87,8 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
           resolve: {
             // Extend the default resolve conditionNames for browser-like environment, use `browser` field instead of `node` field
             conditionNames:
-              testEnvironment.name === 'node' || resolve?.conditionNames
+              isNodeLikeTestEnvironment(testEnvironment) ||
+              resolve?.conditionNames
                 ? undefined
                 : ['browser', '...'],
           },
@@ -223,7 +225,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               config.resolve.extensionAlias['.js'] = ['.js', '.ts', '.tsx'];
               config.resolve.extensionAlias['.jsx'] = ['.jsx', '.tsx'];
 
-              if (testEnvironment.name === 'node') {
+              if (isNodeLikeTestEnvironment(testEnvironment)) {
                 // skip `module` field in Node.js environment.
                 // ESM module resolved by module field is not always a native ESM module
                 config.resolve.mainFields = config.resolve.mainFields?.filter(
