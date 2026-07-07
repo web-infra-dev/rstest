@@ -86,10 +86,10 @@ npx rstest run --shard=1/3
 
 在 [Rsbuild](https://github.com/web-infra-dev/rsbuild) 仓库自身的测试套件上（`pnpm test --coverage --coverage.provider=v8`），我们测得：
 
-| 版本                             | Wall span | Phase sum |
-| -------------------------------- | --------: | --------: |
-| baseline（`ast-v8-to-istanbul`） |     6.05s |    60.11s |
-| Rstest 0.11                      |     1.81s |    10.28s |
+| 版本               | Wall span | Phase sum |
+| ------------------ | --------: | --------: |
+| baseline（0.10.6） |     6.05s |    60.11s |
+| Rstest 0.11        |     1.81s |    10.28s |
 
 相比 baseline，重构后的路径快约 **3.34 倍**，各文件 phase 耗时之和降低 **5.85 倍**；在主进程解析 raw coverage 进一步将 Rstest 自身的处理耗时降低约 **2 倍**（同一项目），并减少了 CPU 占用。coverage 输出结果保持不变。
 

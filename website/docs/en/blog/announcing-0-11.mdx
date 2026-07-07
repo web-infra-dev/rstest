@@ -86,10 +86,10 @@ Previously, the provider ran every raw V8 entry through the generic `ast-v8-to-i
 
 Measured on the [Rsbuild](https://github.com/web-infra-dev/rsbuild) repository's own test suite (`pnpm test --coverage --coverage.provider=v8`):
 
-| Version                         | Wall span | Phase sum |
-| ------------------------------- | --------: | --------: |
-| baseline (`ast-v8-to-istanbul`) |     6.05s |    60.11s |
-| Rstest 0.11                     |     1.81s |    10.28s |
+| Version           | Wall span | Phase sum |
+| ----------------- | --------: | --------: |
+| baseline (0.10.6) |     6.05s |    60.11s |
+| Rstest 0.11       |     1.81s |    10.28s |
 
 Compared with the baseline, the reworked path is about **3.34x faster**, and the summed per-file phase time drops **5.85x**. Resolving raw coverage in the main process further cuts Rstest's own processing time (about **2x** on the same project) and lowers CPU usage. The coverage output is unchanged.
 
