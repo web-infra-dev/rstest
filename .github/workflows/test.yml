@@ -222,6 +222,55 @@ jobs:
         if: matrix.test_script == 'test' && (needs.prepare.outputs.is_full_run == 'true' || (matrix.os == 'windows-latest' && matrix.node_version == '24'))
         run: pnpm run test:vscode
 
+  # ======== native-watcher stress (draft only) ========
+  # 50-round pressure test of the rspack native watcher on macos-14, where the
+  # stale-FSEvent flake used to surface. 10 shards x 5 fresh rounds = 50 runs
+  # of the watch e2e suite. Not wired into test-gate; remove before merge.
+  stress-watch:
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: macos-14
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Build Packages
+        run: pnpm run build
+
+      - name: Stress watch e2e (5 fresh rounds)
+        run: |
+          cd e2e
+          fail=0
+          for r in 1 2 3 4 5; do
+            echo "===== shard ${{ matrix.shard }} round $r/5 ====="
+            if pnpm exec rstest run watch/; then
+              echo "shard ${{ matrix.shard }} round $r: PASS"
+            else
+              echo "shard ${{ matrix.shard }} round $r: FAIL"
+              fail=1
+            fi
+          done
+          exit $fail
+
   # ======== codspeed ========
   # Temporarily disabled: CodSpeed runner quota exhausted.
   # Re-enable once quota resets.
