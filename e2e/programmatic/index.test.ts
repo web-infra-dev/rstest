@@ -405,7 +405,7 @@ describe('programmatic createRstest', () => {
     ]);
   });
 
-  it('mergeReports() reports blob failures via ok=false without poisoning host process.exitCode', async ({
+  it('mergeReports resolves the merged TestRunResult and rejects only on operational failure', async ({
     onTestFinished,
   }) => {
     const { cli } = await runRstestCli({
@@ -418,11 +418,21 @@ describe('programmatic createRstest', () => {
     await cli.exec;
     const result = parsePayload(cli.stdout);
 
-    // A merged report containing a failed test surfaces as ok=false (mirroring
-    // the CLI exit code), while all-passing blobs merge to ok=true...
-    expect(result.failingOk).toBe(false);
-    expect(result.passingOk).toBe(true);
-    // ...and neither merge leaks a non-zero exit code onto the host.
+    // Failing merged blobs surface as data (ok=false + per-file detail), not a
+    // rejection — mirroring the CLI's exit 1.
+    expect(result.fail.ok).toBe(false);
+    expect(result.fail.failedTests).toBeGreaterThan(0);
+    expect(result.fail.failedFiles).toBeGreaterThan(0);
+    expect(result.fail.hasFileDetail).toBe(true);
+    // All-passing blobs merge to ok=true.
+    expect(result.pass.ok).toBe(true);
+    expect(result.pass.passedTests).toBeGreaterThan(0);
+    // A merge that can't be performed rejects with the original core error.
+    expect(result.missingRejected).toBe(true);
+    expect(result.missingError).toMatch(
+      /No blob report files found|directory not found/,
+    );
+    // The host's exit code is left untouched by any of the merges.
     expect(result.hostExitCode).toBe(0);
   });
 

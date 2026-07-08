@@ -207,6 +207,12 @@ type CapturedRunState = {
    * fails on these, so `ok` must too.
    */
   exitCode?: number | string;
+  /**
+   * Per-file results captured from `onTestRunEnd`; used by the merge-reports
+   * path, where `context.reporterResults` is not populated (the `run()` path
+   * reads per-file results from the runner context instead).
+   */
+  files?: TestFileResult[];
 };
 
 export const createCapturedRunState = (): CapturedRunState => ({
@@ -240,8 +246,14 @@ const fillCapturedFromRunEnd = (
  */
 export const createCaptureReporter = (
   captured: CapturedRunState,
+  { captureFiles = false }: { captureFiles?: boolean } = {},
 ): Reporter => ({
-  onTestRunEnd: (args) => fillCapturedFromRunEnd(captured, args),
+  onTestRunEnd: (args) => {
+    fillCapturedFromRunEnd(captured, args);
+    if (captureFiles) {
+      captured.files = args.results.map(toPublicTestFileResult);
+    }
+  },
 });
 
 /**
@@ -290,9 +302,13 @@ export const assembleTestRunResult = (
   // Watch is exempt — the CLI never fails a watch rerun for zero test files
   // (a benign no-op rerun logs "No test files need re-run" without an exit
   // code), so a watch `onResult` must not report `ok: false` for it either.
+  // `merge-reports` is exempt too: merging blobs that legitimately contain zero
+  // file results (e.g. a `passWithNoTests` shard that matched nothing) is not a
+  // failure — the CLI exits 0 for it.
   const noTestsFailure =
     !!context &&
     context.command !== 'watch' &&
+    context.command !== 'merge-reports' &&
     files.length === 0 &&
     !context.normalizedConfig.passWithNoTests;
 

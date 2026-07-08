@@ -204,7 +204,9 @@ for (const file of list) {
 
 ### rstest.mergeReports
 
-将磁盘上的 blob reports 合并为单个聚合报告。
+将磁盘上的 blob reports 合并为单个聚合报告。它 resolve 合并后的 [`TestRunResult`](#testrunresult) —— 即各分片运行的聚合结果，与 `run()` resolve 的结构相同。
+
+当合并后的 blobs 中包含失败的测试或 unhandled errors 时，`ok` 为 `false`（与 CLI 的退出码一致）；这些是 `stats` / `files` 中的数据，而不是异常。只有当合并操作本身无法执行时它才会 **reject** —— 例如 blob 目录不存在、没有 blob 文件、或 blob JSON 损坏 —— 因为此时没有可返回的聚合结果。这是与 `run()`（永不 reject）有意形成的对比：`run()` 掌管一次测试执行，会把所有失败都收敛进其结果，而 `mergeReports` 是一个聚合工具，具有明确的"完全无法执行"的失败模式。
 
 - **类型：**
 
@@ -212,19 +214,21 @@ for (const file of list) {
 function mergeReports(options?: {
   path?: string;
   cleanup?: boolean;
-}): Promise<{ ok: boolean }>;
+}): Promise<TestRunResult>;
 ```
 
 - **示例：**
 
 ```ts
-const { ok } = await rstest.mergeReports({
-  path: './.rstest-reports',
-  cleanup: true,
-});
+const result = await rstest.mergeReports({ path: './.rstest-reports' });
+// resolve 出的值就是各分片运行的合并聚合结果：
+if (!result.ok) {
+  const failed = result.files.filter((f) => f.status === 'fail');
+  console.log(`${result.stats.tests.failed} failed tests`, failed);
+}
+// reject 仅表示合并本身无法执行
+//（blob 目录不存在、blob 文件损坏）。
 ```
-
-当合并的 blob reports 中包含失败的测试或未处理的错误时，`ok` 为 `false`，与 `rstest merge-reports` CLI 的退出码保持一致。与 CLI 不同，宿主进程的 `process.exitCode` 不会被修改，因此请检查 `ok` 来决定是否让流水线失败。
 
 :::tip 无需调用 `close()`
 实例上没有 `close()`。每次 `run()` 都会自行构建并拆除其 worker pool 与 Rsbuild server，因此实例在两次调用之间不持有任何资源。唯一的例外是 [`watch`](#rstestwatch) 会话 —— 它会保持一个 dev server 常驻，用完后请调用返回的 watcher 的 `close()`。

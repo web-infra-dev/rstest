@@ -266,15 +266,24 @@ export interface RstestInstance {
   ): Promise<ListCommandResult[]>;
 
   /**
-   * Merge on-disk blob reports into a single aggregate report. Resolves
-   * `{ ok: false }` when the merged blobs contain failed tests or unhandled
-   * errors (mirroring the CLI `rstest merge-reports` exit code); `{ ok: true }`
-   * otherwise. The host's `process.exitCode` is left untouched.
+   * Merge on-disk blob reports into a single aggregate report. Resolves the
+   * merged {@link TestRunResult} — the aggregate of the sharded runs, the same
+   * shape `run()` resolves. `ok` is `false` when the merged blobs contain
+   * failed tests or unhandled errors (mirroring the CLI's exit 1); the failing
+   * detail is in `stats` / `files`, not thrown.
+   *
+   * Rejects only when the merge operation itself cannot be performed (missing
+   * blob directory, no blob files, corrupt blob JSON), with the original core
+   * error — in that case there is no aggregate to return. This is the
+   * intentional contrast with `run()` (which never rejects): `run()` owns a
+   * test execution and contains every failure in its result, whereas
+   * `mergeReports` is an aggregation utility with a clean "couldn't do it at
+   * all" failure mode.
    */
   mergeReports(options?: {
     path?: string;
     cleanup?: boolean;
-  }): Promise<{ ok: boolean }>;
+  }): Promise<TestRunResult>;
 }
 
 /** Resolve an optional caller-supplied cwd against the current process cwd. */
@@ -613,18 +622,32 @@ export async function createRstest(
   const mergeReports = async (mergeOptions?: {
     path?: string;
     cleanup?: boolean;
-  }): Promise<{ ok: boolean }> => {
-    // `mergeReports` reports failure only via `process.exitCode = 1` (set when a
-    // blob report contains failed tests / unhandled errors) — it never throws.
-    // Start from a clean exit code (like `run()`), observe it after the merge to
-    // derive `ok`, then restore the host's original value in `finally` so the
-    // merge doesn't leave the embedding process marked as failed.
+  }): Promise<TestRunResult> => {
     const restore = snapshotProcessGuards();
+    // Start from a clean exit code (like the CLI) so `ok` reflects only this
+    // merge's failing blobs, not a non-zero code the embedding host set earlier.
+    // The guard restores the host's original value afterwards.
     process.exitCode = undefined;
+    const captured = createCapturedRunState();
     try {
       const runner = await build('merge-reports', {});
+      // Core merge does not populate `context.reporterResults`, so capture the
+      // per-file results directly from the `onTestRunEnd` broadcast.
+      runner.context.reporters.push(
+        createCaptureReporter(captured, { captureFiles: true }),
+      );
+      // Operational failures (missing/empty blob dir, corrupt blob JSON) throw
+      // in core `loadBlobFiles` and propagate as this promise's rejection — the
+      // merge produced no aggregate to hand back.
       await runner.mergeReports(mergeOptions);
-      return { ok: !process.exitCode };
+      // Core signals failing merged blobs only via `process.exitCode = 1`; fold
+      // it into `ok` like `run()` does (the guard restores the host value).
+      captured.exitCode = process.exitCode;
+      return assembleTestRunResult(
+        captured.files ?? [],
+        captured,
+        runner.context,
+      );
     } finally {
       restore();
     }

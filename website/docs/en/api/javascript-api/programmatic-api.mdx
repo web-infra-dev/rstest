@@ -204,7 +204,9 @@ for (const file of list) {
 
 ### rstest.mergeReports
 
-Merge on-disk blob reports into a single aggregate report.
+Merge on-disk blob reports into a single aggregate report. Resolves the merged [`TestRunResult`](#testrunresult) — the aggregate of the sharded runs, the same shape `run()` resolves.
+
+`ok` is `false` when the merged blobs contain failed tests or unhandled errors (mirroring the CLI's exit code); those are data in `stats` / `files`, not an exception. It **rejects** only when the merge itself cannot be performed — a missing blob directory, no blob files, or corrupt blob JSON — since there is no aggregate to return. This is the intentional contrast with `run()` (which never rejects): `run()` owns a test execution and contains every failure in its result, whereas `mergeReports` is an aggregation utility with a clean "couldn't do it at all" failure mode.
 
 - **Type:**
 
@@ -212,19 +214,21 @@ Merge on-disk blob reports into a single aggregate report.
 function mergeReports(options?: {
   path?: string;
   cleanup?: boolean;
-}): Promise<{ ok: boolean }>;
+}): Promise<TestRunResult>;
 ```
 
 - **Example:**
 
 ```ts
-const { ok } = await rstest.mergeReports({
-  path: './.rstest-reports',
-  cleanup: true,
-});
+const result = await rstest.mergeReports({ path: './.rstest-reports' });
+// The resolved value is the merged aggregate of the sharded runs:
+if (!result.ok) {
+  const failed = result.files.filter((f) => f.status === 'fail');
+  console.log(`${result.stats.tests.failed} failed tests`, failed);
+}
+// A rejection only means the merge itself could not be performed
+// (missing blob directory, corrupt blob file).
 ```
-
-`ok` is `false` when the merged blobs contain failed tests or unhandled errors, mirroring the `rstest merge-reports` CLI exit code. Unlike the CLI, the host's `process.exitCode` is left untouched, so check `ok` to fail your pipeline.
 
 :::tip No `close()` to call
 There is no `close()` on the instance. Each `run()` builds and tears down its own worker pool and Rsbuild server, so an instance holds no resources between calls. A [`watch`](#rstestwatch) session is the exception — it keeps a dev server alive, so call `close()` on the returned watcher when you're done.
