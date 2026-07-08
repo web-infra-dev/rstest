@@ -374,42 +374,60 @@ const getMockImplementation = (mockType = 'mock') => {
             }
             return undefined;
           };
-          const lazyExports = new Proxy(Object.create(null), {
-            get(_, property) {
-              if (materializedExports === undefined) {
-                const probed = preMaterializeAnswer(property);
-                if (probed) {
-                  return probed.value;
+          // mockRequire serves the factory result verbatim, and that result
+          // may be CALLABLE (`rs.mockRequire('pkg', () => () => 'ok')`) — a
+          // Proxy is only callable when its target is, so the mockRequire
+          // path proxies an arrow function and forwards `apply`. An ARROW
+          // function specifically: it has no own non-configurable `prototype`
+          // (a regular function's would make the `ownKeys` trap below throw
+          // a Proxy invariant violation on `Object.keys`), at the cost of
+          // `new` on a
+          // lazily-served mockRequire mock throwing — constructing through a
+          // Proxy requires a constructible target. The rs.mock path keeps a
+          // plain object target: a namespace is never callable.
+          const lazyExports = new Proxy(
+            isMockRequire ? () => {} : Object.create(null),
+            {
+              apply(_, thisArg, args) {
+                return Reflect.apply(materialize(), thisArg, args);
+              },
+              get(_, property) {
+                if (materializedExports === undefined) {
+                  const probed = preMaterializeAnswer(property);
+                  if (probed) {
+                    return probed.value;
+                  }
                 }
-              }
-              return materialize()[property];
-            },
-            has(_, property) {
-              if (materializedExports === undefined) {
-                const probed = preMaterializeAnswer(property);
-                if (probed) {
-                  return probed.value !== undefined;
+                return materialize()[property];
+              },
+              has(_, property) {
+                if (materializedExports === undefined) {
+                  const probed = preMaterializeAnswer(property);
+                  if (probed) {
+                    return probed.value !== undefined;
+                  }
                 }
-              }
-              return Reflect.has(materialize(), property);
+                return Reflect.has(materialize(), property);
+              },
+              ownKeys(_) {
+                return Reflect.ownKeys(materialize());
+              },
+              getOwnPropertyDescriptor(_, property) {
+                const descriptor = Reflect.getOwnPropertyDescriptor(
+                  materialize(),
+                  property,
+                );
+                // `configurable: true` unconditionally: the Proxy target owns
+                // no non-configurable properties (an empty object, or an arrow
+                // function whose `length`/`name` are configurable), and
+                // reporting a non-configurable descriptor for a property the
+                // target does not own violates the Proxy invariant and throws.
+                return descriptor
+                  ? { ...descriptor, configurable: true }
+                  : undefined;
+              },
             },
-            ownKeys(_) {
-              return Reflect.ownKeys(materialize());
-            },
-            getOwnPropertyDescriptor(_, property) {
-              const descriptor = Reflect.getOwnPropertyDescriptor(
-                materialize(),
-                property,
-              );
-              // `configurable: true` unconditionally: the Proxy target is an
-              // empty object, and reporting a non-configurable descriptor for
-              // a property the target does not own violates the Proxy
-              // invariant and throws.
-              return descriptor
-                ? { ...descriptor, configurable: true }
-                : undefined;
-            },
-          });
+          );
           __webpack_module__.exports = lazyExports;
           // Guarantee the factory runs even when nothing ever reads an
           // export (a side-effect-only `import 'pkg'`): the worker flushes

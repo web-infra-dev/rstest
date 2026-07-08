@@ -394,7 +394,12 @@ const loadFiles = async ({
   // chunk's mock runtime registers a flusher — see
   // `__rstest_lazy_mock_flushers__` in mockRuntimeCode.js), so a factory
   // side effect from a side-effect-only `import 'pkg'` is not silently
-  // skipped.
+  // skipped. This is the earliest point the worker can hook: the factory's
+  // captured bindings are only reassigned when its module's async-deps await
+  // resumes, so running factories during the import statement itself is
+  // exactly the unsettled-capture timing the lazy path exists to avoid —
+  // even though a top-level statement between the import and the end of the
+  // module body will not observe the side effect yet.
   const lazyMockFlushers = (
     globalThis as { __rstest_lazy_mock_flushers__?: Set<() => void> }
   ).__rstest_lazy_mock_flushers__;
