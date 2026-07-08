@@ -254,7 +254,10 @@ type Properties<T> = {
   [K in keyof T]: T[K] extends MockProcedure ? never : K;
 }[keyof T];
 
-export type MockedFunction<T extends MockProcedure> = Mock<T> & T;
+// `T` comes first so a construct+call member keeps `T`'s real construct
+// signature at `new mocked.fn()` sites; `Mock<T>`'s synthetic `new` (which
+// returns `ReturnType<T>`) would otherwise shadow it.
+export type MockedFunction<T extends MockProcedure> = T & Mock<T>;
 
 export type MockedFunctionDeep<T extends MockProcedure> = Mock<T> &
   MockedObjectDeep<T>;

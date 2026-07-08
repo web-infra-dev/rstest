@@ -266,6 +266,10 @@ describe('rs.mocked', () => {
       op: (new () => Handle) & (() => Promise<number>);
     }
     const asReal = (mocked: Mocked<Api>): Api => mocked;
+    // The construct signature must also survive: `new mocked.op()` should
+    // infer `Handle`, not `Mock`'s synthetic `ReturnType<T>` (`Promise`).
+    const constructsHandle = (mocked: Mocked<Api>): Handle => new mocked.op();
     expect(asReal).toBeTypeOf('function');
+    expect(constructsHandle).toBeTypeOf('function');
   });
 });
