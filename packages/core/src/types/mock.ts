@@ -254,9 +254,7 @@ type Properties<T> = {
   [K in keyof T]: T[K] extends MockProcedure ? never : K;
 }[keyof T];
 
-export type MockedFunction<T extends MockProcedure> = Mock<T> & {
-  [K in keyof T]: T[K];
-};
+export type MockedFunction<T extends MockProcedure> = Mock<T> & T;
 
 export type MockedFunctionDeep<T extends MockProcedure> = Mock<T> &
   MockedObjectDeep<T>;

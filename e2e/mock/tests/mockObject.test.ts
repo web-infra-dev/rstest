@@ -1,3 +1,4 @@
+import type { Mocked } from '@rstest/core';
 import { describe, expect, rs, test } from '@rstest/core';
 
 describe('rs.mockObject', () => {
@@ -253,5 +254,18 @@ describe('rs.mocked', () => {
     const mock = rs.fn();
     const mocked = rs.mocked(mock, { partial: true, deep: true });
     expect(mocked).toBe(mock);
+  });
+
+  // Type-level regression: `Mocked<T>` must stay assignable back to `T`,
+  // including members that are both constructable and callable (issue #1515).
+  test('Mocked<T> stays assignable to T for construct+call members', () => {
+    class Handle {
+      _tag!: number;
+    }
+    interface Api {
+      op: (new () => Handle) & (() => Promise<number>);
+    }
+    const asReal = (mocked: Mocked<Api>): Api => mocked;
+    expect(asReal).toBeTypeOf('function');
   });
 });
