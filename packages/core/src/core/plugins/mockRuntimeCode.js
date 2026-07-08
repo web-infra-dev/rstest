@@ -334,25 +334,48 @@ const getMockImplementation = (mockType = 'mock') => {
             }
             return materializedExports;
           };
-          // Runtime probes must not force the factory: the async-deps
-          // machinery checks `.then` (thenable) and `Symbol("rspack queues")`
-          // (async module), `Object.prototype.toString` reads
-          // `Symbol.toStringTag`. An ESM namespace never has symbol exports,
-          // so every symbol read answers `undefined` without materializing —
-          // and the mock must not look async, or the importer would await it
-          // back into the very cycle this Proxy breaks.
-          const isRuntimeProbe = (property) =>
-            property === 'then' || typeof property === 'symbol';
+          // Until the factory has run, the runtime's own module-loading reads
+          // must be answered WITHOUT forcing it: the async-deps machinery
+          // checks `.then` (thenable) and `Symbol("rspack queues")` (async
+          // module), `Object.prototype.toString` reads `Symbol.toStringTag`,
+          // and `__webpack_require__.n` reads `__esModule` — all while the
+          // captured bindings may still be unsettled (and the mock must not
+          // look async, or the importer would await it back into the very
+          // cycle this Proxy breaks). `then`/symbols answer undefined;
+          // `__esModule` answers `true`, which is a constant of the namespace
+          // `defineExportsWithCjsInterop` will build (its `.r` call), so no
+          // materialization is needed for a correct answer. Once materialized,
+          // every read — including a genuine `then` export — delegates to the
+          // real namespace, matching the eager path. Residual limitation: a
+          // mock whose FIRST-ever accessed export is named `then` reads
+          // `undefined` (indistinguishable from a thenable probe).
+          const preMaterializeAnswer = (property) => {
+            if (property === '__esModule' && !isMockRequire) {
+              return { value: true };
+            }
+            if (property === 'then' || typeof property === 'symbol') {
+              return { value: undefined };
+            }
+            return undefined;
+          };
           __webpack_module__.exports = new Proxy(Object.create(null), {
             get(_, property) {
-              return isRuntimeProbe(property)
-                ? undefined
-                : materialize()[property];
+              if (materializedExports === undefined) {
+                const probed = preMaterializeAnswer(property);
+                if (probed) {
+                  return probed.value;
+                }
+              }
+              return materialize()[property];
             },
             has(_, property) {
-              return isRuntimeProbe(property)
-                ? false
-                : Reflect.has(materialize(), property);
+              if (materializedExports === undefined) {
+                const probed = preMaterializeAnswer(property);
+                if (probed) {
+                  return probed.value !== undefined;
+                }
+              }
+              return Reflect.has(materialize(), property);
             },
             ownKeys(_) {
               return Reflect.ownKeys(materialize());
