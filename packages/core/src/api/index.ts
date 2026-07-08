@@ -203,6 +203,11 @@ export interface RstestProjectSummary {
   name: string;
   /** Absolute root path of this project. */
   rootPath: string;
+  /**
+   * Absolute path to this project's own config file. Undefined for an inline
+   * project, which is identified by its `rootPath` instead.
+   */
+  configFilePath?: string;
 }
 
 /**
@@ -499,6 +504,7 @@ export async function createRstest(
       projects: internal.projects.map((project) => ({
         name: project.name,
         rootPath: project.rootPath,
+        configFilePath: project.configFilePath,
       })),
       configFilePath: internal.configFilePath,
     };

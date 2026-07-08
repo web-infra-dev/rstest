@@ -6,12 +6,11 @@ import { createRstest } from '@rstest/core/api';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const cwd = join(__dirname, 'merge-reports');
 
-// Fresh blob output dirs so reruns don't merge stale reports.
-const FAIL_DIR = 'blobs-fail';
-const PASS_DIR = 'blobs-pass';
-for (const dir of [FAIL_DIR, PASS_DIR]) {
-  rmSync(join(cwd, dir), { recursive: true, force: true });
-}
+// Fresh blob output dirs so reruns don't merge stale reports. Kept under the
+// gitignored `.rstest-reports/` so the generated blobs aren't tracked.
+const FAIL_DIR = '.rstest-reports/fail';
+const PASS_DIR = '.rstest-reports/pass';
+rmSync(join(cwd, '.rstest-reports'), { recursive: true, force: true });
 
 // Produce a blob report for a run that contains a failing test.
 const failRun = await createRstest({
