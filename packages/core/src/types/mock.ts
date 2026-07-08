@@ -149,7 +149,7 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
   withImplementation<T2>(
     fn: NormalizedProcedure<T>,
     callback: () => T2,
-  ): T2 extends Promise<unknown> ? Promise<void> : void;
+  ): T2 extends Promise<unknown> ? Promise<this> : this;
   /**
    * Return the `this` context from the method without invoking the actual implementation.
    */
