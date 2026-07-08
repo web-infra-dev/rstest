@@ -138,7 +138,6 @@ function matchesBundledDependency(
 }
 
 const autoExternalNodeModules: (
-  outputModule: boolean,
   bundledDependencies?: BundleDependencyPattern[],
 ) => (
   data: Rspack.ExternalItemFunctionData,
@@ -148,7 +147,7 @@ const autoExternalNodeModules: (
     type?: Rspack.ExternalsType,
   ) => void,
 ) => void =
-  (outputModule, bundledDependencies) =>
+  (bundledDependencies) =>
   ({ context, request, dependencyType, getResolve }, callback) => {
     if (!request) {
       return callback();
@@ -167,11 +166,15 @@ const autoExternalNodeModules: (
       callback(
         undefined,
         externalPath,
-        dependencyType === 'commonjs'
-          ? 'commonjs'
-          : outputModule
-            ? 'module-import'
-            : 'import',
+        // `import` (dynamic) also under module output, NOT `module-import`
+        // (static): a static external is evaluated by the ESM loader before
+        // the bundle body runs, so a hoisted `rs.mock` can never prevent the
+        // real module's evaluation — an import-time side effect (or throw)
+        // escapes the mock (#1456). An import-type external loads at
+        // `__webpack_require__` time, AFTER mock registration, so a mocked
+        // external's factory is already replaced and the real module is
+        // never touched.
+        dependencyType === 'commonjs' ? 'commonjs' : 'import',
       );
     };
 
@@ -244,6 +247,10 @@ function autoExternalNodeBuiltin(
     callback(
       undefined,
       request,
+      // Builtins keep the static `module-import` form: evaluating a core
+      // module early is side-effect-free, so the #1456 deferral in
+      // `doExternal` above buys nothing here, and the factory swap still
+      // intercepts every bundled importer of a mocked builtin.
       dependencyType === 'commonjs' ? 'commonjs' : 'module-import',
     );
   } else {
@@ -262,7 +269,6 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
           testEnvironment,
           output: { bundleDependencies } = {},
         },
-        outputModule,
       } = context.projects.find((p) => p.environmentName === name)!;
 
       const shouldExternalize =
@@ -277,7 +283,6 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
           externals: shouldExternalize
             ? [
                 autoExternalNodeModules(
-                  outputModule,
                   Array.isArray(bundleDependencies)
                     ? bundleDependencies
                     : undefined,

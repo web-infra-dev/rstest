@@ -261,11 +261,25 @@ importers:
         specifier: ^7.2.0
         version: 7.2.0
 
+  e2e/externals/fixtures/mock-eval/boom-esm: {}
+
+  e2e/externals/fixtures/mock-eval/boom-on-eval: {}
+
+  e2e/externals/fixtures/mock-eval/cjs-shaped: {}
+
+  e2e/externals/fixtures/mock-eval/consumer-pkg: {}
+
+  e2e/externals/fixtures/mock-eval/env-singleton: {}
+
+  e2e/externals/fixtures/mock-eval/sfx-mod: {}
+
   e2e/externals/fixtures/test-bundle: {}
 
   e2e/externals/fixtures/test-interop: {}
 
   e2e/externals/fixtures/test-lodash: {}
+
+  e2e/externals/fixtures/test-mock-eval: {}
 
   e2e/externals/fixtures/test-module-field: {}
 

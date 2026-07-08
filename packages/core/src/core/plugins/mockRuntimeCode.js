@@ -2,11 +2,40 @@
 
 const originalWebpackRequire = __webpack_require__;
 
+// Async-external exports that have not settled yet. An import-type external
+// (see `doExternal` in plugins/external.ts) loads through a native dynamic
+// import, so requiring it yields a Promise that the importer's async-deps
+// machinery unwraps later. A hoisted function-mock factory may capture such a
+// namespace binding (e.g. spread an `importActual` import); the factory
+// therefore must not run while any of these are pending — see the
+// lazily-materialized mock exports in `getMockImplementation`.
+const rstest_pending_async_exports = new Set();
+// Every promise ever tracked, so a settled external — whose exports stay the
+// SAME cached promise on every later require — is not re-added (and does not
+// re-open the pending window) each time another module requires it.
+const rstest_tracked_async_exports = new WeakSet();
+
+const trackAsyncExports = (exportsValue) => {
+  if (
+    isPromise(exportsValue) &&
+    !rstest_tracked_async_exports.has(exportsValue)
+  ) {
+    rstest_tracked_async_exports.add(exportsValue);
+    rstest_pending_async_exports.add(exportsValue);
+    const untrack = () => rstest_pending_async_exports.delete(exportsValue);
+    // `.then(onSettled, onSettled)`, not `.finally` — finally re-throws a
+    // rejection into a new promise chain nobody handles (unhandledRejection);
+    // the rejection itself still surfaces through the importer's await.
+    exportsValue.then(untrack, untrack);
+  }
+  return exportsValue;
+};
+
 //#region proxy __webpack_require__
 __webpack_require__ = new Proxy(
   function (...args) {
     try {
-      return originalWebpackRequire(...args);
+      return trackAsyncExports(originalWebpackRequire(...args));
     } catch (e) {
       const errMsg = e.message ?? e.toString();
       if (errMsg.includes('__webpack_modules__[moduleId] is not a function')) {
@@ -259,15 +288,93 @@ const getMockImplementation = (mockType = 'mock') => {
         __webpack_exports__,
         __webpack_require__,
       ) {
-        const res = modFactory();
+        const runFactory = () => {
+          const res = modFactory();
 
-        if (isPromise(res)) {
-          throw new Error(
-            `[Rstest] An async mock factory is not supported. ` +
-              `Use a sync factory; to keep part of the original module, ` +
-              `import it with \`with { rstest: 'importActual' }\` and spread it in.`,
-          );
+          if (isPromise(res)) {
+            throw new Error(
+              `[Rstest] An async mock factory is not supported. ` +
+                `Use a sync factory; to keep part of the original module, ` +
+                `import it with \`with { rstest: 'importActual' }\` and spread it in.`,
+            );
+          }
+          return res;
+        };
+
+        // The factory may capture async-external namespace bindings (e.g.
+        // spread an `importActual` import) that are still unsettled while the
+        // importer's harmony requires run. Those bindings are only reassigned
+        // to real namespaces when the importer's async-deps `await` resumes,
+        // and that await includes THIS mocked dep — so the factory can never
+        // run "after the await" as a dep (the importer waits on the mock, the
+        // mock would wait on the importer's rebinding). Break the cycle by
+        // serving a lazily-materialized namespace: exports settle immediately
+        // (a Proxy), the importer resumes and rebinds its vars, and the
+        // factory runs on FIRST PROPERTY ACCESS, when the captured bindings
+        // are settled namespaces. Only engaged while async externals are
+        // actually pending; otherwise the eager path below runs, as before.
+        if (rstest_pending_async_exports.size > 0) {
+          let materializedExports;
+          const materialize = () => {
+            if (materializedExports === undefined) {
+              const res = runFactory();
+              if (isMockRequire) {
+                materializedExports = res;
+              } else {
+                // Same interop policy as the eager path below, applied once
+                // at materialization by the same helper, so the two paths
+                // cannot diverge.
+                materializedExports = {};
+                defineExportsWithCjsInterop(
+                  res,
+                  materializedExports,
+                  __webpack_require__,
+                );
+              }
+            }
+            return materializedExports;
+          };
+          // Runtime probes must not force the factory: the async-deps
+          // machinery checks `.then` (thenable) and `Symbol("rspack queues")`
+          // (async module), `Object.prototype.toString` reads
+          // `Symbol.toStringTag`. An ESM namespace never has symbol exports,
+          // so every symbol read answers `undefined` without materializing —
+          // and the mock must not look async, or the importer would await it
+          // back into the very cycle this Proxy breaks.
+          const isRuntimeProbe = (property) =>
+            property === 'then' || typeof property === 'symbol';
+          __webpack_module__.exports = new Proxy(Object.create(null), {
+            get(_, property) {
+              return isRuntimeProbe(property)
+                ? undefined
+                : materialize()[property];
+            },
+            has(_, property) {
+              return isRuntimeProbe(property)
+                ? false
+                : Reflect.has(materialize(), property);
+            },
+            ownKeys(_) {
+              return Reflect.ownKeys(materialize());
+            },
+            getOwnPropertyDescriptor(_, property) {
+              const descriptor = Reflect.getOwnPropertyDescriptor(
+                materialize(),
+                property,
+              );
+              // `configurable: true` unconditionally: the Proxy target is an
+              // empty object, and reporting a non-configurable descriptor for
+              // a property the target does not own violates the Proxy
+              // invariant and throws.
+              return descriptor
+                ? { ...descriptor, configurable: true }
+                : undefined;
+            },
+          });
+          return;
         }
+
+        const res = runFactory();
 
         if (isMockRequire) {
           __webpack_module__.exports = res;

@@ -53,7 +53,5 @@ it('mocked axios', async () => {
 
   expect(originalAxios.Axios).toBeDefined();
 
-  if (process.env.RSTEST_OUTPUT_MODULE !== 'false') {
-    expect(axios.Axios).toBeDefined();
-  }
+  expect(axios.Axios).toBeDefined();
 });
