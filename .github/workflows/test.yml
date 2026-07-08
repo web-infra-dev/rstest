@@ -223,14 +223,16 @@ jobs:
         run: pnpm run test:vscode
 
   # ======== native-watcher stress (draft only) ========
-  # 50-round pressure test of the rspack native watcher on macos-14, where the
-  # stale-FSEvent flake used to surface. 10 shards x 5 fresh rounds = 50 runs
-  # of the watch e2e suite. Not wired into test-gate; remove before merge.
+  # 50-round pressure test at REAL e2e volume on macos-14, where the
+  # stale-FSEvent watch flake only surfaces under full-suite load. Each round
+  # runs the complete `pnpm test` (rstest run over all ~237 e2e files, incl.
+  # browser-mode) exactly like the real e2e job. 10 shards x 5 fresh rounds =
+  # 50 full runs. Not wired into test-gate; remove before merge.
   stress-watch:
     needs: prepare
     if: needs.prepare.outputs.changed == 'true'
     runs-on: macos-14
-    timeout-minutes: 20
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -256,13 +258,18 @@ jobs:
       - name: Build Packages
         run: pnpm run build
 
-      - name: Stress watch e2e (5 fresh rounds)
+      - name: Setup Playwright
+        uses: ./.github/actions/setup-playwright
+        with:
+          install-webkit: 'true'
+
+      - name: Stress full e2e (5 fresh rounds)
         run: |
           cd e2e
           fail=0
           for r in 1 2 3 4 5; do
-            echo "===== shard ${{ matrix.shard }} round $r/5 ====="
-            if pnpm exec rstest run watch/; then
+            echo "===== shard ${{ matrix.shard }} round $r/5 (full pnpm test) ====="
+            if pnpm test; then
               echo "shard ${{ matrix.shard }} round $r: PASS"
             else
               echo "shard ${{ matrix.shard }} round $r: FAIL"
