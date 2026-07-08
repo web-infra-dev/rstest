@@ -269,7 +269,14 @@ describe('rs.mocked', () => {
     // The construct signature must also survive: `new mocked.op()` should
     // infer `Handle`, not `Mock`'s synthetic `ReturnType<T>` (`Promise`).
     const constructsHandle = (mocked: Mocked<Api>): Handle => new mocked.op();
+    // Same must hold on the deep path (`rs.mockObject` / `rs.mocked(x, true)`).
+    type DeepMocked = ReturnType<typeof rs.mockObject<Api>>;
+    const asRealDeep = (mocked: DeepMocked): Api => mocked;
+    const constructsHandleDeep = (mocked: DeepMocked): Handle =>
+      new mocked.op();
     expect(asReal).toBeTypeOf('function');
     expect(constructsHandle).toBeTypeOf('function');
+    expect(asRealDeep).toBeTypeOf('function');
+    expect(constructsHandleDeep).toBeTypeOf('function');
   });
 });

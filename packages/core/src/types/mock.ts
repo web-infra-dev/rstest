@@ -259,7 +259,9 @@ type Properties<T> = {
 // returns `ReturnType<T>`) would otherwise shadow it.
 export type MockedFunction<T extends MockProcedure> = T & Mock<T>;
 
-export type MockedFunctionDeep<T extends MockProcedure> = Mock<T> &
+// `T` first, for the same construct-signature reason as `MockedFunction`.
+export type MockedFunctionDeep<T extends MockProcedure> = T &
+  Mock<T> &
   MockedObjectDeep<T>;
 
 export type MockedObject<T> = {
