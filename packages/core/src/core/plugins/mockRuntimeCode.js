@@ -15,6 +15,22 @@ const rstest_pending_async_exports = new Set();
 // re-open the pending window) each time another module requires it.
 const rstest_tracked_async_exports = new WeakSet();
 
+// Lazy mocks whose factory has not run yet (the lazily-materialized Proxy in
+// `getMockImplementation`). The worker invokes every registered flusher after
+// the test module graph is evaluated — every captured binding settled — and
+// before tests execute (see `runInPool`), so a mock imported ONLY for its
+// side effects (`import 'pkg'`, no export ever read) still runs its factory,
+// as it does on the eager path. A Set registry rather than a single global
+// slot, for the same reason as `__rstest_cache_cleaners__`
+// (moduleCacheControl.ts): under `isolate: false` a reused worker holds
+// several runtime chunks at once, each with its own mock runtime instance.
+const rstest_lazy_mock_factories = [];
+(globalThis.__rstest_lazy_mock_flushers__ ??= new Set()).add(() => {
+  while (rstest_lazy_mock_factories.length > 0) {
+    rstest_lazy_mock_factories.shift()();
+  }
+});
+
 const trackAsyncExports = (exportsValue) => {
   if (
     isPromise(exportsValue) &&
@@ -358,7 +374,7 @@ const getMockImplementation = (mockType = 'mock') => {
             }
             return undefined;
           };
-          __webpack_module__.exports = new Proxy(Object.create(null), {
+          const lazyExports = new Proxy(Object.create(null), {
             get(_, property) {
               if (materializedExports === undefined) {
                 const probed = preMaterializeAnswer(property);
@@ -393,6 +409,19 @@ const getMockImplementation = (mockType = 'mock') => {
                 ? { ...descriptor, configurable: true }
                 : undefined;
             },
+          });
+          __webpack_module__.exports = lazyExports;
+          // Guarantee the factory runs even when nothing ever reads an
+          // export (a side-effect-only `import 'pkg'`): the worker flushes
+          // this queue once the module graph is evaluated. Guarded so it
+          // runs only while this mock still owns the module — after an
+          // unmock, re-mock, or resetModules the cache entry is gone (or
+          // repopulated by a different factory), and running THIS factory
+          // would resurrect a replaced mock's side effects.
+          rstest_lazy_mock_factories.push(() => {
+            if (__webpack_module_cache__[id]?.exports === lazyExports) {
+              materialize();
+            }
           });
           return;
         }

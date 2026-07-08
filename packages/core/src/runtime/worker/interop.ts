@@ -175,15 +175,19 @@ export const clearSyntheticModuleCache = (): void => {
 };
 
 /**
- * Drop the per-chunk cache cleaners registered by the cache-control runtime
- * module (see `core/plugins/moduleCacheControl.ts`). Call only on a full flush:
- * the runtime chunks are evicted, so re-evaluating each one re-registers a fresh
- * cleaner — keeping the old ones would pin stale chunk caches across rebuilds.
+ * Drop the per-chunk registries populated by bundle runtime code — the cache
+ * cleaners (see `core/plugins/moduleCacheControl.ts`) and the lazy-mock
+ * flushers (see `mockRuntimeCode.js`). Call only on a full flush: the runtime
+ * chunks are evicted, so re-evaluating each one re-registers fresh entries —
+ * keeping the old ones would pin stale chunk scopes across rebuilds.
  */
 export const clearCacheCleaners = (): void => {
-  (
-    globalThis as { __rstest_cache_cleaners__?: Set<() => void> }
-  ).__rstest_cache_cleaners__?.clear();
+  const registries = globalThis as {
+    __rstest_cache_cleaners__?: Set<() => void>;
+    __rstest_lazy_mock_flushers__?: Set<() => void>;
+  };
+  registries.__rstest_cache_cleaners__?.clear();
+  registries.__rstest_lazy_mock_flushers__?.clear();
 };
 
 /**

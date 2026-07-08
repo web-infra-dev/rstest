@@ -387,6 +387,18 @@ const loadFiles = async ({
     assetFiles,
     interopDefault,
   });
+
+  // The module graph is fully evaluated here, so every async external has
+  // settled and the bindings a lazy mock factory captured are real
+  // namespaces. Run the factories nothing has materialized yet (each runtime
+  // chunk's mock runtime registers a flusher — see
+  // `__rstest_lazy_mock_flushers__` in mockRuntimeCode.js), so a factory
+  // side effect from a side-effect-only `import 'pkg'` is not silently
+  // skipped.
+  const lazyMockFlushers = (
+    globalThis as { __rstest_lazy_mock_flushers__?: Set<() => void> }
+  ).__rstest_lazy_mock_flushers__;
+  lazyMockFlushers?.forEach((flush) => flush());
 };
 
 export const runInPool = async (
