@@ -1,8 +1,10 @@
-import './setup';
 import { install } from 'source-map-support';
 import type { FormattedError } from '../../types';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
+import { installGracefulExit } from './setup';
+
+installGracefulExit();
 
 let teardownCallbacks: (() => Promise<void> | void)[] = [];
 // Track environment variable changes
