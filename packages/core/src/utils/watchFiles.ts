@@ -35,5 +35,7 @@ export async function createChokidar(
     }
   }
 
-  return chokidar.watch(Array.from(watchFiles), options);
+  const watcher = chokidar.watch(Array.from(watchFiles), options);
+  await new Promise<void>((resolve) => watcher.once('ready', () => resolve()));
+  return watcher;
 }
