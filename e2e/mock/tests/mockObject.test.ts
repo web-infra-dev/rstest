@@ -257,7 +257,9 @@ describe('rs.mocked', () => {
   });
 
   // Type-level regression: `Mocked<T>` must stay assignable back to `T`,
-  // including members that are both constructable and callable (issue #1515).
+  // including members that are both constructable and callable (issue #1515),
+  // whether or not the call signature carries a `this` parameter — the latter
+  // is the shape a `function` + `class` declaration merge produces.
   test('Mocked<T> stays assignable to T for construct+call members', () => {
     class Handle {
       _tag!: number;
@@ -265,19 +267,37 @@ describe('rs.mocked', () => {
     interface Api {
       op: (new () => Handle) & (() => Promise<number>);
     }
+    interface ThisApi {
+      op: (new () => Handle) & ((this: ThisApi) => Promise<number>);
+    }
     const asReal = (mocked: Mocked<Api>): Api => mocked;
+    const asRealThis = (mocked: Mocked<ThisApi>): ThisApi => mocked;
     // The construct signature must also survive: `new mocked.op()` should
-    // infer `Handle`, not `Mock`'s synthetic `ReturnType<T>` (`Promise`).
+    // infer `Handle`, not `Mock`'s synthetic `ReturnType<T>` (`Promise`),
+    // and the this-typed member must stay callable without a receiver.
     const constructsHandle = (mocked: Mocked<Api>): Handle => new mocked.op();
+    const constructsHandleThis = (mocked: Mocked<ThisApi>): Handle =>
+      new mocked.op();
+    const callsWithoutReceiver = (mocked: Mocked<ThisApi>): Promise<number> =>
+      mocked.op();
     // Same must hold on the deep path (`rs.mockObject` / `rs.mocked(x, true)`).
     type DeepMocked = ReturnType<typeof rs.mockObject<Api>>;
+    type DeepMockedThis = ReturnType<typeof rs.mockObject<ThisApi>>;
     const asRealDeep = (mocked: DeepMocked): Api => mocked;
+    const asRealThisDeep = (mocked: DeepMockedThis): ThisApi => mocked;
     const constructsHandleDeep = (mocked: DeepMocked): Handle =>
       new mocked.op();
+    const constructsHandleThisDeep = (mocked: DeepMockedThis): Handle =>
+      new mocked.op();
     expect(asReal).toBeTypeOf('function');
+    expect(asRealThis).toBeTypeOf('function');
     expect(constructsHandle).toBeTypeOf('function');
+    expect(constructsHandleThis).toBeTypeOf('function');
+    expect(callsWithoutReceiver).toBeTypeOf('function');
     expect(asRealDeep).toBeTypeOf('function');
+    expect(asRealThisDeep).toBeTypeOf('function');
     expect(constructsHandleDeep).toBeTypeOf('function');
+    expect(constructsHandleThisDeep).toBeTypeOf('function');
   });
 
   // Type-level regression: mocking a function typed with an explicit `this`
