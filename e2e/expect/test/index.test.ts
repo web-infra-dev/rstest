@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, rs } from '@rstest/core';
 
 describe('Expect API', () => {
   it('test expect API', () => {
@@ -95,6 +95,24 @@ describe('Expect API', () => {
 
     expect(['blue', 'red']).not.toContain('blu');
     expect('blue red').not.toMatch('redd');
+  });
+
+  // Regression guard for #1514: a mock from `rs.fn()` / `rs.spyOn()` must be
+  // accepted by the call-order matchers without a cast under strict
+  // type-checking, including through inherited chains like `.not`. The value is
+  // the no-cast usage being type-checked (`e2e` is in the `pnpm typecheck`
+  // scope); reverting the fix makes these lines fail to compile.
+  it('toHaveBeenCalledBefore / toHaveBeenCalledAfter accept a mock without a cast', () => {
+    const a = rs.fn();
+    const b = rs.fn();
+
+    a();
+    b();
+
+    expect(a).toHaveBeenCalledBefore(b);
+    expect(b).toHaveBeenCalledAfter(a);
+    expect(b).not.toHaveBeenCalledBefore(a);
+    expect(a).not.toHaveBeenCalledAfter(b);
   });
 
   it.fails('test not failed', () => {
