@@ -279,4 +279,18 @@ describe('rs.mocked', () => {
     expect(asRealDeep).toBeTypeOf('function');
     expect(constructsHandleDeep).toBeTypeOf('function');
   });
+
+  // Type-level regression: mocking a function typed with an explicit `this`
+  // must not force a receiver — `rs.mocked(fn)(arg)` should still type-check.
+  test('mocked function stays callable without a receiver for this-typed functions', () => {
+    class Ctx {
+      _brand!: 'ctx';
+    }
+    type Run = (this: Ctx, arg: number) => string;
+    const callsWithoutReceiver = (mocked: Mocked<Run>): string => mocked(1);
+    const callsDeep = (mocked: ReturnType<typeof rs.mockObject<Run>>): string =>
+      mocked(1);
+    expect(callsWithoutReceiver).toBeTypeOf('function');
+    expect(callsDeep).toBeTypeOf('function');
+  });
 });

@@ -254,13 +254,16 @@ type Properties<T> = {
   [K in keyof T]: T[K] extends MockProcedure ? never : K;
 }[keyof T];
 
-// `T` comes first so a construct+call member keeps `T`'s real construct
-// signature at `new mocked.fn()` sites; `Mock<T>`'s synthetic `new` (which
-// returns `ReturnType<T>`) would otherwise shadow it.
-export type MockedFunction<T extends MockProcedure> = T & Mock<T>;
+// `OmitThisParameter<T>` comes first so a construct+call member keeps `T`'s
+// real construct signature at `new mocked.fn()` sites (`Mock<T>`'s synthetic
+// `new` returns `ReturnType<T>` and would otherwise shadow it). Stripping the
+// `this` type keeps `mocked(args)` callable without a receiver for methods
+// typed with an explicit `this`, which a bare `T` would break.
+export type MockedFunction<T extends MockProcedure> = OmitThisParameter<T> &
+  Mock<T> & { [K in keyof T]: T[K] };
 
-// `T` first, for the same construct-signature reason as `MockedFunction`.
-export type MockedFunctionDeep<T extends MockProcedure> = T &
+// Same `OmitThisParameter<T>`-first reasoning as `MockedFunction`.
+export type MockedFunctionDeep<T extends MockProcedure> = OmitThisParameter<T> &
   Mock<T> &
   MockedObjectDeep<T>;
 
