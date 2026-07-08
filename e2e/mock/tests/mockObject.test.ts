@@ -1,3 +1,4 @@
+import type { Mocked } from '@rstest/core';
 import { describe, expect, rs, test } from '@rstest/core';
 
 describe('rs.mockObject', () => {
@@ -253,5 +254,43 @@ describe('rs.mocked', () => {
     const mock = rs.fn();
     const mocked = rs.mocked(mock, { partial: true, deep: true });
     expect(mocked).toBe(mock);
+  });
+
+  // Type-level regression: `Mocked<T>` must stay assignable back to `T`,
+  // including members that are both constructable and callable (issue #1515).
+  test('Mocked<T> stays assignable to T for construct+call members', () => {
+    class Handle {
+      _tag!: number;
+    }
+    interface Api {
+      op: (new () => Handle) & (() => Promise<number>);
+    }
+    const asReal = (mocked: Mocked<Api>): Api => mocked;
+    // The construct signature must also survive: `new mocked.op()` should
+    // infer `Handle`, not `Mock`'s synthetic `ReturnType<T>` (`Promise`).
+    const constructsHandle = (mocked: Mocked<Api>): Handle => new mocked.op();
+    // Same must hold on the deep path (`rs.mockObject` / `rs.mocked(x, true)`).
+    type DeepMocked = ReturnType<typeof rs.mockObject<Api>>;
+    const asRealDeep = (mocked: DeepMocked): Api => mocked;
+    const constructsHandleDeep = (mocked: DeepMocked): Handle =>
+      new mocked.op();
+    expect(asReal).toBeTypeOf('function');
+    expect(constructsHandle).toBeTypeOf('function');
+    expect(asRealDeep).toBeTypeOf('function');
+    expect(constructsHandleDeep).toBeTypeOf('function');
+  });
+
+  // Type-level regression: mocking a function typed with an explicit `this`
+  // must not force a receiver — `rs.mocked(fn)(arg)` should still type-check.
+  test('mocked function stays callable without a receiver for this-typed functions', () => {
+    class Ctx {
+      _brand!: 'ctx';
+    }
+    type Run = (this: Ctx, arg: number) => string;
+    const callsWithoutReceiver = (mocked: Mocked<Run>): string => mocked(1);
+    const callsDeep = (mocked: ReturnType<typeof rs.mockObject<Run>>): string =>
+      mocked(1);
+    expect(callsWithoutReceiver).toBeTypeOf('function');
+    expect(callsDeep).toBeTypeOf('function');
   });
 });
