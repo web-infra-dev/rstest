@@ -18,6 +18,7 @@
     "directory": "packages/core"
   },
   "license": "MIT",
+  "sideEffects": false,
   "type": "module",
   "exports": {
     ".": {
