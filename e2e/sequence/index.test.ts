@@ -95,4 +95,25 @@ describe('perf-first test sequencing', () => {
 
     expect(readFileSync(cacheFile, 'utf-8')).toBe(before);
   }, 90_000);
+
+  it('does not update the cache for a bail-aborted run', async ({
+    onTestFinished,
+  }) => {
+    rmSync(cacheDir, { recursive: true, force: true });
+    // Record alpha as failed so it becomes failed-first and runs first next time.
+    await (await runOnce(onTestFinished, { SEQ_FAIL: '1' })).expectExecFailed();
+    const cacheFile = join(cacheDir, 'results.json');
+    const before = readFileSync(cacheFile, 'utf-8');
+
+    // `--bail 1` with alpha (now failed-first) failing again: the pool aborts
+    // and hands back the remaining files as synthetic `skip`s. Writing those
+    // back would clear their failed-first bit, so the cache must stay untouched.
+    const bailed = await runOnce(onTestFinished, { SEQ_FAIL: '1' }, [
+      '--bail',
+      '1',
+    ]);
+    await bailed.expectExecFailed();
+
+    expect(readFileSync(cacheFile, 'utf-8')).toBe(before);
+  }, 90_000);
 });

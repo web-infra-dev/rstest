@@ -849,6 +849,16 @@ export async function runTests(context: Rstest): Promise<void> {
 
       const isFailure = nodeHasFailure || browserHasFailure;
 
+      // A run is "bail-aborted" once the failed-test count reaches the bail
+      // limit: the pool then returns a synthetic `skip` result for every
+      // not-yet-loaded file (see `runInPool`), and the runner stops executing
+      // the remaining tests of the file it was in. From that point on no file
+      // result describes a complete execution.
+      const bailLimit = context.normalizedConfig.bail;
+      const bailAborted =
+        bailLimit > 0 &&
+        context.stateManager.getCountOfFailedTests() >= bailLimit;
+
       context.updateReporterResultState(
         results,
         testResults,
@@ -859,14 +869,16 @@ export async function runTests(context: Rstest): Promise<void> {
       // browser results were merged into `results` above and take a separate
       // path). Best-effort — `writeResultsCache` swallows its own IO errors.
       //
-      // Skip the write entirely while a `testNamePattern` filter is active: such
-      // a run only executes the matching subset of each file, so its per-file
-      // duration and pass/fail state don't describe the full file. Persisting
-      // them would poison the perf-first cache — a quick `-t` run could make a
-      // genuinely slow file look fast, or clear a failing file's failed-first
-      // bit when the matched test passes (or the file is reported skipped). The
-      // last full-run record stays authoritative instead.
-      if (!context.normalizedConfig.testNamePattern) {
+      // Skip the write for any run that doesn't fully describe every file it
+      // touched, so a partial run can't poison the perf-first cache:
+      //   - `testNamePattern`: only the matching subset of each file runs, so a
+      //     quick `-t` run could make a slow file look fast, or clear a failing
+      //     file's failed-first bit when the matched test passes.
+      //   - bail abort: the not-yet-run files come back as synthetic `skip`s, so
+      //     writing them would clear the failed-first bit of a previously
+      //     failing file that simply never got its turn this run.
+      // The last full-run record stays authoritative in both cases.
+      if (!context.normalizedConfig.testNamePattern && !bailAborted) {
         await writeResultsCache(
           rootPath,
           returns.flatMap((r) => r.results),
@@ -915,16 +927,12 @@ export async function runTests(context: Rstest): Promise<void> {
       // are not lost.
       activeTraceRun = traceController.beginRun();
 
-      if (isFailure) {
-        const bail = context.normalizedConfig.bail;
-
-        if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
-          logger.log(
-            color.yellow(
-              `Test run aborted due to reaching the bail limit of ${bail} failed test(s).`,
-            ),
-          );
-        }
+      if (bailAborted) {
+        logger.log(
+          color.yellow(
+            `Test run aborted due to reaching the bail limit of ${bailLimit} failed test(s).`,
+          ),
+        );
       }
     } finally {
       if (browserClose) {
