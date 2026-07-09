@@ -72,6 +72,114 @@ const isStringDict = (value: unknown): value is Record<string, string> =>
   isRecord(value) &&
   Object.values(value).every((item) => typeof item === 'string');
 
+const findNonStringDictEntry = (
+  value: unknown,
+): { key: string; value: unknown } | undefined => {
+  if (!isRecord(value)) return undefined;
+
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item !== 'string') {
+      return { key, value: item };
+    }
+  }
+
+  return undefined;
+};
+
+const describeValue = (value: unknown): string => {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
+};
+
+const describeMalformedRawCoveragePayload = (
+  payload: unknown,
+  index: number,
+): string => {
+  const prefix = `Failed to resolve malformed raw V8 coverage payload at index ${index}`;
+
+  if (!isRecord(payload)) {
+    return `${prefix}: expected an object, received ${describeValue(payload)}.`;
+  }
+
+  if (!Array.isArray(payload.entries)) {
+    return `${prefix}: expected "entries" to be an array, received ${describeValue(
+      payload.entries,
+    )}. Keys: ${Object.keys(payload).join(', ') || '<none>'}.`;
+  }
+
+  const invalidEntryIndex = payload.entries.findIndex(
+    (entry) => !isCoverageEntry(entry),
+  );
+  if (invalidEntryIndex !== -1) {
+    const entry = payload.entries[invalidEntryIndex];
+    return `${prefix}: invalid entry at entries[${invalidEntryIndex}] (${describeValue(
+      entry,
+    )}). Entries: ${payload.entries.length}.`;
+  }
+
+  if (payload.options !== undefined && !isRecord(payload.options)) {
+    return `${prefix}: expected "options" to be an object, received ${describeValue(
+      payload.options,
+    )}. Entries: ${payload.entries.length}.`;
+  }
+
+  if (isRecord(payload.options)) {
+    if (
+      payload.options.assetFiles !== undefined &&
+      !isRecord(payload.options.assetFiles)
+    ) {
+      return `${prefix}: expected options.assetFiles to be an object, received ${describeValue(
+        payload.options.assetFiles,
+      )}. Entries: ${payload.entries.length}.`;
+    }
+
+    if (
+      payload.options.sourceMaps !== undefined &&
+      !isRecord(payload.options.sourceMaps)
+    ) {
+      return `${prefix}: expected options.sourceMaps to be an object, received ${describeValue(
+        payload.options.sourceMaps,
+      )}. Entries: ${payload.entries.length}.`;
+    }
+
+    const invalidAssetFile = findNonStringDictEntry(payload.options.assetFiles);
+    if (invalidAssetFile) {
+      return `${prefix}: expected options.assetFiles[${JSON.stringify(
+        invalidAssetFile.key,
+      )}] to be a string, received ${describeValue(
+        invalidAssetFile.value,
+      )}. Entries: ${payload.entries.length}.`;
+    }
+
+    const invalidSourceMap = findNonStringDictEntry(payload.options.sourceMaps);
+    if (invalidSourceMap) {
+      return `${prefix}: expected options.sourceMaps[${JSON.stringify(
+        invalidSourceMap.key,
+      )}] to be a string, received ${describeValue(
+        invalidSourceMap.value,
+      )}. Entries: ${payload.entries.length}.`;
+    }
+
+    if (
+      payload.options.outputModule !== undefined &&
+      typeof payload.options.outputModule !== 'boolean'
+    ) {
+      return `${prefix}: expected options.outputModule to be a boolean, received ${describeValue(
+        payload.options.outputModule,
+      )}. Entries: ${payload.entries.length}.`;
+    }
+  }
+
+  if (payload.root !== undefined && typeof payload.root !== 'string') {
+    return `${prefix}: expected "root" to be a string, received ${describeValue(
+      payload.root,
+    )}. Entries: ${payload.entries.length}.`;
+  }
+
+  return `${prefix}: unknown shape mismatch. Entries: ${payload.entries.length}.`;
+};
+
 const isCollectOptions = (value: unknown): value is CollectOptions =>
   isRecord(value) &&
   (value.assetFiles === undefined || isStringDict(value.assetFiles)) &&
@@ -551,11 +659,11 @@ export class CoverageProvider implements RstestCoverageProvider {
   resolveRawCoverage(payloads: unknown[]): Promise<CoverageMap | null> {
     const validPayloads: RawCoveragePayload[] = [];
 
-    for (const payload of payloads) {
+    for (const [index, payload] of payloads.entries()) {
       if (isRawCoveragePayload(payload)) {
         validPayloads.push(payload);
       } else {
-        console.error('Failed to resolve malformed raw V8 coverage payload.');
+        console.error(describeMalformedRawCoveragePayload(payload, index));
         process.exitCode = 1;
       }
     }
@@ -602,12 +710,12 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     for (const entry of entries) {
       const assetSource = this.findInDict(options.assetFiles, entry.filePath);
-      if (assetSource !== undefined) {
+      if (typeof assetSource === 'string') {
         assetFiles[entry.filePath] = assetSource;
       }
 
       const sourceMap = this.findInDict(options.sourceMaps, entry.filePath);
-      if (sourceMap !== undefined) {
+      if (typeof sourceMap === 'string') {
         sourceMaps[entry.filePath] = sourceMap;
       }
     }
