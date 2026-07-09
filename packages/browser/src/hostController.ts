@@ -1,0 +1,4167 @@
+import { existsSync } from 'node:fs';
+import fs from 'node:fs/promises';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
+import type { Rspack } from '@rstest/core';
+import {
+  type BrowserTestRunOptions,
+  type BrowserTestRunResult,
+  type CoverageMapData,
+  color,
+  createCoverageProvider,
+  DEFAULT_TEST_TIMEOUT,
+  type FormattedError,
+  getNoTestFilesMessage,
+  getSetupFiles,
+  getTestEntries,
+  isDebug,
+  type ListCommandResult,
+  loadCoverageProvider,
+  logger,
+  PhaseTracker,
+  type ProjectContext,
+  type Reporter,
+  type RstestContext,
+  type RuntimeConfig,
+  resolveProjectBuildCache,
+  RSTEST_ENV_SYMBOL_KEY,
+  rsbuild,
+  serializableConfig,
+  type Test,
+  type TestFileResult,
+  type TestResult,
+  type UserConsoleLog,
+} from '@rstest/core/internal/browser';
+import { type BirpcReturn, createBirpc } from 'birpc';
+import openEditor from 'open-editor';
+import { basename, dirname, join, normalize, relative, resolve } from 'pathe';
+import picomatch from 'picomatch';
+import sirv from 'sirv';
+import { type WebSocket, WebSocketServer } from 'ws';
+import { getHeadlessConcurrency } from './concurrency';
+import {
+  createHostDispatchRouter,
+  type HostDispatchRouterOptions,
+} from './dispatchCapabilities';
+import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
+import { createHeadlessLatestRerunScheduler } from './headlessLatestRerunScheduler';
+import { attachHeadlessRunnerTransport } from './headlessTransport';
+import type {
+  BrowserClientMessage,
+  BrowserDispatchHandler,
+  BrowserDispatchRequest,
+  BrowserDispatchResponse,
+  BrowserHostConfig,
+  BrowserLogPayload,
+  BrowserProjectRuntime,
+  BrowserRpcRequest,
+  BrowserViewport,
+  SnapshotRpcRequest,
+  TestFileInfo,
+} from './protocol';
+import {
+  DISPATCH_MESSAGE_TYPE,
+  DISPATCH_NAMESPACE_BROWSER,
+  DISPATCH_NAMESPACE_RUNNER,
+  validateBrowserRpcRequest,
+} from './protocol';
+import {
+  type BrowserProvider,
+  type BrowserProviderBrowser,
+  type BrowserProviderContext,
+  type BrowserProviderImplementation,
+  type BrowserProviderPage,
+  getBrowserProviderImplementation,
+} from './providers';
+import {
+  createRunSession,
+  type RunSession,
+  RunSessionLifecycle,
+} from './runSession';
+import { RunnerSessionRegistry } from './sessionRegistry';
+import {
+  loadSourceMapWithCache,
+  normalizeJavaScriptUrl,
+  type SourceMapPayload,
+} from './sourceMap/sourceMapLoader';
+import { resolveBrowserViewportPreset } from './viewportPresets';
+import {
+  isBrowserWatchCliShortcutsEnabled,
+  logBrowserWatchReadyMessage,
+  setupBrowserWatchCliShortcuts,
+} from './watchCliShortcuts';
+import { collectWatchTestFiles, planWatchRerun } from './watchRerunPlanner';
+
+const { createRsbuild, rspack } = rsbuild;
+type RsbuildDevServer = rsbuild.RsbuildDevServer;
+type RsbuildInstance = rsbuild.RsbuildInstance;
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const OPTIONS_PLACEHOLDER = '__RSTEST_OPTIONS_PLACEHOLDER__';
+
+/**
+ * Monotonic counter for synthetic per-file Perfetto `pid` values in `--trace`
+ * mode. Browser host runs every test file inside the same Node process, so
+ * without an override every file would emit events under the same `pid` and
+ * share a single track labelled `worker <hostPid>`. Giving each file its own
+ * synthetic `pid` makes the track title surface the file path instead,
+ * matching node mode's default `isolate: true` behavior. The 1_000_000_000
+ * base keeps each synthetic `pid` well clear of real OS `pid` values in
+ * mixed-mode traces.
+ */
+let nextBrowserFilePid = 1_000_000_000;
+
+/**
+ * Serialize JSON for inline <script> injection.
+ * Escapes '<' to prevent accidental </script> break-out.
+ * Escapes U+2028/U+2029 to keep script parsing safe.
+ */
+const serializeForInlineScript = (value: unknown): string => {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+};
+
+// ============================================================================
+// Type Definitions
+// ============================================================================
+
+type BrowserProjectEntries = {
+  project: ProjectContext;
+  setupFiles: string[];
+  testFiles: string[];
+};
+
+type BrowserProviderProject = {
+  rootPath: string;
+  provider: BrowserProvider;
+};
+
+type BrowserLaunchOptions = {
+  provider: BrowserProvider;
+  browser: ProjectContext['normalizedConfig']['browser']['browser'];
+  headless: ProjectContext['normalizedConfig']['browser']['headless'];
+  port: ProjectContext['normalizedConfig']['browser']['port'];
+  strictPort: ProjectContext['normalizedConfig']['browser']['strictPort'];
+  providerOptions: Record<string, unknown>;
+};
+
+const getBrowserProviderOptions = (
+  project: ProjectContext,
+): Record<string, unknown> => {
+  const browserConfig = project.normalizedConfig.browser as {
+    providerOptions?: Record<string, unknown>;
+  };
+
+  return browserConfig.providerOptions ?? {};
+};
+
+/** Payload for test file start event */
+type TestFileStartPayload = {
+  testPath: string;
+  projectName: string;
+};
+
+/** Payload for log event — single-sourced from the wire protocol. */
+type LogPayload = BrowserLogPayload;
+
+/** Payload for fatal error event */
+type FatalPayload = {
+  message: string;
+  stack?: string;
+};
+
+type ReporterHookArg<THook extends keyof Reporter> =
+  NonNullable<Reporter[THook]> extends (...args: infer TArgs) => unknown
+    ? TArgs[0]
+    : never;
+
+type TestFileReadyPayload = ReporterHookArg<'onTestFileReady'>;
+type TestSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;
+type TestSuiteResultPayload = ReporterHookArg<'onTestSuiteResult'>;
+type TestCaseStartPayload = ReporterHookArg<'onTestCaseStart'>;
+type ReloadTestFileAck = {
+  runId: string;
+};
+type HeadedTestFileCompletePayload = TestFileResult & {
+  runId?: string;
+};
+
+type DeferredPromise<T> = {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: unknown) => void;
+};
+
+const getFileTaskId = (testPath: string): string => {
+  return `file:${testPath}`;
+};
+
+const getBufferedLogTaskId = (log: UserConsoleLog): string => {
+  return log.taskId ?? getFileTaskId(log.testPath);
+};
+
+const createDeferredPromise = <T>(): DeferredPromise<T> => {
+  let resolve!: DeferredPromise<T>['resolve'];
+  let reject!: DeferredPromise<T>['reject'];
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return {
+    promise,
+    resolve,
+    reject,
+  };
+};
+
+/** RPC methods exposed by the host (server) to the container (client) */
+type HostRpcMethods = {
+  rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
+  getTestFiles: () => Promise<TestFileInfo[]>;
+  onRunnerFramesReady: (testFiles: string[]) => Promise<void>;
+  // Test result callbacks from container
+  onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
+  onTestCaseResult: (payload: TestResult) => Promise<void>;
+  onTestFileComplete: (payload: HeadedTestFileCompletePayload) => Promise<void>;
+  onLog: (payload: LogPayload) => Promise<void>;
+  onFatal: (payload: FatalPayload) => Promise<void>;
+  // Generic dispatch endpoint used by runner RPC requests.
+  dispatch: (
+    request: BrowserDispatchRequest,
+  ) => Promise<BrowserDispatchResponse>;
+};
+
+/** RPC methods exposed by the container (client) to the host (server) */
+type ContainerRpcMethods = {
+  onTestFileUpdate: (testFiles: TestFileInfo[]) => Promise<void>;
+  reloadTestFile: (
+    testFile: string,
+    testNamePattern?: string,
+  ) => Promise<ReloadTestFileAck>;
+};
+
+type ContainerRpc = BirpcReturn<ContainerRpcMethods, HostRpcMethods>;
+
+// ============================================================================
+// RPC Manager - Encapsulates WebSocket and birpc management
+// ============================================================================
+
+/**
+ * Manages the WebSocket connection and birpc communication with the container UI.
+ * Provides a clean interface for sending RPC calls and handling connections.
+ */
+class ContainerRpcManager {
+  private wss: WebSocketServer;
+  private ws: WebSocket | null = null;
+  private rpc: ContainerRpc | null = null;
+  private methods: HostRpcMethods;
+  private onDisconnect?: (error: Error) => void;
+  private detachActiveSocketListeners: (() => void) | null = null;
+
+  constructor(
+    wss: WebSocketServer,
+    methods: HostRpcMethods,
+    onDisconnect?: (error: Error) => void,
+  ) {
+    this.wss = wss;
+    this.methods = methods;
+    this.onDisconnect = onDisconnect;
+    this.setupConnectionHandler();
+  }
+
+  /** Update the RPC methods (used when starting a new test run) */
+  updateMethods(
+    methods: HostRpcMethods,
+    onDisconnect?: (error: Error) => void,
+  ): void {
+    this.methods = methods;
+    this.onDisconnect = onDisconnect;
+    // Re-create birpc with new methods if already connected
+    if (this.ws && this.ws.readyState === this.ws.OPEN) {
+      this.attachWebSocket(this.ws);
+    }
+  }
+
+  private setupConnectionHandler(): void {
+    this.wss.on('connection', (ws: WebSocket) => {
+      logger.debug('[Browser UI] Container WebSocket connected');
+      logger.debug(
+        `[Browser UI] Current ws: ${this.ws ? 'exists' : 'null'}, new ws: ${ws ? 'exists' : 'null'}`,
+      );
+      this.attachWebSocket(ws);
+    });
+  }
+
+  private attachWebSocket(ws: WebSocket): void {
+    this.detachActiveSocketListeners?.();
+    if (this.rpc && !this.rpc.$closed) {
+      this.rpc.$close(new Error('Container RPC transport reattached'));
+    }
+    this.ws = ws;
+    const messageHandlers = new WeakMap<
+      (data: any) => void,
+      (message: any) => void
+    >();
+
+    this.rpc = createBirpc<ContainerRpcMethods, HostRpcMethods>(this.methods, {
+      timeout: -1,
+      post: (data) => {
+        if (ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify(data));
+        }
+      },
+      on: (fn) => {
+        const handler = (message: any) => {
+          try {
+            const data = JSON.parse(message.toString());
+            fn(data);
+          } catch {
+            // ignore invalid messages
+          }
+        };
+        messageHandlers.set(fn, handler);
+        ws.on('message', handler);
+      },
+      off: (fn) => {
+        const handler = messageHandlers.get(fn);
+        if (!handler) {
+          return;
+        }
+        ws.off('message', handler);
+        messageHandlers.delete(fn);
+      },
+    });
+
+    const handleClose = () => {
+      // Only clear if this is still the active connection
+      // This prevents a race condition when a new connection is established
+      // before the old one's close event fires
+      if (this.ws === ws) {
+        this.ws = null;
+      }
+      this.detachActiveSocketListeners?.();
+      this.detachActiveSocketListeners = null;
+      if (this.rpc && !this.rpc.$closed) {
+        const disconnectError = new Error(
+          'Browser UI WebSocket disconnected before reload completed',
+        );
+        this.rpc.$close(disconnectError);
+        this.onDisconnect?.(disconnectError);
+      }
+      this.rpc = null;
+    };
+
+    ws.on('close', handleClose);
+    this.detachActiveSocketListeners = () => {
+      ws.off('close', handleClose);
+    };
+  }
+
+  /** Check if a container is currently connected */
+  get isConnected(): boolean {
+    return this.ws !== null && this.ws.readyState === this.ws.OPEN;
+  }
+
+  /** Get the current WebSocket instance (for reuse in watch mode) */
+  get currentWebSocket(): WebSocket | null {
+    return this.ws;
+  }
+
+  /** Reattach an existing WebSocket (for watch mode reuse) */
+  reattach(ws: WebSocket): void {
+    this.attachWebSocket(ws);
+  }
+
+  /** Notify container of test file changes */
+  async notifyTestFileUpdate(files: TestFileInfo[]): Promise<void> {
+    await this.rpc?.onTestFileUpdate(files);
+  }
+
+  /** Request container to reload a specific test file */
+  async reloadTestFile(
+    testFile: string,
+    testNamePattern?: string,
+  ): Promise<ReloadTestFileAck> {
+    logger.debug(
+      `[Browser UI] reloadTestFile called, rpc: ${this.rpc ? 'exists' : 'null'}, ws: ${this.ws ? 'exists' : 'null'}`,
+    );
+    if (!this.rpc) {
+      throw new Error('Browser UI RPC not available for reloadTestFile');
+    }
+    logger.debug(`[Browser UI] Calling reloadTestFile: ${testFile}`);
+    return this.rpc.reloadTestFile(testFile, testNamePattern);
+  }
+}
+
+// ============================================================================
+// Browser Runtime - Core runtime state
+// ============================================================================
+
+// One isolated rsbuild instance + dev server per browser project. Physical
+// isolation (separate compiler, dev server, port, virtual manifest, runner)
+// prevents one project's build/resolve config from leaking into another's
+// compilation and avoids shared-dev-server races (chunk filenames,
+// lazyCompilation backend) between projects.
+type BrowserProjectServer = {
+  projectName: string;
+  environmentName: string;
+  rsbuildInstance: RsbuildInstance;
+  devServer: RsbuildDevServer;
+  port: number;
+  manifestPath: string;
+};
+
+type BrowserRuntime = {
+  // Per-project servers, keyed by project name.
+  projectServers: Map<string, BrowserProjectServer>;
+  // The server that hosts the container UI HTML (headed mode). The WebSocket
+  // server below is shared and reachable from any origin.
+  containerServer: BrowserProjectServer;
+  browser: BrowserProviderBrowser;
+  browserLaunchOptions: BrowserLaunchOptions;
+  wsPort: number;
+  tempDir: string;
+  containerPage?: BrowserProviderPage;
+  containerContext?: BrowserProviderContext;
+  setContainerOptions: (options: BrowserHostConfig) => void;
+  // Reserved extension seam for host-side dispatch capabilities.
+  dispatchHandlers: Map<string, BrowserDispatchHandler>;
+  wss: WebSocketServer;
+  rpcManager?: ContainerRpcManager;
+};
+
+// ============================================================================
+// Watch Mode Context - Encapsulates all watch mode state
+// ============================================================================
+
+type WatchContext = {
+  runtime: BrowserRuntime | null;
+  lastTestFiles: TestFileInfo[];
+  hooksEnabled: boolean;
+  cleanupRegistered: boolean;
+  cleanupPromise: Promise<void> | null;
+  closeCliShortcuts: (() => void) | null;
+  chunkHashes: Map<string, string>;
+  affectedTestFiles: string[];
+};
+
+const watchContext: WatchContext = {
+  runtime: null,
+  lastTestFiles: [],
+  hooksEnabled: false,
+  cleanupRegistered: false,
+  cleanupPromise: null,
+  closeCliShortcuts: null,
+  chunkHashes: new Map(),
+  affectedTestFiles: [],
+};
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+const resolveViewport = (
+  viewport: BrowserViewport | undefined,
+): { width: number; height: number } | null => {
+  if (!viewport) {
+    return null;
+  }
+
+  if (typeof viewport === 'string') {
+    return resolveBrowserViewportPreset(viewport);
+  }
+
+  if (
+    typeof viewport.width === 'number' &&
+    Number.isFinite(viewport.width) &&
+    viewport.width > 0 &&
+    typeof viewport.height === 'number' &&
+    Number.isFinite(viewport.height) &&
+    viewport.height > 0
+  ) {
+    return {
+      width: viewport.width,
+      height: viewport.height,
+    };
+  }
+
+  return null;
+};
+
+const mapViewportByProject = (
+  projects: BrowserProjectRuntime[],
+): Map<string, { width: number; height: number }> => {
+  const map = new Map<string, { width: number; height: number }>();
+  for (const project of projects) {
+    const viewport = resolveViewport(project.viewport);
+    if (viewport) {
+      map.set(project.name, viewport);
+    }
+  }
+  return map;
+};
+
+const ensureProcessExitCode = (code: number): void => {
+  if (process.exitCode === undefined || process.exitCode === 0) {
+    process.exitCode = code;
+  }
+};
+
+const castArray = <T>(arr?: T | T[]): T[] => {
+  if (arr === undefined) {
+    return [];
+  }
+  return Array.isArray(arr) ? arr : [arr];
+};
+
+const applyDefaultWatchOptions = (
+  rspackConfig: Rspack.Configuration,
+  isWatchMode: boolean,
+) => {
+  rspackConfig.watchOptions ??= {};
+
+  if (!isWatchMode) {
+    rspackConfig.watchOptions.ignored = '**/**';
+    return;
+  }
+
+  rspackConfig.watchOptions.ignored = castArray(
+    rspackConfig.watchOptions.ignored || [],
+  ) as string[];
+
+  if (rspackConfig.watchOptions.ignored.length === 0) {
+    rspackConfig.watchOptions.ignored.push('**/.git', '**/node_modules');
+  }
+
+  if (rspackConfig.output?.path) {
+    rspackConfig.watchOptions.ignored.push(rspackConfig.output.path);
+  }
+};
+
+type LazyCompilationModule = {
+  nameForCondition?: () => string | null | undefined;
+};
+
+type BrowserLazyCompilationConfig = {
+  imports: true;
+  entries: false;
+  test?: (module: LazyCompilationModule) => boolean;
+};
+
+/**
+ * Resolve the actual port the dev server is listening on.
+ *
+ * Rsbuild's `devServer.listen()` may return `0` when configured with
+ * `server.port: 0` because its internal `getPort` never reads back the
+ * OS-assigned ephemeral port.  This helper falls back to
+ * `httpServer.address()` to obtain the real bound port.
+ */
+export const resolveListenPort = (
+  listenPort: number,
+  httpServer: {
+    address: () => ReturnType<import('node:net').Server['address']>;
+  } | null,
+): number => {
+  if (listenPort) {
+    return listenPort;
+  }
+  const addr = httpServer?.address();
+  if (addr && typeof addr === 'object') {
+    return addr.port;
+  }
+  return listenPort;
+};
+
+export const createBrowserLazyCompilationConfig = (
+  setupFiles: string[],
+): BrowserLazyCompilationConfig => {
+  const eagerSetupFiles = new Set(
+    setupFiles.map((filePath) => normalize(filePath)),
+  );
+
+  if (eagerSetupFiles.size === 0) {
+    return {
+      imports: true,
+      entries: false,
+    };
+  }
+
+  return {
+    imports: true,
+    entries: false,
+    test(module: LazyCompilationModule) {
+      const filePath = module.nameForCondition?.();
+      return !filePath || !eagerSetupFiles.has(normalize(filePath));
+    },
+  };
+};
+
+/**
+ * HMR — and the lazyCompilation transport it carries — is wired only for headed
+ * watch, the sole path that reuses a persistent page and applies module updates
+ * in place. Headless always loads each test file in a fresh page (pulling the
+ * latest incrementally-built chunks over HTTP), and one-shot runs never rerun,
+ * so pushing HMR updates there is dead weight that only races factory
+ * registration for chunk-split node_modules (rspack#11922) and lets
+ * lazyCompilation's accept-chain walk abort the next spec when no boundary
+ * exists (#1472). Disabling HMR does not make watch rebuilds any less
+ * incremental — HMR is only the client push transport.
+ */
+export const shouldEnableBrowserHmr = (
+  isWatchMode: boolean,
+  isHeadless: boolean,
+): boolean => isWatchMode && !isHeadless;
+
+export const createBrowserRsbuildDevConfig = (
+  enableHmr: boolean,
+): {
+  writeToDisk: boolean;
+  hmr: boolean;
+  client: {
+    logLevel: 'error';
+  };
+} => {
+  return {
+    writeToDisk: isDebug(),
+    // `enableHmr` is gated to headed watch by `shouldEnableBrowserHmr` — the one
+    // path that reuses a page. See that helper for why fresh-page runs (headless,
+    // or any one-shot) must not receive HMR pushes.
+    hmr: enableHmr,
+    client: {
+      logLevel: 'error' as const,
+    },
+  };
+};
+
+/**
+ * Convert a single glob pattern to RegExp using picomatch
+ * Based on Storybook's implementation
+ */
+const globToRegexp = (glob: string): RegExp => {
+  const regex = picomatch.makeRe(glob, {
+    fastpaths: false,
+    noglobstar: false,
+    bash: false,
+    dot: true,
+  });
+
+  if (!regex) {
+    throw new Error(`Invalid glob pattern: ${glob}`);
+  }
+
+  // picomatch generates regex starting with ^
+  // For patterns starting with ./, we need special handling
+  if (!glob.startsWith('./')) {
+    return regex;
+  }
+
+  // makeRe is sort of funny. If you pass it a directory starting with `./` it
+  // creates a matcher that expects files with no prefix (e.g. `src/file.js`)
+  // but if you pass it a directory that starts with `../` it expects files that
+  // start with `../`. Let's make it consistent.
+  // Globs starting `**` need special treatment due to the regex they produce
+  return new RegExp(
+    [
+      '^\\.',
+      glob.startsWith('./**') ? '' : '[\\\\/]',
+      regex.source.substring(1),
+    ].join(''),
+  );
+};
+
+/**
+ * Convert rstest include glob patterns to RegExp for import.meta.webpackContext
+ * Uses picomatch for robust glob-to-regexp conversion
+ */
+const globPatternsToRegExp = (patterns: string[]): RegExp => {
+  const regexParts = patterns.map((pattern) => {
+    const regex = globToRegexp(pattern);
+    // Remove ^ anchor and $ anchor to allow combining patterns
+    let source = regex.source;
+    if (source.startsWith('^')) {
+      source = source.substring(1);
+    }
+    if (source.endsWith('$')) {
+      source = source.substring(0, source.length - 1);
+    }
+    return source;
+  });
+
+  return new RegExp(`(?:${regexParts.join('|')})$`);
+};
+
+const REGEXP_SPECIAL_CHARACTERS = /[|\\{}()[\]^$+*?.]/g;
+const PATH_SEPARATOR_SOURCE = String.raw`[\\/]`;
+const WINDOWS_ABSOLUTE_PATH_SOURCE = String.raw`[A-Za-z]:[\\/]`;
+
+const escapeRegExp = (value: string): string =>
+  value.replace(REGEXP_SPECIAL_CHARACTERS, '\\$&');
+
+const normalizePathForRegExp = (value: string): string =>
+  normalize(value).replaceAll('\\', '/');
+
+const normalizeExcludePatternForRegExp = (value: string): string =>
+  value.startsWith('./')
+    ? `./${normalizePathForRegExp(value.substring(2))}`
+    : normalizePathForRegExp(value);
+
+const isAbsolutePatternForRegExp = (value: string): boolean =>
+  value.startsWith('/') || /^[A-Za-z]:\//.test(value);
+
+const isEscapedRegExpCharacter = (source: string, index: number): boolean => {
+  let backslashCount = 0;
+  for (
+    let current = index - 1;
+    current >= 0 && source[current] === '\\';
+    current--
+  ) {
+    backslashCount++;
+  }
+  return backslashCount % 2 === 1;
+};
+
+const replacePathSeparatorsInRegExpSource = (source: string): string => {
+  let result = '';
+  let inCharacterClass = false;
+
+  for (let index = 0; index < source.length; index++) {
+    const character = source[index];
+    const isEscaped = isEscapedRegExpCharacter(source, index);
+
+    if (character === '[' && !isEscaped) {
+      inCharacterClass = true;
+    }
+
+    if (!inCharacterClass && character === '\\' && source[index + 1] === '/') {
+      result += PATH_SEPARATOR_SOURCE;
+      index++;
+      continue;
+    }
+
+    result += character;
+
+    if (character === ']' && !isEscaped) {
+      inCharacterClass = false;
+    }
+  }
+
+  return result;
+};
+
+type BrowserContextExcludeSource = {
+  relative: string;
+  absolute: string;
+  isAbsolute: boolean;
+};
+
+const createRelativeContextExcludeSource = (
+  source: string,
+  normalizedPattern: string,
+): string => {
+  if (normalizedPattern.startsWith('./')) {
+    return source;
+  }
+
+  return normalizedPattern.startsWith('**/')
+    ? `(?:(?:${source})|\\.(?:${source}))`
+    : `(?:(?:${source})|\\.${PATH_SEPARATOR_SOURCE}(?:${source}))`;
+};
+
+const createProjectAbsoluteExcludeSource = (
+  source: string,
+  normalizedPattern: string,
+): string =>
+  normalizedPattern.startsWith('./') || normalizedPattern.startsWith('**/')
+    ? source
+    : `${PATH_SEPARATOR_SOURCE}(?:${source})`;
+
+/**
+ * Convert exclude patterns to a RegExp for import.meta.webpackContext's exclude option
+ * This is used at compile time to filter out files during bundling
+ *
+ * Example:
+ *   Input: ['**\/node_modules\/**', '**\/dist\/**']
+ *   Output: a regexp matching node_modules or dist path segments.
+ */
+const excludePatternsToRegExpSources = (
+  patterns: string[],
+): BrowserContextExcludeSource[] | null => {
+  const sources = patterns.map((pattern) => {
+    const normalizedPattern = normalizeExcludePatternForRegExp(pattern);
+    const regex = globToRegexp(normalizedPattern);
+    let source = regex.source;
+    if (source.startsWith('^')) {
+      source = source.substring(1);
+    }
+    if (source.endsWith('$')) {
+      source = source.substring(0, source.length - 1);
+    }
+
+    source = replacePathSeparatorsInRegExpSource(source);
+    const isAbsolute = isAbsolutePatternForRegExp(normalizedPattern);
+    const absolute = normalizedPattern.startsWith('./')
+      ? source.substring(2)
+      : source;
+
+    return {
+      relative: isAbsolute
+        ? source
+        : createRelativeContextExcludeSource(source, normalizedPattern),
+      absolute: isAbsolute
+        ? absolute
+        : createProjectAbsoluteExcludeSource(absolute, normalizedPattern),
+      isAbsolute,
+    };
+  });
+
+  if (sources.length === 0) {
+    return null;
+  }
+
+  return sources;
+};
+
+export const createBrowserContextExcludeRegExp = (
+  patterns: string[],
+  projectRoot: string,
+): RegExp | null => {
+  const excludeSources = excludePatternsToRegExpSources(patterns);
+  if (!excludeSources) {
+    return null;
+  }
+
+  const normalizedProjectRoot = normalizePathForRegExp(projectRoot).replace(
+    /[\\/]$/,
+    '',
+  );
+  const projectRootSource = normalizedProjectRoot
+    .split('/')
+    .map(escapeRegExp)
+    .join(PATH_SEPARATOR_SOURCE);
+  const relativeExcludeSources = excludeSources.filter(
+    (source) => !source.isAbsolute,
+  );
+  const absoluteExcludeSources = excludeSources.filter(
+    (source) => source.isAbsolute,
+  );
+  const sourceBranches: string[] = [];
+
+  if (relativeExcludeSources.length > 0) {
+    const relativePatternSource = `(?:${relativeExcludeSources
+      .map((source) => source.relative)
+      .join('|')})`;
+    const absolutePatternSource = `(?:${relativeExcludeSources
+      .map((source) => source.absolute)
+      .join('|')})`;
+    const relativeSource = `(?:${relativePatternSource})`;
+    const absoluteSource = normalizedProjectRoot
+      ? `${projectRootSource}(?=${PATH_SEPARATOR_SOURCE})(?:${absolutePatternSource})`
+      : `(?:${absolutePatternSource})`;
+
+    sourceBranches.push(
+      `(?!${WINDOWS_ABSOLUTE_PATH_SOURCE}|${PATH_SEPARATOR_SOURCE})${relativeSource}`,
+      absoluteSource,
+    );
+  }
+
+  if (absoluteExcludeSources.length > 0) {
+    sourceBranches.push(
+      `(?:${absoluteExcludeSources
+        .map((source) => source.relative)
+        .join('|')})`,
+    );
+  }
+
+  return new RegExp(`^(?:${sourceBranches.join('|')})$`);
+};
+
+type StatsModule = {
+  nameForCondition?: string;
+  children?: StatsModule[];
+};
+
+type StatsChunk = {
+  id?: string | number;
+  names?: string[];
+  hash?: string;
+  files?: string[];
+  modules?: StatsModule[];
+};
+
+/**
+ * Find test file path from chunk modules by matching against known entry files.
+ */
+const findTestFileInModules = (
+  modules: StatsModule[] | undefined,
+  entryTestFiles: Set<string>,
+): string | null => {
+  if (!modules) return null;
+
+  for (const m of modules) {
+    if (m.nameForCondition) {
+      const normalizedPath = normalize(m.nameForCondition);
+      if (entryTestFiles.has(normalizedPath)) {
+        return normalizedPath;
+      }
+    }
+    if (m.children) {
+      const found = findTestFileInModules(m.children, entryTestFiles);
+      if (found) return found;
+    }
+  }
+  return null;
+};
+
+/**
+ * Get a stable identifier for a chunk.
+ * Prefers chunk.id or chunk.names[0] over file paths for stability.
+ */
+const getChunkKey = (chunk: StatsChunk): string | null => {
+  if (chunk.id != null) {
+    return String(chunk.id);
+  }
+  if (chunk.names && chunk.names.length > 0) {
+    return chunk.names[0]!;
+  }
+  if (chunk.files && chunk.files.length > 0) {
+    return chunk.files[0]!;
+  }
+  return null;
+};
+
+/**
+ * Compare chunk hashes and find affected test files for watch mode re-runs.
+ * Uses chunk.id/names as stable keys instead of relying on file path patterns.
+ */
+const getAffectedTestFiles = (
+  chunks: StatsChunk[] | undefined,
+  entryTestFiles: Set<string>,
+): string[] => {
+  if (!chunks) return [];
+
+  const affectedFiles = new Set<string>();
+  const currentHashes = new Map<string, string>();
+
+  for (const chunk of chunks) {
+    if (!chunk.hash) continue;
+
+    // First check if this chunk contains a test entry file
+    const testFile = findTestFileInModules(chunk.modules, entryTestFiles);
+    if (!testFile) continue;
+
+    // Get a stable key for this chunk
+    const chunkKey = getChunkKey(chunk);
+    if (!chunkKey) continue;
+
+    const prevHash = watchContext.chunkHashes.get(chunkKey);
+    currentHashes.set(chunkKey, chunk.hash);
+
+    if (prevHash !== undefined && prevHash !== chunk.hash) {
+      affectedFiles.add(testFile);
+      logger.debug(
+        `[Watch] Chunk hash changed for ${chunkKey}: ${prevHash} -> ${chunk.hash} (test: ${testFile})`,
+      );
+    }
+  }
+
+  watchContext.chunkHashes = currentHashes;
+  return Array.from(affectedFiles);
+};
+
+const getRuntimeConfigFromProject = (
+  project: ProjectContext,
+): RuntimeConfig => {
+  const {
+    testNamePattern,
+    testTimeout,
+    passWithNoTests,
+    retry,
+    globals,
+    clearMocks,
+    resetMocks,
+    restoreMocks,
+    unstubEnvs,
+    unstubGlobals,
+    maxConcurrency,
+    printConsoleTrace,
+    disableConsoleIntercept,
+    testEnvironment,
+    hookTimeout,
+    isolate,
+    coverage,
+    snapshotFormat,
+    env,
+    bail,
+    logHeapUsage,
+    detectAsyncLeaks,
+    chaiConfig,
+    includeTaskLocation,
+    silent,
+  } = project.normalizedConfig;
+
+  return {
+    // Propagate NODE_ENV and the RSTEST flag from the host so
+    // `process.env.NODE_ENV` / `process.env.RSTEST` (rewritten to the
+    // `RSTEST_ENV_SYMBOL_KEY` symbol store) resolve in browser tests the same
+    // way they do in Node mode, where `prepare.ts` sets them on the real
+    // `process.env`.
+    // User-supplied `env` wins so explicit overrides still take effect.
+    // See https://github.com/web-infra-dev/rstest/issues/1351
+    env: {
+      NODE_ENV: process.env.NODE_ENV,
+      RSTEST: 'true',
+      ...env,
+    },
+    testNamePattern,
+    testTimeout,
+    hookTimeout,
+    passWithNoTests,
+    retry,
+    globals,
+    clearMocks,
+    resetMocks,
+    restoreMocks,
+    unstubEnvs,
+    unstubGlobals,
+    maxConcurrency,
+    printConsoleTrace,
+    disableConsoleIntercept,
+    testEnvironment,
+    isolate,
+    coverage,
+    snapshotFormat,
+    bail,
+    logHeapUsage,
+    detectAsyncLeaks,
+    chaiConfig,
+    includeTaskLocation,
+    silent,
+  };
+};
+
+const getBrowserProjects = (context: RstestContext): ProjectContext[] => {
+  return context.projects.filter(
+    (project) => project.normalizedConfig.browser.enabled,
+  );
+};
+
+const getBrowserLaunchOptions = (
+  project: ProjectContext,
+): BrowserLaunchOptions => ({
+  provider: project.normalizedConfig.browser.provider,
+  browser: project.normalizedConfig.browser.browser,
+  headless: project.normalizedConfig.browser.headless,
+  port: project.normalizedConfig.browser.port,
+  strictPort: project.normalizedConfig.browser.strictPort,
+  providerOptions: getBrowserProviderOptions(project),
+});
+
+const ensureConsistentBrowserLaunchOptions = (
+  projects: ProjectContext[],
+): BrowserLaunchOptions => {
+  if (projects.length === 0) {
+    throw new Error('No browser-enabled projects found.');
+  }
+
+  const firstProject = projects[0]!;
+  const firstOptions = getBrowserLaunchOptions(firstProject);
+
+  for (const project of projects.slice(1)) {
+    const options = getBrowserLaunchOptions(project);
+    // Each browser project now runs on its own rsbuild dev server, so ports may
+    // differ per project. Only the shared single Playwright browser forces
+    // provider/browser/headless/providerOptions to match across projects.
+    if (
+      options.provider !== firstOptions.provider ||
+      options.browser !== firstOptions.browser ||
+      options.headless !== firstOptions.headless ||
+      !isDeepStrictEqual(options.providerOptions, firstOptions.providerOptions)
+    ) {
+      throw new Error(
+        `Browser launch config mismatch between projects "${firstProject.name}" and "${project.name}". ` +
+          'All browser-enabled projects in one run must share provider/browser/headless/providerOptions.',
+      );
+    }
+  }
+
+  return firstOptions;
+};
+
+const resolveProviderForTestPath = ({
+  testPath,
+  browserProjects,
+}: {
+  testPath: string;
+  browserProjects: BrowserProviderProject[];
+}): BrowserProvider => {
+  const normalizedTestPath = normalize(testPath);
+  const sortedProjects = [...browserProjects].sort(
+    (a, b) => b.rootPath.length - a.rootPath.length,
+  );
+
+  for (const project of sortedProjects) {
+    if (normalizedTestPath.startsWith(project.rootPath)) {
+      return project.provider;
+    }
+  }
+
+  throw new Error(
+    `Cannot resolve browser provider for test path: ${JSON.stringify(testPath)}. ` +
+      `Known project roots: ${JSON.stringify(sortedProjects.map((p) => p.rootPath))}`,
+  );
+};
+
+const collectProjectEntries = async (
+  context: RstestContext,
+): Promise<BrowserProjectEntries[]> => {
+  // Only collect entries for browser mode projects
+  const browserProjects = getBrowserProjects(context);
+
+  return Promise.all(
+    browserProjects.map(async (project) => {
+      const {
+        normalizedConfig: { include, exclude, includeSource, setupFiles },
+      } = project;
+
+      const tests = await getTestEntries({
+        include,
+        exclude: exclude.patterns,
+        includeSource,
+        rootPath: context.rootPath,
+        projectRoot: project.rootPath,
+        fileFilters: context.fileFilters || [],
+        fileFilterMode: context.fileFilterMode,
+      });
+
+      const setup = getSetupFiles(setupFiles, project.rootPath);
+
+      return {
+        project,
+        setupFiles: Object.values(setup),
+        testFiles: Object.values(tests),
+      };
+    }),
+  );
+};
+
+const resolveBrowserFile = (relativePath: string): string => {
+  // __dirname points to packages/browser/dist when running from built code
+  // or packages/browser/src when running from source
+  const candidates = [
+    // When running from built dist: look in ../src for source files
+    resolve(__dirname, '../src', relativePath),
+    // When running from source (dev mode)
+    resolve(__dirname, relativePath),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new Error(`Unable to resolve browser client file: ${relativePath}`);
+};
+
+const resolveContainerDist = (): string => {
+  // When running from built dist: browser-container is in the same dist folder
+  const distPath = resolve(__dirname, 'browser-container');
+  if (existsSync(distPath)) {
+    return distPath;
+  }
+
+  throw new Error(
+    `Browser container build not found at ${distPath}. Please run "pnpm --filter @rstest/browser build".`,
+  );
+};
+
+// ============================================================================
+// Manifest Generation
+// ============================================================================
+
+/**
+ * Format environment name to a valid JavaScript identifier.
+ * Replaces non-alphanumeric characters with underscores.
+ */
+const toSafeVarName = (name: string): string => {
+  return name.replace(/[^a-zA-Z0-9_]/g, '_');
+};
+
+// Host-side mirror of the browser runtime's `toContextKey` (client/entry.ts):
+// `./<path-relative-to-project-root>` with forward slashes. The runtime derives
+// the same key from the target test file, so the non-watch import map below must
+// key by the identical form for `loadTest(key)` to resolve.
+export const toContextKey = (
+  filePath: string,
+  projectRootPosix: string,
+): string => {
+  const posixPath = normalize(filePath);
+  // Only strip the root at a path boundary: a bare `startsWith` would mangle a
+  // sibling like `/repo/pkg-extra/a.test.ts` under root `/repo/pkg`.
+  const withinRoot =
+    posixPath === projectRootPosix ||
+    posixPath.startsWith(`${projectRootPosix}/`);
+  if (!withinRoot) {
+    // Test file outside the project root: use the absolute path as the key so
+    // the runtime `toAbsolutePath` can round-trip it. A `./`-prefixed relative
+    // key would be re-rooted under projectRoot and point at a nonexistent file.
+    return posixPath;
+  }
+  const rel = posixPath.slice(projectRootPosix.length);
+  return rel.startsWith('/') ? `.${rel}` : `./${rel}`;
+};
+
+const generateManifestModule = ({
+  manifestPath,
+  entries,
+  isWatchMode,
+}: {
+  manifestPath: string;
+  entries: BrowserProjectEntries[];
+  isWatchMode: boolean;
+}): string => {
+  const manifestDirPosix = normalize(dirname(manifestPath));
+
+  const toRelativeImport = (filePath: string): string => {
+    const posixPath = normalize(filePath);
+    let relativePath = relative(manifestDirPosix, posixPath);
+    if (!relativePath.startsWith('.')) {
+      relativePath = `./${relativePath}`;
+    }
+    return relativePath;
+  };
+
+  const lines: string[] = [];
+
+  // 1. Export all projects configuration
+  lines.push('// All projects configuration');
+  lines.push('export const projects = [');
+  for (const { project } of entries) {
+    lines.push('  {');
+    lines.push(`    name: ${JSON.stringify(project.name)},`);
+    lines.push(
+      `    environmentName: ${JSON.stringify(project.environmentName)},`,
+    );
+    lines.push(
+      `    projectRoot: ${JSON.stringify(normalize(project.rootPath))},`,
+    );
+    lines.push('  },');
+  }
+  lines.push('];');
+  lines.push('');
+
+  // 2. Setup loaders for each project
+  lines.push('// Setup loaders for each project');
+  lines.push('export const projectSetupLoaders = {');
+  for (const { project, setupFiles } of entries) {
+    lines.push(`  ${JSON.stringify(project.name)}: [`);
+    for (const filePath of setupFiles) {
+      const relativePath = toRelativeImport(filePath);
+      lines.push(`    () => import(${JSON.stringify(relativePath)}),`);
+    }
+    lines.push('  ],');
+  }
+  lines.push('};');
+  lines.push('');
+
+  // 3. Test context for each project. Both branches expose the same shape as a
+  // webpackContext (callable by key, plus `keys()`), consumed in section 4.
+  lines.push('// Test context for each project');
+  for (const { project, testFiles } of entries) {
+    const varName = `context_${toSafeVarName(project.environmentName)}`;
+    const projectRootPosix = normalize(project.rootPath);
+
+    if (isWatchMode) {
+      // Watch mode keeps the include-glob context so newly added files are
+      // picked up on rebuild via `keys()` without regenerating the manifest.
+      // `mode: 'lazy'` is plain code-splitting (async chunks over HTTP), so it
+      // works with or without lazyCompilation; headed watch additionally layers
+      // lazyCompilation on top to keep the initial build cheap.
+      const includeRegExp = globPatternsToRegExp(
+        project.normalizedConfig.include,
+      );
+      const excludeRegExp = createBrowserContextExcludeRegExp(
+        project.normalizedConfig.exclude.patterns,
+        projectRootPosix,
+      );
+      lines.push(
+        `const ${varName} = import.meta.webpackContext(${JSON.stringify(projectRootPosix)}, {`,
+      );
+      lines.push('  recursive: true,');
+      lines.push(`  regExp: ${includeRegExp.toString()},`);
+      if (excludeRegExp) {
+        lines.push(`  exclude: ${excludeRegExp.toString()},`);
+      }
+      lines.push("  mode: 'lazy',");
+      lines.push('});');
+    } else {
+      // One-shot runs: the file set is fixed and already filtered, so emit an
+      // explicit lazy-import map (one chunk per literal `import()`, like the
+      // setup loaders above). The eager, non-lazyCompilation build then compiles
+      // only the run set instead of every included test file.
+      lines.push(`const ${varName}_modules = {`);
+      for (const filePath of testFiles) {
+        const key = toContextKey(filePath, projectRootPosix);
+        const importPath = toRelativeImport(filePath);
+        lines.push(
+          `  ${JSON.stringify(key)}: () => import(${JSON.stringify(importPath)}),`,
+        );
+      }
+      lines.push('};');
+      lines.push(
+        `const ${varName} = Object.assign((key) => ${varName}_modules[key](), {`,
+      );
+      lines.push(`  keys: () => Object.keys(${varName}_modules),`);
+      lines.push('});');
+    }
+    lines.push('');
+  }
+
+  // 4. Export test contexts object
+  lines.push('export const projectTestContexts = {');
+  for (const { project } of entries) {
+    const varName = `context_${toSafeVarName(project.environmentName)}`;
+    lines.push(`  ${JSON.stringify(project.name)}: {`);
+    lines.push(`    getTestKeys: () => ${varName}.keys(),`);
+    lines.push(`    loadTest: (key) => ${varName}(key),`);
+    lines.push(
+      `    projectRoot: ${JSON.stringify(normalize(project.rootPath))},`,
+    );
+    lines.push('  },');
+  }
+  lines.push('};');
+  lines.push('');
+
+  // 5. Backward compatibility exports (use first project as default)
+  lines.push('// Backward compatibility: export first project as default');
+  lines.push('export const projectConfig = projects[0];');
+  lines.push(
+    'export const setupLoaders = projectSetupLoaders[projects[0].name] || [];',
+  );
+  lines.push('const _defaultCtx = projectTestContexts[projects[0].name];');
+  lines.push(
+    'export const getTestKeys = () => _defaultCtx ? _defaultCtx.getTestKeys() : [];',
+  );
+  lines.push(
+    'export const loadTest = (key) => _defaultCtx ? _defaultCtx.loadTest(key) : Promise.reject(new Error("No project found"));',
+  );
+
+  return `${lines.join('\n')}\n`;
+};
+
+const htmlTemplate = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Rstest Browser Runner</title>
+  </head>
+  <body>
+    <script type="module" src="/static/js/runner.js"></script>
+  </body>
+</html>
+`;
+
+// Workaround for noisy "removed ..." logs caused by VirtualModulesPlugin.
+// Rsbuild suppresses the removed-file log if all removed paths include "virtual":
+// https://github.com/web-infra-dev/rsbuild/blob/1258fa9dba5c321a4629b591a6dadbd2e26c6963/packages/core/src/createCompiler.ts#L73-L76
+const VIRTUAL_MANIFEST_FILENAME = 'virtual-manifest.ts';
+
+// ============================================================================
+// Browser Runtime Lifecycle
+// ============================================================================
+
+const closeAllProjectServers = (
+  servers: Iterable<BrowserProjectServer>,
+): Promise<unknown> =>
+  Promise.allSettled([...servers].map((server) => server.devServer.close()));
+
+// Copy a proxied fetch Response's status + headers onto the Node response,
+// dropping content-length (the body is re-sent, so the original length may not
+// match).
+const copyProxyResponseHeaders = (
+  response: Response,
+  res: ServerResponse,
+): void => {
+  res.statusCode = response.status;
+  response.headers.forEach((value, key) => {
+    if (key.toLowerCase() === 'content-length') {
+      return;
+    }
+    res.setHeader(key, value);
+  });
+};
+
+const destroyBrowserRuntime = async (
+  runtime: BrowserRuntime,
+): Promise<void> => {
+  try {
+    await runtime.browser?.close?.();
+  } catch {
+    // ignore
+  }
+  await closeAllProjectServers(runtime.projectServers.values());
+  try {
+    runtime.wss?.close();
+  } catch {
+    // ignore
+  }
+  await fs
+    .rm(runtime.tempDir, { recursive: true, force: true })
+    .catch(() => {});
+};
+
+const cleanupWatchRuntime = (): Promise<void> => {
+  if (watchContext.cleanupPromise) {
+    return watchContext.cleanupPromise;
+  }
+
+  watchContext.cleanupPromise = (async () => {
+    watchContext.closeCliShortcuts?.();
+    watchContext.closeCliShortcuts = null;
+
+    if (!watchContext.runtime) {
+      return;
+    }
+
+    await destroyBrowserRuntime(watchContext.runtime);
+    watchContext.runtime = null;
+  })();
+
+  return watchContext.cleanupPromise;
+};
+
+const registerWatchCleanup = (): void => {
+  if (watchContext.cleanupRegistered) {
+    return;
+  }
+
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGTSTP'] as const) {
+    process.once(signal, () => {
+      void cleanupWatchRuntime();
+    });
+  }
+
+  process.once('exit', () => {
+    void cleanupWatchRuntime();
+  });
+
+  watchContext.cleanupRegistered = true;
+};
+
+const createBrowserRuntime = async ({
+  context,
+  projectEntries,
+  tempDir,
+  isWatchMode,
+  onTriggerRerun,
+  containerDistPath,
+  containerDevServer,
+  forceHeadless,
+}: {
+  context: RstestContext;
+  projectEntries: BrowserProjectEntries[];
+  tempDir: string;
+  isWatchMode: boolean;
+  onTriggerRerun?: () => Promise<void>;
+  containerDistPath?: string;
+  containerDevServer?: string;
+  /** Force headless mode regardless of user config (used for list command) */
+  forceHeadless?: boolean;
+}): Promise<BrowserRuntime> => {
+  // ---- Shared singletons (created once, wired into every project server) ----
+  const containerHtmlTemplate = containerDistPath
+    ? await fs.readFile(join(containerDistPath, 'index.html'), 'utf-8')
+    : null;
+
+  let injectedContainerHtml: string | null = null;
+  let serializedOptions = 'null';
+  // Reserved extension seam for future browser-side capabilities.
+  const dispatchHandlers = new Map<string, BrowserDispatchHandler>();
+
+  const setContainerOptions = (options: BrowserHostConfig): void => {
+    serializedOptions = serializeForInlineScript(options);
+    if (containerHtmlTemplate) {
+      injectedContainerHtml = containerHtmlTemplate.replace(
+        OPTIONS_PLACEHOLDER,
+        serializedOptions,
+      );
+    }
+  };
+
+  const browserProjects = getBrowserProjects(context);
+  const browserLaunchOptions =
+    ensureConsistentBrowserLaunchOptions(browserProjects);
+
+  // Rstest internal aliases that must not be overridden by user config
+  const browserRuntimePath = fileURLToPath(
+    import.meta.resolve('@rstest/core/internal/browser-runtime'),
+  );
+
+  // Shared by every project — only the per-project `@rstest/browser-manifest`
+  // alias varies (one virtual manifest per server).
+  const staticRstestAliases = {
+    // User test code: import { describe, it } from '@rstest/core'
+    '@rstest/core': resolveBrowserFile('client/public.ts'),
+    // User test code: import { page } from '@rstest/browser'
+    '@rstest/browser': resolveBrowserFile('browser.ts'),
+    // Browser runtime APIs for entry.ts and public.ts
+    // Uses dist file with extractSourceMap to preserve sourcemap chain for inline snapshots
+    '@rstest/core/internal/browser-runtime': browserRuntimePath,
+  };
+
+  // rspack `define` replaces `process.env` / `import.meta.env` with this literal
+  // expression. JSON.stringify reproduces the exact double-quoted `"rstest.env"`
+  // text, so the owned key can never drift from the runtime
+  // `Symbol.for(RSTEST_ENV_SYMBOL_KEY)` sites.
+  const rstestEnvDefine = `globalThis[Symbol.for(${JSON.stringify(
+    RSTEST_ENV_SYMBOL_KEY,
+  )})]`;
+
+  // Serve prebuilt container assets (SPA) via sirv (container origin only)
+  const serveContainer = containerDistPath
+    ? sirv(containerDistPath, {
+        dev: false,
+        single: 'index.html',
+      })
+    : null;
+
+  const containerDevBase = containerDevServer
+    ? new URL(containerDevServer)
+    : null;
+
+  const respondWithDevServerHtml = async (
+    url: URL,
+    res: ServerResponse,
+  ): Promise<boolean> => {
+    if (!containerDevBase) {
+      return false;
+    }
+
+    try {
+      const target = new URL(url.pathname + url.search, containerDevBase);
+      const response = await fetch(target);
+      if (!response.ok) {
+        return false;
+      }
+
+      let html = await response.text();
+      html = html.replace(OPTIONS_PLACEHOLDER, serializedOptions);
+
+      copyProxyResponseHeaders(response, res);
+      res.setHeader('Content-Type', 'text/html');
+      res.end(html);
+      return true;
+    } catch (error) {
+      logger.debug(
+        `[Browser UI] Failed to fetch container HTML from dev server: ${String(error)}`,
+      );
+      return false;
+    }
+  };
+
+  const proxyDevServerAsset = async (
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<boolean> => {
+    if (!containerDevBase || !req.url) {
+      return false;
+    }
+
+    try {
+      const target = new URL(req.url, containerDevBase);
+      const response = await fetch(target);
+      if (!response.ok) {
+        return false;
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      copyProxyResponseHeaders(response, res);
+      res.end(buffer);
+      return true;
+    } catch (error) {
+      logger.debug(
+        `[Browser UI] Failed to proxy asset from dev server: ${String(error)}`,
+      );
+      return false;
+    }
+  };
+
+  const entryByEnvironmentName = new Map(
+    projectEntries.map((entry) => [entry.project.environmentName, entry]),
+  );
+
+  // ---- Build one isolated rsbuild instance + dev server per project ----
+  const buildProjectServer = async (
+    project: ProjectContext,
+    isContainerServer: boolean,
+  ): Promise<BrowserProjectServer> => {
+    const manifestPath = join(
+      tempDir,
+      toSafeVarName(project.environmentName),
+      VIRTUAL_MANIFEST_FILENAME,
+    );
+    const entry = entryByEnvironmentName.get(project.environmentName);
+    const manifestSource = generateManifestModule({
+      manifestPath,
+      entries: [
+        {
+          project,
+          testFiles: entry?.testFiles ?? [],
+          setupFiles: entry?.setupFiles ?? [],
+        },
+      ],
+      isWatchMode,
+    });
+    const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin({
+      [manifestPath]: manifestSource,
+    });
+
+    const rstestInternalAliases = {
+      '@rstest/browser-manifest': manifestPath,
+      ...staticRstestAliases,
+    };
+
+    const isHeadless =
+      forceHeadless || project.normalizedConfig.browser.headless;
+    const enableHmr = shouldEnableBrowserHmr(isWatchMode, isHeadless);
+
+    const rsbuildInstance = await createRsbuild({
+      callerName: 'rstest-browser',
+      rsbuildConfig: {
+        root: context.rootPath,
+        mode: 'development',
+        plugins: project.normalizedConfig.plugins || [],
+        server: {
+          printUrls: false,
+          // Each project gets its own dev server. Honor an explicitly
+          // configured port; otherwise keep the historical 4000 default for the
+          // container server and let the OS assign free ports for the rest, so
+          // multiple projects never collide on one port.
+          port:
+            project.normalizedConfig.browser.port ??
+            (isContainerServer ? 4000 : 0),
+          strictPort: project.normalizedConfig.browser.strictPort,
+        },
+        dev: createBrowserRsbuildDevConfig(enableHmr),
+        environments: {
+          [project.environmentName]: {},
+        },
+      },
+    });
+
+    // Add plugin to merge user Rsbuild config with rstest required config
+    rsbuildInstance.addPlugins([
+      {
+        name: 'rstest:browser-user-config',
+        setup(api) {
+          // Internal extension entry: register host dispatch handlers without
+          // coupling scheduling to individual capability implementations.
+          (api as { expose?: (name: string, value: unknown) => void }).expose?.(
+            'rstest:browser',
+            {
+              registerDispatchHandler: (
+                namespace: string,
+                handler: BrowserDispatchHandler,
+              ) => {
+                dispatchHandlers.set(namespace, handler);
+              },
+            },
+          );
+
+          api.modifyEnvironmentConfig({
+            handler: (config, { mergeEnvironmentConfig, name }) => {
+              if (name !== project.environmentName) {
+                return config;
+              }
+
+              const userRsbuildConfig = project.normalizedConfig;
+              const buildCache = resolveProjectBuildCache({
+                context,
+                project,
+              });
+              const setupFiles = Object.values(
+                getSetupFiles(
+                  project.normalizedConfig.setupFiles,
+                  project.rootPath,
+                ),
+              );
+              // Merge order: current config -> userConfig -> rstest required config (highest priority)
+              const merged = mergeEnvironmentConfig(
+                config,
+                {
+                  ...userRsbuildConfig,
+                  performance: buildCache
+                    ? {
+                        ...userRsbuildConfig.performance,
+                        buildCache,
+                      }
+                    : userRsbuildConfig.performance,
+                },
+                {
+                  resolve: {
+                    alias: rstestInternalAliases,
+                  },
+                  source: {
+                    define: {
+                      'process.env': rstestEnvDefine,
+                      'import.meta.env': rstestEnvDefine,
+                    },
+                  },
+                  output: {
+                    target: 'web',
+                    // Enable source map for inline snapshot support
+                    sourceMap: {
+                      js: 'source-map',
+                    },
+                  },
+                  tools: {
+                    rspack: (rspackConfig) => {
+                      rspackConfig.mode = 'development';
+                      // lazyCompilation's only delivery transport is the HMR
+                      // runtime, so it follows the same gate as HMR (see
+                      // `shouldEnableBrowserHmr`): headed watch only, everything
+                      // else compiles eagerly.
+                      rspackConfig.lazyCompilation = enableHmr
+                        ? createBrowserLazyCompilationConfig(setupFiles)
+                        : false;
+                      rspackConfig.plugins = rspackConfig.plugins || [];
+                      rspackConfig.plugins.push(virtualManifestPlugin);
+
+                      applyDefaultWatchOptions(rspackConfig, isWatchMode);
+
+                      // Extract and merge sourcemaps from pre-built @rstest/core files
+                      // This preserves the sourcemap chain for inline snapshot support
+                      // See: https://rspack.dev/config/module-rules#rulesextractsourcemap
+                      const browserRuntimeDir = dirname(browserRuntimePath);
+                      rspackConfig.module = rspackConfig.module || {};
+                      rspackConfig.module.rules =
+                        rspackConfig.module.rules || [];
+                      rspackConfig.module.rules.unshift({
+                        test: /\.js$/,
+                        include: browserRuntimeDir,
+                        extractSourceMap: true,
+                      });
+
+                      if (isDebug()) {
+                        logger.log(
+                          `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
+                        );
+                      }
+                    },
+                  },
+                },
+              );
+
+              // Completely overwrite entry to prevent Rsbuild default entry detection from taking effect.
+              // In browser mode, entry is fully controlled by rstest (not user's src/index.ts).
+              // This must be done after mergeEnvironmentConfig to ensure highest priority.
+              merged.source = merged.source || {};
+              merged.source.entry = {
+                runner: resolveBrowserFile('client/entry.ts'),
+              };
+
+              return merged;
+            },
+            // Execute after all other plugins to ensure rstest's entry config has the highest priority
+            order: 'post',
+          });
+        },
+      },
+    ]);
+
+    // Register watch plugin if in watch mode
+    if (isWatchMode && onTriggerRerun) {
+      rsbuildInstance.addPlugins([
+        {
+          name: 'rstest:browser-watch',
+          setup(api) {
+            api.onBeforeDevCompile(() => {
+              if (!watchContext.hooksEnabled) {
+                return;
+              }
+              logger.log(color.cyan('\nFile changed, re-running tests...\n'));
+            });
+
+            api.onAfterDevCompile(async ({ stats }) => {
+              // Collect hashes even during initial build to establish baseline
+              if (stats) {
+                const allProjectEntries = await collectProjectEntries(context);
+                const entryTestFiles = new Set<string>(
+                  collectWatchTestFiles(allProjectEntries).map(
+                    (file) => file.testPath,
+                  ),
+                );
+
+                const statsJson = stats.toJson({ all: true });
+                const affected = getAffectedTestFiles(
+                  statsJson.chunks,
+                  entryTestFiles,
+                );
+                watchContext.affectedTestFiles = affected;
+
+                if (affected.length > 0) {
+                  logger.debug(
+                    `[Watch] Affected test files: ${affected.join(', ')}`,
+                  );
+                }
+              }
+
+              if (!watchContext.hooksEnabled) {
+                return;
+              }
+
+              await onTriggerRerun();
+            });
+          },
+        },
+      ]);
+    }
+
+    // Register coverage plugin if this project enables coverage
+    const coverage = project.normalizedConfig.coverage;
+    if (coverage?.enabled && context.command !== 'list') {
+      const { pluginCoverage } = await loadCoverageProvider(
+        coverage,
+        context.rootPath,
+      );
+      rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
+    }
+
+    const devServer = await rsbuildInstance.createDevServer({
+      getPortSilently: true,
+    });
+
+    if (isDebug()) {
+      await rsbuildInstance.inspectConfig({
+        writeToDisk: true,
+        extraConfigs: {
+          rstest: {
+            ...context.normalizedConfig,
+            projects: [project.normalizedConfig],
+          },
+        },
+      });
+    }
+
+    devServer.middlewares.use(
+      async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+        if (!req.url) {
+          next();
+          return;
+        }
+        const url = new URL(req.url, 'http://localhost');
+        if (url.pathname === '/__open-in-editor') {
+          const file = url.searchParams.get('file');
+          if (!file) {
+            res.statusCode = 400;
+            res.end('Missing file');
+            return;
+          }
+          try {
+            await openEditor([{ file }]);
+            res.statusCode = 204;
+            res.end();
+          } catch (error) {
+            logger.debug(
+              `[Browser UI] Failed to open editor: ${String(error)}`,
+            );
+            res.statusCode = 500;
+            res.end('Failed to open editor');
+          }
+          return;
+        }
+        // Container UI HTML + static assets are served by the container origin
+        // only. Per-project runner servers expose just /runner.html + assets.
+        if (isContainerServer) {
+          if (url.pathname === '/') {
+            if (await respondWithDevServerHtml(url, res)) {
+              return;
+            }
+
+            const html =
+              injectedContainerHtml ||
+              containerHtmlTemplate?.replace(OPTIONS_PLACEHOLDER, 'null');
+
+            if (html) {
+              res.setHeader('Content-Type', 'text/html');
+              res.end(html);
+              return;
+            }
+
+            res.statusCode = 502;
+            res.end('Container UI is not available.');
+            return;
+          }
+          if (url.pathname.startsWith('/container-static/')) {
+            if (await proxyDevServerAsset(req, res)) {
+              return;
+            }
+
+            if (serveContainer) {
+              serveContainer(req, res, next);
+              return;
+            }
+
+            res.statusCode = 502;
+            res.end('Container assets are not available.');
+            return;
+          }
+        }
+        if (url.pathname === '/runner.html') {
+          res.setHeader('Content-Type', 'text/html');
+          res.end(htmlTemplate);
+          return;
+        }
+        next();
+      },
+    );
+
+    const { port: listenPort } = await devServer.listen();
+    const port = resolveListenPort(listenPort, devServer.httpServer);
+
+    return {
+      projectName: project.name,
+      environmentName: project.environmentName,
+      rsbuildInstance,
+      devServer,
+      port,
+      manifestPath,
+    };
+  };
+
+  // Build each project's server sequentially. Servers must bind ports one at a
+  // time: projects may share a configured port and rely on strictPort:false
+  // bumping to the next free one, which races under concurrent listen().
+  const projectServers = new Map<string, BrowserProjectServer>();
+  try {
+    for (const [index, project] of browserProjects.entries()) {
+      const server = await buildProjectServer(project, index === 0);
+      projectServers.set(server.projectName, server);
+    }
+  } catch (error) {
+    await closeAllProjectServers(projectServers.values());
+    throw error;
+  }
+
+  // browserProjects is non-empty (ensureConsistentBrowserLaunchOptions throws
+  // otherwise) and index 0 is the designated container origin.
+  const containerServer = projectServers.get(browserProjects[0]!.name)!;
+
+  // Create WebSocket server on an available port
+  // Using port: 0 lets the OS assign an available port, avoiding conflicts
+  // when the fixed port (e.g., container port + 1) is already in use
+  const wss = new WebSocketServer({ port: 0 });
+  await new Promise<void>((resolve, reject) => {
+    wss.once('listening', resolve);
+    wss.once('error', reject);
+  });
+  const wsPort = (wss.address() as AddressInfo).port;
+  logger.debug(`[Browser UI] WebSocket server started on port ${wsPort}`);
+
+  const browserName = browserLaunchOptions.browser ?? 'chromium';
+  try {
+    const providerImplementation = getBrowserProviderImplementation(
+      browserLaunchOptions.provider,
+    );
+    const runtime = await providerImplementation.launchRuntime({
+      browserName,
+      headless: forceHeadless ?? browserLaunchOptions.headless,
+      providerOptions: browserLaunchOptions.providerOptions,
+    });
+    return {
+      projectServers,
+      containerServer,
+      browser: runtime.browser,
+      browserLaunchOptions,
+      wsPort,
+      tempDir,
+      setContainerOptions,
+      dispatchHandlers,
+      wss,
+    };
+  } catch (error) {
+    wss.close();
+    await closeAllProjectServers(projectServers.values());
+    throw error;
+  }
+};
+
+async function resolveProjectEntries(
+  context: RstestContext,
+  shardedEntries?: Map<string, { entries: Record<string, string> }>,
+): Promise<BrowserProjectEntries[]> {
+  if (shardedEntries) {
+    const browserProjects = getBrowserProjects(context);
+    const projectEntries: BrowserProjectEntries[] = [];
+    for (const project of browserProjects) {
+      const entryInfo = shardedEntries.get(project.environmentName);
+      if (entryInfo && Object.keys(entryInfo.entries).length > 0) {
+        const setup = getSetupFiles(
+          project.normalizedConfig.setupFiles,
+          project.rootPath,
+        );
+        projectEntries.push({
+          project,
+          setupFiles: Object.values(setup),
+          testFiles: Object.values(entryInfo.entries),
+        });
+      }
+    }
+    return projectEntries;
+  }
+  return collectProjectEntries(context);
+}
+
+// ============================================================================
+// Main Entry Point
+// ============================================================================
+
+export const runBrowserController = async (
+  context: RstestContext,
+  options?: BrowserTestRunOptions,
+): Promise<BrowserTestRunResult | void> => {
+  const {
+    skipOnTestRunEnd = false,
+    allowEmptyWatchRun = false,
+    onTraceEvents,
+  } = options ?? {};
+  const buildStart = Date.now();
+  const isWatchMode = context.command === 'watch';
+
+  // Per-file PhaseTrackers, populated only when `--trace` is on (caller
+  // passes `onTraceEvents`). The browser host shares one Node process across
+  // every test file, so each tracker is assigned a synthetic per-file pid
+  // (`nextBrowserFilePid`) that lets Perfetto render each file as its own
+  // process track with the file path as the title.
+  const phaseTrackers = onTraceEvents
+    ? new Map<string, PhaseTracker>()
+    : undefined;
+  const browserProjects = getBrowserProjects(context);
+  const useHeadlessDirect = browserProjects.every(
+    (project) => project.normalizedConfig.browser.headless,
+  );
+
+  const browserSourceMapCache = new Map<string, SourceMapPayload | null>();
+
+  const isHttpLikeFile = (file: string): boolean => /^https?:\/\//.test(file);
+
+  const resolveBrowserSourcemap = async (sourcePath: string) => {
+    if (!isHttpLikeFile(sourcePath)) {
+      return {
+        handled: false,
+        sourcemap: null,
+      };
+    }
+
+    const normalizedUrl = normalizeJavaScriptUrl(sourcePath);
+    if (!normalizedUrl) {
+      return {
+        handled: true,
+        sourcemap: null,
+      };
+    }
+
+    if (browserSourceMapCache.has(normalizedUrl)) {
+      return {
+        handled: true,
+        sourcemap: browserSourceMapCache.get(normalizedUrl) ?? null,
+      };
+    }
+
+    return {
+      handled: true,
+      sourcemap: await loadSourceMapWithCache({
+        jsUrl: normalizedUrl,
+        cache: browserSourceMapCache,
+      }),
+    };
+  };
+
+  const getBrowserSourcemap = async (
+    sourcePath: string,
+  ): Promise<SourceMapPayload | null> => {
+    const result = await resolveBrowserSourcemap(sourcePath);
+    return result.handled ? result.sourcemap : null;
+  };
+
+  /**
+   * Build an error BrowserTestRunResult and call onTestRunEnd if needed.
+   * Used for early-exit error paths to ensure errors reach the summary report.
+   */
+  const buildErrorResult = async (
+    error: Error,
+    close?: () => Promise<void>,
+  ): Promise<BrowserTestRunResult> => {
+    const elapsed = Math.max(0, Date.now() - buildStart);
+    const errorResult = {
+      results: [],
+      testResults: [],
+      duration: { totalTime: elapsed, buildTime: elapsed, testTime: 0 },
+      hasFailure: true,
+      unhandledErrors: [error],
+      getSourcemap: getBrowserSourcemap,
+      resolveSourcemap: resolveBrowserSourcemap,
+      close,
+    };
+
+    if (!skipOnTestRunEnd) {
+      for (const reporter of context.reporters) {
+        await (reporter as Reporter).onTestRunEnd?.({
+          results: [],
+          testResults: [],
+          duration: errorResult.duration,
+          snapshotSummary: context.snapshotManager.summary,
+          getSourcemap: getBrowserSourcemap,
+          unhandledErrors: errorResult.unhandledErrors,
+        });
+      }
+    }
+
+    return errorResult;
+  };
+
+  const toError = (error: unknown): Error => {
+    return error instanceof Error ? error : new Error(String(error));
+  };
+
+  const failWithError = async (
+    error: unknown,
+    cleanup?: () => Promise<void>,
+  ): Promise<BrowserTestRunResult> => {
+    ensureProcessExitCode(1);
+
+    const normalizedError = toError(error);
+
+    if (cleanup && skipOnTestRunEnd) {
+      return buildErrorResult(normalizedError, cleanup);
+    }
+
+    try {
+      return await buildErrorResult(normalizedError);
+    } finally {
+      await cleanup?.();
+    }
+  };
+
+  const collectDeletedTestPaths = (
+    previous: TestFileInfo[],
+    current: TestFileInfo[],
+  ): string[] => {
+    const currentPathSet = new Set(current.map((file) => file.testPath));
+    return previous
+      .map((file) => file.testPath)
+      .filter((testPath) => !currentPathSet.has(testPath));
+  };
+
+  const notifyTestRunStart = async (): Promise<void> => {
+    if (skipOnTestRunEnd) {
+      return;
+    }
+
+    for (const reporter of context.reporters) {
+      await reporter.onTestRunStart?.();
+    }
+  };
+
+  const coverageConfig = browserProjects.find(
+    (project) => project.normalizedConfig.coverage?.enabled,
+  )?.normalizedConfig.coverage;
+  const coverageProvider = coverageConfig?.enabled
+    ? await createCoverageProvider(coverageConfig, context.rootPath)
+    : null;
+
+  const notifyTestRunEnd = async ({
+    duration,
+    unhandledErrors,
+    filterRerunTestPaths,
+  }: {
+    duration: {
+      totalTime: number;
+      buildTime: number;
+      testTime: number;
+    };
+    unhandledErrors?: Error[];
+    filterRerunTestPaths?: string[];
+  }): Promise<void> => {
+    if (skipOnTestRunEnd) {
+      return;
+    }
+
+    // Merge per-file coverage into a single CoverageMapData for reporters
+    let mergedCoverage: CoverageMapData | undefined;
+    if (coverageProvider) {
+      const coverageMap = coverageProvider.createCoverageMap();
+      let hasCoverage = false;
+      for (const result of context.reporterResults.results) {
+        if (result.coverage) {
+          coverageMap.merge(result.coverage);
+          hasCoverage = true;
+        }
+      }
+      if (hasCoverage) {
+        mergedCoverage = coverageMap.toJSON();
+      }
+    }
+
+    for (const reporter of context.reporters) {
+      await reporter.onTestRunEnd?.({
+        results: context.reporterResults.results,
+        coverage: mergedCoverage,
+        testResults: context.reporterResults.testResults,
+        duration,
+        snapshotSummary: context.snapshotManager.summary,
+        getSourcemap: getBrowserSourcemap,
+        unhandledErrors,
+        filterRerunTestPaths,
+      });
+    }
+  };
+
+  const containerDevServerEnv = process.env.RSTEST_CONTAINER_DEV_SERVER;
+  let containerDevServer: string | undefined;
+  let containerDistPath: string | undefined;
+
+  if (!useHeadlessDirect) {
+    if (containerDevServerEnv) {
+      try {
+        containerDevServer = new URL(containerDevServerEnv).toString();
+        logger.debug(
+          `[Browser UI] Using dev server for container: ${containerDevServer}`,
+        );
+      } catch (error) {
+        const originalError = toError(error);
+        originalError.message = `Invalid RSTEST_CONTAINER_DEV_SERVER value: ${originalError.message}`;
+        return failWithError(originalError);
+      }
+    }
+
+    if (!containerDevServer) {
+      try {
+        containerDistPath = resolveContainerDist();
+      } catch (error) {
+        return failWithError(error);
+      }
+    }
+  }
+
+  const projectEntries = await resolveProjectEntries(
+    context,
+    options?.shardedEntries,
+  );
+  const totalTests = projectEntries.reduce(
+    (total, item) => total + item.testFiles.length,
+    0,
+  );
+  const shouldKeepWatchingWithEmptySet = isWatchMode && allowEmptyWatchRun;
+
+  if (totalTests === 0) {
+    const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
+    if (!skipOnTestRunEnd) {
+      const message = shouldKeepWatchingWithEmptySet
+        ? 'No test files found.'
+        : getNoTestFilesMessage({
+            context,
+            code,
+            defaultMessage: `No test files found, exiting with code ${code}.`,
+          });
+      if (code === 0) {
+        logger.log(color.yellow(message));
+      } else {
+        logger.error(color.red(message));
+      }
+
+      if (context.relatedFilters?.length) {
+        logger.log(
+          color.gray('related: '),
+          context.relatedFilters.join(color.gray(', ')),
+        );
+      } else if (context.fileFilters?.length) {
+        logger.log(
+          color.gray('filter: '),
+          context.fileFilters.join(color.gray(', ')),
+        );
+      }
+    }
+
+    if (code !== 0 && !shouldKeepWatchingWithEmptySet) {
+      ensureProcessExitCode(code);
+    }
+    if (!shouldKeepWatchingWithEmptySet) {
+      return;
+    }
+  }
+
+  await notifyTestRunStart();
+
+  const enableCliShortcuts = isWatchMode && isBrowserWatchCliShortcutsEnabled();
+  const browserTempOutputRoot = context.normalizedConfig.output.distPath.root;
+  const tempDir =
+    isWatchMode && watchContext.runtime
+      ? watchContext.runtime.tempDir
+      : isWatchMode
+        ? join(context.rootPath, browserTempOutputRoot, 'browser', 'watch')
+        : join(
+            context.rootPath,
+            browserTempOutputRoot,
+            'browser',
+            Date.now().toString(),
+          );
+
+  // Track initial test files for watch mode
+  if (isWatchMode) {
+    watchContext.lastTestFiles = collectWatchTestFiles(projectEntries);
+  }
+
+  let runtime = isWatchMode ? watchContext.runtime : null;
+
+  // Define rerun callback for watch mode (will be populated later)
+  let triggerRerun: (() => Promise<void>) | undefined;
+
+  if (!runtime) {
+    try {
+      runtime = await createBrowserRuntime({
+        context,
+        projectEntries,
+        tempDir,
+        isWatchMode,
+        onTriggerRerun: isWatchMode
+          ? async () => {
+              await triggerRerun?.();
+            }
+          : undefined,
+        containerDistPath,
+        containerDevServer,
+      });
+    } catch (error) {
+      return failWithError(error, async () => {
+        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+      });
+    }
+
+    if (isWatchMode) {
+      watchContext.runtime = runtime;
+      registerWatchCleanup();
+
+      if (enableCliShortcuts && !watchContext.closeCliShortcuts) {
+        watchContext.closeCliShortcuts = await setupBrowserWatchCliShortcuts({
+          close: cleanupWatchRuntime,
+        });
+      }
+    }
+  }
+
+  const { browser, browserLaunchOptions, wsPort, wss } = runtime;
+  const buildTime = Date.now() - buildStart;
+
+  // Collect all test files from project entries with project info
+  // Normalize paths to posix format for cross-platform compatibility
+  const allTestFiles: TestFileInfo[] = projectEntries.flatMap((entry) =>
+    entry.testFiles.map((testPath) => ({
+      testPath: normalize(testPath),
+      projectName: entry.project.name,
+    })),
+  );
+
+  // Only include browser mode projects in runtime configs
+  // Normalize projectRoot to posix format for cross-platform compatibility
+  const projectRuntimeConfigs: BrowserProjectRuntime[] = browserProjects.map(
+    (project: ProjectContext) => ({
+      name: project.name,
+      environmentName: project.environmentName,
+      projectRoot: normalize(project.rootPath),
+      runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
+      viewport: project.normalizedConfig.browser.viewport,
+    }),
+  );
+
+  // Get max testTimeout from all browser projects for RPC timeout
+  const maxTestTimeoutForRpc = Math.max(
+    ...browserProjects.map(
+      (p) => p.normalizedConfig.testTimeout ?? DEFAULT_TEST_TIMEOUT,
+    ),
+  );
+
+  const projectRunnerUrls = Object.fromEntries(
+    [...runtime.projectServers].map(([name, server]) => [
+      name,
+      `http://localhost:${server.port}`,
+    ]),
+  );
+
+  const hostOptions: BrowserHostConfig = {
+    rootPath: normalize(context.rootPath),
+    projects: projectRuntimeConfigs,
+    snapshot: {
+      updateSnapshot: context.snapshotManager.options.updateSnapshot,
+    },
+    // Container origin (fallback). Per-project runner origins below.
+    runnerUrl: `http://localhost:${runtime.containerServer.port}`,
+    projectRunnerUrls,
+    wsPort,
+    debug: isDebug(),
+    rpcTimeout: maxTestTimeoutForRpc,
+  };
+
+  const browserProviderProjects: BrowserProviderProject[] = browserProjects.map(
+    (project) => ({
+      rootPath: normalize(project.rootPath),
+      provider: project.normalizedConfig.browser.provider,
+    }),
+  );
+  const implementationByProvider = new Map<
+    BrowserProvider,
+    BrowserProviderImplementation
+  >();
+  for (const browserProject of browserProviderProjects) {
+    if (!implementationByProvider.has(browserProject.provider)) {
+      implementationByProvider.set(
+        browserProject.provider,
+        getBrowserProviderImplementation(browserProject.provider),
+      );
+    }
+  }
+
+  let activeContainerPage: BrowserProviderPage | null = null;
+  let getHeadlessRunnerPageBySessionId:
+    ((sessionId: string) => BrowserProviderPage | undefined) | undefined;
+
+  const dispatchBrowserRpcRequest = async ({
+    request,
+    target,
+  }: {
+    request: BrowserRpcRequest;
+    target?: BrowserDispatchRequest['target'];
+  }): Promise<unknown> => {
+    const timeoutFallbackMs = maxTestTimeoutForRpc;
+    const provider = resolveProviderForTestPath({
+      testPath: request.testPath,
+      browserProjects: browserProviderProjects,
+    });
+    const implementation = implementationByProvider.get(provider);
+    if (!implementation) {
+      throw new Error(`Browser provider implementation not found: ${provider}`);
+    }
+
+    const runnerPage = target?.sessionId
+      ? getHeadlessRunnerPageBySessionId?.(target.sessionId)
+      : undefined;
+
+    if (target?.sessionId && !runnerPage) {
+      throw new Error(
+        `Runner page session not found for browser dispatch: ${target.sessionId}`,
+      );
+    }
+
+    if (!runnerPage && !activeContainerPage) {
+      throw new Error('Browser container page is not initialized');
+    }
+
+    try {
+      return await implementation.dispatchRpc({
+        containerPage: runnerPage
+          ? undefined
+          : (activeContainerPage ?? undefined),
+        runnerPage,
+        request,
+        timeoutFallbackMs,
+      });
+    } catch (error) {
+      // birpc serializes thrown Errors as `{}` over JSON; throw a string instead.
+      if (error instanceof Error) {
+        throw error.message;
+      }
+      throw String(error);
+    }
+  };
+
+  runtime.dispatchHandlers.set(
+    DISPATCH_NAMESPACE_BROWSER,
+    async (dispatchRequest) => {
+      const request = validateBrowserRpcRequest(dispatchRequest.args);
+      return dispatchBrowserRpcRequest({
+        request,
+        target: dispatchRequest.target,
+      });
+    },
+  );
+
+  runtime.setContainerOptions(hostOptions);
+
+  // Track test results from browser runners
+  const reporterResults: TestFileResult[] = [];
+  const caseResults: TestResult[] = [];
+  let fatalError: Error | null = null;
+
+  const snapshotRpcMethods = {
+    async resolveSnapshotPath(testPath: string): Promise<string> {
+      const snapExtension = '.snap';
+      const resolver =
+        context.normalizedConfig.resolveSnapshotPath ||
+        (() =>
+          join(
+            dirname(testPath),
+            '__snapshots__',
+            `${basename(testPath)}${snapExtension}`,
+          ));
+      return resolver(testPath, snapExtension);
+    },
+    async readSnapshotFile(filepath: string): Promise<string | null> {
+      try {
+        return await fs.readFile(filepath, 'utf-8');
+      } catch {
+        return null;
+      }
+    },
+    async saveSnapshotFile(filepath: string, content: string): Promise<void> {
+      const dir = dirname(filepath);
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(filepath, content, 'utf-8');
+    },
+    async removeSnapshotFile(filepath: string): Promise<void> {
+      try {
+        await fs.unlink(filepath);
+      } catch {
+        // ignore if file doesn't exist
+      }
+    },
+  };
+
+  const handleTestFileStart = async (
+    payload: TestFileStartPayload,
+  ): Promise<void> => {
+    if (phaseTrackers) {
+      const tracker = new PhaseTracker({
+        trace: {
+          testPath: payload.testPath,
+          project: payload.projectName,
+        },
+        pid: nextBrowserFilePid++,
+      });
+      tracker.transition('prepare');
+      phaseTrackers.set(payload.testPath, tracker);
+    }
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestFileStart?.({
+          testId: getFileTaskId(payload.testPath),
+          testPath: payload.testPath,
+          tests: [],
+        }),
+      ),
+    );
+  };
+
+  const handleTestFileReady = async (
+    payload: TestFileReadyPayload,
+  ): Promise<void> => {
+    phaseTrackers?.get(payload.testPath)?.transition('tests');
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestFileReady?.(payload),
+      ),
+    );
+  };
+
+  const handleTestSuiteStart = async (
+    payload: TestSuiteStartPayload,
+  ): Promise<void> => {
+    phaseTrackers?.get(payload.testPath)?.recordSuiteStart(payload);
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestSuiteStart?.(payload),
+      ),
+    );
+  };
+
+  const handleTestSuiteResult = async (
+    payload: TestSuiteResultPayload,
+  ): Promise<void> => {
+    phaseTrackers?.get(payload.testPath)?.recordSuiteResult(payload);
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestSuiteResult?.(payload),
+      ),
+    );
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+        taskParentNames: payload.parentNames,
+        taskType: 'suite',
+        testPath: payload.testPath,
+      });
+    }
+  };
+
+  const handleTestCaseStart = async (
+    payload: TestCaseStartPayload,
+  ): Promise<void> => {
+    phaseTrackers?.get(payload.testPath)?.recordCaseStart(payload);
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestCaseStart?.(payload),
+      ),
+    );
+  };
+
+  const handleTestCaseResult = async (payload: TestResult): Promise<void> => {
+    caseResults.push(payload);
+    phaseTrackers?.get(payload.testPath)?.recordCaseResult(payload);
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestCaseResult?.(payload),
+      ),
+    );
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+        taskParentNames: payload.parentNames,
+        taskType: 'case',
+        testPath: payload.testPath,
+      });
+    }
+  };
+
+  const handleTestFileComplete = async (
+    payload: TestFileResult,
+  ): Promise<void> => {
+    reporterResults.push(payload);
+    context.updateReporterResultState([payload], payload.results);
+    if (payload.snapshotResult) {
+      context.snapshotManager.add(payload.snapshotResult);
+    }
+
+    if (phaseTrackers) {
+      const tracker = phaseTrackers.get(payload.testPath);
+      if (tracker) {
+        tracker.end();
+        const events = tracker.getTraceEvents();
+        if (events) onTraceEvents?.(events);
+        phaseTrackers.delete(payload.testPath);
+      }
+    }
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      await flushBufferedLogsForTask({
+        taskId: payload.testId,
+        status: payload.status,
+        taskParentNames: payload.parentNames,
+        taskType: 'file',
+        testPath: payload.testPath,
+      });
+    }
+
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onTestFileResult?.(payload),
+      ),
+    );
+    if (payload.status === 'fail') {
+      ensureProcessExitCode(1);
+    }
+  };
+
+  const handleLog = async (payload: LogPayload): Promise<void> => {
+    const log: UserConsoleLog = {
+      content: payload.content,
+      name: payload.level,
+      taskId: payload.taskId,
+      taskName: payload.taskName,
+      taskParentNames: payload.taskParentNames,
+      taskType: payload.taskType,
+      testPath: payload.testPath,
+      type: payload.type,
+      trace: payload.trace,
+    };
+    if (context.normalizedConfig.silent === true) {
+      return;
+    }
+
+    if (context.normalizedConfig.silent === 'passed-only') {
+      bufferConsoleLog(log);
+      return;
+    }
+
+    if (context.normalizedConfig.disableConsoleIntercept) {
+      return;
+    }
+
+    await emitUserConsoleLog(log);
+  };
+
+  const handleFatal = async (payload: FatalPayload): Promise<void> => {
+    const error = new Error(payload.message);
+    error.stack = payload.stack;
+    fatalError = error;
+    ensureProcessExitCode(1);
+  };
+
+  const bufferedConsoleLogs = new Map<string, UserConsoleLog[]>();
+  const suiteIdsByChain = new Map<string, string>();
+
+  const getSuiteChainKey = (names: string[]): string => {
+    return names.join('\u0000');
+  };
+
+  const pushTaskId = (taskIds: string[], taskId: string): void => {
+    if (!taskIds.includes(taskId)) {
+      taskIds.push(taskId);
+    }
+  };
+
+  const shouldEmitUserConsoleLog = (log: UserConsoleLog): boolean => {
+    return (
+      context.normalizedConfig.onConsoleLog?.(log.content, log.type) !== false
+    );
+  };
+
+  const emitUserConsoleLog = async (log: UserConsoleLog): Promise<void> => {
+    if (!shouldEmitUserConsoleLog(log)) {
+      return;
+    }
+
+    await Promise.all(
+      context.reporters.map((reporter) =>
+        (reporter as Reporter).onUserConsoleLog?.(log),
+      ),
+    );
+  };
+
+  const bufferConsoleLog = (log: UserConsoleLog): void => {
+    const taskId = getBufferedLogTaskId(log);
+    const logs = bufferedConsoleLogs.get(taskId) || [];
+    logs.push(log);
+    bufferedConsoleLogs.set(taskId, logs);
+
+    if (log.taskType === 'suite' && log.taskId) {
+      suiteIdsByChain.set(
+        getSuiteChainKey([...(log.taskParentNames || []), log.taskName || '']),
+        log.taskId,
+      );
+    }
+  };
+
+  const flushBufferedLogsForTask = async ({
+    taskId,
+    status,
+    taskParentNames,
+    taskType,
+    testPath,
+  }: {
+    taskId: string;
+    status: TestResult['status'];
+    taskParentNames?: string[];
+    taskType?: 'file' | 'suite' | 'case';
+    testPath: string;
+  }): Promise<void> => {
+    if (status !== 'fail') {
+      bufferedConsoleLogs.delete(taskId);
+      return;
+    }
+
+    const taskIdsToFlush: string[] = [];
+
+    if (taskType === 'case') {
+      pushTaskId(taskIdsToFlush, getFileTaskId(testPath));
+
+      const suiteNames = taskParentNames || [];
+      for (let i = 0; i < suiteNames.length; i++) {
+        const suiteId = suiteIdsByChain.get(
+          getSuiteChainKey(suiteNames.slice(0, i + 1)),
+        );
+
+        if (suiteId) {
+          pushTaskId(taskIdsToFlush, suiteId);
+        }
+      }
+
+      pushTaskId(taskIdsToFlush, taskId);
+    }
+
+    if (taskType === 'suite') {
+      pushTaskId(taskIdsToFlush, getFileTaskId(testPath));
+      pushTaskId(taskIdsToFlush, taskId);
+    }
+
+    if (taskType === 'file') {
+      pushTaskId(taskIdsToFlush, taskId);
+    }
+
+    for (const bufferedTaskId of taskIdsToFlush) {
+      const logs = bufferedConsoleLogs.get(bufferedTaskId);
+      if (!logs) {
+        continue;
+      }
+
+      bufferedConsoleLogs.delete(bufferedTaskId);
+
+      for (const log of logs) {
+        await Promise.all(
+          context.reporters.map((reporter) =>
+            (reporter as Reporter).onUserConsoleLog?.(log),
+          ),
+        );
+      }
+    }
+  };
+
+  const runSnapshotRpc = async (
+    request: SnapshotRpcRequest,
+  ): Promise<unknown> => {
+    switch (request.method) {
+      case 'resolveSnapshotPath':
+        return snapshotRpcMethods.resolveSnapshotPath(request.args.testPath);
+      case 'readSnapshotFile':
+        return snapshotRpcMethods.readSnapshotFile(request.args.filepath);
+      case 'saveSnapshotFile':
+        return snapshotRpcMethods.saveSnapshotFile(
+          request.args.filepath,
+          request.args.content,
+        );
+      case 'removeSnapshotFile':
+        return snapshotRpcMethods.removeSnapshotFile(request.args.filepath);
+      default: {
+        // Exhaustiveness guard: a new SnapshotRpcRequest method without a case
+        // here fails to compile rather than silently returning undefined.
+        const _exhaustive: never = request;
+        return _exhaustive;
+      }
+    }
+  };
+
+  const createDispatchRouter = (options?: HostDispatchRouterOptions) => {
+    return createHostDispatchRouter({
+      routerOptions: options,
+      runnerCallbacks: {
+        onTestFileStart: handleTestFileStart,
+        onTestFileReady: handleTestFileReady,
+        onTestSuiteStart: handleTestSuiteStart,
+        onTestSuiteResult: handleTestSuiteResult,
+        onTestCaseStart: handleTestCaseStart,
+        onTestCaseResult: handleTestCaseResult,
+        onTestFileComplete: handleTestFileComplete,
+        onLog: handleLog,
+        onFatal: handleFatal,
+      },
+      runSnapshotRpc,
+      extensionHandlers: runtime.dispatchHandlers,
+      onDuplicateNamespace: (namespace) => {
+        logger.debug(
+          `[Dispatch] Skip registering dispatch namespace "${namespace}" because it is already reserved`,
+        );
+      },
+    });
+  };
+
+  if (useHeadlessDirect) {
+    // Session-based scheduling path: lifecycle + session index + dispatch routing.
+    type ActiveHeadlessRun = RunSession & {
+      contexts: Set<BrowserProviderContext>;
+    };
+
+    const viewportByProject = mapViewportByProject(projectRuntimeConfigs);
+    const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
+    const sessionRegistry = new RunnerSessionRegistry();
+    getHeadlessRunnerPageBySessionId = (sessionId) => {
+      return sessionRegistry.getById(sessionId)?.page;
+    };
+    let dispatchRequestCounter = 0;
+
+    const nextDispatchRequestId = (namespace: string): string => {
+      return `${namespace}-${++dispatchRequestCounter}`;
+    };
+
+    const closeContextSafely = async (
+      browserContext: BrowserProviderContext,
+    ): Promise<void> => {
+      try {
+        await browserContext.close();
+      } catch {
+        // ignore
+      }
+    };
+
+    const cancelRun = async (
+      run: ActiveHeadlessRun,
+      waitForDone = true,
+    ): Promise<void> => {
+      await runLifecycle.cancel(run, {
+        waitForDone,
+        onCancel: async (session) => {
+          await Promise.all(
+            Array.from(session.contexts).map((browserContext) =>
+              closeContextSafely(browserContext),
+            ),
+          );
+        },
+      });
+    };
+
+    const dispatchRouter = createDispatchRouter({
+      isRunTokenStale: (runToken) => runLifecycle.isTokenStale(runToken),
+      onStale: (request) => {
+        if (request.namespace === DISPATCH_NAMESPACE_RUNNER) {
+          logger.debug(
+            `[Headless] Dropped stale message "${request.method}" for ${request.target?.testFile ?? 'unknown'}`,
+          );
+        }
+      },
+    });
+
+    const dispatchRunnerMessage = async (
+      run: ActiveHeadlessRun,
+      file: TestFileInfo,
+      sessionId: string,
+      message: BrowserClientMessage,
+    ): Promise<void> => {
+      const response = await dispatchRouter.dispatch({
+        requestId: nextDispatchRequestId(DISPATCH_NAMESPACE_RUNNER),
+        runToken: run.token,
+        namespace: DISPATCH_NAMESPACE_RUNNER,
+        method: message.type,
+        args: 'payload' in message ? message.payload : undefined,
+        target: {
+          sessionId,
+          testFile: file.testPath,
+          projectName: file.projectName,
+        },
+      });
+
+      if (response.stale) {
+        return;
+      }
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+    };
+
+    const runSingleFile = async (
+      run: ActiveHeadlessRun,
+      file: TestFileInfo,
+    ): Promise<void> => {
+      if (run.cancelled || runLifecycle.isTokenStale(run.token)) {
+        return;
+      }
+
+      const viewport = viewportByProject.get(file.projectName);
+      const browserContext = await browser.newContext({
+        providerOptions: browserLaunchOptions.providerOptions,
+        viewport: viewport ?? null,
+      });
+      run.contexts.add(browserContext);
+
+      let page: BrowserProviderPage | null = null;
+      let sessionId: string | null = null;
+      let settled = false;
+      let resolveDone: (() => void) | null = null;
+
+      const markDone = (): void => {
+        if (!settled) {
+          settled = true;
+          resolveDone?.();
+        }
+      };
+
+      const donePromise = new Promise<void>((resolve) => {
+        resolveDone = resolve;
+      });
+
+      // Event-driven death detection (vitest-style): a renderer crash or an
+      // unexpected page close produces no further messages, so fail the file at
+      // once. Per-test/hook timeouts are enforced inside the runner, so the host
+      // deliberately keeps no execution-duration watchdog. Our own teardown
+      // close is ignored because `settled`/`run.cancelled` are set by then.
+      const crashDeferred = createDeferredPromise<string>();
+      const onPageDead = (reason: string): void => {
+        if (
+          settled ||
+          run.cancelled ||
+          !runLifecycle.isTokenActive(run.token)
+        ) {
+          return;
+        }
+        settled = true;
+        crashDeferred.resolve(reason);
+      };
+
+      try {
+        page = await browserContext.newPage();
+        page.on('crash', () =>
+          onPageDead(`Browser page crashed while running ${file.testPath}.`),
+        );
+        page.on('close', () =>
+          onPageDead(
+            `Browser page closed unexpectedly while running ${file.testPath}.`,
+          ),
+        );
+
+        const session = sessionRegistry.register({
+          testFile: file.testPath,
+          projectName: file.projectName,
+          runToken: run.token,
+          mode: 'headless-page',
+          context: browserContext,
+          page,
+        });
+        sessionId = session.id;
+
+        await attachHeadlessRunnerTransport(page, {
+          onDispatchMessage: async (message) => {
+            try {
+              await dispatchRunnerMessage(run, file, session.id, message);
+              if (
+                message.type === 'file-complete' ||
+                message.type === 'complete'
+              ) {
+                markDone();
+              } else if (message.type === 'fatal') {
+                markDone();
+                await cancelRun(run, false);
+              }
+            } catch (error) {
+              const formatted = toError(error);
+              await handleFatal({
+                message: formatted.message,
+                stack: formatted.stack,
+              });
+              markDone();
+              await cancelRun(run, false);
+            }
+          },
+          onDispatchRpc: async (request) => {
+            return dispatchRouter.dispatch({
+              ...request,
+              runToken: run.token,
+              target: {
+                sessionId: session.id,
+                testFile: file.testPath,
+                projectName: file.projectName,
+                ...request.target,
+              },
+            });
+          },
+        });
+
+        const inlineOptions: BrowserHostConfig = {
+          ...hostOptions,
+          testFile: file.testPath,
+          runId: `${run.token}:${session.id}`,
+        };
+        const serializedOptions = serializeForInlineScript(inlineOptions);
+        await page.addInitScript(
+          `window.__RSTEST_BROWSER_OPTIONS__ = ${serializedOptions};`,
+        );
+
+        const projectServer = runtime.projectServers.get(file.projectName);
+        if (!projectServer) {
+          throw new Error(
+            `No browser dev server for project "${file.projectName}" (test file: ${file.testPath}).`,
+          );
+        }
+        await page.goto(`http://localhost:${projectServer.port}/runner.html`, {
+          waitUntil: 'load',
+        });
+
+        const state = await Promise.race([
+          donePromise.then(() => ({ type: 'done' as const })),
+          crashDeferred.promise.then((reason) => ({
+            type: 'crash' as const,
+            reason,
+          })),
+          run.cancelSignal.then(() => ({ type: 'cancelled' as const })),
+        ]);
+
+        if (state.type === 'cancelled') {
+          return;
+        }
+
+        if (
+          state.type === 'crash' &&
+          runLifecycle.isTokenActive(run.token) &&
+          !run.cancelled
+        ) {
+          await handleFatal({ message: state.reason });
+          await cancelRun(run, false);
+        }
+      } catch (error) {
+        if (runLifecycle.isTokenActive(run.token) && !run.cancelled) {
+          const formatted = toError(error);
+          await handleFatal({
+            message: formatted.message,
+            stack: formatted.stack,
+          });
+          await cancelRun(run, false);
+        }
+      } finally {
+        if (page) {
+          try {
+            await page.close();
+          } catch {
+            // ignore
+          }
+        }
+        if (sessionId) {
+          sessionRegistry.deleteById(sessionId);
+        }
+        run.contexts.delete(browserContext);
+        await closeContextSafely(browserContext);
+      }
+    };
+
+    const runFilesWithPool = async (files: TestFileInfo[]): Promise<void> => {
+      if (files.length === 0) {
+        return;
+      }
+
+      const previous = runLifecycle.activeSession;
+      if (previous) {
+        await cancelRun(previous);
+      }
+
+      const run = runLifecycle.createSession((token) => ({
+        ...createRunSession(token),
+        contexts: new Set<BrowserProviderContext>(),
+      }));
+
+      const queue = [...files];
+      const concurrency = getHeadlessConcurrency(context, queue.length);
+
+      const worker = async (): Promise<void> => {
+        while (
+          queue.length > 0 &&
+          !run.cancelled &&
+          runLifecycle.isTokenActive(run.token)
+        ) {
+          const next = queue.shift();
+          if (!next) {
+            return;
+          }
+          await runSingleFile(run, next);
+        }
+      };
+
+      run.done = Promise.all(
+        Array.from(
+          { length: Math.min(queue.length, Math.max(concurrency, 1)) },
+          () => worker(),
+        ),
+      ).then(() => {});
+
+      await run.done;
+      runLifecycle.clearIfActive(run);
+    };
+
+    const latestRerunScheduler = createHeadlessLatestRerunScheduler<
+      TestFileInfo,
+      ActiveHeadlessRun
+    >({
+      getActiveRun: () => runLifecycle.activeSession,
+      isRunCancelled: (run) => run.cancelled,
+      invalidateActiveRun: () => {
+        runLifecycle.invalidateActiveToken();
+      },
+      interruptActiveRun: async (run) => {
+        await cancelRun(run, false);
+      },
+      runFiles: async (files) => {
+        await notifyTestRunStart();
+
+        const rerunStartTime = Date.now();
+        const fatalErrorBeforeRun = fatalError;
+        let rerunError: Error | undefined;
+
+        try {
+          await runFilesWithPool(files);
+        } catch (error) {
+          rerunError = toError(error);
+          throw error;
+        } finally {
+          const testTime = Math.max(0, Date.now() - rerunStartTime);
+          const rerunFatalError =
+            fatalError && fatalError !== fatalErrorBeforeRun
+              ? fatalError
+              : undefined;
+          await notifyTestRunEnd({
+            duration: {
+              totalTime: testTime,
+              buildTime: 0,
+              testTime,
+            },
+            filterRerunTestPaths: files.map((file) => file.testPath),
+            unhandledErrors: rerunError
+              ? [rerunError]
+              : rerunFatalError
+                ? [rerunFatalError]
+                : undefined,
+          });
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+        }
+      },
+      onError: async (error) => {
+        const formatted = toError(error);
+        await handleFatal({
+          message: formatted.message,
+          stack: formatted.stack,
+        });
+      },
+      onInterrupt: (run) => {
+        logger.debug(
+          `[Headless] Interrupting active run token ${run.token} before scheduling latest rerun`,
+        );
+      },
+    });
+
+    if (allTestFiles.length === 0) {
+      const duration = {
+        totalTime: buildTime,
+        buildTime,
+        testTime: 0,
+      };
+      const result = {
+        results: reporterResults,
+        testResults: caseResults,
+        duration,
+        hasFailure: false,
+        getSourcemap: getBrowserSourcemap,
+        resolveSourcemap: resolveBrowserSourcemap,
+        close: skipOnTestRunEnd
+          ? async () => {
+              sessionRegistry.clear();
+              await destroyBrowserRuntime(runtime);
+            }
+          : undefined,
+      };
+
+      if (!skipOnTestRunEnd) {
+        await notifyTestRunEnd({ duration });
+      }
+
+      if (isWatchMode) {
+        triggerRerun = async () => {
+          const newProjectEntries = await collectProjectEntries(context);
+          const rerunPlan = planWatchRerun({
+            projectEntries: newProjectEntries,
+            previousTestFiles: watchContext.lastTestFiles,
+            affectedTestFiles: watchContext.affectedTestFiles,
+          });
+          watchContext.affectedTestFiles = [];
+
+          if (rerunPlan.filesChanged) {
+            watchContext.lastTestFiles = rerunPlan.currentTestFiles;
+            if (rerunPlan.currentTestFiles.length === 0) {
+              logger.log(
+                color.cyan('No browser test files remain after update.\n'),
+              );
+              logBrowserWatchReadyMessage(enableCliShortcuts);
+              return;
+            }
+
+            logger.log(
+              color.cyan(
+                `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
+              ),
+            );
+            void latestRerunScheduler.enqueueLatest(rerunPlan.currentTestFiles);
+            return;
+          }
+
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+        };
+        watchContext.hooksEnabled = true;
+        logBrowserWatchReadyMessage(enableCliShortcuts);
+      }
+
+      return result;
+    }
+
+    const testStart = Date.now();
+    await runFilesWithPool(allTestFiles);
+    const testTime = Date.now() - testStart;
+
+    if (isWatchMode) {
+      triggerRerun = async () => {
+        const newProjectEntries = await collectProjectEntries(context);
+        const rerunPlan = planWatchRerun({
+          projectEntries: newProjectEntries,
+          previousTestFiles: watchContext.lastTestFiles,
+          affectedTestFiles: watchContext.affectedTestFiles,
+        });
+        watchContext.affectedTestFiles = [];
+
+        if (rerunPlan.filesChanged) {
+          const deletedTestPaths = collectDeletedTestPaths(
+            watchContext.lastTestFiles,
+            rerunPlan.currentTestFiles,
+          );
+          if (deletedTestPaths.length > 0) {
+            context.updateReporterResultState([], [], deletedTestPaths);
+          }
+          watchContext.lastTestFiles = rerunPlan.currentTestFiles;
+          if (rerunPlan.currentTestFiles.length === 0) {
+            await latestRerunScheduler.enqueueLatest([]);
+            logger.log(
+              color.cyan('No browser test files remain after update.\n'),
+            );
+            logBrowserWatchReadyMessage(enableCliShortcuts);
+            return;
+          }
+
+          logger.log(
+            color.cyan(
+              `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
+            ),
+          );
+          void latestRerunScheduler.enqueueLatest(rerunPlan.currentTestFiles);
+          return;
+        }
+
+        if (rerunPlan.affectedTestFiles.length === 0) {
+          logger.log(
+            color.cyan(
+              'No affected browser test files detected, skipping re-run.\n',
+            ),
+          );
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+          return;
+        }
+
+        logger.log(
+          color.cyan(
+            `Re-running ${rerunPlan.affectedTestFiles.length} affected test file(s)...\n`,
+          ),
+        );
+        void latestRerunScheduler.enqueueLatest(rerunPlan.affectedTestFiles);
+      };
+    }
+
+    const closeHeadlessRuntime = !isWatchMode
+      ? async () => {
+          sessionRegistry.clear();
+          await destroyBrowserRuntime(runtime);
+        }
+      : undefined;
+
+    if (fatalError) {
+      return failWithError(fatalError, closeHeadlessRuntime);
+    }
+
+    const duration = {
+      totalTime: buildTime + testTime,
+      buildTime,
+      testTime,
+    };
+
+    context.updateReporterResultState(reporterResults, caseResults);
+
+    const isFailure = reporterResults.some(
+      (result: TestFileResult) => result.status === 'fail',
+    );
+    if (isFailure) {
+      ensureProcessExitCode(1);
+    }
+
+    const result = {
+      results: reporterResults,
+      testResults: caseResults,
+      duration,
+      hasFailure: isFailure,
+      getSourcemap: getBrowserSourcemap,
+      resolveSourcemap: resolveBrowserSourcemap,
+      close: skipOnTestRunEnd ? closeHeadlessRuntime : undefined,
+    };
+
+    if (!skipOnTestRunEnd) {
+      try {
+        await notifyTestRunEnd({ duration });
+      } finally {
+        await closeHeadlessRuntime?.();
+      }
+    }
+
+    if (isWatchMode && triggerRerun) {
+      watchContext.hooksEnabled = true;
+      logBrowserWatchReadyMessage(enableCliShortcuts);
+    }
+
+    return result;
+  }
+
+  let currentTestFiles = allTestFiles;
+  // Coincidentally equal to the runner-side CONFIG_WAIT_TIMEOUT_MS and
+  // DEFAULT_RPC_TIMEOUT_MS (client/entry.ts, client/dispatchTransport.ts) but
+  // semantically distinct and in a different runtime, so deliberately NOT shared
+  // with them. Invariant worth preserving: a runner must be able to receive its
+  // config (config-wait) before the host declares its frames un-ready, i.e.
+  // CONFIG_WAIT_TIMEOUT_MS <= RUNNER_FRAMES_READY_TIMEOUT_MS.
+  const RUNNER_FRAMES_READY_TIMEOUT_MS = 30_000;
+  let currentRunnerFramesSignature: string | null = null;
+  const runnerFramesWaiters = new Map<string, Set<() => void>>();
+
+  const createTestFilesSignature = (testFiles: readonly string[]): string => {
+    return JSON.stringify(testFiles.map((testFile) => normalize(testFile)));
+  };
+
+  const markRunnerFramesReady = (testFiles: string[]): void => {
+    const signature = createTestFilesSignature(testFiles);
+    currentRunnerFramesSignature = signature;
+    const waiters = runnerFramesWaiters.get(signature);
+    if (!waiters) {
+      return;
+    }
+    runnerFramesWaiters.delete(signature);
+    for (const waiter of waiters) {
+      waiter();
+    }
+  };
+
+  const waitForRunnerFramesReady = async (
+    testFiles: readonly string[],
+  ): Promise<void> => {
+    const signature = createTestFilesSignature(testFiles);
+    if (currentRunnerFramesSignature === signature) {
+      return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const waiters =
+        runnerFramesWaiters.get(signature) ?? new Set<() => void>();
+
+      const cleanup = () => {
+        const currentWaiters = runnerFramesWaiters.get(signature);
+        if (!currentWaiters) {
+          return;
+        }
+        currentWaiters.delete(onReady);
+        if (currentWaiters.size === 0) {
+          runnerFramesWaiters.delete(signature);
+        }
+      };
+
+      const onReady = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        cleanup();
+        resolve();
+      };
+
+      const timeoutId = setTimeout(() => {
+        cleanup();
+        reject(
+          new Error(
+            `Timed out waiting for headed runner frames to be ready for ${testFiles.length} file(s).`,
+          ),
+        );
+      }, RUNNER_FRAMES_READY_TIMEOUT_MS);
+
+      waiters.add(onReady);
+      runnerFramesWaiters.set(signature, waiters);
+
+      if (currentRunnerFramesSignature === signature) {
+        onReady();
+      }
+    });
+  };
+
+  const getTestFileInfo = (testFile: string): TestFileInfo => {
+    const normalizedTestFile = normalize(testFile);
+    const fileInfo = currentTestFiles.find(
+      (file) => file.testPath === normalizedTestFile,
+    );
+    if (!fileInfo) {
+      throw new Error(`Unknown browser test file: ${JSON.stringify(testFile)}`);
+    }
+    return fileInfo;
+  };
+
+  // Open a container page for user to view (reuse in watch mode)
+  let containerContext: BrowserProviderContext;
+  let containerPage: BrowserProviderPage;
+  let isNewPage = false;
+
+  if (isWatchMode && runtime.containerPage && runtime.containerContext) {
+    containerContext = runtime.containerContext;
+    containerPage = runtime.containerPage;
+    logger.log(color.gray('\n[Watch] Reusing existing container page\n'));
+  } else {
+    isNewPage = true;
+    containerContext = await browser.newContext({
+      providerOptions: browserLaunchOptions.providerOptions,
+      viewport: null,
+    });
+    containerPage = await containerContext.newPage();
+
+    // Prevent popup windows from being created
+    containerPage.on('popup', async (popup: BrowserProviderPage) => {
+      await popup.close().catch(() => {});
+    });
+
+    containerContext.on('page', async (page: BrowserProviderPage) => {
+      if (page !== containerPage) {
+        await page.close().catch(() => {});
+      }
+    });
+
+    if (isWatchMode) {
+      runtime.containerPage = containerPage;
+      runtime.containerContext = containerContext;
+    }
+
+    // Forward browser console to terminal
+    containerPage.on('console', (msg) => {
+      const text = msg.text();
+      if (text.startsWith('[Container]') || text.startsWith('[Runner]')) {
+        logger.log(color.gray(`[Browser Console] ${text}`));
+      }
+    });
+  }
+
+  activeContainerPage = containerPage;
+
+  const dispatchRouter = createDispatchRouter();
+  const headedReloadQueue = createHeadedSerialTaskQueue();
+  const pendingHeadedReloads = new Map<
+    string,
+    {
+      runId: string;
+      deferred: DeferredPromise<void>;
+    }
+  >();
+  let enqueueHeadedReload = async (
+    _file: TestFileInfo,
+    _testNamePattern?: string,
+  ): Promise<void> => {
+    throw new Error('Headed reload queue is not initialized');
+  };
+
+  const rejectPendingHeadedReload = (
+    testPath: string,
+    error: Error,
+    runId?: string,
+  ): void => {
+    const pending = pendingHeadedReloads.get(testPath);
+    if (!pending) {
+      return;
+    }
+    if (runId && pending.runId !== runId) {
+      return;
+    }
+    pendingHeadedReloads.delete(testPath);
+    pending.deferred.reject(error);
+  };
+
+  const rejectAllPendingHeadedReloads = (error: Error): void => {
+    for (const [testPath, pending] of pendingHeadedReloads) {
+      pendingHeadedReloads.delete(testPath);
+      pending.deferred.reject(error);
+    }
+  };
+
+  const registerPendingHeadedReload = (
+    testPath: string,
+    runId: string,
+  ): Promise<void> => {
+    const previousPending = pendingHeadedReloads.get(testPath);
+    if (previousPending) {
+      previousPending.deferred.reject(
+        new Error(
+          `Reload for "${testPath}" was superseded by a newer request.`,
+        ),
+      );
+      pendingHeadedReloads.delete(testPath);
+    }
+
+    const deferred = createDeferredPromise<void>();
+    pendingHeadedReloads.set(testPath, {
+      runId,
+      deferred,
+    });
+
+    return deferred.promise;
+  };
+
+  const resolvePendingHeadedReload = (
+    testPath: string,
+    runId?: string,
+  ): void => {
+    const pending = pendingHeadedReloads.get(testPath);
+    if (!pending) {
+      return;
+    }
+    if (runId && pending.runId !== runId) {
+      logger.debug(
+        `[Browser UI] Ignoring stale file-complete for ${testPath}. current=${pending.runId}, incoming=${runId}`,
+      );
+      return;
+    }
+    pendingHeadedReloads.delete(testPath);
+    pending.deferred.resolve();
+  };
+
+  // No execution-duration watchdog: per-test/hook timeouts are enforced inside
+  // the runner, and a dead container is caught event-driven by the WebSocket
+  // `close` handler, which rejects every pending reload via `onDisconnect`.
+  const reloadTestFileAndWait = async (
+    file: TestFileInfo,
+    testNamePattern?: string,
+  ): Promise<void> => {
+    let reloadAck: ReloadTestFileAck | undefined;
+
+    try {
+      reloadAck = await rpcManager.reloadTestFile(
+        file.testPath,
+        testNamePattern,
+      );
+      await registerPendingHeadedReload(file.testPath, reloadAck.runId);
+    } catch (error) {
+      if (reloadAck?.runId) {
+        rejectPendingHeadedReload(
+          file.testPath,
+          toError(error),
+          reloadAck.runId,
+        );
+      }
+      throw error;
+    }
+  };
+
+  // Create RPC methods that can access test state variables
+  const createRpcMethods = (): HostRpcMethods => ({
+    async rerunTest(testFile: string, testNamePattern?: string) {
+      const projectName = context.normalizedConfig.name || 'project';
+      const relativePath = relative(context.rootPath, testFile);
+      const displayPath = `<${projectName}>/${relativePath}`;
+      logger.log(
+        color.cyan(
+          `\nRe-running test: ${displayPath}${testNamePattern ? ` (pattern: ${testNamePattern})` : ''}\n`,
+        ),
+      );
+      await enqueueHeadedReload(getTestFileInfo(testFile), testNamePattern);
+    },
+    async getTestFiles() {
+      return currentTestFiles;
+    },
+    async onRunnerFramesReady(testFiles: string[]) {
+      markRunnerFramesReady(testFiles);
+    },
+    async onTestFileStart(payload: TestFileStartPayload) {
+      await handleTestFileStart(payload);
+    },
+    async onTestCaseResult(payload: TestResult) {
+      await handleTestCaseResult(payload);
+    },
+    async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
+      try {
+        await handleTestFileComplete(payload);
+        resolvePendingHeadedReload(payload.testPath, payload.runId);
+      } catch (error) {
+        rejectPendingHeadedReload(
+          payload.testPath,
+          toError(error),
+          payload.runId,
+        );
+        throw error;
+      }
+    },
+    async onLog(payload: LogPayload) {
+      await handleLog(payload);
+    },
+    async onFatal(payload: FatalPayload) {
+      const error = new Error(payload.message);
+      error.stack = payload.stack;
+      rejectAllPendingHeadedReloads(error);
+      await handleFatal(payload);
+    },
+    async dispatch(request: BrowserDispatchRequest) {
+      // Headed/container path now shares the same dispatch contract as headless.
+      return dispatchRouter.dispatch(request);
+    },
+  });
+
+  // Setup RPC manager
+  let rpcManager: ContainerRpcManager;
+
+  if (isWatchMode && runtime.rpcManager) {
+    rpcManager = runtime.rpcManager;
+    // Update methods with new test state (caseResults, completedTests, etc.)
+    rpcManager.updateMethods(createRpcMethods(), rejectAllPendingHeadedReloads);
+    // Reattach if we have an existing WebSocket
+    const existingWs = rpcManager.currentWebSocket;
+    if (existingWs) {
+      rpcManager.reattach(existingWs);
+    }
+  } else {
+    rpcManager = new ContainerRpcManager(
+      wss,
+      createRpcMethods(),
+      rejectAllPendingHeadedReloads,
+    );
+
+    if (isWatchMode) {
+      runtime.rpcManager = rpcManager;
+    }
+  }
+
+  // Only navigate on first creation
+  if (isNewPage) {
+    const pagePath = '/';
+    const containerPort = runtime.containerServer.port;
+    await containerPage.goto(`http://localhost:${containerPort}${pagePath}`, {
+      waitUntil: 'load',
+    });
+
+    logger.log(
+      color.cyan(
+        `\nBrowser mode opened at http://localhost:${containerPort}${pagePath}\n`,
+      ),
+    );
+  }
+
+  enqueueHeadedReload = async (
+    file: TestFileInfo,
+    testNamePattern?: string,
+  ): Promise<void> => {
+    return headedReloadQueue.enqueue(async () => {
+      if (fatalError) {
+        return;
+      }
+      await reloadTestFileAndWait(file, testNamePattern);
+    });
+  };
+
+  let testTime = 0;
+  if (currentTestFiles.length > 0) {
+    const testStart = Date.now();
+    try {
+      await waitForRunnerFramesReady(
+        currentTestFiles.map((file) => file.testPath),
+      );
+
+      for (const file of currentTestFiles) {
+        await enqueueHeadedReload(file);
+        if (fatalError) {
+          break;
+        }
+      }
+    } catch (error) {
+      fatalError = fatalError ?? toError(error);
+      ensureProcessExitCode(1);
+    }
+
+    testTime = Date.now() - testStart;
+  }
+
+  // Define rerun logic for watch mode
+  if (isWatchMode) {
+    triggerRerun = async () => {
+      const newProjectEntries = await collectProjectEntries(context);
+      const rerunPlan = planWatchRerun({
+        projectEntries: newProjectEntries,
+        previousTestFiles: watchContext.lastTestFiles,
+        affectedTestFiles: watchContext.affectedTestFiles,
+      });
+      watchContext.affectedTestFiles = [];
+
+      if (rerunPlan.filesChanged) {
+        const deletedTestPaths = collectDeletedTestPaths(
+          watchContext.lastTestFiles,
+          rerunPlan.currentTestFiles,
+        );
+        if (deletedTestPaths.length > 0) {
+          context.updateReporterResultState([], [], deletedTestPaths);
+        }
+        watchContext.lastTestFiles = rerunPlan.currentTestFiles;
+        currentTestFiles = rerunPlan.currentTestFiles;
+        await rpcManager.notifyTestFileUpdate(currentTestFiles);
+        if (currentTestFiles.length === 0) {
+          logger.log(
+            color.cyan('No browser test files remain after update.\n'),
+          );
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+          return;
+        }
+        await waitForRunnerFramesReady(
+          currentTestFiles.map((file) => file.testPath),
+        );
+      }
+
+      if (rerunPlan.normalizedAffectedTestFiles.length > 0) {
+        logger.log(
+          color.cyan(
+            `Re-running ${rerunPlan.normalizedAffectedTestFiles.length} affected test file(s)...\n`,
+          ),
+        );
+        await notifyTestRunStart();
+
+        const rerunStartTime = Date.now();
+        const fatalErrorBeforeRun = fatalError;
+        let rerunError: Error | undefined;
+
+        try {
+          for (const testFile of rerunPlan.normalizedAffectedTestFiles) {
+            await enqueueHeadedReload(getTestFileInfo(testFile));
+          }
+        } catch (error) {
+          rerunError = toError(error);
+          throw error;
+        } finally {
+          const testTime = Math.max(0, Date.now() - rerunStartTime);
+          const rerunFatalError =
+            fatalError && fatalError !== fatalErrorBeforeRun
+              ? fatalError
+              : undefined;
+          await notifyTestRunEnd({
+            duration: {
+              totalTime: testTime,
+              buildTime: 0,
+              testTime,
+            },
+            filterRerunTestPaths: rerunPlan.normalizedAffectedTestFiles,
+            unhandledErrors: rerunError
+              ? [rerunError]
+              : rerunFatalError
+                ? [rerunFatalError]
+                : undefined,
+          });
+          logBrowserWatchReadyMessage(enableCliShortcuts);
+        }
+      } else if (!rerunPlan.filesChanged) {
+        logger.log(color.cyan('Tests will be re-executed automatically\n'));
+        logBrowserWatchReadyMessage(enableCliShortcuts);
+      } else {
+        logBrowserWatchReadyMessage(enableCliShortcuts);
+      }
+    };
+  }
+
+  const closeContainerRuntime = !isWatchMode
+    ? async () => {
+        try {
+          await containerPage.close();
+        } catch {
+          // ignore
+        }
+        try {
+          await containerContext.close();
+        } catch {
+          // ignore
+        }
+        await destroyBrowserRuntime(runtime);
+      }
+    : undefined;
+
+  if (fatalError) {
+    return failWithError(fatalError, closeContainerRuntime);
+  }
+
+  const duration = {
+    totalTime: buildTime + testTime,
+    buildTime,
+    testTime,
+  };
+
+  context.updateReporterResultState(reporterResults, caseResults);
+
+  const isFailure = reporterResults.some(
+    (result: TestFileResult) => result.status === 'fail',
+  );
+  if (isFailure) {
+    ensureProcessExitCode(1);
+  }
+
+  const result = {
+    results: reporterResults,
+    testResults: caseResults,
+    duration,
+    hasFailure: isFailure,
+    getSourcemap: getBrowserSourcemap,
+    resolveSourcemap: resolveBrowserSourcemap,
+    close: skipOnTestRunEnd ? closeContainerRuntime : undefined,
+  };
+
+  if (!skipOnTestRunEnd) {
+    try {
+      await notifyTestRunEnd({ duration });
+    } finally {
+      await closeContainerRuntime?.();
+    }
+  }
+
+  // Enable watch hooks AFTER initial test run to avoid duplicate runs
+  if (isWatchMode && triggerRerun) {
+    watchContext.hooksEnabled = true;
+    logBrowserWatchReadyMessage(enableCliShortcuts);
+  }
+
+  return result;
+};
+
+// ============================================================================
+// List Browser Tests
+// ============================================================================
+
+/**
+ * Result from collecting browser tests.
+ * This is the return type for listBrowserTests, designed for future extraction
+ * to a separate browser package.
+ */
+export type ListBrowserTestsResult = {
+  list: ListCommandResult[];
+  close: () => Promise<void>;
+};
+
+/**
+ * Collect test metadata from browser mode projects without running them.
+ * This function creates a headless browser runtime, loads test files,
+ * and collects their test structure (describe/test declarations).
+ */
+export const listBrowserTests = async (
+  context: RstestContext,
+  options?: {
+    shardedEntries?: Map<string, { entries: Record<string, string> }>;
+  },
+): Promise<ListBrowserTestsResult> => {
+  const projectEntries = await resolveProjectEntries(
+    context,
+    options?.shardedEntries,
+  );
+  const totalTests = projectEntries.reduce(
+    (total, item) => total + item.testFiles.length,
+    0,
+  );
+
+  if (totalTests === 0) {
+    return {
+      list: [],
+      close: async () => {},
+    };
+  }
+
+  const tempDir = join(
+    context.rootPath,
+    context.normalizedConfig.output.distPath.root,
+    'browser',
+    `list-${Date.now()}`,
+  );
+
+  const browserProjects = getBrowserProjects(context);
+
+  // Create a simplified browser runtime for collect mode
+  let runtime: BrowserRuntime;
+  try {
+    runtime = await createBrowserRuntime({
+      context,
+      projectEntries,
+      tempDir,
+      isWatchMode: false,
+      containerDistPath: undefined,
+      containerDevServer: undefined,
+      forceHeadless: true, // Always use headless for list command
+    });
+  } catch (error) {
+    const providers = [
+      ...new Set(
+        browserProjects.map((p) => p.normalizedConfig.browser.provider),
+      ),
+    ];
+    logger.error(
+      color.red(
+        `Failed to initialize browser provider runtime (${providers.join(', ')}).`,
+      ),
+      error,
+    );
+    throw error;
+  }
+
+  const { browser, browserLaunchOptions } = runtime;
+
+  // Get browser projects for runtime config
+  // Normalize projectRoot to posix format for cross-platform compatibility
+  const projectRuntimeConfigs: BrowserProjectRuntime[] = browserProjects.map(
+    (project: ProjectContext) => ({
+      name: project.name,
+      environmentName: project.environmentName,
+      projectRoot: normalize(project.rootPath),
+      runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
+      viewport: project.normalizedConfig.browser.viewport,
+    }),
+  );
+
+  // Get max testTimeout from all browser projects for RPC timeout
+  const maxTestTimeoutForRpc = Math.max(
+    ...browserProjects.map(
+      (p) => p.normalizedConfig.testTimeout ?? DEFAULT_TEST_TIMEOUT,
+    ),
+  );
+
+  const hostOptions: BrowserHostConfig = {
+    rootPath: normalize(context.rootPath),
+    projects: projectRuntimeConfigs,
+    snapshot: {
+      updateSnapshot: context.snapshotManager.options.updateSnapshot,
+    },
+    mode: 'collect', // Use collect mode
+    debug: isDebug(),
+    rpcTimeout: maxTestTimeoutForRpc,
+  };
+
+  runtime.setContainerOptions(hostOptions);
+
+  // Collect results across every project's isolated dev server. Each server
+  // serves only its own project's manifest, so collection navigates one page
+  // per project; each page returns its own results, aggregated afterwards.
+  const browserContext = await browser.newContext({
+    providerOptions: browserLaunchOptions.providerOptions,
+    viewport: null,
+  });
+
+  const serializedOptions = serializeForInlineScript(hostOptions);
+
+  const collectFromServer = async (
+    server: BrowserProjectServer,
+  ): Promise<{ results: ListCommandResult[]; error: Error | null }> => {
+    const results: ListCommandResult[] = [];
+    let error: Error | null = null;
+    let collectCompleted = false;
+    let resolveCollect: (() => void) | undefined;
+    const collectPromise = new Promise<void>((resolve) => {
+      resolveCollect = resolve;
+    });
+
+    const page = await browserContext.newPage();
+
+    // Expose dispatch function for browser client to send messages
+    await page.exposeFunction(
+      DISPATCH_MESSAGE_TYPE,
+      (message: { type: string; payload?: unknown }) => {
+        switch (message.type) {
+          case 'collect-result': {
+            const payload = message.payload as {
+              testPath: string;
+              project: string;
+              tests: Test[];
+            };
+            results.push({
+              testPath: payload.testPath,
+              project: payload.project,
+              tests: payload.tests,
+            });
+            break;
+          }
+          case 'collect-complete':
+            collectCompleted = true;
+            resolveCollect?.();
+            break;
+          case 'fatal': {
+            const payload = message.payload as {
+              message: string;
+              stack?: string;
+            };
+            error = new Error(payload.message);
+            error.stack = payload.stack;
+            resolveCollect?.();
+            break;
+          }
+          case 'ready':
+          case 'log':
+            // Ignore these messages during collection
+            break;
+          default:
+            // Log unexpected messages for debugging
+            logger.debug(`[List] Unexpected message: ${message.type}`);
+        }
+      },
+    );
+
+    // Inject host options before navigation so the runner can access them
+    await page.addInitScript(
+      `window.__RSTEST_BROWSER_OPTIONS__ = ${serializedOptions};`,
+    );
+
+    // Navigate to this project's runner page
+    await page.goto(`http://localhost:${server.port}/runner.html`, {
+      waitUntil: 'load',
+    });
+
+    // Wait for collection to complete with timeout
+    const timeoutMs = 30000;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<void>((resolve) => {
+      timeoutId = setTimeout(() => {
+        if (!collectCompleted) {
+          logger.warn(
+            color.yellow(
+              `[List] Browser test collection timed out after ${timeoutMs}ms`,
+            ),
+          );
+        }
+        resolve();
+      }, timeoutMs);
+    });
+
+    await Promise.race([collectPromise, timeoutPromise]);
+
+    // Clear timeout to prevent Node.js from waiting for it
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+
+    await page.close().catch(() => {});
+    return { results, error };
+  };
+
+  // Collect every project concurrently — each navigates its own page against
+  // its own dev server and returns its own results.
+  const collected = await Promise.all(
+    [...runtime.projectServers.values()].map((server) =>
+      collectFromServer(server),
+    ),
+  );
+  const collectResults = collected.flatMap((entry) => entry.results);
+  const fatalError = collected.find((entry) => entry.error)?.error ?? null;
+
+  // Cleanup
+  const cleanup = async () => {
+    try {
+      await browserContext.close();
+    } catch {
+      // ignore
+    }
+    await destroyBrowserRuntime(runtime);
+  };
+
+  if (fatalError) {
+    await cleanup();
+    // Return error in the result format instead of throwing
+    const errorResult: ListCommandResult = {
+      testPath: '',
+      project: '',
+      tests: [],
+      errors: [
+        {
+          name: 'BrowserCollectError',
+          message: fatalError.message,
+          stack: fatalError.stack,
+        } as FormattedError,
+      ],
+    };
+    return {
+      list: [errorResult],
+      close: async () => {},
+    };
+  }
+
+  return {
+    list: collectResults,
+    close: cleanup,
+  };
+};

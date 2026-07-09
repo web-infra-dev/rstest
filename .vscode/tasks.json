@@ -1,0 +1,75 @@
+// See https://go.microsoft.com/fwlink/?LinkId=733558
+// for the documentation about the tasks.json format
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "core dev",
+      "type": "npm",
+      "script": "dev",
+      "path": "packages/core",
+      "problemMatcher": {
+        "owner": "rslib",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "build started...",
+          "endsPattern": "build completed, watching for changes..."
+        },
+        "pattern": {
+          "regexp": "build failed in"
+        }
+      },
+      "isBackground": true,
+      "group": {
+        "kind": "build"
+      }
+    },
+    {
+      "label": "coverage-istanbul dev",
+      "type": "npm",
+      "script": "dev",
+      "path": "packages/coverage-istanbul",
+      "problemMatcher": {
+        "owner": "rslib",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "build started...",
+          "endsPattern": "build completed, watching for changes..."
+        },
+        "pattern": {
+          "regexp": "build failed in"
+        }
+      },
+      "isBackground": true,
+      "dependsOn": ["core dev"],
+      "dependsOrder": "parallel",
+      "group": {
+        "kind": "build"
+      }
+    },
+    {
+      "label": "vscode dev",
+      "type": "npm",
+      "script": "watch:local",
+      "path": "packages/vscode",
+      "problemMatcher": {
+        "owner": "rslib",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "build started...",
+          "endsPattern": "build completed, watching for changes..."
+        },
+        "pattern": {
+          "regexp": "build failed in"
+        }
+      },
+      "isBackground": true,
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "dependsOn": ["core dev", "coverage-istanbul dev"],
+      "dependsOrder": "parallel"
+    }
+  ]
+}

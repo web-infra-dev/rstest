@@ -1,17 +1,21 @@
 [
   {
-    "type": "file",
-    "name": "index",
+    "type": "section-header",
     "label": "Overview"
   },
   {
-    "type": "dir",
-    "name": "test",
-    "label": "Test Configurations"
+    "type": "file",
+    "name": "index",
+    "label": "Config overview"
   },
   {
-    "type": "dir",
+    "type": "dir-section-header",
+    "name": "test",
+    "label": "Test configurations"
+  },
+  {
+    "type": "dir-section-header",
     "name": "build",
-    "label": "Build Configurations"
+    "label": "Build configurations"
   }
 ]

@@ -1,4 +1,4 @@
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
@@ -13,7 +13,7 @@ describe('onTestFinished', () => {
       args: ['run', 'onTestFinished.test'],
       options: {
         nodeOptions: {
-          cwd: __dirname,
+          cwd: join(__dirname, 'fixtures'),
         },
       },
     });
@@ -32,7 +32,7 @@ describe('onTestFinished', () => {
   });
 
   it('should run test failed when onTestFinished error', async () => {
-    const { cli, expectLog } = await runRstestCli({
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'onTestFinished.failed.test'],
       options: {
@@ -42,14 +42,13 @@ describe('onTestFinished', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
+    await expectExecFailed();
 
-    expectLog('onTestFinished failed');
+    expectStderrLog('onTestFinished failed');
   });
 
   it('should run onTestFinished failed when onTestFinished outside', async () => {
-    const { cli, expectLog } = await runRstestCli({
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run', 'onTestFinished.outside.test'],
       options: {
@@ -59,9 +58,8 @@ describe('onTestFinished', () => {
       },
     });
 
-    await cli.exec;
-    expect(cli.exec.process?.exitCode).toBe(1);
+    await expectExecFailed();
 
-    expectLog('onTestFinished() can only be called inside a test');
+    expectStderrLog('onTestFinished() can only be called inside a test');
   });
 });

@@ -1,0 +1,46 @@
+import { defineConfig } from '@rslib/core';
+import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
+import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
+
+export default defineConfig({
+  plugins: publishCheckPlugins(),
+  lib: [
+    {
+      format: 'esm',
+      syntax: ['chrome 100'],
+      dts: {
+        isolated: true,
+      },
+      redirect: {
+        // Append `.js` to relative imports in emitted .d.ts so they resolve
+        // under NodeNext/Node16 module resolution (ESM requires explicit ext).
+        dts: { extension: true },
+      },
+      output: {
+        target: 'web',
+        sourceMap: process.env.SOURCEMAP === 'true',
+        externals: {
+          // Keep react and react-dom as external (provided by user's project)
+          react: 'react',
+          'react-dom': 'react-dom',
+          'react-dom/client': 'react-dom/client',
+          'react/jsx-runtime': 'react/jsx-runtime',
+          'react/jsx-dev-runtime': 'react/jsx-dev-runtime',
+          // Keep @rstest/core as external
+          '@rstest/core': '@rstest/core',
+        },
+      },
+    },
+  ],
+  source: {
+    entry: {
+      index: './src/index.ts',
+      pure: './src/pure.tsx',
+    },
+  },
+  tools: {
+    rspack: {
+      plugins: [rsdoctorCIPlugin()].filter(Boolean),
+    },
+  },
+});

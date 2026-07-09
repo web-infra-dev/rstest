@@ -1,0 +1,134 @@
+{
+  "name": "rstest",
+  "displayName": "Rstest",
+  "version": "0.11.0",
+  "private": true,
+  "description": "VS Code extension for Rstest",
+  "categories": [
+    "Testing"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/web-infra-dev/rstest.git",
+    "directory": "packages/vscode"
+  },
+  "license": "MIT",
+  "publisher": "rstack",
+  "main": "./dist/extension.js",
+  "scripts": {
+    "build": "rslib build",
+    "build:local": "cross-env SOURCEMAP=true rslib build",
+    "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rstest-logo-512x512.png --output icon.png",
+    "lint": "rslint .",
+    "package:vsce": "npm run build && vsce package",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",
+    "test:unit": "rstest",
+    "watch": "rslib build --watch",
+    "watch:local": "cross-env SOURCEMAP=true rslib build --watch"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "rstest.updateSnapshot",
+        "title": "Update Snapshot",
+        "category": "Testing",
+        "icon": "$(merge)"
+      }
+    ],
+    "configuration": {
+      "title": "Rstest",
+      "properties": {
+        "rstest.rstestPackagePath": {
+          "markdownDescription": "The path to a `package.json` file of a Rstest executable (it's usually inside `node_modules`) in case the extension cannot find it. It will be used to resolve Rstest API paths. This should be used as a last resort fix. Supports `${workspaceFolder}` placeholder.",
+          "scope": "resource",
+          "type": "string"
+        },
+        "rstest.configFileGlobPattern": {
+          "description": "Glob patterns used to discover config files. Must be an array of strings.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/rstest.config.{mjs,ts,js,cjs,mts,cts}"
+          ]
+        },
+        "rstest.testCaseCollectMethod": {
+          "type": "string",
+          "default": "ast",
+          "enum": [
+            "ast",
+            "runtime"
+          ],
+          "enumItemLabels": [
+            "Static AST Analyze",
+            "Run Test File"
+          ],
+          "enumDescriptions": [
+            "Fast, only supports basic test cases.",
+            "Slow, supports all test cases, including dynamic test generation methods (each/for/extend)."
+          ]
+        },
+        "rstest.applyDiagnostic": {
+          "description": "Show diagnostics in editor and Problems panel for failed tests.",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "rstest.updateSnapshot",
+          "when": "false"
+        }
+      ],
+      "testing/message/content": [
+        {
+          "command": "rstest.updateSnapshot",
+          "when": "testMessage == canUpdateSnapshot"
+        }
+      ],
+      "testing/message/context": [
+        {
+          "command": "rstest.updateSnapshot",
+          "group": "inline@1",
+          "when": "testMessage == canUpdateSnapshot"
+        }
+      ]
+    }
+  },
+  "activationEvents": [
+    "workspaceContains:**/*rstest*.config*.{ts,js,mjs,cjs,cts,mts}",
+    "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
+  ],
+  "devDependencies": {
+    "@rsbuild/core": "~2.1.4",
+    "@rslib/core": "0.23.2",
+    "@rstest/core": "workspace:*",
+    "@swc/core": "^1.15.43",
+    "@types/istanbul-lib-report": "^3.0.3",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.16.5",
+    "@types/picomatch": "^4.0.3",
+    "@types/semver": "^7.7.1",
+    "@types/vscode": "1.97.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "3.9.2",
+    "birpc": "^4.0.0",
+    "core-js-pure": "^3.49.0",
+    "mocha": "^11.7.6",
+    "ovsx": "^1.0.2",
+    "picomatch": "^4.0.5",
+    "semver": "^7.8.5",
+    "tinyglobby": "^0.2.17",
+    "typescript": "^6.0.3",
+    "valibot": "^1.4.2"
+  },
+  "engines": {
+    "vscode": "^1.97.0"
+  },
+  "icon": "icon.png"
+}

@@ -1,4 +1,5 @@
 import type {
+  FileFilterMode,
   ListCommandOptions,
   Project,
   RstestCommand,
@@ -12,21 +13,40 @@ export function createRstest(
     config,
     projects,
     configFilePath,
+    trace,
+    cwd = process.cwd(),
+    embedded = false,
   }: {
     config: RstestConfig;
     configFilePath?: string;
     projects: Project[];
+    /** CLI-only `--trace` switch; not exposed via user config. */
+    trace?: boolean;
+    /** Working directory; defaults to `process.cwd()`. */
+    cwd?: string;
+    /**
+     * When true, Rstest won't install `process.on('exit' | 'SIG*')` handlers
+     * and config errors throw instead of calling `process.exit()`, so a
+     * programmatic run can't kill the host process. (`process.exitCode` is
+     * still written; `runRstest` restores it via try/finally.) Set by the
+     * `@rstest/core/api` adapter.
+     */
+    embedded?: boolean;
   },
   command: RstestCommand,
   fileFilters: string[],
+  fileFilterMode?: FileFilterMode,
 ): RstestInstance {
   const context = new Rstest(
     {
-      cwd: process.cwd(),
+      cwd,
       command,
       fileFilters,
+      fileFilterMode,
       configFilePath,
       projects,
+      trace,
+      embedded,
     },
     config,
   );
@@ -36,14 +56,23 @@ export function createRstest(
     await runTests(context);
   };
 
-  const listTests = async (options: ListCommandOptions): Promise<void> => {
+  const listTests = async (options: ListCommandOptions) => {
     const { listTests } = await import('./listTests');
-    await listTests(context, options);
+    return listTests(context, options);
+  };
+
+  const mergeReports = async (options?: {
+    path?: string;
+    cleanup?: boolean;
+  }): Promise<void> => {
+    const { mergeReports } = await import('./mergeReports');
+    await mergeReports(context, options);
   };
 
   return {
     context,
     runTests,
     listTests,
+    mergeReports,
   };
 }

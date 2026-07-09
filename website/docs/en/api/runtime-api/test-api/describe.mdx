@@ -1,0 +1,293 @@
+---
+title: Describe
+description: describe defines a test suite. It supports chainable modifiers and parameterized methods for flexible and organized test grouping.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Describe
+
+`describe` defines a test suite. It supports chainable modifiers and parameterized methods for flexible and organized test grouping.
+
+## describe
+
+- **Type:**
+
+```ts
+(name: string, fn?: () => void | Promise<void>, timeout?: number): void;
+(name: string, options: TestOptions, fn?: () => void | Promise<void>): void;
+```
+
+Defines a test suite that can contain multiple test cases or nested describe blocks.
+The callback can be asynchronous; Rstest waits for it during collection before running the tests declared inside it.
+
+```ts
+import { describe, expect, test } from '@rstest/core';
+
+describe('math', () => {
+  test('add', () => {
+    // ...
+  });
+  test('sub', () => {
+    // ...
+  });
+});
+```
+
+```ts
+describe('async setup', async () => {
+  const data = await loadFixtureData();
+
+  test('uses collected data', () => {
+    expect(data).toBeDefined();
+  });
+});
+```
+
+### TestOptions
+
+<ApiMeta addedVersion="0.11.0" />
+
+Pass a `TestOptions` object as the **second argument** (before the suite function) to set defaults for every test inside the suite:
+
+```ts
+describe('flaky integration', { retry: 3, timeout: 10000 }, () => {
+  test('reaches the server', async () => {
+    /* inherits retry: 3 and timeout: 10000 */
+  });
+});
+```
+
+As a shorthand, you can still pass a number as the **last argument** to set only the timeout (equivalent to `{ timeout: n }`):
+
+```ts
+describe('slow suite', () => {
+  test('within budget', async () => {
+    /* ... */
+  });
+}, 10000);
+```
+
+`TestOptions` accepts the same fields as on [`test`](/api/runtime-api/test-api/test#testoptions): `timeout`, `retry`, and `repeats`. These propagate to the tests in the suite as **inheritable defaults**:
+
+- A test-level option always wins over the suite-level value.
+- A nested `describe` inherits its parent's options, and the nearest enclosing value applies.
+- A test without its own `timeout` falls back to the nearest suite's `timeout`, then to [`test.testTimeout`](/config/test/test-timeout).
+
+```ts
+describe('parent', { retry: 2, timeout: 100 }, () => {
+  test('a', () => {
+    /* retry: 2, timeout: 100 */
+  });
+
+  describe('child', { timeout: 200 }, () => {
+    test('b', () => {
+      /* retry: 2 (inherited), timeout: 200 (nearest wins) */
+    });
+
+    test('c', { retry: 0 }, () => {
+      /* retry: 0 (own value wins), timeout: 200 */
+    });
+  });
+});
+```
+
+## describe.only
+
+Only run the describe block(s) marked with `only`.
+
+```ts
+describe.only('only this suite', () => {
+  // ...
+});
+```
+
+## describe.skip
+
+Skip the describe block(s) marked with `skip`.
+
+```ts
+describe.skip('Skip the test cases in this suite', () => {
+  // ...
+});
+```
+
+It should be noted that the skip tag is only used to skip test cases, and the code inside the describe block will still be executed. This is because Rstest needs to collect information about test cases to ensure that all features work properly, even if they are marked as skipped. For example, in snapshot tests, it determines whether a snapshot is outdated or marked as skipped.
+
+```ts
+describe.skip('a', () => {
+  console.log('will run');
+  test('b', () => {
+    console.log('will not run');
+    expect(0).toBe(0);
+  });
+});
+```
+
+## describe.todo
+
+Mark a describe block as todo.
+
+```ts
+describe.todo('should implement this suite');
+```
+
+## describe.each
+
+- **Type:**
+
+```ts
+describe.each(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+describe.each(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+```
+
+Creates a describe block for each item in the provided array. Like `describe`, it accepts an optional [`TestOptions`](#testoptions) object as its second argument and applies it to every generated suite.
+
+```ts
+describe.each([
+  { a: 1, b: 2 },
+  { a: 2, b: 3 },
+])('math $a + $b', ({ a, b }) => {
+  test('add', () => {
+    // ...
+  });
+});
+```
+
+You can also use a tagged template literal table syntax:
+
+```ts
+describe.each`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
+  });
+});
+```
+
+You can provide an explicit generic type parameter for type safety:
+
+```ts
+describe.each<{ a: number; b: number; expected: number }>`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
+  });
+});
+```
+
+## describe.for
+
+- **Type:**
+
+```ts
+describe.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+describe.for(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+```
+
+Alternative to `describe.each` for more flexible parameter types. It accepts the same optional [`TestOptions`](#testoptions) second argument.
+
+```ts
+describe.for([
+  [1, 2],
+  [2, 3],
+])('math %i + %i', ([a, b]) => {
+  test('add', () => {
+    // ...
+  });
+});
+```
+
+`describe.for` also supports the tagged template literal table syntax:
+
+```ts
+describe.for`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
+  });
+});
+```
+
+You can provide an explicit generic type parameter for type safety:
+
+```ts
+describe.for<{ a: number; b: number; expected: number }>`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
+  });
+});
+```
+
+## describe.runIf
+
+Run the describe block only if the condition is true.
+
+```ts
+describe.runIf(process.env.RUN_EXTRA === '1')('conditionally run', () => {
+  // ...
+});
+```
+
+## describe.skipIf
+
+Skip the describe block if the condition is true.
+
+```ts
+describe.skipIf(process.platform === 'win32')('skip on Windows', () => {
+  // ...
+});
+```
+
+## describe.concurrent
+
+Run the tests in the describe block concurrently.
+
+```ts
+describe.concurrent('concurrent suite', () => {
+  test('test 1', async () => {
+    /* ... */
+  });
+  test('test 2', async () => {
+    /* ... */
+  });
+});
+```
+
+## describe.sequential
+
+Run the tests in the describe block sequentially (default behavior).
+
+```ts
+describe.sequential('sequential suite', () => {
+  test('test 1', async () => {
+    /* ... */
+  });
+  test('test 2', async () => {
+    /* ... */
+  });
+});
+```
+
+## Chainable modifiers
+
+`describe` supports chainable modifiers, so you can use them together. For example:
+
+- `describe.only.runIf(condition)` (or `describe.runIf(condition).only`) will only run the describe block if the condition is true.
+- `describe.skipIf(condition).concurrent` (or `describe.concurrent.skipIf(condition)`) will skip the describe block if the condition is true, otherwise run the tests concurrently.
+- `describe.runIf(condition).concurrent` (or `describe.concurrent.runIf(condition)`) will only run the describe block concurrently if the condition is true.
+- `describe.only.concurrent` (or `describe.concurrent.only`) will only run the describe block concurrently.
+- ......

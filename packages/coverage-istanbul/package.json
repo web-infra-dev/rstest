@@ -1,0 +1,56 @@
+{
+  "name": "@rstest/coverage-istanbul",
+  "version": "0.11.0",
+  "description": "Istanbul coverage provider for Rstest",
+  "keywords": [
+    "rstest",
+    "coverage",
+    "istanbul"
+  ],
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/web-infra-dev/rstest.git",
+    "directory": "packages/coverage-istanbul"
+  },
+  "license": "MIT",
+  "author": "Travis Zhang<https://github.com/travzhang>",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "dev": "cross-env SOURCEMAP=true rslib build --watch"
+  },
+  "dependencies": {
+    "istanbul-lib-coverage": "^3.2.2",
+    "istanbul-lib-report": "^3.0.1",
+    "istanbul-lib-source-maps": "^5.0.6",
+    "istanbul-reports": "^3.2.0",
+    "swc-plugin-coverage-instrument": "0.0.32"
+  },
+  "devDependencies": {
+    "@rslib/core": "0.23.2",
+    "@rstest/core": "workspace:*",
+    "@rstest/tsconfig": "workspace:*",
+    "@types/istanbul-lib-coverage": "^2.0.6",
+    "@types/istanbul-lib-report": "^3.0.3",
+    "@types/istanbul-lib-source-maps": "^4.0.4",
+    "@types/istanbul-reports": "^3.0.4",
+    "@types/node": "^22.16.5",
+    "typescript": "^6.0.3"
+  },
+  "peerDependencies": {
+    "@rstest/core": "workspace:^"
+  }
+}

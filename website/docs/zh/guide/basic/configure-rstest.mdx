@@ -1,3 +1,7 @@
+---
+description: 本章节介绍如何配置 Rstest 以及其底层使用的 Rsbuild 和 Rspack。
+---
+
 # 配置 Rstest
 
 ## 配置文件
@@ -11,7 +15,7 @@
 - `rstest.config.mts`
 - `rstest.config.cts`
 
-我们推荐使用 `.mjs` 或 `.ts` 格式的配置文件，并从 `@rstest/core` 中导入 `defineConfig` 工具函数, 它提供了友好的 TypeScript 类型推导和自动补全，可以帮助你避免配置中的错误。
+我们推荐使用 `.mjs` 或 `.ts` 格式的配置文件，并从 `@rstest/core` 中导入 `defineConfig` 工具函数，它提供了友好的 TypeScript 类型推导和自动补全，可以帮助你避免配置中的错误。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -40,6 +44,66 @@ Rstest CLI 通过 `--config` 选项来指定配置文件，可以设置为相对
 ```bash
 rstest -c scripts/rstest.config.mjs
 ```
+
+## 配置 Rsbuild
+
+Rstest 的构建配置继承自 Rsbuild。因此，在 Rstest 中，你可以使用绝大部分的 Rsbuild 配置。如：
+
+- 通过 [plugins](/config/build/plugins) 使用 Rsbuild 插件；
+- 通过 [resolve](/config/build/resolve) 对模块解析行为进行配置；
+- 通过 [tools.rspack](/config/build/tools#toolsrspack) 配置 Rspack；
+- 通过 [tools.swc](/config/build/tools#toolsswc) 对 builtin:swc-loader 进行配置。
+
+更多配置可参考 [构建配置](/config/#build-configurations)。
+
+### 在 Rsbuild 插件中修改 Rstest 配置 \{#modify-rstest-config}
+
+你可以在 Rsbuild 插件中通过 Rstest 暴露的 API 修改当前 Rstest project 配置。
+
+用法、类型说明和限制请参考 [在 Rsbuild 插件中修改 Rstest 配置](/config/build/plugins#modify-rstest-config)。
+
+## 配置 Rspack
+
+Rstest 底层使用 Rspack 进行构建，因此你可以直接使用 Rspack 的配置项来配置 Rstest 的构建行为。
+
+详情可参考 [配置 Rspack](https://rsbuild.rs/zh/guide/configuration/rspack)。
+
+## 配置 SWC
+
+Rstest 默认通过 Rspack 的 [builtin:swc-loader](https://rspack.rs/zh/guide/features/builtin-swc-loader) 来转换 JavaScript 和 TypeScript 代码，它是 [swc-loader](https://github.com/swc-project/pkgs/tree/main/packages/swc-loader) 的 Rust 版本。
+
+Rstest 暴露了一些选项来配置 `builtin:swc-loader`：
+
+- [tools.swc](/config/build/tools#toolsswc)：用于配置 `builtin:swc-loader` 的选项。
+- [source.include](/config/build/source#sourceinclude)：用于指定需要被 SWC 编译的文件。
+- [source.exclude](/config/build/source#sourceexclude)：用于排除不需要被 SWC 编译的文件。
+
+```ts
+import { defineConfig } from '@rsbuild/core';
+
+export default defineConfig({
+  tools: {
+    swc: {
+      jsc: {
+        transform: {
+          react: {
+            runtime: 'automatic',
+          },
+        },
+        experimental: {
+          plugins: [['@swc/plugin-emotion', {}]],
+        },
+      },
+    },
+  },
+});
+```
+
+### SWC 插件版本
+
+请注意，SWC 的插件仍然是一个实验性功能，目前 SWC 的 Wasm 插件是不向后兼容的，SWC 插件的版本与 Rspack 依赖的 `swc_core` 版本存在强耦合关系。
+
+这意味着，你需要选择和当前 `swc_core` 版本匹配的 SWC 插件，才能使它正常执行。如果你使用的 SWC 插件版本与 Rspack 依赖的 `swc_core` 版本不匹配，Rspack 在执行构建时会抛出错误，请参考 [Rspack 常见问题 - SWC 插件版本不匹配](https://rspack.rs/zh/errors/swc-plugin-version) 进行处理。
 
 ## 检测 Rstest 环境
 
@@ -82,3 +146,10 @@ export const myPlugin = {
   },
 };
 ```
+
+## 配置集成
+
+在大型项目中，你往往已经有构建/工具链的既有配置（别名、全局变量、插件等）。Rstest 通过 [适配器（Adapter）](/guide/integration/adapters) 与 [extends](/config/test/extends) 选项，支持将这些外部配置转换并整合到测试配置中，从而避免重复维护、保持一致性。
+
+- 使用 `extends` 可加载一个函数（适配器）或对象，返回的配置会与当前 Rstest 配置深度合并。
+- 适用于复用 Rsbuild/Rspack 等工具的配置，或为框架模板预设测试行为（如默认测试环境、setup 脚本）。

@@ -1,9 +1,9 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
-import { castArray, TEMP_RSTEST_OUTPUT_DIR_GLOB } from '../../utils';
+import { castArray, getTempRstestOutputDirGlob } from '../../utils';
 
 class TestFileWatchPlugin {
-  private contextToWatch: string | null = null;
+  private readonly contextToWatch: string | null = null;
 
   constructor(contextToWatch: string) {
     this.contextToWatch = contextToWatch;
@@ -28,75 +28,90 @@ class TestFileWatchPlugin {
 
 const rstestVirtualEntryFlag = 'rstest-virtual-entry-';
 
-let rerunTrigger: Record<string, () => void> = {};
+const rerunTriggers = new Map<string, () => void>();
+const configuredWatchConfigs = new WeakMap<object, Set<string>>();
 
-const registerRerunTrigger = (name: string, fn: () => void) => {
-  rerunTrigger[name] = fn;
-};
-
-export const triggerRerun = (): void => {
-  Object.values(rerunTrigger).forEach((fn) => {
-    fn();
-  });
+export const triggerRerun = (): boolean => {
+  let hasTrigger = false;
+  for (const trigger of rerunTriggers.values()) {
+    hasTrigger = true;
+    trigger();
+  }
+  return hasTrigger;
 };
 
 export const pluginEntryWatch: (params: {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
+  globalSetupFiles: Record<string, Record<string, string>>;
   isWatch: boolean;
   configFilePath?: string;
 }) => RsbuildPlugin = ({
   isWatch,
   globTestSourceEntries,
   setupFiles,
+  globalSetupFiles,
   context,
 }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
     api.onCloseDevServer(() => {
-      rerunTrigger = {};
+      rerunTriggers.clear();
     });
 
+    const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
     api.modifyRspackConfig(async (config, { environment, rspack }) => {
       if (isWatch) {
-        // FIXME: inspect config will retrigger initConfig
-        if (rerunTrigger[environment.name]) {
+        let configuredEnvironments = configuredWatchConfigs.get(config);
+        if (!configuredEnvironments) {
+          configuredEnvironments = new Set();
+          configuredWatchConfigs.set(config, configuredEnvironments);
+        }
+        if (configuredEnvironments.has(environment.name)) {
           return;
         }
+        configuredEnvironments.add(environment.name);
+
         config.plugins.push(new TestFileWatchPlugin(environment.config.root));
         config.entry = async () => {
           const sourceEntries = await globTestSourceEntries(environment.name);
           return {
             ...sourceEntries,
             ...setupFiles[environment.name],
+            ...(globalSetupFiles?.[environment.name] || {}),
           };
         };
 
-        // Add virtual entry to trigger recompile
-        const virtualEntryName = `${rstestVirtualEntryFlag}${config.name!}.js`;
+        const virtualEntryName = `${rstestVirtualEntryFlag}${environment.name}.js`;
         const virtualEntryPath = `${environment.config.root}/${virtualEntryName}`;
+        let virtualEntryVersion = 0;
+        const getVirtualEntryContent = () =>
+          `export const virtualEntry = ${virtualEntryVersion};`;
 
         const virtualModulesPlugin =
           new rspack.experiments.VirtualModulesPlugin({
-            [virtualEntryPath]: `export const virtualEntry = ${Date.now()}`,
+            [virtualEntryPath]: getVirtualEntryContent(),
           });
-
-        registerRerunTrigger(environment.name, () =>
-          virtualModulesPlugin.writeModule(
-            virtualEntryPath,
-            `export const virtualEntry = ${Date.now()}`,
-          ),
-        );
 
         config.experiments ??= {};
         config.experiments.nativeWatcher = true;
-
-        config.plugins.push(virtualModulesPlugin);
+        config.plugins.push({
+          apply(compiler: Rspack.Compiler) {
+            virtualModulesPlugin.apply(compiler);
+            rerunTriggers.set(environment.name, () => {
+              virtualEntryVersion += 1;
+              virtualModulesPlugin.writeModule(
+                virtualEntryPath,
+                getVirtualEntryContent(),
+              );
+            });
+          },
+        });
 
         config.watchOptions ??= {};
+        // FIXME: Temporarily default to 5 to debounce rerun in watch mode.
         config.watchOptions.aggregateTimeout = 5;
-
         // TODO: rspack should support `(string | RegExp)[]` type
         // https://github.com/web-infra-dev/rspack/issues/10596
         config.watchOptions.ignored = castArray(
@@ -111,7 +126,10 @@ export const pluginEntryWatch: (params: {
         }
 
         config.watchOptions.ignored.push(
-          TEMP_RSTEST_OUTPUT_DIR_GLOB,
+          getTempRstestOutputDirGlob(outputDistPathRoot),
+          context.normalizedConfig.coverage.reportsDirectory,
+          // ignore global setup files since they are only run once
+          ...Object.values(globalSetupFiles?.[environment.name] || {}),
           '**/*.snap',
         );
 
@@ -131,6 +149,7 @@ export const pluginEntryWatch: (params: {
         const sourceEntries = await globTestSourceEntries(environment.name);
         config.entry = {
           ...setupFiles[environment.name],
+          ...(globalSetupFiles?.[environment.name] || {}),
           ...sourceEntries,
         };
       }

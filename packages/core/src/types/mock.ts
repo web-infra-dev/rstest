@@ -1,6 +1,20 @@
-import type { FakeTimerInstallOpts } from '@sinonjs/fake-timers';
-import type { FunctionLike, MaybePromise } from './utils';
+import type {
+  Clock as FakeTimerClock,
+  Config as FakeTimerInstallOpts,
+} from '@sinonjs/fake-timers';
+import type { FunctionLike, MaybePromise, Truthy } from './utils';
 import type { RuntimeConfig } from './worker';
+
+type FakeTimerTickTime = Parameters<FakeTimerClock['tick']>[0];
+type FakeTimerSystemTime = Parameters<FakeTimerClock['setSystemTime']>[0];
+type FakeTimerTickMode = Parameters<FakeTimerClock['setTickMode']>[0];
+type MockFactory<T = unknown> = () => Partial<T>;
+
+export type RealTimers = {
+  setTimeout: typeof globalThis.setTimeout;
+  clearTimeout: typeof globalThis.clearTimeout;
+  setImmediate?: typeof globalThis.setImmediate;
+};
 
 interface MockResultReturn<T> {
   type: 'return';
@@ -22,9 +36,7 @@ interface MockResultThrow {
 }
 
 type MockResult<T> =
-  | MockResultReturn<T>
-  | MockResultThrow
-  | MockResultIncomplete;
+  MockResultReturn<T> | MockResultThrow | MockResultIncomplete;
 
 interface MockSettledResultFulfilled<T> {
   type: 'fulfilled';
@@ -36,8 +48,7 @@ interface MockSettledResultRejected {
 }
 
 type MockSettledResult<T> =
-  | MockSettledResultFulfilled<T>
-  | MockSettledResultRejected;
+  MockSettledResultFulfilled<T> | MockSettledResultRejected;
 
 type RuntimeOptions = Partial<
   Pick<
@@ -117,6 +128,10 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
    */
   mockRestore(): void;
   /**
+   * Restores the mock when it leaves a `using` scope.
+   */
+  [Symbol.dispose](): void;
+  /**
    * Returns current mock implementation if there is one.
    */
   getMockImplementation(): NormalizedProcedure<T> | undefined;
@@ -134,7 +149,7 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
   withImplementation<T2>(
     fn: NormalizedProcedure<T>,
     callback: () => T2,
-  ): T2 extends Promise<unknown> ? Promise<void> : void;
+  ): T2 extends Promise<unknown> ? Promise<this> : this;
   /**
    * Return the `this` context from the method without invoking the actual implementation.
    */
@@ -165,14 +180,154 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
   mockRejectedValueOnce(error: unknown): this;
 }
 
-export interface Mock<T extends FunctionLike = FunctionLike>
-  extends MockInstance<T> {
+export interface Mock<
+  T extends FunctionLike = FunctionLike,
+> extends MockInstance<T> {
   new (...args: Parameters<T>): ReturnType<T>;
   (...args: Parameters<T>): ReturnType<T>;
 }
 
 export type MockFn = <T extends FunctionLike = FunctionLike>(fn?: T) => Mock<T>;
-type MockFactory<T = unknown> = () => MaybePromise<Partial<T>>;
+
+export type WaitForCallback<T> = () => MaybePromise<T>;
+
+export interface WaitForOptions {
+  timeout?: number;
+  interval?: number;
+}
+
+export interface WaitUntilOptions {
+  timeout?: number;
+  interval?: number;
+}
+
+/**
+ * Options for mockObject
+ */
+export interface MockOptions {
+  /**
+   * If `true`, the original implementation will be kept.
+   * All methods will call the original implementation, but you can still track the calls.
+   */
+  spy?: boolean;
+}
+
+/**
+ * Options for rs.mock module mocking.
+ * Supports `{ spy: true }` or `{ mock: true }`.
+ */
+export type MockModuleOptions =
+  | {
+      /**
+       * If `true`, the module will be auto-mocked but the original implementations
+       * will be preserved - all exports will be wrapped in spy functions that track calls.
+       */
+      spy: true;
+    }
+  | {
+      /**
+       * If `true`, the module will be auto-mocked with all exports replaced by mock functions.
+       * Original implementations will NOT be preserved.
+       */
+      mock: true;
+    };
+
+// Helper types for mocking
+type MockProcedure = (...args: any[]) => any;
+
+// Type for class constructors
+type Constructor<T = any> = new (...args: any[]) => T;
+
+// Mocked class constructor type - preserves both the constructor signature and mock capabilities
+export type MockedClass<T extends Constructor> = Mock<
+  (...args: ConstructorParameters<T>) => InstanceType<T>
+> & {
+  new (...args: ConstructorParameters<T>): InstanceType<T>;
+  prototype: InstanceType<T>;
+};
+
+type Methods<T> = {
+  [K in keyof T]: T[K] extends MockProcedure ? K : never;
+}[keyof T];
+
+type Properties<T> = {
+  [K in keyof T]: T[K] extends MockProcedure ? never : K;
+}[keyof T];
+
+// A mock-wrapped callable. Stripping `this` keeps `mocked(args)` callable
+// without a receiver for methods typed with an explicit `this`, which a bare
+// `T` would break — but when a `this` parameter is present,
+// `OmitThisParameter<T>` rebuilds a bare call signature and drops `T`'s
+// construct signature, so `ConstructSignature<T>` re-extracts it (the tuple
+// wrapping avoids distributing over union members). `T`'s real signatures come
+// before `Mock<T>` so a construct+call member keeps its real construct
+// signature at `new mocked.fn()` sites (`Mock<T>`'s synthetic `new` returns
+// `ReturnType<T>` and would otherwise shadow it).
+type ConstructSignature<T> = [T] extends [new (...args: infer A) => infer R]
+  ? new (...args: A) => R
+  : unknown;
+
+type MockedCallable<T extends MockProcedure> = OmitThisParameter<T> &
+  ConstructSignature<T> &
+  Mock<T>;
+
+// The extra `{ [K in keyof T]: T[K] }` restores named/static properties that
+// `OmitThisParameter` drops when it rebuilds a this-less call signature.
+export type MockedFunction<T extends MockProcedure> = MockedCallable<T> & {
+  [K in keyof T]: T[K];
+};
+
+export type MockedFunctionDeep<T extends MockProcedure> = MockedCallable<T> &
+  MockedObjectDeep<T>;
+
+export type MockedObject<T> = {
+  [K in Methods<T>]: T[K] extends MockProcedure ? MockedFunction<T[K]> : T[K];
+} & { [K in Properties<T>]: T[K] };
+
+export type MockedObjectDeep<T> = {
+  [K in Methods<T>]: T[K] extends MockProcedure
+    ? MockedFunctionDeep<T[K]>
+    : T[K];
+} & { [K in Properties<T>]: MaybeMockedDeep<T[K]> };
+
+export type Mocked<T> = T extends Constructor
+  ? MockedClass<T>
+  : T extends MockProcedure
+    ? MockedFunction<T>
+    : T extends object
+      ? MockedObject<T>
+      : T;
+
+export type MaybeMockedDeep<T> = T extends Constructor
+  ? MockedClass<T>
+  : T extends MockProcedure
+    ? MockedFunctionDeep<T>
+    : T extends object
+      ? MockedObjectDeep<T>
+      : T;
+
+export type MaybePartiallyMocked<T> = T extends Constructor
+  ? MockedClass<T>
+  : T extends MockProcedure
+    ? MockedFunction<T>
+    : T extends object
+      ? MockedObject<T>
+      : T;
+
+export type MaybePartiallyMockedDeep<T> = T extends Constructor
+  ? MockedClass<T>
+  : T extends MockProcedure
+    ? MockedFunctionDeep<T>
+    : T extends object
+      ? MockedObjectDeep<T>
+      : T;
+
+export type DisposableRstestUtilities = RstestUtilities & {
+  /**
+   * Restores the resource created by the current utility call when it leaves a `using` scope.
+   */
+  [Symbol.dispose](): void;
+};
 
 export interface RstestUtilities {
   /**
@@ -194,6 +349,78 @@ export interface RstestUtilities {
   isMockFunction: (fn: any) => fn is MockInstance;
 
   /**
+   * Deeply mocks properties and methods of a given object
+   * in the same way as `rstest.mock()` mocks module exports.
+   *
+   * @example
+   * ```ts
+   * const original = {
+   *   simple: () => 'value',
+   *   nested: {
+   *     method: () => 'real'
+   *   },
+   *   prop: 'foo',
+   * }
+   *
+   * const mocked = rstest.mockObject(original)
+   * expect(mocked.simple()).toBe(undefined)
+   * expect(mocked.nested.method()).toBe(undefined)
+   * expect(mocked.prop).toBe('foo')
+   *
+   * mocked.simple.mockReturnValue('mocked')
+   * expect(mocked.simple()).toBe('mocked')
+   *
+   * // With spy option to keep original implementations
+   * const spied = rstest.mockObject(original, { spy: true })
+   * expect(spied.simple()).toBe('value')
+   * expect(spied.simple).toHaveBeenCalled()
+   * ```
+   *
+   * @param value - The object to be mocked
+   * @param options - Mock options
+   * @returns A deeply mocked version of the input object
+   */
+  mockObject: <T>(value: T, options?: MockOptions) => MaybeMockedDeep<T>;
+
+  /**
+   * Type helper for TypeScript. Just returns the object that was passed.
+   *
+   * When `partial` is `true` it will expect a `Partial<T>` as a return value.
+   * By default, this will only make TypeScript believe that the first level values are mocked.
+   * You can pass down `{ deep: true }` as a second argument to tell TypeScript
+   * that the whole object is mocked, if it actually is.
+   *
+   * @example
+   * ```ts
+   * import example from './example.js'
+   *
+   * rstest.mock('./example.js')
+   *
+   * test('1 + 1 equals 10', async () => {
+   *   rstest.mocked(example.calc).mockReturnValue(10)
+   *   expect(example.calc(1, '+', 1)).toBe(10)
+   * })
+   * ```
+   * @param item - Anything that can be mocked
+   * @returns The same item with mocked type
+   */
+  mocked: (<T>(item: T, deep?: false) => Mocked<T>) &
+    (<T>(item: T, deep: true) => MaybeMockedDeep<T>) &
+    (<T>(item: T, options: { partial?: false; deep?: false }) => Mocked<T>) &
+    (<T>(
+      item: T,
+      options: { partial?: false; deep: true },
+    ) => MaybeMockedDeep<T>) &
+    (<T>(
+      item: T,
+      options: { partial: true; deep?: false },
+    ) => MaybePartiallyMocked<T>) &
+    (<T>(
+      item: T,
+      options: { partial: true; deep: true },
+    ) => MaybePartiallyMockedDeep<T>);
+
+  /**
    * Calls `.mockClear()` on all spies.
    */
   clearAllMocks: () => RstestUtilities;
@@ -207,36 +434,57 @@ export interface RstestUtilities {
   restoreAllMocks: () => RstestUtilities;
 
   /**
-   * Mock a module
+   * Mock a module.
+   *
+   * When called with a factory function, the module will be replaced with the return value of the factory.
+   * When called with `{ spy: true }`, the module will be auto-mocked but the original implementations
+   * will be preserved - all exports will be wrapped in spy functions that track calls.
+   *
+   * @example
+   * ```ts
+   * // Replace module with factory
+   * rs.mock('./module', () => ({ fn: rs.fn() }))
+   *
+   * // Auto-mock with spy mode - keeps original implementations
+   * rs.mock('./module', { spy: true })
+   * ```
    */
   mock<T = unknown>(
     moduleName: string | Promise<T>,
-    moduleFactory?: MockFactory<T>,
+    factoryOrOptions?: MockFactory<T> | MockModuleOptions,
   ): void;
 
   /**
-   * Mock a module
+   * Mock a module (CommonJS require)
    */
   mockRequire: <T = unknown>(
     moduleName: string,
-    moduleFactory?: () => T,
+    factoryOrOptions?: (() => T) | MockModuleOptions,
   ) => void;
 
   /**
    * Mock a module, not hoisted.
+   *
+   * When called with `{ spy: true }`, the module will be auto-mocked but the original implementations
+   * will be preserved - all exports will be wrapped in spy functions that track calls.
    */
   doMock<T = unknown>(
     moduleName: string | Promise<T>,
-    moduleFactory?: MockFactory<T>,
+    factoryOrOptions?: MockFactory<T> | MockModuleOptions,
   ): void;
 
   /**
-   * Mock a module, not hoisted.
+   * Mock a module, not hoisted (CommonJS require).
    */
   doMockRequire: <T = unknown>(
     moduleName: string,
-    moduleFactory?: () => T,
+    factoryOrOptions?: (() => T) | MockModuleOptions,
   ) => void;
+
+  /**
+   * Hoisted mock function.
+   */
+  hoisted: <T = unknown>(fn: () => T) => T;
 
   /**
    * Removes module from the mocked registry.
@@ -244,9 +492,19 @@ export interface RstestUtilities {
   unmock: (path: string) => void;
 
   /**
+   * Removes CommonJS require module from the mocked registry.
+   */
+  unmockRequire: (path: string) => void;
+
+  /**
    * Removes module from the mocked registry, not hoisted.
    */
   doUnmock: (path: string) => void;
+
+  /**
+   * Removes CommonJS require module from the mocked registry, not hoisted.
+   */
+  doUnmockRequire: (path: string) => void;
 
   /**
    * Imports a module with all of its properties (including nested properties) mocked.
@@ -274,12 +532,16 @@ export interface RstestUtilities {
   resetModules: () => RstestUtilities;
 
   /**
-   * Changes the value of environmental variable on `process.env`.
+   * Changes the value of an environment variable in the current runtime env store.
+   * Uses `process.env` in Node.js and runtime env store in browser mode.
    */
-  stubEnv: (name: string, value: string | undefined) => RstestUtilities;
+  stubEnv: (
+    name: string,
+    value: string | undefined,
+  ) => DisposableRstestUtilities;
 
   /**
-   * Restores all `process.env` values that were changed with `rstest.stubEnv`.
+   * Restores all env values that were changed with `rstest.stubEnv`.
    */
   unstubAllEnvs: () => RstestUtilities;
 
@@ -289,7 +551,7 @@ export interface RstestUtilities {
   stubGlobal: (
     name: string | number | symbol,
     value: unknown,
-  ) => RstestUtilities;
+  ) => DisposableRstestUtilities;
 
   /**
    * Restores all global variables that were changed with `rstest.stubGlobal`.
@@ -302,6 +564,11 @@ export interface RstestUtilities {
   setConfig: (config: RuntimeOptions) => void;
 
   /**
+   * get runtime config for the current test.
+   */
+  getConfig: () => RuntimeOptions;
+
+  /**
    * Reset runtime config that were changed with `rstest.setConfig`.
    */
   resetConfig: () => void;
@@ -309,14 +576,15 @@ export interface RstestUtilities {
   /**
    * Mocks timers using `@sinonjs/fake-timers`.
    */
-  useFakeTimers: (config?: FakeTimerInstallOpts) => RstestUtilities;
+  useFakeTimers: (config?: FakeTimerInstallOpts) => DisposableRstestUtilities;
   useRealTimers: () => RstestUtilities;
   isFakeTimers: () => boolean;
   /**
    * Set the current system time used by fake timers.
    */
-  setSystemTime: (now?: number | Date) => RstestUtilities;
+  setSystemTime: (now?: FakeTimerSystemTime) => RstestUtilities;
   getRealSystemTime: () => number;
+  getRealTimers: () => RealTimers;
 
   runAllTicks: () => RstestUtilities;
   runAllTimers: () => RstestUtilities;
@@ -324,11 +592,13 @@ export interface RstestUtilities {
   runOnlyPendingTimers: () => RstestUtilities;
   runOnlyPendingTimersAsync: () => Promise<RstestUtilities>;
 
-  advanceTimersByTime: (ms: number) => RstestUtilities;
-  advanceTimersByTimeAsync: (ms: number) => Promise<RstestUtilities>;
+  advanceTimersByTime: (ms: FakeTimerTickTime) => RstestUtilities;
+  advanceTimersByTimeAsync: (ms: FakeTimerTickTime) => Promise<RstestUtilities>;
   advanceTimersToNextTimer: (steps?: number) => RstestUtilities;
   advanceTimersToNextTimerAsync: (steps?: number) => Promise<RstestUtilities>;
   advanceTimersToNextFrame: () => RstestUtilities;
+  jumpTimersByTime: (ms: FakeTimerTickTime) => RstestUtilities;
+  setTickMode: (mode: FakeTimerTickMode) => RstestUtilities;
 
   /**
    * Returns the number of fake timers still left to run.
@@ -338,4 +608,23 @@ export interface RstestUtilities {
    * Removes all timers that are scheduled to run.
    */
   clearAllTimers: () => RstestUtilities;
+
+  /**
+   * Retry callback until it succeeds (doesn't throw) or timeout is reached.
+   * If timeout is reached, throws the last error from the callback.
+   */
+  waitFor: <T>(
+    callback: WaitForCallback<T>,
+    options?: number | WaitForOptions,
+  ) => Promise<T>;
+
+  /**
+   * Retry callback until it returns a truthy value or timeout is reached.
+   * If callback throws, it interrupts immediately and throws that error.
+   * If timeout is reached, throws an error.
+   */
+  waitUntil: <T>(
+    callback: () => MaybePromise<T>,
+    options?: number | WaitUntilOptions,
+  ) => Promise<Truthy<Awaited<T>>>;
 }

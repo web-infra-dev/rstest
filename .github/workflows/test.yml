@@ -8,6 +8,16 @@ on:
     branches: [main]
 
   workflow_dispatch:
+    inputs:
+      fullRun:
+        description: 'Run the full e2e matrix'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 permissions:
   contents: read
@@ -17,27 +27,19 @@ env:
   NODE_OPTIONS: --max-old-space-size=6144
 
 jobs:
-  # ======== ut ========
-  ut:
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    strategy:
-      matrix:
-        # run ut in macOS, as SWC cases will fail in Ubuntu CI
-        os: [macos-14, windows-latest]
-
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.changes.outputs.changed }}
+      # Full e2e sweep: push to main (post-merge gate) or release PR (pre-publish gate)
+      is_full_run: ${{ github.event_name == 'push' || startsWith(github.event.pull_request.title, 'release:') || inputs.fullRun }}
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 1
 
-      - name: Install Pnpm
-        run: |
-          npm install -g corepack@latest --force
-          corepack enable
-
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: changes
         with:
           predicate-quantifier: 'every'
@@ -48,68 +50,206 @@ jobs:
               - "!**/_meta.json"
               - "!**/dictionary.txt"
 
+  # ======== lint ========
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
       - name: Setup Node.js
-        if: steps.changes.outputs.changed == 'true'
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 22
-          cache: 'pnpm'
+          package-manager-cache: false
 
       - name: Install Dependencies
-        if: steps.changes.outputs.changed == 'true'
-        run: pnpm install
+        run: pnpm install --ignore-scripts
 
-      - name: Run Type Check
-        if: steps.changes.outputs.changed == 'true'
-        run: pnpm run typecheck
+      - name: Build Packages
+        run: pnpm run build
+        env:
+          # Publish checks are comparatively expensive and only need to run once
+          # as part of the lint/static-check gate.
+          RSTEST_PUBLISH_CHECK: true
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Check Dependency Version
+        run: pnpm run check-dependency-version
+
+      - name: Check Version Consistency
+        run: pnpm run check-version-consistency
+
+      - name: Check Unused Code
+        run: pnpm run check-unused
+
+      - name: Check pnpm Dedupe
+        # Keep dedupe last: `pnpm dedupe --check` may leave pnpm's modules
+        # state needing a reconcile. If another `pnpm run ...` follows it,
+        # pnpm can enter its implicit install path and rerun lifecycle scripts
+        # such as the root `prepare`.
+        run: pnpm dedupe --check --config.minimum-release-age=0
+
+  # ======== ut ========
+  ut:
+    # Gate behind lint so a lint failure skips the (billed-premium) macOS +
+    # Windows ut runners — and transitively e2e — before they start; e2e already
+    # needs lint. Trade-off: any lint nit (prettier/spell/dedupe/knip) now blocks
+    # ut+e2e too, instead of running them in parallel with lint.
+    needs: [prepare, lint]
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        # run ut in macOS, as SWC cases will fail in Ubuntu CI
+        os: [macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Build Packages
+        run: pnpm run build
 
       - name: Run Test
-        if: steps.changes.outputs.changed == 'true'
         run: pnpm run test
+
+      - name: Run Examples Test
+        run: pnpm run test:examples
 
   # ======== e2e ========
   e2e:
+    needs: [prepare, lint, ut]
+    if: needs.prepare.outputs.changed == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
         # run ut in macOS, as SWC cases will fail in Ubuntu CI
-        os: [macos-14, windows-latest]
-        node_version: [18, 20, 22, 24]
+        os: [macos-latest, windows-latest]
+        # Trigger-dependent axes (gated by prepare.outputs.is_full_run):
+        #
+        #   trigger      | node_version | test_script
+        #   -------------+--------------+--------------------------------------
+        #   PR (regular) | [24]         | [test]
+        #   push to main | [20, 24]     | [test, commonjs, no-isolate, threads]
+        #   release PR   | [20, 24]     | [test, commonjs, no-isolate, threads]
+        #
+        # Node 20 + test:no-isolate can hit upstream vm native crashes under worker
+        # reuse; tolerated on full runs in exchange for coverage.
+        node_version: >-
+          ${{ fromJson(
+            needs.prepare.outputs.is_full_run == 'true'
+              && '["20","24"]'
+            || '["24"]'
+          ) }}
+        test_script: >-
+          ${{ fromJson(
+            needs.prepare.outputs.is_full_run == 'true'
+              && '["test","test:commonjs","test:no-isolate","test:threads"]'
+            || '["test"]'
+          ) }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 1
 
-      - name: Install Pnpm
-        run: |
-          npm install -g corepack@latest --force
-          corepack enable
-
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
-        id: changes
+      - name: Setup pnpm standalone
+        if: matrix.node_version == '20'
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
-          predicate-quantifier: 'every'
-          filters: |
-            changed:
-              - "!**/*.md"
-              - "!**/*.mdx"
-              - "!**/_meta.json"
-              - "!**/dictionary.txt"
+          # pnpm 11 requires Node >=22, but this matrix intentionally tests Node 20 runtime behavior.
+          standalone: true
 
-      - name: Setup Node.js ${{ matrix.node-version }}
-        if: steps.changes.outputs.changed == 'true'
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - name: Setup pnpm
+        if: matrix.node_version != '20'
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Setup Node.js ${{ matrix.node_version }}
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ matrix.node_version }}
-          cache: 'pnpm'
+          package-manager-cache: false
 
       - name: Install Dependencies
-        if: steps.changes.outputs.changed == 'true'
-        run: pnpm install
+        run: pnpm install --frozen-lockfile --prefer-offline
 
-      - name: E2E Test
-        if: steps.changes.outputs.changed == 'true'
-        run: pnpm run e2e
+      - name: Build Packages
+        run: pnpm run build
+
+      - name: Setup Playwright
+        # Only test/test:commonjs run browser-mode e2e (incl. the WebKit
+        # fixture). test:no-isolate and test:threads exclude browser-mode/**,
+        # so they need no Playwright browsers.
+        if: matrix.test_script == 'test' || matrix.test_script == 'test:commonjs'
+        uses: ./.github/actions/setup-playwright
+        with:
+          install-webkit: 'true'
+
+      - name: E2E Test (${{ matrix.test_script }})
+        run: cd e2e && pnpm ${{ matrix.test_script }}
+
+      - name: VS Code Extension Test
+        # OS-sensitive (Extension Host) but node-insensitive: on PR, pin to a
+        # single combo (Windows + node 24) instead of every e2e row. FULL runs
+        # still exercise it on every 'test' row.
+        if: matrix.test_script == 'test' && (needs.prepare.outputs.is_full_run == 'true' || (matrix.os == 'windows-latest' && matrix.node_version == '24'))
+        run: pnpm run test:vscode
+
+  # ======== codspeed ========
+  # Temporarily disabled: CodSpeed runner quota exhausted.
+  # Re-enable once quota resets.
+  codspeed:
+    needs: e2e
+    if: false
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/codspeed.yml
+    with:
+      ref: ${{ github.sha }}
+
+  # ======== gate ========
+  test-gate:
+    needs: [prepare, lint, ut, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check test requirement
+        run: |
+          for result in \
+            "${{ needs.prepare.result }}" \
+            "${{ needs.lint.result }}" \
+            "${{ needs.ut.result }}" \
+            "${{ needs.e2e.result }}"; do
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              exit 1
+            fi
+          done

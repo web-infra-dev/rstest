@@ -1,0 +1,65 @@
+import {
+  array,
+  boolean,
+  fallback,
+  type InferOutput,
+  literal,
+  object,
+  optional,
+  parse,
+  string,
+  union,
+} from 'valibot';
+import vscode from 'vscode';
+
+// Centralized configuration types for the extension.
+// Add new keys here to extend configuration in a type-safe way.
+const configSchema = object({
+  // The path to a package.json file of a Rstest executable.
+  // Used as a last resort if the extension cannot auto-detect @rstest/core.
+  rstestPackagePath: fallback(optional(string()), undefined),
+  configFileGlobPattern: fallback(array(string()), [
+    '**/rstest.config.{mjs,ts,js,cjs,mts,cts}',
+  ]),
+  testCaseCollectMethod: fallback(
+    union([literal('ast'), literal('runtime')]),
+    'ast',
+  ),
+  applyDiagnostic: fallback(boolean(), true),
+});
+
+type ExtensionConfig = InferOutput<typeof configSchema>;
+
+// Type-safe getter for a single config value
+export function getConfigValue<K extends keyof ExtensionConfig>(
+  key: K,
+  scope?: vscode.ConfigurationScope | null,
+): ExtensionConfig[K] {
+  const value = vscode.workspace.getConfiguration('rstest', scope).get(key);
+  return parse(configSchema.entries[key], value) as ExtensionConfig[K];
+}
+
+export function watchConfigValue<K extends keyof ExtensionConfig>(
+  key: K,
+  scope: vscode.ConfigurationScope | null | undefined,
+  listener: (
+    value: ExtensionConfig[K],
+    token: vscode.CancellationToken,
+  ) => void,
+): vscode.Disposable {
+  let cancelSource = new vscode.CancellationTokenSource();
+  listener(getConfigValue(key, scope), cancelSource.token);
+  const disposable = vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration(`rstest.${key}`, scope ?? undefined)) {
+      cancelSource.cancel();
+      cancelSource = new vscode.CancellationTokenSource();
+      listener(getConfigValue(key, scope), cancelSource.token);
+    }
+  });
+  return {
+    dispose: () => {
+      disposable.dispose();
+      cancelSource.cancel();
+    },
+  };
+}

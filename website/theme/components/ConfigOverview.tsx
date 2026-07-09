@@ -1,17 +1,17 @@
-import { Link } from '@rspress/core/theme';
-import styles from './ConfigOverview.module.scss';
+import { type Group, OverviewGroup } from '@rspress/core/theme';
+import { useI18nUrl } from './utils';
 
 export interface GroupItem {
   text: string;
   link: string;
 }
 
-export interface Group {
+export interface BasicGroup {
   name: string;
   items?: string[];
 }
 
-const OVERVIEW_GROUPS: Group[] = [
+const OVERVIEW_GROUPS: BasicGroup[] = [
   {
     name: 'basic',
     items: [
@@ -20,21 +20,25 @@ const OVERVIEW_GROUPS: Group[] = [
       'include',
       'exclude',
       'setupFiles',
+      'globalSetup',
       'projects',
-      'update',
-      'globals',
       'passWithNoTests',
       'includeSource',
       'testNamePattern',
+      'extends',
     ],
   },
   {
     name: 'runtime',
-    items: ['retry', 'testTimeout', 'hookTimeout', 'maxConcurrency'],
-  },
-  {
-    name: 'environment',
-    items: ['pool', 'isolate', 'testEnvironment'],
+    items: [
+      'globals',
+      'env',
+      'bail',
+      'retry',
+      'testTimeout',
+      'hookTimeout',
+      'maxConcurrency',
+    ],
   },
   {
     name: 'mock',
@@ -47,10 +51,41 @@ const OVERVIEW_GROUPS: Group[] = [
     ],
   },
   {
+    name: 'environment',
+    items: ['pool', 'isolate', 'testEnvironment'],
+  },
+  {
+    name: 'browser',
+    items: [
+      'browser.enabled',
+      'browser.provider',
+      'browser.browser',
+      'browser.headless',
+      'browser.port',
+      'browser.providerOptions',
+    ],
+  },
+  {
+    name: 'snapshot',
+    items: ['update', 'snapshotFormat', 'resolveSnapshotPath'],
+  },
+  {
     name: 'output',
     items: [
+      'coverage',
       'reporters',
+      'includeTaskLocation',
+      'logHeapUsage',
+      'hideSkippedTests',
+      'hideSkippedTestFiles',
       'slowTestThreshold',
+      'chaiConfig',
+    ],
+  },
+  {
+    name: 'console',
+    items: [
+      'silent',
       'onConsoleLog',
       'printConsoleTrace',
       'disableConsoleIntercept',
@@ -58,33 +93,45 @@ const OVERVIEW_GROUPS: Group[] = [
   },
 ];
 
-export default function Overview() {
-  const Nodes = OVERVIEW_GROUPS.map((group) => (
-    <div key={group.name} className={styles.overviewGroups}>
-      <div className={styles.group}>
-        <h2>{group.name}</h2>
-        <ul>
-          {group.items?.map((item) => (
-            <li key={item}>
-              <Link href={`/config/test/${item}`}>{item}</Link>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  ));
-
-  return <div className={styles.root}>{Nodes}</div>;
+function camelToKebab(str: string) {
+  return str.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
 }
 
-const BUILD_OVERVIEW_GROUPS: Group[] = [
+export default function Overview() {
+  const tUrl = useI18nUrl();
+
+  const group: Group = {
+    name: '',
+    items: OVERVIEW_GROUPS.map((item) => ({
+      text: item.name,
+      link: '',
+      items: item.items?.map((item) => {
+        const [page, anchor] = item.split('.');
+        const target = page ?? item;
+        const hash = anchor ? `#${anchor.toLowerCase()}` : '';
+
+        return {
+          link: tUrl(`/config/test/${camelToKebab(target)}${hash}`),
+          text: anchor ?? item,
+        };
+      }),
+    })),
+  };
+
+  return <OverviewGroup group={group} />;
+}
+
+const BUILD_OVERVIEW_GROUPS: BasicGroup[] = [
   {
-    name: 'plugins',
+    name: 'top level',
+    items: ['plugins'],
   },
   {
     name: 'source',
     items: [
       'source.decorators',
+      'source.transformImport',
+      'source.assetsInclude',
       'source.define',
       'source.exclude',
       'source.include',
@@ -93,7 +140,15 @@ const BUILD_OVERVIEW_GROUPS: Group[] = [
   },
   {
     name: 'output',
-    items: ['output.externals', 'output.cssModules', 'output.cleanDistPath'],
+    items: [
+      'output.module',
+      'output.externals',
+      'output.bundleDependencies',
+      'output.cssModules',
+      'output.emitAssets',
+      'output.cleanDistPath',
+      'output.distPath',
+    ],
   },
   {
     name: 'resolve',
@@ -102,6 +157,8 @@ const BUILD_OVERVIEW_GROUPS: Group[] = [
       'resolve.alias',
       'resolve.dedupe',
       'resolve.extensions',
+      'resolve.conditionNames',
+      'resolve.mainFields',
     ],
   },
   {
@@ -114,31 +171,34 @@ const BUILD_OVERVIEW_GROUPS: Group[] = [
   },
   {
     name: 'performance',
-    items: ['performance.bundleAnalyze'],
+    items: ['performance.buildCache'],
   },
 ];
 
 export function BuildOverview() {
-  const Nodes = BUILD_OVERVIEW_GROUPS.map((group) => (
-    <div key={group.name} className={styles.overviewGroups}>
-      <div className={styles.group}>
-        <h2>
-          <Link href={`/config/build/${group.name}`}> {group.name}</Link>
-        </h2>
-        <ul>
-          {group.items?.map((item) => (
-            <li key={item}>
-              <Link
-                href={`/config/build/${group.name}#${item.replace('.', '')}`}
-              >
-                {item}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  ));
+  const tUrl = useI18nUrl();
 
-  return <div className={styles.root}>{Nodes}</div>;
+  const group: Group = {
+    name: '',
+    items: BUILD_OVERVIEW_GROUPS.map((groupItem) => ({
+      text: groupItem.name,
+      link:
+        groupItem.name === 'top level'
+          ? ''
+          : tUrl(`/config/build/${groupItem.name}`),
+      items: groupItem.items?.map((item) => {
+        return {
+          link:
+            groupItem.name === 'top level'
+              ? tUrl(`/config/build/${item}`)
+              : tUrl(
+                  `/config/build/${groupItem.name}#${item.toLowerCase().replace('.', '')}`,
+                ),
+          text: item,
+        };
+      }),
+    })),
+  };
+
+  return <OverviewGroup group={group} />;
 }

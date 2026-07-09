@@ -1,6 +1,10 @@
-import { describe, expect, it, rstest } from '@rstest/core';
+import { afterAll, describe, expect, it, rstest } from '@rstest/core';
 
 describe('test spy', () => {
+  afterAll(() => {
+    rstest.resetAllMocks();
+  });
+
   it('rstest.fn -> mockName', () => {
     const sayHi = rstest.fn((name: string) => `hi ${name}`);
     const sayHello = rstest.fn(function sayHelloFn(name: string) {

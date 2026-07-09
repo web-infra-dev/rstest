@@ -1,4 +1,5 @@
 ---
+description: Provide global Rstest APIs for test files, such as expect, test, describe, etc.
 overviewHeaders: []
 ---
 
@@ -45,9 +46,39 @@ describe('Index', () => {
 });
 ```
 
+## Available global APIs
+
+When `globals` is enabled, Rstest injects the following globals:
+
+- `test`
+- `describe`
+- `it`
+- `expect`
+- `assert`
+- `beforeAll`
+- `afterAll`
+- `beforeEach`
+- `afterEach`
+- `onTestFinished`
+- `onTestFailed`
+- `rs`
+- `rstest`
+
+`rs` and `rstest` are aliases with the same runtime utilities.
+
 ### TypeScript support
 
-To get TypeScript working with the global APIs, you can create a `src/rstestEnv.d.ts` file to reference:
+To enable TypeScript to properly recognize the global APIs, add the `@rstest/core/globals` type declaration in your `tsconfig.json`:
+
+```ts title=tsconfig.json
+{
+  "compilerOptions": {
+    "types": ["@rstest/core/globals"]
+  }
+}
+```
+
+Alternatively, create a `src/rstestEnv.d.ts` file to reference the type definitions:
 
 ```ts title=rstestEnv.d.ts
 /// <reference types="@rstest/core/globals" />

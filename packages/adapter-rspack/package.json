@@ -1,0 +1,52 @@
+{
+  "name": "@rstest/adapter-rspack",
+  "version": "0.11.0",
+  "description": "Rstest adapter for rspack configuration",
+  "keywords": [
+    "rstest",
+    "rspack",
+    "adapter",
+    "configuration"
+  ],
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/web-infra-dev/rstest.git",
+    "directory": "packages/adapter-rspack"
+  },
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "dev": "rslib build --watch",
+    "test": "rstest"
+  },
+  "devDependencies": {
+    "@rslib/core": "0.23.2",
+    "@rspack/cli": "~2.1.2",
+    "@rspack/core": "~2.1.2",
+    "@rstest/core": "workspace:*",
+    "@rstest/tsconfig": "workspace:*"
+  },
+  "peerDependencies": {
+    "@rspack/cli": ">=2.0.0-0",
+    "@rspack/core": ">=2.0.0-0",
+    "@rstest/core": "workspace:^"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

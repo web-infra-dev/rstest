@@ -10,59 +10,143 @@ import type {
 } from './testSuite';
 import type { MaybePromise } from './utils';
 
-export type TestContext = {
+export interface TestContext {
+  /**
+   * Metadata of the current test
+   */
+  task: {
+    /** A stable, unique identifier for the test */
+    id: string;
+    /** Test name provided by user */
+    name: string;
+    /** Absolute path of the current test file when provided by the runner */
+    filepath?: string;
+    /** Absolute path of the current project's root directory. */
+    projectRoot?: string;
+    /** Result of the current test, undefined if the test is not run yet */
+    result?: TestResult;
+  };
   expect: RstestExpect;
+  /** Skip the current test during execution. */
+  skip: () => never;
   onTestFinished: RunnerAPI['onTestFinished'];
   onTestFailed: RunnerAPI['onTestFailed'];
-};
+}
 
 export type TestCallbackFn<ExtraContext = object> = (
   context: TestContext & ExtraContext,
 ) => MaybePromise<void>;
 
-type TestFn<ExtraContext = object> = (
-  description: string,
-  fn?: TestCallbackFn<ExtraContext>,
-  timeout?: number,
-) => void;
+/**
+ * Per-test options accepted as the second argument of `test` / `it` / `test.each` /
+ * `test.for`. Passing a plain `number` as the last argument is equivalent to
+ * `{ timeout: n }`.
+ *
+ * Declared as an `interface` so consumers can use module augmentation to add
+ * fields in the future without breaking source compatibility.
+ */
+export interface TestOptions {
+  /**
+   * Per-test timeout in milliseconds. Overrides `test.testTimeout`.
+   */
+  timeout?: number;
+  /**
+   * Number of times to retry the test if it fails. Overrides `test.retry`.
+   *
+   * @default 0
+   */
+  retry?: number;
+  /**
+   * Number of times to re-run the test after it has already passed. The test is
+   * considered failed as soon as any run fails. Total executions per case is
+   * `repeats + 1`. Orthogonal to `retry`: each repeat independently honors the
+   * configured retry budget.
+   *
+   * @default 0
+   */
+  repeats?: number;
+}
+
+/**
+ * The two accepted call shapes shared by `test` / `it` and the functions returned
+ * by `test.each` / `test.for`:
+ * - `(name, fn, timeout?)` — test function second, with an optional numeric timeout
+ *   last (kept for Jest compatibility; shorthand for `{ timeout: n }`).
+ * - `(name, options, fn?)` — `TestOptions` object as the second argument.
+ *
+ * The function-first overload is listed first so the common `test(name, fn)` case
+ * binds the callback's context types — a function value is otherwise assignable to
+ * the all-optional `TestOptions`, which would swallow contextual typing.
+ */
+type TestCall<Fn> = {
+  (description: string, fn?: Fn, timeout?: number): void;
+  (description: string, options: TestOptions, fn?: Fn): void;
+};
+
+type TestFn<ExtraContext = object> = TestCall<TestCallbackFn<ExtraContext>>;
 
 export interface TestEachFn {
   <T extends Record<string, unknown>>(
     cases: readonly T[],
-  ): (
-    description: string,
-    fn?: (param: T) => MaybePromise<void>,
-    timeout?: number,
-  ) => void;
+  ): TestCall<(param: T) => MaybePromise<void>>;
   <T extends readonly [unknown, ...unknown[]]>(
     cases: readonly T[],
-  ): (
-    description: string,
-    fn: (...args: [...T]) => MaybePromise<void>,
-    timeout?: number,
-  ) => void;
+  ): TestCall<(...args: [...T]) => MaybePromise<void>>;
+  <T>(cases: readonly T[]): TestCall<(...args: T[]) => MaybePromise<void>>;
+  <T extends Record<string, unknown>>(
+    strings: TemplateStringsArray,
+    ...expressions: unknown[]
+  ): TestCall<(param: T) => MaybePromise<void>>;
 }
 
-export type TestForFn<ExtraContext = object> = <T>(
-  cases: readonly T[],
-) => (
-  description: string,
-  fn?: (param: T, context: TestContext & ExtraContext) => MaybePromise<void>,
-  timeout?: number,
-) => void;
+export interface TestForFn<ExtraContext = object> {
+  <T>(
+    cases: readonly T[],
+  ): TestCall<
+    (param: T, context: TestContext & ExtraContext) => MaybePromise<void>
+  >;
+  <T extends Record<string, unknown>>(
+    strings: TemplateStringsArray,
+    ...expressions: unknown[]
+  ): TestCall<
+    (param: T, context: TestContext & ExtraContext) => MaybePromise<void>
+  >;
+}
+
+/**
+ * The two accepted call shapes for `describe` and the functions returned by
+ * `describe.each` / `describe.for`, mirroring `TestCall`:
+ * - `(name, fn, timeout?)` — suite function second, optional numeric timeout last.
+ * - `(name, options, fn?)` — `TestOptions` object as the second argument.
+ *
+ * Suite-level options propagate to descendant cases as inheritable defaults.
+ */
+type DescribeCall<Fn> = {
+  (description: string, fn?: Fn, timeout?: number): void;
+  (description: string, options: TestOptions, fn?: Fn): void;
+};
 
 export interface DescribeEachFn {
   <T extends Record<string, unknown>>(
     cases: readonly T[],
-  ): (description: string, fn?: (param: T) => MaybePromise<void>) => void;
+  ): DescribeCall<(param: T) => MaybePromise<void>>;
   <T extends readonly [unknown, ...unknown[]]>(
     cases: readonly T[],
-  ): (description: string, fn: (...args: [...T]) => MaybePromise<void>) => void;
+  ): DescribeCall<(...args: [...T]) => MaybePromise<void>>;
+  <T>(cases: readonly T[]): DescribeCall<(param: T) => MaybePromise<void>>;
+  <T extends Record<string, unknown>>(
+    strings: TemplateStringsArray,
+    ...expressions: unknown[]
+  ): DescribeCall<(param: T) => MaybePromise<void>>;
 }
 
-export type DescribeForFn = <T>(
-  cases: readonly T[],
-) => (description: string, fn?: (param: T) => MaybePromise<void>) => void;
+export interface DescribeForFn {
+  <T>(cases: readonly T[]): DescribeCall<(param: T) => MaybePromise<void>>;
+  <T extends Record<string, unknown>>(
+    strings: TemplateStringsArray,
+    ...expressions: unknown[]
+  ): DescribeCall<(param: T) => MaybePromise<void>>;
+}
 
 export type TestAPI<ExtraContext = object> = TestFn<ExtraContext> & {
   each: TestEachFn;
@@ -77,7 +161,7 @@ export type TestAPI<ExtraContext = object> = TestFn<ExtraContext> & {
   skipIf: (condition: boolean) => TestAPI<ExtraContext>;
 };
 
-type DescribeFn = (description: string, fn?: () => void) => void;
+type DescribeFn = DescribeCall<() => MaybePromise<void>>;
 
 export type DescribeAPI = DescribeFn & {
   each: DescribeEachFn;
@@ -98,7 +182,7 @@ interface FixtureOptions {
   auto?: boolean;
 }
 
-type Use<T> = (value: T) => Promise<void>;
+export type Use<T> = (value: T) => Promise<void>;
 
 type FixtureFn<T, K extends keyof T, ExtraContext> = (
   context: Omit<T, K> & ExtraContext,
@@ -111,11 +195,10 @@ type Fixture<T, K extends keyof T, ExtraContext = object> = ((
   ? T[K] extends any
     ? FixtureFn<T, K, Omit<ExtraContext, Exclude<keyof T, K>>>
     : never
-  :
-      | T[K]
-      | (T[K] extends any
-          ? FixtureFn<T, K, Omit<ExtraContext, Exclude<keyof T, K>>>
-          : never);
+  : | T[K]
+    | (T[K] extends any
+        ? FixtureFn<T, K, Omit<ExtraContext, Exclude<keyof T, K>>>
+        : never);
 
 export type Fixtures<
   T extends Record<string, any> = object,
@@ -147,22 +230,18 @@ export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {
   }>;
 };
 
-export type OnTestFinishedHandler = (params: {
-  task: { result: Readonly<TestResult> };
-}) => MaybePromise<void>;
+export type OnTestFinishedHandler = (ctx: TestContext) => MaybePromise<void>;
 
-export type OnTestFailedHandler = (params: {
-  task: { result: Readonly<TestResult> };
-}) => MaybePromise<void>;
+export type OnTestFailedHandler = (ctx: TestContext) => MaybePromise<void>;
 
 export type RunnerAPI = {
   describe: DescribeAPI;
   it: TestAPIs;
   test: TestAPIs;
-  beforeAll: (fn: BeforeAllListener, timeout?: number) => MaybePromise<void>;
-  afterAll: (fn: AfterAllListener, timeout?: number) => MaybePromise<void>;
-  beforeEach: (fn: BeforeEachListener, timeout?: number) => MaybePromise<void>;
-  afterEach: (fn: AfterEachListener, timeout?: number) => MaybePromise<void>;
+  beforeAll: (fn: BeforeAllListener, timeout?: number) => void;
+  afterAll: (fn: AfterAllListener, timeout?: number) => void;
+  beforeEach: (fn: BeforeEachListener, timeout?: number) => void;
+  afterEach: (fn: AfterEachListener, timeout?: number) => void;
   onTestFinished: (fn: OnTestFinishedHandler, timeout?: number) => void;
   onTestFailed: (fn: OnTestFailedHandler, timeout?: number) => void;
 };

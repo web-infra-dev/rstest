@@ -1,0 +1,172 @@
+import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from '@rstest/core';
+import { withRsbuildConfig } from '../src';
+
+describe('withRsbuildConfig', () => {
+  const testConfigPath = join(__dirname, 'test-temp-rsbuild.config.ts');
+  const testConfigContent = `
+import { defineConfig } from '@rsbuild/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: {
+      cacheDirectory: '.cache/from-file',
+      cacheDigest: ['file-digest'],
+      buildDependencies: ['./cache-extra.ts']
+    }
+  },
+  source: {
+    assetsInclude: /\\.json5$/,
+    define: {
+      'process.env.NODE_ENV': '"common"'
+    }
+  },
+  resolve: {
+    alias: {
+      '@': './src'
+    }
+  },
+  environments: {
+    test: {
+      source: {
+        define: {
+          'process.env.NODE_ENV': '"test"'
+        }
+      }
+    }
+  }
+});
+  `;
+
+  beforeEach(() => {
+    // Create a temporary rsbuild config file for testing
+    writeFileSync(testConfigPath, testConfigContent);
+  });
+
+  afterEach(() => {
+    // Clean up test config file
+    if (existsSync(testConfigPath)) {
+      unlinkSync(testConfigPath);
+    }
+  });
+
+  it('should load and convert rsbuild config to rstest config', async () => {
+    const config = await withRsbuildConfig({
+      configPath: testConfigPath,
+    })({});
+
+    expect(config).toBeDefined();
+    expect(config.source?.assetsInclude).toEqual(/\.json5$/);
+    expect(config.source?.define).toEqual({
+      'process.env.NODE_ENV': '"common"',
+    });
+    expect(config.resolve?.alias).toEqual({
+      '@': './src',
+    });
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: '.cache/from-file',
+      cacheDigest: ['file-digest'],
+      buildDependencies: [join(__dirname, 'cache-extra.ts'), testConfigPath],
+    });
+    expect(config.forceRerunTriggers).toEqual([testConfigPath]);
+    expect(config.testEnvironment).toBe('happy-dom');
+  });
+
+  it('should add rsbuild config file as dependency for boolean build cache', async () => {
+    writeFileSync(
+      testConfigPath,
+      `
+import { defineConfig } from '@rsbuild/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: true
+  }
+});
+  `,
+    );
+
+    const config = await withRsbuildConfig({
+      configPath: testConfigPath,
+    })({});
+
+    expect(config.performance?.buildCache).toEqual({
+      buildDependencies: [testConfigPath],
+    });
+  });
+
+  it('should load and merge environment config', async () => {
+    const config = await withRsbuildConfig({
+      configPath: testConfigPath,
+      environmentName: 'test',
+    })({});
+
+    expect(config).toBeDefined();
+    expect(config.name).toBe('test');
+    expect(config.source?.assetsInclude).toEqual(/\.json5$/);
+    expect(config.source?.define).toEqual({
+      'process.env.NODE_ENV': '"test"',
+    });
+    expect(config.resolve?.alias).toEqual({
+      '@': './src',
+    });
+  });
+
+  it('should allow modification of rsbuild config', async () => {
+    const config = await withRsbuildConfig({
+      configPath: testConfigPath,
+      modifyRsbuildConfig: (rsbuildConfig) => ({
+        ...rsbuildConfig,
+        source: {
+          ...rsbuildConfig.source,
+          define: {
+            ...rsbuildConfig.source?.define,
+            'process.env.CUSTOM': '"custom-value"',
+          },
+        },
+      }),
+    })({});
+
+    expect(config.source?.define).toEqual({
+      'process.env.NODE_ENV': '"common"',
+      'process.env.CUSTOM': '"custom-value"',
+    });
+  });
+
+  it('should use inline rsbuild config before configPath', async () => {
+    const inlineConfigPath = join(
+      __dirname,
+      'missing-inline-rsbuild.config.ts',
+    );
+    const config = await withRsbuildConfig({
+      configPath: inlineConfigPath,
+      config: {
+        performance: {
+          buildCache: true,
+        },
+        source: {
+          define: {
+            INLINE_CONFIG: '"inline"',
+          },
+        },
+      },
+    })({});
+
+    expect(config.source?.define).toEqual({
+      INLINE_CONFIG: '"inline"',
+    });
+    expect(config.forceRerunTriggers).toEqual([inlineConfigPath]);
+    expect(config.performance?.buildCache).toEqual({
+      buildDependencies: [inlineConfigPath],
+    });
+  });
+
+  it('should throw error when config file not found', async () => {
+    await expect(() =>
+      withRsbuildConfig({
+        configPath: './non-existent.config.ts',
+      })({}),
+    ).rejects.toThrowError(/Cannot find config file/);
+  });
+});

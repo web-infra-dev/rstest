@@ -2,7 +2,7 @@ import { clearScreen, color, isTTY, logger } from '../utils';
 
 export const isCliShortcutsEnabled = (): boolean => isTTY('stdin');
 
-export type CliShortcut = {
+type CliShortcut = {
   /**
    * The key to trigger the shortcut.
    */
@@ -52,13 +52,15 @@ export async function setupCliShortcuts({
   const clearCurrentInputLine = (): void => {
     try {
       process.stdout.write('\r\x1b[2K');
-    } catch {}
+    } catch {
+      // ignore
+    }
   };
 
-  const promptInput = async (
+  const promptInput = (
     promptText: string,
     onComplete: (value: string | undefined) => Promise<void>,
-  ): Promise<void> => {
+  ): void => {
     if (isPrompting) return;
     isPrompting = true;
 
@@ -81,7 +83,16 @@ export async function setupCliShortcuts({
       if (!isPrompting) return;
 
       if (key.ctrl && key.name === 'c') {
-        process.exit(0);
+        // Send SIGINT to self to trigger proper cleanup
+        process.kill(process.pid, 'SIGINT');
+        return;
+      }
+
+      if (key.ctrl && key.name === 'z') {
+        if (process.platform !== 'win32') {
+          process.kill(process.pid, 'SIGTSTP');
+        }
+        return;
       }
 
       if (key.name === 'return' || key.name === 'enter') {
@@ -143,9 +154,9 @@ export async function setupCliShortcuts({
     {
       key: 't',
       description: `${color.bold('t')}  ${color.dim('filter by a test name regex pattern')}`,
-      action: async () => {
+      action: () => {
         clearCurrentInputLine();
-        await promptInput(
+        promptInput(
           'Enter test name pattern (empty to clear): ',
           async (pattern) => {
             await runWithTestNamePattern(pattern);
@@ -156,9 +167,9 @@ export async function setupCliShortcuts({
     {
       key: 'p',
       description: `${color.bold('p')}  ${color.dim('filter by a filename regex pattern')}`,
-      action: async () => {
+      action: () => {
         clearCurrentInputLine();
-        await promptInput(
+        promptInput(
           'Enter file name pattern (empty to clear): ',
           async (input) => {
             const filters = input
@@ -195,9 +206,18 @@ export async function setupCliShortcuts({
   ) => {
     if (isPrompting) return; // Ignore global shortcuts while prompting
 
-    // Handle Ctrl+C
+    // Handle Ctrl+C - let the process signal handler take care of cleanup
     if (key.ctrl && key.name === 'c') {
-      process.exit(0);
+      // Send SIGINT to self to trigger proper cleanup
+      process.kill(process.pid, 'SIGINT');
+      return;
+    }
+
+    if (key.ctrl && key.name === 'z') {
+      if (process.platform !== 'win32') {
+        process.kill(process.pid, 'SIGTSTP');
+      }
+      return;
     }
 
     // Check shortcuts
@@ -226,7 +246,9 @@ export async function setupCliShortcuts({
     try {
       process.stdin.setRawMode(false);
       process.stdin.pause();
-    } catch {}
+    } catch {
+      // ignore
+    }
     process.stdin.off('keypress', handleKeypress);
     rl.close();
   };

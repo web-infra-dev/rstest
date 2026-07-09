@@ -1,0 +1,33 @@
+{
+  "name": "@examples/react-rspack",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "rspack build",
+    "dev": "rspack dev",
+    "preview": "rspack preview",
+    "test": "rstest",
+    "test:watch": "rstest --watch"
+  },
+  "dependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@rsbuild/plugin-react": "^2.1.0",
+    "@rspack/cli": "~2.1.2",
+    "@rspack/core": "~2.1.2",
+    "@rspack/dev-server": "~2.1.0",
+    "@rspack/plugin-react-refresh": "~2.0.2",
+    "@rstest/adapter-rspack": "workspace:*",
+    "@rstest/core": "workspace:*",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "happy-dom": "^20.10.6",
+    "react-refresh": "^0.18.0",
+    "typescript": "^6.0.3"
+  }
+}

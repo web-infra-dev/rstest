@@ -1,7 +1,9 @@
 ---
+description: plugins 选项用于注册 Rsbuild 插件。
 overviewHeaders: []
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 # plugins <RsbuildDocBadge path="/config/plugins" text="plugins" />
@@ -23,76 +25,94 @@ export default defineConfig({
 });
 ```
 
-## 官方插件
+## 发现插件
 
-下面是 Rsbuild 官方提供的插件，适用于 Rsbuild 和 Rstest。
+查看 Rsbuild 的 [插件列表](https://rsbuild.rs/zh/plugins/list/#%E5%AE%98%E6%96%B9%E6%8F%92%E4%BB%B6) 来发现可用的插件，这些插件也适用于 Rstest。
 
-### React
+## 在 Rsbuild 插件中修改 Rstest 配置 \{#modify-rstest-config}
 
-适用于 React 的插件有：
+<ApiMeta addedVersion="0.11.1" />
 
-- [React 插件](https://rsbuild.rs/zh/plugins/list/plugin-react)：提供对 React 的支持。
-- [SVGR 插件](https://rsbuild.rs/zh/plugins/list/plugin-svgr)：支持将 SVG 图片转换为一个 React 组件使用。
-- [Styled Components 插件](https://github.com/rspack-contrib/rsbuild-plugin-styled-components)：提供对 styled-components 的编译时支持。
+当 Rsbuild 插件运行在 Rstest 中时，可以通过 Rsbuild Plugin API 中的 [`api.useExposed`](https://rsbuild.rs/zh/plugins/dev/core) 获取 Rstest 暴露的 API，并调用 `modifyRstestConfig` 来调整当前 project 的 Rstest 配置。
 
-### Vue
+该 API 目前仅在 Node Mode project 中暴露。Browser Mode project 不会收到 `rstest` 暴露 API，因此在这些 project 中 `api.useExposed('rstest')` 会返回 `undefined`。
 
-适用于 Vue 的插件有：
+这个 API 适合框架集成或工具链插件使用：当插件已经了解当前 framework、Rsbuild environment 或项目约定时，可以集中补充测试入口、排除规则、setup files、alias、define 或 `testEnvironment` 等 project 配置，避免用户在 Rstest 配置中重复声明同一套信息。
 
-- [Vue 插件](https://github.com/rspack-contrib/rsbuild-plugin-unplugin-vue)：基于 [unplugin-vue](https://github.com/unplugin/unplugin-vue) 实现的为 Vue 3 SFC（单文件组件）提供支持的插件。
-- [Vue 插件](https://rsbuild.rs/zh/plugins/list/plugin-vue)：基于 [vue-loader](https://github.com/vuejs/vue-loader) 实现的为 Vue 3 SFC（单文件组件）提供支持的插件（推荐使用基于 [unplugin-vue](https://github.com/unplugin/unplugin-vue) 的实现，vue-loader 已不再维护）。
-- [Vue JSX 插件](https://github.com/rspack-contrib/rsbuild-plugin-vue-jsx)：提供对 Vue 3 JSX / TSX 语法的支持。
-- [Vue 2 插件](https://github.com/rspack-contrib/rsbuild-plugin-vue2)：提供对 Vue 2 SFC（单文件组件）的支持。
-- [Vue 2 JSX 插件](https://github.com/rspack-contrib/rsbuild-plugin-vue2-jsx)：提供对 Vue 2 JSX / TSX 语法的支持。
+```ts title="rstest-plugin.ts"
+import type { RsbuildPlugin } from '@rsbuild/core';
+import type { RstestExposeAPI } from '@rstest/core';
 
-### Preact
+export const myPlugin = (): RsbuildPlugin => ({
+  name: 'my-plugin',
+  setup(api) {
+    if (api.context.callerName !== 'rstest') {
+      return;
+    }
 
-适用于 Preact 的插件有：
+    const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
 
-- [Preact 插件](https://rsbuild.rs/zh/plugins/list/plugin-preact)：提供对 Preact 的支持。
+    rstestApi?.modifyRstestConfig((config) => {
+      config.include = ['**/*.test.ts'];
+    });
+  },
+});
+```
 
-### Svelte
+在多 project 模式下，Rstest 会为每个 Rsbuild environment 暴露独立的 API。注册在某个 project 中的插件只会修改该 project 的 Rstest 配置，不会影响其他 project。
 
-适用于 Svelte 的插件有：
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { myPlugin } from './rstest-plugin';
 
-- [Svelte 插件](https://rsbuild.rs/zh/plugins/list/plugin-svelte)：提供对 Svelte 组件（`.svelte` 文件）的支持。
+export default defineConfig({
+  projects: [
+    {
+      name: 'node',
+      plugins: [myPlugin()],
+    },
+    {
+      name: 'browser',
+      plugins: [],
+    },
+  ],
+});
+```
 
-### Solid
+### 类型说明
 
-适用于 Solid 的插件有：
+`RstestExposeAPI` 从 `@rstest/core` 导出，用于描述 Rstest 通过 `api.useExposed('rstest')` 暴露给 Rsbuild 插件的 API。
 
-- [Solid 插件](https://rsbuild.rs/zh/plugins/list/plugin-solid)：提供对 Solid 的支持。
+```ts
+import type { RstestConfig } from '@rstest/core';
 
-### Common
+export type ModifyRstestConfigCallback = (
+  config: RstestConfig,
+) => RstestConfig | void | Promise<RstestConfig | void>;
 
-以下是与框架无关的通用插件：
+export type RstestExposeAPI = {
+  modifyRstestConfig: (callback: ModifyRstestConfigCallback) => void;
+};
+```
 
-- [Babel 插件](https://rsbuild.rs/zh/plugins/list/plugin-babel)：提供对 Babel 转译能力的支持。
-- [Sass 插件](https://rsbuild.rs/zh/plugins/list/plugin-sass)：使用 Sass 作为 CSS 预处理器。
-- [Less 插件](https://rsbuild.rs/zh/plugins/list/plugin-less)：使用 Less 作为 CSS 预处理器。
-- [Stylus 插件](https://rsbuild.rs/zh/plugins/list/plugin-stylus)：使用 Stylus 作为 CSS 预处理器。
-- [ESLint 插件](https://github.com/rspack-contrib/rsbuild-plugin-eslint)：用于在编译过程中运行 ESLint 检查。
-- [publint 插件](https://github.com/rspack-contrib/rsbuild-plugin-publint)：在构建后运行 `publint` 来检查 npm 包。
-- [Type Check 插件](https://github.com/rspack-contrib/rsbuild-plugin-type-check)：用于在单独的进程中运行 TypeScript 类型检查。
-- [Image Compress 插件](https://github.com/rspack-contrib/rsbuild-plugin-image-compress)：压缩图片资源。
-- [MDX 插件](https://github.com/rspack-contrib/rsbuild-plugin-mdx)：提供 MDX 支持。
-- [Node Polyfill 插件](https://github.com/rspack-contrib/rsbuild-plugin-node-polyfill)：用于注入 Node 核心模块在浏览器端的 polyfills。
-- [Source Build 插件](https://github.com/rspack-contrib/rsbuild-plugin-source-build)：用于 monorepo 场景，支持引用其他子目录的源代码，并完成构建和热更新。
-- [Check Syntax 插件](https://github.com/rspack-contrib/rsbuild-plugin-check-syntax)：检查构建产物的语法兼容性，判断是否存在导致兼容性问题的高级语法。
-- [CSS Minimizer 插件](https://github.com/rspack-contrib/rsbuild-plugin-css-minimizer)：用于自定义 CSS 压缩工具，切换到 [cssnano](https://github.com/cssnano/cssnano) 或其他工具进行 CSS 压缩。
-- [Typed CSS Modules 插件](https://github.com/rspack-contrib/rsbuild-plugin-typed-css-modules)：用于为 CSS Modules 文件生成类型声明。
-- [Pug 插件](https://github.com/rspack-contrib/rsbuild-plugin-pug)：提供对 Pug 模板引擎的支持。
-- [Rem 插件](https://github.com/rspack-contrib/rsbuild-plugin-rem)：用于实现移动端页面的 rem 自适应布局。
-- [UMD 插件](https://github.com/rspack-contrib/rsbuild-plugin-umd)：用于构建 UMD 格式的产物。
-- [YAML 插件](https://github.com/rspack-contrib/rsbuild-plugin-yaml)：引用 YAML 文件，并将其转换为 JavaScript 对象。
-- [TOML 插件](https://github.com/rspack-contrib/rsbuild-plugin-toml)：引用 TOML 文件，并将其转换为 JavaScript 对象。
+`RstestConfig` 与 `defineConfig` 接收的配置类型一致。你可以直接修改回调收到的 `config` 对象，也可以返回一个符合 `RstestConfig` 结构的配置片段。Rstest 会在回调完成后重新合并、规范化并校验这些改动。该回调也可以是异步函数。
 
-:::tip
-你可以在 [web-infra-dev/rsbuild](https://github.com/web-infra-dev/rsbuild) 和 [rspack-contrib](https://github.com/rspack-contrib) 中找到这些插件的源代码。
-:::
+请在 Rsbuild 插件的 `setup` 阶段注册 `modifyRstestConfig`。不要在 `api.modifyRsbuildConfig` 等更晚的 Rsbuild config hook 中注册它，因为 Rstest 会在解析 Rsbuild config 时应用已经收集到的回调；在这些 hook 内注册的回调对于当前解析流程来说已经太晚。
 
-## 社区插件
+### 可修改的配置范围
 
-你可以在 [awesome-rspack - Rsbuild Plugins](https://github.com/web-infra-dev/awesome-rspack?tab=readme-ov-file#rsbuild-plugins) 中查看社区提供的 Rsbuild 插件。
+`modifyRstestConfig` 只用于调整当前 project 的配置。回调修改不支持的字段时，Rstest 会抛出错误并提示应改为在 `rstest.config.*` 中声明。
 
-也可以在 npm 上搜索 [rsbuild-plugin](https://www.npmjs.com/search?q=rsbuild-plugin&ranking=popularity) 关键词来发现更多 Rsbuild 插件。
+| 配置范围                                                                            | 是否支持 | 说明                                                                       |
+| ----------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------- |
+| `include`、`exclude`、`includeSource`                                               | 支持     | 影响当前 project 的测试发现；Rstest 会在回调后重新收集测试入口。           |
+| `setupFiles`、`globalSetup`                                                         | 支持     | 影响当前 project 的 setup 文件；Rstest 会在回调后重新解析。                |
+| `testEnvironment`                                                                   | 支持     | 只影响当前 project 的测试环境。                                            |
+| `resolve`、`source`、`performance.buildCache`                                       | 支持     | 作为当前 project 的构建配置重新应用到 Rsbuild。                            |
+| `root`、`output.module`                                                             | 支持     | 作为当前 project 的路径或输出模块配置重新规范化。                          |
+| `name`、`browser.enabled`                                                           | 不支持   | 会改变 project 身份或运行模式，必须在 `rstest.config.*` 中声明。           |
+| `projects`、`plugins`、`extends`                                                    | 不支持   | 会改变 project 拓扑或插件初始化顺序，必须在 Rstest 配置或 adapter 中声明。 |
+| `coverage`、`reporters`、`pool`、`isolate`、`update`、`shard`、`forceRerunTriggers` | 不支持   | 属于全局执行策略，或在 Rsbuild 插件运行前已经参与调度。                    |
+| `output.distPath`                                                                   | 不支持   | 会改变 Rstest/Rsbuild 输出目录拓扑，必须在 Rstest 配置中声明。             |
+
+如果你需要动态添加 Rsbuild 插件，请通过 Rstest 的 `extends` Adapter 方案集成。Adapter 可以在 Rsbuild 插件初始化开始之前准备好 Rstest 配置。

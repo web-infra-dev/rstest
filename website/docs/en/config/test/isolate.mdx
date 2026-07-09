@@ -1,8 +1,12 @@
+---
+description: Run tests in an isolated environment. Includes practical guidance, options, and examples for real projects.
+---
+
 # isolate
 
 - **Type:** `boolean`
 - **Default:** `true`
-- **CLI:** `--isolate=false`
+- **CLI:** `--isolate`, `--isolate=false`, `--no-isolate`
 
 Run tests in an isolated environment.
 
@@ -10,12 +14,16 @@ By default, Rstest runs each test in an isolated environment, which avoids the i
 
 If your code has no side effects, turning off this option will help improve performance because module caches can be reused between different test files.
 
+:::warning Module top-level code runs once per worker
+When `isolate` is `false`, a module imported by multiple test files is evaluated **once per worker**, not once per file. Any code at that shared module's top level — including hooks registered there (e.g. a helper that calls `beforeEach` at module scope) — therefore runs only for the first file that loads it, not for every file. For setup that must run per file, use [`setupFiles`](/config/test/setup-files), which Rstest re-runs for each test file even without isolation.
+:::
+
 import { Tab, Tabs } from '@theme';
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
   ```bash
-  npx rstest --isolate=false
+  npx rstest --no-isolate
   ```
   </Tab>
   <Tab label="rstest.config.ts">

@@ -31,7 +31,9 @@ describe('after hooks error', () => {
     `);
 
     expect(
-      logs.find((log) => log.includes('Error: afterAll error')),
+      cli.stderr
+        .split('\n')
+        .find((log) => log.includes('Error: afterAll error')),
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('Test Files 1 failed')),
@@ -63,7 +65,9 @@ describe('after hooks error', () => {
     `);
 
     expect(
-      logs.find((log) => log.includes('Error: afterEach error')),
+      cli.stderr
+        .split('\n')
+        .find((log) => log.includes('Error: afterEach error')),
     ).toBeTruthy();
     expect(
       logs.find((log) => log.includes('Test Files 1 failed')),

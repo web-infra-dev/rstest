@@ -1,17 +1,37 @@
 [
   {
-    "type": "dir",
+    "type": "dir-section-header",
     "name": "start",
-    "label": "Getting Started"
+    "label": "Start"
   },
   {
-    "type": "dir",
+    "type": "dir-section-header",
     "name": "basic",
     "label": "Basic"
   },
   {
-    "type": "dir",
+    "type": "dir-section-header",
+    "name": "browser-testing",
+    "label": "Browser Testing"
+  },
+  {
+    "type": "dir-section-header",
+    "name": "framework",
+    "label": "Framework"
+  },
+  {
+    "type": "dir-section-header",
     "name": "advanced",
     "label": "Advanced"
+  },
+  {
+    "type": "dir-section-header",
+    "name": "integration",
+    "label": "Integration"
+  },
+  {
+    "type": "dir-section-header",
+    "name": "migration",
+    "label": "Migration"
   }
 ]

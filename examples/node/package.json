@@ -1,15 +1,17 @@
 {
   "name": "@examples/node",
   "private": true,
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "build": "rsbuild build",
     "test": "rstest",
+    "test:coverage": "rstest --coverage",
     "test:watch": "rstest --watch"
   },
   "devDependencies": {
     "@rstest/core": "workspace:*",
-    "@types/node": "^22.13.8",
-    "typescript": "^5.9.2"
+    "@rstest/coverage-istanbul": "workspace:*",
+    "@types/node": "^22.16.5",
+    "typescript": "^6.0.3"
   }
 }

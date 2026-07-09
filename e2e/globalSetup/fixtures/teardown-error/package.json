@@ -1,0 +1,5 @@
+{
+  "name": "e2e-global-teardown-error",
+  "private": true,
+  "type": "module"
+}

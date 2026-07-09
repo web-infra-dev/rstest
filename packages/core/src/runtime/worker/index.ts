@@ -1,369 +1,161 @@
-import type {
-  MaybePromise,
-  Rstest,
-  RunWorkerOptions,
-  Test,
-  TestFileResult,
-  WorkerState,
-} from '../../types';
-import './setup';
-import { globalApis } from '../../utils/constants';
-import { color, undoSerializableConfig } from '../../utils/helper';
-import { formatTestError, getRealTimers, setRealTimers } from '../util';
-import { loadModule } from './loadModule';
-import { createForksRpcOptions, createRuntimeRpc } from './rpc';
-import { RstestSnapshotEnvironment } from './snapshot';
+import { isMainThread } from 'node:worker_threads';
+import {
+  isWorkerRequestEnvelope,
+  serializeError,
+  type WorkerRequest,
+  type WorkerResponse,
+  wrapWorkerResponse,
+} from '../../pool/protocol';
+import { ENV } from '../../utils/env';
+import { channel } from './channels';
+import { runInPool } from './runInPool';
+import { installGracefulExit } from './setup';
 
-const getGlobalApi = (api: Rstest) => {
-  return globalApis.reduce<{
-    [key in keyof Rstest]?: Rstest[key];
-  }>((apis, key) => {
-    apis[key] = api[key] as any;
-    return apis;
-  }, {});
+installGracefulExit();
+
+const send = (response: WorkerResponse): void => {
+  channel.send(wrapWorkerResponse(response));
 };
 
-const listeners: (() => void)[] = [];
-let isTeardown = false;
+let currentTaskId: number | undefined;
+/**
+ * Set when a task handler has reported `fatal_error` and is on its way to
+ * exit. Suppresses the bottom-of-the-stack `fatalExit` from racing in with a
+ * second fatal_error during the same death sequence.
+ */
+let dyingFromFatal = false;
 
-const preparePool = async ({
-  entryInfo: { distPath, testPath },
-  sourceMaps,
-  updateSnapshot,
-  context,
-}: RunWorkerOptions['options']) => {
-  setRealTimers();
-  context.runtimeConfig = undoSerializableConfig(context.runtimeConfig);
-
-  const cleanupFns: (() => MaybePromise<void>)[] = [];
-
-  const { rpc } = createRuntimeRpc(createForksRpcOptions());
-  const {
-    runtimeConfig: {
-      globals,
-      printConsoleTrace,
-      disableConsoleIntercept,
-      testEnvironment,
-    },
-  } = context;
-
-  if (!disableConsoleIntercept) {
-    const { createCustomConsole } = await import('./console');
-
-    global.console = createCustomConsole({
-      rpc,
-      testPath,
-      printConsoleTrace,
-    });
-  }
-
-  const interopDefault = true;
-
-  const workerState: WorkerState = {
-    ...context,
-    snapshotOptions: {
-      updateSnapshot,
-      snapshotEnvironment: new RstestSnapshotEnvironment(),
-    },
-    distPath,
-    testPath,
-    environment: 'node',
-  };
-
-  const { createRstestRuntime } = await import('../api');
-  // provides source map support for stack traces
-  const { install } = await import('source-map-support');
-
-  install({
-    // @ts-expect-error map type
-    retrieveSourceMap: (source) => {
-      if (sourceMaps[source]) {
-        return {
-          url: source,
-          map: sourceMaps[source],
-        };
-      }
-      return null;
-    },
-  });
-
-  // Reset listeners only when preparePool is called again (running without isolation)
-  listeners.forEach((fn) => {
-    fn();
-  });
-  listeners.length = 0;
-
-  const unhandledErrors: Error[] = [];
-
-  const handleError = (e: Error | string, type: string) => {
-    const error: Error = typeof e === 'string' ? new Error(e) : e;
-
-    error.name = type;
-
-    if (isTeardown) {
-      error.stack = `${color.yellow('Caught error after test environment was torn down:')}\n\n${error.stack}`;
-      console.error(error);
-    } else {
-      console.error(error);
-      unhandledErrors.push(error);
-    }
-  };
-
-  const uncaughtException = (e: Error) => handleError(e, 'uncaughtException');
-  const unhandledRejection = (e: Error) => handleError(e, 'unhandledRejection');
-
-  process.on('uncaughtException', uncaughtException);
-  process.on('unhandledRejection', unhandledRejection);
-
-  listeners.push(() => {
-    process.off('uncaughtException', uncaughtException);
-    process.off('unhandledRejection', unhandledRejection);
-  });
-
-  const { api, runner } = createRstestRuntime(workerState);
-
-  switch (testEnvironment) {
-    case 'node':
-      break;
-    case 'jsdom': {
-      const { environment } = await import('./env/jsdom');
-      const { teardown } = await environment.setup(global, {});
-      cleanupFns.push(() => teardown(global));
-      break;
-    }
-    case 'happy-dom': {
-      const { environment } = await import('./env/happyDom');
-      const { teardown } = await environment.setup(global, {});
-      cleanupFns.push(async () => teardown(global));
-      break;
-    }
-    default:
-      throw new Error(`Unknown test environment: ${testEnvironment}`);
-  }
-
-  const rstestContext = {
-    global,
-    console: global.console,
-    Error,
-    ...(globals ? getGlobalApi(api) : {}),
-  };
-
-  // @ts-expect-error
-  rstestContext.global['@rstest/core'] = api;
-
-  return {
-    interopDefault,
-    rstestContext,
-    runner,
-    rpc,
-    api,
-    unhandledErrors,
-    cleanup: async () => {
-      await Promise.all(cleanupFns.map((fn) => fn()));
-    },
-  };
-};
-
-const loadFiles = async ({
-  setupEntries,
-  assetFiles,
-  rstestContext,
-  distPath,
-  testPath,
-  interopDefault,
-  isolate,
-}: {
-  setupEntries: RunWorkerOptions['options']['setupEntries'];
-  assetFiles: RunWorkerOptions['options']['assetFiles'];
-  rstestContext: Record<string, any>;
-  distPath: string;
-  testPath: string;
-  interopDefault: boolean;
-  isolate: boolean;
-}): Promise<void> => {
-  // clean rstest core cache manually
-  if (!isolate) {
-    await loadModule({
-      codeContent: `if (global && typeof global.__rstest_clean_core_cache__ === 'function') {
-  global.__rstest_clean_core_cache__();
-  }`,
-      distPath,
-      testPath,
-      rstestContext,
-      assetFiles,
-      interopDefault,
-    });
-  }
-
-  // run setup files
-  for (const { distPath, testPath } of setupEntries) {
-    const setupCodeContent = assetFiles[distPath]!;
-
-    await loadModule({
-      codeContent: setupCodeContent,
-      distPath,
-      testPath,
-      rstestContext,
-      assetFiles,
-      interopDefault,
-    });
-  }
-
-  await loadModule({
-    codeContent: assetFiles[distPath]!,
-    distPath,
-    testPath,
-    rstestContext,
-    assetFiles,
-    interopDefault,
+const sendFatalError = (err: unknown): void => {
+  send({
+    type: 'fatal_error',
+    error: serializeError(err),
   });
 };
 
-const onExit = () => {
-  process.exit();
+/**
+ * Hand control back to Node's default uncaught-exception path. Best-effort
+ * IPC delivery happens first, then **all** uncaughtException / unhandledRejection
+ * listeners are cleared and the error is re-thrown on the next tick so Node's
+ * built-in handler is what actually terminates the process — printing the
+ * stack to stderr (forks pool: piped to the host's stderr; threads pool:
+ * surfaced via `worker.on('error')`).
+ *
+ * Why clear *all* listeners, not just `fatalExit`: `runInPool` installs its
+ * own per-task uncaughtException handler that silently absorbs errors into
+ * `unhandledErrors` (see `runInPool.ts` ~ line 230). That handler is removed
+ * only when the *next* `preparePool` runs, so for `isolate: true` it stays
+ * installed forever after the first task. If we leave it attached, the
+ * re-thrown error gets absorbed and Node's default never runs — the worker
+ * neither prints a stack nor exits, and `PoolRunner.stopTimer` eventually
+ * SIGTERMs it 60s later with no diagnostic info.
+ *
+ * Why not just `process.exit(1)`: `process.send` is async and a synchronous
+ * exit drops any envelope still queued in the IPC pipe (verified to lose
+ * 100% of envelopes ≥ ~100KB on macOS). Without a fallback the host sees
+ * only `Worker exited unexpectedly (code=1, signal=null)` with no stack.
+ */
+const handOffToNodeDefault = (err: unknown): void => {
+  process.removeAllListeners('uncaughtException');
+  process.removeAllListeners('unhandledRejection');
+  process.nextTick(() => {
+    throw err;
+  });
 };
 
-const runInPool = async (
-  options: RunWorkerOptions['options'],
-): Promise<
-  | {
-      tests: Test[];
-      testPath: string;
-    }
-  | TestFileResult
-> => {
-  isTeardown = false;
-  const {
-    entryInfo: { distPath, testPath },
-    setupEntries,
-    assetFiles,
-    type,
-    context: {
-      project,
-      runtimeConfig: { isolate },
-    },
-  } = options;
-
-  const cleanups: (() => MaybePromise<void>)[] = [];
-
-  const exit = process.exit.bind(process);
-  process.exit = (code = process.exitCode || 0): never => {
-    throw new Error(`process.exit unexpectedly called with "${code}"`);
-  };
-
-  cleanups.push(() => {
-    process.exit = exit;
-  });
-
-  process.off('SIGTERM', onExit);
-
-  const teardown = async () => {
-    await new Promise((resolve) => getRealTimers().setTimeout!(resolve));
-
-    await Promise.all(cleanups.map((fn) => fn()));
-    isTeardown = true;
-    // should exit correctly when user's signal listener exists
-    process.once('SIGTERM', onExit);
-  };
-
-  if (type === 'collect') {
-    try {
-      const {
-        rstestContext,
-        runner,
-        cleanup,
-        unhandledErrors,
-        interopDefault,
-      } = await preparePool(options);
-
-      cleanups.push(cleanup);
-
-      await loadFiles({
-        rstestContext,
-        distPath,
-        testPath,
-        assetFiles,
-        setupEntries,
-        interopDefault,
-        isolate,
-      });
-      const tests = await runner.collectTests();
-      return {
-        project,
-        testPath,
-        tests,
-        errors: formatTestError(unhandledErrors),
-      };
-    } catch (err) {
-      return {
-        project,
-        testPath,
-        tests: [],
-        errors: formatTestError(err),
-      };
-    } finally {
-      await teardown();
-    }
+/**
+ * Last-resort handlers. The runtime's `runInPool` registers its own
+ * uncaught/unhandled handlers that capture errors thrown WHILE a test is
+ * running and feed them into the test result. These bottom-of-the-stack
+ * handlers fire only when no task is active (e.g., during worker bootstrap,
+ * teardown after the result has been flushed, or async leak after the
+ * test completes).
+ */
+const fatalExit = (err: unknown): void => {
+  if (dyingFromFatal) return;
+  if (currentTaskId !== undefined) {
+    // A task is in progress — let runInPool's own handlers absorb the error
+    // into the test result.
+    return;
   }
+  dyingFromFatal = true;
+  sendFatalError(err);
+  handOffToNodeDefault(err);
+};
+process.on('uncaughtException', fatalExit);
+process.on('unhandledRejection', fatalExit);
+
+const handleStart = (request: Extract<WorkerRequest, { type: 'start' }>) => {
+  process.env[ENV.WORKER_ID] = String(request.workerId);
+  send({ type: 'started', pid: process.pid });
+};
+
+type TaskKind = 'run' | 'collect';
+
+const RESPONSE_TYPE: Record<TaskKind, 'runFinished' | 'collectFinished'> = {
+  run: 'runFinished',
+  collect: 'collectFinished',
+};
+
+// Skip RSS reporting for thread workers — `process.memoryUsage().rss` is
+// host-wide and would mislead the gate. See rstest#1301. Read once at
+// bootstrap; toggling `RSTEST_MEMORY_AWARE` mid-run is not supported (host
+// samples it at pool construction too).
+const MEMORY_REPORTING_ENABLED =
+  isMainThread && process.env[ENV.MEMORY_AWARE] !== '0';
+
+const runTask = async (
+  kind: TaskKind,
+  request: Extract<WorkerRequest, { type: 'run' | 'collect' }>,
+): Promise<void> => {
+  currentTaskId = request.taskId;
 
   try {
-    const {
-      rstestContext,
-      runner,
-      rpc,
-      api,
-      cleanup,
-      unhandledErrors,
-      interopDefault,
-    } = await preparePool(options);
-
-    cleanups.push(cleanup);
-
-    await loadFiles({
-      rstestContext,
-      distPath,
-      testPath,
-      assetFiles,
-      setupEntries,
-      interopDefault,
-      isolate,
+    const result = await runInPool(request.options);
+    send({
+      type: RESPONSE_TYPE[kind],
+      taskId: request.taskId,
+      result: result as any,
+      memory: MEMORY_REPORTING_ENABLED
+        ? { rss: process.memoryUsage().rss }
+        : undefined,
     });
-    const results = await runner.runTests(
-      testPath,
-      {
-        onTestFileStart: async (test) => {
-          await rpc.onTestFileStart(test);
-        },
-        onTestFileResult: async (test) => {
-          await rpc.onTestFileResult(test);
-        },
-        onTestCaseResult: async (result) => {
-          await rpc.onTestCaseResult(result);
-        },
-      },
-      api,
-    );
-
-    if (unhandledErrors.length > 0) {
-      results.status = 'fail';
-      results.errors = (results.errors || []).concat(
-        ...formatTestError(unhandledErrors),
-      );
-    }
-
-    return results;
   } catch (err) {
-    return {
-      project,
-      testPath,
-      status: 'fail',
-      name: '',
-      results: [],
-      errors: formatTestError(err),
-    };
-  } finally {
-    await teardown();
+    // runInPool's own uncaughtException handler funnels per-test errors into
+    // the result; reaching this catch means the worker's internal state is
+    // corrupted (setup-file or compilation failure). Reporting `fatal_error`
+    // alone is not enough — without exiting, an `isolate: false` pool would
+    // reuse this poisoned process for the next file.
+    dyingFromFatal = true;
+    sendFatalError(err);
+    currentTaskId = undefined;
+    handOffToNodeDefault(err);
+    return;
   }
+
+  currentTaskId = undefined;
 };
 
-export default runInPool;
+// No SIGTERM handler — the host owns termination and SIGTERM (default action:
+// exit) is what gets us out. Any handler that didn't unconditionally exit
+// would defeat that contract (rstest#1275). `setup.ts` may install a
+// profiling-specific handler that calls `process.exit()`, which is compatible.
+
+channel.on((message: unknown) => {
+  if (!isWorkerRequestEnvelope(message)) {
+    // Not a lifecycle envelope — leave it for the rpc handler installed by
+    // createWorkerRpcOptions to pick up via its own listener.
+    return;
+  }
+  const request = message.request;
+  switch (request.type) {
+    case 'start':
+      handleStart(request);
+      break;
+    case 'run':
+      void runTask('run', request);
+      break;
+    case 'collect':
+      void runTask('collect', request);
+      break;
+  }
+});

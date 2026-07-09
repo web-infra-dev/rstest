@@ -1,7 +1,7 @@
-import * as path from 'node:path';
+import path from 'node:path';
 import { pluginSass } from '@rsbuild/plugin-sass';
 import { defineConfig } from '@rspress/core';
-import { pluginLlms } from '@rspress/plugin-llms';
+import { pluginAlgolia } from '@rspress/plugin-algolia';
 import { pluginGoogleAnalytics } from 'rsbuild-plugin-google-analytics';
 import { pluginOpenGraph } from 'rsbuild-plugin-open-graph';
 import { pluginFontOpenSans } from 'rspress-plugin-font-open-sans';
@@ -16,9 +16,15 @@ export default defineConfig({
   icon: 'https://assets.rspack.rs/rstest/rstest-logo.svg',
   logo: 'https://assets.rspack.rs/rstest/rstest-logo.svg',
   logoText: 'Rstest',
+  description:
+    'Rstest is a testing framework powered by Rspack. It delivers comprehensive, first-class support for the Rspack ecosystem, enabling seamless integration into existing Rspack-based projects.',
   markdown: {
-    checkDeadLinks: true,
+    link: {
+      checkAnchors: true,
+      checkDeadLinks: true,
+    },
   },
+  llms: true,
   search: {
     codeBlocks: true,
   },
@@ -46,38 +52,43 @@ export default defineConfig({
         content: 'https://discord.gg/XsaKEEk4mW',
       },
     ],
+    editLink: {
+      docRepoBaseUrl:
+        'https://github.com/web-infra-dev/rstest/tree/main/website/docs',
+    },
     locales: [
       {
         lang: 'en',
         label: 'English',
         description,
-        editLink: {
-          docRepoBaseUrl:
-            'https://github.com/web-infra-dev/rstest/tree/main/website/docs',
-          text: '📝 Edit this page on GitHub',
-        },
       },
       {
         lang: 'zh',
         label: '简体中文',
-        outlineTitle: '目录',
-        prevPageText: '上一页',
-        nextPageText: '下一页',
         description: '由 Rspack 驱动的测试框架',
-        editLink: {
-          docRepoBaseUrl:
-            'https://github.com/web-infra-dev/rstest/tree/main/website/docs',
-          text: '📝 在 GitHub 上编辑此页',
-        },
       },
     ],
   },
   plugins: [
+    pluginAlgolia({
+      verificationContent: '71ECBF977243215D',
+    }),
     pluginFontOpenSans(),
     pluginSitemap({
       domain: siteUrl,
     }),
-    pluginLlms(),
+  ],
+  head: [
+    ({ routePath }) => {
+      const getOgImage = () => {
+        const match = routePath.match(/blog\/announcing-(\d+-\d+)$/);
+        if (match) {
+          return `rstest-og-image-v${match[1]}.png`;
+        }
+        return 'rstest-og-image.png';
+      };
+      return `<meta property="og:image" content="https://assets.rspack.rs/rstest/${getOgImage()}">`;
+    },
   ],
   builderConfig: {
     plugins: [
@@ -90,7 +101,6 @@ export default defineConfig({
         title: 'Rstest',
         type: 'website',
         url: siteUrl,
-        image: 'https://assets.rspack.rs/rstest/rstest-og-image.png',
         description,
         twitter: {
           site: '@rspack_dev',
@@ -98,5 +108,12 @@ export default defineConfig({
         },
       }),
     ],
+    performance: {
+      printFileSize: {
+        total: true,
+        detail: false,
+        compressed: false,
+      },
+    },
   },
 });

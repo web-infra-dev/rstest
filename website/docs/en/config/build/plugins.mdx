@@ -1,7 +1,9 @@
 ---
+description: plugins is used to register Rsbuild plugins. Includes practical guidance, options, and examples for real projects.
 overviewHeaders: []
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 # plugins <RsbuildDocBadge path="/config/plugins" text="plugins" />
@@ -23,76 +25,94 @@ export default defineConfig({
 });
 ```
 
-## Official plugins
+## Discover plugins
 
-The following are official plugins that can be used in Rsbuild, and applicable to Rstest.
+Check out the Rsbuild [plugin list](https://rsbuild.rs/plugins/list#official-plugins) to discover available plugins. These plugins can also be used with Rstest.
 
-### For React
+## Modify Rstest config in Rsbuild plugins \{#modify-rstest-config}
 
-Plugins available for React:
+<ApiMeta addedVersion="0.11.1" />
 
-- [React Plugin](https://rsbuild.rs/plugins/list/plugin-react): Provides support for React.
-- [SVGR Plugin](https://rsbuild.rs/plugins/list/plugin-svgr): Support convert SVG to React components.
-- [Styled Components Plugin](https://github.com/rsbuild-contrib/rsbuild-plugin-styled-components): Provide compile-time support for styled-components.
+When an Rsbuild plugin runs inside Rstest, it can get the Rstest exposed API through [`api.useExposed`](https://rsbuild.rs/plugins/dev/core) from the Rsbuild Plugin API and call `modifyRstestConfig` to adjust the Rstest config for the current project.
 
-### For Vue
+This API is currently exposed only for Node-mode projects. Browser Mode projects do not receive the `rstest` exposed API, so `api.useExposed('rstest')` returns `undefined` there.
 
-Plugins available for Vue:
+This API is intended for framework integrations and toolchain plugins. When a plugin already knows the current framework, Rsbuild environment, or project conventions, it can centrally add project config such as test entries, exclude rules, setup files, aliases, defines, or `testEnvironment` so users do not need to duplicate the same information in their Rstest config.
 
-- [Vue Plugin](https://github.com/rspack-contrib/rsbuild-plugin-unplugin-vue): Based on [unplugin-vue](https://github.com/unplugin/unplugin-vue), provides support for Vue 3 SFC (Single File Components).
-- [Vue Plugin](https://rsbuild.rs/plugins/list/plugin-vue): Based on [vue-loader](https://github.com/vuejs/vue-loader), provides support for Vue 3 SFC (Single File Components) (Recommend using the implementation based on [unplugin-vue](https://github.com/unplugin/unplugin-vue), as vue-loader is no longer maintained).
-- [Vue JSX Plugin](https://github.com/rspack-contrib/rsbuild-plugin-vue-jsx): Provides support for Vue 3 JSX / TSX syntax.
-- [Vue2 Plugin](https://github.com/rspack-contrib/rsbuild-plugin-vue2): Provides support for Vue 2 SFC (Single File Components).
-- [Vue2 JSX Plugin](https://github.com/rspack-contrib/rsbuild-plugin-vue2-jsx): Provides support for Vue 2 JSX / TSX syntax.
+```ts title="rstest-plugin.ts"
+import type { RsbuildPlugin } from '@rsbuild/core';
+import type { RstestExposeAPI } from '@rstest/core';
 
-### For Preact
+export const myPlugin = (): RsbuildPlugin => ({
+  name: 'my-plugin',
+  setup(api) {
+    if (api.context.callerName !== 'rstest') {
+      return;
+    }
 
-Plugins available for Preact:
+    const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
 
-- [Preact Plugin](https://rsbuild.rs/plugins/list/plugin-preact): Provides support for Preact.
+    rstestApi?.modifyRstestConfig((config) => {
+      config.include = ['**/*.test.ts'];
+    });
+  },
+});
+```
 
-### For Svelte
+In multi-project mode, Rstest exposes one API for each Rsbuild environment. A plugin registered in one project only modifies that project's Rstest config and does not affect other projects.
 
-Plugins available for Svelte:
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { myPlugin } from './rstest-plugin';
 
-- [Svelte Plugin](https://rsbuild.rs/plugins/list/plugin-svelte): Provides support for Svelte components (`.svelte` files).
+export default defineConfig({
+  projects: [
+    {
+      name: 'node',
+      plugins: [myPlugin()],
+    },
+    {
+      name: 'browser',
+      plugins: [],
+    },
+  ],
+});
+```
 
-### For Solid
+### Type definitions
 
-Plugins available for Solid:
+`RstestExposeAPI` is exported from `@rstest/core` and is the type of the API exposed by Rstest to Rsbuild plugins through `api.useExposed('rstest')`.
 
-- [Solid Plugin](https://rsbuild.rs/plugins/list/plugin-solid): Provides support for Solid.
+```ts
+import type { RstestConfig } from '@rstest/core';
 
-### Common
+export type ModifyRstestConfigCallback = (
+  config: RstestConfig,
+) => RstestConfig | void | Promise<RstestConfig | void>;
 
-The following are common framework-agnostic plugins:
+export type RstestExposeAPI = {
+  modifyRstestConfig: (callback: ModifyRstestConfigCallback) => void;
+};
+```
 
-- [Babel Plugin](https://rsbuild.rs/plugins/list/plugin-babel): Provides support for Babel transpilation capabilities.
-- [Sass Plugin](https://rsbuild.rs/plugins/list/plugin-sass): Use Sass as the CSS preprocessor.
-- [Less Plugin](https://rsbuild.rs/plugins/list/plugin-less): Use Less as the CSS preprocessor.
-- [Stylus Plugin](https://rsbuild.rs/plugins/list/plugin-stylus): Use Stylus as the CSS preprocessor.
-- [ESLint Plugin](https://github.com/rspack-contrib/rsbuild-plugin-eslint): Run ESLint checks during the compilation.
-- [Type Check Plugin](https://github.com/rspack-contrib/rsbuild-plugin-type-check): Run TypeScript type checker on a separate process.
-- [publint Plugin](https://github.com/rspack-contrib/rsbuild-plugin-publint): Run `publint` to lint npm packages after the build.
-- [Image Compress Plugin](https://github.com/rspack-contrib/rsbuild-plugin-image-compress): Compress the image assets.
-- [MDX Plugin](https://github.com/rspack-contrib/rsbuild-plugin-mdx): Provide support for MDX.
-- [Node Polyfill Plugin](https://github.com/rspack-contrib/rsbuild-plugin-node-polyfill): Used to inject polyfills of Node core modules in the browser side.
-- [Source Build Plugin](https://github.com/rspack-contrib/rsbuild-plugin-source-build): This plugin is designed for the monorepo scenario. It supports referencing source code from other subdirectories and performs build and hot update.
-- [Check Syntax Plugin](https://github.com/rspack-contrib/rsbuild-plugin-check-syntax): Check the syntax compatibility of output files and determine if there are any advanced syntaxes that could cause compatibility issues.
-- [CSS Minimizer Plugin](https://github.com/rspack-contrib/rsbuild-plugin-css-minimizer): Used to customize CSS minimizer, switch to [cssnano](https://github.com/cssnano/cssnano) or other tools for CSS compression.
-- [Typed CSS Modules Plugin](https://github.com/rspack-contrib/rsbuild-plugin-typed-css-modules): Generate TypeScript declaration file for CSS Modules.
-- [Pug Plugin](https://github.com/rspack-contrib/rsbuild-plugin-pug): Provides support for the Pug template engine.
-- [Rem Plugin](https://github.com/rspack-contrib/rsbuild-plugin-rem): Implements the rem adaptive layout for mobile pages.
-- [UMD Plugin](https://github.com/rspack-contrib/rsbuild-plugin-umd): Generate outputs in UMD format.
-- [YAML Plugin](https://github.com/rspack-contrib/rsbuild-plugin-yaml): Import YAML files and convert them into JavaScript objects.
-- [TOML Plugin](https://github.com/rspack-contrib/rsbuild-plugin-toml): Import TOML files and convert them into JavaScript objects.
+`RstestConfig` is the same user-facing config shape accepted by `defineConfig`. You can either mutate the received `config` object directly or return a config fragment that matches the `RstestConfig` shape. Rstest merges, normalizes, and validates these changes again after the callback finishes. The callback can also be asynchronous.
 
-:::tip
-You can find the source code of all official plugins in [web-infra-dev/rsbuild](https://github.com/web-infra-dev/rsbuild) and [rspack-contrib](https://github.com/rspack-contrib).
-:::
+Register `modifyRstestConfig` during the Rsbuild plugin `setup` phase. Do not register it from later Rsbuild config hooks such as `api.modifyRsbuildConfig`, because Rstest applies collected callbacks while resolving the Rsbuild config; callbacks registered inside those hooks are too late for the current resolution pass.
 
-## Community plugins
+### Modifiable config fields
 
-You can check out the Rsbuild plugins provided by the community at [awesome-rspack - Rsbuild Plugins](https://github.com/web-infra-dev/awesome-rspack?tab=readme-ov-file#rsbuild-plugins).
+`modifyRstestConfig` only adjusts the current project's config. If a callback modifies an unsupported field, Rstest throws an error that tells you to configure it in `rstest.config.*` instead.
 
-You can also discover more Rsbuild plugins on npm by searching for the keyword [rsbuild-plugin](https://www.npmjs.com/search?q=rsbuild-plugin&ranking=popularity).
+| Config scope                                                                        | Supported | Notes                                                                                                            |
+| ----------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------- |
+| `include`, `exclude`, `includeSource`                                               | Yes       | Affect test discovery for the current project; Rstest recollects test entries after the callback.                |
+| `setupFiles`, `globalSetup`                                                         | Yes       | Affect setup files for the current project; Rstest resolves them again after the callback.                       |
+| `testEnvironment`                                                                   | Yes       | Only affects the current project's test environment.                                                             |
+| `resolve`, `source`, `performance.buildCache`                                       | Yes       | Reapplied to Rsbuild as build config for the current project.                                                    |
+| `root`, `output.module`                                                             | Yes       | Re-normalized as path or output module config for the current project.                                           |
+| `name`, `browser.enabled`                                                           | No        | They change project identity or runtime mode and must be declared in `rstest.config.*`.                          |
+| `projects`, `plugins`, `extends`                                                    | No        | They change project topology or plugin initialization order and must be declared in Rstest config or an adapter. |
+| `coverage`, `reporters`, `pool`, `isolate`, `update`, `shard`, `forceRerunTriggers` | No        | They are global execution strategy fields or participate in scheduling before Rsbuild plugins run.               |
+| `output.distPath`                                                                   | No        | It changes the Rstest/Rsbuild output directory topology and must be declared in Rstest config.                   |
+
+If you need to add Rsbuild plugins dynamically, integrate through Rstest's `extends` adapter pattern instead. An adapter can prepare the Rstest config before Rsbuild plugin initialization starts.

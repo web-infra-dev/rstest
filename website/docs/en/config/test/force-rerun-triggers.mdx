@@ -1,0 +1,34 @@
+---
+description: Configure changed-file patterns that force Rstest to run the whole test suite.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# forceRerunTriggers
+
+<ApiMeta addedVersion="0.10.0" />
+
+- **Type:** `string[]`
+- **Default:** `['**/package.json/**', '**/rstest.config.*']`
+
+`forceRerunTriggers` defines glob patterns that make `--changed` run the whole test suite when any changed file matches them.
+
+This is useful for files that can affect many tests but are not always represented in the module graph, such as package manifests, test configs, or generated files executed by child processes.
+
+If you extend config from an adapter such as `withRsbuildConfig`, `withRslibConfig`, or `withRspackConfig`, Rstest also treats the loaded Rsbuild, Rslib, or Rspack config file as a force-rerun trigger. This adapter-provided trigger is appended to the defaults unless you explicitly configure `forceRerunTriggers` in your Rstest config.
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  forceRerunTriggers: [
+    '**/package.json/**',
+    '**/rstest.config.*',
+    'scripts/cli-output/**',
+  ],
+});
+```
+
+For example, if `scripts/cli-output/index.js` changes and matches the configured pattern, `npx rstest run --changed` will run all matched test files instead of only tests resolved from related source files.
+
+`forceRerunTriggers` uses replace semantics: when you set it, your array becomes the full trigger list. Include the default patterns in your config if you still want them, or set `forceRerunTriggers: []` to disable this behavior.

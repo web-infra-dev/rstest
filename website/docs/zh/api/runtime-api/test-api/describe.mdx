@@ -1,0 +1,283 @@
+---
+title: Describe
+description: describe 用于定义测试套件（test suite），支持链式修饰符和参数化方法，便于灵活有序地组织测试。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Describe
+
+`describe` 用于定义测试套件（test suite），支持链式修饰符和参数化方法，便于灵活有序地组织测试。
+
+## describe
+
+- **类型：**
+
+```ts
+(name: string, fn?: () => void | Promise<void>, timeout?: number): void;
+(name: string, options: TestOptions, fn?: () => void | Promise<void>): void;
+```
+
+定义一个测试套件，可以包含多个测试用例或嵌套的 describe。
+回调可以是异步函数；Rstest 会在收集阶段等待它完成，然后再运行其中声明的测试。
+
+```ts
+import { describe, expect, test } from '@rstest/core';
+
+describe('math', () => {
+  test('add', () => {
+    // ...
+  });
+  test('sub', () => {
+    // ...
+  });
+});
+```
+
+```ts
+describe('async setup', async () => {
+  const data = await loadFixtureData();
+
+  test('uses collected data', () => {
+    expect(data).toBeDefined();
+  });
+});
+```
+
+### TestOptions
+
+<ApiMeta addedVersion="0.11.0" />
+
+将 `TestOptions` 对象作为**第二个参数**（位于套件函数之前）传入，用于为套件内的所有测试设置默认值：
+
+```ts
+describe('flaky integration', { retry: 3, timeout: 10000 }, () => {
+  test('reaches the server', async () => {
+    /* 继承 retry: 3 与 timeout: 10000 */
+  });
+});
+```
+
+作为简写，你仍可以将数字作为**最后一个参数**传入，仅用于设置超时（等价于 `{ timeout: n }`）：
+
+```ts
+describe('slow suite', () => {
+  test('within budget', async () => {
+    /* ... */
+  });
+}, 10000);
+```
+
+`TestOptions` 支持的字段与 [`test`](/api/runtime-api/test-api/test#testoptions) 上一致：`timeout`、`retry`、`repeats`。这些选项会作为**可继承的默认值**向套件内的测试传播：
+
+- 测试级别的选项始终优先于套件级别的值。
+- 嵌套的 `describe` 会继承父级选项，最终以最近一层的值为准。
+- 未单独设置 `timeout` 的测试，回退到最近一层套件的 `timeout`，再回退到 [`test.testTimeout`](/config/test/test-timeout)。
+
+```ts
+describe('parent', { retry: 2, timeout: 100 }, () => {
+  test('a', () => {
+    /* retry: 2, timeout: 100 */
+  });
+
+  describe('child', { timeout: 200 }, () => {
+    test('b', () => {
+      /* retry: 2（继承），timeout: 200（最近一层优先） */
+    });
+
+    test('c', { retry: 0 }, () => {
+      /* retry: 0（自身值优先），timeout: 200 */
+    });
+  });
+});
+```
+
+## describe.only
+
+只运行被 only 标记的 describe 块。
+
+```ts
+describe.only('只运行这个套件', () => {
+  // ...
+});
+```
+
+## describe.skip
+
+跳过被 skip 标记的 describe 块里的测试用例。
+
+```ts
+describe.skip('跳过这个套件里的测试用例', () => {
+  // ...
+});
+```
+
+需要注意的是，skip 标记仅用于跳过测试用例，describe 块内的代码仍会执行。这是因为 Rstest 需要收集测试用例的信息，以确保所有功能正常运行，即使它们被标记为跳过。例如，在快照测试中判断快照是过时还是被标记为 skipped。
+
+```ts
+describe.skip('a', () => {
+  console.log('will run');
+  test('b', () => {
+    console.log('will not run');
+    expect(0).toBe(0);
+  });
+});
+```
+
+## describe.todo
+
+标记为待办的 describe 块。
+
+```ts
+describe.todo('should implement this suite');
+```
+
+## describe.each
+
+- **类型：**
+
+```ts
+describe.each(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+describe.each(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+```
+
+为数组中的每一项生成一个 describe 块。与 `describe` 一样，它的第二个参数可选地接受一个 [`TestOptions`](#testoptions) 对象，并作用于生成的每个套件。
+
+```ts
+describe.each([
+  { a: 1, b: 2 },
+  { a: 2, b: 3 },
+])('math $a + $b', ({ a, b }) => {
+  test('add', () => {
+    // ...
+  });
+});
+```
+
+你也可以使用标签模板字面量的表格语法：
+
+```ts
+describe.each`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
+  });
+});
+```
+
+你可以通过显式泛型参数来获得类型支持：
+
+```ts
+describe.each<{ a: number; b: number; expected: number }>`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
+  });
+});
+```
+
+## describe.for
+
+- **类型：**
+
+```ts
+describe.for(cases: ReadonlyArray<T>)(name: string, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
+describe.for(cases: ReadonlyArray<T>)(name: string, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+```
+
+类似 each，但参数类型更灵活。它同样接受可选的 [`TestOptions`](#testoptions) 第二个参数。
+
+```ts
+describe.for([
+  [1, 2],
+  [2, 3],
+])('math %i + %i', ([a, b]) => {
+  test('add', () => {
+    // ...
+  });
+});
+```
+
+`describe.for` 同样支持标签模板字面量的表格语法：
+
+```ts
+describe.for`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
+  });
+});
+```
+
+你可以通过显式泛型参数来获得类型支持：
+
+```ts
+describe.for<{ a: number; b: number; expected: number }>`
+  a    | b    | expected
+  ${1} | ${2} | ${3}
+  ${2} | ${3} | ${5}
+`('$a + $b = $expected', ({ a, b, expected }) => {
+  test('add', () => {
+    expect(a + b).toBe(expected);
+  });
+});
+```
+
+## describe.runIf
+
+仅当条件为 true 时运行该 describe 块。
+
+```ts
+describe.runIf(process.env.RUN_EXTRA === '1')('有条件地运行', () => {
+  // ...
+});
+```
+
+## describe.skipIf
+
+当条件为 true 时跳过该 describe 块。
+
+```ts
+describe.skipIf(process.platform === 'win32')('Windows 下跳过', () => {
+  // ...
+});
+```
+
+## describe.concurrent
+
+并发运行该 describe 下的测试。
+
+```ts
+describe.concurrent('并发套件', () => {
+  test('test 1', async () => {
+    /* ... */
+  });
+  test('test 2', async () => {
+    /* ... */
+  });
+});
+```
+
+## describe.sequential
+
+顺序运行该 describe 下的测试（默认行为）。
+
+```ts
+describe.sequential('顺序套件', () => {
+  test('test 1', async () => {
+    /* ... */
+  });
+  test('test 2', async () => {
+    /* ... */
+  });
+});
+```

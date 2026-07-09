@@ -22,14 +22,17 @@ import type {
   TestResult,
 } from '../types';
 import {
+  bgColor,
   color,
   formatTestPath,
   getTaskNameWithPrefix,
   logger,
+  POINTER,
   prettyTestPath,
   prettyTime,
   TEST_DELIMITER,
 } from '../utils';
+import { getRetryErrorLabel } from './utils';
 
 export const getSummaryStatusString = (
   tasks: TestResult[],
@@ -59,10 +62,42 @@ export const getSummaryStatusString = (
 };
 
 /**
+ * Plain-text version of getSummaryStatusString (no ANSI codes).
+ * Suitable for markdown / GitHub step summary output.
+ */
+export const getPlainSummaryStatusString = (
+  tasks: TestResult[],
+  name = 'tests',
+  showTotal = true,
+): string => {
+  if (tasks.length === 0) {
+    return `no ${name}`;
+  }
+
+  const failed = tasks.filter((result) => result.status === 'fail');
+  const passed = tasks.filter((result) => result.status === 'pass');
+  const skipped = tasks.filter((result) => result.status === 'skip');
+  const todo = tasks.filter((result) => result.status === 'todo');
+
+  const icon = failed.length > 0 ? '❌' : '✅';
+  const parts = [
+    failed.length ? `${failed.length} failed` : null,
+    passed.length ? `${passed.length} passed` : null,
+    skipped.length ? `${skipped.length} skipped` : null,
+    todo.length ? `${todo.length} todo` : null,
+  ].filter(Boolean);
+
+  return (
+    `${icon} ${parts.join(' | ')}` +
+    (showTotal && parts.length > 1 ? ` (${tasks.length})` : '')
+  );
+};
+
+/**
  * This method is modified based on source found in
  * https://github.com/vitest-dev/vitest/blob/e8ce94cfb5520a8b69f9071cc5638a53129130d6/packages/vitest/src/node/reporters/renderers/utils.ts#L67
  */
-export const printSnapshotSummaryLog = (
+const printSnapshotSummaryLog = (
   snapshots: SnapshotSummary,
   rootDir: string,
 ): void => {
@@ -89,7 +124,6 @@ export const printSnapshotSummaryLog = (
       );
     }
   }
-  const POINTER = '➜';
 
   if (snapshots.filesRemovedList?.length) {
     const [head, ...tail] = snapshots.filesRemovedList;
@@ -123,6 +157,12 @@ export const printSnapshotSummaryLog = (
   }
 };
 
+export const TestFileSummaryLabel: string = color.gray(
+  'Test Files'.padStart(11),
+);
+export const TestSummaryLabel: string = color.gray('Tests'.padStart(11));
+export const DurationLabel: string = color.gray('Duration'.padStart(11));
+
 export const printSummaryLog = ({
   results,
   testResults,
@@ -138,15 +178,11 @@ export const printSummaryLog = ({
 }): void => {
   logger.log('');
   printSnapshotSummaryLog(snapshotSummary, rootPath);
-  logger.log(
-    `${color.gray('Test Files'.padStart(11))} ${getSummaryStatusString(results)}`,
-  );
-  logger.log(
-    `${color.gray('Tests'.padStart(11))} ${getSummaryStatusString(testResults)}`,
-  );
+  logger.log(`${TestFileSummaryLabel} ${getSummaryStatusString(results)}`);
+  logger.log(`${TestSummaryLabel} ${getSummaryStatusString(testResults)}`);
 
   logger.log(
-    `${color.gray('Duration'.padStart(11))} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)})`)}`,
+    `${DurationLabel} ${prettyTime(duration.totalTime)} ${color.gray(`(build ${prettyTime(duration.buildTime)}, tests ${prettyTime(duration.testTime)})`)}`,
   );
   logger.log('');
 };
@@ -155,6 +191,7 @@ export const printSummaryErrorLogs = async ({
   testResults,
   results,
   rootPath,
+  unhandledErrors,
   getSourcemap,
   filterRerunTestPaths,
 }: {
@@ -163,7 +200,8 @@ export const printSummaryErrorLogs = async ({
   testResults: TestResult[];
   getSourcemap: GetSourcemap;
   filterRerunTestPaths?: string[];
-}): Promise<void> => {
+  unhandledErrors?: Error[];
+}): Promise<boolean> => {
   const failedTests: TestResult[] = [
     ...results.filter(
       (i) =>
@@ -182,28 +220,40 @@ export const printSummaryErrorLogs = async ({
     ),
   ];
 
-  if (failedTests.length === 0) {
-    return;
+  if (failedTests.length === 0 && !unhandledErrors?.length) {
+    return false;
   }
 
-  logger.log('');
-  logger.log(color.bold('Summary of all failing tests:'));
-  logger.log('');
+  logger.stderr('');
+  logger.stderr(color.bold('Summary of all failing tests:'));
+  logger.stderr('');
+
+  const { printError } = await import('../utils/error');
+  for (const error of unhandledErrors || []) {
+    logger.stderr(bgColor('bgRed', ' Unhandled Error '));
+    await printError(error, getSourcemap, rootPath);
+  }
 
   for (const test of failedTests) {
     const relativePath = path.relative(rootPath, test.testPath);
     const nameStr = getTaskNameWithPrefix(test);
 
     //  FAIL  tests/index.test.ts > suite name > test case name
-    logger.log(
-      `${color.bgRed(' FAIL ')} ${prettyTestPath(relativePath)} ${nameStr.length ? `${color.dim(TEST_DELIMITER)} ${nameStr}` : ''}`,
+    logger.stderr(
+      `${bgColor('bgRed', ' FAIL ')} ${prettyTestPath(relativePath)} ${nameStr.length ? `${color.dim(TEST_DELIMITER)} ${nameStr}` : ''}`,
     );
 
     if (test.errors) {
       const { printError } = await import('../utils/error');
       for (const error of test.errors) {
+        const retryLabel = getRetryErrorLabel(error);
+        if (retryLabel) {
+          logger.stderr(color.yellow(`  ${retryLabel}:`));
+        }
         await printError(error, getSourcemap, rootPath);
       }
     }
   }
+
+  return true;
 };

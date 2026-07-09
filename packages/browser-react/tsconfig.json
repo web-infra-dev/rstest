@@ -1,0 +1,12 @@
+{
+  "extends": "@rstest/tsconfig/base",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "src",
+    "composite": true,
+    "isolatedDeclarations": true,
+    "declarationMap": true,
+    "jsx": "react-jsx"
+  },
+  "include": ["src"]
+}

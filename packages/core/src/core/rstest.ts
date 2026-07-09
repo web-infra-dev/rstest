@@ -1,22 +1,41 @@
+import { existsSync } from 'node:fs';
 import { SnapshotManager } from '@vitest/snapshot/manager';
+import { join } from 'pathe';
 import { isCI } from 'std-env';
 import { withDefaultConfig } from '../config';
 import { DefaultReporter } from '../reporter';
+import { BlobReporter } from '../reporter/blob';
+import { DotReporter } from '../reporter/dot';
 import { GithubActionsReporter } from '../reporter/githubActions';
+import { JsonReporter } from '../reporter/json';
+import { JUnitReporter } from '../reporter/junit';
+import { MdReporter } from '../reporter/md';
 import { VerboseReporter } from '../reporter/verbose';
 import type {
+  BuiltInReporterNames,
+  FileFilterMode,
   NormalizedConfig,
+  NormalizedProjectConfig,
   Project,
   ProjectContext,
   Reporter,
   RstestCommand,
   RstestConfig,
   RstestContext,
-  Test,
+  RstestTestState,
   TestFileResult,
   TestResult,
 } from '../types';
-import { castArray, getAbsolutePath } from '../utils/helper';
+import {
+  castArray,
+  ENV,
+  getAbsolutePath,
+  logger,
+  normalizeBuildCache,
+  resolveBuildCacheDependencyPaths,
+  TS_CONFIG_FILE,
+} from '../utils';
+import { TestStateManager } from './stateManager';
 
 /**
  * Only letters, numbers, "-", "_", and "$" are allowed.
@@ -25,26 +44,51 @@ function formatEnvironmentName(name: string): string {
   return name.replace(/[^a-zA-Z0-9\-_$]/g, '_');
 }
 
+/**
+ * Report a fatal configuration error. In embedded (programmatic) mode the
+ * caller owns the process, so throw and let `runRstest` surface it; otherwise
+ * log and exit the CLI process.
+ */
+function failConfig(embedded: boolean, message: string): never {
+  if (embedded) {
+    throw new Error(message);
+  }
+  logger.error(message);
+  process.exit(1);
+}
+
 type Options = {
   cwd: string;
   command: RstestCommand;
   fileFilters?: string[];
+  fileFilterMode?: FileFilterMode;
   configFilePath?: string;
   projects: Project[];
+  trace?: boolean;
+  /** See the `embedded` option on `createRstest`. */
+  embedded?: boolean;
 };
 
 export class Rstest implements RstestContext {
   public cwd: string;
   public command: RstestCommand;
   public fileFilters?: string[];
+  public fileFilterMode?: FileFilterMode;
+  public relatedFilters?: string[];
+  public relatedMode?: 'related' | 'changed';
+  public relatedResolutionEmpty?: boolean;
+  public changedCoverageFilters?: string[];
+  public relatedRerunReason?: 'forceRerunTrigger';
+  public relatedRerunFiles?: string[];
   public configFilePath?: string;
-  public reporters: (Reporter | GithubActionsReporter)[];
+  public embedded: boolean;
+  public reporters: Reporter[];
   public snapshotManager: SnapshotManager;
+  public trace: boolean;
   public version: string;
   public rootPath: string;
   public originalConfig: RstestConfig;
   public normalizedConfig: NormalizedConfig;
-  public idMap: Map<string, Test> = new Map();
   public reporterResults: {
     results: TestFileResult[];
     testResults: TestResult[];
@@ -52,6 +96,20 @@ export class Rstest implements RstestContext {
     results: [],
     testResults: [],
   };
+  public stateManager: TestStateManager = new TestStateManager();
+
+  public testState: RstestTestState = {
+    getRunningModules: () => this.stateManager.runningModules,
+    getTestModules: () => this.stateManager.testModules,
+    getTestFiles: () => {
+      // TODO: support collecting test files in watch mode
+      if (this.command === 'watch') {
+        return undefined;
+      }
+      return this.stateManager.testFiles;
+    },
+  };
+
   public projects: ProjectContext[] = [];
 
   public constructor(
@@ -59,32 +117,44 @@ export class Rstest implements RstestContext {
       cwd = process.cwd(),
       command,
       fileFilters,
+      fileFilterMode,
       configFilePath,
       projects,
+      trace = false,
+      embedded = false,
     }: Options,
     userConfig: RstestConfig,
   ) {
     this.cwd = cwd;
     this.command = command;
+    this.trace = trace;
     this.fileFilters = fileFilters;
+    this.fileFilterMode = fileFilterMode;
     this.configFilePath = configFilePath;
+    this.embedded = embedded;
 
     const rootPath = userConfig.root
       ? getAbsolutePath(cwd, userConfig.root)
       : cwd;
 
-    const rstestConfig = withDefaultConfig(userConfig);
-    const reporters =
-      command !== 'list'
-        ? createReporters(rstestConfig.reporters, {
-            rootPath,
-            config: rstestConfig,
-          })
-        : [];
+    const rstestConfig = withDefaultConfig(
+      resolveBuildCacheDependencyPaths(
+        {
+          ...userConfig,
+          root: rootPath,
+        },
+        configFilePath,
+      ),
+    );
+
+    if (command === 'watch' && rstestConfig.shard) {
+      failConfig(embedded, 'Test sharding is not supported in watch mode.');
+    }
+
     const snapshotManager = new SnapshotManager({
       updateSnapshot: rstestConfig.update ? 'all' : isCI ? 'none' : 'new',
     });
-    this.reporters = reporters;
+
     this.snapshotManager = snapshotManager;
     this.version = RSTEST_VERSION;
     this.rootPath = rootPath;
@@ -92,13 +162,60 @@ export class Rstest implements RstestContext {
     this.normalizedConfig = rstestConfig;
     this.projects = projects.length
       ? projects.map((project) => {
+          project.config.root = getAbsolutePath(rootPath, project.config.root!);
+
           // TODO: support extend projects config
-          const config = withDefaultConfig(project.config);
+          const config = withDefaultConfig(
+            resolveBuildCacheDependencyPaths(
+              project.config,
+              project.configFilePath ?? configFilePath,
+            ),
+          ) as NormalizedProjectConfig;
+          // some configs are global only
+          config.isolate = rstestConfig.isolate;
+          config.coverage = rstestConfig.coverage;
+          config.bail = rstestConfig.bail;
+
+          config.source ??= {};
+          if (!config.source.tsconfigPath) {
+            const tsconfigPath = join(config.root, TS_CONFIG_FILE);
+
+            if (existsSync(tsconfigPath)) {
+              config.source.tsconfigPath = tsconfigPath;
+            }
+          } else {
+            config.source.tsconfigPath = getAbsolutePath(
+              config.root,
+              config.source.tsconfigPath,
+            );
+          }
+          const environmentName = formatEnvironmentName(config.name);
+
+          if (config.performance?.buildCache) {
+            config.performance.buildCache = normalizeBuildCache({
+              buildCache: config.performance.buildCache,
+              root: config.root,
+              tsconfigPaths: config.source?.tsconfigPath
+                ? [config.source.tsconfigPath]
+                : [],
+              outputDistPathRoot: rstestConfig.output.distPath.root,
+              environmentName,
+              browserEnabled: config.browser.enabled,
+              coverageEnabled: config.coverage?.enabled,
+              coverageProvider: config.coverage?.provider,
+              assumeNormalized: true,
+            });
+          }
+
           return {
             configFilePath: project.configFilePath,
             rootPath: config.root,
             name: config.name,
-            environmentName: formatEnvironmentName(config.name),
+            _globalSetups: false,
+            outputModule:
+              config.output?.module ??
+              process.env[ENV.OUTPUT_MODULE] !== 'false',
+            environmentName,
             normalizedConfig: config,
           };
         })
@@ -106,11 +223,42 @@ export class Rstest implements RstestContext {
           {
             configFilePath,
             rootPath,
+            _globalSetups: false,
             name: rstestConfig.name,
+            outputModule:
+              rstestConfig.output?.module ??
+              process.env[ENV.OUTPUT_MODULE] !== 'false',
             environmentName: formatEnvironmentName(rstestConfig.name),
             normalizedConfig: rstestConfig,
           },
         ];
+
+    // Create a map of project name to project config for reporters
+    const projectConfigs = new Map(
+      this.projects.map((p) => [p.name, p.normalizedConfig]),
+    );
+
+    const reporters =
+      command !== 'list'
+        ? createReporters(rstestConfig.reporters, {
+            rootPath,
+            config: rstestConfig,
+            testState: this.testState,
+            fileFilters: this.fileFilters,
+            projectConfigs,
+            options: {
+              showProjectName: projects.length > 1,
+            },
+          }).filter((r) => {
+            // Exclude blob reporter when merging (we consume blobs, not produce them)
+            if (command === 'merge-reports' && r instanceof BlobReporter) {
+              return false;
+            }
+            return true;
+          })
+        : [];
+
+    this.reporters = reporters;
   }
 
   public updateReporterResultState(
@@ -151,22 +299,28 @@ export class Rstest implements RstestContext {
   }
 }
 
-const reportersMap: {
-  default: typeof DefaultReporter;
-  verbose: typeof VerboseReporter;
-  'github-actions': typeof GithubActionsReporter;
-} = {
+// `satisfies Record<BuiltInReporterNames, …>` keeps this map in lockstep with
+// the BuiltInReporterNames union (the single source of truth): a name added to
+// the union without a class here is a missing-key compile error, and a class
+// added here without a union entry is an excess-key error. The previous explicit
+// object-type annotation duplicated the key list and let the two drift, surfacing
+// only as a runtime "Reporter X not found". `satisfies` (not `:`) preserves each
+// value's concrete constructor type for the `new reportersMap[name](…)` call.
+const reportersMap = {
   default: DefaultReporter,
+  dot: DotReporter,
   verbose: VerboseReporter,
   'github-actions': GithubActionsReporter,
-};
+  junit: JUnitReporter,
+  json: JsonReporter,
+  md: MdReporter,
+  blob: BlobReporter,
+} satisfies Record<BuiltInReporterNames, new (...args: any[]) => unknown>;
 
-export type BuiltInReporterNames = keyof typeof reportersMap;
-
-export function createReporters(
+function createReporters(
   reporters: RstestConfig['reporters'],
-  initOptions: any = {},
-): (Reporter | GithubActionsReporter)[] {
+  initConfig: any = {},
+): (Reporter | GithubActionsReporter | JUnitReporter)[] {
   const result = castArray(reporters).map((reporter) => {
     if (typeof reporter === 'string' || Array.isArray(reporter)) {
       const [name, options = {}] =
@@ -175,14 +329,17 @@ export function createReporters(
       if (name in reportersMap) {
         const Reporter = reportersMap[name];
         return new Reporter({
-          ...initOptions,
-          options,
+          ...initConfig,
+          options: {
+            ...(initConfig.options || {}),
+            ...options,
+          },
         });
       }
 
       // TODO: load third-party reporters
       throw new Error(
-        `Reporter ${reporter} not found. Please install it or use a built-in reporter.`,
+        `Reporter ${name} not found. Please install it or use a built-in reporter.`,
       );
     }
 

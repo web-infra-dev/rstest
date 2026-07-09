@@ -1,9 +1,70 @@
+---
+description: 配置 Rstest 在测试构建中使用的 Rsbuild performance 选项。
+---
+
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
- 
+import { ApiMeta } from '@components/ApiMeta';
+
 # performance
 
-与构建性能、运行时性能有关的选项。
+## performance.buildCache <RsbuildDocBadge path="/config/performance/build-cache" text="performance.buildCache" />
 
-## performance.bundleAnalyze <RsbuildDocBadge path="/config/performance/bundle-analyze" text="performance.bundleAnalyze" />
+<ApiMeta addedVersion="0.10.0" />
 
-用于开启 [webpack-bundle-analyzer](https://github.com/webpack-contrib/webpack-bundle-analyzer) 插件来分析产物体积。
+- **类型：**
+
+```ts
+type BuildCacheConfig =
+  | boolean
+  | {
+      cacheDirectory?: string;
+      cacheDigest?: Array<string | undefined>;
+      buildDependencies?: string[];
+    };
+```
+
+- **默认值：** `false`
+
+为 Rstest 的测试构建开启 Rsbuild 持久化构建缓存。
+
+:::tip
+Rspack 的持久化缓存仍处于实验阶段，未来版本中可能发生变化，因此 Rstest 默认不会开启 `performance.buildCache`。
+:::
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: true,
+  },
+});
+```
+
+开启后，Rstest 会补上一些更适合测试场景的默认值，以保证缓存目录和失效条件更稳定：
+
+- `cacheDirectory` 默认使用当前 project 根目录下的 `node_modules/.cache/rstest-<project-name>`，即使多个 project 共用同一个 root，也能拥有独立缓存。
+- `cacheDigest` 会自动包含 Rstest 的运行输入，例如命令类型、环境名、browser / node 模式。
+- `buildDependencies` 会自动包含当前 Rstest 配置文件、各 project 配置文件，以及已解析到的 `tsconfig` 路径。
+
+你可以通过自定义配置来覆盖或扩展这些默认值：
+
+- `cacheDirectory`：**覆盖**。显式提供后，Rstest 会直接使用你的目录。
+- `cacheDigest`：**扩展**。Rstest 会保留自己的运行时摘要项，并把你的自定义值追加在后面。
+- `buildDependencies`：**扩展**。Rstest 会保留自己的依赖文件，并在把相对路径按当前配置文件目录解析后，再追加你的自定义文件。
+
+例如：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  performance: {
+    buildCache: {
+      cacheDirectory: '.cache/rstest/browser',
+      cacheDigest: [process.env.CUSTOM_ENV],
+      buildDependencies: ['./scripts/test-env.ts'],
+    },
+  },
+});
+```

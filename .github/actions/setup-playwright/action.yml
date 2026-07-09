@@ -1,0 +1,18 @@
+name: 'Setup Playwright'
+description: 'Install only Playwright browsers that are not provided by GitHub-hosted runners. Run after dependencies are installed.'
+
+inputs:
+  install-webkit:
+    description: 'Install Playwright WebKit.'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Playwright WebKit
+      if: inputs.install-webkit == 'true'
+      shell: bash
+      # Only browser-mode e2e includes the explicit WebKit fixture.
+      run: |
+        npx playwright install webkit

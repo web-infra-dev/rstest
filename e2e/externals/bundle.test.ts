@@ -7,7 +7,7 @@ import { runRstestCli } from '../scripts/';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-describe('test externals false', () => {
+describe('test load typescript files', () => {
   beforeAll(() => {
     fse.copySync(
       join(__dirname, './fixtures/test-bundle'),
@@ -15,15 +15,10 @@ describe('test externals false', () => {
     );
   });
 
-  it('should bundle node_modules', async () => {
+  it('should bundle typescript files', async () => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: [
-        'run',
-        './fixtures/bundle.test.ts',
-        '-c',
-        './fixtures/rstest.bundle.config.ts',
-      ],
+      args: ['run', './fixtures/bundle.test.ts'],
       options: {
         nodeOptions: {
           cwd: __dirname,

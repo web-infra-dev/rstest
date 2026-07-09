@@ -4,22 +4,55 @@ import type {
   RunnerHooks,
   Test,
   TestFileResult,
+  TestInfo,
   WorkerState,
 } from '../../types';
-
+import { getFileTaskId } from '../../utils/helper';
+import { fileContext, setFileContext } from '../fileContext';
+import type { TaskContext } from '../worker/taskContext';
 import { TestRunner } from './runner';
-import { createRuntimeAPI } from './runtime';
+import { RunnerRuntime, runtimeAPI } from './runtime';
 import { traverseUpdateTest } from './task';
 
-export function createRunner({ workerState }: { workerState: WorkerState }): {
-  api: RunnerAPI;
+// The running file's execution-phase runner (see the live-binding contract in
+// `../api`; `createRunner` publishes the context per file).
+const currentRunner = (): TestRunner => fileContext().testRunner;
+
+const onTestFinished: RunnerAPI['onTestFinished'] = (...args) => {
+  const runner = currentRunner();
+  runner.onTestFinished(runner.getCurrentTest(), ...args);
+};
+
+const onTestFailed: RunnerAPI['onTestFailed'] = (...args) => {
+  const runner = currentRunner();
+  runner.onTestFailed(runner.getCurrentTest(), ...args);
+};
+
+/**
+ * The full stable `@rstest/core` runner surface, built once: the collection-phase
+ * `runtimeAPI` plus the execution-phase `onTestFinished`/`onTestFailed`
+ * forwarders. Spread into the injected api by `createRstestRuntime` (`../api`).
+ */
+export const runnerAPI: RunnerAPI = {
+  ...runtimeAPI,
+  onTestFinished,
+  onTestFailed,
+};
+
+export function createRunner({
+  workerState,
+  taskContext,
+}: {
+  workerState: WorkerState;
+  taskContext: TaskContext;
+}): {
   runner: {
     runTests: (
       testFilePath: string,
       hooks: RunnerHooks,
       api: Rstest,
     ) => Promise<TestFileResult>;
-    collectTests: () => Promise<Test[]>;
+    collectTests: () => Promise<TestInfo[]>;
     getCurrentTest: TestRunner['getCurrentTest'];
   };
 } {
@@ -28,28 +61,31 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
     project,
     runtimeConfig: { testNamePattern },
   } = workerState;
-  const runtime = createRuntimeAPI({
+  const runtimeInstance = new RunnerRuntime({
     project,
     testPath,
     runtimeConfig: workerState.runtimeConfig,
   });
-  const testRunner: TestRunner = new TestRunner();
+  const testRunner: TestRunner = new TestRunner(taskContext);
+  // Publish this file's context as one unit; every stable forwarder (runner
+  // surface, `expect`, `rstest` config methods) resolves it at call time.
+  setFileContext({ workerState, runnerRuntime: runtimeInstance, testRunner });
 
   return {
-    api: {
-      ...runtime.api,
-      onTestFinished: (fn, timeout) => {
-        testRunner.onTestFinished(testRunner.getCurrentTest(), fn, timeout);
-      },
-      onTestFailed: (fn, timeout) => {
-        testRunner.onTestFailed(testRunner.getCurrentTest(), fn, timeout);
-      },
-    },
     runner: {
       runTests: async (testPath: string, hooks: RunnerHooks, api: Rstest) => {
-        const tests = await runtime.instance.getTests();
+        const snapshotClient = workerState.snapshotClient!;
+
+        await snapshotClient.setup(testPath, workerState.snapshotOptions);
+
+        const tests = await runtimeInstance.getTests();
         traverseUpdateTest(tests, testNamePattern);
-        runtime.instance.updateStatus('running');
+        hooks.onTestFileReady?.({
+          testId: getFileTaskId(testPath),
+          testPath,
+          tests: tests.map(toTestInfo),
+        });
+        runtimeInstance.updateStatus('running');
 
         const results = await testRunner.runTests({
           tests,
@@ -57,19 +93,32 @@ export function createRunner({ workerState }: { workerState: WorkerState }): {
           state: workerState,
           hooks,
           api,
+          snapshotClient,
         });
-
-        hooks.onTestFileResult?.(results);
 
         return results;
       },
       collectTests: async () => {
-        const tests = await runtime.instance.getTests();
+        const tests = await runtimeInstance.getTests();
         traverseUpdateTest(tests, testNamePattern);
 
-        return tests;
+        return tests.map(toTestInfo);
       },
       getCurrentTest: () => testRunner.getCurrentTest(),
     },
+  };
+}
+
+function toTestInfo(test: Test): TestInfo {
+  return {
+    testId: test.testId,
+    name: test.name,
+    parentNames: test.parentNames,
+    testPath: test.testPath,
+    project: test.project,
+    type: test.type,
+    location: test.location,
+    tests: test.type === 'suite' ? test.tests.map(toTestInfo) : [],
+    runMode: test.runMode,
   };
 }

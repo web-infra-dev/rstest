@@ -1,0 +1,123 @@
+---
+name: testing
+description: Testing workflow for the Rstest monorepo. Use when running unit tests, e2e tests, browser e2e, example tests, watch-mode checks, writing test fixtures, debugging local or CI test failures, validating code changes, or reproducing bugs from external projects.
+metadata:
+  internal: true
+---
+
+# Testing Workflow
+
+## Running tests
+
+### Package/unit tests from repository root (single file — preferred)
+
+```bash
+pnpm rstest packages/core/tests/core/rsbuild.test.ts
+```
+
+Use this form for tests discovered by the root workspace config.
+Do **not** pass `e2e/...` paths to the root `pnpm rstest` command.
+
+### Package-level tests
+
+```bash
+pnpm --filter @rstest/core test
+pnpm --filter @rstest/core test -- tests/core/rsbuild.test.ts  # single file
+```
+
+### E2E tests
+
+Run e2e tests from inside the `e2e/` directory.
+When passing the test path, strip the `e2e/` prefix because the working directory is already `e2e/`.
+
+```bash
+cd e2e && pnpm test <path-to-test>
+```
+
+To run tests in a fixture directory directly:
+
+```bash
+cd e2e/<test>/fixtures/<fixture>/ && npx rstest
+```
+
+## Rebuild before E2E
+
+E2E tests and examples execute against **built package output**, not TypeScript sources. If you changed package source code, you **must rebuild** before running e2e:
+
+```bash
+pnpm --filter @rstest/core build    # or whichever package was changed
+cd e2e && pnpm test <path>
+```
+
+Forgetting this step means e2e runs against stale output — a common source of false passes/failures.
+
+When the change may affect multiple packages, prefer a full workspace package build first:
+
+```bash
+pnpm build
+cd e2e && pnpm test <path>
+```
+
+Important:
+
+- Do **not** start e2e while any package build is still running.
+- Do **not** overlap `pnpm build` and `pnpm e2e` in separate sessions.
+- Wait for the build command to exit successfully before starting e2e.
+- If e2e fails immediately with a missing built file such as `packages/core/dist/rstestSuppressWarnings.cjs`, treat that as an incomplete build and rebuild before retrying.
+- When unsure whether the build is fully finished, verify the expected artifact exists before running e2e.
+
+## Browser E2E
+
+- Fixtures default to `headless: true` — no browser windows locally
+- Headed smoke tests are skipped locally by default (CI only)
+- To opt in locally: `cd e2e && RSTEST_E2E_RUN_HEADED=true pnpm test browser-mode/basic.test.ts`
+
+### Browser E2E debugging
+
+- Rebuild affected packages before retrying; stale `dist` is a common false signal.
+- Separate host/protocol/provider issues from UI issues before editing `@rstest/browser-ui`.
+- For flakes, check shared ports/cwd, persistent `dist/.rstest-temp/`, unawaited events, and order-dependent state before increasing timeouts.
+
+## Watch-mode and long-running tests
+
+- Use watch-mode tests only for file-change/rerun/invalidation behavior.
+- Assert stable events/final output, clean up watchers/processes, and inspect open handles before changing production code for hangs.
+
+## Fixture strategy
+
+Before adding a fixture, list existing ones in the same area (`ls e2e/<area>/fixtures`) and name the closest match. Prefer extending it:
+
+- Adding a project, config flag, or test file is additive reuse — "different config" alone does not justify a new fixture. **After extending, re-run every test using that fixture** to confirm none broke.
+- A new fixture is right when reuse would force an **incompatible** change to config other tests depend on, or contort the fixture's intent.
+- Prefer **one consolidated regression fixture** that exercises the whole surface over many near-duplicate per-feature files. When several cases share a structural root cause, assert them together.
+
+## E2E rstest spawns with persistent `dist/.rstest-temp/`
+
+A fixture that enables `performance.buildCache` (or `dev.writeToDisk: true`) forces rstest to persist the built bundle under `<cwd>/dist/.rstest-temp/`. If sibling test files share that `cwd`, those persistent writes race against any test asserting on the default path. Other disk writers like coverage or blob reporters land in `<cwd>/coverage/` or `<cwd>/.rstest-reports/` — different surfaces, not covered by this rule.
+
+When your fixture enables persistent build output:
+
+- Set `cwd` to the fixture subdirectory, not the parent test directory.
+- In that fixture's config, drop any `include` referencing paths outside the fixture (e.g. `'./fixtures/<name>/index.test.ts'`). Fixture-local globs like `'./*.test.ts'` are fine.
+- Read `dist/.rstest-temp/` assertions from that isolated fixture dir, not from a shared parent.
+
+## Snapshot policy
+
+- Only update snapshots when the behavioral change is **intentional**
+- For package/unit tests from repository root, use `-u` / `--update`: `pnpm rstest -u packages/core/tests/core/rsbuild.test.ts`
+- Do **not** use snapshot updates as a default way to silence test failures — investigate first
+- When updating, review the snapshot diff to confirm it matches expected changes
+
+## External repro projects
+
+For external repos/fixtures: read README/scripts/deps, reproduce with the smallest command, classify the source, then port only the minimal regression case into this repo.
+
+## Performance and benchmark validation
+
+For performance work, compare like-for-like runs: same command/fixture/env/cache policy, enough samples to separate noise, and state whether the result covers startup, execution, transform/cache, browser startup, or reporter overhead.
+
+## Validation before wrapping up
+
+- Do not stop at targeted tests only. Before finishing a code change, run the narrowest relevant tests first, then decide whether broader validation is needed.
+- `pnpm run check-unused` is part of the default validation pass for code changes in this repo. Run it before wrapping up, even when focused tests already pass.
+- Treat `check-unused` failures as real regressions unless you have confirmed the reported item is an intentional temporary state.

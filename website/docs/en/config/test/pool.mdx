@@ -1,21 +1,29 @@
 ---
+description: Options of pool used to run tests in.
 overviewHeaders: []
 ---
+
+import { ApiMeta } from '@components/ApiMeta';
 
 # pool
 
 - **Type:**
 
 ```ts
+export type RstestPoolType = 'forks' | 'threads';
+
 export type RstestPoolOptions = {
   /** Pool used to run tests in. */
-  type: 'fork';
+  type?: RstestPoolType;
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
-  /** Minimum number or percentage of workers to run tests in. */
-  minWorkers?: number | string;
   /** Pass additional arguments to node process in the child processes. */
   execArgv?: string[];
+};
+
+export type RstestConfig = {
+  /** Pool used to run tests in. */
+  pool?: RstestPoolType | RstestPoolOptions;
 };
 ```
 
@@ -23,26 +31,96 @@ export type RstestPoolOptions = {
 
 ```ts
 const defaultPool = {
-  type: 'fork'
-  maxWorkers: available CPUs
-  minWorkers: available CPUs
-}
+  type: 'forks',
+  // maxWorkers is computed from CPU count and command mode
+};
 ```
+
+- **CLI:** `--pool <type>`, `--pool.type <type>`, `--pool.maxWorkers <value>`, `--pool.execArgv <arg>`
 
 Options of pool used to run tests in.
 
-## Example
+## Pool types
 
-Run all tests inside a single child process.
+Rstest supports two pool types. Both share the same scheduler, RPC, and result-aggregation logic — they differ only in how workers are spawned.
+
+### forks
+
+Each test file runs in a separate Node.js child process spawned via `child_process.fork`. Every worker has its own V8 heap, so process-wide state (`process.chdir`, signal handlers, environment mutations, native module bindings) cannot leak between files.
+
+### threads
+
+<ApiMeta addedVersion="0.10.0" />
+
+Each test file runs in a Node.js worker thread spawned via `node:worker_threads`. Workers share the parent process's V8 heap and stdio.
+
+## Choose a pool type
+
+`forks` is the default — most existing test code relies on per-file process isolation. If you're not sure, keep using `forks`.
+
+Consider switching to `threads` when:
+
+- Your suite is dominated by small, fast test files and worker startup eats a noticeable share of total runtime — `worker_threads` spawns roughly 10× faster than `child_process.fork`, making watch-mode reruns feel instant.
+- Parallel runs are memory-bound on your machine, or you see OOM — threads share the parent V8 heap instead of each carrying their own instance.
+- Your tests don't mutate cwd / env vars / signal handlers and don't rely on per-file resets of process-level state.
+
+Stick with `forks` when:
+
+- Your tests mutate `process.chdir`, env vars, or signal handlers and rely on per-file isolation.
+- Your project uses native addons (e.g. `better-sqlite3`, `sharp`, `canvas`) — one not built for worker threads can abort the whole run under `threads` (`SIGSEGV` / `SIGABRT`, not a catchable error).
+- You want a hard crash in one test file contained inside its own worker, without risking the parent process or sibling tests.
+
+## Control file-level parallelism
+
+`pool.maxWorkers` controls how many test files can run at the same time. Use it when tests compete for the same database, port, fixture directory, or other external resource.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   pool: {
-    type: 'forks',
     maxWorkers: 1,
-    minWorkers: 1,
+  },
+});
+```
+
+You can also pass the same value from the CLI:
+
+```bash
+npx rstest --pool.maxWorkers 1
+```
+
+Common values:
+
+- `1`: run test files one at a time. This is the Rstest equivalent of Vitest's `fileParallelism: false` and Jest's `--runInBand`.
+- `50%`: keep parallelism proportional to the available CPU count, which is useful on CI machines with shared capacity.
+- A fixed number such as `4`: cap resource usage to a known safe level regardless of machine size.
+
+`maxWorkers` is about file-level parallelism. It does not limit `test.concurrent` cases inside a single test file — use [`maxConcurrency`](/config/test/max-concurrency) for that.
+
+## Pass Node.js flags to workers
+
+Use `pool.execArgv` when the code running inside workers needs specific Node.js flags, such as custom conditions, warnings, or debugging flags.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: {
+    execArgv: ['--conditions=development'],
+  },
+});
+```
+
+For debugging a single worker, combine `execArgv` with `maxWorkers: 1` so only one test file attaches to the debugger at a time:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  pool: {
+    maxWorkers: 1,
+    execArgv: ['--inspect-brk'],
   },
 });
 ```

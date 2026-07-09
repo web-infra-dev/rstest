@@ -1,23 +1,49 @@
 import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import pathe from 'pathe';
-import { glob } from 'tinyglobby';
-import { castArray, color, getAbsolutePath, parsePosix } from './helper';
+import { glob, isDynamicPattern } from 'tinyglobby';
+import type { FileFilterMode, Project } from '../types';
+import { castArray, parsePosix } from './helper';
+import { color } from './logger';
 
 export const filterFiles = (
   testFiles: string[],
   filters: string[],
   dir: string,
+  mode: FileFilterMode = 'fuzzy',
 ): string[] => {
   if (!filters.length) {
-    return testFiles;
+    // `exact` mode: an empty filter list matches zero files; `fuzzy` mode keeps
+    // the "no filter = all files" convenience.
+    return mode === 'exact' ? [] : testFiles;
   }
 
   const fileFilters =
     process.platform === 'win32'
       ? filters.map((f) => f.split(pathe.sep).join('/'))
       : filters;
+
+  if (mode === 'exact') {
+    const normalizeExactMatchPath = (filePath: string) => {
+      const normalizedPath = pathe.normalize(filePath);
+      return process.platform === 'win32'
+        ? normalizedPath.toLocaleLowerCase()
+        : normalizedPath;
+    };
+
+    const exactFilters = new Set(
+      fileFilters.map((filter) => normalizeExactMatchPath(filter)),
+    );
+
+    return testFiles.filter((testFilePath) => {
+      const absolutePath = normalizeExactMatchPath(testFilePath);
+      const relativePath = normalizeExactMatchPath(
+        pathe.relative(dir, testFilePath),
+      );
+
+      return exactFilters.has(absolutePath) || exactFilters.has(relativePath);
+    });
+  }
 
   return testFiles.filter((t) => {
     const testFile = pathe.relative(dir, t).toLocaleLowerCase();
@@ -38,6 +64,32 @@ export const filterFiles = (
   });
 };
 
+export const filterProjects = (
+  projects: Project[],
+  options: {
+    project?: string[];
+  },
+): Project[] => {
+  if (options.project) {
+    const regexes = castArray(options.project).map((pattern) => {
+      // cast wildcard to RegExp, eg. @rstest/*, !@rstest/core
+      const isNeg = pattern.startsWith('!');
+
+      const escaped = (isNeg ? pattern.slice(1) : pattern)
+        .split('*')
+        .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+        .join('.*');
+      return new RegExp(isNeg ? `^(?!${escaped})` : `^${escaped}$`);
+    });
+
+    return projects.filter((proj) =>
+      regexes.some((re) => re.test(proj.config.name!)),
+    );
+  }
+
+  return projects;
+};
+
 const hasInSourceTestCode = (code: string): boolean =>
   code.includes('import.meta.rstest');
 
@@ -48,35 +100,55 @@ export const formatTestEntryName = (name: string): string =>
 export const getTestEntries = async ({
   include,
   exclude,
-  root,
+  rootPath,
+  projectRoot,
   fileFilters,
+  fileFilterMode,
   includeSource,
 }: {
+  rootPath: string;
   include: string[];
   exclude: string[];
   includeSource: string[];
   fileFilters: string[];
-  root: string;
-}): Promise<{
-  [name: string]: string;
-}> => {
-  const testFiles = await glob(include, {
-    cwd: root,
+  fileFilterMode?: FileFilterMode;
+  projectRoot: string;
+}): Promise<Record<string, string>> => {
+  const globOptions = {
+    cwd: projectRoot,
     absolute: true,
     ignore: exclude,
     dot: true,
     expandDirectories: false,
-  });
+  };
 
-  if (includeSource?.length) {
-    const sourceFiles = await glob(includeSource, {
-      cwd: root,
-      absolute: true,
-      ignore: exclude,
-      dot: true,
-      expandDirectories: false,
-    });
+  // The include glob and the in-source glob are independent filesystem walks,
+  // so run them concurrently. Passing the full `include` (literal entries
+  // included) keeps `exclude` behaving exactly as before for real files.
+  const [globbedFiles, sourceFiles] = await Promise.all([
+    glob(include, globOptions),
+    includeSource?.length ? glob(includeSource, globOptions) : [],
+  ]);
 
+  // Virtual modules (backed by `experiments.VirtualModulesPlugin`) are listed
+  // as literal includes but don't exist on disk, so the glob above drops them
+  // — add those back. Real literal includes already flowed through the glob, so
+  // `exclude` applies to them; only genuinely-missing paths qualify as virtual
+  // here, and `exclude` does not apply to those. `isDynamicPattern` mirrors
+  // tinyglobby's own glob/literal split, so a glob that matches nothing is
+  // never mistaken for a virtual path.
+  const virtualFiles = include
+    .filter((pattern) => !isDynamicPattern(pattern))
+    .map((p) => pathe.resolve(projectRoot, p))
+    .filter((abs) => !existsSync(abs));
+
+  // glob already returns a unique list (as on `main`), so only build a Set to
+  // dedupe when virtual entries are actually present.
+  const testFiles = virtualFiles.length
+    ? Array.from(new Set([...globbedFiles, ...virtualFiles]))
+    : globbedFiles;
+
+  if (sourceFiles.length) {
     await Promise.all<void>(
       sourceFiles.map(async (file) => {
         try {
@@ -92,47 +164,12 @@ export const getTestEntries = async ({
   }
 
   return Object.fromEntries(
-    filterFiles(testFiles, fileFilters, root).map((entry) => {
-      const relativePath = pathe.relative(root, entry);
-      return [formatTestEntryName(relativePath), entry];
-    }),
-  );
-};
-
-const tryResolve = (request: string, rootPath: string) => {
-  try {
-    const require = createRequire(rootPath);
-    return require.resolve(request, { paths: [rootPath] });
-  } catch (_err) {
-    return undefined;
-  }
-};
-
-export const getSetupFiles = (
-  setups: string[] | string | undefined,
-  rootPath: string,
-): Record<string, string> => {
-  return Object.fromEntries(
-    castArray(setups).map((setupFile) => {
-      const setupFilePath = getAbsolutePath(rootPath, setupFile);
-      try {
-        if (!existsSync(setupFilePath)) {
-          let errorMessage = `Setup file ${color.red(setupFile)} not found`;
-          if (setupFilePath !== setupFile) {
-            errorMessage += color.gray(` (resolved path: ${setupFilePath})`);
-          }
-          throw errorMessage;
-        }
-        const relativePath = pathe.relative(rootPath, setupFilePath);
-        return [formatTestEntryName(relativePath), setupFilePath];
-      } catch (err) {
-        // support use package name as setupFiles value
-        if (tryResolve(setupFile, rootPath)) {
-          return [formatTestEntryName(setupFile), setupFile];
-        }
-        throw err;
-      }
-    }),
+    filterFiles(testFiles, fileFilters, rootPath, fileFilterMode).map(
+      (entry) => {
+        const relativePath = pathe.relative(rootPath, entry);
+        return [formatTestEntryName(relativePath), entry];
+      },
+    ),
   );
 };
 

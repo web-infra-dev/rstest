@@ -1,0 +1,38 @@
+---
+description: 测试的默认超时时间（以毫秒为单位）。设置为 0 禁用超时。
+---
+
+# testTimeout
+
+- **类型：** `number`
+- **默认值：** `5_000`
+- **CLI：** `--testTimeout=5000`
+
+测试的默认超时时间（以毫秒为单位）。设置为 `0` 禁用超时。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --testTimeout=5000
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testTimeout: 5000,
+});
+```
+  </Tab>
+</Tabs>
+
+Rstest 会根据以下优先级顺序确定测试超时时间：
+
+1. 每个测试用例中的 [timeout](/api/runtime-api/test-api/test#test-1) 配置
+2. 测试文件中通过 [`rs.setConfig({ testTimeout })`](/api/runtime-api/rstest/utilities#rssetconfig) 配置的超时时间
+3. CLI 中的 `--testTimeout` 选项
+4. 配置文件中的 `testTimeout` 选项
+5. 默认值 `5000` 毫秒

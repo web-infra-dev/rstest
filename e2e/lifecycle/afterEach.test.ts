@@ -1,4 +1,4 @@
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
@@ -13,7 +13,7 @@ describe('afterEach', () => {
       args: ['run', 'afterEach.test'],
       options: {
         nodeOptions: {
-          cwd: __dirname,
+          cwd: join(__dirname, 'fixtures'),
         },
       },
     });

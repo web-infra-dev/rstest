@@ -1,5 +1,5 @@
 ---
-overviewHeaders: []
+description: Configure which reporters to use for test result output.
 ---
 
 # reporters
@@ -8,9 +8,10 @@ overviewHeaders: []
 
 ```ts
 type Reporter = ReporterName | [ReporterName, ReporterOptions];
-
 type Reporters = Reporter | Reporter[];
 ```
+
+- **Reporter options reference:** Reporter option types are defined in [`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)
 
 - **Default:**
 
@@ -20,98 +21,87 @@ process.env.GITHUB_ACTIONS === 'true'
   : ['default'];
 ```
 
-- **CLI:** `--reporter=<name> --reporter=<name1>`
+- **CLI:** `--reporters=<name> --reporters=<name1>` (`--reporter` is also accepted as an alias)
 
-Customize the reporter type.
+Configure which reporters to use for test result output.
 
-## Built-in Reporters
+Built-in reporter names include `default`, `dot`, `verbose`, `md`, `github-actions`, `junit`, `json`, and `blob`.
 
-### Default reporter
+:::info AI agent environments
+If you haven't explicitly configured any reporters (no `reporters` in config and no `--reporters` flags), Rstest defaults to `['md']` and outputs AI agent-friendly markdown to stdout.
+:::
 
-By default, Rstest displays test run status, results, and summary information in the terminal.
+### Usage
 
-Output example:
+#### Basic example
 
-```bash
- ✓ test/index.test.ts (2)
-
- Test Files 1 passed
-      Tests 2 passed
-   Duration 112ms (build 19ms, tests 93ms)
-```
-
-### Verbose reporter
-
-The default reporter only outputs test case information when tests fail or run slowly. The verbose reporter will output all test case information after test completion.
+You can specify reporters in the `rstest.config.ts` file or via the CLI.
 
 import { Tab, Tabs } from '@theme';
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
+
 ```bash
-npx rstest --reporter=verbose
+npx rstest --reporters=default
 ```
+
   </Tab>
   <Tab label="rstest.config.ts">
+
 ```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  reporters: 'verbose'
+  reporters: 'default',
 });
 ```
-  </Tab>
+
+</Tab>
 </Tabs>
 
-With verbose reporter, Rstest outputs:
+#### Multiple reporters
 
-```bash
- ✓ test/index.test.ts (2) 2ms
-  ✓ Index > should add two numbers correctly (1ms)
-  ✓ Index > should test source code correctly (1ms)
+You can use multiple reporters to output test results in different formats simultaneously. This is useful when you want both console output and a file report for CI/CD pipelines.
 
- Test Files 1 passed
-      Tests 2 passed
-   Duration 112ms (build 19ms, tests 93ms)
-```
-
-### Github actions reporter
-
-The Github Actions reporter outputs error messages in the form of [workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-error-message) when tests fail.
-
-#### Output example
-
-When tests fail, the Github Actions reporter outputs information in a format similar to:
-
-```bash
-::error file=src/index.ts,line=4,col=17,title=test/index.test.ts > should add two numbers correctly::expected 2 to be 4
-```
-
-These outputs are parsed by GitHub Actions and generate comments at the corresponding locations.
-
-![rstest-github-actions-example](https://assets.rspack.rs/rstest/assets/rstest-github-actions-example.jpg)
-
-#### Auto-enablement
-
-When no reporter is manually set, Rstest automatically enables this reporter when it detects a GitHub Actions environment (`process.env.GITHUB_ACTIONS` is `'true'`).
-
-#### Manual enablement
-
-You can also manually enable this reporter:
-
-<Tabs defaultValue='rstest.config.ts'>
-  <Tab label="CLI">
-```bash
-npx rstest --reporter=github-actions
-```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts
+```ts title=rstest.config.ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  reporters: ['github-actions']
+  reporters: ['default', 'junit'],
 });
 ```
-  </Tab>
-</Tabs>
+
+#### Configuring reporters with options
+
+Many reporters support configuration options. Pass them as a tuple `[reporterName, options]`:
+
+```ts title=rstest.config.ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  reporters: [
+    ['default', { verbose: true }],
+    ['github-actions', { verbose: true }],
+    ['junit', { outputPath: './test-results.xml' }],
+  ],
+});
+```
+
+#### Using custom reporters
+
+You can create and use custom reporters by providing a reporter class or object that implements the reporter interface:
+
+```ts title=rstest.config.ts
+import { defineConfig } from '@rstest/core';
+import { CustomReporter } from './custom-reporter';
+
+export default defineConfig({
+  reporters: [CustomReporter],
+});
+```
+
+### Related documentation
+
+- [Reporters guide](/guide/basic/reporters) - Usage examples and built-in reporter details
+- [Reporter API reference](/api/javascript-api/reporter) - Custom reporter implementation

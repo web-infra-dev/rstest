@@ -1,0 +1,11 @@
+@rstest/browser includes portions adapted from Playwright.
+
+Playwright
+Copyright (c) Microsoft Corporation
+
+This software contains code derived from the Puppeteer project (https://github.com/puppeteer/puppeteer),
+available under the Apache 2.0 license (https://github.com/puppeteer/puppeteer/blob/master/LICENSE).
+
+The adapted portions are used in Playwright provider matcher/RPC integration code under:
+- src/providers/playwright/dispatchBrowserRpc.ts
+- src/providers/playwright/expectUtils.ts

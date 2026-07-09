@@ -23,21 +23,9 @@ import {
   SnapshotClient,
   stripSnapshotIndentation,
 } from '@vitest/snapshot';
-import type { Assertion, TestCase } from '../../types';
-import { getTaskNameWithPrefix } from '../../utils';
-
-let _client: SnapshotClient;
-
-export function getSnapshotClient(): SnapshotClient {
-  if (!_client) {
-    _client = new SnapshotClient({
-      isEqual: (received, expected) => {
-        return equals(received, expected, [iterableEquality, subsetEquality]);
-      },
-    });
-  }
-  return _client;
-}
+import type { Assertion, TestCase, WorkerState } from '../../types';
+import { getTaskNameWithPrefix } from '../../utils/helper';
+import { fileContext } from '../fileContext';
 
 function recordAsyncExpect(
   _test: any,
@@ -49,7 +37,6 @@ function recordAsyncExpect(
   // record promise for test, that resolves before test ends
   if (test && promise instanceof Promise) {
     // if promise is explicitly awaited, remove it from the list
-    // biome-ignore lint/style/noParameterAssign: reassigning
     promise = promise.finally(() => {
       if (!test.promises) {
         return;
@@ -86,7 +73,6 @@ function recordAsyncExpect(
     });
 
     return {
-      // biome-ignore lint/suspicious/noThenProperty: promise
       then(onFulfilled, onRejected) {
         resolved = true;
         return promise.then(onFulfilled, onRejected);
@@ -137,208 +123,236 @@ function getError(expected: () => void | Error, promise: string | undefined) {
   throw new Error("snapshot function didn't throw");
 }
 
-function getTestNames(test: TestCase) {
+function getTestMeta(test: TestCase) {
   return {
     filepath: test.testPath,
     name: getTaskNameWithPrefix(test),
-    // testId: test.id,
+    testId: test.testId,
   };
 }
 
-export const SnapshotPlugin: ChaiPlugin = (chai, utils) => {
-  function getTest(assertionName: string, obj: object) {
-    const test = utils.flag(obj, 'vitest-test');
-    if (!test) {
-      throw new Error(`'${assertionName}' cannot be used without test context`);
-    }
-    return test as TestCase;
+/** Snapshot metadata for inline assertions reached outside a test context. */
+function getFileMeta(name: string) {
+  const { testPath, taskId } = fileContext().workerState;
+  return {
+    filepath: testPath,
+    name,
+    testId: String(taskId),
+  };
+}
+/**
+ * Attach this file's `SnapshotClient` to its worker state. Called once per
+ * file by `createRstestRuntime` — the runner consumes it for `setup`/`finish`,
+ * and the (build-once) snapshot chai plugin below resolves it at assert time.
+ */
+export const ensureSnapshotClient = (
+  workerState: WorkerState,
+): SnapshotClient => {
+  workerState.snapshotClient ??= new SnapshotClient({
+    isEqual: (received, expected) => {
+      return equals(received, expected, [iterableEquality, subsetEquality]);
+    },
+  });
+  return workerState.snapshotClient;
+};
+
+/**
+ * Build the snapshot chai plugin. Installed once on the file-level `expect`
+ * singleton; every assertion resolves the running file's worker state through
+ * `fileContext()` at call time (the live-binding contract, see `../api`).
+ */
+export const SnapshotPlugin: () => ChaiPlugin = () => {
+  function getSnapshotClient(): SnapshotClient {
+    return ensureSnapshotClient(fileContext().workerState);
   }
 
-  for (const key of ['matchSnapshot', 'toMatchSnapshot']) {
+  return (chai, utils) => {
+    function getTest(obj: object) {
+      const test = utils.flag(obj, 'vitest-test');
+      return test as TestCase | undefined;
+    }
+
+    function getTestOrThrow(assertionName: string, obj: object) {
+      const test = getTest(obj);
+      if (!test) {
+        throw new Error(
+          `'${assertionName}' cannot be used without test context`,
+        );
+      }
+      return test;
+    }
+
+    for (const key of ['matchSnapshot', 'toMatchSnapshot']) {
+      utils.addMethod(
+        chai.Assertion.prototype,
+        key,
+        function (
+          this: Record<string, unknown>,
+          properties?: object,
+          message?: string,
+        ) {
+          utils.flag(this, '_name', key);
+          const isNot = utils.flag(this, 'negate');
+          if (isNot) {
+            throw new Error(`${key} cannot be used with "not"`);
+          }
+          const expected = utils.flag(this, 'object');
+          const test = getTestOrThrow(key, this);
+          if (
+            typeof properties === 'string' &&
+            typeof message === 'undefined'
+          ) {
+            message = properties;
+            properties = undefined;
+          }
+          const errorMessage = utils.flag(this, 'message');
+          getSnapshotClient().assert({
+            received: expected,
+            message,
+            isInline: false,
+            properties,
+            errorMessage,
+            ...getTestMeta(test),
+          });
+        },
+      );
+    }
+
     utils.addMethod(
       chai.Assertion.prototype,
-      key,
-      function (
-        this: Record<string, unknown>,
-        properties?: object,
-        message?: string,
-      ) {
-        utils.flag(this, '_name', key);
+      'toMatchFileSnapshot',
+      function (this: Assertion, file: string, message?: string) {
+        utils.flag(this, '_name', 'toMatchFileSnapshot');
         const isNot = utils.flag(this, 'negate');
         if (isNot) {
-          throw new Error(`${key} cannot be used with "not"`);
+          throw new Error('toMatchFileSnapshot cannot be used with "not"');
         }
+        const error = new Error('resolves');
         const expected = utils.flag(this, 'object');
-        const test = getTest(key, this);
-        if (typeof properties === 'string' && typeof message === 'undefined') {
-          // biome-ignore lint/style/noParameterAssign: reassigning
-          message = properties;
-          // biome-ignore lint/style/noParameterAssign: reassigning
-          properties = undefined;
-        }
+        const test = getTestOrThrow('toMatchFileSnapshot', this);
         const errorMessage = utils.flag(this, 'message');
-        getSnapshotClient().assert({
+
+        const promise = getSnapshotClient().assertRaw({
           received: expected,
           message,
           isInline: false,
-          properties,
+          rawSnapshot: {
+            file,
+          },
           errorMessage,
-          ...getTestNames(test),
+          ...getTestMeta(test),
+        });
+
+        return recordAsyncExpect(
+          test,
+          promise,
+          createAssertionMessage(utils, this, true),
+          error,
+        );
+      },
+    );
+
+    utils.addMethod(
+      chai.Assertion.prototype,
+      'toMatchInlineSnapshot',
+      function __INLINE_SNAPSHOT__(
+        this: Record<string, unknown>,
+        properties?: object,
+        inlineSnapshot?: string,
+        message?: string,
+      ) {
+        utils.flag(this, '_name', 'toMatchInlineSnapshot');
+        const isNot = utils.flag(this, 'negate');
+        if (isNot) {
+          throw new Error('toMatchInlineSnapshot cannot be used with "not"');
+        }
+        const test = getTest(this);
+
+        const expected = utils.flag(this, 'object');
+        const error = utils.flag(this, 'error');
+        if (typeof properties === 'string') {
+          message = inlineSnapshot;
+          inlineSnapshot = properties;
+          properties = undefined;
+        }
+        if (inlineSnapshot) {
+          inlineSnapshot = stripSnapshotIndentation(inlineSnapshot);
+        }
+        const errorMessage = utils.flag(this, 'message');
+
+        getSnapshotClient().assert({
+          received: expected,
+          message,
+          isInline: true,
+          properties,
+          inlineSnapshot,
+          error,
+          errorMessage,
+          ...(test ? getTestMeta(test) : getFileMeta('toMatchInlineSnapshot')),
         });
       },
     );
-  }
+    utils.addMethod(
+      chai.Assertion.prototype,
+      'toThrowErrorMatchingSnapshot',
+      function (this: Record<string, unknown>, message?: string) {
+        utils.flag(this, '_name', 'toThrowErrorMatchingSnapshot');
+        const isNot = utils.flag(this, 'negate');
+        if (isNot) {
+          throw new Error(
+            'toThrowErrorMatchingSnapshot cannot be used with "not"',
+          );
+        }
+        const expected = utils.flag(this, 'object');
+        const test = getTestOrThrow('toThrowErrorMatchingSnapshot', this);
+        const promise = utils.flag(this, 'promise') as string | undefined;
+        const errorMessage = utils.flag(this, 'message');
+        getSnapshotClient().assert({
+          received: getError(expected, promise),
+          message,
+          errorMessage,
+          ...getTestMeta(test),
+        });
+      },
+    );
+    utils.addMethod(
+      chai.Assertion.prototype,
+      'toThrowErrorMatchingInlineSnapshot',
+      function __INLINE_SNAPSHOT__(
+        this: Record<string, unknown>,
+        inlineSnapshot: string,
+        message: string,
+      ) {
+        const isNot = utils.flag(this, 'negate');
+        if (isNot) {
+          throw new Error(
+            'toThrowErrorMatchingInlineSnapshot cannot be used with "not"',
+          );
+        }
+        const test = getTest(this);
 
-  utils.addMethod(
-    chai.Assertion.prototype,
-    'toMatchFileSnapshot',
-    function (this: Assertion, file: string, message?: string) {
-      utils.flag(this, '_name', 'toMatchFileSnapshot');
-      const isNot = utils.flag(this, 'negate');
-      if (isNot) {
-        throw new Error('toMatchFileSnapshot cannot be used with "not"');
-      }
-      const error = new Error('resolves');
-      const expected = utils.flag(this, 'object');
-      const test = getTest('toMatchFileSnapshot', this);
-      const errorMessage = utils.flag(this, 'message');
+        const expected = utils.flag(this, 'object');
+        const error = utils.flag(this, 'error');
+        const promise = utils.flag(this, 'promise') as string | undefined;
+        const errorMessage = utils.flag(this, 'message');
 
-      const promise = getSnapshotClient().assertRaw({
-        received: expected,
-        message,
-        isInline: false,
-        rawSnapshot: {
-          file,
-        },
-        errorMessage,
-        ...getTestNames(test),
-      });
+        if (inlineSnapshot) {
+          inlineSnapshot = stripSnapshotIndentation(inlineSnapshot);
+        }
 
-      return recordAsyncExpect(
-        test,
-        promise,
-        createAssertionMessage(utils, this, true),
-        error,
-      );
-    },
-  );
-
-  utils.addMethod(
-    chai.Assertion.prototype,
-    'toMatchInlineSnapshot',
-    function __INLINE_SNAPSHOT__(
-      this: Record<string, unknown>,
-      properties?: object,
-      inlineSnapshot?: string,
-      message?: string,
-    ) {
-      utils.flag(this, '_name', 'toMatchInlineSnapshot');
-      const isNot = utils.flag(this, 'negate');
-      if (isNot) {
-        throw new Error('toMatchInlineSnapshot cannot be used with "not"');
-      }
-      const test = getTest('toMatchInlineSnapshot', this);
-
-      const isInsideEach = test.each || test.inTestEach;
-      if (isInsideEach) {
-        throw new Error(
-          'InlineSnapshot cannot be used inside of test.each or describe.each',
-        );
-      }
-
-      const expected = utils.flag(this, 'object');
-      const error = utils.flag(this, 'error');
-      if (typeof properties === 'string') {
-        // biome-ignore lint/style/noParameterAssign: reassigning
-        message = inlineSnapshot;
-        // biome-ignore lint/style/noParameterAssign: reassigning
-        inlineSnapshot = properties;
-        // biome-ignore lint/style/noParameterAssign: reassigning
-        properties = undefined;
-      }
-      if (inlineSnapshot) {
-        // biome-ignore lint/style/noParameterAssign: reassigning
-        inlineSnapshot = stripSnapshotIndentation(inlineSnapshot);
-      }
-      const errorMessage = utils.flag(this, 'message');
-
-      getSnapshotClient().assert({
-        received: expected,
-        message,
-        isInline: true,
-        properties,
-        inlineSnapshot,
-        error,
-        errorMessage,
-        ...getTestNames(test),
-      });
-    },
-  );
-  utils.addMethod(
-    chai.Assertion.prototype,
-    'toThrowErrorMatchingSnapshot',
-    function (this: Record<string, unknown>, message?: string) {
-      utils.flag(this, '_name', 'toThrowErrorMatchingSnapshot');
-      const isNot = utils.flag(this, 'negate');
-      if (isNot) {
-        throw new Error(
-          'toThrowErrorMatchingSnapshot cannot be used with "not"',
-        );
-      }
-      const expected = utils.flag(this, 'object');
-      const test = getTest('toThrowErrorMatchingSnapshot', this);
-      const promise = utils.flag(this, 'promise') as string | undefined;
-      const errorMessage = utils.flag(this, 'message');
-      getSnapshotClient().assert({
-        received: getError(expected, promise),
-        message,
-        errorMessage,
-        ...getTestNames(test),
-      });
-    },
-  );
-  utils.addMethod(
-    chai.Assertion.prototype,
-    'toThrowErrorMatchingInlineSnapshot',
-    function __INLINE_SNAPSHOT__(
-      this: Record<string, unknown>,
-      inlineSnapshot: string,
-      message: string,
-    ) {
-      const isNot = utils.flag(this, 'negate');
-      if (isNot) {
-        throw new Error(
-          'toThrowErrorMatchingInlineSnapshot cannot be used with "not"',
-        );
-      }
-      const test = getTest('toThrowErrorMatchingInlineSnapshot', this);
-
-      const isInsideEach = test.each || test.inTestEach;
-      if (isInsideEach) {
-        throw new Error(
-          'InlineSnapshot cannot be used inside of test.each or describe.each',
-        );
-      }
-      const expected = utils.flag(this, 'object');
-      const error = utils.flag(this, 'error');
-      const promise = utils.flag(this, 'promise') as string | undefined;
-      const errorMessage = utils.flag(this, 'message');
-
-      if (inlineSnapshot) {
-        // biome-ignore lint/style/noParameterAssign: reassigning
-        inlineSnapshot = stripSnapshotIndentation(inlineSnapshot);
-      }
-
-      getSnapshotClient().assert({
-        received: getError(expected, promise),
-        message,
-        inlineSnapshot,
-        isInline: true,
-        error,
-        errorMessage,
-        ...getTestNames(test),
-      });
-    },
-  );
-  utils.addMethod(chai.expect, 'addSnapshotSerializer', addSerializer);
+        getSnapshotClient().assert({
+          received: getError(expected, promise),
+          message,
+          inlineSnapshot,
+          isInline: true,
+          error,
+          errorMessage,
+          ...(test
+            ? getTestMeta(test)
+            : getFileMeta('toThrowErrorMatchingInlineSnapshot')),
+        });
+      },
+    );
+    utils.addMethod(chai.expect, 'addSnapshotSerializer', addSerializer);
+  };
 };

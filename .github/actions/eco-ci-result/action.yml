@@ -15,12 +15,12 @@ runs:
   using: 'composite'
   steps:
     - id: get-result
-      uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
       env:
         CI_OUTPUT: ${{ inputs.workflow-output }}
       with:
         script: |
-          const owner = "rspack-contrib"
+          const owner = "rstackjs"
           const repo = "rstest-ecosystem-ci"
           const runId = JSON.parse(process.env.CI_OUTPUT).workflow_id
 

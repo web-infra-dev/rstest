@@ -1,0 +1,68 @@
+---
+description: Silence intercepted console output from tests, or only keep logs for failed tasks.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# silent
+
+<ApiMeta addedVersion="0.10.0" />
+
+- **Type:** `boolean | 'passed-only'`
+- **Default:** `false`
+- **CLI:** `--silent [value]`
+
+Silence intercepted console output from tests.
+
+- Set `true` to hide all intercepted console logs.
+- Set `'passed-only'` to keep intercepted logs only for failed files, suites, and test cases.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+    ```bash
+    npx rstest --silent=passed-only
+    ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+    ```ts
+    import { defineConfig } from '@rstest/core';
+
+    export default defineConfig({
+      silent: 'passed-only',
+    });
+    ```
+
+  </Tab>
+</Tabs>
+
+## Example
+
+When `silent` is set to `'passed-only'`, console logs from passing tasks are buffered and discarded, while logs from failed tasks are replayed with the failure output.
+
+```ts title="example.test.ts"
+import { describe, expect, it } from '@rstest/core';
+
+describe('math', () => {
+  it('passes', () => {
+    console.log('pass log');
+    expect(1 + 1).toBe(2);
+  });
+
+  it('fails', () => {
+    console.log('fail log');
+    expect(1 + 1).toBe(3);
+  });
+});
+```
+
+Only `fail log` will be printed.
+
+:::note
+Rstest tries to attribute logs to specific tests, but in concurrent asynchronous test scenarios in browser mode, log attribution may not be perfectly accurate.
+
+In browser mode, this interception still calls the original `console.*` so logs can remain visible in DevTools. `silent` controls Rstest/reporter output, not necessarily the browser's native console view.
+
+`silent` still works when `disableConsoleIntercept` is `true`. In that case, logs do not go through the reporter console interception pipeline, so [onConsoleLog](/config/test/on-console-log) and [printConsoleTrace](/config/test/print-console-trace) still do not apply. However, with `silent: 'passed-only'`, Rstest still buffers logs internally and replays the matching logs through the original console output after failed tasks finish.
+:::

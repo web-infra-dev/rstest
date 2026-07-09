@@ -1,0 +1,127 @@
+---
+description: Rstest 默认使用 Node.js 作为测试环境。如果你在开发 Web 应用，可以使用类浏览器环境，如 jsdom 或 happy-dom。
+---
+
+# testEnvironment
+
+- **类型：** `'node' | 'jsdom' | 'happy-dom' | { name: EnvironmentName, options?: EnvironmentOptions }`
+- **默认值：** `'node'`
+- **CLI：** `--testEnvironment=node`
+
+测试时所使用的环境。
+
+Rstest 默认使用 Node.js 作为测试环境。如果你在开发 Web 应用，可以使用类浏览器环境，如 `jsdom` 或 `happy-dom`。
+
+import { Tab, Tabs } from '@theme';
+import { ApiMeta } from '@components/ApiMeta';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --testEnvironment=jsdom
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'jsdom',
+});
+```
+  </Tab>
+</Tabs>
+
+### DOM 测试
+
+Rstest 支持使用 [jsdom](https://github.com/jsdom/jsdom) 和 [happy-dom](https://github.com/capricorn86/happy-dom) 来模拟 DOM 和浏览器 API。
+
+如果你想启用 DOM 测试，可以使用如下配置：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'jsdom', // 或 'happy-dom'
+});
+```
+
+你还需要安装对应的包：
+
+import { PackageManagerTabs } from '@theme';
+
+使用 jsdom
+
+<PackageManagerTabs command="add jsdom -D" />
+
+使用 happy-dom
+
+<PackageManagerTabs command="add happy-dom -D" />
+
+启用 DOM 测试后，你可以在测试用例中使用 `document` 和 `window` 等浏览器 API。
+
+```ts
+test('DOM test', () => {
+  document.body.innerHTML = '<p class="content">hello world</p>';
+  const paragraph = document.querySelector('.content');
+  expect(paragraph?.innerHTML).toBe('hello world');
+});
+```
+
+#### 环境选项
+
+你也可以为测试环境传递选项。这对于配置 `jsdom` 或 `happy-dom` 非常有用。例如，你可以为 `jsdom` 设置 `url`：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: {
+    name: 'jsdom',
+    options: {
+      // jsdom-specific options
+      url: 'https://example.com',
+    },
+  },
+});
+```
+
+`options` 对象会直接传递给环境的构造函数。
+
+- 对于 `jsdom`，它会传递给 `JSDOM` 构造函数。你可以在 [jsdom 文档](https://github.com/jsdom/jsdom#customizing-jsdom)中找到可用的选项。
+- 对于 `happy-dom`，它会传递给 `Window` 构造函数。你可以在 [happy-dom 文档](https://github.com/capricorn86/happy-dom/wiki/Window)中找到可用的选项。
+
+### 环境注释
+
+<ApiMeta addedVersion="0.10.5" />
+
+你可以在测试文件顶部附近添加环境注释，为单个测试文件覆盖测试环境：
+
+```ts title="example.test.ts"
+// @rstest-environment jsdom
+
+test('DOM test', () => {
+  document.body.innerHTML = '<p>hello world</p>';
+  expect(document.querySelector('p')?.textContent).toBe('hello world');
+});
+```
+
+使用 `@rstest-environment-options` 可以为当前文件传递环境选项。选项必须是单行 JSON 对象：
+
+```ts title="example.test.ts"
+// @rstest-environment jsdom
+// @rstest-environment-options { "url": "https://example.com/" }
+
+test('sets the jsdom url', () => {
+  expect(window.location.href).toBe('https://example.com/');
+});
+```
+
+Rstest 也识别 `@vitest-environment` 和 `@jest-environment` 别名，以及它们对应的 `-options` 变体，方便从 Vitest 或 Jest 迁移。
+
+环境注释支持 Node runner 内置环境：`node`、`jsdom` 和 `happy-dom`。它不会应用到 browser mode。如果大多数文件使用同一个环境，建议优先在 `rstest.config.ts` 中配置 `testEnvironment` 或拆分 `projects`。
+
+### 示例
+
+- [Rstest + node](https://github.com/web-infra-dev/rstest/tree/main/examples/node)
+- [Rstest + jsdom + react](https://github.com/web-infra-dev/rstest/tree/main/examples/react)

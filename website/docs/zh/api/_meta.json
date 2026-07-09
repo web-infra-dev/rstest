@@ -1,17 +1,12 @@
 [
   {
-    "type": "file",
-    "name": "index",
-    "label": "Overview"
+    "type": "dir-section-header",
+    "name": "runtime-api",
+    "label": "Runtime API"
   },
   {
-    "type": "dir",
-    "name": "test-api",
-    "label": "Test API"
-  },
-  {
-    "type": "dir",
-    "name": "rstest",
-    "label": "Rstest Utility"
+    "type": "dir-section-header",
+    "name": "javascript-api",
+    "label": "JavaScript API"
   }
 ]

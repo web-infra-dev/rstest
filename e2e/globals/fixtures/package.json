@@ -1,7 +1,7 @@
 {
-  "private": true,
   "name": "@rstest/tests-global-fixtures",
   "version": "1.0.0",
+  "private": true,
   "devDependencies": {
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*"

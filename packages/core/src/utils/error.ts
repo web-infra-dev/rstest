@@ -1,8 +1,40 @@
 import fs from 'node:fs';
+import { resolve } from 'node:path';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { type StackFrame, parse as stackTraceParse } from 'stacktrace-parser';
 import type { FormattedError, GetSourcemap } from '../types';
-import { color, formatTestPath, logger } from '../utils';
+import { globalApis } from './constants';
+import { color, isDebug, logger } from './logger';
+import { formatTestPath } from './testFiles';
+
+const isRelativePath = (p: string): boolean => /^\.\.?\//.test(p);
+
+const isHttpLikeFile = (file: string): boolean => /^https?:\/\//.test(file);
+
+const hintNotDefinedError = (message: string): string => {
+  const [, varName] = /(\w+) is not defined/.exec(message) || [];
+  if (varName) {
+    if ((globalApis as readonly string[]).includes(varName)) {
+      return message.replace(
+        `${varName} is not defined`,
+        `${varName} is not defined. Did you forget to enable "globals" configuration?`,
+      );
+    }
+    if (['jest', 'vitest'].includes(varName)) {
+      return message.replace(
+        `${varName} is not defined`,
+        `${varName} is not defined. Did you mean rstest?`,
+      );
+    }
+    if (varName === 'React') {
+      return message.replace(
+        `${varName} is not defined`,
+        `${varName} is not defined. Did you forget to install "${color.yellow('@rsbuild/plugin-react')}" plugin?`,
+      );
+    }
+  }
+  return message;
+};
 
 export async function printError(
   error: FormattedError,
@@ -19,24 +51,59 @@ export async function printError(
       '  - Enable `globals` configuration and use global API.',
     ];
 
-    logger.log(`${color.red(tips.join('\n'))}\n`);
+    logger.stderr(`${color.red(tips.join('\n'))}\n`);
     return;
   }
-  logger.log(
+
+  if (error.message.includes('is not defined')) {
+    error.message = hintNotDefinedError(error.message);
+  }
+
+  logger.stderr(
     `${color.red(color.bold(errorName))}${color.red(`: ${error.message}`)}\n`,
   );
 
   if (error.diff) {
-    logger.log(error.diff);
-    logger.log();
+    logger.stderr(error.diff);
+    logger.stderr('');
   }
 
   if (error.stack) {
-    const stackFrames = await parseErrorStacktrace({
+    let stackFrames = await parseErrorStacktrace({
       stack: error.stack,
       fullStack: error.fullStack,
       getSourcemap,
     });
+    if (
+      !stackFrames.length &&
+      !(error.fullStack || isDebug()) &&
+      !error.stack.endsWith(error.message)
+    ) {
+      const fullStackFrames = await parseErrorStacktrace({
+        stack: error.stack,
+        fullStack: true,
+        getSourcemap,
+      });
+
+      const printableFullStackFrames = fullStackFrames.filter(
+        (frame) => frame.file,
+      );
+
+      if (printableFullStackFrames[0]) {
+        logger.stderr(
+          color.gray(
+            "No user error stack found, showing fullStack. Set 'DEBUG=rstest' to always show fullStack.",
+          ),
+        );
+        stackFrames = printableFullStackFrames;
+      } else {
+        logger.stderr(
+          color.gray(
+            "No error stack found, set 'DEBUG=rstest' to show fullStack.",
+          ),
+        );
+      }
+    }
 
     if (stackFrames[0]) {
       await printCodeFrame(stackFrames[0]);
@@ -77,30 +144,32 @@ async function printCodeFrame(frame: StackFrame) {
     },
   );
 
-  logger.log(result);
-  logger.log('');
+  logger.stderr(result);
+  logger.stderr('');
+}
+
+export function formatStack(frame: StackFrame, rootPath: string): string {
+  return frame.methodName !== '<unknown>'
+    ? `at ${frame.methodName} (${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column})`
+    : `at ${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column}`;
 }
 
 function printStack(stackFrames: StackFrame[], rootPath: string) {
   for (const frame of stackFrames) {
-    const msg =
-      frame.methodName !== '<unknown>'
-        ? `at ${frame.methodName} (${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column})`
-        : `at ${formatTestPath(rootPath, frame.file!)}:${frame.lineNumber}:${frame.column}`;
-    logger.log(color.gray(`        ${msg}`));
+    logger.stderr(color.gray(`        ${formatStack(frame, rootPath)}`));
   }
-  stackFrames.length && logger.log();
+  if (stackFrames.length) logger.stderr('');
 }
 
 const stackIgnores: (RegExp | string)[] = [
   /\/@rstest\/core/,
   /rstest\/packages\/core\/dist/,
-  /node_modules\/tinypool/,
   /node_modules\/chai/,
   /node_modules\/@vitest\/expect/,
   /node_modules\/@vitest\/snapshot/,
   /node:\w+/,
   /webpack\/runtime/,
+  /rstest runtime/,
   // windows path
   /webpack\\runtime/,
   '<anonymous>',
@@ -109,13 +178,17 @@ const stackIgnores: (RegExp | string)[] = [
 export async function parseErrorStacktrace({
   stack,
   getSourcemap,
-  fullStack,
+  fullStack = isDebug(),
 }: {
   fullStack?: boolean;
   stack: string;
-  getSourcemap: GetSourcemap;
+  getSourcemap?: GetSourcemap;
 }): Promise<StackFrame[]> {
-  return Promise.all(
+  // Cache TraceMap per file to avoid redundant VLQ decoding when multiple
+  // stack frames originate from the same source file.
+  const traceMapCache = new Map<string, TraceMap>();
+
+  const stackFrames = await Promise.all(
     stackTraceParse(stack)
       .filter((frame) =>
         fullStack
@@ -124,9 +197,13 @@ export async function parseErrorStacktrace({
             !stackIgnores.some((entry) => frame.file?.match(entry)),
       )
       .map(async (frame) => {
-        const sourcemap = getSourcemap(frame.file!);
+        const sourcemap = await getSourcemap?.(frame.file!);
         if (sourcemap) {
-          const traceMap = new TraceMap(sourcemap);
+          let traceMap = traceMapCache.get(frame.file!);
+          if (!traceMap) {
+            traceMap = new TraceMap(sourcemap);
+            traceMapCache.set(frame.file!, traceMap);
+          }
           const { line, column, source, name } = originalPositionFor(traceMap, {
             line: frame.lineNumber!,
             column: frame.column!,
@@ -138,7 +215,18 @@ export async function parseErrorStacktrace({
           }
           return {
             ...frame,
-            file: source,
+            file: isRelativePath(source)
+              ? resolve(frame.file!, '../', source)
+              : (() => {
+                  // `source` can be a filesystem path (e.g. `C:\...`) or a URL-like
+                  // string (e.g. `webpack://...`). `new URL()` throws for plain paths,
+                  // so fall back to the raw value instead of crashing the reporter.
+                  try {
+                    return new URL(source).pathname;
+                  } catch {
+                    return source;
+                  }
+                })(),
             lineNumber: line,
             name,
             column,
@@ -149,4 +237,23 @@ export async function parseErrorStacktrace({
   ).then((frames) =>
     frames.filter((frame): frame is StackFrame => frame !== null),
   );
+
+  if (fullStack) {
+    return stackFrames;
+  }
+
+  const filteredFrames = stackFrames.filter((frame) => {
+    if (!frame.file) {
+      return false;
+    }
+
+    if (isHttpLikeFile(frame.file)) {
+      return false;
+    }
+
+    const normalizedFile = frame.file.replace(/\\/g, '/');
+    return !stackIgnores.some((entry) => normalizedFile.match(entry));
+  });
+
+  return filteredFrames;
 }

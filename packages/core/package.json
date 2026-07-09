@@ -1,32 +1,48 @@
 {
   "name": "@rstest/core",
-  "version": "0.2.2",
+  "version": "0.11.0",
   "description": "The Rsbuild-based test tool.",
-  "bugs": {
-    "url": "https://github.com/web-infra-dev/rstest/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/web-infra-dev/rstest",
-    "directory": "packages/core"
-  },
   "keywords": [
     "rstest",
     "test",
     "rstack",
     "rspack"
   ],
-  "license": "MIT",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist-types/index.d.ts",
-  "bin": {
-    "rstest": "./bin/rstest.js"
+  "homepage": "https://rstest.rs",
+  "bugs": {
+    "url": "https://github.com/web-infra-dev/rstest/issues"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/web-infra-dev/rstest.git",
+    "directory": "packages/core"
+  },
+  "license": "MIT",
+  "sideEffects": false,
+  "type": "module",
   "exports": {
     ".": {
-      "types": "./dist-types/index.d.ts",
+      "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./api": {
+      "types": "./dist/api/index.d.ts",
+      "default": "./dist/api/index.js"
+    },
+    "./internal/adapter": {
+      "types": "./dist/adapter.d.ts",
+      "default": "./dist/adapter.js"
+    },
+    "./internal/browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    },
+    "./internal/browser-runtime": {
+      "types": "./dist/browser-runtime/index.d.ts",
+      "default": "./dist/browser-runtime/index.js"
+    },
+    "./package.json": {
+      "default": "./package.json"
     },
     "./globals": {
       "types": "./globals.d.ts"
@@ -35,57 +51,75 @@
       "types": "./importMeta.d.ts"
     }
   },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "rstest": "./bin/rstest.js"
+  },
   "files": [
     "bin",
     "dist",
-    "dist-types",
     "compiled",
     "globals.d.ts",
     "importMeta.d.ts"
   ],
   "scripts": {
     "build": "rslib build && npx prettier ./LICENSE.md --write",
-    "typecheck": "tsc --noEmit",
-    "dev": "rslib build --watch",
+    "dev": "cross-env SOURCEMAP=true rslib build --watch",
     "test": "npx rstest --globals"
   },
   "dependencies": {
-    "chai": "^5.3.3",
-    "@types/chai": "^5.2.2",
-    "@rsbuild/core": "1.5.0",
-    "birpc": "2.5.0",
-    "pathe": "^2.0.3",
-    "std-env": "^3.9.0",
-    "tinypool": "^1.1.1"
+    "@rsbuild/core": "~2.1.4",
+    "@types/chai": "^5.2.3"
   },
   "devDependencies": {
-    "@vitest/expect": "^3.2.4",
-    "@vitest/snapshot": "^3.2.4",
-    "@babel/code-frame": "^7.27.1",
-    "@jridgewell/trace-mapping": "0.3.30",
-    "@microsoft/api-extractor": "^7.52.11",
-    "@rslib/core": "0.12.2",
+    "@antfu/install-pkg": "^1.1.0",
+    "@babel/code-frame": "^7.29.7",
+    "@clack/prompts": "^1.7.0",
+    "@jridgewell/trace-mapping": "0.3.31",
+    "@microsoft/api-extractor": "^7.58.9",
+    "@rsbuild/plugin-less": "^2.0.1",
+    "@rsbuild/plugin-node-polyfill": "^1.4.6",
+    "@rsbuild/plugin-sass": "^2.0.1",
+    "@rslib/core": "0.23.2",
     "@rstest/tsconfig": "workspace:*",
-    "@sinonjs/fake-timers": "^14.0.0",
-    "@types/babel__code-frame": "^7.0.6",
+    "@sinonjs/fake-timers": "^15.4.0",
+    "@types/babel__code-frame": "^7.27.0",
+    "@types/istanbul-lib-coverage": "^2.0.6",
+    "@types/istanbul-lib-report": "^3.0.3",
+    "@types/istanbul-reports": "^3.0.4",
     "@types/jsdom": "^21.1.7",
-    "@types/sinonjs__fake-timers": "^8.1.5",
+    "@types/picomatch": "^4.0.3",
     "@types/source-map-support": "^0.5.10",
-    "cac": "^6.7.14",
-    "chokidar": "^4.0.3",
-    "happy-dom": "^18.0.1",
-    "jest-diff": "^30.0.5",
-    "jsdom": "^26.1.0",
-    "license-webpack-plugin": "^4.0.2",
+    "@vitest/expect": "^3.2.6",
+    "@vitest/pretty-format": "^3.2.6",
+    "@vitest/snapshot": "^3.2.6",
+    "@vitest/utils": "^3.2.6",
+    "birpc": "^4.0.0",
+    "cac": "^7.0.0",
+    "chai": "^6.2.2",
+    "chokidar": "^5.0.0",
+    "deepmerge": "^4.3.1",
+    "happy-dom": "^20.10.6",
+    "jsdom": "^29.1.1",
+    "memfs": "^4.57.8",
+    "package-manager-detector": "^1.7.0",
+    "pathe": "^2.0.3",
     "picocolors": "^1.1.1",
-    "rslog": "^1.2.11",
+    "picomatch": "^4.0.5",
+    "rslog": "^2.1.3",
     "source-map-support": "^0.5.21",
     "stacktrace-parser": "0.1.11",
-    "tinyglobby": "^0.2.14",
-    "tinyspy": "^4.0.3"
+    "std-env": "^4.1.0",
+    "strip-ansi": "^7.2.0",
+    "tinyglobby": "^0.2.17",
+    "tinyspy": "^4.0.4",
+    "url-extras": "^0.1.0",
+    "webpack": "^5.108.4",
+    "webpack-license-plugin": "^4.5.1"
   },
   "peerDependencies": {
-    "happy-dom": "*",
+    "happy-dom": "^20.8.3",
     "jsdom": "*"
   },
   "peerDependenciesMeta": {
@@ -97,7 +131,7 @@
     }
   },
   "engines": {
-    "node": ">=18.12.0"
+    "node": "^20.19.0 || >=22.12.0"
   },
   "publishConfig": {
     "access": "public",

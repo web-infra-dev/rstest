@@ -1,0 +1,68 @@
+---
+description: 控制是否输出测试中的 console 日志，或只保留失败任务的日志。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# silent
+
+<ApiMeta addedVersion="0.10.0" />
+
+- **类型：** `boolean | 'passed-only'`
+- **默认值：** `false`
+- **CLI：** `--silent [value]`
+
+控制是否静默测试中的 console 日志输出。
+
+- 设为 `true` 时，隐藏所有被拦截的测试 console 日志。
+- 设为 `'passed-only'` 时，仅保留失败文件、套件和测试用例的被拦截日志。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+    ```bash
+    npx rstest --silent=passed-only
+    ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+    ```ts
+    import { defineConfig } from '@rstest/core';
+
+    export default defineConfig({
+      silent: 'passed-only',
+    });
+    ```
+
+  </Tab>
+</Tabs>
+
+## 示例
+
+当 `silent` 设置为 `'passed-only'` 时，通过 console 打印的日志会先被缓存；通过任务的日志会被丢弃，失败任务的日志会在失败输出附近回放。
+
+```ts title="example.test.ts"
+import { describe, expect, it } from '@rstest/core';
+
+describe('math', () => {
+  it('passes', () => {
+    console.log('pass log');
+    expect(1 + 1).toBe(2);
+  });
+
+  it('fails', () => {
+    console.log('fail log');
+    expect(1 + 1).toBe(3);
+  });
+});
+```
+
+最终只会打印 `fail log`。
+
+:::note
+Rstest 会尽力将日志归属到具体测试上，但在 browser mode 的并发异步测试场景中，日志归属可能不会完全准确。
+
+在 browser mode 下，这条拦截链路仍然会调用原始的 `console.*`，以便日志继续出现在 DevTools 中。因此，`silent` 控制的是 Rstest / reporter 的输出，不一定会把浏览器原生控制台中的日志也一起隐藏。
+
+当 `disableConsoleIntercept` 为 `true` 时，`silent` 仍然生效。此时日志不会经过 reporter 的 console 拦截链路，因此 [onConsoleLog](/config/test/on-console-log) 和 [printConsoleTrace](/config/test/print-console-trace) 仍然不会生效；但在 `silent: 'passed-only'` 下，Rstest 仍会在内部缓存日志，并在失败任务结束后通过原始 console 输出回放对应日志。
+:::

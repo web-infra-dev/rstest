@@ -1,8 +1,10 @@
 import type {
   Reporter,
+  TestCaseInfo,
   TestFileInfo,
   TestFileResult,
   TestResult,
+  TestSuiteInfo,
 } from '@rstest/core';
 import { defineConfig } from '@rstest/core';
 
@@ -13,8 +15,28 @@ class MyReporter implements Reporter {
     reporterResult.push('[custom reporter] onTestFileStart');
   }
 
+  onTestFileReady(_file: TestFileInfo) {
+    reporterResult.push('[custom reporter] onTestFileReady');
+  }
+
+  onTestSuiteStart(_test: TestSuiteInfo) {
+    reporterResult.push('[custom reporter] onTestSuiteStart');
+  }
+
+  onTestSuiteResult(_result: TestResult) {
+    reporterResult.push('[custom reporter] onTestSuiteResult');
+  }
+
+  onTestCaseStart(_test: TestCaseInfo) {
+    reporterResult.push('[custom reporter] onTestCaseStart');
+  }
+
   onTestCaseResult(_result: TestResult) {
     reporterResult.push('[custom reporter] onTestCaseResult');
+  }
+
+  onTestRunStart() {
+    reporterResult.push('[custom reporter] onTestRunStart');
   }
 
   onTestRunEnd({

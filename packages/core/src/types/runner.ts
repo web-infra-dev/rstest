@@ -1,16 +1,29 @@
-import type { TestFileInfo, TestFileResult, TestResult } from './testSuite';
+import type {
+  TestCaseInfo,
+  TestFileInfo,
+  TestResult,
+  TestSuiteInfo,
+} from './testSuite';
 
 export type RunnerHooks = {
+  onTestSuiteStart?: (test: TestSuiteInfo) => Promise<void>;
+  onTestSuiteResult?: (result: TestResult) => Promise<void>;
   /**
-   * Called before test file run.
+   * Called after tests in file collected.
    */
-  onTestFileStart?: (test: TestFileInfo) => Promise<void>;
+  onTestFileReady?: (test: TestFileInfo) => Promise<void>;
   /**
-   * Called after the test file is finished running.
+   * Called before running the test case.
    */
-  onTestFileResult: (test: TestFileResult) => Promise<void>;
+  onTestCaseStart?: (test: TestCaseInfo) => Promise<void>;
+
   /**
    * Called after the test is finished running.
    */
   onTestCaseResult?: (result: TestResult) => Promise<void>;
+
+  /**
+   * The number of failed tests.
+   */
+  getCountOfFailedTests: () => Promise<number>;
 };

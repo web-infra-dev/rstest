@@ -1,130 +1,141 @@
 import { relative } from 'pathe';
-import { parse as stackTraceParse } from 'stacktrace-parser';
-import { isCI } from 'std-env';
 import type {
   DefaultReporterOptions,
   Duration,
   GetSourcemap,
   NormalizedConfig,
+  NormalizedProjectConfig,
   Reporter,
+  RstestTestState,
   SnapshotSummary,
-  TestFileInfo,
   TestFileResult,
   TestResult,
   UserConsoleLog,
 } from '../types';
-import { color, logger, prettyTestPath } from '../utils';
+import { flushOutputStreams, isTTY } from '../utils';
+import { NonTTYProgressNotifier } from './nonTtyProgressNotifier';
 import { StatusRenderer } from './statusRenderer';
 import { printSummaryErrorLogs, printSummaryLog } from './summary';
-import { logCase, logFileTitle } from './utils';
+import { logCase, logFileTitle, logUserConsoleLog } from './utils';
 
 export class DefaultReporter implements Reporter {
+  readonly flushOutputStreams: boolean;
+
   protected rootPath: string;
   protected config: NormalizedConfig;
-  private options: DefaultReporterOptions = {};
+  protected projectConfigs: Map<string, NormalizedProjectConfig>;
+  private readonly options: DefaultReporterOptions = {};
   protected statusRenderer: StatusRenderer | undefined;
+  protected nonTTYProgressNotifier: NonTTYProgressNotifier | undefined;
+  private readonly testState: RstestTestState;
 
   constructor({
     rootPath,
     options,
     config,
+    testState,
+    projectConfigs,
   }: {
     rootPath: string;
     config: NormalizedConfig;
     options: DefaultReporterOptions;
+    testState: RstestTestState;
+    projectConfigs?: Map<string, NormalizedProjectConfig>;
   }) {
     this.rootPath = rootPath;
     this.config = config;
+    this.projectConfigs = projectConfigs ?? new Map();
     this.options = options;
-    if (!isCI) {
-      this.statusRenderer = new StatusRenderer(rootPath);
+    this.testState = testState;
+    this.flushOutputStreams = !options.logger;
+    if (isTTY() || options.logger) {
+      this.statusRenderer = new StatusRenderer(
+        rootPath,
+        testState,
+        options.logger,
+      );
+    } else {
+      this.nonTTYProgressNotifier = new NonTTYProgressNotifier(
+        rootPath,
+        testState,
+      );
     }
   }
 
-  onTestFileStart(test: TestFileInfo): void {
-    this.statusRenderer?.addRunningModule(test.testPath);
+  onTestFileStart(): void {
+    this.statusRenderer?.onTestFileStart();
+    this.nonTTYProgressNotifier?.start();
   }
 
-  onTestFileResult(test: TestFileResult): void {
-    this.statusRenderer?.removeRunningModule(test.testPath);
-
-    const relativePath = relative(this.rootPath, test.testPath);
-    const { slowTestThreshold } = this.config;
-
-    logFileTitle(test, relativePath, slowTestThreshold);
-
-    const isTooSlow = test.duration && test.duration > slowTestThreshold;
-
-    const hasRetryCase = test.results.some(
-      (result) => (result.retryCount || 0) > 0,
-    );
-
-    if (test.status !== 'fail' && !isTooSlow && !hasRetryCase) {
+  protected withSuspendedStatusRenderer(fn: () => void): void {
+    if (!this.statusRenderer) {
+      fn();
       return;
     }
 
-    const showAllCases =
-      isTooSlow &&
-      !test.results.some(
-        (result) => (result.duration || 0) > slowTestThreshold,
-      );
-
-    for (const result of test.results) {
-      const isSlowCase = (result.duration || 0) > slowTestThreshold;
-      const retried = (result.retryCount || 0) > 0;
-      if (
-        !showAllCases &&
-        result.status !== 'fail' &&
-        !isSlowCase &&
-        !retried
-      ) {
-        continue;
-      }
-
-      logCase(result, slowTestThreshold);
+    this.statusRenderer.suspendWindowOutput();
+    try {
+      fn();
+    } finally {
+      this.statusRenderer.resumeWindowOutput();
     }
-  }
-
-  onTestCaseResult(_result: TestResult): void {
-    // TODO
-    // this.statusRenderer?.updateRunningModule({ result.testPath, status: result.status });
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {
-    const shouldLog = this.config.onConsoleLog?.(log.content) ?? true;
+    this.nonTTYProgressNotifier?.notifyOutput();
+    this.withSuspendedStatusRenderer(() => {
+      logUserConsoleLog(this.rootPath, log);
+    });
+  }
 
-    if (!shouldLog) {
+  onTestCaseResult(_result: TestResult): void {
+    this.statusRenderer?.onTestCaseResult();
+  }
+
+  onTestFileResult(test: TestFileResult): void {
+    this.statusRenderer?.onTestFileResult();
+    this.nonTTYProgressNotifier?.notifyOutput();
+
+    const projectConfig = this.projectConfigs.get(test.project);
+    const hideSkippedTestFiles =
+      projectConfig?.hideSkippedTestFiles ?? this.config.hideSkippedTestFiles;
+
+    if (hideSkippedTestFiles && test.status === 'skip') {
       return;
     }
 
-    const titles = [log.name];
+    const relativePath = relative(this.rootPath, test.testPath);
+    const slowTestThreshold =
+      projectConfig?.slowTestThreshold ?? this.config.slowTestThreshold;
 
-    const testPath = relative(this.rootPath, log.testPath);
+    const logResults = () => {
+      logFileTitle(test, relativePath, false, this.options.showProjectName);
+      const showAllCases = this.testState.getTestFiles()?.length === 1;
 
-    if (log.trace) {
-      const [frame] = stackTraceParse(log.trace);
-      const filePath = relative(this.rootPath, frame!.file || '');
+      const hideSkippedTests =
+        projectConfig?.hideSkippedTests ?? this.config.hideSkippedTests;
 
-      if (filePath !== testPath) {
-        titles.push(prettyTestPath(testPath));
+      for (const result of test.results) {
+        const isDisplayed =
+          showAllCases ||
+          result.status === 'fail' ||
+          (result.duration ?? 0) > slowTestThreshold ||
+          (result.retryCount ?? 0) > 0;
+        if (isDisplayed) {
+          logCase(result, {
+            slowTestThreshold,
+            hideSkippedTests,
+          });
+        }
       }
-      titles.push(
-        prettyTestPath(filePath) +
-          color.gray(`:${frame!.lineNumber}:${frame!.column}`),
-      );
-    } else {
-      titles.push(prettyTestPath(testPath));
-    }
+    };
 
-    // TODO: output to stdout or stderr
-    logger.log(titles.join(color.gray(' | ')));
-
-    logger.log(log.content);
-    logger.log('');
+    this.withSuspendedStatusRenderer(logResults);
   }
 
-  async onExit(): Promise<void> {
+  onExit(): void {
     this.statusRenderer?.clear();
+    this.nonTTYProgressNotifier?.stop();
   }
 
   async onTestRunEnd({
@@ -134,27 +145,35 @@ export class DefaultReporter implements Reporter {
     getSourcemap,
     snapshotSummary,
     filterRerunTestPaths,
+    unhandledErrors,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
     duration: Duration;
     snapshotSummary: SnapshotSummary;
     getSourcemap: GetSourcemap;
+    unhandledErrors?: Error[];
     filterRerunTestPaths?: string[];
   }): Promise<void> {
     this.statusRenderer?.clear();
+    this.nonTTYProgressNotifier?.stop();
 
     if (this.options.summary === false) {
       return;
     }
 
-    await printSummaryErrorLogs({
+    const hasErrorLogs = await printSummaryErrorLogs({
       testResults,
       results,
+      unhandledErrors,
       rootPath: this.rootPath,
       getSourcemap,
       filterRerunTestPaths,
     });
+
+    if (hasErrorLogs && this.flushOutputStreams) {
+      await flushOutputStreams();
+    }
 
     printSummaryLog({
       results,

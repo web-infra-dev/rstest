@@ -15,33 +15,45 @@
  */
 import { AssertionError, strict as assert } from 'node:assert';
 import { Console } from 'node:console';
+import { Writable } from 'node:stream';
 import {
   format,
   formatWithOptions,
   type InspectOptions,
   inspect,
 } from 'node:util';
-import { color, prettyTime } from '../../utils';
-import type { WorkerRPC } from './rpc';
+import type { CurrentTaskInfo, UserConsoleLog } from '../../types';
+import { prettyTime } from '../../utils/helper';
+import { color } from '../../utils/logger';
 
 const RealDate = Date;
 
-export type LogCounters = {
-  [label: string]: number;
-};
+class NullWritable extends Writable {
+  override _write(
+    _chunk: any,
+    _encoding: BufferEncoding,
+    callback: (error?: Error | null) => void,
+  ): void {
+    callback();
+  }
+}
 
-export type LogTimers = {
-  [label: string]: Date;
-};
+const nullWritable = new NullWritable();
+
+type LogCounters = Record<string, number>;
+
+type LogTimers = Record<string, Date>;
 
 export function createCustomConsole({
-  rpc,
+  onConsoleLog,
   testPath,
   printConsoleTrace,
+  getCurrentTask,
 }: {
-  rpc: WorkerRPC;
+  onConsoleLog: (log: UserConsoleLog) => void;
   testPath: string;
   printConsoleTrace: boolean;
+  getCurrentTask: () => CurrentTaskInfo | undefined;
 }): Console {
   const getConsoleTrace = () => {
     const limit = Error.stackTraceLimit;
@@ -82,9 +94,15 @@ export function createCustomConsole({
       message: string,
       type: 'stderr' | 'stdout' = 'stdout',
     ) {
-      rpc.onConsoleLog({
+      const currentTask = getCurrentTask();
+
+      onConsoleLog({
         content: '  '.repeat(this._groupDepth) + message,
         name: this.getPrettyName(name),
+        taskId: currentTask?.taskId,
+        taskName: currentTask?.taskName,
+        taskParentNames: currentTask?.taskParentNames,
+        taskType: currentTask?.taskType,
         testPath,
         type,
         trace: printConsoleTrace ? getConsoleTrace() : undefined,
@@ -181,7 +199,7 @@ export function createCustomConsole({
         const endTime = RealDate.now();
         const time = endTime - startTime.getTime();
         this._log('time', format(`${label}: ${prettyTime(time)}`));
-        delete this._timers[label];
+        Reflect.deleteProperty(this._timers, label);
       }
     }
 
@@ -204,5 +222,5 @@ export function createCustomConsole({
     }
   }
 
-  return new CustomConsole(process.stdout, process.stderr);
+  return new CustomConsole(nullWritable, nullWritable);
 }

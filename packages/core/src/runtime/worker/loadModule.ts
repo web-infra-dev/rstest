@@ -1,12 +1,59 @@
+import { existsSync } from 'node:fs';
 import { createRequire as createNativeRequire } from 'node:module';
-import { isAbsolute } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import path from 'pathe';
 import { logger } from '../../utils/logger';
-import { asModule, interopModule, shouldInterop } from './interop';
+import { clearCacheCleaners, clearSyntheticModuleCache } from './interop';
+import {
+  finalizeDynamicImport,
+  loadWasm,
+  resolveImportSpecifier,
+} from './resolveDynamicImport';
+import {
+  RSTEST_DYNAMIC_IMPORT_HOOK,
+  RSTEST_REQUIRE_RESOLVE_HOOK,
+} from './runtimeHooks';
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
+
+const defineRstestRequireResolve =
+  ({
+    testPath,
+    distPath,
+    assetFiles,
+  }: {
+    testPath: string;
+    distPath: string;
+    assetFiles: Record<string, string>;
+  }) =>
+  (
+    specifier: string,
+    optionsOrOrigin?: string | { paths?: string[] },
+    maybeOrigin?: string,
+  ): string => {
+    const options =
+      typeof optionsOrOrigin === 'string' ? undefined : optionsOrOrigin;
+    // `origin` is the absolute path of the source module that produced the
+    // `require.resolve()` call, injected by rspack's `RstestPlugin` when
+    // `injectRequireResolveOrigin` is enabled. Falling back keeps native
+    // `require.resolve` semantics for un-rewritten calls.
+    const origin =
+      typeof optionsOrOrigin === 'string' ? optionsOrOrigin : maybeOrigin;
+    const resolveBase = origin ?? testPath;
+
+    const currentDirectory = path.dirname(origin ?? distPath);
+    const joinedPath = isRelativePath(specifier)
+      ? path.join(currentDirectory, specifier)
+      : specifier;
+    const normalizedPath = path.normalize(joinedPath);
+
+    if (assetFiles[normalizedPath]) {
+      return normalizedPath;
+    }
+
+    return createNativeRequire(resolveBase).resolve(specifier, options);
+  };
 
 const createRequire = (
   filename: string,
@@ -19,7 +66,7 @@ const createRequire = (
     try {
       // compat with some testPath may not be an available path but the third-party package name
       return createNativeRequire(filename);
-    } catch (_err) {
+    } catch {
       return createNativeRequire(distPath);
     }
   })();
@@ -53,7 +100,13 @@ const createRequire = (
     const resolved = _require.resolve(id);
     return _require(resolved);
   }) as NodeJS.Require;
-  require.resolve = _require.resolve;
+  const requireResolve = defineRstestRequireResolve({
+    testPath: filename,
+    distPath,
+    assetFiles,
+  }) as NodeJS.RequireResolve;
+  requireResolve.paths = _require.resolve.paths.bind(_require.resolve);
+  require.resolve = requireResolve;
   require.main = _require.main;
   return require;
 };
@@ -68,70 +121,47 @@ const defineRstestDynamicImport =
     testPath: string;
     interopDefault: boolean;
   }) =>
-  async (specifier: string, importAttributes: ImportCallOptions) => {
-    const resolvedPath = isAbsolute(specifier)
-      ? pathToFileURL(specifier)
-      : import.meta.resolve(specifier, pathToFileURL(testPath));
+  async (
+    specifier: string,
+    importAttributes: ImportCallOptions,
+    origin?: string,
+  ) => {
+    const modulePath = resolveImportSpecifier({ specifier, origin, testPath });
 
-    const modulePath =
-      typeof resolvedPath === 'string' ? resolvedPath : resolvedPath.pathname;
+    // `.wasm` always resolves to an on-disk source file (wasmLoader.mjs rewrites
+    // direct imports; `new URL(...)` resolves source-relative, #1455). rstest
+    // instantiates it itself so the pattern is flag-free on every Node version.
+    if (modulePath.endsWith('.wasm')) {
+      const normalizedPath = path.normalize(
+        modulePath.startsWith('file://')
+          ? fileURLToPath(modulePath)
+          : modulePath,
+      );
 
-    // Rstest importAttributes is used internally to distinguish `importActual` and normal imports,
-    // and should not be passed to Node.js side, otherwise it will cause ERR_IMPORT_ATTRIBUTE_UNSUPPORTED error.
-    if (importAttributes?.with?.rstest) {
-      delete importAttributes.with.rstest;
-    }
-
-    const importedModule = await import(modulePath, importAttributes);
-
-    if (
-      shouldInterop({
-        interopDefault,
-        modulePath,
-        mod: importedModule,
-      })
-    ) {
-      const { mod, defaultExport } = interopModule(importedModule);
-
-      if (returnModule) {
-        return asModule(mod, defaultExport);
+      if (existsSync(normalizedPath)) {
+        return loadWasm(normalizedPath, returnModule);
       }
-
-      return new Proxy(mod, {
-        get(mod, prop) {
-          if (prop === 'default') {
-            return defaultExport;
-          }
-          /**
-           * interop invalid named exports. eg:
-           * exports: module.exports = { a: 1 }
-           * import: import { a } from 'mod';
-           */
-          return mod[prop] ?? defaultExport?.[prop];
-        },
-        has(mod, prop) {
-          if (prop === 'default') {
-            return defaultExport !== undefined;
-          }
-          return prop in mod || (defaultExport && prop in defaultExport);
-        },
-        getOwnPropertyDescriptor(mod, prop): any {
-          const descriptor = Reflect.getOwnPropertyDescriptor(mod, prop);
-          if (descriptor) {
-            return descriptor;
-          }
-          if (prop === 'default' && defaultExport !== undefined) {
-            return {
-              value: defaultExport,
-              enumerable: true,
-              configurable: true,
-            };
-          }
-        },
-      });
     }
-    return importedModule;
+
+    return finalizeDynamicImport({
+      modulePath,
+      importAttributes,
+      interopDefault,
+      returnModule,
+    });
   };
+
+// Persistent asset map for the kept runtime chunk under `isolate: false` (the
+// per-module hooks closed over this reference). Mirrors the ESM loader — see
+// `loadEsModule.ts` for the full rationale.
+const accumulatedAssetFiles: Record<string, string> = {};
+
+// Every shared runtime chunk this (possibly reused) worker has loaded under
+// `isolate: false`. Mirrors the ESM loader — a reused worker can serve multiple
+// projects (the pool has no environment affinity), so keeping a single id would
+// let one project's teardown evict another's runtime chunk. Accumulate all and
+// reset only on a full clear; see `loadEsModule.ts` for the full rationale.
+const keptRuntimeChunks = new Set<string>();
 
 // setup and rstest module should not be cached
 export const loadModule = ({
@@ -139,7 +169,7 @@ export const loadModule = ({
   distPath,
   testPath,
   rstestContext,
-  assetFiles,
+  assetFiles: assetFilesArg,
   interopDefault,
 }: {
   interopDefault: boolean;
@@ -149,6 +179,12 @@ export const loadModule = ({
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
 }): any => {
+  // Fold this file's assets into the persistent map. Recursive loads (require /
+  // dynamic imports) re-pass that same map, so skip the no-op self-merge.
+  if (assetFilesArg !== accumulatedAssetFiles) {
+    Object.assign(accumulatedAssetFiles, assetFilesArg);
+  }
+  const assetFiles = accumulatedAssetFiles;
   const fileDir = path.dirname(testPath);
 
   const localModule = {
@@ -171,23 +207,27 @@ export const loadModule = ({
       assetFiles,
       interopDefault,
     ),
-    __rstest_dynamic_import__: defineRstestDynamicImport({
+    [RSTEST_DYNAMIC_IMPORT_HOOK]: defineRstestDynamicImport({
       testPath,
       interopDefault,
+    }),
+    [RSTEST_REQUIRE_RESOLVE_HOOK]: defineRstestRequireResolve({
+      testPath,
+      distPath,
+      assetFiles,
     }),
     __dirname: fileDir,
     __filename: testPath,
     ...rstestContext,
   };
 
-  const codeDefinition = `'use strict';(${Object.keys(context).join(',')})=>{`;
-  const code = `${codeDefinition}${codeContent}\n}`;
+  const code = `'use strict';return function(){\n${codeContent}\n}`;
 
-  const fn = vm.runInThisContext(code, {
+  const fn = vm.compileFunction(code, Object.keys(context), {
     // Used in stack traces produced by this script.
     filename: distPath,
-    lineOffset: 0,
-    columnOffset: -codeDefinition.length,
+    lineOffset: -1,
+    columnOffset: 0,
     importModuleDynamically: (specifier, _referencer, importAttributes) => {
       return defineRstestDynamicImport({
         testPath,
@@ -196,7 +236,7 @@ export const loadModule = ({
       })(specifier, importAttributes as ImportCallOptions);
     },
   });
-  fn(...Object.values(context));
+  fn(...Object.values(context)).call(localModule.exports);
 
   return localModule.exports;
 };
@@ -231,4 +271,34 @@ export const cacheableLoadModule = ({
   });
   moduleCache.set(testPath, mod);
   return mod;
+};
+
+/**
+ * Reset the per-worker module cache between test files.
+ *
+ * Mirrors the ESM loader: with `isolate: false` the shared runtime chunk owns
+ * the only `__webpack_module_cache__`, so keeping it (via `keep`) preserves the
+ * module-scope state of every already-evaluated non-entry module across files.
+ * A reused worker can serve more than one project, so every project's runtime
+ * chunk is accumulated and kept — see `keptRuntimeChunks`.
+ * See https://github.com/web-infra-dev/rstest/issues/1373.
+ */
+export const clearModuleCache = (keep?: string): void => {
+  if (keep) {
+    keptRuntimeChunks.add(keep);
+    for (const key of moduleCache.keys()) {
+      if (!keptRuntimeChunks.has(key)) {
+        moduleCache.delete(key);
+      }
+    }
+  } else {
+    moduleCache.clear();
+    keptRuntimeChunks.clear();
+    // Nothing is kept, so no hook holds a reference to the accumulated assets.
+    for (const key of Object.keys(accumulatedAssetFiles)) {
+      delete accumulatedAssetFiles[key];
+    }
+    clearCacheCleaners();
+  }
+  clearSyntheticModuleCache();
 };

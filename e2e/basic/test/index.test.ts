@@ -15,6 +15,10 @@ describe('Index', () => {
     expect(process.env.RSTEST).toBe('true');
   });
 
+  it('should get WORKER ID correctly', () => {
+    expect(process.env.RSTEST_WORKER_ID).toBeDefined();
+  });
+
   it('should use node API correctly', async () => {
     expect(
       pathe
@@ -24,8 +28,8 @@ describe('Index', () => {
   });
 
   it('should use require.resolve correctly', async () => {
-    expect(
-      require.resolve('../src/index.ts').endsWith('index.ts'),
-    ).toBeTruthy();
+    const resolved = require.resolve('../src/index.ts');
+    // TODO: can't write as  require.resolve('../src/index.ts').endsWith('index.ts')
+    expect(resolved.endsWith('index.ts')).toBeTruthy();
   });
 });

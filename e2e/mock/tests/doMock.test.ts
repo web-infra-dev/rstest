@@ -1,5 +1,8 @@
-import { expect, rs, test } from '@rstest/core';
-import { sleep } from '../../scripts/utils';
+import { afterAll, expect, rs, test } from '@rstest/core';
+
+afterAll(() => {
+  rs.doUnmock('../src/increment');
+});
 
 test('doMock works', async () => {
   const { increment: incrementWith1 } = await import('../src/increment');
@@ -32,8 +35,7 @@ test('the second doMock can override the first doMock', async () => {
 });
 
 test('the third doMock can override the second doMock', async () => {
-  rs.doMock('../src/increment', async () => {
-    await sleep(500);
+  rs.doMock('../src/increment', () => {
     return {
       increment: (num: number) => num + 100,
     };
@@ -43,8 +45,7 @@ test('the third doMock can override the second doMock', async () => {
 
   expect(incrementWith1(1)).toBe(101);
 
-  rs.doMock('../src/increment', async () => {
-    await sleep(500);
+  rs.doMock('../src/increment', () => {
     return {
       increment: (num: number) => num + 200,
     };

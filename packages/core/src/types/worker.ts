@@ -1,32 +1,41 @@
-import type { SnapshotUpdateState } from '@vitest/snapshot';
+import type { SnapshotClient, SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
-import type { RstestContext } from './core';
-import type { SourceMapInput } from './reporter';
+import type { ProjectContext, RstestContext } from './core';
 import type {
+  TestCaseInfo,
   TestFileInfo,
-  TestFileResult,
   TestResult,
+  TestSuiteInfo,
   UserConsoleLog,
 } from './testSuite';
 import type { DistPath, TestPath } from './utils';
 
 export type EntryInfo = {
   distPath: DistPath;
+  runtimeDistPath?: DistPath;
   chunks: (string | number)[];
   testPath: TestPath;
   files?: string[];
 };
 
 /** Server to Runtime */
-// biome-ignore lint/complexity/noBannedTypes: TODO
-export type ServerRPC = {};
+export type ServerRPC = object;
 
 /** Runtime to Server */
 export type RuntimeRPC = {
   onTestFileStart: (test: TestFileInfo) => Promise<void>;
-  onTestFileResult: (test: TestFileResult) => Promise<void>;
+  onTestFileReady: (test: TestFileInfo) => Promise<void>;
+  getAssetsByEntry: () => Promise<{
+    assetFiles: Record<string, string>;
+    sourceMaps: Record<string, string>;
+  }>;
+  onTestSuiteStart: (test: TestSuiteInfo) => Promise<void>;
+  onTestSuiteResult: (result: TestResult) => Promise<void>;
+  onTestCaseStart: (test: TestCaseInfo) => Promise<void>;
   onTestCaseResult: (result: TestResult) => Promise<void>;
+  getCountOfFailedTests: () => Promise<number>;
   onConsoleLog: (log: UserConsoleLog) => void;
+  resolveSnapshotPath: (filepath: string) => string;
 };
 
 export type RuntimeConfig = Pick<
@@ -47,23 +56,51 @@ export type RuntimeConfig = Pick<
   | 'testEnvironment'
   | 'isolate'
   | 'hookTimeout'
+  | 'coverage'
+  | 'snapshotFormat'
+  | 'env'
+  | 'logHeapUsage'
+  | 'detectAsyncLeaks'
+  | 'bail'
+  | 'chaiConfig'
+  | 'includeTaskLocation'
+  | 'silent'
+>;
+
+export type CurrentTaskInfo = Pick<
+  UserConsoleLog,
+  'taskId' | 'taskName' | 'taskParentNames' | 'taskType' | 'testPath'
 >;
 
 export type WorkerContext = {
   rootPath: RstestContext['rootPath'];
+  projectRoot: ProjectContext['rootPath'];
   project: string;
   runtimeConfig: RuntimeConfig;
+  taskId: number;
+  /**
+   * Monotonically increasing per-compile id: stable across all files of one
+   * run, bumped on every watch rebuild. A change tells a reused worker to flush
+   * its kept module cache before loading (#1373).
+   */
+  buildId: number;
+  outputModule: boolean;
+  /** When true, the worker emits Perfetto trace events alongside phase totals. */
+  trace?: boolean;
 };
 
 export type RunWorkerOptions = {
   options: {
     entryInfo: EntryInfo;
     setupEntries: EntryInfo[];
-    assetFiles: Record<string, string>;
-    sourceMaps: Record<string, SourceMapInput>;
     context: WorkerContext;
     updateSnapshot: SnapshotUpdateState;
     type: 'run' | 'collect';
+    /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
+    assets?: {
+      assetFiles: Record<string, string>;
+      sourceMaps: Record<string, string>;
+    };
   };
   rpcMethods: RuntimeRPC;
 };
@@ -72,8 +109,11 @@ export type WorkerState = WorkerContext & {
   environment: string;
   testPath: TestPath;
   distPath: DistPath;
+  currentTask?: CurrentTaskInfo;
+  snapshotClient?: SnapshotClient;
   snapshotOptions: {
     updateSnapshot: SnapshotUpdateState;
     snapshotEnvironment: SnapshotEnvironment;
+    snapshotFormat: RuntimeConfig['snapshotFormat'];
   };
 };

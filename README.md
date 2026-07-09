@@ -11,6 +11,7 @@
   <a href="https://nodejs.org/en/about/previous-releases"><img src="https://img.shields.io/node/v/@rstest/core.svg?style=flat-square&colorA=564341&colorB=EDED91" alt="node version"></a>
   <a href="https://github.com/web-infra-dev/rstest/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square&colorA=564341&colorB=EDED91" alt="license" /></a>
   <a href="https://deepwiki.com/web-infra-dev/rstest"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" /></a>
+  <a href="https://codspeed.io/web-infra-dev/rstest?utm_source=badge"><img src="https://img.shields.io/endpoint?url=https://codspeed.io/badge.json" alt="CodSpeed" /></a>
 </p>
 
 Rstest is a testing framework powered by Rspack. It delivers comprehensive, first-class support for the Rspack ecosystem, enabling seamless integration into existing Rspack-based projects.
@@ -23,13 +24,13 @@ See [Documentation](https://rstest.rs).
 
 ## 🔥 Roadmap
 
-Rstest is currently under active development and we plan to release the first stable version in late 2025.
+Rstest now supports core testing scenarios including Node.js testing, DOM testing, mocking, multi-project testing, and coverage collection. It is already in active use across the Rstack ecosystem, including projects like Rspack, Rsbuild and Rslib.
 
-More details can be found on [Rstest Roadmap](https://github.com/web-infra-dev/rstest/issues/85).
+The project is currently in active development, and we will continue to refine functionality and enhance the user experience based on community feedback. For future development plans, please refer to the [Rstest Roadmap](https://github.com/web-infra-dev/rstest/issues/85).
 
 ## 🦀 Rstack
 
-Rstack is a unified JavaScript toolchain built around Rspack, with high performance and consistent architecture.
+Rstack is a unified JavaScript toolchain centered on Rspack, with high performance and consistent architecture.
 
 | Name                                                  | Description              | Version                                                                                                                                                                          |
 | ----------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

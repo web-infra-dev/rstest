@@ -1,62 +1,154 @@
-import { format } from 'node:util';
-import { diff } from 'jest-diff';
-import type { FormattedError, Test } from '../types';
+import type { FormattedError, Test, TestOptions } from '../types';
+
+/**
+ * Resolve the overloaded trailing arguments of `test` / `it` / `test.each` /
+ * `test.for`, which accept two shapes:
+ * - `(name, fn, timeout?)` — `arg2` is the test fn, `arg3` an optional numeric timeout.
+ * - `(name, options, fn?)` — `arg2` is a `TestOptions` object, `arg3` the test fn.
+ *
+ * In the function-first shape `arg3` is only honored as a numeric timeout; an options
+ * object is no longer accepted there (it is a type error and ignored at runtime).
+ */
+export const resolveTestArgs = <Fn extends (...args: any[]) => any>(
+  arg2?: Fn | TestOptions,
+  arg3?: Fn | number,
+): { fn?: Fn; options: TestOptions } => {
+  if (typeof arg2 === 'function') {
+    return {
+      fn: arg2,
+      options: typeof arg3 === 'number' ? { timeout: arg3 } : {},
+    };
+  }
+  return { fn: arg3 as Fn | undefined, options: arg2 ?? {} };
+};
+
+const loadDiffModules = async () => {
+  const [{ diff }, { format, plugins }] = await Promise.all([
+    import('@vitest/utils/diff'),
+    import('@vitest/pretty-format'),
+  ]);
+
+  return {
+    diff,
+    format,
+    formatPlugins: Object.values(plugins),
+  };
+};
 
 const REAL_TIMERS: {
   setTimeout?: typeof globalThis.setTimeout;
+  clearTimeout?: typeof globalThis.clearTimeout;
+  setImmediate?: typeof globalThis.setImmediate;
 } = {};
 
 // store the original timers
 export const setRealTimers = (): void => {
-  REAL_TIMERS.setTimeout ??= globalThis.setTimeout;
+  REAL_TIMERS.setTimeout ??= globalThis.setTimeout.bind(globalThis);
+  REAL_TIMERS.clearTimeout ??= globalThis.clearTimeout.bind(globalThis);
+  if (typeof globalThis.setImmediate === 'function') {
+    REAL_TIMERS.setImmediate ??= globalThis.setImmediate.bind(globalThis);
+  }
 };
 
 export const getRealTimers = (): typeof REAL_TIMERS => {
   return REAL_TIMERS;
 };
 
-export const formatTestError = (err: any, test?: Test): FormattedError[] => {
+/**
+ * Stable reference to `Date.now`, captured before `@sinonjs/fake-timers`
+ * can hijack the global. Phase boundaries straddling `tests` rely on this.
+ */
+const realNow = Date.now.bind(Date);
+
+export const getRealNow = (): number => realNow();
+
+export const formatTestError = async (
+  err: any,
+  test?: Test,
+): Promise<FormattedError[]> => {
   const errors = Array.isArray(err) ? err : [err];
 
-  return errors.map((error) => {
-    const errObj: FormattedError = {
-      ...error,
-      // Some error attributes cannot be enumerated
-      message: error.message,
-      name: error.name,
-      stack: error.stack,
-    };
+  return Promise.all(
+    errors.map(async (rawError) => {
+      const error =
+        typeof rawError === 'string' ? { message: rawError } : rawError;
+      const errObj: FormattedError = {
+        fullStack: error.fullStack,
+        // Some error attributes cannot be enumerated
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+      };
 
-    if (error instanceof TestRegisterError && test?.type === 'case') {
-      errObj.message = `Can't nest describe or test inside a test. ${error.message} because it is nested within test '${test.name}'`;
-    }
-
-    if (
-      error.showDiff ||
-      (error.showDiff === undefined &&
-        error.expected !== undefined &&
-        error.actual !== undefined)
-    ) {
-      errObj.diff = diff(err.expected, err.actual, {
-        expand: false,
-      })!;
-    }
-
-    for (const key of ['actual', 'expected'] as const) {
-      if (typeof err[key] !== 'string') {
-        (errObj as Record<string, any>)[key] = JSON.stringify(
-          err[key],
-          null,
-          10,
-        );
+      if (error instanceof TestRegisterError && test?.type === 'case') {
+        errObj.message = `Can't nest describe or test inside a test. ${error.message} because it is nested within test '${test.name}'`;
       }
-    }
 
-    return errObj;
-  });
+      if (
+        error.showDiff ||
+        (error.showDiff === undefined &&
+          error.expected !== undefined &&
+          error.actual !== undefined)
+      ) {
+        const expected = error.expected;
+        const actual = error.actual;
+        const { diff, format, formatPlugins } = await loadDiffModules();
+
+        errObj.diff = diff(expected, actual, {
+          expand: false,
+        })!;
+        errObj.expected =
+          typeof expected === 'string'
+            ? expected
+            : format(expected, { plugins: formatPlugins });
+        errObj.actual =
+          typeof actual === 'string'
+            ? actual
+            : format(actual, { plugins: formatPlugins });
+      }
+
+      return errObj;
+    }),
+  );
 };
 // cspell:ignore sdjifo
 const formatRegExp = /%[sdjifoOc%]/;
+
+const formatTemplate = (template: string, values: any[]): string => {
+  if (!formatRegExp.test(template)) {
+    return template;
+  }
+
+  let valueIndex = 0;
+  return template.replace(/%[sdjifoOc%]/g, (specifier) => {
+    if (specifier === '%%') {
+      return '%';
+    }
+
+    const value = values[valueIndex++];
+
+    switch (specifier) {
+      case '%s':
+      case '%O':
+      case '%o':
+      case '%c':
+        return String(value);
+      case '%d':
+      case '%i':
+        return Number.parseInt(String(value), 10).toString();
+      case '%f':
+        return Number(value).toString();
+      case '%j':
+        try {
+          return JSON.stringify(value);
+        } catch {
+          return '[Circular]';
+        }
+      default:
+        return String(value ?? '');
+    }
+  });
+};
 
 export const formatName = (
   template: string,
@@ -79,13 +171,14 @@ export const formatName = (
   if (Array.isArray(param)) {
     // format printf-like string
     // https://nodejs.org/api/util.html#util_util_format_format_args
-    return formatRegExp.test(templateStr)
-      ? format(templateStr, ...param)
-      : templateStr;
+    if (formatRegExp.test(templateStr)) {
+      return formatTemplate(templateStr, param);
+    }
+    return templateStr;
   }
 
   if (formatRegExp.test(templateStr)) {
-    templateStr = format(templateStr, param);
+    templateStr = formatTemplate(templateStr, [param]);
   }
 
   return templateStr.replace(/\$([$\w.]+)/g, (_, key: string) => {
@@ -107,4 +200,77 @@ function getValue(source: any, path: string, defaultValue = undefined): any {
   return result;
 }
 
+export function isTemplateStringsArray(
+  value: unknown,
+): value is TemplateStringsArray {
+  return Array.isArray(value) && 'raw' in value && Array.isArray(value.raw);
+}
+
+export function parseTemplateTable(
+  strings: TemplateStringsArray,
+  ...expressions: unknown[]
+): Record<string, unknown>[] {
+  const raw = strings.join('\0');
+  const lines = raw.split('\n').filter((line) => line.trim());
+
+  if (lines.length === 0) return [];
+
+  const headers = lines[0]!
+    .split('|')
+    .map((h) => h.trim())
+    .filter(Boolean);
+
+  if (headers.length === 0) return [];
+
+  const result: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < expressions.length; i += headers.length) {
+    const row: Record<string, unknown> = {};
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]!] = expressions[i + j];
+    }
+    result.push(row);
+  }
+
+  return result;
+}
+
 export class TestRegisterError extends Error {}
+
+export class TestSkipError extends Error {}
+
+class RstestError extends Error {
+  public fullStack?: boolean;
+}
+
+export function checkPkgInstalled(name: string): void {
+  if (typeof process === 'undefined' || !process.versions?.node) {
+    return;
+  }
+
+  let resolveFn: ((id: string) => string) | undefined;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const req = Function('return require')();
+    resolveFn = req?.resolve?.bind(req);
+  } catch {
+    resolveFn = undefined;
+  }
+
+  if (!resolveFn) {
+    return;
+  }
+
+  try {
+    resolveFn(name);
+  } catch (error: any) {
+    if (error?.code === 'MODULE_NOT_FOUND') {
+      const missingError = new RstestError(
+        `Missing dependency "${name}". Please install it first.`,
+      );
+      missingError.fullStack = true;
+      throw missingError;
+    }
+    throw error;
+  }
+}

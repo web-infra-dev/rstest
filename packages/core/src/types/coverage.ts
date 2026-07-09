@@ -1,0 +1,227 @@
+import type {
+  CoverageMap,
+  CoverageMapData,
+  CoverageSummary,
+  FileCoverageData,
+  Totals,
+} from 'istanbul-lib-coverage';
+import type { ReportBase } from 'istanbul-lib-report';
+import type { ReportOptions } from 'istanbul-reports';
+
+type ReportWithOptions<Name extends keyof ReportOptions = keyof ReportOptions> =
+  Name extends keyof ReportOptions
+    ? [Name, Partial<ReportOptions[Name]>]
+    : [Name, Record<string, unknown>];
+
+/** Custom reporter configuration for non-istanbul reporters */
+type CustomReporter = string | [string, Record<string, unknown>];
+
+/** Union type for all supported reporter types */
+type SupportedReporter =
+  keyof ReportOptions | ReportWithOptions | ReportBase | CustomReporter;
+
+export type CoverageThreshold = {
+  /** Threshold for statements */
+  statements?: number;
+  /** Threshold for functions */
+  functions?: number;
+  /** Threshold for branches */
+  branches?: number;
+  /** Threshold for lines */
+  lines?: number;
+};
+
+export type CoverageSummaryTotals = Totals;
+
+export type { CoverageMap, CoverageMapData, CoverageSummary };
+
+export type CoverageThresholds =
+  CoverageThreshold | (CoverageThreshold & ThresholdGlobRecord);
+
+/** check thresholds for matched files */
+type ThresholdGlobRecord = Record<
+  string,
+  CoverageThreshold & {
+    /**
+     * check thresholds per file
+     * @default false
+     */
+    perFile?: boolean;
+  }
+>;
+
+export type CoverageOptions = {
+  /**
+   * Enable coverage collection.
+   * @default false
+   */
+  enabled?: boolean;
+
+  /**
+   * A list of glob patterns that should be included for coverage collection.
+   * Only collect coverage for tested files by default.
+   *
+   * @default undefined
+   */
+  include?: string[];
+
+  /**
+   * Collect coverage only for files changed since a specified commit or branch.
+   * When enabled from `--changed`, it inherits the changed files collected by `--changed`.
+   *
+   * @default undefined
+   */
+  changed?: boolean | string;
+
+  /**
+   * A list of glob patterns that should be excluded from coverage collection.
+   *
+   * This option accepts an array of wax(https://crates.io/crates/wax)-compatible glob patterns
+   *
+   * @default ['**\/node_modules/**',
+   *           '**\/__tests__/**',
+   *           '**\/__mocks__/**',
+   *           '**\/*.d.ts',
+   *           '**\/*.{test,spec}.[jt]s',
+   *           '**\/*.{test,spec}.[cm][jt]s',
+   *           '**\/*.{test,spec}.[jt]sx',
+   *           '**\/*.{test,spec}.[cm][jt]sx'
+   * ]
+   */
+  exclude?: string[];
+
+  /**
+   * The provider to use for coverage collection.
+   * @default 'istanbul'
+   */
+  provider?: 'istanbul' | 'v8';
+
+  /**
+   * The reporters to use for coverage collection.
+   * Supports built-in istanbul reporters and custom reporters (e.g., '@canyonjs/report-html').
+   * @default ['text', 'html', 'clover', 'json']
+   * @example
+   * // Built-in reporters
+   * reporters: ['text', 'html', ['json', { file: 'coverage.json' }]]
+   *
+   * // Custom reporters
+   * reporters: ['@canyonjs/report-html', ['custom-reporter', { outputDir: './reports' }]]
+   *
+   * // Mixed usage
+   * reporters: ['text', '@canyonjs/report-html', ['html', { subdir: 'html-report' }]]
+   */
+  reporters?: SupportedReporter[];
+
+  /**
+   * The directory to store coverage reports.
+   * @default './coverage'
+   */
+  reportsDirectory?: string;
+
+  /**
+   * Whether to clean the coverage directory before running tests.
+   * @default true
+   */
+  clean?: boolean;
+
+  /**
+   * Coverage thresholds
+   *
+   * @default undefined
+   */
+  thresholds?: CoverageThresholds;
+
+  /**
+   * Whether to report coverage when tests fail.
+   * @default false
+   */
+  reportOnFailure?: boolean;
+
+  /**
+   * Whether to collect coverage for source files outside the project root directory.
+   * This is useful in monorepo setups where tests import modules from sibling packages.
+   * @default false
+   */
+  allowExternal?: boolean;
+};
+
+export type NormalizedCoverageOptions = Required<
+  Omit<CoverageOptions, 'thresholds' | 'include' | 'changed'>
+> & {
+  thresholds?: CoverageThresholds;
+  include?: string[];
+  changed?: boolean | string;
+};
+
+export type CoverageCollectOptions = {
+  assetFiles?: Record<string, string>;
+  sourceMaps?: Record<string, string>;
+  outputModule?: boolean;
+};
+
+export declare class CoverageProvider {
+  constructor(options: NormalizedCoverageOptions, root?: string);
+  /**
+   * Initialize coverage collection
+   */
+  init(): void | Promise<void>;
+
+  /**
+   * Collect coverage data into an Istanbul coverage map.
+   */
+  collect(
+    options?: CoverageCollectOptions,
+  ): CoverageMap | null | Promise<CoverageMap | null>;
+
+  /**
+   * Collect lightweight, serializable raw coverage payloads in workers.
+   *
+   * Providers may implement this with `resolveRawCoverage` to defer expensive
+   * conversion work to the main process. Return `null` to indicate that no raw
+   * coverage was collected and the runner should not call `resolveRawCoverage`
+   * for that worker result.
+   */
+  collectRaw?(
+    options?: CoverageCollectOptions,
+  ): unknown | null | Promise<unknown | null>;
+
+  /**
+   * Resolve raw payloads produced by `collectRaw` into an Istanbul coverage map.
+   *
+   * The runner passes only non-null payloads returned by the same provider.
+   * Implementations should ignore malformed payloads only when they can still
+   * produce a valid partial report; otherwise they may reject to fail coverage
+   * finalization.
+   */
+  resolveRawCoverage?(
+    payloads: unknown[],
+  ): CoverageMap | null | Promise<CoverageMap | null>;
+
+  /**
+   * Create a new coverage map
+   */
+  createCoverageMap(): CoverageMap;
+
+  /**
+   * Generate coverage for untested files
+   */
+  generateCoverageForUntestedFiles(params: {
+    environmentName: string;
+    files: string[];
+  }): Promise<FileCoverageData[]>;
+
+  /**
+   * Generate coverage reports.
+   *
+   * Reporters and output directory come from the normalized options the
+   * provider received at construction — there is no per-call override, so a
+   * provider cannot silently ignore a second argument that drifts away from the
+   * constructor config.
+   */
+  generateReports(coverageMap: CoverageMap): Promise<void>;
+
+  /**
+   * Clean up coverage data
+   */
+  cleanup(): void;
+}

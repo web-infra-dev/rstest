@@ -27,7 +27,7 @@ describe('test setup file', async () => {
   });
 
   it('should test error when run setup file failed', async () => {
-    const { cli } = await runRstestCli({
+    const { cli, expectStderrLog } = await runRstestCli({
       command: 'rstest',
       args: ['run'],
       options: {
@@ -39,12 +39,9 @@ describe('test setup file', async () => {
 
     await cli.exec;
     expect(cli.exec.process?.exitCode).toBe(1);
-    const logs = cli.stdout.split('\n').filter(Boolean);
     // test error log
-    expect(logs.find((log) => log.includes('Rstest setup error'))).toBeTruthy();
-    expect(
-      logs.find((log) => log.includes('rstest.setup.ts:1:7')),
-    ).toBeTruthy();
+    expectStderrLog(/Rstest setup error/);
+    expectStderrLog(/rstest.setup.ts:1:7/);
   });
 
   it('should run setup file correctly when setupFiles value is package name', async () => {
@@ -58,5 +55,62 @@ describe('test setup file', async () => {
       },
     });
     await expectExecSuccess();
+  });
+
+  it('should resolve setup file correctly when setupFiles path with file protocol', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'rstest.fileProtocol.config.mts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/package-name'),
+        },
+      },
+    });
+    await expectExecSuccess();
+  });
+
+  it('should resolve setup file correctly when setupFile is pure es module', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'rstest.esm.config.mts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/package-name'),
+        },
+      },
+    });
+    await expectExecSuccess();
+  });
+
+  it('should run setup file correctly with no-isolate', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/no-isolate'),
+        },
+      },
+    });
+
+    await cli.exec;
+    const logs = cli.stdout.split('\n');
+    await expectExecSuccess();
+
+    // `ctx.filepath` is OS-native (#1465), so build the expected suffix with
+    // `join` to match backslashes on Windows and forward slashes on POSIX.
+    expect(
+      logs.filter((log) => log.endsWith(join('no-isolate', 'foo.test.ts'))),
+    ).toHaveLength(1);
+    expect(
+      logs.filter((log) => log.endsWith(join('no-isolate', 'bar.test.ts'))),
+    ).toHaveLength(1);
+    expect(logs.filter((log) => log.endsWith('[beforeAll] root'))).toHaveLength(
+      2,
+    );
+    expect(logs.filter((log) => log.endsWith('[afterAll] setup'))).toHaveLength(
+      2,
+    );
   });
 });

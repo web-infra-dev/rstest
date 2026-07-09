@@ -1,9 +1,5 @@
 import { defineConfig } from '@rstest/core';
 
-export default defineConfig({
-  pool: {
-    type: 'forks',
-    maxWorkers: 4,
-    minWorkers: 5,
-  },
+export default defineConfig(() => {
+  throw new Error('Intentional config error for testing');
 });

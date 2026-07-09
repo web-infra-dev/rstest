@@ -19,6 +19,5 @@ describe('vue sfc', () => {
     });
 
     await expectExecSuccess();
-    // fix timeout in CI
-  }, 20000);
+  });
 });

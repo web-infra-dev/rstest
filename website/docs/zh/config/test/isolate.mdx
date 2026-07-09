@@ -1,21 +1,29 @@
+---
+description: 默认情况下，Rstest 会运行每个测试在一个独立的环境，这会使其避免受到一些模块副作用的影响，从而有助于提升测试的稳定性。
+---
+
 # isolate
 
 - **类型：** `boolean`
 - **默认值：** `true`
-- **CLI：** `--isolate=false`
+- **CLI：** `--isolate`, `--isolate=false`, `--no-isolate`
 
 是否运行每个测试在一个独立的环境。
 
-默认情况下, Rstest 会运行每个测试在一个独立的环境，这会使其避免受到一些模块副作用的影响，从而有助于提升测试的稳定性。
+默认情况下，Rstest 会运行每个测试在一个独立的环境，这会使其避免受到一些模块副作用的影响，从而有助于提升测试的稳定性。
 
 如果你的代码没有副作用影响，关闭这个选项将有助于提升性能因为可以在不同的测试文件间复用模块缓存。
+
+:::warning 模块顶层代码每个 worker 只执行一次
+当 `isolate` 为 `false` 时，被多个测试文件引入的模块在每个 worker 中**只会被求值一次**，而非每个文件求值一次。因此该共享模块顶层的所有代码——包括在其模块作用域注册的 hooks（例如某个 helper 在模块作用域调用 `beforeEach`）——只会对第一个加载它的文件生效，而不会对每个文件生效。如果某段 setup 逻辑需要按文件执行，请使用 [`setupFiles`](/config/test/setup-files)，即使关闭隔离，Rstest 也会为每个测试文件重新执行它。
+:::
 
 import { Tab, Tabs } from '@theme';
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
   ```bash
-  npx rstest --isolate=false
+  npx rstest --no-isolate
   ```
   </Tab>
   <Tab label="rstest.config.ts">

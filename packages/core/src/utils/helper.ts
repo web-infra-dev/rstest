@@ -1,11 +1,78 @@
-import { isAbsolute, join, parse, sep } from 'pathe';
-import color from 'picocolors';
+import { normalize as nativeNormalize } from 'node:path';
+import {
+  isAbsolute,
+  join,
+  normalize,
+  parse,
+  relative,
+  resolve,
+  sep,
+} from 'pathe';
 import type { RuntimeConfig, TestResult } from '../types';
 import { TEST_DELIMITER } from './constants';
+import { color } from './logger';
+import { wrapRegex } from './regexpWireFormat';
+
+/**
+ * Generate a stable hash for a file path.
+ * Uses FNV-1a to produce a 10-char hex string.
+ */
+export function generateFilePathHash(
+  project: string,
+  testPath: string,
+): string {
+  const str = `${project}\0${testPath}`;
+
+  // FNV-1a 32-bit hash, produce 10 hex chars by combining two rounds
+  let h1 = 0x811c9dc5;
+  let h2 = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h1 ^= str.charCodeAt(i);
+    h1 = Math.imul(h1, 0x01000193);
+  }
+  for (let i = str.length - 1; i >= 0; i--) {
+    h2 ^= str.charCodeAt(i);
+    h2 = Math.imul(h2, 0x01000193);
+  }
+
+  // Combine to get 10 hex chars
+  const hex1 = (h1 >>> 0).toString(16).padStart(8, '0');
+  const hex2 = (h2 >>> 0).toString(16).padStart(8, '0');
+  return (hex1 + hex2).slice(0, 10);
+}
+
+export const formatRootStr = (rootStr: string, root: string): string => {
+  return rootStr.includes('<rootDir>')
+    ? normalize(rootStr.replace('<rootDir>', normalize(root)))
+    : rootStr;
+};
 
 export function getAbsolutePath(base: string, filepath: string): string {
   return isAbsolute(filepath) ? filepath : join(base, filepath);
 }
+
+/**
+ * Render a path relative to `rootPath` when it lives inside the root, otherwise
+ * fall back to the original path. Used for trace labels and summary tables so
+ * in-repo files show as short relative paths while external/sentinel paths
+ * (e.g. `<host>`) pass through unchanged.
+ */
+export const displayPath = (filePath: string, rootPath: string): string => {
+  const rel = relative(rootPath, resolve(rootPath, filePath));
+  return rel && !rel.startsWith('..') ? rel : filePath;
+};
+
+/**
+ * Convert a path to the OS-native separator form (`\` on Windows, no-op on
+ * POSIX). Internally `testPath` stays POSIX so the pathe-based consumers
+ * (snapshot, reporter relative paths, related-graph lookup) keep working, but
+ * the user-facing surfaces (`expect.getState().testPath`, hook `ctx.filepath`)
+ * must match `import.meta.filename`/`__filename`, which the rspack plugin
+ * injects in native form. Apply this only at those user-facing boundaries.
+ * See https://github.com/web-infra-dev/rstest/issues/1465.
+ */
+export const toNativePath = (filePath: string): string =>
+  nativeNormalize(filePath);
 
 export const parsePosix = (filePath: string): { dir: string; base: string } => {
   const { dir, base } = parse(filePath);
@@ -15,10 +82,6 @@ export const parsePosix = (filePath: string): { dir: string; base: string } => {
     base,
   };
 };
-
-export function slash(path: string): string {
-  return path.replace(/\\/g, '/');
-}
 
 export const isObject = (obj: unknown): obj is Record<string, any> =>
   Object.prototype.toString.call(obj) === '[object Object]';
@@ -54,6 +117,9 @@ export function formatError(error: unknown): Error | string {
   return String(error);
 }
 
+export const toError = (err: unknown): Error =>
+  err instanceof Error ? err : new Error(String(err));
+
 export const prettyTime = (milliseconds: number): string => {
   if (milliseconds < 1000) {
     return `${Math.round(milliseconds)}ms`;
@@ -69,8 +135,9 @@ export const prettyTime = (milliseconds: number): string => {
     return `${seconds.toFixed(digits)}s`;
   };
 
-  const minutes = Math.floor(seconds / 60);
-  const secondsRemainder = seconds % 60;
+  const roundedSeconds = Math.round(seconds);
+  const minutes = Math.floor(roundedSeconds / 60);
+  const secondsRemainder = minutes > 0 ? roundedSeconds % 60 : seconds;
   let time = '';
 
   if (minutes > 0) {
@@ -93,25 +160,18 @@ const getTaskNames = (
 export const getTaskNameWithPrefix = (
   test: Pick<TestResult, 'name' | 'parentNames'>,
   delimiter: string = TEST_DELIMITER,
-): string => getTaskNames(test).join(` ${delimiter} `);
+): string => getTaskNames(test).join(delimiter ? ` ${delimiter} ` : ' ');
 
-const REGEXP_FLAG_PREFIX = 'RSTEST_REGEXP:';
-
-const wrapRegex = (value: RegExp): string =>
-  `${REGEXP_FLAG_PREFIX}${value.toString()}`;
-
-const unwrapRegex = (value: string): RegExp | string => {
-  if (value.startsWith(REGEXP_FLAG_PREFIX)) {
-    const regexStr = value.slice(REGEXP_FLAG_PREFIX.length);
-
-    const matches = regexStr.match(/^\/(.+)\/([gimuy]*)$/);
-    if (matches) {
-      const [, pattern, flags] = matches;
-      return new RegExp(pattern!, flags);
-    }
-  }
-  return value;
-};
+/**
+ * Single source of truth for the `file:` task-id grammar. The value is an
+ * opaque pass-through label (never equality-checked across processes), so the
+ * grammar only needs to stay self-consistent — owning it here keeps the worker,
+ * pool, and runner copies from drifting.
+ *
+ * The browser package keeps its own copy on purpose (it must not import core
+ * runtime internals across the provider-agnostic barrier).
+ */
+export const getFileTaskId = (testPath: string): string => `file:${testPath}`;
 
 /**
  * Makes some special types that are not supported for passing into the pool serializable.
@@ -130,20 +190,7 @@ export const serializableConfig = (
   };
 };
 
-export const undoSerializableConfig = (
-  normalizedConfig: RuntimeConfig,
-): RuntimeConfig => {
-  const { testNamePattern } = normalizedConfig;
-  return {
-    ...normalizedConfig,
-    testNamePattern:
-      testNamePattern && typeof testNamePattern === 'string'
-        ? unwrapRegex(testNamePattern)
-        : testNamePattern,
-  };
-};
-
-export const getNodeVersion = (): {
+const getNodeVersion = (): {
   major: number;
   minor: number;
   patch: number;
@@ -166,70 +213,29 @@ export const needFlagExperimentalDetectModule = (): boolean => {
   return false;
 };
 
-// Ported from https://github.com/webpack/webpack/blob/21b28a82f7a6ec677752e1c8fb722a830a2adf69/lib/node/NodeTargetPlugin.js.
-export const NODE_BUILTINS: (string | RegExp)[] = [
-  'assert',
-  'assert/strict',
-  'async_hooks',
-  'buffer',
-  'child_process',
-  'cluster',
-  'console',
-  'constants',
-  'crypto',
-  'dgram',
-  'diagnostics_channel',
-  'dns',
-  'dns/promises',
-  'domain',
-  'events',
-  'fs',
-  'fs/promises',
-  'http',
-  'http2',
-  'https',
-  'inspector',
-  'inspector/promises',
-  'module',
-  'net',
-  'os',
-  'path',
-  'path/posix',
-  'path/win32',
-  'perf_hooks',
-  'process',
-  'punycode',
-  'querystring',
-  'readline',
-  'readline/promises',
-  'repl',
-  'stream',
-  'stream/consumers',
-  'stream/promises',
-  'stream/web',
-  'string_decoder',
-  'sys',
-  'timers',
-  'timers/promises',
-  'tls',
-  'trace_events',
-  'tty',
-  'url',
-  'util',
-  'util/types',
-  'v8',
-  'vm',
-  'wasi',
-  'worker_threads',
-  'zlib',
+export const ADDITIONAL_NODE_BUILTINS: (string | RegExp)[] = [
   /^node:/,
-
   // cspell:word pnpapi
   // Yarn PnP adds pnpapi as "builtin"
   'pnpapi',
 ];
 
-export { color };
+type BackgroundColor =
+  | 'bgBlack'
+  | 'bgRed'
+  | 'bgGreen'
+  | 'bgYellow'
+  | 'bgBlue'
+  | 'bgMagenta'
+  | 'bgCyan'
+  | 'bgWhite';
+
+export const bgColor = (background: BackgroundColor, str: string): string => {
+  if (['bgRed', 'bgBlack'].includes(background)) {
+    return color[background](color.white(color.bold(str)));
+  }
+  return color[background](color.blackBright(color.bold(str)));
+};
 
 /**
  * Check if running in a TTY context
@@ -239,4 +245,13 @@ export const isTTY = (type: 'stdin' | 'stdout' = 'stdout'): boolean => {
     (type === 'stdin' ? process.stdin.isTTY : process.stdout.isTTY) &&
     !process.env.CI
   );
+};
+
+export const isDeno: boolean =
+  typeof process !== 'undefined' && process.versions?.deno !== undefined;
+
+export const getWorkerSerialization = (): 'advanced' | 'json' => {
+  return typeof process !== 'undefined' && process.versions?.bun !== undefined
+    ? 'json'
+    : 'advanced';
 };

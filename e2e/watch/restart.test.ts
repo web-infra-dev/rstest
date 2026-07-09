@@ -13,15 +13,14 @@ rs.setConfig({
 
 describe('restart', () => {
   it('should restart when rstest config file changed', async () => {
+    const fixturesTargetPath = `${__dirname}/fixtures-test-1${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
+
     const { fs } = await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures`,
-      fixturesTargetPath: `${__dirname}/fixtures-test-1`,
+      fixturesTargetPath,
     });
 
-    const configFile = path.join(
-      __dirname,
-      'fixtures-test-1/rstest-1.config.mjs',
-    );
+    const configFile = path.join(fixturesTargetPath, 'rstest-1.config.mjs');
     await remove(configFile);
 
     fs.create(
@@ -45,14 +44,14 @@ export default defineConfig({
       args: ['watch', '--disableConsoleIntercept', '-c', configFile],
       options: {
         nodeOptions: {
-          cwd: `${__dirname}/fixtures-test-1`,
+          cwd: fixturesTargetPath,
         },
       },
     });
 
     // initial run
     await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Tests 1 passed');
+    expect(cli.stdout).toMatch('Tests 2 passed');
 
     // trigger restart by updating config file
     cli.resetStd();
@@ -60,8 +59,13 @@ export default defineConfig({
 
     await cli.waitForStdout('restart');
     await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Tests 1 passed');
+    expect(cli.stdout).toMatch('Tests 2 passed');
 
+    // Ensure we kill the entire process tree (important on Windows where child
+    // processes may survive and keep the test worker alive).
     cli.exec.kill();
+
+    // Give the OS a moment to release file handles (especially on Windows CI).
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   });
 });

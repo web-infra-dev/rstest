@@ -11,7 +11,12 @@
   },
   {
     "text": "API",
-    "link": "/api/",
-    "activeMatch": "/api/"
+    "link": "/api/runtime-api/",
+    "activeMatch": "/api/runtime-api/"
+  },
+  {
+    "text": "博客",
+    "link": "/blog/index",
+    "activeMatch": "/blog"
   }
 ]

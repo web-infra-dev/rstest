@@ -1,0 +1,5 @@
+// Rstest Snapshot v1
+
+exports[`test snapshot - error > test snapshot generate 1`] = `"hello world"`;
+
+exports[`test snapshot - error > test snapshot update 1`] = `"hello world1"`;

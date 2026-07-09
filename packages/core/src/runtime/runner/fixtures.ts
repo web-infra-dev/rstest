@@ -4,7 +4,7 @@ import type {
   NormalizedFixtures,
   TestCase,
 } from '../../types';
-import { isObject } from '../../utils';
+import { isObject } from '../../utils/helper';
 
 export const normalizeFixtures = (
   fixtures: Fixtures = {},
@@ -61,11 +61,10 @@ export const normalizeFixtures = (
 export const handleFixtures = async (
   test: TestCase,
   context: Record<string, any>,
+  cleanups: (() => Promise<void>)[] = [],
 ): Promise<{
   cleanups: (() => Promise<void>)[];
 }> => {
-  const cleanups: (() => Promise<void>)[] = [];
-
   if (!test.fixtures) {
     return { cleanups };
   }
@@ -103,22 +102,24 @@ export const handleFixtures = async (
       }
     }
 
-    // This API behavior follows vitest & playwright
+    // This API behavior follows Vitest & Playwright
     // but why not return cleanup function?
-    await new Promise<void>((fixtureResolve) => {
+    await new Promise<void>((fixtureResolve, fixtureReject) => {
       let useDone: (() => void) | undefined;
-      const block = fixtureValue(context, async (value: any) => {
-        context[name] = value;
-        fixtureResolve();
-        return new Promise<void>((useFnResolve) => {
-          useDone = useFnResolve;
-        });
-      });
-
-      cleanups.unshift(() => {
-        useDone?.();
-        return block;
-      });
+      const block = Promise.resolve().then(() =>
+        fixtureValue(context, async (value: any) => {
+          context[name] = value;
+          cleanups.unshift(() => {
+            useDone?.();
+            return block;
+          });
+          fixtureResolve();
+          return new Promise<void>((useFnResolve) => {
+            useDone = useFnResolve;
+          });
+        }),
+      );
+      block.catch(fixtureReject);
     });
 
     doneMap.add(name);
@@ -199,15 +200,14 @@ function filterOutComments(s: string): string {
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// biome-ignore lint/complexity/noBannedTypes: Function type
-export function getFixtureUsedProps(fn: Function): string[] {
+function getFixtureUsedProps(fn: (...args: any[]) => any): string[] {
   const text = filterOutComments(fn.toString());
-  const match = text.match(/(?:async)?(?:\s+function)?[^(]*\(([^)]*)/);
+  const match = /(?:async)?(?:\s+function)?[^(]*\(([^)]*)/.exec(text);
   if (!match) return [];
   const trimmedParams = match[1]!.trim();
   if (!trimmedParams) return [];
   const [firstParam] = splitByComma(trimmedParams);
-  if (firstParam?.[0] !== '{' || firstParam[firstParam.length - 1] !== '}') {
+  if (firstParam?.[0] !== '{' || !firstParam.endsWith('}')) {
     if (firstParam?.startsWith('_')) {
       return [];
     }

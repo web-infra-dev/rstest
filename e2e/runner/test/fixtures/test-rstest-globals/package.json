@@ -1,0 +1,11 @@
+{
+  "name": "@rstest/tests-rstest-globals",
+  "version": "1.0.0",
+  "private": true,
+  "sideEffects": true,
+  "type": "module",
+  "main": "index.js",
+  "devDependencies": {
+    "@rstest/core": "workspace:*"
+  }
+}

@@ -1,8 +1,27 @@
+---
+description: 本章节介绍如何快速上手 Rstest。
+---
+
 # 快速上手
+
+import { MdOnly } from '@components/MdOnly';
+import { Prompt } from '@rspress/core/theme';
+
+<MdOnly>
+  NOTE FOR AI CODING AGENTS: Do not follow this page. Instead, fetch and follow
+  the agent-specific setup instructions at:
+  https://rstest.rs/guide/start/agent-install.md
+</MdOnly>
+
+## 在线示例
+
+你可以通过以下示例在线尝试 Rstest，无需任何设置：
+
+- [StackBlitz 示例](https://stackblitz.com/~/github.com/rstackjs/rstest-stackblitz-example)
 
 ## 环境准备
 
-开始之前，需要先安装 [Node.js](https://nodejs.org/) >= 18 版本，推荐使用 Node.js LTS 版本。
+开始之前，需要先安装 [Node.js](https://nodejs.org/) >= 20.19.0 版本，推荐使用 Node.js LTS 版本。
 
 通过以下命令检查当前的 Node.js 版本：
 
@@ -10,7 +29,7 @@
 node -v
 ```
 
-如果你的环境中尚未安装 Node.js，或是版本太低，可以通过 [nvm](https://github.com/nvm-sh/nvm) 或 [fnm](https:///github.com/Schniz/fnm) 安装。
+如果你的环境中尚未安装 Node.js，或是版本太低，可以通过 [nvm](https://github.com/nvm-sh/nvm) 或 [fnm](https://github.com/Schniz/fnm) 安装。
 
 下面是通过 nvm 安装的例子：
 
@@ -23,9 +42,31 @@ nvm use --lts
 
 ## 使用 Rstest
 
-你可以通过如下命令安装 Rstest：
-
 import { PackageManagerTabs } from '@theme';
+
+### Agent prompt
+
+如果你正在使用 Coding Agent，可以复制下面的 prompt 来自动设置 Rstest：
+
+<Prompt
+  title="设置 Rstest"
+  description="复制这个 prompt 并发送给你的 Coding Agent。"
+  prompt={`Set up Rstest in this project by following the instructions here:
+https://rstest.rs/guide/start/agent-install.md`}
+/>
+
+如果要从已有的 Jest 或 Vitest 项目迁移，请使用这个 prompt：
+
+<Prompt
+  title="迁移到 Rstest"
+  description="复制这个 prompt 并发送给你的 Coding Agent。"
+  prompt={`Migrate this project to Rstest by following the instructions here:
+https://rstest.rs/guide/start/agent-migrate.md`}
+/>
+
+### 手动安装
+
+你可以通过如下命令安装 Rstest：
 
 <PackageManagerTabs command="add @rstest/core -D" />
 
@@ -45,7 +86,7 @@ Rstest 内置了 `watch`、`run` 等命令，请参考 [CLI 工具](/guide/basic
 
 ## 编写测试
 
-作为一个简单的例子，我们有一个 `sayHi` 方法。为了对它进行测试，你可以创建一个名为 `index.test.ts` 的测试文件或使用与 [Rust 测试](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest) 类似的 [In-Source 测试](/config/test/includeSource)。
+作为一个简单的例子，我们有一个 `sayHi` 方法。为了对它进行测试，你可以创建一个名为 `index.test.ts` 的测试文件或使用与 [Rust 测试](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest) 类似的 [In-Source 测试](/config/test/include-source)。
 
 ```ts title=index.ts
 export const sayHi = () => 'hi';
@@ -69,3 +110,14 @@ test('should sayHi correctly', () => {
       Tests 1 passed
    Duration 140 ms (build 17 ms, tests 123 ms)
 ```
+
+## 下一步
+
+如果你想查看完整项目结构，可以参考以下常用示例：
+
+- [node](https://github.com/web-infra-dev/rstest/tree/main/examples/node)：Node.js 测试与覆盖率收集。
+- [react](https://github.com/web-infra-dev/rstest/tree/main/examples/react)：使用 happy-dom 的 React 组件、Hook 和 SSR 测试。
+- [vue](https://github.com/web-infra-dev/rstest/tree/main/examples/vue)：Vue 组件与 SSR 测试。
+- [browser-react](https://github.com/web-infra-dev/rstest/tree/main/examples/browser-react)：Browser Mode 下的 React 组件测试。
+
+更多示例请参考 [Rstest examples](https://github.com/web-infra-dev/rstest/tree/main/examples)。
