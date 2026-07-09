@@ -109,6 +109,8 @@ export type {
   RstestCommand,
   RstestExpect as Expect,
   RstestUtilities,
+  TaskMeta,
+  TaskMetaValue,
   TestCaseInfo,
   TestContext,
   TestAPIs,
