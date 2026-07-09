@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser-react",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "React component testing support for Rstest browser mode",
   "keywords": [
     "rstest",
