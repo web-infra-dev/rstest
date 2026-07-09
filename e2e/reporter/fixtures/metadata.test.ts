@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, it } from '@rstest/core';
 
 afterAll((ctx) => {
-  ctx.meta.fileHook = 'afterAll';
+  ctx.meta = { ...ctx.meta, fileHook: 'afterAll' };
 });
 
 describe(
@@ -9,7 +9,7 @@ describe(
   { meta: { fromSuite: true, shared: 'suite' } },
   () => {
     afterAll((ctx) => {
-      ctx.meta.suiteHook = 'afterAll';
+      ctx.meta = { ...ctx.meta, suiteHook: 'afterAll' };
     });
 
     it('inherits metadata', (ctx) => {

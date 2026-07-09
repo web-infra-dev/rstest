@@ -3,6 +3,8 @@ title: Reporter
 description: The Reporter API allows you to create custom test result processors and output formatters. This interface is experimental and may change in future versions.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Reporter API
 
 The Reporter API allows you to create custom test result processors and output formatters. This interface is experimental and may change in future versions.
@@ -72,7 +74,9 @@ interface Reporter {
 }
 ```
 
-Metadata result fields are added in 0.11.1. JSON-serializable runtime metadata written through `context.task.meta` is available on the `TestResult` passed to `onTestCaseResult`. Metadata written by hooks through `ctx.meta` is available on the corresponding suite result in `onTestSuiteResult`, and file-level hook metadata is available on `TestFileResult.meta` in `onTestFileResult`.
+<ApiMeta addedVersion="0.11.1" />
+
+Metadata result fields are available on reporter results. JSON-serializable runtime metadata written through `context.task.meta` is available on the `TestResult` passed to `onTestCaseResult`. Metadata written by hooks through `ctx.meta` is available on the corresponding suite result in `onTestSuiteResult`, and file-level hook metadata is available on `TestFileResult.meta` in `onTestFileResult`.
 
 ## Examples
 

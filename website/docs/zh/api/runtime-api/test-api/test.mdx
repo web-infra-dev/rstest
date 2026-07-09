@@ -56,7 +56,21 @@ test('runs within 3s', async () => {
 - `timeout?: number` — 单测超时（毫秒），覆盖 [`test.testTimeout`](/config/test/test-timeout)。
 - `retry?: number` — 测试失败时的重跑次数，首次通过即停。覆盖 [`test.retry`](/config/test/retry)。
 - `repeats?: number` — 在通过的前提下额外重跑指定次数，任一次失败则整体判定为失败。每次重跑会完整执行 `beforeEach` / `afterEach`，并各自享有独立的 `retry` 配额。
-- `meta?: Record<string, TaskMetaValue>` — 0.11.1 新增。测试结果的初始可 JSON 序列化元数据。如果测试位于带有 `meta` 的 `describe` 中，会继承一份套件元数据副本，测试级别的同名字段会覆盖继承值。
+- `meta?: TaskMeta` — 0.11.1 新增。测试结果的初始可 JSON 序列化元数据。如果测试位于带有 `meta` 的 `describe` 中，会继承一份套件元数据副本，测试级别的同名字段会覆盖继承值。
+
+`TaskMeta` 和 `TaskMetaValue` 都从 `@rstest/core` 导出，允许使用可 JSON 序列化的值：
+
+```ts
+type TaskMeta = Record<string, TaskMetaValue>;
+
+type TaskMetaValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TaskMetaValue[]
+  | { [key: string]: TaskMetaValue };
+```
 
 ```ts
 test('flaky network call', { retry: 3 }, async () => {
@@ -505,7 +519,7 @@ export interface TestContext {
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
     /** Mutable metadata copied to the current test result. Added in 0.11.1. */
-    meta: Record<string, TaskMetaValue>;
+    meta: TaskMeta;
   };
   /** The `expect` API bound to the current test */
   expect: Expect;

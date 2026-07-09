@@ -56,7 +56,21 @@ test('runs within 3s', async () => {
 - `timeout?: number` — per-test timeout in milliseconds. Overrides [`test.testTimeout`](/config/test/test-timeout).
 - `retry?: number` — re-runs the test up to this many times if it fails, stopping at the first pass. Overrides [`test.retry`](/config/test/retry).
 - `repeats?: number` — re-runs an already-passing test this many extra times; any failure marks the whole case as failed. Each repeat runs the full `beforeEach`/`afterEach` lifecycle and gets an independent `retry` budget.
-- `meta?: Record<string, TaskMetaValue>` — added in 0.11.1. Initial JSON-serializable metadata for the test result. If the test is inside a `describe` with `meta`, it inherits a copy of the suite metadata and test-level keys override inherited keys.
+- `meta?: TaskMeta` — added in 0.11.1. Initial JSON-serializable metadata for the test result. If the test is inside a `describe` with `meta`, it inherits a copy of the suite metadata and test-level keys override inherited keys.
+
+`TaskMeta` and `TaskMetaValue` are exported from `@rstest/core` and allow JSON-serializable values:
+
+```ts
+type TaskMeta = Record<string, TaskMetaValue>;
+
+type TaskMetaValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TaskMetaValue[]
+  | { [key: string]: TaskMetaValue };
+```
 
 ```ts
 test('flaky network call', { retry: 3 }, async () => {
@@ -516,7 +530,7 @@ export interface TestContext {
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
     /** Mutable metadata copied to the current test result. Added in 0.11.1. */
-    meta: Record<string, TaskMetaValue>;
+    meta: TaskMeta;
   };
   /** The `expect` API bound to the current test */
   expect: Expect;

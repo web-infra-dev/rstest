@@ -136,7 +136,9 @@ import type {
 
 Reporter 实现细节见 [Reporter](/api/javascript-api/reporter)。
 
-`meta` 字段为 0.11.1 新增。`TestResult.meta` 包含从 `TestOptions.meta` 初始化，并在运行时通过 `context.task.meta` 写入的可 JSON 序列化元数据。套件元数据会被子套件和测试继承，子级顶层同名字段会覆盖父级字段；继承值会为每个子级复制，避免运行时修改泄漏到兄弟节点。`TestFileResult.meta` 包含文件级 `beforeAll` / `afterAll` hooks 通过 `ctx.meta` 写入的元数据，传给 `onTestSuiteResult` 的 suite 结果则包含该 suite 生命周期 hooks 写入的元数据。
+<ApiMeta addedVersion="0.11.1" />
+
+`meta` 字段包含从 `TestOptions.meta` 初始化，并在运行时通过 `context.task.meta` 写入的可 JSON 序列化元数据。套件元数据会被子套件和测试继承，子级顶层同名字段会覆盖父级字段；继承值会为每个子级复制，避免运行时修改泄漏到兄弟节点。`TestFileResult.meta` 包含文件级 `beforeAll` / `afterAll` hooks 通过 `ctx.meta` 写入的元数据，传给 `onTestSuiteResult` 的 suite 结果则包含该 suite 生命周期 hooks 写入的元数据。
 
 ```ts
 import { afterAll, test } from '@rstest/core';

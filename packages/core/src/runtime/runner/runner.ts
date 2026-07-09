@@ -426,7 +426,13 @@ export class TestRunner {
               // `ctx.filepath` is user-facing; expose the OS-native path
               // so it matches `__filename`/`import.meta.filename` (#1465).
               filepath: toNativePath(testPath),
-              meta: (test.meta ??= {}),
+              get meta() {
+                return (test.meta ??= {});
+              },
+              set meta(value) {
+                test.meta = cloneTaskMeta(value);
+                result.meta = test.meta;
+              },
             };
 
             if (
