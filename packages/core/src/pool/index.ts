@@ -242,7 +242,16 @@ const workerErrorToResult = (
 
   const runningModule = context.stateManager.runningModules.get(testPath);
   const runningTests = runningModule?.runningTests;
+  const completedResults = runningModule?.results || [];
 
+  let results = completedResults;
+  // The crash error stays at the file level unless we can attribute it to a
+  // running case below, in which case it moves onto that case.
+  let errors = [error];
+
+  // When the worker dies mid-test, attribute the crash to the test case(s) that
+  // were running so they surface as failed test cases in the `Tests` totals,
+  // instead of the case silently vanishing from the counts (#1535).
   if (runningTests?.length) {
     const getCaseName = (test: TestCaseInfo) =>
       `"${test.name}"${test.parentNames?.length ? ` (Under suite: ${test.parentNames?.join(' > ')})` : ''}`;
@@ -253,6 +262,21 @@ const workerErrorToResult = (
         : `The below test cases may be relevant, as they were running when the error occurred:\n  - ${runningTests.map((t) => getCaseName(t)).join('\n  - ')}`;
 
     error.message += `\n\n${color.white(hint)}`;
+
+    const crashedResults: TestResult[] = runningTests.map((test) => ({
+      testId: test.testId,
+      status: 'fail',
+      name: test.name,
+      testPath: test.testPath,
+      parentNames: test.parentNames,
+      project: test.project,
+      errors: [error],
+    }));
+
+    results = [...completedResults, ...crashedResults];
+    // The error is attributed to the crashed case(s) above; keep it off the
+    // file-level result so the failing-tests summary doesn't print it twice.
+    errors = [];
   }
 
   return {
@@ -261,8 +285,8 @@ const workerErrorToResult = (
     testPath,
     status: 'fail',
     name: '',
-    results: runningModule?.results || [],
-    errors: [error],
+    results,
+    errors,
   };
 };
 
