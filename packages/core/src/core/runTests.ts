@@ -220,9 +220,9 @@ export async function runTests(context: Rstest): Promise<void> {
   //    file-level environment comments and splits node projects by their final
   //    `testEnvironment`, so each Rsbuild environment is present before
   //    environment-scoped plugins initialize.
-  // 3. Prepare Rsbuild with the pre-grouped node environments. Resolve its
-  //    config early only when browser/no-node decisions need post-hook config;
-  //    otherwise let the dev server trigger config hooks to avoid extra side effects.
+  // 3. Prepare Rsbuild with the pre-grouped node environments; let server
+  //    creation drive config resolution so run mode avoids extra initConfigs
+  //    side effects.
   // 4. Start browser tests early for mixed runs, then create the node Rsbuild
   //    dev server and worker pool when node tests remain.
   // 5. The inner `run()` handles one compile cycle: read Rsbuild stats, run
@@ -401,11 +401,6 @@ export async function runTests(context: Rstest): Promise<void> {
       );
     },
   });
-
-  if (plan.browserProjectsToRun.length || !plan.nodeProjectsToRun.length) {
-    await rsbuildInstance.initConfigs({ action: 'dev' });
-    plan = projectPlanState.getPlan();
-  }
 
   const hasBrowserTestsToRun = plan.browserProjectsToRun.length > 0;
   const hasNodeTestsToRun = plan.nodeProjectsToRun.length > 0;

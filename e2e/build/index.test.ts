@@ -58,6 +58,26 @@ describe('test build config', () => {
     expect(cli.stdout).not.toContain('ignored.test.ts');
   });
 
+  it('modifyRstestConfig should apply when initial node test entries are empty', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--config', 'rstest.noInitialTests.config.mts'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/modifyRstestConfig'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).toContain('uses project-a modified config');
+    expect(cli.stdout).not.toContain('No test files found');
+  });
+
   it('should write output to customized distPath.root', async ({
     onTestFinished,
   }) => {

@@ -99,7 +99,7 @@ export type RstestExposeAPI = {
 
 请在 Rsbuild 插件的 `setup` 阶段注册 `modifyRstestConfig`。不要在 `api.modifyRsbuildConfig` 等更晚的 Rsbuild config hook 中注册它，因为 Rstest 会在解析 Rsbuild config 时应用已经收集到的回调；在这些 hook 内注册的回调对于当前解析流程来说已经太晚。
 
-Rstest 会在 Rsbuild 初始化测试运行所需的 environments 之前解析文件级环境注释，因此 `@vitest-environment jsdom` 这类注释对应的文件也能应用到 environment-scoped 的 Rsbuild 插件。由于 `modifyRstestConfig` 发生在 Rsbuild config 解析过程中，它不应该新增或暴露需要形成新的文件级环境注释分组的测试文件。如果插件需要这些文件运行在不同环境中，请在 Rsbuild 初始化前通过 `testEnvironment` 或拆分 `projects` 完成配置。
+Rstest 会在 Rsbuild 初始化测试 environments 前解析文件级环境注释，如 `@rstest-environment jsdom`。`modifyRstestConfig` 不应新增或暴露需要形成新环境注释分组的文件；请改为在 Rsbuild 初始化前通过 `testEnvironment` 或拆分 `projects` 配置。
 
 ### 可修改的配置范围
 
