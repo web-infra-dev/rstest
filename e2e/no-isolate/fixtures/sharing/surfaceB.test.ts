@@ -1,4 +1,4 @@
 import { runSurfaceGuard } from './surfaceHelper';
 
-// Peer of surfaceA — see surfaceHelper.runSurfaceGuard for the shared rationale.
+// Peer surface file (surfaceA/B/C) — see surfaceHelper.runSurfaceGuard.
 runSurfaceGuard('surfaceB');

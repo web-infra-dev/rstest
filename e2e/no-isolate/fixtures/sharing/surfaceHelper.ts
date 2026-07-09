@@ -28,9 +28,12 @@ const test = Object.assign(base.extend({}), {
  * Drive the entire captured surface from the calling test file. Because the
  * hooks and `describe` are registered while this file's module is executing,
  * they must late-bind to THIS file's runner rather than the file that first
- * evaluated the helper. Called from two peer files (surfaceA/surfaceB) with no
+ * evaluated the helper. Called from three peer files (surfaceA/B/C) with no
  * assumed order: whichever runs second exercises the late-bind path, and its
- * `beforeAll` proves the earlier file's shared `afterAll` already fired.
+ * shared `afterAll` (registered from a non-first file — the #1376 regression
+ * surface) is in turn observed by whichever runs third, via the counter
+ * invariant in `beforeAll`. Two files alone would leave the last file's
+ * `afterAll` unchecked; the third peer closes that gap.
  */
 export function runSurfaceGuard(label: string): void {
   const g = globalThis as Record<string, any>;

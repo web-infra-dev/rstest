@@ -16,10 +16,11 @@ describe('module state sharing under isolate: false', () => {
   //   still re-runs per file (a/b.test.ts + shared.ts).
   // - https://github.com/web-infra-dev/rstest/issues/1376: a context-bound API
   //   captured in a shared module must resolve the current file, not the
-  //   evaluating file's torn-down context. Two peer files drive the WHOLE
-  //   surface through one persisted helper (surfaceA/surfaceB +
-  //   surfaceHelper.ts); whichever runs second exercises the late-bind path.
-  //   The subtle `expect` self-delegation is unit-covered
+  //   evaluating file's torn-down context. Three peer files drive the WHOLE
+  //   surface through one persisted helper (surfaceA/B/C + surfaceHelper.ts);
+  //   whichever runs second exercises the late-bind path, and its shared
+  //   afterAll (a non-first file's) is observed by whichever runs third. The
+  //   subtle `expect` self-delegation is unit-covered
   //   (tests/runtime/api/expect.test.ts).
   // - https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3457255132: a
   //   mock defined in a module shared across files persists, so `clearMocks`
