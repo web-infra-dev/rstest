@@ -113,8 +113,6 @@ function getProviderInternals(provider: CoverageProvider): ProviderInternals {
 function parseModule(code: string) {
   return Parser.parse(code, {
     ecmaVersion: 'latest',
-    locations: true,
-    ranges: true,
     sourceType: 'module',
   });
 }
@@ -457,11 +455,11 @@ describe('coverage-v8 provider', () => {
     expect(coverage[file]?.branchMap[0]?.locations).toEqual([
       {
         start: { line: 1, column: 0 },
-        end: { line: 1, column: Number.POSITIVE_INFINITY },
+        end: { line: 1, column: 19 },
       },
       {
         start: { line: 1, column: 0 },
-        end: { line: 1, column: Number.POSITIVE_INFINITY },
+        end: { line: 1, column: 19 },
       },
     ]);
   });
@@ -1120,6 +1118,60 @@ export default class CustomCoverageReporter {
       expect(
         coverageMap?.fileCoverageFor(file).toSummary().statements.pct,
       ).toBe(100);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('limits concurrent raw coverage conversion', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-concurrency');
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    let activeConversions = 0;
+    let peakConversions = 0;
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (filePath: string) => {
+        activeConversions++;
+        peakConversions = Math.max(peakConversions, activeConversions);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        activeConversions--;
+        return {
+          [filePath]: createFileCoverage(filePath),
+        };
+      },
+    });
+
+    const payloads = Array.from({ length: 12 }, (_, index) => {
+      const file = join(root, 'src', `covered-${index}.js`);
+      const code = `function covered${index}() { return ${index}; }`;
+
+      return {
+        entries: [
+          {
+            url: pathToFileURL(file).href,
+            filePath: file,
+            scriptId: String(index),
+            functions: [
+              {
+                functionName: '',
+                isBlockCoverage: true,
+                ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+              },
+            ],
+          },
+        ],
+        options: { assetFiles: { [file]: code }, outputModule: true },
+      };
+    });
+
+    try {
+      const coverageMap = await provider.resolveRawCoverage(payloads);
+
+      expect(coverageMap?.files()).toHaveLength(12);
+      expect(peakConversions).toBeLessThanOrEqual(4);
+      expect(peakConversions).toBeGreaterThan(1);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
