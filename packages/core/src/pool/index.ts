@@ -226,13 +226,18 @@ const buildTask = async ({
  * Convert a worker crash or pool error into a fail-status `TestFileResult`.
  * Enriches the error with context about which test cases were running at the
  * time of the crash (if any).
+ *
+ * Returns the file result plus the synthetic `crashedResults` (the cases that
+ * were running at crash time). The caller replays those through the live
+ * `onTestCaseResult` reporter hook so incremental reporters stay consistent
+ * with the final totals — they are already included in `fileResult.results`.
  */
 const workerErrorToResult = (
   err: unknown,
   testPath: string,
   projectName: string,
   context: RstestContext,
-): TestFileResult => {
+): { fileResult: TestFileResult; crashedResults: TestResult[] } => {
   const error = toError(err);
 
   (error as any).fullStack = true;
@@ -245,6 +250,7 @@ const workerErrorToResult = (
   const completedResults = runningModule?.results || [];
 
   let results = completedResults;
+  let crashedResults: TestResult[] = [];
   // The crash error stays at the file level unless we can attribute it to a
   // running case below, in which case it moves onto that case.
   let errors = [error];
@@ -263,7 +269,7 @@ const workerErrorToResult = (
 
     error.message += `\n\n${color.white(hint)}`;
 
-    const crashedResults: TestResult[] = runningTests.map((test) => ({
+    crashedResults = runningTests.map((test) => ({
       testId: test.testId,
       status: 'fail',
       name: test.name,
@@ -280,13 +286,16 @@ const workerErrorToResult = (
   }
 
   return {
-    testId: getFileTaskId(testPath),
-    project: projectName,
-    testPath,
-    status: 'fail',
-    name: '',
-    results,
-    errors,
+    fileResult: {
+      testId: getFileTaskId(testPath),
+      project: projectName,
+      testPath,
+      status: 'fail',
+      name: '',
+      results,
+      errors,
+    },
+    crashedResults,
   };
 };
 
@@ -551,13 +560,26 @@ export const createPool = async ({
             'host',
             () => pool.runTest(task),
             { ...traceArgs, worker: task.worker },
-          ).catch((err: unknown) => {
-            return workerErrorToResult(
+          ).catch(async (err: unknown) => {
+            const { fileResult, crashedResults } = workerErrorToResult(
               err,
               entryInfo.testPath,
               projectName,
               context,
             );
+            // Each crashed case already fired `onTestCaseStart`; complete the
+            // pair with a live `onTestCaseResult` so incremental reporters (dot,
+            // custom accounting) render it, matching the final totals. Counting
+            // stays sourced from `fileResult.results`, so the state manager is
+            // intentionally not touched here to avoid double-counting.
+            for (const caseResult of crashedResults) {
+              await Promise.all(
+                reporters.map((reporter) =>
+                  reporter.onTestCaseResult?.(caseResult),
+                ),
+              );
+            }
+            return fileResult;
           });
 
           if (result.coverage) {
