@@ -109,7 +109,7 @@ describe('writeResultsCache', () => {
     expect(cache?.files[key]?.duration).toBeUndefined();
   });
 
-  it('leaves existing records untouched for skip/todo files', async () => {
+  it('preserves the cached duration for skip/todo files (no EWMA poisoning)', async () => {
     await writeResultsCache(root, [fileResult('a.test.ts', 'pass', 100)]);
     await writeResultsCache(root, [fileResult('a.test.ts', 'skip', undefined)]);
     await writeResultsCache(root, [fileResult('a.test.ts', 'todo', undefined)]);
@@ -117,6 +117,19 @@ describe('writeResultsCache', () => {
     const key = sequenceKey('default', root, join(root, 'a.test.ts'));
     expect(cache?.files[key]?.duration).toBe(100);
     expect(cache?.files[key]?.failed).toBe(false);
+  });
+
+  it('clears the failed flag when a previously-failing file is later skipped/todo', async () => {
+    // Quarantining a flaky file (converting its failing tests to skip/todo)
+    // must drop it out of failed-first — otherwise it steals the front of the
+    // queue on every run until the entry ages out.
+    await writeResultsCache(root, [fileResult('a.test.ts', 'fail', 50)]);
+    await writeResultsCache(root, [fileResult('a.test.ts', 'skip', undefined)]);
+    const cache = await readResultsCache(root);
+    const key = sequenceKey('default', root, join(root, 'a.test.ts'));
+    expect(cache?.files[key]?.failed).toBe(false);
+    // The last real duration is kept so ordering stays informed.
+    expect(cache?.files[key]?.duration).toBe(50);
   });
 
   it('clears the failed flag when a previously failing file passes', async () => {

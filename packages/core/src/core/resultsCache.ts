@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join, relative } from 'pathe';
 import type { TestFileResult } from '../types';
-import { logger } from '../utils';
+import { logger, SEQUENCE_CACHE_DIR } from '../utils';
 
 /**
  * Persistent, best-effort record of each test file's last-known runtime and
@@ -10,10 +10,10 @@ import { logger } from '../utils';
  * swallows its own IO errors, so a missing, corrupt, or non-writable cache
  * degrades to a cold (size-only) ordering rather than failing the run.
  *
- * The file lives under a dedicated directory (`.rstest-sequence`, leading dot)
- * so it can never collide with the `rstest`/`rstest-<env>` Rspack build cache.
+ * The cache lives in a dedicated directory (`SEQUENCE_CACHE_DIR`, a dotted
+ * prefix) that cannot collide with the `rstest`/`rstest-<env>` Rspack build
+ * cache — see the constant's definition for why the dot is load-bearing.
  */
-const CACHE_DIR = 'node_modules/.cache/.rstest-sequence';
 const CACHE_FILE = 'results.json';
 const CACHE_VERSION = 1;
 
@@ -54,7 +54,7 @@ export const sequenceKey = (
 ): string => `${project}\0${relative(rootPath, testPath)}`;
 
 const cachePath = (rootPath: string): string =>
-  join(rootPath, CACHE_DIR, CACHE_FILE);
+  join(rootPath, SEQUENCE_CACHE_DIR, CACHE_FILE);
 
 /**
  * Read the sequencing cache. Returns `undefined` on any failure — a missing
@@ -97,23 +97,22 @@ export const writeResultsCache = async (
     const files: Record<string, CachedFileResult> = { ...existing?.files };
 
     for (const result of results) {
-      // `skip`/`todo` files carry no meaningful duration and would poison the
-      // EWMA with a near-zero sample; leave any existing record untouched. The
-      // `failed` flag persists until the file actually re-runs to pass/fail.
-      if (result.status !== 'pass' && result.status !== 'fail') {
-        continue;
-      }
-
       const key = sequenceKey(result.project, rootPath, result.testPath);
       const prev = files[key];
 
-      // Always refresh the fail state + timestamp for a completed run. A worker
-      // crash yields a `fail` result with no `duration` (see
-      // `workerErrorToResult`); it must still land in failed-first next run, so
-      // only the EWMA update is skipped when the duration is missing — the old
-      // smoothed duration is preserved.
+      // Every run that reached here executed the file, so always refresh its
+      // fail state + timestamp: `fail` re-enters failed-first, while `pass`,
+      // `skip`, and `todo` clear it (a quarantined file whose failing tests were
+      // converted to skip/todo must stop stealing the front of the queue).
+      //
+      // Only a completed pass/fail with a real `duration` feeds the EWMA. A
+      // worker crash yields `fail` with no `duration` (see `workerErrorToResult`),
+      // and skip/todo carry no meaningful timing — both preserve the previous
+      // smoothed duration instead of poisoning the average with a missing or
+      // near-zero sample.
+      const isPassFail = result.status === 'pass' || result.status === 'fail';
       let duration = prev?.duration;
-      if (result.duration != null) {
+      if (isPassFail && result.duration != null) {
         duration =
           prev?.duration != null
             ? Math.round(
@@ -144,7 +143,7 @@ export const writeResultsCache = async (
     }
 
     const data: ResultsCacheData = { version: CACHE_VERSION, files };
-    const dir = join(rootPath, CACHE_DIR);
+    const dir = join(rootPath, SEQUENCE_CACHE_DIR);
     await mkdir(dir, { recursive: true });
     // Atomic write: write to a pid-scoped temp file then rename into place so a
     // concurrent reader never observes a half-written JSON.
