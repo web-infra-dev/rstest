@@ -32,6 +32,12 @@ import {
 } from './globalSetup';
 import { createSetupFileState } from './setupFileState';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
+import {
+  readResultsCache,
+  sequenceKey,
+  writeResultsCache,
+} from './resultsCache';
+import { type SequenceHints, sortTestEntries } from './testSequencer';
 import { createRunProjectPlanState, syncNodeProjects } from './projectPlan';
 import type { Rstest } from './rstest';
 
@@ -593,6 +599,15 @@ export async function runTests(context: Rstest): Promise<void> {
     // TODO: this is not the best practice for collecting test files
     context.stateManager.testFiles = isWatchMode ? undefined : entryFiles;
 
+    // Perf-first ordering hints for this run: last-known duration + failure
+    // state per test file. Read once (watch reruns pick up the freshly written
+    // cache on the next `run()`); a missing/corrupt cache yields no hints and
+    // falls back to bundle-size ordering.
+    const resultsCache = await readResultsCache(rootPath);
+    const sequenceHints: SequenceHints = new Map(
+      Object.entries(resultsCache?.files ?? {}),
+    );
+
     const mergedCoverageMap: CoverageMap | undefined = coverageProvider
       ? coverageProvider.createCoverageMap()
       : undefined;
@@ -701,6 +716,14 @@ export async function runTests(context: Rstest): Promise<void> {
             ),
           );
         }
+
+        // Perf-first ordering, applied per project (the pool interleaves
+        // projects via a shared FIFO, but each project's stream stays ordered).
+        finalEntries = sortTestEntries(
+          finalEntries,
+          sequenceHints,
+          (testPath) => sequenceKey(p.name, rootPath, testPath),
+        );
 
         currentEntries.push(...finalEntries);
         const { results, testResults } = await pool.runTests({
@@ -829,6 +852,15 @@ export async function runTests(context: Rstest): Promise<void> {
       context.updateReporterResultState(
         results,
         testResults,
+        currentDeletedEntries,
+      );
+
+      // Persist node results for next-run ordering. Uses `returns` (node-only;
+      // browser results were merged into `results` above and take a separate
+      // path). Best-effort — `writeResultsCache` swallows its own IO errors.
+      await writeResultsCache(
+        rootPath,
+        returns.flatMap((r) => r.results),
         currentDeletedEntries,
       );
 

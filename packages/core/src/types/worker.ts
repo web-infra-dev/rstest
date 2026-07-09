@@ -16,6 +16,12 @@ export type EntryInfo = {
   chunks: (string | number)[];
   testPath: TestPath;
   files?: string[];
+  /**
+   * Bundle size (in bytes) of this entry's emitted assets, including its
+   * dependency graph. Used as the cold-start cost proxy when ordering test
+   * files that have no cached duration yet. Only populated for test entries.
+   */
+  size?: number;
 };
 
 /** Server to Runtime */

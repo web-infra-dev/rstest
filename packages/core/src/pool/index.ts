@@ -525,78 +525,109 @@ export const createPool = async ({
       });
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
+      // Sequential dispatch gate: `entries` is already perf-sorted, but the
+      // per-entry `buildTask` (eager asset reads) finishes out of order, so
+      // enqueueing right after it would scramble the pool's slot order. Each
+      // entry waits for the previous one to claim its pool slot before calling
+      // `pool.runTest`, then releases the next — the asset reads stay fully
+      // pipelined, only the enqueue is serialized.
+      let dispatchGate: Promise<void> = Promise.resolve();
+
       const results = await Promise.all(
         entries.map(async (entryInfo, index) => {
-          const traceArgs = {
-            project: projectName,
-            testPath: entryInfo.testPath,
-          };
-          const task = await traceSpan(
-            'host:build-task',
-            'host',
-            () =>
-              buildTask({
-                type: 'run',
-                workerKind,
-                entryInfo,
-                index,
-                context,
-                project,
-                runtimeConfig,
-                setupEntries,
-                setupAssets,
-                updateSnapshot,
-                getAssetFiles,
-                getSourceMaps,
-                rpcMethods,
-                traceSpan,
-                buildId,
-              }),
-            traceArgs,
-          );
-
-          const result = await traceSpan(
-            'host:pool-run-test',
-            'host',
-            () => pool.runTest(task),
-            { ...traceArgs, worker: task.worker },
-          ).catch(async (err: unknown) => {
-            const { fileResult, crashedResults } = workerErrorToResult(
-              err,
-              entryInfo.testPath,
-              projectName,
-              context,
-            );
-            // Each crashed case already fired `onTestCaseStart`; complete the
-            // pair with a live `onTestCaseResult` so incremental reporters (dot,
-            // custom accounting) render it, matching the final totals. Counting
-            // stays sourced from `fileResult.results`, so the state manager is
-            // intentionally not touched here to avoid double-counting.
-            for (const caseResult of crashedResults) {
-              await Promise.all(
-                reporters.map((reporter) =>
-                  reporter.onTestCaseResult?.(caseResult),
-                ),
-              );
-            }
-            return fileResult;
+          const gate = dispatchGate;
+          let releaseGate!: () => void;
+          dispatchGate = new Promise<void>((r) => {
+            releaseGate = r;
           });
 
-          if (result.coverage) {
-            onCoverageResult?.(result.coverage);
-            delete result.coverage;
+          try {
+            const traceArgs = {
+              project: projectName,
+              testPath: entryInfo.testPath,
+            };
+            const task = await traceSpan(
+              'host:build-task',
+              'host',
+              () =>
+                buildTask({
+                  type: 'run',
+                  workerKind,
+                  entryInfo,
+                  index,
+                  context,
+                  project,
+                  runtimeConfig,
+                  setupEntries,
+                  setupAssets,
+                  updateSnapshot,
+                  getAssetFiles,
+                  getSourceMaps,
+                  rpcMethods,
+                  traceSpan,
+                  buildId,
+                }),
+              traceArgs,
+            );
+
+            await gate;
+            // `pool.runTest` claims a slot (or parks in `slotWaiters`)
+            // synchronously before its first await, and `traceSpan` invokes
+            // its callback synchronously, so releasing after this returns
+            // preserves the exact enqueue order.
+            const resultPromise = traceSpan(
+              'host:pool-run-test',
+              'host',
+              () => pool.runTest(task),
+              { ...traceArgs, worker: task.worker },
+            );
+            releaseGate();
+
+            const result = await resultPromise.catch(async (err: unknown) => {
+              const { fileResult, crashedResults } = workerErrorToResult(
+                err,
+                entryInfo.testPath,
+                projectName,
+                context,
+              );
+              // Each crashed case already fired `onTestCaseStart`; complete the
+              // pair with a live `onTestCaseResult` so incremental reporters
+              // (dot, custom accounting) render it, matching the final totals.
+              // Counting stays sourced from `fileResult.results`, so the state
+              // manager is intentionally not touched here to avoid
+              // double-counting.
+              for (const caseResult of crashedResults) {
+                await Promise.all(
+                  reporters.map((reporter) =>
+                    reporter.onTestCaseResult?.(caseResult),
+                  ),
+                );
+              }
+              return fileResult;
+            });
+
+            if (result.coverage) {
+              onCoverageResult?.(result.coverage);
+              delete result.coverage;
+            }
+            if (result.coverageRaw != null) {
+              onRawCoverageResult?.(result.coverageRaw);
+              delete result.coverageRaw;
+            }
+            if (result.traceEvents) {
+              onTraceEvents?.(result.traceEvents);
+              delete result.traceEvents;
+            }
+            context.stateManager.onTestFileResult(result);
+            reporters.map((reporter) => reporter.onTestFileResult?.(result));
+            return result;
+          } finally {
+            // Unblock the next entry even if `buildTask` threw before the
+            // dispatch above ran — otherwise the whole chain would deadlock.
+            // A second call after the in-`try` release is a harmless no-op
+            // (a Promise's resolve settles once).
+            releaseGate();
           }
-          if (result.coverageRaw != null) {
-            onRawCoverageResult?.(result.coverageRaw);
-            delete result.coverageRaw;
-          }
-          if (result.traceEvents) {
-            onTraceEvents?.(result.traceEvents);
-            delete result.traceEvents;
-          }
-          context.stateManager.onTestFileResult(result);
-          reporters.map((reporter) => reporter.onTestFileResult?.(result));
-          return result;
         }),
       );
 
