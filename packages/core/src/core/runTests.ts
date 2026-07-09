@@ -220,12 +220,15 @@ export async function runTests(context: Rstest): Promise<void> {
   //    file-level environment comments and splits node projects by their final
   //    `testEnvironment`, so each Rsbuild environment is present before
   //    environment-scoped plugins initialize.
-  // 3. Create the Rsbuild dev server to trigger config hooks, then start
-  //    browser tests early for mixed runs and initialize the node worker pool.
-  // 4. The inner `run()` handles one compile cycle: read Rsbuild stats, run
+  // 3. Prepare Rsbuild with the pre-grouped node environments. Resolve its
+  //    config early only when browser/no-node decisions need post-hook config;
+  //    otherwise let the dev server trigger config hooks to avoid extra side effects.
+  // 4. Start browser tests early for mixed runs, then create the node Rsbuild
+  //    dev server and worker pool when node tests remain.
+  // 5. The inner `run()` handles one compile cycle: read Rsbuild stats, run
   //    global setup, execute workers, merge browser/node results for reporters,
   //    generate coverage, and finalize trace data.
-  // 5. Watch mode wires `run()` to Rsbuild rebuild callbacks and CLI shortcuts;
+  // 6. Watch mode wires `run()` to Rsbuild rebuild callbacks and CLI shortcuts;
   //    non-watch mode calls it once and then tears everything down.
   cleanCoverageReports(context.normalizedConfig.coverage);
 
