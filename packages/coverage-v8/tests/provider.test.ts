@@ -1021,6 +1021,49 @@ export default class CustomCoverageReporter {
     }
   });
 
+  it('omits null source maps from raw coverage payload options', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-null-sourcemap');
+    const file = join(root, 'dist', 'covered.js');
+    const code = 'function covered() { return 1; }';
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+
+    Object.defineProperty(providerInternals, 'takeRawCoverage', {
+      configurable: true,
+      value: async () => [
+        {
+          url: pathToFileURL(file).href,
+          filePath: file,
+          scriptId: '1',
+          functions: [
+            {
+              functionName: '',
+              isBlockCoverage: true,
+              ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+            },
+          ],
+        },
+      ],
+    });
+    Object.defineProperty(provider, 'session', {
+      configurable: true,
+      value: {},
+    });
+
+    const options = {
+      assetFiles: { [file]: code },
+      sourceMaps: { [file]: null },
+      outputModule: true,
+      // Rsbuild resource collection can return null for assets without maps;
+      // this locks the runtime boundary even though the public type is stricter.
+    } as unknown as Parameters<CoverageProvider['collectRaw']>[0];
+
+    const payload = await provider.collectRaw(options);
+
+    expect(payload?.options?.assetFiles).toEqual({ [file]: code });
+    expect(payload?.options?.sourceMaps).toBeUndefined();
+  });
+
   it('collects raw v8 coverage before converting to Istanbul coverage', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-raw-merge');
     const file = join(root, 'src', 'covered.js');
@@ -1255,6 +1298,58 @@ export default class CustomCoverageReporter {
 
       expect(coverageMap?.files()).toEqual([file]);
       expect(hasError).toBe(true);
+      expect(process.exitCode).toBe(1);
+    } finally {
+      console.error = originalError;
+      process.exitCode = originalExitCode;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports raw coverage payload shape errors with invalid field paths', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-malformed-message');
+    const file = join(root, 'valid.js');
+    const code = 'function covered() { return 1; }';
+    const provider = new CoverageProvider(createOptions(), root);
+    const originalError = console.error;
+    const originalExitCode = process.exitCode;
+    const errors: string[] = [];
+
+    console.error = (...args: unknown[]) => {
+      errors.push(args.join(' '));
+    };
+
+    try {
+      await expect(
+        provider.resolveRawCoverage([
+          {
+            entries: [
+              {
+                url: pathToFileURL(file).href,
+                filePath: file,
+                scriptId: 'valid',
+                functions: [
+                  {
+                    functionName: '',
+                    isBlockCoverage: true,
+                    ranges: [
+                      { startOffset: 0, endOffset: code.length, count: 1 },
+                    ],
+                  },
+                ],
+              },
+            ],
+            options: { sourceMaps: { [file]: null }, outputModule: true },
+          },
+        ]),
+      ).resolves.toBeNull();
+
+      expect(errors[0]).toContain(
+        'Failed to resolve malformed raw V8 coverage payload at index 0',
+      );
+      expect(errors[0]).toContain('options.sourceMaps');
+      expect(errors[0]).toContain(JSON.stringify(file));
+      expect(errors[0]).toContain('received null');
       expect(process.exitCode).toBe(1);
     } finally {
       console.error = originalError;
