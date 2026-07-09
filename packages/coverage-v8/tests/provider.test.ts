@@ -1157,9 +1157,7 @@ export default class CustomCoverageReporter {
               {
                 functionName: '',
                 isBlockCoverage: true,
-                ranges: [
-                  { startOffset: 0, endOffset: code.length, count: 1 },
-                ],
+                ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
               },
             ],
           },
