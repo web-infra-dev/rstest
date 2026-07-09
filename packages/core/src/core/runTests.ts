@@ -216,9 +216,10 @@ export async function runTests(context: Rstest): Promise<void> {
   // High-level flow:
   // 1. Split browser and node projects. Pure-browser runs take a fast path
   //    because they do not need Rsbuild's node-side server or worker pool.
-  // 2. For node or mixed runs, prepare Rsbuild first so plugin-provided
-  //    `modifyRstestConfig` hooks can finalize project config before we decide
-  //    which entries/projects actually run.
+  // 2. Resolve runnable projects before preparing Rsbuild. This also scans
+  //    file-level environment comments and splits node projects by their final
+  //    `testEnvironment`, so each Rsbuild environment is present before
+  //    environment-scoped plugins initialize.
   // 3. Create the Rsbuild dev server to trigger config hooks, then start
   //    browser tests early for mixed runs and initialize the node worker pool.
   // 4. The inner `run()` handles one compile cycle: read Rsbuild stats, run
@@ -369,6 +370,12 @@ export async function runTests(context: Rstest): Promise<void> {
     isWatchMode,
   });
   const { globTestSourceEntries, resolveRunnableProjects } = projectPlanState;
+  let plan = await resolveRunnableProjects();
+  syncNodeProjects(
+    rsbuildProjects,
+    plan.nodeProjectsToRun.length ? plan.nodeProjectsToRun : nodeProjects,
+  );
+
   let coveragePluginLoadError: unknown;
 
   const rsbuildInstance = await prepareRsbuild({
@@ -392,8 +399,10 @@ export async function runTests(context: Rstest): Promise<void> {
     },
   });
 
-  await rsbuildInstance.initConfigs({ action: 'dev' });
-  const plan = await resolveRunnableProjects();
+  if (plan.browserProjectsToRun.length || !plan.nodeProjectsToRun.length) {
+    await rsbuildInstance.initConfigs({ action: 'dev' });
+    plan = projectPlanState.getPlan();
+  }
 
   const hasBrowserTestsToRun = plan.browserProjectsToRun.length > 0;
   const hasNodeTestsToRun = plan.nodeProjectsToRun.length > 0;

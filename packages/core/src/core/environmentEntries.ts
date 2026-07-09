@@ -16,11 +16,13 @@ export const resolveRunnableProjectsByEntries = async ({
   projects,
   entriesCache,
   globTestSourceEntries,
+  groupEnvironmentComments = true,
   skipEmptyProjects = true,
 }: {
   projects: ProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
   globTestSourceEntries: GlobTestSourceEntries;
+  groupEnvironmentComments?: boolean;
   skipEmptyProjects?: boolean;
 }): Promise<{
   projects: ProjectContext[];
@@ -33,6 +35,22 @@ export const resolveRunnableProjectsByEntries = async ({
   );
 
   const browserProjects = projects.filter(isBrowserProject);
+  if (!groupEnvironmentComments) {
+    const shouldRunProject = (project: ProjectContext): boolean =>
+      !skipEmptyProjects || hasEntries(entriesCache, project.environmentName);
+
+    return {
+      projects,
+      entriesCache,
+      browserProjectsToRun: projects.filter(
+        (project) => isBrowserProject(project) && shouldRunProject(project),
+      ),
+      nodeProjectsToRun: projects.filter(
+        (project) => !isBrowserProject(project) && shouldRunProject(project),
+      ),
+    };
+  }
+
   const grouped = await groupProjectEntriesByEnvironment({
     entriesCache,
     projects: projects.filter((project) => !isBrowserProject(project)),

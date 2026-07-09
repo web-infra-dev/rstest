@@ -476,6 +476,11 @@ export async function listTests(
   );
 
   if (nodeProjects.length && filesOnly) {
+    await refreshListEntries({
+      silentShardMessage: shouldPrintShardAfterConfigHooks,
+    });
+    syncNodeProjects(nodeProjects, context.projects);
+
     const rsbuildInstance = await prepareRsbuild({
       context,
       globTestSourceEntries,
@@ -487,11 +492,11 @@ export async function listTests(
       },
     });
     await rsbuildInstance.initConfigs({ action: 'dev' });
+  } else {
+    await refreshListEntries({
+      silentShardMessage: shouldPrintShardAfterConfigHooks,
+    });
   }
-
-  await refreshListEntries({
-    silentShardMessage: shouldPrintShardAfterConfigHooks,
-  });
 
   const {
     list,

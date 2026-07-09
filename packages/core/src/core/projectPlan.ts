@@ -60,7 +60,7 @@ export const createRunProjectPlanState = ({
   let entriesCache: Map<string, ProjectEntries> = new Map();
   let browserProjectsToRun: ProjectContext[] = [];
   let nodeProjectsToRun: ProjectContext[] = [];
-  let runnableProjectsResolved = false;
+  let environmentGroupsResolved = false;
 
   const getPlan = (): RunProjectPlan => ({
     projects: allProjects,
@@ -94,18 +94,17 @@ export const createRunProjectPlanState = ({
   };
 
   const resolveRunnableProjects = async (): Promise<RunProjectPlan> => {
-    if (runnableProjectsResolved) {
-      return getPlan();
-    }
-
-    if (context.normalizedConfig.shard) {
+    if (context.normalizedConfig.shard && !environmentGroupsResolved) {
       entriesCache = (await resolveShardedEntries(context)) || new Map();
+    } else {
+      entriesCache = new Map();
     }
 
     const runnable = await resolveRunnableProjectsByEntries({
       entriesCache,
       projects: context.projects,
       globTestSourceEntries,
+      groupEnvironmentComments: !environmentGroupsResolved,
       skipEmptyProjects: !isWatchMode,
     });
 
@@ -129,7 +128,7 @@ export const createRunProjectPlanState = ({
       nodeProjectsToRun = [];
     }
 
-    runnableProjectsResolved = true;
+    environmentGroupsResolved = true;
     return getPlan();
   };
 

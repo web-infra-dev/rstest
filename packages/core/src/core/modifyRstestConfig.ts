@@ -507,7 +507,7 @@ export const initModifyRstestConfigHooks = (
   rsbuildInstance: RsbuildInstance,
   projects: ProjectContext[],
   exposeProjects: ProjectContext[] = projects,
-  onModifyRstestConfigApplied?: () => Promise<void>,
+  onRsbuildConfigResolved?: (applied: boolean) => Promise<void>,
 ): void => {
   const modifyRstestConfigCallbacks = new Map<
     string,
@@ -515,7 +515,9 @@ export const initModifyRstestConfigHooks = (
   >();
   const appliedEnvironmentNames = new Set<string>();
 
-  const applyModifyRstestConfigCallbacks = async () => {
+  const applyModifyRstestConfigCallbacks = async (): Promise<boolean> => {
+    let applied = false;
+
     for (const project of exposeProjects) {
       if (appliedEnvironmentNames.has(project.environmentName)) {
         continue;
@@ -528,7 +530,10 @@ export const initModifyRstestConfigHooks = (
       }
       await applyProjectModifyRstestConfig(context, project, callbacks);
       appliedEnvironmentNames.add(project.environmentName);
+      applied = true;
     }
+
+    return applied;
   };
 
   for (const project of exposeProjects) {
@@ -547,8 +552,8 @@ export const initModifyRstestConfigHooks = (
   rsbuildInstance.modifyRsbuildConfig({
     order: 'pre',
     handler: async (config) => {
-      await applyModifyRstestConfigCallbacks();
-      await onModifyRstestConfigApplied?.();
+      const applied = await applyModifyRstestConfigCallbacks();
+      await onRsbuildConfigResolved?.(applied);
 
       return {
         ...config,

@@ -231,6 +231,46 @@ const regexp = /"/;
     }
   });
 
+  it('creates a synthetic environment when all files override the environment', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const jsdomFile = path.join(root, 'jsdom.test.ts');
+      writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
+
+      const project = createProject();
+
+      const grouped = await groupProjectEntriesByEnvironment({
+        entriesCache: new Map([
+          [
+            project.environmentName,
+            {
+              entries: {
+                jsdom: jsdomFile,
+              },
+            },
+          ],
+        ]),
+        projects: [project],
+      });
+
+      expect(grouped.changed).toBe(true);
+      expect(grouped.projects.map((item) => item.name)).toEqual([
+        'default-environment-1',
+      ]);
+      expect(grouped.projects.map((item) => item.environmentName)).toEqual([
+        'default-environment-1',
+      ]);
+      expect(grouped.projects[0]!.normalizedConfig.testEnvironment).toEqual({
+        name: 'jsdom',
+      });
+      expect(
+        grouped.entriesCache.get('default-environment-1')?.entries,
+      ).toEqual({ jsdom: jsdomFile });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('does not split projects when environment markers only appear in code strings', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
     try {

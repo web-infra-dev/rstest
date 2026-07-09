@@ -1,4 +1,5 @@
 import { describe, it } from '@rstest/core';
+import { runRstestCli } from '../scripts';
 import { runCli } from './utils';
 
 const appFilters = 'test/App';
@@ -15,6 +16,36 @@ describe('jsdom', () => {
         args: ['--config', 'rstest.environmentComment.config.mts'],
       },
     );
+    await expectExecSuccess();
+  });
+
+  it('should keep automatic JSX runtime with an environment comment', async () => {
+    const { expectExecSuccess } = await runCli(
+      ['test/environmentCommentNode', 'test/vitestEnvironmentReact'],
+      undefined,
+      {
+        args: ['--config', 'rstest.environmentComment.config.mts'],
+      },
+    );
+    await expectExecSuccess();
+  });
+
+  it('should list tests correctly with an environment comment', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'list',
+        '--config',
+        'rstest.environmentComment.config.mts',
+        'test/environmentCommentNode',
+        'test/vitestEnvironmentReact',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: new URL('./fixtures', import.meta.url).pathname,
+        },
+      },
+    });
     await expectExecSuccess();
   });
 
