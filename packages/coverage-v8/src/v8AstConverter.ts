@@ -40,7 +40,6 @@ import {
   type EncodedSourceMap,
   type Needle,
   type SourceMapInput,
-  type SourceMapSegment,
 } from '@jridgewell/trace-mapping';
 import type { Profiler } from 'node:inspector';
 import type { FileCoverageData } from 'istanbul-lib-coverage';
@@ -106,7 +105,7 @@ type PreparedCoverage = {
 };
 
 type ConvertOptions = {
-  ast: unknown;
+  ast: unknown | (() => unknown);
   cacheKey: string;
   code: string;
   coverage: Pick<Profiler.ScriptCoverage, 'functions' | 'url'>;
@@ -115,7 +114,6 @@ type ConvertOptions = {
   sourceFilter?: (filePath: string) => boolean;
 };
 
-const WORD_PATTERN = /(\w+|\s|[^\w\s])/g;
 const SOURCE_MAP_URL_PATTERN = /[#@]\s*sourceMappingURL\s*=\s*(\S+)\s*$/gm;
 const DATA_SOURCE_MAP_PATTERN = /^data:application\/json(?:;[^,]*)?,/i;
 const BASE_64_SOURCE_MAP_PATTERN =
@@ -165,16 +163,17 @@ async function prepareCoverage(
   const sourceMapResult = options.sourceMap
     ? { sourceMap: options.sourceMap, sourceMapUrl: options.sourceMapUrl }
     : await getSourceMap(filename, options.code);
-  const mapInput =
-    sourceMapResult?.sourceMap || createEmptySourceMap(filename, options.code);
-  const sourceMap = new TraceMap(
-    mapInput as SourceMapInput,
-    normalizeSourceMapUrl(sourceMapResult?.sourceMapUrl),
-  );
-  const locator = new Locator(sourceMap, options.code);
+  const sourceMap = sourceMapResult?.sourceMap
+    ? new TraceMap(
+        sourceMapResult.sourceMap as SourceMapInput,
+        normalizeSourceMapUrl(sourceMapResult.sourceMapUrl),
+      )
+    : null;
+  const locator = sourceMap
+    ? new SourceMapLocator(sourceMap, options.code)
+    : new IdentityLocator(filename, options.code);
   const builder = new CoverageBuilder(
     filename,
-    sourceMap,
     locator,
     directory,
     options.sourceFilter,
@@ -210,7 +209,9 @@ async function prepareCoverage(
   const isSkipped = (node: AstNode | null | undefined) =>
     Boolean(node && skippedNodes.has(node));
 
-  walk(options.ast as Parameters<typeof walk>[0], {
+  const ast = typeof options.ast === 'function' ? options.ast() : options.ast;
+
+  walk(ast as Parameters<typeof walk>[0], {
     enter(node) {
       const current = node as AstNode;
       if (nextIgnore !== false) {
@@ -469,14 +470,13 @@ class CoverageBuilder {
 
   constructor(
     filename: string,
-    sourceMap: TraceMap,
-    private locator: Locator,
+    private locator: CoverageLocator,
     private directory: string,
     sourceFilter?: (filePath: string) => boolean,
   ) {
     const generatedDirectory = dirname(filename);
 
-    for (const source of sourceMap.resolvedSources) {
+    for (const source of locator.getSourceFilenames()) {
       let filePath = filename;
 
       if (source) {
@@ -675,15 +675,16 @@ class CoverageBuilder {
   }
 }
 
-class Locator {
-  private cache = new Map<number, Needle>();
-  private ignoredLines = new Map<string, Set<number>>();
-  private lineStarts: number[] = [0];
+interface CoverageLocator {
+  getLoc(node: Pick<AstNode, 'start' | 'end'>): MappedLocation | null;
+  getSourceFilenames(): string[];
+}
 
-  constructor(
-    private sourceMap: TraceMap,
-    code: string,
-  ) {
+class BaseLocator {
+  private cache = new Map<number, Needle>();
+  protected lineStarts: number[] = [0];
+
+  constructor(code: string) {
     for (let index = 0; index < code.length; index++) {
       if (code.charCodeAt(index) === 10) {
         this.lineStarts.push(index + 1);
@@ -718,6 +719,55 @@ class Locator {
     };
     this.cache.set(offset, needle);
     return { ...needle };
+  }
+}
+
+class IdentityLocator extends BaseLocator implements CoverageLocator {
+  private ignoredLines: Set<number> | undefined;
+
+  constructor(
+    private filename: string,
+    private code: string,
+  ) {
+    super(code);
+  }
+
+  getSourceFilenames(): string[] {
+    return [this.filename];
+  }
+
+  getLoc(node: Pick<AstNode, 'start' | 'end'>): MappedLocation | null {
+    const start = this.offsetToNeedle(node.start);
+    const end = this.offsetToNeedle(node.end);
+    end.column -= 1;
+
+    if (!this.ignoredLines) {
+      this.ignoredLines = getIgnoredLines(this.code);
+    }
+
+    if (this.ignoredLines.has(start.line)) {
+      return null;
+    }
+
+    return {
+      start: { ...start, filename: this.filename },
+      end: { ...end, filename: this.filename },
+    };
+  }
+}
+
+class SourceMapLocator extends BaseLocator implements CoverageLocator {
+  private ignoredLines = new Map<string, Set<number>>();
+
+  constructor(
+    private sourceMap: TraceMap,
+    code: string,
+  ) {
+    super(code);
+  }
+
+  getSourceFilenames(): string[] {
+    return this.sourceMap.resolvedSources;
   }
 
   getLoc(node: Pick<AstNode, 'start' | 'end'>): MappedLocation | null {
@@ -1070,35 +1120,6 @@ function getPosition(
     line: position.line,
     column: position.column,
     filename: position.source,
-  };
-}
-
-function createEmptySourceMap(
-  filename: string,
-  code: string,
-): DecodedSourceMap {
-  const mappings: SourceMapSegment[][] = [];
-
-  for (const [line, content] of code.split('\n').entries()) {
-    const parts = content.match(WORD_PATTERN) || [];
-    const segments: SourceMapSegment[] = [];
-    let column = 0;
-
-    for (const part of parts) {
-      segments.push([column, 0, line, column]);
-      column += part.length;
-    }
-
-    mappings.push(segments);
-  }
-
-  return {
-    version: 3,
-    mappings,
-    file: filename,
-    sources: [filename],
-    sourcesContent: [code],
-    names: [],
   };
 }
 

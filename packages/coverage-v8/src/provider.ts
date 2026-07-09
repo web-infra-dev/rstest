@@ -13,7 +13,7 @@ import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import picomatch from 'picomatch';
 import v8ToIstanbul from 'v8-to-istanbul';
-import { createFastCoverageMap } from './utils';
+import { createFastCoverageMap, mapWithConcurrency } from './utils';
 import { convertV8CoverageWithAst } from './v8AstConverter';
 
 type SourceMapLike = {
@@ -30,13 +30,12 @@ type CoverageReporterConstructor = new (
   options: Record<string, unknown>,
 ) => ReportBase;
 
-const MAX_PARSED_AST_CACHE_SIZE = 50;
+const COVERAGE_CONVERSION_CONCURRENCY = 4;
 const SOURCE_MAP_INNER_PATTERN =
   /\s*[#@]\s*sourceMappingURL\s*=\s*([^\s'"]*)\s*/;
 const SOURCE_MAP_URL_PATTERN = new RegExp(
   `(?:/\\*(?:\\s*\\r?\\n(?://)?)?${SOURCE_MAP_INNER_PATTERN.source}\\s*\\*/|//${SOURCE_MAP_INNER_PATTERN.source})\\s*`,
 );
-const parsedAstCache = new Map<string, ReturnType<typeof Parser.parse>>();
 
 type CoverageEntry = inspector.Profiler.ScriptCoverage & {
   filePath: string;
@@ -517,29 +516,11 @@ export class CoverageProvider implements RstestCoverageProvider {
     };
   }
 
-  private parseAst(code: string, outputModule: boolean, cacheKey: string) {
-    const cachedAst = parsedAstCache.get(cacheKey);
-    if (cachedAst) {
-      return cachedAst;
-    }
-
-    const ast = Parser.parse(code, {
+  private parseAst(code: string, outputModule: boolean) {
+    return Parser.parse(code, {
       ecmaVersion: 'latest',
-      locations: true,
-      ranges: true,
       sourceType: outputModule ? 'module' : 'script',
     });
-
-    parsedAstCache.set(cacheKey, ast);
-
-    if (parsedAstCache.size > MAX_PARSED_AST_CACHE_SIZE) {
-      const firstKey = parsedAstCache.keys().next().value;
-      if (firstKey) {
-        parsedAstCache.delete(firstKey);
-      }
-    }
-
-    return ast;
   }
 
   private async convertWithAst(
@@ -558,12 +539,6 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     const outputModule = options?.outputModule ?? true;
     const codeHash = this.hashString(code);
-    const astCacheKey = this.getAstCacheKey(
-      filePath,
-      code,
-      codeHash,
-      outputModule,
-    );
     const converterCacheKey = this.getConverterCacheKey(
       filePath,
       code,
@@ -572,10 +547,9 @@ export class CoverageProvider implements RstestCoverageProvider {
       outputModule,
       root,
     );
-    const ast = this.parseAst(code, outputModule, astCacheKey);
 
     return convertV8CoverageWithAst({
-      ast,
+      ast: () => this.parseAst(code, outputModule),
       cacheKey: converterCacheKey,
       code,
       sourceFilter: (sourcePath) =>
@@ -807,8 +781,10 @@ export class CoverageProvider implements RstestCoverageProvider {
     );
     const coverageMap = this.createCoverageMap();
 
-    await Promise.all(
-      filteredEntries.map(async (entry) => {
+    await mapWithConcurrency(
+      filteredEntries,
+      COVERAGE_CONVERSION_CONCURRENCY,
+      async (entry) => {
         try {
           const istanbulData = await this.convertWithAst(
             entry.filePath,
@@ -822,7 +798,7 @@ export class CoverageProvider implements RstestCoverageProvider {
           console.error(`Failed to process coverage for ${entry.url}:`, e);
           process.exitCode = 1;
         }
-      }),
+      },
     );
 
     return coverageMap;
@@ -852,36 +828,33 @@ export class CoverageProvider implements RstestCoverageProvider {
       }
     }
 
-    await Promise.all(
-      Array.from(groups.values()).map(async ({ entries, options, root }) => {
+    await mapWithConcurrency(
+      Array.from(groups.values()),
+      COVERAGE_CONVERSION_CONCURRENCY,
+      async ({ entries, options, root }) => {
         try {
           const transformedSource = await this.getTransformedSource(
             entries[0]!.filePath,
             options,
           );
 
-          await Promise.all(
-            entries.map(async (entry) => {
-              try {
-                const istanbulData = await this.convertWithAst(
-                  entry.filePath,
-                  entry,
-                  options,
-                  transformedSource,
-                  root,
-                );
+          for (const entry of entries) {
+            try {
+              const istanbulData = await this.convertWithAst(
+                entry.filePath,
+                entry,
+                options,
+                transformedSource,
+                root,
+              );
 
-                this.filterCoverageData(istanbulData, root);
-                coverageMap.merge(istanbulData);
-              } catch (e) {
-                console.error(
-                  `Failed to process coverage for ${entry.url}:`,
-                  e,
-                );
-                process.exitCode = 1;
-              }
-            }),
-          );
+              this.filterCoverageData(istanbulData, root);
+              coverageMap.merge(istanbulData);
+            } catch (e) {
+              console.error(`Failed to process coverage for ${entry.url}:`, e);
+              process.exitCode = 1;
+            }
+          }
         } catch (e) {
           console.error(
             `Failed to process coverage for ${entries[0]!.url}:`,
@@ -889,7 +862,7 @@ export class CoverageProvider implements RstestCoverageProvider {
           );
           process.exitCode = 1;
         }
-      }),
+      },
     );
 
     return coverageMap;
