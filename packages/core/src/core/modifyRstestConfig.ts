@@ -60,6 +60,30 @@ const forbiddenModifyRstestConfigPaths: ForbiddenModifyRstestConfigPath[] = [
     get: (config) => config.browser?.enabled,
   },
   {
+    path: 'browser.provider',
+    get: (config) => config.browser?.provider,
+  },
+  {
+    path: 'browser.browser',
+    get: (config) => config.browser?.browser,
+  },
+  {
+    path: 'browser.headless',
+    get: (config) => config.browser?.headless,
+  },
+  {
+    path: 'browser.port',
+    get: (config) => config.browser?.port,
+  },
+  {
+    path: 'browser.strictPort',
+    get: (config) => config.browser?.strictPort,
+  },
+  {
+    path: 'browser.providerOptions',
+    get: (config) => config.browser?.providerOptions,
+  },
+  {
     path: 'name',
     get: (config) => config.name,
   },

@@ -12,7 +12,11 @@ const modifyBrowserListConfigPlugin = (): RsbuildPlugin => ({
 
     const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
     rstestApi?.modifyRstestConfig((config) => {
-      config.include = ['tests/**/*.test.ts', 'modified/**/*.test.ts'];
+      config.include = [
+        'tests/**/*.test.ts',
+        'modified/**/*.test.ts',
+        'empty-before-hook/*.test.ts',
+      ];
     });
   },
 });

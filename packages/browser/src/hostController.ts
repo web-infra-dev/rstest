@@ -27,6 +27,7 @@ import {
   type RstestContext,
   type RuntimeConfig,
   resolveProjectBuildCache,
+  resolveShardedEntries,
   RSTEST_ENV_SYMBOL_KEY,
   rsbuild,
   serializableConfig,
@@ -49,6 +50,7 @@ import {
 import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
 import { createHeadlessLatestRerunScheduler } from './headlessLatestRerunScheduler';
 import { attachHeadlessRunnerTransport } from './headlessTransport';
+import { validateBrowserConfig } from './configValidation';
 import type {
   BrowserClientMessage,
   BrowserDispatchHandler,
@@ -1678,9 +1680,16 @@ const createBrowserRuntime = async ({
       {
         getEnvironmentConfig: getBrowserRsbuildEnvironmentConfig,
         onModifyRstestConfigApplied: async () => {
+          validateBrowserConfig(context);
           browserLaunchOptions =
             ensureConsistentBrowserLaunchOptions(browserProjects);
-          projectEntries = await resolveProjectEntries(context, shardedEntries);
+          const updatedShardedEntries = context.normalizedConfig.shard
+            ? await resolveShardedEntries(context, { silent: true })
+            : shardedEntries;
+          projectEntries = await resolveProjectEntries(
+            context,
+            updatedShardedEntries,
+          );
           const updatedEntry = projectEntries.find(
             (item) => item.project.environmentName === project.environmentName,
           );
@@ -2299,50 +2308,7 @@ export const runBrowserController = async (
     context,
     options?.shardedEntries,
   );
-  const totalTests = projectEntries.reduce(
-    (total, item) => total + item.testFiles.length,
-    0,
-  );
   const shouldKeepWatchingWithEmptySet = isWatchMode && allowEmptyWatchRun;
-
-  if (totalTests === 0) {
-    const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
-    if (!skipOnTestRunEnd) {
-      const message = shouldKeepWatchingWithEmptySet
-        ? 'No test files found.'
-        : getNoTestFilesMessage({
-            context,
-            code,
-            defaultMessage: `No test files found, exiting with code ${code}.`,
-          });
-      if (code === 0) {
-        logger.log(color.yellow(message));
-      } else {
-        logger.error(color.red(message));
-      }
-
-      if (context.relatedFilters?.length) {
-        logger.log(
-          color.gray('related: '),
-          context.relatedFilters.join(color.gray(', ')),
-        );
-      } else if (context.fileFilters?.length) {
-        logger.log(
-          color.gray('filter: '),
-          context.fileFilters.join(color.gray(', ')),
-        );
-      }
-    }
-
-    if (code !== 0 && !shouldKeepWatchingWithEmptySet) {
-      ensureProcessExitCode(code);
-    }
-    if (!shouldKeepWatchingWithEmptySet) {
-      return;
-    }
-  }
-
-  await notifyTestRunStart();
 
   const enableCliShortcuts = isWatchMode && isBrowserWatchCliShortcutsEnabled();
   const browserTempOutputRoot = context.normalizedConfig.output.distPath.root;
@@ -2403,6 +2369,55 @@ export const runBrowserController = async (
   }
 
   projectEntries = runtime.projectEntries;
+
+  const totalTests = projectEntries.reduce(
+    (total, item) => total + item.testFiles.length,
+    0,
+  );
+
+  if (totalTests === 0) {
+    const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
+    if (!skipOnTestRunEnd) {
+      const message = shouldKeepWatchingWithEmptySet
+        ? 'No test files found.'
+        : getNoTestFilesMessage({
+            context,
+            code,
+            defaultMessage: `No test files found, exiting with code ${code}.`,
+          });
+      if (code === 0) {
+        logger.log(color.yellow(message));
+      } else {
+        logger.error(color.red(message));
+      }
+
+      if (context.relatedFilters?.length) {
+        logger.log(
+          color.gray('related: '),
+          context.relatedFilters.join(color.gray(', ')),
+        );
+      } else if (context.fileFilters?.length) {
+        logger.log(
+          color.gray('filter: '),
+          context.fileFilters.join(color.gray(', ')),
+        );
+      }
+    }
+
+    if (code !== 0 && !shouldKeepWatchingWithEmptySet) {
+      ensureProcessExitCode(code);
+    }
+    if (!shouldKeepWatchingWithEmptySet) {
+      if (watchContext.runtime === runtime) {
+        watchContext.runtime = null;
+      }
+      await destroyBrowserRuntime(runtime);
+      return;
+    }
+  }
+
+  await notifyTestRunStart();
+
   if (isWatchMode) {
     watchContext.lastTestFiles = collectWatchTestFiles(projectEntries);
   }
@@ -3986,17 +4001,6 @@ export const listBrowserTests = async (
     context,
     options?.shardedEntries,
   );
-  const totalTests = projectEntries.reduce(
-    (total, item) => total + item.testFiles.length,
-    0,
-  );
-
-  if (totalTests === 0) {
-    return {
-      list: [],
-      close: async () => {},
-    };
-  }
 
   const tempDir = join(
     context.rootPath,
@@ -4036,6 +4040,19 @@ export const listBrowserTests = async (
   }
 
   projectEntries = runtime.projectEntries;
+
+  const totalTests = projectEntries.reduce(
+    (total, item) => total + item.testFiles.length,
+    0,
+  );
+
+  if (totalTests === 0) {
+    await destroyBrowserRuntime(runtime);
+    return {
+      list: [],
+      close: async () => {},
+    };
+  }
 
   const { browser, browserLaunchOptions } = runtime;
 

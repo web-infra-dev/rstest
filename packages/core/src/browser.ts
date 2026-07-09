@@ -57,5 +57,6 @@ export {
 } from './utils/constants';
 export type { BrowserProvider } from './utils/constants';
 export { getSetupFiles } from './utils/getSetupFiles';
+export { resolveShardedEntries } from './utils/shard';
 export { getTestEntries } from './utils/testFiles';
 export { rsbuild };

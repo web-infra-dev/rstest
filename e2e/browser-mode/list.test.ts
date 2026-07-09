@@ -36,4 +36,32 @@ describe('browser mode - list (collect mode)', () => {
     expect(lines.join('\n')).not.toContain('should NOT be listed (skip)');
     expect(lines.join('\n')).not.toContain('should NOT be listed (todo)');
   });
+
+  it('should list browser tests added after initial empty entries', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCliWithCwd(
+      join(__dirname, 'fixtures', 'list'),
+      { command: 'list', args: ['empty-before-hook'] },
+    );
+
+    await expectExecSuccess();
+
+    const output = pathe.normalize(cli.stdout);
+    expect(output).toContain(
+      'empty-before-hook/added-by-hook.test.ts > should be listed when include is added by modifyRstestConfig after initial empty entries',
+    );
+  });
+
+  it('should list browser tests added after initial empty entries with shard', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCliWithCwd(
+      join(__dirname, 'fixtures', 'list'),
+      { command: 'list', args: ['--shard=1/1', 'empty-before-hook'] },
+    );
+
+    await expectExecSuccess();
+
+    const output = pathe.normalize(cli.stdout);
+    expect(output).toContain(
+      'empty-before-hook/added-by-hook.test.ts > should be listed when include is added by modifyRstestConfig after initial empty entries',
+    );
+  });
 });

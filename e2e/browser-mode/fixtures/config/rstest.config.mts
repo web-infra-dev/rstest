@@ -12,10 +12,19 @@ const modifyBrowserRstestConfigPlugin = (): RsbuildPlugin => ({
 
     const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
     rstestApi?.modifyRstestConfig((config) => {
+      if (process.env.RSTEST_E2E_MUTATE_BROWSER_HEADLESS) {
+        config.browser ??= { provider: 'playwright' };
+        config.browser.headless = false;
+      }
+      if (process.env.RSTEST_E2E_MUTATE_BUNDLE_DEPENDENCIES) {
+        config.output ??= {};
+        config.output.bundleDependencies = false;
+      }
       config.include = [
         './*.test.ts',
         './git/*.test.ts',
         './modified/*.test.ts',
+        './empty-before-hook/*.test.ts',
       ];
       config.source ??= {};
       config.source.define = {
