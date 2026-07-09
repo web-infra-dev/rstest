@@ -35,7 +35,7 @@ export default defineConfig({
 
 当 Rsbuild 插件运行在 Rstest 中时，可以通过 Rsbuild Plugin API 中的 [`api.useExposed`](https://rsbuild.rs/zh/plugins/dev/core) 获取 Rstest 暴露的 API，并调用 `modifyRstestConfig` 来调整当前 project 的 Rstest 配置。
 
-该 API 目前仅在 Node Mode project 中暴露。Browser Mode project 不会收到 `rstest` 暴露 API，因此在这些 project 中 `api.useExposed('rstest')` 会返回 `undefined`。
+该 API 会同时在 Node Mode 和 Browser Mode project 中暴露。两种模式都会使用 `rstest` 作为 Rsbuild caller name，因此插件可以通过 `api.context.callerName === 'rstest'` 判断当前运行在 Rstest 中。
 
 这个 API 适合框架集成或工具链插件使用：当插件已经了解当前 framework、Rsbuild environment 或项目约定时，可以集中补充测试入口、排除规则、setup files、alias、define 或 `testEnvironment` 等 project 配置，避免用户在 Rstest 配置中重复声明同一套信息。
 

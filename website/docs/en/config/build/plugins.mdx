@@ -35,7 +35,7 @@ Check out the Rsbuild [plugin list](https://rsbuild.rs/plugins/list#official-plu
 
 When an Rsbuild plugin runs inside Rstest, it can get the Rstest exposed API through [`api.useExposed`](https://rsbuild.rs/plugins/dev/core) from the Rsbuild Plugin API and call `modifyRstestConfig` to adjust the Rstest config for the current project.
 
-This API is currently exposed only for Node-mode projects. Browser Mode projects do not receive the `rstest` exposed API, so `api.useExposed('rstest')` returns `undefined` there.
+This API is exposed in both Node Mode and Browser Mode projects. Both modes use the `rstest` Rsbuild caller name, so plugins can guard on `api.context.callerName === 'rstest'` when they run inside Rstest.
 
 This API is intended for framework integrations and toolchain plugins. When a plugin already knows the current framework, Rsbuild environment, or project conventions, it can centrally add project config such as test entries, exclude rules, setup files, aliases, defines, or `testEnvironment` so users do not need to duplicate the same information in their Rstest config.
 

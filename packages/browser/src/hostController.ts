@@ -16,6 +16,7 @@ import {
   getNoTestFilesMessage,
   getSetupFiles,
   getTestEntries,
+  initModifyRstestConfigHooks,
   isDebug,
   type ListCommandResult,
   loadCoverageProvider,
@@ -97,6 +98,8 @@ import { collectWatchTestFiles, planWatchRerun } from './watchRerunPlanner';
 const { createRsbuild, rspack } = rsbuild;
 type RsbuildDevServer = rsbuild.RsbuildDevServer;
 type RsbuildInstance = rsbuild.RsbuildInstance;
+type RsbuildEnvironmentConfig = rsbuild.EnvironmentConfig &
+  Pick<rsbuild.RsbuildConfig, 'root'>;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OPTIONS_PLACEHOLDER = '__RSTEST_OPTIONS_PLACEHOLDER__';
@@ -433,6 +436,7 @@ type BrowserRuntime = {
   dispatchHandlers: Map<string, BrowserDispatchHandler>;
   wss: WebSocketServer;
   rpcManager?: ContainerRpcManager;
+  projectEntries: BrowserProjectEntries[];
 };
 
 // ============================================================================
@@ -1061,6 +1065,13 @@ const getBrowserLaunchOptions = (
   providerOptions: getBrowserProviderOptions(project),
 });
 
+const getBrowserRsbuildEnvironmentConfig = (
+  project: ProjectContext,
+): RsbuildEnvironmentConfig => ({
+  plugins: project.normalizedConfig.plugins,
+  root: project.rootPath,
+});
+
 const ensureConsistentBrowserLaunchOptions = (
   projects: ProjectContext[],
 ): BrowserLaunchOptions => {
@@ -1455,7 +1466,8 @@ const registerWatchCleanup = (): void => {
 
 const createBrowserRuntime = async ({
   context,
-  projectEntries,
+  projectEntries: initialProjectEntries,
+  shardedEntries,
   tempDir,
   isWatchMode,
   onTriggerRerun,
@@ -1465,6 +1477,7 @@ const createBrowserRuntime = async ({
 }: {
   context: RstestContext;
   projectEntries: BrowserProjectEntries[];
+  shardedEntries?: Map<string, { entries: Record<string, string> }>;
   tempDir: string;
   isWatchMode: boolean;
   onTriggerRerun?: () => Promise<void>;
@@ -1494,8 +1507,9 @@ const createBrowserRuntime = async ({
   };
 
   const browserProjects = getBrowserProjects(context);
-  const browserLaunchOptions =
+  let browserLaunchOptions =
     ensureConsistentBrowserLaunchOptions(browserProjects);
+  let projectEntries = initialProjectEntries;
 
   // Rstest internal aliases that must not be overridden by user config
   const browserRuntimePath = fileURLToPath(
@@ -1606,20 +1620,22 @@ const createBrowserRuntime = async ({
       VIRTUAL_MANIFEST_FILENAME,
     );
     const entry = entryByEnvironmentName.get(project.environmentName);
-    const manifestSource = generateManifestModule({
-      manifestPath,
-      entries: [
-        {
-          project,
-          testFiles: entry?.testFiles ?? [],
-          setupFiles: entry?.setupFiles ?? [],
-        },
-      ],
-      isWatchMode,
-    });
-    const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin({
-      [manifestPath]: manifestSource,
-    });
+    const virtualManifestModules = {
+      [manifestPath]: generateManifestModule({
+        manifestPath,
+        entries: [
+          {
+            project,
+            testFiles: entry?.testFiles ?? [],
+            setupFiles: entry?.setupFiles ?? [],
+          },
+        ],
+        isWatchMode,
+      }),
+    };
+    const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin(
+      virtualManifestModules,
+    );
 
     const rstestInternalAliases = {
       '@rstest/browser-manifest': manifestPath,
@@ -1631,11 +1647,10 @@ const createBrowserRuntime = async ({
     const enableHmr = shouldEnableBrowserHmr(isWatchMode, isHeadless);
 
     const rsbuildInstance = await createRsbuild({
-      callerName: 'rstest-browser',
+      callerName: 'rstest',
       rsbuildConfig: {
         root: context.rootPath,
         mode: 'development',
-        plugins: project.normalizedConfig.plugins || [],
         server: {
           printUrls: false,
           // Each project gets its own dev server. Honor an explicitly
@@ -1649,10 +1664,40 @@ const createBrowserRuntime = async ({
         },
         dev: createBrowserRsbuildDevConfig(enableHmr),
         environments: {
-          [project.environmentName]: {},
+          [project.environmentName]:
+            getBrowserRsbuildEnvironmentConfig(project),
         },
       },
     });
+
+    initModifyRstestConfigHooks(
+      context,
+      rsbuildInstance,
+      [project],
+      [project],
+      {
+        getEnvironmentConfig: getBrowserRsbuildEnvironmentConfig,
+        onModifyRstestConfigApplied: async () => {
+          browserLaunchOptions =
+            ensureConsistentBrowserLaunchOptions(browserProjects);
+          projectEntries = await resolveProjectEntries(context, shardedEntries);
+          const updatedEntry = projectEntries.find(
+            (item) => item.project.environmentName === project.environmentName,
+          );
+          virtualManifestModules[manifestPath] = generateManifestModule({
+            manifestPath,
+            entries: [
+              {
+                project,
+                testFiles: updatedEntry?.testFiles ?? [],
+                setupFiles: updatedEntry?.setupFiles ?? [],
+              },
+            ],
+            isWatchMode,
+          });
+        },
+      },
+    );
 
     // Add plugin to merge user Rsbuild config with rstest required config
     rsbuildInstance.addPlugins([
@@ -1983,6 +2028,7 @@ const createBrowserRuntime = async ({
       setContainerOptions,
       dispatchHandlers,
       wss,
+      projectEntries,
     };
   } catch (error) {
     wss.close();
@@ -2249,7 +2295,7 @@ export const runBrowserController = async (
     }
   }
 
-  const projectEntries = await resolveProjectEntries(
+  let projectEntries = await resolveProjectEntries(
     context,
     options?.shardedEntries,
   );
@@ -2327,6 +2373,7 @@ export const runBrowserController = async (
       runtime = await createBrowserRuntime({
         context,
         projectEntries,
+        shardedEntries: options?.shardedEntries,
         tempDir,
         isWatchMode,
         onTriggerRerun: isWatchMode
@@ -2353,6 +2400,11 @@ export const runBrowserController = async (
         });
       }
     }
+  }
+
+  projectEntries = runtime.projectEntries;
+  if (isWatchMode) {
+    watchContext.lastTestFiles = collectWatchTestFiles(projectEntries);
   }
 
   const { browser, browserLaunchOptions, wsPort, wss } = runtime;
@@ -3930,7 +3982,7 @@ export const listBrowserTests = async (
     shardedEntries?: Map<string, { entries: Record<string, string> }>;
   },
 ): Promise<ListBrowserTestsResult> => {
-  const projectEntries = await resolveProjectEntries(
+  let projectEntries = await resolveProjectEntries(
     context,
     options?.shardedEntries,
   );
@@ -3961,6 +4013,7 @@ export const listBrowserTests = async (
     runtime = await createBrowserRuntime({
       context,
       projectEntries,
+      shardedEntries: options?.shardedEntries,
       tempDir,
       isWatchMode: false,
       containerDistPath: undefined,
@@ -3981,6 +4034,8 @@ export const listBrowserTests = async (
     );
     throw error;
   }
+
+  projectEntries = runtime.projectEntries;
 
   const { browser, browserLaunchOptions } = runtime;
 

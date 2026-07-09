@@ -18,7 +18,8 @@ export type RstestExposeAPI = {
   /**
    * Modify the Rstest config for the current Rsbuild environment.
    *
-   * This API is exposed to Rsbuild plugins through `api.useExposed('rstest')`.
+   * This API is exposed to Rsbuild plugins through `api.useExposed('rstest')`
+   * in both Node Mode and Browser Mode projects.
    * In multi-project mode, the callback only applies to the Rstest project
    * that owns the current Rsbuild environment.
    *

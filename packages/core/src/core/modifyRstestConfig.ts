@@ -31,6 +31,11 @@ import {
 
 type RstestEnvironmentConfig = EnvironmentConfig & Pick<RsbuildConfig, 'root'>;
 
+type InitModifyRstestConfigHooksOptions = {
+  onModifyRstestConfigApplied?: () => Promise<void>;
+  getEnvironmentConfig?: (project: ProjectContext) => RstestEnvironmentConfig;
+};
+
 type NormalizedProjectConfigWithDistPath = NormalizedProjectConfig & {
   output?: NormalizedProjectConfig['output'] & {
     distPath?: NormalizedConfig['output']['distPath'];
@@ -507,8 +512,12 @@ export const initModifyRstestConfigHooks = (
   rsbuildInstance: RsbuildInstance,
   projects: ProjectContext[],
   exposeProjects: ProjectContext[] = projects,
-  onModifyRstestConfigApplied?: () => Promise<void>,
+  options: InitModifyRstestConfigHooksOptions = {},
 ): void => {
+  const {
+    getEnvironmentConfig = getRsbuildEnvironmentConfig,
+    onModifyRstestConfigApplied,
+  } = options;
   const modifyRstestConfigCallbacks = new Map<
     string,
     ModifyRstestConfigCallback[]
@@ -555,7 +564,7 @@ export const initModifyRstestConfigHooks = (
         environments: Object.fromEntries(
           projects.map((project) => [
             project.environmentName,
-            getRsbuildEnvironmentConfig(project),
+            getEnvironmentConfig(project),
           ]),
         ),
       };

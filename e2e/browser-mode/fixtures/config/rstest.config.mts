@@ -1,5 +1,30 @@
+import type { RsbuildPlugin } from '@rsbuild/core';
 import { defineConfig } from '@rstest/core';
+import type { RstestExposeAPI } from '@rstest/core';
 import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT } from '../ports';
+
+const modifyBrowserRstestConfigPlugin = (): RsbuildPlugin => ({
+  name: 'modify-browser-rstest-config',
+  setup(api) {
+    if (api.context.callerName !== 'rstest') {
+      return;
+    }
+
+    const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+    rstestApi?.modifyRstestConfig((config) => {
+      config.include = [
+        './*.test.ts',
+        './git/*.test.ts',
+        './modified/*.test.ts',
+      ];
+      config.source ??= {};
+      config.source.define = {
+        ...config.source.define,
+        __MODIFY_RSTEST_CONFIG_DEFINE__: JSON.stringify('modified-value'),
+      };
+    });
+  },
+});
 
 export default defineConfig({
   browser: {
@@ -11,6 +36,7 @@ export default defineConfig({
   include: ['./*.test.ts', './git/*.test.ts'],
   testTimeout: BROWSER_TEST_TIMEOUT,
   globals: true,
+  plugins: [modifyBrowserRstestConfigPlugin()],
   source: {
     define: {
       __TEST_DEFINE__: JSON.stringify('define-value'),

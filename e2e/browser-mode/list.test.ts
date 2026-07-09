@@ -28,6 +28,9 @@ describe('browser mode - list (collect mode)', () => {
     expect(lines.join('\n')).toContain(
       'tests/b.test.ts > browser list nested > nested > should include nested test',
     );
+    expect(lines.join('\n')).toContain(
+      'modified/modified.test.ts > should include test added by modifyRstestConfig in list',
+    );
 
     // Skip/todo tests should not be listed
     expect(lines.join('\n')).not.toContain('should NOT be listed (skip)');

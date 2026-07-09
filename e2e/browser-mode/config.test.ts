@@ -13,6 +13,7 @@ describe('browser mode - config options', () => {
     await expectExecSuccess();
     expect(cli.stdout).toMatch(/Tests.*passed/);
     expect(cli.stdout).toContain('git/source-dir.test.ts');
+    expect(cli.stdout).toContain('modified/modified.test.ts');
   });
 
   it('should respect customized output.distPath.root', async () => {
