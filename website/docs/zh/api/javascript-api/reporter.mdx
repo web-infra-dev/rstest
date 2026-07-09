@@ -72,7 +72,7 @@ interface Reporter {
 }
 ```
 
-结果 metadata 字段为 0.11.1 新增。通过 `context.task.meta` 写入的可 JSON 序列化运行时 metadata 可以在 `onTestCaseResult` 收到的 `TestResult` 上读取。通过 hooks 的 `ctx.meta` 写入的 metadata 可以在 `onTestSuiteResult` 收到的对应 suite result 上读取，文件级 hook metadata 可以在 `onTestFileResult` 的 `TestFileResult.meta` 上读取。
+`meta` 字段为 0.11.1 新增。通过 `context.task.meta` 写入的可 JSON 序列化运行时 metadata 可以在 `onTestCaseResult` 收到的 `TestResult` 上读取。通过 hooks 的 `ctx.meta` 写入的 metadata 可以在 `onTestSuiteResult` 收到的对应 suite result 上读取，文件级 hook metadata 可以在 `onTestFileResult` 的 `TestFileResult.meta` 上读取。
 
 ## 示例
 
