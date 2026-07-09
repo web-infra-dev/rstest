@@ -111,7 +111,10 @@ export const createRunProjectPlanState = ({
     const shouldPreserveEnvironmentPartitions =
       environmentGroupsResolved && environmentGroupsChanged;
 
-    if (!shouldPreserveEnvironmentPartitions && context.normalizedConfig.shard) {
+    if (
+      !shouldPreserveEnvironmentPartitions &&
+      context.normalizedConfig.shard
+    ) {
       entriesCache = (await resolveShardedEntries(context)) || new Map();
     } else if (!shouldPreserveEnvironmentPartitions) {
       entriesCache = new Map();
