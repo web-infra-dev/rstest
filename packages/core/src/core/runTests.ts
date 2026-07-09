@@ -396,7 +396,8 @@ export async function runTests(context: Rstest): Promise<void> {
   const plan = await resolveRunnableProjects();
 
   const hasBrowserTestsToRun =
-    plan.browserProjectsToRun.length > 0 || browserProjects.length > 0;
+    plan.browserProjectsToRun.length > 0 ||
+    (browserProjects.length > 0 && !context.relatedFilters?.length);
   const hasNodeTestsToRun = plan.nodeProjectsToRun.length > 0;
 
   if (hasNodeTestsToRun || hasBrowserTestsToRun) {
