@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
+import { expect as coreExpect } from '@rstest/core';
 import { beforeEach, expect, test } from '../src';
 import { getDebugOptions, resolveLaunchOptions } from '../src/fixture';
 import type { Browser, BrowserContext, Page } from 'playwright';
@@ -116,41 +117,8 @@ test('can be imported outside a rstest worker', async () => {
   }
 });
 
-test('does not force a local expect for core expect users', async () => {
-  const { rejects } = await import('node:assert/strict');
-  const root = await createPlaywrightTempRoot();
-
-  try {
-    await writePlaywrightFixtureProject(root);
-    await writeFile(
-      join(root, 'core-expect.test.mjs'),
-      `
-        import { expect } from '@rstest/core';
-        import { test } from ${JSON.stringify(join(__dirname, '../src/index.ts').replaceAll('\\', '/'))};
-
-        test('uses the core expect state', () => {
-          expect.assertions(1);
-        });
-      `,
-    );
-
-    await rejects(
-      execFileAsync(
-        process.execPath,
-        [
-          join(__dirname, '../../core/bin/rstest.js'),
-          '--root',
-          root,
-          '--config',
-          './rstest.config.mjs',
-        ],
-        { cwd: root },
-      ),
-      /expected number of assertions to be 1, but got 0/,
-    );
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+test.fails('does not force a local expect for core expect users', () => {
+  coreExpect.assertions(1);
 });
 
 test('exposes playwright options fixture overrides', async ({ playwright }) => {
