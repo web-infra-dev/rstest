@@ -492,13 +492,9 @@ export const createPool = async ({
       });
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
-      const results = await Promise.all(
-        entries.map(async (entryInfo, index) => {
-          const traceArgs = {
-            project: projectName,
-            testPath: entryInfo.testPath,
-          };
-          const task = await traceSpan(
+      const tasks = await Promise.all(
+        entries.map((entryInfo, index) =>
+          traceSpan(
             'host:build-task',
             'host',
             () =>
@@ -519,8 +515,18 @@ export const createPool = async ({
                 traceSpan,
                 buildId,
               }),
-            traceArgs,
-          );
+            { project: projectName, testPath: entryInfo.testPath },
+          ),
+        ),
+      );
+
+      const results = await Promise.all(
+        tasks.map(async (task, index) => {
+          const entryInfo = entries[index]!;
+          const traceArgs = {
+            project: projectName,
+            testPath: entryInfo.testPath,
+          };
 
           const result = await traceSpan(
             'host:pool-run-test',
