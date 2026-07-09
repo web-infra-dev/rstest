@@ -78,6 +78,26 @@ describe('test build config', () => {
     expect(cli.stdout).not.toContain('No test files found');
   });
 
+  it('modifyRstestConfig should refresh run plan before dependency checks', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--config', 'rstest.environment.config.mts'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/modifyRstestConfig'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).toContain('uses modified jsdom environment');
+    expect(cli.stdout).not.toContain('No test files found');
+  });
+
   it('modifyRstestConfig should preserve shard partition', async ({
     onTestFinished,
   }) => {

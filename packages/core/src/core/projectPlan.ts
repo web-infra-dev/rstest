@@ -108,10 +108,12 @@ export const createRunProjectPlanState = ({
   };
 
   const resolveRunnableProjects = async (): Promise<RunProjectPlan> => {
-    if (environmentGroupsResolved && environmentGroupsChanged) {
-    } else if (context.normalizedConfig.shard) {
+    const shouldPreserveEnvironmentPartitions =
+      environmentGroupsResolved && environmentGroupsChanged;
+
+    if (!shouldPreserveEnvironmentPartitions && context.normalizedConfig.shard) {
       entriesCache = (await resolveShardedEntries(context)) || new Map();
-    } else {
+    } else if (!shouldPreserveEnvironmentPartitions) {
       entriesCache = new Map();
     }
 

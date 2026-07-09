@@ -5,6 +5,7 @@ import {
   resolveAndMergeRawCoverage,
 } from '../coverage';
 import { ensureRunDependencies } from './dependencies';
+import { ensureTestEnvironmentDependencies } from './envDependencies';
 import { createPool } from '../pool';
 import type { Duration, EntryInfo, SourceMapInput } from '../types';
 import type { CoverageMap } from '../types/coverage';
@@ -394,7 +395,7 @@ export async function runTests(context: Rstest): Promise<void> {
       globalSetupProjects: context.projects,
     }),
     onModifyRstestConfigApplied: async () => {
-      const plan = await resolveRunnableProjects();
+      plan = await resolveRunnableProjects();
       syncNodeProjects(
         rsbuildProjects,
         plan.nodeProjectsToRun.length ? plan.nodeProjectsToRun : nodeProjects,
@@ -402,12 +403,19 @@ export async function runTests(context: Rstest): Promise<void> {
     },
   });
 
-  const hasBrowserTestsToRun = plan.browserProjectsToRun.length > 0;
-  const hasNodeTestsToRun = plan.nodeProjectsToRun.length > 0;
+  let hasBrowserTestsToRun = plan.browserProjectsToRun.length > 0;
+  let hasNodeTestsToRun = plan.nodeProjectsToRun.length > 0;
+
+  if (!hasNodeTestsToRun && nodeProjects.length) {
+    await rsbuildInstance.initConfigs({ action: 'dev' });
+    plan = projectPlanState.getPlan();
+    hasBrowserTestsToRun = plan.browserProjectsToRun.length > 0;
+    hasNodeTestsToRun = plan.nodeProjectsToRun.length > 0;
+  }
 
   if (hasNodeTestsToRun || hasBrowserTestsToRun) {
     await ensureRunDependencies({
-      projects: plan.nodeProjectsToRun,
+      projects: [],
       rootPath,
       coverage,
     });
@@ -531,6 +539,8 @@ export async function runTests(context: Rstest): Promise<void> {
   // The `projects` variable now refers to node projects that have tests to run.
   const { entriesCache, nodeProjectsToRun: projects } =
     projectPlanState.getPlan();
+
+  await ensureTestEnvironmentDependencies(projects, rootPath);
 
   const entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
     (acc, entry) => acc.concat(Object.values(entry.entries) || []),
