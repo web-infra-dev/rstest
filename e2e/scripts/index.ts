@@ -165,6 +165,7 @@ export async function runRstestCli({
       env: {
         ...baseEnv,
         ...(options?.nodeOptions?.env || {}),
+        GITHUB_ACTIONS: options?.nodeOptions?.env?.GITHUB_ACTIONS || undefined,
         GITHUB_STEP_SUMMARY:
           options?.nodeOptions?.env?.GITHUB_STEP_SUMMARY || undefined,
       },
