@@ -78,6 +78,27 @@ describe('test build config', () => {
     expect(cli.stdout).not.toContain('No test files found');
   });
 
+  it('modifyRstestConfig should preserve shard partition', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--config', 'rstest.shard.config.mts', '--shard', '1/2'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/modifyRstestConfig'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).toContain('shard-a.test.ts');
+    expect(cli.stdout).toContain('shard-b.test.ts');
+    expect(cli.stdout).not.toContain('shard-c.test.ts');
+  });
+
   it('should write output to customized distPath.root', async ({
     onTestFinished,
   }) => {

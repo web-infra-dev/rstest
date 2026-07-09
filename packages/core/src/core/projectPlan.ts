@@ -43,6 +43,19 @@ export const syncNodeProjects = (
   );
 };
 
+const isSameProjectList = (
+  left: ProjectContext[],
+  right: ProjectContext[],
+): boolean =>
+  left.length === right.length &&
+  left.every((project, index) => {
+    const other = right[index];
+    return (
+      other?.name === project.name &&
+      other.environmentName === project.environmentName
+    );
+  });
+
 export const createRunProjectPlanState = ({
   context,
   browserProjects,
@@ -61,6 +74,7 @@ export const createRunProjectPlanState = ({
   let browserProjectsToRun: ProjectContext[] = [];
   let nodeProjectsToRun: ProjectContext[] = [];
   let environmentGroupsResolved = false;
+  let environmentGroupsChanged = false;
 
   const getPlan = (): RunProjectPlan => ({
     projects: allProjects,
@@ -94,12 +108,14 @@ export const createRunProjectPlanState = ({
   };
 
   const resolveRunnableProjects = async (): Promise<RunProjectPlan> => {
-    if (context.normalizedConfig.shard && !environmentGroupsResolved) {
+    if (environmentGroupsResolved && environmentGroupsChanged) {
+    } else if (context.normalizedConfig.shard) {
       entriesCache = (await resolveShardedEntries(context)) || new Map();
     } else {
       entriesCache = new Map();
     }
 
+    const previousProjects = context.projects;
     const runnable = await resolveRunnableProjectsByEntries({
       entriesCache,
       projects: context.projects,
@@ -107,6 +123,13 @@ export const createRunProjectPlanState = ({
       groupEnvironmentComments: !environmentGroupsResolved,
       skipEmptyProjects: !isWatchMode,
     });
+
+    if (!environmentGroupsResolved) {
+      environmentGroupsChanged = !isSameProjectList(
+        previousProjects,
+        runnable.projects,
+      );
+    }
 
     allProjects = runnable.projects;
     entriesCache = runnable.entriesCache;
