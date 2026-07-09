@@ -98,10 +98,12 @@ export type { Rspack } from '@rsbuild/core';
 export type {
   Assertion,
   DescribeAPI as Describe,
+  AsymmetricMatchersContaining,
   ExpectStatic,
   ExtendConfig,
   ExtendConfigFn,
   Fixtures,
+  Matchers,
   ProjectConfig,
   RealTimers,
   Reporter,
