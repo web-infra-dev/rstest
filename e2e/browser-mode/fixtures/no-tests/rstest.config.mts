@@ -7,6 +7,13 @@ export default defineConfig({
     provider: 'playwright',
     headless: true,
     port: BROWSER_PORTS['no-tests'],
+    // If the provider is launched for an empty run, this invalid executable
+    // makes the regression observable. Empty runs should stop before launch.
+    providerOptions: {
+      launch: {
+        executablePath: './should-not-launch-browser-for-empty-runs',
+      },
+    },
   },
   // Intentionally points to a non-existing directory to cover the
   // "No test files found" branch in browser mode.

@@ -32,6 +32,12 @@ export interface BrowserTestRunOptions {
    */
   allowEmptyWatchRun?: boolean;
   /**
+   * Treat an empty browser result as a no-op instead of a run failure.
+   * Used by mixed node+browser planning, where Browser Mode hooks may add
+   * entries after the node-side plan initially saw an empty browser project.
+   */
+  allowEmptyRun?: boolean;
+  /**
    * When set, the browser host emits Perfetto trace events to this callback
    * (per-file `tests` slices + suite/case slices). Only invoked when the
    * caller has `--trace` enabled.

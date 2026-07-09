@@ -395,7 +395,8 @@ export async function runTests(context: Rstest): Promise<void> {
   await rsbuildInstance.initConfigs({ action: 'dev' });
   const plan = await resolveRunnableProjects();
 
-  const hasBrowserTestsToRun = plan.browserProjectsToRun.length > 0;
+  const hasBrowserTestsToRun =
+    plan.browserProjectsToRun.length > 0 || browserProjects.length > 0;
   const hasNodeTestsToRun = plan.nodeProjectsToRun.length > 0;
 
   if (hasNodeTestsToRun || hasBrowserTestsToRun) {
@@ -452,29 +453,29 @@ export async function runTests(context: Rstest): Promise<void> {
   if (hasBrowserTestsToRun) {
     const browserEntries = new Map();
     const plan = projectPlanState.getPlan();
+    const browserProjectsToRun = plan.browserProjectsToRun.length
+      ? plan.browserProjectsToRun
+      : browserProjects;
     if (shard) {
-      for (const p of plan.browserProjectsToRun) {
+      for (const p of browserProjectsToRun) {
         browserEntries.set(
           p.environmentName,
           plan.entriesCache.get(p.environmentName),
         );
       }
     }
-    browserResultPromise = runBrowserModeTests(
-      context,
-      plan.browserProjectsToRun,
-      {
-        // Defer browser teardown + reporting to the unified node run only when
-        // node tests will actually run. If node projects resolve to zero files,
-        // the `!hasNodeTestsToRun` early return below skips `run()` entirely, so a
-        // deferred browser would never be torn down and the CLI hangs. Otherwise
-        // let the browser self-finalize like the browser-only path. See #1363.
-        skipOnTestRunEnd: shouldUnifyReporter && hasNodeTestsToRun,
-        shardedEntries: shard ? browserEntries : undefined,
-        allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
-        onTraceEvents: forwardBrowserTraceEvents,
-      },
-    );
+    browserResultPromise = runBrowserModeTests(context, browserProjectsToRun, {
+      // Defer browser teardown + reporting to the unified node run only when
+      // node tests will actually run. If node projects resolve to zero files,
+      // the `!hasNodeTestsToRun` early return below skips `run()` entirely, so a
+      // deferred browser would never be torn down and the CLI hangs. Otherwise
+      // let the browser self-finalize like the browser-only path. See #1363.
+      skipOnTestRunEnd: shouldUnifyReporter && hasNodeTestsToRun,
+      shardedEntries: shard ? browserEntries : undefined,
+      allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
+      allowEmptyRun: hasNodeTestsToRun,
+      onTraceEvents: forwardBrowserTraceEvents,
+    });
 
     // Prevent an unhandled rejection window in mixed node+browser runs.
     // We still await the original promise later to surface the error.

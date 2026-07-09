@@ -52,4 +52,43 @@ describe.sequential('browser mode - multi project config isolation', () => {
     expect(cli.stdout).toContain('smoke.test.ts');
     expect(cli.stdout).toMatch(/Tests.*2 passed/);
   });
+
+  it('runs mixed-mode browser tests added by modifyRstestConfig hooks', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli(
+      'modify-rstest-mixed',
+      {
+        args: [
+          '--project',
+          'project-hooked-browser',
+          '--project',
+          'node-smoke',
+        ],
+      },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('hooked-browser.test.ts');
+    expect(cli.stdout).toContain('node-smoke.test.ts');
+    expect(cli.stdout).toMatch(/Tests.*2 passed/);
+  });
+
+  it('keeps browser shard manifests in sync after all project hooks run', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli(
+      'modify-rstest-mixed',
+      {
+        args: [
+          '--shard=1/2',
+          '--project',
+          'project-hooked-a',
+          '--project',
+          'project-hooked-b',
+        ],
+      },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('hooked-a.test.ts');
+    expect(cli.stdout).not.toContain('hooked-b.test.ts');
+    expect(cli.stdout).toMatch(/Tests.*1 passed/);
+  });
 });

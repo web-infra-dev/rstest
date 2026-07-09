@@ -427,7 +427,7 @@ type BrowserRuntime = {
   // The server that hosts the container UI HTML (headed mode). The WebSocket
   // server below is shared and reachable from any origin.
   containerServer: BrowserProjectServer;
-  browser: BrowserProviderBrowser;
+  browser?: BrowserProviderBrowser;
   browserLaunchOptions: BrowserLaunchOptions;
   wsPort: number;
   tempDir: string;
@@ -439,6 +439,13 @@ type BrowserRuntime = {
   wss: WebSocketServer;
   rpcManager?: ContainerRpcManager;
   projectEntries: BrowserProjectEntries[];
+};
+
+type BrowserManifestModule = {
+  manifestPath: string;
+  project: ProjectContext;
+  plugin: InstanceType<typeof rspack.experiments.VirtualModulesPlugin>;
+  modules: Record<string, string>;
 };
 
 // ============================================================================
@@ -1512,6 +1519,45 @@ const createBrowserRuntime = async ({
   let browserLaunchOptions =
     ensureConsistentBrowserLaunchOptions(browserProjects);
   let projectEntries = initialProjectEntries;
+  const manifestModules: BrowserManifestModule[] = [];
+
+  const getProjectEntry = (project: ProjectContext) =>
+    projectEntries.find(
+      (item) => item.project.environmentName === project.environmentName,
+    );
+
+  const updateManifestModule = (manifestModule: BrowserManifestModule) => {
+    const updatedEntry = getProjectEntry(manifestModule.project);
+    manifestModule.modules[manifestModule.manifestPath] =
+      generateManifestModule({
+        manifestPath: manifestModule.manifestPath,
+        entries: [
+          {
+            project: manifestModule.project,
+            testFiles: updatedEntry?.testFiles ?? [],
+            setupFiles: updatedEntry?.setupFiles ?? [],
+          },
+        ],
+        isWatchMode,
+      });
+  };
+
+  const refreshProjectEntries = async (): Promise<void> => {
+    validateBrowserConfig(context);
+    browserLaunchOptions = ensureConsistentBrowserLaunchOptions(
+      getBrowserProjects(context),
+    );
+    const updatedShardedEntries = context.normalizedConfig.shard
+      ? await resolveShardedEntries(context, { silent: true })
+      : shardedEntries;
+    projectEntries = await resolveProjectEntries(
+      context,
+      updatedShardedEntries,
+    );
+    for (const manifestModule of manifestModules) {
+      updateManifestModule(manifestModule);
+    }
+  };
 
   // Rstest internal aliases that must not be overridden by user config
   const browserRuntimePath = fileURLToPath(
@@ -1607,10 +1653,6 @@ const createBrowserRuntime = async ({
     }
   };
 
-  const entryByEnvironmentName = new Map(
-    projectEntries.map((entry) => [entry.project.environmentName, entry]),
-  );
-
   // ---- Build one isolated rsbuild instance + dev server per project ----
   const buildProjectServer = async (
     project: ProjectContext,
@@ -1621,7 +1663,7 @@ const createBrowserRuntime = async ({
       toSafeVarName(project.environmentName),
       VIRTUAL_MANIFEST_FILENAME,
     );
-    const entry = entryByEnvironmentName.get(project.environmentName);
+    const entry = getProjectEntry(project);
     const virtualManifestModules = {
       [manifestPath]: generateManifestModule({
         manifestPath,
@@ -1638,6 +1680,12 @@ const createBrowserRuntime = async ({
     const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin(
       virtualManifestModules,
     );
+    manifestModules.push({
+      manifestPath,
+      project,
+      plugin: virtualManifestPlugin,
+      modules: virtualManifestModules,
+    });
 
     const rstestInternalAliases = {
       '@rstest/browser-manifest': manifestPath,
@@ -1679,32 +1727,7 @@ const createBrowserRuntime = async ({
       [project],
       {
         getEnvironmentConfig: getBrowserRsbuildEnvironmentConfig,
-        onModifyRstestConfigApplied: async () => {
-          validateBrowserConfig(context);
-          browserLaunchOptions =
-            ensureConsistentBrowserLaunchOptions(browserProjects);
-          const updatedShardedEntries = context.normalizedConfig.shard
-            ? await resolveShardedEntries(context, { silent: true })
-            : shardedEntries;
-          projectEntries = await resolveProjectEntries(
-            context,
-            updatedShardedEntries,
-          );
-          const updatedEntry = projectEntries.find(
-            (item) => item.project.environmentName === project.environmentName,
-          );
-          virtualManifestModules[manifestPath] = generateManifestModule({
-            manifestPath,
-            entries: [
-              {
-                project,
-                testFiles: updatedEntry?.testFiles ?? [],
-                setupFiles: updatedEntry?.setupFiles ?? [],
-              },
-            ],
-            isWatchMode,
-          });
-        },
+        onModifyRstestConfigApplied: refreshProjectEntries,
       },
     );
 
@@ -1997,6 +2020,13 @@ const createBrowserRuntime = async ({
       const server = await buildProjectServer(project, index === 0);
       projectServers.set(server.projectName, server);
     }
+    await refreshProjectEntries();
+    for (const manifestModule of manifestModules) {
+      manifestModule.plugin.writeModule(
+        manifestModule.manifestPath,
+        manifestModule.modules[manifestModule.manifestPath]!,
+      );
+    }
   } catch (error) {
     await closeAllProjectServers(projectServers.values());
     throw error;
@@ -2017,33 +2047,38 @@ const createBrowserRuntime = async ({
   const wsPort = (wss.address() as AddressInfo).port;
   logger.debug(`[Browser UI] WebSocket server started on port ${wsPort}`);
 
-  const browserName = browserLaunchOptions.browser ?? 'chromium';
-  try {
-    const providerImplementation = getBrowserProviderImplementation(
-      browserLaunchOptions.provider,
-    );
-    const runtime = await providerImplementation.launchRuntime({
-      browserName,
-      headless: forceHeadless ?? browserLaunchOptions.headless,
-      providerOptions: browserLaunchOptions.providerOptions,
-    });
-    return {
-      projectServers,
-      containerServer,
-      browser: runtime.browser,
-      browserLaunchOptions,
-      wsPort,
-      tempDir,
-      setContainerOptions,
-      dispatchHandlers,
-      wss,
-      projectEntries,
-    };
-  } catch (error) {
-    wss.close();
-    await closeAllProjectServers(projectServers.values());
-    throw error;
+  return {
+    projectServers,
+    containerServer,
+    browserLaunchOptions,
+    wsPort,
+    tempDir,
+    setContainerOptions,
+    dispatchHandlers,
+    wss,
+    projectEntries,
+  };
+};
+
+const launchBrowserRuntimeProvider = async (
+  runtime: BrowserRuntime,
+  forceHeadless?: boolean,
+): Promise<BrowserProviderBrowser> => {
+  if (runtime.browser) {
+    return runtime.browser;
   }
+
+  const browserName = runtime.browserLaunchOptions.browser ?? 'chromium';
+  const providerImplementation = getBrowserProviderImplementation(
+    runtime.browserLaunchOptions.provider,
+  );
+  const providerRuntime = await providerImplementation.launchRuntime({
+    browserName,
+    headless: forceHeadless ?? runtime.browserLaunchOptions.headless,
+    providerOptions: runtime.browserLaunchOptions.providerOptions,
+  });
+  runtime.browser = providerRuntime.browser;
+  return runtime.browser;
 };
 
 async function resolveProjectEntries(
@@ -2083,6 +2118,7 @@ export const runBrowserController = async (
   const {
     skipOnTestRunEnd = false,
     allowEmptyWatchRun = false,
+    allowEmptyRun = false,
     onTraceEvents,
   } = options ?? {};
   const buildStart = Date.now();
@@ -2376,7 +2412,8 @@ export const runBrowserController = async (
   );
 
   if (totalTests === 0) {
-    const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
+    const code =
+      allowEmptyRun || context.normalizedConfig.passWithNoTests ? 0 : 1;
     if (!skipOnTestRunEnd) {
       const message = shouldKeepWatchingWithEmptySet
         ? 'No test files found.'
@@ -2422,7 +2459,19 @@ export const runBrowserController = async (
     watchContext.lastTestFiles = collectWatchTestFiles(projectEntries);
   }
 
-  const { browser, browserLaunchOptions, wsPort, wss } = runtime;
+  let browser: BrowserProviderBrowser;
+  try {
+    browser = await launchBrowserRuntimeProvider(runtime);
+  } catch (error) {
+    return failWithError(error, async () => {
+      if (watchContext.runtime === runtime) {
+        watchContext.runtime = null;
+      }
+      await destroyBrowserRuntime(runtime);
+    });
+  }
+
+  const { browserLaunchOptions, wsPort, wss } = runtime;
   const buildTime = Date.now() - buildStart;
 
   // Collect all test files from project entries with project info
@@ -4054,7 +4103,26 @@ export const listBrowserTests = async (
     };
   }
 
-  const { browser, browserLaunchOptions } = runtime;
+  let browser: BrowserProviderBrowser;
+  try {
+    browser = await launchBrowserRuntimeProvider(runtime, true);
+  } catch (error) {
+    await destroyBrowserRuntime(runtime);
+    const providers = [
+      ...new Set(
+        browserProjects.map((p) => p.normalizedConfig.browser.provider),
+      ),
+    ];
+    logger.error(
+      color.red(
+        `Failed to initialize browser provider runtime (${providers.join(', ')}).`,
+      ),
+      error,
+    );
+    throw error;
+  }
+
+  const { browserLaunchOptions } = runtime;
 
   // Get browser projects for runtime config
   // Normalize projectRoot to posix format for cross-platform compatibility
