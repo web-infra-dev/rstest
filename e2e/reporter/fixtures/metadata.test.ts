@@ -17,6 +17,18 @@ describe(
       expect(1 + 1).toBe(2);
     });
 
+    it.skip(
+      'skipped metadata',
+      { meta: { shared: 'skip', skippedCase: true } },
+      () => {
+        throw new Error('should not run');
+      },
+    );
+
+    it.todo('todo metadata', {
+      meta: { shared: 'todo', todoCase: true },
+    });
+
     afterEach((ctx) => {
       if (ctx.task.name === 'overrides metadata') {
         ctx.task.meta = { ...ctx.task.meta, afterEach: true };

@@ -39,12 +39,7 @@ describe('programmatic runRstest', () => {
       tests: { total: 2, passed: 2, failed: 0, skipped: 0, todo: 0 },
       files: { total: 1, failed: 0 },
     });
-    expect(result.files).toEqual([
-      {
-        status: 'pass',
-        testPath: 'sum.test.ts',
-      },
-    ]);
+    expect(result.files).toEqual([{ status: 'pass', testPath: 'sum.test.ts' }]);
     expect(result.unhandledErrors).toEqual([]);
     expect(result.duration.hasTotal).toBe(true);
     expect(result.snapshotPresent).toBe(true);

@@ -354,6 +354,14 @@ describe.concurrent('reporters', () => {
         meta: { fromSuite: true, shared: 'suite' },
       },
       {
+        name: 'skipped metadata',
+        meta: { fromSuite: true, shared: 'skip', skippedCase: true },
+      },
+      {
+        name: 'todo metadata',
+        meta: { fromSuite: true, shared: 'todo', todoCase: true },
+      },
+      {
         name: 'overrides metadata',
         meta: { fromSuite: true, shared: 'case', caseOnly: true },
       },
@@ -362,6 +370,14 @@ describe.concurrent('reporters', () => {
       {
         name: 'inherits metadata',
         meta: { fromSuite: true, shared: 'suite', runtime: 'first' },
+      },
+      {
+        name: 'skipped metadata',
+        meta: { fromSuite: true, shared: 'skip', skippedCase: true },
+      },
+      {
+        name: 'todo metadata',
+        meta: { fromSuite: true, shared: 'todo', todoCase: true },
       },
       {
         name: 'overrides metadata',
