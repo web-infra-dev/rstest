@@ -42,7 +42,7 @@ import {
   type SourceMapInput,
 } from '@jridgewell/trace-mapping';
 import type { Profiler } from 'node:inspector';
-import type { FileCoverageData } from 'istanbul-lib-coverage';
+import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
 import jsTokens from 'js-tokens';
 import { walk } from 'estree-walker';
 
@@ -103,6 +103,7 @@ type PreparedCoverage = {
   statements: StatementDescriptor[];
   branches: BranchDescriptor[];
 };
+type FileCoverageLike = FileCoverageData | { data: FileCoverageData };
 
 type ConvertOptions = {
   ast: unknown | (() => unknown);
@@ -132,10 +133,38 @@ const preparedCache = new Map<string, Promise<PreparedCoverage>>();
 export async function convertV8CoverageWithAst(
   options: ConvertOptions,
 ): Promise<Record<string, FileCoverageData>> {
+  const prepared = await getPreparedCoverage(options);
+
+  if (!prepared) {
+    return {};
+  }
+
+  return applyCoverage(prepared, normalize(options.coverage));
+}
+
+export async function applyV8CoverageWithAst(
+  options: ConvertOptions & { coverageMap: CoverageMap },
+): Promise<void> {
+  const prepared = await getPreparedCoverage(options);
+
+  if (!prepared) {
+    return;
+  }
+
+  applyCoverageToMap(
+    options.coverageMap,
+    prepared,
+    normalize(options.coverage),
+  );
+}
+
+async function getPreparedCoverage(
+  options: ConvertOptions,
+): Promise<PreparedCoverage | null> {
   const ignoreHints = getIgnoreHints(options.code);
 
   if (ignoreHints.length === 1 && ignoreHints[0]?.type === 'file') {
-    return {};
+    return null;
   }
 
   let prepared = preparedCache.get(options.cacheKey);
@@ -151,7 +180,7 @@ export async function convertV8CoverageWithAst(
     }
   }
 
-  return applyCoverage(await prepared, normalize(options.coverage));
+  return prepared;
 }
 
 async function prepareCoverage(
@@ -850,29 +879,76 @@ function applyCoverage(
   const data: Record<string, FileCoverageData> = {};
 
   for (const [filename, template] of Object.entries(prepared.files)) {
-    const fileCoverage: FileCoverageData = {
-      path: template.path,
-      statementMap: template.statementMap,
-      fnMap: template.fnMap,
-      branchMap: template.branchMap,
-      s: {},
-      f: {},
-      b: {},
-    };
-
-    for (let index = 0; index < template.statementCount; index++) {
-      fileCoverage.s[index] = 0;
-    }
-    for (let index = 0; index < template.functionCount; index++) {
-      fileCoverage.f[index] = 0;
-    }
-    for (const [index, length] of Object.entries(template.branchLengths)) {
-      fileCoverage.b[index] = Array(length).fill(0);
-    }
-
-    data[filename] = fileCoverage;
+    data[filename] = createFileCoverage(template);
   }
 
+  applyCoverageHits(data, prepared, ranges);
+
+  return data;
+}
+
+function applyCoverageToMap(
+  coverageMap: CoverageMap,
+  prepared: PreparedCoverage,
+  ranges: NormalizedRange[],
+): void {
+  const data: Record<string, FileCoverageData> = {};
+
+  for (const [filename, template] of Object.entries(prepared.files)) {
+    data[filename] = getOrCreateFileCoverage(coverageMap, filename, template);
+  }
+
+  applyCoverageHits(data, prepared, ranges);
+}
+
+function createFileCoverage(template: FileTemplate): FileCoverageData {
+  const fileCoverage: FileCoverageData = {
+    path: template.path,
+    statementMap: template.statementMap,
+    fnMap: template.fnMap,
+    branchMap: template.branchMap,
+    s: {},
+    f: {},
+    b: {},
+  };
+
+  for (let index = 0; index < template.statementCount; index++) {
+    fileCoverage.s[index] = 0;
+  }
+  for (let index = 0; index < template.functionCount; index++) {
+    fileCoverage.f[index] = 0;
+  }
+  for (const [index, length] of Object.entries(template.branchLengths)) {
+    fileCoverage.b[index] = Array(length).fill(0);
+  }
+
+  return fileCoverage;
+}
+
+function getOrCreateFileCoverage(
+  coverageMap: CoverageMap,
+  filename: string,
+  template: FileTemplate,
+): FileCoverageData {
+  const existingCoverage = coverageMap.data[filename] as
+    FileCoverageLike | undefined;
+
+  if (existingCoverage) {
+    return 'data' in existingCoverage
+      ? existingCoverage.data
+      : existingCoverage;
+  }
+
+  coverageMap.addFileCoverage(createFileCoverage(template));
+  const fileCoverage = coverageMap.data[filename] as FileCoverageLike;
+  return 'data' in fileCoverage ? fileCoverage.data : fileCoverage;
+}
+
+function applyCoverageHits(
+  data: Record<string, FileCoverageData>,
+  prepared: PreparedCoverage,
+  ranges: NormalizedRange[],
+): void {
   for (const descriptor of prepared.functions) {
     data[descriptor.filename]!.f[descriptor.index]! += getCount(
       descriptor,
@@ -889,20 +965,16 @@ function applyCoverage(
 
   for (const descriptor of prepared.branches) {
     const hits = data[descriptor.filename]!.b[descriptor.index]!;
-    const covered: number[] = [];
+    let previousHit = 0;
 
-    for (const range of descriptor.ranges) {
+    for (let index = 0; index < descriptor.ranges.length; index++) {
+      const range = descriptor.ranges[index]!;
       const count = getCount(range, ranges);
-      const hit = range.implicit ? count - (covered.at(-1) || 0) : count;
-      covered.push(hit);
-    }
-
-    for (let index = 0; index < hits.length; index++) {
-      hits[index] = hits[index]! + (covered[index] || 0);
+      const hit = range.implicit ? count - previousHit : count;
+      hits[index] = hits[index]! + hit;
+      previousHit = hit;
     }
   }
-
-  return data;
 }
 
 function normalize(scriptCoverage: Pick<Profiler.ScriptCoverage, 'functions'>) {

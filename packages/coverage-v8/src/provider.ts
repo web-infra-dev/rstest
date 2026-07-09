@@ -14,7 +14,10 @@ import reports from 'istanbul-reports';
 import picomatch from 'picomatch';
 import v8ToIstanbul from 'v8-to-istanbul';
 import { createFastCoverageMap, mapWithConcurrency } from './utils';
-import { convertV8CoverageWithAst } from './v8AstConverter';
+import {
+  applyV8CoverageWithAst,
+  convertV8CoverageWithAst,
+} from './v8AstConverter';
 
 type SourceMapLike = {
   version: number;
@@ -563,6 +566,61 @@ export class CoverageProvider implements RstestCoverageProvider {
     });
   }
 
+  private async applyWithAst(
+    coverageMap: CoverageMap,
+    filePath: string,
+    entry: inspector.Profiler.ScriptCoverage,
+    options?: CollectOptions,
+    transformedSource?: TransformedSource,
+    root = this.root,
+  ): Promise<void> {
+    if (this.convertWithAst !== CoverageProvider.prototype.convertWithAst) {
+      const istanbulData = await this.convertWithAst(
+        filePath,
+        entry,
+        options,
+        transformedSource,
+        root,
+      );
+      this.filterCoverageData(istanbulData, root);
+      coverageMap.merge(istanbulData);
+      return;
+    }
+
+    const { code, sourceMap, sourceMapStr, sourceMapUrl } =
+      transformedSource ?? (await this.getTransformedSource(filePath, options));
+
+    if (this.shouldSkipSourceMapEntry(sourceMap)) {
+      return;
+    }
+
+    const outputModule = options?.outputModule ?? true;
+    const codeHash = this.hashString(code);
+    const converterCacheKey = this.getConverterCacheKey(
+      filePath,
+      code,
+      codeHash,
+      sourceMapStr,
+      outputModule,
+      root,
+    );
+
+    await applyV8CoverageWithAst({
+      coverageMap,
+      ast: () => this.parseAst(code, outputModule),
+      cacheKey: converterCacheKey,
+      code,
+      sourceFilter: (sourcePath) =>
+        this.shouldKeepOriginalSource(sourcePath, root),
+      sourceMap,
+      sourceMapUrl,
+      coverage: {
+        url: entry.url,
+        functions: entry.functions,
+      },
+    });
+  }
+
   private getConverterCacheKey(
     filePath: string,
     code: string,
@@ -786,14 +844,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       COVERAGE_CONVERSION_CONCURRENCY,
       async (entry) => {
         try {
-          const istanbulData = await this.convertWithAst(
-            entry.filePath,
-            entry,
-            options,
-          );
-
-          this.filterCoverageData(istanbulData);
-          coverageMap.merge(istanbulData);
+          await this.applyWithAst(coverageMap, entry.filePath, entry, options);
         } catch (e) {
           console.error(`Failed to process coverage for ${entry.url}:`, e);
           process.exitCode = 1;
@@ -840,16 +891,14 @@ export class CoverageProvider implements RstestCoverageProvider {
 
           for (const entry of entries) {
             try {
-              const istanbulData = await this.convertWithAst(
+              await this.applyWithAst(
+                coverageMap,
                 entry.filePath,
                 entry,
                 options,
                 transformedSource,
                 root,
               );
-
-              this.filterCoverageData(istanbulData, root);
-              coverageMap.merge(istanbulData);
             } catch (e) {
               console.error(`Failed to process coverage for ${entry.url}:`, e);
               process.exitCode = 1;
