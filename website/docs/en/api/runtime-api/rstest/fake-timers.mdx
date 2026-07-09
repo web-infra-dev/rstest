@@ -93,6 +93,25 @@ Returns the real system time (as a timestamp), even when fake timers are enabled
 const realTime = rs.getRealSystemTime();
 ```
 
+## rs.getRealTimers
+
+<ApiMeta addedVersion="0.11.1" />
+
+- **Alias:** `rstest.getRealTimers`
+- **Type:** `() => { setTimeout: typeof globalThis.setTimeout; clearTimeout: typeof globalThis.clearTimeout; setImmediate?: typeof globalThis.setImmediate }`
+
+Returns real timer functions captured by Rstest, even when fake timers are enabled.
+
+```ts
+const { setTimeout, clearTimeout } = rs.getRealTimers();
+
+const timeout = setTimeout(() => {
+  // This timer uses real time.
+}, 1000);
+
+clearTimeout(timeout);
+```
+
 ## rs.runAllTicks
 
 - **Alias:** `rstest.runAllTicks`
@@ -167,7 +186,7 @@ Advances the timers to the next animation frame.
 
 ## rs.jumpTimersByTime
 
-<ApiMeta addedVersion="0.10.7" />
+<ApiMeta addedVersion="0.11.0" />
 
 - **Alias:** `rstest.jumpTimersByTime`
 - **Type:** `(ms: number | string | Temporal.Duration) => RstestUtilities`
@@ -187,7 +206,7 @@ expect(cb).toHaveBeenCalledTimes(1);
 
 ## rs.setTickMode
 
-<ApiMeta addedVersion="0.10.7" />
+<ApiMeta addedVersion="0.11.0" />
 
 - **Alias:** `rstest.setTickMode`
 - **Type:** `(mode: { mode: 'manual' | 'nextAsync' } | { mode: 'interval'; delta?: number }) => RstestUtilities`

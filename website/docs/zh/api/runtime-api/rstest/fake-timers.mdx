@@ -93,6 +93,25 @@ rs.useRealTimers();
 const realTime = rs.getRealSystemTime();
 ```
 
+## rs.getRealTimers
+
+<ApiMeta addedVersion="0.11.1" />
+
+- **别名：** `rstest.getRealTimers`
+- **类型：** `() => { setTimeout: typeof globalThis.setTimeout; clearTimeout: typeof globalThis.clearTimeout; setImmediate?: typeof globalThis.setImmediate }`
+
+即使在启用 fake timers 时，也可以返回由 Rstest 捕获的真实定时器函数。
+
+```ts
+const { setTimeout, clearTimeout } = rs.getRealTimers();
+
+const timeout = setTimeout(() => {
+  // 这个定时器使用真实时间。
+}, 1000);
+
+clearTimeout(timeout);
+```
+
 ## rs.runAllTicks
 
 - **别名：** `rstest.runAllTicks`
@@ -167,7 +186,7 @@ const realTime = rs.getRealSystemTime();
 
 ## rs.jumpTimersByTime
 
-<ApiMeta addedVersion="0.10.7" />
+<ApiMeta addedVersion="0.11.0" />
 
 - **别名：** `rstest.jumpTimersByTime`
 - **类型：** `(ms: number | string | Temporal.Duration) => RstestUtilities`
@@ -187,7 +206,7 @@ expect(cb).toHaveBeenCalledTimes(1);
 
 ## rs.setTickMode
 
-<ApiMeta addedVersion="0.10.7" />
+<ApiMeta addedVersion="0.11.0" />
 
 - **别名：** `rstest.setTickMode`
 - **类型：** `(mode: { mode: 'manual' | 'nextAsync' } | { mode: 'interval'; delta?: number }) => RstestUtilities`

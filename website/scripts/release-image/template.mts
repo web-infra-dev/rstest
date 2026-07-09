@@ -1,19 +1,56 @@
 import { html } from 'satori-html';
 
+/**
+ * Fixed pixel geometry for a render target. `og` is the 1200x630 social card;
+ * `banner` is the wider 2048x576 in-page blog banner. Both render at 2x zoom.
+ */
+export interface Layout {
+  width: number;
+  height: number;
+  padding: string;
+  logoSize: number;
+  wordmarkSize: number;
+  versionSize: number;
+  /** Banners omit the tagline; the og card renders it when provided. */
+  showDescription: boolean;
+}
+
+export const LAYOUTS = {
+  og: {
+    width: 1200,
+    height: 630,
+    padding: '64px 80px',
+    logoSize: 96,
+    wordmarkSize: 80,
+    versionSize: 208,
+    showDescription: true,
+  },
+  banner: {
+    width: 2048,
+    height: 576,
+    padding: '48px 96px',
+    logoSize: 92,
+    wordmarkSize: 76,
+    versionSize: 196,
+    showDescription: false,
+  },
+} satisfies Record<string, Layout>;
+
+export type LayoutName = keyof typeof LAYOUTS;
+
 export interface TemplateOptions {
   version: string;
   description?: string;
   logoDataUrl: string;
   background: string;
+  layout: Layout;
 }
 
 /**
- * Layout: 1200x630.
- *
  * Centered column over a white + soft-gradient background:
  *   - Header row: logo + "Rstest" wordmark side-by-side
  *   - v{version} (display-sized hero)
- *   - Description (free-form tagline)
+ *   - Description (og card only)
  *
  * design-resources has no rstest "logo + wordmark" combo SVG yet, so the
  * wordmark is rendered separately in Space Grotesk while the logo is fetched
@@ -27,7 +64,9 @@ export function buildTemplate({
   description,
   logoDataUrl,
   background,
+  layout,
 }: TemplateOptions) {
+  const showDescription = layout.showDescription && !!description;
   return html`
     <div
       style="
@@ -36,9 +75,9 @@ export function buildTemplate({
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        width: 1200px;
-        height: 630px;
-        padding: 64px 80px;
+        width: ${layout.width}px;
+        height: ${layout.height}px;
+        padding: ${layout.padding};
         background: ${background};
         font-family: 'Space Grotesk';
         text-align: center;
@@ -54,14 +93,14 @@ export function buildTemplate({
         <img
           src="${logoDataUrl}"
           style="
-            width: 96px;
-            height: 96px;
+            width: ${layout.logoSize}px;
+            height: ${layout.logoSize}px;
           "
         />
         <div
           style="
             display: flex;
-            font-size: 80px;
+            font-size: ${layout.wordmarkSize}px;
             font-weight: 700;
             letter-spacing: -0.03em;
             line-height: 1;
@@ -75,7 +114,7 @@ export function buildTemplate({
       <div
         style="
           display: flex;
-          font-size: 208px;
+          font-size: ${layout.versionSize}px;
           font-weight: 700;
           letter-spacing: -0.05em;
           line-height: 1;
@@ -88,7 +127,7 @@ export function buildTemplate({
 
       <div
         style="
-          display: ${description ? 'flex' : 'none'};
+          display: ${showDescription ? 'flex' : 'none'};
           font-size: 30px;
           font-weight: 400;
           color: #555555;

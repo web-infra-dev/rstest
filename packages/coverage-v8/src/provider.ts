@@ -42,6 +42,74 @@ type CoverageEntry = inspector.Profiler.ScriptCoverage & {
   filePath: string;
 };
 
+type CollectOptions = NonNullable<
+  Parameters<RstestCoverageProvider['collect']>[0]
+>;
+
+type TransformedSource = {
+  code: string;
+  sourceMap?: SourceMapLike;
+  sourceMapStr?: string;
+  sourceMapUrl?: string;
+};
+
+type RawCoveragePayload = {
+  entries: CoverageEntry[];
+  options?: CollectOptions;
+  root?: string;
+};
+
+type CoverageEntryGroup = {
+  entries: CoverageEntry[];
+  options?: CollectOptions;
+  root?: string;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object';
+
+const isStringDict = (value: unknown): value is Record<string, string> =>
+  isRecord(value) &&
+  Object.values(value).every((item) => typeof item === 'string');
+
+const isCollectOptions = (value: unknown): value is CollectOptions =>
+  isRecord(value) &&
+  (value.assetFiles === undefined || isStringDict(value.assetFiles)) &&
+  (value.sourceMaps === undefined || isStringDict(value.sourceMaps)) &&
+  (value.outputModule === undefined || typeof value.outputModule === 'boolean');
+
+const isCoverageRange = (
+  value: unknown,
+): value is inspector.Profiler.CoverageRange =>
+  isRecord(value) &&
+  typeof value.startOffset === 'number' &&
+  typeof value.endOffset === 'number' &&
+  typeof value.count === 'number';
+
+const isFunctionCoverage = (
+  value: unknown,
+): value is inspector.Profiler.FunctionCoverage =>
+  isRecord(value) &&
+  typeof value.functionName === 'string' &&
+  typeof value.isBlockCoverage === 'boolean' &&
+  Array.isArray(value.ranges) &&
+  value.ranges.every(isCoverageRange);
+
+const isCoverageEntry = (value: unknown): value is CoverageEntry =>
+  isRecord(value) &&
+  typeof value.url === 'string' &&
+  typeof value.scriptId === 'string' &&
+  typeof value.filePath === 'string' &&
+  Array.isArray(value.functions) &&
+  value.functions.every(isFunctionCoverage);
+
+const isRawCoveragePayload = (value: unknown): value is RawCoveragePayload =>
+  isRecord(value) &&
+  Array.isArray(value.entries) &&
+  value.entries.every(isCoverageEntry) &&
+  (value.options === undefined || isCollectOptions(value.options)) &&
+  (value.root === undefined || typeof value.root === 'string');
+
 export class CoverageProvider implements RstestCoverageProvider {
   private session: inspector.Session | null = null;
   private isMatch: (filePath: string) => boolean;
@@ -85,25 +153,32 @@ export class CoverageProvider implements RstestCoverageProvider {
     return posix.isAbsolute(filePath) || win32.isAbsolute(filePath);
   }
 
-  private toProjectRelativePath(filePath: string): string {
+  private toProjectRelativePath(filePath: string, root = this.root): string {
     const normalizedFilePath = this.normalizeSlashes(filePath);
 
-    if (!this.root || !this.isAbsolutePath(normalizedFilePath)) {
+    if (!root || !this.isAbsolutePath(normalizedFilePath)) {
       return normalizedFilePath;
     }
 
+    const normalizedRoot = this.normalizeSlashes(root);
+
     if (
       this.normalizeForMatching(normalizedFilePath) ===
-      this.normalizeForMatching(this.root)
+      this.normalizeForMatching(normalizedRoot)
     ) {
       return '';
     }
 
-    if (win32.isAbsolute(normalizedFilePath) || win32.isAbsolute(this.root)) {
-      return win32.relative(this.root, normalizedFilePath).replace(/\\/g, '/');
+    if (
+      win32.isAbsolute(normalizedFilePath) ||
+      win32.isAbsolute(normalizedRoot)
+    ) {
+      return win32
+        .relative(normalizedRoot, normalizedFilePath)
+        .replace(/\\/g, '/');
     }
 
-    return posix.relative(this.root, normalizedFilePath);
+    return posix.relative(normalizedRoot, normalizedFilePath);
   }
 
   private findInDict(
@@ -111,7 +186,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     filePath: string,
   ): string | undefined {
     if (!dict) return undefined;
-    if (dict[filePath]) return dict[filePath];
+    if (dict[filePath] !== undefined) return dict[filePath];
 
     let lookup = this.dictLookupCache.get(dict);
     if (!lookup) {
@@ -132,11 +207,11 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     const normalizedPath = filePath.replace(/\\/g, '/');
     const directMatch = lookup.get(normalizedPath);
-    if (directMatch) return directMatch;
+    if (directMatch !== undefined) return directMatch;
 
     if (filePath.startsWith('/private/')) {
       const privateMatch = lookup.get(filePath.slice('/private'.length));
-      if (privateMatch) return privateMatch;
+      if (privateMatch !== undefined) return privateMatch;
     }
 
     return lookup.get(normalizedPath.toLowerCase());
@@ -164,18 +239,19 @@ export class CoverageProvider implements RstestCoverageProvider {
     );
   }
 
-  private shouldProcessEntry(filePath: string): boolean {
+  private shouldProcessEntry(filePath: string, root = this.root): boolean {
     const normalizedFilePath = this.normalizeForMatching(filePath);
-    const normalizedRoot = this.root
-      ? this.normalizeForMatching(this.root)
-      : undefined;
+    const normalizedRoot = root ? this.normalizeForMatching(root) : undefined;
 
     if (this.shouldIgnoreTransformedFile(normalizedFilePath)) {
       return false;
     }
 
     if (!this.options.allowExternal && normalizedRoot) {
-      const relativeFilePath = this.toProjectRelativePath(normalizedFilePath);
+      const relativeFilePath = this.toProjectRelativePath(
+        normalizedFilePath,
+        normalizedRoot,
+      );
       if (
         this.isAbsolutePath(relativeFilePath) ||
         relativeFilePath.startsWith('../')
@@ -208,14 +284,17 @@ export class CoverageProvider implements RstestCoverageProvider {
     );
   }
 
-  private shouldKeepOriginalSource(filePath: string): boolean {
+  private shouldKeepOriginalSource(
+    filePath: string,
+    root = this.root,
+  ): boolean {
     const normalizedKey = filePath.replace(/\\/g, '/');
 
     if (this.shouldIgnoreTransformedFile(normalizedKey)) {
       return false;
     }
 
-    const originalTestPath = this.toProjectRelativePath(normalizedKey);
+    const originalTestPath = this.toProjectRelativePath(normalizedKey, root);
     return (
       !this.isExcluded(originalTestPath) && this.isIncluded(originalTestPath)
     );
@@ -307,16 +386,8 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private async getTransformedSource(
     filePath: string,
-    options?: {
-      assetFiles?: Record<string, string>;
-      sourceMaps?: Record<string, string>;
-    },
-  ): Promise<{
-    code: string;
-    sourceMap?: SourceMapLike;
-    sourceMapStr?: string;
-    sourceMapUrl?: string;
-  }> {
+    options?: Pick<CollectOptions, 'assetFiles' | 'sourceMaps'>,
+  ): Promise<TransformedSource> {
     const assetSource = this.findInDict(options?.assetFiles, filePath);
     const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
     const code = assetSource ?? (await fs.readFile(filePath, 'utf-8'));
@@ -366,14 +437,12 @@ export class CoverageProvider implements RstestCoverageProvider {
   private async convertWithAst(
     filePath: string,
     entry: inspector.Profiler.ScriptCoverage,
-    options?: {
-      assetFiles?: Record<string, string>;
-      sourceMaps?: Record<string, string>;
-      outputModule?: boolean;
-    },
+    options?: CollectOptions,
+    transformedSource?: TransformedSource,
+    root = this.root,
   ): Promise<Record<string, FileCoverageData>> {
     const { code, sourceMap, sourceMapStr, sourceMapUrl } =
-      await this.getTransformedSource(filePath, options);
+      transformedSource ?? (await this.getTransformedSource(filePath, options));
 
     if (this.shouldSkipSourceMapEntry(sourceMap)) {
       return {};
@@ -393,6 +462,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       codeHash,
       sourceMapStr,
       outputModule,
+      root,
     );
     const ast = this.parseAst(code, outputModule, astCacheKey);
 
@@ -400,7 +470,8 @@ export class CoverageProvider implements RstestCoverageProvider {
       ast,
       cacheKey: converterCacheKey,
       code,
-      sourceFilter: (sourcePath) => this.shouldKeepOriginalSource(sourcePath),
+      sourceFilter: (sourcePath) =>
+        this.shouldKeepOriginalSource(sourcePath, root),
       sourceMap,
       sourceMapUrl,
       coverage: {
@@ -416,12 +487,13 @@ export class CoverageProvider implements RstestCoverageProvider {
     codeHash: number,
     sourceMapStr: string | undefined,
     outputModule: boolean,
+    root: string | undefined,
   ): string {
     return [
       this.getAstCacheKey(filePath, code, codeHash, outputModule),
       sourceMapStr?.length ?? 0,
       sourceMapStr ? this.hashString(sourceMapStr) : 0,
-      this.root ?? '',
+      root ?? '',
       this.options.allowExternal ? 'external' : 'root-only',
       this.options.include?.join('\n') ?? '',
       this.options.exclude.join('\n'),
@@ -450,9 +522,12 @@ export class CoverageProvider implements RstestCoverageProvider {
     return hash >>> 0;
   }
 
-  private filterCoverageData(istanbulData: Record<string, FileCoverageData>) {
+  private filterCoverageData(
+    istanbulData: Record<string, FileCoverageData>,
+    root = this.root,
+  ) {
     for (const key of Object.keys(istanbulData)) {
-      if (!this.shouldKeepOriginalSource(key)) {
+      if (!this.shouldKeepOriginalSource(key, root)) {
         delete istanbulData[key];
         continue;
       }
@@ -469,12 +544,79 @@ export class CoverageProvider implements RstestCoverageProvider {
     });
   }
 
-  collect(options?: {
-    assetFiles?: Record<string, string>;
-    sourceMaps?: Record<string, string>;
-    outputModule?: boolean;
-  }): Promise<CoverageMap | null> {
+  collect(options?: CollectOptions): Promise<CoverageMap | null> {
     return this.collectImpl(options);
+  }
+
+  resolveRawCoverage(payloads: unknown[]): Promise<CoverageMap | null> {
+    const validPayloads: RawCoveragePayload[] = [];
+
+    for (const payload of payloads) {
+      if (isRawCoveragePayload(payload)) {
+        validPayloads.push(payload);
+      } else {
+        console.error('Failed to resolve malformed raw V8 coverage payload.');
+        process.exitCode = 1;
+      }
+    }
+
+    if (!validPayloads.length) {
+      return Promise.resolve(null);
+    }
+
+    return this.collectRawPayloads(validPayloads);
+  }
+
+  async collectRaw(
+    options?: CollectOptions,
+  ): Promise<RawCoveragePayload | null> {
+    if (!this.session) return null;
+
+    let entries: CoverageEntry[];
+    try {
+      entries = await this.takeRawCoverage();
+    } finally {
+      await this.stopCoverage();
+    }
+
+    const filteredEntries = await this.filterRawCoverageEntries(
+      entries,
+      options,
+    );
+
+    return {
+      entries: filteredEntries,
+      options: this.pickRawCoverageOptions(filteredEntries, options),
+      root: this.root,
+    };
+  }
+
+  private pickRawCoverageOptions(
+    entries: CoverageEntry[],
+    options?: CollectOptions,
+  ): CollectOptions | undefined {
+    if (!options) return undefined;
+
+    const assetFiles: Record<string, string> = {};
+    const sourceMaps: Record<string, string> = {};
+
+    for (const entry of entries) {
+      const assetSource = this.findInDict(options.assetFiles, entry.filePath);
+      if (assetSource !== undefined) {
+        assetFiles[entry.filePath] = assetSource;
+      }
+
+      const sourceMap = this.findInDict(options.sourceMaps, entry.filePath);
+      if (sourceMap !== undefined) {
+        sourceMaps[entry.filePath] = sourceMap;
+      }
+    }
+
+    return {
+      ...(Object.keys(assetFiles).length ? { assetFiles } : {}),
+      ...(Object.keys(sourceMaps).length ? { sourceMaps } : {}),
+      outputModule: options.outputModule,
+    };
   }
 
   private async takeRawCoverage(): Promise<CoverageEntry[]> {
@@ -497,10 +639,7 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private async filterRawCoverageEntries(
     entries: CoverageEntry[],
-    options?: {
-      assetFiles?: Record<string, string>;
-      sourceMaps?: Record<string, string>;
-    },
+    options?: Pick<CollectOptions, 'assetFiles' | 'sourceMaps'>,
   ): Promise<CoverageEntry[]> {
     const filtered: CoverageEntry[] = [];
 
@@ -515,10 +654,7 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private async shouldKeepRawCoverageEntry(
     entry: CoverageEntry,
-    options?: {
-      assetFiles?: Record<string, string>;
-      sourceMaps?: Record<string, string>;
-    },
+    options?: Pick<CollectOptions, 'assetFiles' | 'sourceMaps'>,
   ): Promise<boolean> {
     const { filePath } = entry;
     const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
@@ -545,23 +681,16 @@ export class CoverageProvider implements RstestCoverageProvider {
     return assetSource === undefined && this.hasSourceMapOnDisk(filePath);
   }
 
-  private async collectImpl(options?: {
-    assetFiles?: Record<string, string>;
-    sourceMaps?: Record<string, string>;
-    outputModule?: boolean;
-  }): Promise<CoverageMap | null> {
+  private async collectImpl(
+    options?: CollectOptions,
+  ): Promise<CoverageMap | null> {
     if (!this.session) return null;
 
     let entries: CoverageEntry[];
     try {
       entries = await this.takeRawCoverage();
     } finally {
-      try {
-        await this.session.post('Profiler.stopPreciseCoverage');
-        await this.session.post('Profiler.disable');
-      } catch (_err) {
-        // Ignore teardown errors to prevent masking original errors
-      }
+      await this.stopCoverage();
     }
 
     const filteredEntries = await this.filterRawCoverageEntries(
@@ -589,6 +718,220 @@ export class CoverageProvider implements RstestCoverageProvider {
     );
 
     return coverageMap;
+  }
+
+  private async collectRawPayloads(
+    payloads: RawCoveragePayload[],
+  ): Promise<CoverageMap | null> {
+    const coverageMap = this.createCoverageMap();
+    const groups = new Map<string, CoverageEntryGroup>();
+    const sourceIdentityIds = new Map<string, number>();
+
+    for (const payload of payloads) {
+      for (const entry of payload.entries) {
+        const key = this.getRawCoverageGroupKey(
+          payload,
+          entry,
+          sourceIdentityIds,
+        );
+        this.mergeIntoCoverageEntries(
+          groups,
+          key,
+          entry,
+          payload.options,
+          payload.root,
+        );
+      }
+    }
+
+    await Promise.all(
+      Array.from(groups.values()).map(async ({ entries, options, root }) => {
+        try {
+          const transformedSource = await this.getTransformedSource(
+            entries[0]!.filePath,
+            options,
+          );
+
+          await Promise.all(
+            entries.map(async (entry) => {
+              try {
+                const istanbulData = await this.convertWithAst(
+                  entry.filePath,
+                  entry,
+                  options,
+                  transformedSource,
+                  root,
+                );
+
+                this.filterCoverageData(istanbulData, root);
+                coverageMap.merge(istanbulData);
+              } catch (e) {
+                console.error(
+                  `Failed to process coverage for ${entry.url}:`,
+                  e,
+                );
+                process.exitCode = 1;
+              }
+            }),
+          );
+        } catch (e) {
+          console.error(
+            `Failed to process coverage for ${entries[0]!.url}:`,
+            e,
+          );
+          process.exitCode = 1;
+        }
+      }),
+    );
+
+    return coverageMap;
+  }
+
+  private getRawCoverageGroupKey(
+    payload: RawCoveragePayload,
+    entry: CoverageEntry,
+    sourceIdentityIds: Map<string, number>,
+  ): string {
+    const outputModule = payload.options?.outputModule ?? true;
+    const assetSource = this.findInDict(
+      payload.options?.assetFiles,
+      entry.filePath,
+    );
+    const sourceMap = this.findInDict(
+      payload.options?.sourceMaps,
+      entry.filePath,
+    );
+
+    return [
+      payload.root ?? '',
+      entry.filePath,
+      outputModule ? 'module' : 'script',
+      this.getStringIdentity(assetSource, sourceIdentityIds),
+      this.getStringIdentity(sourceMap, sourceIdentityIds),
+    ].join('\0');
+  }
+
+  private getStringIdentity(
+    value: string | undefined,
+    sourceIdentityIds: Map<string, number>,
+  ): string {
+    if (value === undefined) return 'missing';
+
+    let id = sourceIdentityIds.get(value);
+    if (id === undefined) {
+      id = sourceIdentityIds.size;
+      sourceIdentityIds.set(value, id);
+    }
+
+    return String(id);
+  }
+
+  private async stopCoverage(): Promise<void> {
+    if (!this.session) return;
+
+    try {
+      await this.session.post('Profiler.stopPreciseCoverage');
+      await this.session.post('Profiler.disable');
+    } catch (_err) {
+      // Ignore teardown errors to prevent masking original errors
+    }
+  }
+
+  private mergeIntoCoverageEntries(
+    groups: Map<string, CoverageEntryGroup>,
+    key: string,
+    entry: CoverageEntry,
+    options?: CollectOptions,
+    root?: string,
+  ): void {
+    let group = groups.get(key);
+    if (!group) {
+      group = { entries: [], options, root };
+      groups.set(key, group);
+    } else if (options) {
+      group.options = {
+        assetFiles: { ...group.options?.assetFiles, ...options.assetFiles },
+        sourceMaps: { ...group.options?.sourceMaps, ...options.sourceMaps },
+        outputModule: group.options?.outputModule ?? options.outputModule,
+      };
+    }
+
+    for (const target of group.entries) {
+      if (this.tryMergeCoverageEntry(target, entry)) {
+        return;
+      }
+    }
+
+    group.entries.push(this.cloneCoverageEntry(entry));
+  }
+
+  private tryMergeCoverageEntry(
+    target: CoverageEntry,
+    incoming: CoverageEntry,
+  ): boolean {
+    if (target.functions.length !== incoming.functions.length) {
+      return false;
+    }
+
+    for (
+      let functionIndex = 0;
+      functionIndex < target.functions.length;
+      functionIndex++
+    ) {
+      const targetFunction = target.functions[functionIndex]!;
+      const incomingFunction = incoming.functions[functionIndex]!;
+      if (
+        targetFunction.functionName !== incomingFunction.functionName ||
+        targetFunction.isBlockCoverage !== incomingFunction.isBlockCoverage ||
+        targetFunction.ranges.length !== incomingFunction.ranges.length
+      ) {
+        return false;
+      }
+
+      for (
+        let rangeIndex = 0;
+        rangeIndex < targetFunction.ranges.length;
+        rangeIndex++
+      ) {
+        const targetRange = targetFunction.ranges[rangeIndex]!;
+        const incomingRange = incomingFunction.ranges[rangeIndex]!;
+        if (
+          targetRange.startOffset !== incomingRange.startOffset ||
+          targetRange.endOffset !== incomingRange.endOffset
+        ) {
+          return false;
+        }
+      }
+    }
+
+    for (
+      let functionIndex = 0;
+      functionIndex < target.functions.length;
+      functionIndex++
+    ) {
+      const targetFunction = target.functions[functionIndex]!;
+      const incomingFunction = incoming.functions[functionIndex]!;
+      for (
+        let rangeIndex = 0;
+        rangeIndex < targetFunction.ranges.length;
+        rangeIndex++
+      ) {
+        targetFunction.ranges[rangeIndex]!.count +=
+          incomingFunction.ranges[rangeIndex]!.count;
+      }
+    }
+
+    return true;
+  }
+
+  private cloneCoverageEntry(entry: CoverageEntry): CoverageEntry {
+    return {
+      ...entry,
+      functions: entry.functions.map((fn) => ({
+        ...fn,
+        ranges: fn.ranges.map((range) => ({ ...range })),
+      })),
+    };
   }
 
   createCoverageMap(): CoverageMap {

@@ -68,7 +68,7 @@ describe('slow suite', () => {
 }, 10000);
 ```
 
-`TestOptions` accepts the same fields as on [`test`](/api/runtime-api/test-api/test#testoptions): `timeout`, `retry`, `repeats`, and `meta`. These propagate to descendant suites and tests as **inheritable defaults**:
+`TestOptions` accepts the same fields as on [`test`](/api/runtime-api/test-api/test#testoptions): `timeout`, `retry`, `repeats`, and `meta` (`meta` is added in 0.11.1). These propagate to descendant suites and tests as **inheritable defaults**:
 
 - A test-level option always wins over the suite-level value.
 - A nested `describe` inherits its parent's options, and the nearest enclosing value applies.

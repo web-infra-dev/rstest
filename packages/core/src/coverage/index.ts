@@ -13,6 +13,7 @@ import {
   getCoverageProviderModuleName,
 } from './install';
 export { ensureCoverageProviderInstalled } from './install';
+export { resolveAndMergeRawCoverage } from './resolveRawCoverage';
 
 export const loadCoverageProvider = async (
   options: CoverageOptions,

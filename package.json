@@ -9,6 +9,7 @@
     "check-dependency-version": "pnpx check-dependency-version-consistency --ignore-package @rstest/test-mock-re-exports . && echo",
     "check-spell": "pnpx cspell && heading-case",
     "check-unused": "knip",
+    "check-version-consistency": "node scripts/checkVersionConsistency.mjs",
     "e2e": "cd e2e && pnpm test && pnpm test:commonjs && pnpm test:no-isolate",
     "format": "prettier --write . && heading-case --write",
     "lint": "prettier --check . && pnpm run check-spell && pnpm run lint:type",

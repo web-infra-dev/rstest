@@ -33,7 +33,7 @@ test('should add two numbers correctly', () => {
 
 ### TestOptions
 
-<ApiMeta addedVersion="0.11.0" />
+<ApiMeta addedVersion="0.11.1" />
 
 Pass a `TestOptions` object as the **second argument** (before the test function) to tune the behavior of a single test:
 
@@ -56,7 +56,7 @@ test('runs within 3s', async () => {
 - `timeout?: number` — per-test timeout in milliseconds. Overrides [`test.testTimeout`](/config/test/test-timeout).
 - `retry?: number` — re-runs the test up to this many times if it fails, stopping at the first pass. Overrides [`test.retry`](/config/test/retry).
 - `repeats?: number` — re-runs an already-passing test this many extra times; any failure marks the whole case as failed. Each repeat runs the full `beforeEach`/`afterEach` lifecycle and gets an independent `retry` budget.
-- `meta?: Record<string, TaskMetaValue>` — initial JSON-serializable metadata for the test result. If the test is inside a `describe` with `meta`, it inherits a copy of the suite metadata and test-level keys override inherited keys.
+- `meta?: Record<string, TaskMetaValue>` — added in 0.11.1. Initial JSON-serializable metadata for the test result. If the test is inside a `describe` with `meta`, it inherits a copy of the suite metadata and test-level keys override inherited keys.
 
 ```ts
 test('flaky network call', { retry: 3 }, async () => {
@@ -509,9 +509,13 @@ export interface TestContext {
     id: string;
     /** Test name provided by user */
     name: string;
+    /** Absolute path of the current test file when provided by the runner. Added in 0.11.1. */
+    filepath?: string;
+    /** Absolute path of the current project's root directory when provided by the runner. Added in 0.11.1. */
+    projectRoot?: string;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
-    /** Mutable metadata copied to the current test result */
+    /** Mutable metadata copied to the current test result. Added in 0.11.1. */
     meta: Record<string, TaskMetaValue>;
   };
   /** The `expect` API bound to the current test */

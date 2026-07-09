@@ -12,6 +12,7 @@ describe('test build config', () => {
     { name: 'define' },
     { name: 'alias' },
     { name: 'plugin' },
+    { name: 'modifyRstestConfig' },
     { name: 'tools/rspack' },
     { name: 'decorators' },
   ])(
@@ -34,6 +35,28 @@ describe('test build config', () => {
       await expectExecSuccess();
     },
   );
+
+  it('modifyRstestConfig should apply before listing test files', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list', '--filesOnly'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/modifyRstestConfig'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).toContain('project-a.test.ts');
+    expect(cli.stdout).toContain('project-b.test.ts');
+    expect(cli.stdout).toContain('return-project.test.ts');
+    expect(cli.stdout).not.toContain('ignored.test.ts');
+  });
 
   it('should write output to customized distPath.root', async ({
     onTestFinished,

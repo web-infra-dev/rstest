@@ -702,6 +702,8 @@ export class TestRunner {
     context.task = {
       id: test.testId,
       name: test.name,
+      filepath: toNativePath(test.testPath),
+      projectRoot: toNativePath(this.workerState!.projectRoot),
       get meta() {
         return (test.meta ??= {});
       },

@@ -4,6 +4,7 @@ import type {
   CoverageProvider,
   InlineProjectConfig,
   NormalizedCoverageOptions,
+  RstestExposeAPI,
   ProjectConfig,
   RstestConfig,
 } from './types';
@@ -19,6 +20,7 @@ export type {
   NormalizedCoverageOptions,
   RsbuildPlugin,
   RstestConfig,
+  RstestExposeAPI,
 };
 
 export type RstestConfigAsyncFn = () => Promise<RstestConfig>;
@@ -99,7 +101,9 @@ export type {
   ExpectStatic,
   ExtendConfig,
   ExtendConfigFn,
+  Fixtures,
   ProjectConfig,
+  RealTimers,
   Reporter,
   Rstest,
   RstestCommand,
@@ -107,9 +111,13 @@ export type {
   RstestUtilities,
   TestCaseInfo,
   TestContext,
+  TestAPIs,
+  TestForFn,
   TestFileInfo,
   TestFileResult,
   TestInfo,
+  TestOptions,
   TestResult,
   TestSuiteInfo,
+  Use,
 } from './types';

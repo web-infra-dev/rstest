@@ -284,6 +284,7 @@ export const createPool = async ({
     buildId?: number;
     /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
     onCoverageResult?: (coverage: CoverageMapData) => void;
+    onRawCoverageResult?: (coverage: unknown) => void;
     /** Perfetto trace events forwarded for caller-owned dumping. */
     onTraceEvents?: (events: TraceEvent[]) => void;
     /** Records host-side pool slices in the caller-owned Perfetto trace. */
@@ -479,6 +480,7 @@ export const createPool = async ({
       updateSnapshot,
       buildId,
       onCoverageResult,
+      onRawCoverageResult,
       onTraceEvents,
       traceSpan,
     }) => {
@@ -537,6 +539,10 @@ export const createPool = async ({
           if (result.coverage) {
             onCoverageResult?.(result.coverage);
             delete result.coverage;
+          }
+          if (result.coverageRaw != null) {
+            onRawCoverageResult?.(result.coverageRaw);
+            delete result.coverageRaw;
           }
           if (result.traceEvents) {
             onTraceEvents?.(result.traceEvents);

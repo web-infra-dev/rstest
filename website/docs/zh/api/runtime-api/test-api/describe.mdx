@@ -68,7 +68,7 @@ describe('slow suite', () => {
 }, 10000);
 ```
 
-`TestOptions` 支持的字段与 [`test`](/api/runtime-api/test-api/test#testoptions) 上一致：`timeout`、`retry`、`repeats`、`meta`。这些选项会作为**可继承的默认值**向子套件和测试传播：
+`TestOptions` 支持的字段与 [`test`](/api/runtime-api/test-api/test#testoptions) 上一致：`timeout`、`retry`、`repeats`、`meta`（`meta` 为 0.11.1 新增）。这些选项会作为**可继承的默认值**向子套件和测试传播：
 
 - 测试级别的选项始终优先于套件级别的值。
 - 嵌套的 `describe` 会继承父级选项，最终以最近一层的值为准。

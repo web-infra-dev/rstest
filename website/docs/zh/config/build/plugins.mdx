@@ -3,6 +3,7 @@ description: plugins 选项用于注册 Rsbuild 插件。
 overviewHeaders: []
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 # plugins <RsbuildDocBadge path="/config/plugins" text="plugins" />
@@ -27,3 +28,91 @@ export default defineConfig({
 ## 发现插件
 
 查看 Rsbuild 的 [插件列表](https://rsbuild.rs/zh/plugins/list/#%E5%AE%98%E6%96%B9%E6%8F%92%E4%BB%B6) 来发现可用的插件，这些插件也适用于 Rstest。
+
+## 在 Rsbuild 插件中修改 Rstest 配置 \{#modify-rstest-config}
+
+<ApiMeta addedVersion="0.11.1" />
+
+当 Rsbuild 插件运行在 Rstest 中时，可以通过 Rsbuild Plugin API 中的 [`api.useExposed`](https://rsbuild.rs/zh/plugins/dev/core) 获取 Rstest 暴露的 API，并调用 `modifyRstestConfig` 来调整当前 project 的 Rstest 配置。
+
+该 API 目前仅在 Node Mode project 中暴露。Browser Mode project 不会收到 `rstest` 暴露 API，因此在这些 project 中 `api.useExposed('rstest')` 会返回 `undefined`。
+
+这个 API 适合框架集成或工具链插件使用：当插件已经了解当前 framework、Rsbuild environment 或项目约定时，可以集中补充测试入口、排除规则、setup files、alias、define 或 `testEnvironment` 等 project 配置，避免用户在 Rstest 配置中重复声明同一套信息。
+
+```ts title="rstest-plugin.ts"
+import type { RsbuildPlugin } from '@rsbuild/core';
+import type { RstestExposeAPI } from '@rstest/core';
+
+export const myPlugin = (): RsbuildPlugin => ({
+  name: 'my-plugin',
+  setup(api) {
+    if (api.context.callerName !== 'rstest') {
+      return;
+    }
+
+    const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+
+    rstestApi?.modifyRstestConfig((config) => {
+      config.include = ['**/*.test.ts'];
+    });
+  },
+});
+```
+
+在多 project 模式下，Rstest 会为每个 Rsbuild environment 暴露独立的 API。注册在某个 project 中的插件只会修改该 project 的 Rstest 配置，不会影响其他 project。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+import { myPlugin } from './rstest-plugin';
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'node',
+      plugins: [myPlugin()],
+    },
+    {
+      name: 'browser',
+      plugins: [],
+    },
+  ],
+});
+```
+
+### 类型说明
+
+`RstestExposeAPI` 从 `@rstest/core` 导出，用于描述 Rstest 通过 `api.useExposed('rstest')` 暴露给 Rsbuild 插件的 API。
+
+```ts
+import type { RstestConfig } from '@rstest/core';
+
+export type ModifyRstestConfigCallback = (
+  config: RstestConfig,
+) => RstestConfig | void | Promise<RstestConfig | void>;
+
+export type RstestExposeAPI = {
+  modifyRstestConfig: (callback: ModifyRstestConfigCallback) => void;
+};
+```
+
+`RstestConfig` 与 `defineConfig` 接收的配置类型一致。你可以直接修改回调收到的 `config` 对象，也可以返回一个符合 `RstestConfig` 结构的配置片段。Rstest 会在回调完成后重新合并、规范化并校验这些改动。该回调也可以是异步函数。
+
+请在 Rsbuild 插件的 `setup` 阶段注册 `modifyRstestConfig`。不要在 `api.modifyRsbuildConfig` 等更晚的 Rsbuild config hook 中注册它，因为 Rstest 会在解析 Rsbuild config 时应用已经收集到的回调；在这些 hook 内注册的回调对于当前解析流程来说已经太晚。
+
+### 可修改的配置范围
+
+`modifyRstestConfig` 只用于调整当前 project 的配置。回调修改不支持的字段时，Rstest 会抛出错误并提示应改为在 `rstest.config.*` 中声明。
+
+| 配置范围                                                                            | 是否支持 | 说明                                                                       |
+| ----------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------- |
+| `include`、`exclude`、`includeSource`                                               | 支持     | 影响当前 project 的测试发现；Rstest 会在回调后重新收集测试入口。           |
+| `setupFiles`、`globalSetup`                                                         | 支持     | 影响当前 project 的 setup 文件；Rstest 会在回调后重新解析。                |
+| `testEnvironment`                                                                   | 支持     | 只影响当前 project 的测试环境。                                            |
+| `resolve`、`source`、`performance.buildCache`                                       | 支持     | 作为当前 project 的构建配置重新应用到 Rsbuild。                            |
+| `root`、`output.module`                                                             | 支持     | 作为当前 project 的路径或输出模块配置重新规范化。                          |
+| `name`、`browser.enabled`                                                           | 不支持   | 会改变 project 身份或运行模式，必须在 `rstest.config.*` 中声明。           |
+| `projects`、`plugins`、`extends`                                                    | 不支持   | 会改变 project 拓扑或插件初始化顺序，必须在 Rstest 配置或 adapter 中声明。 |
+| `coverage`、`reporters`、`pool`、`isolate`、`update`、`shard`、`forceRerunTriggers` | 不支持   | 属于全局执行策略，或在 Rsbuild 插件运行前已经参与调度。                    |
+| `output.distPath`                                                                   | 不支持   | 会改变 Rstest/Rsbuild 输出目录拓扑，必须在 Rstest 配置中声明。             |
+
+如果你需要动态添加 Rsbuild 插件，请通过 Rstest 的 `extends` Adapter 方案集成。Adapter 可以在 Rsbuild 插件初始化开始之前准备好 Rstest 配置。

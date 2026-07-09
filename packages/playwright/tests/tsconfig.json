@@ -1,0 +1,7 @@
+{
+  "extends": "@rstest/tsconfig/base",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts"]
+}

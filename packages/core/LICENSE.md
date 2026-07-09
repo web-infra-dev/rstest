@@ -368,7 +368,7 @@ Licensed under MIT license in the repository at git+https://github.com/bombshell
 
 > MIT License
 >
-> Copyright (c) Nate Moore
+> MIT License Copyright (c) 2025-Present [Bombshell contributors](https://bomb.sh/team)
 >
 > Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 >
@@ -382,7 +382,7 @@ Licensed under MIT license in the repository at git+https://github.com/bombshell
 
 > MIT License
 >
-> Copyright (c) Nate Moore
+> MIT License Copyright (c) 2025-Present [Bombshell contributors](https://bomb.sh/team)
 >
 > Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 >

@@ -9,7 +9,7 @@
     "build": "rspress build",
     "build:agent-install": "node scripts/buildAgentInstall.mjs",
     "dev": "rspress dev",
-    "gen:og": "node --experimental-strip-types scripts/og-image/cli.mts",
+    "gen:release-image": "node --experimental-strip-types scripts/release-image/cli.mts",
     "preview": "rspress preview"
   },
   "devDependencies": {

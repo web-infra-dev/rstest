@@ -1,0 +1,333 @@
+---
+description: This guide covers how to use @rstest/playwright to drive Playwright from Rstest tests running in Node.js workers.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+import { PackageManagerTabs } from '@theme';
+
+# Playwright
+
+<ApiMeta addedVersion="0.11.1" />
+
+[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) provides Playwright fixtures and Playwright-style assertions for Rstest tests that run in Node.js workers. Use it for E2E tests against a complete page or app, such as a local dev server, a preview server, or a deployed URL. The test runs in Node.js and uses Playwright to drive the page.
+
+## Rstest browser mode vs playwright
+
+The main difference is the testing scenario: Rstest browser mode web-bundles test modules and runs test code in a browser runtime, while `@rstest/playwright` controls a page that is already prepared by your app or server.
+
+| Scenario                                                        | Recommended                                                          |
+| --------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Test a component with Rstest's web bundling and browser runtime | [Rstest browser mode](/guide/browser-testing) with `@rstest/browser` |
+| Test a complete app or page through `page.goto()`               | `@rstest/playwright`                                                 |
+| Drive an existing dev server, preview server, or deployed URL   | `@rstest/playwright`                                                 |
+| Need in-browser component test utilities                        | [Rstest browser mode](/guide/browser-testing)                        |
+
+Because `@rstest/playwright` controls an external page instead of running the test in Rstest's browser runner, it does not use the Browser UI preview iframe. For visual debugging, use headed mode with `PWDEBUG=1`.
+
+## Rstest playwright vs native playwright
+
+`@rstest/playwright` and native Playwright use different runners and configuration files:
+
+| Item          | `@rstest/playwright`                                  | Native Playwright                                  |
+| ------------- | ----------------------------------------------------- | -------------------------------------------------- |
+| Runner        | Rstest runner                                         | Playwright Test runner                             |
+| Configuration | `rstest.config.ts` and `playwright` fixture overrides | `playwright.config.ts`                             |
+| Test API      | Import `test` and `expect` from `@rstest/playwright`  | Import `test` and `expect` from `@playwright/test` |
+
+Use `@rstest/playwright` when you want Playwright-driven E2E tests to run in the same Rstest workflow as the rest of your tests. Use native Playwright when you want the full Playwright Test runner workflow and its configuration model.
+
+## Install
+
+Install both packages:
+
+- [@rstest/playwright](https://www.npmjs.com/package/@rstest/playwright) adds the Rstest fixtures and assertions.
+- [playwright](https://www.npmjs.com/package/playwright) provides the browser automation runtime.
+
+<PackageManagerTabs command="add @rstest/playwright playwright -D" />
+
+Install the Chromium browser binary used by Playwright:
+
+```bash
+pnpm exec playwright install chromium
+```
+
+## Basic usage
+
+Import `test` and `expect` from `@rstest/playwright` instead of `@rstest/core`:
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('page title', async ({ page }) => {
+  await page.goto('https://example.com');
+
+  await expect(page).toHaveTitle(/Example/);
+  await expect(page.locator('h1')).toHaveText('Example Domain');
+});
+```
+
+Regular lifecycle helpers are also available from `@rstest/playwright`:
+
+```ts
+import { beforeEach, describe, test } from '@rstest/playwright';
+
+beforeEach(() => {
+  // Prepare per-test state.
+});
+
+describe('checkout', () => {
+  test('opens the checkout page', async ({ page }) => {
+    await page.goto('http://localhost:3000/checkout');
+  });
+});
+```
+
+If your test modules do not rely on side effects that need isolation, set `isolate: false` in `rstest.config.ts` to reuse the worker module cache across test files and avoid repeated Playwright startup cost:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  isolate: false,
+  testEnvironment: 'node',
+});
+```
+
+## Fixtures
+
+`@rstest/playwright` provides these fixtures:
+
+| Fixture   | Description                                                                          |
+| --------- | ------------------------------------------------------------------------------------ |
+| `browser` | A Chromium `Browser` shared by tests in the current worker.                          |
+| `context` | A new `BrowserContext` for each test that uses it. It is closed after the test.      |
+| `page`    | A new `Page` for each test that uses it. It is closed after the test.                |
+| `request` | A new `APIRequestContext` for each test that uses it. It is disposed after the test. |
+| `serve`   | Starts a static server from inside the test and cleans it up automatically.          |
+
+The sections below show how each fixture is commonly used. `page` and `serve` link to the existing examples to avoid repeating the same code.
+
+### `browser`
+
+Use `browser` when you need to create a custom browser context yourself:
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('custom browser context', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'en-US' });
+  const page = await context.newPage();
+
+  await page.goto('https://example.com');
+  await expect(page).toHaveTitle(/Example/);
+
+  await context.close();
+});
+```
+
+### `context`
+
+Use `context` when one test needs multiple pages that share the same browser context:
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('multiple pages', async ({ context }) => {
+  const page = await context.newPage();
+  const popup = await context.newPage();
+
+  await page.goto('https://example.com');
+  await popup.goto('https://example.com');
+
+  await expect(page).toHaveTitle(/Example/);
+  await expect(popup).toHaveTitle(/Example/);
+});
+```
+
+### `page`
+
+See [Basic usage](#basic-usage) for the common E2E flow of opening and asserting a page.
+
+### `request`
+
+Use `request` when you only need Playwright's API client and do not need to launch a browser:
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('health check', async ({ request }) => {
+  const response = await request.get('http://localhost:3000/health');
+
+  expect(response.ok()).toBe(true);
+});
+```
+
+### `serve`
+
+See [Local app server](#local-app-server) for serving a built app from local files.
+
+## Assertions
+
+`expect` keeps normal Rstest assertions. When the actual value is a Playwright `Locator` or `Page`, it also provides retrying Playwright-style async assertions.
+
+Locator assertions target Playwright [`Locator`](https://playwright.dev/docs/api/class-locator) values and follow the naming of [Playwright Locator assertions](https://playwright.dev/docs/test-assertions#locator-assertions) where possible. They are aligned with the element assertions already supported by `@rstest/browser` where possible:
+
+- `toBeVisible(options?)`
+- `toBeHidden(options?)`
+- `toBeEnabled(options?)`
+- `toBeDisabled(options?)`
+- `toBeChecked(options?)`
+- `toBeUnchecked(options?)`
+- `toBeAttached(options?)`
+- `toBeDetached(options?)`
+- `toBeEditable(options?)`
+- `toBeFocused(options?)`
+- `toBeEmpty(options?)`
+- `toBeInViewport(options?)`
+- `toContainText(expected, options?)`
+- `toHaveAttribute(name, expected?, options?)`
+- `toHaveClass(expected, options?)`
+- `toHaveCSS(propertyName, expected, options?)`
+- `toHaveCount(expected, options?)`
+- `toHaveId(expected, options?)`
+- `toHaveJSProperty(name, expected, options?)`
+- `toHaveText(expected, options?)`
+- `toHaveValue(expected, options?)`
+
+Page assertions:
+
+- `toHaveTitle(expected, options?)`
+- `toHaveURL(expected, options?)`
+
+String text assertions normalize whitespace. Playwright assertions retry until they pass or the `timeout` option is reached. The default timeout is `5000` milliseconds.
+
+```ts
+await expect(page.locator('.message')).toContainText('Saved', {
+  timeout: 10_000,
+});
+```
+
+`.not` and `expect.soft` are also supported:
+
+```ts
+await expect(page.locator('.error')).not.toBeAttached();
+await expect.soft(page).toHaveTitle(/Dashboard/);
+```
+
+## Configure playwright options
+
+Global `playwright` configuration is not supported yet. Override the `playwright` fixture when a test file needs custom Playwright options:
+
+```ts
+import { expect, test } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+const e2e = test.extend({
+  playwright: {
+    contextOptions: {
+      viewport: { width: 390, height: 844 },
+    },
+  } satisfies PlaywrightOptions,
+});
+
+e2e('mobile page', async ({ page }) => {
+  await page.goto('http://localhost:3000');
+  await expect(page.locator('main')).toBeAttached();
+});
+```
+
+The `playwright` fixture supports these options:
+
+| Option           | Description                                          |
+| ---------------- | ---------------------------------------------------- |
+| `browserName`    | Browser engine to launch. Currently only `chromium`. |
+| `launchOptions`  | Options passed to `browserType.launch()`.            |
+| `contextOptions` | Options passed to `browser.newContext()`.            |
+| `requestOptions` | Options passed to `request.newContext()`.            |
+| `debug`          | Convenience options for local headed debugging.      |
+
+## Local app server
+
+Use the `serve` fixture when a test needs to serve a built app. It starts a static server for the entry file and automatically stops the server after the test.
+
+```ts
+import { expect, test } from '@rstest/playwright';
+
+test('home page', async ({ page, serve }) => {
+  const { url } = await serve('./dist/index.html');
+
+  await page.goto(url);
+  await expect(page.locator('h1')).toHaveText('Home');
+});
+```
+
+When `PWDEBUG=1` is enabled, `serve` keeps the server alive by default so the opened page remains available for inspection. In non-watch runs, this may keep the Rstest process open until you stop it manually. Set `keepAliveOnDebug: false` if you want the server to close even in debug mode.
+
+## Headed debugging
+
+Set `PWDEBUG=1` to launch Chromium in headed mode while debugging locally:
+
+```bash
+PWDEBUG=1 rstest watch
+```
+
+This environment variable keeps your tests unchanged and applies these defaults:
+
+- `headless: false`
+- `slowMo: 100`
+- `devtools: true`
+
+You can also override the debug defaults from the test:
+
+```ts
+import { test } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+const e2e = test.extend({
+  playwright: {
+    debug: {
+      enabled: true,
+      slowMo: 100,
+      devtools: false,
+    },
+  } satisfies PlaywrightOptions,
+});
+
+e2e('debug page', async ({ page }) => {
+  await page.goto('http://localhost:3000');
+});
+```
+
+To stop on a page while debugging, use Playwright's `page.pause()` with a zero test timeout:
+
+```ts
+test('debug page state', { timeout: 0 }, async ({ page, serve }) => {
+  const { url } = await serve('./dist/index.html');
+
+  await page.goto(url);
+  await page.pause();
+});
+```
+
+In debug mode, failed tests automatically call `page.pause()` before closing the page and context. Set `pauseOnFailure: false` in `debug` options, or `RSTEST_PLAYWRIGHT_PAUSE=false`, to disable this behavior.
+
+For non-interactive debugging in CI or local runs, capture a screenshot when a test fails:
+
+```ts
+import { test } from '@rstest/playwright';
+
+test('home page', async ({ onTestFailed, page, serve }) => {
+  onTestFailed(async ({ task }) => {
+    await page.screenshot({
+      fullPage: true,
+      path: `${task.id}-failed.png`,
+    });
+  });
+
+  const { url } = await serve('./dist/index.html');
+
+  await page.goto(url);
+});
+```
+
+This keeps the test runner non-blocking while preserving the failed page state as an artifact. See `examples/playwright` for a complete Rsbuild + Playwright example.

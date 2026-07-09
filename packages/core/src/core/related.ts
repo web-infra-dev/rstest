@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { isAbsolute, normalize, relative, resolve } from 'pathe';
-import type { ProjectContext, RstestContext } from '../types';
+import type { RstestContext } from '../types';
 import { getTestEntries } from '../utils';
-import { getSetupFiles } from '../utils/getSetupFiles';
+import { createSetupFileState } from './setupFileState';
 import { prepareRsbuild } from './rsbuild';
 
 type StatsModuleReason = NonNullable<Rspack.StatsModule['reasons']>[number];
@@ -224,18 +224,6 @@ const collectProjectEntries = async (
   return entries;
 };
 
-const buildSetupFiles = (
-  projects: ProjectContext[],
-  key: 'setupFiles' | 'globalSetup',
-): Record<string, Record<string, string>> => {
-  return Object.fromEntries(
-    projects.map((project) => [
-      project.environmentName,
-      getSetupFiles(project.normalizedConfig[key], project.rootPath),
-    ]),
-  );
-};
-
 const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
   name: 'rstest:related-build-safeguards',
   setup(api) {
@@ -323,38 +311,57 @@ export async function resolveRelatedTestFiles(
     );
   }
 
-  const projectEntries = await collectProjectEntries(context);
-  const matchedTestFiles = new Set(
-    collectDirectlyMatchedFiles({
-      files: Array.from(projectEntries.values()).flatMap((entries) =>
-        Object.values(entries),
-      ),
-      sourceFilters,
-      rootPath: context.rootPath,
-    }),
-  );
-
+  let projectEntries = new Map<string, Record<string, string>>();
   const globTestSourceEntries = async (environmentName: string) =>
     projectEntries.get(environmentName) ?? {};
 
-  const setupFiles = buildSetupFiles(context.projects, 'setupFiles');
-  const globalSetupFiles = buildSetupFiles(context.projects, 'globalSetup');
+  const setupFileState = createSetupFileState();
+  const nodeProjects = context.projects.filter(
+    (project) => !project.normalizedConfig.browser.enabled,
+  );
 
-  const rsbuildInstance = await prepareRsbuild(
+  const rsbuildInstance = await prepareRsbuild({
     context,
     globTestSourceEntries,
-    setupFiles,
-    globalSetupFiles,
-    context.projects,
-    [createRelatedBuildSafeguardsPlugin()],
-  );
+    setupFileState,
+    targetProjects: context.projects,
+    exposeRstestAPIProjects: nodeProjects,
+    extraPlugins: [createRelatedBuildSafeguardsPlugin()],
+    getSetupFileProjects: () => ({
+      setupProjects: context.projects,
+      globalSetupProjects: context.projects,
+    }),
+    onModifyRstestConfigApplied: async () => {
+      projectEntries = await collectProjectEntries(context);
+    },
+  });
 
   const devServer = await rsbuildInstance.createDevServer({
     getPortSilently: true,
   });
 
+  const matchedTestFiles = new Set<string>();
+
   try {
+    projectEntries = projectEntries.size
+      ? projectEntries
+      : await collectProjectEntries(context);
+
+    for (const file of collectDirectlyMatchedFiles({
+      files: Array.from(projectEntries.values()).flatMap((entries) =>
+        Object.values(entries),
+      ),
+      sourceFilters,
+      rootPath: context.rootPath,
+    })) {
+      matchedTestFiles.add(file);
+    }
+
     for (const project of context.projects) {
+      if (!projectEntries.has(project.environmentName)) {
+        continue;
+      }
+
       const environment = devServer.environments[project.environmentName]!;
       const stats = await environment.getStats();
       const { modules } = stats.toJson({
@@ -372,10 +379,10 @@ export async function resolveRelatedTestFiles(
         projectEntries.get(project.environmentName) || {},
       );
       const setupPaths = Object.values(
-        setupFiles[project.environmentName] || {},
+        setupFileState.setupFiles[project.environmentName] || {},
       );
       const globalSetupPaths = Object.values(
-        globalSetupFiles[project.environmentName] || {},
+        setupFileState.globalSetupFiles[project.environmentName] || {},
       );
       const matchedSources = collectDirectlyMatchedFiles({
         files: Array.from(moduleGraph.allSources),

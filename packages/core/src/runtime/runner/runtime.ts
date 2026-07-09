@@ -61,6 +61,8 @@ const SHARED_RUN_MODIFIERS = [
   { name: 'sequential', overrides: { sequential: true } },
 ] as const;
 
+const TEST_EACH_CONTEXT_SYMBOL = Symbol.for('rstest.test.each.context');
+
 export class RunnerRuntime {
   /** all test cases */
   private readonly tests: Test[] = [];
@@ -530,10 +532,14 @@ export class RunnerRuntime {
         const param = cases[i]!;
         const params = castArray(param) as any[];
 
+        const shouldPassContext =
+          typeof fn === 'function' && TEST_EACH_CONTEXT_SYMBOL in fn;
+
         this.it({
           name: formatName(name, param, i),
           originalFn: fn,
-          fn: () => fn?.(...params),
+          fn: (context) =>
+            shouldPassContext ? fn?.(...params, context) : fn?.(...params),
           timeout,
           retry,
           repeats,

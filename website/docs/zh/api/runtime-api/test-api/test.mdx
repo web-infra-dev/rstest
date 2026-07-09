@@ -33,7 +33,7 @@ test('should add two numbers correctly', () => {
 
 ### TestOptions
 
-<ApiMeta addedVersion="0.11.0" />
+<ApiMeta addedVersion="0.11.1" />
 
 将 `TestOptions` 对象作为**第二个参数**（位于测试函数之前）传入，用于细化单个测试的运行行为：
 
@@ -56,7 +56,7 @@ test('runs within 3s', async () => {
 - `timeout?: number` — 单测超时（毫秒），覆盖 [`test.testTimeout`](/config/test/test-timeout)。
 - `retry?: number` — 测试失败时的重跑次数，首次通过即停。覆盖 [`test.retry`](/config/test/retry)。
 - `repeats?: number` — 在通过的前提下额外重跑指定次数，任一次失败则整体判定为失败。每次重跑会完整执行 `beforeEach` / `afterEach`，并各自享有独立的 `retry` 配额。
-- `meta?: Record<string, TaskMetaValue>` — 测试结果的初始可 JSON 序列化元数据。如果测试位于带有 `meta` 的 `describe` 中，会继承一份套件元数据副本，测试级别的同名字段会覆盖继承值。
+- `meta?: Record<string, TaskMetaValue>` — 0.11.1 新增。测试结果的初始可 JSON 序列化元数据。如果测试位于带有 `meta` 的 `describe` 中，会继承一份套件元数据副本，测试级别的同名字段会覆盖继承值。
 
 ```ts
 test('flaky network call', { retry: 3 }, async () => {
@@ -498,9 +498,13 @@ export interface TestContext {
     id: string;
     /** Test name provided by user */
     name: string;
+    /** Absolute path of the current test file when provided by the runner. Added in 0.11.1. */
+    filepath?: string;
+    /** Absolute path of the current project's root directory when provided by the runner. Added in 0.11.1. */
+    projectRoot?: string;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
-    /** Mutable metadata copied to the current test result */
+    /** Mutable metadata copied to the current test result. Added in 0.11.1. */
     meta: Record<string, TaskMetaValue>;
   };
   /** The `expect` API bound to the current test */
