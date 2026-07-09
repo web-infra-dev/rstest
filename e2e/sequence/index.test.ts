@@ -1,4 +1,4 @@
-import { rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -29,10 +29,11 @@ const seqOrder = (stdout: string): string[] => {
 const runOnce = async (
   onTestFinished: typeof OnTestFinished,
   env?: Record<string, string>,
+  extraArgs: string[] = [],
 ) =>
   runRstestCli({
     command: 'rstest',
-    args: ['run', '--pool.maxWorkers', '1'],
+    args: ['run', '--pool.maxWorkers', '1', ...extraArgs],
     onTestFinished,
     options: {
       nodeOptions: {
@@ -71,5 +72,27 @@ describe('perf-first test sequencing', () => {
     const recovered = await runOnce(onTestFinished);
     await recovered.expectExecSuccess();
     expect(seqOrder(recovered.cli.stdout)[0]).toBe('alpha');
+  }, 90_000);
+
+  it('does not update the cache for a testNamePattern-filtered run', async ({
+    onTestFinished,
+  }) => {
+    rmSync(cacheDir, { recursive: true, force: true });
+    // Two full runs so every file has a real cached duration/fail state.
+    await (await runOnce(onTestFinished)).expectExecSuccess();
+    await (await runOnce(onTestFinished)).expectExecSuccess();
+    const cacheFile = join(cacheDir, 'results.json');
+    const before = readFileSync(cacheFile, 'utf-8');
+
+    // `-t gamma` runs only gamma's test; alpha/beta are fully skipped. That
+    // partial run must NOT overwrite the full-run cache — otherwise a quick
+    // filtered run would make slow files look fast and drop failed-first bits.
+    const filtered = await runOnce(onTestFinished, undefined, [
+      '--testNamePattern',
+      'gamma',
+    ]);
+    await filtered.expectExecSuccess();
+
+    expect(readFileSync(cacheFile, 'utf-8')).toBe(before);
   }, 90_000);
 });

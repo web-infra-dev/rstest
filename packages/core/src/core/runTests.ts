@@ -858,11 +858,21 @@ export async function runTests(context: Rstest): Promise<void> {
       // Persist node results for next-run ordering. Uses `returns` (node-only;
       // browser results were merged into `results` above and take a separate
       // path). Best-effort — `writeResultsCache` swallows its own IO errors.
-      await writeResultsCache(
-        rootPath,
-        returns.flatMap((r) => r.results),
-        currentDeletedEntries,
-      );
+      //
+      // Skip the write entirely while a `testNamePattern` filter is active: such
+      // a run only executes the matching subset of each file, so its per-file
+      // duration and pass/fail state don't describe the full file. Persisting
+      // them would poison the perf-first cache — a quick `-t` run could make a
+      // genuinely slow file look fast, or clear a failing file's failed-first
+      // bit when the matched test passes (or the file is reported skipped). The
+      // last full-run record stays authoritative instead.
+      if (!context.normalizedConfig.testNamePattern) {
+        await writeResultsCache(
+          rootPath,
+          returns.flatMap((r) => r.results),
+          currentDeletedEntries,
+        );
+      }
 
       if (noTestsDiscovered) {
         reportNoTestFiles({ context, mode });
