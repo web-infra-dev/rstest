@@ -127,8 +127,9 @@ test('can be imported outside a rstest worker', async () => {
   }
 });
 
-test.fails('does not force a local expect for core expect users', () => {
+test('does not force a local expect for core expect users', async () => {
   coreExpect.assertions(1);
+  await expect(createPage('core expect')).toHaveTitle('core expect');
 });
 
 test('exposes playwright options fixture overrides', async ({ playwright }) => {
