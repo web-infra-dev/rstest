@@ -3,6 +3,8 @@ title: Hooks
 description: Hooks allow you to run setup and teardown logic before or after your tests or test suites.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Hooks
 
 Hooks allow you to run setup and teardown logic before or after your tests or test suites.
@@ -19,6 +21,7 @@ import { beforeAll } from '@rstest/core';
 beforeAll(async (ctx) => {
   // Setup logic before all tests
   // ctx.filepath gives the current test file path
+  ctx.meta.startedAt = Date.now();
 });
 ```
 
@@ -48,8 +51,13 @@ import { afterAll } from '@rstest/core';
 
 afterAll(async (ctx) => {
   // Cleanup logic after all tests
+  ctx.meta.finished = true;
 });
 ```
+
+<ApiMeta addedVersion="0.11.1" />
+
+`ctx.meta` is the mutable metadata object for the current suite. If the suite was declared with `describe(name, { meta }, fn)`, `ctx.meta` starts with that metadata after suite inheritance has been applied. File-level hooks write metadata to `TestFileResult.meta`; hooks inside a `describe` block write metadata to that suite result passed to custom reporters.
 
 ## beforeEach
 

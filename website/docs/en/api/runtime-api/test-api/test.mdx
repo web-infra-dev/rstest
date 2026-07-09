@@ -56,6 +56,21 @@ test('runs within 3s', async () => {
 - `timeout?: number` — per-test timeout in milliseconds. Overrides [`test.testTimeout`](/config/test/test-timeout).
 - `retry?: number` — re-runs the test up to this many times if it fails, stopping at the first pass. Overrides [`test.retry`](/config/test/retry).
 - `repeats?: number` — re-runs an already-passing test this many extra times; any failure marks the whole case as failed. Each repeat runs the full `beforeEach`/`afterEach` lifecycle and gets an independent `retry` budget.
+- `meta?: TaskMeta` — added in 0.11.1. Initial JSON-serializable metadata for the test result. If the test is inside a `describe` with `meta`, it inherits a copy of the suite metadata and test-level keys override inherited keys.
+
+`TaskMeta` and `TaskMetaValue` are exported from `@rstest/core` and allow JSON-serializable values:
+
+```ts
+type TaskMeta = Record<string, TaskMetaValue>;
+
+type TaskMetaValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TaskMetaValue[]
+  | { [key: string]: TaskMetaValue };
+```
 
 ```ts
 test('flaky network call', { retry: 3 }, async () => {
@@ -66,7 +81,13 @@ test('flaky network call', { retry: 3 }, async () => {
 test('stays green across runs', { repeats: 9 }, async () => {
   /* ... */
 });
+
+test('records metadata', { meta: { owner: 'team-a' } }, (context) => {
+  context.task.meta.startedBy = 'runtime';
+});
 ```
+
+In this example, the test result's metadata starts as `{ owner: 'team-a' }`. During execution, the test mutates the same object through `context.task.meta`, so reporters and the programmatic API receive `{ owner: 'team-a', startedBy: 'runtime' }` on `TestResult.meta`.
 
 `test.each` and `test.for` accept the same options as their second argument and apply it to every generated case.
 
@@ -508,6 +529,8 @@ export interface TestContext {
     projectRoot?: string;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
+    /** Mutable metadata copied to the current test result. Added in 0.11.1. */
+    meta: TaskMeta;
   };
   /** The `expect` API bound to the current test */
   expect: Expect;
@@ -518,6 +541,16 @@ export interface TestContext {
   /** The `onTestFailed` hook bound to the current test */
   onTestFailed: OnTestFailed;
 }
+```
+
+Use `context.task.meta` to attach JSON-serializable metadata to the current test result. You can mutate the metadata object or replace it with a new metadata object. Custom reporters and the programmatic API can read this metadata from `TestResult.meta`:
+
+```ts
+import { test } from '@rstest/core';
+
+test('tracks runtime data', (context) => {
+  context.task.meta.coveredBranches = ['a', 'b'];
+});
 ```
 
 Use `context.skip()` to skip a test while it is running. Code after

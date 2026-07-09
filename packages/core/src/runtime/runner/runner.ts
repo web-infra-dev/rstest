@@ -20,7 +20,10 @@ import type {
   TestResultStatus,
   WorkerState,
 } from '../../types';
-import { SYNTHETIC_STACK_ERROR_MESSAGE } from '../../utils/constants';
+import {
+  ROOT_SUITE_NAME,
+  SYNTHETIC_STACK_ERROR_MESSAGE,
+} from '../../utils/constants';
 import {
   getFileTaskId,
   getTaskNameWithPrefix,
@@ -30,6 +33,7 @@ import { createExpect } from '../api/expect';
 import { formatTestError, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
 import { handleFixtures } from './fixtures';
+import { cloneTaskMeta } from './metadata';
 import {
   getTestStatus,
   limitConcurrency,
@@ -88,6 +92,7 @@ export class TestRunner {
           name: test.name,
           testPath,
           project,
+          meta: test.meta,
         };
         return result;
       }
@@ -99,6 +104,7 @@ export class TestRunner {
           name: test.name,
           testPath,
           project,
+          meta: test.meta,
         };
         return result;
       }
@@ -126,6 +132,7 @@ export class TestRunner {
         name: test.name,
         testPath,
         project,
+        meta: test.meta,
       });
 
       try {
@@ -147,6 +154,7 @@ export class TestRunner {
             errors: await formatTestError(error, test),
             testPath,
             project,
+            meta: test.meta,
           };
         }
       }
@@ -170,6 +178,7 @@ export class TestRunner {
               errors: await formatTestError(error, test),
               testPath,
               project,
+              meta: test.meta,
             };
           }
         }
@@ -188,6 +197,7 @@ export class TestRunner {
               name: test.name,
               testPath,
               project,
+              meta: test.meta,
               errors: [
                 {
                   message: 'Expect test to fail',
@@ -206,6 +216,7 @@ export class TestRunner {
                 parentNames: test.parentNames,
                 name: test.name,
                 testPath,
+                meta: test.meta,
               };
             }
           }
@@ -236,6 +247,7 @@ export class TestRunner {
               name: test.name,
               status: 'pass' as const,
               testPath,
+              meta: test.meta,
             };
           } catch (error) {
             if (error instanceof TestSkipError) {
@@ -250,6 +262,7 @@ export class TestRunner {
                 name: test.name,
                 errors: await formatTestError(error, test),
                 testPath,
+                meta: test.meta,
               };
             }
           }
@@ -289,6 +302,8 @@ export class TestRunner {
         // should not be updated for snapshots that have not been run when the test run fails
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
       }
+
+      result.meta = test.meta;
 
       test.onFinished.length = onFinishedSnapshot;
       test.onFailed.length = onFailedSnapshot;
@@ -354,6 +369,7 @@ export class TestRunner {
         project,
         duration: 0,
         errors: [],
+        meta: test.meta,
       };
 
       if (bail && (await hooks.getCountOfFailedTests()) >= bail) {
@@ -382,6 +398,7 @@ export class TestRunner {
               type: 'suite',
               location: test.location,
               runMode: test.runMode,
+              meta: test.meta,
             });
 
             if (test.tests.length === 0) {
@@ -405,6 +422,18 @@ export class TestRunner {
 
             const cleanups: ((ctx: SuiteContext) => void)[] = [];
             let hasBeforeAllError = false;
+            const suiteContext: SuiteContext = {
+              // `ctx.filepath` is user-facing; expose the OS-native path
+              // so it matches `__filename`/`import.meta.filename` (#1465).
+              filepath: toNativePath(testPath),
+              get meta() {
+                return (test.meta ??= {});
+              },
+              set meta(value) {
+                test.meta = cloneTaskMeta(value);
+                result.meta = test.meta;
+              },
+            };
 
             if (
               ['run', 'only'].includes(test.runMode) &&
@@ -412,11 +441,7 @@ export class TestRunner {
             ) {
               try {
                 for (const fn of test.beforeAllListeners) {
-                  const cleanupFn = await fn({
-                    // `ctx.filepath` is user-facing; expose the OS-native path
-                    // so it matches `__filename`/`import.meta.filename` (#1465).
-                    filepath: toNativePath(testPath),
-                  });
+                  const cleanupFn = await fn(suiteContext);
                   if (cleanupFn) cleanups.push(cleanupFn);
                 }
               } catch (error) {
@@ -445,11 +470,7 @@ export class TestRunner {
             if (['run', 'only'].includes(test.runMode) && afterAllFns.length) {
               try {
                 for (const fn of afterAllFns) {
-                  await fn({
-                    // `ctx.filepath` is user-facing; expose the OS-native path
-                    // so it matches `__filename`/`import.meta.filename` (#1465).
-                    filepath: toNativePath(testPath),
-                  });
+                  await fn(suiteContext);
                 }
               } catch (error) {
                 result.errors?.push(...(await formatTestError(error)));
@@ -502,6 +523,7 @@ export class TestRunner {
               type: 'case',
               location: test.location,
               runMode: test.runMode,
+              meta: test.meta,
             });
 
             for (let repeat = 0; repeat <= repeats; repeat++) {
@@ -598,6 +620,10 @@ export class TestRunner {
       afterEachListeners: [],
     });
 
+    const fileMeta = tests.find(
+      (test) => test.type === 'suite' && test.name === ROOT_SUITE_NAME,
+    )?.meta;
+
     // saves files and returns SnapshotResult
     const snapshotResult = await snapshotClient.finish(testPath);
 
@@ -621,6 +647,7 @@ export class TestRunner {
         snapshotResult,
         errors,
         duration: RealDate.now() - start,
+        meta: fileMeta,
       };
     } finally {
       this.taskContext.setFallback(undefined);
@@ -683,6 +710,12 @@ export class TestRunner {
       name: test.name,
       filepath: toNativePath(test.testPath),
       projectRoot: toNativePath(this.workerState!.projectRoot),
+      get meta() {
+        return (test.meta ??= {});
+      },
+      set meta(value) {
+        test.meta = cloneTaskMeta(value);
+      },
     };
 
     Object.defineProperty(context, 'expect', {

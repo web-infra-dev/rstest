@@ -6,6 +6,7 @@ import type {
   AfterEachListener,
   BeforeAllListener,
   BeforeEachListener,
+  TaskMeta,
   TestResult,
 } from './testSuite';
 import type { MaybePromise } from './utils';
@@ -25,6 +26,8 @@ export interface TestContext {
     projectRoot?: string;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
+    /** Mutable metadata copied to the current test result. */
+    meta: TaskMeta;
   };
   expect: RstestExpect;
   /** Skip the current test during execution. */
@@ -65,6 +68,11 @@ export interface TestOptions {
    * @default 0
    */
   repeats?: number;
+  /**
+   * Initial metadata for this test or suite. Suite metadata is inherited by
+   * descendant suites and tests; child metadata overrides inherited keys.
+   */
+  meta?: TaskMeta;
 }
 
 /**

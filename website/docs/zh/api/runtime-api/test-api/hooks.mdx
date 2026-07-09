@@ -3,6 +3,8 @@ title: Hooks
 description: Hooks 允许你在测试或测试套件执行之前或之后运行初始化和清理逻辑。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Hooks
 
 Hooks 允许你在测试或测试套件执行之前或之后运行初始化和清理逻辑。
@@ -19,6 +21,7 @@ import { beforeAll } from '@rstest/core';
 beforeAll(async (ctx) => {
   // 在所有测试前的初始化逻辑
   // ctx.filepath 表示当前测试文件路径
+  ctx.meta.startedAt = Date.now();
 });
 ```
 
@@ -48,8 +51,13 @@ import { afterAll } from '@rstest/core';
 
 afterAll(async (ctx) => {
   // 在所有测试后的清理逻辑
+  ctx.meta.finished = true;
 });
 ```
+
+<ApiMeta addedVersion="0.11.1" />
+
+`ctx.meta` 是当前 suite 的可变元数据对象。如果 suite 通过 `describe(name, { meta }, fn)` 声明，`ctx.meta` 会以应用完套件继承后的元数据作为初始值。文件级 hooks 写入的元数据会出现在 `TestFileResult.meta`；`describe` 内 hooks 写入的元数据会出现在传给自定义 Reporter 的对应 suite result 上。
 
 ## beforeEach
 
