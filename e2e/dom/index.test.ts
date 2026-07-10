@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { describe, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 import { runCli } from './utils';
@@ -42,7 +43,7 @@ describe('jsdom', () => {
       ],
       options: {
         nodeOptions: {
-          cwd: new URL('./fixtures', import.meta.url).pathname,
+          cwd: fileURLToPath(new URL('./fixtures', import.meta.url)),
         },
       },
     });
