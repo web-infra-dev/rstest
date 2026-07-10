@@ -43,6 +43,12 @@ export const applyOnlyFailuresSelection = <E extends { testPath: string }>(
 
   let candidateCount = 0;
   let selectedCount = 0;
+  // Failures come only from cache-covered projects. An uncovered project's
+  // fallback entries are "unknown", not "failed", so they must not count toward
+  // the "did anything fail?" decision below — otherwise a clean multi-project
+  // run that merely gained a new/uncovered project would skip the run-everything
+  // path and silently deselect the clean covered projects.
+  let failedCount = 0;
   const selections = projectPlans.map((plan) => {
     candidateCount += plan.finalEntries.length;
     const { entries: kept, covered } = filterFailedEntries(
@@ -59,15 +65,17 @@ export const applyOnlyFailuresSelection = <E extends { testPath: string }>(
           `onlyFailures: project(${plan.p.name}) has no results in the sequence cache; running all its test files.`,
         ),
       );
+    } else if (covered) {
+      failedCount += kept.length;
     }
     selectedCount += kept.length;
     return kept;
   });
 
-  if (selectedCount === 0) {
-    // Everything passed last run (all covered projects clean, no uncovered
-    // project had files): keep the full, unfiltered set — pytest's default, not
-    // Jest's "run nothing".
+  if (failedCount === 0) {
+    // Nothing failed on the previous run (every covered project is clean; any
+    // uncovered project has no failure history): keep the full, unfiltered set —
+    // pytest's default, not Jest's "run nothing".
     logger.log(color.gray(NO_FAILURES_NOTICE));
     return;
   }

@@ -694,9 +694,15 @@ export async function runTests(context: Rstest): Promise<void> {
 
         const execute = async (selectedEntries: EntryInfo[]) => {
           // Global setup runs once per project, only if there is at least one
-          // running test.
+          // running test. Gate on the selected (possibly `--onlyFailures`-
+          // narrowed) set, not the full candidate set: a project deselected to
+          // zero files this run must not run its setup/teardown side effects.
           if (
-            claimGlobalSetupOnce(p, entries.length, globalSetupEntries.length)
+            claimGlobalSetupOnce(
+              p,
+              selectedEntries.length,
+              globalSetupEntries.length,
+            )
           ) {
             const files = globalSetupEntries.flatMap((e) => e.files!);
             const globalSetupTraceArgs = {

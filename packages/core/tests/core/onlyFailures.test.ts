@@ -93,6 +93,26 @@ describe('applyOnlyFailuresSelection', () => {
     expect(paths(plans[1]!)).toEqual(['/root/x.test.ts', '/root/y.test.ts']);
   });
 
+  it('runs everything when covered projects are clean and only an uncovered project has files', () => {
+    const plans = [
+      plan('node', ['/root/a.test.ts', '/root/b.test.ts']),
+      plan('browser', ['/root/x.test.ts']),
+    ];
+    applyOnlyFailuresSelection(plans, {
+      resultsCache: CACHE,
+      // The node project is recorded and fully clean; the browser project is
+      // uncovered. Nothing failed, so the run-everything fallback must win —
+      // the clean node project must not be deselected.
+      sequenceHints: hints([
+        ['node', '/root/a.test.ts', { failed: false, at: 0 }],
+        ['node', '/root/b.test.ts', { failed: false, at: 0 }],
+      ]),
+      rootPath,
+    });
+    expect(paths(plans[0]!)).toEqual(['/root/a.test.ts', '/root/b.test.ts']);
+    expect(paths(plans[1]!)).toEqual(['/root/x.test.ts']);
+  });
+
   it('drops never-run (uncached) files while keeping the failed ones', () => {
     const plans = [plan('proj', ['/root/failed.test.ts', '/root/new.test.ts'])];
     applyOnlyFailuresSelection(plans, {
