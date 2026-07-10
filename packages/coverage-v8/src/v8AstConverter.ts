@@ -77,6 +77,7 @@ type FileTemplate = Omit<FileCoverageData, 's' | 'f' | 'b'> & {
   statementCount: number;
   functionCount: number;
   branchLengths: Record<string, number>;
+  branchCount: number;
   seen: Record<string, number>;
   fnNames: Map<string, number>;
 };
@@ -524,6 +525,7 @@ class CoverageBuilder {
         statementCount: 0,
         functionCount: 0,
         branchLengths: {},
+        branchCount: 0,
         seen: {},
         fnNames: new Map(),
       };
@@ -668,7 +670,7 @@ class CoverageBuilder {
     let index = fileCoverage.seen[key];
 
     if (index == null) {
-      index = Object.keys(fileCoverage.branchMap).length;
+      index = fileCoverage.branchCount++;
       fileCoverage.seen[key] = index;
       fileCoverage.branchMap[index] = {
         loc: pickLocation(loc),

@@ -464,6 +464,35 @@ describe('coverage-v8 provider', () => {
     ]);
   });
 
+  it('allocates branch indexes for large files without depending on branch map scans', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-many-branches.js');
+    const code = Array.from(
+      { length: 1500 },
+      (_, index) => `if (flag${index}) { foo(); } else { bar(); }`,
+    ).join('\n');
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:many-branches`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(Object.keys(coverage[file]?.branchMap ?? {})).toHaveLength(1500);
+    expect(Object.keys(coverage[file]?.b ?? {})).toHaveLength(1500);
+    expect(coverage[file]?.b[1499]).toEqual([1, 1]);
+  });
+
   it('honors ignore-next comments before ternary separators', async () => {
     const file = join(tmpdir(), 'rstest-coverage-v8-ignore-ternary-next.js');
     const code = "const os = flag ? 'OSX' /* v8 ignore next */ : 'Windows';";
