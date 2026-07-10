@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { normalize } from 'pathe';
 import { groupProjectEntriesByEnvironment } from '../../src/core/environmentGroups';
 import { createRunProjectPlanState } from '../../src/core/projectPlan';
 import type { ProjectContext, RstestContext } from '../../src/types';
@@ -443,13 +444,13 @@ const jsdom = '// @rstest-environment jsdom';
       const refreshed = await planState.resolveRunnableProjects();
 
       expect(refreshed.entriesCache.get('default')?.entries).toEqual({
-        'a~test~ts': nodeFile,
-        'c~test~ts': newNodeFile,
+        'a~test~ts': normalize(nodeFile),
+        'c~test~ts': normalize(newNodeFile),
       });
       expect(
         refreshed.entriesCache.get('default-environment-1')?.entries,
       ).toEqual({
-        'b~test~ts': jsdomFile,
+        'b~test~ts': normalize(jsdomFile),
       });
     } finally {
       rmSync(root, { recursive: true, force: true });
