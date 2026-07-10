@@ -12,6 +12,12 @@
       "sourceType": "github",
       "skillPath": "skills/pr-creator/SKILL.md",
       "computedHash": "a632c60f135594b5ec098ce6196c85395e448ade27882292bf0b68f9192e8278"
+    },
+    "tdd": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/tdd/SKILL.md",
+      "computedHash": "c9326b88419cfba1d54dd713b7ddb23020e6a93f4b0d13aea58cebba58cda2ee"
     }
   }
 }

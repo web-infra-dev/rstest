@@ -121,7 +121,7 @@ Available workflow skills in `.agents/skills/`:
 | api-doc-sync               | Verify/fix that hand-written API doc signatures stay faithful to exported types   |
 | triage                     | Move issues and external PRs through triage states and write agent briefs         |
 | implement                  | Implement a piece of work based on a spec, agent brief, or set of tickets         |
-| setup-matt-pocock-skills   | Re-scaffold the triage/issue-tracker configuration in `docs/agents/`              |
+| tdd                        | Test-driven development at pre-agreed seams (red → green loop)                    |
 
 ## Agent skills
 
