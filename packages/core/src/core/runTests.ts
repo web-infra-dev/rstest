@@ -273,6 +273,10 @@ export async function runTests(context: Rstest): Promise<void> {
       logger.warn(
         'onlyFailures is ignored when explicit file filters are provided.',
       );
+    } else if (context.normalizedConfig.testNamePattern) {
+      logger.warn(
+        'onlyFailures is ignored when a test name pattern is provided.',
+      );
     }
   }
 
@@ -805,6 +809,12 @@ export async function runTests(context: Rstest): Promise<void> {
     // failure selection must not narrow that back down. `mode === 'on-demand'`
     // only occurs under watch and stays guarded defensively.
     //
+    // A `testNamePattern` (`-t`) run must search every file for matching tests,
+    // so it is skipped too: narrowing to the previously-failed files would
+    // silently drop matching tests that live in files which passed last run.
+    // This mirrors the cache-write guard below, which also treats a
+    // `testNamePattern` run as partial.
+    //
     // An explicitly user-scoped run must never be narrowed further by failure
     // history. Two forms of explicit scoping exist: positional CLI filters live
     // on `context.fileFilters` (they drive the build-stats entry set), while the
@@ -820,6 +830,7 @@ export async function runTests(context: Rstest): Promise<void> {
       context.normalizedConfig.onlyFailures &&
       !isWatchMode &&
       !context.relatedMode &&
+      !context.normalizedConfig.testNamePattern &&
       mode !== 'on-demand' &&
       !isExplicitlyScoped
     ) {
