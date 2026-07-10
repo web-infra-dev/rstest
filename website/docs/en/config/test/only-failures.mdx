@@ -85,7 +85,7 @@ Partial runs do not overwrite the records, so `onlyFailures` always works from t
 
 ## Combining with other selection
 
-`onlyFailures` applies only to a plain, full run. Whenever the run is narrowed some other way, that selection wins and `onlyFailures` is ignored with a warning — a warning rather than an error, so `onlyFailures` set in a config file keeps working in these scenarios:
+`onlyFailures` only takes effect on full runs. When the run scope is specified in any of the following ways, that scope takes precedence: `onlyFailures` is ignored and a warning is printed. Since it is a warning rather than an error, keeping `onlyFailures` enabled in a config file does not affect these scenarios:
 
 - **File filters** — `npx rstest some.test.ts -f` runs exactly the files you named, whether they failed last time or not.
 - **`--changed` / `--related`** — the change-based selection already defines the scope. Run a plain `npx rstest -f` afterwards if you only want the failures from that run.
