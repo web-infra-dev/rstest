@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import vscode from 'vscode';
-import { toLabelTree, waitFor } from './helpers';
+import { getTestItemByLabels, toLabelTree, waitFor } from './helpers';
 
 suite('Workspace discover suite', () => {
   test('Extension should discover workspaces and projects', async () => {
@@ -267,5 +267,38 @@ suite('Workspace discover suite', () => {
         },
       ]);
     });
+  });
+
+  test('discovers test cases when project root has a trailing separator', async () => {
+    const extension = vscode.extensions.getExtension('rstack.rstest');
+    if (extension && !extension.isActive) {
+      await extension.activate();
+    }
+
+    const testController: vscode.TestController =
+      extension?.exports.testController;
+    const config = vscode.workspace.getConfiguration('rstest');
+    const configFileGlobPattern = config.get<string[]>('configFileGlobPattern');
+    assert.ok(configFileGlobPattern);
+    await config.update('configFileGlobPattern', [
+      ...configFileGlobPattern,
+      '**/trailing-slash.config.ts',
+    ]);
+
+    try {
+      await waitFor(() => {
+        const testFile = getTestItemByLabels(testController.items, [
+          'config/trailing-slash.config.ts',
+          'test',
+          'foo.test.ts',
+        ]);
+        assert.ok(
+          testFile.children.size > 0,
+          'Test file should be associated with its test cases',
+        );
+      });
+    } finally {
+      await config.update('configFileGlobPattern', undefined);
+    }
   });
 });
