@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@rstest/core';
 import {
+  filterFailedEntries,
   type SequenceHints,
   sortTestEntries,
 } from '../../src/core/testSequencer';
@@ -108,5 +109,77 @@ describe('sortTestEntries', () => {
       'known-slow',
       'known-fast',
     ]);
+  });
+});
+
+describe('filterFailedEntries', () => {
+  const keep = (entries: Entry[], hints: SequenceHints) =>
+    filterFailedEntries(entries, hints, (testPath) => testPath);
+
+  it('keeps files whose last run failed', () => {
+    const entries: Entry[] = [
+      { testPath: 'a' },
+      { testPath: 'b' },
+      { testPath: 'c' },
+    ];
+    const hints: SequenceHints = new Map([
+      ['a', { duration: 5 }],
+      ['b', { duration: 5, failed: true }],
+      ['c', { duration: 5, failed: true }],
+    ]);
+    const result = keep(entries, hints);
+    expect(result.covered).toBe(true);
+    expect(result.entries.map((e) => e.testPath)).toEqual(['b', 'c']);
+  });
+
+  it('drops files that previously passed', () => {
+    const entries: Entry[] = [{ testPath: 'a' }, { testPath: 'b' }];
+    const hints: SequenceHints = new Map([
+      ['a', { duration: 5, failed: false }],
+      ['b', { duration: 5 }],
+    ]);
+    const result = keep(entries, hints);
+    expect(result.covered).toBe(true);
+    expect(result.entries).toEqual([]);
+  });
+
+  it('drops files with no hint (never run / newly added) when others are covered', () => {
+    const entries: Entry[] = [
+      { testPath: 'known-failed' },
+      { testPath: 'brand-new' },
+    ];
+    const hints: SequenceHints = new Map([
+      ['known-failed', { duration: 5, failed: true }],
+    ]);
+    const result = keep(entries, hints);
+    expect(result.covered).toBe(true);
+    expect(result.entries.map((e) => e.testPath)).toEqual(['known-failed']);
+  });
+
+  it('falls back to all entries when the project is absent from the cache', () => {
+    const entries: Entry[] = [{ testPath: 'a' }, { testPath: 'b' }];
+    // Hints only cover a different project's files → this project is uncovered.
+    const hints: SequenceHints = new Map([['other', { failed: true }]]);
+    const result = keep(entries, hints);
+    expect(result.covered).toBe(false);
+    expect(result.entries).toBe(entries);
+  });
+
+  it('preserves input order and does not mutate the input', () => {
+    const entries: Entry[] = [
+      { testPath: 'c' },
+      { testPath: 'a' },
+      { testPath: 'b' },
+    ];
+    const snapshot = [...entries];
+    const hints: SequenceHints = new Map([
+      ['c', { failed: true }],
+      ['a', { failed: true }],
+      ['b', { failed: false }],
+    ]);
+    const result = keep(entries, hints);
+    // original relative order kept (c before a); sorting happens separately
+    expect(result.entries.map((e) => e.testPath)).toEqual(['c', 'a']);
+    expect(entries).toEqual(snapshot);
   });
 });

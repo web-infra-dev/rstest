@@ -1,0 +1,88 @@
+---
+description: '仅重新运行上一次运行中失败的测试文件。'
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# onlyFailures
+
+<ApiMeta addedVersion="0.11.2" />
+
+- **类型：** `boolean`
+- **默认值：** `false`
+- **CLI：** `-f, --onlyFailures`
+
+仅重新运行上一次运行中失败的测试文件。
+
+当一次改动挂掉多个测试文件时，每修复一处通常都要付出一轮全量运行的代价来验证。启用 `onlyFailures` 后，Rstest 会记住上次失败的文件，只重跑这些文件，让每一轮「修复 → 验证」都保持快速。
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='CLI'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --onlyFailures
+  # 或使用简写
+  npx rstest -f
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  onlyFailures: true,
+});
+```
+  </Tab>
+</Tabs>
+
+## 示例
+
+一次改动挂掉了 14 个测试文件中的 2 个：
+
+```bash
+npx rstest
+
+ Test Files 2 failed | 12 passed
+```
+
+修复代码后，用 `-f` 验证——只有之前失败的 2 个文件会运行：
+
+```bash
+npx rstest -f
+
+onlyFailures: running 2 of 14 test files (12 deselected).
+```
+
+重复这个过程直到全部通过。当不再有失败记录时，下一次 `-f` 运行会自动回退到全量运行，因此不会陷入「什么都不跑」的状态：
+
+```bash
+npx rstest -f
+
+No failed tests found from the previous run. Running all tests.
+```
+
+## 哪些文件会被重跑
+
+`onlyFailures` 以整个测试文件为选择单位：
+
+- 只要文件中有任意一个测试失败，整个文件都会重跑——包括其中已通过的测试。不支持只重跑单个失败的测试用例。
+- 从未运行过的文件（例如你刚新增的文件）没有失败记录，不会被选中。先不带 `onlyFailures` 运行一次即可将其纳入。
+
+:::info Browser Mode
+[Browser Mode](/config/test/browser) 项目的结果目前尚未被记录，因此 `onlyFailures` 不会排除它们的文件——browser 项目始终运行其全部测试文件。
+:::
+
+## 失败记录
+
+Rstest 将每个测试文件最近一次的通过/失败状态保存在项目根目录的 `node_modules/.cache/.rstest-results/` 中，并在每次运行后刷新。删除该目录即可重置记录。
+
+部分运行不会覆盖记录，因此 `onlyFailures` 始终基于最近一次完整运行的结果工作：
+
+- 使用 [testNamePattern](/config/test/test-name-pattern)（`-t`）过滤的运行，只执行了每个文件中的部分测试。
+- 被 [bail](/config/test/bail) 中止的运行，未能执行到剩余的文件。
+
+## Watch 模式
+
+Watch 模式会忽略 `onlyFailures` 并打印一条警告。Watch 本身就会重跑你编辑的文件，并提供重跑失败测试的快捷键，该选项在此没有额外价值——选择忽略（而不是报错）也让设置了 `onlyFailures` 的配置文件仍可用于 `rstest watch`。

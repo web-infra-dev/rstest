@@ -37,6 +37,7 @@ import {
   sequenceKey,
   writeResultsCache,
 } from './resultsCache';
+import { applyOnlyFailuresSelection } from './onlyFailures';
 import { type SequenceHints, sortTestEntries } from './testSequencer';
 import { createRunProjectPlanState, syncNodeProjects } from './projectPlan';
 import type { Rstest } from './rstest';
@@ -250,6 +251,17 @@ export async function runTests(context: Rstest): Promise<void> {
   const hasNodeProjects = nodeProjects.length > 0;
 
   const isWatchMode = context.command === 'watch';
+
+  // `onlyFailures` re-runs the previous run's failed FILES from the on-disk
+  // results cache. Watch already has its own run-failed shortcut and refreshes
+  // the failed set as you edit, so a disk-backed selection is redundant and
+  // confusing there. Warn once and ignore it (rather than erroring) so a shared
+  // config carrying `onlyFailures` stays usable under `rstest watch`.
+  if (isWatchMode && context.normalizedConfig.onlyFailures) {
+    logger.warn(
+      'onlyFailures is ignored in watch mode; use the watch run-failed shortcut instead.',
+    );
+  }
 
   // For non-watch mode with both browser and node tests, we need to unify reporter output
   const shouldUnifyReporter =
@@ -621,7 +633,12 @@ export async function runTests(context: Rstest): Promise<void> {
     // (see `beginRun` in utils/trace.ts), so call sites stay branch-free.
     const { span } = traceRun;
 
-    const returns = await Promise.all(
+    // Phase 1: resolve each project's build stats and candidate test files
+    // (mode-filtered), and close over an `execute` continuation that runs them.
+    // Execution is deferred because `--onlyFailures` (phase 2) needs the full
+    // candidate set across every project before it can decide whether any
+    // failed file is left to run.
+    const projectPlans = await Promise.all(
       projects.map(async (p) => {
         const {
           assetNames,
@@ -644,48 +661,6 @@ export async function runTests(context: Rstest): Promise<void> {
         );
 
         testStart ??= Date.now();
-
-        // Global setup runs once per project, only if there is at least one
-        // running test.
-        if (
-          claimGlobalSetupOnce(p, entries.length, globalSetupEntries.length)
-        ) {
-          const files = globalSetupEntries.flatMap((e) => e.files!);
-          const globalSetupTraceArgs = {
-            project: p.name,
-            testPath: '<globalSetup>',
-          };
-          const [assetFiles, sourceMaps] = await span(
-            'host:global-setup-assets',
-            'host',
-            () => Promise.all([getAssetFiles(files), getSourceMaps(files)]),
-            globalSetupTraceArgs,
-          );
-
-          const { success, errors } = await span(
-            'host:global-setup',
-            'host',
-            () =>
-              runGlobalSetup({
-                globalSetupEntries,
-                assetFiles,
-                sourceMaps,
-                interopDefault: true,
-                outputModule: p.outputModule,
-              }),
-            globalSetupTraceArgs,
-          );
-          if (!success) {
-            return {
-              results: [],
-              testResults: [],
-              errors,
-              assetNames,
-              // sourcemap is useless since we install source-map-support in worker
-              getSourceMaps: () => null,
-            };
-          }
-        }
 
         currentDeletedEntries.push(...deletedEntries);
 
@@ -717,36 +692,124 @@ export async function runTests(context: Rstest): Promise<void> {
           );
         }
 
-        // Perf-first ordering, applied per project (the pool interleaves
-        // projects via a shared FIFO, but each project's stream stays ordered).
-        finalEntries = sortTestEntries(
-          finalEntries,
-          sequenceHints,
-          (testPath) => sequenceKey(p.name, rootPath, testPath),
-        );
+        const execute = async (selectedEntries: EntryInfo[]) => {
+          // Global setup runs once per project, only if there is at least one
+          // running test.
+          if (
+            claimGlobalSetupOnce(p, entries.length, globalSetupEntries.length)
+          ) {
+            const files = globalSetupEntries.flatMap((e) => e.files!);
+            const globalSetupTraceArgs = {
+              project: p.name,
+              testPath: '<globalSetup>',
+            };
+            const [assetFiles, sourceMaps] = await span(
+              'host:global-setup-assets',
+              'host',
+              () => Promise.all([getAssetFiles(files), getSourceMaps(files)]),
+              globalSetupTraceArgs,
+            );
 
-        currentEntries.push(...finalEntries);
-        const { results, testResults } = await pool.runTests({
-          entries: finalEntries,
-          getSourceMaps,
-          setupEntries,
-          getAssetFiles,
-          project: p,
-          buildId,
-          updateSnapshot: context.snapshotManager.options.updateSnapshot,
-          onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
-          onRawCoverageResult: (coverage) => rawCoverageResults.push(coverage),
-          onTraceEvents: traceRun.onEvents,
-          traceSpan: span,
-        });
+            const { success, errors } = await span(
+              'host:global-setup',
+              'host',
+              () =>
+                runGlobalSetup({
+                  globalSetupEntries,
+                  assetFiles,
+                  sourceMaps,
+                  interopDefault: true,
+                  outputModule: p.outputModule,
+                }),
+              globalSetupTraceArgs,
+            );
+            if (!success) {
+              return {
+                results: [],
+                testResults: [],
+                errors,
+                assetNames,
+                // sourcemap is useless since we install source-map-support in worker
+                getSourceMaps: () => null,
+              };
+            }
+          }
 
-        return {
-          results,
-          testResults,
-          assetNames,
-          getSourceMaps,
+          // Perf-first ordering, applied per project (the pool interleaves
+          // projects via a shared FIFO, but each project's stream stays ordered).
+          const sortedEntries = sortTestEntries(
+            selectedEntries,
+            sequenceHints,
+            (testPath) => sequenceKey(p.name, rootPath, testPath),
+          );
+
+          currentEntries.push(...sortedEntries);
+          const { results, testResults } = await pool.runTests({
+            entries: sortedEntries,
+            getSourceMaps,
+            setupEntries,
+            getAssetFiles,
+            project: p,
+            buildId,
+            updateSnapshot: context.snapshotManager.options.updateSnapshot,
+            onCoverageResult: (coverage) => mergedCoverageMap?.merge(coverage),
+            onRawCoverageResult: (coverage) =>
+              rawCoverageResults.push(coverage),
+            onTraceEvents: traceRun.onEvents,
+            traceSpan: span,
+          });
+
+          return {
+            results,
+            testResults,
+            assetNames,
+            getSourceMaps,
+          };
         };
+
+        return { p, finalEntries, execute };
       }),
+    );
+
+    // Phase 2: `--onlyFailures` file-level selection. Runs after every project's
+    // candidate set is known (so the global "nothing failed → run everything"
+    // fallback is decidable) and before perf-first ordering / test execution (so
+    // deselected files are never ordered or run). Sharding for node projects is
+    // resolved further upstream in `projectPlan`; because a file's shard
+    // assignment is deterministic, filtering the failed subset within each shard
+    // still re-runs every failed file across the full shard matrix.
+    //
+    // Watch mode ignores `--onlyFailures` entirely (warned once at setup), so it
+    // is skipped here; `mode === 'on-demand'` only occurs under watch and stays
+    // guarded defensively.
+    //
+    // An explicitly user-scoped run must never be narrowed further by failure
+    // history. Two forms of explicit scoping exist: positional CLI filters live
+    // on `context.fileFilters` (they drive the build-stats entry set), while the
+    // watch `runFailedTests` shortcut passes its file list as the `fileFilters`
+    // argument with `mode: 'all'`. That shortcut hands us the IN-MEMORY failed
+    // set; intersecting it with the on-disk cache — which is intentionally stale
+    // after a bail-aborted or `testNamePattern` run that skipped its write —
+    // could wrongly deselect a file that just failed in memory.
+    const isExplicitlyScoped = !!(
+      fileFilters?.length || context.fileFilters?.length
+    );
+    if (
+      context.normalizedConfig.onlyFailures &&
+      !isWatchMode &&
+      mode !== 'on-demand' &&
+      !isExplicitlyScoped
+    ) {
+      applyOnlyFailuresSelection(projectPlans, {
+        resultsCache,
+        sequenceHints,
+        rootPath,
+      });
+    }
+
+    // Phase 3: run each project with its final (possibly narrowed) selection.
+    const returns = await Promise.all(
+      projectPlans.map((plan) => plan.execute(plan.finalEntries)),
     );
 
     testStart ??= buildStart;

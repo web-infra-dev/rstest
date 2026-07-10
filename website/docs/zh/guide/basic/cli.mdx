@@ -331,6 +331,7 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--isolate`                         | 在隔离环境中运行测试，详见 [isolate](/config/test/isolate)                                                                                           |
 | `--logHeapUsage`                    | 打印每个测试的堆内存使用情况，详见 [logHeapUsage](/config/test/log-heap-usage)                                                                       |
 | `--maxConcurrency <value>`          | 最大并发测试数，详见 [maxConcurrency](/config/test/max-concurrency)                                                                                  |
+| `-f, --onlyFailures`                | 仅重新运行上一次运行中失败的测试文件，详见 [onlyFailures](/config/test/only-failures)                                                                |
 | `--output.cleanDistPath`            | 测试开始前清理测试临时文件，详见 [output.cleanDistPath](/config/build/output#outputcleandistpath)                                                    |
 | `--output.emitAssets`               | 输出导入的静态资源，详见 [output.emitAssets](/config/build/output#outputemitassets)                                                                  |
 | `--output.module`                   | 以 ES module 格式输出 JavaScript 文件，详见 [output.module](/config/build/output#outputmodule)                                                       |
