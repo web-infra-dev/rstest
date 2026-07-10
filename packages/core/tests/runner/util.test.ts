@@ -33,6 +33,7 @@ describe('formatTestError', () => {
   });
 
   it('does not suggest the V8 coverage provider in browser mode', async () => {
+    const hadWindow = 'window' in globalThis;
     const originalWindow = (globalThis as { window?: unknown }).window;
     (globalThis as { window?: unknown }).window = {
       __RSTEST_BROWSER_OPTIONS__: {},
@@ -50,7 +51,11 @@ describe('formatTestError', () => {
         'avoid serializing Istanbul-instrumented functions',
       );
     } finally {
-      (globalThis as { window?: unknown }).window = originalWindow;
+      if (hadWindow) {
+        (globalThis as { window?: unknown }).window = originalWindow;
+      } else {
+        delete (globalThis as { window?: unknown }).window;
+      }
     }
   });
 
