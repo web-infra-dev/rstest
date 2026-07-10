@@ -10,11 +10,11 @@ Rstest supports scoped cleanup for temporary test changes. When your runtime or 
 
 This is useful when a test temporarily changes shared state, such as spies, environment variables, globals, or fake timers.
 
-## Disposable `using` syntax
+## `using` syntax
 
 <ApiMeta addedVersion="0.10.3" />
 
-`rs.stubEnv()`, `rs.stubGlobal()`, and `rs.useFakeTimers()` return disposable resources that work with `using`.
+`rs.stubEnv()`, `rs.stubGlobal()`, and `rs.useFakeTimers()` return disposable resources that work with the `using` syntax.
 
 ## Spy cleanup
 
