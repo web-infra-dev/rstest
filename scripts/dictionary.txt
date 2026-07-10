@@ -1,5 +1,6 @@
 # Custom Dictionary Words
 ACMRTUXB
+actioned
 antd
 apng
 apos
@@ -123,6 +124,7 @@ pluggable
 pmmmwh
 pngquant
 pnpx
+pocock
 postcssrc
 preact
 prebundle

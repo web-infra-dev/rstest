@@ -119,3 +119,20 @@ Available workflow skills in `.agents/skills/`:
 | create-draft-release-notes | Create or update draft GitHub releases and organize generated release notes       |
 | create-release-blog        | Draft bilingual release blog posts from a version range                           |
 | api-doc-sync               | Verify/fix that hand-written API doc signatures stay faithful to exported types   |
+| triage                     | Move issues and external PRs through triage states and write agent briefs         |
+| implement                  | Implement a piece of work based on a spec, agent brief, or set of tickets         |
+| setup-matt-pocock-skills   | Re-scaffold the triage/issue-tracker configuration in `docs/agents/`              |
+
+## Agent skills
+
+### Issue tracker
+
+Issues and external PRs are tracked on GitHub (`web-infra-dev/rstest`); public writes require per-item maintainer confirmation. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical triage roles map to repo labels (`needs-info` → `need reproduction`; others match by name). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `CLAUDE.md` plus per-package `AGENTS.md` files. See `docs/agents/domain.md`.
