@@ -99,6 +99,8 @@ export type RstestExposeAPI = {
 
 Register `modifyRstestConfig` during the Rsbuild plugin `setup` phase. Do not register it from later Rsbuild config hooks such as `api.modifyRsbuildConfig`, because Rstest applies collected callbacks while resolving the Rsbuild config; callbacks registered inside those hooks are too late for the current resolution pass.
 
+Rstest resolves file-level environment comments, such as `@rstest-environment jsdom`, before Rsbuild initializes test environments. `modifyRstestConfig` must not add or reveal files that need new environment-comment groups; use `testEnvironment` or separate `projects` before Rsbuild initialization instead.
+
 ### Modifiable config fields
 
 `modifyRstestConfig` only adjusts the current project's config. If a callback modifies an unsupported field, Rstest throws an error that tells you to configure it in `rstest.config.*` instead.

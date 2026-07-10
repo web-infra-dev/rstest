@@ -119,6 +119,7 @@ type PrepareRsbuildOptions = {
   exposeRstestAPIProjects?: ProjectContext[];
   extraPlugins?: RsbuildPlugin[];
   onModifyRstestConfigApplied?: () => Promise<void>;
+  onRsbuildConfigResolved?: () => Promise<void>;
   onCoveragePluginLoadError?: (error: unknown) => void;
 };
 
@@ -150,6 +151,7 @@ export const prepareRsbuild = async ({
   exposeRstestAPIProjects,
   extraPlugins = [],
   onModifyRstestConfigApplied,
+  onRsbuildConfigResolved,
   onCoveragePluginLoadError,
 }: PrepareRsbuildOptions): Promise<RsbuildInstance> => {
   const {
@@ -227,8 +229,11 @@ export const prepareRsbuild = async ({
     rsbuildInstance,
     projects,
     exposeRstestAPIProjects,
-    async () => {
-      await onModifyRstestConfigApplied?.();
+    async (applied) => {
+      if (applied) {
+        await onModifyRstestConfigApplied?.();
+      }
+      await onRsbuildConfigResolved?.();
       updateSetupFileMaps();
     },
   );

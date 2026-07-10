@@ -5,6 +5,7 @@ import {
   resolveAndMergeRawCoverage,
 } from '../coverage';
 import { ensureRunDependencies } from './dependencies';
+import { ensureTestEnvironmentDependencies } from './envDependencies';
 import { createPool } from '../pool';
 import type { Duration, EntryInfo, SourceMapInput } from '../types';
 import type { CoverageMap } from '../types/coverage';
@@ -222,15 +223,20 @@ export async function runTests(context: Rstest): Promise<void> {
   // High-level flow:
   // 1. Split browser and node projects. Pure-browser runs take a fast path
   //    because they do not need Rsbuild's node-side server or worker pool.
-  // 2. For node or mixed runs, prepare Rsbuild first so plugin-provided
-  //    `modifyRstestConfig` hooks can finalize project config before we decide
-  //    which entries/projects actually run.
-  // 3. Create the Rsbuild dev server to trigger config hooks, then start
-  //    browser tests early for mixed runs and initialize the node worker pool.
-  // 4. The inner `run()` handles one compile cycle: read Rsbuild stats, run
+  // 2. Resolve runnable projects before preparing Rsbuild. This also scans
+  //    file-level environment comments and splits node projects by their final
+  //    `testEnvironment`, so each Rsbuild environment is present before
+  //    environment-scoped plugins initialize.
+  // 3. Prepare Rsbuild with the pre-grouped node environments; let server
+  //    creation drive config resolution so run mode avoids extra initConfigs
+  //    side effects.
+  // 4. For node or mixed runs, create the Rsbuild dev server to trigger config
+  //    hooks, validate node environment dependencies, then start browser tests
+  //    for mixed runs and initialize the node worker pool.
+  // 5. The inner `run()` handles one compile cycle: read Rsbuild stats, run
   //    global setup, execute workers, merge browser/node results for reporters,
   //    generate coverage, and finalize trace data.
-  // 5. Watch mode wires `run()` to Rsbuild rebuild callbacks and CLI shortcuts;
+  // 6. Watch mode wires `run()` to Rsbuild rebuild callbacks and CLI shortcuts;
   //    non-watch mode calls it once and then tears everything down.
   cleanCoverageReports(context.normalizedConfig.coverage);
 
@@ -362,8 +368,6 @@ export async function runTests(context: Rstest): Promise<void> {
     ? (events: TraceEvent[]) => activeTraceRun.onEvents?.(events)
     : undefined;
 
-  const rsbuildProjects = [...nodeProjects];
-
   const { rootPath, reporters, snapshotManager, command, normalizedConfig } =
     context;
   const { coverage, shard } = normalizedConfig;
@@ -374,7 +378,27 @@ export async function runTests(context: Rstest): Promise<void> {
     browserProjects,
     isWatchMode,
   });
-  const { globTestSourceEntries, resolveRunnableProjects } = projectPlanState;
+  const {
+    globTestSourceEntries,
+    resolveRunnableProjects,
+    validateEnvironmentComments,
+  } = projectPlanState;
+  let plan = await resolveRunnableProjects({ silentShardMessage: true });
+  const plannedNodeSourceNames = new Set(
+    plan.nodeProjectsToRun.map(
+      (project) =>
+        project._environmentGroup?.sourceEnvironmentName ??
+        project.environmentName,
+    ),
+  );
+  const rsbuildProjects = [
+    ...plan.nodeProjectsToRun,
+    ...nodeProjects.filter(
+      (project) => !plannedNodeSourceNames.has(project.environmentName),
+    ),
+  ];
+  context.projects = [...browserProjects, ...rsbuildProjects];
+
   let coveragePluginLoadError: unknown;
 
   const rsbuildInstance = await prepareRsbuild({
@@ -390,23 +414,31 @@ export async function runTests(context: Rstest): Promise<void> {
       globalSetupProjects: context.projects,
     }),
     onModifyRstestConfigApplied: async () => {
-      const plan = await resolveRunnableProjects();
-      syncNodeProjects(
-        rsbuildProjects,
-        plan.nodeProjectsToRun.length ? plan.nodeProjectsToRun : nodeProjects,
-      );
+      plan = await resolveRunnableProjects({ strictEnvironmentComments: true });
+      syncNodeProjects(rsbuildProjects, plan.nodeProjectsToRun);
     },
+    onRsbuildConfigResolved: validateEnvironmentComments,
   });
 
-  await rsbuildInstance.initConfigs({ action: 'dev' });
-  const plan = await resolveRunnableProjects();
+  const syncRunPlanFlags = () => {
+    const currentPlan = projectPlanState.getPlan();
+    return {
+      hasBrowserTestsToRun: currentPlan.browserProjectsToRun.length > 0,
+      hasNodeTestsToRun: currentPlan.nodeProjectsToRun.length > 0,
+    };
+  };
 
-  const hasBrowserTestsToRun = plan.browserProjectsToRun.length > 0;
-  const hasNodeTestsToRun = plan.nodeProjectsToRun.length > 0;
+  let { hasBrowserTestsToRun, hasNodeTestsToRun } = syncRunPlanFlags();
+
+  if (nodeProjects.length) {
+    await rsbuildInstance.initConfigs({ action: 'dev' });
+    plan = projectPlanState.getPlan();
+    ({ hasBrowserTestsToRun, hasNodeTestsToRun } = syncRunPlanFlags());
+  }
 
   if (hasNodeTestsToRun || hasBrowserTestsToRun) {
     await ensureRunDependencies({
-      projects: plan.nodeProjectsToRun,
+      projects: [],
       rootPath,
       coverage,
     });
@@ -454,43 +486,30 @@ export async function runTests(context: Rstest): Promise<void> {
     return;
   }
 
-  // If there are browser tests to run, start them.
-  if (hasBrowserTestsToRun) {
-    const browserEntries = new Map();
-    const plan = projectPlanState.getPlan();
-    if (shard) {
-      for (const p of plan.browserProjectsToRun) {
-        browserEntries.set(
-          p.environmentName,
-          plan.entriesCache.get(p.environmentName),
-        );
-      }
-    }
-    browserResultPromise = runBrowserModeTests(
-      context,
-      plan.browserProjectsToRun,
-      {
-        // Defer browser teardown + reporting to the unified node run only when
-        // node tests will actually run. If node projects resolve to zero files,
-        // the `!hasNodeTestsToRun` early return below skips `run()` entirely, so a
-        // deferred browser would never be torn down and the CLI hangs. Otherwise
-        // let the browser self-finalize like the browser-only path. See #1363.
-        skipOnTestRunEnd: shouldUnifyReporter && hasNodeTestsToRun,
-        shardedEntries: shard ? browserEntries : undefined,
-        allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
-        onTraceEvents: forwardBrowserTraceEvents,
-      },
-    );
-
-    // Prevent an unhandled rejection window in mixed node+browser runs.
-    // We still await the original promise later to surface the error.
-    browserResultPromise.catch(() => undefined);
-  }
-
   // If there are no node tests to run, we can potentially exit early.
   if (!hasNodeTestsToRun) {
     // If only browser tests were to run and they ran, we should return.
     if (hasBrowserTestsToRun) {
+      const browserEntries = new Map();
+      const plan = projectPlanState.getPlan();
+      if (shard) {
+        for (const p of plan.browserProjectsToRun) {
+          browserEntries.set(
+            p.environmentName,
+            plan.entriesCache.get(p.environmentName),
+          );
+        }
+      }
+      browserResultPromise = runBrowserModeTests(
+        context,
+        plan.browserProjectsToRun,
+        {
+          skipOnTestRunEnd: false,
+          shardedEntries: shard ? browserEntries : undefined,
+          allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
+          onTraceEvents: forwardBrowserTraceEvents,
+        },
+      );
       try {
         if (browserResultPromise) {
           await browserResultPromise;
@@ -530,6 +549,43 @@ export async function runTests(context: Rstest): Promise<void> {
   // The `projects` variable now refers to node projects that have tests to run.
   const { entriesCache, nodeProjectsToRun: projects } =
     projectPlanState.getPlan();
+
+  try {
+    await ensureTestEnvironmentDependencies(projects, rootPath);
+  } catch (error) {
+    await closeServer();
+    throw error;
+  }
+
+  // If there are browser tests to run, start them after node environment
+  // dependencies are validated so early dependency failures do not leave a
+  // browser host running.
+  if (hasBrowserTestsToRun) {
+    const browserEntries = new Map();
+    const plan = projectPlanState.getPlan();
+    if (shard) {
+      for (const p of plan.browserProjectsToRun) {
+        browserEntries.set(
+          p.environmentName,
+          plan.entriesCache.get(p.environmentName),
+        );
+      }
+    }
+    browserResultPromise = runBrowserModeTests(
+      context,
+      plan.browserProjectsToRun,
+      {
+        skipOnTestRunEnd: shouldUnifyReporter && hasNodeTestsToRun,
+        shardedEntries: shard ? browserEntries : undefined,
+        allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
+        onTraceEvents: forwardBrowserTraceEvents,
+      },
+    );
+
+    // Prevent an unhandled rejection window in mixed node+browser runs.
+    // We still await the original promise later to surface the error.
+    browserResultPromise.catch(() => undefined);
+  }
 
   const entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
     (acc, entry) => acc.concat(Object.values(entry.entries) || []),
