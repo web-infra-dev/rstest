@@ -89,6 +89,7 @@ Partial runs do not overwrite the records, so `onlyFailures` always works from t
 
 - **File filters** — `npx rstest some.test.ts -f` runs exactly the files you named, whether they failed last time or not.
 - **`--changed` / `--related`** — the change-based selection already defines the scope. Run a plain `npx rstest -f` afterwards if you only want the failures from that run.
+- **[testNamePattern](/config/test/test-name-pattern) (`-t`)** — a name pattern must search every file for matching tests; narrowing to previously failed files would silently skip matches in files that passed.
 - **Watch mode** — watch already re-runs the files you edit and provides a shortcut for re-running failed tests.
 
 Ignoring the option (rather than erroring) keeps a config file that sets `onlyFailures` usable with all of the above.
