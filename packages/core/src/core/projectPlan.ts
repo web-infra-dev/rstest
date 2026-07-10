@@ -65,21 +65,30 @@ const isSameProjectList = (
     );
   });
 
+const isBrowserProject = (project: ProjectContext): boolean =>
+  project.normalizedConfig.browser.enabled;
+
+type RefreshEnvironmentPartitionResult = {
+  projects: ProjectContext[];
+  entriesCache: Map<string, ProjectEntries>;
+};
+
 const refreshEnvironmentPartitionEntries = async ({
   context,
   projects,
 }: {
   context: RstestContext;
   projects: ProjectContext[];
-}): Promise<Map<string, ProjectEntries>> => {
+}): Promise<RefreshEnvironmentPartitionResult> => {
   const sourceProjects = new Map<string, ProjectContext[]>();
   for (const project of projects) {
     const sourceEnvironmentName =
       project._environmentGroup?.sourceEnvironmentName ??
       project.environmentName;
-    const sourceGroup = sourceProjects.get(sourceEnvironmentName) ?? [];
+    const sourceKey = `${isBrowserProject(project) ? 'browser' : 'node'}:${sourceEnvironmentName}`;
+    const sourceGroup = sourceProjects.get(sourceKey) ?? [];
     sourceGroup.push(project);
-    sourceProjects.set(sourceEnvironmentName, sourceGroup);
+    sourceProjects.set(sourceKey, sourceGroup);
   }
 
   const refreshedEntries = [] as Array<{
@@ -87,23 +96,44 @@ const refreshEnvironmentPartitionEntries = async ({
     alias: string;
     testPath: string;
   }>;
+  const refreshedProjects: ProjectContext[] = [];
 
   for (const sourceGroup of sourceProjects.values()) {
-    const sourceProject =
-      sourceGroup.find((project) => {
-        const sourceEnvironmentName =
-          project._environmentGroup?.sourceEnvironmentName ??
-          project.environmentName;
-        return project.environmentName === sourceEnvironmentName;
-      }) ?? sourceGroup[0]!;
+    const firstProject = sourceGroup[0]!;
+    if (isBrowserProject(firstProject)) {
+      for (const project of sourceGroup) {
+        refreshedProjects.push(project);
+        const entries = await getProjectEntries({ context, project });
+        for (const [alias, testPath] of Object.entries(entries)) {
+          refreshedEntries.push({ project, alias, testPath });
+        }
+      }
+      continue;
+    }
+
+    const sourceEnvironmentName =
+      firstProject._environmentGroup?.sourceEnvironmentName ??
+      firstProject.environmentName;
+    const sourceProjectName =
+      firstProject._environmentGroup?.sourceProjectName ?? firstProject.name;
+    const baseProject = sourceGroup.find(
+      (project) => project.environmentName === sourceEnvironmentName,
+    );
+    const sourceProject = baseProject ?? firstProject;
     const environmentGroup = sourceProject._environmentGroup;
     const baseTestEnvironment =
+      baseProject?.normalizedConfig.testEnvironment ??
       environmentGroup?.baseTestEnvironment ??
       sourceProject.normalizedConfig.testEnvironment;
     const groupingProject: ProjectContext = {
       ...sourceProject,
+      name: sourceProjectName,
+      environmentName: sourceEnvironmentName,
+      _environmentGroup: undefined,
+      _globalSetups: baseProject ? sourceProject._globalSetups : false,
       normalizedConfig: {
         ...sourceProject.normalizedConfig,
+        name: sourceProjectName,
         testEnvironment: baseTestEnvironment,
       },
     };
@@ -124,21 +154,34 @@ const refreshEnvironmentPartitionEntries = async ({
       projects: [groupingProject],
     });
 
-    for (const project of sourceGroup) {
-      const group = project._environmentGroup;
+    for (const regroupedProject of regrouped.projects) {
+      const regroupedEnvironmentKey = getEnvironmentKey(
+        regroupedProject.normalizedConfig.testEnvironment,
+      );
+      const project =
+        sourceGroup.find((item) => {
+          const group = item._environmentGroup;
+          const expectedEnvironment = group?.environmentComment
+            ? applyEnvironmentComment(
+                baseTestEnvironment,
+                group.environmentComment,
+              )
+            : baseTestEnvironment;
+
+          return (
+            getEnvironmentKey(expectedEnvironment) === regroupedEnvironmentKey
+          );
+        }) ?? regroupedProject;
+
+      const group = regroupedProject._environmentGroup;
       const expectedEnvironment = group?.environmentComment
         ? applyEnvironmentComment(baseTestEnvironment, group.environmentComment)
         : baseTestEnvironment;
       project.normalizedConfig.testEnvironment = expectedEnvironment;
-      const expectedKey = getEnvironmentKey(expectedEnvironment);
-      const matchedProject = regrouped.projects.find(
-        (item) =>
-          getEnvironmentKey(item.normalizedConfig.testEnvironment) ===
-          expectedKey,
-      );
-      const entries = matchedProject
-        ? regrouped.entriesCache.get(matchedProject.environmentName)?.entries
-        : undefined;
+      refreshedProjects.push(project);
+      const entries = regrouped.entriesCache.get(
+        regroupedProject.environmentName,
+      )?.entries;
 
       for (const [alias, testPath] of Object.entries(entries || {})) {
         refreshedEntries.push({ project, alias, testPath });
@@ -151,7 +194,7 @@ const refreshEnvironmentPartitionEntries = async ({
     : refreshedEntries;
 
   const refreshedEntriesCache = new Map<string, ProjectEntries>();
-  for (const project of projects) {
+  for (const project of refreshedProjects) {
     refreshedEntriesCache.set(project.environmentName, {
       entries: {},
       fileFilters: context.fileFilters,
@@ -163,7 +206,14 @@ const refreshEnvironmentPartitionEntries = async ({
       testPath;
   }
 
-  return refreshedEntriesCache;
+  return {
+    projects: refreshedProjects,
+    entriesCache: refreshedEntriesCache,
+  };
+};
+
+type ResolveRunnableProjectsOptions = {
+  strictEnvironmentComments?: boolean;
 };
 
 export const createRunProjectPlanState = ({
@@ -177,7 +227,9 @@ export const createRunProjectPlanState = ({
 }): {
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   getPlan: () => RunProjectPlan;
-  resolveRunnableProjects: () => Promise<RunProjectPlan>;
+  resolveRunnableProjects: (
+    options?: ResolveRunnableProjectsOptions,
+  ) => Promise<RunProjectPlan>;
 } => {
   let allProjects = context.projects;
   let entriesCache: Map<string, ProjectEntries> = new Map();
@@ -219,15 +271,19 @@ export const createRunProjectPlanState = ({
     return entries;
   };
 
-  const resolveRunnableProjects = async (): Promise<RunProjectPlan> => {
+  const resolveRunnableProjects = async ({
+    strictEnvironmentComments = false,
+  }: ResolveRunnableProjectsOptions = {}): Promise<RunProjectPlan> => {
     const shouldPreserveEnvironmentPartitions =
       environmentGroupsResolved && environmentGroupsChanged;
 
     if (shouldPreserveEnvironmentPartitions) {
-      entriesCache = await refreshEnvironmentPartitionEntries({
+      const refreshed = await refreshEnvironmentPartitionEntries({
         context,
         projects: allProjects,
       });
+      allProjects = refreshed.projects;
+      entriesCache = refreshed.entriesCache;
     } else if (context.normalizedConfig.shard) {
       entriesCache = (await resolveShardedEntries(context)) || new Map();
     } else {
@@ -237,9 +293,10 @@ export const createRunProjectPlanState = ({
     const previousProjects = context.projects;
     const runnable = await resolveRunnableProjectsByEntries({
       entriesCache,
-      projects: context.projects,
+      projects: allProjects,
       globTestSourceEntries,
       groupEnvironmentComments: !shouldPreserveEnvironmentPartitions,
+      ignoreInvalidEnvironmentComments: !strictEnvironmentComments,
       skipEmptyProjects: !isWatchMode,
     });
 

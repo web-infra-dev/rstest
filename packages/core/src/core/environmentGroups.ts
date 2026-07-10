@@ -40,9 +40,11 @@ export const getEnvironmentKey = (
 export const groupProjectEntriesByEnvironment = async ({
   entriesCache,
   projects,
+  ignoreInvalidEnvironmentComments = false,
 }: {
   entriesCache: Map<string, ProjectEntries>;
   projects: ProjectContext[];
+  ignoreInvalidEnvironmentComments?: boolean;
 }): Promise<{
   entriesCache: Map<string, ProjectEntries>;
   projects: ProjectContext[];
@@ -76,7 +78,14 @@ export const groupProjectEntriesByEnvironment = async ({
     }
 
     for (const [entryName, testPath] of projectEntryItems) {
-      const comment = await parseEnvironmentCommentFromFile(testPath);
+      const comment = await parseEnvironmentCommentFromFile(testPath).catch(
+        (error: unknown) => {
+          if (ignoreInvalidEnvironmentComments) {
+            return null;
+          }
+          throw error;
+        },
+      );
       const testEnvironment = comment
         ? applyEnvironmentComment(
             project.normalizedConfig.testEnvironment,
@@ -120,6 +129,8 @@ export const groupProjectEntriesByEnvironment = async ({
     const sourceEnvironmentName =
       project._environmentGroup?.sourceEnvironmentName ??
       project.environmentName;
+    const sourceProjectName =
+      project._environmentGroup?.sourceProjectName ?? project.name;
     const baseTestEnvironment =
       project._environmentGroup?.baseTestEnvironment ??
       project.normalizedConfig.testEnvironment;
@@ -146,6 +157,7 @@ export const groupProjectEntriesByEnvironment = async ({
           baseKey: baseEnvironmentKey,
           baseTestEnvironment,
           sourceEnvironmentName,
+          sourceProjectName,
           environmentComment: group.environmentComment,
         },
         normalizedConfig: group.config,

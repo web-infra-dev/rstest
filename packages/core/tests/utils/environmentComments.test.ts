@@ -456,4 +456,247 @@ const jsdom = '// @rstest-environment jsdom';
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('preserves a modified base environment when refreshing partitions', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const nodeFile = path.join(root, 'node.test.ts');
+      const jsdomFile = path.join(root, 'jsdom.test.ts');
+      writeFileSync(nodeFile, '// node test\n');
+      writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['*.test.ts'],
+          exclude: {
+            patterns: [],
+            override: false,
+          },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: {},
+        fileFilters: [],
+      } as unknown as RstestContext;
+      const planState = createRunProjectPlanState({
+        context,
+        browserProjects: [],
+        isWatchMode: false,
+      });
+
+      await planState.resolveRunnableProjects();
+      const baseProject = context.projects.find(
+        (item) => item.environmentName === 'default',
+      )!;
+      baseProject.normalizedConfig.testEnvironment = { name: 'happy-dom' };
+
+      const refreshed = await planState.resolveRunnableProjects({
+        strictEnvironmentComments: true,
+      });
+
+      expect(
+        refreshed.projects.find((item) => item.environmentName === 'default')
+          ?.normalizedConfig.testEnvironment,
+      ).toEqual({ name: 'happy-dom' });
+      expect(refreshed.entriesCache.get('default')?.entries).toEqual({
+        'node~test~ts': normalize(nodeFile),
+      });
+      expect(
+        refreshed.entriesCache.get('default-environment-1')?.entries,
+      ).toEqual({
+        'jsdom~test~ts': normalize(jsdomFile),
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores invalid environment comments before config hooks can exclude them', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const invalidFile = path.join(root, 'invalid.test.ts');
+      const validFile = path.join(root, 'valid.test.ts');
+      writeFileSync(invalidFile, '// @rstest-environment custom\n');
+      writeFileSync(validFile, '// valid test\n');
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['*.test.ts'],
+          exclude: {
+            patterns: [],
+            override: false,
+          },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: {},
+        fileFilters: [],
+      } as unknown as RstestContext;
+      const planState = createRunProjectPlanState({
+        context,
+        browserProjects: [],
+        isWatchMode: false,
+      });
+
+      await expect(planState.resolveRunnableProjects()).resolves.toBeTruthy();
+      context.projects[0]!.normalizedConfig.include = ['valid.test.ts'];
+
+      const refreshed = await planState.resolveRunnableProjects({
+        strictEnvironmentComments: true,
+      });
+
+      expect(refreshed.entriesCache.get('default')?.entries).toEqual({
+        'valid~test~ts': normalize(validFile),
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps browser entries when refreshing node environment partitions', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const nodeFile = path.join(root, 'node.test.ts');
+      const jsdomFile = path.join(root, 'jsdom.test.ts');
+      const browserFile = path.join(root, 'browser.test.ts');
+      writeFileSync(nodeFile, '// node test\n');
+      writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
+      writeFileSync(browserFile, '// @rstest-environment jsdom\n');
+
+      const nodeProject: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['node.test.ts', 'jsdom.test.ts'],
+          exclude: {
+            patterns: [],
+            override: false,
+          },
+          includeSource: [],
+        },
+      };
+      const browserProject: ProjectContext = {
+        ...createProject(),
+        name: 'browser',
+        environmentName: 'browser',
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          name: 'browser',
+          root,
+          include: ['browser.test.ts'],
+          exclude: {
+            patterns: [],
+            override: false,
+          },
+          includeSource: [],
+          browser: {
+            enabled: true,
+          },
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [browserProject, nodeProject],
+        normalizedConfig: {},
+        fileFilters: [],
+      } as unknown as RstestContext;
+      const planState = createRunProjectPlanState({
+        context,
+        browserProjects: [browserProject],
+        isWatchMode: false,
+      });
+
+      await planState.resolveRunnableProjects();
+      const refreshed = await planState.resolveRunnableProjects({
+        strictEnvironmentComments: true,
+      });
+
+      expect(refreshed.entriesCache.get('browser')?.entries).toEqual({
+        'browser~test~ts': normalize(browserFile),
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('recreates a missing base partition when refreshed entries need it', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const nodeFile = path.join(root, 'node.test.ts');
+      const jsdomFile = path.join(root, 'jsdom.test.ts');
+      writeFileSync(nodeFile, '// node test\n');
+      writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['jsdom.test.ts'],
+          exclude: {
+            patterns: [],
+            override: false,
+          },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: {
+          shard: {
+            index: 1,
+            count: 1,
+          },
+        },
+        fileFilters: [],
+      } as unknown as RstestContext;
+      const planState = createRunProjectPlanState({
+        context,
+        browserProjects: [],
+        isWatchMode: false,
+      });
+
+      await planState.resolveRunnableProjects();
+      for (const item of context.projects) {
+        item.normalizedConfig.include = ['node.test.ts', 'jsdom.test.ts'];
+      }
+
+      const refreshed = await planState.resolveRunnableProjects({
+        strictEnvironmentComments: true,
+      });
+
+      expect(
+        refreshed.projects.map((item) => item.environmentName).sort(),
+      ).toEqual(['default', 'default-environment-1']);
+      expect(refreshed.entriesCache.get('default')?.entries).toEqual({
+        'node~test~ts': normalize(nodeFile),
+      });
+      expect(
+        refreshed.entriesCache.get('default-environment-1')?.entries,
+      ).toEqual({
+        'jsdom~test~ts': normalize(jsdomFile),
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

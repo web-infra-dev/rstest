@@ -33,6 +33,7 @@ export type ProjectContext = {
     baseKey: string;
     baseTestEnvironment: NormalizedProjectConfig['testEnvironment'];
     sourceEnvironmentName: string;
+    sourceProjectName: string;
     environmentComment?: {
       name?: EnvironmentName;
       options?: Record<string, unknown>;

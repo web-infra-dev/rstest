@@ -404,7 +404,7 @@ export async function runTests(context: Rstest): Promise<void> {
       globalSetupProjects: context.projects,
     }),
     onModifyRstestConfigApplied: async () => {
-      plan = await resolveRunnableProjects();
+      plan = await resolveRunnableProjects({ strictEnvironmentComments: true });
       syncNodeProjects(rsbuildProjects, plan.nodeProjectsToRun);
     },
   });

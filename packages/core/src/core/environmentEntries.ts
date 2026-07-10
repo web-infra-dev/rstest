@@ -17,12 +17,14 @@ export const resolveRunnableProjectsByEntries = async ({
   entriesCache,
   globTestSourceEntries,
   groupEnvironmentComments = true,
+  ignoreInvalidEnvironmentComments = false,
   skipEmptyProjects = true,
 }: {
   projects: ProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
   globTestSourceEntries: GlobTestSourceEntries;
   groupEnvironmentComments?: boolean;
+  ignoreInvalidEnvironmentComments?: boolean;
   skipEmptyProjects?: boolean;
 }): Promise<{
   projects: ProjectContext[];
@@ -54,6 +56,7 @@ export const resolveRunnableProjectsByEntries = async ({
   const grouped = await groupProjectEntriesByEnvironment({
     entriesCache,
     projects: projects.filter((project) => !isBrowserProject(project)),
+    ignoreInvalidEnvironmentComments,
   });
 
   const resolvedEntriesCache = grouped.changed
