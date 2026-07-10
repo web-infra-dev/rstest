@@ -35,6 +35,46 @@ const loadDiffModules = async () => {
   };
 };
 
+const ISTANBUL_COVERAGE_HELPER_REFERENCE_ERROR_REGEXP =
+  /(?:\bcov_[A-Za-z0-9_$]+\b.*\bis not defined\b|\bis not defined\b.*\bcov_[A-Za-z0-9_$]+\b)/;
+
+const ISTANBUL_COVERAGE_HELPER_HINT = [
+  '',
+  'This looks like an Istanbul coverage counter from instrumented code executed outside its original scope or realm.',
+  'It can happen when a function is serialized with fn.toString() or executed via page.evaluate, Worker, node:vm, eval, or new Function.',
+].join('\n');
+
+const ISTANBUL_COVERAGE_HELPER_WORKAROUND_HINT =
+  "Exclude that source file with coverage.exclude, add an Istanbul ignore hint for small isolated snippets, switch to coverage.provider: 'v8' for non-browser tests, or avoid serializing Istanbul-instrumented functions.";
+
+const ISTANBUL_COVERAGE_HELPER_BROWSER_WORKAROUND_HINT =
+  'Exclude that source file with coverage.exclude, add an Istanbul ignore hint for small isolated snippets, or avoid serializing Istanbul-instrumented functions.';
+
+const isBrowserModeRuntime = (): boolean => {
+  const windowObject = (globalThis as { window?: unknown }).window;
+
+  return (
+    typeof windowObject === 'object' &&
+    windowObject !== null &&
+    '__RSTEST_BROWSER_OPTIONS__' in windowObject
+  );
+};
+
+const appendIstanbulCoverageHelperHint = (message: string): string => {
+  if (
+    message.includes('Istanbul coverage counter') ||
+    !ISTANBUL_COVERAGE_HELPER_REFERENCE_ERROR_REGEXP.test(message)
+  ) {
+    return message;
+  }
+
+  const workaroundHint = isBrowserModeRuntime()
+    ? ISTANBUL_COVERAGE_HELPER_BROWSER_WORKAROUND_HINT
+    : ISTANBUL_COVERAGE_HELPER_WORKAROUND_HINT;
+
+  return `${message}${ISTANBUL_COVERAGE_HELPER_HINT}\n${workaroundHint}`;
+};
+
 const REAL_TIMERS: {
   setTimeout?: typeof globalThis.setTimeout;
   clearTimeout?: typeof globalThis.clearTimeout;
@@ -82,6 +122,10 @@ export const formatTestError = async (
 
       if (error instanceof TestRegisterError && test?.type === 'case') {
         errObj.message = `Can't nest describe or test inside a test. ${error.message} because it is nested within test '${test.name}'`;
+      }
+
+      if (typeof errObj.message === 'string') {
+        errObj.message = appendIstanbulCoverageHelperHint(errObj.message);
       }
 
       if (
