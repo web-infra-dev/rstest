@@ -572,6 +572,11 @@ export const createRsbuildServer = async ({
     const globalSetupEntries: EntryInfo[] = [];
     const sourceEntries = await globTestSourceEntries(environmentName);
 
+    // Per-asset size lookup for entrypoints that only report asset names.
+    // Entrypoint-level `assetsSize`/`assets[].size` are optional in the rspack
+    // stats types, but the top-level `assets[].size` is always present.
+    const assetSizes = new Map(assets!.map((a) => [a.name, a.size]));
+
     for (const entry of Object.keys(entrypoints!)) {
       const e = entrypoints![entry]!;
 
@@ -604,6 +609,12 @@ export const createRsbuildServer = async ({
           testPath: sourceEntries[entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
+          size:
+            e.assetsSize ??
+            (e.assets ?? []).reduce(
+              (sum, a) => sum + (a.size ?? assetSizes.get(a.name) ?? 0),
+              0,
+            ),
         });
       } else if (globalSetupFiles?.[environmentName]?.[entry]) {
         globalSetupEntries.push({
