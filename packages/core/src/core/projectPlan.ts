@@ -228,6 +228,8 @@ const refreshEnvironmentPartitionEntries = async ({
       const expectedEnvironment = group?.environmentComment
         ? applyEnvironmentComment(baseTestEnvironment, group.environmentComment)
         : baseTestEnvironment;
+      project._environmentGroup = regroupedProject._environmentGroup;
+      project._globalSetups = regroupedProject._globalSetups;
       project.normalizedConfig.testEnvironment = expectedEnvironment;
       refreshedProjects.push(project);
       usedEnvironmentNames.add(project.environmentName);
@@ -256,6 +258,44 @@ const refreshEnvironmentPartitionEntries = async ({
   for (const { project, alias, testPath } of entriesToRun) {
     refreshedEntriesCache.get(project.environmentName)!.entries[alias] =
       testPath;
+  }
+
+  for (const sourceGroup of sourceProjects.values()) {
+    const groupProjects = refreshedProjects.filter((project) => {
+      const sourceEnvironmentName =
+        project._environmentGroup?.sourceEnvironmentName ??
+        project.environmentName;
+      const firstProject = sourceGroup[0]!;
+      const originalSourceEnvironmentName =
+        firstProject._environmentGroup?.sourceEnvironmentName ??
+        firstProject.environmentName;
+
+      return (
+        sourceEnvironmentName === originalSourceEnvironmentName &&
+        isBrowserProject(project) === isBrowserProject(firstProject)
+      );
+    });
+    const hasUnclaimedGlobalSetup = groupProjects.some(
+      (project) => !project._globalSetups,
+    );
+    if (!hasUnclaimedGlobalSetup) {
+      continue;
+    }
+
+    const owner = groupProjects.find(
+      (project) =>
+        Object.keys(
+          refreshedEntriesCache.get(project.environmentName)?.entries || {},
+        ).length > 0,
+    );
+    if (!owner || !owner._globalSetups) {
+      continue;
+    }
+
+    for (const project of groupProjects) {
+      project._globalSetups = true;
+    }
+    owner._globalSetups = false;
   }
 
   return {
@@ -493,6 +533,18 @@ export const createListProjectPlanState = (
       });
       context.projects = refreshed.projects;
       Object.assign(testEntries, getEntriesCacheRecord(refreshed.entriesCache));
+      if (context.normalizedConfig.shard) {
+        shardedBrowserEntries = new Map();
+        for (const project of context.projects.filter(
+          (p) => p.normalizedConfig.browser.enabled,
+        )) {
+          shardedBrowserEntries.set(project.environmentName, {
+            entries:
+              refreshed.entriesCache.get(project.environmentName)?.entries ||
+              {},
+          });
+        }
+      }
     } else {
       const grouped = await applyEnvironmentGroupsToListEntries({
         context,
