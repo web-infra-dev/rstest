@@ -68,6 +68,21 @@ const isSameProjectList = (
 const isBrowserProject = (project: ProjectContext): boolean =>
   project.normalizedConfig.browser.enabled;
 
+const getSourceEnvironmentName = (project: ProjectContext): string =>
+  project._environmentGroup?.sourceEnvironmentName ?? project.environmentName;
+
+const getSourceProjectName = (project: ProjectContext): string =>
+  project._environmentGroup?.sourceProjectName ?? project.name;
+
+const getSourceProjectKey = (project: ProjectContext): string =>
+  `${isBrowserProject(project) ? 'browser' : 'node'}:${getSourceEnvironmentName(project)}`;
+
+const hasEntries = (
+  entriesCache: Map<string, ProjectEntries>,
+  environmentName: string,
+): boolean =>
+  Object.keys(entriesCache.get(environmentName)?.entries || {}).length > 0;
+
 const getSyntheticEnvironmentName = (
   sourceEnvironmentName: string,
   index: number,
@@ -105,6 +120,112 @@ type RefreshEnvironmentPartitionResult = {
   entriesCache: Map<string, ProjectEntries>;
 };
 
+type RefreshEnvironmentPartitionEntry = {
+  project: ProjectContext;
+  alias: string;
+  testPath: string;
+};
+
+const pushProjectEntries = (
+  target: RefreshEnvironmentPartitionEntry[],
+  project: ProjectContext,
+  entries: Record<string, string> | undefined,
+): void => {
+  for (const [alias, testPath] of Object.entries(entries || {})) {
+    target.push({ project, alias, testPath });
+  }
+};
+
+const createEmptyEntriesCache = (
+  projects: ProjectContext[],
+  fileFilters: string[] | undefined,
+): Map<string, ProjectEntries> =>
+  new Map(
+    projects.map((project) => [
+      project.environmentName,
+      {
+        entries: {},
+        fileFilters,
+      },
+    ]),
+  );
+
+const getRefreshBaseTestEnvironment = ({
+  baseProject,
+  sourceProject,
+}: {
+  baseProject: ProjectContext | undefined;
+  sourceProject: ProjectContext;
+}): ProjectContext['normalizedConfig']['testEnvironment'] => {
+  const environmentGroup = sourceProject._environmentGroup;
+  if (baseProject) {
+    return baseProject.normalizedConfig.testEnvironment;
+  }
+
+  if (!environmentGroup?.environmentComment?.name) {
+    return sourceProject.normalizedConfig.testEnvironment;
+  }
+
+  return (
+    environmentGroup.baseTestEnvironment ??
+    sourceProject.normalizedConfig.testEnvironment
+  );
+};
+
+const findMatchingPartitionProject = ({
+  baseTestEnvironment,
+  sourceGroup,
+  usedEnvironmentNames,
+  environmentKey,
+}: {
+  baseTestEnvironment: ProjectContext['normalizedConfig']['testEnvironment'];
+  sourceGroup: ProjectContext[];
+  usedEnvironmentNames: Set<string>;
+  environmentKey: string;
+}): ProjectContext | undefined =>
+  sourceGroup.find((project) => {
+    const group = project._environmentGroup;
+    const expectedEnvironment = group?.environmentComment
+      ? applyEnvironmentComment(baseTestEnvironment, group.environmentComment)
+      : baseTestEnvironment;
+
+    return (
+      !usedEnvironmentNames.has(project.environmentName) &&
+      getEnvironmentKey(expectedEnvironment) === environmentKey
+    );
+  });
+
+const reassignGlobalSetupOwner = ({
+  entriesCache,
+  projects,
+  sourceProjects,
+}: {
+  entriesCache: Map<string, ProjectEntries>;
+  projects: ProjectContext[];
+  sourceProjects: Map<string, ProjectContext[]>;
+}): void => {
+  for (const sourceKey of sourceProjects.keys()) {
+    const groupProjects = projects.filter(
+      (project) => getSourceProjectKey(project) === sourceKey,
+    );
+    if (!groupProjects.some((project) => !project._globalSetups)) {
+      continue;
+    }
+
+    const owner = groupProjects.find((project) =>
+      hasEntries(entriesCache, project.environmentName),
+    );
+    if (!owner || !owner._globalSetups) {
+      continue;
+    }
+
+    for (const project of groupProjects) {
+      project._globalSetups = true;
+    }
+    owner._globalSetups = false;
+  }
+};
+
 const refreshEnvironmentPartitionEntries = async ({
   context,
   projects,
@@ -114,20 +235,13 @@ const refreshEnvironmentPartitionEntries = async ({
 }): Promise<RefreshEnvironmentPartitionResult> => {
   const sourceProjects = new Map<string, ProjectContext[]>();
   for (const project of projects) {
-    const sourceEnvironmentName =
-      project._environmentGroup?.sourceEnvironmentName ??
-      project.environmentName;
-    const sourceKey = `${isBrowserProject(project) ? 'browser' : 'node'}:${sourceEnvironmentName}`;
+    const sourceKey = getSourceProjectKey(project);
     const sourceGroup = sourceProjects.get(sourceKey) ?? [];
     sourceGroup.push(project);
     sourceProjects.set(sourceKey, sourceGroup);
   }
 
-  const refreshedEntries = [] as Array<{
-    project: ProjectContext;
-    alias: string;
-    testPath: string;
-  }>;
+  const refreshedEntries: RefreshEnvironmentPartitionEntry[] = [];
   const refreshedProjects: ProjectContext[] = [];
 
   for (const sourceGroup of sourceProjects.values()) {
@@ -136,31 +250,21 @@ const refreshEnvironmentPartitionEntries = async ({
       for (const project of sourceGroup) {
         refreshedProjects.push(project);
         const entries = await getProjectEntries({ context, project });
-        for (const [alias, testPath] of Object.entries(entries)) {
-          refreshedEntries.push({ project, alias, testPath });
-        }
+        pushProjectEntries(refreshedEntries, project, entries);
       }
       continue;
     }
 
-    const sourceEnvironmentName =
-      firstProject._environmentGroup?.sourceEnvironmentName ??
-      firstProject.environmentName;
-    const sourceProjectName =
-      firstProject._environmentGroup?.sourceProjectName ?? firstProject.name;
+    const sourceEnvironmentName = getSourceEnvironmentName(firstProject);
+    const sourceProjectName = getSourceProjectName(firstProject);
     const baseProject = sourceGroup.find(
       (project) => project.environmentName === sourceEnvironmentName,
     );
     const sourceProject = baseProject ?? firstProject;
-    const environmentGroup = sourceProject._environmentGroup;
-    const shouldUseCurrentSourceEnvironment =
-      !environmentGroup?.environmentComment?.name;
-    const baseTestEnvironment =
-      baseProject?.normalizedConfig.testEnvironment ??
-      (shouldUseCurrentSourceEnvironment
-        ? sourceProject.normalizedConfig.testEnvironment
-        : environmentGroup?.baseTestEnvironment) ??
-      sourceProject.normalizedConfig.testEnvironment;
+    const baseTestEnvironment = getRefreshBaseTestEnvironment({
+      baseProject,
+      sourceProject,
+    });
     const groupingProject: ProjectContext = {
       ...sourceProject,
       name: sourceProjectName,
@@ -200,19 +304,11 @@ const refreshEnvironmentPartitionEntries = async ({
       const regroupedEnvironmentKey = getEnvironmentKey(
         regroupedProject.normalizedConfig.testEnvironment,
       );
-      const matchedProject = sourceGroup.find((item) => {
-        const group = item._environmentGroup;
-        const expectedEnvironment = group?.environmentComment
-          ? applyEnvironmentComment(
-              baseTestEnvironment,
-              group.environmentComment,
-            )
-          : baseTestEnvironment;
-
-        return (
-          !usedEnvironmentNames.has(item.environmentName) &&
-          getEnvironmentKey(expectedEnvironment) === regroupedEnvironmentKey
-        );
+      const matchedProject = findMatchingPartitionProject({
+        baseTestEnvironment,
+        sourceGroup,
+        usedEnvironmentNames,
+        environmentKey: regroupedEnvironmentKey,
       });
       const project = matchedProject ?? regroupedProject;
 
@@ -236,10 +332,7 @@ const refreshEnvironmentPartitionEntries = async ({
       const entries = regrouped.entriesCache.get(
         regroupedEnvironmentName,
       )?.entries;
-
-      for (const [alias, testPath] of Object.entries(entries || {})) {
-        refreshedEntries.push({ project, alias, testPath });
-      }
+      pushProjectEntries(refreshedEntries, project, entries);
     }
   }
 
@@ -247,56 +340,21 @@ const refreshEnvironmentPartitionEntries = async ({
     ? getShardedFiles(refreshedEntries, context.normalizedConfig.shard)
     : refreshedEntries;
 
-  const refreshedEntriesCache = new Map<string, ProjectEntries>();
-  for (const project of refreshedProjects) {
-    refreshedEntriesCache.set(project.environmentName, {
-      entries: {},
-      fileFilters: context.fileFilters,
-    });
-  }
+  const refreshedEntriesCache = createEmptyEntriesCache(
+    refreshedProjects,
+    context.fileFilters,
+  );
 
   for (const { project, alias, testPath } of entriesToRun) {
     refreshedEntriesCache.get(project.environmentName)!.entries[alias] =
       testPath;
   }
 
-  for (const sourceGroup of sourceProjects.values()) {
-    const groupProjects = refreshedProjects.filter((project) => {
-      const sourceEnvironmentName =
-        project._environmentGroup?.sourceEnvironmentName ??
-        project.environmentName;
-      const firstProject = sourceGroup[0]!;
-      const originalSourceEnvironmentName =
-        firstProject._environmentGroup?.sourceEnvironmentName ??
-        firstProject.environmentName;
-
-      return (
-        sourceEnvironmentName === originalSourceEnvironmentName &&
-        isBrowserProject(project) === isBrowserProject(firstProject)
-      );
-    });
-    const hasUnclaimedGlobalSetup = groupProjects.some(
-      (project) => !project._globalSetups,
-    );
-    if (!hasUnclaimedGlobalSetup) {
-      continue;
-    }
-
-    const owner = groupProjects.find(
-      (project) =>
-        Object.keys(
-          refreshedEntriesCache.get(project.environmentName)?.entries || {},
-        ).length > 0,
-    );
-    if (!owner || !owner._globalSetups) {
-      continue;
-    }
-
-    for (const project of groupProjects) {
-      project._globalSetups = true;
-    }
-    owner._globalSetups = false;
-  }
+  reassignGlobalSetupOwner({
+    entriesCache: refreshedEntriesCache,
+    projects: refreshedProjects,
+    sourceProjects,
+  });
 
   return {
     projects: refreshedProjects,
