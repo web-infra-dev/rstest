@@ -164,11 +164,7 @@ export class Project implements vscode.Disposable {
       .getNormalizedConfig()
       .then((config) => {
         if (this.cancellationSource.token.isCancellationRequested) return;
-        // A configured root may end with a path separator (e.g. when derived
-        // from a file URL). Strip it so the glob `cwd` and later path joins
-        // don't yield doubled separators that break test-item URI matching.
-        const root = config.root.replace(/[\\/]+$/, '') || config.root;
-        this.root = vscode.Uri.file(root);
+        this.root = vscode.Uri.file(config.root);
         this.include = config.include;
         this.exclude = config.exclude;
         this.startWatchingWorkspace(this.root);
