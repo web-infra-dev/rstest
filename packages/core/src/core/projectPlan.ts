@@ -1,9 +1,17 @@
 import type { ProjectContext, ProjectEntries, RstestContext } from '../types';
-import { getTestEntries, resolveShardedEntries } from '../utils';
+import {
+  applyEnvironmentComment,
+  getTestEntries,
+  resolveShardedEntries,
+} from '../utils';
 import {
   applyEnvironmentGroupsToListEntries,
   resolveRunnableProjectsByEntries,
 } from './environmentEntries';
+import {
+  getEnvironmentKey,
+  groupProjectEntriesByEnvironment,
+} from './environmentGroups';
 
 const getProjectEntries = async ({
   context,
@@ -56,6 +64,69 @@ const isSameProjectList = (
     );
   });
 
+const refreshEnvironmentPartitionEntries = async ({
+  context,
+  projects,
+  entriesCache,
+}: {
+  context: RstestContext;
+  projects: ProjectContext[];
+  entriesCache: Map<string, ProjectEntries>;
+}): Promise<Map<string, ProjectEntries>> => {
+  const refreshedEntriesCache = new Map<string, ProjectEntries>();
+  for (const project of projects) {
+    const nextEntries = await getProjectEntries({
+      context,
+      project,
+    });
+    const previousFiles = new Set(
+      Object.values(entriesCache.get(project.environmentName)?.entries || {}),
+    );
+    const regrouped = await groupProjectEntriesByEnvironment({
+      entriesCache: new Map([
+        [
+          project.environmentName,
+          {
+            entries: context.normalizedConfig.shard
+              ? Object.fromEntries(
+                  Object.entries(nextEntries).filter(([, file]) =>
+                    previousFiles.has(file),
+                  ),
+                )
+              : nextEntries,
+            fileFilters: context.fileFilters,
+          },
+        ],
+      ]),
+      projects: [project],
+    });
+
+    const group = project._environmentGroup;
+    const expectedEnvironment = group?.environmentComment
+      ? applyEnvironmentComment(
+          project.normalizedConfig.testEnvironment,
+          group.environmentComment,
+        )
+      : project.normalizedConfig.testEnvironment;
+    project.normalizedConfig.testEnvironment = expectedEnvironment;
+    const expectedKey = getEnvironmentKey(expectedEnvironment);
+    const matchedProject = regrouped.projects.find(
+      (item) =>
+        getEnvironmentKey(item.normalizedConfig.testEnvironment) ===
+        expectedKey,
+    );
+
+    refreshedEntriesCache.set(
+      project.environmentName,
+      regrouped.entriesCache.get(
+        matchedProject?.environmentName ?? project.environmentName,
+      ) || { entries: {}, fileFilters: context.fileFilters },
+    );
+  }
+
+  return refreshedEntriesCache;
+};
+
 export const createRunProjectPlanState = ({
   context,
   browserProjects,
@@ -93,7 +164,9 @@ export const createRunProjectPlanState = ({
       return entriesCache.get(name)!.entries;
     }
 
-    const project = allProjects.find((p) => p.environmentName === name);
+    const project =
+      allProjects.find((p) => p.environmentName === name) ??
+      context.projects.find((p) => p.environmentName === name);
     if (!project) {
       return {};
     }
@@ -111,12 +184,15 @@ export const createRunProjectPlanState = ({
     const shouldPreserveEnvironmentPartitions =
       environmentGroupsResolved && environmentGroupsChanged;
 
-    if (
-      !shouldPreserveEnvironmentPartitions &&
-      context.normalizedConfig.shard
-    ) {
+    if (shouldPreserveEnvironmentPartitions) {
+      entriesCache = await refreshEnvironmentPartitionEntries({
+        context,
+        projects: allProjects,
+        entriesCache,
+      });
+    } else if (context.normalizedConfig.shard) {
       entriesCache = (await resolveShardedEntries(context)) || new Map();
-    } else if (!shouldPreserveEnvironmentPartitions) {
+    } else {
       entriesCache = new Map();
     }
 
@@ -125,7 +201,7 @@ export const createRunProjectPlanState = ({
       entriesCache,
       projects: context.projects,
       globTestSourceEntries,
-      groupEnvironmentComments: !environmentGroupsResolved,
+      groupEnvironmentComments: !shouldPreserveEnvironmentPartitions,
       skipEmptyProjects: !isWatchMode,
     });
 

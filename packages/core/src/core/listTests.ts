@@ -368,12 +368,19 @@ const collectAllTests = async ({
     });
 
   if (collectBrowserAfterConfigHooks && nodeProjects.length) {
+    let refreshedAfterConfigHooks = false;
     const nodeResult = await collectNodeTests({
       context,
       nodeProjects,
       globTestSourceEntries,
-      onModifyRstestConfigApplied,
+      onModifyRstestConfigApplied: async () => {
+        refreshedAfterConfigHooks = true;
+        await onModifyRstestConfigApplied?.();
+      },
     });
+    if (!refreshedAfterConfigHooks) {
+      await onModifyRstestConfigApplied?.();
+    }
     let browserResult: Awaited<ReturnType<typeof collectBrowser>>;
     try {
       browserResult = await collectBrowser();

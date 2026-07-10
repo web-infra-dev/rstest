@@ -3,6 +3,7 @@ import type {
   ProjectContext,
   ProjectEntries,
 } from '../types';
+import type { EnvironmentComment } from '../utils';
 import {
   applyEnvironmentComment,
   parseEnvironmentCommentFromFile,
@@ -29,8 +30,12 @@ const formatEnvironmentName = (name: string): string =>
 const formatGroupName = (projectName: string, groupIndex: number): string =>
   `${projectName}-environment-${groupIndex}`;
 
-const getProjectEnvironmentKey = (project: ProjectContext): string =>
+export const getProjectEnvironmentKey = (project: ProjectContext): string =>
   stableJson(project.normalizedConfig.testEnvironment);
+
+export const getEnvironmentKey = (
+  testEnvironment: NormalizedProjectConfig['testEnvironment'],
+): string => stableJson(testEnvironment);
 
 export const groupProjectEntriesByEnvironment = async ({
   entriesCache,
@@ -59,6 +64,7 @@ export const groupProjectEntriesByEnvironment = async ({
       {
         config: NormalizedProjectConfig;
         entries: Record<string, string>;
+        environmentComment?: EnvironmentComment;
       }
     >();
 
@@ -93,6 +99,10 @@ export const groupProjectEntriesByEnvironment = async ({
         groups.set(key, group);
       }
 
+      if (comment) {
+        group.environmentComment = comment;
+      }
+
       group.entries[entryName] = testPath;
     }
 
@@ -107,6 +117,10 @@ export const groupProjectEntriesByEnvironment = async ({
 
     changed = true;
     let groupIndex = 0;
+    let shouldRunGlobalSetup = true;
+    const sourceEnvironmentName =
+      project._environmentGroup?.sourceEnvironmentName ??
+      project.environmentName;
     for (const [key, group] of groups) {
       const isBaseEnvironment = key === baseEnvironmentKey;
       const groupName = isBaseEnvironment
@@ -122,8 +136,16 @@ export const groupProjectEntriesByEnvironment = async ({
         ...project,
         name: groupName,
         environmentName,
+        _environmentGroup: {
+          key,
+          baseKey: baseEnvironmentKey,
+          sourceEnvironmentName,
+          environmentComment: group.environmentComment,
+        },
         normalizedConfig: group.config,
+        _globalSetups: project._globalSetups || !shouldRunGlobalSetup,
       });
+      shouldRunGlobalSetup = false;
       groupedEntriesCache.set(environmentName, {
         ...projectEntries,
         entries: group.entries,

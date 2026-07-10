@@ -189,6 +189,42 @@ const regexp = /"/;
     }
   });
 
+  it('marks only one synthetic environment group eligible for global setup', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const nodeFile = path.join(root, 'node.test.ts');
+      const jsdomFile = path.join(root, 'jsdom.test.ts');
+      writeFileSync(nodeFile, '// node test\n');
+      writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
+
+      const project = createProject();
+
+      const grouped = await groupProjectEntriesByEnvironment({
+        entriesCache: new Map([
+          [
+            project.environmentName,
+            {
+              entries: {
+                node: nodeFile,
+                jsdom: jsdomFile,
+              },
+            },
+          ],
+        ]),
+        projects: [project],
+      });
+
+      expect(grouped.changed).toBe(true);
+      expect(grouped.projects).toHaveLength(2);
+      expect(grouped.projects.map((item) => item._globalSetups)).toEqual([
+        false,
+        true,
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('preserves the base project name for files without environment comments', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
     try {
