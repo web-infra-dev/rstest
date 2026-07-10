@@ -24,7 +24,7 @@ test(
 
     const { url } = await serve('./dist/index.html');
 
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    await page.goto(url, { waitUntil: 'commit' });
 
     const content = await page.locator('main').evaluate((element) => ({
       title: document.title,
