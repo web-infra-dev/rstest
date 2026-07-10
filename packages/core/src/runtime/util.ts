@@ -36,7 +36,7 @@ const loadDiffModules = async () => {
 };
 
 const ISTANBUL_COVERAGE_HELPER_REFERENCE_ERROR_REGEXP =
-  /(?:\bcov_[A-Za-z0-9_$]+\b.*\bis not defined\b|\bis not defined\b.*\bcov_[A-Za-z0-9_$]+\b)/;
+  /(?:cov_[A-Za-z0-9_$]+.*\bis not defined\b|\bis not defined\b.*cov_[A-Za-z0-9_$]+)/;
 
 const ISTANBUL_COVERAGE_HELPER_HINT = [
   '',
