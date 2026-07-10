@@ -521,6 +521,95 @@ const jsdom = '// @rstest-environment jsdom';
     }
   });
 
+  it('keeps project names unique when refreshing renamed partitions', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const implicitJsdomFile = path.join(root, 'implicit-jsdom.test.ts');
+      const initialNodeFile = path.join(root, 'initial-node.test.ts');
+      const explicitJsdomFile = path.join(root, 'explicit-jsdom.test.ts');
+      const explicitNodeFile = path.join(root, 'explicit-node.test.ts');
+      writeFileSync(implicitJsdomFile, '// implicit jsdom test\n');
+      writeFileSync(initialNodeFile, '// initial node test\n');
+      writeFileSync(explicitJsdomFile, '// @rstest-environment jsdom\n');
+      writeFileSync(explicitNodeFile, '// @rstest-environment node\n');
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['initial-node.test.ts', 'explicit-jsdom.test.ts'],
+          exclude: {
+            patterns: [],
+            override: false,
+          },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: {},
+        fileFilters: [],
+      } as unknown as RstestContext;
+      const planState = createRunProjectPlanState({
+        context,
+        browserProjects: [],
+        isWatchMode: false,
+      });
+
+      await planState.resolveRunnableProjects();
+      for (const item of context.projects) {
+        item.normalizedConfig.include = [
+          'implicit-jsdom.test.ts',
+          'explicit-jsdom.test.ts',
+          'explicit-node.test.ts',
+        ];
+        item.normalizedConfig.testEnvironment = { name: 'jsdom' };
+      }
+
+      const refreshed = await planState.resolveRunnableProjects({
+        strictEnvironmentComments: true,
+      });
+
+      expect(
+        refreshed.projects.map((item) => ({
+          name: item.name,
+          normalizedName: item.normalizedConfig.name,
+          environmentName: item.environmentName,
+          testEnvironment: item.normalizedConfig.testEnvironment,
+        })),
+      ).toEqual([
+        {
+          name: 'default-environment-1',
+          normalizedName: 'default-environment-1',
+          environmentName: 'default-environment-1',
+          testEnvironment: { name: 'jsdom' },
+        },
+        {
+          name: 'default-environment-2',
+          normalizedName: 'default-environment-2',
+          environmentName: 'default-environment-2',
+          testEnvironment: { name: 'node' },
+        },
+      ]);
+      expect(
+        refreshed.entriesCache.get('default-environment-1')?.entries,
+      ).toEqual({
+        'explicit-jsdom~test~ts': normalize(explicitJsdomFile),
+        'implicit-jsdom~test~ts': normalize(implicitJsdomFile),
+      });
+      expect(
+        refreshed.entriesCache.get('default-environment-2')?.entries,
+      ).toEqual({
+        'explicit-node~test~ts': normalize(explicitNodeFile),
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('ignores invalid environment comments before config hooks can exclude them', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
     try {

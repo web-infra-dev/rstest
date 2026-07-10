@@ -55,6 +55,11 @@ const getSyntheticEnvironmentName = (
     '_',
   );
 
+const getSyntheticProjectName = (
+  sourceProjectName: string,
+  index: number,
+): string => `${sourceProjectName}-environment-${index}`;
+
 const getUniqueEnvironmentName = (
   environmentName: string,
   sourceEnvironmentName: string,
@@ -76,6 +81,23 @@ const getUniqueEnvironmentName = (
     );
   }
   return nextEnvironmentName;
+};
+
+const getUniqueProjectName = (
+  projectName: string,
+  sourceProjectName: string,
+  usedProjectNames: Set<string>,
+): string => {
+  if (!usedProjectNames.has(projectName)) {
+    return projectName;
+  }
+
+  let index = 1;
+  let nextProjectName = getSyntheticProjectName(sourceProjectName, index);
+  while (usedProjectNames.has(nextProjectName)) {
+    nextProjectName = getSyntheticProjectName(sourceProjectName, (index += 1));
+  }
+  return nextProjectName;
 };
 
 const pushProjectEntries = (
@@ -287,7 +309,11 @@ export const refreshEnvironmentPartitionEntries = async ({
     const reservedEnvironmentNames = new Set(
       sourceGroup.map((project) => project.environmentName),
     );
+    const reservedProjectNames = new Set(
+      sourceGroup.map((project) => project.name),
+    );
     const usedEnvironmentNames = new Set<string>();
+    const usedProjectNames = new Set<string>();
 
     for (const regroupedProject of regrouped.projects) {
       const regroupedEnvironmentName = regroupedProject.environmentName;
@@ -303,6 +329,12 @@ export const refreshEnvironmentPartitionEntries = async ({
       const project = matchedProject ?? regroupedProject;
 
       if (!matchedProject) {
+        project.name = getUniqueProjectName(
+          project.name,
+          sourceProjectName,
+          new Set([...reservedProjectNames, ...usedProjectNames]),
+        );
+        project.normalizedConfig.name = project.name;
         project.environmentName = getUniqueEnvironmentName(
           project.environmentName,
           sourceEnvironmentName,
@@ -319,6 +351,7 @@ export const refreshEnvironmentPartitionEntries = async ({
       project.normalizedConfig.testEnvironment = expectedEnvironment;
       refreshedProjects.push(project);
       usedEnvironmentNames.add(project.environmentName);
+      usedProjectNames.add(project.name);
       const entries = regrouped.entriesCache.get(
         regroupedEnvironmentName,
       )?.entries;

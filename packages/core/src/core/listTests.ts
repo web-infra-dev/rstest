@@ -501,7 +501,7 @@ export async function listTests(
 
   if (nodeProjects.length && filesOnly) {
     await refreshListEntries({
-      silentShardMessage: shouldPrintShardAfterConfigHooks,
+      silentShardMessage: Boolean(shard),
       strictEnvironmentComments: false,
     });
     syncNodeProjects(nodeProjects, context.projects);
@@ -514,14 +514,20 @@ export async function listTests(
       targetProjects: nodeProjects,
       onModifyRstestConfigApplied: async () => {
         refreshedAfterConfigHooks = true;
-        await refreshListEntries({ strictEnvironmentComments: false });
+        await refreshListEntries({
+          silentShardMessage: !shard,
+          strictEnvironmentComments: false,
+        });
         syncNodeProjects(nodeProjects, context.projects);
       },
       onRsbuildConfigResolved: validateEnvironmentComments,
     });
     await rsbuildInstance.initConfigs({ action: 'dev' });
     if (!refreshedAfterConfigHooks) {
-      await refreshListEntries({ strictEnvironmentComments: true });
+      await refreshListEntries({
+        silentShardMessage: !shard,
+        strictEnvironmentComments: true,
+      });
       syncNodeProjects(nodeProjects, context.projects);
     }
   } else {

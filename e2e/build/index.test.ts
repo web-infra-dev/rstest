@@ -140,6 +140,37 @@ describe('test build config', () => {
     expect(cli.stdout).not.toContain('shard-c.test.ts');
   });
 
+  it('modifyRstestConfig should print final shard count when listing test files', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'list',
+        '--filesOnly',
+        '--config',
+        'rstest.listShard.config.mts',
+        '--shard',
+        '1/2',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/modifyRstestConfig'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+    expect(logs).toEqual([
+      'Running shard 1 of 2 (2 of 3 test files)',
+      'shard-a.test.ts',
+      'shard-b.test.ts',
+    ]);
+  });
+
   it('should write output to customized distPath.root', async ({
     onTestFinished,
   }) => {
