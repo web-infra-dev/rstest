@@ -34,6 +34,7 @@ export type ProjectContext = {
     baseTestEnvironment: NormalizedProjectConfig['testEnvironment'];
     sourceEnvironmentName: string;
     sourceProjectName: string;
+    hasImplicitEntries?: boolean;
     environmentComment?: {
       name?: EnvironmentName;
       options?: Record<string, unknown>;

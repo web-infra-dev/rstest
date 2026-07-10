@@ -4,22 +4,21 @@ import {
   type RstestExposeAPI,
 } from '@rstest/core';
 
-const revealJsdomTestPlugin = (): RsbuildPlugin => ({
-  name: 'reveal-jsdom-test',
+const hideNodeTestsPlugin = (): RsbuildPlugin => ({
+  name: 'hide-node-tests',
   setup(api) {
     if (api.context.callerName !== 'rstest') {
       return;
     }
 
     api.useExposed<RstestExposeAPI>('rstest')?.modifyRstestConfig((config) => {
-      config.include = ['environment.test.ts'];
-      config.testEnvironment = 'jsdom';
+      config.include = ['missing-after-modify/**/*.test.ts'];
     });
   },
 });
 
 export default defineConfig({
-  include: ['ignored.test.ts', 'missing/**/*.test.ts'],
-  passWithNoTests: false,
-  plugins: [revealJsdomTestPlugin()],
+  include: ['project-a.test.ts'],
+  passWithNoTests: true,
+  plugins: [hideNodeTestsPlugin()],
 });

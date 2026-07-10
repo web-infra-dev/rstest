@@ -761,6 +761,90 @@ const jsdom = '// @rstest-environment jsdom';
     }
   });
 
+  it('moves implicit entries when the base environment changes during refresh', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const implicitNodeFile = path.join(root, 'implicit-node.test.ts');
+      const explicitNodeFile = path.join(root, 'explicit-node.test.ts');
+      const jsdomFile = path.join(root, 'jsdom.test.ts');
+      writeFileSync(implicitNodeFile, '// implicit node test\n');
+      writeFileSync(explicitNodeFile, '// @rstest-environment node\n');
+      writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['*.test.ts'],
+          exclude: {
+            patterns: [],
+            override: false,
+          },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: {},
+        fileFilters: [],
+      } as unknown as RstestContext;
+      const planState = createRunProjectPlanState({
+        context,
+        browserProjects: [],
+        isWatchMode: false,
+      });
+
+      await planState.resolveRunnableProjects();
+      const baseProject = context.projects.find(
+        (item) => item.environmentName === 'default',
+      )!;
+      baseProject.normalizedConfig.testEnvironment = { name: 'happy-dom' };
+
+      const refreshed = await planState.resolveRunnableProjects({
+        strictEnvironmentComments: true,
+      });
+
+      expect(
+        refreshed.projects.map((item) => ({
+          environmentName: item.environmentName,
+          testEnvironment: item.normalizedConfig.testEnvironment,
+        })),
+      ).toEqual([
+        {
+          environmentName: 'default-environment-2',
+          testEnvironment: { name: 'node' },
+        },
+        {
+          environmentName: 'default',
+          testEnvironment: { name: 'happy-dom' },
+        },
+        {
+          environmentName: 'default-environment-1',
+          testEnvironment: { name: 'jsdom' },
+        },
+      ]);
+      expect(refreshed.entriesCache.get('default')?.entries).toEqual({
+        'implicit-node~test~ts': normalize(implicitNodeFile),
+      });
+      const allEntries = Object.assign(
+        {},
+        ...Array.from(refreshed.entriesCache.values()).map(
+          (item) => item.entries,
+        ),
+      );
+
+      expect(allEntries).toMatchObject({
+        'explicit-node~test~ts': normalize(explicitNodeFile),
+        'jsdom~test~ts': normalize(jsdomFile),
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('validates ignored environment comment errors on the final run plan', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
     try {

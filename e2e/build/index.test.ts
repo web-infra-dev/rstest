@@ -98,6 +98,26 @@ describe('test build config', () => {
     expect(cli.stdout).not.toContain('No test files found');
   });
 
+  it('modifyRstestConfig should refresh run plan when tests are removed', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--config', 'rstest.emptyAfterModify.config.mts'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/modifyRstestConfig'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).toContain('No test files found');
+    expect(cli.stdout).not.toContain('uses project-a modified config');
+  });
+
   it('modifyRstestConfig should preserve shard partition', async ({
     onTestFinished,
   }) => {

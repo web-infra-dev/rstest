@@ -67,6 +67,7 @@ export const groupProjectEntriesByEnvironment = async ({
         config: NormalizedProjectConfig;
         entries: Record<string, string>;
         environmentComment?: EnvironmentComment;
+        hasImplicitEntries: boolean;
       }
     >();
 
@@ -104,12 +105,15 @@ export const groupProjectEntriesByEnvironment = async ({
         group = {
           config,
           entries: {},
+          hasImplicitEntries: false,
         };
         groups.set(key, group);
       }
 
       if (comment) {
         group.environmentComment = comment;
+      } else {
+        group.hasImplicitEntries = true;
       }
 
       group.entries[entryName] = testPath;
@@ -158,7 +162,10 @@ export const groupProjectEntriesByEnvironment = async ({
           baseTestEnvironment,
           sourceEnvironmentName,
           sourceProjectName,
-          environmentComment: group.environmentComment,
+          hasImplicitEntries: group.hasImplicitEntries,
+          environmentComment: group.hasImplicitEntries
+            ? undefined
+            : group.environmentComment,
         },
         normalizedConfig: group.config,
         _globalSetups:

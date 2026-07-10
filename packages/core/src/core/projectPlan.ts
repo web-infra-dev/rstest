@@ -68,6 +68,38 @@ const isSameProjectList = (
 const isBrowserProject = (project: ProjectContext): boolean =>
   project.normalizedConfig.browser.enabled;
 
+const getSyntheticEnvironmentName = (
+  sourceEnvironmentName: string,
+  index: number,
+): string =>
+  `${sourceEnvironmentName}-environment-${index}`.replace(
+    /[^a-zA-Z0-9\-_$]/g,
+    '_',
+  );
+
+const getUniqueEnvironmentName = (
+  environmentName: string,
+  sourceEnvironmentName: string,
+  usedEnvironmentNames: Set<string>,
+): string => {
+  if (!usedEnvironmentNames.has(environmentName)) {
+    return environmentName;
+  }
+
+  let index = 1;
+  let nextEnvironmentName = getSyntheticEnvironmentName(
+    sourceEnvironmentName,
+    index,
+  );
+  while (usedEnvironmentNames.has(nextEnvironmentName)) {
+    nextEnvironmentName = getSyntheticEnvironmentName(
+      sourceEnvironmentName,
+      (index += 1),
+    );
+  }
+  return nextEnvironmentName;
+};
+
 type RefreshEnvironmentPartitionResult = {
   projects: ProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
@@ -158,24 +190,39 @@ const refreshEnvironmentPartitionEntries = async ({
       projects: [groupingProject],
     });
 
+    const reservedEnvironmentNames = new Set(
+      sourceGroup.map((project) => project.environmentName),
+    );
+    const usedEnvironmentNames = new Set<string>();
+
     for (const regroupedProject of regrouped.projects) {
+      const regroupedEnvironmentName = regroupedProject.environmentName;
       const regroupedEnvironmentKey = getEnvironmentKey(
         regroupedProject.normalizedConfig.testEnvironment,
       );
-      const project =
-        sourceGroup.find((item) => {
-          const group = item._environmentGroup;
-          const expectedEnvironment = group?.environmentComment
-            ? applyEnvironmentComment(
-                baseTestEnvironment,
-                group.environmentComment,
-              )
-            : baseTestEnvironment;
+      const matchedProject = sourceGroup.find((item) => {
+        const group = item._environmentGroup;
+        const expectedEnvironment = group?.environmentComment
+          ? applyEnvironmentComment(
+              baseTestEnvironment,
+              group.environmentComment,
+            )
+          : baseTestEnvironment;
 
-          return (
-            getEnvironmentKey(expectedEnvironment) === regroupedEnvironmentKey
-          );
-        }) ?? regroupedProject;
+        return (
+          !usedEnvironmentNames.has(item.environmentName) &&
+          getEnvironmentKey(expectedEnvironment) === regroupedEnvironmentKey
+        );
+      });
+      const project = matchedProject ?? regroupedProject;
+
+      if (!matchedProject) {
+        project.environmentName = getUniqueEnvironmentName(
+          project.environmentName,
+          sourceEnvironmentName,
+          new Set([...reservedEnvironmentNames, ...usedEnvironmentNames]),
+        );
+      }
 
       const group = regroupedProject._environmentGroup;
       const expectedEnvironment = group?.environmentComment
@@ -183,8 +230,9 @@ const refreshEnvironmentPartitionEntries = async ({
         : baseTestEnvironment;
       project.normalizedConfig.testEnvironment = expectedEnvironment;
       refreshedProjects.push(project);
+      usedEnvironmentNames.add(project.environmentName);
       const entries = regrouped.entriesCache.get(
-        regroupedProject.environmentName,
+        regroupedEnvironmentName,
       )?.entries;
 
       for (const [alias, testPath] of Object.entries(entries || {})) {
@@ -215,6 +263,16 @@ const refreshEnvironmentPartitionEntries = async ({
     entriesCache: refreshedEntriesCache,
   };
 };
+
+const getEntriesCacheRecord = (
+  entriesCache: Map<string, ProjectEntries>,
+): Record<string, Record<string, string>> =>
+  Object.fromEntries(
+    Array.from(entriesCache.entries()).map(([environmentName, entries]) => [
+      environmentName,
+      entries.entries,
+    ]),
+  );
 
 type ResolveRunnableProjectsOptions = {
   strictEnvironmentComments?: boolean;
@@ -367,12 +425,16 @@ export const createListProjectPlanState = (
 ): {
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   refreshListEntries: (options?: RefreshListEntriesOptions) => Promise<void>;
+  validateEnvironmentComments: () => Promise<void>;
   getShardedBrowserEntries: () =>
     Map<string, { entries: Record<string, string> }> | undefined;
 } => {
   const testEntries: Record<string, Record<string, string>> = {};
   let shardedBrowserEntries:
     Map<string, { entries: Record<string, string> }> | undefined;
+  let environmentGroupsResolved = false;
+  let environmentGroupsChanged = false;
+  let pendingStrictEnvironmentCommentValidation = false;
 
   const globTestSourceEntries = async (
     name: string,
@@ -420,17 +482,47 @@ export const createListProjectPlanState = (
       }
     }
 
-    await applyEnvironmentGroupsToListEntries({
-      context,
-      testEntries,
-      globTestSourceEntries,
-      ignoreInvalidEnvironmentComments: !strictEnvironmentComments,
-    });
+    const shouldPreserveEnvironmentPartitions =
+      environmentGroupsResolved && environmentGroupsChanged;
+    const ignoreInvalidEnvironmentComments = !strictEnvironmentComments;
+
+    if (shouldPreserveEnvironmentPartitions) {
+      const refreshed = await refreshEnvironmentPartitionEntries({
+        context,
+        projects: context.projects,
+      });
+      context.projects = refreshed.projects;
+      Object.assign(testEntries, getEntriesCacheRecord(refreshed.entriesCache));
+    } else {
+      const grouped = await applyEnvironmentGroupsToListEntries({
+        context,
+        testEntries,
+        globTestSourceEntries,
+        ignoreInvalidEnvironmentComments,
+      });
+      if (!environmentGroupsResolved) {
+        environmentGroupsChanged = grouped.changed;
+      }
+    }
+
+    pendingStrictEnvironmentCommentValidation =
+      ignoreInvalidEnvironmentComments;
+    environmentGroupsResolved = true;
+  };
+
+  const validateEnvironmentComments = async (): Promise<void> => {
+    if (!pendingStrictEnvironmentCommentValidation) {
+      return;
+    }
+
+    await refreshListEntries({ strictEnvironmentComments: true });
+    pendingStrictEnvironmentCommentValidation = false;
   };
 
   return {
     globTestSourceEntries,
     refreshListEntries,
+    validateEnvironmentComments,
     getShardedBrowserEntries: () => shardedBrowserEntries,
   };
 };

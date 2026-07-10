@@ -414,14 +414,20 @@ export async function runTests(context: Rstest): Promise<void> {
     onRsbuildConfigResolved: validateEnvironmentComments,
   });
 
-  let hasBrowserTestsToRun = plan.browserProjectsToRun.length > 0;
-  let hasNodeTestsToRun = plan.nodeProjectsToRun.length > 0;
+  const syncRunPlanFlags = () => {
+    const currentPlan = projectPlanState.getPlan();
+    return {
+      hasBrowserTestsToRun: currentPlan.browserProjectsToRun.length > 0,
+      hasNodeTestsToRun: currentPlan.nodeProjectsToRun.length > 0,
+    };
+  };
 
-  if (!hasNodeTestsToRun && nodeProjects.length) {
+  let { hasBrowserTestsToRun, hasNodeTestsToRun } = syncRunPlanFlags();
+
+  if (nodeProjects.length) {
     await rsbuildInstance.initConfigs({ action: 'dev' });
     plan = projectPlanState.getPlan();
-    hasBrowserTestsToRun = plan.browserProjectsToRun.length > 0;
-    hasNodeTestsToRun = plan.nodeProjectsToRun.length > 0;
+    ({ hasBrowserTestsToRun, hasNodeTestsToRun } = syncRunPlanFlags());
   }
 
   if (hasNodeTestsToRun || hasBrowserTestsToRun) {

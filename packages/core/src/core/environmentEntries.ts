@@ -98,7 +98,7 @@ export const applyEnvironmentGroupsToListEntries = async ({
   testEntries: Record<string, Record<string, string>>;
   globTestSourceEntries: GlobTestSourceEntries;
   ignoreInvalidEnvironmentComments?: boolean;
-}): Promise<void> => {
+}): Promise<{ changed: boolean }> => {
   if (!context.normalizedConfig.shard) {
     await Promise.all(
       context.projects.map((project) =>
@@ -119,7 +119,7 @@ export const applyEnvironmentGroupsToListEntries = async ({
   });
 
   if (!grouped.changed) {
-    return;
+    return { changed: false };
   }
 
   const nodeEnvironmentNames = new Set(
@@ -142,4 +142,6 @@ export const applyEnvironmentGroupsToListEntries = async ({
     ...context.projects.filter(isBrowserProject),
     ...grouped.projects,
   ];
+
+  return { changed: true };
 };
