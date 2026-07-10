@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { groupProjectEntriesByEnvironment } from '../../src/core/environmentGroups';
-import type { ProjectContext } from '../../src/types';
+import { createRunProjectPlanState } from '../../src/core/projectPlan';
+import type { ProjectContext, RstestContext } from '../../src/types';
 import {
   applyEnvironmentComment,
   parseEnvironmentComment,
@@ -225,6 +226,52 @@ const regexp = /"/;
     }
   });
 
+  it('keeps the base environment group eligible for global setup regardless of file order', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const nodeFile = path.join(root, 'node.test.ts');
+      const jsdomFile = path.join(root, 'jsdom.test.ts');
+      writeFileSync(nodeFile, '// node test\n');
+      writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
+
+      const project = createProject();
+
+      const grouped = await groupProjectEntriesByEnvironment({
+        entriesCache: new Map([
+          [
+            project.environmentName,
+            {
+              entries: {
+                jsdom: jsdomFile,
+                node: nodeFile,
+              },
+            },
+          ],
+        ]),
+        projects: [project],
+      });
+
+      expect(grouped.changed).toBe(true);
+      expect(
+        grouped.projects.map((item) => ({
+          environmentName: item.environmentName,
+          globalSetupsClaimed: item._globalSetups,
+        })),
+      ).toEqual([
+        {
+          environmentName: 'default-environment-1',
+          globalSetupsClaimed: true,
+        },
+        {
+          environmentName: 'default',
+          globalSetupsClaimed: false,
+        },
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('preserves the base project name for files without environment comments', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
     try {
@@ -341,6 +388,68 @@ const jsdom = '// @rstest-environment jsdom';
         grouped.entriesCache.get(project.environmentName)?.entries,
       ).toEqual({
         file,
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refreshes environment partitions from the source project under shard', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const nodeFile = path.join(root, 'a.test.ts');
+      const jsdomFile = path.join(root, 'b.test.ts');
+      const newNodeFile = path.join(root, 'c.test.ts');
+      writeFileSync(nodeFile, '// node test\n');
+      writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
+      writeFileSync(newNodeFile, '// new node test\n');
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['a.test.ts', 'b.test.ts'],
+          exclude: {
+            patterns: [],
+            override: false,
+          },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: {
+          shard: {
+            index: 1,
+            count: 1,
+          },
+        },
+        fileFilters: [],
+      } as unknown as RstestContext;
+      const planState = createRunProjectPlanState({
+        context,
+        browserProjects: [],
+        isWatchMode: false,
+      });
+
+      await planState.resolveRunnableProjects();
+      for (const item of context.projects) {
+        item.normalizedConfig.include = ['a.test.ts', 'b.test.ts', 'c.test.ts'];
+      }
+
+      const refreshed = await planState.resolveRunnableProjects();
+
+      expect(refreshed.entriesCache.get('default')?.entries).toEqual({
+        'a~test~ts': nodeFile,
+        'c~test~ts': newNodeFile,
+      });
+      expect(
+        refreshed.entriesCache.get('default-environment-1')?.entries,
+      ).toEqual({
+        'b~test~ts': jsdomFile,
       });
     } finally {
       rmSync(root, { recursive: true, force: true });

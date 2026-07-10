@@ -31,6 +31,7 @@ export type ProjectContext = {
   _environmentGroup?: {
     key: string;
     baseKey: string;
+    baseTestEnvironment: NormalizedProjectConfig['testEnvironment'];
     sourceEnvironmentName: string;
     environmentComment?: {
       name?: EnvironmentName;

@@ -5,7 +5,7 @@ import { getTestEntries } from './testFiles';
 /**
  * Distributes test files into a specific shard.
  */
-function getShardedFiles<T extends { testPath: string }>(
+export function getShardedFiles<T extends { testPath: string }>(
   files: T[],
   shard: ShardConfig,
 ): T[] {

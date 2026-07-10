@@ -117,10 +117,15 @@ export const groupProjectEntriesByEnvironment = async ({
 
     changed = true;
     let groupIndex = 0;
-    let shouldRunGlobalSetup = true;
     const sourceEnvironmentName =
       project._environmentGroup?.sourceEnvironmentName ??
       project.environmentName;
+    const baseTestEnvironment =
+      project._environmentGroup?.baseTestEnvironment ??
+      project.normalizedConfig.testEnvironment;
+    const globalSetupEnvironmentKey = groups.has(baseEnvironmentKey)
+      ? baseEnvironmentKey
+      : groups.keys().next().value;
     for (const [key, group] of groups) {
       const isBaseEnvironment = key === baseEnvironmentKey;
       const groupName = isBaseEnvironment
@@ -139,13 +144,14 @@ export const groupProjectEntriesByEnvironment = async ({
         _environmentGroup: {
           key,
           baseKey: baseEnvironmentKey,
+          baseTestEnvironment,
           sourceEnvironmentName,
           environmentComment: group.environmentComment,
         },
         normalizedConfig: group.config,
-        _globalSetups: project._globalSetups || !shouldRunGlobalSetup,
+        _globalSetups:
+          project._globalSetups || key !== globalSetupEnvironmentKey,
       });
-      shouldRunGlobalSetup = false;
       groupedEntriesCache.set(environmentName, {
         ...projectEntries,
         entries: group.entries,

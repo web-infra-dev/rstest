@@ -1,6 +1,7 @@
 import type { ProjectContext, ProjectEntries, RstestContext } from '../types';
 import {
   applyEnvironmentComment,
+  getShardedFiles,
   getTestEntries,
   resolveShardedEntries,
 } from '../utils';
@@ -67,61 +68,99 @@ const isSameProjectList = (
 const refreshEnvironmentPartitionEntries = async ({
   context,
   projects,
-  entriesCache,
 }: {
   context: RstestContext;
   projects: ProjectContext[];
-  entriesCache: Map<string, ProjectEntries>;
 }): Promise<Map<string, ProjectEntries>> => {
-  const refreshedEntriesCache = new Map<string, ProjectEntries>();
+  const sourceProjects = new Map<string, ProjectContext[]>();
   for (const project of projects) {
+    const sourceEnvironmentName =
+      project._environmentGroup?.sourceEnvironmentName ??
+      project.environmentName;
+    const sourceGroup = sourceProjects.get(sourceEnvironmentName) ?? [];
+    sourceGroup.push(project);
+    sourceProjects.set(sourceEnvironmentName, sourceGroup);
+  }
+
+  const refreshedEntries = [] as Array<{
+    project: ProjectContext;
+    alias: string;
+    testPath: string;
+  }>;
+
+  for (const sourceGroup of sourceProjects.values()) {
+    const sourceProject =
+      sourceGroup.find((project) => {
+        const sourceEnvironmentName =
+          project._environmentGroup?.sourceEnvironmentName ??
+          project.environmentName;
+        return project.environmentName === sourceEnvironmentName;
+      }) ?? sourceGroup[0]!;
+    const environmentGroup = sourceProject._environmentGroup;
+    const baseTestEnvironment =
+      environmentGroup?.baseTestEnvironment ??
+      sourceProject.normalizedConfig.testEnvironment;
+    const groupingProject: ProjectContext = {
+      ...sourceProject,
+      normalizedConfig: {
+        ...sourceProject.normalizedConfig,
+        testEnvironment: baseTestEnvironment,
+      },
+    };
     const nextEntries = await getProjectEntries({
       context,
-      project,
+      project: groupingProject,
     });
-    const previousFiles = new Set(
-      Object.values(entriesCache.get(project.environmentName)?.entries || {}),
-    );
     const regrouped = await groupProjectEntriesByEnvironment({
       entriesCache: new Map([
         [
-          project.environmentName,
+          groupingProject.environmentName,
           {
-            entries: context.normalizedConfig.shard
-              ? Object.fromEntries(
-                  Object.entries(nextEntries).filter(([, file]) =>
-                    previousFiles.has(file),
-                  ),
-                )
-              : nextEntries,
+            entries: nextEntries,
             fileFilters: context.fileFilters,
           },
         ],
       ]),
-      projects: [project],
+      projects: [groupingProject],
     });
 
-    const group = project._environmentGroup;
-    const expectedEnvironment = group?.environmentComment
-      ? applyEnvironmentComment(
-          project.normalizedConfig.testEnvironment,
-          group.environmentComment,
-        )
-      : project.normalizedConfig.testEnvironment;
-    project.normalizedConfig.testEnvironment = expectedEnvironment;
-    const expectedKey = getEnvironmentKey(expectedEnvironment);
-    const matchedProject = regrouped.projects.find(
-      (item) =>
-        getEnvironmentKey(item.normalizedConfig.testEnvironment) ===
-        expectedKey,
-    );
+    for (const project of sourceGroup) {
+      const group = project._environmentGroup;
+      const expectedEnvironment = group?.environmentComment
+        ? applyEnvironmentComment(baseTestEnvironment, group.environmentComment)
+        : baseTestEnvironment;
+      project.normalizedConfig.testEnvironment = expectedEnvironment;
+      const expectedKey = getEnvironmentKey(expectedEnvironment);
+      const matchedProject = regrouped.projects.find(
+        (item) =>
+          getEnvironmentKey(item.normalizedConfig.testEnvironment) ===
+          expectedKey,
+      );
+      const entries = matchedProject
+        ? regrouped.entriesCache.get(matchedProject.environmentName)?.entries
+        : undefined;
 
-    refreshedEntriesCache.set(
-      project.environmentName,
-      regrouped.entriesCache.get(
-        matchedProject?.environmentName ?? project.environmentName,
-      ) || { entries: {}, fileFilters: context.fileFilters },
-    );
+      for (const [alias, testPath] of Object.entries(entries || {})) {
+        refreshedEntries.push({ project, alias, testPath });
+      }
+    }
+  }
+
+  const entriesToRun = context.normalizedConfig.shard
+    ? getShardedFiles(refreshedEntries, context.normalizedConfig.shard)
+    : refreshedEntries;
+
+  const refreshedEntriesCache = new Map<string, ProjectEntries>();
+  for (const project of projects) {
+    refreshedEntriesCache.set(project.environmentName, {
+      entries: {},
+      fileFilters: context.fileFilters,
+    });
+  }
+
+  for (const { project, alias, testPath } of entriesToRun) {
+    refreshedEntriesCache.get(project.environmentName)!.entries[alias] =
+      testPath;
   }
 
   return refreshedEntriesCache;
@@ -188,7 +227,6 @@ export const createRunProjectPlanState = ({
       entriesCache = await refreshEnvironmentPartitionEntries({
         context,
         projects: allProjects,
-        entriesCache,
       });
     } else if (context.normalizedConfig.shard) {
       entriesCache = (await resolveShardedEntries(context)) || new Map();
