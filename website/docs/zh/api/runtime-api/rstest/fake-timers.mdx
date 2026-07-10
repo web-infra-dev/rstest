@@ -18,6 +18,8 @@ Rstest 提供了一些实用函数，基于 [@sinonjs/fake-timers](https://githu
 
 调用此方法可以启用定时器的模拟。底层使用 [@sinonjs/fake-timers](https://github.com/sinonjs/fake-timers)。
 
+- **示例：**
+
 ```ts
 rs.useFakeTimers();
 ```
@@ -26,17 +28,21 @@ rs.useFakeTimers();
 
 该配置会透传给 `@sinonjs/fake-timers`。例如，`toFake` 和 `toNotFake` 用于控制要模拟哪些定时器 API，`now` 用于设置初始的模拟系统时间，`shouldAdvanceTime` / `advanceTimeDelta` 用于开启自动推进。
 
-**Disposable / `using` 语法**
+- **`using` 语法**
 
 <ApiMeta addedVersion="0.10.3" />
 
-Rstest 支持使用 `using` 语法在代码块退出时自动恢复真实定时器：
+`rs.useFakeTimers()` 返回一个 `Disposable`，可配合 `using` 语法在代码块退出时自动恢复真实定时器。
+
+`_timers` 变量以下划线开头，表示它不会被直接使用。`using` 语法要求声明一个变量，因此不能省略 `_timers`，但可以使用其他变量名。
 
 ```ts
 {
   using _timers = rs.useFakeTimers();
   // Fake timers 在这个代码块中启用。
 }
+
+// 真实定时器已恢复。
 ```
 
 ## rs.useRealTimers
