@@ -41,7 +41,6 @@ import {
   type Needle,
   type SourceMapInput,
 } from '@jridgewell/trace-mapping';
-import { Parser } from 'acorn';
 import type { Profiler } from 'node:inspector';
 import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
 import jsTokens from 'js-tokens';
@@ -105,14 +104,6 @@ type PreparedCoverage = {
   statements: StatementDescriptor[];
   branches: BranchDescriptor[];
 };
-type OriginalSourceOptions = {
-  source: string;
-  sourceMap: SourceMapLike;
-  sourceFilename: string;
-  sourceCode: string;
-  hasSourceContent: boolean;
-  traceMap: TraceMap;
-};
 type FileCoverageLike = FileCoverageData | { data: FileCoverageData };
 
 type ConvertOptions = {
@@ -137,31 +128,25 @@ const IGNORE_LINES_PATTERN =
   /\s*(?:istanbul|[cv]8|node:coverage)\s+ignore\s+(start|stop)(?=\W|$)/;
 const EOL_PATTERN = /\r?\n/g;
 const MAX_PREPARED_CACHE_SIZE = 50;
-const LARGE_GENERATED_CODE_SIZE = 1024 * 1024;
-const LARGE_ORIGINAL_CODE_SIZE = 512 * 1024;
-const LARGE_SOURCEMAP_MAPPINGS_SIZE = 512 * 1024;
 
-const preparedCache = new Map<string, Promise<PreparedCoverage | null>>();
-const originalSourceAstCache = new Map<string, unknown | null>();
+const preparedCache = new Map<string, Promise<PreparedCoverage>>();
 
 export async function convertV8CoverageWithAst(
   options: ConvertOptions,
 ): Promise<Record<string, FileCoverageData>> {
-  const effectiveOptions = getEffectiveConvertOptions(options);
-  const prepared = await getPreparedCoverage(effectiveOptions);
+  const prepared = await getPreparedCoverage(options);
 
   if (!prepared) {
     return {};
   }
 
-  return applyCoverage(prepared, normalize(effectiveOptions.coverage));
+  return applyCoverage(prepared, normalize(options.coverage));
 }
 
 export async function applyV8CoverageWithAst(
   options: ConvertOptions & { coverageMap: CoverageMap },
 ): Promise<void> {
-  const effectiveOptions = getEffectiveConvertOptions(options);
-  const prepared = await getPreparedCoverage(effectiveOptions);
+  const prepared = await getPreparedCoverage(options);
 
   if (!prepared) {
     return;
@@ -170,13 +155,8 @@ export async function applyV8CoverageWithAst(
   applyCoverageToMap(
     options.coverageMap,
     prepared,
-    normalize(effectiveOptions.coverage),
+    normalize(options.coverage),
   );
-}
-
-export function __clearCoverageAstCachesForTest(): void {
-  preparedCache.clear();
-  originalSourceAstCache.clear();
 }
 
 async function getPreparedCoverage(
@@ -202,404 +182,6 @@ async function getPreparedCoverage(
   }
 
   return prepared;
-}
-
-function getEffectiveConvertOptions(options: ConvertOptions): ConvertOptions {
-  const originalSourceOptions = getOriginalSourceOptions(options);
-
-  if (!originalSourceOptions) {
-    return options;
-  }
-
-  if (!canReuseOriginalSourceCoverage(options.code, originalSourceOptions)) {
-    if (originalSourceOptions.hasSourceContent) {
-      return options;
-    }
-
-    if (
-      !isLargeOriginalSourceCoverageInput(
-        options.code,
-        originalSourceOptions.sourceCode.length,
-        getSourceMapMappingsSize(originalSourceOptions.sourceMap),
-      )
-    ) {
-      return options;
-    }
-
-    const remappedCoverage = remapCoverageToOriginalSource(
-      options.coverage,
-      originalSourceOptions,
-      options.code,
-    );
-
-    if (!remappedCoverage) {
-      return options;
-    }
-
-    return (
-      createOriginalSourceConvertOptions(
-        options,
-        originalSourceOptions,
-        remappedCoverage,
-      ) ?? options
-    );
-  }
-
-  return (
-    createOriginalSourceConvertOptions(
-      options,
-      originalSourceOptions,
-      options.coverage,
-    ) ?? options
-  );
-}
-
-function getOriginalSourceOptions(
-  options: ConvertOptions,
-): OriginalSourceOptions | null {
-  const sourceMap = options.sourceMap;
-
-  if (!sourceMap?.sources || sourceMap.sources.length !== 1) {
-    return null;
-  }
-
-  const source = sourceMap.sources[0];
-  if (!source) {
-    return null;
-  }
-
-  const sourceIndex = sourceMap.sources.indexOf(source);
-  const sourceContent = sourceMap.sourcesContent?.[sourceIndex];
-  const hasSourceContent = typeof sourceContent === 'string';
-  const mappingsSize = getSourceMapMappingsSize(sourceMap);
-
-  if (
-    hasSourceContent &&
-    !canReuseOriginalSourceCode(options.code, sourceContent) &&
-    !isLargeOriginalSourceCoverageInput(
-      options.code,
-      sourceContent.length,
-      mappingsSize,
-    )
-  ) {
-    return null;
-  }
-
-  if (
-    !hasSourceContent &&
-    !isLargeOriginalSourceCoverageInput(options.code, 0, mappingsSize)
-  ) {
-    return null;
-  }
-
-  const generatedFilename = fileURLToPath(options.coverage.url);
-  const rawSourceMapUrl = options.sourceMapUrl
-    ? normalizeSourceMapUrl(options.sourceMapUrl)
-    : generatedFilename;
-  const sourceMapUrl = rawSourceMapUrl ?? generatedFilename;
-  const traceMap = new TraceMap(sourceMap as SourceMapInput, sourceMapUrl);
-  if (URL_SCHEME_PATTERN.test(source) && !source.startsWith('file://')) {
-    return null;
-  }
-  const sourceFilename = resolveSourceFilename(
-    traceMap.resolvedSources[0] ?? source,
-    dirname(sourceMapUrl),
-  );
-
-  const sourceCode = getSourceContent(sourceMap, source, sourceFilename);
-  if (sourceCode === null) {
-    return null;
-  }
-
-  if (options.sourceFilter && !options.sourceFilter(sourceFilename)) {
-    return null;
-  }
-
-  return {
-    source,
-    sourceMap,
-    sourceFilename,
-    sourceCode,
-    hasSourceContent,
-    traceMap,
-  };
-}
-
-function createOriginalSourceConvertOptions(
-  options: ConvertOptions,
-  originalSourceOptions: OriginalSourceOptions,
-  coverage: Pick<Profiler.ScriptCoverage, 'functions' | 'url'>,
-): ConvertOptions | null {
-  const sourceCacheKey = getOriginalSourceCacheKey(originalSourceOptions);
-  const ast = getOriginalSourceAst(originalSourceOptions);
-
-  if (!ast) {
-    return null;
-  }
-
-  return {
-    ...options,
-    ast,
-    cacheKey: sourceCacheKey,
-    code: originalSourceOptions.sourceCode,
-    coverage: {
-      url: pathToFileURL(originalSourceOptions.sourceFilename).href,
-      functions: coverage.functions,
-    },
-    sourceMap: undefined,
-    sourceMapUrl: undefined,
-  };
-}
-
-function getOriginalSourceAst(
-  options: Pick<OriginalSourceOptions, 'sourceFilename' | 'sourceCode'>,
-): unknown | null {
-  const cacheKey = getOriginalSourceCacheKey(options);
-  if (originalSourceAstCache.has(cacheKey)) {
-    return originalSourceAstCache.get(cacheKey) ?? null;
-  }
-
-  const ast = tryParseModuleAst(options.sourceCode);
-  originalSourceAstCache.set(cacheKey, ast);
-
-  if (originalSourceAstCache.size > MAX_PREPARED_CACHE_SIZE) {
-    const firstKey = originalSourceAstCache.keys().next().value;
-    if (firstKey) {
-      originalSourceAstCache.delete(firstKey);
-    }
-  }
-
-  return ast;
-}
-
-function getOriginalSourceCacheKey(
-  options: Pick<OriginalSourceOptions, 'sourceFilename' | 'sourceCode'>,
-): string {
-  return [
-    options.sourceFilename,
-    options.sourceCode.length,
-    hashString(options.sourceCode),
-  ].join('\0');
-}
-
-function canReuseOriginalSourceCoverage(
-  generatedCode: string,
-  options: OriginalSourceOptions,
-): boolean {
-  return canReuseOriginalSourceCode(generatedCode, options.sourceCode);
-}
-
-function canReuseOriginalSourceCode(
-  generatedCode: string,
-  sourceCode: string,
-): boolean {
-  if (generatedCode === sourceCode) {
-    return true;
-  }
-
-  const trimmedGeneratedCode = stripFinalSourceMapComment(generatedCode);
-  if (trimmedGeneratedCode === sourceCode) {
-    return true;
-  }
-
-  const normalizedSourceCode = stripTrailingNewlines(sourceCode);
-  return stripTrailingNewlines(trimmedGeneratedCode) === normalizedSourceCode;
-}
-
-function isLargeOriginalSourceCoverageInput(
-  generatedCode: string,
-  originalCodeSize: number,
-  mappingsSize: number,
-): boolean {
-  return (
-    generatedCode.length >= LARGE_GENERATED_CODE_SIZE ||
-    originalCodeSize >= LARGE_ORIGINAL_CODE_SIZE ||
-    mappingsSize >= LARGE_SOURCEMAP_MAPPINGS_SIZE
-  );
-}
-
-function getSourceMapMappingsSize(sourceMap: SourceMapLike): number {
-  if (typeof sourceMap.mappings === 'string') {
-    return sourceMap.mappings.length;
-  }
-
-  return sourceMap.mappings.reduce(
-    (size, line) =>
-      size + line.reduce((lineSize, segment) => lineSize + segment.length, 0),
-    0,
-  );
-}
-
-function remapCoverageToOriginalSource(
-  coverage: Pick<Profiler.ScriptCoverage, 'functions' | 'url'>,
-  options: OriginalSourceOptions,
-  generatedCode: string,
-): Pick<Profiler.ScriptCoverage, 'functions' | 'url'> | null {
-  const generatedLocator = new BaseLocator(generatedCode);
-  const originalLocator = new BaseLocator(options.sourceCode);
-  const functions: Profiler.FunctionCoverage[] = [];
-
-  for (const fn of coverage.functions) {
-    const ranges: Profiler.CoverageRange[] = [];
-
-    for (const range of fn.ranges) {
-      const remappedRange = remapRangeToOriginalSource(
-        range,
-        options,
-        generatedLocator,
-        originalLocator,
-      );
-
-      if (remappedRange) {
-        ranges.push(remappedRange);
-      }
-    }
-
-    if (ranges.length > 0) {
-      functions.push({ ...fn, ranges });
-    }
-  }
-
-  if (functions.length === 0) {
-    return null;
-  }
-
-  return {
-    url: pathToFileURL(options.sourceFilename).href,
-    functions,
-  };
-}
-
-function remapRangeToOriginalSource(
-  range: Profiler.CoverageRange,
-  options: OriginalSourceOptions,
-  generatedLocator: BaseLocator,
-  originalLocator: BaseLocator,
-): Profiler.CoverageRange | null {
-  const start = mapGeneratedOffsetToOriginalOffset(
-    range.startOffset,
-    options,
-    generatedLocator,
-    originalLocator,
-    true,
-  );
-  const end = mapGeneratedOffsetToOriginalOffset(
-    Math.max(range.startOffset, range.endOffset - 1),
-    options,
-    generatedLocator,
-    originalLocator,
-    false,
-  );
-
-  if (start === null || end === null) {
-    return null;
-  }
-
-  const endOffset = Math.min(end + 1, options.sourceCode.length);
-  if (start >= endOffset) {
-    return null;
-  }
-
-  return {
-    startOffset: start,
-    endOffset,
-    count: range.count,
-  };
-}
-
-function mapGeneratedOffsetToOriginalOffset(
-  offset: number,
-  options: OriginalSourceOptions,
-  generatedLocator: BaseLocator,
-  originalLocator: BaseLocator,
-  allowNextMapping: boolean,
-): number | null {
-  const generatedPosition = generatedLocator.offsetToNeedle(offset);
-  const originalPosition = getPosition(
-    allowNextMapping
-      ? { ...generatedPosition, bias: LEAST_UPPER_BOUND }
-      : generatedPosition,
-    options.traceMap,
-  );
-
-  if (
-    originalPosition === null ||
-    resolveSourceFilename(
-      originalPosition.filename ?? '',
-      dirname(options.sourceFilename),
-    ) !== options.sourceFilename
-  ) {
-    return null;
-  }
-
-  return originalLocator.needleToOffset(originalPosition);
-}
-
-function getSourceContent(
-  sourceMap: SourceMapLike,
-  source: string,
-  sourceFilename: string,
-): string | null {
-  const sourceIndex = sourceMap.sources.indexOf(source);
-  const sourceContent = sourceMap.sourcesContent?.[sourceIndex];
-  if (typeof sourceContent === 'string') {
-    return sourceContent;
-  }
-
-  return tryReadFileSync(sourceFilename) ?? null;
-}
-
-function stripFinalSourceMapComment(code: string): string {
-  let result = code;
-  SOURCE_MAP_URL_PATTERN.lastIndex = 0;
-  for (const match of code.matchAll(SOURCE_MAP_URL_PATTERN)) {
-    if (
-      match.index !== undefined &&
-      match.index + match[0].length === code.length
-    ) {
-      result = code.slice(0, match.index);
-    }
-  }
-  SOURCE_MAP_URL_PATTERN.lastIndex = 0;
-  return result;
-}
-
-function stripTrailingNewlines(code: string): string {
-  return code.replace(/[\r\n]+$/, '');
-}
-
-function hashString(value: string): number {
-  let hash = 0;
-  for (let index = 0; index < value.length; index++) {
-    hash = Math.imul(31, hash) + value.charCodeAt(index);
-  }
-  return hash >>> 0;
-}
-
-function parseModuleAst(code: string) {
-  try {
-    return Parser.parse(code, {
-      ecmaVersion: 'latest',
-      sourceType: 'module',
-    });
-  } catch (moduleError) {
-    try {
-      return Parser.parse(code, {
-        ecmaVersion: 'latest',
-        sourceType: 'script',
-      });
-    } catch {
-      throw moduleError;
-    }
-  }
-}
-
-function tryParseModuleAst(code: string): unknown | null {
-  try {
-    return parseModuleAst(code);
-  } catch {
-    return null;
-  }
 }
 
 async function prepareCoverage(
@@ -629,6 +211,7 @@ async function prepareCoverage(
   const skippedNodes = new WeakSet<AstNode>();
   const coveredNodes = new WeakSet<AstNode>();
   let nextIgnore: AstNode | false = false;
+
   const getIgnoreHint = (node: AstNode) => {
     for (const hint of ignoreHints) {
       if (hint.loc.end === node.start) {
@@ -1167,10 +750,6 @@ class BaseLocator {
     };
     this.cache.set(offset, needle);
     return { ...needle };
-  }
-
-  needleToOffset(needle: Needle): number {
-    return this.lineStarts[needle.line - 1]! + needle.column;
   }
 }
 

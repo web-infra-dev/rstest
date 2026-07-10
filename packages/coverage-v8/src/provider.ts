@@ -6,10 +6,6 @@ import type {
   NormalizedCoverageOptions,
   CoverageProvider as RstestCoverageProvider,
 } from '@rstest/core';
-import type {
-  DecodedSourceMap,
-  EncodedSourceMap,
-} from '@jridgewell/trace-mapping';
 import { Parser } from 'acorn';
 import { type CoverageMap, type FileCoverageData } from 'istanbul-lib-coverage';
 import type { ReportBase } from 'istanbul-lib-report';
@@ -23,9 +19,14 @@ import {
   convertV8CoverageWithAst,
 } from './v8AstConverter';
 
-type SourceMapLike = Omit<EncodedSourceMap | DecodedSourceMap, 'sources'> & {
+type SourceMapLike = {
   version: number;
   sources: string[];
+  names: string[];
+  mappings: string;
+  file?: string;
+  sourceRoot?: string;
+  sourcesContent?: (string | null)[];
 };
 
 type CoverageReporterConstructor = new (
@@ -38,11 +39,6 @@ const SOURCE_MAP_INNER_PATTERN =
 const SOURCE_MAP_URL_PATTERN = new RegExp(
   `(?:/\\*(?:\\s*\\r?\\n(?://)?)?${SOURCE_MAP_INNER_PATTERN.source}\\s*\\*/|//${SOURCE_MAP_INNER_PATTERN.source})\\s*`,
 );
-const DATA_SOURCE_MAP_PATTERN = /^data:application\/json(?:;[^,]*)?,/i;
-const BASE_64_SOURCE_MAP_PATTERN =
-  /^data:application\/json(?:;[^,]*)?;base64,/i;
-const URL_SCHEME_PATTERN = /^[a-zA-Z][a-zA-Z\d+.-]*:/;
-const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-zA-Z]:[\\/]/;
 
 type CoverageEntry = inspector.Profiler.ScriptCoverage & {
   filePath: string;
@@ -414,6 +410,20 @@ export class CoverageProvider implements RstestCoverageProvider {
     );
   }
 
+  private hasInlineSourceMap(code: string): boolean {
+    const sourceMapUrl = this.getSourceMapUrl(code);
+    return (
+      sourceMapUrl !== undefined && this.isInlineSourceMapUrl(sourceMapUrl)
+    );
+  }
+
+  private hasExternalSourceMap(code: string): boolean {
+    const sourceMapUrl = this.getSourceMapUrl(code);
+    return (
+      sourceMapUrl !== undefined && !this.isInlineSourceMapUrl(sourceMapUrl)
+    );
+  }
+
   private getSourceMapUrl(code: string): string | undefined {
     let searchIndex = code.lastIndexOf('sourceMappingURL');
 
@@ -441,153 +451,6 @@ export class CoverageProvider implements RstestCoverageProvider {
     return url.startsWith('data:');
   }
 
-  private parseSourceMap(sourceMapStr: string): SourceMapLike | null {
-    try {
-      const sourceMap = JSON.parse(sourceMapStr) as unknown;
-      if (
-        !isRecord(sourceMap) ||
-        !Array.isArray(sourceMap.sources) ||
-        !sourceMap.sources.every((source) => typeof source === 'string') ||
-        (sourceMap.version !== undefined &&
-          typeof sourceMap.version !== 'number') ||
-        (sourceMap.names !== undefined && !Array.isArray(sourceMap.names)) ||
-        (sourceMap.mappings !== undefined &&
-          typeof sourceMap.mappings !== 'string' &&
-          !Array.isArray(sourceMap.mappings)) ||
-        (sourceMap.file !== undefined &&
-          sourceMap.file !== null &&
-          typeof sourceMap.file !== 'string') ||
-        (sourceMap.sourceRoot !== undefined &&
-          typeof sourceMap.sourceRoot !== 'string') ||
-        (sourceMap.sourcesContent !== undefined &&
-          !Array.isArray(sourceMap.sourcesContent))
-      ) {
-        return null;
-      }
-
-      return {
-        version: 3,
-        sources: sourceMap.sources,
-        names: sourceMap.names ?? [],
-        mappings: sourceMap.mappings ?? '',
-        file: sourceMap.file,
-        sourceRoot: sourceMap.sourceRoot,
-        sourcesContent: sourceMap.sourcesContent,
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  private loadInlineSourceMap(sourceMapUrl: string): SourceMapLike | null {
-    try {
-      if (BASE_64_SOURCE_MAP_PATTERN.test(sourceMapUrl)) {
-        const encoded = sourceMapUrl.replace(BASE_64_SOURCE_MAP_PATTERN, '');
-        return this.parseSourceMap(Buffer.from(encoded, 'base64').toString());
-      }
-
-      if (DATA_SOURCE_MAP_PATTERN.test(sourceMapUrl)) {
-        const encoded = sourceMapUrl.replace(DATA_SOURCE_MAP_PATTERN, '');
-        return this.parseSourceMap(decodeURIComponent(encoded));
-      }
-    } catch {
-      return null;
-    }
-
-    return null;
-  }
-
-  private resolveSourceMapSource(
-    source: string,
-    baseDirectory: string,
-    sourceRoot?: string,
-  ): string {
-    const sourceWithRoot = sourceRoot
-      ? this.joinSourceRoot(sourceRoot, source)
-      : source;
-
-    if (sourceWithRoot.startsWith('file://')) {
-      return fileURLToPath(sourceWithRoot);
-    }
-
-    if (
-      URL_SCHEME_PATTERN.test(sourceWithRoot) &&
-      !WINDOWS_ABSOLUTE_PATH_PATTERN.test(sourceWithRoot)
-    ) {
-      return sourceWithRoot;
-    }
-
-    return resolve(baseDirectory, sourceWithRoot);
-  }
-
-  private joinSourceRoot(sourceRoot: string, source: string): string {
-    if (
-      URL_SCHEME_PATTERN.test(sourceRoot) &&
-      !WINDOWS_ABSOLUTE_PATH_PATTERN.test(sourceRoot)
-    ) {
-      const root = sourceRoot.endsWith('/') ? sourceRoot : `${sourceRoot}/`;
-      return new URL(source, root).href;
-    }
-
-    return posix.join(sourceRoot, source);
-  }
-
-  private sourceMapMayContainIncludedSource(
-    filePath: string,
-    sourceMap: SourceMapLike,
-    sourceMapUrl?: string,
-  ): boolean {
-    if (!sourceMap.sources.length) {
-      return true;
-    }
-
-    const baseDirectory = dirname(sourceMapUrl ?? filePath);
-    return sourceMap.sources.some((source) => {
-      if (this.shouldIgnoreOriginalSource(source)) {
-        return false;
-      }
-
-      const sourcePath = this.resolveSourceMapSource(
-        source,
-        baseDirectory,
-        sourceMap.sourceRoot,
-      );
-      return this.shouldKeepOriginalSource(sourcePath);
-    });
-  }
-
-  private async shouldKeepSourceMapEntry(
-    filePath: string,
-    code: string,
-  ): Promise<boolean | undefined> {
-    const sourceMapUrl = this.getSourceMapUrl(code);
-    if (!sourceMapUrl) {
-      return undefined;
-    }
-
-    if (this.isInlineSourceMapUrl(sourceMapUrl)) {
-      const sourceMap = this.loadInlineSourceMap(sourceMapUrl);
-      return sourceMap
-        ? this.sourceMapMayContainIncludedSource(filePath, sourceMap)
-        : true;
-    }
-
-    try {
-      const resolvedSourceMapUrl = resolve(dirname(filePath), sourceMapUrl);
-      const sourceMapStr = await fs.readFile(resolvedSourceMapUrl, 'utf-8');
-      const sourceMap = this.parseSourceMap(sourceMapStr);
-      return sourceMap
-        ? this.sourceMapMayContainIncludedSource(
-            filePath,
-            sourceMap,
-            resolvedSourceMapUrl,
-          )
-        : true;
-    } catch {
-      return true;
-    }
-  }
-
   private async loadExternalSourceMap(
     filePath: string,
     code: string,
@@ -604,14 +467,12 @@ export class CoverageProvider implements RstestCoverageProvider {
     try {
       const resolvedSourceMapUrl = resolve(dirname(filePath), sourceMapUrl);
       const sourceMapStr = await fs.readFile(resolvedSourceMapUrl, 'utf-8');
-      const sourceMap = this.parseSourceMap(sourceMapStr);
-
-      if (!sourceMap) {
-        return {};
-      }
 
       return {
-        sourceMap,
+        sourceMap: {
+          names: [],
+          ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
+        } as SourceMapLike,
         sourceMapStr,
         sourceMapUrl: resolvedSourceMapUrl,
       };
@@ -642,11 +503,12 @@ export class CoverageProvider implements RstestCoverageProvider {
     const code = assetSource ?? (await fs.readFile(filePath, 'utf-8'));
 
     if (sourceMapStr) {
-      const sourceMap = this.parseSourceMap(sourceMapStr);
-
       return {
         code,
-        sourceMap: sourceMap ?? undefined,
+        sourceMap: {
+          names: [],
+          ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
+        } as SourceMapLike,
         sourceMapStr,
       };
     }
@@ -938,21 +800,15 @@ export class CoverageProvider implements RstestCoverageProvider {
     const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
     const assetSource = this.findInDict(options?.assetFiles, filePath);
 
-    if (sourceMapStr) {
-      const sourceMap = this.parseSourceMap(sourceMapStr);
-      return sourceMap
-        ? this.sourceMapMayContainIncludedSource(filePath, sourceMap)
-        : true;
+    if (
+      sourceMapStr ||
+      (assetSource && this.hasExternalSourceMap(assetSource))
+    ) {
+      return true;
     }
 
-    if (assetSource) {
-      const shouldKeepSourceMapEntry = await this.shouldKeepSourceMapEntry(
-        filePath,
-        assetSource,
-      );
-      if (shouldKeepSourceMapEntry !== undefined) {
-        return shouldKeepSourceMapEntry;
-      }
+    if (assetSource && this.hasInlineSourceMap(assetSource)) {
+      return true;
     }
 
     if (
