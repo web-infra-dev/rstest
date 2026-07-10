@@ -55,7 +55,7 @@ npx rstest -f
 onlyFailures: running 2 of 14 test files (12 deselected).
 ```
 
-Repeat until everything passes. Once no failure is left on record, the next `-f` run falls back to the full suite, so you cannot get stuck running nothing:
+Repeat until everything passes. Once no failure is left on record, the next `-f` run falls back to the full suite:
 
 ```bash
 npx rstest -f
@@ -76,7 +76,7 @@ Results from [Browser Mode](/config/test/browser) projects are not recorded yet,
 
 ## Failure records
 
-Rstest keeps each test file's latest pass/fail state in `node_modules/.cache/.rstest-results/` under the project root, refreshed after every run. Delete this directory to reset the records.
+Rstest keeps each test file's latest pass/fail state in `node_modules/.cache/.rstest-results/` under the workspace root, refreshed after every run. In a multi-project setup, all projects share this single record file, with entries keyed by project. Delete the directory to reset the records.
 
 Partial runs do not overwrite the records, so `onlyFailures` always works from the last complete run:
 
@@ -85,11 +85,9 @@ Partial runs do not overwrite the records, so `onlyFailures` always works from t
 
 ## Combining with other selection
 
-`onlyFailures` applies only to a plain, full run. Whenever the run is narrowed some other way, that selection wins and `onlyFailures` is ignored with a warning:
+`onlyFailures` applies only to a plain, full run. Whenever the run is narrowed some other way, that selection wins and `onlyFailures` is ignored with a warning — a warning rather than an error, so `onlyFailures` set in a config file keeps working in these scenarios:
 
 - **File filters** — `npx rstest some.test.ts -f` runs exactly the files you named, whether they failed last time or not.
 - **`--changed` / `--related`** — the change-based selection already defines the scope. Run a plain `npx rstest -f` afterwards if you only want the failures from that run.
 - **[testNamePattern](/config/test/test-name-pattern) (`-t`)** — a name pattern must search every file for matching tests; narrowing to previously failed files would silently skip matches in files that passed.
 - **Watch mode** — watch already re-runs the files you edit and provides a shortcut for re-running failed tests.
-
-Ignoring the option (rather than erroring) keeps a config file that sets `onlyFailures` usable with all of the above.

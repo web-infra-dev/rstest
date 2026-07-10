@@ -55,7 +55,7 @@ npx rstest -f
 onlyFailures: running 2 of 14 test files (12 deselected).
 ```
 
-重复这个过程直到全部通过。当不再有失败记录时，下一次 `-f` 运行会自动回退到全量运行，因此不会陷入「什么都不跑」的状态：
+重复这个过程直到全部通过。当不再有失败记录时，下一次 `-f` 运行会自动回退到全量运行：
 
 ```bash
 npx rstest -f
@@ -76,7 +76,7 @@ No failed tests found from the previous run. Running all tests.
 
 ## 失败记录
 
-Rstest 将每个测试文件最近一次的通过/失败状态保存在项目根目录的 `node_modules/.cache/.rstest-results/` 中，并在每次运行后刷新。删除该目录即可重置记录。
+Rstest 将每个测试文件最近一次的通过/失败状态保存在 workspace 根目录的 `node_modules/.cache/.rstest-results/` 中，并在每次运行后刷新。多 project 场景下，所有 project 共用这一份记录文件，条目按 project 区分。删除该目录即可重置记录。
 
 部分运行不会覆盖记录，因此 `onlyFailures` 始终基于最近一次完整运行的结果工作：
 
@@ -85,11 +85,9 @@ Rstest 将每个测试文件最近一次的通过/失败状态保存在项目根
 
 ## 与其他筛选方式的关系
 
-`onlyFailures` 仅作用于朴素的全量运行。当运行范围已通过其他方式收窄时，以该方式为准，`onlyFailures` 会被忽略并打印警告：
+`onlyFailures` 仅作用于朴素的全量运行。当运行范围已通过其他方式收窄时，以该方式为准，`onlyFailures` 会被忽略并打印警告——警告而非报错，因此配置文件中设置的 `onlyFailures` 在这些场景下不影响使用：
 
 - **文件过滤**——`npx rstest some.test.ts -f` 会精确运行你指定的文件，无论它们上次是否失败。
 - **`--changed` / `--related`**——基于变更的选择已经定义了运行范围。若只想重跑该次运行中的失败，请在之后执行朴素的 `npx rstest -f`。
 - **[testNamePattern](/config/test/test-name-pattern)（`-t`）**——名称匹配需要在每个文件中搜索匹配的测试；若收窄到上次失败的文件，会静默漏掉通过文件中的匹配测试。
 - **Watch 模式**——watch 本身就会重跑你编辑的文件，并提供重跑失败测试的快捷键。
-
-选择忽略（而不是报错）让设置了 `onlyFailures` 的配置文件在以上场景中都保持可用。
