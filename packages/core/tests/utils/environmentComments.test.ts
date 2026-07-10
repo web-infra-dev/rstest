@@ -699,4 +699,106 @@ const jsdom = '// @rstest-environment jsdom';
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('preserves a modified base environment for option-only partitions', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const file = path.join(root, 'options.test.ts');
+      writeFileSync(
+        file,
+        '// @rstest-environment-options { "url": "https://example.test/" }\n',
+      );
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['*.test.ts'],
+          exclude: {
+            patterns: [],
+            override: false,
+          },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: {},
+        fileFilters: [],
+      } as unknown as RstestContext;
+      const planState = createRunProjectPlanState({
+        context,
+        browserProjects: [],
+        isWatchMode: false,
+      });
+
+      await planState.resolveRunnableProjects();
+      context.projects[0]!.normalizedConfig.testEnvironment = {
+        name: 'happy-dom',
+      };
+
+      const refreshed = await planState.resolveRunnableProjects({
+        strictEnvironmentComments: true,
+      });
+
+      expect(refreshed.projects).toHaveLength(1);
+      expect(refreshed.projects[0]!.normalizedConfig.testEnvironment).toEqual({
+        name: 'happy-dom',
+        options: {
+          url: 'https://example.test/',
+        },
+      });
+      expect(
+        refreshed.entriesCache.get('default-environment-1')?.entries,
+      ).toEqual({
+        'options~test~ts': normalize(file),
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('validates ignored environment comment errors on the final run plan', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const file = path.join(root, 'invalid.test.ts');
+      writeFileSync(file, '// @rstest-environment custom\n');
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['*.test.ts'],
+          exclude: {
+            patterns: [],
+            override: false,
+          },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: {},
+        fileFilters: [],
+      } as unknown as RstestContext;
+      const planState = createRunProjectPlanState({
+        context,
+        browserProjects: [],
+        isWatchMode: false,
+      });
+
+      await expect(planState.resolveRunnableProjects()).resolves.toBeTruthy();
+      await expect(planState.validateEnvironmentComments()).rejects.toThrow(
+        'Unsupported test environment "custom"',
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

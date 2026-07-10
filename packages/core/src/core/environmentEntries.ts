@@ -92,10 +92,12 @@ export const applyEnvironmentGroupsToListEntries = async ({
   context,
   testEntries,
   globTestSourceEntries,
+  ignoreInvalidEnvironmentComments = false,
 }: {
   context: RstestContext;
   testEntries: Record<string, Record<string, string>>;
   globTestSourceEntries: GlobTestSourceEntries;
+  ignoreInvalidEnvironmentComments?: boolean;
 }): Promise<void> => {
   if (!context.normalizedConfig.shard) {
     await Promise.all(
@@ -113,6 +115,7 @@ export const applyEnvironmentGroupsToListEntries = async ({
       ]),
     ),
     projects: context.projects.filter((project) => !isBrowserProject(project)),
+    ignoreInvalidEnvironmentComments,
   });
 
   if (!grouped.changed) {

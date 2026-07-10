@@ -372,7 +372,11 @@ export async function runTests(context: Rstest): Promise<void> {
     browserProjects,
     isWatchMode,
   });
-  const { globTestSourceEntries, resolveRunnableProjects } = projectPlanState;
+  const {
+    globTestSourceEntries,
+    resolveRunnableProjects,
+    validateEnvironmentComments,
+  } = projectPlanState;
   let plan = await resolveRunnableProjects();
   const plannedNodeSourceNames = new Set(
     plan.nodeProjectsToRun.map(
@@ -407,6 +411,7 @@ export async function runTests(context: Rstest): Promise<void> {
       plan = await resolveRunnableProjects({ strictEnvironmentComments: true });
       syncNodeProjects(rsbuildProjects, plan.nodeProjectsToRun);
     },
+    onRsbuildConfigResolved: validateEnvironmentComments,
   });
 
   let hasBrowserTestsToRun = plan.browserProjectsToRun.length > 0;
