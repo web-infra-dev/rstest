@@ -77,7 +77,11 @@ export function getTestItemByLabels(
   const item = labels.reduce(
     (item, label) =>
       item &&
-      getTestItems(item.children).find((child) => child.label === label),
+      getTestItems(item.children).find(
+        // normalize to linux path style, matching `toLabelTree`, so labels
+        // built with `path.sep` still match on Windows
+        (child) => child.label.replaceAll(path.sep, '/') === label,
+      ),
     {
       children: collection,
     } as vscode.TestItem | undefined,
