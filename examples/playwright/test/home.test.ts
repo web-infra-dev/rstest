@@ -10,19 +10,32 @@ const test = base.extend({
   } satisfies PlaywrightOptions,
 });
 
-test('opens the built Rsbuild page', async ({ onTestFailed, page, serve }) => {
-  onTestFailed(async ({ task }) => {
-    await page.screenshot({
-      fullPage: true,
-      path: `${task.id}-failed.png`,
+test(
+  'opens the built Rsbuild page',
+  { timeout: 15_000 },
+  async ({ onTestFailed, page, serve }) => {
+    onTestFailed(async ({ task }) => {
+      await page.screenshot({
+        fullPage: true,
+        path: `${task.id}-failed.png`,
+        timeout: 5_000,
+      });
     });
-  });
 
-  const { url } = await serve('./dist/index.html');
+    const { url } = await serve('./dist/index.html');
 
-  await page.goto(url);
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
 
-  await expect(page).toHaveTitle('Rstest Playwright Example');
-  await expect(page.locator('h1')).toHaveText('Rstest Playwright Example');
-  await expect(page.locator('.message')).toContainText('Built by Rsbuild');
-});
+    const content = await page.locator('main').evaluate((element) => ({
+      title: document.title,
+      heading: element.querySelector('h1')?.textContent,
+      message: element.querySelector('.message')?.textContent,
+    }));
+
+    expect(content).toEqual({
+      title: 'Rstest Playwright Example',
+      heading: 'Rstest Playwright Example',
+      message: 'Built by Rsbuild and tested with Playwright.',
+    });
+  },
+);
