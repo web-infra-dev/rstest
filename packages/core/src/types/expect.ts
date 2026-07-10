@@ -121,6 +121,8 @@ export interface Assertion<T = any> extends VitestAssertion<T> {
   rejects: PromisifyAssertion<T>;
 }
 
+export type { AsymmetricMatchersContaining, Matchers } from '@vitest/expect';
+
 export interface ExpectStatic extends VitestExpectStatic {
   <T>(actual: T, message?: string): Assertion<T>;
   unreachable: (message?: string) => never;
