@@ -68,6 +68,7 @@ const getEntriesCacheRecord = (
   );
 
 type ResolveRunnableProjectsOptions = {
+  silentShardMessage?: boolean;
   strictEnvironmentComments?: boolean;
 };
 
@@ -129,6 +130,7 @@ export const createRunProjectPlanState = ({
   };
 
   const resolveRunnableProjects = async ({
+    silentShardMessage = false,
     strictEnvironmentComments = false,
   }: ResolveRunnableProjectsOptions = {}): Promise<RunProjectPlan> => {
     const shouldPreserveEnvironmentPartitions =
@@ -139,11 +141,17 @@ export const createRunProjectPlanState = ({
         context,
         projects: allProjects,
         getProjectEntries: (project) => getProjectEntries({ context, project }),
+        shardMessage: {
+          silent: silentShardMessage,
+        },
       });
       allProjects = refreshed.projects;
       entriesCache = refreshed.entriesCache;
     } else if (context.normalizedConfig.shard) {
-      entriesCache = (await resolveShardedEntries(context)) || new Map();
+      entriesCache =
+        (await resolveShardedEntries(context, {
+          silent: silentShardMessage,
+        })) || new Map();
     } else {
       entriesCache = new Map();
     }
@@ -285,6 +293,9 @@ export const createListProjectPlanState = (
         context,
         projects: context.projects,
         getProjectEntries: (project) => getProjectEntries({ context, project }),
+        shardMessage: {
+          silent: silentShardMessage,
+        },
       });
       context.projects = refreshed.projects;
       Object.assign(testEntries, getEntriesCacheRecord(refreshed.entriesCache));

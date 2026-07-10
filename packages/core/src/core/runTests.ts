@@ -377,7 +377,7 @@ export async function runTests(context: Rstest): Promise<void> {
     resolveRunnableProjects,
     validateEnvironmentComments,
   } = projectPlanState;
-  let plan = await resolveRunnableProjects();
+  let plan = await resolveRunnableProjects({ silentShardMessage: true });
   const plannedNodeSourceNames = new Set(
     plan.nodeProjectsToRun.map(
       (project) =>

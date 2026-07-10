@@ -703,6 +703,136 @@ const jsdom = '// @rstest-environment jsdom';
     }
   });
 
+  it('preserves synthetic project discovery changes during refresh', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const nodeFile = path.join(root, 'node.test.ts');
+      const jsdomFile = path.join(root, 'jsdom.test.ts');
+      const newJsdomFile = path.join(root, 'new-jsdom.test.ts');
+      writeFileSync(nodeFile, '// node test\n');
+      writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
+      writeFileSync(newJsdomFile, '// @rstest-environment jsdom\n');
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['node.test.ts', 'jsdom.test.ts'],
+          exclude: {
+            patterns: [],
+            override: false,
+          },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: {},
+        fileFilters: [],
+      } as unknown as RstestContext;
+      const planState = createRunProjectPlanState({
+        context,
+        browserProjects: [],
+        isWatchMode: false,
+      });
+
+      await planState.resolveRunnableProjects();
+      const jsdomProject = context.projects.find(
+        (item) => item.environmentName === 'default-environment-1',
+      )!;
+      jsdomProject.normalizedConfig.include = [
+        'jsdom.test.ts',
+        'new-jsdom.test.ts',
+      ];
+
+      const refreshed = await planState.resolveRunnableProjects({
+        strictEnvironmentComments: true,
+      });
+
+      expect(
+        refreshed.entriesCache.get('default-environment-1')?.entries,
+      ).toEqual({
+        'jsdom~test~ts': normalize(jsdomFile),
+        'new-jsdom~test~ts': normalize(newJsdomFile),
+      });
+      expect(refreshed.entriesCache.get('default')?.entries).toEqual({
+        'node~test~ts': normalize(nodeFile),
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves claimed global setup when refresh recreates the base partition', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
+    try {
+      const nodeFile = path.join(root, 'node.test.ts');
+      const jsdomFile = path.join(root, 'jsdom.test.ts');
+      writeFileSync(nodeFile, '// node test\n');
+      writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['jsdom.test.ts'],
+          exclude: {
+            patterns: [],
+            override: false,
+          },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: {},
+        fileFilters: [],
+      } as unknown as RstestContext;
+      const planState = createRunProjectPlanState({
+        context,
+        browserProjects: [],
+        isWatchMode: true,
+      });
+
+      await planState.resolveRunnableProjects();
+      context.projects[0]!._globalSetups = true;
+      context.projects[0]!.normalizedConfig.include = [
+        'node.test.ts',
+        'jsdom.test.ts',
+      ];
+
+      const refreshed = await planState.resolveRunnableProjects({
+        strictEnvironmentComments: true,
+      });
+
+      expect(
+        refreshed.projects
+          .map((item) => ({
+            environmentName: item.environmentName,
+            globalSetupsClaimed: item._globalSetups,
+          }))
+          .sort((a, b) => a.environmentName.localeCompare(b.environmentName)),
+      ).toEqual([
+        {
+          environmentName: 'default',
+          globalSetupsClaimed: true,
+        },
+        {
+          environmentName: 'default-environment-1',
+          globalSetupsClaimed: true,
+        },
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('preserves a modified base environment for option-only partitions', async () => {
     const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
     try {

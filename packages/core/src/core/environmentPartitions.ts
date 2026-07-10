@@ -1,5 +1,9 @@
 import type { ProjectContext, ProjectEntries, RstestContext } from '../types';
-import { applyEnvironmentComment, getShardedFiles } from '../utils';
+import {
+  applyEnvironmentComment,
+  getShardedFiles,
+  logShardMessage,
+} from '../utils';
 import {
   getEnvironmentKey,
   groupProjectEntriesByEnvironment,
@@ -18,6 +22,10 @@ type RefreshEnvironmentPartitionEntry = {
   project: ProjectContext;
   alias: string;
   testPath: string;
+};
+
+type ShardMessageOptions = {
+  silent?: boolean;
 };
 
 const isBrowserProject = (project: ProjectContext): boolean =>
@@ -77,6 +85,15 @@ const pushProjectEntries = (
 ): void => {
   for (const [alias, testPath] of Object.entries(entries || {})) {
     target.push({ project, alias, testPath });
+  }
+};
+
+const mergeProjectEntries = (
+  target: Record<string, string>,
+  entries: Record<string, string>,
+): void => {
+  for (const [alias, testPath] of Object.entries(entries)) {
+    target[alias] = testPath;
   }
 };
 
@@ -187,10 +204,12 @@ export const refreshEnvironmentPartitionEntries = async ({
   context,
   projects,
   getProjectEntries,
+  shardMessage,
 }: {
   context: RstestContext;
   projects: ProjectContext[];
   getProjectEntries: GetProjectEntries;
+  shardMessage?: ShardMessageOptions;
 }): Promise<RefreshEnvironmentPartitionResult> => {
   const sourceProjects = groupProjectsBySource(projects);
   const refreshedEntries: RefreshEnvironmentPartitionEntry[] = [];
@@ -213,6 +232,9 @@ export const refreshEnvironmentPartitionEntries = async ({
       (project) => project.environmentName === sourceEnvironmentName,
     );
     const sourceProject = baseProject ?? firstProject;
+    const globalSetupAlreadyClaimed = sourceGroup.every(
+      (project) => project._globalSetups,
+    );
     const baseTestEnvironment = getRefreshBaseTestEnvironment({
       baseProject,
       sourceProject,
@@ -222,14 +244,33 @@ export const refreshEnvironmentPartitionEntries = async ({
       name: sourceProjectName,
       environmentName: sourceEnvironmentName,
       _environmentGroup: undefined,
-      _globalSetups: baseProject ? sourceProject._globalSetups : false,
+      _globalSetups: baseProject
+        ? sourceProject._globalSetups
+        : globalSetupAlreadyClaimed,
       normalizedConfig: {
         ...sourceProject.normalizedConfig,
         name: sourceProjectName,
         testEnvironment: baseTestEnvironment,
       },
     };
-    const nextEntries = await getProjectEntries(groupingProject);
+    const nextEntries: Record<string, string> = {};
+    for (const project of sourceGroup) {
+      mergeProjectEntries(
+        nextEntries,
+        await getProjectEntries({
+          ...project,
+          name: sourceProjectName,
+          environmentName: sourceEnvironmentName,
+          _environmentGroup: undefined,
+          _globalSetups: groupingProject._globalSetups,
+          normalizedConfig: {
+            ...project.normalizedConfig,
+            name: sourceProjectName,
+            testEnvironment: baseTestEnvironment,
+          },
+        }),
+      );
+    }
     const regrouped = await groupProjectEntriesByEnvironment({
       entriesCache: new Map([
         [
@@ -288,6 +329,15 @@ export const refreshEnvironmentPartitionEntries = async ({
   const entriesToRun = context.normalizedConfig.shard
     ? getShardedFiles(refreshedEntries, context.normalizedConfig.shard)
     : refreshedEntries;
+
+  if (context.normalizedConfig.shard && !shardMessage?.silent) {
+    logShardMessage({
+      shard: context.normalizedConfig.shard,
+      testFilesInShardCount: entriesToRun.length,
+      totalTestFileCount: refreshedEntries.length,
+    });
+  }
+
   const refreshedEntriesCache = createEmptyEntriesCache(
     refreshedProjects,
     context.fileFilters,

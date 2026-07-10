@@ -134,6 +134,7 @@ describe('test build config', () => {
 
     await expectExecSuccess();
 
+    expect(cli.stdout).toContain('Running shard 1 of 2 (2 of 3 test files)');
     expect(cli.stdout).toContain('shard-a.test.ts');
     expect(cli.stdout).toContain('shard-b.test.ts');
     expect(cli.stdout).not.toContain('shard-c.test.ts');
