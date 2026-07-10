@@ -148,5 +148,8 @@ describe('--onlyFailures', () => {
     ]);
     await scoped.expectExecSuccess();
     expect(ranFiles(scoped.cli.stdout)).toEqual(['first', 'second']);
+    expect(scoped.cli.stderr).toContain(
+      'onlyFailures is ignored when explicit file filters are provided.',
+    );
   }, 90_000);
 });

@@ -252,15 +252,28 @@ export async function runTests(context: Rstest): Promise<void> {
 
   const isWatchMode = context.command === 'watch';
 
-  // `onlyFailures` re-runs the previous run's failed FILES from the on-disk
-  // results cache. Watch already has its own run-failed shortcut and refreshes
-  // the failed set as you edit, so a disk-backed selection is redundant and
-  // confusing there. Warn once and ignore it (rather than erroring) so a shared
-  // config carrying `onlyFailures` stays usable under `rstest watch`.
-  if (isWatchMode && context.normalizedConfig.onlyFailures) {
-    logger.warn(
-      'onlyFailures is ignored in watch mode; use the watch run-failed shortcut instead.',
-    );
+  // `onlyFailures` applies only to a plain, full run: any other scoping
+  // mechanism wins over failure history. Watch has its own run-failed shortcut
+  // and refreshes the failed set as you edit. `--changed`/`--related` scope by
+  // relevance to a change — and their forceRerunTriggers path deliberately
+  // clears all file filters to force a full-suite rerun, which failure
+  // selection must not narrow back down. Explicit file filters are the user
+  // naming exactly what to run. Warn once and ignore (rather than erroring) so
+  // a shared config carrying `onlyFailures` stays usable everywhere.
+  if (context.normalizedConfig.onlyFailures) {
+    if (isWatchMode) {
+      logger.warn(
+        'onlyFailures is ignored in watch mode; use the watch run-failed shortcut instead.',
+      );
+    } else if (context.relatedMode) {
+      logger.warn(
+        `onlyFailures is ignored when combined with --${context.relatedMode}.`,
+      );
+    } else if (context.fileFilters?.length) {
+      logger.warn(
+        'onlyFailures is ignored when explicit file filters are provided.',
+      );
+    }
   }
 
   // For non-watch mode with both browser and node tests, we need to unify reporter output
@@ -785,9 +798,12 @@ export async function runTests(context: Rstest): Promise<void> {
     // assignment is deterministic, filtering the failed subset within each shard
     // still re-runs every failed file across the full shard matrix.
     //
-    // Watch mode ignores `--onlyFailures` entirely (warned once at setup), so it
-    // is skipped here; `mode === 'on-demand'` only occurs under watch and stays
-    // guarded defensively.
+    // Watch mode and `--changed`/`--related` runs ignore `--onlyFailures`
+    // entirely (warned once at setup), so they are skipped here. The
+    // `relatedMode` check also covers the forceRerunTriggers path, which
+    // deliberately clears all file filters to force a full-suite rerun —
+    // failure selection must not narrow that back down. `mode === 'on-demand'`
+    // only occurs under watch and stays guarded defensively.
     //
     // An explicitly user-scoped run must never be narrowed further by failure
     // history. Two forms of explicit scoping exist: positional CLI filters live
@@ -803,6 +819,7 @@ export async function runTests(context: Rstest): Promise<void> {
     if (
       context.normalizedConfig.onlyFailures &&
       !isWatchMode &&
+      !context.relatedMode &&
       mode !== 'on-demand' &&
       !isExplicitlyScoped
     ) {
