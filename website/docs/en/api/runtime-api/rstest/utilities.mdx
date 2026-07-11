@@ -69,6 +69,16 @@ rs.unstubAllEnvs();
 expect(process.env.NODE_ENV).not.toBe('test');
 ```
 
+When stubbing environment variables in multiple tests, call `rs.unstubAllEnvs()` in an [`afterEach`](/api/runtime-api/test-api/hooks#aftereach) hook to restore them after every test:
+
+```ts
+import { afterEach } from '@rstest/core';
+
+afterEach(() => {
+  rs.unstubAllEnvs();
+});
+```
+
 ## rs.stubGlobal
 
 - **Alias:** `rstest.stubGlobal`
@@ -125,6 +135,16 @@ rs.stubGlobal('myGlobal', 123);
 // ... run some code
 rs.unstubAllGlobals();
 expect(globalThis.myGlobal).toBeUndefined();
+```
+
+When stubbing global variables in multiple tests, call `rs.unstubAllGlobals()` in an [`afterEach`](/api/runtime-api/test-api/hooks#aftereach) hook to restore them after every test:
+
+```ts
+import { afterEach } from '@rstest/core';
+
+afterEach(() => {
+  rs.unstubAllGlobals();
+});
 ```
 
 ## rs.setConfig
