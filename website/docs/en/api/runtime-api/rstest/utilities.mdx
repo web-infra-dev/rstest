@@ -18,7 +18,7 @@ Temporarily sets an environment variable in `process.env` and `import.meta.env` 
 
 - If `value` is `undefined`, the variable will be removed from `process.env` and `import.meta.env`.
 - You can call this multiple times to stub multiple variables.
-- Use [rs.unstubAllEnvs()](#rsunstuballenvs) to restore all environment variables changed by this method.
+- Use [`rs.unstubAllEnvs()`](#rsunstuballenvs) to restore all environment variables changed by this method.
 
 - **Example:**
 
@@ -55,7 +55,7 @@ The `_env` binding is intentionally unused, as indicated by its leading undersco
 
 - **Type:** `() => RstestUtilities`
 
-Restores all environment variables that were changed using [rs.stubEnv](#rsstubenv) to their original values.
+Restores all environment variables that were changed using [`rs.stubEnv`](#rsstubenv) to their original values.
 
 - Call this after your test to clean up any environment changes.
 - Automatically called before each test if the [`unstubEnvs`](/config/test/unstub-envs) config is enabled.
@@ -78,7 +78,7 @@ expect(process.env.NODE_ENV).not.toBe('test');
 Temporarily sets a global variable to the specified value. Useful for mocking global objects or functions.
 
 - You can call this multiple times to stub multiple globals.
-- Use [rs.unstubAllGlobals()](#rsunstuballglobals) to restore all globals changed by this method.
+- Use [`rs.unstubAllGlobals()`](#rsunstuballglobals) to restore all globals changed by this method.
 
 - **Example:**
 
@@ -113,7 +113,7 @@ The `_global` binding is intentionally unused, as indicated by its leading under
 
 - **Type:** `() => RstestUtilities`
 
-Restores all global variables that were changed using [rs.stubGlobal](#rsstubglobal) to their original values.
+Restores all global variables that were changed using [`rs.stubGlobal`](#rsstubglobal) to their original values.
 
 - Call this after your test to clean up any global changes.
 - Automatically called before each test if the [`unstubGlobals`](/config/test/unstub-globals) config is enabled.
@@ -163,7 +163,7 @@ rs.resetConfig(); // Restore to default config
 
 - **Type:** `() => void`
 
-Resets the runtime configuration that was changed using [rs.setConfig](#rssetconfig) back to the default values.
+Resets the runtime configuration that was changed using [`rs.setConfig`](#rssetconfig) back to the default values.
 
 ## rs.getConfig
 
