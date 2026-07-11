@@ -14,11 +14,11 @@ This is useful when a test temporarily changes shared state, such as spies, envi
 
 <ApiMeta addedVersion="0.10.3" />
 
-`rs.stubEnv()`, `rs.stubGlobal()`, and `rs.useFakeTimers()` return disposable resources that work with the `using` syntax.
+[rs.stubEnv()](/api/runtime-api/rstest/utilities#rsstubenv), [rs.stubGlobal()](/api/runtime-api/rstest/utilities#rsstubglobal), and [rs.useFakeTimers()](/api/runtime-api/rstest/fake-timers#rsusefaketimers) return disposable resources that work with the `using` syntax.
 
 ## Spy cleanup
 
-Mocks and spies implement `Symbol.dispose`, so a spy created with `rs.spyOn()` is restored when the `using` block exits.
+Mocks and spies implement `Symbol.dispose`, so a spy created with [rs.spyOn()](/api/runtime-api/rstest/mock-functions#rsspyon) is restored when the `using` block exits.
 
 ```ts title="logger.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -39,7 +39,7 @@ See [Mock](/guide/basic/mock#using-syntax) for more spy examples.
 
 ## Environment variables
 
-`rs.stubEnv()` returns a disposable resource. When it leaves a `using` scope, only that scoped env stub is restored.
+[rs.stubEnv()](/api/runtime-api/rstest/utilities#rsstubenv) returns a disposable resource. When it leaves a `using` scope, only that scoped env stub is restored.
 
 ```ts title="env.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -73,7 +73,7 @@ You can still call [rs.unstubAllEnvs()](/api/runtime-api/rstest/utilities#rsunst
 
 ## Globals
 
-`rs.stubGlobal()` also returns a disposable resource. This is convenient for temporarily replacing global APIs.
+[rs.stubGlobal()](/api/runtime-api/rstest/utilities#rsstubglobal) also returns a disposable resource. This is convenient for temporarily replacing global APIs.
 
 ```ts title="global.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -93,7 +93,7 @@ You can still call [rs.unstubAllGlobals()](/api/runtime-api/rstest/utilities#rsu
 
 ## Fake timers
 
-`rs.useFakeTimers()` returns a disposable resource that restores real timers when the block exits.
+[rs.useFakeTimers()](/api/runtime-api/rstest/fake-timers#rsusefaketimers) returns a disposable resource that restores real timers when the block exits.
 
 ```ts title="timer.test.ts"
 import { expect, rs, test } from '@rstest/core';
