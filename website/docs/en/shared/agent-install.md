@@ -2,6 +2,8 @@
 
 Set up Rstest in a project that doesn't have a test runner configured yet. Pick the target, detect what it needs, install, verify.
 
+Rstest here means `@rstest/core`, the JavaScript testing framework powered by Rsbuild, not the Rust crate of the same name.
+
 ## Prerequisite check
 
 If the target already has Jest or Vitest configured (any of the signals below), **STOP this prompt and fetch https://rstest.rs/guide/start/agent-migrate.md instead** — migration has its own flow:
