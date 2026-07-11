@@ -8,7 +8,8 @@ import { pluginFontOpenSans } from 'rspress-plugin-font-open-sans';
 import pluginSitemap from 'rspress-plugin-sitemap';
 
 const siteUrl = 'https://rstest.rs';
-const description = 'The Rspack-based testing framework';
+const description =
+  'Rstest is a JavaScript testing framework powered by Rspack';
 
 export default defineConfig({
   root: path.join(__dirname, 'docs'),
@@ -16,8 +17,7 @@ export default defineConfig({
   icon: 'https://assets.rspack.rs/rstest/rstest-logo.svg',
   logo: 'https://assets.rspack.rs/rstest/rstest-logo.svg',
   logoText: 'Rstest',
-  description:
-    'Rstest is a testing framework powered by Rspack. It delivers comprehensive, first-class support for the Rspack ecosystem, enabling seamless integration into existing Rspack-based projects.',
+  description,
   markdown: {
     link: {
       checkAnchors: true,
@@ -65,7 +65,7 @@ export default defineConfig({
       {
         lang: 'zh',
         label: '简体中文',
-        description: '由 Rspack 驱动的测试框架',
+        description: 'Rstest 是由 Rspack 驱动的 JavaScript 测试框架',
       },
     ],
   },
