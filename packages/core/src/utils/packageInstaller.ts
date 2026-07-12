@@ -60,7 +60,12 @@ export const installPackage = async (
 
   const installer =
     options.installPackage ??
-    (await import('@antfu/install-pkg')).installPackage;
+    (
+      await import(
+        /* rspackChunkName: 'install-pkg' */
+        '@antfu/install-pkg'
+      )
+    ).installPackage;
   await installer(packageName, {
     cwd: root,
     dev: true,
