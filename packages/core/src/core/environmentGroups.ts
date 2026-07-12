@@ -77,6 +77,7 @@ export const groupProjectEntriesByEnvironment = async ({
       groupedEntriesCache.set(project.environmentName, projectEntries);
       continue;
     }
+    const baseEnvironmentKey = getProjectEnvironmentKey(project);
 
     for (const [entryName, testPath] of projectEntryItems) {
       const comment = await parseEnvironmentCommentFromFile(testPath).catch(
@@ -93,7 +94,7 @@ export const groupProjectEntriesByEnvironment = async ({
             comment,
           )
         : project.normalizedConfig.testEnvironment;
-      const key = stableJson(testEnvironment);
+      const key = comment ? stableJson(testEnvironment) : baseEnvironmentKey;
 
       let group = groups.get(key);
       if (!group) {
@@ -119,7 +120,6 @@ export const groupProjectEntriesByEnvironment = async ({
       group.entries[entryName] = testPath;
     }
 
-    const baseEnvironmentKey = getProjectEnvironmentKey(project);
     const needsSplit = groups.size > 1 || !groups.has(baseEnvironmentKey);
 
     if (!needsSplit) {
