@@ -1,6 +1,5 @@
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { installPackage as installPackageWithPackageManager } from '@antfu/install-pkg';
 import { isTTY } from './helper';
 import { color, logger } from './logger';
 
@@ -59,7 +58,9 @@ export const installPackage = async (
 
   logger.log(color.cyan(`Installing ${packageName}...`));
 
-  const installer = options.installPackage ?? installPackageWithPackageManager;
+  const installer =
+    options.installPackage ??
+    (await import('@antfu/install-pkg')).installPackage;
   await installer(packageName, {
     cwd: root,
     dev: true,
