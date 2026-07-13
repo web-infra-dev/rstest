@@ -1,4 +1,5 @@
 import { type ChildProcess, spawn } from 'node:child_process';
+import net from 'node:net';
 import path, { dirname } from 'node:path';
 import { type BirpcReturn, createBirpc } from 'birpc';
 import regexpEscape from 'core-js-pure/actual/regexp/escape';
@@ -15,6 +16,18 @@ import {
 import type { Worker } from './worker';
 
 export const runningWorkers = new Set<BirpcReturn<Worker, TestRunReporter>>();
+
+// Probe whether a fixed inspector port can be bound. `--inspect-wait=host:port`
+// does not fall back when the port is taken: Node reports address-in-use and
+// runs the worker without the inspector, and attaching by that port could hit an
+// unrelated process. Preflight so we fail with a clear message instead.
+const isPortAvailable = (port: number, host?: string): Promise<boolean> =>
+  new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => resolve(false));
+    server.once('listening', () => server.close(() => resolve(true)));
+    server.listen(port, host ?? '127.0.0.1');
+  });
 
 export class RstestApi {
   private childProcesses = new Set<ChildProcess>();
@@ -240,6 +253,16 @@ export class RstestApi {
     }
     const debuggerPort = getConfigValue('debuggerPort', this.workspace);
     const debuggerAddress = getConfigValue('debuggerAddress', this.workspace);
+    if (
+      startDebugging &&
+      debuggerPort &&
+      !(await isPortAvailable(debuggerPort, debuggerAddress))
+    ) {
+      const at = `${debuggerAddress ?? '127.0.0.1'}:${debuggerPort}`;
+      const message = `Rstest debug port ${at} is already in use. Set a free "rstest.debuggerPort" or free the port.`;
+      vscode.window.showErrorMessage(message);
+      throw new Error(message);
+    }
     const execArgv: string[] = [];
     if (startDebugging) {
       execArgv.push(
