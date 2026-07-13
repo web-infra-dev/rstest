@@ -322,6 +322,7 @@ const loadFiles = async ({
   distPath,
   runtimeDistPath,
   testPath,
+  hasModuleMock,
   interopDefault,
   isolate,
   outputModule,
@@ -333,6 +334,7 @@ const loadFiles = async ({
   distPath: string;
   runtimeDistPath?: string;
   testPath: string;
+  hasModuleMock?: boolean;
   interopDefault: boolean;
   isolate: boolean;
   outputModule: boolean;
@@ -342,23 +344,36 @@ const loadFiles = async ({
     ? await import('./loadEsModule')
     : await import('./loadModule');
 
-  // Clean each kept runtime chunk's webpack module cache before re-running setup
-  // + entry. A reused worker can hold several projects' runtime chunks at once
-  // (isolate: false), so invoke EVERY registered cleaner — each is self-scoped to
-  // its own chunk's cache, so over-calling is a harmless no-op. See
-  // `moduleCacheControl.ts` for why this is a per-chunk registry, not a single
-  // `global.__rstest_clean_core_cache__` slot.
   if (!isolate) {
-    await loadModule({
-      codeContent: `if (global && global.__rstest_cache_cleaners__) {
+    if (hasModuleMock || setupEntries.some((entry) => entry.hasModuleMock)) {
+      // A file that installs module mocks (`hasModuleMock` is derived from
+      // the compiler's dependency graph, see `getRsbuildStats` in rsbuild.ts)
+      // gets a fully fresh module world, setup files included — so a mock
+      // always applies and setup + test code keep sharing the same module
+      // instances. The between-files cleaner in mockRuntimeCode.js undoes the
+      // mocks afterwards. The full flush also empties the cleaner registry,
+      // leaving nothing for the branch below to invoke.
+      // See https://github.com/web-infra-dev/rstest/issues/1556.
+      const { flushAllLoaderCaches } = await import('./interop');
+      await flushAllLoaderCaches();
+    } else {
+      // Clean each kept runtime chunk's webpack module cache before re-running
+      // setup + entry. A reused worker can hold several projects' runtime
+      // chunks at once, so invoke EVERY registered cleaner — each is
+      // self-scoped to its own chunk's cache, so over-calling is a harmless
+      // no-op. See `moduleCacheControl.ts` for why this is a per-chunk
+      // registry, not a single `global.__rstest_clean_core_cache__` slot.
+      await loadModule({
+        codeContent: `if (global && global.__rstest_cache_cleaners__) {
   global.__rstest_cache_cleaners__.forEach((fn) => fn());
   }`,
-      distPath: '',
-      testPath,
-      rstestContext,
-      assetFiles,
-      interopDefault,
-    });
+        distPath: '',
+        testPath,
+        rstestContext,
+        assetFiles,
+        interopDefault,
+      });
+    }
   }
 
   // run setup files
@@ -400,7 +415,7 @@ export const runInPool = async (
 > => {
   isTeardown = false;
   const {
-    entryInfo: { distPath, runtimeDistPath, testPath },
+    entryInfo: { distPath, runtimeDistPath, testPath, hasModuleMock },
     setupEntries,
     assets,
     type,
@@ -491,6 +506,7 @@ export const runInPool = async (
         distPath,
         runtimeDistPath,
         testPath,
+        hasModuleMock,
         assetFiles,
         setupEntries,
         interopDefault,
@@ -601,6 +617,7 @@ export const runInPool = async (
         distPath,
         runtimeDistPath,
         testPath,
+        hasModuleMock,
         assetFiles,
         setupEntries,
         interopDefault,

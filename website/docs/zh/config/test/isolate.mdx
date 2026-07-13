@@ -18,6 +18,10 @@ description: 默认情况下，Rstest 会运行每个测试在一个独立的环
 当 `isolate` 为 `false` 时，被多个测试文件引入的模块在每个 worker 中**只会被求值一次**，而非每个文件求值一次。因此该共享模块顶层的所有代码——包括在其模块作用域注册的 hooks（例如某个 helper 在模块作用域调用 `beforeEach`）——只会对第一个加载它的文件生效，而不会对每个文件生效。如果某段 setup 逻辑需要按文件执行，请使用 [`setupFiles`](/config/test/setup-files)，即使关闭隔离，Rstest 也会为每个测试文件重新执行它。
 :::
 
+:::warning 使用模块 mock 的文件表现如同隔离模式
+即使 `isolate` 为 `false`，模块 mock 也只作用于声明它的那个文件。为了保证这一点，使用了模块 mock（`rstest.mock`、`rstest.mockRequire`、`rstest.doMock` 等）的文件会重新求值它引入的模块（而不是复用先前文件留下的状态），文件结束后共享的模块缓存也会再次重置——因此其后运行的文件同样从全新的模块开始。换句话说，模块状态共享会在每个使用 mock 的文件处重新开始：只有中间没有 mock 文件的测试文件之间才会保持共享。这也包括 setup 文件——如果 setup 文件中安装了模块 mock，所有测试文件都会从全新的模块开始。
+:::
+
 import { Tab, Tabs } from '@theme';
 
 <Tabs defaultValue='rstest.config.ts'>

@@ -47,7 +47,11 @@ const hasOwn = (target, property) => Object.hasOwn(target, property);
 const isPromise = (value) => value instanceof Promise;
 
 // Restore a module id to its captured original factory and drop its cache
-// entry — undoing a mock.
+// entry — undoing a mock. Deliberately keeps the registry entry in
+// `rstest_original_module_factories`: the between-files reset infers "the
+// previous file installed mocks" from a non-empty registry, so entries must
+// survive a mid-file `rs.unmock` (modules evaluated while the mock was live
+// may still hold mocked closures and need the boundary flush).
 const restoreOriginalFactory = (id) => {
   const factory = __webpack_require__.rstest_original_module_factories[id];
   if (factory) {
@@ -334,4 +338,35 @@ __webpack_require__.rstest_reset_modules = () => {
 __webpack_require__.rstest_hoisted = (fn) => {
   return fn();
 };
+//#endregion
+
+//#region reset mocks between files
+// Registered into the per-file cleaner registry (see moduleCacheControl.ts);
+// the worker invokes cleaners before each file only when `isolate: false`.
+// If the previous file installed module mocks, undo them: restore every
+// patched factory, reset the registries, and flush the shared module cache so
+// modules that captured mocked exports re-evaluate. The mocking file itself
+// got a fresh module world before it loaded (module-mock pre-flush in
+// runInPool.ts). See https://github.com/web-infra-dev/rstest/issues/1556.
+const rstestResetMocksBetweenFiles = () => {
+  const mockedIds = Object.keys(
+    __webpack_require__.rstest_original_module_factories,
+  );
+  if (mockedIds.length === 0) {
+    return;
+  }
+  for (const id of mockedIds) {
+    restoreOriginalFactory(id);
+  }
+  __webpack_require__.rstest_original_modules = {};
+  __webpack_require__.rstest_original_module_factories = {};
+  __webpack_require__.rstest_mocked_ids_by_request = Object.create(null);
+  for (const id of Object.keys(__webpack_module_cache__)) {
+    delete __webpack_module_cache__[id];
+  }
+};
+
+(global.__rstest_cache_cleaners__ ??= new Set()).add(
+  rstestResetMocksBetweenFiles,
+);
 //#endregion

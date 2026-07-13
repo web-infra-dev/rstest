@@ -35,6 +35,10 @@ import {
   type SetupFileState,
 } from './setupFileState';
 
+// Dependency type the rspack RstestPlugin (instantiated in plugins/basic.ts)
+// assigns to compiled `rs.mock`-family calls; not exported by @rspack/core.
+const RSTEST_MOCK_DEPENDENCY_TYPE = 'rstest mock module id';
+
 type TestEntryToChunkHashes = {
   name: string;
   /** key is chunk asset file path, value is chunk hash */
@@ -589,8 +593,39 @@ export const createRsbuildServer = async ({
     // stats types, but the top-level `assets[].size` is always present.
     const assetSizes = new Map(assets!.map((a) => [a.name, a.size]));
 
+    // Chunk ids containing modules that install module mocks (`rs.mock` and
+    // friends): the RstestPlugin compiles every mock call into a dependency
+    // with its own dependency type, so the dependency graph identifies mocking
+    // entries precisely. Under `isolate: false` the worker gives those entries
+    // a fresh module world (see `loadFiles` in runInPool.ts); with isolation
+    // each file gets a fresh worker anyway, so the scan is skipped.
+    const mockChunkIds = new Set<string | number>();
+    if (!inspectedConfig?.isolate) {
+      const { chunkGraph } = stats.compilation;
+      for (const module of stats.compilation.modules) {
+        if (
+          module.dependencies.some(
+            (dep) => dep.type === RSTEST_MOCK_DEPENDENCY_TYPE,
+          )
+        ) {
+          for (const chunk of chunkGraph.getModuleChunks(module)) {
+            if (chunk.id != null) {
+              mockChunkIds.add(chunk.id);
+            }
+          }
+        }
+      }
+    }
+    // `undefined` (not `false`) when the scan was skipped: the flag is only
+    // meaningful with a shared module registry.
+    const hasModuleMock = (chunkIds: (string | number)[]) =>
+      inspectedConfig?.isolate
+        ? undefined
+        : chunkIds.some((id) => mockChunkIds.has(id));
+
     for (const entry of Object.keys(entrypoints!)) {
       const e = entrypoints![entry]!;
+      const chunks = e.chunks || [];
 
       const distPath = path.join(
         outputPath!,
@@ -606,7 +641,8 @@ export const createRsbuildServer = async ({
           runtimeDistPath,
           testPath: setupFiles[environmentName][entry],
           files: entryFiles[entry],
-          chunks: e.chunks || [],
+          chunks,
+          hasModuleMock: hasModuleMock(chunks),
         });
       } else if (sourceEntries[entry]) {
         if (
@@ -620,7 +656,8 @@ export const createRsbuildServer = async ({
           runtimeDistPath,
           testPath: sourceEntries[entry],
           files: entryFiles[entry],
-          chunks: e.chunks || [],
+          chunks,
+          hasModuleMock: hasModuleMock(chunks),
           size:
             e.assetsSize ??
             (e.assets ?? []).reduce(
@@ -634,7 +671,7 @@ export const createRsbuildServer = async ({
           runtimeDistPath,
           testPath: globalSetupFiles[environmentName][entry],
           files: entryFiles[entry],
-          chunks: e.chunks || [],
+          chunks,
         });
       }
     }

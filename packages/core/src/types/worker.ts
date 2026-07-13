@@ -17,6 +17,13 @@ export type EntryInfo = {
   testPath: TestPath;
   files?: string[];
   /**
+   * Whether any module in this entry's chunks installs module mocks
+   * (`rs.mock` and friends), derived from the compiler's dependency graph.
+   * Under `isolate: false` the worker gives such entries a fresh module world
+   * (see `loadFiles` in runInPool.ts). Only populated when isolation is off.
+   */
+  hasModuleMock?: boolean;
+  /**
    * Bundle size (in bytes) of this entry's emitted assets, including its
    * dependency graph. Used as the cold-start cost proxy when ordering test
    * files that have no cached duration yet. Only populated for test entries.
