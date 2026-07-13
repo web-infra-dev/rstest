@@ -35,6 +35,7 @@ type InitModifyRstestConfigHooksOptions = {
   onModifyRstestConfigApplied?: () => Promise<void>;
   onRsbuildConfigResolved?: (applied: boolean) => Promise<void>;
   getEnvironmentConfig?: (project: ProjectContext) => RstestEnvironmentConfig;
+  appliedEnvironmentNames?: Set<string>;
 };
 
 type NormalizedProjectConfigWithDistPath = NormalizedProjectConfig & {
@@ -543,13 +544,12 @@ export const initModifyRstestConfigHooks = (
     getEnvironmentConfig = getRsbuildEnvironmentConfig,
     onModifyRstestConfigApplied,
     onRsbuildConfigResolved,
+    appliedEnvironmentNames = new Set<string>(),
   } = options;
   const modifyRstestConfigCallbacks = new Map<
     string,
     ModifyRstestConfigCallback[]
   >();
-  const appliedEnvironmentNames = new Set<string>();
-
   const applyModifyRstestConfigCallbacks = async (): Promise<boolean> => {
     let applied = false;
 

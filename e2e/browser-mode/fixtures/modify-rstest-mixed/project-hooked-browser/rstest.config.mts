@@ -11,7 +11,16 @@ const addBrowserEntriesPlugin = (): RsbuildPlugin => ({
     }
 
     api.useExposed<RstestExposeAPI>('rstest')?.modifyRstestConfig((config) => {
-      config.include = ['tests-added/**/*.test.ts'];
+      config.include = [
+        ...(Array.isArray(config.include) ? config.include : [config.include]),
+        'tests-added/**/*.test.ts',
+      ].filter(Boolean) as string[];
+      config.setupFiles = [
+        ...(Array.isArray(config.setupFiles)
+          ? config.setupFiles
+          : [config.setupFiles]),
+        './rstest.setup.ts',
+      ].filter(Boolean) as string[];
     });
   },
 });

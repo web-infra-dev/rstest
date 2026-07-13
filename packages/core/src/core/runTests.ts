@@ -416,6 +416,7 @@ export async function runTests(context: Rstest): Promise<void> {
     browserProjects.some((project) => isFilterInsideProject(filter, project));
 
   const setupFileState = createSetupFileState();
+  const appliedBrowserModifyRstestConfigEnvironments = new Set<string>();
   const projectPlanState = createRunProjectPlanState({
     context,
     browserProjects,
@@ -476,6 +477,7 @@ export async function runTests(context: Rstest): Promise<void> {
   };
   const shouldAllowEmptyBrowserFallback = () =>
     shouldRunBrowserDiscoveryFallback() &&
+    hasNodeTestsToRun &&
     !context.fileFilters?.some(isBrowserProjectPathFilter);
   const shouldFreezeBrowserShardedEntries = Boolean(
     shard && nodeProjects.length,
@@ -542,10 +544,13 @@ export async function runTests(context: Rstest): Promise<void> {
         shardedEntries: getBrowserShardedEntries(getBrowserProjectsToRun()),
         filesOnly: true,
         allowEmptyRun: true,
+        appliedModifyRstestConfigEnvironments:
+          appliedBrowserModifyRstestConfigEnvironments,
         onTraceEvents: forwardBrowserTraceEvents,
       },
     );
     if (discoveryResult?.hasFailure) {
+      await discoveryResult.close?.();
       throw (
         discoveryResult.unhandledErrors?.[0] ??
         new Error('Failed to initialize Browser Mode discovery.')
@@ -629,6 +634,8 @@ export async function runTests(context: Rstest): Promise<void> {
           freezeShardedEntries: shouldFreezeBrowserShardedEntries,
           allowEmptyRun: shouldAllowEmptyBrowserFallback(),
           allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
+          appliedModifyRstestConfigEnvironments:
+            appliedBrowserModifyRstestConfigEnvironments,
           onTraceEvents: forwardBrowserTraceEvents,
         },
       );
@@ -690,6 +697,8 @@ export async function runTests(context: Rstest): Promise<void> {
       freezeShardedEntries: shouldFreezeBrowserShardedEntries,
       allowEmptyRun: shouldAllowEmptyBrowserFallback(),
       allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
+      appliedModifyRstestConfigEnvironments:
+        appliedBrowserModifyRstestConfigEnvironments,
       onTraceEvents: forwardBrowserTraceEvents,
     });
 

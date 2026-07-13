@@ -48,6 +48,7 @@ export interface BrowserTestRunOptions {
    * entries after the node-side plan initially saw an empty browser project.
    */
   allowEmptyRun?: boolean;
+  appliedModifyRstestConfigEnvironments?: Set<string>;
   /**
    * When set, the browser host emits Perfetto trace events to this callback
    * (per-file `tests` slices + suite/case slices). Only invoked when the

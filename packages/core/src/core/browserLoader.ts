@@ -29,7 +29,10 @@ export interface BrowserHostModule {
     context: RstestContext,
     options?: Pick<
       BrowserTestRunOptions,
-      'shardedEntries' | 'freezeShardedEntries' | 'filesOnly'
+      | 'shardedEntries'
+      | 'freezeShardedEntries'
+      | 'filesOnly'
+      | 'appliedModifyRstestConfigEnvironments'
     >,
   ) => Promise<{
     list: ListCommandResult[];

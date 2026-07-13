@@ -284,12 +284,14 @@ const collectBrowserTests = async ({
   shardedEntries,
   freezeShardedEntries,
   filesOnly,
+  appliedModifyRstestConfigEnvironments,
 }: {
   context: RstestContext;
   browserProjects: ProjectContext[];
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
   freezeShardedEntries?: boolean;
   filesOnly?: boolean;
+  appliedModifyRstestConfigEnvironments?: Set<string>;
 }): Promise<{
   list: ListCommandResult[];
   close: () => Promise<void>;
@@ -313,6 +315,7 @@ const collectBrowserTests = async ({
     shardedEntries,
     freezeShardedEntries,
     filesOnly,
+    appliedModifyRstestConfigEnvironments,
   });
 };
 
@@ -354,6 +357,7 @@ const collectAllTests = async ({
   collectBrowserAfterConfigHooks,
   onModifyRstestConfigApplied,
   onRsbuildConfigResolved,
+  appliedModifyRstestConfigEnvironments,
 }: {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
@@ -362,6 +366,7 @@ const collectAllTests = async ({
   collectBrowserAfterConfigHooks?: boolean;
   onModifyRstestConfigApplied?: () => Promise<void>;
   onRsbuildConfigResolved?: () => Promise<void>;
+  appliedModifyRstestConfigEnvironments?: Set<string>;
 }): Promise<{
   errors?: FormattedError[];
   list: ListCommandResult[];
@@ -384,6 +389,7 @@ const collectAllTests = async ({
       freezeShardedEntries: Boolean(
         context.normalizedConfig.shard && nodeProjects.length,
       ),
+      appliedModifyRstestConfigEnvironments,
     });
 
   if (collectBrowserAfterConfigHooks && nodeProjects.length) {
@@ -471,6 +477,19 @@ export async function listTests(
     );
   };
 
+  const isFuzzyBasenameFilter = (filter: string) => {
+    if (context.fileFilterMode === 'exact' || isAbsolute(filter)) {
+      return false;
+    }
+
+    const normalizedFilter = normalize(filter);
+    return (
+      !normalizedFilter.startsWith('.') &&
+      !normalizedFilter.includes('/') &&
+      !normalizedFilter.includes('\\')
+    );
+  };
+
   if (context.relatedResolutionEmpty) {
     const tests: ListedTest[] = [];
 
@@ -511,6 +530,7 @@ export async function listTests(
   }
 
   const listPlanState = createListProjectPlanState(context);
+  const appliedBrowserModifyRstestConfigEnvironments = new Set<string>();
   const {
     globTestSourceEntries,
     refreshListEntries,
@@ -535,10 +555,12 @@ export async function listTests(
 
     if (
       context.fileFilters?.length &&
-      !context.fileFilters.some((filter) =>
-        browserProjects.some((project) =>
-          isFilterInsideProject(filter, project),
-        ),
+      !context.fileFilters.some(
+        (filter) =>
+          isFuzzyBasenameFilter(filter) ||
+          browserProjects.some((project) =>
+            isFilterInsideProject(filter, project),
+          ),
       )
     ) {
       return;
@@ -551,6 +573,8 @@ export async function listTests(
         ? listPlanState.getShardedBrowserEntries?.()
         : undefined,
       filesOnly: true,
+      appliedModifyRstestConfigEnvironments:
+        appliedBrowserModifyRstestConfigEnvironments,
     });
     await browserResult.close();
     await refreshListEntries({
@@ -604,6 +628,9 @@ export async function listTests(
       silentShardMessage: shouldPrintShardAfterConfigHooks,
       strictEnvironmentComments: !nodeProjects.length,
     });
+    if (shouldPrintShardAfterConfigHooks) {
+      await applyBrowserFilesOnlyConfigHooks();
+    }
   }
 
   const {
@@ -629,6 +656,8 @@ export async function listTests(
             silentShardMessage: !shouldPrintShardAfterConfigHooks,
             strictEnvironmentComments: false,
           }),
+        appliedModifyRstestConfigEnvironments:
+          appliedBrowserModifyRstestConfigEnvironments,
       });
 
   const tests: ListedTest[] = [];

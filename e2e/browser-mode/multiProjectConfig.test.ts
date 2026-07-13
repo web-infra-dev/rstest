@@ -1,5 +1,10 @@
 import { describe, expect, it } from '@rstest/core';
-import { runBrowserCli } from './utils';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { runBrowserCli, runBrowserCliWithCwd } from './utils';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const getFixturePath = (name: string) => join(__dirname, 'fixtures', name);
 
 /**
  * Regression test: in multi-project browser mode, each project must compile with
@@ -131,6 +136,24 @@ describe.sequential('browser mode - multi project config isolation', () => {
     expect(cli.stdout).not.toContain('node-smoke.test.ts');
   });
 
+  it('fails empty mixed-mode fallback when no node or browser tests run after hooks', async () => {
+    const { expectExecFailed, cli } = await runBrowserCli(
+      'modify-rstest-mixed',
+      {
+        args: [
+          '--project',
+          'project-hooked-browser',
+          '--project',
+          'node-smoke',
+          'missing.test.ts',
+        ],
+      },
+    );
+
+    await expectExecFailed();
+    expect(cli.stderr).toContain('No test files found');
+  });
+
   it('keeps browser shard manifests in sync after all project hooks run', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli(
       'modify-rstest-mixed',
@@ -169,5 +192,46 @@ describe.sequential('browser mode - multi project config isolation', () => {
     expect(cli.stdout).toContain('hooked-browser.test.ts');
     expect(cli.stdout).not.toContain('node-smoke.test.ts');
     expect(cli.stdout).toMatch(/Tests.*1 passed/);
+  });
+
+  it('lists fuzzy-filtered browser files added by hooks in files-only mode', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCliWithCwd(
+      getFixturePath('modify-rstest-mixed'),
+      {
+        command: 'list',
+        args: [
+          '--filesOnly',
+          '--project',
+          'project-hooked-browser',
+          '--project',
+          'node-smoke',
+          'hooked-browser.test.ts',
+        ],
+      },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('hooked-browser.test.ts');
+    expect(cli.stdout).not.toContain('node-smoke.test.ts');
+  });
+
+  it('lists sharded browser files added by hooks after browser hook refresh', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCliWithCwd(
+      getFixturePath('modify-rstest-mixed'),
+      {
+        command: 'list',
+        args: [
+          '--shard=2/2',
+          '--project',
+          'project-hooked-browser',
+          '--project',
+          'node-smoke',
+        ],
+      },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('hooked-browser.test.ts');
+    expect(cli.stdout).not.toContain('node-smoke.test.ts');
   });
 });

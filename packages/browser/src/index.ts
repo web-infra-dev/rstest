@@ -24,7 +24,10 @@ export async function listBrowserTests(
   context: RstestContext,
   options?: Pick<
     BrowserTestRunOptions,
-    'shardedEntries' | 'freezeShardedEntries' | 'filesOnly'
+    | 'shardedEntries'
+    | 'freezeShardedEntries'
+    | 'filesOnly'
+    | 'appliedModifyRstestConfigEnvironments'
   >,
 ): Promise<ListBrowserTestsResult> {
   // Forward `options` (e.g. `shardedEntries`) so `rstest list --shard` lists

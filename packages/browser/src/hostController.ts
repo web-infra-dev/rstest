@@ -1484,6 +1484,7 @@ const createBrowserRuntime = async ({
   containerDistPath,
   containerDevServer,
   forceHeadless,
+  appliedModifyRstestConfigEnvironments,
 }: {
   context: RstestContext;
   projectEntries: BrowserProjectEntries[];
@@ -1496,6 +1497,7 @@ const createBrowserRuntime = async ({
   containerDevServer?: string;
   /** Force headless mode regardless of user config (used for list command) */
   forceHeadless?: boolean;
+  appliedModifyRstestConfigEnvironments?: Set<string>;
 }): Promise<BrowserRuntime> => {
   // ---- Shared singletons (created once, wired into every project server) ----
   const containerHtmlTemplate = containerDistPath
@@ -1732,6 +1734,7 @@ const createBrowserRuntime = async ({
       {
         getEnvironmentConfig: getBrowserRsbuildEnvironmentConfig,
         onModifyRstestConfigApplied: refreshProjectEntries,
+        appliedEnvironmentNames: appliedModifyRstestConfigEnvironments,
       },
     );
 
@@ -2397,6 +2400,8 @@ export const runBrowserController = async (
         projectEntries,
         shardedEntries: options?.shardedEntries,
         freezeShardedEntries: options?.freezeShardedEntries,
+        appliedModifyRstestConfigEnvironments:
+          options?.appliedModifyRstestConfigEnvironments,
         tempDir,
         isWatchMode,
         onTriggerRerun: isWatchMode
@@ -4087,6 +4092,7 @@ export const listBrowserTests = async (
     shardedEntries?: Map<string, { entries: Record<string, string> }>;
     freezeShardedEntries?: boolean;
     filesOnly?: boolean;
+    appliedModifyRstestConfigEnvironments?: Set<string>;
   },
 ): Promise<ListBrowserTestsResult> => {
   let projectEntries = await resolveProjectEntries(
@@ -4111,6 +4117,8 @@ export const listBrowserTests = async (
       projectEntries,
       shardedEntries: options?.shardedEntries,
       freezeShardedEntries: options?.freezeShardedEntries,
+      appliedModifyRstestConfigEnvironments:
+        options?.appliedModifyRstestConfigEnvironments,
       tempDir,
       isWatchMode: false,
       containerDistPath: undefined,
