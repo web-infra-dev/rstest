@@ -27,6 +27,7 @@ import {
 import { createSetupFileState } from './setupFileState';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import { createListProjectPlanState, syncNodeProjects } from './projectPlan';
+import { hasUserRstestConfigPlugins } from './modifyRstestConfig';
 
 type ListedTest = {
   file: string;
@@ -553,16 +554,28 @@ export async function listTests(
       return;
     }
 
-    if (
-      context.fileFilters?.length &&
-      !context.fileFilters.some(
-        (filter) =>
-          isFuzzyBasenameFilter(filter) ||
-          browserProjects.some((project) =>
-            isFilterInsideProject(filter, project),
-          ),
+    const hasBrowserEntries = (
+      await Promise.all(
+        browserProjects.map((project) =>
+          globTestSourceEntries(project.environmentName),
+        ),
       )
-    ) {
+    ).some((entries) => Object.keys(entries).length > 0);
+    const shouldApplyConfigHooks =
+      hasUserRstestConfigPlugins(browserProjects) &&
+      (!context.fileFilters?.length ||
+        context.fileFilters.some(
+          (filter) =>
+            isFuzzyBasenameFilter(filter) ||
+            browserProjects.some((project) =>
+              isFilterInsideProject(filter, project),
+            ) ||
+            !nodeProjects.some((project) =>
+              isFilterInsideProject(filter, project),
+            ),
+        ));
+
+    if (!hasBrowserEntries && !shouldApplyConfigHooks) {
       return;
     }
 

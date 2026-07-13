@@ -441,6 +441,30 @@ const syncProjectDerivedFields = (project: ProjectContext): void => {
     process.env[ENV.OUTPUT_MODULE] !== 'false';
 };
 
+const isUserRstestConfigPlugin = (plugin: unknown): boolean => {
+  if (!plugin) {
+    return false;
+  }
+
+  if (Array.isArray(plugin)) {
+    return plugin.some(isUserRstestConfigPlugin);
+  }
+
+  if (typeof plugin === 'object') {
+    const name = 'name' in plugin ? plugin.name : undefined;
+    return name !== 'rstest:browser-user-config';
+  }
+
+  return true;
+};
+
+export const hasUserRstestConfigPlugins = (
+  projects: ProjectContext[],
+): boolean =>
+  projects.some((project) =>
+    project.normalizedConfig.plugins?.some(isUserRstestConfigPlugin),
+  );
+
 const applyModifyRstestConfig = async (
   config: NormalizedProjectConfig,
   context: RstestContext,

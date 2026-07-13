@@ -16,6 +16,7 @@ import {
   getNoTestFilesMessage,
   getSetupFiles,
   getTestEntries,
+  hasUserRstestConfigPlugins,
   initModifyRstestConfigHooks,
   isDebug,
   type ListCommandResult,
@@ -4108,6 +4109,16 @@ export const listBrowserTests = async (
   );
 
   const browserProjects = getBrowserProjects(context);
+
+  if (
+    projectEntries.every((entry) => entry.testFiles.length === 0) &&
+    !hasUserRstestConfigPlugins(browserProjects)
+  ) {
+    return {
+      list: [],
+      close: async () => {},
+    };
+  }
 
   // Create a simplified browser runtime for collect mode
   let runtime: BrowserRuntime;

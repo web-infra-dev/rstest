@@ -1,6 +1,8 @@
 import { describe, expect, it } from '@rstest/core';
+import { createServer } from 'node:net';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BROWSER_PORTS } from './fixtures/ports';
 import { runBrowserCli, runBrowserCliWithCwd } from './utils';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -158,6 +160,61 @@ describe.sequential('browser mode - multi project config isolation', () => {
     expect(cli.stdout).toMatch(/Tests.*1 passed/);
   });
 
+  it('keeps related-empty mixed runs empty', async () => {
+    const { expectExecFailed, cli } = await runBrowserCli(
+      'modify-rstest-mixed',
+      {
+        args: [
+          '--related',
+          'missing-source.ts',
+          '--project',
+          'project-hooked-browser',
+          '--project',
+          'node-smoke',
+        ],
+      },
+    );
+
+    await expectExecFailed();
+    expect(cli.stderr).toContain('No test files found');
+    expect(cli.log).not.toContain('hooked-browser.test.ts');
+    expect(cli.log).not.toContain('node-smoke.test.ts');
+  });
+
+  it('skips empty browser projects without config hooks in mixed runs', async () => {
+    const server = createServer();
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(
+        BROWSER_PORTS['multi-project-config'],
+        '127.0.0.1',
+        resolve,
+      );
+    });
+
+    try {
+      const { expectExecSuccess, cli } = await runBrowserCli(
+        'modify-rstest-mixed',
+        {
+          args: [
+            '--project',
+            'project-empty-browser',
+            '--project',
+            'node-smoke',
+          ],
+        },
+      );
+
+      await expectExecSuccess();
+      expect(cli.stdout).toContain('node-smoke.test.ts');
+      expect(cli.stdout).toMatch(/Tests.*1 passed/);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
   it('fails explicit browser path filters that still match no tests after hooks', async () => {
     const { expectExecFailed, cli } = await runBrowserCli(
       'modify-rstest-mixed',
@@ -253,6 +310,27 @@ describe.sequential('browser mode - multi project config isolation', () => {
 
     await expectExecSuccess();
     expect(cli.stdout).toContain('hooked-browser.test.ts');
+    expect(cli.stdout).not.toContain('node-smoke.test.ts');
+  });
+
+  it('lists browser files after hooks move the project root', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCliWithCwd(
+      getFixturePath('modify-rstest-mixed'),
+      {
+        command: 'list',
+        args: [
+          '--filesOnly',
+          '--project',
+          'project-moved-root',
+          '--project',
+          'node-smoke',
+          'project-moved-root/src/moved-root.test.ts',
+        ],
+      },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('moved-root.test.ts');
     expect(cli.stdout).not.toContain('node-smoke.test.ts');
   });
 

@@ -13,7 +13,10 @@ export type { BrowserHostModule } from './core/browserLoader';
 export type { Rstest } from './core/rstest';
 // Coverage support for browser mode
 export { createCoverageProvider, loadCoverageProvider } from './coverage';
-export { initModifyRstestConfigHooks } from './core/modifyRstestConfig';
+export {
+  hasUserRstestConfigPlugins,
+  initModifyRstestConfigHooks,
+} from './core/modifyRstestConfig';
 // Trace primitives — the browser host instantiates PhaseTracker per test file
 // and forwards its events via `BrowserTestRunOptions.onTraceEvents`.
 export { PhaseTracker } from './runtime/worker/phaseTracker';

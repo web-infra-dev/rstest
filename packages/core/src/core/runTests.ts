@@ -46,6 +46,7 @@ import {
 } from './resultsCache';
 import { type SequenceHints, sortTestEntries } from './testSequencer';
 import { createRunProjectPlanState, syncNodeProjects } from './projectPlan';
+import { hasUserRstestConfigPlugins } from './modifyRstestConfig';
 import type { Rstest } from './rstest';
 
 /**
@@ -419,27 +420,8 @@ export async function runTests(context: Rstest): Promise<void> {
     !isFuzzyBasenameFilter(filter) &&
     nodeProjects.some((project) => isFilterInsideProject(filter, project));
 
-  const isUserBrowserConfigPlugin = (plugin: unknown): boolean => {
-    if (!plugin) {
-      return false;
-    }
-
-    if (Array.isArray(plugin)) {
-      return plugin.some(isUserBrowserConfigPlugin);
-    }
-
-    if (typeof plugin === 'object') {
-      const { name } = plugin as { name?: unknown };
-      return name !== 'rstest:browser-user-config';
-    }
-
-    return true;
-  };
-
   const hasBrowserConfigHooks = () =>
-    browserProjects.some((project) =>
-      project.normalizedConfig.plugins?.some(isUserBrowserConfigPlugin),
-    );
+    hasUserRstestConfigPlugins(browserProjects);
 
   const isPotentialBrowserConfigHookFilter = (filter: string) =>
     isBrowserProjectFilter(filter) || !isNodeProjectPathFilter(filter);
@@ -498,18 +480,19 @@ export async function runTests(context: Rstest): Promise<void> {
   });
 
   const shouldRunBrowserDiscoveryFallback = () => {
-    if (browserProjects.length === 0) {
+    if (browserProjects.length === 0 || context.relatedResolutionEmpty) {
       return false;
     }
 
-    if (!context.fileFilters?.length) {
+    if (projectPlanState.getPlan().browserProjectsToRun.length > 0) {
       return true;
     }
 
-    return (
-      context.fileFilters.some(isBrowserProjectFilter) ||
-      shouldRunBrowserConfigHookFallback()
-    );
+    if (!context.fileFilters?.length) {
+      return hasBrowserConfigHooks();
+    }
+
+    return shouldRunBrowserConfigHookFallback();
   };
   const shouldAllowEmptyBrowserFallback = () =>
     shouldRunBrowserDiscoveryFallback() &&
