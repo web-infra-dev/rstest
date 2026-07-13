@@ -10,7 +10,7 @@ const textDecoder = new TextDecoder('utf-8');
 
 export const testData = new WeakMap<
   vscode.TestItem,
-  WorkspaceManager | Project | TestFolder | TestFile | TestCase
+  WorkspaceManager | Project | TestFolder | ProjectFolder | TestFile | TestCase
 >();
 
 const getContentFromFilesystem = async (uri: vscode.Uri) => {
@@ -45,6 +45,11 @@ export class TestFolder {
     public uri: vscode.Uri,
   ) {}
 }
+
+// Marker for a folder node that groups multiple projects by directory. Unlike
+// `TestFolder`, it does not belong to a single project/api, so running it
+// recurses into its children instead of invoking one api.
+export class ProjectFolder {}
 
 export class TestFile {
   public didResolve = false;
