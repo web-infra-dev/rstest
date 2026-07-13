@@ -1,4 +1,4 @@
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import {
@@ -192,6 +192,7 @@ const PAUSE_ENV = 'RSTEST_PLAYWRIGHT_PAUSE';
 const TRACE_ENV = 'RSTEST_PLAYWRIGHT_TRACE';
 const TRACE_OUTPUT_DIR_ENV = 'RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR';
 const DEBUG_PAUSE_TIMEOUT = 24 * 60 * 60 * 1000;
+const TRACE_CLEANUP_TIMEOUT = 60 * 1000;
 const BROWSER_IDLE_CLOSE_DELAY = 1000;
 const DEFAULT_STATIC_SERVER_HOST = '127.0.0.1';
 const DEFAULT_TRACE_OUTPUT_DIR = join('.rstest', 'playwright-traces');
@@ -325,6 +326,8 @@ const getTraceArtifacts = (
   };
 };
 
+type TraceArtifacts = NonNullable<ReturnType<typeof getTraceArtifacts>>;
+
 const getTraceArtifactName = (task: TestContext['task']) => {
   const source = [task.filepath, task.id, task.name].filter(Boolean).join(' ');
   let hash = 0;
@@ -363,15 +366,60 @@ const formatRelativePath = (projectRoot: string, path: string) => {
   return relativePath || '.';
 };
 
+const quoteShellArg = (value: string) => {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+};
+
+const getShowTraceCommand = (
+  artifacts: TraceArtifacts,
+  projectRoot: string,
+) => {
+  const tracePath = quoteShellArg(
+    formatRelativePath(projectRoot, artifacts.tracePath),
+  );
+
+  return `pnpm exec playwright show-trace ${tracePath}`;
+};
+
+const reserveTraceArtifacts = async (
+  artifacts: TraceArtifacts,
+): Promise<TraceArtifacts> => {
+  await mkdir(dirname(artifacts.dir), { recursive: true });
+
+  for (let index = 0; ; index++) {
+    const dir = index === 0 ? artifacts.dir : `${artifacts.dir}-${index}`;
+
+    try {
+      await mkdir(dir);
+
+      return {
+        ...artifacts,
+        dir,
+        tracePath: join(dir, 'trace.zip'),
+        summaryPath: join(dir, 'trace-summary.json'),
+        debugPath: join(dir, 'debug.md'),
+      };
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !('code' in error) ||
+        error.code !== 'EEXIST'
+      ) {
+        throw error;
+      }
+    }
+  }
+};
+
 const writeTraceSummary = async ({
   artifacts,
   task,
 }: {
-  artifacts: NonNullable<ReturnType<typeof getTraceArtifacts>>;
+  artifacts: TraceArtifacts;
   task: TestContext['task'];
 }) => {
   const projectRoot = task.projectRoot ?? process.cwd();
-  const showTraceCommand = `pnpm exec playwright show-trace ${formatRelativePath(projectRoot, artifacts.tracePath)}`;
+  const showTraceCommand = getShowTraceCommand(artifacts, projectRoot);
   const errors = getFormattedErrors(task);
   const summary = {
     test: {
@@ -438,7 +486,7 @@ const writeTraceSummary = async ({
 };
 
 const printTraceSavedMessage = (
-  artifacts: NonNullable<ReturnType<typeof getTraceArtifacts>>,
+  artifacts: TraceArtifacts,
   task: TestContext['task'],
 ) => {
   const projectRoot = task.projectRoot ?? process.cwd();
@@ -447,7 +495,7 @@ const printTraceSavedMessage = (
   console.log(`[rstest-playwright] Trace saved: ${tracePath}`);
   if (artifacts.options.print) {
     console.log(
-      `[rstest-playwright] View trace: pnpm exec playwright show-trace ${tracePath}`,
+      `[rstest-playwright] View trace: ${getShowTraceCommand(artifacts, projectRoot)}`,
     );
   }
 };
@@ -848,17 +896,28 @@ const playwrightFixtures = {
   ) => {
     const context = await browser.newContext(playwright.contextOptions);
     const artifacts = getTraceArtifacts(playwright, task);
-
-    if (artifacts) {
-      await context.tracing.start({
-        screenshots: artifacts.options.screenshots,
-        snapshots: artifacts.options.snapshots,
-        sources: artifacts.options.sources,
-        title: task.name,
-      });
-    }
-
+    let activeArtifacts: TraceArtifacts | undefined;
+    let traceStarted = false;
     let released = false;
+    let finalized = false;
+    let traceReported = false;
+
+    const finalizeTrace = async () => {
+      if (!activeArtifacts || finalized) {
+        return;
+      }
+
+      finalized = true;
+
+      if (activeArtifacts.options.summary) {
+        await writeTraceSummary({ artifacts: activeArtifacts, task });
+      }
+
+      if (!traceReported) {
+        printTraceSavedMessage(activeArtifacts, task);
+        traceReported = true;
+      }
+    };
 
     const cleanupContext = async () => {
       if (released) {
@@ -868,17 +927,21 @@ const playwrightFixtures = {
       released = true;
 
       try {
-        if (artifacts) {
+        if (artifacts && traceStarted) {
           const shouldSaveTrace =
             artifacts.options.mode === 'on' || task.result?.status === 'fail';
 
           if (shouldSaveTrace) {
-            await mkdir(artifacts.dir, { recursive: true });
-            await context.tracing.stop({ path: artifacts.tracePath });
-            if (artifacts.options.summary) {
-              await writeTraceSummary({ artifacts, task });
+            activeArtifacts = await reserveTraceArtifacts(artifacts);
+            try {
+              await context.tracing.stop({ path: activeArtifacts.tracePath });
+            } catch (error) {
+              await rm(activeArtifacts.dir, { recursive: true, force: true });
+              activeArtifacts = undefined;
+              throw error;
             }
-            printTraceSavedMessage(artifacts, task);
+
+            await finalizeTrace();
           } else {
             await context.tracing.stop();
           }
@@ -888,7 +951,22 @@ const playwrightFixtures = {
       }
     };
 
-    onTestFailed(cleanupContext);
+    onTestFailed(cleanupContext, TRACE_CLEANUP_TIMEOUT);
+
+    if (artifacts) {
+      try {
+        await context.tracing.start({
+          screenshots: artifacts.options.screenshots,
+          snapshots: artifacts.options.snapshots,
+          sources: artifacts.options.sources,
+          title: task.name,
+        });
+        traceStarted = true;
+      } catch (error) {
+        await cleanupContext();
+        throw error;
+      }
+    }
 
     try {
       await use(context);

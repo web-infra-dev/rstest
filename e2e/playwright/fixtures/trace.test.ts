@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { expect, test as base } from '@rstest/playwright';
+import { afterAll, expect, test as base } from '@rstest/playwright';
 import type { PlaywrightOptions } from '@rstest/playwright';
 
 const outputDir = join(import.meta.dirname, '.rstest-test-traces');
@@ -15,6 +15,10 @@ const test = base.extend({
       print: false,
     },
   } satisfies PlaywrightOptions,
+});
+
+afterAll(async () => {
+  await rm(outputDir, { recursive: true, force: true });
 });
 
 test.sequential('writes Playwright trace debug artifacts', async ({ page }) => {
@@ -47,4 +51,34 @@ test.sequential('verifies Playwright trace debug artifacts', async () => {
   expect(debug).toContain('Playwright Trace Debug Report');
   expect(debug).toContain('playwright show-trace');
   console.log('RSTEST_PLAYWRIGHT_TRACE_OK');
+});
+
+let retryAttempts = 0;
+
+test.sequential(
+  'keeps retry trace attempts separate',
+  { retry: 1 },
+  async ({ page }) => {
+    retryAttempts++;
+
+    await page.setContent('<h1>Retry trace target</h1>');
+    await expect(page.locator('h1')).toHaveText('Retry trace target');
+    expect(retryAttempts).toBe(2);
+  },
+);
+
+test.sequential('verifies retry traces are not overwritten', async () => {
+  const traceEntries = (await readdir(outputDir)).filter((entry) =>
+    entry.startsWith('keeps-retry-trace-attempts-separate-'),
+  );
+
+  expect(traceEntries.length).toBe(2);
+
+  for (const traceEntry of traceEntries) {
+    expect(
+      (await stat(join(outputDir, traceEntry, 'trace.zip'))).size,
+    ).toBeGreaterThan(0);
+  }
+
+  console.log('RSTEST_PLAYWRIGHT_TRACE_RETRY_OK');
 });

@@ -272,18 +272,19 @@ export class TestRunner {
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]
         .reverse()
         .concat(cleanups)
-        .concat(fixtureCleanups)
-        .concat(test.onFinished);
+        .concat(test.onFinished)
+        .concat(fixtureCleanups);
 
       test.context.task.result = result;
-      try {
-        for (const fn of afterEachFns) {
+      for (const fn of afterEachFns) {
+        try {
           await fn(test.context);
+        } catch (error) {
+          result.status = 'fail';
+          result.errors ??= [];
+          result.errors.push(...(await formatTestError(error)));
+          test.context.task.result = result;
         }
-      } catch (error) {
-        result.status = 'fail';
-        result.errors ??= [];
-        result.errors.push(...(await formatTestError(error)));
       }
 
       if (skipped) {

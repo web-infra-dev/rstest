@@ -249,6 +249,8 @@ e2e('mobile page', async ({ page }) => {
 
 ## Trace 调试
 
+<ApiMeta addedVersion="0.11.2" />
+
 设置 `playwright.trace` 或 `RSTEST_PLAYWRIGHT_TRACE` 后，`context` fixture 会捕获 Playwright 官方的 `trace.zip` 产物。这个 trace 覆盖默认的 `page` fixture，也覆盖通过 `context.newPage()` 创建的页面。优先级是 fixture 配置高于环境变量，最后默认关闭。
 
 ```ts

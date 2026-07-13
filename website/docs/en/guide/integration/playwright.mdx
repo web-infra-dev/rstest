@@ -249,6 +249,8 @@ The `playwright` fixture supports these options:
 
 ## Trace debugging
 
+<ApiMeta addedVersion="0.11.2" />
+
 Set `playwright.trace` or `RSTEST_PLAYWRIGHT_TRACE` to capture Playwright's official `trace.zip` artifact from the `context` fixture. The trace covers the default `page` fixture and pages created with `context.newPage()`. Fixture configuration takes priority over the environment variable, then falls back to `off`.
 
 ```ts

@@ -50,6 +50,7 @@ describe('@rstest/playwright', () => {
 
     await expectExecSuccess();
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_OK');
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_RETRY_OK');
     expect(cli.stdout).toContain('[rstest-playwright] Trace saved:');
   });
 
@@ -91,6 +92,22 @@ describe('@rstest/playwright', () => {
     await expectExecSuccess();
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_PRIORITY_OK');
     expect(cli.stdout).not.toContain('[rstest-playwright] Trace saved:');
+  });
+
+  it('retains Playwright trace when onTestFinished fails', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'trace-on-finished-failure.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_ON_FINISHED_FAIL_OK');
   });
 
   it.skipIf(!shouldRunHeadedPlaywrightTests)(
