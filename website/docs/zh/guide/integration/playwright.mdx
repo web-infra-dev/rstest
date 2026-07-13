@@ -267,19 +267,19 @@ e2e('checkout', async ({ page }) => {
 });
 ```
 
-如果只是临时用命令行风格打开调试，不想修改测试代码，可以使用 `--playwright.trace`。这里刻意使用 provider 作用域，因为现有顶层 `--trace` 已经表示 Rstest 性能追踪：
+如果只是临时用命令行风格打开调试，不想修改测试代码，可以设置 `RSTEST_PLAYWRIGHT_TRACE`：
 
 ```bash
-rstest --playwright.trace=retain-on-failure
+RSTEST_PLAYWRIGHT_TRACE=retain-on-failure rstest
 ```
 
-可以用 `--playwright.trace.outputDir` 覆盖默认输出目录：
+当 trace 由环境变量开启时，可以用 `RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR` 覆盖默认输出目录：
 
 ```bash
-rstest --playwright.trace=on --playwright.trace.outputDir=.rstest/playwright-traces
+RSTEST_PLAYWRIGHT_TRACE=on RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR=.rstest/playwright-traces rstest
 ```
 
-fixture 选项和 `RSTEST_PLAYWRIGHT_TRACE` 环境变量仍按上面的优先级生效。`trace` 支持 `'off'`、`'on'`、`'retain-on-failure'`，也支持传入 options 对象：
+`trace` 支持 `'off'`、`'on'`、`'retain-on-failure'`，也支持传入 options 对象：
 
 ```ts
 const e2e = test.extend({

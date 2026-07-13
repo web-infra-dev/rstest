@@ -267,19 +267,19 @@ e2e('checkout', async ({ page }) => {
 });
 ```
 
-For temporary CLI-style debugging without changing test code, use `--playwright.trace`. This flag is intentionally provider-scoped because the existing top-level `--trace` already means Rstest performance tracing:
+For temporary CLI-style debugging without changing test code, set `RSTEST_PLAYWRIGHT_TRACE`:
 
 ```bash
-rstest --playwright.trace=retain-on-failure
+RSTEST_PLAYWRIGHT_TRACE=retain-on-failure rstest
 ```
 
-Use `--playwright.trace.outputDir` to override the default output directory:
+Use `RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR` to override the default output directory when trace is enabled by the environment variable:
 
 ```bash
-rstest --playwright.trace=on --playwright.trace.outputDir=.rstest/playwright-traces
+RSTEST_PLAYWRIGHT_TRACE=on RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR=.rstest/playwright-traces rstest
 ```
 
-The fixture option and `RSTEST_PLAYWRIGHT_TRACE` environment variable still take priority as described above. `trace` accepts `'off'`, `'on'`, `'retain-on-failure'`, or an options object:
+`trace` accepts `'off'`, `'on'`, `'retain-on-failure'`, or an options object:
 
 ```ts
 const e2e = test.extend({
