@@ -23,6 +23,15 @@ const getContentFromFilesystem = async (uri: vscode.Uri) => {
   }
 };
 
+// Duplicate sibling test/suite names get a unique TestItem id by appending
+// their 0-based occurrence index. Creation (TestFile.onTest) and result lookup
+// (TestRunReporter.findTestItem) must derive ids identically, so both go
+// through this helper. `siblingIndex` is the number of prior same-named
+// siblings (0 for the first, which keeps its plain name as id).
+export function getTestItemId(name: string, siblingIndex: number): string {
+  return siblingIndex ? [name, siblingIndex].join('@@@@@@') : name;
+}
+
 export function gatherTestItems(
   collection: vscode.TestItemCollection,
   recursive = true,
@@ -172,9 +181,7 @@ export class TestFile {
   ) {
     const siblingsCount = parent.filter((child) => child.label === name).length;
 
-    // generate unique id to duplicated item
-    let id = name;
-    if (siblingsCount) id = [name, siblingsCount].join('@@@@@@');
+    const id = getTestItemId(name, siblingsCount);
 
     const isSuite = testType === 'describe' || testType === 'suite';
 

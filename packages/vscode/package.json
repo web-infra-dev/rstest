@@ -44,6 +44,20 @@
           "scope": "resource",
           "type": "string"
         },
+        "rstest.nodeExecutable": {
+          "markdownDescription": "Overrides the `node` binary used to spawn the Rstest test worker process. Provide an absolute path to a Node.js executable (for example, a version-manager or custom build). When empty, the `node` binary on `PATH` is used. Supports `${workspaceFolder}` placeholder.",
+          "scope": "resource",
+          "type": "string"
+        },
+        "rstest.nodeExecArgs": {
+          "description": "Extra arguments passed to the Node executable when spawning the test worker (e.g. --experimental-vm-modules). Must be an array of strings.",
+          "scope": "resource",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
         "rstest.configFileGlobPattern": {
           "description": "Glob patterns used to discover config files. Must be an array of strings.",
           "type": "array",
