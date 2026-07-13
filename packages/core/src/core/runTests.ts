@@ -236,9 +236,11 @@ export async function runTests(context: Rstest): Promise<void> {
   // 3. Prepare Rsbuild with the pre-grouped node environments; let server
   //    creation drive config resolution so run mode avoids extra initConfigs
   //    side effects.
-  // 4. For node or mixed runs, create the Rsbuild dev server to trigger config
-  //    hooks, validate node environment dependencies, then start browser tests
-  //    for mixed runs and initialize the node worker pool.
+  // 4. For mixed runs whose browser entries may be added by Browser Mode
+  //    hooks, first start Browser Mode in files-only mode so those hooks run
+  //    before the shared node/browser shard plan is finalized. Then create the
+  //    node Rsbuild dev server, validate dependencies, start browser tests for
+  //    mixed runs, and initialize the node worker pool.
   // 5. The inner `run()` handles one compile cycle: read Rsbuild stats, run
   //    global setup, execute workers, merge browser/node results for reporters,
   //    generate coverage, and finalize trace data.
@@ -392,7 +394,25 @@ export async function runTests(context: Rstest): Promise<void> {
     );
   };
 
+  const isFuzzyBasenameFilter = (filter: string) => {
+    if (context.fileFilterMode === 'exact' || isAbsolute(filter)) {
+      return false;
+    }
+
+    const normalizedFilter = normalize(filter);
+    return (
+      !normalizedFilter.startsWith('.') &&
+      !normalizedFilter.includes('/') &&
+      !normalizedFilter.includes('\\')
+    );
+  };
+
   const isBrowserProjectFilter = (filter: string) =>
+    isFuzzyBasenameFilter(filter) ||
+    browserProjects.some((project) => isFilterInsideProject(filter, project));
+
+  const isBrowserProjectPathFilter = (filter: string) =>
+    !isFuzzyBasenameFilter(filter) &&
     browserProjects.some((project) => isFilterInsideProject(filter, project));
 
   const setupFileState = createSetupFileState();
@@ -444,16 +464,19 @@ export async function runTests(context: Rstest): Promise<void> {
   });
 
   const shouldRunBrowserDiscoveryFallback = () => {
-    if (browserProjects.length === 0 || (shard && nodeProjects.length)) {
+    if (browserProjects.length === 0) {
       return false;
     }
 
     if (!context.fileFilters?.length) {
-      return !context.relatedFilters?.length;
+      return true;
     }
 
     return context.fileFilters.some(isBrowserProjectFilter);
   };
+  const shouldAllowEmptyBrowserFallback = () =>
+    shouldRunBrowserDiscoveryFallback() &&
+    !context.fileFilters?.some(isBrowserProjectPathFilter);
   const shouldFreezeBrowserShardedEntries = Boolean(
     shard && nodeProjects.length,
   );
@@ -474,7 +497,10 @@ export async function runTests(context: Rstest): Promise<void> {
       return currentPlan.browserProjectsToRun;
     }
 
-    if (!context.fileFilters?.length) {
+    if (
+      !context.fileFilters?.length ||
+      context.fileFilters.some(isFuzzyBasenameFilter)
+    ) {
       return browserProjects;
     }
 
@@ -506,6 +532,32 @@ export async function runTests(context: Rstest): Promise<void> {
   };
 
   let { hasBrowserTestsToRun, hasNodeTestsToRun } = syncRunPlanFlags();
+
+  if (hasNodeProjects && shouldRunBrowserDiscoveryFallback()) {
+    const discoveryResult = await runBrowserModeTests(
+      context,
+      getBrowserProjectsToRun(),
+      {
+        skipOnTestRunEnd: true,
+        shardedEntries: getBrowserShardedEntries(getBrowserProjectsToRun()),
+        filesOnly: true,
+        allowEmptyRun: true,
+        onTraceEvents: forwardBrowserTraceEvents,
+      },
+    );
+    if (discoveryResult?.hasFailure) {
+      throw (
+        discoveryResult.unhandledErrors?.[0] ??
+        new Error('Failed to initialize Browser Mode discovery.')
+      );
+    }
+    plan = await resolveRunnableProjects({
+      silentShardMessage: true,
+      strictEnvironmentComments: true,
+    });
+    syncNodeProjects(rsbuildProjects, plan.nodeProjectsToRun);
+    ({ hasBrowserTestsToRun, hasNodeTestsToRun } = syncRunPlanFlags());
+  }
 
   if (nodeProjects.length) {
     await rsbuildInstance.initConfigs({ action: 'dev' });
@@ -575,7 +627,7 @@ export async function runTests(context: Rstest): Promise<void> {
           skipOnTestRunEnd: false,
           shardedEntries: getBrowserShardedEntries(browserProjectsToRun),
           freezeShardedEntries: shouldFreezeBrowserShardedEntries,
-          allowEmptyRun: shouldRunBrowserDiscoveryFallback(),
+          allowEmptyRun: shouldAllowEmptyBrowserFallback(),
           allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
           onTraceEvents: forwardBrowserTraceEvents,
         },
@@ -636,7 +688,7 @@ export async function runTests(context: Rstest): Promise<void> {
       skipOnTestRunEnd: shouldUnifyReporter && hasNodeTestsToRun,
       shardedEntries: getBrowserShardedEntries(browserProjectsToRun),
       freezeShardedEntries: shouldFreezeBrowserShardedEntries,
-      allowEmptyRun: shouldRunBrowserDiscoveryFallback(),
+      allowEmptyRun: shouldAllowEmptyBrowserFallback(),
       allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
       onTraceEvents: forwardBrowserTraceEvents,
     });

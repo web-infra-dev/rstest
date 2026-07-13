@@ -2232,6 +2232,8 @@ export const runBrowserController = async (
 
     const normalizedError = toError(error);
 
+    await notifyTestRunStart();
+
     if (cleanup && skipOnTestRunEnd) {
       return buildErrorResult(normalizedError, cleanup);
     }
@@ -2253,10 +2255,12 @@ export const runBrowserController = async (
       .filter((testPath) => !currentPathSet.has(testPath));
   };
 
+  let hasNotifiedTestRunStart = false;
   const notifyTestRunStart = async (): Promise<void> => {
-    if (skipOnTestRunEnd) {
+    if (skipOnTestRunEnd || hasNotifiedTestRunStart) {
       return;
     }
+    hasNotifiedTestRunStart = true;
 
     for (const reporter of context.reporters) {
       await reporter.onTestRunStart?.();
@@ -2410,6 +2414,26 @@ export const runBrowserController = async (
   }
 
   projectEntries = runtime.projectEntries;
+
+  if (options?.filesOnly) {
+    const buildTime = Date.now() - buildStart;
+    if (watchContext.runtime === runtime) {
+      watchContext.runtime = null;
+    }
+    await destroyBrowserRuntime(runtime);
+    return {
+      results: [],
+      testResults: [],
+      duration: {
+        totalTime: buildTime,
+        buildTime,
+        testTime: 0,
+      },
+      hasFailure: false,
+      getSourcemap: getBrowserSourcemap,
+      resolveSourcemap: resolveBrowserSourcemap,
+    };
+  }
 
   const totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,

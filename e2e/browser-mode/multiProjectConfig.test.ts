@@ -92,6 +92,45 @@ describe.sequential('browser mode - multi project config isolation', () => {
     expect(cli.stdout).toMatch(/Tests.*1 passed/);
   });
 
+  it('runs fuzzy-filtered mixed-mode browser tests added by modifyRstestConfig hooks', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli(
+      'modify-rstest-mixed',
+      {
+        args: [
+          '--project',
+          'project-hooked-browser',
+          '--project',
+          'node-smoke',
+          'hooked-browser.test.ts',
+        ],
+      },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('hooked-browser.test.ts');
+    expect(cli.stdout).not.toContain('node-smoke.test.ts');
+    expect(cli.stdout).toMatch(/Tests.*1 passed/);
+  });
+
+  it('fails explicit browser path filters that still match no tests after hooks', async () => {
+    const { expectExecFailed, cli } = await runBrowserCli(
+      'modify-rstest-mixed',
+      {
+        args: [
+          '--project',
+          'project-hooked-browser',
+          '--project',
+          'node-smoke',
+          'project-hooked-browser/tests-added/missing.test.ts',
+        ],
+      },
+    );
+
+    await expectExecFailed();
+    expect(cli.stderr).toContain('No test files found');
+    expect(cli.stdout).not.toContain('node-smoke.test.ts');
+  });
+
   it('keeps browser shard manifests in sync after all project hooks run', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli(
       'modify-rstest-mixed',
@@ -109,6 +148,26 @@ describe.sequential('browser mode - multi project config isolation', () => {
     await expectExecSuccess();
     expect(cli.stdout).toContain('hooked-a.test.ts');
     expect(cli.stdout).not.toContain('hooked-b.test.ts');
+    expect(cli.stdout).toMatch(/Tests.*1 passed/);
+  });
+
+  it('keeps mixed node and browser shard planning in sync after browser hooks run', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli(
+      'modify-rstest-mixed',
+      {
+        args: [
+          '--shard=2/2',
+          '--project',
+          'project-hooked-browser',
+          '--project',
+          'node-smoke',
+        ],
+      },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('hooked-browser.test.ts');
+    expect(cli.stdout).not.toContain('node-smoke.test.ts');
     expect(cli.stdout).toMatch(/Tests.*1 passed/);
   });
 });
