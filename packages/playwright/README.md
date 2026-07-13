@@ -244,9 +244,9 @@ const e2e = test.extend({
 });
 ```
 
-By default, traces are written to `.rstest/playwright-traces/<test-id>/`. Each saved trace contains:
+By default, traces are written to `.rstest/playwright-traces/<test-name>-<hash>/`. If the same test saves multiple traces, for example across retries, later attempts use a numeric suffix to avoid overwriting earlier traces. Each saved trace contains:
 
-- `trace.zip`: Playwright's official trace artifact. Open it with `pnpm exec playwright show-trace <path-to-trace.zip>`.
+- `trace.zip`: Playwright's official trace artifact. Open it with `npx playwright show-trace <path-to-trace.zip>`.
 - `trace-summary.json`: Rstest-aware test metadata, artifact paths, and error stacks for tools and AI assistants.
 - `debug.md`: a human-readable debugging report.
 

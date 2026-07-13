@@ -192,7 +192,6 @@ const PAUSE_ENV = 'RSTEST_PLAYWRIGHT_PAUSE';
 const TRACE_ENV = 'RSTEST_PLAYWRIGHT_TRACE';
 const TRACE_OUTPUT_DIR_ENV = 'RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR';
 const DEBUG_PAUSE_TIMEOUT = 24 * 60 * 60 * 1000;
-const TRACE_CLEANUP_TIMEOUT = 60 * 1000;
 const BROWSER_IDLE_CLOSE_DELAY = 1000;
 const DEFAULT_STATIC_SERVER_HOST = '127.0.0.1';
 const DEFAULT_TRACE_OUTPUT_DIR = join('.rstest', 'playwright-traces');
@@ -378,7 +377,7 @@ const getShowTraceCommand = (
     formatRelativePath(projectRoot, artifacts.tracePath),
   );
 
-  return `pnpm exec playwright show-trace ${tracePath}`;
+  return `npx playwright show-trace ${tracePath}`;
 };
 
 const reserveTraceArtifacts = async (
@@ -816,6 +815,7 @@ const playwrightFixtures = {
   serve: async (
     {
       onTestFailed,
+      onTestFinished,
       playwright,
       task,
     }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
@@ -855,6 +855,7 @@ const playwrightFixtures = {
     };
 
     onTestFailed(cleanupServers);
+    onTestFinished(cleanupServers);
 
     const serve: PlaywrightServe = async (entry, options) => {
       const server = await startStaticServer(entry, options, task.projectRoot);
@@ -896,6 +897,7 @@ const playwrightFixtures = {
   ) => {
     const context = await browser.newContext(playwright.contextOptions);
     const artifacts = getTraceArtifacts(playwright, task);
+    const keepTrace = artifacts?.options.mode !== 'off';
     let activeArtifacts: TraceArtifacts | undefined;
     let traceStarted = false;
     let released = false;
@@ -927,31 +929,24 @@ const playwrightFixtures = {
       released = true;
 
       try {
-        if (artifacts && traceStarted) {
-          const shouldSaveTrace =
-            artifacts.options.mode === 'on' || task.result?.status === 'fail';
-
-          if (shouldSaveTrace) {
-            activeArtifacts = await reserveTraceArtifacts(artifacts);
-            try {
-              await context.tracing.stop({ path: activeArtifacts.tracePath });
-            } catch (error) {
-              await rm(activeArtifacts.dir, { recursive: true, force: true });
-              activeArtifacts = undefined;
-              throw error;
-            }
-
-            await finalizeTrace();
-          } else {
-            await context.tracing.stop();
+        if (keepTrace && artifacts && traceStarted) {
+          activeArtifacts = await reserveTraceArtifacts(artifacts);
+          try {
+            await context.tracing.stop({ path: activeArtifacts.tracePath });
+          } catch (error) {
+            await rm(activeArtifacts.dir, { recursive: true, force: true });
+            activeArtifacts = undefined;
+            throw error;
           }
+        } else if (artifacts && traceStarted) {
+          await context.tracing.stop();
         }
       } finally {
         await context.close();
       }
     };
 
-    onTestFailed(cleanupContext, TRACE_CLEANUP_TIMEOUT);
+    onTestFailed(cleanupContext);
 
     if (artifacts) {
       try {
@@ -971,8 +966,19 @@ const playwrightFixtures = {
     try {
       await use(context);
     } finally {
-      if (task.result?.status !== 'fail') {
-        await cleanupContext();
+      await cleanupContext();
+
+      if (
+        activeArtifacts &&
+        artifacts?.options.mode === 'retain-on-failure' &&
+        task.result?.status !== 'fail'
+      ) {
+        await rm(activeArtifacts.dir, { recursive: true, force: true });
+        activeArtifacts = undefined;
+      }
+
+      if (activeArtifacts) {
+        await finalizeTrace();
       }
     }
   },

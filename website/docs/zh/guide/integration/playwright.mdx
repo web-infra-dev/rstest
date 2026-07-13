@@ -297,9 +297,9 @@ const e2e = test.extend({
 });
 ```
 
-默认情况下，trace 会写入 `.rstest/playwright-traces/<test-id>/`。每次保存 trace 会包含：
+默认情况下，trace 会写入 `.rstest/playwright-traces/<test-name>-<hash>/`。如果同一个测试保存了多份 trace，例如 retry 产生的多次尝试，后续 trace 会使用数字后缀避免覆盖之前的产物。每次保存 trace 会包含：
 
-- `trace.zip`：Playwright 官方 trace 产物。可以用 `pnpm exec playwright show-trace <path-to-trace.zip>` 打开。
+- `trace.zip`：Playwright 官方 trace 产物。可以用 `npx playwright show-trace <path-to-trace.zip>` 打开。
 - `trace-summary.json`：面向工具和 AI 助手的 Rstest 测试元信息、产物路径和错误堆栈。
 - `debug.md`：面向开发者阅读的调试报告。
 

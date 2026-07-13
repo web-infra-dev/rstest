@@ -110,6 +110,22 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_ON_FINISHED_FAIL_OK');
   });
 
+  it('retains Playwright trace when later fixture teardown fails', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'trace-teardown-failure.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_TEARDOWN_FAIL_OK');
+  });
+
   it.skipIf(!shouldRunHeadedPlaywrightTests)(
     'can opt into headed debug mode from a test',
     { timeout: 60_000 },
