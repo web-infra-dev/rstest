@@ -792,7 +792,7 @@ export class TestRunner {
       wrapTimeout({
         name: 'onTestFailed hook',
         fn,
-        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
+        timeout: timeout ?? this.workerState!.runtimeConfig.hookTimeout,
         stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );

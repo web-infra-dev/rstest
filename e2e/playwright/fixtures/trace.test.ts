@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterAll, expect, test as base } from '@rstest/playwright';
 import type { PlaywrightOptions } from '@rstest/playwright';
 
-const outputDir = join(import.meta.dirname, '.rstest-test-traces');
+const outputDir = join(import.meta.dirname, '.rstest test traces');
 
 const test = base.extend({
   playwright: {
@@ -45,7 +45,11 @@ test.sequential('verifies Playwright trace debug artifacts', async () => {
   const summary = JSON.parse(await readFile(summaryPath, 'utf-8'));
   expect(summary.test.name).toBe('writes Playwright trace debug artifacts');
   expect(summary.test.status).toBe('pass');
-  expect(summary.command.showTrace).toContain('playwright show-trace');
+  expect(
+    summary.command.showTrace.startsWith(
+      `npx playwright show-trace ${process.platform === 'win32' ? '"' : "'"}`,
+    ),
+  ).toBe(true);
 
   const debug = await readFile(debugPath, 'utf-8');
   expect(debug).toContain('Playwright Trace Debug Report');

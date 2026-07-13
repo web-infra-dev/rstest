@@ -366,6 +366,10 @@ const formatRelativePath = (projectRoot: string, path: string) => {
 };
 
 const quoteShellArg = (value: string) => {
+  if (process.platform === 'win32') {
+    return `"${value}"`;
+  }
+
   return `'${value.replaceAll("'", `'\\''`)}'`;
 };
 
@@ -888,7 +892,7 @@ const playwrightFixtures = {
       }
     };
 
-    onTestFailed(cleanupContext);
+    onTestFailed(cleanupContext, 0);
 
     if (artifacts) {
       try {

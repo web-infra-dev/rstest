@@ -97,7 +97,7 @@ describe('@rstest/playwright', () => {
   it('retains Playwright trace when onTestFinished fails', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'trace-on-finished-failure.test.ts'],
+      args: ['run', 'trace-on-finished-failure.test.ts', '--hookTimeout', '1'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
