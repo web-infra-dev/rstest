@@ -189,17 +189,15 @@ Because the underlying coverage data comes from Node.js / V8 itself, remapped br
 The `v8` provider honors ignore hints when converting V8 coverage to Istanbul format. The hint prefix can be any of the following forms:
 
 ```ts
-/* istanbul ignore file */
-/* c8 ignore file */
-/* v8 ignore file */
-/* node:coverage ignore file */
+/* istanbul ignore next */
+/* c8 ignore next */
+/* v8 ignore next */
+/* node:coverage ignore next */
 ```
 
 Prefer using one prefix consistently in a project. The supported hint forms are:
 
 ```ts
-/* v8 ignore file */
-
 /* v8 ignore next */
 const value = optionalExpensivePath();
 
@@ -220,7 +218,7 @@ const generatedLookup = createGeneratedLookup();
 /* v8 ignore stop */
 ```
 
-Use `coverage.exclude` when a whole file or generated file group should be excluded.
+`ignore file` is also recognized, but it applies to the generated coverage entry before source-map remapping. In normal Rstest output, one generated chunk can contain multiple source files, so prefer `coverage.exclude` when a source file or generated file group should be excluded.
 
 The `v8` provider is only available outside Browser Mode, including `node`, `jsdom`, and `happy-dom` test environments. Browser Mode does not use inspector coverage, so browser coverage should use the default `istanbul` provider.
 
