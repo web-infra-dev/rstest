@@ -2205,15 +2205,19 @@ export const runBrowserController = async (
     };
 
     if (!skipOnTestRunEnd) {
-      for (const reporter of context.reporters) {
-        await (reporter as Reporter).onTestRunEnd?.({
-          results: [],
-          testResults: [],
-          duration: errorResult.duration,
-          snapshotSummary: context.snapshotManager.summary,
-          getSourcemap: getBrowserSourcemap,
-          unhandledErrors: errorResult.unhandledErrors,
-        });
+      try {
+        for (const reporter of context.reporters) {
+          await (reporter as Reporter).onTestRunEnd?.({
+            results: [],
+            testResults: [],
+            duration: errorResult.duration,
+            snapshotSummary: context.snapshotManager.summary,
+            getSourcemap: getBrowserSourcemap,
+            unhandledErrors: errorResult.unhandledErrors,
+          });
+        }
+      } finally {
+        markTestRunEnded();
       }
     }
 
@@ -2267,6 +2271,10 @@ export const runBrowserController = async (
     }
   };
 
+  const markTestRunEnded = (): void => {
+    hasNotifiedTestRunStart = false;
+  };
+
   const coverageConfig = browserProjects.find(
     (project) => project.normalizedConfig.coverage?.enabled,
   )?.normalizedConfig.coverage;
@@ -2307,17 +2315,21 @@ export const runBrowserController = async (
       }
     }
 
-    for (const reporter of context.reporters) {
-      await reporter.onTestRunEnd?.({
-        results: context.reporterResults.results,
-        coverage: mergedCoverage,
-        testResults: context.reporterResults.testResults,
-        duration,
-        snapshotSummary: context.snapshotManager.summary,
-        getSourcemap: getBrowserSourcemap,
-        unhandledErrors,
-        filterRerunTestPaths,
-      });
+    try {
+      for (const reporter of context.reporters) {
+        await reporter.onTestRunEnd?.({
+          results: context.reporterResults.results,
+          coverage: mergedCoverage,
+          testResults: context.reporterResults.testResults,
+          duration,
+          snapshotSummary: context.snapshotManager.summary,
+          getSourcemap: getBrowserSourcemap,
+          unhandledErrors,
+          filterRerunTestPaths,
+        });
+      }
+    } finally {
+      markTestRunEnded();
     }
   };
 
