@@ -6,6 +6,7 @@ import { Project, WorkspaceManager } from './project';
 import { RstestFileCoverage } from './testRunReporter';
 import {
   gatherTestItems,
+  ProjectFolder,
   TestCase,
   TestFile,
   TestFolder,
@@ -207,6 +208,9 @@ class Rstest {
           await data.api.runTest({
             ...commonOptions,
           });
+        } else if (data instanceof ProjectFolder) {
+          // grouping folder spans multiple projects; recurse into children
+          await discoverTests(gatherTestItems(test.children, false));
         } else if (data instanceof TestFolder) {
           await data.api.runTest({
             ...commonOptions,
