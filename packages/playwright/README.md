@@ -196,6 +196,62 @@ e2e('mobile page', async ({ page }) => {
 });
 ```
 
+## Trace debugging
+
+Set `playwright.trace` or `RSTEST_PLAYWRIGHT_TRACE` to capture Playwright's official `trace.zip` artifact from the `context` fixture. The trace covers the default `page` fixture and pages created with `context.newPage()`. Fixture configuration takes priority over the environment variable, then falls back to `off`.
+
+```ts
+import { expect, test } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+const e2e = test.extend({
+  playwright: {
+    trace: process.env.CI ? 'retain-on-failure' : 'off',
+  } satisfies PlaywrightOptions,
+});
+
+e2e('checkout', async ({ page }) => {
+  await page.goto('http://localhost:3000/checkout');
+  await expect(page.locator('main')).toBeAttached();
+});
+```
+
+For temporary CLI-style debugging without changing test code, use `--playwright.trace`. This flag is intentionally provider-scoped because the existing top-level `--trace` already means Rstest performance tracing:
+
+```bash
+rstest --playwright.trace=retain-on-failure
+```
+
+Use `--playwright.trace.outputDir` to override the default output directory:
+
+```bash
+rstest --playwright.trace=on --playwright.trace.outputDir=.rstest/playwright-traces
+```
+
+The fixture option and `RSTEST_PLAYWRIGHT_TRACE` environment variable still take priority as described above. `trace` accepts `'off'`, `'on'`, `'retain-on-failure'`, or an options object:
+
+```ts
+const e2e = test.extend({
+  playwright: {
+    trace: {
+      mode: 'retain-on-failure',
+      outputDir: '.rstest/playwright-traces',
+      screenshots: true,
+      snapshots: true,
+      sources: true,
+    },
+  } satisfies PlaywrightOptions,
+});
+```
+
+By default, traces are written to `.rstest/playwright-traces/<test-id>/`. Each saved trace contains:
+
+- `trace.zip`: Playwright's official trace artifact. Open it with `pnpm exec playwright show-trace <path-to-trace.zip>`.
+- `trace-summary.json`: Rstest-aware test metadata, artifact paths, and error stacks for tools and AI assistants.
+- `debug.md`: a human-readable debugging report.
+
+`trace.zip` is not a generic Chrome/Perfetto trace. It is Playwright's trace format and is intended to be inspected with Playwright Trace Viewer.
+
 ## Local app server
 
 Use the `serve` fixture when a test needs to serve a built app. It starts a static server for the entry file and automatically stops the server after the test:

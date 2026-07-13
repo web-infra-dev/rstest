@@ -24,6 +24,9 @@ describe('@rstest/playwright', () => {
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
+          env: {
+            RSTEST_PLAYWRIGHT_TRACE: 'off',
+          },
         },
       },
     });
@@ -32,6 +35,62 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_E2E_OK');
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_DEBUG_OFF');
     expect(cli.stdout).toContain('Test Files 2 passed');
+  });
+
+  it('writes Playwright trace debug artifacts', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'trace.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_OK');
+    expect(cli.stdout).toContain('[rstest-playwright] Trace saved:');
+  });
+
+  it('can enable Playwright trace from env', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'trace-env.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+          env: {
+            RSTEST_PLAYWRIGHT_TRACE: 'on',
+            RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR: '.rstest-env-traces',
+          },
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_ENV_OK');
+    expect(cli.stdout).toContain('[rstest-playwright] Trace saved:');
+  });
+
+  it('lets Playwright trace fixture config override env', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'trace-env-priority.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+          env: {
+            RSTEST_PLAYWRIGHT_TRACE: 'on',
+            RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR: '.rstest-env-priority-traces',
+          },
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_PRIORITY_OK');
+    expect(cli.stdout).not.toContain('[rstest-playwright] Trace saved:');
   });
 
   it.skipIf(!shouldRunHeadedPlaywrightTests)(
