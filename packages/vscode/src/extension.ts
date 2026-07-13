@@ -25,6 +25,7 @@ export function deactivate() {
 }
 
 class Rstest {
+  private context: vscode.ExtensionContext;
   private ctrl: vscode.TestController;
   private workspaces = new Map<string, WorkspaceManager>();
   private workspaceWatcher?: vscode.Disposable;
@@ -38,9 +39,11 @@ class Rstest {
   }
 
   constructor(context: vscode.ExtensionContext) {
+    this.context = context;
     this.ctrl = vscode.tests.createTestController('rstest', 'Rstest');
     context.subscriptions.push(this.ctrl);
     context.subscriptions.push(this.diagnostics);
+    context.subscriptions.push(logger);
 
     this.startScanWorkspaces();
     this.setupTestController();
@@ -58,14 +61,22 @@ class Rstest {
       true,
     );
 
-    vscode.commands.registerCommand(
-      'rstest.updateSnapshot',
-      (params: { test: vscode.TestItem; message: vscode.TestMessage }) =>
-        this.startTestRun(
-          new vscode.TestRunRequest([params.test], undefined, this.runProfile),
-          new vscode.CancellationTokenSource().token,
-          true,
-        ),
+    this.context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'rstest.updateSnapshot',
+        (params: { test: vscode.TestItem; message: vscode.TestMessage }) => {
+          const cancellation = new vscode.CancellationTokenSource();
+          return this.startTestRun(
+            new vscode.TestRunRequest(
+              [params.test],
+              undefined,
+              this.runProfile,
+            ),
+            cancellation.token,
+            true,
+          ).finally(() => cancellation.dispose());
+        },
+      ),
     );
 
     this.ctrl.createRunProfile(
@@ -118,6 +129,7 @@ class Rstest {
           this.refreshAllWorkspaces();
         },
       );
+      this.context.subscriptions.push(this.workspaceWatcher);
     }
   }
 
