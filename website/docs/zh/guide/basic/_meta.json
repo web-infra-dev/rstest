@@ -2,6 +2,7 @@
   "cli",
   "configure-rstest",
   "test-filter",
+  "metadata",
   "mock",
   "scoped-cleanup",
   "snapshot",
