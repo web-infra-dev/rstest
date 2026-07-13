@@ -415,6 +415,39 @@ export async function runTests(context: Rstest): Promise<void> {
     !isFuzzyBasenameFilter(filter) &&
     browserProjects.some((project) => isFilterInsideProject(filter, project));
 
+  const isNodeProjectPathFilter = (filter: string) =>
+    !isFuzzyBasenameFilter(filter) &&
+    nodeProjects.some((project) => isFilterInsideProject(filter, project));
+
+  const isUserBrowserConfigPlugin = (plugin: unknown): boolean => {
+    if (!plugin) {
+      return false;
+    }
+
+    if (Array.isArray(plugin)) {
+      return plugin.some(isUserBrowserConfigPlugin);
+    }
+
+    if (typeof plugin === 'object') {
+      const { name } = plugin as { name?: unknown };
+      return name !== 'rstest:browser-user-config';
+    }
+
+    return true;
+  };
+
+  const hasBrowserConfigHooks = () =>
+    browserProjects.some((project) =>
+      project.normalizedConfig.plugins?.some(isUserBrowserConfigPlugin),
+    );
+
+  const isPotentialBrowserConfigHookFilter = (filter: string) =>
+    isBrowserProjectFilter(filter) || !isNodeProjectPathFilter(filter);
+
+  const shouldRunBrowserConfigHookFallback = () =>
+    hasBrowserConfigHooks() &&
+    context.fileFilters?.some(isPotentialBrowserConfigHookFilter);
+
   const setupFileState = createSetupFileState();
   const appliedBrowserModifyRstestConfigEnvironments = new Set<string>();
   const projectPlanState = createRunProjectPlanState({
@@ -473,7 +506,10 @@ export async function runTests(context: Rstest): Promise<void> {
       return true;
     }
 
-    return context.fileFilters.some(isBrowserProjectFilter);
+    return (
+      context.fileFilters.some(isBrowserProjectFilter) ||
+      shouldRunBrowserConfigHookFallback()
+    );
   };
   const shouldAllowEmptyBrowserFallback = () =>
     shouldRunBrowserDiscoveryFallback() &&
@@ -501,7 +537,8 @@ export async function runTests(context: Rstest): Promise<void> {
 
     if (
       !context.fileFilters?.length ||
-      context.fileFilters.some(isFuzzyBasenameFilter)
+      context.fileFilters.some(isFuzzyBasenameFilter) ||
+      shouldRunBrowserConfigHookFallback()
     ) {
       return browserProjects;
     }

@@ -1,7 +1,11 @@
 import { existsSync } from 'node:fs';
-import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
+import type { RsbuildInstance, RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { isAbsolute, normalize, relative, resolve } from 'pathe';
-import type { RstestContext } from '../types';
+import type {
+  NormalizedProjectConfig,
+  ProjectContext,
+  RstestContext,
+} from '../types';
 import { getTestEntries } from '../utils';
 import { createSetupFileState } from './setupFileState';
 import { prepareRsbuild } from './rsbuild';
@@ -11,6 +15,54 @@ type StatsModuleReason = NonNullable<Rspack.StatsModule['reasons']>[number];
 type ModuleGraph = {
   allSources: Set<string>;
   dependentsBySource: Map<string, Set<string>>;
+};
+
+type ProjectConfigSnapshot = {
+  project: ProjectContext;
+  normalizedConfig: NormalizedProjectConfig;
+  rootPath: string;
+  outputModule: boolean;
+};
+
+const clonePlainConfig = <T>(value: T): T => {
+  if (Array.isArray(value)) {
+    return value.map((item) => clonePlainConfig(item)) as T;
+  }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    Object.getPrototypeOf(value) === Object.prototype
+  ) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, clonePlainConfig(item)]),
+    ) as T;
+  }
+
+  return value;
+};
+
+const snapshotProjectConfigs = (
+  projects: ProjectContext[],
+): ProjectConfigSnapshot[] =>
+  projects.map((project) => ({
+    project,
+    normalizedConfig: clonePlainConfig(project.normalizedConfig),
+    rootPath: project.rootPath,
+    outputModule: project.outputModule,
+  }));
+
+const restoreProjectConfigs = (snapshots: ProjectConfigSnapshot[]): void => {
+  for (const {
+    project,
+    normalizedConfig,
+    rootPath,
+    outputModule,
+  } of snapshots) {
+    project.normalizedConfig = normalizedConfig;
+    project.rootPath = rootPath;
+    project.outputModule = outputModule;
+  }
 };
 
 const stripSourceProtocol = (source: string): string => {
@@ -318,29 +370,32 @@ export async function resolveRelatedTestFiles(
   const setupFileState = createSetupFileState();
   projectEntries = await collectProjectEntries(context);
 
-  const rsbuildInstance = await prepareRsbuild({
-    context,
-    globTestSourceEntries,
-    setupFileState,
-    targetProjects: context.projects,
-    exposeRstestAPIProjects: context.projects,
-    extraPlugins: [createRelatedBuildSafeguardsPlugin()],
-    getSetupFileProjects: () => ({
-      setupProjects: context.projects,
-      globalSetupProjects: context.projects,
-    }),
-    onModifyRstestConfigApplied: async () => {
-      projectEntries = await collectProjectEntries(context);
-    },
-  });
-
-  const devServer = await rsbuildInstance.createDevServer({
-    getPortSilently: true,
-  });
-
-  const matchedTestFiles = new Set<string>();
+  const projectConfigSnapshots = snapshotProjectConfigs(context.projects);
+  let devServer:
+    Awaited<ReturnType<RsbuildInstance['createDevServer']>> | undefined;
 
   try {
+    const rsbuildInstance = await prepareRsbuild({
+      context,
+      globTestSourceEntries,
+      setupFileState,
+      targetProjects: context.projects,
+      exposeRstestAPIProjects: context.projects,
+      extraPlugins: [createRelatedBuildSafeguardsPlugin()],
+      getSetupFileProjects: () => ({
+        setupProjects: context.projects,
+        globalSetupProjects: context.projects,
+      }),
+      onModifyRstestConfigApplied: async () => {
+        projectEntries = await collectProjectEntries(context);
+      },
+    });
+
+    devServer = await rsbuildInstance.createDevServer({
+      getPortSilently: true,
+    });
+
+    const matchedTestFiles = new Set<string>();
     projectEntries = projectEntries.size
       ? projectEntries
       : await collectProjectEntries(context);
@@ -416,9 +471,10 @@ export async function resolveRelatedTestFiles(
         }
       }
     }
-  } finally {
-    await devServer.close();
-  }
 
-  return Array.from(matchedTestFiles).sort();
+    return Array.from(matchedTestFiles).sort();
+  } finally {
+    await devServer?.close();
+    restoreProjectConfigs(projectConfigSnapshots);
+  }
 }

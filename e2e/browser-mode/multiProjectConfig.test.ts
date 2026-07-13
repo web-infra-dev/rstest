@@ -117,6 +117,47 @@ describe.sequential('browser mode - multi project config isolation', () => {
     expect(cli.stdout).toMatch(/Tests.*1 passed/);
   });
 
+  it('runs mixed-mode browser path filters after hooks move project root', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli(
+      'modify-rstest-mixed',
+      {
+        args: [
+          '--project',
+          'project-moved-root',
+          '--project',
+          'node-smoke',
+          'project-moved-root/src/moved-root.test.ts',
+        ],
+      },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('moved-root.test.ts');
+    expect(cli.stdout).not.toContain('node-smoke.test.ts');
+    expect(cli.stdout).toMatch(/Tests.*1 passed/);
+  });
+
+  it('runs related mixed-mode browser tests without duplicating hook mutations', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli(
+      'modify-rstest-mixed',
+      {
+        args: [
+          '--related',
+          'project-hooked-browser/tests-added/hooked-browser.test.ts',
+          '--project',
+          'project-hooked-browser',
+          '--project',
+          'node-smoke',
+        ],
+      },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('hooked-browser.test.ts');
+    expect(cli.stdout).not.toContain('node-smoke.test.ts');
+    expect(cli.stdout).toMatch(/Tests.*1 passed/);
+  });
+
   it('fails explicit browser path filters that still match no tests after hooks', async () => {
     const { expectExecFailed, cli } = await runBrowserCli(
       'modify-rstest-mixed',
