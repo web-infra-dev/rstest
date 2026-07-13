@@ -321,8 +321,6 @@ export async function runTests(context: Rstest): Promise<void> {
 
     const browserResult = await runBrowserModeTests(context, browserProjects, {
       skipOnTestRunEnd: false,
-      allowEmptyRun:
-        !context.fileFilters?.length && !context.relatedFilters?.length,
       onTraceEvents: traceRun.onEvents,
     });
 
