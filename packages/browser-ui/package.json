@@ -28,12 +28,12 @@
   "dependencies": {
     "antd": "^6.5.0",
     "birpc": "^4.0.0",
-    "lucide-react": "^1.23.0",
+    "lucide-react": "^1.24.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.1.4",
+    "@rsbuild/core": "~2.1.5",
     "@rsbuild/plugin-react": "^2.1.0",
     "@rsbuild/plugin-svgr": "^2.0.5",
     "@tailwindcss/postcss": "^4.3.2",

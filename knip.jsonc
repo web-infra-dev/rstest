@@ -7,6 +7,12 @@
   "ignoreExportsUsedInFile": true,
   // pnpm 11 stage is a pnpm subcommand, but knip currently reports it as a binary in GitHub workflows.
   "ignoreBinaries": ["stage"],
+  "ignoreDependencies": [
+    // Declared in pnpm packageExtensions for @vue/test-utils peer resolution.
+    "@vue/compiler-dom",
+    "@vue/server-renderer",
+    "vue",
+  ],
   "workspaces": {
     ".": {
       "entry": [
@@ -34,11 +40,6 @@
     },
     "packages/core": {
       "entry": [
-        // Package export: "./internal/browser-runtime" (separate rslib env targeting web)
-        "src/browserRuntime.ts",
-        // Worker entries bundled by rslib
-        "src/runtime/worker/index.ts",
-        "src/runtime/worker/globalSetupWorker.ts",
         // Runtime files copied to dist via CopyRspackPlugin (dynamically loaded)
         "src/core/plugins/mockRuntimeCode.js",
         "src/core/plugins/importActualLoader.mjs",
@@ -69,16 +70,8 @@
     },
     "packages/browser-ui": {
       "entry": [
-        // PostCSS config (not auto-detected by knip)
-        "postcss.config.cjs",
         // Test files
         "src/**/*.test.ts",
-      ],
-      "ignoreDependencies": [
-        // Used in postcss.config.cjs which knip doesn't parse
-        "@tailwindcss/postcss",
-        // Path-mapped imports (@rstest/browser/protocol) resolved via tsconfig, not package dependency
-        "@rstest/browser",
       ],
     },
     "packages/coverage-istanbul": {
@@ -105,10 +98,6 @@
 
     "packages/vscode": {
       "entry": [
-        // VS Code extension host entry (loaded by VS Code via package.json "main")
-        "src/extension.ts",
-        // Worker process entry (not in package.json exports)
-        "src/worker/index.ts",
         // Test files
         "tests/**/*.ts",
         // Test fixture files (read by parser at runtime, not imported)
