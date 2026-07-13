@@ -1058,9 +1058,17 @@ const getRuntimeConfigFromProject = (
   };
 };
 
-const getBrowserProjects = (context: RstestContext): ProjectContext[] => {
+const getBrowserProjects = (
+  context: RstestContext,
+  targetEnvironmentNames?: string[],
+): ProjectContext[] => {
+  const targetEnvironments = targetEnvironmentNames
+    ? new Set(targetEnvironmentNames)
+    : undefined;
   return context.projects.filter(
-    (project) => project.normalizedConfig.browser.enabled,
+    (project) =>
+      project.normalizedConfig.browser.enabled &&
+      (!targetEnvironments || targetEnvironments.has(project.environmentName)),
   );
 };
 
@@ -1139,9 +1147,10 @@ const resolveProviderForTestPath = ({
 
 const collectProjectEntries = async (
   context: RstestContext,
+  targetEnvironmentNames?: string[],
 ): Promise<BrowserProjectEntries[]> => {
   // Only collect entries for browser mode projects
-  const browserProjects = getBrowserProjects(context);
+  const browserProjects = getBrowserProjects(context, targetEnvironmentNames);
 
   return Promise.all(
     browserProjects.map(async (project) => {
@@ -1486,6 +1495,7 @@ const createBrowserRuntime = async ({
   containerDevServer,
   forceHeadless,
   appliedModifyRstestConfigEnvironments,
+  targetEnvironmentNames,
 }: {
   context: RstestContext;
   projectEntries: BrowserProjectEntries[];
@@ -1499,6 +1509,7 @@ const createBrowserRuntime = async ({
   /** Force headless mode regardless of user config (used for list command) */
   forceHeadless?: boolean;
   appliedModifyRstestConfigEnvironments?: Set<string>;
+  targetEnvironmentNames?: string[];
 }): Promise<BrowserRuntime> => {
   // ---- Shared singletons (created once, wired into every project server) ----
   const containerHtmlTemplate = containerDistPath
@@ -1520,7 +1531,7 @@ const createBrowserRuntime = async ({
     }
   };
 
-  const browserProjects = getBrowserProjects(context);
+  const browserProjects = getBrowserProjects(context, targetEnvironmentNames);
   let browserLaunchOptions =
     ensureConsistentBrowserLaunchOptions(browserProjects);
   let projectEntries = initialProjectEntries;
@@ -1550,7 +1561,7 @@ const createBrowserRuntime = async ({
   const refreshProjectEntries = async (): Promise<void> => {
     validateBrowserConfig(context);
     browserLaunchOptions = ensureConsistentBrowserLaunchOptions(
-      getBrowserProjects(context),
+      getBrowserProjects(context, targetEnvironmentNames),
     );
     const updatedShardedEntries = freezeShardedEntries
       ? shardedEntries
@@ -1560,6 +1571,7 @@ const createBrowserRuntime = async ({
     projectEntries = await resolveProjectEntries(
       context,
       updatedShardedEntries,
+      targetEnvironmentNames,
     );
     for (const manifestModule of manifestModules) {
       updateManifestModule(manifestModule);
@@ -2092,9 +2104,10 @@ const launchBrowserRuntimeProvider = async (
 async function resolveProjectEntries(
   context: RstestContext,
   shardedEntries?: Map<string, { entries: Record<string, string> }>,
+  targetEnvironmentNames?: string[],
 ): Promise<BrowserProjectEntries[]> {
   if (shardedEntries) {
-    const browserProjects = getBrowserProjects(context);
+    const browserProjects = getBrowserProjects(context, targetEnvironmentNames);
     const projectEntries: BrowserProjectEntries[] = [];
     for (const project of browserProjects) {
       const entryInfo = shardedEntries.get(project.environmentName);
@@ -2112,7 +2125,7 @@ async function resolveProjectEntries(
     }
     return projectEntries;
   }
-  return collectProjectEntries(context);
+  return collectProjectEntries(context, targetEnvironmentNames);
 }
 
 // ============================================================================
@@ -2140,7 +2153,10 @@ export const runBrowserController = async (
   const phaseTrackers = onTraceEvents
     ? new Map<string, PhaseTracker>()
     : undefined;
-  const browserProjects = getBrowserProjects(context);
+  const browserProjects = getBrowserProjects(
+    context,
+    options?.targetEnvironmentNames,
+  );
   const useHeadlessDirect = browserProjects.every(
     (project) => project.normalizedConfig.browser.headless,
   );
@@ -2337,6 +2353,59 @@ export const runBrowserController = async (
     }
   };
 
+  const shouldKeepWatchingWithEmptySet = isWatchMode && allowEmptyWatchRun;
+  const reportEmptyTestSet = (): boolean => {
+    const code =
+      allowEmptyRun || context.normalizedConfig.passWithNoTests ? 0 : 1;
+    if (!skipOnTestRunEnd) {
+      const message = shouldKeepWatchingWithEmptySet
+        ? 'No test files found.'
+        : getNoTestFilesMessage({
+            context,
+            code,
+            defaultMessage: `No test files found, exiting with code ${code}.`,
+          });
+      if (code === 0) {
+        logger.log(color.yellow(message));
+      } else {
+        logger.error(color.red(message));
+      }
+
+      if (context.relatedFilters?.length) {
+        logger.log(
+          color.gray('related: '),
+          context.relatedFilters.join(color.gray(', ')),
+        );
+      } else if (context.fileFilters?.length) {
+        logger.log(
+          color.gray('filter: '),
+          context.fileFilters.join(color.gray(', ')),
+        );
+      }
+    }
+
+    if (code !== 0 && !shouldKeepWatchingWithEmptySet) {
+      ensureProcessExitCode(code);
+    }
+    return !shouldKeepWatchingWithEmptySet;
+  };
+
+  const createFilesOnlyResult = (): BrowserTestRunResult => {
+    const buildTime = Date.now() - buildStart;
+    return {
+      results: [],
+      testResults: [],
+      duration: {
+        totalTime: buildTime,
+        buildTime,
+        testTime: 0,
+      },
+      hasFailure: false,
+      getSourcemap: getBrowserSourcemap,
+      resolveSourcemap: resolveBrowserSourcemap,
+    };
+  };
+
   const containerDevServerEnv = process.env.RSTEST_CONTAINER_DEV_SERVER;
   let containerDevServer: string | undefined;
   let containerDistPath: string | undefined;
@@ -2367,8 +2436,24 @@ export const runBrowserController = async (
   let projectEntries = await resolveProjectEntries(
     context,
     options?.shardedEntries,
+    options?.targetEnvironmentNames,
   );
-  const shouldKeepWatchingWithEmptySet = isWatchMode && allowEmptyWatchRun;
+  let totalTests = projectEntries.reduce(
+    (total, item) => total + item.testFiles.length,
+    0,
+  );
+
+  if (
+    totalTests === 0 &&
+    !hasUserRstestConfigPlugins(browserProjects) &&
+    !isWatchMode
+  ) {
+    if (options?.filesOnly) {
+      return createFilesOnlyResult();
+    }
+    reportEmptyTestSet();
+    return;
+  }
 
   const enableCliShortcuts = isWatchMode && isBrowserWatchCliShortcutsEnabled();
   const browserTempOutputRoot = context.normalizedConfig.output.distPath.root;
@@ -2403,6 +2488,7 @@ export const runBrowserController = async (
         freezeShardedEntries: options?.freezeShardedEntries,
         appliedModifyRstestConfigEnvironments:
           options?.appliedModifyRstestConfigEnvironments,
+        targetEnvironmentNames: options?.targetEnvironmentNames,
         tempDir,
         isWatchMode,
         onTriggerRerun: isWatchMode
@@ -2434,70 +2520,24 @@ export const runBrowserController = async (
   projectEntries = runtime.projectEntries;
 
   if (options?.filesOnly) {
-    const buildTime = Date.now() - buildStart;
     if (watchContext.runtime === runtime) {
       watchContext.runtime = null;
     }
     await destroyBrowserRuntime(runtime);
-    return {
-      results: [],
-      testResults: [],
-      duration: {
-        totalTime: buildTime,
-        buildTime,
-        testTime: 0,
-      },
-      hasFailure: false,
-      getSourcemap: getBrowserSourcemap,
-      resolveSourcemap: resolveBrowserSourcemap,
-    };
+    return createFilesOnlyResult();
   }
 
-  const totalTests = projectEntries.reduce(
+  totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
     0,
   );
 
-  if (totalTests === 0) {
-    const code =
-      allowEmptyRun || context.normalizedConfig.passWithNoTests ? 0 : 1;
-    if (!skipOnTestRunEnd) {
-      const message = shouldKeepWatchingWithEmptySet
-        ? 'No test files found.'
-        : getNoTestFilesMessage({
-            context,
-            code,
-            defaultMessage: `No test files found, exiting with code ${code}.`,
-          });
-      if (code === 0) {
-        logger.log(color.yellow(message));
-      } else {
-        logger.error(color.red(message));
-      }
-
-      if (context.relatedFilters?.length) {
-        logger.log(
-          color.gray('related: '),
-          context.relatedFilters.join(color.gray(', ')),
-        );
-      } else if (context.fileFilters?.length) {
-        logger.log(
-          color.gray('filter: '),
-          context.fileFilters.join(color.gray(', ')),
-        );
-      }
+  if (totalTests === 0 && reportEmptyTestSet()) {
+    if (watchContext.runtime === runtime) {
+      watchContext.runtime = null;
     }
-
-    if (code !== 0 && !shouldKeepWatchingWithEmptySet) {
-      ensureProcessExitCode(code);
-    }
-    if (!shouldKeepWatchingWithEmptySet) {
-      if (watchContext.runtime === runtime) {
-        watchContext.runtime = null;
-      }
-      await destroyBrowserRuntime(runtime);
-      return;
-    }
+    await destroyBrowserRuntime(runtime);
+    return;
   }
 
   await notifyTestRunStart();
@@ -4093,12 +4133,14 @@ export const listBrowserTests = async (
     shardedEntries?: Map<string, { entries: Record<string, string> }>;
     freezeShardedEntries?: boolean;
     filesOnly?: boolean;
+    targetEnvironmentNames?: string[];
     appliedModifyRstestConfigEnvironments?: Set<string>;
   },
 ): Promise<ListBrowserTestsResult> => {
   let projectEntries = await resolveProjectEntries(
     context,
     options?.shardedEntries,
+    options?.targetEnvironmentNames,
   );
 
   const tempDir = join(
@@ -4108,7 +4150,10 @@ export const listBrowserTests = async (
     `list-${Date.now()}`,
   );
 
-  const browserProjects = getBrowserProjects(context);
+  const browserProjects = getBrowserProjects(
+    context,
+    options?.targetEnvironmentNames,
+  );
 
   if (
     projectEntries.every((entry) => entry.testFiles.length === 0) &&
@@ -4130,6 +4175,7 @@ export const listBrowserTests = async (
       freezeShardedEntries: options?.freezeShardedEntries,
       appliedModifyRstestConfigEnvironments:
         options?.appliedModifyRstestConfigEnvironments,
+      targetEnvironmentNames: options?.targetEnvironmentNames,
       tempDir,
       isWatchMode: false,
       containerDistPath: undefined,

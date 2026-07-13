@@ -79,6 +79,58 @@ describe.sequential('browser mode - multi project config isolation', () => {
     expect(cli.stdout).toMatch(/Tests.*2 passed/);
   });
 
+  it('runs ordinary mixed browser projects without config discovery', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli(
+      'modify-rstest-mixed',
+      {
+        args: ['--project', 'project-plain-browser', '--project', 'node-smoke'],
+      },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('plain-browser.test.ts');
+    expect(cli.stdout).toContain('node-smoke.test.ts');
+    expect(cli.stdout).toMatch(/Tests.*2 passed/);
+  });
+
+  it('initializes only the browser project matched by an exact filter', async () => {
+    const server = createServer();
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(
+        BROWSER_PORTS['multi-project-config-hooked-b'],
+        '127.0.0.1',
+        resolve,
+      );
+    });
+
+    try {
+      const { expectExecSuccess, cli } = await runBrowserCli(
+        'modify-rstest-mixed',
+        {
+          args: [
+            '--project',
+            'project-hooked-a',
+            '--project',
+            'project-hooked-b',
+            '--project',
+            'node-smoke',
+            'project-hooked-a/tests-added/hooked-a.test.ts',
+          ],
+        },
+      );
+
+      await expectExecSuccess();
+      expect(cli.stdout).toContain('hooked-a.test.ts');
+      expect(cli.stdout).not.toContain('hooked-b.test.ts');
+      expect(cli.stdout).toMatch(/Tests.*1 passed/);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
   it('runs filtered mixed-mode browser tests added by modifyRstestConfig hooks', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli(
       'modify-rstest-mixed',

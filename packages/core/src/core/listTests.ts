@@ -27,7 +27,7 @@ import {
 import { createSetupFileState } from './setupFileState';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import { createListProjectPlanState, syncNodeProjects } from './projectPlan';
-import { hasUserRstestConfigPlugins } from './modifyRstestConfig';
+import { getUserRstestConfigPluginProjects } from './modifyRstestConfig';
 
 type ListedTest = {
   file: string;
@@ -316,6 +316,9 @@ const collectBrowserTests = async ({
     shardedEntries,
     freezeShardedEntries,
     filesOnly,
+    targetEnvironmentNames: browserProjects.map(
+      (project) => project.environmentName,
+    ),
     appliedModifyRstestConfigEnvironments,
   });
 };
@@ -554,34 +557,38 @@ export async function listTests(
       return;
     }
 
-    const hasBrowserEntries = (
-      await Promise.all(
-        browserProjects.map((project) =>
-          globTestSourceEntries(project.environmentName),
-        ),
-      )
-    ).some((entries) => Object.keys(entries).length > 0);
-    const shouldApplyConfigHooks =
-      hasUserRstestConfigPlugins(browserProjects) &&
-      (!context.fileFilters?.length ||
-        context.fileFilters.some(
-          (filter) =>
-            isFuzzyBasenameFilter(filter) ||
-            browserProjects.some((project) =>
-              isFilterInsideProject(filter, project),
-            ) ||
-            !nodeProjects.some((project) =>
-              isFilterInsideProject(filter, project),
-            ),
-        ));
-
-    if (!hasBrowserEntries && !shouldApplyConfigHooks) {
+    const browserConfigHookProjects =
+      getUserRstestConfigPluginProjects(browserProjects);
+    if (!browserConfigHookProjects.length) {
       return;
+    }
+
+    let projectsToInitialize = browserConfigHookProjects;
+    if (
+      context.fileFilters?.length &&
+      !context.fileFilters.some(isFuzzyBasenameFilter)
+    ) {
+      const matchedProjects = browserConfigHookProjects.filter((project) =>
+        context.fileFilters?.some((filter) =>
+          isFilterInsideProject(filter, project),
+        ),
+      );
+      if (matchedProjects.length > 0) {
+        projectsToInitialize = matchedProjects;
+      } else if (
+        context.fileFilters.every((filter) =>
+          [...browserProjects, ...nodeProjects].some((project) =>
+            isFilterInsideProject(filter, project),
+          ),
+        )
+      ) {
+        return;
+      }
     }
 
     const browserResult = await collectBrowserTests({
       context,
-      browserProjects,
+      browserProjects: projectsToInitialize,
       shardedEntries: shard
         ? listPlanState.getShardedBrowserEntries?.()
         : undefined,

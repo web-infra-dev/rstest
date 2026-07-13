@@ -27,6 +27,7 @@ export async function listBrowserTests(
     | 'shardedEntries'
     | 'freezeShardedEntries'
     | 'filesOnly'
+    | 'targetEnvironmentNames'
     | 'appliedModifyRstestConfigEnvironments'
   >,
 ): Promise<ListBrowserTestsResult> {

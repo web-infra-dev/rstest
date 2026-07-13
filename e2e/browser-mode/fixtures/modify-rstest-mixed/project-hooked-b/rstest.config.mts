@@ -24,6 +24,7 @@ export default defineConfig({
     enabled: true,
     provider: 'playwright',
     headless: true,
-    port: BROWSER_PORTS['multi-project-config'],
+    port: BROWSER_PORTS['multi-project-config-hooked-b'],
+    strictPort: true,
   },
 });

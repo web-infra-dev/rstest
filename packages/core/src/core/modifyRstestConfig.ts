@@ -458,12 +458,16 @@ const isUserRstestConfigPlugin = (plugin: unknown): boolean => {
   return true;
 };
 
-export const hasUserRstestConfigPlugins = (
+export const getUserRstestConfigPluginProjects = (
   projects: ProjectContext[],
-): boolean =>
-  projects.some((project) =>
+): ProjectContext[] =>
+  projects.filter((project) =>
     project.normalizedConfig.plugins?.some(isUserRstestConfigPlugin),
   );
+
+export const hasUserRstestConfigPlugins = (
+  projects: ProjectContext[],
+): boolean => getUserRstestConfigPluginProjects(projects).length > 0;
 
 const applyModifyRstestConfig = async (
   config: NormalizedProjectConfig,

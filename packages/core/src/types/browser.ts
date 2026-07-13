@@ -48,6 +48,8 @@ export interface BrowserTestRunOptions {
    * entries after the node-side plan initially saw an empty browser project.
    */
   allowEmptyRun?: boolean;
+  /** Limit Browser Mode initialization to these project environments. */
+  targetEnvironmentNames?: string[];
   appliedModifyRstestConfigEnvironments?: Set<string>;
   /**
    * When set, the browser host emits Perfetto trace events to this callback

@@ -32,6 +32,7 @@ export interface BrowserHostModule {
       | 'shardedEntries'
       | 'freezeShardedEntries'
       | 'filesOnly'
+      | 'targetEnvironmentNames'
       | 'appliedModifyRstestConfigEnvironments'
     >,
   ) => Promise<{

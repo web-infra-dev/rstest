@@ -49,4 +49,26 @@ describe('browser mode - no tests', () => {
       });
     }
   });
+
+  it('should report an empty browser run without starting its server', async () => {
+    const server = createServer();
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(BROWSER_PORTS['no-tests'], '127.0.0.1', resolve);
+    });
+
+    try {
+      const { cli, expectExecFailed } = await runBrowserCliWithCwd(
+        join(__dirname, 'fixtures', 'no-tests'),
+      );
+
+      await expectExecFailed();
+      expect(cli.stderr).toContain('No test files found, exiting with code 1.');
+      expect(cli.stderr).not.toContain('already in use');
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
 });

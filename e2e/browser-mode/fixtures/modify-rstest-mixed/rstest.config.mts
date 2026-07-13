@@ -7,6 +7,7 @@ export default defineConfig({
     './project-hooked-b/rstest.config.mts',
     './project-moved-root/rstest.config.mts',
     './project-empty-browser/rstest.config.mts',
+    './project-plain-browser/rstest.config.mts',
     './node-smoke/rstest.config.mts',
   ],
 });

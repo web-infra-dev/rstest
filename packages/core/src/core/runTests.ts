@@ -46,7 +46,7 @@ import {
 } from './resultsCache';
 import { type SequenceHints, sortTestEntries } from './testSequencer';
 import { createRunProjectPlanState, syncNodeProjects } from './projectPlan';
-import { hasUserRstestConfigPlugins } from './modifyRstestConfig';
+import { getUserRstestConfigPluginProjects } from './modifyRstestConfig';
 import type { Rstest } from './rstest';
 
 /**
@@ -64,7 +64,12 @@ async function runBrowserModeTests(
     embedded: context.embedded,
   });
   validateBrowserConfig(context);
-  return runBrowserTests(context, options);
+  return runBrowserTests(context, {
+    ...options,
+    targetEnvironmentNames: browserProjects.map(
+      (project) => project.environmentName,
+    ),
+  });
 }
 
 const getSignalExitCode = (signal: NodeJS.Signals): number => {
@@ -408,10 +413,6 @@ export async function runTests(context: Rstest): Promise<void> {
     );
   };
 
-  const isBrowserProjectFilter = (filter: string) =>
-    isFuzzyBasenameFilter(filter) ||
-    browserProjects.some((project) => isFilterInsideProject(filter, project));
-
   const isBrowserProjectPathFilter = (filter: string) =>
     !isFuzzyBasenameFilter(filter) &&
     browserProjects.some((project) => isFilterInsideProject(filter, project));
@@ -420,18 +421,12 @@ export async function runTests(context: Rstest): Promise<void> {
     !isFuzzyBasenameFilter(filter) &&
     nodeProjects.some((project) => isFilterInsideProject(filter, project));
 
-  const hasBrowserConfigHooks = () =>
-    hasUserRstestConfigPlugins(browserProjects);
-
-  const isPotentialBrowserConfigHookFilter = (filter: string) =>
-    isBrowserProjectFilter(filter) || !isNodeProjectPathFilter(filter);
-
-  const shouldRunBrowserConfigHookFallback = () =>
-    hasBrowserConfigHooks() &&
-    context.fileFilters?.some(isPotentialBrowserConfigHookFilter);
+  const browserConfigHookProjects =
+    getUserRstestConfigPluginProjects(browserProjects);
 
   const setupFileState = createSetupFileState();
   const appliedBrowserModifyRstestConfigEnvironments = new Set<string>();
+  let hasRunBrowserConfigHookDiscovery = false;
   const projectPlanState = createRunProjectPlanState({
     context,
     browserProjects,
@@ -480,19 +475,27 @@ export async function runTests(context: Rstest): Promise<void> {
   });
 
   const shouldRunBrowserDiscoveryFallback = () => {
-    if (browserProjects.length === 0 || context.relatedResolutionEmpty) {
+    if (
+      browserConfigHookProjects.length === 0 ||
+      context.relatedResolutionEmpty ||
+      hasRunBrowserConfigHookDiscovery
+    ) {
       return false;
     }
 
-    if (projectPlanState.getPlan().browserProjectsToRun.length > 0) {
+    if (!context.fileFilters?.length) {
       return true;
     }
 
-    if (!context.fileFilters?.length) {
-      return hasBrowserConfigHooks();
-    }
-
-    return shouldRunBrowserConfigHookFallback();
+    return context.fileFilters.some(
+      (filter) =>
+        isFuzzyBasenameFilter(filter) ||
+        browserConfigHookProjects.some((project) =>
+          isFilterInsideProject(filter, project),
+        ) ||
+        (!isBrowserProjectPathFilter(filter) &&
+          !isNodeProjectPathFilter(filter)),
+    );
   };
   const shouldAllowEmptyBrowserFallback = () =>
     shouldRunBrowserDiscoveryFallback() &&
@@ -512,25 +515,39 @@ export async function runTests(context: Rstest): Promise<void> {
     };
   };
 
+  const getBrowserProjectsForDiscovery = () => {
+    if (!context.fileFilters?.length) {
+      return browserConfigHookProjects;
+    }
+
+    if (context.fileFilters.some(isFuzzyBasenameFilter)) {
+      return browserConfigHookProjects;
+    }
+
+    const matchedProjects = browserConfigHookProjects.filter((project) =>
+      context.fileFilters?.some((filter) =>
+        isFilterInsideProject(filter, project),
+      ),
+    );
+    if (matchedProjects.length > 0) {
+      return matchedProjects;
+    }
+
+    return context.fileFilters.some(
+      (filter) =>
+        !isBrowserProjectPathFilter(filter) && !isNodeProjectPathFilter(filter),
+    )
+      ? browserConfigHookProjects
+      : [];
+  };
+
   const getBrowserProjectsToRun = () => {
     const currentPlan = projectPlanState.getPlan();
     if (currentPlan.browserProjectsToRun.length > 0) {
       return currentPlan.browserProjectsToRun;
     }
 
-    if (
-      !context.fileFilters?.length ||
-      context.fileFilters.some(isFuzzyBasenameFilter) ||
-      shouldRunBrowserConfigHookFallback()
-    ) {
-      return browserProjects;
-    }
-
-    return browserProjects.filter((project) =>
-      context.fileFilters?.some((filter) =>
-        isFilterInsideProject(filter, project),
-      ),
-    );
+    return getBrowserProjectsForDiscovery();
   };
 
   const getBrowserShardedEntries = (
@@ -556,12 +573,13 @@ export async function runTests(context: Rstest): Promise<void> {
   let { hasBrowserTestsToRun, hasNodeTestsToRun } = syncRunPlanFlags();
 
   if (hasNodeProjects && shouldRunBrowserDiscoveryFallback()) {
+    const browserProjectsForDiscovery = getBrowserProjectsForDiscovery();
     const discoveryResult = await runBrowserModeTests(
       context,
-      getBrowserProjectsToRun(),
+      browserProjectsForDiscovery,
       {
         skipOnTestRunEnd: true,
-        shardedEntries: getBrowserShardedEntries(getBrowserProjectsToRun()),
+        shardedEntries: getBrowserShardedEntries(browserProjectsForDiscovery),
         filesOnly: true,
         allowEmptyRun: true,
         appliedModifyRstestConfigEnvironments:
@@ -576,6 +594,7 @@ export async function runTests(context: Rstest): Promise<void> {
         new Error('Failed to initialize Browser Mode discovery.')
       );
     }
+    hasRunBrowserConfigHookDiscovery = true;
     plan = await resolveRunnableProjects({
       silentShardMessage: true,
       strictEnvironmentComments: true,

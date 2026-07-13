@@ -14,6 +14,7 @@ export type { Rstest } from './core/rstest';
 // Coverage support for browser mode
 export { createCoverageProvider, loadCoverageProvider } from './coverage';
 export {
+  getUserRstestConfigPluginProjects,
   hasUserRstestConfigPlugins,
   initModifyRstestConfigHooks,
 } from './core/modifyRstestConfig';
