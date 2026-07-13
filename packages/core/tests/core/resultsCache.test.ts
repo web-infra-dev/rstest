@@ -10,7 +10,7 @@ import {
 } from '../../src/core/resultsCache';
 import type { TestFileResult, TestResultStatus } from '../../src/types';
 
-const CACHE_REL = 'node_modules/.cache/.rstest-sequence/results.json';
+const CACHE_REL = 'node_modules/.cache/.rstest-results/results.json';
 
 let root: string;
 
@@ -38,7 +38,7 @@ const fileResult = (
 });
 
 const seed = async (data: ResultsCacheData): Promise<void> => {
-  const dir = join(root, 'node_modules/.cache/.rstest-sequence');
+  const dir = join(root, 'node_modules/.cache/.rstest-results');
   await mkdir(dir, { recursive: true });
   await writeFile(join(root, CACHE_REL), JSON.stringify(data));
 };
@@ -49,7 +49,7 @@ describe('readResultsCache', () => {
   });
 
   it('returns undefined on corrupt JSON', async () => {
-    const dir = join(root, 'node_modules/.cache/.rstest-sequence');
+    const dir = join(root, 'node_modules/.cache/.rstest-results');
     await mkdir(dir, { recursive: true });
     await writeFile(join(root, CACHE_REL), '{ not valid json');
     expect(await readResultsCache(root)).toBeUndefined();
@@ -186,7 +186,7 @@ describe('writeResultsCache', () => {
 
   it('does not leave a temp file behind after an atomic write', async () => {
     await writeResultsCache(root, [fileResult('a.test.ts', 'pass', 100)]);
-    const dir = join(root, 'node_modules/.cache/.rstest-sequence');
+    const dir = join(root, 'node_modules/.cache/.rstest-results');
     const raw = await readFile(join(dir, 'results.json'), 'utf-8');
     expect(() => JSON.parse(raw)).not.toThrow();
   });
