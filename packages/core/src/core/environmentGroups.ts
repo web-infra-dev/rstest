@@ -3,6 +3,7 @@ import type {
   ProjectContext,
   ProjectEntries,
 } from '../types';
+import type { EnvironmentComment } from '../utils';
 import {
   applyEnvironmentComment,
   parseEnvironmentCommentFromFile,
@@ -29,15 +30,21 @@ const formatEnvironmentName = (name: string): string =>
 const formatGroupName = (projectName: string, groupIndex: number): string =>
   `${projectName}-environment-${groupIndex}`;
 
-const getProjectEnvironmentKey = (project: ProjectContext): string =>
+export const getProjectEnvironmentKey = (project: ProjectContext): string =>
   stableJson(project.normalizedConfig.testEnvironment);
+
+export const getEnvironmentKey = (
+  testEnvironment: NormalizedProjectConfig['testEnvironment'],
+): string => stableJson(testEnvironment);
 
 export const groupProjectEntriesByEnvironment = async ({
   entriesCache,
   projects,
+  ignoreInvalidEnvironmentComments = false,
 }: {
   entriesCache: Map<string, ProjectEntries>;
   projects: ProjectContext[];
+  ignoreInvalidEnvironmentComments?: boolean;
 }): Promise<{
   entriesCache: Map<string, ProjectEntries>;
   projects: ProjectContext[];
@@ -59,6 +66,8 @@ export const groupProjectEntriesByEnvironment = async ({
       {
         config: NormalizedProjectConfig;
         entries: Record<string, string>;
+        environmentComment?: EnvironmentComment;
+        hasImplicitEntries: boolean;
       }
     >();
 
@@ -70,7 +79,14 @@ export const groupProjectEntriesByEnvironment = async ({
     }
 
     for (const [entryName, testPath] of projectEntryItems) {
-      const comment = await parseEnvironmentCommentFromFile(testPath);
+      const comment = await parseEnvironmentCommentFromFile(testPath).catch(
+        (error: unknown) => {
+          if (ignoreInvalidEnvironmentComments) {
+            return null;
+          }
+          throw error;
+        },
+      );
       const testEnvironment = comment
         ? applyEnvironmentComment(
             project.normalizedConfig.testEnvironment,
@@ -89,8 +105,15 @@ export const groupProjectEntriesByEnvironment = async ({
         group = {
           config,
           entries: {},
+          hasImplicitEntries: false,
         };
         groups.set(key, group);
+      }
+
+      if (comment) {
+        group.environmentComment = comment;
+      } else {
+        group.hasImplicitEntries = true;
       }
 
       group.entries[entryName] = testPath;
@@ -107,6 +130,17 @@ export const groupProjectEntriesByEnvironment = async ({
 
     changed = true;
     let groupIndex = 0;
+    const sourceEnvironmentName =
+      project._environmentGroup?.sourceEnvironmentName ??
+      project.environmentName;
+    const sourceProjectName =
+      project._environmentGroup?.sourceProjectName ?? project.name;
+    const baseTestEnvironment =
+      project._environmentGroup?.baseTestEnvironment ??
+      project.normalizedConfig.testEnvironment;
+    const globalSetupEnvironmentKey = groups.has(baseEnvironmentKey)
+      ? baseEnvironmentKey
+      : groups.keys().next().value;
     for (const [key, group] of groups) {
       const isBaseEnvironment = key === baseEnvironmentKey;
       const groupName = isBaseEnvironment
@@ -122,7 +156,20 @@ export const groupProjectEntriesByEnvironment = async ({
         ...project,
         name: groupName,
         environmentName,
+        _environmentGroup: {
+          key,
+          baseKey: baseEnvironmentKey,
+          baseTestEnvironment,
+          sourceEnvironmentName,
+          sourceProjectName,
+          hasImplicitEntries: group.hasImplicitEntries,
+          environmentComment: group.hasImplicitEntries
+            ? undefined
+            : group.environmentComment,
+        },
         normalizedConfig: group.config,
+        _globalSetups:
+          project._globalSetups || key !== globalSetupEnvironmentKey,
       });
       groupedEntriesCache.set(environmentName, {
         ...projectEntries,

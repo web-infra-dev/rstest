@@ -13,8 +13,11 @@ import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import picomatch from 'picomatch';
 import v8ToIstanbul from 'v8-to-istanbul';
-import { createFastCoverageMap } from './utils';
-import { convertV8CoverageWithAst } from './v8AstConverter';
+import { createFastCoverageMap, mapWithConcurrency } from './utils';
+import {
+  applyV8CoverageWithAst,
+  convertV8CoverageWithAst,
+} from './v8AstConverter';
 
 type SourceMapLike = {
   version: number;
@@ -30,13 +33,12 @@ type CoverageReporterConstructor = new (
   options: Record<string, unknown>,
 ) => ReportBase;
 
-const MAX_PARSED_AST_CACHE_SIZE = 50;
+const COVERAGE_CONVERSION_CONCURRENCY = 4;
 const SOURCE_MAP_INNER_PATTERN =
   /\s*[#@]\s*sourceMappingURL\s*=\s*([^\s'"]*)\s*/;
 const SOURCE_MAP_URL_PATTERN = new RegExp(
   `(?:/\\*(?:\\s*\\r?\\n(?://)?)?${SOURCE_MAP_INNER_PATTERN.source}\\s*\\*/|//${SOURCE_MAP_INNER_PATTERN.source})\\s*`,
 );
-const parsedAstCache = new Map<string, ReturnType<typeof Parser.parse>>();
 
 type CoverageEntry = inspector.Profiler.ScriptCoverage & {
   filePath: string;
@@ -71,6 +73,114 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isStringDict = (value: unknown): value is Record<string, string> =>
   isRecord(value) &&
   Object.values(value).every((item) => typeof item === 'string');
+
+const findNonStringDictEntry = (
+  value: unknown,
+): { key: string; value: unknown } | undefined => {
+  if (!isRecord(value)) return undefined;
+
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item !== 'string') {
+      return { key, value: item };
+    }
+  }
+
+  return undefined;
+};
+
+const describeValue = (value: unknown): string => {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
+};
+
+const describeMalformedRawCoveragePayload = (
+  payload: unknown,
+  index: number,
+): string => {
+  const prefix = `Failed to resolve malformed raw V8 coverage payload at index ${index}`;
+
+  if (!isRecord(payload)) {
+    return `${prefix}: expected an object, received ${describeValue(payload)}.`;
+  }
+
+  if (!Array.isArray(payload.entries)) {
+    return `${prefix}: expected "entries" to be an array, received ${describeValue(
+      payload.entries,
+    )}. Keys: ${Object.keys(payload).join(', ') || '<none>'}.`;
+  }
+
+  const invalidEntryIndex = payload.entries.findIndex(
+    (entry) => !isCoverageEntry(entry),
+  );
+  if (invalidEntryIndex !== -1) {
+    const entry = payload.entries[invalidEntryIndex];
+    return `${prefix}: invalid entry at entries[${invalidEntryIndex}] (${describeValue(
+      entry,
+    )}). Entries: ${payload.entries.length}.`;
+  }
+
+  if (payload.options !== undefined && !isRecord(payload.options)) {
+    return `${prefix}: expected "options" to be an object, received ${describeValue(
+      payload.options,
+    )}. Entries: ${payload.entries.length}.`;
+  }
+
+  if (isRecord(payload.options)) {
+    if (
+      payload.options.assetFiles !== undefined &&
+      !isRecord(payload.options.assetFiles)
+    ) {
+      return `${prefix}: expected options.assetFiles to be an object, received ${describeValue(
+        payload.options.assetFiles,
+      )}. Entries: ${payload.entries.length}.`;
+    }
+
+    if (
+      payload.options.sourceMaps !== undefined &&
+      !isRecord(payload.options.sourceMaps)
+    ) {
+      return `${prefix}: expected options.sourceMaps to be an object, received ${describeValue(
+        payload.options.sourceMaps,
+      )}. Entries: ${payload.entries.length}.`;
+    }
+
+    const invalidAssetFile = findNonStringDictEntry(payload.options.assetFiles);
+    if (invalidAssetFile) {
+      return `${prefix}: expected options.assetFiles[${JSON.stringify(
+        invalidAssetFile.key,
+      )}] to be a string, received ${describeValue(
+        invalidAssetFile.value,
+      )}. Entries: ${payload.entries.length}.`;
+    }
+
+    const invalidSourceMap = findNonStringDictEntry(payload.options.sourceMaps);
+    if (invalidSourceMap) {
+      return `${prefix}: expected options.sourceMaps[${JSON.stringify(
+        invalidSourceMap.key,
+      )}] to be a string, received ${describeValue(
+        invalidSourceMap.value,
+      )}. Entries: ${payload.entries.length}.`;
+    }
+
+    if (
+      payload.options.outputModule !== undefined &&
+      typeof payload.options.outputModule !== 'boolean'
+    ) {
+      return `${prefix}: expected options.outputModule to be a boolean, received ${describeValue(
+        payload.options.outputModule,
+      )}. Entries: ${payload.entries.length}.`;
+    }
+  }
+
+  if (payload.root !== undefined && typeof payload.root !== 'string') {
+    return `${prefix}: expected "root" to be a string, received ${describeValue(
+      payload.root,
+    )}. Entries: ${payload.entries.length}.`;
+  }
+
+  return `${prefix}: unknown shape mismatch. Entries: ${payload.entries.length}.`;
+};
 
 const isCollectOptions = (value: unknown): value is CollectOptions =>
   isRecord(value) &&
@@ -409,29 +519,11 @@ export class CoverageProvider implements RstestCoverageProvider {
     };
   }
 
-  private parseAst(code: string, outputModule: boolean, cacheKey: string) {
-    const cachedAst = parsedAstCache.get(cacheKey);
-    if (cachedAst) {
-      return cachedAst;
-    }
-
-    const ast = Parser.parse(code, {
+  private parseAst(code: string, outputModule: boolean) {
+    return Parser.parse(code, {
       ecmaVersion: 'latest',
-      locations: true,
-      ranges: true,
       sourceType: outputModule ? 'module' : 'script',
     });
-
-    parsedAstCache.set(cacheKey, ast);
-
-    if (parsedAstCache.size > MAX_PARSED_AST_CACHE_SIZE) {
-      const firstKey = parsedAstCache.keys().next().value;
-      if (firstKey) {
-        parsedAstCache.delete(firstKey);
-      }
-    }
-
-    return ast;
   }
 
   private async convertWithAst(
@@ -450,12 +542,6 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     const outputModule = options?.outputModule ?? true;
     const codeHash = this.hashString(code);
-    const astCacheKey = this.getAstCacheKey(
-      filePath,
-      code,
-      codeHash,
-      outputModule,
-    );
     const converterCacheKey = this.getConverterCacheKey(
       filePath,
       code,
@@ -464,10 +550,64 @@ export class CoverageProvider implements RstestCoverageProvider {
       outputModule,
       root,
     );
-    const ast = this.parseAst(code, outputModule, astCacheKey);
 
     return convertV8CoverageWithAst({
-      ast,
+      ast: () => this.parseAst(code, outputModule),
+      cacheKey: converterCacheKey,
+      code,
+      sourceFilter: (sourcePath) =>
+        this.shouldKeepOriginalSource(sourcePath, root),
+      sourceMap,
+      sourceMapUrl,
+      coverage: {
+        url: entry.url,
+        functions: entry.functions,
+      },
+    });
+  }
+
+  private async applyWithAst(
+    coverageMap: CoverageMap,
+    filePath: string,
+    entry: inspector.Profiler.ScriptCoverage,
+    options?: CollectOptions,
+    transformedSource?: TransformedSource,
+    root = this.root,
+  ): Promise<void> {
+    if (this.convertWithAst !== CoverageProvider.prototype.convertWithAst) {
+      const istanbulData = await this.convertWithAst(
+        filePath,
+        entry,
+        options,
+        transformedSource,
+        root,
+      );
+      this.filterCoverageData(istanbulData, root);
+      coverageMap.merge(istanbulData);
+      return;
+    }
+
+    const { code, sourceMap, sourceMapStr, sourceMapUrl } =
+      transformedSource ?? (await this.getTransformedSource(filePath, options));
+
+    if (this.shouldSkipSourceMapEntry(sourceMap)) {
+      return;
+    }
+
+    const outputModule = options?.outputModule ?? true;
+    const codeHash = this.hashString(code);
+    const converterCacheKey = this.getConverterCacheKey(
+      filePath,
+      code,
+      codeHash,
+      sourceMapStr,
+      outputModule,
+      root,
+    );
+
+    await applyV8CoverageWithAst({
+      coverageMap,
+      ast: () => this.parseAst(code, outputModule),
       cacheKey: converterCacheKey,
       code,
       sourceFilter: (sourcePath) =>
@@ -551,11 +691,11 @@ export class CoverageProvider implements RstestCoverageProvider {
   resolveRawCoverage(payloads: unknown[]): Promise<CoverageMap | null> {
     const validPayloads: RawCoveragePayload[] = [];
 
-    for (const payload of payloads) {
+    for (const [index, payload] of payloads.entries()) {
       if (isRawCoveragePayload(payload)) {
         validPayloads.push(payload);
       } else {
-        console.error('Failed to resolve malformed raw V8 coverage payload.');
+        console.error(describeMalformedRawCoveragePayload(payload, index));
         process.exitCode = 1;
       }
     }
@@ -602,12 +742,12 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     for (const entry of entries) {
       const assetSource = this.findInDict(options.assetFiles, entry.filePath);
-      if (assetSource !== undefined) {
+      if (typeof assetSource === 'string') {
         assetFiles[entry.filePath] = assetSource;
       }
 
       const sourceMap = this.findInDict(options.sourceMaps, entry.filePath);
-      if (sourceMap !== undefined) {
+      if (typeof sourceMap === 'string') {
         sourceMaps[entry.filePath] = sourceMap;
       }
     }
@@ -699,22 +839,17 @@ export class CoverageProvider implements RstestCoverageProvider {
     );
     const coverageMap = this.createCoverageMap();
 
-    await Promise.all(
-      filteredEntries.map(async (entry) => {
+    await mapWithConcurrency(
+      filteredEntries,
+      COVERAGE_CONVERSION_CONCURRENCY,
+      async (entry) => {
         try {
-          const istanbulData = await this.convertWithAst(
-            entry.filePath,
-            entry,
-            options,
-          );
-
-          this.filterCoverageData(istanbulData);
-          coverageMap.merge(istanbulData);
+          await this.applyWithAst(coverageMap, entry.filePath, entry, options);
         } catch (e) {
           console.error(`Failed to process coverage for ${entry.url}:`, e);
           process.exitCode = 1;
         }
-      }),
+      },
     );
 
     return coverageMap;
@@ -744,36 +879,31 @@ export class CoverageProvider implements RstestCoverageProvider {
       }
     }
 
-    await Promise.all(
-      Array.from(groups.values()).map(async ({ entries, options, root }) => {
+    await mapWithConcurrency(
+      Array.from(groups.values()),
+      COVERAGE_CONVERSION_CONCURRENCY,
+      async ({ entries, options, root }) => {
         try {
           const transformedSource = await this.getTransformedSource(
             entries[0]!.filePath,
             options,
           );
 
-          await Promise.all(
-            entries.map(async (entry) => {
-              try {
-                const istanbulData = await this.convertWithAst(
-                  entry.filePath,
-                  entry,
-                  options,
-                  transformedSource,
-                  root,
-                );
-
-                this.filterCoverageData(istanbulData, root);
-                coverageMap.merge(istanbulData);
-              } catch (e) {
-                console.error(
-                  `Failed to process coverage for ${entry.url}:`,
-                  e,
-                );
-                process.exitCode = 1;
-              }
-            }),
-          );
+          for (const entry of entries) {
+            try {
+              await this.applyWithAst(
+                coverageMap,
+                entry.filePath,
+                entry,
+                options,
+                transformedSource,
+                root,
+              );
+            } catch (e) {
+              console.error(`Failed to process coverage for ${entry.url}:`, e);
+              process.exitCode = 1;
+            }
+          }
         } catch (e) {
           console.error(
             `Failed to process coverage for ${entries[0]!.url}:`,
@@ -781,7 +911,7 @@ export class CoverageProvider implements RstestCoverageProvider {
           );
           process.exitCode = 1;
         }
-      }),
+      },
     );
 
     return coverageMap;

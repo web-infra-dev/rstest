@@ -316,16 +316,14 @@ export async function resolveRelatedTestFiles(
     projectEntries.get(environmentName) ?? {};
 
   const setupFileState = createSetupFileState();
-  const nodeProjects = context.projects.filter(
-    (project) => !project.normalizedConfig.browser.enabled,
-  );
+  projectEntries = await collectProjectEntries(context);
 
   const rsbuildInstance = await prepareRsbuild({
     context,
     globTestSourceEntries,
     setupFileState,
     targetProjects: context.projects,
-    exposeRstestAPIProjects: nodeProjects,
+    exposeRstestAPIProjects: context.projects,
     extraPlugins: [createRelatedBuildSafeguardsPlugin()],
     getSetupFileProjects: () => ({
       setupProjects: context.projects,

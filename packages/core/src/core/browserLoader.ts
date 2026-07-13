@@ -27,7 +27,10 @@ export interface BrowserHostModule {
   ) => Promise<BrowserTestRunResult | void>;
   listBrowserTests: (
     context: RstestContext,
-    options?: Pick<BrowserTestRunOptions, 'shardedEntries'>,
+    options?: Pick<
+      BrowserTestRunOptions,
+      'shardedEntries' | 'freezeShardedEntries' | 'filesOnly'
+    >,
   ) => Promise<{
     list: ListCommandResult[];
     close: () => Promise<void>;

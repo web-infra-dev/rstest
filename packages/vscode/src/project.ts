@@ -365,9 +365,7 @@ export class Project implements vscode.Disposable {
       parents: string[],
       collection: vscode.TestItemCollection,
     ) => {
-      const uri = vscode.Uri.file(
-        [this.root.fsPath, ...parents, key].join(path.sep),
-      );
+      const uri = vscode.Uri.file(path.join(this.root.fsPath, ...parents, key));
       const children = Object.entries(value);
 
       if (children.length === 1) {

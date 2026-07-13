@@ -4,6 +4,7 @@ import {
   applyEnvironmentGroupsToListEntries,
   resolveRunnableProjectsByEntries,
 } from './environmentEntries';
+import { refreshEnvironmentPartitionEntries } from './environmentPartitions';
 
 const getProjectEntries = async ({
   context,
@@ -43,6 +44,34 @@ export const syncNodeProjects = (
   );
 };
 
+const isSameProjectList = (
+  left: ProjectContext[],
+  right: ProjectContext[],
+): boolean =>
+  left.length === right.length &&
+  left.every((project, index) => {
+    const other = right[index];
+    return (
+      other?.name === project.name &&
+      other.environmentName === project.environmentName
+    );
+  });
+
+const getEntriesCacheRecord = (
+  entriesCache: Map<string, ProjectEntries>,
+): Record<string, Record<string, string>> =>
+  Object.fromEntries(
+    Array.from(entriesCache.entries()).map(([environmentName, entries]) => [
+      environmentName,
+      entries.entries,
+    ]),
+  );
+
+type ResolveRunnableProjectsOptions = {
+  silentShardMessage?: boolean;
+  strictEnvironmentComments?: boolean;
+};
+
 export const createRunProjectPlanState = ({
   context,
   browserProjects,
@@ -54,13 +83,18 @@ export const createRunProjectPlanState = ({
 }): {
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   getPlan: () => RunProjectPlan;
-  resolveRunnableProjects: () => Promise<RunProjectPlan>;
+  resolveRunnableProjects: (
+    options?: ResolveRunnableProjectsOptions,
+  ) => Promise<RunProjectPlan>;
+  validateEnvironmentComments: () => Promise<void>;
 } => {
   let allProjects = context.projects;
   let entriesCache: Map<string, ProjectEntries> = new Map();
   let browserProjectsToRun: ProjectContext[] = [];
   let nodeProjectsToRun: ProjectContext[] = [];
-  let runnableProjectsResolved = false;
+  let environmentGroupsResolved = false;
+  let environmentGroupsChanged = false;
+  let pendingStrictEnvironmentCommentValidation = false;
 
   const getPlan = (): RunProjectPlan => ({
     projects: allProjects,
@@ -79,7 +113,9 @@ export const createRunProjectPlanState = ({
       return entriesCache.get(name)!.entries;
     }
 
-    const project = allProjects.find((p) => p.environmentName === name);
+    const project =
+      allProjects.find((p) => p.environmentName === name) ??
+      context.projects.find((p) => p.environmentName === name);
     if (!project) {
       return {};
     }
@@ -93,21 +129,52 @@ export const createRunProjectPlanState = ({
     return entries;
   };
 
-  const resolveRunnableProjects = async (): Promise<RunProjectPlan> => {
-    if (runnableProjectsResolved) {
-      return getPlan();
+  const resolveRunnableProjects = async ({
+    silentShardMessage = false,
+    strictEnvironmentComments = false,
+  }: ResolveRunnableProjectsOptions = {}): Promise<RunProjectPlan> => {
+    const shouldPreserveEnvironmentPartitions =
+      environmentGroupsResolved && environmentGroupsChanged;
+
+    if (shouldPreserveEnvironmentPartitions) {
+      const refreshed = await refreshEnvironmentPartitionEntries({
+        context,
+        projects: allProjects,
+        getProjectEntries: (project) => getProjectEntries({ context, project }),
+        shardMessage: {
+          silent: silentShardMessage,
+        },
+      });
+      allProjects = refreshed.projects;
+      entriesCache = refreshed.entriesCache;
+    } else if (context.normalizedConfig.shard) {
+      entriesCache =
+        (await resolveShardedEntries(context, {
+          silent: silentShardMessage,
+        })) || new Map();
+    } else {
+      entriesCache = new Map();
     }
 
-    if (context.normalizedConfig.shard) {
-      entriesCache = (await resolveShardedEntries(context)) || new Map();
-    }
-
+    const previousProjects = context.projects;
+    const ignoreInvalidEnvironmentComments = !strictEnvironmentComments;
     const runnable = await resolveRunnableProjectsByEntries({
       entriesCache,
-      projects: context.projects,
+      projects: allProjects,
       globTestSourceEntries,
+      groupEnvironmentComments: !shouldPreserveEnvironmentPartitions,
+      ignoreInvalidEnvironmentComments,
       skipEmptyProjects: !isWatchMode,
     });
+    pendingStrictEnvironmentCommentValidation =
+      ignoreInvalidEnvironmentComments;
+
+    if (!environmentGroupsResolved) {
+      environmentGroupsChanged = !isSameProjectList(
+        previousProjects,
+        runnable.projects,
+      );
+    }
 
     allProjects = runnable.projects;
     entriesCache = runnable.entriesCache;
@@ -129,30 +196,47 @@ export const createRunProjectPlanState = ({
       nodeProjectsToRun = [];
     }
 
-    runnableProjectsResolved = true;
+    environmentGroupsResolved = true;
     return getPlan();
+  };
+
+  const validateEnvironmentComments = async (): Promise<void> => {
+    if (!pendingStrictEnvironmentCommentValidation) {
+      return;
+    }
+
+    await resolveRunnableProjects({ strictEnvironmentComments: true });
+    pendingStrictEnvironmentCommentValidation = false;
   };
 
   return {
     globTestSourceEntries,
     getPlan,
     resolveRunnableProjects,
+    validateEnvironmentComments,
   };
+};
+
+type RefreshListEntriesOptions = {
+  silentShardMessage?: boolean;
+  strictEnvironmentComments?: boolean;
 };
 
 export const createListProjectPlanState = (
   context: RstestContext,
 ): {
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
-  refreshListEntries: (options?: {
-    silentShardMessage?: boolean;
-  }) => Promise<void>;
+  refreshListEntries: (options?: RefreshListEntriesOptions) => Promise<void>;
+  validateEnvironmentComments: () => Promise<void>;
   getShardedBrowserEntries: () =>
     Map<string, { entries: Record<string, string> }> | undefined;
 } => {
   const testEntries: Record<string, Record<string, string>> = {};
   let shardedBrowserEntries:
     Map<string, { entries: Record<string, string> }> | undefined;
+  let environmentGroupsResolved = false;
+  let environmentGroupsChanged = false;
+  let pendingStrictEnvironmentCommentValidation = false;
 
   const globTestSourceEntries = async (
     name: string,
@@ -174,7 +258,8 @@ export const createListProjectPlanState = (
 
   const refreshListEntries = async ({
     silentShardMessage = true,
-  }: { silentShardMessage?: boolean } = {}): Promise<void> => {
+    strictEnvironmentComments = true,
+  }: RefreshListEntriesOptions = {}): Promise<void> => {
     for (const key of Object.keys(testEntries)) {
       delete testEntries[key];
     }
@@ -199,16 +284,63 @@ export const createListProjectPlanState = (
       }
     }
 
-    await applyEnvironmentGroupsToListEntries({
-      context,
-      testEntries,
-      globTestSourceEntries,
-    });
+    const shouldPreserveEnvironmentPartitions =
+      environmentGroupsResolved && environmentGroupsChanged;
+    const ignoreInvalidEnvironmentComments = !strictEnvironmentComments;
+
+    if (shouldPreserveEnvironmentPartitions) {
+      const refreshed = await refreshEnvironmentPartitionEntries({
+        context,
+        projects: context.projects,
+        getProjectEntries: (project) => getProjectEntries({ context, project }),
+        shardMessage: {
+          silent: silentShardMessage,
+        },
+      });
+      context.projects = refreshed.projects;
+      Object.assign(testEntries, getEntriesCacheRecord(refreshed.entriesCache));
+      if (context.normalizedConfig.shard) {
+        shardedBrowserEntries = new Map();
+        for (const project of context.projects.filter(
+          (p) => p.normalizedConfig.browser.enabled,
+        )) {
+          shardedBrowserEntries.set(project.environmentName, {
+            entries:
+              refreshed.entriesCache.get(project.environmentName)?.entries ||
+              {},
+          });
+        }
+      }
+    } else {
+      const grouped = await applyEnvironmentGroupsToListEntries({
+        context,
+        testEntries,
+        globTestSourceEntries,
+        ignoreInvalidEnvironmentComments,
+      });
+      if (!environmentGroupsResolved) {
+        environmentGroupsChanged = grouped.changed;
+      }
+    }
+
+    pendingStrictEnvironmentCommentValidation =
+      ignoreInvalidEnvironmentComments;
+    environmentGroupsResolved = true;
+  };
+
+  const validateEnvironmentComments = async (): Promise<void> => {
+    if (!pendingStrictEnvironmentCommentValidation) {
+      return;
+    }
+
+    await refreshListEntries({ strictEnvironmentComments: true });
+    pendingStrictEnvironmentCommentValidation = false;
   };
 
   return {
     globTestSourceEntries,
     refreshListEntries,
+    validateEnvironmentComments,
     getShardedBrowserEntries: () => shardedBrowserEntries,
   };
 };

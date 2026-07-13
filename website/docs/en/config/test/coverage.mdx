@@ -105,6 +105,57 @@ import { PackageManagerTabs } from '@theme';
 
 `@rstest/coverage-istanbul` is powered by [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument). Rstest applies instrumentation through SWC during transform, so this provider has good transform-time performance. It can use more runtime memory because the executed code keeps the injected counters needed to collect coverage.
 
+##### Serialized functions and other realms
+
+Istanbul injects `cov_*` coverage counter calls into instrumented files. Those counters are scoped to the transformed module that Rstest executes. If code from an instrumented file is serialized and executed somewhere else, the new scope or realm may not have the matching `cov_*` helper, and the test can fail with `ReferenceError: cov_... is not defined`.
+
+This can happen when a function is serialized with `fn.toString()` or executed through APIs such as `page.evaluate`, `Worker`, `node:vm`, `eval`, or `new Function`. To avoid the failure, exclude that source file with `coverage.exclude`, switch to `coverage.provider: 'v8'` for non-browser tests, or avoid serializing Istanbul-instrumented functions. The `v8` provider is not available in Browser Mode, so browser tests should use `coverage.exclude` or avoid serializing instrumented functions.
+
+Prefer `coverage.exclude` when a whole file is mainly used to generate, serialize, or inject code into another scope or realm. Istanbul ignore comments are better for small isolated snippets that must stay in an otherwise covered file.
+
+Exclude whole files in config:
+
+```ts title='rstest.config.ts'
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    provider: 'istanbul',
+    exclude: ['**/src/injected-script.ts', '**/src/**/*.{worker,evaluate}.ts'],
+  },
+});
+```
+
+You can also pass the same patterns from the CLI for a one-off run:
+
+```bash
+npx rstest run --coverage --coverage.exclude "**/src/injected-script.ts" --coverage.exclude "**/src/**/*.{worker,evaluate}.ts"
+```
+
+If the whole file should be skipped by Istanbul instrumentation, put `/* istanbul ignore file */` at the top of the file:
+
+```ts title='src/injected-script.ts'
+/* istanbul ignore file */
+
+export function createInjectedScript() {
+  return `globalThis.__APP_READY__ = true;`;
+}
+```
+
+If only one serialized function needs to be skipped, place `/* istanbul ignore next */` immediately before it:
+
+```ts
+/* istanbul ignore next */
+function browserEvaluateFn() {
+  return window.location.href;
+}
+
+await page.evaluate(browserEvaluateFn);
+```
+
+Branch-level hints such as `/* istanbul ignore if */` and `/* istanbul ignore else */` can be used for narrow environment guards. If an ignored snippet still receives an injected `cov_*` call, use `coverage.exclude` for the source file instead.
+
 #### V8 provider
 
 <ApiMeta addedVersion="0.10.2" />

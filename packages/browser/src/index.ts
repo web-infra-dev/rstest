@@ -22,7 +22,10 @@ export async function runBrowserTests(
 
 export async function listBrowserTests(
   context: RstestContext,
-  options?: Pick<BrowserTestRunOptions, 'shardedEntries'>,
+  options?: Pick<
+    BrowserTestRunOptions,
+    'shardedEntries' | 'freezeShardedEntries' | 'filesOnly'
+  >,
 ): Promise<ListBrowserTestsResult> {
   // Forward `options` (e.g. `shardedEntries`) so `rstest list --shard` lists
   // only the current shard's browser test files, matching the run path.

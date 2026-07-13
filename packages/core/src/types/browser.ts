@@ -28,6 +28,17 @@ export interface BrowserTestRunOptions {
    */
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
   /**
+   * Treat the provided sharded entries as the authoritative core run plan.
+   * Mixed node+browser runs set this so Browser Mode does not recompute a
+   * different global shard after config hooks have run.
+   */
+  freezeShardedEntries?: boolean;
+  /**
+   * Only initialize Browser Mode config hooks and refresh test files, without
+   * launching the browser provider to collect test declarations.
+   */
+  filesOnly?: boolean;
+  /**
    * Keep watch infrastructure alive even when the initial browser test set is empty.
    */
   allowEmptyWatchRun?: boolean;

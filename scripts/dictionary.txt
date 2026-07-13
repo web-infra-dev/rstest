@@ -52,6 +52,7 @@ elifecycle
 endgroup
 envinfo
 estree
+ewma
 facti
 fastpaths
 fi3ework

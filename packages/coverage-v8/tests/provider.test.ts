@@ -113,8 +113,6 @@ function getProviderInternals(provider: CoverageProvider): ProviderInternals {
 function parseModule(code: string) {
   return Parser.parse(code, {
     ecmaVersion: 'latest',
-    locations: true,
-    ranges: true,
     sourceType: 'module',
   });
 }
@@ -457,13 +455,42 @@ describe('coverage-v8 provider', () => {
     expect(coverage[file]?.branchMap[0]?.locations).toEqual([
       {
         start: { line: 1, column: 0 },
-        end: { line: 1, column: Number.POSITIVE_INFINITY },
+        end: { line: 1, column: 19 },
       },
       {
         start: { line: 1, column: 0 },
-        end: { line: 1, column: Number.POSITIVE_INFINITY },
+        end: { line: 1, column: 19 },
       },
     ]);
+  });
+
+  it('allocates branch indexes for large files without depending on branch map scans', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-many-branches.js');
+    const code = Array.from(
+      { length: 1500 },
+      (_, index) => `if (flag${index}) { foo(); } else { bar(); }`,
+    ).join('\n');
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:many-branches`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(Object.keys(coverage[file]?.branchMap ?? {})).toHaveLength(1500);
+    expect(Object.keys(coverage[file]?.b ?? {})).toHaveLength(1500);
+    expect(coverage[file]?.b[1499]).toEqual([1, 1]);
   });
 
   it('honors ignore-next comments before ternary separators', async () => {
@@ -1021,6 +1048,49 @@ export default class CustomCoverageReporter {
     }
   });
 
+  it('omits null source maps from raw coverage payload options', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-null-sourcemap');
+    const file = join(root, 'dist', 'covered.js');
+    const code = 'function covered() { return 1; }';
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+
+    Object.defineProperty(providerInternals, 'takeRawCoverage', {
+      configurable: true,
+      value: async () => [
+        {
+          url: pathToFileURL(file).href,
+          filePath: file,
+          scriptId: '1',
+          functions: [
+            {
+              functionName: '',
+              isBlockCoverage: true,
+              ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+            },
+          ],
+        },
+      ],
+    });
+    Object.defineProperty(provider, 'session', {
+      configurable: true,
+      value: {},
+    });
+
+    const options = {
+      assetFiles: { [file]: code },
+      sourceMaps: { [file]: null },
+      outputModule: true,
+      // Rsbuild resource collection can return null for assets without maps;
+      // this locks the runtime boundary even though the public type is stricter.
+    } as unknown as Parameters<CoverageProvider['collectRaw']>[0];
+
+    const payload = await provider.collectRaw(options);
+
+    expect(payload?.options?.assetFiles).toEqual({ [file]: code });
+    expect(payload?.options?.sourceMaps).toBeUndefined();
+  });
+
   it('collects raw v8 coverage before converting to Istanbul coverage', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-raw-merge');
     const file = join(root, 'src', 'covered.js');
@@ -1077,6 +1147,60 @@ export default class CustomCoverageReporter {
       expect(
         coverageMap?.fileCoverageFor(file).toSummary().statements.pct,
       ).toBe(100);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('limits concurrent raw coverage conversion', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-concurrency');
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    let activeConversions = 0;
+    let peakConversions = 0;
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (filePath: string) => {
+        activeConversions++;
+        peakConversions = Math.max(peakConversions, activeConversions);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        activeConversions--;
+        return {
+          [filePath]: createFileCoverage(filePath),
+        };
+      },
+    });
+
+    const payloads = Array.from({ length: 12 }, (_, index) => {
+      const file = join(root, 'src', `covered-${index}.js`);
+      const code = `function covered${index}() { return ${index}; }`;
+
+      return {
+        entries: [
+          {
+            url: pathToFileURL(file).href,
+            filePath: file,
+            scriptId: String(index),
+            functions: [
+              {
+                functionName: '',
+                isBlockCoverage: true,
+                ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+              },
+            ],
+          },
+        ],
+        options: { assetFiles: { [file]: code }, outputModule: true },
+      };
+    });
+
+    try {
+      const coverageMap = await provider.resolveRawCoverage(payloads);
+
+      expect(coverageMap?.files()).toHaveLength(12);
+      expect(peakConversions).toBeLessThanOrEqual(4);
+      expect(peakConversions).toBeGreaterThan(1);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -1255,6 +1379,58 @@ export default class CustomCoverageReporter {
 
       expect(coverageMap?.files()).toEqual([file]);
       expect(hasError).toBe(true);
+      expect(process.exitCode).toBe(1);
+    } finally {
+      console.error = originalError;
+      process.exitCode = originalExitCode;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports raw coverage payload shape errors with invalid field paths', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-malformed-message');
+    const file = join(root, 'valid.js');
+    const code = 'function covered() { return 1; }';
+    const provider = new CoverageProvider(createOptions(), root);
+    const originalError = console.error;
+    const originalExitCode = process.exitCode;
+    const errors: string[] = [];
+
+    console.error = (...args: unknown[]) => {
+      errors.push(args.join(' '));
+    };
+
+    try {
+      await expect(
+        provider.resolveRawCoverage([
+          {
+            entries: [
+              {
+                url: pathToFileURL(file).href,
+                filePath: file,
+                scriptId: 'valid',
+                functions: [
+                  {
+                    functionName: '',
+                    isBlockCoverage: true,
+                    ranges: [
+                      { startOffset: 0, endOffset: code.length, count: 1 },
+                    ],
+                  },
+                ],
+              },
+            ],
+            options: { sourceMaps: { [file]: null }, outputModule: true },
+          },
+        ]),
+      ).resolves.toBeNull();
+
+      expect(errors[0]).toContain(
+        'Failed to resolve malformed raw V8 coverage payload at index 0',
+      );
+      expect(errors[0]).toContain('options.sourceMaps');
+      expect(errors[0]).toContain(JSON.stringify(file));
+      expect(errors[0]).toContain('received null');
       expect(process.exitCode).toBe(1);
     } finally {
       console.error = originalError;

@@ -64,4 +64,16 @@ describe('browser mode - list (collect mode)', () => {
       'empty-before-hook/added-by-hook.test.ts > should be listed when include is added by modifyRstestConfig after initial empty entries',
     );
   });
+
+  it('should list browser files added after initial empty entries with filesOnly', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCliWithCwd(
+      join(__dirname, 'fixtures', 'list'),
+      { command: 'list', args: ['--filesOnly', 'empty-before-hook'] },
+    );
+
+    await expectExecSuccess();
+
+    const output = pathe.normalize(cli.stdout);
+    expect(output).toContain('empty-before-hook/added-by-hook.test.ts');
+  });
 });

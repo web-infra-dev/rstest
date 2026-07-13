@@ -58,6 +58,119 @@ describe('test build config', () => {
     expect(cli.stdout).not.toContain('ignored.test.ts');
   });
 
+  it('modifyRstestConfig should apply when initial node test entries are empty', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--config', 'rstest.noInitialTests.config.mts'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/modifyRstestConfig'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).toContain('uses project-a modified config');
+    expect(cli.stdout).not.toContain('No test files found');
+  });
+
+  it('modifyRstestConfig should refresh run plan before dependency checks', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--config', 'rstest.environment.config.mts'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/modifyRstestConfig'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).toContain('uses modified jsdom environment');
+    expect(cli.stdout).not.toContain('No test files found');
+  });
+
+  it('modifyRstestConfig should refresh run plan when tests are removed', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--config', 'rstest.emptyAfterModify.config.mts'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/modifyRstestConfig'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).toContain('No test files found');
+    expect(cli.stdout).not.toContain('uses project-a modified config');
+  });
+
+  it('modifyRstestConfig should preserve shard partition', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--config', 'rstest.shard.config.mts', '--shard', '1/2'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/modifyRstestConfig'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).toContain('Running shard 1 of 2 (2 of 3 test files)');
+    expect(cli.stdout).toContain('shard-a.test.ts');
+    expect(cli.stdout).toContain('shard-b.test.ts');
+    expect(cli.stdout).not.toContain('shard-c.test.ts');
+  });
+
+  it('modifyRstestConfig should print final shard count when listing test files', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'list',
+        '--filesOnly',
+        '--config',
+        'rstest.listShard.config.mts',
+        '--shard',
+        '1/2',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures/modifyRstestConfig'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const logs = cli.stdout?.split('\n').filter(Boolean);
+    expect(logs).toEqual([
+      'Running shard 1 of 2 (2 of 3 test files)',
+      'shard-a.test.ts',
+      'shard-b.test.ts',
+    ]);
+  });
+
   it('should write output to customized distPath.root', async ({
     onTestFinished,
   }) => {

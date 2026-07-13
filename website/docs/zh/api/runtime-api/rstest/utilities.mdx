@@ -20,13 +20,7 @@ import { ApiMeta } from '@components/ApiMeta';
 - 可多次调用以模拟多个环境变量。
 - 使用 `rs.unstubAllEnvs()` 可恢复所有通过此方法更改的环境变量。
 
-**Disposable / `using` 语法**
-
-<ApiMeta addedVersion="0.10.3" />
-
-Rstest 支持使用 `using` 语法在代码块退出时自动恢复当前作用域内的 env stub。
-
-**示例：**
+- **示例：**
 
 ```ts
 rs.stubEnv('NODE_ENV', 'test');
@@ -38,11 +32,21 @@ expect(process.env.MY_VAR).toBeUndefined();
 expect(import.meta.env.MY_VAR).toBeUndefined();
 ```
 
+- **`using` 语法**
+
+<ApiMeta addedVersion="0.10.3" />
+
+`rs.stubEnv()` 返回一个 `Disposable`，可配合 `using` 语法在代码块退出时自动恢复当前 env stub。
+
+`_env` 变量以下划线开头，表示它不会被直接使用。`using` 语法要求声明一个变量，因此不能省略 `_env`，但可以使用其他变量名。
+
 ```ts
 {
   using _env = rs.stubEnv('NODE_ENV', 'test');
   expect(process.env.NODE_ENV).toBe('test');
 }
+
+// NODE_ENV 已恢复为原始值。
 ```
 
 ## rs.unstubAllEnvs
@@ -76,13 +80,7 @@ expect(process.env.NODE_ENV).not.toBe('test');
 - 可多次调用以模拟多个全局变量。
 - 使用 `rs.unstubAllGlobals()` 可恢复所有通过此方法更改的全局变量。
 
-**Disposable / `using` 语法**
-
-<ApiMeta addedVersion="0.10.3" />
-
-Rstest 支持使用 `using` 语法在代码块退出时自动恢复当前作用域内的 global stub。
-
-**示例：**
+- **示例：**
 
 ```ts
 rs.stubGlobal('myGlobal', 123);
@@ -92,11 +90,21 @@ rs.stubGlobal(Symbol.for('foo'), 'bar');
 expect(globalThis[Symbol.for('foo')]).toBe('bar');
 ```
 
+- **`using` 语法**
+
+<ApiMeta addedVersion="0.10.3" />
+
+`rs.stubGlobal()` 返回一个 `Disposable`，可配合 `using` 语法在代码块退出时自动恢复当前 global stub。
+
+`_global` 变量以下划线开头，表示它不会被直接使用。`using` 语法要求声明一个变量，因此不能省略 `_global`，但可以使用其他变量名。
+
 ```ts
 {
   using _global = rs.stubGlobal('myGlobal', 123);
   expect(globalThis.myGlobal).toBe(123);
 }
+
+// myGlobal 已恢复为原始值。
 ```
 
 ## rs.unstubAllGlobals

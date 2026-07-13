@@ -42,6 +42,20 @@ export type BrowserProvider = (typeof BROWSER_PROVIDERS)[number];
 
 export const TEMP_RSTEST_OUTPUT_DIR = 'dist/.rstest-temp';
 const DEFAULT_BUILD_CACHE_PREFIX = 'node_modules/.cache/rstest';
+
+/**
+ * Directory for the perf-first test-sequencing cache (see `core/resultsCache.ts`).
+ * The leading dot is load-bearing: it must NOT reuse `rstest` or `rstest-*`.
+ * The Rspack build cache occupies `node_modules/.cache/rstest` (no environment)
+ * and `node_modules/.cache/rstest-<environmentName>` (see
+ * `getDefaultBuildCacheDir`), so a plain `rstest-sequence` would collide with a
+ * build cache for an environment literally named `sequence`. A dotted prefix is
+ * the only construction guaranteed collision-free against every build cache dir,
+ * and it matches the `dist/.rstest-temp` style. Kept here, next to the build
+ * cache prefix, so renaming the build cache naming can't silently break this
+ * construction-based no-collision invariant.
+ */
+export const SEQUENCE_CACHE_DIR = 'node_modules/.cache/.rstest-sequence';
 const DEFAULT_BUILD_CACHE_DIRECTORY_MARKER = Symbol(
   'defaultBuildCacheDirectory',
 );

@@ -5,7 +5,7 @@ import { getTestEntries } from './testFiles';
 /**
  * Distributes test files into a specific shard.
  */
-function getShardedFiles<T extends { testPath: string }>(
+export function getShardedFiles<T extends { testPath: string }>(
   files: T[],
   shard: ShardConfig,
 ): T[] {
@@ -21,6 +21,22 @@ function getShardedFiles<T extends { testPath: string }>(
   return files
     .sort((a, b) => a.testPath.localeCompare(b.testPath))
     .slice(start, end);
+}
+
+export function logShardMessage({
+  shard,
+  testFilesInShardCount,
+  totalTestFileCount,
+}: {
+  shard: ShardConfig;
+  testFilesInShardCount: number;
+  totalTestFileCount: number;
+}): void {
+  logger.log(
+    color.green(
+      `Running shard ${shard.index} of ${shard.count} (${testFilesInShardCount} of ${totalTestFileCount} test files)\n`,
+    ),
+  );
 }
 
 /**
@@ -71,11 +87,11 @@ export async function resolveShardedEntries(
   const testFilesInShardCount = shardedEntries.length;
 
   if (!silent) {
-    logger.log(
-      color.green(
-        `Running shard ${shard.index} of ${shard.count} (${testFilesInShardCount} of ${totalTestFileCount} test files)\n`,
-      ),
-    );
+    logShardMessage({
+      shard,
+      testFilesInShardCount,
+      totalTestFileCount,
+    });
   }
 
   const shardedEntriesByProject = new Map<string, Record<string, string>>();

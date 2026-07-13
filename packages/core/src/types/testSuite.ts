@@ -10,6 +10,16 @@ import type { ConsoleStreamType, MaybePromise, TestPath } from './utils';
 
 export type TestRunMode = 'run' | 'skip' | 'todo' | 'only';
 
+export type TaskMetaValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TaskMetaValue[]
+  | { [key: string]: TaskMetaValue };
+
+export type TaskMeta = Record<string, TaskMetaValue>;
+
 export type TaskState = 'pass' | 'fail';
 
 export interface TaskResult {
@@ -42,6 +52,7 @@ export type TestCaseInfo = {
   startTime?: number;
   /** Only included when `includeTaskLocation` config is enabled */
   location?: Location;
+  meta?: TaskMeta;
   type: 'case';
   runMode: TestRunMode;
 };
@@ -85,6 +96,7 @@ export type TestCase = TestCaseInfo & {
 
 export interface SuiteContext {
   filepath: TestPath;
+  meta: TaskMeta;
 }
 
 export type AfterAllListener = (ctx: SuiteContext) => MaybePromise<void>;
@@ -108,6 +120,7 @@ export type TestSuiteInfo = {
   type: 'suite';
   /** Only included when `includeTaskLocation` config is enabled */
   location?: Location;
+  meta?: TaskMeta;
   runMode: TestRunMode;
 };
 
@@ -118,9 +131,9 @@ export type TestSuite = TestSuiteInfo & {
   sequential?: boolean;
   /**
    * Suite-level `TestOptions` passed to `describe(name, options, fn)`. Applied
-   * as inheritable defaults to descendant cases: an explicit case-level value
-   * wins, and a nested `describe` inherits its parent's value. Stored on the
-   * suite only to propagate down — suites are not executed themselves.
+   * as inheritable defaults to descendant suites and cases: an explicit child
+   * value wins, and a nested `describe` carries inherited values to its own
+   * descendants.
    */
   timeout?: number;
   retry?: number;
@@ -175,6 +188,7 @@ export type TestResult = {
   retryErrors?: FormattedError[];
   retryCount?: number;
   project: string;
+  meta?: TaskMeta;
   heap?: number;
 };
 

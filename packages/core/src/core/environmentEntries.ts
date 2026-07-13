@@ -16,11 +16,15 @@ export const resolveRunnableProjectsByEntries = async ({
   projects,
   entriesCache,
   globTestSourceEntries,
+  groupEnvironmentComments = true,
+  ignoreInvalidEnvironmentComments = false,
   skipEmptyProjects = true,
 }: {
   projects: ProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
   globTestSourceEntries: GlobTestSourceEntries;
+  groupEnvironmentComments?: boolean;
+  ignoreInvalidEnvironmentComments?: boolean;
   skipEmptyProjects?: boolean;
 }): Promise<{
   projects: ProjectContext[];
@@ -33,9 +37,26 @@ export const resolveRunnableProjectsByEntries = async ({
   );
 
   const browserProjects = projects.filter(isBrowserProject);
+  if (!groupEnvironmentComments) {
+    const shouldRunProject = (project: ProjectContext): boolean =>
+      !skipEmptyProjects || hasEntries(entriesCache, project.environmentName);
+
+    return {
+      projects,
+      entriesCache,
+      browserProjectsToRun: projects.filter(
+        (project) => isBrowserProject(project) && shouldRunProject(project),
+      ),
+      nodeProjectsToRun: projects.filter(
+        (project) => !isBrowserProject(project) && shouldRunProject(project),
+      ),
+    };
+  }
+
   const grouped = await groupProjectEntriesByEnvironment({
     entriesCache,
     projects: projects.filter((project) => !isBrowserProject(project)),
+    ignoreInvalidEnvironmentComments,
   });
 
   const resolvedEntriesCache = grouped.changed
@@ -71,11 +92,13 @@ export const applyEnvironmentGroupsToListEntries = async ({
   context,
   testEntries,
   globTestSourceEntries,
+  ignoreInvalidEnvironmentComments = false,
 }: {
   context: RstestContext;
   testEntries: Record<string, Record<string, string>>;
   globTestSourceEntries: GlobTestSourceEntries;
-}): Promise<void> => {
+  ignoreInvalidEnvironmentComments?: boolean;
+}): Promise<{ changed: boolean }> => {
   if (!context.normalizedConfig.shard) {
     await Promise.all(
       context.projects.map((project) =>
@@ -92,10 +115,11 @@ export const applyEnvironmentGroupsToListEntries = async ({
       ]),
     ),
     projects: context.projects.filter((project) => !isBrowserProject(project)),
+    ignoreInvalidEnvironmentComments,
   });
 
   if (!grouped.changed) {
-    return;
+    return { changed: false };
   }
 
   const nodeEnvironmentNames = new Set(
@@ -118,4 +142,6 @@ export const applyEnvironmentGroupsToListEntries = async ({
     ...context.projects.filter(isBrowserProject),
     ...grouped.projects,
   ];
+
+  return { changed: true };
 };

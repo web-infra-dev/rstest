@@ -20,6 +20,7 @@ import type {
   TestAPIs,
   TestCallbackFn,
   TestCase,
+  TaskMeta,
   TestEachFn,
   TestForFn,
   TestOptions,
@@ -40,6 +41,7 @@ import {
   TestRegisterError,
 } from '../util';
 import { normalizeFixtures } from './fixtures';
+import { cloneTaskMeta, mergeTaskMeta } from './metadata';
 import { registerTestSuiteListener, wrapTimeout } from './task';
 
 type CollectStatus = 'lazy' | 'running';
@@ -192,6 +194,7 @@ export class RunnerRuntime {
       name: ROOT_SUITE_NAME,
       tests: [],
       type: 'suite',
+      meta: {},
     };
   }
 
@@ -205,6 +208,7 @@ export class RunnerRuntime {
     timeout,
     retry,
     repeats,
+    meta,
     location,
   }: {
     name: string;
@@ -216,6 +220,7 @@ export class RunnerRuntime {
     timeout?: number;
     retry?: number;
     repeats?: number;
+    meta?: TaskMeta;
     location?: Location;
   }): void {
     this.checkStatus(name, 'suite');
@@ -225,6 +230,7 @@ export class RunnerRuntime {
       runMode,
       tests: [],
       type: 'suite',
+      meta: cloneTaskMeta(meta),
       each,
       testPath: this.testPath,
       concurrent,
@@ -316,6 +322,7 @@ export class RunnerRuntime {
       test.timeout ??= current.timeout;
       test.retry ??= current.retry;
       test.repeats ??= current.repeats;
+      test.meta = mergeTaskMeta(current.meta, test.meta);
 
       current.tests.push(test);
     }
@@ -387,6 +394,7 @@ export class RunnerRuntime {
     timeout,
     retry,
     repeats,
+    meta,
     runMode = 'run',
     fails = false,
     each = false,
@@ -401,6 +409,7 @@ export class RunnerRuntime {
     timeout?: number;
     retry?: number;
     repeats?: number;
+    meta?: TaskMeta;
     runMode?: TestRunMode;
     each?: boolean;
     fails?: boolean;
@@ -417,6 +426,7 @@ export class RunnerRuntime {
       stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       runMode,
       type: 'case',
+      meta: cloneTaskMeta(meta),
       timeout,
       retry,
       repeats,
@@ -447,7 +457,7 @@ export class RunnerRuntime {
   ) => void {
     return (name, arg2, arg3) => {
       const { fn, options: suiteOptions } = resolveTestArgs(arg2, arg3);
-      const { timeout, retry, repeats } = suiteOptions;
+      const { timeout, retry, repeats, meta } = suiteOptions;
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
         const params = castArray(param) as any[];
@@ -458,6 +468,7 @@ export class RunnerRuntime {
           timeout,
           retry,
           repeats,
+          meta,
           ...options,
           each: true,
         });
@@ -481,7 +492,7 @@ export class RunnerRuntime {
   ) => void {
     return (name, arg2, arg3) => {
       const { fn, options: suiteOptions } = resolveTestArgs(arg2, arg3);
-      const { timeout, retry, repeats } = suiteOptions;
+      const { timeout, retry, repeats, meta } = suiteOptions;
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
 
@@ -491,6 +502,7 @@ export class RunnerRuntime {
           timeout,
           retry,
           repeats,
+          meta,
           ...options,
           each: true,
         });
@@ -515,7 +527,7 @@ export class RunnerRuntime {
   ) => void {
     return (name, arg2, arg3) => {
       const { fn, options: testOptions } = resolveTestArgs(arg2, arg3);
-      const { timeout, retry, repeats } = testOptions;
+      const { timeout, retry, repeats, meta } = testOptions;
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
         const params = castArray(param) as any[];
@@ -531,6 +543,7 @@ export class RunnerRuntime {
           timeout,
           retry,
           repeats,
+          meta,
           ...options,
           each: true,
         });
@@ -555,7 +568,7 @@ export class RunnerRuntime {
   ) => void {
     return (name, arg2, arg3) => {
       const { fn, options: testOptions } = resolveTestArgs(arg2, arg3);
-      const { timeout, retry, repeats } = testOptions;
+      const { timeout, retry, repeats, meta } = testOptions;
       for (let i = 0; i < cases.length; i++) {
         const param = cases[i]!;
 
@@ -566,6 +579,7 @@ export class RunnerRuntime {
           timeout,
           retry,
           repeats,
+          meta,
           ...options,
           each: true,
         });
@@ -614,7 +628,7 @@ const buildRuntimeAPI = (): CollectionAPI => {
   ): TestAPI => {
     const testFn = ((name, arg2, arg3) => {
       const { fn, options: testOptions } = resolveTestArgs(arg2, arg3);
-      const { timeout, retry, repeats } = testOptions;
+      const { timeout, retry, repeats, meta } = testOptions;
       const rt = currentRuntime();
       rt.it({
         name,
@@ -622,6 +636,7 @@ const buildRuntimeAPI = (): CollectionAPI => {
         timeout,
         retry,
         repeats,
+        meta,
         ...options,
         location: options.location ?? rt.getLocation(),
       });
@@ -702,7 +717,7 @@ const buildRuntimeAPI = (): CollectionAPI => {
   ): DescribeAPI => {
     const describeFn = ((name, arg2, arg3) => {
       const { fn, options: suiteOptions } = resolveTestArgs(arg2, arg3);
-      const { timeout, retry, repeats } = suiteOptions;
+      const { timeout, retry, repeats, meta } = suiteOptions;
       const rt = currentRuntime();
       rt.describe({
         name,
@@ -710,6 +725,7 @@ const buildRuntimeAPI = (): CollectionAPI => {
         timeout,
         retry,
         repeats,
+        meta,
         ...options,
         location: options.location ?? rt.getLocation(),
       });

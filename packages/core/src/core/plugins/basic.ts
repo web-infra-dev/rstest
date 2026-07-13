@@ -37,7 +37,12 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
     });
     api.modifyEnvironmentConfig((config, { mergeEnvironmentConfig, name }) => {
       const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
-      const project = context.projects.find((p) => p.environmentName === name)!;
+      const project = context.projects.find((p) => p.environmentName === name);
+
+      if (!project) {
+        return config;
+      }
+
       const {
         normalizedConfig: {
           resolve,

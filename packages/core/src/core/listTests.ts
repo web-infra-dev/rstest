@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
-import { relative } from 'pathe';
+import { normalize, relative, resolve as resolvePath } from 'pathe';
 import { createPool } from '../pool';
 import type {
   FormattedError,
@@ -147,11 +147,13 @@ const collectNodeTests = async ({
   context,
   nodeProjects,
   globTestSourceEntries,
+  onRsbuildConfigResolved,
   onModifyRstestConfigApplied,
 }: {
   context: RstestContext;
   nodeProjects: ProjectContext[];
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+  onRsbuildConfigResolved?: () => Promise<void>;
   onModifyRstestConfigApplied?: () => Promise<void>;
 }) => {
   if (nodeProjects.length === 0) {
@@ -175,6 +177,10 @@ const collectNodeTests = async ({
     }),
     onModifyRstestConfigApplied: async () => {
       await onModifyRstestConfigApplied?.();
+      syncNodeProjects(nodeProjects, context.projects);
+    },
+    onRsbuildConfigResolved: async () => {
+      await onRsbuildConfigResolved?.();
       syncNodeProjects(nodeProjects, context.projects);
     },
   });
@@ -276,10 +282,14 @@ const collectBrowserTests = async ({
   context,
   browserProjects,
   shardedEntries,
+  freezeShardedEntries,
+  filesOnly,
 }: {
   context: RstestContext;
   browserProjects: ProjectContext[];
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
+  freezeShardedEntries?: boolean;
+  filesOnly?: boolean;
 }): Promise<{
   list: ListCommandResult[];
   close: () => Promise<void>;
@@ -299,7 +309,11 @@ const collectBrowserTests = async ({
     embedded: context.embedded,
   });
   validateBrowserConfig(context);
-  return listBrowserTests(context, { shardedEntries });
+  return listBrowserTests(context, {
+    shardedEntries,
+    freezeShardedEntries,
+    filesOnly,
+  });
 };
 
 const collectTestFiles = async ({
@@ -339,6 +353,7 @@ const collectAllTests = async ({
   getShardedEntries,
   collectBrowserAfterConfigHooks,
   onModifyRstestConfigApplied,
+  onRsbuildConfigResolved,
 }: {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
@@ -346,6 +361,7 @@ const collectAllTests = async ({
     Map<string, { entries: Record<string, string> }> | undefined;
   collectBrowserAfterConfigHooks?: boolean;
   onModifyRstestConfigApplied?: () => Promise<void>;
+  onRsbuildConfigResolved?: () => Promise<void>;
 }): Promise<{
   errors?: FormattedError[];
   list: ListCommandResult[];
@@ -365,15 +381,29 @@ const collectAllTests = async ({
       context,
       browserProjects,
       shardedEntries: getShardedEntries?.(),
+      freezeShardedEntries: Boolean(
+        context.normalizedConfig.shard && nodeProjects.length,
+      ),
     });
 
   if (collectBrowserAfterConfigHooks && nodeProjects.length) {
+    let refreshedAfterConfigHooks = false;
     const nodeResult = await collectNodeTests({
       context,
       nodeProjects,
       globTestSourceEntries,
-      onModifyRstestConfigApplied,
+      onRsbuildConfigResolved,
+      onModifyRstestConfigApplied: async () => {
+        refreshedAfterConfigHooks = true;
+        await onModifyRstestConfigApplied?.();
+      },
     });
+    if (
+      !refreshedAfterConfigHooks &&
+      !context.projects.some((project) => project._environmentGroup)
+    ) {
+      await onModifyRstestConfigApplied?.();
+    }
     let browserResult: Awaited<ReturnType<typeof collectBrowser>>;
     try {
       browserResult = await collectBrowser();
@@ -397,6 +427,7 @@ const collectAllTests = async ({
       context,
       nodeProjects,
       globTestSourceEntries,
+      onRsbuildConfigResolved,
       onModifyRstestConfigApplied,
     }),
     collectBrowser(),
@@ -425,6 +456,20 @@ export async function listTests(
   const { rootPath } = context;
   const { shard } = context.normalizedConfig;
   const showProject = context.projects.length > 1;
+
+  const isFilterInsideProject = (filter: string, project: ProjectContext) => {
+    const absoluteFilter = normalize(
+      isAbsolute(filter) ? filter : resolvePath(rootPath, filter),
+    );
+    const relativeFilter = normalize(
+      relative(project.rootPath, absoluteFilter),
+    );
+
+    return (
+      relativeFilter === '' ||
+      (!relativeFilter.startsWith('..') && !isAbsolute(relativeFilter))
+    );
+  };
 
   if (context.relatedResolutionEmpty) {
     const tests: ListedTest[] = [];
@@ -466,7 +511,11 @@ export async function listTests(
   }
 
   const listPlanState = createListProjectPlanState(context);
-  const { globTestSourceEntries, refreshListEntries } = listPlanState;
+  const {
+    globTestSourceEntries,
+    refreshListEntries,
+    validateEnvironmentComments,
+  } = listPlanState;
 
   const nodeProjects = context.projects.filter(
     (project) => !project.normalizedConfig.browser.enabled,
@@ -475,23 +524,87 @@ export async function listTests(
     shard && !filesOnly && nodeProjects.length,
   );
 
+  const applyBrowserFilesOnlyConfigHooks = async () => {
+    const browserProjects = context.projects.filter(
+      (project) => project.normalizedConfig.browser.enabled,
+    );
+
+    if (!browserProjects.length) {
+      return;
+    }
+
+    if (
+      context.fileFilters?.length &&
+      !context.fileFilters.some((filter) =>
+        browserProjects.some((project) =>
+          isFilterInsideProject(filter, project),
+        ),
+      )
+    ) {
+      return;
+    }
+
+    const browserResult = await collectBrowserTests({
+      context,
+      browserProjects,
+      shardedEntries: shard
+        ? listPlanState.getShardedBrowserEntries?.()
+        : undefined,
+      filesOnly: true,
+    });
+    await browserResult.close();
+    await refreshListEntries({
+      silentShardMessage: true,
+      strictEnvironmentComments: true,
+    });
+  };
+
   if (nodeProjects.length && filesOnly) {
+    await refreshListEntries({
+      silentShardMessage: Boolean(shard),
+      strictEnvironmentComments: false,
+    });
+    syncNodeProjects(nodeProjects, context.projects);
+    let refreshedAfterConfigHooks = false;
+
     const rsbuildInstance = await prepareRsbuild({
       context,
       globTestSourceEntries,
       setupFileState: createSetupFileState(),
       targetProjects: nodeProjects,
       onModifyRstestConfigApplied: async () => {
-        await refreshListEntries();
+        refreshedAfterConfigHooks = true;
+        await refreshListEntries({
+          silentShardMessage: !shard,
+          strictEnvironmentComments: false,
+        });
         syncNodeProjects(nodeProjects, context.projects);
       },
+      onRsbuildConfigResolved: validateEnvironmentComments,
     });
     await rsbuildInstance.initConfigs({ action: 'dev' });
-  }
+    if (!refreshedAfterConfigHooks) {
+      await refreshListEntries({
+        silentShardMessage: !shard,
+        strictEnvironmentComments: true,
+      });
+      syncNodeProjects(nodeProjects, context.projects);
+    }
 
-  await refreshListEntries({
-    silentShardMessage: shouldPrintShardAfterConfigHooks,
-  });
+    await applyBrowserFilesOnlyConfigHooks();
+  } else if (filesOnly) {
+    await refreshListEntries({
+      silentShardMessage: Boolean(shard),
+      strictEnvironmentComments: !nodeProjects.length,
+    });
+
+    await applyBrowserFilesOnlyConfigHooks();
+  } else {
+    await refreshListEntries({
+      silentShardMessage: shouldPrintShardAfterConfigHooks,
+      strictEnvironmentComments: !nodeProjects.length,
+    });
+  }
 
   const {
     list,
@@ -510,9 +623,11 @@ export async function listTests(
           ? listPlanState.getShardedBrowserEntries
           : undefined,
         collectBrowserAfterConfigHooks: shouldPrintShardAfterConfigHooks,
+        onRsbuildConfigResolved: validateEnvironmentComments,
         onModifyRstestConfigApplied: () =>
           refreshListEntries({
             silentShardMessage: !shouldPrintShardAfterConfigHooks,
+            strictEnvironmentComments: false,
           }),
       });
 

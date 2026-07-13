@@ -56,6 +56,21 @@ test('runs within 3s', async () => {
 - `timeout?: number` — 单测超时（毫秒），覆盖 [`test.testTimeout`](/config/test/test-timeout)。
 - `retry?: number` — 测试失败时的重跑次数，首次通过即停。覆盖 [`test.retry`](/config/test/retry)。
 - `repeats?: number` — 在通过的前提下额外重跑指定次数，任一次失败则整体判定为失败。每次重跑会完整执行 `beforeEach` / `afterEach`，并各自享有独立的 `retry` 配额。
+- `meta?: TaskMeta` — 0.11.1 新增。测试结果的初始可 JSON 序列化元数据。如果测试位于带有 `meta` 的 `describe` 中，会继承一份套件元数据副本，测试级别的同名字段会覆盖继承值。
+
+`TaskMeta` 和 `TaskMetaValue` 都从 `@rstest/core` 导出，允许使用可 JSON 序列化的值：
+
+```ts
+type TaskMeta = Record<string, TaskMetaValue>;
+
+type TaskMetaValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TaskMetaValue[]
+  | { [key: string]: TaskMetaValue };
+```
 
 ```ts
 test('flaky network call', { retry: 3 }, async () => {
@@ -66,7 +81,13 @@ test('flaky network call', { retry: 3 }, async () => {
 test('stays green across runs', { repeats: 9 }, async () => {
   /* ... */
 });
+
+test('records metadata', { meta: { owner: 'team-a' } }, (context) => {
+  context.task.meta.startedBy = 'runtime';
+});
 ```
+
+在这个例子中，测试结果的 metadata 初始值是 `{ owner: 'team-a' }`。测试运行时又通过 `context.task.meta` 修改同一个对象，因此 Reporter 和 programmatic API 会在 `TestResult.meta` 上收到 `{ owner: 'team-a', startedBy: 'runtime' }`。
 
 `test.each` 与 `test.for` 的第二个参数语义相同，会作用于生成的每个 case。
 
@@ -497,6 +518,8 @@ export interface TestContext {
     projectRoot?: string;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
+    /** Mutable metadata copied to the current test result. Added in 0.11.1. */
+    meta: TaskMeta;
   };
   /** The `expect` API bound to the current test */
   expect: Expect;
@@ -507,6 +530,16 @@ export interface TestContext {
   /** The `onTestFailed` hook bound to the current test */
   onTestFailed: OnTestFailed;
 }
+```
+
+你可以使用 `context.task.meta` 给当前测试结果附加可 JSON 序列化的元数据。既可以修改该对象，也可以整体替换为一个新的 metadata 对象。自定义 Reporter 和 programmatic API 可以从 `TestResult.meta` 读取这些数据：
+
+```ts
+import { test } from '@rstest/core';
+
+test('tracks runtime data', (context) => {
+  context.task.meta.coveredBranches = ['a', 'b'];
+});
 ```
 
 你可以使用 `context.skip()` 在测试运行过程中跳过当前测试。`context.skip()` 之后的代码不会继续执行，测试结果会被标记为 skipped：

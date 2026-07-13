@@ -296,6 +296,16 @@ export class Rstest implements RstestContext {
           (r) => !deletedPathsSet.has(r.testPath),
         );
     }
+
+    // Reporter *presentation* order is deterministic by test path, decoupled
+    // from *execution* order (which is perf-first and cache/timing dependent —
+    // see testSequencer.ts). Without this, the order files appear in reports
+    // would shift run-to-run with the sequencer's scheduling. Sort is stable,
+    // so individual test cases keep their in-file declaration order.
+    const byTestPath = (a: { testPath: string }, b: { testPath: string }) =>
+      a.testPath.localeCompare(b.testPath);
+    this.reporterResults.results.sort(byTestPath);
+    this.reporterResults.testResults.sort(byTestPath);
   }
 }
 

@@ -1477,6 +1477,7 @@ const createBrowserRuntime = async ({
   context,
   projectEntries: initialProjectEntries,
   shardedEntries,
+  freezeShardedEntries,
   tempDir,
   isWatchMode,
   onTriggerRerun,
@@ -1487,6 +1488,7 @@ const createBrowserRuntime = async ({
   context: RstestContext;
   projectEntries: BrowserProjectEntries[];
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
+  freezeShardedEntries?: boolean;
   tempDir: string;
   isWatchMode: boolean;
   onTriggerRerun?: () => Promise<void>;
@@ -1547,9 +1549,11 @@ const createBrowserRuntime = async ({
     browserLaunchOptions = ensureConsistentBrowserLaunchOptions(
       getBrowserProjects(context),
     );
-    const updatedShardedEntries = context.normalizedConfig.shard
-      ? await resolveShardedEntries(context, { silent: true })
-      : shardedEntries;
+    const updatedShardedEntries = freezeShardedEntries
+      ? shardedEntries
+      : context.normalizedConfig.shard
+        ? await resolveShardedEntries(context, { silent: true })
+        : shardedEntries;
     projectEntries = await resolveProjectEntries(
       context,
       updatedShardedEntries,
@@ -2376,6 +2380,7 @@ export const runBrowserController = async (
         context,
         projectEntries,
         shardedEntries: options?.shardedEntries,
+        freezeShardedEntries: options?.freezeShardedEntries,
         tempDir,
         isWatchMode,
         onTriggerRerun: isWatchMode
@@ -4044,6 +4049,8 @@ export const listBrowserTests = async (
   context: RstestContext,
   options?: {
     shardedEntries?: Map<string, { entries: Record<string, string> }>;
+    freezeShardedEntries?: boolean;
+    filesOnly?: boolean;
   },
 ): Promise<ListBrowserTestsResult> => {
   let projectEntries = await resolveProjectEntries(
@@ -4067,6 +4074,7 @@ export const listBrowserTests = async (
       context,
       projectEntries,
       shardedEntries: options?.shardedEntries,
+      freezeShardedEntries: options?.freezeShardedEntries,
       tempDir,
       isWatchMode: false,
       containerDistPath: undefined,
@@ -4089,6 +4097,21 @@ export const listBrowserTests = async (
   }
 
   projectEntries = runtime.projectEntries;
+
+  if (options?.filesOnly) {
+    const list = projectEntries.flatMap((entry) =>
+      entry.testFiles.map((testPath) => ({
+        testPath,
+        project: entry.project.name,
+        tests: [],
+      })),
+    );
+    await destroyBrowserRuntime(runtime);
+    return {
+      list,
+      close: async () => {},
+    };
+  }
 
   const totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
