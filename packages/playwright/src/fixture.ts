@@ -812,72 +812,6 @@ const playwrightFixtures = {
   cleanupBrowser: cleanupBrowserFixture,
   playwright: defaultPlaywrightFixture,
 
-  serve: async (
-    {
-      onTestFailed,
-      onTestFinished,
-      playwright,
-      task,
-    }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
-    use: (serve: PlaywrightServe) => Promise<void>,
-  ) => {
-    const servers: {
-      keepAliveOnDebug?: boolean;
-      released: boolean;
-      server: PlaywrightServeResult;
-    }[] = [];
-
-    const cleanupServers = async () => {
-      const errors: unknown[] = [];
-
-      for (const entry of servers.toReversed()) {
-        if (entry.released) {
-          continue;
-        }
-
-        entry.released = true;
-        try {
-          await cleanupServer({
-            ...entry,
-            playwright,
-          });
-        } catch (error) {
-          errors.push(error);
-        }
-      }
-
-      if (errors.length === 1) {
-        throw errors[0];
-      }
-      if (errors.length > 1) {
-        throw new AggregateError(errors, 'Failed to close Playwright servers.');
-      }
-    };
-
-    onTestFailed(cleanupServers);
-    onTestFinished(cleanupServers);
-
-    const serve: PlaywrightServe = async (entry, options) => {
-      const server = await startStaticServer(entry, options, task.projectRoot);
-
-      servers.push({
-        keepAliveOnDebug: options?.keepAliveOnDebug,
-        released: false,
-        server,
-      });
-
-      return server;
-    };
-
-    try {
-      await use(serve);
-    } finally {
-      if (task.result?.status !== 'fail') {
-        await cleanupServers();
-      }
-    }
-  },
-
   browser: async (
     { playwright }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
     use: (browser: Browser) => Promise<void>,
@@ -897,7 +831,6 @@ const playwrightFixtures = {
   ) => {
     const context = await browser.newContext(playwright.contextOptions);
     const artifacts = getTraceArtifacts(playwright, task);
-    const keepTrace = artifacts?.options.mode !== 'off';
     let activeArtifacts: TraceArtifacts | undefined;
     let traceStarted = false;
     let released = false;
@@ -929,20 +862,29 @@ const playwrightFixtures = {
       released = true;
 
       try {
-        if (keepTrace && artifacts && traceStarted) {
-          activeArtifacts = await reserveTraceArtifacts(artifacts);
-          try {
-            await context.tracing.stop({ path: activeArtifacts.tracePath });
-          } catch (error) {
-            await rm(activeArtifacts.dir, { recursive: true, force: true });
-            activeArtifacts = undefined;
-            throw error;
+        if (artifacts && traceStarted) {
+          const shouldSaveTrace =
+            artifacts.options.mode === 'on' || task.result?.status === 'fail';
+
+          if (shouldSaveTrace) {
+            activeArtifacts = await reserveTraceArtifacts(artifacts);
+            try {
+              await context.tracing.stop({ path: activeArtifacts.tracePath });
+            } catch (error) {
+              await rm(activeArtifacts.dir, { recursive: true, force: true });
+              activeArtifacts = undefined;
+              throw error;
+            }
+          } else {
+            await context.tracing.stop();
           }
-        } else if (artifacts && traceStarted) {
-          await context.tracing.stop();
         }
       } finally {
         await context.close();
+      }
+
+      if (activeArtifacts) {
+        await finalizeTrace();
       }
     };
 
@@ -966,19 +908,8 @@ const playwrightFixtures = {
     try {
       await use(context);
     } finally {
-      await cleanupContext();
-
-      if (
-        activeArtifacts &&
-        artifacts?.options.mode === 'retain-on-failure' &&
-        task.result?.status !== 'fail'
-      ) {
-        await rm(activeArtifacts.dir, { recursive: true, force: true });
-        activeArtifacts = undefined;
-      }
-
-      if (activeArtifacts) {
-        await finalizeTrace();
+      if (task.result?.status !== 'fail') {
+        await cleanupContext();
       }
     }
   },
@@ -1043,6 +974,70 @@ const playwrightFixtures = {
     } finally {
       if (task.result?.status !== 'fail') {
         await cleanupRequest();
+      }
+    }
+  },
+
+  serve: async (
+    {
+      onTestFailed,
+      playwright,
+      task,
+    }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
+    use: (serve: PlaywrightServe) => Promise<void>,
+  ) => {
+    const servers: {
+      keepAliveOnDebug?: boolean;
+      released: boolean;
+      server: PlaywrightServeResult;
+    }[] = [];
+
+    const cleanupServers = async () => {
+      const errors: unknown[] = [];
+
+      for (const entry of servers.toReversed()) {
+        if (entry.released) {
+          continue;
+        }
+
+        entry.released = true;
+        try {
+          await cleanupServer({
+            ...entry,
+            playwright,
+          });
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+
+      if (errors.length === 1) {
+        throw errors[0];
+      }
+      if (errors.length > 1) {
+        throw new AggregateError(errors, 'Failed to close Playwright servers.');
+      }
+    };
+
+    onTestFailed(cleanupServers);
+
+    const serve: PlaywrightServe = async (entry, options) => {
+      const server = await startStaticServer(entry, options, task.projectRoot);
+
+      servers.push({
+        keepAliveOnDebug: options?.keepAliveOnDebug,
+        released: false,
+        server,
+      });
+
+      return server;
+    };
+
+    try {
+      await use(serve);
+    } finally {
+      if (task.result?.status !== 'fail') {
+        await cleanupServers();
       }
     }
   },

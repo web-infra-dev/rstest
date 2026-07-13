@@ -126,6 +126,38 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_TEARDOWN_FAIL_OK');
   });
 
+  it('keeps Playwright resources alive for failure diagnostics', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'failure-diagnostics.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_FAILURE_DIAGNOSTICS_OK');
+  });
+
+  it('does not write retained traces for passing tests', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'trace-retain-pass.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_RETAIN_PASS_OK');
+    expect(cli.stdout).not.toContain('[rstest-playwright] Trace saved:');
+  });
+
   it.skipIf(!shouldRunHeadedPlaywrightTests)(
     'can opt into headed debug mode from a test',
     { timeout: 60_000 },
