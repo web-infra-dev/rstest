@@ -238,9 +238,15 @@ export class RstestApi {
     if (!rstestPath) {
       throw new Error('Failed to resolve rstest path');
     }
+    const debuggerPort = getConfigValue('debuggerPort', this.workspace);
+    const debuggerAddress = getConfigValue('debuggerAddress', this.workspace);
     const execArgv: string[] = [];
     if (startDebugging) {
-      execArgv.push('--inspect-wait');
+      execArgv.push(
+        debuggerPort
+          ? `--inspect-wait=${debuggerAddress ?? '127.0.0.1'}:${debuggerPort}`
+          : '--inspect-wait',
+      );
     }
     const workerPath = path.resolve(__dirname, 'worker.js');
     const configuredExecutable = getConfigValue(
@@ -253,6 +259,10 @@ export class RstestApi {
     const nodeExecArgs = getConfigValue('nodeExecArgs', this.workspace).map(
       (arg) => this.expandWorkspaceFolder(arg),
     );
+    const nodeEnv = getConfigValue('nodeEnv', this.workspace);
+    const debugNodeEnv = startDebugging
+      ? getConfigValue('debugNodeEnv', this.workspace)
+      : undefined;
     logger.debug('Spawning worker process', {
       workerPath,
       nodeExecutable,
@@ -270,6 +280,8 @@ export class RstestApi {
           // if (!process.env.NODE_ENV) process.env.NODE_ENV = 'test'
           NODE_ENV: 'test',
           ...process.env,
+          ...nodeEnv,
+          ...debugNodeEnv,
           // process.env.RSTEST = 'true';
           RSTEST: 'true',
           FORCE_COLOR: '1',
@@ -332,13 +344,18 @@ export class RstestApi {
     // spawn failure (e.g. a misconfigured `nodeExecutable`) during this await is
     // handled instead of throwing uncaught in the extension host.
     if (startDebugging) {
+      const debugOutFiles = getConfigValue('debugOutFiles', this.workspace);
       const startedDebugging = await vscode.debug.startDebugging(
         this.workspace,
         {
           type: 'node',
           name: 'Rstest Debug',
           request: 'attach',
-          processId: rstestProcess.pid,
+          skipFiles: getConfigValue('debugExclude', this.workspace),
+          ...(debugOutFiles.length ? { outFiles: debugOutFiles } : {}),
+          ...(debuggerPort
+            ? { port: debuggerPort, address: debuggerAddress }
+            : { processId: rstestProcess.pid }),
         },
         { testRun },
       );

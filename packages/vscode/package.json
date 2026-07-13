@@ -58,6 +58,60 @@
           },
           "default": []
         },
+        "rstest.nodeEnv": {
+          "markdownDescription": "Environment variables passed to the test worker process, in addition to `process.env`.",
+          "scope": "resource",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": null
+        },
+        "rstest.debugNodeEnv": {
+          "markdownDescription": "Environment variables passed to the test worker process when debugging, in addition to `process.env` and `rstest.nodeEnv`.",
+          "scope": "resource",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": null
+        },
+        "rstest.debugExclude": {
+          "markdownDescription": "Glob patterns for files to skip while debugging tests (maps to the debug session's `skipFiles`).",
+          "scope": "resource",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "<node_internals>/**"
+          ]
+        },
+        "rstest.debugOutFiles": {
+          "markdownDescription": "When source maps are enabled, glob patterns locating the generated JavaScript files (maps to the debug session's `outFiles`).",
+          "scope": "resource",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "rstest.debuggerPort": {
+          "description": "Port the debugger attaches to. Defaults to Node's inspector behavior (9229, or a free port if taken).",
+          "scope": "resource",
+          "type": "number"
+        },
+        "rstest.debuggerAddress": {
+          "description": "TCP/IP address the debugger attaches to. Defaults to localhost.",
+          "scope": "resource",
+          "type": "string"
+        },
         "rstest.configFileGlobPattern": {
           "description": "Glob patterns used to discover config files. Must be an array of strings.",
           "type": "array",
