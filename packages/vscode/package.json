@@ -34,6 +34,28 @@
         "title": "Update Snapshot",
         "category": "Testing",
         "icon": "$(merge)"
+      },
+      {
+        "command": "rstest.openOutput",
+        "title": "Show Output",
+        "category": "Rstest"
+      },
+      {
+        "command": "rstest.revealInTestExplorer",
+        "title": "Reveal in Test Explorer",
+        "category": "Rstest"
+      },
+      {
+        "command": "rstest.copyErrorOutput",
+        "title": "Copy Error Output",
+        "category": "Rstest",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "rstest.copyTestItemErrors",
+        "title": "Copy Test Errors",
+        "category": "Rstest",
+        "icon": "$(copy)"
       }
     ],
     "configuration": {
@@ -41,6 +63,74 @@
       "properties": {
         "rstest.rstestPackagePath": {
           "markdownDescription": "The path to a `package.json` file of a Rstest executable (it's usually inside `node_modules`) in case the extension cannot find it. It will be used to resolve Rstest API paths. This should be used as a last resort fix. Supports `${workspaceFolder}` placeholder.",
+          "scope": "resource",
+          "type": "string"
+        },
+        "rstest.nodeExecutable": {
+          "markdownDescription": "Overrides the `node` binary used to spawn the Rstest test worker process. Provide an absolute path to a Node.js executable (for example, a version-manager or custom build). When empty, the `node` binary on `PATH` is used. Supports `${workspaceFolder}` placeholder.",
+          "scope": "resource",
+          "type": "string"
+        },
+        "rstest.nodeExecArgs": {
+          "description": "Extra arguments passed to the Node executable when spawning the test worker (e.g. --experimental-vm-modules). Must be an array of strings.",
+          "scope": "resource",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "rstest.nodeEnv": {
+          "markdownDescription": "Environment variables passed to the test worker process, in addition to `process.env`.",
+          "scope": "resource",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": null
+        },
+        "rstest.debugNodeEnv": {
+          "markdownDescription": "Environment variables passed to the test worker process when debugging, in addition to `process.env` and `rstest.nodeEnv`.",
+          "scope": "resource",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": null
+        },
+        "rstest.debugExclude": {
+          "markdownDescription": "Glob patterns for files to skip while debugging tests (maps to the debug session's `skipFiles`).",
+          "scope": "resource",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "<node_internals>/**"
+          ]
+        },
+        "rstest.debugOutFiles": {
+          "markdownDescription": "When source maps are enabled, glob patterns locating the generated JavaScript files (maps to the debug session's `outFiles`).",
+          "scope": "resource",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "rstest.debuggerPort": {
+          "description": "Port the debugger attaches to. Defaults to Node's inspector behavior (9229, or a free port if taken).",
+          "scope": "resource",
+          "type": "number"
+        },
+        "rstest.debuggerAddress": {
+          "description": "TCP/IP address the debugger attaches to. Defaults to localhost.",
           "scope": "resource",
           "type": "string"
         },
@@ -82,12 +172,34 @@
         {
           "command": "rstest.updateSnapshot",
           "when": "false"
+        },
+        {
+          "command": "rstest.revealInTestExplorer",
+          "when": "false"
+        },
+        {
+          "command": "rstest.copyErrorOutput",
+          "when": "false"
+        },
+        {
+          "command": "rstest.copyTestItemErrors",
+          "when": "false"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "rstest.revealInTestExplorer",
+          "when": "resourcePath in rstest.testFiles"
         }
       ],
       "testing/message/content": [
         {
           "command": "rstest.updateSnapshot",
           "when": "testMessage == canUpdateSnapshot"
+        },
+        {
+          "command": "rstest.copyErrorOutput",
+          "when": "resourcePath in rstest.testFiles"
         }
       ],
       "testing/message/context": [
@@ -95,6 +207,23 @@
           "command": "rstest.updateSnapshot",
           "group": "inline@1",
           "when": "testMessage == canUpdateSnapshot"
+        },
+        {
+          "command": "rstest.copyErrorOutput",
+          "group": "inline@2",
+          "when": "resourcePath in rstest.testFiles"
+        }
+      ],
+      "testing/item/context": [
+        {
+          "command": "rstest.copyTestItemErrors",
+          "when": "controllerId == 'rstest'"
+        }
+      ],
+      "testing/item/gutter": [
+        {
+          "command": "rstest.copyTestItemErrors",
+          "when": "controllerId == 'rstest'"
         }
       ]
     }
@@ -104,7 +233,7 @@
     "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
   ],
   "devDependencies": {
-    "@rsbuild/core": "~2.1.4",
+    "@rsbuild/core": "~2.1.5",
     "@rslib/core": "0.23.2",
     "@rstest/core": "workspace:*",
     "@swc/core": "^1.15.43",

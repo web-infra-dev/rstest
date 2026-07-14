@@ -1131,7 +1131,7 @@ Licensed under MIT license in the repository at https://github.com/paulmillr/rea
 
 ### rslog
 
-Licensed under MIT license in the repository at https://github.com/rstackjs/rslog.git.
+Licensed under MIT license in the repository at git+https://github.com/rstackjs/rslog.git.
 
 > MIT License
 >

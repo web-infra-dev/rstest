@@ -7,6 +7,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('onTestFinished', () => {
+  it('should run fixture teardown before user callbacks', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'onTestFinished.fixture.test'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(
+      cli.stdout.split('\n').filter((line) => line.startsWith('[')),
+    ).toEqual(['[fixture] teardown', '[onTestFinished] cleanup']);
+  });
+
   it('onTestFinished should be invoked in the correct order', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',
@@ -27,6 +44,8 @@ describe('onTestFinished', () => {
         "[afterEach] root",
         "[onTestFinished] in level A",
         "[afterEach] root",
+        "[afterEach] root",
+        "[onTestFinished] outer",
       ]
     `);
   });

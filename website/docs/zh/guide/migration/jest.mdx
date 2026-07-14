@@ -149,7 +149,7 @@ export default defineConfig({
 
 Rstest 默认使用 `swc` 进行代码转换，这与 Jest 的 `babel-jest` 不同。大多数情况下，你不需要做任何更改。你可以通过 [tools.swc](/config/build/tools#toolsswc) 配置你的 swc 选项。
 
-Rstest 会转换进入 bundle graph 的文件。如果你的项目之前依赖 `ts-jest` 的运行时转换，请参考 [bundle graph 之外的代码使用 Node.js 原生行为](/guide/advanced/troubleshooting#bundle-graph-之外的代码使用-nodejs-原生行为)。
+Rstest 会转换进入 bundle graph 的文件。如果你的项目之前依赖 `ts-jest` 的运行时转换，请参考 [bundle graph 之外的代码使用 Node.js 原生行为](/guide/debug/troubleshooting#bundle-graph-之外的代码使用-nodejs-原生行为)。
 
 ```diff
 export default {

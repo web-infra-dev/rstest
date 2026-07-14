@@ -245,6 +245,68 @@ e2e('mobile page', async ({ page }) => {
 | `contextOptions` | 传给 `browser.newContext()` 的选项。        |
 | `requestOptions` | 传给 `request.newContext()` 的选项。        |
 | `debug`          | 用于本地 headed 调试的便捷选项。            |
+| `trace`          | 捕获用于调试的 Playwright trace 产物。      |
+
+## Trace 调试
+
+<ApiMeta addedVersion="0.11.2" />
+
+设置 `playwright.trace` 或 `RSTEST_PLAYWRIGHT_TRACE` 后，`context` fixture 会捕获 Playwright 官方的 `trace.zip` 产物。这个 trace 覆盖默认的 `page` fixture，也覆盖通过 `context.newPage()` 创建的页面。优先级是 fixture 配置高于环境变量，最后默认关闭。
+
+```ts
+import { expect, test } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+const e2e = test.extend({
+  playwright: {
+    trace: process.env.CI ? 'retain-on-failure' : 'off',
+  } satisfies PlaywrightOptions,
+});
+
+e2e('checkout', async ({ page }) => {
+  await page.goto('http://localhost:3000/checkout');
+  await expect(page.locator('main')).toBeAttached();
+});
+```
+
+如果只是临时用命令行风格打开调试，不想修改测试代码，可以设置 `RSTEST_PLAYWRIGHT_TRACE`：
+
+```bash
+RSTEST_PLAYWRIGHT_TRACE=retain-on-failure rstest
+```
+
+当 trace 由环境变量开启时，可以用 `RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR` 覆盖默认输出目录：
+
+```bash
+RSTEST_PLAYWRIGHT_TRACE=on RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR=.rstest/playwright-traces rstest
+```
+
+`trace` 支持 `'off'`、`'on'`、`'retain-on-failure'`，也支持传入 options 对象：
+
+```ts
+const e2e = test.extend({
+  playwright: {
+    trace: {
+      mode: 'retain-on-failure',
+      outputDir: '.rstest/playwright-traces',
+      screenshots: true,
+      snapshots: true,
+      sources: true,
+    },
+  } satisfies PlaywrightOptions,
+});
+```
+
+默认情况下，trace 会写入 `.rstest/playwright-traces/<test-name>-<hash>/`。如果同一个测试保存了多份 trace，例如 retry 产生的多次尝试，后续 trace 会使用数字后缀避免覆盖之前的产物。每次保存都会包含：
+
+- `trace.zip`：Playwright 官方 trace 产物。可以用 `npx playwright show-trace <path-to-trace.zip>` 打开。
+
+启用 `summary`（默认行为）时，该目录还会包含：
+
+- `trace-summary.json`：面向工具和 AI 助手的 Rstest 测试元信息、产物路径和错误堆栈。
+- `debug.md`：面向开发者阅读的调试报告。
+
+`trace.zip` 不是通用的 Chrome/Perfetto trace，而是 Playwright 自己的 trace 格式，推荐使用 Playwright Trace Viewer 查看。
 
 ## 本地应用 server
 

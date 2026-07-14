@@ -44,6 +44,21 @@ import {
 
 const RealDate = Date;
 
+/**
+ * Sample heap usage when `logHeapUsage` is enabled. Guarded so the shared
+ * runner is safe when bundled into the web-target browser runtime, where
+ * `process.memoryUsage` does not exist and an unguarded call would crash
+ * (see #1389).
+ */
+export const sampleHeapUsed = (
+  logHeapUsage: boolean | undefined,
+): number | undefined =>
+  logHeapUsage &&
+  typeof process !== 'undefined' &&
+  typeof process.memoryUsage === 'function'
+    ? process.memoryUsage().heapUsed
+    : undefined;
+
 export class TestRunner {
   /** current test case */
   private _test: TestCase | undefined;
@@ -271,9 +286,7 @@ export class TestRunner {
 
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]
         .reverse()
-        .concat(cleanups)
-        .concat(fixtureCleanups)
-        .concat(test.onFinished);
+        .concat(cleanups);
 
       test.context.task.result = result;
       try {
@@ -284,6 +297,29 @@ export class TestRunner {
         result.status = 'fail';
         result.errors ??= [];
         result.errors.push(...(await formatTestError(error)));
+        test.context.task.result = result;
+      }
+
+      for (const fn of fixtureCleanups) {
+        try {
+          await fn();
+        } catch (error) {
+          result.status = 'fail';
+          result.errors ??= [];
+          result.errors.push(...(await formatTestError(error)));
+          test.context.task.result = result;
+        }
+      }
+
+      for (const fn of [...test.onFinished]) {
+        try {
+          await fn(test.context);
+        } catch (error) {
+          result.status = 'fail';
+          result.errors ??= [];
+          result.errors.push(...(await formatTestError(error)));
+          test.context.task.result = result;
+        }
       }
 
       if (skipped) {
@@ -570,9 +606,7 @@ export class TestRunner {
             if (result.status === 'pass' && retryErrors.length > 0) {
               result.retryErrors = retryErrors;
             }
-            result.heap = state.runtimeConfig.logHeapUsage
-              ? process.memoryUsage().heapUsed
-              : undefined;
+            result.heap = sampleHeapUsed(state.runtimeConfig.logHeapUsage);
             hooks.onTestCaseResult?.(result);
             results.push(result);
             return result;
@@ -603,9 +637,7 @@ export class TestRunner {
         name: '',
         status: 'fail',
         results,
-        heap: state.runtimeConfig.logHeapUsage
-          ? process.memoryUsage().heapUsed
-          : undefined,
+        heap: sampleHeapUsed(state.runtimeConfig.logHeapUsage),
         errors: [
           {
             message: `No test suites found in file: ${testPath}`,
@@ -639,9 +671,7 @@ export class TestRunner {
         project,
         testPath,
         name: '',
-        heap: state.runtimeConfig.logHeapUsage
-          ? process.memoryUsage().heapUsed
-          : undefined,
+        heap: sampleHeapUsed(state.runtimeConfig.logHeapUsage),
         status: errors.length ? 'fail' : getTestStatus(results, defaultStatus),
         results,
         snapshotResult,
@@ -773,7 +803,7 @@ export class TestRunner {
       wrapTimeout({
         name: 'onTestFinished hook',
         fn,
-        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
+        timeout: timeout ?? this.workerState!.runtimeConfig.hookTimeout,
         stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );
@@ -791,7 +821,7 @@ export class TestRunner {
       wrapTimeout({
         name: 'onTestFailed hook',
         fn,
-        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
+        timeout: timeout ?? this.workerState!.runtimeConfig.hookTimeout,
         stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );

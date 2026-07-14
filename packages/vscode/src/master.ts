@@ -1,10 +1,12 @@
 import { type ChildProcess, spawn } from 'node:child_process';
+import net from 'node:net';
 import path, { dirname } from 'node:path';
 import { type BirpcReturn, createBirpc } from 'birpc';
 import regexpEscape from 'core-js-pure/actual/regexp/escape';
 import vscode from 'vscode';
 import { getConfigValue } from './config';
 import type { RstestDiagnostics } from './diagnostics';
+import type { TestErrorStore } from './errorStore';
 import { logger } from './logger';
 import type { Project } from './project';
 import { TestRunReporter } from './testRunReporter';
@@ -16,8 +18,27 @@ import type { Worker } from './worker';
 
 export const runningWorkers = new Set<BirpcReturn<Worker, TestRunReporter>>();
 
+// Default host for a fixed debug port. The spawn (`--inspect-wait`), the port
+// preflight, and the attach config must all use the same host: on a dual-stack
+// machine `localhost` can resolve to `::1` while the worker listens on IPv4, so
+// the debugger would attach to the wrong endpoint. Prefer an explicit IPv4
+// literal over `localhost` so both ends agree.
+const DEFAULT_DEBUG_HOST = '127.0.0.1';
+
+// Probe whether a fixed inspector port can be bound. `--inspect-wait=host:port`
+// does not fall back when the port is taken: Node reports address-in-use and
+// runs the worker without the inspector, and attaching by that port could hit an
+// unrelated process. Preflight so we fail with a clear message instead.
+const isPortAvailable = (port: number, host?: string): Promise<boolean> =>
+  new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => resolve(false));
+    server.once('listening', () => server.close(() => resolve(true)));
+    server.listen(port, host ?? DEFAULT_DEBUG_HOST);
+  });
+
 export class RstestApi {
-  private childProcess: ChildProcess | null = null;
+  private childProcesses = new Set<ChildProcess>();
   private coreVersionTooLowWarned = false;
 
   constructor(
@@ -26,6 +47,10 @@ export class RstestApi {
     private configFilePath: string,
     private project: Project,
   ) {}
+
+  private expandWorkspaceFolder(value: string): string {
+    return value.replaceAll('${workspaceFolder}', this.workspace.uri.fsPath);
+  }
 
   private resolveRstestPath(): string {
     // TODO: support Yarn PnP
@@ -37,10 +62,8 @@ export class RstestApi {
       );
 
       if (configuredPackagePath) {
-        // Support ${workspaceFolder} placeholder
-        configuredPackagePath = configuredPackagePath.replace(
-          '${workspaceFolder}',
-          this.workspace.uri.fsPath,
+        configuredPackagePath = this.expandWorkspaceFolder(
+          configuredPackagePath,
         );
         // Validate that the path points to package.json
         if (!configuredPackagePath.endsWith('package.json')) {
@@ -142,6 +165,7 @@ export class RstestApi {
     kind,
     continuous,
     diagnostics,
+    errorStore,
     createTestRun,
   }: {
     run: vscode.TestRun;
@@ -153,6 +177,7 @@ export class RstestApi {
     kind?: vscode.TestRunProfileKind;
     continuous?: boolean;
     diagnostics?: RstestDiagnostics;
+    errorStore?: TestErrorStore;
     createTestRun?: () => vscode.TestRun;
   }) {
     let onFinish!: () => void;
@@ -179,6 +204,7 @@ export class RstestApi {
       createTestRun,
       this.configFilePath,
       applyDiagnostic ? diagnostics : undefined,
+      errorStore,
     );
 
     const worker = await this.createChildProcess(
@@ -236,48 +262,67 @@ export class RstestApi {
     if (!rstestPath) {
       throw new Error('Failed to resolve rstest path');
     }
+    const debuggerPort = getConfigValue('debuggerPort', this.workspace);
+    const debuggerAddress = getConfigValue('debuggerAddress', this.workspace);
+    if (
+      startDebugging &&
+      debuggerPort &&
+      !(await isPortAvailable(debuggerPort, debuggerAddress))
+    ) {
+      const at = `${debuggerAddress ?? DEFAULT_DEBUG_HOST}:${debuggerPort}`;
+      const message = `Rstest debug port ${at} is already in use. Set a free "rstest.debuggerPort" or free the port.`;
+      vscode.window.showErrorMessage(message);
+      throw new Error(message);
+    }
     const execArgv: string[] = [];
     if (startDebugging) {
-      execArgv.push('--inspect-wait');
+      execArgv.push(
+        debuggerPort
+          ? `--inspect-wait=${debuggerAddress ?? DEFAULT_DEBUG_HOST}:${debuggerPort}`
+          : '--inspect-wait',
+      );
     }
     const workerPath = path.resolve(__dirname, 'worker.js');
+    const configuredExecutable = getConfigValue(
+      'nodeExecutable',
+      this.workspace,
+    );
+    const nodeExecutable = configuredExecutable
+      ? this.expandWorkspaceFolder(configuredExecutable)
+      : 'node';
+    const nodeExecArgs = getConfigValue('nodeExecArgs', this.workspace).map(
+      (arg) => this.expandWorkspaceFolder(arg),
+    );
+    const nodeEnv = getConfigValue('nodeEnv', this.workspace);
+    const debugNodeEnv = startDebugging
+      ? getConfigValue('debugNodeEnv', this.workspace)
+      : undefined;
     logger.debug('Spawning worker process', {
       workerPath,
+      nodeExecutable,
+      nodeExecArgs,
     });
-    const rstestProcess = spawn('node', [...execArgv, workerPath], {
-      cwd: this.cwd,
-      stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-      serialization: 'advanced',
-      env: {
-        // same as packages/core/src/cli/prepare.ts
-        // if (!process.env.NODE_ENV) process.env.NODE_ENV = 'test'
-        NODE_ENV: 'test',
-        ...process.env,
-        // process.env.RSTEST = 'true';
-        RSTEST: 'true',
-        FORCE_COLOR: '1',
-      },
-    });
-    this.childProcess = rstestProcess;
-
-    if (startDebugging) {
-      const startedDebugging = await vscode.debug.startDebugging(
-        this.workspace,
-        {
-          type: 'node',
-          name: 'Rstest Debug',
-          request: 'attach',
-          processId: rstestProcess.pid,
+    const rstestProcess = spawn(
+      nodeExecutable,
+      [...nodeExecArgs, ...execArgv, workerPath],
+      {
+        cwd: this.cwd,
+        stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+        serialization: 'advanced',
+        env: {
+          // same as packages/core/src/cli/prepare.ts
+          // if (!process.env.NODE_ENV) process.env.NODE_ENV = 'test'
+          NODE_ENV: 'test',
+          ...process.env,
+          ...nodeEnv,
+          ...debugNodeEnv,
+          // process.env.RSTEST = 'true';
+          RSTEST: 'true',
+          FORCE_COLOR: '1',
         },
-        { testRun },
-      );
-      if (!startedDebugging) {
-        rstestProcess.kill();
-        throw new Error(
-          `Failed to attach debugger to test worker process (PID: ${rstestProcess.pid})`,
-        );
-      }
-    }
+      },
+    );
+    this.childProcesses.add(rstestProcess);
 
     rstestProcess.stdout?.on('data', (d) => {
       const content = d.toString();
@@ -290,13 +335,17 @@ export class RstestApi {
     });
 
     const worker = createBirpc<Worker, TestRunReporter>(testRunReporter, {
-      // use this.childProcess to catch post is called after process killed
-      post: (data) => this.childProcess?.send(data),
+      // Target the local process rather than the shared field, which is
+      // reassigned on every spawn; skip once the IPC channel is gone.
+      post: (data) => {
+        if (rstestProcess.connected) rstestProcess.send(data);
+      },
       on: (fn) => rstestProcess.on('message', fn),
       bind: 'functions',
       timeout: 600_000,
       off: () => {
         rstestProcess.kill();
+        this.childProcesses.delete(rstestProcess);
         runningWorkers.delete(worker);
       },
     });
@@ -309,15 +358,59 @@ export class RstestApi {
       configFilePath: this.configFilePath,
     });
 
+    rstestProcess.on('error', (error) => {
+      logger.error('Worker process error', error);
+      vscode.window.showErrorMessage(
+        `Rstest worker process failed: ${error.message}`,
+      );
+      // Reject any in-flight birpc calls instead of letting them hang; $close
+      // runs the `off` handler, which removes the process from the Set.
+      if (!worker.$closed) worker.$close();
+    });
+
     rstestProcess.on('exit', (code, signal) => {
       logger.debug('Worker process exited', { code, signal });
+      // Unblock pending calls when the worker exits before we closed it.
+      if (!worker.$closed) worker.$close();
     });
+
+    // Attach the debugger only after the error/exit handlers are wired, so a
+    // spawn failure (e.g. a misconfigured `nodeExecutable`) during this await is
+    // handled instead of throwing uncaught in the extension host.
+    if (startDebugging) {
+      const debugOutFiles = getConfigValue('debugOutFiles', this.workspace);
+      const startedDebugging = await vscode.debug.startDebugging(
+        this.workspace,
+        {
+          type: 'node',
+          name: 'Rstest Debug',
+          request: 'attach',
+          skipFiles: getConfigValue('debugExclude', this.workspace),
+          ...(debugOutFiles.length ? { outFiles: debugOutFiles } : {}),
+          ...(debuggerPort
+            ? {
+                port: debuggerPort,
+                address: debuggerAddress ?? DEFAULT_DEBUG_HOST,
+              }
+            : { processId: rstestProcess.pid }),
+        },
+        { testRun },
+      );
+      if (!startedDebugging) {
+        rstestProcess.kill();
+        throw new Error(
+          `Failed to attach debugger to test worker process (PID: ${rstestProcess.pid})`,
+        );
+      }
+    }
 
     return worker;
   }
 
   public dispose() {
-    this.childProcess?.kill();
-    this.childProcess = null;
+    for (const child of this.childProcesses) {
+      child.kill();
+    }
+    this.childProcesses.clear();
   }
 }

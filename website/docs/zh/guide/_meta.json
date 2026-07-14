@@ -21,6 +21,11 @@
   },
   {
     "type": "dir-section-header",
+    "name": "debug",
+    "label": "调试"
+  },
+  {
+    "type": "dir-section-header",
     "name": "advanced",
     "label": "进阶"
   },

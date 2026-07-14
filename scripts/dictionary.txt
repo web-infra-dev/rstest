@@ -54,6 +54,7 @@ envinfo
 estree
 ewma
 facti
+fanout
 fastpaths
 fi3ework
 filenaming
@@ -85,6 +86,8 @@ liyincode
 llms
 lockfiles
 longpaths
+macrotask
+macrotasks
 manypkg
 mattcompiles
 memfs
@@ -133,6 +136,7 @@ PROCESSWRAP
 publint
 PWDEBUG
 pxtorem
+pytest
 quasis
 quxx
 RANDOMBYTESREQUEST
@@ -186,14 +190,18 @@ tsbuildinfo
 tsconfck
 tsdoc
 tsup
+unawaited
 unencapsulated
+unhandledrejection
 Unhashed
 unocss
 unpatch
 unplugin
 unpredictibly
+unrouted
 unsharded
 unshift
+unsilenceable
 unstub
 upath
 vitest

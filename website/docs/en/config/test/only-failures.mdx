@@ -1,0 +1,93 @@
+---
+description: 'Re-run only the test files that failed in the previous run.'
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# onlyFailures
+
+<ApiMeta addedVersion="0.11.2" />
+
+- **Type:** `boolean`
+- **Default:** `false`
+- **CLI:** `-f, --onlyFailures`
+
+Re-run only the test files that failed in the previous run.
+
+When a change breaks several test files, verifying each fix normally costs you a full-suite run. With `onlyFailures`, Rstest remembers which files failed last time and runs only those, so each fix-and-verify round stays fast.
+
+import { Tab, Tabs } from '@theme';
+
+<Tabs defaultValue='CLI'>
+  <Tab label="CLI">
+  ```bash
+  npx rstest --onlyFailures
+  # or the short flag
+  npx rstest -f
+  ```
+  </Tab>
+  <Tab label="rstest.config.ts">
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  onlyFailures: true,
+});
+```
+  </Tab>
+</Tabs>
+
+## Example
+
+A change broke 2 of 14 test files:
+
+```bash
+npx rstest
+
+ Test Files 2 failed | 12 passed
+```
+
+Fix the code, then verify with `-f` — only the 2 previously failed files run:
+
+```bash
+npx rstest -f
+
+onlyFailures: running 2 of 14 test files (12 deselected).
+```
+
+Repeat until everything passes. Once no failure is left on record, the next `-f` run falls back to the full suite:
+
+```bash
+npx rstest -f
+
+No failed tests found from the previous run. Running all tests.
+```
+
+## Which files are re-run
+
+`onlyFailures` selects whole test files:
+
+- If any test in a file failed, the entire file re-runs — including the tests in it that passed. Re-running individual failed test cases is not supported.
+- A file that has never been run (for example, one you just added) has no failure record and is not selected. Run once without `onlyFailures` to include it.
+
+:::info Browser Mode
+Results from [Browser Mode](/config/test/browser) projects are not recorded yet, so `onlyFailures` never deselects their files — browser projects always run all of their test files.
+:::
+
+## Failure records
+
+Rstest keeps each test file's latest pass/fail state in `node_modules/.cache/.rstest-results/` under the workspace root, refreshed after every run. In a multi-project setup, all projects share this single record file, with entries keyed by project. Delete the directory to reset the records.
+
+Partial runs do not overwrite the records, so `onlyFailures` always works from the last complete run:
+
+- Runs filtered with [testNamePattern](/config/test/test-name-pattern) (`-t`), which execute only some of the tests in each file.
+- Runs aborted by [bail](/config/test/bail), which never reached the remaining files.
+
+## Combining with other selection
+
+`onlyFailures` only takes effect on full runs. When the run scope is specified in any of the following ways, that scope takes precedence and `onlyFailures` is ignored with a warning (the same applies when `onlyFailures` is set in the config file):
+
+- **File filters** — `npx rstest some.test.ts -f` runs exactly the files you named, whether they failed last time or not.
+- **`--changed` / `--related`** — the change-based selection already defines the scope. Run a plain `npx rstest -f` afterwards if you only want the failures from that run.
+- **[testNamePattern](/config/test/test-name-pattern) (`-t`)** — a name pattern must search every file for matching tests; narrowing to previously failed files would silently skip matches in files that passed.
+- **Watch mode** — watch already re-runs the files you edit and provides a shortcut for re-running failed tests.

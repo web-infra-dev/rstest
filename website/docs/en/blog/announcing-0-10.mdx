@@ -187,7 +187,7 @@ The flag is CLI-only and opt-in. Each run produces per-phase slices per file (`p
 
 In a TTY, Rstest starts a local helper so that the printed link opens the trace directly in the Perfetto UI. In CI, the trace is written to `<rootPath>/.rstest/trace-<ts>.json`, which you can upload as an artifact.
 
-For other profiling needs, such as CPU time distribution with samply, memory with `--heap-prof`, or step-through debugging with `--inspect`, please refer to the [Profiler](/guide/advanced/profiling#profiler) section.
+For other profiling needs, such as CPU time distribution with samply, memory with `--heap-prof`, or step-through debugging with `--inspect`, please refer to the [Profiler](/guide/debug/profiling#profiler) section.
 
 ## Clearer worker output attribution \{#worker-pool}
 

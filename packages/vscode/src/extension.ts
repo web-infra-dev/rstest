@@ -1,11 +1,13 @@
 import vscode from 'vscode';
 import { RstestDiagnostics } from './diagnostics';
+import { TestErrorStore, testMessageText } from './errorStore';
 import { logger } from './logger';
 import { runningWorkers } from './master';
 import { Project, WorkspaceManager } from './project';
 import { RstestFileCoverage } from './testRunReporter';
 import {
   gatherTestItems,
+  ProjectFolder,
   TestCase,
   TestFile,
   TestFolder,
@@ -24,12 +26,14 @@ export function deactivate() {
 }
 
 class Rstest {
+  private context: vscode.ExtensionContext;
   private ctrl: vscode.TestController;
   private workspaces = new Map<string, WorkspaceManager>();
   private workspaceWatcher?: vscode.Disposable;
   private runProfile!: vscode.TestRunProfile;
   private coverageProfile!: vscode.TestRunProfile;
   private diagnostics = new RstestDiagnostics();
+  private errorStore = new TestErrorStore();
 
   // Add getter to access the test controller for testing
   get testController() {
@@ -37,9 +41,11 @@ class Rstest {
   }
 
   constructor(context: vscode.ExtensionContext) {
+    this.context = context;
     this.ctrl = vscode.tests.createTestController('rstest', 'Rstest');
     context.subscriptions.push(this.ctrl);
     context.subscriptions.push(this.diagnostics);
+    context.subscriptions.push(logger);
 
     this.startScanWorkspaces();
     this.setupTestController();
@@ -57,15 +63,25 @@ class Rstest {
       true,
     );
 
-    vscode.commands.registerCommand(
-      'rstest.updateSnapshot',
-      (params: { test: vscode.TestItem; message: vscode.TestMessage }) =>
-        this.startTestRun(
-          new vscode.TestRunRequest([params.test], undefined, this.runProfile),
-          new vscode.CancellationTokenSource().token,
-          true,
-        ),
+    this.context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'rstest.updateSnapshot',
+        (params: { test: vscode.TestItem; message: vscode.TestMessage }) => {
+          const cancellation = new vscode.CancellationTokenSource();
+          return this.startTestRun(
+            new vscode.TestRunRequest(
+              [params.test],
+              undefined,
+              this.runProfile,
+            ),
+            cancellation.token,
+            true,
+          ).finally(() => cancellation.dispose());
+        },
+      ),
     );
+
+    this.registerCommands();
 
     this.ctrl.createRunProfile(
       'Debug Tests',
@@ -93,6 +109,87 @@ class Rstest {
     };
   }
 
+  private registerCommands() {
+    const register = (
+      command: string,
+      callback: (...args: any[]) => unknown,
+    ) => {
+      this.context.subscriptions.push(
+        vscode.commands.registerCommand(command, callback),
+      );
+    };
+
+    register('rstest.openOutput', () => logger.show());
+
+    register('rstest.revealInTestExplorer', async (uri?: vscode.Uri) => {
+      const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+      const item = target && this.findTestFileItem(target);
+      if (!item) {
+        vscode.window.showInformationMessage(
+          'This file is not a known Rstest test file.',
+        );
+        return;
+      }
+      await vscode.commands.executeCommand('vscode.revealTestInExplorer', item);
+    });
+
+    register(
+      'rstest.copyErrorOutput',
+      async (args?: { test: vscode.TestItem; message: vscode.TestMessage }) => {
+        if (!args?.message) return;
+        await vscode.env.clipboard.writeText(testMessageText(args.message));
+      },
+    );
+
+    register(
+      'rstest.copyTestItemErrors',
+      async (testItem?: vscode.TestItem) => {
+        if (!testItem) return;
+        const errors = this.collectErrors(testItem);
+        if (!errors.length) {
+          vscode.window.showInformationMessage('No test errors to copy.');
+          return;
+        }
+        await vscode.env.clipboard.writeText(errors.join('\n\n'));
+      },
+    );
+  }
+
+  // Errors for a test item plus any descendants (a file/suite item aggregates
+  // its leaves' failures).
+  private collectErrors(item: vscode.TestItem): string[] {
+    const errors: string[] = [];
+    for (const test of [item, ...gatherTestItems(item.children)]) {
+      for (const message of this.errorStore.get(test)) {
+        errors.push(testMessageText(message));
+      }
+    }
+    return errors;
+  }
+
+  private findTestFileItem(uri: vscode.Uri): vscode.TestItem | undefined {
+    const key = uri.toString();
+    for (const workspace of this.workspaces.values()) {
+      for (const project of workspace.projects.values()) {
+        const item = project.testFiles.get(key)?.testItem;
+        if (item) return item;
+      }
+    }
+    return undefined;
+  }
+
+  private updateTestFilesContext() {
+    const paths: string[] = [];
+    for (const workspace of this.workspaces.values()) {
+      for (const project of workspace.projects.values()) {
+        for (const file of project.testFiles.values()) {
+          paths.push(file.uri.fsPath);
+        }
+      }
+    }
+    vscode.commands.executeCommand('setContext', 'rstest.testFiles', paths);
+  }
+
   private startScanWorkspaces() {
     // dispose previous data on refresh
     for (const [workspacePath, workspace] of this.workspaces) {
@@ -117,6 +214,7 @@ class Rstest {
           this.refreshAllWorkspaces();
         },
       );
+      this.context.subscriptions.push(this.workspaceWatcher);
     }
   }
 
@@ -126,7 +224,9 @@ class Rstest {
 
     this.workspaces.set(
       workspaceFolder.uri.toString(),
-      new WorkspaceManager(workspaceFolder, this.ctrl),
+      new WorkspaceManager(workspaceFolder, this.ctrl, () =>
+        this.updateTestFilesContext(),
+      ),
     );
   }
 
@@ -143,6 +243,7 @@ class Rstest {
     for (const workspace of this.workspaces.values()) {
       workspace.refresh(vscode.workspace.workspaceFolders?.length === 1);
     }
+    this.updateTestFilesContext();
   }
 
   private startTestRun = async (
@@ -175,6 +276,7 @@ class Rstest {
       kind: request.profile?.kind,
       continuous: request.continuous,
       diagnostics: this.diagnostics,
+      errorStore: this.errorStore,
       createTestRun: () =>
         createTestRun(
           new vscode.TestRunRequest(
@@ -207,6 +309,9 @@ class Rstest {
           await data.api.runTest({
             ...commonOptions,
           });
+        } else if (data instanceof ProjectFolder) {
+          // grouping folder spans multiple projects; recurse into children
+          await discoverTests(gatherTestItems(test.children, false));
         } else if (data instanceof TestFolder) {
           await data.api.runTest({
             ...commonOptions,

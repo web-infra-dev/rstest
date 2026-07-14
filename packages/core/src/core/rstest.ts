@@ -175,6 +175,13 @@ export class Rstest implements RstestContext {
           config.isolate = rstestConfig.isolate;
           config.coverage = rstestConfig.coverage;
           config.bail = rstestConfig.bail;
+          // `resolveSnapshotPath` and `onConsoleLog` are omitted from
+          // ProjectConfig (root-only), so they must be copied down; otherwise the
+          // per-project event pump reads `undefined` and silently drops the root
+          // behavior in multi-project mode (default snapshot paths / unfiltered
+          // console), diverging from the browser host which reads root config.
+          config.resolveSnapshotPath = rstestConfig.resolveSnapshotPath;
+          config.onConsoleLog = rstestConfig.onConsoleLog;
 
           config.source ??= {};
           if (!config.source.tsconfigPath) {

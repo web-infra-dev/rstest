@@ -341,6 +341,15 @@ export interface RstestConfig {
    */
   passWithNoTests?: boolean;
   /**
+   * Run only the test files that failed in the previous run, backed by the
+   * persistent results cache. File-level granularity: the whole failed test
+   * file re-runs. When there are no previously-failed files (or no cache yet),
+   * all tests run with a notice.
+   *
+   * @default false
+   */
+  onlyFailures?: boolean;
+  /**
    * Pool used to run tests in.
    */
   pool?: RstestPoolType | RstestPoolOptions;

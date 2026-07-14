@@ -4,9 +4,11 @@ import {
   fallback,
   type InferOutput,
   literal,
+  number,
   object,
   optional,
   parse,
+  record,
   string,
   union,
 } from 'valibot';
@@ -18,6 +20,14 @@ const configSchema = object({
   // The path to a package.json file of a Rstest executable.
   // Used as a last resort if the extension cannot auto-detect @rstest/core.
   rstestPackagePath: fallback(optional(string()), undefined),
+  nodeExecutable: fallback(optional(string()), undefined),
+  nodeExecArgs: fallback(array(string()), []),
+  nodeEnv: fallback(optional(record(string(), string())), undefined),
+  debugNodeEnv: fallback(optional(record(string(), string())), undefined),
+  debuggerPort: fallback(optional(number()), undefined),
+  debuggerAddress: fallback(optional(string()), undefined),
+  debugExclude: fallback(array(string()), ['<node_internals>/**']),
+  debugOutFiles: fallback(array(string()), []),
   configFileGlobPattern: fallback(array(string()), [
     '**/rstest.config.{mjs,ts,js,cjs,mts,cts}',
   ]),

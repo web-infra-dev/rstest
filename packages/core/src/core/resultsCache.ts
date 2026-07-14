@@ -1,16 +1,17 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join, relative } from 'pathe';
 import type { TestFileResult } from '../types';
-import { logger, SEQUENCE_CACHE_DIR } from '../utils';
+import { logger, RESULTS_CACHE_DIR } from '../utils';
 
 /**
  * Persistent, best-effort record of each test file's last-known runtime and
  * failure state, used to order test files perf-first on the next run (see
- * `testSequencer.ts`). This is purely an optimization: every read/write path
+ * `testSequencer.ts`) and to select failed files for `onlyFailures` (see
+ * `onlyFailures.ts`). This is purely an optimization: every read/write path
  * swallows its own IO errors, so a missing, corrupt, or non-writable cache
  * degrades to a cold (size-only) ordering rather than failing the run.
  *
- * The cache lives in a dedicated directory (`SEQUENCE_CACHE_DIR`, a dotted
+ * The cache lives in a dedicated directory (`RESULTS_CACHE_DIR`, a dotted
  * prefix) that cannot collide with the `rstest`/`rstest-<env>` Rspack build
  * cache — see the constant's definition for why the dot is load-bearing.
  */
@@ -54,7 +55,7 @@ export const sequenceKey = (
 ): string => `${project}\0${relative(rootPath, testPath)}`;
 
 const cachePath = (rootPath: string): string =>
-  join(rootPath, SEQUENCE_CACHE_DIR, CACHE_FILE);
+  join(rootPath, RESULTS_CACHE_DIR, CACHE_FILE);
 
 /**
  * Read the sequencing cache. Returns `undefined` on any failure — a missing
@@ -143,7 +144,7 @@ export const writeResultsCache = async (
     }
 
     const data: ResultsCacheData = { version: CACHE_VERSION, files };
-    const dir = join(rootPath, SEQUENCE_CACHE_DIR);
+    const dir = join(rootPath, RESULTS_CACHE_DIR);
     await mkdir(dir, { recursive: true });
     // Atomic write: write to a pid-scoped temp file then rename into place so a
     // concurrent reader never observes a half-written JSON.

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "devDependencies": {
-    "@rsbuild/core": "~2.1.4",
+    "@rsbuild/core": "~2.1.5",
     "@rstest/core": "workspace:*",
     "@rstest/playwright": "workspace:*",
     "playwright": "^1.61.1"

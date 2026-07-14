@@ -95,25 +95,19 @@ export default defineConfig({
 
 #### Istanbul provider
 
-[Istanbul](https://istanbul.js.org/) is a widely used JavaScript code coverage tool that collects code coverage information through instrumentation.
+[Istanbul](https://istanbul.js.org/) is a widely used JavaScript code coverage tool that collects coverage through instrumentation.
 
-To enable istanbul coverage, you need to install the `@rstest/coverage-istanbul` package first.
+To enable istanbul coverage, install `@rstest/coverage-istanbul` first.
 
 import { PackageManagerTabs } from '@theme';
 
 <PackageManagerTabs command="add @rstest/coverage-istanbul -D" />
 
-`@rstest/coverage-istanbul` is powered by [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument). Rstest applies instrumentation through SWC during transform, so this provider has good transform-time performance. It can use more runtime memory because the executed code keeps the injected counters needed to collect coverage.
+`@rstest/coverage-istanbul` is powered by [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument). Rstest instruments source files through SWC during transform, so this provider has good transform-time performance. It can use more runtime memory because executed modules keep the injected coverage counters.
 
-##### Serialized functions and other realms
+##### Excluding code
 
-Istanbul injects `cov_*` coverage counter calls into instrumented files. Those counters are scoped to the transformed module that Rstest executes. If code from an instrumented file is serialized and executed somewhere else, the new scope or realm may not have the matching `cov_*` helper, and the test can fail with `ReferenceError: cov_... is not defined`.
-
-This can happen when a function is serialized with `fn.toString()` or executed through APIs such as `page.evaluate`, `Worker`, `node:vm`, `eval`, or `new Function`. To avoid the failure, exclude that source file with `coverage.exclude`, switch to `coverage.provider: 'v8'` for non-browser tests, or avoid serializing Istanbul-instrumented functions. The `v8` provider is not available in Browser Mode, so browser tests should use `coverage.exclude` or avoid serializing instrumented functions.
-
-Prefer `coverage.exclude` when a whole file is mainly used to generate, serialize, or inject code into another scope or realm. Istanbul ignore comments are better for small isolated snippets that must stay in an otherwise covered file.
-
-Exclude whole files in config:
+Use `coverage.exclude` when a whole file, generated file group, or injected script should not be instrumented:
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -133,7 +127,7 @@ You can also pass the same patterns from the CLI for a one-off run:
 npx rstest run --coverage --coverage.exclude "**/src/injected-script.ts" --coverage.exclude "**/src/**/*.{worker,evaluate}.ts"
 ```
 
-If the whole file should be skipped by Istanbul instrumentation, put `/* istanbul ignore file */` at the top of the file:
+Use Istanbul ignore comments only for small snippets that must stay in an otherwise covered file:
 
 ```ts title='src/injected-script.ts'
 /* istanbul ignore file */
@@ -143,18 +137,40 @@ export function createInjectedScript() {
 }
 ```
 
-If only one serialized function needs to be skipped, place `/* istanbul ignore next */` immediately before it:
-
 ```ts
 /* istanbul ignore next */
 function browserEvaluateFn() {
   return window.location.href;
 }
 
-await page.evaluate(browserEvaluateFn);
+/* istanbul ignore if */
+if (process.env.NODE_ENV === 'test') {
+  setupTestOnlyState();
+}
+
+/* istanbul ignore else */
+if (hasNativeFeature()) {
+  useNativeFeature();
+} else {
+  useFallback();
+}
 ```
 
-Branch-level hints such as `/* istanbul ignore if */` and `/* istanbul ignore else */` can be used for narrow environment guards. If an ignored snippet still receives an injected `cov_*` call, use `coverage.exclude` for the source file instead.
+If an ignored snippet still receives an injected `cov_*` call, use `coverage.exclude` for the source file instead.
+
+##### Serialized functions and other realms
+
+Istanbul injects `cov_*` coverage counter calls into instrumented files. Those counters are scoped to the transformed module that Rstest executes. If code from an instrumented file is serialized and executed somewhere else, the new scope or realm may not have the matching `cov_*` helper, and the test can fail with `ReferenceError: cov_... is not defined`.
+
+This can happen when a function is serialized with `fn.toString()` or executed through APIs such as `page.evaluate`, `Worker`, `node:vm`, `eval`, or `new Function`.
+
+To avoid the failure, prefer one of these approaches:
+
+- exclude the source file with `coverage.exclude`;
+- switch to `coverage.provider: 'v8'` for non-browser tests;
+- avoid serializing Istanbul-instrumented functions.
+
+The `v8` provider is not available in Browser Mode, so browser tests should use `coverage.exclude` or avoid serializing instrumented functions.
 
 #### V8 provider
 
@@ -167,6 +183,42 @@ To enable V8 coverage, install [@rstest/coverage-v8](https://github.com/web-infr
 <PackageManagerTabs command="add @rstest/coverage-v8 -D" />
 
 Because the underlying coverage data comes from Node.js / V8 itself, remapped branch coverage and uncovered line details can vary slightly across different Node.js or V8 versions.
+
+##### Ignore hints
+
+The `v8` provider honors ignore hints when converting V8 coverage to Istanbul format. The hint prefix can be any of the following forms:
+
+```ts
+/* istanbul ignore next */
+/* c8 ignore next */
+/* v8 ignore next */
+/* node:coverage ignore next */
+```
+
+Prefer using one prefix consistently in a project. The supported hint forms are:
+
+```ts
+/* v8 ignore next */
+const value = optionalExpensivePath();
+
+/* v8 ignore if */
+if (process.env.NODE_ENV === 'test') {
+  setupTestOnlyState();
+}
+
+/* v8 ignore else */
+if (hasNativeFeature()) {
+  useNativeFeature();
+} else {
+  useFallback();
+}
+
+/* v8 ignore start */
+const generatedLookup = createGeneratedLookup();
+/* v8 ignore stop */
+```
+
+`ignore file` is also recognized, but it applies to the generated coverage entry before source-map remapping. In normal Rstest output, one generated chunk can contain multiple source files, so prefer `coverage.exclude` when a source file or generated file group should be excluded.
 
 The `v8` provider is only available outside Browser Mode, including `node`, `jsdom`, and `happy-dom` test environments. Browser Mode does not use inspector coverage, so browser coverage should use the default `istanbul` provider.
 

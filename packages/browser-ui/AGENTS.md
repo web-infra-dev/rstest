@@ -14,7 +14,10 @@ Prebuilt browser container UI for Rstest's browser mode testing.
 
 - `src/main.tsx` — Application entry
 - `src/core/channel.ts` — Container message channel (`__rstest_dispatch__`) and dispatch RPC forwarding
+- `src/core/browserRpc.ts` — Browser-namespace (`locator`/page) RPC forwarding helpers
 - `src/core/runtime.ts` — Runtime URL helpers (`runner`/`websocket`)
+- `src/core/caseMap.ts` — Collected test case index for the tree/UI state
+- `src/core/treeNodeKey.ts` — Single owner of the test-tree node-key grammar (producer/consumer must agree byte-for-byte)
 - `src/components/` — UI components
 - `src/hooks/` — React hooks (notably `useRpc` WebSocket + birpc lifecycle)
 - `src/utils/` — Utility functions and constants

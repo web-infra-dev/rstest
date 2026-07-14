@@ -67,14 +67,19 @@ type GlobalWithRuntimeEnv = typeof globalThis &
 const restoreRuntimeConfig = (
   config: BrowserProjectRuntime['runtimeConfig'],
 ): RuntimeConfig => {
-  const { testNamePattern } = config as RuntimeConfig;
+  const { testNamePattern } = config;
+  // The browser wire (BrowserRuntimeConfig) omits node-only fields
+  // (testEnvironment / coverage / logHeapUsage / detectAsyncLeaks) that the
+  // browser runtime never reads. The shared WorkerState / runner types require
+  // the full RuntimeConfig shape and runner heap sampling is guarded against
+  // the absent logHeapUsage, so widening back here is sound.
   return {
     ...config,
     testNamePattern:
       typeof testNamePattern === 'string'
         ? unwrapRegex(testNamePattern)
         : testNamePattern,
-  };
+  } as RuntimeConfig;
 };
 
 const ensureRuntimeEnv = (env: RuntimeConfig['env'] | undefined): void => {
@@ -542,6 +547,28 @@ const run = async () => {
     return;
   }
 
+  // Capture unhandled errors/rejections that escape a test file's execution.
+  // Parity with the node worker, which attaches process-level
+  // uncaughtException/unhandledRejection to the running file's result and fails
+  // the file. `activeUnhandledErrors` points at the currently running file's
+  // collector (undefined between files, so stray late events are ignored).
+  let activeUnhandledErrors: Error[] | undefined;
+  const onWindowError = (event: ErrorEvent): void => {
+    activeUnhandledErrors?.push(
+      event.error instanceof Error
+        ? event.error
+        : new Error(event.message || String(event.error)),
+    );
+  };
+  const onUnhandledRejection = (event: PromiseRejectionEvent): void => {
+    const { reason } = event;
+    activeUnhandledErrors?.push(
+      reason instanceof Error ? reason : new Error(String(reason)),
+    );
+  };
+  window.addEventListener('error', onWindowError);
+  window.addEventListener('unhandledrejection', onUnhandledRejection);
+
   // 2. Run tests for each file
   for (const key of testKeysToRun) {
     const testPath = toAbsolutePath(key, currentProject.projectRoot);
@@ -669,6 +696,9 @@ const run = async () => {
       },
     });
 
+    const unhandledErrors: Error[] = [];
+    activeUnhandledErrors = unhandledErrors;
+
     try {
       // Load setup files for this project after runtime is ready.
       await loadSetupFiles();
@@ -691,6 +721,32 @@ const run = async () => {
         runnerHooks,
         runtime.api,
       );
+
+      // The browser dispatches `unhandledrejection` in a task queued at the
+      // current task's microtask checkpoint, so a rejection leaked by a
+      // synchronous test is not observable yet when `runTests()` resolves.
+      // Yield two macrotasks: the first reaches the checkpoint that queues
+      // the event task, the second runs after that task regardless of how
+      // the browser orders the timer and event task sources.
+      for (let i = 0; i < 2; i++) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        });
+      }
+
+      // An unhandled error/rejection that escaped the run fails the file even
+      // when every test passed.
+      if (unhandledErrors.length > 0) {
+        result.status = 'fail';
+        result.errors = [
+          ...(result.errors ?? []),
+          ...unhandledErrors.map((error) => ({
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+          })),
+        ];
+      }
 
       // Collect coverage data from global __coverage__ object
       if (globalThis.__coverage__) {
@@ -716,8 +772,12 @@ const run = async () => {
     } finally {
       // Restore original console methods
       restoreConsole();
+      activeUnhandledErrors = undefined;
     }
   }
+
+  window.removeEventListener('error', onWindowError);
+  window.removeEventListener('unhandledrejection', onUnhandledRejection);
 
   send({ type: 'complete' });
   window.__RSTEST_DONE__ = true;
