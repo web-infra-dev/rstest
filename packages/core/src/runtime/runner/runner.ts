@@ -285,7 +285,18 @@ export class TestRunner {
         test.context.task.result = result;
       }
 
-      for (const fn of test.onFinished.concat(fixtureCleanups)) {
+      for (const fn of fixtureCleanups) {
+        try {
+          await fn();
+        } catch (error) {
+          result.status = 'fail';
+          result.errors ??= [];
+          result.errors.push(...(await formatTestError(error)));
+          test.context.task.result = result;
+        }
+      }
+
+      for (const fn of test.onFinished) {
         try {
           await fn(test.context);
         } catch (error) {
@@ -783,7 +794,7 @@ export class TestRunner {
       wrapTimeout({
         name: 'onTestFinished hook',
         fn,
-        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
+        timeout: timeout ?? this.workerState!.runtimeConfig.hookTimeout,
         stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );

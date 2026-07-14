@@ -40,7 +40,7 @@ describe('@rstest/playwright', () => {
   it('writes Playwright trace debug artifacts', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'trace.test.ts'],
+      args: ['run', 'trace.test.ts', '--hookTimeout', '1'],
       options: {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),

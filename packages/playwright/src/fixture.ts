@@ -828,6 +828,7 @@ const playwrightFixtures = {
     {
       browser,
       onTestFailed,
+      onTestFinished,
       playwright,
       task,
     }: TestContext & Pick<PlaywrightFixture, 'browser' | 'playwright'>,
@@ -913,7 +914,11 @@ const playwrightFixtures = {
       await use(context);
     } finally {
       if (task.result?.status !== 'fail') {
-        await cleanupContext();
+        onTestFinished(async () => {
+          if (task.result?.status !== 'fail') {
+            await cleanupContext();
+          }
+        }, 0);
       }
     }
   },

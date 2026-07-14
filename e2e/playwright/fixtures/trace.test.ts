@@ -19,7 +19,7 @@ const test = base.extend({
 
 afterAll(async () => {
   await rm(outputDir, { recursive: true, force: true });
-});
+}, 10_000);
 
 test.sequential('writes Playwright trace debug artifacts', async ({ page }) => {
   await rm(outputDir, { recursive: true, force: true });
