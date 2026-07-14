@@ -545,7 +545,6 @@ export async function runTests(context: Rstest): Promise<void> {
   // Non-watch: one executor loop, one finalize, one close exit path.
   // ===================================================================
   if (!isWatchMode) {
-    let browserExecutor: TestExecutor | undefined;
     let browserShardedEntries:
       Map<string, { entries: Record<string, string> }> | undefined;
     // Start the node resources (dev server, env-dependency validation, pool)
@@ -557,31 +556,13 @@ export async function runTests(context: Rstest): Promise<void> {
       await nodeExecutor.ensureRunResources();
     }
 
-    if (hasBrowserTestsToRun) {
-      const browserProjectsToRun = getBrowserProjectsToRun();
-      browserShardedEntries = getBrowserShardedEntries(browserProjectsToRun);
-      browserExecutor = await loadBrowserExecutor(
-        context,
-        browserProjectsToRun,
-        coverageProvider,
-        {
-          freezeShardedEntries: freezeBrowserShardedEntries,
-          allowEmptyRun: shouldAllowEmptyBrowserFallback(),
-          appliedModifyRstestConfigEnvironments:
-            appliedBrowserModifyRstestConfigEnvironments,
-        },
-      );
-      await browserExecutor.init();
-    }
-
-    const executors: TestExecutor[] = [
-      ...(hasNodeTestsToRun ? [nodeExecutor] : []),
-      ...(browserExecutor ? [browserExecutor] : []),
-    ];
+    const executors: TestExecutor[] = hasNodeTestsToRun ? [nodeExecutor] : [];
 
     // Single-exit-path rule: every executor closes through here exactly once
     // (idempotent), so no early return or throw can reintroduce a #1363-class
-    // deferred-teardown hang.
+    // deferred-teardown hang. `executors` is read at close time, so the browser
+    // executor pushed inside the try below is covered — including when its own
+    // load/init fails with the node resources above already up.
     let didCloseExecutors = false;
     const closeExecutors = async () => {
       if (didCloseExecutors) {
@@ -649,6 +630,24 @@ export async function runTests(context: Rstest): Promise<void> {
     }
 
     try {
+      if (hasBrowserTestsToRun) {
+        const browserProjectsToRun = getBrowserProjectsToRun();
+        browserShardedEntries = getBrowserShardedEntries(browserProjectsToRun);
+        const browserExecutor = await loadBrowserExecutor(
+          context,
+          browserProjectsToRun,
+          coverageProvider,
+          {
+            freezeShardedEntries: freezeBrowserShardedEntries,
+            allowEmptyRun: shouldAllowEmptyBrowserFallback(),
+            appliedModifyRstestConfigEnvironments:
+              appliedBrowserModifyRstestConfigEnvironments,
+          },
+        );
+        executors.push(browserExecutor);
+        await browserExecutor.init();
+      }
+
       await notifyReportersOnTestRunStart(context);
       const outcomes = await Promise.all(
         executors.map((executor) =>
