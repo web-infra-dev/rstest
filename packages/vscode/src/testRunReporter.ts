@@ -10,6 +10,7 @@ import vscode from 'vscode';
 import { ROOT_SUITE_NAME } from '../../core/src/utils/constants';
 import { parseErrorStacktrace } from '../../core/src/utils/error';
 import type { DiagnosticEntry, RstestDiagnostics } from './diagnostics';
+import type { TestErrorStore } from './errorStore';
 import { logger } from './logger';
 import type { Project } from './project';
 import type { LogLevel } from './shared/logger';
@@ -25,6 +26,7 @@ export class TestRunReporter implements Reporter {
     private createTestRun?: () => vscode.TestRun,
     private projectKey = '',
     private diagnostics?: RstestDiagnostics,
+    private errorStore?: TestErrorStore,
   ) {}
 
   public async log(level: LogLevel, message: string) {
@@ -112,7 +114,7 @@ export class TestRunReporter implements Reporter {
       }
     }
   }
-  onTestFileResult(test: TestFileResult) {
+  async onTestFileResult(test: TestFileResult) {
     // only update test file result when explicit run itself or parent
     if (this.path.length) return;
 
@@ -125,13 +127,32 @@ export class TestRunReporter implements Reporter {
       case 'todo':
       case 'skip':
         this.run?.skipped(fileItem);
+        this.errorStore?.clear(fileItem);
         break;
       case 'pass':
         this.run?.passed(fileItem, test.duration);
+        this.errorStore?.clear(fileItem);
         break;
-      case 'fail':
-        this.run?.failed(fileItem, [], test.duration);
+      case 'fail': {
+        // When a file fails before any test case runs (a syntax/collection
+        // error or a worker crash during collection), the errors live only on
+        // the file result and no onTestCaseResult fires to surface or store
+        // them. Surface them on the file item so they appear in the failure
+        // widget and copyTestItemErrors can find them. When cases did run,
+        // their per-case results already carry the errors (core also
+        // re-aggregates suite hook errors onto file.errors, but those are
+        // already surfaced/stored via onTestSuiteResult on the file item), so
+        // we skip here to avoid double-reporting. This relies on core keeping
+        // file.errors as the sole carrier only when no case ran.
+        const fileErrors = test.results?.length
+          ? []
+          : await this.createErrors(test.errors, test.testPath);
+        this.run?.failed(fileItem, fileErrors, test.duration);
+        if (fileErrors.length) {
+          this.errorStore?.set(fileItem, fileErrors);
+        }
         break;
+      }
     }
   }
 
@@ -170,26 +191,25 @@ export class TestRunReporter implements Reporter {
       case 'pass': {
         this.run?.passed(testItem, result.duration);
         this.diagnostics?.clearForTest(this.projectKey, testItem);
+        this.errorStore?.clear(testItem);
         break;
       }
       case 'skip':
       case 'todo': {
         this.run?.skipped(testItem);
         this.diagnostics?.clearForTest(this.projectKey, testItem);
+        this.errorStore?.clear(testItem);
         break;
       }
       case 'fail': {
-        const errors = await Promise.all(
-          (result.errors || []).map(async (error) =>
-            this.createError(error, result.testPath),
-          ),
-        );
+        const errors = await this.createErrors(result.errors, result.testPath);
         this.run?.failed(testItem, errors, result.duration);
         this.diagnostics?.setForTest(
           this.projectKey,
           testItem,
           this.createDiagnostics(testItem, errors),
         );
+        this.errorStore?.set(testItem, errors);
         break;
       }
     }
@@ -304,6 +324,12 @@ export class TestRunReporter implements Reporter {
               );
         }),
       ),
+    );
+  }
+
+  private createErrors(errors: TestResult['errors'], testPath: string) {
+    return Promise.all(
+      (errors || []).map((error) => this.createError(error, testPath)),
     );
   }
 

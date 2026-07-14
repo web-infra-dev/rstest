@@ -20,6 +20,7 @@ export class WorkspaceManager implements vscode.Disposable {
   constructor(
     private workspaceFolder: vscode.WorkspaceFolder,
     private testController: vscode.TestController,
+    private onDidChangeTestFiles?: () => void,
   ) {
     this.workspacePath = workspaceFolder.uri.toString();
     this.configValueWatcher = this.startWatchingWorkspace();
@@ -120,6 +121,7 @@ export class WorkspaceManager implements vscode.Disposable {
       configFileUri,
       this.testController,
       this.testItem?.children ?? this.testController.items,
+      this.onDidChangeTestFiles,
     );
     this.projects.set(configFilePath, project);
   }
@@ -254,6 +256,7 @@ export class Project implements vscode.Disposable {
     private configFileUri: vscode.Uri,
     private testController: vscode.TestController,
     public parentCollection: vscode.TestItemCollection,
+    private onDidChangeTestFiles?: () => void,
   ) {
     // use dirname of config file as default root
     this.root = configFileUri.with({ path: path.dirname(configFileUri.path) });
@@ -515,5 +518,8 @@ export class Project implements vscode.Disposable {
     for (const [childKey, childValue] of Object.entries(tree)) {
       handleTreeItem(childKey, childValue, [], [], this.collection);
     }
+    // testFiles has settled for this project; let the extension refresh any
+    // derived state (e.g. the `rstest.testFiles` context key).
+    this.onDidChangeTestFiles?.();
   }
 }

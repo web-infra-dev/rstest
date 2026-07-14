@@ -34,6 +34,28 @@
         "title": "Update Snapshot",
         "category": "Testing",
         "icon": "$(merge)"
+      },
+      {
+        "command": "rstest.openOutput",
+        "title": "Show Output",
+        "category": "Rstest"
+      },
+      {
+        "command": "rstest.revealInTestExplorer",
+        "title": "Reveal in Test Explorer",
+        "category": "Rstest"
+      },
+      {
+        "command": "rstest.copyErrorOutput",
+        "title": "Copy Error Output",
+        "category": "Rstest",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "rstest.copyTestItemErrors",
+        "title": "Copy Test Errors",
+        "category": "Rstest",
+        "icon": "$(copy)"
       }
     ],
     "configuration": {
@@ -150,12 +172,34 @@
         {
           "command": "rstest.updateSnapshot",
           "when": "false"
+        },
+        {
+          "command": "rstest.revealInTestExplorer",
+          "when": "false"
+        },
+        {
+          "command": "rstest.copyErrorOutput",
+          "when": "false"
+        },
+        {
+          "command": "rstest.copyTestItemErrors",
+          "when": "false"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "rstest.revealInTestExplorer",
+          "when": "resourcePath in rstest.testFiles"
         }
       ],
       "testing/message/content": [
         {
           "command": "rstest.updateSnapshot",
           "when": "testMessage == canUpdateSnapshot"
+        },
+        {
+          "command": "rstest.copyErrorOutput",
+          "when": "resourcePath in rstest.testFiles"
         }
       ],
       "testing/message/context": [
@@ -163,6 +207,23 @@
           "command": "rstest.updateSnapshot",
           "group": "inline@1",
           "when": "testMessage == canUpdateSnapshot"
+        },
+        {
+          "command": "rstest.copyErrorOutput",
+          "group": "inline@2",
+          "when": "resourcePath in rstest.testFiles"
+        }
+      ],
+      "testing/item/context": [
+        {
+          "command": "rstest.copyTestItemErrors",
+          "when": "controllerId == 'rstest'"
+        }
+      ],
+      "testing/item/gutter": [
+        {
+          "command": "rstest.copyTestItemErrors",
+          "when": "controllerId == 'rstest'"
         }
       ]
     }
