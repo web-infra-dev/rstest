@@ -141,15 +141,36 @@ export class TestFile {
   }
 
   public updateFromList(tests: TestInfo[]) {
+    // A run's reported tests may arrive without a source location (the runtime
+    // only emits locations when `includeTaskLocation` resolves one, which
+    // depends on the project's core version and build). Snapshot the ranges we
+    // already have so a location-less test keeps its range instead of
+    // collapsing to line 1, which would move every gutter icon to the imports.
+    const previousRanges = new Map<string, vscode.Range>();
+    const rangeKey = (names: string[]) => names.join('\x00');
+    const snapshot = (item: vscode.TestItem, names: string[]) => {
+      if (item.range) previousRanges.set(rangeKey(names), item.range);
+      item.children.forEach((child) =>
+        snapshot(child, [...names, child.label]),
+      );
+    };
+    this.children.forEach((item) => snapshot(item, [item.label]));
+
     const handleChild = (
       test: TestInfo,
       parent: vscode.TestItem[],
       parentNames: string[],
     ) => {
-      // vscode location is zero based
-      const line = (test.location?.line ?? 1) - 1;
-      const column = (test.location?.column ?? 1) - 1;
-      const range = new vscode.Range(line, column, line, column);
+      const names = [...parentNames, test.name];
+      let range: vscode.Range | undefined;
+      if (test.location) {
+        // vscode location is zero based
+        const line = test.location.line - 1;
+        const column = test.location.column - 1;
+        range = new vscode.Range(line, column, line, column);
+      } else {
+        range = previousRanges.get(rangeKey(names));
+      }
       const testItem = this.onTest(
         range,
         test.name,
@@ -160,7 +181,7 @@ export class TestFile {
       if (test.type === 'suite') {
         const children: vscode.TestItem[] = [];
         test.tests.forEach((child) => {
-          handleChild(child, children, [...parentNames, test.name]);
+          handleChild(child, children, names);
         });
         testItem.children.replace(children);
       }
@@ -178,7 +199,7 @@ export class TestFile {
   }
 
   private onTest(
-    range: vscode.Range,
+    range: vscode.Range | undefined,
     name: string,
     testType: 'test' | 'it' | 'suite' | 'describe',
     parent: vscode.TestItem[],
@@ -196,7 +217,7 @@ export class TestFile {
       new TestCase(this.api, this.uri, parentNames, isSuite ? 'suite' : 'case'),
     );
 
-    testItem.range = range;
+    if (range) testItem.range = range;
 
     // warn about duplicated name
     if (siblingsCount) testItem.error = `Duplicated ${testType} name`;
