@@ -62,15 +62,16 @@ export class Worker {
       root: rstest.context.normalizedConfig.root,
       include: rstest.context.normalizedConfig.include,
       exclude: rstest.context.normalizedConfig.exclude.patterns,
-      // Root directories of the sub-projects this config aggregates via
-      // `projects`. Empty for a leaf config. The extension uses these to avoid
-      // registering a child config as its own top-level project when a parent
-      // already covers it (otherwise the same test files show up twice). Roots
-      // are used rather than config-file paths so nested/inline projects (which
-      // have no own config file) are still matched.
-      projectRoots: projects
-        .map((project) => project.config.root)
-        .filter((root): root is string => Boolean(root)),
+      // Sub-projects this config aggregates via `projects`. Empty for a leaf
+      // config. The extension uses these to avoid registering a child config
+      // as its own top-level project when a parent already covers it
+      // (otherwise the same test files show up twice). A file-based child is
+      // identified by its config file; inline children only have a root.
+      // `null` (not `undefined`) so the fields survive the IPC JSON round-trip.
+      childProjects: projects.map((project) => ({
+        configFilePath: project.configFilePath ?? null,
+        root: project.config.root ?? null,
+      })),
     };
   }
 
