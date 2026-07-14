@@ -60,19 +60,25 @@ const aggregatesNestedConfig = (
 //   - aggregates this config's own child roots (a nested intermediate config;
 //     see `aggregatesNestedConfig`). This is inferred from the flattened
 //     grandchildren, so it carries a tiebreak for the ambiguous equal-set case.
-// Coverage from a config's own `projects` is ignored, since an aggregator's
-// inline children may share its own root (which would otherwise hide it).
+// In both cases the parent must also be able to *display* the child's files:
+// in AST mode a project only globs its own `include`, so a child whose include
+// patterns the parent does not also match is kept visible (its tests would
+// otherwise vanish from the tree even though the aggregated run still executes
+// them). Coverage from a config's own `projects` is ignored, since an
+// aggregator's inline children may share its own root (which would hide it).
 export function computeCoveredConfigs(
   projects: {
     configFilePath: string;
     root: string;
     childProjectRoots: string[];
+    include: string[];
   }[],
 ): Set<string> {
   const nodes = projects.map((project) => ({
     configFilePath: project.configFilePath,
     root: normalizeRoot(project.root),
     children: new Set(project.childProjectRoots.map(normalizeRoot)),
+    include: new Set(project.include),
   }));
   const configsPerRoot = new Map<string, number>();
   for (const node of nodes) {
@@ -84,6 +90,7 @@ export function computeCoveredConfigs(
     const isCovered = nodes.some(
       (other) =>
         other.configFilePath !== project.configFilePath &&
+        isSubset(project.include, other.include) &&
         ((rootIsUnique && other.children.has(project.root)) ||
           aggregatesNestedConfig(project, other)),
     );

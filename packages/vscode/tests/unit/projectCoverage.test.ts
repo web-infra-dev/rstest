@@ -2,11 +2,16 @@ import { describe, expect, it } from '@rstest/core';
 import { computeCoveredConfigs } from '../../src/projectCoverage';
 
 // Roots are absolute in practice; use POSIX-looking paths for readability.
+// `include` defaults to a shared pattern so root/subset coverage is exercised
+// without the include guard getting in the way; pass a distinct one to exercise
+// the guard itself.
+const DEFAULT_INCLUDE = ['**/*.test.ts'];
 const p = (
   configFilePath: string,
   root: string,
   childProjectRoots: string[] = [],
-) => ({ configFilePath, root, childProjectRoots });
+  include: string[] = DEFAULT_INCLUDE,
+) => ({ configFilePath, root, childProjectRoots, include });
 
 describe('computeCoveredConfigs', () => {
   it('suppresses child configs aggregated by a root config', () => {
@@ -100,6 +105,30 @@ describe('computeCoveredConfigs', () => {
       p('/repo/apps/web/rstest.e2e.config.ts', '/repo/apps/web'),
     ]);
     expect(covered.size).toBe(0);
+  });
+
+  it('keeps a child config whose include the parent does not match', () => {
+    // The root aggregates `e2e`, but the child matches only `**/*.e2e.ts`,
+    // which the root's own include does not glob (AST mode). Suppressing it
+    // would hide those tests, so the child stays visible.
+    const covered = computeCoveredConfigs([
+      p('/repo/rstest.config.ts', '/repo', ['/repo/e2e']),
+      p('/repo/e2e/rstest.config.ts', '/repo/e2e', [], ['**/*.e2e.ts']),
+    ]);
+    expect(covered.size).toBe(0);
+  });
+
+  it('suppresses a child whose include is a subset of the parent include', () => {
+    const covered = computeCoveredConfigs([
+      p(
+        '/repo/rstest.config.ts',
+        '/repo',
+        ['/repo/pkg'],
+        ['**/*.test.ts', '**/*.spec.ts'],
+      ),
+      p('/repo/pkg/rstest.config.ts', '/repo/pkg', [], ['**/*.test.ts']),
+    ]);
+    expect([...covered]).toEqual(['/repo/pkg/rstest.config.ts']);
   });
 
   it('matches a root reported with a trailing separator', () => {

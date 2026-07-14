@@ -175,6 +175,7 @@ export class WorkspaceManager implements vscode.Disposable {
         configFilePath,
         root: project.root.fsPath,
         childProjectRoots: project.childProjectRoots,
+        include: project.include,
       })),
     );
 
