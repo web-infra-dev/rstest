@@ -73,6 +73,22 @@ export type RuntimeConfig = Pick<
   | 'silent'
 >;
 
+/**
+ * The browser-mode wire projection of {@link RuntimeConfig}. Node-only fields
+ * the browser client never reads are stripped so they cannot ship unrouted
+ * (the #1389 class):
+ * - `testEnvironment`: the client hardcodes `environment: 'browser'`.
+ * - `coverage`: browser coverage is host-wired, not client-read.
+ * - `logHeapUsage` / `detectAsyncLeaks`: node process mechanisms.
+ *
+ * These fields stay REQUIRED on `RuntimeConfig` (node worker consumers
+ * destructure them unconditionally); only the browser wire narrows.
+ */
+export type BrowserRuntimeConfig = Omit<
+  RuntimeConfig,
+  'testEnvironment' | 'detectAsyncLeaks' | 'logHeapUsage' | 'coverage'
+>;
+
 export type CurrentTaskInfo = Pick<
   UserConsoleLog,
   'taskId' | 'taskName' | 'taskParentNames' | 'taskType' | 'testPath'

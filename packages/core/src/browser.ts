@@ -9,6 +9,32 @@ import * as rsbuild from '@rsbuild/core';
 
 // Core-owned contract for the host module that @rstest/browser implements
 export type { BrowserHostModule } from './core/browserLoader';
+// Executor cycle outcome — the browser host returns one so the shared
+// finalizeRunCycle can reduce it alongside the node outcome.
+export type { ExecutorCycleOutcome } from './types';
+// The executor-capability table's list of RuntimeConfig keys the browser wire
+// ignores/strips; the browser config validation iterates it so a new
+// ignored/stripped row can't become a silent no-op (#1389).
+export { browserIgnoredRuntimeConfigKeys } from './core/executorCapabilities';
+// Single core-owned RuntimeConfig projection (node inherit / browser static)
+export { projectRuntimeConfig } from './core/runtimeConfigProjection';
+// Shared runner-event pump so the browser host feeds stateManager and fans out
+// to reporters through the same implementation as the node pool.
+export {
+  createRunnerEventSink,
+  type RunnerEventSink,
+} from './core/runnerEventSink';
+// Shared snapshot path resolver so the browser host matches the node pool
+export {
+  resolveSnapshotPathDefault,
+  SNAPSHOT_HEADER,
+} from './utils/snapshotPath';
+// Shared per-cycle state reset so the browser host and the node pool clear
+// stateManager/snapshotManager identically at the start of each watch rerun.
+export { prepareWatchRerunState } from './core/watchState';
+// Shared silent-console buffering engine so the browser host replays
+// `silent: 'passed-only'` logs through the same controller as the node worker.
+export { createSilentConsoleController } from './runtime/worker/silentConsole';
 // Re-export Rstest type for convenience
 export type { Rstest } from './core/rstest';
 // Coverage support for browser mode
@@ -18,6 +44,7 @@ export { createCoverageProvider, loadCoverageProvider } from './coverage';
 export { PhaseTracker } from './runtime/worker/phaseTracker';
 // Types
 export type {
+  BrowserRuntimeConfig,
   BrowserTestRunOptions,
   BrowserTestRunResult,
   BrowserViewport,

@@ -170,6 +170,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "test-project",
+  "onConsoleLog": undefined,
   "onlyFailures": false,
   "output": {
     "distPath": {
@@ -185,6 +186,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "default",
   ],
   "resetMocks": false,
+  "resolveSnapshotPath": undefined,
   "restoreMocks": false,
   "retry": 0,
   "root": "<ROOT>/packages/core/test-project",
@@ -274,6 +276,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
   "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "test-project1",
+  "onConsoleLog": undefined,
   "onlyFailures": false,
   "output": {
     "distPath": {
@@ -289,6 +292,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
     "default",
   ],
   "resetMocks": false,
+  "resolveSnapshotPath": undefined,
   "restoreMocks": false,
   "retry": 0,
   "root": "<ROOT>/packages/core/test-project1",

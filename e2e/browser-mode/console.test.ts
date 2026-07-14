@@ -63,30 +63,70 @@ describe('browser mode - console forwarding', () => {
     },
   );
 
+  // `silent: 'passed-only'` buffers logs and replays only the failing tasks'
+  // logs through the shared silent-console controller — the same engine the node
+  // pool uses. Replayed logs now go through the owning project's `onConsoleLog`
+  // filter and honor `disableConsoleIntercept` (previously the browser host
+  // flushed straight to reporters, bypassing both — see the drift the isomorphism
+  // refactor removes).
   it.for([
-    { args: ['--silent=passed-only'] },
-    { args: ['--silent=passed-only', '--disableConsoleIntercept'] },
     {
+      // Default config: failing-task logs replay through reporters, passing-task
+      // logs stay buffered (dropped).
+      args: ['--silent=passed-only'],
+      shouldContain: [
+        'BROWSER_FILE_LEVEL_LOG',
+        'BROWSER_FAILING_SUITE_LOG',
+        'BROWSER_FAILING_CASE_LOG',
+        'BROWSER_CONCURRENT_FAILING_CASE_LOG',
+      ],
+      shouldNotContain: [
+        'BROWSER_PASSING_SUITE_LOG',
+        'BROWSER_PASSING_CASE_LOG',
+      ],
+    },
+    {
+      // `onConsoleLog: () => false` now filters replayed logs too, so nothing
+      // reaches the reporters.
       args: [
         '--silent=passed-only',
-        '--disableConsoleIntercept',
         '-c',
         'rstest.onConsoleLogFalse.config.mts',
       ],
+      shouldContain: [],
+      shouldNotContain: [
+        'BROWSER_FILE_LEVEL_LOG',
+        'BROWSER_FAILING_SUITE_LOG',
+        'BROWSER_FAILING_CASE_LOG',
+        'BROWSER_PASSING_CASE_LOG',
+      ],
+    },
+    {
+      // `disableConsoleIntercept` opts out of host-side console forwarding, so the
+      // replay is suppressed host-side (the page console still shows the logs);
+      // nothing reaches the CLI, matching plain `--disableConsoleIntercept`.
+      args: ['--silent=passed-only', '--disableConsoleIntercept'],
+      shouldContain: [],
+      shouldNotContain: [
+        'BROWSER_FILE_LEVEL_LOG',
+        'BROWSER_FAILING_SUITE_LOG',
+        'BROWSER_FAILING_CASE_LOG',
+        'BROWSER_PASSING_CASE_LOG',
+      ],
     },
   ])(
-    'should only replay failed task logs with args $args',
-    async ({ args }) => {
+    'should replay failed task logs honoring onConsoleLog/disableConsoleIntercept with args $args',
+    async ({ args, shouldContain, shouldNotContain }) => {
       const { cli } = await runBrowserCli('silent', { args });
 
       await cli.exec;
 
-      expect(cli.stdout).toContain('BROWSER_FILE_LEVEL_LOG');
-      expect(cli.stdout).toContain('BROWSER_FAILING_SUITE_LOG');
-      expect(cli.stdout).toContain('BROWSER_FAILING_CASE_LOG');
-      expect(cli.stdout).toContain('BROWSER_CONCURRENT_FAILING_CASE_LOG');
-      expect(cli.stdout).not.toContain('BROWSER_PASSING_SUITE_LOG');
-      expect(cli.stdout).not.toContain('BROWSER_PASSING_CASE_LOG');
+      for (const message of shouldContain) {
+        expect(cli.stdout).toContain(message);
+      }
+      for (const message of shouldNotContain) {
+        expect(cli.stdout).not.toContain(message);
+      }
     },
   );
 });

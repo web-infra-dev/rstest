@@ -34,13 +34,13 @@ flowchart LR
   subgraph IframePath["Iframe path (headed)"]
     S1["send()"] --> P1["parent.postMessage(__rstest_dispatch__)"]
     R1["dispatchRunnerLifecycle()"] --> P2["postMessage dispatch-rpc-request"]
-    SN1["snapshot.sendRpcRequest()"] --> P3["postMessage dispatch-rpc-request + wait __rstest_dispatch_response__"]
+    SN1["snapshot.ts / browserRpc.ts via dispatchTransport.dispatchRpc()"] --> P3["postMessage dispatch-rpc-request + wait __rstest_dispatch_response__"]
   end
 
   subgraph TopLevelRunPath["Top-level page path (headless run)"]
     S2["send()"] --> D1["window.__rstest_dispatch__"]
     R2["dispatchRunnerLifecycle()"] --> D2["window.__rstest_dispatch_rpc__"]
-    SN2["snapshot.sendRpcRequest()"] --> D3["window.__rstest_dispatch_rpc__"]
+    SN2["snapshot.ts / browserRpc.ts via dispatchTransport.dispatchRpc()"] --> D3["window.__rstest_dispatch_rpc__"]
   end
 
   subgraph TopLevelCollectPath["Top-level page path (list collect)"]
@@ -48,31 +48,36 @@ flowchart LR
   end
 ```
 
-## Snapshot RPC sequence
+## Dispatch RPC sequence (snapshot / browser namespaces)
+
+The `snapshot` namespace (snapshot file ops) and the `browser` namespace
+(locator/page RPC from `browserRpc.ts`) share one client channel:
+`dispatchTransport.ts` owns request ids, timeouts, and pending-response
+resolution for both the iframe and top-level transports.
 
 ```mermaid
 sequenceDiagram
-  participant Snap as snapshot.ts
-  participant Runner as entry.ts runtime
+  participant Caller as snapshot.ts / browserRpc.ts
+  participant Transport as dispatchTransport.ts
   participant Container as browser-ui channel
   participant Host as host dispatch router
 
-  Snap->>Runner: sendRpcRequest(method, args)
+  Caller->>Transport: dispatchRpc(request)
 
   alt top-level runner (headless run)
-    Runner->>Host: __rstest_dispatch_rpc__(namespace=snapshot)
-    Host-->>Runner: BrowserDispatchResponse
-    Runner-->>Snap: result/error
+    Transport->>Host: __rstest_dispatch_rpc__(namespace=snapshot|browser)
+    Host-->>Transport: BrowserDispatchResponse
+    Transport-->>Caller: result/error
   else iframe runner (headed)
-    Runner->>Container: postMessage(dispatch-rpc-request)
+    Transport->>Container: postMessage(dispatch-rpc-request)
     Container->>Host: rpc.dispatch(request)
     Host-->>Container: BrowserDispatchResponse
-    Container-->>Runner: __rstest_dispatch_response__
-    Runner-->>Snap: resolve/reject pending request
+    Container-->>Transport: __rstest_dispatch_response__
+    Transport-->>Caller: resolve/reject pending request
   end
 ```
 
-List collect mode does not use the snapshot RPC namespace.
+List collect mode does not use the snapshot or browser RPC namespaces.
 
 ## Runtime invariants
 
@@ -80,3 +85,5 @@ List collect mode does not use the snapshot RPC namespace.
 - Runner lifecycle events (`file-ready`, `suite-start`, `suite-result`, `case-start`) go through the `runner` dispatch namespace.
 - Snapshot file operations go through the `snapshot` dispatch namespace and never access filesystem directly in browser runtime.
 - Console interception is per test file and must restore original console methods in `finally`.
+- An unhandled window error or `unhandledrejection` that escapes a test file fails the file even when every test passed. Before finalizing each file result, the runner yields two macrotasks so a rejection leaked by a synchronous test is still observed (the browser dispatches `unhandledrejection` in a task queued after the current task).
+- The `getCountOfFailedTests` runner hook returns the client-local per-file failed count; cross-file `bail` is enforced host-side at file boundaries (see `../AGENTS.md`), not by this hook.
