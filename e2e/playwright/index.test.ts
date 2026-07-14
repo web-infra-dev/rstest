@@ -126,6 +126,24 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_TEARDOWN_FAIL_OK');
   });
 
+  it('finalizes Playwright trace when context close fails', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'trace-context-close-failure.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    expect(cli.exec.process?.exitCode).toBe(1);
+    expect(cli.stdout).toContain(
+      'RSTEST_PLAYWRIGHT_TRACE_CONTEXT_CLOSE_FAIL_OK',
+    );
+  });
+
   it('keeps Playwright resources alive for failure diagnostics', async () => {
     const { cli } = await runRstestCli({
       command: 'rstest',

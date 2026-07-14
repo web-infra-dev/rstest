@@ -599,6 +599,27 @@ const scheduleBrowserCleanupWhenIdle = () => {
   }, BROWSER_IDLE_CLOSE_DELAY);
 };
 
+const retainBrowser = () => {
+  clearBrowserCleanupTimer();
+  activeBrowserFixtureCount++;
+  let released = false;
+
+  return async (scheduleCleanup: boolean) => {
+    if (released) {
+      return;
+    }
+
+    released = true;
+    activeBrowserFixtureCount--;
+
+    if (scheduleCleanup) {
+      scheduleBrowserCleanupWhenIdle();
+    } else {
+      await closeBrowserWhenIdle();
+    }
+  };
+};
+
 const createStaticServerClose = (server: Server) => {
   let closePromise: Promise<void> | undefined;
 
@@ -775,24 +796,7 @@ const cleanupBrowserFixture = [
     { onTestFailed, task }: TestContext,
     use: (value: undefined) => Promise<void>,
   ) => {
-    clearBrowserCleanupTimer();
-    activeBrowserFixtureCount++;
-    let released = false;
-
-    const release = async (scheduleCleanup: boolean) => {
-      if (released) {
-        return;
-      }
-
-      released = true;
-      activeBrowserFixtureCount--;
-
-      if (scheduleCleanup) {
-        scheduleBrowserCleanupWhenIdle();
-      } else {
-        await closeBrowserWhenIdle();
-      }
-    };
+    const release = retainBrowser();
 
     onTestFailed(async () => {
       await release(false);
@@ -841,6 +845,7 @@ const playwrightFixtures = {
     let released = false;
     let finalized = false;
     let traceReported = false;
+    let releaseBrowser: ReturnType<typeof retainBrowser> | undefined;
 
     const finalizeTrace = async () => {
       if (!activeArtifacts || finalized) {
@@ -859,38 +864,52 @@ const playwrightFixtures = {
       }
     };
 
+    const finishContextCleanup = async (scheduleBrowserCleanup: boolean) => {
+      try {
+        await finalizeTrace();
+      } finally {
+        await releaseBrowser?.(scheduleBrowserCleanup);
+      }
+    };
+
     const cleanupContext = async () => {
       if (released) {
+        await finishContextCleanup(task.result?.status !== 'fail');
         return;
       }
 
       released = true;
 
       try {
-        if (artifacts && traceStarted) {
-          const shouldSaveTrace =
-            artifacts.options.mode === 'on' || task.result?.status === 'fail';
+        try {
+          if (artifacts && traceStarted) {
+            const shouldSaveTrace =
+              artifacts.options.mode === 'on' || task.result?.status === 'fail';
 
-          if (shouldSaveTrace) {
-            activeArtifacts = await reserveTraceArtifacts(artifacts);
-            try {
-              await context.tracing.stop({ path: activeArtifacts.tracePath });
-            } catch (error) {
-              await rm(activeArtifacts.dir, { recursive: true, force: true });
-              activeArtifacts = undefined;
-              throw error;
+            if (shouldSaveTrace) {
+              activeArtifacts = await reserveTraceArtifacts(artifacts);
+              try {
+                await context.tracing.stop({ path: activeArtifacts.tracePath });
+              } catch (error) {
+                await rm(activeArtifacts.dir, { recursive: true, force: true });
+                activeArtifacts = undefined;
+                throw error;
+              }
+            } else {
+              await context.tracing.stop();
             }
-          } else {
-            await context.tracing.stop();
           }
+        } finally {
+          await context.close();
         }
-      } finally {
-        await context.close();
+      } catch (error) {
+        if (task.result?.status === 'fail') {
+          await finishContextCleanup(false);
+        }
+        throw error;
       }
 
-      if (activeArtifacts) {
-        await finalizeTrace();
-      }
+      await finishContextCleanup(task.result?.status !== 'fail');
     };
 
     onTestFailed(cleanupContext, 0);
@@ -914,6 +933,7 @@ const playwrightFixtures = {
       await use(context);
     } finally {
       if (task.result?.status !== 'fail') {
+        releaseBrowser = retainBrowser();
         onTestFinished(async () => {
           if (task.result?.status !== 'fail') {
             await cleanupContext();

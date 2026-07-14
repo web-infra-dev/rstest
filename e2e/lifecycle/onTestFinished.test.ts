@@ -44,6 +44,8 @@ describe('onTestFinished', () => {
         "[afterEach] root",
         "[onTestFinished] in level A",
         "[afterEach] root",
+        "[afterEach] root",
+        "[onTestFinished] outer",
       ]
     `);
   });

@@ -296,7 +296,7 @@ export class TestRunner {
         }
       }
 
-      for (const fn of test.onFinished) {
+      for (const fn of [...test.onFinished]) {
         try {
           await fn(test.context);
         } catch (error) {

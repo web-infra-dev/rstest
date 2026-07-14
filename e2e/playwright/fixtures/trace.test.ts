@@ -57,6 +57,21 @@ test.sequential('verifies Playwright trace debug artifacts', async () => {
   console.log('RSTEST_PLAYWRIGHT_TRACE_OK');
 });
 
+test.sequential(
+  'keeps the browser alive during slow trace cleanup',
+  async ({ browser, context, page }) => {
+    const stopTracing = context.tracing.stop.bind(context.tracing);
+    context.tracing.stop = async (options) => {
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      expect(browser.isConnected()).toBe(true);
+      await stopTracing(options);
+    };
+
+    await page.setContent('<h1>Slow trace cleanup</h1>');
+    await expect(page.locator('h1')).toHaveText('Slow trace cleanup');
+  },
+);
+
 let retryAttempts = 0;
 
 test.sequential(
