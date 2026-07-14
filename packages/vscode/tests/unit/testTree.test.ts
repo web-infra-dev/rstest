@@ -132,4 +132,39 @@ describe('TestFile.updateFromList', () => {
     expect(suite.range.startLine).toBe(8);
     expect(suite.children.get('a').range.startLine).toBe(19);
   });
+
+  it('preserves separate ranges for duplicate sibling names', async () => {
+    const { TestFile, getTestItemId } = await import('../../src/testTree');
+    const controller = createController();
+    const uri = { fsPath: '/x/dup.test.ts', toString: () => 'file:///x' };
+    const file = new TestFile({} as any, uri as any, controller);
+    const root = controller.createTestItem('root', 'dup.test.ts', uri);
+    file.setTestItem(root);
+
+    const dup = [
+      { type: 'case', name: 'renders', location: location(4), tests: [] },
+      { type: 'case', name: 'renders', location: location(9), tests: [] },
+    ] as any;
+    file.updateFromList(dup);
+    // duplicate siblings get distinct ids by occurrence index
+    expect(root.children.get(getTestItemId('renders', 0)).range.startLine).toBe(
+      3,
+    );
+    expect(root.children.get(getTestItemId('renders', 1)).range.startLine).toBe(
+      8,
+    );
+
+    // location-less rebuild must keep each occurrence's own range, not collapse
+    // both onto the last one's.
+    file.updateFromList([
+      { type: 'case', name: 'renders', location: undefined, tests: [] },
+      { type: 'case', name: 'renders', location: undefined, tests: [] },
+    ] as any);
+    expect(root.children.get(getTestItemId('renders', 0)).range.startLine).toBe(
+      3,
+    );
+    expect(root.children.get(getTestItemId('renders', 1)).range.startLine).toBe(
+      8,
+    );
+  });
 });
