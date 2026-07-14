@@ -271,9 +271,7 @@ export class TestRunner {
 
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]
         .reverse()
-        .concat(cleanups)
-        .concat(fixtureCleanups)
-        .concat(test.onFinished);
+        .concat(cleanups);
 
       test.context.task.result = result;
       try {
@@ -284,6 +282,29 @@ export class TestRunner {
         result.status = 'fail';
         result.errors ??= [];
         result.errors.push(...(await formatTestError(error)));
+        test.context.task.result = result;
+      }
+
+      for (const fn of fixtureCleanups) {
+        try {
+          await fn();
+        } catch (error) {
+          result.status = 'fail';
+          result.errors ??= [];
+          result.errors.push(...(await formatTestError(error)));
+          test.context.task.result = result;
+        }
+      }
+
+      for (const fn of [...test.onFinished]) {
+        try {
+          await fn(test.context);
+        } catch (error) {
+          result.status = 'fail';
+          result.errors ??= [];
+          result.errors.push(...(await formatTestError(error)));
+          test.context.task.result = result;
+        }
       }
 
       if (skipped) {
@@ -773,7 +794,7 @@ export class TestRunner {
       wrapTimeout({
         name: 'onTestFinished hook',
         fn,
-        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
+        timeout: timeout ?? this.workerState!.runtimeConfig.hookTimeout,
         stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );
@@ -791,7 +812,7 @@ export class TestRunner {
       wrapTimeout({
         name: 'onTestFailed hook',
         fn,
-        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
+        timeout: timeout ?? this.workerState!.runtimeConfig.hookTimeout,
         stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );

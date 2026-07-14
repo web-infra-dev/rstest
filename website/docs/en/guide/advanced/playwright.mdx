@@ -245,6 +245,68 @@ The `playwright` fixture supports these options:
 | `contextOptions` | Options passed to `browser.newContext()`.            |
 | `requestOptions` | Options passed to `request.newContext()`.            |
 | `debug`          | Convenience options for local headed debugging.      |
+| `trace`          | Capture Playwright trace artifacts for debugging.    |
+
+## Trace debugging
+
+<ApiMeta addedVersion="0.11.2" />
+
+Set `playwright.trace` or `RSTEST_PLAYWRIGHT_TRACE` to capture Playwright's official `trace.zip` artifact from the `context` fixture. The trace covers the default `page` fixture and pages created with `context.newPage()`. Fixture configuration takes priority over the environment variable, then falls back to `off`.
+
+```ts
+import { expect, test } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+const e2e = test.extend({
+  playwright: {
+    trace: process.env.CI ? 'retain-on-failure' : 'off',
+  } satisfies PlaywrightOptions,
+});
+
+e2e('checkout', async ({ page }) => {
+  await page.goto('http://localhost:3000/checkout');
+  await expect(page.locator('main')).toBeAttached();
+});
+```
+
+For temporary CLI-style debugging without changing test code, set `RSTEST_PLAYWRIGHT_TRACE`:
+
+```bash
+RSTEST_PLAYWRIGHT_TRACE=retain-on-failure rstest
+```
+
+Use `RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR` to override the default output directory when trace is enabled by the environment variable:
+
+```bash
+RSTEST_PLAYWRIGHT_TRACE=on RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR=.rstest/playwright-traces rstest
+```
+
+`trace` accepts `'off'`, `'on'`, `'retain-on-failure'`, or an options object:
+
+```ts
+const e2e = test.extend({
+  playwright: {
+    trace: {
+      mode: 'retain-on-failure',
+      outputDir: '.rstest/playwright-traces',
+      screenshots: true,
+      snapshots: true,
+      sources: true,
+    },
+  } satisfies PlaywrightOptions,
+});
+```
+
+By default, traces are written to `.rstest/playwright-traces/<test-name>-<hash>/`. If the same test saves multiple traces, for example across retries, later attempts use a numeric suffix to avoid overwriting earlier traces. Every saved trace contains:
+
+- `trace.zip`: Playwright's official trace artifact. Open it with `npx playwright show-trace <path-to-trace.zip>`.
+
+When `summary` is enabled (the default), the directory also contains:
+
+- `trace-summary.json`: Rstest-aware test metadata, artifact paths, and error stacks for tools and AI assistants.
+- `debug.md`: a human-readable debugging report.
+
+`trace.zip` is not a generic Chrome/Perfetto trace. It is Playwright's trace format and is intended to be inspected with Playwright Trace Viewer.
 
 ## Local app server
 

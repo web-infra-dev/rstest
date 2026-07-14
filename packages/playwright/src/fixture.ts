@@ -1,6 +1,15 @@
-import { readFile, stat } from 'node:fs/promises';
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
+import { tmpdir } from 'node:os';
 import {
   basename,
   dirname,
@@ -74,6 +83,54 @@ export type PlaywrightDebugOptions = {
   pauseOnFailure?: boolean;
 };
 
+export type PlaywrightTraceMode = 'off' | 'on' | 'retain-on-failure';
+
+export type PlaywrightTraceOptions = {
+  /**
+   * When to save a Playwright trace.
+   *
+   * @default 'off'
+   */
+  mode?: PlaywrightTraceMode;
+  /**
+   * Directory where trace artifacts are written.
+   *
+   * @default '<projectRoot>/.rstest/playwright-traces'
+   */
+  outputDir?: string;
+  /**
+   * Capture screenshots in the Playwright trace.
+   *
+   * @default true
+   */
+  screenshots?: boolean;
+  /**
+   * Capture DOM snapshots in the Playwright trace.
+   *
+   * @default true
+   */
+  snapshots?: boolean;
+  /**
+   * Capture test source files in the Playwright trace.
+   *
+   * @default true
+   */
+  sources?: boolean;
+  /**
+   * Print the `playwright show-trace` command after saving a trace.
+   *
+   * @default true
+   */
+  print?: boolean;
+  /**
+   * Generate AI-readable `trace-summary.json` and `debug.md` files next to
+   * `trace.zip`.
+   *
+   * @default true
+   */
+  summary?: boolean;
+};
+
 export type PlaywrightServeOptions = {
   /** Host used by the static server. */
   host?: string;
@@ -116,6 +173,8 @@ export type PlaywrightOptions = {
   requestOptions?: PlaywrightRequestOptions;
   /** Convenience options for local headed debugging. */
   debug?: boolean | PlaywrightDebugOptions;
+  /** Capture Playwright trace artifacts for browser debugging. */
+  trace?: PlaywrightTraceMode | PlaywrightTraceOptions;
 };
 
 export type PlaywrightFixture = {
@@ -139,9 +198,12 @@ const DEFAULT_BROWSER_NAME = 'chromium' satisfies PlaywrightBrowserName;
 
 const DEBUG_ENV = 'PWDEBUG';
 const PAUSE_ENV = 'RSTEST_PLAYWRIGHT_PAUSE';
+const TRACE_ENV = 'RSTEST_PLAYWRIGHT_TRACE';
+const TRACE_OUTPUT_DIR_ENV = 'RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR';
 const DEBUG_PAUSE_TIMEOUT = 24 * 60 * 60 * 1000;
 const BROWSER_IDLE_CLOSE_DELAY = 1000;
 const DEFAULT_STATIC_SERVER_HOST = '127.0.0.1';
+const DEFAULT_TRACE_OUTPUT_DIR = join('.rstest', 'playwright-traces');
 const TEST_EACH_CONTEXT_SYMBOL = Symbol.for('rstest.test.each.context');
 const TEST_EACH_CONTEXT_PARAM = '__rstestPlaywrightContext';
 
@@ -199,6 +261,255 @@ const shouldPauseOnFailure = (playwright: PlaywrightOptions) => {
   }
 
   return debugOptions.pauseOnFailure ?? true;
+};
+
+const normalizeTraceOptions = (
+  trace: PlaywrightOptions['trace'],
+): Required<Omit<PlaywrightTraceOptions, 'outputDir'>> & {
+  outputDir?: string;
+} => {
+  const traceOptions: PlaywrightTraceOptions | undefined =
+    trace === undefined
+      ? getEnvTraceOptions()
+      : typeof trace === 'string'
+        ? { mode: trace }
+        : trace;
+
+  return {
+    mode: traceOptions?.mode ?? 'off',
+    outputDir: traceOptions?.outputDir,
+    screenshots: traceOptions?.screenshots ?? true,
+    snapshots: traceOptions?.snapshots ?? true,
+    sources: traceOptions?.sources ?? true,
+    print: traceOptions?.print ?? true,
+    summary: traceOptions?.summary ?? true,
+  };
+};
+
+const normalizeTraceMode = (
+  mode: string | undefined,
+): PlaywrightTraceMode | undefined => {
+  return mode === 'on' || mode === 'off' || mode === 'retain-on-failure'
+    ? mode
+    : undefined;
+};
+
+const getEnvTraceOptions = (): PlaywrightTraceOptions | undefined => {
+  const mode = normalizeTraceMode(process.env[TRACE_ENV]);
+
+  if (!mode) {
+    return;
+  }
+
+  return {
+    mode,
+    outputDir: process.env[TRACE_OUTPUT_DIR_ENV],
+  };
+};
+
+const getTraceArtifacts = (
+  playwright: PlaywrightOptions,
+  task: TestContext['task'],
+) => {
+  const options = normalizeTraceOptions(playwright.trace);
+
+  if (options.mode === 'off') {
+    return;
+  }
+
+  const projectRoot = task.projectRoot ?? process.cwd();
+  const outputRoot = options.outputDir
+    ? isAbsolute(options.outputDir)
+      ? options.outputDir
+      : resolve(projectRoot, options.outputDir)
+    : resolve(projectRoot, DEFAULT_TRACE_OUTPUT_DIR);
+  const dir = join(outputRoot, getTraceArtifactName(task));
+
+  return {
+    options,
+    dir,
+    tracePath: join(dir, 'trace.zip'),
+    summaryPath: join(dir, 'trace-summary.json'),
+    debugPath: join(dir, 'debug.md'),
+  };
+};
+
+type TraceArtifacts = NonNullable<ReturnType<typeof getTraceArtifacts>>;
+
+const getTraceArtifactName = (task: TestContext['task']) => {
+  const source = [task.filepath, task.id, task.name].filter(Boolean).join(' ');
+  let hash = 0;
+
+  for (let i = 0; i < source.length; i++) {
+    hash = (hash * 31 + source.charCodeAt(i)) >>> 0;
+  }
+
+  const sanitizedName = task.name
+    .replaceAll(/[^A-Za-z0-9._-]+/g, '-')
+    .replaceAll(/^-+|-+$/g, '')
+    .slice(0, 80);
+
+  return `${sanitizedName || 'test'}-${hash.toString(16).padStart(8, '0')}`;
+};
+
+const getFormattedErrors = (task: TestContext['task']) => {
+  return (task.result?.errors ?? []).map((error) => ({
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+  }));
+};
+
+const formatRelativePath = (projectRoot: string, path: string) => {
+  const relativePath = relative(projectRoot, path);
+
+  if (
+    relativePath.startsWith('..') ||
+    relativePath.startsWith(sep) ||
+    isAbsolute(relativePath)
+  ) {
+    return path;
+  }
+
+  return relativePath || '.';
+};
+
+const quoteShellArg = (value: string) => {
+  if (process.platform === 'win32') {
+    return `"${value}"`;
+  }
+
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+};
+
+const getShowTraceCommand = (
+  artifacts: TraceArtifacts,
+  projectRoot: string,
+) => {
+  const tracePath = quoteShellArg(
+    formatRelativePath(projectRoot, artifacts.tracePath),
+  );
+
+  return `npx playwright show-trace ${tracePath}`;
+};
+
+const reserveTraceArtifacts = async (
+  artifacts: TraceArtifacts,
+): Promise<TraceArtifacts> => {
+  await mkdir(dirname(artifacts.dir), { recursive: true });
+
+  for (let index = 0; ; index++) {
+    const dir = index === 0 ? artifacts.dir : `${artifacts.dir}-${index}`;
+
+    try {
+      await mkdir(dir);
+
+      return {
+        ...artifacts,
+        dir,
+        tracePath: join(dir, 'trace.zip'),
+        summaryPath: join(dir, 'trace-summary.json'),
+        debugPath: join(dir, 'debug.md'),
+      };
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !('code' in error) ||
+        error.code !== 'EEXIST'
+      ) {
+        throw error;
+      }
+    }
+  }
+};
+
+const writeTraceSummary = async ({
+  artifacts,
+  task,
+}: {
+  artifacts: TraceArtifacts;
+  task: TestContext['task'];
+}) => {
+  const projectRoot = task.projectRoot ?? process.cwd();
+  const showTraceCommand = getShowTraceCommand(artifacts, projectRoot);
+  const errors = getFormattedErrors(task);
+  const summary = {
+    test: {
+      id: task.id,
+      name: task.name,
+      file: task.filepath,
+      status: task.result?.status,
+    },
+    error: errors[0],
+    errors,
+    artifacts: {
+      trace: artifacts.tracePath,
+      summary: artifacts.summaryPath,
+      debug: artifacts.debugPath,
+    },
+    command: {
+      showTrace: showTraceCommand,
+    },
+    note: 'trace.zip is the official Playwright trace artifact. Use the command above to inspect actions, DOM snapshots, screenshots, console, and network details.',
+  };
+
+  await writeFile(
+    artifacts.summaryPath,
+    `${JSON.stringify(summary, undefined, 2)}\n`,
+  );
+
+  await writeFile(
+    artifacts.debugPath,
+    [
+      '# Playwright Trace Debug Report',
+      '',
+      '## Test',
+      '',
+      `- Name: ${task.name}`,
+      `- File: ${task.filepath ?? 'unknown'}`,
+      `- Status: ${task.result?.status ?? 'unknown'}`,
+      '',
+      '## Open Trace',
+      '',
+      '```bash',
+      showTraceCommand,
+      '```',
+      '',
+      '## Error',
+      '',
+      errors.length
+        ? errors
+            .map((error) =>
+              [`### ${error.name ?? 'Error'}`, '', error.message ?? ''].join(
+                '\n',
+              ),
+            )
+            .join('\n\n')
+        : 'No Rstest error was recorded for this test.',
+      '',
+      '## AI Debugging Notes',
+      '',
+      "- `trace.zip` is Playwright's official trace artifact, not a generic Chrome/Perfetto trace.",
+      '- Inspect it with Playwright Trace Viewer for actions, DOM snapshots, screenshots, console, and network details.',
+      '- Use `trace-summary.json` for Rstest-aware test metadata and error stacks.',
+      '',
+    ].join('\n'),
+  );
+};
+
+const printTraceSavedMessage = (
+  artifacts: TraceArtifacts,
+  task: TestContext['task'],
+) => {
+  const projectRoot = task.projectRoot ?? process.cwd();
+  const tracePath = formatRelativePath(projectRoot, artifacts.tracePath);
+
+  console.log(`[rstest-playwright] Trace saved: ${tracePath}`);
+  if (artifacts.options.print) {
+    console.log(
+      `[rstest-playwright] View trace: ${getShowTraceCommand(artifacts, projectRoot)}`,
+    );
+  }
 };
 
 export const resolveLaunchOptions = ({
@@ -295,6 +606,27 @@ const scheduleBrowserCleanupWhenIdle = () => {
     browserCleanupTimer = undefined;
     void closeBrowserWhenIdle();
   }, BROWSER_IDLE_CLOSE_DELAY);
+};
+
+const retainBrowser = () => {
+  clearBrowserCleanupTimer();
+  activeBrowserFixtureCount++;
+  let released = false;
+
+  return async (scheduleCleanup: boolean) => {
+    if (released) {
+      return;
+    }
+
+    released = true;
+    activeBrowserFixtureCount--;
+
+    if (scheduleCleanup) {
+      scheduleBrowserCleanupWhenIdle();
+    } else {
+      await closeBrowserWhenIdle();
+    }
+  };
 };
 
 const createStaticServerClose = (server: Server) => {
@@ -473,24 +805,7 @@ const cleanupBrowserFixture = [
     { onTestFailed, task }: TestContext,
     use: (value: undefined) => Promise<void>,
   ) => {
-    clearBrowserCleanupTimer();
-    activeBrowserFixtureCount++;
-    let released = false;
-
-    const release = async (scheduleCleanup: boolean) => {
-      if (released) {
-        return;
-      }
-
-      released = true;
-      activeBrowserFixtureCount--;
-
-      if (scheduleCleanup) {
-        scheduleBrowserCleanupWhenIdle();
-      } else {
-        await closeBrowserWhenIdle();
-      }
-    };
+    const release = retainBrowser();
 
     onTestFailed(async () => {
       await release(false);
@@ -514,70 +829,6 @@ const playwrightFixtures = {
   cleanupBrowser: cleanupBrowserFixture,
   playwright: defaultPlaywrightFixture,
 
-  serve: async (
-    {
-      onTestFailed,
-      playwright,
-      task,
-    }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
-    use: (serve: PlaywrightServe) => Promise<void>,
-  ) => {
-    const servers: {
-      keepAliveOnDebug?: boolean;
-      released: boolean;
-      server: PlaywrightServeResult;
-    }[] = [];
-
-    const cleanupServers = async () => {
-      const errors: unknown[] = [];
-
-      for (const entry of servers.toReversed()) {
-        if (entry.released) {
-          continue;
-        }
-
-        entry.released = true;
-        try {
-          await cleanupServer({
-            ...entry,
-            playwright,
-          });
-        } catch (error) {
-          errors.push(error);
-        }
-      }
-
-      if (errors.length === 1) {
-        throw errors[0];
-      }
-      if (errors.length > 1) {
-        throw new AggregateError(errors, 'Failed to close Playwright servers.');
-      }
-    };
-
-    onTestFailed(cleanupServers);
-
-    const serve: PlaywrightServe = async (entry, options) => {
-      const server = await startStaticServer(entry, options, task.projectRoot);
-
-      servers.push({
-        keepAliveOnDebug: options?.keepAliveOnDebug,
-        released: false,
-        server,
-      });
-
-      return server;
-    };
-
-    try {
-      await use(serve);
-    } finally {
-      if (task.result?.status !== 'fail') {
-        await cleanupServers();
-      }
-    }
-  },
-
   browser: async (
     { playwright }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
     use: (browser: Browser) => Promise<void>,
@@ -590,21 +841,153 @@ const playwrightFixtures = {
     {
       browser,
       onTestFailed,
+      onTestFinished,
       playwright,
       task,
     }: TestContext & Pick<PlaywrightFixture, 'browser' | 'playwright'>,
     use: (context: BrowserContext) => Promise<void>,
   ) => {
     const context = await browser.newContext(playwright.contextOptions);
-    onTestFailed(async () => {
-      await context.close();
-    });
+    const artifacts = getTraceArtifacts(playwright, task);
+    let activeArtifacts: TraceArtifacts | undefined;
+    let traceStarted = false;
+    let released = false;
+    let finalized = false;
+    let traceReported = false;
+    let releaseBrowser: ReturnType<typeof retainBrowser> | undefined;
+    let stagedTraceDir: string | undefined;
+    let stagedTracePath: string | undefined;
+
+    const finalizeTrace = async () => {
+      if (!activeArtifacts || finalized) {
+        return;
+      }
+
+      if (activeArtifacts.options.summary) {
+        await writeTraceSummary({ artifacts: activeArtifacts, task });
+      }
+
+      if (!traceReported) {
+        printTraceSavedMessage(activeArtifacts, task);
+        traceReported = true;
+      }
+
+      finalized = true;
+    };
+
+    const finishContextCleanup = async (scheduleBrowserCleanup: boolean) => {
+      try {
+        if (stagedTraceDir && stagedTracePath) {
+          try {
+            if (task.result?.status === 'fail' && artifacts) {
+              activeArtifacts = await reserveTraceArtifacts(artifacts);
+              try {
+                await copyFile(stagedTracePath, activeArtifacts.tracePath);
+              } catch (error) {
+                await rm(activeArtifacts.dir, {
+                  recursive: true,
+                  force: true,
+                });
+                activeArtifacts = undefined;
+                throw error;
+              }
+            }
+          } finally {
+            await rm(stagedTraceDir, { recursive: true, force: true });
+            stagedTraceDir = undefined;
+            stagedTracePath = undefined;
+          }
+        }
+
+        await finalizeTrace();
+      } finally {
+        await releaseBrowser?.(scheduleBrowserCleanup);
+      }
+    };
+
+    const cleanupContext = async () => {
+      if (released) {
+        await finishContextCleanup(task.result?.status !== 'fail');
+        return;
+      }
+
+      released = true;
+
+      try {
+        try {
+          if (artifacts && traceStarted) {
+            const shouldSaveTrace =
+              artifacts.options.mode === 'on' || task.result?.status === 'fail';
+            const shouldStageTrace =
+              artifacts.options.mode === 'retain-on-failure' &&
+              task.result?.status !== 'fail';
+
+            if (shouldSaveTrace) {
+              activeArtifacts = await reserveTraceArtifacts(artifacts);
+              try {
+                await context.tracing.stop({ path: activeArtifacts.tracePath });
+              } catch (error) {
+                await rm(activeArtifacts.dir, { recursive: true, force: true });
+                activeArtifacts = undefined;
+                throw error;
+              }
+            } else if (shouldStageTrace) {
+              stagedTraceDir = await mkdtemp(
+                join(tmpdir(), 'rstest-playwright-trace-'),
+              );
+              stagedTracePath = join(stagedTraceDir, 'trace.zip');
+              try {
+                await context.tracing.stop({ path: stagedTracePath });
+              } catch (error) {
+                await rm(stagedTraceDir, { recursive: true, force: true });
+                stagedTraceDir = undefined;
+                stagedTracePath = undefined;
+                throw error;
+              }
+            } else {
+              await context.tracing.stop();
+            }
+          }
+        } finally {
+          await context.close();
+        }
+      } catch (error) {
+        if (task.result?.status === 'fail') {
+          await finishContextCleanup(false);
+        }
+        throw error;
+      }
+
+      await finishContextCleanup(task.result?.status !== 'fail');
+    };
+
+    onTestFailed(cleanupContext, 0);
+
+    if (artifacts) {
+      try {
+        await context.tracing.start({
+          screenshots: artifacts.options.screenshots,
+          snapshots: artifacts.options.snapshots,
+          sources: artifacts.options.sources,
+          title: task.name,
+        });
+        traceStarted = true;
+      } catch (error) {
+        await cleanupContext();
+        throw error;
+      }
+    }
 
     try {
       await use(context);
     } finally {
       if (task.result?.status !== 'fail') {
-        await context.close();
+        releaseBrowser = retainBrowser();
+        onTestFinished(async () => {
+          if (task.result?.status !== 'fail') {
+            await cleanupContext();
+          }
+        }, 0);
       }
     }
   },
@@ -669,6 +1052,70 @@ const playwrightFixtures = {
     } finally {
       if (task.result?.status !== 'fail') {
         await cleanupRequest();
+      }
+    }
+  },
+
+  serve: async (
+    {
+      onTestFailed,
+      playwright,
+      task,
+    }: TestContext & Pick<PlaywrightFixture, 'playwright'>,
+    use: (serve: PlaywrightServe) => Promise<void>,
+  ) => {
+    const servers: {
+      keepAliveOnDebug?: boolean;
+      released: boolean;
+      server: PlaywrightServeResult;
+    }[] = [];
+
+    const cleanupServers = async () => {
+      const errors: unknown[] = [];
+
+      for (const entry of servers.toReversed()) {
+        if (entry.released) {
+          continue;
+        }
+
+        entry.released = true;
+        try {
+          await cleanupServer({
+            ...entry,
+            playwright,
+          });
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+
+      if (errors.length === 1) {
+        throw errors[0];
+      }
+      if (errors.length > 1) {
+        throw new AggregateError(errors, 'Failed to close Playwright servers.');
+      }
+    };
+
+    onTestFailed(cleanupServers);
+
+    const serve: PlaywrightServe = async (entry, options) => {
+      const server = await startStaticServer(entry, options, task.projectRoot);
+
+      servers.push({
+        keepAliveOnDebug: options?.keepAliveOnDebug,
+        released: false,
+        server,
+      });
+
+      return server;
+    };
+
+    try {
+      await use(serve);
+    } finally {
+      if (task.result?.status !== 'fail') {
+        await cleanupServers();
       }
     }
   },
