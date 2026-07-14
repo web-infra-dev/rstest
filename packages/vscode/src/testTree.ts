@@ -32,6 +32,13 @@ export function getTestItemId(name: string, siblingIndex: number): string {
   return siblingIndex ? [name, siblingIndex].join('@@@@@@') : name;
 }
 
+// Occurrence index of `name` among the siblings already collected in `parent`
+// (0 for the first). Shared by tree creation and the range snapshot so both
+// derive the same duplicate-aware id via getTestItemId.
+function siblingIndexOf(parent: vscode.TestItem[], name: string): number {
+  return parent.filter((child) => child.label === name).length;
+}
+
 export function gatherTestItems(
   collection: vscode.TestItemCollection,
   recursive = true,
@@ -141,15 +148,41 @@ export class TestFile {
   }
 
   public updateFromList(tests: TestInfo[]) {
+    // A run's reported tests may arrive without a source location (the runtime
+    // only emits locations when `includeTaskLocation` resolves one, which
+    // depends on the project's core version and build). Snapshot the ranges we
+    // already have so a location-less test keeps its range instead of
+    // collapsing to line 1, which would move every gutter icon to the imports.
+    // Keys are the path of duplicate-aware item ids so that duplicate sibling
+    // names each keep their own range.
+    const previousRanges = new Map<string, vscode.Range>();
+    const rangeKey = (idPath: string[]) => idPath.join('\x00');
+    const snapshot = (item: vscode.TestItem, idPath: string[]) => {
+      if (item.range) previousRanges.set(rangeKey(idPath), item.range);
+      item.children.forEach((child) => snapshot(child, [...idPath, child.id]));
+    };
+    this.children.forEach((item) => snapshot(item, [item.id]));
+
     const handleChild = (
       test: TestInfo,
       parent: vscode.TestItem[],
       parentNames: string[],
+      parentIds: string[],
     ) => {
-      // vscode location is zero based
-      const line = (test.location?.line ?? 1) - 1;
-      const column = (test.location?.column ?? 1) - 1;
-      const range = new vscode.Range(line, column, line, column);
+      const names = [...parentNames, test.name];
+      const ids = [
+        ...parentIds,
+        getTestItemId(test.name, siblingIndexOf(parent, test.name)),
+      ];
+      let range: vscode.Range | undefined;
+      if (test.location) {
+        // vscode location is zero based
+        const line = test.location.line - 1;
+        const column = test.location.column - 1;
+        range = new vscode.Range(line, column, line, column);
+      } else {
+        range = previousRanges.get(rangeKey(ids));
+      }
       const testItem = this.onTest(
         range,
         test.name,
@@ -160,7 +193,7 @@ export class TestFile {
       if (test.type === 'suite') {
         const children: vscode.TestItem[] = [];
         test.tests.forEach((child) => {
-          handleChild(child, children, [...parentNames, test.name]);
+          handleChild(child, children, names, ids);
         });
         testItem.children.replace(children);
       }
@@ -171,20 +204,20 @@ export class TestFile {
         ? tests[0].tests
         : tests;
     realTests.forEach((test) => {
-      handleChild(test, children, []);
+      handleChild(test, children, [], []);
     });
     this.children = children;
     this.testItem?.children.replace(this.children);
   }
 
   private onTest(
-    range: vscode.Range,
+    range: vscode.Range | undefined,
     name: string,
     testType: 'test' | 'it' | 'suite' | 'describe',
     parent: vscode.TestItem[],
     parentNames: string[],
   ) {
-    const siblingsCount = parent.filter((child) => child.label === name).length;
+    const siblingsCount = siblingIndexOf(parent, name);
 
     const id = getTestItemId(name, siblingsCount);
 
@@ -196,7 +229,7 @@ export class TestFile {
       new TestCase(this.api, this.uri, parentNames, isSuite ? 'suite' : 'case'),
     );
 
-    testItem.range = range;
+    if (range) testItem.range = range;
 
     // warn about duplicated name
     if (siblingsCount) testItem.error = `Duplicated ${testType} name`;
