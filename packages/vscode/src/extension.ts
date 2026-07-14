@@ -4,6 +4,7 @@ import { TestErrorStore, testMessageText } from './errorStore';
 import { logger } from './logger';
 import { runningWorkers } from './master';
 import { Project, WorkspaceManager } from './project';
+import { disposeTerminal } from './terminal';
 import { RstestFileCoverage } from './testRunReporter';
 import {
   gatherTestItems,
@@ -23,6 +24,7 @@ export function deactivate() {
   for (const worker of runningWorkers) {
     worker.$close();
   }
+  disposeTerminal();
 }
 
 class Rstest {
@@ -140,6 +142,26 @@ class Rstest {
         await vscode.env.clipboard.writeText(testMessageText(args.message));
       },
     );
+
+    register('rstest.runInTerminal', (testItem?: vscode.TestItem) => {
+      if (!testItem) return;
+      const data = testData.get(testItem);
+      if (data instanceof TestCase) {
+        data.api.runInTerminal({
+          fileFilter: data.uri.fsPath,
+          testCaseNamePath: data.parentNames.concat(testItem.label),
+          isSuite: data.type === 'suite',
+        });
+      } else if (data instanceof TestFile || data instanceof TestFolder) {
+        data.api.runInTerminal({ fileFilter: data.uri.fsPath });
+      } else if (data instanceof Project) {
+        data.api.runInTerminal({});
+      } else {
+        vscode.window.showInformationMessage(
+          'Run in Terminal is not available for this item.',
+        );
+      }
+    });
 
     register(
       'rstest.copyTestItemErrors',
@@ -297,8 +319,8 @@ class Rstest {
 
         const data = testData.get(test);
         if (data instanceof WorkspaceManager) {
-          if (data.projects.size === 1) {
-            const project = data.projects.values().next().value!;
+          if (data.activeProjects.size === 1) {
+            const project = data.activeProjects.values().next().value!;
             await project.api.runTest({
               ...commonOptions,
             });
@@ -337,8 +359,8 @@ class Rstest {
       if (!request.include?.length) {
         if (this.workspaces.size === 1) {
           const workspace = this.workspaces.values().next().value!;
-          if (workspace.projects.size === 1) {
-            const project = workspace.projects.values().next().value!;
+          if (workspace.activeProjects.size === 1) {
+            const project = workspace.activeProjects.values().next().value!;
             await project.api.runTest({
               ...commonOptions,
             });

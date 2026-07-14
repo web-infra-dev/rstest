@@ -56,6 +56,12 @@
         "title": "Copy Test Errors",
         "category": "Rstest",
         "icon": "$(copy)"
+      },
+      {
+        "command": "rstest.runInTerminal",
+        "title": "Run in Terminal",
+        "category": "Rstest",
+        "icon": "$(terminal)"
       }
     ],
     "configuration": {
@@ -164,6 +170,18 @@
           "description": "Show diagnostics in editor and Problems panel for failed tests.",
           "type": "boolean",
           "default": true
+        },
+        "rstest.terminalShellPath": {
+          "markdownDescription": "Path to the shell used by the **Run in Terminal** command. Leave empty to use your default integrated terminal so its profile and environment are honored. Note: command arguments are quoted for POSIX shells; on Windows point this at a POSIX-style shell (e.g. Git Bash) if a test name needs quoting.",
+          "type": "string"
+        },
+        "rstest.terminalShellArgs": {
+          "markdownDescription": "Arguments passed to the shell used by the **Run in Terminal** command.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
         }
       }
     },
@@ -183,6 +201,10 @@
         },
         {
           "command": "rstest.copyTestItemErrors",
+          "when": "false"
+        },
+        {
+          "command": "rstest.runInTerminal",
           "when": "false"
         }
       ],
@@ -216,11 +238,20 @@
       ],
       "testing/item/context": [
         {
+          "command": "rstest.runInTerminal",
+          "group": "rstest@1",
+          "when": "controllerId == 'rstest'"
+        },
+        {
           "command": "rstest.copyTestItemErrors",
           "when": "controllerId == 'rstest'"
         }
       ],
       "testing/item/gutter": [
+        {
+          "command": "rstest.runInTerminal",
+          "when": "controllerId == 'rstest'"
+        },
         {
           "command": "rstest.copyTestItemErrors",
           "when": "controllerId == 'rstest'"
