@@ -6,6 +6,7 @@ import regexpEscape from 'core-js-pure/actual/regexp/escape';
 import vscode from 'vscode';
 import { getConfigValue } from './config';
 import type { RstestDiagnostics } from './diagnostics';
+import type { TestErrorStore } from './errorStore';
 import { logger } from './logger';
 import type { Project } from './project';
 import { TestRunReporter } from './testRunReporter';
@@ -164,6 +165,7 @@ export class RstestApi {
     kind,
     continuous,
     diagnostics,
+    errorStore,
     createTestRun,
   }: {
     run: vscode.TestRun;
@@ -175,6 +177,7 @@ export class RstestApi {
     kind?: vscode.TestRunProfileKind;
     continuous?: boolean;
     diagnostics?: RstestDiagnostics;
+    errorStore?: TestErrorStore;
     createTestRun?: () => vscode.TestRun;
   }) {
     let onFinish!: () => void;
@@ -201,6 +204,7 @@ export class RstestApi {
       createTestRun,
       this.configFilePath,
       applyDiagnostic ? diagnostics : undefined,
+      errorStore,
     );
 
     const worker = await this.createChildProcess(

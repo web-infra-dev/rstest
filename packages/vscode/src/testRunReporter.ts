@@ -10,6 +10,7 @@ import vscode from 'vscode';
 import { ROOT_SUITE_NAME } from '../../core/src/utils/constants';
 import { parseErrorStacktrace } from '../../core/src/utils/error';
 import type { DiagnosticEntry, RstestDiagnostics } from './diagnostics';
+import type { TestErrorStore } from './errorStore';
 import { logger } from './logger';
 import type { Project } from './project';
 import type { LogLevel } from './shared/logger';
@@ -25,6 +26,7 @@ export class TestRunReporter implements Reporter {
     private createTestRun?: () => vscode.TestRun,
     private projectKey = '',
     private diagnostics?: RstestDiagnostics,
+    private errorStore?: TestErrorStore,
   ) {}
 
   public async log(level: LogLevel, message: string) {
@@ -170,12 +172,14 @@ export class TestRunReporter implements Reporter {
       case 'pass': {
         this.run?.passed(testItem, result.duration);
         this.diagnostics?.clearForTest(this.projectKey, testItem);
+        this.errorStore?.clear(testItem);
         break;
       }
       case 'skip':
       case 'todo': {
         this.run?.skipped(testItem);
         this.diagnostics?.clearForTest(this.projectKey, testItem);
+        this.errorStore?.clear(testItem);
         break;
       }
       case 'fail': {
@@ -190,6 +194,7 @@ export class TestRunReporter implements Reporter {
           testItem,
           this.createDiagnostics(testItem, errors),
         );
+        this.errorStore?.set(testItem, errors);
         break;
       }
     }
