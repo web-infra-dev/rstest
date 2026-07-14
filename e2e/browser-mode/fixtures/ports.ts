@@ -38,6 +38,8 @@ export const BROWSER_PORTS = {
   'mixed-browser-fail': 5240,
   'browser-only-reporters': 5242,
   'no-tests-reporters': 5244,
+  'browser-empty-project': 5248,
+  'browser-collect-timeout': 5250,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);

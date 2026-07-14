@@ -3,12 +3,20 @@ import { pathToFileURL } from 'node:url';
 import type {
   BrowserTestRunOptions,
   BrowserTestRunResult,
+  ListBrowserTestsOptions,
   ListCommandResult,
+  ProjectContext,
   RstestContext,
+  TestExecutor,
 } from '../types';
+import type { CoverageProvider } from '../types/coverage';
 import { color, logger } from '../utils';
 
-export type { BrowserTestRunOptions, BrowserTestRunResult } from '../types';
+export type {
+  BrowserTestRunOptions,
+  BrowserTestRunResult,
+  ListBrowserTestsOptions,
+} from '../types';
 
 /**
  * Core-owned contract for the `@rstest/browser/internal` host module.
@@ -19,22 +27,41 @@ export type { BrowserTestRunOptions, BrowserTestRunResult } from '../types';
  * as {@link RstestContext} (not `unknown`) so drift between the two sides —
  * such as a dropped `options` argument — surfaces as a type error.
  */
+/**
+ * Options for {@link BrowserHostModule.createBrowserExecutor}. `projects` is the
+ * explicit browser-project subset the plan resolved; `coverageProvider` is the
+ * single run-scoped provider core owns, shared so the browser host folds its
+ * per-file coverage into the same map shape the node pool produces.
+ */
+export interface CreateBrowserExecutorOptions extends Pick<
+  BrowserTestRunOptions,
+  | 'freezeShardedEntries'
+  | 'filesOnly'
+  | 'allowEmptyRun'
+  | 'appliedModifyRstestConfigEnvironments'
+> {
+  projects: ProjectContext[];
+  coverageProvider: CoverageProvider | null;
+}
+
 export interface BrowserHostModule {
   validateBrowserConfig: (context: RstestContext) => void;
+  /**
+   * The outer-seam entry point: build a {@link TestExecutor} the shared run loop
+   * drives alongside the node pool. Obtained through the version-locked dynamic
+   * seam so core never statically imports playwright.
+   */
+  createBrowserExecutor: (
+    context: RstestContext,
+    options: CreateBrowserExecutorOptions,
+  ) => Promise<TestExecutor>;
   runBrowserTests: (
     context: RstestContext,
     options?: BrowserTestRunOptions,
   ) => Promise<BrowserTestRunResult | void>;
   listBrowserTests: (
     context: RstestContext,
-    options?: Pick<
-      BrowserTestRunOptions,
-      | 'shardedEntries'
-      | 'freezeShardedEntries'
-      | 'filesOnly'
-      | 'targetEnvironmentNames'
-      | 'appliedModifyRstestConfigEnvironments'
-    >,
+    options?: ListBrowserTestsOptions,
   ) => Promise<{
     list: ListCommandResult[];
     close: () => Promise<void>;

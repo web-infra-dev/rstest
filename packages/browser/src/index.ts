@@ -2,8 +2,10 @@ import type {
   BrowserHostModule,
   BrowserTestRunOptions,
   BrowserTestRunResult,
+  ListBrowserTestsOptions,
   RstestContext,
 } from '@rstest/core/internal/browser';
+import { createBrowserExecutor } from './browserExecutor';
 import { validateBrowserConfig } from './configValidation';
 import {
   type ListBrowserTestsResult,
@@ -11,7 +13,7 @@ import {
   runBrowserController,
 } from './hostController';
 
-export { validateBrowserConfig };
+export { createBrowserExecutor, validateBrowserConfig };
 
 export async function runBrowserTests(
   context: RstestContext,
@@ -22,14 +24,7 @@ export async function runBrowserTests(
 
 export async function listBrowserTests(
   context: RstestContext,
-  options?: Pick<
-    BrowserTestRunOptions,
-    | 'shardedEntries'
-    | 'freezeShardedEntries'
-    | 'filesOnly'
-    | 'targetEnvironmentNames'
-    | 'appliedModifyRstestConfigEnvironments'
-  >,
+  options?: ListBrowserTestsOptions,
 ): Promise<ListBrowserTestsResult> {
   // Forward `options` (e.g. `shardedEntries`) so `rstest list --shard` lists
   // only the current shard's browser test files, matching the run path.
@@ -43,6 +38,7 @@ export async function listBrowserTests(
  */
 void ({
   validateBrowserConfig,
+  createBrowserExecutor,
   runBrowserTests,
   listBrowserTests,
 } satisfies BrowserHostModule);

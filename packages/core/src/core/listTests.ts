@@ -26,6 +26,7 @@ import {
 } from './globalSetup';
 import { createSetupFileState } from './setupFileState';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
+import { isBrowserProject, isNodeProject } from './isBrowserProject';
 import { createListProjectPlanState, syncNodeProjects } from './projectPlan';
 import { getUserRstestConfigPluginProjects } from './modifyRstestConfig';
 
@@ -307,20 +308,23 @@ const collectBrowserTests = async ({
   const { loadBrowserModule } = await import('./browserLoader');
   // Pass project roots to resolve @rstest/browser from project-specific node_modules
   const projectRoots = browserProjects.map((p) => p.rootPath);
-  const { validateBrowserConfig, listBrowserTests } = await loadBrowserModule({
-    projectRoots,
-    embedded: context.embedded,
-  });
+  const { validateBrowserConfig, createBrowserExecutor } =
+    await loadBrowserModule({
+      projectRoots,
+      embedded: context.embedded,
+    });
   validateBrowserConfig(context);
-  return listBrowserTests(context, {
-    shardedEntries,
+  // Collect through the executor seam (its per-executor `timeoutMs` default),
+  // so `rstest list` and the run path share one browser entry point.
+  const executor = await createBrowserExecutor(context, {
+    projects: browserProjects,
+    coverageProvider: null,
     freezeShardedEntries,
     filesOnly,
-    targetEnvironmentNames: browserProjects.map(
-      (project) => project.environmentName,
-    ),
     appliedModifyRstestConfigEnvironments,
   });
+  const { list } = await executor.collect({ shardedEntries });
+  return { list, close: () => executor.close() };
 };
 
 const collectTestFiles = async ({
@@ -378,12 +382,8 @@ const collectAllTests = async ({
   close: () => Promise<void>;
 }> => {
   // Separate browser and node mode projects
-  const browserProjects = context.projects.filter(
-    (p) => p.normalizedConfig.browser.enabled,
-  );
-  const nodeProjects = context.projects.filter(
-    (p) => !p.normalizedConfig.browser.enabled,
-  );
+  const browserProjects = context.projects.filter(isBrowserProject);
+  const nodeProjects = context.projects.filter(isNodeProject);
 
   const collectBrowser = () =>
     collectBrowserTests({
@@ -541,9 +541,7 @@ export async function listTests(
     validateEnvironmentComments,
   } = listPlanState;
 
-  const nodeProjects = context.projects.filter(
-    (project) => !project.normalizedConfig.browser.enabled,
-  );
+  const nodeProjects = context.projects.filter(isNodeProject);
   const shouldPrintShardAfterConfigHooks = Boolean(
     shard && !filesOnly && nodeProjects.length,
   );

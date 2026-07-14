@@ -8,10 +8,19 @@
 import * as rsbuild from '@rsbuild/core';
 
 // Core-owned contract for the host module that @rstest/browser implements
-export type { BrowserHostModule } from './core/browserLoader';
-// Executor cycle outcome — the browser host returns one so the shared
-// finalizeRunCycle can reduce it alongside the node outcome.
-export type { ExecutorCycleOutcome } from './types';
+export type {
+  BrowserHostModule,
+  CreateBrowserExecutorOptions,
+} from './core/browserLoader';
+// The executor seam — `@rstest/browser`'s `BrowserExecutor` writes
+// `implements TestExecutor` and returns an `ExecutorCycleOutcome` so the shared
+// `finalizeRunCycle` reduces it alongside the node outcome. Transitive dts
+// exposure through `BrowserHostModule` is not enough; these must be named here.
+export type {
+  ExecutorCycleOutcome,
+  ExecutorRunCycleOptions,
+  TestExecutor,
+} from './types';
 // The executor-capability table's list of RuntimeConfig keys the browser wire
 // ignores/strips; the browser config validation iterates it so a new
 // ignored/stripped row can't become a silent no-op (#1389).
@@ -54,8 +63,10 @@ export type {
   BrowserTestRunResult,
   BrowserViewport,
   CoverageMapData,
+  CoverageProvider,
   DevicePreset,
   FormattedError,
+  ListBrowserTestsOptions,
   ListCommandResult,
   ProjectContext,
   Reporter,
@@ -78,7 +89,8 @@ export {
   serializableConfig,
 } from './utils';
 // Worker concurrency primitives shared with @rstest/browser
-export { getNumCpus, parseWorkers } from './utils/workers';
+export { getNumCpus, parseWorkers, resolveWorkerCount } from './utils/workers';
+export type { ResolveWorkerCountOptions } from './utils/workers';
 // Constants
 export {
   BROWSER_PROVIDERS,
