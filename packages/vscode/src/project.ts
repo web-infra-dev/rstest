@@ -15,6 +15,10 @@ const DEFAULT_ROOT_CONFIG_RE = /^rstest\.config\.[mc]?[tj]s$/;
 
 export class WorkspaceManager implements vscode.Disposable {
   public projects = new Map<string, Project>();
+  // The subset of `projects` currently shown (not suppressed as a duplicate of
+  // an aggregating parent). Kept in sync by `refreshAllProject`. Run All uses
+  // this rather than `projects` so it runs the same set the tree displays.
+  public activeProjects = new Map<string, Project>();
   private workspacePath: string;
   private testItem?: vscode.TestItem;
   private configValueWatcher: vscode.Disposable;
@@ -141,6 +145,7 @@ export class WorkspaceManager implements vscode.Disposable {
     collection.replace([]);
 
     const activeProjects = this.resolveActiveProjects();
+    this.activeProjects = activeProjects;
 
     // Standard single-project setup (one project using the default config name
     // at the workspace root): show its test files directly, with no project node.

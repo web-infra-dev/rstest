@@ -319,8 +319,8 @@ class Rstest {
 
         const data = testData.get(test);
         if (data instanceof WorkspaceManager) {
-          if (data.projects.size === 1) {
-            const project = data.projects.values().next().value!;
+          if (data.activeProjects.size === 1) {
+            const project = data.activeProjects.values().next().value!;
             await project.api.runTest({
               ...commonOptions,
             });
@@ -359,8 +359,8 @@ class Rstest {
       if (!request.include?.length) {
         if (this.workspaces.size === 1) {
           const workspace = this.workspaces.values().next().value!;
-          if (workspace.projects.size === 1) {
-            const project = workspace.projects.values().next().value!;
+          if (workspace.activeProjects.size === 1) {
+            const project = workspace.activeProjects.values().next().value!;
             await project.api.runTest({
               ...commonOptions,
             });
