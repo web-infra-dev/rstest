@@ -2,6 +2,7 @@ import path from 'node:path';
 import { pluginSass } from '@rsbuild/plugin-sass';
 import { defineConfig } from '@rspress/core';
 import { pluginAlgolia } from '@rspress/plugin-algolia';
+import { pluginClientRedirects } from '@rspress/plugin-client-redirects';
 import { pluginGoogleAnalytics } from 'rsbuild-plugin-google-analytics';
 import { pluginOpenGraph } from 'rsbuild-plugin-open-graph';
 import { pluginFontOpenSans } from 'rspress-plugin-font-open-sans';
@@ -72,6 +73,50 @@ export default defineConfig({
   plugins: [
     pluginAlgolia({
       verificationContent: '71ECBF977243215D',
+    }),
+    pluginClientRedirects({
+      redirects: [
+        {
+          from: '/guide/advanced/debugging',
+          to: '/guide/debug/debugging',
+        },
+        {
+          from: '/guide/advanced/profiling',
+          to: '/guide/debug/profiling',
+        },
+        {
+          from: '/guide/advanced/troubleshooting',
+          to: '/guide/debug/troubleshooting',
+        },
+        {
+          from: '/guide/basic/metadata',
+          to: '/guide/advanced/metadata',
+        },
+        {
+          from: '/guide/basic/scoped-cleanup',
+          to: '/guide/advanced/scoped-cleanup',
+        },
+        {
+          from: '/zh/guide/advanced/debugging',
+          to: '/zh/guide/debug/debugging',
+        },
+        {
+          from: '/zh/guide/advanced/profiling',
+          to: '/zh/guide/debug/profiling',
+        },
+        {
+          from: '/zh/guide/advanced/troubleshooting',
+          to: '/zh/guide/debug/troubleshooting',
+        },
+        {
+          from: '/zh/guide/basic/metadata',
+          to: '/zh/guide/advanced/metadata',
+        },
+        {
+          from: '/zh/guide/basic/scoped-cleanup',
+          to: '/zh/guide/advanced/scoped-cleanup',
+        },
+      ],
     }),
     pluginFontOpenSans(),
     pluginSitemap({
