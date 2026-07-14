@@ -95,7 +95,7 @@ export default defineConfig({
 
 #### Istanbul provider
 
-[Istanbul](https://istanbul.js.org/) 是一个广泛使用的 JavaScript 代码覆盖率分析工具，它通过插桩的方式来收集代码覆盖率信息。
+[Istanbul](https://istanbul.js.org/) 是一个广泛使用的 JavaScript 代码覆盖率工具，它通过插桩来收集覆盖率信息。
 
 要启用 istanbul 覆盖率，需要先安装 `@rstest/coverage-istanbul`。
 
@@ -103,17 +103,11 @@ import { PackageManagerTabs } from '@theme';
 
 <PackageManagerTabs command="add @rstest/coverage-istanbul -D" />
 
-`@rstest/coverage-istanbul` 由 [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument) 提供支持。Rstest 会在 transform 阶段通过 SWC 完成插桩，因此该 provider 具有较好的 transform 性能。但插桩后的代码会在执行时保留用于收集覆盖率的计数器，因此运行时内存占用可能更高。
+`@rstest/coverage-istanbul` 由 [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument) 提供支持。Rstest 会在 transform 阶段通过 SWC 对源文件插桩，因此该 provider 具有较好的 transform 性能。但执行模块中会保留用于收集覆盖率的计数器，因此运行时内存占用可能更高。
 
-##### 序列化函数和其他 realm
+##### 排除代码
 
-Istanbul 会向插桩后的文件注入 `cov_*` 覆盖率计数器调用。这些计数器的作用域属于 Rstest 执行的 transformed module。如果来自插桩文件的代码被序列化后在其他位置执行，新的 scope 或 realm 可能没有对应的 `cov_*` helper，测试就可能以 `ReferenceError: cov_... is not defined` 失败。
-
-当函数通过 `fn.toString()` 序列化，或者通过 `page.evaluate`、`Worker`、`node:vm`、`eval`、`new Function` 等 API 执行时，可能触发这个问题。要避免该错误，可以通过 `coverage.exclude` 排除对应源文件；在非 Browser Mode 测试中切换到 `coverage.provider: 'v8'`；或者避免序列化经过 Istanbul 插桩的函数。`v8` provider 在 Browser Mode 中不可用，因此浏览器测试应使用 `coverage.exclude`，或避免序列化经过插桩的函数。
-
-如果整个文件主要用于生成、序列化，或向其他 scope 或 realm 注入代码，优先使用 `coverage.exclude`。Istanbul ignore 注释更适合在一个仍需要收集覆盖率的文件中，跳过很小的独立片段。
-
-在配置中排除整个文件：
+如果整个文件、一组生成文件或注入脚本都不应被插桩，请使用 `coverage.exclude`：
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -133,7 +127,7 @@ export default defineConfig({
 npx rstest run --coverage --coverage.exclude "**/src/injected-script.ts" --coverage.exclude "**/src/**/*.{worker,evaluate}.ts"
 ```
 
-如果整个文件都不应被 Istanbul 插桩，可以在文件顶部添加 `/* istanbul ignore file */`：
+Istanbul ignore 注释更适合在一个仍需要收集覆盖率的文件中跳过很小的片段：
 
 ```ts title='src/injected-script.ts'
 /* istanbul ignore file */
@@ -143,18 +137,40 @@ export function createInjectedScript() {
 }
 ```
 
-如果只有一个会被序列化的函数需要跳过，可以把 `/* istanbul ignore next */` 放在它前面：
-
 ```ts
 /* istanbul ignore next */
 function browserEvaluateFn() {
   return window.location.href;
 }
 
-await page.evaluate(browserEvaluateFn);
+/* istanbul ignore if */
+if (process.env.NODE_ENV === 'test') {
+  setupTestOnlyState();
+}
+
+/* istanbul ignore else */
+if (hasNativeFeature()) {
+  useNativeFeature();
+} else {
+  useFallback();
+}
 ```
 
-对于很小的环境判断分支，也可以使用 `/* istanbul ignore if */` 和 `/* istanbul ignore else */`。如果被忽略的片段里仍然出现了注入的 `cov_*` 调用，请改用 `coverage.exclude` 排除对应源文件。
+如果被忽略的片段里仍然出现了注入的 `cov_*` 调用，请改用 `coverage.exclude` 排除对应源文件。
+
+##### 序列化函数和其他 realm
+
+Istanbul 会向插桩后的文件注入 `cov_*` 覆盖率计数器调用。这些计数器的作用域属于 Rstest 执行的 transformed module。如果来自插桩文件的代码被序列化后在其他位置执行，新的 scope 或 realm 可能没有对应的 `cov_*` helper，测试就可能以 `ReferenceError: cov_... is not defined` 失败。
+
+当函数通过 `fn.toString()` 序列化，或者通过 `page.evaluate`、`Worker`、`node:vm`、`eval`、`new Function` 等 API 执行时，可能触发这个问题。
+
+要避免该错误，优先使用以下方式之一：
+
+- 通过 `coverage.exclude` 排除对应源文件；
+- 在非 Browser Mode 测试中切换到 `coverage.provider: 'v8'`；
+- 避免序列化经过 Istanbul 插桩的函数。
+
+`v8` provider 在 Browser Mode 中不可用，因此浏览器测试应使用 `coverage.exclude`，或避免序列化经过插桩的函数。
 
 #### V8 provider
 
@@ -167,6 +183,42 @@ await page.evaluate(browserEvaluateFn);
 <PackageManagerTabs command="add @rstest/coverage-v8 -D" />
 
 由于底层覆盖率数据来自 Node.js / V8 本身，重映射后的 branch 覆盖率和未覆盖行信息在不同 Node.js 或 V8 版本之间可能存在轻微差异。
+
+##### Ignore hints
+
+`v8` provider 在将 V8 coverage 转换为 Istanbul 格式时会识别 ignore hints。hint 前缀可以使用以下任意一种形式：
+
+```ts
+/* istanbul ignore next */
+/* c8 ignore next */
+/* v8 ignore next */
+/* node:coverage ignore next */
+```
+
+建议在同一个项目中保持前缀一致。支持的 hint 形式如下：
+
+```ts
+/* v8 ignore next */
+const value = optionalExpensivePath();
+
+/* v8 ignore if */
+if (process.env.NODE_ENV === 'test') {
+  setupTestOnlyState();
+}
+
+/* v8 ignore else */
+if (hasNativeFeature()) {
+  useNativeFeature();
+} else {
+  useFallback();
+}
+
+/* v8 ignore start */
+const generatedLookup = createGeneratedLookup();
+/* v8 ignore stop */
+```
+
+`ignore file` 也会被识别，但它会在 source map 重映射前作用于生成后的 coverage entry。正常的 Rstest 输出中，一个生成 chunk 可能包含多个源文件，因此如果需要排除某个源文件或一组生成文件，请优先使用 `coverage.exclude`。
 
 `v8` provider 仅适用于非 Browser Mode 测试执行，包括 `node`、`jsdom` 和 `happy-dom` 测试环境。Browser Mode 不使用 inspector coverage，因此浏览器 coverage 应使用默认的 `istanbul` provider。
 

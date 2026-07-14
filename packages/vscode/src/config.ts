@@ -18,6 +18,8 @@ const configSchema = object({
   // The path to a package.json file of a Rstest executable.
   // Used as a last resort if the extension cannot auto-detect @rstest/core.
   rstestPackagePath: fallback(optional(string()), undefined),
+  nodeExecutable: fallback(optional(string()), undefined),
+  nodeExecArgs: fallback(array(string()), []),
   configFileGlobPattern: fallback(array(string()), [
     '**/rstest.config.{mjs,ts,js,cjs,mts,cts}',
   ]),

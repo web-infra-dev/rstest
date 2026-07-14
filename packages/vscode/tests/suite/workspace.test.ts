@@ -69,7 +69,7 @@ suite('Workspace discover suite', () => {
           label: 'workspace-2',
           children: [
             {
-              label: 'folder/project-2/rstest.config.ts',
+              label: 'folder/project-2',
               children: [
                 {
                   label: 'test',
@@ -78,7 +78,7 @@ suite('Workspace discover suite', () => {
               ],
             },
             {
-              label: 'project-1/rstest.config.ts',
+              label: 'project-1',
               children: [
                 {
                   label: 'test',
@@ -141,7 +141,7 @@ suite('Workspace discover suite', () => {
           label: 'workspace-2',
           children: [
             {
-              label: 'project-1/foo.config.ts',
+              label: 'project-1',
               children: [
                 {
                   label: 'test',
@@ -168,7 +168,7 @@ suite('Workspace discover suite', () => {
           label: 'workspace-2',
           children: [
             {
-              label: 'folder/project-2/foo.config.ts',
+              label: 'folder/project-2',
               children: [
                 {
                   label: 'test',
@@ -177,7 +177,7 @@ suite('Workspace discover suite', () => {
               ],
             },
             {
-              label: 'project-1/foo.config.ts',
+              label: 'project-1',
               children: [
                 {
                   label: 'test',
@@ -226,7 +226,7 @@ suite('Workspace discover suite', () => {
           label: 'workspace-2',
           children: [
             {
-              label: 'folder/project-2/rstest.config.ts',
+              label: 'folder/project-2',
               children: [
                 {
                   label: 'test',
@@ -235,7 +235,7 @@ suite('Workspace discover suite', () => {
               ],
             },
             {
-              label: 'project-1/rstest.config.ts',
+              label: 'project-1',
               children: [
                 {
                   label: 'test',
@@ -288,7 +288,7 @@ suite('Workspace discover suite', () => {
     try {
       await waitFor(() => {
         const testFile = getTestItemByLabels(testController.items, [
-          'config/trailing-slash.config.ts',
+          'config',
           'test',
           'foo.test.ts',
         ]);

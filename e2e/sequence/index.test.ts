@@ -11,7 +11,7 @@ import { runRstestCli } from '../scripts/';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixtures = join(__dirname, './fixtures');
-const cacheDir = join(fixtures, 'node_modules/.cache/.rstest-sequence');
+const cacheDir = join(fixtures, 'node_modules/.cache/.rstest-results');
 
 // With `--pool.maxWorkers 1` files run strictly one at a time, so the order of
 // the per-file `SEQ:<name>` console markers in stdout is the execution order.

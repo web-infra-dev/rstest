@@ -10,7 +10,7 @@ const textDecoder = new TextDecoder('utf-8');
 
 export const testData = new WeakMap<
   vscode.TestItem,
-  WorkspaceManager | Project | TestFolder | TestFile | TestCase
+  WorkspaceManager | Project | TestFolder | ProjectFolder | TestFile | TestCase
 >();
 
 const getContentFromFilesystem = async (uri: vscode.Uri) => {
@@ -22,6 +22,15 @@ const getContentFromFilesystem = async (uri: vscode.Uri) => {
     return '';
   }
 };
+
+// Duplicate sibling test/suite names get a unique TestItem id by appending
+// their 0-based occurrence index. Creation (TestFile.onTest) and result lookup
+// (TestRunReporter.findTestItem) must derive ids identically, so both go
+// through this helper. `siblingIndex` is the number of prior same-named
+// siblings (0 for the first, which keeps its plain name as id).
+export function getTestItemId(name: string, siblingIndex: number): string {
+  return siblingIndex ? [name, siblingIndex].join('@@@@@@') : name;
+}
 
 export function gatherTestItems(
   collection: vscode.TestItemCollection,
@@ -45,6 +54,11 @@ export class TestFolder {
     public uri: vscode.Uri,
   ) {}
 }
+
+// Marker for a folder node that groups multiple projects by directory. Unlike
+// `TestFolder`, it does not belong to a single project/api, so running it
+// recurses into its children instead of invoking one api.
+export class ProjectFolder {}
 
 export class TestFile {
   public didResolve = false;
@@ -172,9 +186,7 @@ export class TestFile {
   ) {
     const siblingsCount = parent.filter((child) => child.label === name).length;
 
-    // generate unique id to duplicated item
-    let id = name;
-    if (siblingsCount) id = [name, siblingsCount].join('@@@@@@');
+    const id = getTestItemId(name, siblingsCount);
 
     const isSuite = testType === 'describe' || testType === 'suite';
 

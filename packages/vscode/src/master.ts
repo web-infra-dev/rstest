@@ -17,7 +17,7 @@ import type { Worker } from './worker';
 export const runningWorkers = new Set<BirpcReturn<Worker, TestRunReporter>>();
 
 export class RstestApi {
-  private childProcess: ChildProcess | null = null;
+  private childProcesses = new Set<ChildProcess>();
   private coreVersionTooLowWarned = false;
 
   constructor(
@@ -26,6 +26,10 @@ export class RstestApi {
     private configFilePath: string,
     private project: Project,
   ) {}
+
+  private expandWorkspaceFolder(value: string): string {
+    return value.replaceAll('${workspaceFolder}', this.workspace.uri.fsPath);
+  }
 
   private resolveRstestPath(): string {
     // TODO: support Yarn PnP
@@ -37,10 +41,8 @@ export class RstestApi {
       );
 
       if (configuredPackagePath) {
-        // Support ${workspaceFolder} placeholder
-        configuredPackagePath = configuredPackagePath.replace(
-          '${workspaceFolder}',
-          this.workspace.uri.fsPath,
+        configuredPackagePath = this.expandWorkspaceFolder(
+          configuredPackagePath,
         );
         // Validate that the path points to package.json
         if (!configuredPackagePath.endsWith('package.json')) {
@@ -241,25 +243,94 @@ export class RstestApi {
       execArgv.push('--inspect-wait');
     }
     const workerPath = path.resolve(__dirname, 'worker.js');
+    const configuredExecutable = getConfigValue(
+      'nodeExecutable',
+      this.workspace,
+    );
+    const nodeExecutable = configuredExecutable
+      ? this.expandWorkspaceFolder(configuredExecutable)
+      : 'node';
+    const nodeExecArgs = getConfigValue('nodeExecArgs', this.workspace).map(
+      (arg) => this.expandWorkspaceFolder(arg),
+    );
     logger.debug('Spawning worker process', {
       workerPath,
+      nodeExecutable,
+      nodeExecArgs,
     });
-    const rstestProcess = spawn('node', [...execArgv, workerPath], {
-      cwd: this.cwd,
-      stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-      serialization: 'advanced',
-      env: {
-        // same as packages/core/src/cli/prepare.ts
-        // if (!process.env.NODE_ENV) process.env.NODE_ENV = 'test'
-        NODE_ENV: 'test',
-        ...process.env,
-        // process.env.RSTEST = 'true';
-        RSTEST: 'true',
-        FORCE_COLOR: '1',
+    const rstestProcess = spawn(
+      nodeExecutable,
+      [...nodeExecArgs, ...execArgv, workerPath],
+      {
+        cwd: this.cwd,
+        stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+        serialization: 'advanced',
+        env: {
+          // same as packages/core/src/cli/prepare.ts
+          // if (!process.env.NODE_ENV) process.env.NODE_ENV = 'test'
+          NODE_ENV: 'test',
+          ...process.env,
+          // process.env.RSTEST = 'true';
+          RSTEST: 'true',
+          FORCE_COLOR: '1',
+        },
+      },
+    );
+    this.childProcesses.add(rstestProcess);
+
+    rstestProcess.stdout?.on('data', (d) => {
+      const content = d.toString();
+      logger.debug('[worker stdout]', content.trimEnd());
+    });
+
+    rstestProcess.stderr?.on('data', (d) => {
+      const content = d.toString();
+      logger.error('[worker stderr]', content.trimEnd());
+    });
+
+    const worker = createBirpc<Worker, TestRunReporter>(testRunReporter, {
+      // Target the local process rather than the shared field, which is
+      // reassigned on every spawn; skip once the IPC channel is gone.
+      post: (data) => {
+        if (rstestProcess.connected) rstestProcess.send(data);
+      },
+      on: (fn) => rstestProcess.on('message', fn),
+      bind: 'functions',
+      timeout: 600_000,
+      off: () => {
+        rstestProcess.kill();
+        this.childProcesses.delete(rstestProcess);
+        runningWorkers.delete(worker);
       },
     });
-    this.childProcess = rstestProcess;
 
+    runningWorkers.add(worker);
+
+    logger.debug('Sent init payload to worker', {
+      root: this.cwd,
+      rstestPath,
+      configFilePath: this.configFilePath,
+    });
+
+    rstestProcess.on('error', (error) => {
+      logger.error('Worker process error', error);
+      vscode.window.showErrorMessage(
+        `Rstest worker process failed: ${error.message}`,
+      );
+      // Reject any in-flight birpc calls instead of letting them hang; $close
+      // runs the `off` handler, which removes the process from the Set.
+      if (!worker.$closed) worker.$close();
+    });
+
+    rstestProcess.on('exit', (code, signal) => {
+      logger.debug('Worker process exited', { code, signal });
+      // Unblock pending calls when the worker exits before we closed it.
+      if (!worker.$closed) worker.$close();
+    });
+
+    // Attach the debugger only after the error/exit handlers are wired, so a
+    // spawn failure (e.g. a misconfigured `nodeExecutable`) during this await is
+    // handled instead of throwing uncaught in the extension host.
     if (startDebugging) {
       const startedDebugging = await vscode.debug.startDebugging(
         this.workspace,
@@ -279,45 +350,13 @@ export class RstestApi {
       }
     }
 
-    rstestProcess.stdout?.on('data', (d) => {
-      const content = d.toString();
-      logger.debug('[worker stdout]', content.trimEnd());
-    });
-
-    rstestProcess.stderr?.on('data', (d) => {
-      const content = d.toString();
-      logger.error('[worker stderr]', content.trimEnd());
-    });
-
-    const worker = createBirpc<Worker, TestRunReporter>(testRunReporter, {
-      // use this.childProcess to catch post is called after process killed
-      post: (data) => this.childProcess?.send(data),
-      on: (fn) => rstestProcess.on('message', fn),
-      bind: 'functions',
-      timeout: 600_000,
-      off: () => {
-        rstestProcess.kill();
-        runningWorkers.delete(worker);
-      },
-    });
-
-    runningWorkers.add(worker);
-
-    logger.debug('Sent init payload to worker', {
-      root: this.cwd,
-      rstestPath,
-      configFilePath: this.configFilePath,
-    });
-
-    rstestProcess.on('exit', (code, signal) => {
-      logger.debug('Worker process exited', { code, signal });
-    });
-
     return worker;
   }
 
   public dispose() {
-    this.childProcess?.kill();
-    this.childProcess = null;
+    for (const child of this.childProcesses) {
+      child.kill();
+    }
+    this.childProcesses.clear();
   }
 }
