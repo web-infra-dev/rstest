@@ -312,20 +312,25 @@ export class RstestApi {
 
     // Prefer a path relative to the run cwd for readability; fall back to the
     // absolute path when the target is outside the cwd.
-    const relative = (target: string) => {
+    const relativeToCwd = (target: string) => {
       const rel = path.relative(this.cwd, target);
       return rel && !rel.startsWith('..') ? rel : target;
     };
 
     const args = ['run'];
     if (fileFilter) {
-      args.push(relative(fileFilter));
+      // Keep the positional file filter absolute: Core matches it against the
+      // resolved config `root`, which can differ from the run cwd (the config
+      // file's directory) when a config sets a custom `root`. A cwd-relative
+      // path would then miss the discovered test files.
+      args.push(fileFilter);
     }
     if (testCaseNamePath?.length) {
       // Terminal run selects the same case as the in-editor run.
       args.push('-t', this.buildTestNamePattern(testCaseNamePath, isSuite));
     }
-    args.push('-c', relative(this.configFilePath));
+    // `-c` is resolved relative to the process cwd, which is `this.cwd`.
+    args.push('-c', relativeToCwd(this.configFilePath));
 
     return [nodeExecutable, ...nodeExecArgs, this.resolveRstestBin(), ...args]
       .map(shellQuote)

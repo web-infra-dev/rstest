@@ -6,7 +6,7 @@ import vscode from 'vscode';
 import { watchConfigValue } from './config';
 import { logger } from './logger';
 import { RstestApi } from './master';
-import { computeCoveredConfigs, normalizeRoot } from './projectCoverage';
+import { computeCoveredConfigs } from './projectCoverage';
 import { ProjectFolder, TestFile, TestFolder, testData } from './testTree';
 
 // The default config file name at the workspace root. A lone project using it
@@ -318,7 +318,7 @@ export class Project implements vscode.Disposable {
         this.root = vscode.Uri.file(config.root);
         this.include = config.include;
         this.exclude = config.exclude;
-        this.childProjectRoots = (config.projectRoots ?? []).map(normalizeRoot);
+        this.childProjectRoots = config.projectRoots ?? [];
         this.applyWatch();
         this.onConfigResolved?.();
       })
