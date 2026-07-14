@@ -25,8 +25,8 @@ flowchart LR
 
   subgraph RunnerRuntime["module: @rstest/browser src/client"]
     R1[send lifecycle]
-    R2[dispatch rpc request]
-    R3[snapshot.ts]
+    R2["dispatch rpc request — snapshot.ts / browserRpc.ts via dispatchTransport.ts"]
+    R3["dispatchTransport.ts pending-request resolver"]
   end
 
   H1 -->|inject host config| U1
@@ -59,6 +59,9 @@ Contract ownership:
 - `@rstest/browser` owns host scheduling, dispatch routing, and protocol semantics.
 - `@rstest/browser-ui` owns transport bridging and UI state projection only.
 - Runner runtime (`src/client`) owns test execution and emits protocol messages, but does not own filesystem access.
+- Runner lifecycle events (file/suite/case start + result, console logs) feed `@rstest/core`'s per-project `RunnerEventSink` — the same event pump the node pool uses. The host never fans out to reporters or `stateManager` directly.
+- Run finalize is split by command: in non-watch runs core's `finalizeRunCycle` owns reporters `onTestRunEnd`, coverage merge, and the exit code (the host returns a `BrowserTestRunResult` with a deferred `close`); watch runs self-finalize host-side per rerun.
+- Browser config compatibility (which `RuntimeConfig` fields are supported / ignored / stripped) is declared in core's `executorCapabilities` table; `src/configValidation.ts` derives its warnings and errors from that table instead of hand-maintaining a list.
 
 ## Provider-agnostic design
 
@@ -75,8 +78,9 @@ Browser mode must stay provider-neutral at the framework boundary.
 
 ## Module structure
 
-- `src/index.ts` — Package entry, exports runBrowserTests and listBrowserTests
+- `src/index.ts` — Package entry, exports runBrowserTests, listBrowserTests, and validateBrowserConfig
 - `src/hostController.ts` — Main browser mode controller (runtime bootstrap + headless/headed scheduling)
+- `src/configValidation.ts` — Browser config validation pass driven by core's `executorCapabilities` table
 - `src/protocol.ts` — Type definitions for browser-host communication protocol
 - `src/dispatchRouter.ts` — Host-side dispatch namespace router
 - `src/dispatchCapabilities.ts` — Shared built-in dispatch capability registration (`runner`, `snapshot`, extension namespaces)
@@ -84,10 +88,22 @@ Browser mode must stay provider-neutral at the framework boundary.
 - `src/sessionRegistry.ts` — Session index keyed by `sessionId`/`testFile`/`runToken`
 - `src/concurrency.ts` — Shared headless worker concurrency policy
 - `src/headlessTransport.ts` — Top-level headless page bridge wiring (`__rstest_dispatch__` / `__rstest_dispatch_rpc__`)
+- `src/headlessLatestRerunScheduler.ts` — Latest-wins rerun scheduling for headless watch mode
+- `src/headedSerialTaskQueue.ts` — Serial task queue for the single headed container page
 - `src/watchRerunPlanner.ts` — Shared watch rerun planning logic across headless/headed paths
-- `src/client/` — Browser-side runtime code (runs in iframe)
+- `src/rpcProtocol.ts` — Locator IR and Browser RPC request/response types (`browser` dispatch namespace)
+- `src/browserRpcRegistry.ts` — Host-side allowlists for Browser RPC methods (locator actions, assertions)
+- `src/augmentExpect.ts` — `expect.element` locator assertion typing
+- `src/browser.ts` — `@rstest/browser/browser` entry re-exporting the client `page`/locator API
+- `src/viewportPresets.ts` — Viewport preset source of truth (kept in sync with core's `DevicePreset` type)
+- `src/watchCliShortcuts.ts` — Watch-mode CLI shortcut hints for browser runs
+- `src/client/` — Browser-side runtime code (top-level page in headless runs, iframe in headed runs)
   - `entry.ts` — Browser client entry point
-  - `snapshot.ts` — Browser snapshot environment (proxies file ops to host)
+  - `dispatchTransport.ts` — Shared client dispatch RPC channel (request ids, timeouts, pending-response resolution) for both iframe and top-level transports
+  - `snapshot.ts` — Browser snapshot environment (proxies file ops to host via `snapshot` namespace)
+  - `browserRpc.ts` — Client side of the `browser` dispatch namespace (locator/page RPC)
+  - `api.ts` / `locator.ts` — `page` API and locator implementation
+  - `formatConsole.ts` — Console argument stringification for terminal forwarding
   - `sourceMapSupport.ts` — Source map handling for browser
   - `public.ts` — Re-exports runtime API for browser
 
@@ -104,12 +120,10 @@ pnpm --filter @rstest/browser typecheck
 
 ## Dependencies
 
-This package requires `@rstest/core` as a peer dependency. The browser client code uses internal APIs from `@rstest/core/internal/browser`:
+This package requires `@rstest/core` as a peer dependency and consumes two internal entrypoints:
 
-- `createRstestRuntime` - Creates test runtime
-- `setRealTimers` - Preserves real timer references
-- `globalApis` - List of global API names
-- Various types (WorkerState, RuntimeConfig, etc.)
+- `@rstest/core/internal/browser-runtime` (client side): `createRstestRuntime`, `setRealTimers`, `globalApis`, and types (WorkerState, RuntimeConfig, etc.)
+- `@rstest/core/internal/browser` (host side): logger/color/TTY utilities, `createRunnerEventSink`, and the run-cycle contract types
 
 ## Do
 
@@ -122,6 +136,9 @@ This package requires `@rstest/core` as a peer dependency. The browser client co
 - Don't duplicate runtime code from @rstest/core
 - Don't add node-only features here
 - Don't modify public API without updating @rstest/core version check
+- Don't bypass the `RunnerEventSink` for runner lifecycle events (no direct reporter/`stateManager` fanout from the host)
+- Don't self-finalize non-watch runs in the host — core's `finalizeRunCycle` owns reporters, coverage, and exit code there
+- Don't hand-maintain browser config compatibility lists; add or change rows in core's `executorCapabilities` table instead
 
 ## Key files
 

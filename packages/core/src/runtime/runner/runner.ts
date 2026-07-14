@@ -44,6 +44,21 @@ import {
 
 const RealDate = Date;
 
+/**
+ * Sample heap usage when `logHeapUsage` is enabled. Guarded so the shared
+ * runner is safe when bundled into the web-target browser runtime, where
+ * `process.memoryUsage` does not exist and an unguarded call would crash
+ * (see #1389).
+ */
+export const sampleHeapUsed = (
+  logHeapUsage: boolean | undefined,
+): number | undefined =>
+  logHeapUsage &&
+  typeof process !== 'undefined' &&
+  typeof process.memoryUsage === 'function'
+    ? process.memoryUsage().heapUsed
+    : undefined;
+
 export class TestRunner {
   /** current test case */
   private _test: TestCase | undefined;
@@ -591,9 +606,7 @@ export class TestRunner {
             if (result.status === 'pass' && retryErrors.length > 0) {
               result.retryErrors = retryErrors;
             }
-            result.heap = state.runtimeConfig.logHeapUsage
-              ? process.memoryUsage().heapUsed
-              : undefined;
+            result.heap = sampleHeapUsed(state.runtimeConfig.logHeapUsage);
             hooks.onTestCaseResult?.(result);
             results.push(result);
             return result;
@@ -624,9 +637,7 @@ export class TestRunner {
         name: '',
         status: 'fail',
         results,
-        heap: state.runtimeConfig.logHeapUsage
-          ? process.memoryUsage().heapUsed
-          : undefined,
+        heap: sampleHeapUsed(state.runtimeConfig.logHeapUsage),
         errors: [
           {
             message: `No test suites found in file: ${testPath}`,
@@ -660,9 +671,7 @@ export class TestRunner {
         project,
         testPath,
         name: '',
-        heap: state.runtimeConfig.logHeapUsage
-          ? process.memoryUsage().heapUsed
-          : undefined,
+        heap: sampleHeapUsed(state.runtimeConfig.logHeapUsage),
         status: errors.length ? 'fail' : getTestStatus(results, defaultStatus),
         results,
         snapshotResult,

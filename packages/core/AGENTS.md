@@ -16,6 +16,14 @@ Core testing framework for Rstest. Provides CLI, test runner, reporter, and work
 - `src/types/` — TypeScript type definitions
 - `src/utils/` — Shared utilities
 
+## Executor contract (node + browser isomorphism)
+
+Core owns the run-cycle contract shared by the node pool and `@rstest/browser`:
+
+- `src/core/finalizeRun.ts` — `finalizeRunCycle`, the single finalize implementation for node-only, browser-only, and mixed runs: reduces each executor's `ExecutorCycleOutcome` into the run verdict (merged results, coverage merge + report, reporter `onTestRunEnd`, exit code, bail message). Non-watch runs must exit through it exactly once; browser watch runs self-finalize host-side instead. Exit codes never downgrade: a later zero must not clear a prior non-zero.
+- `src/core/runnerEventSink.ts` — `RunnerEventSink`, the single event pump for runner lifecycle events on both transports (node pool RPC and browser dispatch). One sink per project, bound to that project's `normalizedConfig` (`onConsoleLog` filter, snapshot path resolution), feeding `stateManager` and reporters.
+- `src/core/executorCapabilities.ts` — declarative per-executor disposition (`supported` / `ignored-warn` / `error` / `stripped`) of every `RuntimeConfig` field. Adding a `RuntimeConfig` field without a row here is a compile error; the browser wire projection (`src/core/runtimeConfigProjection.ts`) and browser config validation derive from this table.
+
 ## Commands
 
 ```bash
@@ -45,3 +53,5 @@ pnpm --filter @rstest/core typecheck
 
 - Don't bypass the worker pool for test execution
 - Don't use `console.log` directly; use the logger utilities
+- Don't fan runner lifecycle events out to reporters or `stateManager` directly; route them through `RunnerEventSink`
+- Don't add a `RuntimeConfig` field without declaring its node/browser disposition in `executorCapabilities`

@@ -11,6 +11,8 @@ import {
   type CoverageMapData,
   color,
   createCoverageProvider,
+  createRunnerEventSink,
+  createSilentConsoleController,
   DEFAULT_TEST_TIMEOUT,
   type FormattedError,
   getNoTestFilesMessage,
@@ -20,12 +22,15 @@ import {
   type ListCommandResult,
   loadCoverageProvider,
   logger,
+  prepareWatchRerunState,
+  projectRuntimeConfig,
   PhaseTracker,
   type ProjectContext,
   type Reporter,
+  type RunnerEventSink,
   type RstestContext,
-  type RuntimeConfig,
   resolveProjectBuildCache,
+  resolveSnapshotPathDefault,
   RSTEST_ENV_SYMBOL_KEY,
   rsbuild,
   serializableConfig,
@@ -36,7 +41,7 @@ import {
 } from '@rstest/core/internal/browser';
 import { type BirpcReturn, createBirpc } from 'birpc';
 import openEditor from 'open-editor';
-import { basename, dirname, join, normalize, relative, resolve } from 'pathe';
+import { dirname, join, normalize, relative, resolve } from 'pathe';
 import picomatch from 'picomatch';
 import sirv from 'sirv';
 import { type WebSocket, WebSocketServer } from 'ws';
@@ -198,10 +203,6 @@ type DeferredPromise<T> = {
 
 const getFileTaskId = (testPath: string): string => {
   return `file:${testPath}`;
-};
-
-const getBufferedLogTaskId = (log: UserConsoleLog): string => {
-  return log.taskId ?? getFileTaskId(log.testPath);
 };
 
 const createDeferredPromise = <T>(): DeferredPromise<T> => {
@@ -973,82 +974,19 @@ const getAffectedTestFiles = (
   return Array.from(affectedFiles);
 };
 
-const getRuntimeConfigFromProject = (
-  project: ProjectContext,
-): RuntimeConfig => {
-  const {
-    testNamePattern,
-    testTimeout,
-    passWithNoTests,
-    retry,
-    globals,
-    clearMocks,
-    resetMocks,
-    restoreMocks,
-    unstubEnvs,
-    unstubGlobals,
-    maxConcurrency,
-    printConsoleTrace,
-    disableConsoleIntercept,
-    testEnvironment,
-    hookTimeout,
-    isolate,
-    coverage,
-    snapshotFormat,
-    env,
-    bail,
-    logHeapUsage,
-    detectAsyncLeaks,
-    chaiConfig,
-    includeTaskLocation,
-    silent,
-  } = project.normalizedConfig;
-
-  return {
-    // Propagate NODE_ENV and the RSTEST flag from the host so
-    // `process.env.NODE_ENV` / `process.env.RSTEST` (rewritten to the
-    // `RSTEST_ENV_SYMBOL_KEY` symbol store) resolve in browser tests the same
-    // way they do in Node mode, where `prepare.ts` sets them on the real
-    // `process.env`.
-    // User-supplied `env` wins so explicit overrides still take effect.
-    // See https://github.com/web-infra-dev/rstest/issues/1351
-    env: {
-      NODE_ENV: process.env.NODE_ENV,
-      RSTEST: 'true',
-      ...env,
-    },
-    testNamePattern,
-    testTimeout,
-    hookTimeout,
-    passWithNoTests,
-    retry,
-    globals,
-    clearMocks,
-    resetMocks,
-    restoreMocks,
-    unstubEnvs,
-    unstubGlobals,
-    maxConcurrency,
-    printConsoleTrace,
-    disableConsoleIntercept,
-    testEnvironment,
-    isolate,
-    coverage,
-    snapshotFormat,
-    bail,
-    logHeapUsage,
-    detectAsyncLeaks,
-    chaiConfig,
-    includeTaskLocation,
-    silent,
-  };
-};
-
 const getBrowserProjects = (context: RstestContext): ProjectContext[] => {
   return context.projects.filter(
     (project) => project.normalizedConfig.browser.enabled,
   );
 };
+
+// Max testTimeout across browser projects, used as the host->client RPC timeout.
+const getMaxTestTimeoutForRpc = (projects: ProjectContext[]): number =>
+  Math.max(
+    ...projects.map(
+      (p) => p.normalizedConfig.testTimeout ?? DEFAULT_TEST_TIMEOUT,
+    ),
+  );
 
 const getBrowserLaunchOptions = (
   project: ProjectContext,
@@ -2025,12 +1963,14 @@ export const runBrowserController = async (
   context: RstestContext,
   options?: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> => {
-  const {
-    skipOnTestRunEnd = false,
-    allowEmptyWatchRun = false,
-    onTraceEvents,
-  } = options ?? {};
+  const { allowEmptyWatchRun = false, onTraceEvents } = options ?? {};
   const buildStart = Date.now();
+  // Non-watch vs watch is the live switch for self-finalize: in non-watch runs
+  // core owns the unified finalize (reporters, exit code, coverage) through
+  // `finalizeRunCycle`, so the host never self-finalizes and always returns a
+  // fully-populated result with `close`. Watch reruns keep their host-driven
+  // per-rerun finalize. `BrowserTestRunOptions.skipOnTestRunEnd` is retained but
+  // ignored for one release (see its TSDoc).
   const isWatchMode = context.command === 'watch';
 
   // Per-file PhaseTrackers, populated only when `--trace` is on (caller
@@ -2109,7 +2049,7 @@ export const runBrowserController = async (
       close,
     };
 
-    if (!skipOnTestRunEnd) {
+    if (isWatchMode) {
       for (const reporter of context.reporters) {
         await (reporter as Reporter).onTestRunEnd?.({
           results: [],
@@ -2133,11 +2073,16 @@ export const runBrowserController = async (
     error: unknown,
     cleanup?: () => Promise<void>,
   ): Promise<BrowserTestRunResult> => {
-    ensureProcessExitCode(1);
+    // Non-watch runs defer the exit code to core's `finalizeRunCycle`, which
+    // raises it from the returned outcome's `errors`. Watch reruns keep owning
+    // their own exit code.
+    if (isWatchMode) {
+      ensureProcessExitCode(1);
+    }
 
     const normalizedError = toError(error);
 
-    if (cleanup && skipOnTestRunEnd) {
+    if (cleanup && !isWatchMode) {
       return buildErrorResult(normalizedError, cleanup);
     }
 
@@ -2159,7 +2104,7 @@ export const runBrowserController = async (
   };
 
   const notifyTestRunStart = async (): Promise<void> => {
-    if (skipOnTestRunEnd) {
+    if (!isWatchMode) {
       return;
     }
 
@@ -2188,7 +2133,7 @@ export const runBrowserController = async (
     unhandledErrors?: Error[];
     filterRerunTestPaths?: string[];
   }): Promise<void> => {
-    if (skipOnTestRunEnd) {
+    if (!isWatchMode) {
       return;
     }
 
@@ -2261,7 +2206,7 @@ export const runBrowserController = async (
 
   if (totalTests === 0) {
     const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
-    if (!skipOnTestRunEnd) {
+    if (isWatchMode) {
       const message = shouldKeepWatchingWithEmptySet
         ? 'No test files found.'
         : getNoTestFilesMessage({
@@ -2288,7 +2233,10 @@ export const runBrowserController = async (
       }
     }
 
-    if (code !== 0 && !shouldKeepWatchingWithEmptySet) {
+    // In non-watch runs the host returns a void outcome and core's
+    // `reportNoTestFiles` owns the exit code and the no-test reporter lifecycle;
+    // the host must not set the code itself. Watch keeps its own exit code.
+    if (isWatchMode && code !== 0 && !shouldKeepWatchingWithEmptySet) {
       ensureProcessExitCode(code);
     }
     if (!shouldKeepWatchingWithEmptySet) {
@@ -2374,17 +2322,14 @@ export const runBrowserController = async (
       name: project.name,
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
-      runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
+      runtimeConfig: serializableConfig(
+        projectRuntimeConfig(project, { envMode: 'static' }),
+      ),
       viewport: project.normalizedConfig.browser.viewport,
     }),
   );
 
-  // Get max testTimeout from all browser projects for RPC timeout
-  const maxTestTimeoutForRpc = Math.max(
-    ...browserProjects.map(
-      (p) => p.normalizedConfig.testTimeout ?? DEFAULT_TEST_TIMEOUT,
-    ),
-  );
+  const maxTestTimeoutForRpc = getMaxTestTimeoutForRpc(browserProjects);
 
   const projectRunnerUrls = Object.fromEntries(
     [...runtime.projectServers].map(([name, server]) => [
@@ -2497,18 +2442,59 @@ export const runBrowserController = async (
   const caseResults: TestResult[] = [];
   let fatalError: Error | null = null;
 
+  // Runner lifecycle events flow through the shared RunnerEventSink (the same
+  // pump the node pool uses), so browser mode feeds stateManager and fans out to
+  // reporters via one implementation. Sinks are bound per-project (keyed by the
+  // client-stamped projectName from file-start); the `testPath -> projectName`
+  // map lets subsequent per-file events resolve their owning project. The
+  // self-finalize side-band (reporterResults/caseResults/updateReporterResultState/
+  // exit code/PhaseTracker/silent flush) is kept as wrappers until Phase 3.
+  const runnerSinks = new Map<string, RunnerEventSink>();
+  const projectNameByTestPath = new Map<string, string>();
+
+  const sinkForProjectName = (projectName: string): RunnerEventSink => {
+    let sink = runnerSinks.get(projectName);
+    if (!sink) {
+      // Silent fallback to the first project when the name doesn't resolve
+      // (e.g. an empty name from `sinkForTestPath`). This host runs a single
+      // browser project's config today; Phase 4 threads the executor's own
+      // projects explicitly so the fallback (and the `!`) can be removed.
+      const project =
+        context.projects.find((p) => p.name === projectName) ??
+        context.projects[0];
+      sink = createRunnerEventSink(context, project!.normalizedConfig);
+      runnerSinks.set(projectName, sink);
+    }
+    return sink;
+  };
+
+  const sinkForTestPath = (testPath: string): RunnerEventSink =>
+    sinkForProjectName(projectNameByTestPath.get(testPath) ?? '');
+
+  // Silent-console buffering runs through the shared controller — the same
+  // engine the node worker uses — so `silent: 'passed-only'` buffers logs and
+  // replays only the failing tasks'. Intercepted replays route through the
+  // owning project's sink, so they honor per-project `onConsoleLog` and
+  // `disableConsoleIntercept` (the browser host previously flushed straight to
+  // reporters, bypassing both). `writeOriginalLog` is a host-side no-op: page
+  // logs have no host "original stream" — the page console and headed terminal
+  // forwarding already show them, so re-emitting here would double-print.
+  const silentConsoleController = createSilentConsoleController({
+    runtimeConfig: {
+      silent: context.normalizedConfig.silent,
+      disableConsoleIntercept: context.normalizedConfig.disableConsoleIntercept,
+    },
+    emitInterceptedLog: (log) =>
+      sinkForTestPath(log.testPath).onConsoleLog(log),
+    writeOriginalLog: () => {},
+  });
+
   const snapshotRpcMethods = {
     async resolveSnapshotPath(testPath: string): Promise<string> {
-      const snapExtension = '.snap';
-      const resolver =
-        context.normalizedConfig.resolveSnapshotPath ||
-        (() =>
-          join(
-            dirname(testPath),
-            '__snapshots__',
-            `${basename(testPath)}${snapExtension}`,
-          ));
-      return resolver(testPath, snapExtension);
+      return resolveSnapshotPathDefault(
+        testPath,
+        context.normalizedConfig.resolveSnapshotPath,
+      );
     },
     async readSnapshotFile(filepath: string): Promise<string | null> {
       try {
@@ -2534,6 +2520,7 @@ export const runBrowserController = async (
   const handleTestFileStart = async (
     payload: TestFileStartPayload,
   ): Promise<void> => {
+    projectNameByTestPath.set(payload.testPath, payload.projectName);
     if (phaseTrackers) {
       const tracker = new PhaseTracker({
         trace: {
@@ -2545,51 +2532,37 @@ export const runBrowserController = async (
       tracker.transition('prepare');
       phaseTrackers.set(payload.testPath, tracker);
     }
-    await Promise.all(
-      context.reporters.map((reporter) =>
-        (reporter as Reporter).onTestFileStart?.({
-          testId: getFileTaskId(payload.testPath),
-          testPath: payload.testPath,
-          tests: [],
-        }),
-      ),
-    );
+    // The client sends `{ testPath, projectName }`; the sink adapter builds the
+    // `TestFileInfo` the reporters and stateManager expect.
+    await sinkForProjectName(payload.projectName).onTestFileStart({
+      testId: getFileTaskId(payload.testPath),
+      testPath: payload.testPath,
+      tests: [],
+    });
   };
 
   const handleTestFileReady = async (
     payload: TestFileReadyPayload,
   ): Promise<void> => {
     phaseTrackers?.get(payload.testPath)?.transition('tests');
-    await Promise.all(
-      context.reporters.map((reporter) =>
-        (reporter as Reporter).onTestFileReady?.(payload),
-      ),
-    );
+    await sinkForTestPath(payload.testPath).onTestFileReady(payload);
   };
 
   const handleTestSuiteStart = async (
     payload: TestSuiteStartPayload,
   ): Promise<void> => {
     phaseTrackers?.get(payload.testPath)?.recordSuiteStart(payload);
-    await Promise.all(
-      context.reporters.map((reporter) =>
-        (reporter as Reporter).onTestSuiteStart?.(payload),
-      ),
-    );
+    await sinkForTestPath(payload.testPath).onTestSuiteStart(payload);
   };
 
   const handleTestSuiteResult = async (
     payload: TestSuiteResultPayload,
   ): Promise<void> => {
     phaseTrackers?.get(payload.testPath)?.recordSuiteResult(payload);
-    await Promise.all(
-      context.reporters.map((reporter) =>
-        (reporter as Reporter).onTestSuiteResult?.(payload),
-      ),
-    );
+    await sinkForTestPath(payload.testPath).onTestSuiteResult(payload);
 
     if (context.normalizedConfig.silent === 'passed-only') {
-      await flushBufferedLogsForTask({
+      silentConsoleController.flushBufferedLogsForTask({
         taskId: payload.testId,
         status: payload.status,
         taskParentNames: payload.parentNames,
@@ -2603,24 +2576,17 @@ export const runBrowserController = async (
     payload: TestCaseStartPayload,
   ): Promise<void> => {
     phaseTrackers?.get(payload.testPath)?.recordCaseStart(payload);
-    await Promise.all(
-      context.reporters.map((reporter) =>
-        (reporter as Reporter).onTestCaseStart?.(payload),
-      ),
-    );
+    // Fire-and-forget on both transports (the sink does not await case-start).
+    sinkForTestPath(payload.testPath).onTestCaseStart(payload);
   };
 
   const handleTestCaseResult = async (payload: TestResult): Promise<void> => {
     caseResults.push(payload);
     phaseTrackers?.get(payload.testPath)?.recordCaseResult(payload);
-    await Promise.all(
-      context.reporters.map((reporter) =>
-        (reporter as Reporter).onTestCaseResult?.(payload),
-      ),
-    );
+    await sinkForTestPath(payload.testPath).onTestCaseResult(payload);
 
     if (context.normalizedConfig.silent === 'passed-only') {
-      await flushBufferedLogsForTask({
+      silentConsoleController.flushBufferedLogsForTask({
         taskId: payload.testId,
         status: payload.status,
         taskParentNames: payload.parentNames,
@@ -2635,9 +2601,6 @@ export const runBrowserController = async (
   ): Promise<void> => {
     reporterResults.push(payload);
     context.updateReporterResultState([payload], payload.results);
-    if (payload.snapshotResult) {
-      context.snapshotManager.add(payload.snapshotResult);
-    }
 
     if (phaseTrackers) {
       const tracker = phaseTrackers.get(payload.testPath);
@@ -2650,7 +2613,7 @@ export const runBrowserController = async (
     }
 
     if (context.normalizedConfig.silent === 'passed-only') {
-      await flushBufferedLogsForTask({
+      silentConsoleController.flushBufferedLogsForTask({
         taskId: payload.testId,
         status: payload.status,
         taskParentNames: payload.parentNames,
@@ -2659,12 +2622,12 @@ export const runBrowserController = async (
       });
     }
 
-    await Promise.all(
-      context.reporters.map((reporter) =>
-        (reporter as Reporter).onTestFileResult?.(payload),
-      ),
-    );
-    if (payload.status === 'fail') {
+    // Feeds stateManager, fans out onTestFileResult to reporters, and ingests
+    // payload.snapshotResult (the snapshotManager.add moved into the sink).
+    await sinkForTestPath(payload.testPath).onTestFileResult(payload);
+    // In non-watch runs core owns the exit code via `finalizeRunCycle` (the
+    // failing file rides the returned outcome); watch reruns set it here.
+    if (isWatchMode && payload.status === 'fail') {
       ensureProcessExitCode(1);
     }
   };
@@ -2681,135 +2644,17 @@ export const runBrowserController = async (
       type: payload.type,
       trace: payload.trace,
     };
-    if (context.normalizedConfig.silent === true) {
-      return;
-    }
-
-    if (context.normalizedConfig.silent === 'passed-only') {
-      bufferConsoleLog(log);
-      return;
-    }
-
-    if (context.normalizedConfig.disableConsoleIntercept) {
-      return;
-    }
-
-    await emitUserConsoleLog(log);
+    silentConsoleController.onConsoleLog(log);
   };
 
   const handleFatal = async (payload: FatalPayload): Promise<void> => {
     const error = new Error(payload.message);
     error.stack = payload.stack;
     fatalError = error;
-    ensureProcessExitCode(1);
-  };
-
-  const bufferedConsoleLogs = new Map<string, UserConsoleLog[]>();
-  const suiteIdsByChain = new Map<string, string>();
-
-  const getSuiteChainKey = (names: string[]): string => {
-    return names.join('\u0000');
-  };
-
-  const pushTaskId = (taskIds: string[], taskId: string): void => {
-    if (!taskIds.includes(taskId)) {
-      taskIds.push(taskId);
-    }
-  };
-
-  const shouldEmitUserConsoleLog = (log: UserConsoleLog): boolean => {
-    return (
-      context.normalizedConfig.onConsoleLog?.(log.content, log.type) !== false
-    );
-  };
-
-  const emitUserConsoleLog = async (log: UserConsoleLog): Promise<void> => {
-    if (!shouldEmitUserConsoleLog(log)) {
-      return;
-    }
-
-    await Promise.all(
-      context.reporters.map((reporter) =>
-        (reporter as Reporter).onUserConsoleLog?.(log),
-      ),
-    );
-  };
-
-  const bufferConsoleLog = (log: UserConsoleLog): void => {
-    const taskId = getBufferedLogTaskId(log);
-    const logs = bufferedConsoleLogs.get(taskId) || [];
-    logs.push(log);
-    bufferedConsoleLogs.set(taskId, logs);
-
-    if (log.taskType === 'suite' && log.taskId) {
-      suiteIdsByChain.set(
-        getSuiteChainKey([...(log.taskParentNames || []), log.taskName || '']),
-        log.taskId,
-      );
-    }
-  };
-
-  const flushBufferedLogsForTask = async ({
-    taskId,
-    status,
-    taskParentNames,
-    taskType,
-    testPath,
-  }: {
-    taskId: string;
-    status: TestResult['status'];
-    taskParentNames?: string[];
-    taskType?: 'file' | 'suite' | 'case';
-    testPath: string;
-  }): Promise<void> => {
-    if (status !== 'fail') {
-      bufferedConsoleLogs.delete(taskId);
-      return;
-    }
-
-    const taskIdsToFlush: string[] = [];
-
-    if (taskType === 'case') {
-      pushTaskId(taskIdsToFlush, getFileTaskId(testPath));
-
-      const suiteNames = taskParentNames || [];
-      for (let i = 0; i < suiteNames.length; i++) {
-        const suiteId = suiteIdsByChain.get(
-          getSuiteChainKey(suiteNames.slice(0, i + 1)),
-        );
-
-        if (suiteId) {
-          pushTaskId(taskIdsToFlush, suiteId);
-        }
-      }
-
-      pushTaskId(taskIdsToFlush, taskId);
-    }
-
-    if (taskType === 'suite') {
-      pushTaskId(taskIdsToFlush, getFileTaskId(testPath));
-      pushTaskId(taskIdsToFlush, taskId);
-    }
-
-    if (taskType === 'file') {
-      pushTaskId(taskIdsToFlush, taskId);
-    }
-
-    for (const bufferedTaskId of taskIdsToFlush) {
-      const logs = bufferedConsoleLogs.get(bufferedTaskId);
-      if (!logs) {
-        continue;
-      }
-
-      bufferedConsoleLogs.delete(bufferedTaskId);
-
-      for (const log of logs) {
-        await Promise.all(
-          context.reporters.map((reporter) =>
-            (reporter as Reporter).onUserConsoleLog?.(log),
-          ),
-        );
-      }
+    // Non-watch runs surface the fatal error through the returned outcome and
+    // let core's `finalizeRunCycle` set the exit code; watch reruns set it here.
+    if (isWatchMode) {
+      ensureProcessExitCode(1);
     }
   };
 
@@ -3117,6 +2962,18 @@ export const runBrowserController = async (
       }
     };
 
+    // Bailed files never run, so they carry no case results — mirror the node
+    // pool's skip result (`runInPool.ts`) so the summary reports them as skipped
+    // rather than dropping them silently.
+    const makeSkippedFileResult = (file: TestFileInfo): TestFileResult => ({
+      testId: getFileTaskId(file.testPath),
+      status: 'skip',
+      name: '',
+      testPath: file.testPath,
+      project: file.projectName,
+      results: [],
+    });
+
     const runFilesWithPool = async (files: TestFileInfo[]): Promise<void> => {
       if (files.length === 0) {
         return;
@@ -3134,6 +2991,7 @@ export const runBrowserController = async (
 
       const queue = [...files];
       const concurrency = getHeadlessConcurrency(context, queue.length);
+      const bail = context.normalizedConfig.bail;
 
       const worker = async (): Promise<void> => {
         while (
@@ -3141,6 +2999,19 @@ export const runBrowserController = async (
           !run.cancelled &&
           runLifecycle.isTokenActive(run.token)
         ) {
+          // Cross-file bail gate (parity with the node pool's pickup-time skip
+          // at `runInPool.ts`): once the cycle-wide failed count reaches `bail`,
+          // drain the remaining files as skipped instead of running them. The
+          // count is cycle-scoped because `stateManager` is reset at the top of
+          // every run/rerun (initial run and `prepareWatchRerunState`).
+          if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
+            let skipped = queue.shift();
+            while (skipped) {
+              await handleTestFileComplete(makeSkippedFileResult(skipped));
+              skipped = queue.shift();
+            }
+            return;
+          }
           const next = queue.shift();
           if (!next) {
             return;
@@ -3173,6 +3044,12 @@ export const runBrowserController = async (
         await cancelRun(run, false);
       },
       runFiles: async (files) => {
+        // Clear the previous cycle's stateManager/snapshotManager before the
+        // rerun streams new events through the shared sink — otherwise failed
+        // counts (bail) and snapshot summaries accumulate across reruns. The
+        // initial run does not reach here (it calls `runFilesWithPool`
+        // directly), so only reruns reset.
+        prepareWatchRerunState(context);
         await notifyTestRunStart();
 
         const rerunStartTime = Date.now();
@@ -3233,7 +3110,7 @@ export const runBrowserController = async (
         hasFailure: false,
         getSourcemap: getBrowserSourcemap,
         resolveSourcemap: resolveBrowserSourcemap,
-        close: skipOnTestRunEnd
+        close: !isWatchMode
           ? async () => {
               sessionRegistry.clear();
               await destroyBrowserRuntime(runtime);
@@ -3241,7 +3118,7 @@ export const runBrowserController = async (
           : undefined,
       };
 
-      if (!skipOnTestRunEnd) {
+      if (isWatchMode) {
         await notifyTestRunEnd({ duration });
       }
 
@@ -3365,7 +3242,9 @@ export const runBrowserController = async (
     const isFailure = reporterResults.some(
       (result: TestFileResult) => result.status === 'fail',
     );
-    if (isFailure) {
+    // Non-watch runs let core's `finalizeRunCycle` own the exit code from the
+    // returned outcome; watch reruns set it here.
+    if (isWatchMode && isFailure) {
       ensureProcessExitCode(1);
     }
 
@@ -3376,10 +3255,12 @@ export const runBrowserController = async (
       hasFailure: isFailure,
       getSourcemap: getBrowserSourcemap,
       resolveSourcemap: resolveBrowserSourcemap,
-      close: skipOnTestRunEnd ? closeHeadlessRuntime : undefined,
+      // `closeHeadlessRuntime` is already `undefined` in watch mode, so the
+      // non-watch caller (core) receives the deferred close and watch does not.
+      close: closeHeadlessRuntime,
     };
 
-    if (!skipOnTestRunEnd) {
+    if (isWatchMode) {
       try {
         await notifyTestRunEnd({ duration });
       } finally {
@@ -3754,7 +3635,11 @@ export const runBrowserController = async (
       }
     } catch (error) {
       fatalError = fatalError ?? toError(error);
-      ensureProcessExitCode(1);
+      // Non-watch: the fatal error rides the returned outcome and core owns the
+      // exit code; watch reruns set it here.
+      if (isWatchMode) {
+        ensureProcessExitCode(1);
+      }
     }
 
     testTime = Date.now() - testStart;
@@ -3800,6 +3685,10 @@ export const runBrowserController = async (
             `Re-running ${rerunPlan.normalizedAffectedTestFiles.length} affected test file(s)...\n`,
           ),
         );
+        // Match the headless path: reset per-cycle state before the rerun
+        // streams new events, so bail counts and snapshot summaries do not
+        // accumulate across headed reruns.
+        prepareWatchRerunState(context);
         await notifyTestRunStart();
 
         const rerunStartTime = Date.now();
@@ -3874,7 +3763,9 @@ export const runBrowserController = async (
   const isFailure = reporterResults.some(
     (result: TestFileResult) => result.status === 'fail',
   );
-  if (isFailure) {
+  // Non-watch runs let core's `finalizeRunCycle` own the exit code from the
+  // returned outcome; watch reruns set it here.
+  if (isWatchMode && isFailure) {
     ensureProcessExitCode(1);
   }
 
@@ -3885,10 +3776,12 @@ export const runBrowserController = async (
     hasFailure: isFailure,
     getSourcemap: getBrowserSourcemap,
     resolveSourcemap: resolveBrowserSourcemap,
-    close: skipOnTestRunEnd ? closeContainerRuntime : undefined,
+    // `closeContainerRuntime` is already `undefined` in watch mode, so the
+    // non-watch caller (core) receives the deferred close and watch does not.
+    close: closeContainerRuntime,
   };
 
-  if (!skipOnTestRunEnd) {
+  if (isWatchMode) {
     try {
       await notifyTestRunEnd({ duration });
     } finally {
@@ -3991,17 +3884,14 @@ export const listBrowserTests = async (
       name: project.name,
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
-      runtimeConfig: serializableConfig(getRuntimeConfigFromProject(project)),
+      runtimeConfig: serializableConfig(
+        projectRuntimeConfig(project, { envMode: 'static' }),
+      ),
       viewport: project.normalizedConfig.browser.viewport,
     }),
   );
 
-  // Get max testTimeout from all browser projects for RPC timeout
-  const maxTestTimeoutForRpc = Math.max(
-    ...browserProjects.map(
-      (p) => p.normalizedConfig.testTimeout ?? DEFAULT_TEST_TIMEOUT,
-    ),
-  );
+  const maxTestTimeoutForRpc = getMaxTestTimeoutForRpc(browserProjects);
 
   const hostOptions: BrowserHostConfig = {
     rootPath: normalize(context.rootPath),

@@ -17,6 +17,7 @@ export { createBrowserTaskContext } from './runtime/worker/taskContext.browser';
 export type { TaskContext } from './runtime/worker/taskContext';
 // Types for browser runtime
 export type {
+  BrowserRuntimeConfig,
   CoverageMapData,
   CurrentTaskInfo,
   RunnerHooks,
@@ -29,6 +30,8 @@ export type {
 } from './types';
 // Constants needed by browser client
 export { globalApis, RSTEST_ENV_SYMBOL_KEY } from './utils/constants';
+// Shared snapshot header so browser-written `.snap` files match node's.
+export { SNAPSHOT_HEADER } from './utils/snapshotPath';
 // Browser-safe regexp wire-format decoder (mirrors the host-side encoder used
 // by `serializableConfig`). Kept here so the client never re-declares it.
 export { unwrapRegex } from './utils/regexpWireFormat';

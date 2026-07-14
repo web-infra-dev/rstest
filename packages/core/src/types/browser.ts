@@ -17,8 +17,12 @@ export type ResolveBrowserSourcemap = (
  */
 export interface BrowserTestRunOptions {
   /**
-   * If true, browser mode will not call onTestRunEnd reporter hook.
-   * This allows the caller to unify reporter output with node mode tests.
+   * @deprecated Ignored since the unified finalize landed. The host now keys
+   * self-finalize off watch vs non-watch mode internally: non-watch runs always
+   * defer `onTestRunEnd`, the exit code, and coverage to core's
+   * `finalizeRunCycle`, and watch reruns always self-finalize. Retained as an
+   * ignored option for one release for cross-version compatibility, then
+   * removed.
    */
   skipOnTestRunEnd?: boolean;
   /**
