@@ -33,14 +33,15 @@ export async function listBrowserTests(
 
 /**
  * Compile-time guard: ensure the public host exports satisfy the core-owned
- * {@link BrowserHostModule} contract. This catches drift such as a dropped
- * `options` argument at the load boundary. No runtime side effect.
+ * {@link BrowserHostModule} contract (`listBrowserTests` stays a plain public
+ * export — core lists through `createBrowserExecutor(...).collect()`). This
+ * catches drift such as a dropped `options` argument at the load boundary.
+ * No runtime side effect.
  */
 void ({
   validateBrowserConfig,
   createBrowserExecutor,
   runBrowserTests,
-  listBrowserTests,
 } satisfies BrowserHostModule);
 
 export type {

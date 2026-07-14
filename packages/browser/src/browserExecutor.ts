@@ -1,12 +1,13 @@
-import type {
-  BrowserTestRunResult,
-  CreateBrowserExecutorOptions,
-  ExecutorCycleOutcome,
-  ExecutorRunCycleOptions,
-  ListCommandResult,
-  RstestContext,
-  TestExecutor,
-  TestFileResult,
+import {
+  type BrowserTestExecutor,
+  type BrowserTestRunResult,
+  buildBrowserCoverageMap,
+  type CreateBrowserExecutorOptions,
+  type ExecutorCycleOutcome,
+  type ExecutorRunCycleOptions,
+  type ListCommandResult,
+  type RstestContext,
+  type TestFileResult,
 } from '@rstest/core/internal/browser';
 import { listBrowserTests, runBrowserController } from './hostController';
 
@@ -31,7 +32,7 @@ const emptyOutcome = (): ExecutorCycleOutcome => ({
 export async function createBrowserExecutor(
   context: RstestContext,
   options: CreateBrowserExecutorOptions,
-): Promise<TestExecutor> {
+): Promise<BrowserTestExecutor> {
   const {
     projects,
     coverageProvider,
@@ -47,22 +48,20 @@ export async function createBrowserExecutor(
   // no `deferredClose` yet and leaks the launching browser + servers.
   let inFlightCycle: Promise<unknown> | undefined;
 
-  // Merge the host's per-file `result.coverage` into one map, stripping it from
-  // each result to avoid reporter/state cache bloat, then hand the shared
-  // finalize a coverage `map` (no `raw` — browser coverage is istanbul-only).
+  // Merge the host's per-file `result.coverage` into one map (shared core
+  // helper, stripping it from each result to avoid reporter/state cache
+  // bloat), then hand the shared finalize a coverage `map` (no `raw` — browser
+  // coverage is istanbul-only).
   const foldOutcome = (
     result: BrowserTestRunResult | void,
   ): ExecutorCycleOutcome => {
     if (!result) {
       return emptyOutcome();
     }
-    const map = coverageProvider?.createCoverageMap();
-    for (const fileResult of result.results as TestFileResult[]) {
-      if (fileResult.coverage) {
-        map?.merge(fileResult.coverage);
-        delete fileResult.coverage;
-      }
-    }
+    const map = buildBrowserCoverageMap(
+      result.results as TestFileResult[],
+      coverageProvider,
+    );
     return {
       results: result.results,
       testResults: result.testResults,
@@ -115,7 +114,6 @@ export async function createBrowserExecutor(
         freezeShardedEntries,
         filesOnly,
         appliedModifyRstestConfigEnvironments,
-        timeoutMs: opts.timeoutMs,
       });
       inFlightCycle = pending;
       try {

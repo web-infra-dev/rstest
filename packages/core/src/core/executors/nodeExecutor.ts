@@ -3,13 +3,13 @@ import type {
   EntryInfo,
   ExecutorCycleOutcome,
   ExecutorRunCycleOptions,
-  ListCommandResult,
   ProjectContext,
   TestExecutor,
 } from '../../types';
 import type { CoverageMap, CoverageProvider } from '../../types/coverage';
 import { color, logger, type TraceRun } from '../../utils';
 import { ensureTestEnvironmentDependencies } from '../envDependencies';
+import { isNodeProject } from '../isBrowserProject';
 import {
   claimGlobalSetupOnce,
   runGlobalSetup,
@@ -143,7 +143,7 @@ export function createNodeExecutor(
     getPlan().browserProjectsToRun.length > 0;
 
   const init = async (): Promise<void> => {
-    let plan = await resolveRunnableProjects({ silentShardMessage: true });
+    const plan = await resolveRunnableProjects({ silentShardMessage: true });
     const plannedNodeSourceNames = new Set(
       plan.nodeProjectsToRun.map(
         (project) =>
@@ -172,17 +172,16 @@ export function createNodeExecutor(
         globalSetupProjects: context.projects,
       }),
       onModifyRstestConfigApplied: async () => {
-        plan = await resolveRunnableProjects({
+        const refreshed = await resolveRunnableProjects({
           strictEnvironmentComments: true,
         });
-        syncNodeProjects(rsbuildProjects, plan.nodeProjectsToRun);
+        syncNodeProjects(rsbuildProjects, refreshed.nodeProjectsToRun);
       },
       onRsbuildConfigResolved: projectPlanState.validateEnvironmentComments,
     });
 
     if (nodeProjects.length) {
       await rsbuildInstance.initConfigs({ action: 'dev' });
-      plan = projectPlanState.getPlan();
     }
   };
 
@@ -204,18 +203,16 @@ export function createNodeExecutor(
   const createRunResources = async (): Promise<
     NonNullable<typeof runResources>
   > => {
-    if (runResources) {
-      return runResources;
-    }
     if (!rsbuildInstance) {
       throw new Error('NodeExecutor.init() must run before runCycle().');
     }
 
-    const rsbuildProjects = projectPlanState.getPlan().nodeProjectsToRun;
+    const { nodeProjectsToRun: projects, entriesCache } =
+      projectPlanState.getPlan();
     const { getRsbuildStats, closeServer } = await createRsbuildServer({
       inspectedConfig: {
         ...context.normalizedConfig,
-        projects: rsbuildProjects.map((p) => p.normalizedConfig),
+        projects: projects.map((p) => p.normalizedConfig),
       },
       isWatchMode,
       globTestSourceEntries,
@@ -225,7 +222,6 @@ export function createNodeExecutor(
       rootPath,
     });
 
-    const projects = projectPlanState.getPlan().nodeProjectsToRun;
     try {
       await ensureTestEnvironmentDependencies(projects, rootPath);
     } catch (error) {
@@ -233,7 +229,6 @@ export function createNodeExecutor(
       throw error;
     }
 
-    const { entriesCache } = projectPlanState.getPlan();
     entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
       (acc, entry) => acc.concat(Object.values(entry.entries) || []),
       [],
@@ -242,7 +237,7 @@ export function createNodeExecutor(
     const getRecommendWorkerCount = (): number => {
       const nodeEntries = Array.from(entriesCache.entries()).filter(([key]) => {
         const project = projects.find((p) => p.environmentName === key);
-        return project?.normalizedConfig.browser.enabled !== true;
+        return !project || isNodeProject(project);
       });
       return nodeEntries.flatMap(
         ([_key, entry]) => Object.values(entry.entries) || [],
@@ -494,18 +489,6 @@ export function createNodeExecutor(
     };
   };
 
-  const collect = async (opts: {
-    fileFilters?: string[];
-    shardedEntries?: Map<string, { entries: Record<string, string> }>;
-    timeoutMs?: number;
-  }): Promise<{ list: ListCommandResult[] }> => {
-    // Placeholder: node collect is driven by `listTests.ts`'s dedicated flow,
-    // which wires the list plan state's config-hook callbacks. Kept on the
-    // interface for symmetry; the node list path calls into that flow directly.
-    void opts;
-    throw new Error('NodeExecutor.collect is handled by listTests.');
-  };
-
   // Idempotent: the single `executors.close()` exit path may race a signal
   // handler, and closing a pool/server twice throws.
   const close = async (): Promise<void> => {
@@ -536,7 +519,6 @@ export function createNodeExecutor(
     },
     init,
     runCycle,
-    collect,
     close,
     getPlan,
     hasNodeTestsToRun,

@@ -304,13 +304,15 @@ export const createPool = async ({
 
   const workerKind: PoolWorkerKind = poolOptions.type ?? 'forks';
 
-  // CPU-derived worker recommendation via the shared policy (halved in watch,
-  // clamped to the workload). The node pool passes no `defaultCap`, so it is
-  // bounded only by `numCpus - 1`; watch passes `recommendWorkerCount` as
-  // `Infinity` to keep warm workers across reruns.
+  // CPU-derived worker recommendation via the shared override/clamp policy.
+  // The node pool's own formulas: `numCpus - 1` outside watch, half the raw CPU
+  // count in watch; watch passes `recommendWorkerCount` as `Infinity` to keep
+  // warm workers across reruns.
   const recommendCount = resolveWorkerCount({
     command: context.command,
     totalTasks: recommendWorkerCount,
+    recommended: Math.max(numCpus - 1, 1),
+    watchRecommended: Math.max(Math.floor(numCpus / 2), 1),
     numCpus,
   });
 

@@ -1,9 +1,10 @@
 import { constants as osConstants } from 'node:os';
 import { isAbsolute, normalize, relative, resolve } from 'pathe';
 import { cleanCoverageReports, createCoverageProvider } from '../coverage';
+import { buildBrowserCoverageMap } from '../coverage/browserCoverageMap';
 import { ensureRunDependencies } from './dependencies';
-import type { ProjectContext, TestExecutor, TestFileResult } from '../types';
-import type { CoverageMap, CoverageProvider } from '../types/coverage';
+import type { ProjectContext, TestExecutor } from '../types';
+import type { CoverageProvider } from '../types/coverage';
 import {
   clearScreen,
   color,
@@ -22,6 +23,7 @@ import {
 import {
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
+  loadBrowserExecutor,
   loadBrowserModule,
 } from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
@@ -51,59 +53,10 @@ async function runBrowserModeTests(
   return runBrowserTests(context, { ...options, projects: browserProjects });
 }
 
-/**
- * Load `@rstest/browser` and build the browser side of the executor seam,
- * validating the browser config first. Core never statically imports playwright;
- * the executor is obtained through the version-locked dynamic module.
- */
-async function loadBrowserExecutor(
-  context: Rstest,
-  browserProjects: typeof context.projects,
-  coverageProvider: CoverageProvider | null,
-  runOptions?: Pick<
-    BrowserTestRunOptions,
-    | 'freezeShardedEntries'
-    | 'allowEmptyRun'
-    | 'appliedModifyRstestConfigEnvironments'
-  >,
-): Promise<TestExecutor> {
-  const projectRoots = browserProjects.map((p) => p.rootPath);
-  const { validateBrowserConfig, createBrowserExecutor } =
-    await loadBrowserModule({
-      projectRoots,
-      embedded: context.embedded,
-    });
-  validateBrowserConfig(context);
-  return createBrowserExecutor(context, {
-    projects: browserProjects,
-    coverageProvider,
-    ...runOptions,
-  });
-}
-
 const getSignalExitCode = (signal: NodeJS.Signals): number => {
   const signalNumber = osConstants.signals[signal];
   return typeof signalNumber === 'number' ? 128 + signalNumber : 1;
 };
-
-/**
- * Merge the browser host's per-file `result.coverage` into one map, stripping it
- * from each result to avoid reporter/state cache bloat. Used by the browser-only
- * watch path, which still self-finalizes host-side (Phase 6 convergence).
- */
-function buildBrowserCoverageMap(
-  results: TestFileResult[],
-  coverageProvider: CoverageProvider | null,
-): CoverageMap | undefined {
-  const map = coverageProvider?.createCoverageMap();
-  for (const result of results) {
-    if (result.coverage) {
-      map?.merge(result.coverage);
-      delete result.coverage;
-    }
-  }
-  return map;
-}
 
 /**
  * Create the coverage provider when coverage is enabled and print the
@@ -239,7 +192,9 @@ export async function runTests(context: Rstest): Promise<void> {
       coverage,
     });
 
-    const traceRun = traceController.beginRun();
+    // The pre-allocated run buffer above is the fast path's trace run — a
+    // second `beginRun()` here would leave it as a dead, never-finalized twin.
+    const traceRun = activeTraceRun;
 
     if (isWatchMode) {
       if (coverage.enabled) {

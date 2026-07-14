@@ -36,30 +36,34 @@ rs.mock('../../src/core/browserLoader', () => {
         })),
       ),
   });
+  const createBrowserExecutor = async (
+    context: RstestContext,
+    options: { projects: RstestContext['projects'] },
+  ) => ({
+    name: 'browser',
+    projects: options.projects,
+    init: async () => undefined,
+    runCycle: async () => {
+      throw new Error('not used in this test');
+    },
+    collect: async (opts: {
+      shardedEntries?: Map<string, { entries: Record<string, string> }>;
+    }) => {
+      const { list } = await listBrowserTests(context, opts);
+      return { list };
+    },
+    close: async () => undefined,
+  });
   return {
     loadBrowserModule: async () => ({
       validateBrowserConfig: () => undefined,
-      listBrowserTests,
-      createBrowserExecutor: async (
-        context: RstestContext,
-        options: { projects: RstestContext['projects'] },
-      ) => ({
-        name: 'browser',
-        projects: options.projects,
-        init: async () => undefined,
-        runCycle: async () => {
-          throw new Error('not used in this test');
-        },
-        collect: async (opts: {
-          shardedEntries?: Map<string, { entries: Record<string, string> }>;
-        }) => {
-          const { list } = await listBrowserTests(context, opts);
-          return { list };
-        },
-        close: async () => undefined,
-      }),
+      createBrowserExecutor,
       runBrowserTests: async () => undefined,
     }),
+    loadBrowserExecutor: async (
+      context: RstestContext,
+      browserProjects: RstestContext['projects'],
+    ) => createBrowserExecutor(context, { projects: browserProjects }),
   };
 });
 

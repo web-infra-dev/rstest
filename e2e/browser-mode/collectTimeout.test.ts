@@ -8,10 +8,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /**
- * Phase 4 step 9 gate: browser collect mode is driven by the shared
- * `TestExecutor.collect({ timeoutMs })` watchdog (default 30s). A test file that
- * delays its module evaluation must still be collected — collect honors the full
- * timeout budget instead of cutting off early.
+ * Phase 4 step 9 gate: browser collect mode runs through `TestExecutor.collect`
+ * with the host's 30s per-page watchdog. A test file that delays its module
+ * evaluation must still be collected — collect honors the full timeout budget
+ * instead of cutting off early.
  */
 describe('browser mode - collect honors the shared timeout', () => {
   it('lists a test whose module load is slower than instant', async () => {

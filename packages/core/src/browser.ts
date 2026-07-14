@@ -10,8 +10,12 @@ import * as rsbuild from '@rsbuild/core';
 // Core-owned contract for the host module that @rstest/browser implements
 export type {
   BrowserHostModule,
+  BrowserTestExecutor,
   CreateBrowserExecutorOptions,
 } from './core/browserLoader';
+// Shared coverage fold: the browser executor and the browser-only watch path
+// merge per-file result coverage through the same helper.
+export { buildBrowserCoverageMap } from './coverage/browserCoverageMap';
 // The executor seam — `@rstest/browser`'s `BrowserExecutor` writes
 // `implements TestExecutor` and returns an `ExecutorCycleOutcome` so the shared
 // `finalizeRunCycle` reduces it alongside the node outcome. Transitive dts

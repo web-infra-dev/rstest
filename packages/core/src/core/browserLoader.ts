@@ -3,8 +3,6 @@ import { pathToFileURL } from 'node:url';
 import type {
   BrowserTestRunOptions,
   BrowserTestRunResult,
-  ListBrowserTestsOptions,
-  ListCommandResult,
   ProjectContext,
   RstestContext,
   TestExecutor,
@@ -44,6 +42,13 @@ export interface CreateBrowserExecutorOptions extends Pick<
   coverageProvider: CoverageProvider | null;
 }
 
+/**
+ * A {@link TestExecutor} with `collect` guaranteed: the browser side is the one
+ * implementation that lists through the seam (`rstest list` relies on it).
+ */
+export type BrowserTestExecutor = TestExecutor &
+  Required<Pick<TestExecutor, 'collect'>>;
+
 export interface BrowserHostModule {
   validateBrowserConfig: (context: RstestContext) => void;
   /**
@@ -54,18 +59,11 @@ export interface BrowserHostModule {
   createBrowserExecutor: (
     context: RstestContext,
     options: CreateBrowserExecutorOptions,
-  ) => Promise<TestExecutor>;
+  ) => Promise<BrowserTestExecutor>;
   runBrowserTests: (
     context: RstestContext,
     options?: BrowserTestRunOptions,
   ) => Promise<BrowserTestRunResult | void>;
-  listBrowserTests: (
-    context: RstestContext,
-    options?: ListBrowserTestsOptions,
-  ) => Promise<{
-    list: ListCommandResult[];
-    close: () => Promise<void>;
-  }>;
 }
 
 interface LoadBrowserModuleOptions {
@@ -182,4 +180,35 @@ export async function loadBrowserModule(
     `Or if using pnpm:\n\n  ${color.cyan(`pnpm add @rstest/browser@${coreVersion}`)}\n`,
   );
   process.exit(1);
+}
+
+/**
+ * Load `@rstest/browser` and build the browser side of the executor seam,
+ * validating the browser config first. Shared by the run path (`runTests`) and
+ * the list path (`listTests`) so both go through one browser entry point.
+ */
+export async function loadBrowserExecutor(
+  context: RstestContext,
+  browserProjects: ProjectContext[],
+  coverageProvider: CoverageProvider | null,
+  runOptions?: Pick<
+    BrowserTestRunOptions,
+    | 'freezeShardedEntries'
+    | 'filesOnly'
+    | 'allowEmptyRun'
+    | 'appliedModifyRstestConfigEnvironments'
+  >,
+): Promise<BrowserTestExecutor> {
+  const projectRoots = browserProjects.map((p) => p.rootPath);
+  const { validateBrowserConfig, createBrowserExecutor } =
+    await loadBrowserModule({
+      projectRoots,
+      embedded: context.embedded,
+    });
+  validateBrowserConfig(context);
+  return createBrowserExecutor(context, {
+    projects: browserProjects,
+    coverageProvider,
+    ...runOptions,
+  });
 }

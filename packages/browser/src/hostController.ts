@@ -1409,7 +1409,7 @@ const registerWatchCleanup = (): void => {
 const createBrowserRuntime = async ({
   context,
   projectEntries: initialProjectEntries,
-  browserProjects = getBrowserProjects(context),
+  browserProjects,
   shardedEntries,
   freezeShardedEntries,
   tempDir,
@@ -1425,10 +1425,9 @@ const createBrowserRuntime = async ({
   projectEntries: BrowserProjectEntries[];
   /**
    * The explicit browser-project subset (plan output). Drives launch-option
-   * consistency and the container origin (`browserProjects[0]`). Defaults to
-   * re-deriving from `context` for callers without a plan list.
+   * consistency and the container origin (`browserProjects[0]`).
    */
-  browserProjects?: ProjectContext[];
+  browserProjects: ProjectContext[];
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
   freezeShardedEntries?: boolean;
   tempDir: string;
@@ -2069,8 +2068,8 @@ const createBrowserRuntime = async ({
 
 async function resolveProjectEntries(
   context: RstestContext,
-  shardedEntries?: Map<string, { entries: Record<string, string> }>,
-  browserProjects: ProjectContext[] = getBrowserProjects(context),
+  shardedEntries: Map<string, { entries: Record<string, string> }> | undefined,
+  browserProjects: ProjectContext[],
 ): Promise<BrowserProjectEntries[]> {
   if (shardedEntries) {
     const projectEntries: BrowserProjectEntries[] = [];
@@ -4159,10 +4158,9 @@ export const listBrowserTests = async (
 
   const serializedOptions = serializeForInlineScript(hostOptions);
 
-  // Shared collect timeout knob (the `TestExecutor.collect({ timeoutMs })`
-  // parameter). Defaults to the historical 30s watchdog when the caller passes
-  // nothing.
-  const collectTimeoutMs = options?.timeoutMs ?? 30000;
+  // Per-page collect watchdog: a test file whose module evaluation stalls must
+  // not hang `rstest list` forever.
+  const collectTimeoutMs = 30_000;
 
   const collectFromServer = async (
     server: BrowserProjectServer,

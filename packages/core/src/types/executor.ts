@@ -100,15 +100,14 @@ export interface TestExecutor {
   readonly projects: ProjectContext[];
   init(): Promise<void>;
   runCycle(options: ExecutorRunCycleOptions): Promise<ExecutorCycleOutcome>;
-  collect(
-    options: Pick<ExecutorRunCycleOptions, 'fileFilters' | 'shardedEntries'> & {
-      /**
-       * Shared per-executor collect timeout. The node pool passes `undefined`
-       * (no timeout, its current behavior); the browser host defaults to
-       * `30_000` (its current watchdog). One knob, per-executor default.
-       */
-      timeoutMs?: number;
-    },
+  /**
+   * List tests without running them. Optional because only the browser executor
+   * implements it today (`rstest list` collects browser tests through it); the
+   * node list flow stays in `listTests.ts`'s dedicated plan-state flow until a
+   * later phase converges it onto the seam.
+   */
+  collect?(
+    options: Pick<ExecutorRunCycleOptions, 'fileFilters' | 'shardedEntries'>,
   ): Promise<{ list: ListCommandResult[] }>;
   close(): Promise<void>;
   /**

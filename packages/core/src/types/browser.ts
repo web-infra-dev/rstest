@@ -67,20 +67,16 @@ export interface BrowserTestRunOptions {
 /**
  * Options for collecting browser tests without running them (`rstest list` and
  * `TestExecutor.collect`). Single definition for the core↔browser boundary —
- * `BrowserHostModule.listBrowserTests`, the `@rstest/browser` public wrapper,
- * and the host implementation all share it.
+ * the `@rstest/browser` public wrapper and the host implementation share it.
  */
-export interface ListBrowserTestsOptions extends Pick<
+export type ListBrowserTestsOptions = Pick<
   BrowserTestRunOptions,
   | 'shardedEntries'
   | 'freezeShardedEntries'
   | 'filesOnly'
   | 'projects'
   | 'appliedModifyRstestConfigEnvironments'
-> {
-  /** Collect watchdog timeout; the host defaults it to 30_000. */
-  timeoutMs?: number;
-}
+>;
 
 /**
  * Result from running browser tests.

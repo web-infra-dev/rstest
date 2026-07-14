@@ -6,7 +6,7 @@ export const getNumCpus = (): number => {
 };
 
 export interface ResolveWorkerCountOptions {
-  /** Run command; `'watch'` halves the CPU-derived recommendation. */
+  /** Run command; `'watch'` selects `watchRecommended`. */
   command: RstestCommand;
   /** Explicit `pool.maxWorkers`; overrides the CPU-derived recommendation. */
   maxWorkers?: string | number;
@@ -16,27 +16,29 @@ export interface ResolveWorkerCountOptions {
    * (the node pool does this in watch to keep warm workers across reruns).
    */
   totalTasks: number;
-  /**
-   * Optional hard ceiling on the CPU-derived worker count. The browser headless
-   * path passes `12`; the node pool passes none (bounded only by `numCpus - 1`).
-   */
-  defaultCap?: number;
+  /** The caller's CPU-derived recommendation outside watch. */
+  recommended: number;
+  /** The caller's recommendation in watch (typically half its own base). */
+  watchRecommended: number;
+  /** Used only to resolve a percentage `maxWorkers`. */
   numCpus?: number;
 }
 
 /**
  * Shared worker-count policy for both executors — the node pool (`pool/index.ts`)
- * and the browser headless scheduler (`@rstest/browser` `concurrency.ts`). Both
- * derive a recommendation from the CPU count, halve it in watch, cap it, and
- * clamp it to the workload; centralizing that here stops the two sites from
- * duplicating (and drifting on) the formula.
+ * and the browser headless scheduler (`@rstest/browser` `concurrency.ts`).
+ * Each caller supplies its own CPU-derived recommendations (the node pool halves
+ * the raw CPU count in watch; the browser headless path halves its capped base);
+ * what is centralized here is the shared override/clamp policy: an explicit
+ * `maxWorkers` always wins, and the result stays within `[1, totalTasks]`.
  */
 export const resolveWorkerCount = ({
   command,
   maxWorkers,
   totalTasks,
-  defaultCap,
-  numCpus = getNumCpus(),
+  recommended,
+  watchRecommended,
+  numCpus,
 }: ResolveWorkerCountOptions): number => {
   const clamp = (value: number): number =>
     Math.max(Math.min(value, totalTasks), 1);
@@ -45,18 +47,7 @@ export const resolveWorkerCount = ({
     return clamp(parseWorkers(maxWorkers, numCpus));
   }
 
-  const base = Math.max(
-    Math.min(defaultCap ?? Number.POSITIVE_INFINITY, numCpus - 1),
-    1,
-  );
-  // Historical formulas, preserved exactly: the node pool (no `defaultCap`)
-  // halves the raw CPU count in watch — floor(numCpus / 2) — while the browser
-  // headless path halves its capped base — floor(min(cap, numCpus - 1) / 2).
-  const recommended =
-    command === 'watch'
-      ? Math.max(Math.floor((defaultCap != null ? base : numCpus) / 2), 1)
-      : base;
-  return clamp(recommended);
+  return clamp(command === 'watch' ? watchRecommended : recommended);
 };
 
 export const parseWorkers = (

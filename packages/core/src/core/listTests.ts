@@ -305,20 +305,11 @@ const collectBrowserTests = async ({
     };
   }
 
-  const { loadBrowserModule } = await import('./browserLoader');
-  // Pass project roots to resolve @rstest/browser from project-specific node_modules
-  const projectRoots = browserProjects.map((p) => p.rootPath);
-  const { validateBrowserConfig, createBrowserExecutor } =
-    await loadBrowserModule({
-      projectRoots,
-      embedded: context.embedded,
-    });
-  validateBrowserConfig(context);
-  // Collect through the executor seam (its per-executor `timeoutMs` default),
-  // so `rstest list` and the run path share one browser entry point.
-  const executor = await createBrowserExecutor(context, {
-    projects: browserProjects,
-    coverageProvider: null,
+  // Collect through the executor seam so `rstest list` and the run path share
+  // one browser entry point (import stays dynamic: no browser module load for
+  // node-only lists).
+  const { loadBrowserExecutor } = await import('./browserLoader');
+  const executor = await loadBrowserExecutor(context, browserProjects, null, {
     freezeShardedEntries,
     filesOnly,
     appliedModifyRstestConfigEnvironments,
@@ -547,9 +538,7 @@ export async function listTests(
   );
 
   const applyBrowserFilesOnlyConfigHooks = async () => {
-    const browserProjects = context.projects.filter(
-      (project) => project.normalizedConfig.browser.enabled,
-    );
+    const browserProjects = context.projects.filter(isBrowserProject);
 
     if (!browserProjects.length) {
       return;
