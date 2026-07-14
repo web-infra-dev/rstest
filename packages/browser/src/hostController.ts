@@ -1475,7 +1475,7 @@ const createBrowserRuntime = async ({
     modules: Record<string, string>;
   }> = [];
 
-  const createProviderlessRuntime = (): BrowserRuntime => {
+  const createRuntimeWithoutProvider = (): BrowserRuntime => {
     const firstProject = browserProjects[0]!;
     return {
       projectServers: new Map(),
@@ -2026,7 +2026,7 @@ const createBrowserRuntime = async ({
   }
 
   if (skipProviderLaunch) {
-    return createProviderlessRuntime();
+    return createRuntimeWithoutProvider();
   }
 
   // browserProjects is non-empty (ensureConsistentBrowserLaunchOptions throws
