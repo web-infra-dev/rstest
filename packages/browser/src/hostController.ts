@@ -2537,7 +2537,7 @@ export const runBrowserController = async (
         // `env` is the post-globalSetup change-set from the core pre-cycle
         // stage; the projection layers it between the static base and the
         // user `test.env` config.
-        projectRuntimeConfig(project, { envMode: 'static', env }),
+        projectRuntimeConfig(project, { envMode: 'static', envOverlay: env }),
       ),
       viewport: project.normalizedConfig.browser.viewport,
     }),

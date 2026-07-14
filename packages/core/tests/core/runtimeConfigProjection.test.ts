@@ -64,7 +64,7 @@ describe('projectRuntimeConfig', () => {
       makeProject({ env: { FROM_CONFIG: 'config' } }),
       {
         envMode: 'static',
-        env: { FROM_SETUP: 'setup', FROM_CONFIG: 'setup-loses' },
+        envOverlay: { FROM_SETUP: 'setup', FROM_CONFIG: 'setup-loses' },
       },
     );
     expect(config.env).toEqual({
@@ -78,13 +78,13 @@ describe('projectRuntimeConfig', () => {
   it('static keeps the NODE_ENV base unless the overlay sets it', () => {
     const withoutNodeEnv = projectRuntimeConfig(makeProject(), {
       envMode: 'static',
-      env: { FROM_SETUP: 'setup' },
+      envOverlay: { FROM_SETUP: 'setup' },
     });
     expect(withoutNodeEnv.env?.NODE_ENV).toBe(process.env.NODE_ENV);
 
     const withNodeEnv = projectRuntimeConfig(makeProject(), {
       envMode: 'static',
-      env: { NODE_ENV: 'production' },
+      envOverlay: { NODE_ENV: 'production' },
     });
     expect(withNodeEnv.env?.NODE_ENV).toBe('production');
   });

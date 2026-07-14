@@ -18,18 +18,10 @@ rs.mock('node:child_process', () => {
       stderr: undefined,
       // Non-null exit code so `killAndWait` treats the child as already gone.
       exitCode: 0,
-      signalCode: null,
       on(event: string, cb: (...args: unknown[]) => void) {
         listeners.set(event, [...(listeners.get(event) ?? []), cb]);
         return this;
       },
-      once(event: string, cb: (...args: unknown[]) => void) {
-        return this.on(event, cb);
-      },
-      off() {
-        return this;
-      },
-      kill: () => true,
       send(
         message: { id: number; type: 'setup' | 'teardown' },
         callback?: (error: Error | null) => void,

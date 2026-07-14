@@ -23,8 +23,10 @@ interface StaticEnvOptions {
    * Overlay change-set (post-globalSetup env diff), NOT a full env base:
    * applied between the static base and the user config env. Arbitrary host
    * env must never be passed here — it would leak onto the browser wire.
+   * Named apart from the inherit branch's `env` so a full `process.env`
+   * cannot be passed by symmetry and still typecheck.
    */
-  env?: EnvSource;
+  envOverlay?: EnvSource;
 }
 
 /**
@@ -111,7 +113,7 @@ export function projectRuntimeConfig(
       env: {
         NODE_ENV: process.env.NODE_ENV,
         RSTEST: 'true',
-        ...options.env,
+        ...options.envOverlay,
         ...env,
       },
     } satisfies BrowserRuntimeConfig;

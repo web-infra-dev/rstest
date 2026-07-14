@@ -12,8 +12,8 @@ import { ensureTestEnvironmentDependencies } from '../envDependencies';
 import { isNodeProject } from '../isBrowserProject';
 import {
   claimGlobalSetupOnce,
+  runGlobalSetup,
   runGlobalTeardown,
-  runProjectGlobalSetup,
 } from '../globalSetup';
 import { applyOnlyFailuresSelection } from '../onlyFailures';
 import {
@@ -345,13 +345,31 @@ export function createNodeExecutor(
               globalSetupEntries.length,
             )
           ) {
-            const { success, errors } = await runProjectGlobalSetup({
-              project: p,
-              globalSetupEntries,
-              getAssetFiles,
-              getSourceMaps,
-              span,
-            });
+            const files = globalSetupEntries.flatMap((e) => e.files!);
+            const globalSetupTraceArgs = {
+              project: p.name,
+              testPath: '<globalSetup>',
+            };
+            const [assetFiles, sourceMaps] = await span(
+              'host:global-setup-assets',
+              'host',
+              () => Promise.all([getAssetFiles(files), getSourceMaps(files)]),
+              globalSetupTraceArgs,
+            );
+
+            const { success, errors } = await span(
+              'host:global-setup',
+              'host',
+              () =>
+                runGlobalSetup({
+                  globalSetupEntries,
+                  assetFiles,
+                  sourceMaps,
+                  interopDefault: true,
+                  outputModule: p.outputModule,
+                }),
+              globalSetupTraceArgs,
+            );
             if (!success) {
               return {
                 results: [],
