@@ -26,6 +26,13 @@ const getProjectEntries = async ({
   });
 };
 
+const areFileFiltersEqual = (a?: string[], b?: string[]): boolean => {
+  const left = a || [];
+  const right = b || [];
+
+  return left.length === right.length && left.every((v, i) => v === right[i]);
+};
+
 export type RunProjectPlan = {
   projects: ProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
@@ -109,8 +116,14 @@ export const createRunProjectPlanState = ({
     if (context.relatedResolutionEmpty) {
       return {};
     }
-    if (entriesCache.has(name)) {
-      return entriesCache.get(name)!.entries;
+    const cachedEntries = entriesCache.get(name);
+    if (
+      cachedEntries &&
+      (!isWatchMode ||
+        context.normalizedConfig.shard ||
+        areFileFiltersEqual(cachedEntries.fileFilters, context.fileFilters))
+    ) {
+      return cachedEntries.entries;
     }
 
     const project =
