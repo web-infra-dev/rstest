@@ -95,6 +95,7 @@ export async function createBrowserExecutor(
         allowEmptyRun,
         appliedModifyRstestConfigEnvironments,
         onTraceEvents: opts.onTraceEvents,
+        env: opts.env,
       });
       inFlightCycle = cycle;
       try {

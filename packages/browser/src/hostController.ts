@@ -2105,6 +2105,7 @@ export const runBrowserController = async (
     allowEmptyRun = false,
     filesOnly = false,
     onTraceEvents,
+    env,
   } = options ?? {};
   const buildStart = Date.now();
   // Non-watch vs watch is the live switch for self-finalize: in non-watch runs
@@ -2533,7 +2534,10 @@ export const runBrowserController = async (
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
       runtimeConfig: serializableConfig(
-        projectRuntimeConfig(project, { envMode: 'static' }),
+        // `env` is the post-globalSetup change-set from the core pre-cycle
+        // stage; the projection layers it between the static base and the
+        // user `test.env` config.
+        projectRuntimeConfig(project, { envMode: 'static', env }),
       ),
       viewport: project.normalizedConfig.browser.viewport,
     }),

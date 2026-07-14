@@ -3,7 +3,11 @@ import { isAbsolute, normalize, relative, resolve } from 'pathe';
 import { cleanCoverageReports, createCoverageProvider } from '../coverage';
 import { buildBrowserCoverageMap } from '../coverage/browserCoverageMap';
 import { ensureRunDependencies } from './dependencies';
-import type { ProjectContext, TestExecutor } from '../types';
+import type {
+  ExecutorCycleOutcome,
+  ProjectContext,
+  TestExecutor,
+} from '../types';
 import type { CoverageProvider } from '../types/coverage';
 import {
   clearScreen,
@@ -27,6 +31,10 @@ import {
   loadBrowserModule,
 } from './browserLoader';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
+import {
+  type BrowserGlobalSetupStageResult,
+  runBrowserGlobalSetupStage,
+} from './browserGlobalSetup';
 import { createNodeExecutor } from './executors/nodeExecutor';
 import { runGlobalTeardown } from './globalSetup';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';
@@ -52,6 +60,19 @@ async function runBrowserModeTests(
   validateBrowserConfig(context);
   return runBrowserTests(context, { ...options, projects: browserProjects });
 }
+
+/**
+ * Errors-only outcome fed into the shared finalize when the pre-cycle browser
+ * globalSetup stage fails — same error objects and exit-code path as a node
+ * in-cycle globalSetup failure.
+ */
+const globalSetupFailureOutcome = (errors: Error[]): ExecutorCycleOutcome => ({
+  results: [],
+  testResults: [],
+  errors,
+  testPaths: [],
+  duration: { buildTime: 0, testTime: 0 },
+});
 
 const getSignalExitCode = (signal: NodeJS.Signals): number => {
   const signalNumber = osConstants.signals[signal];
@@ -253,13 +274,50 @@ export async function runTests(context: Rstest): Promise<void> {
       await browserExecutor.init();
 
       await notifyReportersOnTestRunStart(context);
-      try {
-        const outcome = await browserExecutor.runCycle({
-          buildId: 1,
-          mode: 'all',
-          updateSnapshot: snapshotManager.options.updateSnapshot,
-          onTraceEvents: traceRun.onEvents,
+      // Best-effort teardown nets for hard crashes and signal deaths between
+      // setup and teardown (parity with the mixed path's handlers); the
+      // deterministic drain in the `finally` below is the primary guarantee.
+      const teardownOnExit = () => {
+        runGlobalTeardown().catch((error) => {
+          logger.log(color.red(`Error in global teardown: ${error}`));
         });
+      };
+      const teardownOnSignal = (signal: NodeJS.Signals) => {
+        logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
+        runGlobalTeardown()
+          .catch((error) => {
+            logger.log(color.red(`Error in global teardown: ${error}`));
+          })
+          .finally(() => {
+            process.exit(getSignalExitCode(signal));
+          });
+      };
+      const teardownSignals = ['SIGINT', 'SIGTERM', 'SIGTSTP'] as const;
+      let teardownNetRegistered = false;
+      try {
+        const stage = await runBrowserGlobalSetupStage(
+          context,
+          browserProjects,
+        );
+        if (
+          !context.embedded &&
+          (stage.env !== undefined || stage.errors.length > 0)
+        ) {
+          process.on('exit', teardownOnExit);
+          for (const signal of teardownSignals) {
+            process.on(signal, teardownOnSignal);
+          }
+          teardownNetRegistered = true;
+        }
+        const outcome = stage.errors.length
+          ? globalSetupFailureOutcome(stage.errors)
+          : await browserExecutor.runCycle({
+              buildId: 1,
+              mode: 'all',
+              updateSnapshot: snapshotManager.options.updateSnapshot,
+              env: stage.env,
+              onTraceEvents: traceRun.onEvents,
+            });
         await finalizeRunCycle(context, {
           outcomes: [outcome],
           mode: 'all',
@@ -270,9 +328,21 @@ export async function runTests(context: Rstest): Promise<void> {
           currentDeletedEntries: [],
         });
       } finally {
-        await runLifecycleStep('executor cleanup', () =>
-          browserExecutor.close(),
-        );
+        try {
+          await runLifecycleStep('global teardown', () => runGlobalTeardown());
+        } finally {
+          // The executor close must survive a throwing teardown — a skipped
+          // close leaks the launched browser and dev servers.
+          if (teardownNetRegistered) {
+            process.off('exit', teardownOnExit);
+            for (const signal of teardownSignals) {
+              process.off(signal, teardownOnSignal);
+            }
+          }
+          await runLifecycleStep('executor cleanup', () =>
+            browserExecutor.close(),
+          );
+        }
       }
     }
 
@@ -539,7 +609,14 @@ export async function runTests(context: Rstest): Promise<void> {
       }
       isCleaningUp = true;
       try {
-        await closeExecutors();
+        try {
+          await closeExecutors();
+        } finally {
+          // Signal-path drain: `executors` excludes the node executor when
+          // only browser tests run, so its close cannot be the drain point
+          // for the browser stage's setups.
+          await runLifecycleStep('global teardown', () => runGlobalTeardown());
+        }
         await runLifecycleStep('trace run finalize', () =>
           activeTraceRun.finalize(),
         );
@@ -585,6 +662,7 @@ export async function runTests(context: Rstest): Promise<void> {
     }
 
     try {
+      let browserStage: BrowserGlobalSetupStageResult = { errors: [] };
       if (hasBrowserTestsToRun) {
         const browserProjectsToRun = getBrowserProjectsToRun();
         browserShardedEntries = getBrowserShardedEntries(browserProjectsToRun);
@@ -601,6 +679,13 @@ export async function runTests(context: Rstest): Promise<void> {
         );
         executors.push(browserExecutor);
         await browserExecutor.init();
+        // Core-owned pre-cycle globalSetup stage over the resolved browser
+        // subset. It mutates the shared host `process.env`, so browser setups'
+        // env changes are also visible to node workers dispatched below.
+        browserStage = await runBrowserGlobalSetupStage(
+          context,
+          browserProjectsToRun,
+        );
       }
 
       await notifyReportersOnTestRunStart(context);
@@ -610,13 +695,16 @@ export async function runTests(context: Rstest): Promise<void> {
       // teardown early. The re-await unwraps the already-settled promises,
       // rejecting with the first failure in executor order.
       const cyclePromises = executors.map((executor) =>
-        executor.runCycle({
-          buildId: 1,
-          mode: 'all',
-          updateSnapshot: snapshotManager.options.updateSnapshot,
-          shardedEntries: browserShardedEntries,
-          onTraceEvents: forwardBrowserTraceEvents,
-        }),
+        executor.name === 'browser' && browserStage.errors.length
+          ? Promise.resolve(globalSetupFailureOutcome(browserStage.errors))
+          : executor.runCycle({
+              buildId: 1,
+              mode: 'all',
+              updateSnapshot: snapshotManager.options.updateSnapshot,
+              env: browserStage.env,
+              shardedEntries: browserShardedEntries,
+              onTraceEvents: forwardBrowserTraceEvents,
+            }),
       );
       await Promise.allSettled(cyclePromises);
       const outcomes = await Promise.all(cyclePromises);
@@ -634,12 +722,20 @@ export async function runTests(context: Rstest): Promise<void> {
       });
       isTeardown = true;
     } finally {
-      await closeExecutors();
-      if (!context.embedded) {
-        process.off('exit', unExpectedExit);
-        process.off('SIGINT', handleSignal);
-        process.off('SIGTERM', handleSignal);
-        process.off('SIGTSTP', handleSignal);
+      try {
+        await closeExecutors();
+      } finally {
+        if (!context.embedded) {
+          process.off('exit', unExpectedExit);
+          process.off('SIGINT', handleSignal);
+          process.off('SIGTERM', handleSignal);
+          process.off('SIGTSTP', handleSignal);
+        }
+        // `executors` excludes the node executor when only browser tests run,
+        // so `NodeExecutor.close()` alone cannot be the teardown drain point
+        // for the browser stage's setups; a second drain after it is a no-op,
+        // and it must run even when an executor close throws.
+        await runLifecycleStep('global teardown', () => runGlobalTeardown());
       }
     }
 

@@ -8,6 +8,8 @@ import {
   getForceColorEnv,
   getWorkerSerialization,
   killAndWait,
+  noopTraceSpan,
+  type TraceSpan,
 } from '../utils';
 
 /**
@@ -200,6 +202,12 @@ export async function runGlobalSetup({
 }): Promise<{
   success: boolean;
   errors?: any[];
+  /**
+   * Env change-set (including deletions as `undefined`) the setup applied to
+   * the host `process.env`. Surfaced so the core pre-cycle stage can forward
+   * browser projects' changes onto the browser wire.
+   */
+  envChanges?: Record<string, string | undefined>;
 }> {
   const worker = new GlobalSetupWorker();
 
@@ -236,7 +244,53 @@ export async function runGlobalSetup({
   return {
     success: result.success,
     errors: result.errors,
+    envChanges: result.success ? result.envChanges : undefined,
   };
+}
+
+/**
+ * Compile-output → setup-run step shared by the node executor's in-cycle
+ * globalSetup and the core pre-cycle browser stage: fetch the setup entries'
+ * assets and source maps, then execute them in the forked worker.
+ */
+export async function runProjectGlobalSetup({
+  project,
+  globalSetupEntries,
+  getAssetFiles,
+  getSourceMaps,
+  span = noopTraceSpan,
+}: {
+  project: Pick<ProjectContext, 'name' | 'outputModule'>;
+  globalSetupEntries: EntryInfo[];
+  getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
+  getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
+  span?: TraceSpan;
+}): ReturnType<typeof runGlobalSetup> {
+  const files = globalSetupEntries.flatMap((e) => e.files!);
+  const traceArgs = {
+    project: project.name,
+    testPath: '<globalSetup>',
+  };
+  const [assetFiles, sourceMaps] = await span(
+    'host:global-setup-assets',
+    'host',
+    () => Promise.all([getAssetFiles(files), getSourceMaps(files)]),
+    traceArgs,
+  );
+
+  return span(
+    'host:global-setup',
+    'host',
+    () =>
+      runGlobalSetup({
+        globalSetupEntries,
+        assetFiles,
+        sourceMaps,
+        interopDefault: true,
+        outputModule: project.outputModule,
+      }),
+    traceArgs,
+  );
 }
 
 async function runWorkerTeardown(worker: GlobalSetupWorker): Promise<void> {
