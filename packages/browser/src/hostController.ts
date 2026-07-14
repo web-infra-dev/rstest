@@ -18,6 +18,8 @@ import {
   getNoTestFilesMessage,
   getSetupFiles,
   getTestEntries,
+  hasUserRstestConfigPlugins,
+  initModifyRstestConfigHooks,
   isDebug,
   type ListCommandResult,
   loadCoverageProvider,
@@ -31,6 +33,7 @@ import {
   type RstestContext,
   resolveProjectBuildCache,
   resolveSnapshotPathDefault,
+  resolveShardedEntries,
   RSTEST_ENV_SYMBOL_KEY,
   rsbuild,
   serializableConfig,
@@ -50,6 +53,7 @@ import {
   createHostDispatchRouter,
   type HostDispatchRouterOptions,
 } from './dispatchCapabilities';
+import { validateBrowserConfig } from './configValidation';
 import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
 import { createHeadlessLatestRerunScheduler } from './headlessLatestRerunScheduler';
 import { attachHeadlessRunnerTransport } from './headlessTransport';
@@ -102,6 +106,8 @@ import { collectWatchTestFiles, planWatchRerun } from './watchRerunPlanner';
 const { createRsbuild, rspack } = rsbuild;
 type RsbuildDevServer = rsbuild.RsbuildDevServer;
 type RsbuildInstance = rsbuild.RsbuildInstance;
+type RsbuildEnvironmentConfig = rsbuild.EnvironmentConfig &
+  Pick<rsbuild.RsbuildConfig, 'root'>;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OPTIONS_PLACEHOLDER = '__RSTEST_OPTIONS_PLACEHOLDER__';
@@ -434,6 +440,7 @@ type BrowserRuntime = {
   dispatchHandlers: Map<string, BrowserDispatchHandler>;
   wss: WebSocketServer;
   rpcManager?: ContainerRpcManager;
+  projectEntries: BrowserProjectEntries[];
 };
 
 // ============================================================================
@@ -974,11 +981,27 @@ const getAffectedTestFiles = (
   return Array.from(affectedFiles);
 };
 
-const getBrowserProjects = (context: RstestContext): ProjectContext[] => {
+const getBrowserProjects = (
+  context: RstestContext,
+  targetEnvironmentNames?: string[],
+): ProjectContext[] => {
+  const targetEnvironments = targetEnvironmentNames
+    ? new Set(targetEnvironmentNames)
+    : undefined;
+
   return context.projects.filter(
-    (project) => project.normalizedConfig.browser.enabled,
+    (project) =>
+      project.normalizedConfig.browser.enabled &&
+      (!targetEnvironments || targetEnvironments.has(project.environmentName)),
   );
 };
+
+const getBrowserRsbuildEnvironmentConfig = (
+  project: ProjectContext,
+): RsbuildEnvironmentConfig => ({
+  plugins: project.normalizedConfig.plugins,
+  root: project.rootPath,
+});
 
 // Max testTimeout across browser projects, used as the host->client RPC timeout.
 const getMaxTestTimeoutForRpc = (projects: ProjectContext[]): number =>
@@ -1056,9 +1079,10 @@ const resolveProviderForTestPath = ({
 
 const collectProjectEntries = async (
   context: RstestContext,
+  targetEnvironmentNames?: string[],
 ): Promise<BrowserProjectEntries[]> => {
   // Only collect entries for browser mode projects
-  const browserProjects = getBrowserProjects(context);
+  const browserProjects = getBrowserProjects(context, targetEnvironmentNames);
 
   return Promise.all(
     browserProjects.map(async (project) => {
@@ -1393,16 +1417,23 @@ const registerWatchCleanup = (): void => {
 
 const createBrowserRuntime = async ({
   context,
-  projectEntries,
+  projectEntries: initialProjectEntries,
+  shardedEntries,
+  freezeShardedEntries,
   tempDir,
   isWatchMode,
   onTriggerRerun,
   containerDistPath,
   containerDevServer,
   forceHeadless,
+  skipProviderLaunch,
+  appliedModifyRstestConfigEnvironments,
+  targetEnvironmentNames,
 }: {
   context: RstestContext;
   projectEntries: BrowserProjectEntries[];
+  shardedEntries?: Map<string, { entries: Record<string, string> }>;
+  freezeShardedEntries?: boolean;
   tempDir: string;
   isWatchMode: boolean;
   onTriggerRerun?: () => Promise<void>;
@@ -1410,6 +1441,9 @@ const createBrowserRuntime = async ({
   containerDevServer?: string;
   /** Force headless mode regardless of user config (used for list command) */
   forceHeadless?: boolean;
+  skipProviderLaunch?: boolean;
+  appliedModifyRstestConfigEnvironments?: Set<string>;
+  targetEnvironmentNames?: string[];
 }): Promise<BrowserRuntime> => {
   // ---- Shared singletons (created once, wired into every project server) ----
   const containerHtmlTemplate = containerDistPath
@@ -1431,9 +1465,85 @@ const createBrowserRuntime = async ({
     }
   };
 
-  const browserProjects = getBrowserProjects(context);
-  const browserLaunchOptions =
+  const browserProjects = getBrowserProjects(context, targetEnvironmentNames);
+  let browserLaunchOptions =
     ensureConsistentBrowserLaunchOptions(browserProjects);
+  let projectEntries = initialProjectEntries;
+  const manifestModules: Array<{
+    manifestPath: string;
+    project: ProjectContext;
+    modules: Record<string, string>;
+  }> = [];
+
+  const createRuntimeWithoutProvider = (): BrowserRuntime => {
+    const firstProject = browserProjects[0]!;
+    return {
+      projectServers: new Map(),
+      containerServer: {
+        projectName: firstProject.name,
+        environmentName: firstProject.environmentName,
+        rsbuildInstance: undefined as unknown as RsbuildInstance,
+        devServer: {
+          close: async () => undefined,
+        } as RsbuildDevServer,
+        port: 0,
+        manifestPath: '',
+      },
+      browser: undefined as unknown as BrowserProviderBrowser,
+      browserLaunchOptions,
+      wsPort: 0,
+      tempDir,
+      setContainerOptions,
+      dispatchHandlers,
+      wss: undefined as unknown as WebSocketServer,
+      projectEntries,
+    };
+  };
+
+  const getProjectEntry = (project: ProjectContext) =>
+    projectEntries.find(
+      (item) => item.project.environmentName === project.environmentName,
+    );
+
+  const refreshManifestModule = (manifestModule: {
+    manifestPath: string;
+    project: ProjectContext;
+    modules: Record<string, string>;
+  }): void => {
+    const entry = getProjectEntry(manifestModule.project);
+    manifestModule.modules[manifestModule.manifestPath] =
+      generateManifestModule({
+        manifestPath: manifestModule.manifestPath,
+        entries: [
+          {
+            project: manifestModule.project,
+            testFiles: entry?.testFiles ?? [],
+            setupFiles: entry?.setupFiles ?? [],
+          },
+        ],
+        isWatchMode,
+      });
+  };
+
+  const refreshProjectEntries = async (): Promise<void> => {
+    validateBrowserConfig(context);
+    browserLaunchOptions = ensureConsistentBrowserLaunchOptions(
+      getBrowserProjects(context, targetEnvironmentNames),
+    );
+    const updatedShardedEntries = freezeShardedEntries
+      ? shardedEntries
+      : context.normalizedConfig.shard
+        ? await resolveShardedEntries(context, { silent: true })
+        : shardedEntries;
+    projectEntries = await resolveProjectEntries(
+      context,
+      updatedShardedEntries,
+      targetEnvironmentNames,
+    );
+    for (const manifestModule of manifestModules) {
+      refreshManifestModule(manifestModule);
+    }
+  };
 
   // Rstest internal aliases that must not be overridden by user config
   const browserRuntimePath = fileURLToPath(
@@ -1529,10 +1639,6 @@ const createBrowserRuntime = async ({
     }
   };
 
-  const entryByEnvironmentName = new Map(
-    projectEntries.map((entry) => [entry.project.environmentName, entry]),
-  );
-
   // ---- Build one isolated rsbuild instance + dev server per project ----
   const buildProjectServer = async (
     project: ProjectContext,
@@ -1543,20 +1649,27 @@ const createBrowserRuntime = async ({
       toSafeVarName(project.environmentName),
       VIRTUAL_MANIFEST_FILENAME,
     );
-    const entry = entryByEnvironmentName.get(project.environmentName);
-    const manifestSource = generateManifestModule({
+    const entry = getProjectEntry(project);
+    const virtualManifestModules = {
+      [manifestPath]: generateManifestModule({
+        manifestPath,
+        entries: [
+          {
+            project,
+            testFiles: entry?.testFiles ?? [],
+            setupFiles: entry?.setupFiles ?? [],
+          },
+        ],
+        isWatchMode,
+      }),
+    };
+    const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin(
+      virtualManifestModules,
+    );
+    manifestModules.push({
       manifestPath,
-      entries: [
-        {
-          project,
-          testFiles: entry?.testFiles ?? [],
-          setupFiles: entry?.setupFiles ?? [],
-        },
-      ],
-      isWatchMode,
-    });
-    const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin({
-      [manifestPath]: manifestSource,
+      project,
+      modules: virtualManifestModules,
     });
 
     const rstestInternalAliases = {
@@ -1569,11 +1682,10 @@ const createBrowserRuntime = async ({
     const enableHmr = shouldEnableBrowserHmr(isWatchMode, isHeadless);
 
     const rsbuildInstance = await createRsbuild({
-      callerName: 'rstest-browser',
+      callerName: 'rstest',
       rsbuildConfig: {
         root: context.rootPath,
         mode: 'development',
-        plugins: project.normalizedConfig.plugins || [],
         server: {
           printUrls: false,
           // Each project gets its own dev server. Honor an explicitly
@@ -1587,10 +1699,23 @@ const createBrowserRuntime = async ({
         },
         dev: createBrowserRsbuildDevConfig(enableHmr),
         environments: {
-          [project.environmentName]: {},
+          [project.environmentName]:
+            getBrowserRsbuildEnvironmentConfig(project),
         },
       },
     });
+
+    initModifyRstestConfigHooks(
+      context,
+      rsbuildInstance,
+      [project],
+      [project],
+      {
+        getEnvironmentConfig: getBrowserRsbuildEnvironmentConfig,
+        onModifyRstestConfigApplied: refreshProjectEntries,
+        appliedEnvironmentNames: appliedModifyRstestConfigEnvironments,
+      },
+    );
 
     // Add plugin to merge user Rsbuild config with rstest required config
     rsbuildInstance.addPlugins([
@@ -1760,6 +1885,20 @@ const createBrowserRuntime = async ({
       ]);
     }
 
+    if (skipProviderLaunch) {
+      await rsbuildInstance.initConfigs({ action: 'dev' });
+      return {
+        projectName: project.name,
+        environmentName: project.environmentName,
+        rsbuildInstance,
+        devServer: {
+          close: async () => undefined,
+        } as RsbuildDevServer,
+        port: 0,
+        manifestPath,
+      };
+    }
+
     // Register coverage plugin if this project enables coverage
     const coverage = project.normalizedConfig.coverage;
     if (coverage?.enabled && context.command !== 'list') {
@@ -1886,6 +2025,10 @@ const createBrowserRuntime = async ({
     throw error;
   }
 
+  if (skipProviderLaunch) {
+    return createRuntimeWithoutProvider();
+  }
+
   // browserProjects is non-empty (ensureConsistentBrowserLaunchOptions throws
   // otherwise) and index 0 is the designated container origin.
   const containerServer = projectServers.get(browserProjects[0]!.name)!;
@@ -1921,6 +2064,7 @@ const createBrowserRuntime = async ({
       setContainerOptions,
       dispatchHandlers,
       wss,
+      projectEntries,
     };
   } catch (error) {
     wss.close();
@@ -1932,9 +2076,10 @@ const createBrowserRuntime = async ({
 async function resolveProjectEntries(
   context: RstestContext,
   shardedEntries?: Map<string, { entries: Record<string, string> }>,
+  targetEnvironmentNames?: string[],
 ): Promise<BrowserProjectEntries[]> {
   if (shardedEntries) {
-    const browserProjects = getBrowserProjects(context);
+    const browserProjects = getBrowserProjects(context, targetEnvironmentNames);
     const projectEntries: BrowserProjectEntries[] = [];
     for (const project of browserProjects) {
       const entryInfo = shardedEntries.get(project.environmentName);
@@ -1952,7 +2097,7 @@ async function resolveProjectEntries(
     }
     return projectEntries;
   }
-  return collectProjectEntries(context);
+  return collectProjectEntries(context, targetEnvironmentNames);
 }
 
 // ============================================================================
@@ -1963,7 +2108,12 @@ export const runBrowserController = async (
   context: RstestContext,
   options?: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> => {
-  const { allowEmptyWatchRun = false, onTraceEvents } = options ?? {};
+  const {
+    allowEmptyWatchRun = false,
+    allowEmptyRun = false,
+    filesOnly = false,
+    onTraceEvents,
+  } = options ?? {};
   const buildStart = Date.now();
   // Non-watch vs watch is the live switch for self-finalize: in non-watch runs
   // core owns the unified finalize (reporters, exit code, coverage) through
@@ -1981,7 +2131,10 @@ export const runBrowserController = async (
   const phaseTrackers = onTraceEvents
     ? new Map<string, PhaseTracker>()
     : undefined;
-  const browserProjects = getBrowserProjects(context);
+  let browserProjects = getBrowserProjects(
+    context,
+    options?.targetEnvironmentNames,
+  );
   const useHeadlessDirect = browserProjects.every(
     (project) => project.normalizedConfig.browser.headless,
   );
@@ -2194,19 +2347,38 @@ export const runBrowserController = async (
     }
   }
 
-  const projectEntries = await resolveProjectEntries(
+  let projectEntries = await resolveProjectEntries(
     context,
     options?.shardedEntries,
+    options?.targetEnvironmentNames,
   );
-  const totalTests = projectEntries.reduce(
+  let totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
     0,
   );
   const shouldKeepWatchingWithEmptySet = isWatchMode && allowEmptyWatchRun;
+  const shouldInitializeEmptyBrowserHooks =
+    totalTests === 0 && hasUserRstestConfigPlugins(browserProjects);
 
-  if (totalTests === 0) {
+  const createEmptyRunResult = (): BrowserTestRunResult => {
+    const elapsed = Math.max(0, Date.now() - buildStart);
+    return {
+      results: [],
+      testResults: [],
+      duration: {
+        totalTime: elapsed,
+        buildTime: elapsed,
+        testTime: 0,
+      },
+      hasFailure: false,
+      getSourcemap: getBrowserSourcemap,
+      resolveSourcemap: resolveBrowserSourcemap,
+    };
+  };
+
+  const reportEmptyTestSet = (): boolean => {
     const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
-    if (isWatchMode) {
+    if (isWatchMode || !allowEmptyRun) {
       const message = shouldKeepWatchingWithEmptySet
         ? 'No test files found.'
         : getNoTestFilesMessage({
@@ -2236,15 +2408,27 @@ export const runBrowserController = async (
     // In non-watch runs the host returns a void outcome and core's
     // `reportNoTestFiles` owns the exit code and the no-test reporter lifecycle;
     // the host must not set the code itself. Watch keeps its own exit code.
-    if (isWatchMode && code !== 0 && !shouldKeepWatchingWithEmptySet) {
+    if (
+      isWatchMode &&
+      code !== 0 &&
+      !shouldKeepWatchingWithEmptySet &&
+      !allowEmptyRun
+    ) {
       ensureProcessExitCode(code);
     }
-    if (!shouldKeepWatchingWithEmptySet) {
-      return;
+
+    return !shouldKeepWatchingWithEmptySet;
+  };
+
+  if (totalTests === 0 && !shouldInitializeEmptyBrowserHooks) {
+    if (reportEmptyTestSet()) {
+      return allowEmptyRun ? createEmptyRunResult() : undefined;
     }
   }
 
-  await notifyTestRunStart();
+  if (!filesOnly) {
+    await notifyTestRunStart();
+  }
 
   const enableCliShortcuts = isWatchMode && isBrowserWatchCliShortcutsEnabled();
   const browserTempOutputRoot = context.normalizedConfig.output.distPath.root;
@@ -2275,6 +2459,8 @@ export const runBrowserController = async (
       runtime = await createBrowserRuntime({
         context,
         projectEntries,
+        shardedEntries: options?.shardedEntries,
+        freezeShardedEntries: options?.freezeShardedEntries,
         tempDir,
         isWatchMode,
         onTriggerRerun: isWatchMode
@@ -2284,6 +2470,10 @@ export const runBrowserController = async (
           : undefined,
         containerDistPath,
         containerDevServer,
+        skipProviderLaunch: filesOnly,
+        appliedModifyRstestConfigEnvironments:
+          options?.appliedModifyRstestConfigEnvironments,
+        targetEnvironmentNames: options?.targetEnvironmentNames,
       });
     } catch (error) {
       return failWithError(error, async () => {
@@ -2303,8 +2493,40 @@ export const runBrowserController = async (
     }
   }
 
-  const { browser, browserLaunchOptions, wsPort, wss } = runtime;
+  projectEntries = runtime.projectEntries;
+  browserProjects = getBrowserProjects(
+    context,
+    options?.targetEnvironmentNames,
+  );
+  totalTests = projectEntries.reduce(
+    (total, item) => total + item.testFiles.length,
+    0,
+  );
+
   const buildTime = Date.now() - buildStart;
+
+  if (filesOnly) {
+    return {
+      results: [],
+      testResults: [],
+      duration: {
+        totalTime: buildTime,
+        buildTime,
+        testTime: 0,
+      },
+      hasFailure: false,
+      getSourcemap: getBrowserSourcemap,
+      resolveSourcemap: resolveBrowserSourcemap,
+      close: () => destroyBrowserRuntime(runtime),
+    };
+  }
+
+  if (totalTests === 0 && reportEmptyTestSet()) {
+    await destroyBrowserRuntime(runtime);
+    return allowEmptyRun ? createEmptyRunResult() : undefined;
+  }
+
+  const { browser, browserLaunchOptions, wsPort, wss } = runtime;
 
   // Collect all test files from project entries with project info
   // Normalize paths to posix format for cross-platform compatibility
@@ -3819,20 +4041,30 @@ export type ListBrowserTestsResult = {
  */
 export const listBrowserTests = async (
   context: RstestContext,
-  options?: {
-    shardedEntries?: Map<string, { entries: Record<string, string> }>;
-  },
+  options?: Pick<
+    BrowserTestRunOptions,
+    | 'shardedEntries'
+    | 'freezeShardedEntries'
+    | 'filesOnly'
+    | 'targetEnvironmentNames'
+    | 'appliedModifyRstestConfigEnvironments'
+  >,
 ): Promise<ListBrowserTestsResult> => {
+  let browserProjects = getBrowserProjects(
+    context,
+    options?.targetEnvironmentNames,
+  );
   const projectEntries = await resolveProjectEntries(
     context,
     options?.shardedEntries,
+    options?.targetEnvironmentNames,
   );
   const totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
     0,
   );
 
-  if (totalTests === 0) {
+  if (totalTests === 0 && !hasUserRstestConfigPlugins(browserProjects)) {
     return {
       list: [],
       close: async () => {},
@@ -3846,19 +4078,23 @@ export const listBrowserTests = async (
     `list-${Date.now()}`,
   );
 
-  const browserProjects = getBrowserProjects(context);
-
   // Create a simplified browser runtime for collect mode
   let runtime: BrowserRuntime;
   try {
     runtime = await createBrowserRuntime({
       context,
       projectEntries,
+      shardedEntries: options?.shardedEntries,
+      freezeShardedEntries: options?.freezeShardedEntries,
       tempDir,
       isWatchMode: false,
       containerDistPath: undefined,
       containerDevServer: undefined,
       forceHeadless: true, // Always use headless for list command
+      skipProviderLaunch: options?.filesOnly,
+      appliedModifyRstestConfigEnvironments:
+        options?.appliedModifyRstestConfigEnvironments,
+      targetEnvironmentNames: options?.targetEnvironmentNames,
     });
   } catch (error) {
     const providers = [
@@ -3873,6 +4109,34 @@ export const listBrowserTests = async (
       error,
     );
     throw error;
+  }
+
+  browserProjects = getBrowserProjects(
+    context,
+    options?.targetEnvironmentNames,
+  );
+
+  if (options?.filesOnly) {
+    const list = runtime.projectEntries.flatMap((entry) =>
+      entry.testFiles.map((testPath) => ({
+        testPath,
+        project: entry.project.name,
+        tests: [],
+      })),
+    );
+    await destroyBrowserRuntime(runtime);
+    return {
+      list,
+      close: async () => {},
+    };
+  }
+
+  if (!runtime.projectEntries.some((entry) => entry.testFiles.length > 0)) {
+    await destroyBrowserRuntime(runtime);
+    return {
+      list: [],
+      close: async () => {},
+    };
   }
 
   const { browser, browserLaunchOptions } = runtime;

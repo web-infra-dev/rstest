@@ -13,6 +13,55 @@ describe('browser mode - config options', () => {
     await expectExecSuccess();
     expect(cli.stdout).toMatch(/Tests.*passed/);
     expect(cli.stdout).toContain('git/source-dir.test.ts');
+    expect(cli.stdout).toContain('modified/modified.test.ts');
+  });
+
+  it('should run browser tests added after initial empty entries', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli('config', {
+      args: ['empty-before-hook'],
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toMatch(/Tests.*passed/);
+    expect(cli.stdout).toContain('empty-before-hook/added-by-hook.test.ts');
+  });
+
+  it('should run browser tests added after initial empty entries with shard', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli('config', {
+      args: ['--shard=1/1', 'empty-before-hook'],
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toMatch(/Tests.*passed/);
+    expect(cli.stdout).toContain('empty-before-hook/added-by-hook.test.ts');
+  });
+
+  it('should reject browser launch config modified by Rsbuild plugins', async () => {
+    const { expectExecFailed, expectStderrLog } = await runBrowserCli(
+      'config',
+      {
+        env: { RSTEST_E2E_MUTATE_BROWSER_HEADLESS: 'true' },
+      },
+    );
+
+    await expectExecFailed();
+    expectStderrLog(
+      /Cannot modify `browser\.headless` in `modifyRstestConfig`\./,
+    );
+  });
+
+  it('should revalidate browser-only config modified by Rsbuild plugins', async () => {
+    const { expectExecFailed, expectStderrLog } = await runBrowserCli(
+      'config',
+      {
+        env: { RSTEST_E2E_MUTATE_BUNDLE_DEPENDENCIES: 'true' },
+      },
+    );
+
+    await expectExecFailed();
+    expectStderrLog(
+      /output\.bundleDependencies false is not supported in browser mode\./,
+    );
   });
 
   it('should respect customized output.distPath.root', async () => {

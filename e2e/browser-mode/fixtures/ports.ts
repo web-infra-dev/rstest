@@ -32,6 +32,7 @@ export const BROWSER_PORTS = {
   'browser-coverage-multiproject': 5228,
   related: 5232,
   'multi-project-config': 5234,
+  'multi-project-config-hooked-b': 5246,
   bail: 5236,
   mixed: 5238,
   'mixed-browser-fail': 5240,

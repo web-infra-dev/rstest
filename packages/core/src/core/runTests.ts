@@ -1,9 +1,15 @@
 import { constants as osConstants } from 'node:os';
+import { isAbsolute, normalize, relative, resolve } from 'pathe';
 import { cleanCoverageReports, createCoverageProvider } from '../coverage';
 import { ensureRunDependencies } from './dependencies';
 import { ensureTestEnvironmentDependencies } from './envDependencies';
 import { createPool } from '../pool';
-import type { EntryInfo, ExecutorCycleOutcome, TestFileResult } from '../types';
+import type {
+  EntryInfo,
+  ExecutorCycleOutcome,
+  ProjectContext,
+  TestFileResult,
+} from '../types';
 import type { CoverageMap, CoverageProvider } from '../types/coverage';
 import {
   clearScreen,
@@ -44,6 +50,7 @@ import { type SequenceHints, sortTestEntries } from './testSequencer';
 import { createRunProjectPlanState, syncNodeProjects } from './projectPlan';
 import type { Rstest } from './rstest';
 import { prepareWatchRerunState } from './watchState';
+import { getUserRstestConfigPluginProjects } from './modifyRstestConfig';
 
 /**
  * Run browser mode tests.
@@ -407,7 +414,47 @@ export async function runTests(context: Rstest): Promise<void> {
   const { rootPath, snapshotManager, command, normalizedConfig } = context;
   const { coverage, shard } = normalizedConfig;
 
+  const isFilterInsideProject = (filter: string, project: ProjectContext) => {
+    const absoluteFilter = normalize(
+      isAbsolute(filter) ? filter : resolve(rootPath, filter),
+    );
+    const relativeFilter = normalize(
+      relative(project.rootPath, absoluteFilter),
+    );
+
+    return (
+      relativeFilter === '' ||
+      (!relativeFilter.startsWith('..') && !isAbsolute(relativeFilter))
+    );
+  };
+
+  const isFuzzyBasenameFilter = (filter: string) => {
+    if (context.fileFilterMode === 'exact' || isAbsolute(filter)) {
+      return false;
+    }
+
+    const normalizedFilter = normalize(filter);
+    return (
+      !normalizedFilter.startsWith('.') &&
+      !normalizedFilter.includes('/') &&
+      !normalizedFilter.includes('\\')
+    );
+  };
+
+  const isBrowserProjectPathFilter = (filter: string) =>
+    !isFuzzyBasenameFilter(filter) &&
+    browserProjects.some((project) => isFilterInsideProject(filter, project));
+
+  const isNodeProjectPathFilter = (filter: string) =>
+    !isFuzzyBasenameFilter(filter) &&
+    nodeProjects.some((project) => isFilterInsideProject(filter, project));
+
+  const browserConfigHookProjects =
+    getUserRstestConfigPluginProjects(browserProjects);
+
   const setupFileState = createSetupFileState();
+  const appliedBrowserModifyRstestConfigEnvironments = new Set<string>();
+  let hasRunBrowserConfigHookDiscovery = false;
   const projectPlanState = createRunProjectPlanState({
     context,
     browserProjects,
@@ -455,15 +502,132 @@ export async function runTests(context: Rstest): Promise<void> {
     onRsbuildConfigResolved: validateEnvironmentComments,
   });
 
+  const shouldRunBrowserDiscoveryFallback = () => {
+    if (
+      browserConfigHookProjects.length === 0 ||
+      context.relatedResolutionEmpty ||
+      hasRunBrowserConfigHookDiscovery
+    ) {
+      return false;
+    }
+
+    if (!context.fileFilters?.length) {
+      return true;
+    }
+
+    return context.fileFilters.some(
+      (filter) =>
+        isFuzzyBasenameFilter(filter) ||
+        browserConfigHookProjects.some((project) =>
+          isFilterInsideProject(filter, project),
+        ) ||
+        (!isBrowserProjectPathFilter(filter) &&
+          !isNodeProjectPathFilter(filter)),
+    );
+  };
+
+  const shouldAllowEmptyBrowserFallback = () =>
+    shouldRunBrowserDiscoveryFallback() &&
+    hasNodeTestsToRun &&
+    !context.fileFilters?.some(isBrowserProjectPathFilter);
+
+  const getBrowserProjectsForDiscovery = () => {
+    if (!context.fileFilters?.length) {
+      return browserConfigHookProjects;
+    }
+
+    if (context.fileFilters.some(isFuzzyBasenameFilter)) {
+      return browserConfigHookProjects;
+    }
+
+    const matchedProjects = browserConfigHookProjects.filter((project) =>
+      context.fileFilters?.some((filter) =>
+        isFilterInsideProject(filter, project),
+      ),
+    );
+    if (matchedProjects.length > 0) {
+      return matchedProjects;
+    }
+
+    return context.fileFilters.some(
+      (filter) =>
+        !isBrowserProjectPathFilter(filter) && !isNodeProjectPathFilter(filter),
+    )
+      ? browserConfigHookProjects
+      : [];
+  };
+
+  const getBrowserProjectsToRun = () => {
+    const currentPlan = projectPlanState.getPlan();
+    if (currentPlan.browserProjectsToRun.length > 0) {
+      return currentPlan.browserProjectsToRun;
+    }
+
+    return getBrowserProjectsForDiscovery();
+  };
+
+  const getBrowserShardedEntries = (
+    projects: ProjectContext[],
+  ): Map<string, { entries: Record<string, string> }> | undefined => {
+    if (!shard) {
+      return undefined;
+    }
+    const currentPlan = projectPlanState.getPlan();
+    const browserEntries = new Map<
+      string,
+      { entries: Record<string, string> }
+    >();
+    for (const project of projects) {
+      const entries = currentPlan.entriesCache.get(project.environmentName);
+      if (entries) {
+        browserEntries.set(project.environmentName, entries);
+      }
+    }
+    return browserEntries;
+  };
+
   const syncRunPlanFlags = () => {
     const currentPlan = projectPlanState.getPlan();
     return {
-      hasBrowserTestsToRun: currentPlan.browserProjectsToRun.length > 0,
+      hasBrowserTestsToRun:
+        currentPlan.browserProjectsToRun.length > 0 ||
+        shouldRunBrowserDiscoveryFallback(),
       hasNodeTestsToRun: currentPlan.nodeProjectsToRun.length > 0,
     };
   };
 
   let { hasBrowserTestsToRun, hasNodeTestsToRun } = syncRunPlanFlags();
+
+  if (hasNodeProjects && shouldRunBrowserDiscoveryFallback()) {
+    const browserProjectsForDiscovery = getBrowserProjectsForDiscovery();
+    const discoveryResult = await runBrowserModeTests(
+      context,
+      browserProjectsForDiscovery,
+      {
+        shardedEntries: getBrowserShardedEntries(browserProjectsForDiscovery),
+        filesOnly: true,
+        allowEmptyRun: true,
+        appliedModifyRstestConfigEnvironments:
+          appliedBrowserModifyRstestConfigEnvironments,
+        onTraceEvents: forwardBrowserTraceEvents,
+      },
+    );
+    if (discoveryResult?.hasFailure) {
+      await discoveryResult.close?.();
+      throw (
+        discoveryResult.unhandledErrors?.[0] ??
+        new Error('Failed to initialize Browser Mode discovery.')
+      );
+    }
+    await discoveryResult?.close?.();
+    hasRunBrowserConfigHookDiscovery = true;
+    plan = await resolveRunnableProjects({
+      silentShardMessage: true,
+      strictEnvironmentComments: true,
+    });
+    syncNodeProjects(rsbuildProjects, plan.nodeProjectsToRun);
+    ({ hasBrowserTestsToRun, hasNodeTestsToRun } = syncRunPlanFlags());
+  }
 
   if (nodeProjects.length) {
     await rsbuildInstance.initConfigs({ action: 'dev' });
@@ -516,16 +680,8 @@ export async function runTests(context: Rstest): Promise<void> {
     // `finalizeRunCycle` here — the same non-watch finalize every other path
     // uses — and tear the browser down in this block's `finally`.
     if (hasBrowserTestsToRun) {
-      const browserEntries = new Map();
-      const plan = projectPlanState.getPlan();
-      if (shard) {
-        for (const p of plan.browserProjectsToRun) {
-          browserEntries.set(
-            p.environmentName,
-            plan.entriesCache.get(p.environmentName),
-          );
-        }
-      }
+      const browserProjectsToRun = getBrowserProjectsToRun();
+      const browserEntries = getBrowserShardedEntries(browserProjectsToRun);
 
       if (isWatchMode) {
         // Mixed watch with zero node files: the browser host's watch path owns
@@ -534,9 +690,12 @@ export async function runTests(context: Rstest): Promise<void> {
         // finalize while the session runs — mirror the browser-only watch
         // branch above.
         try {
-          await runBrowserModeTests(context, plan.browserProjectsToRun, {
-            shardedEntries: shard ? browserEntries : undefined,
+          await runBrowserModeTests(context, browserProjectsToRun, {
+            shardedEntries: browserEntries,
+            freezeShardedEntries: Boolean(shard && nodeProjects.length),
             allowEmptyWatchRun: context.relatedResolutionEmpty,
+            appliedModifyRstestConfigEnvironments:
+              appliedBrowserModifyRstestConfigEnvironments,
             onTraceEvents: forwardBrowserTraceEvents,
           });
         } finally {
@@ -560,9 +719,13 @@ export async function runTests(context: Rstest): Promise<void> {
 
       const browserResult = await runBrowserModeTests(
         context,
-        plan.browserProjectsToRun,
+        browserProjectsToRun,
         {
-          shardedEntries: shard ? browserEntries : undefined,
+          shardedEntries: browserEntries,
+          freezeShardedEntries: Boolean(shard && nodeProjects.length),
+          allowEmptyRun: shouldAllowEmptyBrowserFallback(),
+          appliedModifyRstestConfigEnvironments:
+            appliedBrowserModifyRstestConfigEnvironments,
           onTraceEvents: forwardBrowserTraceEvents,
         },
       );
@@ -618,28 +781,19 @@ export async function runTests(context: Rstest): Promise<void> {
   // dependencies are validated so early dependency failures do not leave a
   // browser host running.
   if (hasBrowserTestsToRun) {
-    const browserEntries = new Map();
-    const plan = projectPlanState.getPlan();
-    if (shard) {
-      for (const p of plan.browserProjectsToRun) {
-        browserEntries.set(
-          p.environmentName,
-          plan.entriesCache.get(p.environmentName),
-        );
-      }
-    }
-    browserResultPromise = runBrowserModeTests(
-      context,
-      plan.browserProjectsToRun,
-      {
-        // In non-watch runs the host defers teardown + reporting to core's
-        // unified `finalizeRunCycle` (its internal `isWatchMode` gate); watch
-        // runs self-finalize host-side.
-        shardedEntries: shard ? browserEntries : undefined,
-        allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
-        onTraceEvents: forwardBrowserTraceEvents,
-      },
-    );
+    const browserProjectsToRun = getBrowserProjectsToRun();
+    browserResultPromise = runBrowserModeTests(context, browserProjectsToRun, {
+      // In non-watch runs the host defers teardown + reporting to core's
+      // unified `finalizeRunCycle` (its internal `isWatchMode` gate); watch
+      // runs self-finalize host-side.
+      shardedEntries: getBrowserShardedEntries(browserProjectsToRun),
+      freezeShardedEntries: Boolean(shard && nodeProjects.length),
+      allowEmptyRun: shouldAllowEmptyBrowserFallback(),
+      allowEmptyWatchRun: isWatchMode && context.relatedResolutionEmpty,
+      appliedModifyRstestConfigEnvironments:
+        appliedBrowserModifyRstestConfigEnvironments,
+      onTraceEvents: forwardBrowserTraceEvents,
+    });
 
     // Prevent an unhandled rejection window in mixed node+browser runs.
     // We still await the original promise later to surface the error.

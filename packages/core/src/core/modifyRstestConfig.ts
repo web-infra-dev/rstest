@@ -31,6 +31,13 @@ import {
 
 type RstestEnvironmentConfig = EnvironmentConfig & Pick<RsbuildConfig, 'root'>;
 
+type InitModifyRstestConfigHooksOptions = {
+  onModifyRstestConfigApplied?: () => Promise<void>;
+  onRsbuildConfigResolved?: (applied: boolean) => Promise<void>;
+  getEnvironmentConfig?: (project: ProjectContext) => RstestEnvironmentConfig;
+  appliedEnvironmentNames?: Set<string>;
+};
+
 type NormalizedProjectConfigWithDistPath = NormalizedProjectConfig & {
   output?: NormalizedProjectConfig['output'] & {
     distPath?: NormalizedConfig['output']['distPath'];
@@ -53,6 +60,30 @@ const forbiddenModifyRstestConfigPaths: ForbiddenModifyRstestConfigPath[] = [
   {
     path: 'browser.enabled',
     get: (config) => config.browser?.enabled,
+  },
+  {
+    path: 'browser.provider',
+    get: (config) => config.browser?.provider,
+  },
+  {
+    path: 'browser.browser',
+    get: (config) => config.browser?.browser,
+  },
+  {
+    path: 'browser.headless',
+    get: (config) => config.browser?.headless,
+  },
+  {
+    path: 'browser.port',
+    get: (config) => config.browser?.port,
+  },
+  {
+    path: 'browser.strictPort',
+    get: (config) => config.browser?.strictPort,
+  },
+  {
+    path: 'browser.providerOptions',
+    get: (config) => config.browser?.providerOptions,
   },
   {
     path: 'name',
@@ -410,6 +441,34 @@ const syncProjectDerivedFields = (project: ProjectContext): void => {
     process.env[ENV.OUTPUT_MODULE] !== 'false';
 };
 
+const isUserRstestConfigPlugin = (plugin: unknown): boolean => {
+  if (!plugin) {
+    return false;
+  }
+
+  if (Array.isArray(plugin)) {
+    return plugin.some(isUserRstestConfigPlugin);
+  }
+
+  if (typeof plugin === 'object') {
+    const name = 'name' in plugin ? plugin.name : undefined;
+    return name !== 'rstest:browser-user-config';
+  }
+
+  return true;
+};
+
+export const getUserRstestConfigPluginProjects = (
+  projects: ProjectContext[],
+): ProjectContext[] =>
+  projects.filter((project) =>
+    project.normalizedConfig.plugins?.some(isUserRstestConfigPlugin),
+  );
+
+export const hasUserRstestConfigPlugins = (
+  projects: ProjectContext[],
+): boolean => getUserRstestConfigPluginProjects(projects).length > 0;
+
 const applyModifyRstestConfig = async (
   config: NormalizedProjectConfig,
   context: RstestContext,
@@ -507,14 +566,18 @@ export const initModifyRstestConfigHooks = (
   rsbuildInstance: RsbuildInstance,
   projects: ProjectContext[],
   exposeProjects: ProjectContext[] = projects,
-  onRsbuildConfigResolved?: (applied: boolean) => Promise<void>,
+  options: InitModifyRstestConfigHooksOptions = {},
 ): void => {
+  const {
+    getEnvironmentConfig = getRsbuildEnvironmentConfig,
+    onModifyRstestConfigApplied,
+    onRsbuildConfigResolved,
+    appliedEnvironmentNames = new Set<string>(),
+  } = options;
   const modifyRstestConfigCallbacks = new Map<
     string,
     ModifyRstestConfigCallback[]
   >();
-  const appliedEnvironmentNames = new Set<string>();
-
   const applyModifyRstestConfigCallbacks = async (): Promise<boolean> => {
     let applied = false;
 
@@ -553,6 +616,9 @@ export const initModifyRstestConfigHooks = (
     order: 'pre',
     handler: async (config) => {
       const applied = await applyModifyRstestConfigCallbacks();
+      if (applied) {
+        await onModifyRstestConfigApplied?.();
+      }
       await onRsbuildConfigResolved?.(applied);
 
       return {
@@ -560,7 +626,7 @@ export const initModifyRstestConfigHooks = (
         environments: Object.fromEntries(
           projects.map((project) => [
             project.environmentName,
-            getRsbuildEnvironmentConfig(project),
+            getEnvironmentConfig(project),
           ]),
         ),
       };

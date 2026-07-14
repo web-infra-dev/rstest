@@ -32,9 +32,29 @@ export interface BrowserTestRunOptions {
    */
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
   /**
+   * Treat the provided sharded entries as the authoritative core run plan.
+   * Mixed node+browser runs set this so Browser Mode does not recompute a
+   * different global shard after config hooks have run.
+   */
+  freezeShardedEntries?: boolean;
+  /**
+   * Only initialize Browser Mode config hooks and refresh test files, without
+   * launching the browser provider to collect test declarations.
+   */
+  filesOnly?: boolean;
+  /**
    * Keep watch infrastructure alive even when the initial browser test set is empty.
    */
   allowEmptyWatchRun?: boolean;
+  /**
+   * Treat an empty browser result as a no-op instead of a run failure.
+   * Used by mixed node+browser planning, where Browser Mode hooks may add
+   * entries after the node-side plan initially saw an empty browser project.
+   */
+  allowEmptyRun?: boolean;
+  /** Limit Browser Mode initialization to these project environments. */
+  targetEnvironmentNames?: string[];
+  appliedModifyRstestConfigEnvironments?: Set<string>;
   /**
    * When set, the browser host emits Perfetto trace events to this callback
    * (per-file `tests` slices + suite/case slices). Only invoked when the

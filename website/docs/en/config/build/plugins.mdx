@@ -35,7 +35,7 @@ Check out the Rsbuild [plugin list](https://rsbuild.rs/plugins/list#official-plu
 
 When an Rsbuild plugin runs inside Rstest, it can get the Rstest exposed API through [`api.useExposed`](https://rsbuild.rs/plugins/dev/core) from the Rsbuild Plugin API and call `modifyRstestConfig` to adjust the Rstest config for the current project.
 
-This API is currently exposed only for Node-mode projects. Browser Mode projects do not receive the `rstest` exposed API, so `api.useExposed('rstest')` returns `undefined` there.
+This API is exposed in both Node Mode and Browser Mode projects. Both modes use the `rstest` Rsbuild caller name, so plugins can guard on `api.context.callerName === 'rstest'` when they run inside Rstest.
 
 This API is intended for framework integrations and toolchain plugins. When a plugin already knows the current framework, Rsbuild environment, or project conventions, it can centrally add project config such as test entries, exclude rules, setup files, aliases, defines, or `testEnvironment` so users do not need to duplicate the same information in their Rstest config.
 
@@ -105,16 +105,17 @@ Rstest resolves file-level environment comments, such as `@rstest-environment js
 
 `modifyRstestConfig` only adjusts the current project's config. If a callback modifies an unsupported field, Rstest throws an error that tells you to configure it in `rstest.config.*` instead.
 
-| Config scope                                                                        | Supported | Notes                                                                                                            |
-| ----------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------- |
-| `include`, `exclude`, `includeSource`                                               | Yes       | Affect test discovery for the current project; Rstest recollects test entries after the callback.                |
-| `setupFiles`, `globalSetup`                                                         | Yes       | Affect setup files for the current project; Rstest resolves them again after the callback.                       |
-| `testEnvironment`                                                                   | Yes       | Only affects the current project's test environment.                                                             |
-| `resolve`, `source`, `performance.buildCache`                                       | Yes       | Reapplied to Rsbuild as build config for the current project.                                                    |
-| `root`, `output.module`                                                             | Yes       | Re-normalized as path or output module config for the current project.                                           |
-| `name`, `browser.enabled`                                                           | No        | They change project identity or runtime mode and must be declared in `rstest.config.*`.                          |
-| `projects`, `plugins`, `extends`                                                    | No        | They change project topology or plugin initialization order and must be declared in Rstest config or an adapter. |
-| `coverage`, `reporters`, `pool`, `isolate`, `update`, `shard`, `forceRerunTriggers` | No        | They are global execution strategy fields or participate in scheduling before Rsbuild plugins run.               |
-| `output.distPath`                                                                   | No        | It changes the Rstest/Rsbuild output directory topology and must be declared in Rstest config.                   |
+| Config scope                                                                                                               | Supported | Notes                                                                                                            |
+| -------------------------------------------------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------- |
+| `include`, `exclude`, `includeSource`                                                                                      | Yes       | Affect test discovery for the current project; Rstest recollects test entries after the callback.                |
+| `setupFiles`, `globalSetup`                                                                                                | Yes       | Affect setup files for the current project; Rstest resolves them again after the callback.                       |
+| `testEnvironment`                                                                                                          | Yes       | Only affects the current project's test environment.                                                             |
+| `resolve`, `source`, `performance.buildCache`                                                                              | Yes       | Reapplied to Rsbuild as build config for the current project.                                                    |
+| `root`, `output.module`                                                                                                    | Yes       | Re-normalized as path or output module config for the current project.                                           |
+| `name`, `browser.enabled`                                                                                                  | No        | They change project identity or runtime mode and must be declared in `rstest.config.*`.                          |
+| `browser.provider`, `browser.browser`, `browser.headless`, `browser.port`, `browser.strictPort`, `browser.providerOptions` | No        | They affect Browser Mode launch or dev-server selection and must be declared before Rsbuild plugins run.         |
+| `projects`, `plugins`, `extends`                                                                                           | No        | They change project topology or plugin initialization order and must be declared in Rstest config or an adapter. |
+| `coverage`, `reporters`, `pool`, `isolate`, `update`, `shard`, `forceRerunTriggers`                                        | No        | They are global execution strategy fields or participate in scheduling before Rsbuild plugins run.               |
+| `output.distPath`                                                                                                          | No        | It changes the Rstest/Rsbuild output directory topology and must be declared in Rstest config.                   |
 
 If you need to add Rsbuild plugins dynamically, integrate through Rstest's `extends` adapter pattern instead. An adapter can prepare the Rstest config before Rsbuild plugin initialization starts.

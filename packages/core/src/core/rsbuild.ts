@@ -229,12 +229,12 @@ export const prepareRsbuild = async ({
     rsbuildInstance,
     projects,
     exposeRstestAPIProjects,
-    async (applied) => {
-      if (applied) {
-        await onModifyRstestConfigApplied?.();
-      }
-      await onRsbuildConfigResolved?.();
-      updateSetupFileMaps();
+    {
+      onModifyRstestConfigApplied,
+      onRsbuildConfigResolved: async () => {
+        await onRsbuildConfigResolved?.();
+        updateSetupFileMaps();
+      },
     },
   );
 

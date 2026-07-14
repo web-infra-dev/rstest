@@ -39,6 +39,11 @@ export { createSilentConsoleController } from './runtime/worker/silentConsole';
 export type { Rstest } from './core/rstest';
 // Coverage support for browser mode
 export { createCoverageProvider, loadCoverageProvider } from './coverage';
+export {
+  getUserRstestConfigPluginProjects,
+  hasUserRstestConfigPlugins,
+  initModifyRstestConfigHooks,
+} from './core/modifyRstestConfig';
 // Trace primitives — the browser host instantiates PhaseTracker per test file
 // and forwards its events via `BrowserTestRunOptions.onTraceEvents`.
 export { PhaseTracker } from './runtime/worker/phaseTracker';
@@ -83,5 +88,6 @@ export {
 } from './utils/constants';
 export type { BrowserProvider } from './utils/constants';
 export { getSetupFiles } from './utils/getSetupFiles';
+export { resolveShardedEntries } from './utils/shard';
 export { getTestEntries } from './utils/testFiles';
 export { rsbuild };
