@@ -21,6 +21,11 @@
   },
   {
     "type": "dir-section-header",
+    "name": "debug",
+    "label": "Debug"
+  },
+  {
+    "type": "dir-section-header",
     "name": "advanced",
     "label": "Advanced"
   },
