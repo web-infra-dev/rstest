@@ -44,8 +44,8 @@ export async function createBrowserExecutor(
   let deferredClose: (() => Promise<void>) | undefined;
   // The host has no mid-launch abort, so `close()` must wait for an in-flight
   // cycle to settle before it can tear down — otherwise a close racing the
-  // cycle (e.g. the shared executor loop failing fast on the node side) sees
-  // no `deferredClose` yet and leaks the launching browser + servers.
+  // cycle (e.g. the signal-driven cleanup path) sees no `deferredClose` yet
+  // and leaks the launching browser + servers.
   let inFlightCycle: Promise<unknown> | undefined;
 
   // Merge the host's per-file `result.coverage` into one map (shared core

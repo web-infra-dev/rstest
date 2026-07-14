@@ -604,17 +604,22 @@ export async function runTests(context: Rstest): Promise<void> {
       }
 
       await notifyReportersOnTestRunStart(context);
-      const outcomes = await Promise.all(
-        executors.map((executor) =>
-          executor.runCycle({
-            buildId: 1,
-            mode: 'all',
-            updateSnapshot: snapshotManager.options.updateSnapshot,
-            shardedEntries: browserShardedEntries,
-            onTraceEvents: forwardBrowserTraceEvents,
-          }),
-        ),
+      // Settle every cycle before propagating a failure: a fail-fast
+      // `Promise.all` would reach the `finally` teardown while a sibling
+      // executor is still mid-cycle, truncating its tests and firing global
+      // teardown early. The re-await unwraps the already-settled promises,
+      // rejecting with the first failure in executor order.
+      const cyclePromises = executors.map((executor) =>
+        executor.runCycle({
+          buildId: 1,
+          mode: 'all',
+          updateSnapshot: snapshotManager.options.updateSnapshot,
+          shardedEntries: browserShardedEntries,
+          onTraceEvents: forwardBrowserTraceEvents,
+        }),
       );
+      await Promise.allSettled(cyclePromises);
+      const outcomes = await Promise.all(cyclePromises);
 
       await finalizeRunCycle(context, {
         outcomes,
