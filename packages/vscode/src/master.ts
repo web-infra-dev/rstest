@@ -17,6 +17,13 @@ import type { Worker } from './worker';
 
 export const runningWorkers = new Set<BirpcReturn<Worker, TestRunReporter>>();
 
+// Default host for a fixed debug port. The spawn (`--inspect-wait`), the port
+// preflight, and the attach config must all use the same host: on a dual-stack
+// machine `localhost` can resolve to `::1` while the worker listens on IPv4, so
+// the debugger would attach to the wrong endpoint. Prefer an explicit IPv4
+// literal over `localhost` so both ends agree.
+const DEFAULT_DEBUG_HOST = '127.0.0.1';
+
 // Probe whether a fixed inspector port can be bound. `--inspect-wait=host:port`
 // does not fall back when the port is taken: Node reports address-in-use and
 // runs the worker without the inspector, and attaching by that port could hit an
@@ -26,7 +33,7 @@ const isPortAvailable = (port: number, host?: string): Promise<boolean> =>
     const server = net.createServer();
     server.once('error', () => resolve(false));
     server.once('listening', () => server.close(() => resolve(true)));
-    server.listen(port, host ?? '127.0.0.1');
+    server.listen(port, host ?? DEFAULT_DEBUG_HOST);
   });
 
 export class RstestApi {
@@ -258,7 +265,7 @@ export class RstestApi {
       debuggerPort &&
       !(await isPortAvailable(debuggerPort, debuggerAddress))
     ) {
-      const at = `${debuggerAddress ?? '127.0.0.1'}:${debuggerPort}`;
+      const at = `${debuggerAddress ?? DEFAULT_DEBUG_HOST}:${debuggerPort}`;
       const message = `Rstest debug port ${at} is already in use. Set a free "rstest.debuggerPort" or free the port.`;
       vscode.window.showErrorMessage(message);
       throw new Error(message);
@@ -267,7 +274,7 @@ export class RstestApi {
     if (startDebugging) {
       execArgv.push(
         debuggerPort
-          ? `--inspect-wait=${debuggerAddress ?? '127.0.0.1'}:${debuggerPort}`
+          ? `--inspect-wait=${debuggerAddress ?? DEFAULT_DEBUG_HOST}:${debuggerPort}`
           : '--inspect-wait',
       );
     }
@@ -377,7 +384,10 @@ export class RstestApi {
           skipFiles: getConfigValue('debugExclude', this.workspace),
           ...(debugOutFiles.length ? { outFiles: debugOutFiles } : {}),
           ...(debuggerPort
-            ? { port: debuggerPort, address: debuggerAddress }
+            ? {
+                port: debuggerPort,
+                address: debuggerAddress ?? DEFAULT_DEBUG_HOST,
+              }
             : { processId: rstestProcess.pid }),
         },
         { testRun },
