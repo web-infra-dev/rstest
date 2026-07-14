@@ -1,4 +1,5 @@
 import { type ChildProcess, spawn } from 'node:child_process';
+import net from 'node:net';
 import path, { dirname } from 'node:path';
 import { type BirpcReturn, createBirpc } from 'birpc';
 import regexpEscape from 'core-js-pure/actual/regexp/escape';
@@ -15,6 +16,25 @@ import {
 import type { Worker } from './worker';
 
 export const runningWorkers = new Set<BirpcReturn<Worker, TestRunReporter>>();
+
+// Default host for a fixed debug port. The spawn (`--inspect-wait`), the port
+// preflight, and the attach config must all use the same host: on a dual-stack
+// machine `localhost` can resolve to `::1` while the worker listens on IPv4, so
+// the debugger would attach to the wrong endpoint. Prefer an explicit IPv4
+// literal over `localhost` so both ends agree.
+const DEFAULT_DEBUG_HOST = '127.0.0.1';
+
+// Probe whether a fixed inspector port can be bound. `--inspect-wait=host:port`
+// does not fall back when the port is taken: Node reports address-in-use and
+// runs the worker without the inspector, and attaching by that port could hit an
+// unrelated process. Preflight so we fail with a clear message instead.
+const isPortAvailable = (port: number, host?: string): Promise<boolean> =>
+  new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => resolve(false));
+    server.once('listening', () => server.close(() => resolve(true)));
+    server.listen(port, host ?? DEFAULT_DEBUG_HOST);
+  });
 
 export class RstestApi {
   private childProcesses = new Set<ChildProcess>();
@@ -238,9 +258,25 @@ export class RstestApi {
     if (!rstestPath) {
       throw new Error('Failed to resolve rstest path');
     }
+    const debuggerPort = getConfigValue('debuggerPort', this.workspace);
+    const debuggerAddress = getConfigValue('debuggerAddress', this.workspace);
+    if (
+      startDebugging &&
+      debuggerPort &&
+      !(await isPortAvailable(debuggerPort, debuggerAddress))
+    ) {
+      const at = `${debuggerAddress ?? DEFAULT_DEBUG_HOST}:${debuggerPort}`;
+      const message = `Rstest debug port ${at} is already in use. Set a free "rstest.debuggerPort" or free the port.`;
+      vscode.window.showErrorMessage(message);
+      throw new Error(message);
+    }
     const execArgv: string[] = [];
     if (startDebugging) {
-      execArgv.push('--inspect-wait');
+      execArgv.push(
+        debuggerPort
+          ? `--inspect-wait=${debuggerAddress ?? DEFAULT_DEBUG_HOST}:${debuggerPort}`
+          : '--inspect-wait',
+      );
     }
     const workerPath = path.resolve(__dirname, 'worker.js');
     const configuredExecutable = getConfigValue(
@@ -253,6 +289,10 @@ export class RstestApi {
     const nodeExecArgs = getConfigValue('nodeExecArgs', this.workspace).map(
       (arg) => this.expandWorkspaceFolder(arg),
     );
+    const nodeEnv = getConfigValue('nodeEnv', this.workspace);
+    const debugNodeEnv = startDebugging
+      ? getConfigValue('debugNodeEnv', this.workspace)
+      : undefined;
     logger.debug('Spawning worker process', {
       workerPath,
       nodeExecutable,
@@ -270,6 +310,8 @@ export class RstestApi {
           // if (!process.env.NODE_ENV) process.env.NODE_ENV = 'test'
           NODE_ENV: 'test',
           ...process.env,
+          ...nodeEnv,
+          ...debugNodeEnv,
           // process.env.RSTEST = 'true';
           RSTEST: 'true',
           FORCE_COLOR: '1',
@@ -332,13 +374,21 @@ export class RstestApi {
     // spawn failure (e.g. a misconfigured `nodeExecutable`) during this await is
     // handled instead of throwing uncaught in the extension host.
     if (startDebugging) {
+      const debugOutFiles = getConfigValue('debugOutFiles', this.workspace);
       const startedDebugging = await vscode.debug.startDebugging(
         this.workspace,
         {
           type: 'node',
           name: 'Rstest Debug',
           request: 'attach',
-          processId: rstestProcess.pid,
+          skipFiles: getConfigValue('debugExclude', this.workspace),
+          ...(debugOutFiles.length ? { outFiles: debugOutFiles } : {}),
+          ...(debuggerPort
+            ? {
+                port: debuggerPort,
+                address: debuggerAddress ?? DEFAULT_DEBUG_HOST,
+              }
+            : { processId: rstestProcess.pid }),
         },
         { testRun },
       );
