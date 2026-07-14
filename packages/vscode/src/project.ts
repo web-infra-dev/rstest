@@ -6,6 +6,7 @@ import vscode from 'vscode';
 import { watchConfigValue } from './config';
 import { logger } from './logger';
 import { RstestApi } from './master';
+import { computeCoveredConfigs, normalizeRoot } from './projectCoverage';
 import { ProjectFolder, TestFile, TestFolder, testData } from './testTree';
 
 // The default config file name at the workspace root. A lone project using it
@@ -122,6 +123,9 @@ export class WorkspaceManager implements vscode.Disposable {
       this.testController,
       this.testItem?.children ?? this.testController.items,
       this.onDidChangeTestFiles,
+      // Re-render once the config resolves: coverage (which project aggregates
+      // which) is only known then, and it decides which projects to show.
+      () => this.refreshAllProject(),
     );
     this.projects.set(configFilePath, project);
   }
@@ -136,10 +140,12 @@ export class WorkspaceManager implements vscode.Disposable {
     const collection = this.testItem?.children ?? this.testController.items;
     collection.replace([]);
 
+    const activeProjects = this.resolveActiveProjects();
+
     // Standard single-project setup (one project using the default config name
     // at the workspace root): show its test files directly, with no project node.
-    if (this.projects.size === 1) {
-      const [[configFilePath, project]] = this.projects;
+    if (activeProjects.size === 1) {
+      const [[configFilePath, project]] = activeProjects;
       const relative = path.relative(
         this.workspaceFolder.uri.fsPath,
         vscode.Uri.parse(configFilePath).fsPath,
@@ -150,7 +156,32 @@ export class WorkspaceManager implements vscode.Disposable {
       }
     }
 
-    this.buildProjectTree(collection);
+    this.buildProjectTree(collection, activeProjects);
+  }
+
+  // A project whose root is aggregated by *another* project via `projects` is
+  // shown only under that parent; suppress the standalone copy so its test files
+  // are not duplicated. Coverage from the project's own `projects` is ignored,
+  // since an aggregator's inline children may share its own root.
+  private resolveActiveProjects(): Map<string, Project> {
+    const entries = [...this.projects];
+    const covered = computeCoveredConfigs(
+      entries.map(([configFilePath, project]) => ({
+        configFilePath,
+        root: project.root.fsPath,
+        childProjectRoots: project.childProjectRoots,
+      })),
+    );
+
+    const activeProjects = new Map<string, Project>();
+    for (const [configFilePath, project] of entries) {
+      const isCovered = covered.has(configFilePath);
+      project.setSuppressed(isCovered);
+      if (!isCovered) {
+        activeProjects.set(configFilePath, project);
+      }
+    }
+    return activeProjects;
   }
 
   // Group projects into a folder tree by their config file directory, so the
@@ -158,11 +189,14 @@ export class WorkspaceManager implements vscode.Disposable {
   // `dir/rstest.config.ts` entries. A project is shown as its own directory
   // (e.g. `packages/core`); the config file name is only used to disambiguate
   // a root-level config or multiple configs sharing one directory.
-  private buildProjectTree(rootCollection: vscode.TestItemCollection) {
+  private buildProjectTree(
+    rootCollection: vscode.TestItemCollection,
+    projects: Map<string, Project>,
+  ) {
     type TreeNode = { children: Map<string, TreeNode>; project?: Project };
     const root: TreeNode = { children: new Map() };
 
-    for (const [configFilePath, project] of this.projects) {
+    for (const [configFilePath, project] of projects) {
       const relative = path.relative(
         this.workspaceFolder.uri.fsPath,
         vscode.Uri.parse(configFilePath).fsPath,
@@ -251,12 +285,21 @@ export class Project implements vscode.Disposable {
   include: string[] = [];
   exclude: string[] = [];
   testFiles = new Map<string, TestFile>();
+  // Normalized root directories of the sub-projects this config aggregates via
+  // `projects`. Populated once the config resolves; empty for a leaf config.
+  childProjectRoots: string[] = [];
+  // A project whose root is already covered by another (aggregator) project is
+  // suppressed: it neither watches files nor renders test items, so the same
+  // tests are not shown twice.
+  suppressed = false;
+  #watch?: vscode.Disposable;
   constructor(
     private workspaceFolder: vscode.WorkspaceFolder,
     private configFileUri: vscode.Uri,
     private testController: vscode.TestController,
     public parentCollection: vscode.TestItemCollection,
     private onDidChangeTestFiles?: () => void,
+    private onConfigResolved?: () => void,
   ) {
     // use dirname of config file as default root
     this.root = configFileUri.with({ path: path.dirname(configFileUri.path) });
@@ -275,12 +318,37 @@ export class Project implements vscode.Disposable {
         this.root = vscode.Uri.file(config.root);
         this.include = config.include;
         this.exclude = config.exclude;
-        this.startWatchingWorkspace(this.root);
+        this.childProjectRoots = (config.projectRoots ?? []).map(normalizeRoot);
+        this.applyWatch();
+        this.onConfigResolved?.();
       })
       .catch((error) => {
         if (this.cancellationSource.token.isCancellationRequested) return;
         logger.error('Failed to initialize project config', error);
+        // Let the manager settle its tree even when a config fails to load.
+        this.onConfigResolved?.();
       });
+  }
+
+  private applyWatch() {
+    if (this.suppressed) return;
+    if (!this.#watch) {
+      this.#watch = this.startWatchingWorkspace(this.root);
+    }
+  }
+
+  // Called by WorkspaceManager once it knows whether another project already
+  // covers this config file.
+  public setSuppressed(value: boolean) {
+    if (this.suppressed === value) return;
+    this.suppressed = value;
+    if (value) {
+      this.#watch?.dispose();
+      this.#watch = undefined;
+      this.testFiles.clear();
+    } else {
+      this.applyWatch();
+    }
   }
 
   // `label` is the project node's label, or `null` to hoist its test files
@@ -311,13 +379,14 @@ export class Project implements vscode.Disposable {
     this.buildTree();
   }
   dispose() {
+    this.#watch?.dispose();
     this.api.dispose();
     this.cancellationSource.cancel();
   }
   get collection() {
     return this.testItem?.children || this.parentCollection;
   }
-  private async startWatchingWorkspace(root: vscode.Uri) {
+  private startWatchingWorkspace(root: vscode.Uri): vscode.Disposable {
     const matchInclude = picomatch(this.include);
     const matchExclude = picomatch(this.exclude);
     const isInclude = (uri: vscode.Uri) => {
@@ -433,9 +502,7 @@ export class Project implements vscode.Disposable {
         }
       },
     );
-    this.cancellationSource.token.onCancellationRequested(() =>
-      watcher.dispose(),
-    );
+    return watcher;
   }
   // TODO pass cancellation token to updateFromDisk
   private updateOrCreateFile(uri: vscode.Uri, tests?: TestInfo[]) {
@@ -452,6 +519,10 @@ export class Project implements vscode.Disposable {
   }
 
   private buildTree() {
+    // A suppressed project must not render into its collection; its config file
+    // is already covered by an aggregator project.
+    if (this.suppressed) return;
+
     type NestedRecord = { [K: string]: NestedRecord };
 
     const tree: NestedRecord = {};

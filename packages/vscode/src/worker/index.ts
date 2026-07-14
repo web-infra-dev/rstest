@@ -53,22 +53,31 @@ export class Worker {
       fileFilters ?? [],
     );
 
-    return rstest;
+    return { rstest, projects };
   }
 
   public async getNormalizedConfig(options: WorkerInitOptions) {
-    const rstest = await this.init(options);
+    const { rstest, projects } = await this.init(options);
     return {
       root: rstest.context.normalizedConfig.root,
       include: rstest.context.normalizedConfig.include,
       exclude: rstest.context.normalizedConfig.exclude.patterns,
+      // Root directories of the sub-projects this config aggregates via
+      // `projects`. Empty for a leaf config. The extension uses these to avoid
+      // registering a child config as its own top-level project when a parent
+      // already covers it (otherwise the same test files show up twice). Roots
+      // are used rather than config-file paths so nested/inline projects (which
+      // have no own config file) are still matched.
+      projectRoots: projects
+        .map((project) => project.config.root)
+        .filter((root): root is string => Boolean(root)),
     };
   }
 
   public async runTest(data: WorkerInitOptions) {
     logger.debug('Received runTest request', JSON.stringify(data, null, 2));
     try {
-      const rstest = await this.init(data);
+      const { rstest } = await this.init(data);
       if (data.coverage?.enabled) {
         rstest.context.normalizedConfig.coverage.reporters.push(
           new CoverageReporter(),
@@ -83,7 +92,7 @@ export class Worker {
   }
 
   public async listTests(data: WorkerInitOptions) {
-    const rstest = await this.init({ ...data, command: 'list' });
+    const { rstest } = await this.init({ ...data, command: 'list' });
     const res = await rstest.listTests({});
     return res;
   }

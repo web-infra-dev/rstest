@@ -36,6 +36,10 @@ const configSchema = object({
     'ast',
   ),
   applyDiagnostic: fallback(boolean(), true),
+  // Shell used by the "Run in Terminal" command. Empty falls back to the
+  // user's default integrated terminal (so its profile/env are honored).
+  terminalShellPath: fallback(optional(string()), undefined),
+  terminalShellArgs: fallback(array(string()), []),
 });
 
 type ExtensionConfig = InferOutput<typeof configSchema>;

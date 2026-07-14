@@ -9,6 +9,7 @@ import type { RstestDiagnostics } from './diagnostics';
 import type { TestErrorStore } from './errorStore';
 import { logger } from './logger';
 import type { Project } from './project';
+import { runInTerminal as sendToTerminal, shellQuote } from './terminal';
 import { TestRunReporter } from './testRunReporter';
 import {
   formatCoreVersionWarningMessage,
@@ -52,38 +53,71 @@ export class RstestApi {
     return value.replaceAll('${workspaceFolder}', this.workspace.uri.fsPath);
   }
 
-  private resolveRstestPath(): string {
+  // Regex source that selects a single reported case by its name path. Shared by
+  // the worker run (wrapped in RegExp) and the terminal `-t` argument so both
+  // select the same case.
+  private buildTestNamePattern(
+    testCaseNamePath: string[],
+    isSuite?: boolean,
+  ): string {
+    return `^${regexpEscape(testCaseNamePath.join(' '))}${isSuite ? ' ' : '$'}`;
+  }
+
+  // The node executable + exec args used to run a worker or the CLI, honoring
+  // the `nodeExecutable` / `nodeExecArgs` settings (`${workspaceFolder}`
+  // expanded).
+  private resolveNodeCommand(): {
+    nodeExecutable: string;
+    nodeExecArgs: string[];
+  } {
+    const configuredExecutable = getConfigValue(
+      'nodeExecutable',
+      this.workspace,
+    );
+    return {
+      nodeExecutable: configuredExecutable
+        ? this.expandWorkspaceFolder(configuredExecutable)
+        : 'node',
+      nodeExecArgs: getConfigValue('nodeExecArgs', this.workspace).map((arg) =>
+        this.expandWorkspaceFolder(arg),
+      ),
+    };
+  }
+
+  // Resolve the `@rstest/core` package.json specifier honoring a configured
+  // `rstestPackagePath`: the bare package spec when it is not set, or the
+  // validated absolute path to the configured package.json. Shared by the
+  // worker resolution and the terminal CLI resolution.
+  private resolveConfiguredPackageJson(): string {
     // TODO: support Yarn PnP
-    try {
-      // Check if user configured a custom package path (last resort fix)
-      let configuredPackagePath = getConfigValue(
-        'rstestPackagePath',
-        this.workspace,
+    let configuredPackagePath = getConfigValue(
+      'rstestPackagePath',
+      this.workspace,
+    );
+    if (!configuredPackagePath) {
+      return '@rstest/core/package.json';
+    }
+    configuredPackagePath = this.expandWorkspaceFolder(configuredPackagePath);
+    if (!configuredPackagePath.endsWith('package.json')) {
+      throw new Error(
+        `"rstest.rstestPackagePath" must point to a package.json file, instead got: ${configuredPackagePath}`,
       );
+    }
+    return path.isAbsolute(configuredPackagePath)
+      ? configuredPackagePath
+      : path.resolve(this.workspace.uri.fsPath, configuredPackagePath);
+  }
 
-      if (configuredPackagePath) {
-        configuredPackagePath = this.expandWorkspaceFolder(
-          configuredPackagePath,
-        );
-        // Validate that the path points to package.json
-        if (!configuredPackagePath.endsWith('package.json')) {
-          const errorMessage = `"rstest.rstestPackagePath" must point to a package.json file, instead got: ${configuredPackagePath}`;
-          throw new Error(errorMessage);
-        }
-
-        // User provided a custom path to package.json
-        configuredPackagePath = path.isAbsolute(configuredPackagePath)
-          ? configuredPackagePath
-          : path.resolve(this.workspace.uri.fsPath, configuredPackagePath);
-
-        logger.debug(
-          'Using configured rstestPackagePath:',
-          configuredPackagePath,
-        );
+  private resolveRstestPath(): string {
+    try {
+      const packageJson = this.resolveConfiguredPackageJson();
+      const configured = packageJson !== '@rstest/core/package.json';
+      if (configured) {
+        logger.debug('Using configured rstestPackagePath:', packageJson);
       }
 
       const nodeExport = require.resolve(
-        configuredPackagePath ? dirname(configuredPackagePath) : '@rstest/core',
+        configured ? dirname(packageJson) : '@rstest/core',
         {
           paths: [this.cwd],
         },
@@ -91,12 +125,9 @@ export class RstestApi {
 
       let corePackageJsonPath: string;
       try {
-        corePackageJsonPath = require.resolve(
-          configuredPackagePath || '@rstest/core/package.json',
-          {
-            paths: [this.cwd],
-          },
-        );
+        corePackageJsonPath = require.resolve(packageJson, {
+          paths: [this.cwd],
+        });
       } catch (e) {
         vscode.window.showErrorMessage(
           'Failed to resolve @rstest/core/package.json. Please upgrade @rstest/core to the latest version.',
@@ -131,6 +162,23 @@ export class RstestApi {
       vscode.window.showErrorMessage((e as any).toString());
       throw e;
     }
+  }
+
+  // Resolve the rstest CLI executable (its package `bin`) for the terminal run
+  // mode, honoring a configured `rstestPackagePath` the same way as the worker
+  // resolution above.
+  private resolveRstestBin(): string {
+    const pkgJsonPath = require.resolve(this.resolveConfiguredPackageJson(), {
+      paths: [this.cwd],
+    });
+    const pkg = require(pkgJsonPath) as {
+      bin?: string | Record<string, string>;
+    };
+    const binRel = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.rstest;
+    if (!binRel) {
+      throw new Error('Could not resolve the rstest CLI binary');
+    }
+    return path.join(path.dirname(pkgJsonPath), binRel);
   }
 
   public async getNormalizedConfig() {
@@ -222,9 +270,7 @@ export class RstestApi {
         command: continuous ? 'watch' : 'run',
         fileFilters: fileFilter ? [fileFilter] : undefined,
         testNamePattern: testCaseNamePath
-          ? new RegExp(
-              `^${regexpEscape(testCaseNamePath.join(' '))}${isSuite ? ' ' : '$'}`,
-            )
+          ? new RegExp(this.buildTestNamePattern(testCaseNamePath, isSuite))
           : undefined,
         update: updateSnapshot,
         configFilePath: this.configFilePath,
@@ -251,6 +297,59 @@ export class RstestApi {
       });
 
     await promise;
+  }
+
+  private buildCliCommand({
+    fileFilter,
+    testCaseNamePath,
+    isSuite,
+  }: {
+    fileFilter?: string;
+    testCaseNamePath?: string[];
+    isSuite?: boolean;
+  }): string {
+    const { nodeExecutable, nodeExecArgs } = this.resolveNodeCommand();
+
+    // Prefer a path relative to the run cwd for readability; fall back to the
+    // absolute path when the target is outside the cwd.
+    const relative = (target: string) => {
+      const rel = path.relative(this.cwd, target);
+      return rel && !rel.startsWith('..') ? rel : target;
+    };
+
+    const args = ['run'];
+    if (fileFilter) {
+      args.push(relative(fileFilter));
+    }
+    if (testCaseNamePath?.length) {
+      // Terminal run selects the same case as the in-editor run.
+      args.push('-t', this.buildTestNamePattern(testCaseNamePath, isSuite));
+    }
+    args.push('-c', relative(this.configFilePath));
+
+    return [nodeExecutable, ...nodeExecArgs, this.resolveRstestBin(), ...args]
+      .map(shellQuote)
+      .join(' ');
+  }
+
+  public runInTerminal(options: {
+    fileFilter?: string;
+    testCaseNamePath?: string[];
+    isSuite?: boolean;
+  }): void {
+    let command: string;
+    try {
+      command = this.buildCliCommand(options);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Rstest: ${message}`);
+      return;
+    }
+    sendToTerminal(command, {
+      cwd: this.cwd,
+      shellPath: getConfigValue('terminalShellPath', this.workspace),
+      shellArgs: getConfigValue('terminalShellArgs', this.workspace),
+    });
   }
 
   public async createChildProcess(
@@ -283,16 +382,7 @@ export class RstestApi {
       );
     }
     const workerPath = path.resolve(__dirname, 'worker.js');
-    const configuredExecutable = getConfigValue(
-      'nodeExecutable',
-      this.workspace,
-    );
-    const nodeExecutable = configuredExecutable
-      ? this.expandWorkspaceFolder(configuredExecutable)
-      : 'node';
-    const nodeExecArgs = getConfigValue('nodeExecArgs', this.workspace).map(
-      (arg) => this.expandWorkspaceFolder(arg),
-    );
+    const { nodeExecutable, nodeExecArgs } = this.resolveNodeCommand();
     const nodeEnv = getConfigValue('nodeEnv', this.workspace);
     const debugNodeEnv = startDebugging
       ? getConfigValue('debugNodeEnv', this.workspace)

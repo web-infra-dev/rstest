@@ -56,5 +56,14 @@ suite('Editor / Test Explorer UX commands', () => {
       await vscode.env.clipboard.readText(),
       /expected 1 to equal 2/,
     );
+
+    // runInTerminal builds the real rstest command and opens a shell terminal;
+    // it must resolve the CLI and not throw.
+    await vscode.commands.executeCommand('rstest.runInTerminal', fileItem);
+    const terminal = await waitFor(() =>
+      vscode.window.terminals.find((candidate) => candidate.name === 'Rstest'),
+    );
+    assert.ok(terminal, 'a Rstest terminal should be created');
+    terminal.dispose();
   });
 });
