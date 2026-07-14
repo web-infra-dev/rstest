@@ -16,32 +16,56 @@ process.env.DEBUG = 'false';
 
 const rootPath = join(__dirname, '../..');
 
-rs.mock('../../src/core/browserLoader', () => ({
-  loadBrowserModule: async () => ({
-    validateBrowserConfig: () => undefined,
-    listBrowserTests: async (
-      context: RstestContext,
-      options?: {
-        shardedEntries?: Map<string, { entries: Record<string, string> }>;
-      },
-    ) => ({
-      close: async () => undefined,
-      list: context.projects
-        .filter((project) => project.normalizedConfig.browser.enabled)
-        .flatMap((project) =>
-          Object.values(
-            options?.shardedEntries?.get(project.environmentName)?.entries ||
-              {},
-          ).map((testPath) => ({
-            project: project.name,
-            testPath,
-            tests: [],
-          })),
-        ),
+rs.mock('../../src/core/browserLoader', () => {
+  const listBrowserTests = async (
+    context: RstestContext,
+    options?: {
+      shardedEntries?: Map<string, { entries: Record<string, string> }>;
+    },
+  ) => ({
+    close: async () => undefined,
+    list: context.projects
+      .filter((project) => project.normalizedConfig.browser.enabled)
+      .flatMap((project) =>
+        Object.values(
+          options?.shardedEntries?.get(project.environmentName)?.entries || {},
+        ).map((testPath) => ({
+          project: project.name,
+          testPath,
+          tests: [],
+        })),
+      ),
+  });
+  const createBrowserExecutor = async (
+    context: RstestContext,
+    options: { projects: RstestContext['projects'] },
+  ) => ({
+    name: 'browser',
+    projects: options.projects,
+    init: async () => undefined,
+    runCycle: async () => {
+      throw new Error('not used in this test');
+    },
+    collect: async (opts: {
+      shardedEntries?: Map<string, { entries: Record<string, string> }>;
+    }) => {
+      const { list } = await listBrowserTests(context, opts);
+      return { list };
+    },
+    close: async () => undefined,
+  });
+  return {
+    loadBrowserModule: async () => ({
+      validateBrowserConfig: () => undefined,
+      createBrowserExecutor,
+      runBrowserTests: async () => undefined,
     }),
-    runBrowserTests: async () => undefined,
-  }),
-}));
+    loadBrowserExecutor: async (
+      context: RstestContext,
+      browserProjects: RstestContext['projects'],
+    ) => createBrowserExecutor(context, { projects: browserProjects }),
+  };
+});
 
 rs.mock('../../src/pool', () => ({
   createPool: async () => ({

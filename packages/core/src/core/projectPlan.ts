@@ -5,6 +5,7 @@ import {
   resolveRunnableProjectsByEntries,
 } from './environmentEntries';
 import { refreshEnvironmentPartitionEntries } from './environmentPartitions';
+import { isBrowserProject, isNodeProject } from './isBrowserProject';
 
 const getProjectEntries = async ({
   context,
@@ -37,11 +38,7 @@ export const syncNodeProjects = (
   target: ProjectContext[],
   projects: ProjectContext[],
 ): void => {
-  target.splice(
-    0,
-    target.length,
-    ...projects.filter((project) => !project.normalizedConfig.browser.enabled),
-  );
+  target.splice(0, target.length, ...projects.filter(isNodeProject));
 };
 
 const isSameProjectList = (
@@ -275,9 +272,7 @@ export const createListProjectPlanState = (
       }
 
       shardedBrowserEntries = new Map();
-      for (const project of context.projects.filter(
-        (p) => p.normalizedConfig.browser.enabled,
-      )) {
+      for (const project of context.projects.filter(isBrowserProject)) {
         shardedBrowserEntries.set(project.environmentName, {
           entries: testEntries[project.environmentName] || {},
         });
@@ -301,9 +296,7 @@ export const createListProjectPlanState = (
       Object.assign(testEntries, getEntriesCacheRecord(refreshed.entriesCache));
       if (context.normalizedConfig.shard) {
         shardedBrowserEntries = new Map();
-        for (const project of context.projects.filter(
-          (p) => p.normalizedConfig.browser.enabled,
-        )) {
+        for (const project of context.projects.filter(isBrowserProject)) {
           shardedBrowserEntries.set(project.environmentName, {
             entries:
               refreshed.entriesCache.get(project.environmentName)?.entries ||

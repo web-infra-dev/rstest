@@ -24,7 +24,7 @@ import {
 } from '../utils';
 import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
-import { getNumCpus, parseWorkers } from '../utils/workers';
+import { getNumCpus, parseWorkers, resolveWorkerCount } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
 import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
 import {
@@ -304,16 +304,17 @@ export const createPool = async ({
 
   const workerKind: PoolWorkerKind = poolOptions.type ?? 'forks';
 
-  const threadsCount =
-    context.command === 'watch'
-      ? Math.max(Math.floor(numCpus / 2), 1)
-      : Math.max(numCpus - 1, 1);
-
-  // Avoid creating unused workers when the number of tests is less than the default thread count.
-  const recommendCount =
-    context.command === 'watch'
-      ? threadsCount
-      : Math.min(recommendWorkerCount, threadsCount);
+  // CPU-derived worker recommendation via the shared override/clamp policy.
+  // The node pool's own formulas: `numCpus - 1` outside watch, half the raw CPU
+  // count in watch; watch passes `recommendWorkerCount` as `Infinity` to keep
+  // warm workers across reruns.
+  const recommendCount = resolveWorkerCount({
+    command: context.command,
+    totalTasks: recommendWorkerCount,
+    recommended: Math.max(numCpus - 1, 1),
+    watchRecommended: Math.max(Math.floor(numCpus / 2), 1),
+    numCpus,
+  });
 
   const maxWorkers = poolOptions.maxWorkers
     ? parseWorkers(poolOptions.maxWorkers, numCpus)

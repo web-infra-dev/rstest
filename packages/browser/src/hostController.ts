@@ -9,6 +9,7 @@ import {
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
   type CoverageMapData,
+  type ListBrowserTestsOptions,
   color,
   createCoverageProvider,
   createRunnerEventSink,
@@ -981,20 +982,10 @@ const getAffectedTestFiles = (
   return Array.from(affectedFiles);
 };
 
-const getBrowserProjects = (
-  context: RstestContext,
-  targetEnvironmentNames?: string[],
-): ProjectContext[] => {
-  const targetEnvironments = targetEnvironmentNames
-    ? new Set(targetEnvironmentNames)
-    : undefined;
-
-  return context.projects.filter(
-    (project) =>
-      project.normalizedConfig.browser.enabled &&
-      (!targetEnvironments || targetEnvironments.has(project.environmentName)),
+const getBrowserProjects = (context: RstestContext): ProjectContext[] =>
+  context.projects.filter(
+    (project) => project.normalizedConfig.browser.enabled,
   );
-};
 
 const getBrowserRsbuildEnvironmentConfig = (
   project: ProjectContext,
@@ -1079,11 +1070,11 @@ const resolveProviderForTestPath = ({
 
 const collectProjectEntries = async (
   context: RstestContext,
-  targetEnvironmentNames?: string[],
+  // The explicit browser-project subset the executor was constructed with. Falls
+  // back to re-deriving from `context` for internal callers (e.g. the watch
+  // plugin) that do not carry the plan's project list.
+  browserProjects: ProjectContext[] = getBrowserProjects(context),
 ): Promise<BrowserProjectEntries[]> => {
-  // Only collect entries for browser mode projects
-  const browserProjects = getBrowserProjects(context, targetEnvironmentNames);
-
   return Promise.all(
     browserProjects.map(async (project) => {
       const {
@@ -1418,6 +1409,7 @@ const registerWatchCleanup = (): void => {
 const createBrowserRuntime = async ({
   context,
   projectEntries: initialProjectEntries,
+  browserProjects,
   shardedEntries,
   freezeShardedEntries,
   tempDir,
@@ -1428,10 +1420,14 @@ const createBrowserRuntime = async ({
   forceHeadless,
   skipProviderLaunch,
   appliedModifyRstestConfigEnvironments,
-  targetEnvironmentNames,
 }: {
   context: RstestContext;
   projectEntries: BrowserProjectEntries[];
+  /**
+   * The explicit browser-project subset (plan output). Drives launch-option
+   * consistency and the container origin (`browserProjects[0]`).
+   */
+  browserProjects: ProjectContext[];
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
   freezeShardedEntries?: boolean;
   tempDir: string;
@@ -1443,7 +1439,6 @@ const createBrowserRuntime = async ({
   forceHeadless?: boolean;
   skipProviderLaunch?: boolean;
   appliedModifyRstestConfigEnvironments?: Set<string>;
-  targetEnvironmentNames?: string[];
 }): Promise<BrowserRuntime> => {
   // ---- Shared singletons (created once, wired into every project server) ----
   const containerHtmlTemplate = containerDistPath
@@ -1465,7 +1460,6 @@ const createBrowserRuntime = async ({
     }
   };
 
-  const browserProjects = getBrowserProjects(context, targetEnvironmentNames);
   let browserLaunchOptions =
     ensureConsistentBrowserLaunchOptions(browserProjects);
   let projectEntries = initialProjectEntries;
@@ -1527,9 +1521,8 @@ const createBrowserRuntime = async ({
 
   const refreshProjectEntries = async (): Promise<void> => {
     validateBrowserConfig(context);
-    browserLaunchOptions = ensureConsistentBrowserLaunchOptions(
-      getBrowserProjects(context, targetEnvironmentNames),
-    );
+    browserLaunchOptions =
+      ensureConsistentBrowserLaunchOptions(browserProjects);
     const updatedShardedEntries = freezeShardedEntries
       ? shardedEntries
       : context.normalizedConfig.shard
@@ -1538,7 +1531,7 @@ const createBrowserRuntime = async ({
     projectEntries = await resolveProjectEntries(
       context,
       updatedShardedEntries,
-      targetEnvironmentNames,
+      browserProjects,
     );
     for (const manifestModule of manifestModules) {
       refreshManifestModule(manifestModule);
@@ -2075,11 +2068,10 @@ const createBrowserRuntime = async ({
 
 async function resolveProjectEntries(
   context: RstestContext,
-  shardedEntries?: Map<string, { entries: Record<string, string> }>,
-  targetEnvironmentNames?: string[],
+  shardedEntries: Map<string, { entries: Record<string, string> }> | undefined,
+  browserProjects: ProjectContext[],
 ): Promise<BrowserProjectEntries[]> {
   if (shardedEntries) {
-    const browserProjects = getBrowserProjects(context, targetEnvironmentNames);
     const projectEntries: BrowserProjectEntries[] = [];
     for (const project of browserProjects) {
       const entryInfo = shardedEntries.get(project.environmentName);
@@ -2097,7 +2089,7 @@ async function resolveProjectEntries(
     }
     return projectEntries;
   }
-  return collectProjectEntries(context, targetEnvironmentNames);
+  return collectProjectEntries(context, browserProjects);
 }
 
 // ============================================================================
@@ -2119,8 +2111,7 @@ export const runBrowserController = async (
   // core owns the unified finalize (reporters, exit code, coverage) through
   // `finalizeRunCycle`, so the host never self-finalizes and always returns a
   // fully-populated result with `close`. Watch reruns keep their host-driven
-  // per-rerun finalize. `BrowserTestRunOptions.skipOnTestRunEnd` is retained but
-  // ignored for one release (see its TSDoc).
+  // per-rerun finalize.
   const isWatchMode = context.command === 'watch';
 
   // Per-file PhaseTrackers, populated only when `--trace` is on (caller
@@ -2131,10 +2122,11 @@ export const runBrowserController = async (
   const phaseTrackers = onTraceEvents
     ? new Map<string, PhaseTracker>()
     : undefined;
-  let browserProjects = getBrowserProjects(
-    context,
-    options?.targetEnvironmentNames,
-  );
+  // Explicit projects input (plan output) replaces re-deriving `browser.enabled`
+  // projects from `context`, whose `projects` array is mutated during planning.
+  // Falls back to re-derivation only when the caller passes no list at all —
+  // an explicit empty subset must stay empty, not widen to every project.
+  const browserProjects = options?.projects ?? getBrowserProjects(context);
   const useHeadlessDirect = browserProjects.every(
     (project) => project.normalizedConfig.browser.headless,
   );
@@ -2350,7 +2342,7 @@ export const runBrowserController = async (
   let projectEntries = await resolveProjectEntries(
     context,
     options?.shardedEntries,
-    options?.targetEnvironmentNames,
+    browserProjects,
   );
   let totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
@@ -2459,6 +2451,7 @@ export const runBrowserController = async (
       runtime = await createBrowserRuntime({
         context,
         projectEntries,
+        browserProjects,
         shardedEntries: options?.shardedEntries,
         freezeShardedEntries: options?.freezeShardedEntries,
         tempDir,
@@ -2473,7 +2466,6 @@ export const runBrowserController = async (
         skipProviderLaunch: filesOnly,
         appliedModifyRstestConfigEnvironments:
           options?.appliedModifyRstestConfigEnvironments,
-        targetEnvironmentNames: options?.targetEnvironmentNames,
       });
     } catch (error) {
       return failWithError(error, async () => {
@@ -2494,10 +2486,6 @@ export const runBrowserController = async (
   }
 
   projectEntries = runtime.projectEntries;
-  browserProjects = getBrowserProjects(
-    context,
-    options?.targetEnvironmentNames,
-  );
   totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
     0,
@@ -2666,32 +2654,37 @@ export const runBrowserController = async (
 
   // Runner lifecycle events flow through the shared RunnerEventSink (the same
   // pump the node pool uses), so browser mode feeds stateManager and fans out to
-  // reporters via one implementation. Sinks are bound per-project (keyed by the
-  // client-stamped projectName from file-start); the `testPath -> projectName`
-  // map lets subsequent per-file events resolve their owning project. The
-  // self-finalize side-band (reporterResults/caseResults/updateReporterResultState/
-  // exit code/PhaseTracker/silent flush) is kept as wrappers until Phase 3.
-  const runnerSinks = new Map<string, RunnerEventSink>();
+  // reporters via one implementation. One sink is bound per browser project up
+  // front from the executor's own project plan (`browserProjects`) — never from
+  // `context.projects`, which planning mutates to also contain node projects. The
+  // previous lazy resolver fell back to `context.projects[0]`, so a browser event
+  // could be attributed to a *node* project's config; binding per browser project
+  // here removes that fallback and keeps per-project `onConsoleLog` filtering and
+  // `resolveSnapshotPath` correct across browser projects that share a relative
+  // test path.
+  const runnerSinks = new Map<string, RunnerEventSink>(
+    browserProjects.map((project) => [
+      project.name,
+      createRunnerEventSink(context, project.normalizedConfig),
+    ]),
+  );
+  const firstBrowserSink = runnerSinks.get(browserProjects[0]!.name)!;
+
+  // testPath -> owning project name, stamped from the authoritative client
+  // file-start event (it carries the manifest-resolved projectName) before any
+  // other per-file event for that path fires — including on watch reruns, so the
+  // mapping stays correct when a rerun adds a file. Fully eliminating this map in
+  // favor of a project stamp on every wire event is deferred (it would add
+  // `project` to the shared `TestResult`/`TestFileResult` payloads).
   const projectNameByTestPath = new Map<string, string>();
 
-  const sinkForProjectName = (projectName: string): RunnerEventSink => {
-    let sink = runnerSinks.get(projectName);
-    if (!sink) {
-      // Silent fallback to the first project when the name doesn't resolve
-      // (e.g. an empty name from `sinkForTestPath`). This host runs a single
-      // browser project's config today; Phase 4 threads the executor's own
-      // projects explicitly so the fallback (and the `!`) can be removed.
-      const project =
-        context.projects.find((p) => p.name === projectName) ??
-        context.projects[0];
-      sink = createRunnerEventSink(context, project!.normalizedConfig);
-      runnerSinks.set(projectName, sink);
-    }
-    return sink;
-  };
+  const sinkForProjectName = (projectName: string): RunnerEventSink =>
+    runnerSinks.get(projectName) ?? firstBrowserSink;
 
-  const sinkForTestPath = (testPath: string): RunnerEventSink =>
-    sinkForProjectName(projectNameByTestPath.get(testPath) ?? '');
+  const sinkForTestPath = (testPath: string): RunnerEventSink => {
+    const projectName = projectNameByTestPath.get(testPath);
+    return projectName ? sinkForProjectName(projectName) : firstBrowserSink;
+  };
 
   // Silent-console buffering runs through the shared controller — the same
   // engine the node worker uses — so `silent: 'passed-only'` buffers logs and
@@ -4041,23 +4034,13 @@ export type ListBrowserTestsResult = {
  */
 export const listBrowserTests = async (
   context: RstestContext,
-  options?: Pick<
-    BrowserTestRunOptions,
-    | 'shardedEntries'
-    | 'freezeShardedEntries'
-    | 'filesOnly'
-    | 'targetEnvironmentNames'
-    | 'appliedModifyRstestConfigEnvironments'
-  >,
+  options?: ListBrowserTestsOptions,
 ): Promise<ListBrowserTestsResult> => {
-  let browserProjects = getBrowserProjects(
-    context,
-    options?.targetEnvironmentNames,
-  );
+  const browserProjects = options?.projects ?? getBrowserProjects(context);
   const projectEntries = await resolveProjectEntries(
     context,
     options?.shardedEntries,
-    options?.targetEnvironmentNames,
+    browserProjects,
   );
   const totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
@@ -4084,6 +4067,7 @@ export const listBrowserTests = async (
     runtime = await createBrowserRuntime({
       context,
       projectEntries,
+      browserProjects,
       shardedEntries: options?.shardedEntries,
       freezeShardedEntries: options?.freezeShardedEntries,
       tempDir,
@@ -4094,7 +4078,6 @@ export const listBrowserTests = async (
       skipProviderLaunch: options?.filesOnly,
       appliedModifyRstestConfigEnvironments:
         options?.appliedModifyRstestConfigEnvironments,
-      targetEnvironmentNames: options?.targetEnvironmentNames,
     });
   } catch (error) {
     const providers = [
@@ -4110,11 +4093,6 @@ export const listBrowserTests = async (
     );
     throw error;
   }
-
-  browserProjects = getBrowserProjects(
-    context,
-    options?.targetEnvironmentNames,
-  );
 
   if (options?.filesOnly) {
     const list = runtime.projectEntries.flatMap((entry) =>
@@ -4179,6 +4157,10 @@ export const listBrowserTests = async (
   });
 
   const serializedOptions = serializeForInlineScript(hostOptions);
+
+  // Per-page collect watchdog: a test file whose module evaluation stalls must
+  // not hang `rstest list` forever.
+  const collectTimeoutMs = 30_000;
 
   const collectFromServer = async (
     server: BrowserProjectServer,
@@ -4246,20 +4228,19 @@ export const listBrowserTests = async (
       waitUntil: 'load',
     });
 
-    // Wait for collection to complete with timeout
-    const timeoutMs = 30000;
+    // Wait for collection to complete with the shared collect timeout.
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<void>((resolve) => {
       timeoutId = setTimeout(() => {
         if (!collectCompleted) {
           logger.warn(
             color.yellow(
-              `[List] Browser test collection timed out after ${timeoutMs}ms`,
+              `[List] Browser test collection timed out after ${collectTimeoutMs}ms`,
             ),
           );
         }
         resolve();
-      }, timeoutMs);
+      }, collectTimeoutMs);
     });
 
     await Promise.race([collectPromise, timeoutPromise]);

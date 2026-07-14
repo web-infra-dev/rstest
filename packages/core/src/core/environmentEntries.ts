@@ -1,10 +1,8 @@
 import type { ProjectContext, ProjectEntries, RstestContext } from '../types';
 import { groupProjectEntriesByEnvironment } from './environmentGroups';
+import { isBrowserProject } from './isBrowserProject';
 
 type GlobTestSourceEntries = (name: string) => Promise<Record<string, string>>;
-
-const isBrowserProject = (project: ProjectContext): boolean =>
-  project.normalizedConfig.browser.enabled;
 
 const hasEntries = (
   entriesCache: Map<string, ProjectEntries>,

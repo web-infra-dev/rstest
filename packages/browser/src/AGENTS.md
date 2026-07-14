@@ -6,7 +6,7 @@ This document is architecture-only and focuses on browser mode scheduling in `@r
 
 `runBrowserController` splits finalize ownership on `context.command`:
 
-- **Non-watch runs**: the host never self-finalizes. It returns a fully-populated `BrowserTestRunResult` with a deferred `close`, and `@rstest/core`'s `finalizeRunCycle` reduces the run's `ExecutorCycleOutcome`s into the verdict — reporter `onTestRunEnd`, coverage merge + report, exit code, and the bail message. `BrowserTestRunOptions.skipOnTestRunEnd` is retained but ignored for one release.
+- **Non-watch runs**: the host never self-finalizes. It returns a fully-populated `BrowserTestRunResult` with a deferred `close`, and `@rstest/core`'s `finalizeRunCycle` reduces the run's `ExecutorCycleOutcome`s into the verdict — reporter `onTestRunEnd`, coverage merge + report, exit code, and the bail message. `BrowserTestRunOptions.skipOnTestRunEnd` (deprecated and ignored since the finalize unification) has been removed.
 - **Watch runs**: the host owns the per-rerun lifecycle (`onTestRunStart`/`onTestRunEnd` per rerun) and self-finalizes; core skips its finalize entirely for browser-only and zero-node mixed watch runs.
 
 Runner lifecycle events flow through per-project `RunnerEventSink`s (`createRunnerEventSink` from core — the same event pump the node pool RPC uses). The host keeps a `Map<projectName, RunnerEventSink>` and resolves sinks via `sinkForProjectName`/`sinkForTestPath` (falling back to the first project for unknown names); it never fans out to reporters or `stateManager` directly.

@@ -20,6 +20,7 @@ import { pluginEntryWatch } from './plugins/entry';
 import { pluginExternal } from './plugins/external';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
+import { isNodeProject } from './isBrowserProject';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
 import {
@@ -164,9 +165,7 @@ export const prepareRsbuild = async ({
   // broader project set when they only need graph information.
   const projects = targetProjects?.length
     ? targetProjects
-    : context.projects.filter(
-        (project) => !project.normalizedConfig.browser.enabled,
-      );
+    : context.projects.filter(isNodeProject);
   const debugMode = isDebug();
 
   const updateSetupFileMaps = () => {

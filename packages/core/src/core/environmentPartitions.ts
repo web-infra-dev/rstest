@@ -8,6 +8,7 @@ import {
   getEnvironmentKey,
   groupProjectEntriesByEnvironment,
 } from './environmentGroups';
+import { isBrowserProject } from './isBrowserProject';
 
 type GetProjectEntries = (
   project: ProjectContext,
@@ -27,9 +28,6 @@ type RefreshEnvironmentPartitionEntry = {
 type ShardMessageOptions = {
   silent?: boolean;
 };
-
-const isBrowserProject = (project: ProjectContext): boolean =>
-  project.normalizedConfig.browser.enabled;
 
 const getSourceEnvironmentName = (project: ProjectContext): string =>
   project._environmentGroup?.sourceEnvironmentName ?? project.environmentName;

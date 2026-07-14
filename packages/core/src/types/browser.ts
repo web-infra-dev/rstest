@@ -1,4 +1,5 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
+import type { ProjectContext } from './core';
 import type { GetSourcemap } from './reporter';
 import type { TestFileResult, TestResult } from './testSuite';
 import type { TraceEvent } from '../utils/trace';
@@ -17,14 +18,11 @@ export type ResolveBrowserSourcemap = (
  */
 export interface BrowserTestRunOptions {
   /**
-   * @deprecated Ignored since the unified finalize landed. The host now keys
-   * self-finalize off watch vs non-watch mode internally: non-watch runs always
-   * defer `onTestRunEnd`, the exit code, and coverage to core's
-   * `finalizeRunCycle`, and watch reruns always self-finalize. Retained as an
-   * ignored option for one release for cross-version compatibility, then
-   * removed.
+   * The explicit browser-project subset the executor was constructed with (plan
+   * output). The host keeps a stable reference to this instead of re-deriving
+   * `browser.enabled` projects from `context.projects` (which planning mutates).
    */
-  skipOnTestRunEnd?: boolean;
+  projects?: ProjectContext[];
   /**
    * Pre-calculated sharded entries for browser projects.
    * If provided, the browser controller will use these instead of collecting its own.
@@ -52,8 +50,11 @@ export interface BrowserTestRunOptions {
    * entries after the node-side plan initially saw an empty browser project.
    */
   allowEmptyRun?: boolean;
-  /** Limit Browser Mode initialization to these project environments. */
-  targetEnvironmentNames?: string[];
+  /**
+   * Browser project environments whose `modifyRstestConfig` hooks already
+   * applied this run. Shared across the discovery boot and the real run so
+   * hooks stay single-shot.
+   */
   appliedModifyRstestConfigEnvironments?: Set<string>;
   /**
    * When set, the browser host emits Perfetto trace events to this callback
@@ -62,6 +63,20 @@ export interface BrowserTestRunOptions {
    */
   onTraceEvents?: (events: TraceEvent[]) => void;
 }
+
+/**
+ * Options for collecting browser tests without running them (`rstest list` and
+ * `TestExecutor.collect`). Single definition for the core↔browser boundary —
+ * the `@rstest/browser` public wrapper and the host implementation share it.
+ */
+export type ListBrowserTestsOptions = Pick<
+  BrowserTestRunOptions,
+  | 'shardedEntries'
+  | 'freezeShardedEntries'
+  | 'filesOnly'
+  | 'projects'
+  | 'appliedModifyRstestConfigEnvironments'
+>;
 
 /**
  * Result from running browser tests.
