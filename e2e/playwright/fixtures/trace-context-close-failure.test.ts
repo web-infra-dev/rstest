@@ -10,7 +10,7 @@ const test = base.extend({
     browserName: 'chromium',
     launchOptions: process.env.CI ? { channel: 'chrome' } : undefined,
     trace: {
-      mode: 'on',
+      mode: 'retain-on-failure',
       outputDir,
       print: false,
     },

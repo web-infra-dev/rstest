@@ -1,6 +1,15 @@
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { Server } from 'node:http';
+import { tmpdir } from 'node:os';
 import {
   basename,
   dirname,
@@ -846,13 +855,13 @@ const playwrightFixtures = {
     let finalized = false;
     let traceReported = false;
     let releaseBrowser: ReturnType<typeof retainBrowser> | undefined;
+    let stagedTraceDir: string | undefined;
+    let stagedTracePath: string | undefined;
 
     const finalizeTrace = async () => {
       if (!activeArtifacts || finalized) {
         return;
       }
-
-      finalized = true;
 
       if (activeArtifacts.options.summary) {
         await writeTraceSummary({ artifacts: activeArtifacts, task });
@@ -862,10 +871,34 @@ const playwrightFixtures = {
         printTraceSavedMessage(activeArtifacts, task);
         traceReported = true;
       }
+
+      finalized = true;
     };
 
     const finishContextCleanup = async (scheduleBrowserCleanup: boolean) => {
       try {
+        if (stagedTraceDir && stagedTracePath) {
+          try {
+            if (task.result?.status === 'fail' && artifacts) {
+              activeArtifacts = await reserveTraceArtifacts(artifacts);
+              try {
+                await copyFile(stagedTracePath, activeArtifacts.tracePath);
+              } catch (error) {
+                await rm(activeArtifacts.dir, {
+                  recursive: true,
+                  force: true,
+                });
+                activeArtifacts = undefined;
+                throw error;
+              }
+            }
+          } finally {
+            await rm(stagedTraceDir, { recursive: true, force: true });
+            stagedTraceDir = undefined;
+            stagedTracePath = undefined;
+          }
+        }
+
         await finalizeTrace();
       } finally {
         await releaseBrowser?.(scheduleBrowserCleanup);
@@ -885,6 +918,9 @@ const playwrightFixtures = {
           if (artifacts && traceStarted) {
             const shouldSaveTrace =
               artifacts.options.mode === 'on' || task.result?.status === 'fail';
+            const shouldStageTrace =
+              artifacts.options.mode === 'retain-on-failure' &&
+              task.result?.status !== 'fail';
 
             if (shouldSaveTrace) {
               activeArtifacts = await reserveTraceArtifacts(artifacts);
@@ -893,6 +929,19 @@ const playwrightFixtures = {
               } catch (error) {
                 await rm(activeArtifacts.dir, { recursive: true, force: true });
                 activeArtifacts = undefined;
+                throw error;
+              }
+            } else if (shouldStageTrace) {
+              stagedTraceDir = await mkdtemp(
+                join(tmpdir(), 'rstest-playwright-trace-'),
+              );
+              stagedTracePath = join(stagedTraceDir, 'trace.zip');
+              try {
+                await context.tracing.stop({ path: stagedTracePath });
+              } catch (error) {
+                await rm(stagedTraceDir, { recursive: true, force: true });
+                stagedTraceDir = undefined;
+                stagedTracePath = undefined;
                 throw error;
               }
             } else {
