@@ -90,6 +90,18 @@ describe('computeCoveredConfigs', () => {
     expect(covered.size).toBe(0);
   });
 
+  it('does not suppress standalone configs sharing a root the parent aggregates', () => {
+    // `apps/web` has two standalone configs (e.g. different include/exclude).
+    // The root aggregates `apps/web` via only one of them, so a root-only check
+    // would hide the other config's tests. Neither may be suppressed.
+    const covered = computeCoveredConfigs([
+      p('/repo/rstest.config.ts', '/repo', ['/repo/apps/web']),
+      p('/repo/apps/web/rstest.config.ts', '/repo/apps/web'),
+      p('/repo/apps/web/rstest.e2e.config.ts', '/repo/apps/web'),
+    ]);
+    expect(covered.size).toBe(0);
+  });
+
   it('matches a root reported with a trailing separator', () => {
     const covered = computeCoveredConfigs([
       p('/repo/rstest.config.ts', '/repo', ['/repo/packages/core']),

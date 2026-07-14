@@ -52,7 +52,11 @@ const aggregatesNestedConfig = (
 // the same files show up twice). Roots (own and child) are normalized here, so
 // callers may pass them raw. A config is covered when another config either:
 //   - aggregates this config's own root via `projects` (a leaf child). This is
-//     an explicit, unconditional signal, so no ancestry check is needed.
+//     only applied when the root uniquely identifies a single discovered
+//     config: when several configs share a directory (e.g. `rstest.config.ts`
+//     plus `rstest.e2e.config.ts`, with different `include`/`exclude`), a
+//     parent that aggregates only one of them must not hide the others, whose
+//     tests it does not render.
 //   - aggregates this config's own child roots (a nested intermediate config;
 //     see `aggregatesNestedConfig`). This is inferred from the flattened
 //     grandchildren, so it carries a tiebreak for the ambiguous equal-set case.
@@ -70,12 +74,17 @@ export function computeCoveredConfigs(
     root: normalizeRoot(project.root),
     children: new Set(project.childProjectRoots.map(normalizeRoot)),
   }));
+  const configsPerRoot = new Map<string, number>();
+  for (const node of nodes) {
+    configsPerRoot.set(node.root, (configsPerRoot.get(node.root) ?? 0) + 1);
+  }
   const covered = new Set<string>();
   for (const project of nodes) {
+    const rootIsUnique = configsPerRoot.get(project.root) === 1;
     const isCovered = nodes.some(
       (other) =>
         other.configFilePath !== project.configFilePath &&
-        (other.children.has(project.root) ||
+        ((rootIsUnique && other.children.has(project.root)) ||
           aggregatesNestedConfig(project, other)),
     );
     if (isCovered) {
