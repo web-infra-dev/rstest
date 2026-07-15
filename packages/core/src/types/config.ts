@@ -26,7 +26,7 @@ export type RstestExposeAPI = {
    *
    * Mutating the returned snapshot does not change the Rstest config.
    */
-  getRstestConfig: () => Readonly<RstestConfig>;
+  getRstestConfig: () => Readonly<ResolvedRstestConfig>;
   /**
    * Modify the Rstest config for the current Rsbuild environment.
    *

@@ -54,7 +54,7 @@ Rstest 通过 [`api.useExposed('rstest')`](https://rsbuild.rs/zh/plugins/dev/cor
 
 <ApiMeta addedVersion="0.11.2" />
 
-使用 `getRstestConfig` 读取当前 Rsbuild environment 最终 Rstest 配置的快照。该快照由经过规范化的 Rstest 全局配置与当前 project 配置合并而成：project 配置优先，同时保留 `pool`、`reporters`、`output.distPath` 等仅属于全局配置的选项。
+使用 `getRstestConfig` 读取当前 Rsbuild environment 最终 Rstest 配置的快照。该快照由当前 project 的规范化配置与 `pool`、`reporters`、`shard`、`output.distPath` 等全局配置合并而成。
 
 ```ts title="rstest-plugin.ts"
 import type { RsbuildPlugin } from '@rsbuild/core';
@@ -87,7 +87,7 @@ export const myPlugin = (): RsbuildPlugin => ({
 
 在多 project 模式下，`getRstestConfig` 返回全局配置与当前 Rsbuild environment 所属 project 配置合并后的结果。修改返回快照中的值不会改变 Rstest 的内部配置。
 
-**类型：** `() => Readonly<RstestConfig>`
+**类型：** `() => Readonly<ResolvedRstestConfig>`
 
 ## 在 Rsbuild 插件中修改 Rstest 配置 \{#modify-rstest-config}
 

@@ -149,6 +149,99 @@ const clonePlainConfig = <T>(value: T): T => {
   return value;
 };
 
+// Opaque provider options can contain callable or class-instance values, so
+// public snapshots must detach own state without flattening their prototypes.
+const cloneConfigSnapshot = <T>(
+  value: T,
+  seen = new WeakMap<object, unknown>(),
+): T => {
+  if (
+    value === null ||
+    (typeof value !== 'object' && typeof value !== 'function')
+  ) {
+    return value;
+  }
+
+  const source = value as object;
+  const cached = seen.get(source);
+  if (cached) {
+    return cached as T;
+  }
+
+  if (value instanceof RegExp) {
+    const clone = new RegExp(value.source, value.flags);
+    clone.lastIndex = value.lastIndex;
+    seen.set(source, clone);
+    return clone as T;
+  }
+
+  if (value instanceof Date) {
+    const clone = new Date(value);
+    seen.set(source, clone);
+    return clone as T;
+  }
+
+  if (value instanceof Map) {
+    const clone = new Map();
+    seen.set(source, clone);
+    for (const [key, item] of value) {
+      clone.set(
+        cloneConfigSnapshot(key, seen),
+        cloneConfigSnapshot(item, seen),
+      );
+    }
+    return clone as T;
+  }
+
+  if (value instanceof Set) {
+    const clone = new Set();
+    seen.set(source, clone);
+    for (const item of value) {
+      clone.add(cloneConfigSnapshot(item, seen));
+    }
+    return clone as T;
+  }
+
+  let clone: object;
+  if (Array.isArray(value)) {
+    clone = [];
+  } else if (typeof value === 'function') {
+    const sourceFunction = value;
+    clone = function (this: unknown, ...args: unknown[]) {
+      if (new.target) {
+        return Reflect.construct(sourceFunction, args, sourceFunction);
+      }
+      return Reflect.apply(sourceFunction, this, args);
+    };
+    Object.setPrototypeOf(clone, Object.getPrototypeOf(sourceFunction));
+  } else {
+    clone = Object.create(Object.getPrototypeOf(value));
+  }
+
+  seen.set(source, clone);
+  for (const key of Reflect.ownKeys(source)) {
+    if (Array.isArray(value) && key === 'length') {
+      continue;
+    }
+
+    const existingDescriptor = Object.getOwnPropertyDescriptor(clone, key);
+    if (existingDescriptor && !existingDescriptor.configurable) {
+      continue;
+    }
+
+    const descriptor = Object.getOwnPropertyDescriptor(source, key);
+    if (!descriptor) {
+      continue;
+    }
+    if ('value' in descriptor) {
+      descriptor.value = cloneConfigSnapshot(descriptor.value, seen);
+    }
+    Object.defineProperty(clone, key, descriptor);
+  }
+
+  return clone as T;
+};
+
 const isConfigValueEqual = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) {
     return true;
@@ -556,14 +649,19 @@ const createRstestExposeAPI = (
   modifyRstestConfigCallbacks: Map<string, ModifyRstestConfigCallback[]>,
 ): RstestExposeAPI => ({
   getRstestConfig: () =>
-    clonePlainConfig({
-      ...context.normalizedConfig,
+    cloneConfigSnapshot({
       ...project.normalizedConfig,
+      projects: context.originalConfig.projects,
       pool: context.normalizedConfig.pool,
       reporters: context.normalizedConfig.reporters,
+      isolate: context.normalizedConfig.isolate,
+      coverage: context.normalizedConfig.coverage,
+      resolveSnapshotPath: context.normalizedConfig.resolveSnapshotPath,
+      onConsoleLog: context.normalizedConfig.onConsoleLog,
+      silent: context.normalizedConfig.silent,
+      bail: context.normalizedConfig.bail,
       shard: context.normalizedConfig.shard,
       output: {
-        ...context.normalizedConfig.output,
         ...project.normalizedConfig.output,
         distPath: context.normalizedConfig.output.distPath,
       },
