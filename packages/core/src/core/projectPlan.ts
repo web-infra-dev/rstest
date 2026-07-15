@@ -7,7 +7,7 @@ import {
 import { refreshEnvironmentPartitionEntries } from './environmentPartitions';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';
 
-const getProjectEntries = async ({
+export const getProjectEntries = async ({
   context,
   project,
 }: {

@@ -62,6 +62,12 @@ export interface BrowserTestRunOptions {
    * caller has `--trace` enabled.
    */
   onTraceEvents?: (events: TraceEvent[]) => void;
+  /**
+   * Post-globalSetup env change-set from the core pre-cycle stage. The host
+   * merges it into the browser runtime env store between the static base
+   * (`NODE_ENV`/`RSTEST`) and the user `test.env` config.
+   */
+  env?: Record<string, string | undefined>;
 }
 
 /**
