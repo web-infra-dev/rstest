@@ -10,7 +10,7 @@ Mocking 用于在测试中替换依赖、控制返回值，并断言函数或模
 
 ## Mock 模块
 
-如果依赖是通过模块系统加载的，可以根据模块类型和 mock 方式选择不同的 API。
+如果依赖是通过模块系统加载的，可以根据模块类型和 mock 方式选择不同的 API。模块 mock 在 Node 模式与[浏览器模式](/guide/browser-testing)下的行为一致。
 
 ### Mock ESM 模块
 
@@ -58,6 +58,8 @@ test('only mocks later imports', async () => {
 ### Mock CommonJS 模块
 
 如果依赖是通过 `require()` 加载的，可以使用 [rs.mockRequire()](/api/runtime-api/rstest/mock-modules#rsmockrequire) 或 [rs.doMockRequire()](/api/runtime-api/rstest/mock-modules#rsdomockrequire)。
+
+这些 API 面向 CommonJS 互操作场景。它们在浏览器测试中同样可用，但编写浏览器测试时优先使用 ESM API（`rs.mock` / `rs.doMock`）。
 
 #### 使用 `rs.mockRequire()`
 

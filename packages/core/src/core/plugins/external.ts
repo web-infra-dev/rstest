@@ -3,6 +3,7 @@ import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import type { RstestContext } from '../../types';
 import type { BundleDependencyPattern } from '../../types/config';
 import { ADDITIONAL_NODE_BUILTINS, castArray } from '../../utils';
+import { rstestCoreGlobalExternal } from './mockBuild';
 
 const NODE_MODULES_PATH_SEGMENT = '/node_modules/';
 const SCRIPT_EXTENSION_RE = /\.(?:[cm]?[jt]sx?)$/;
@@ -296,9 +297,7 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
             // Make sure that externals configuration is not modified by users
             config.externals = castArray(config.externals) || [];
 
-            config.externals.unshift({
-              '@rstest/core': 'global @rstest/core',
-            });
+            config.externals.unshift(rstestCoreGlobalExternal);
 
             config.externalsPresets ??= {};
             config.externalsPresets.node = false;

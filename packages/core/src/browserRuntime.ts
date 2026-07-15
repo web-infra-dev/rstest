@@ -5,7 +5,10 @@
  *
  * Used by:
  * - packages/browser/src/client/entry.ts (runtime APIs)
- * - packages/browser/src/client/public.ts (test APIs via alias)
+ *
+ * User test code importing '@rstest/core' is not aliased here; the browser
+ * build keeps that request external against `globalThis['@rstest/core']`
+ * (see `applyWebMockRspackConfig`), mirroring the node build's external.
  */
 
 // Runtime API for creating test runtime in browser
@@ -29,7 +32,13 @@ export type {
   WorkerState,
 } from './types';
 // Constants needed by browser client
-export { globalApis, RSTEST_ENV_SYMBOL_KEY } from './utils/constants';
+export {
+  globalApis,
+  RSTEST_API_GLOBAL_KEY,
+  RSTEST_ENV_SYMBOL_KEY,
+} from './utils/constants';
+// Node-parity console argument formatting for the browser console relay.
+export { formatConsoleArgs } from './runtime/consoleFormat';
 // Shared snapshot header so browser-written `.snap` files match node's.
 export { SNAPSHOT_HEADER } from './utils/snapshotPath';
 // Browser-safe regexp wire-format decoder (mirrors the host-side encoder used

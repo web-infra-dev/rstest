@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import type { Rspack } from '@rstest/core';
 import {
+  applyWebMockRspackConfig,
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
   type CoverageMapData,
@@ -17,14 +18,17 @@ import {
   DEFAULT_TEST_TIMEOUT,
   type FormattedError,
   getNoTestFilesMessage,
+  getPrettyConsoleName,
   getSetupFiles,
   getTestEntries,
   hasUserRstestConfigPlugins,
+  importMetaRstestDefine,
   initModifyRstestConfigHooks,
   isDebug,
   type ListCommandResult,
   loadCoverageProvider,
   logger,
+  pluginMockRuntime,
   prepareWatchRerunState,
   projectRuntimeConfig,
   PhaseTracker,
@@ -1242,16 +1246,51 @@ const generateManifestModule = ({
         project.normalizedConfig.exclude.patterns,
         projectRootPosix,
       );
-      lines.push(
-        `const ${varName} = import.meta.webpackContext(${JSON.stringify(projectRootPosix)}, {`,
-      );
-      lines.push('  recursive: true,');
-      lines.push(`  regExp: ${includeRegExp.toString()},`);
-      if (excludeRegExp) {
-        lines.push(`  exclude: ${excludeRegExp.toString()},`);
+      const { includeSource } = project.normalizedConfig;
+      const emitContext = (contextVarName: string, regExp: RegExp): void => {
+        lines.push(
+          `const ${contextVarName} = import.meta.webpackContext(${JSON.stringify(projectRootPosix)}, {`,
+        );
+        lines.push('  recursive: true,');
+        lines.push(`  regExp: ${regExp.toString()},`);
+        if (excludeRegExp) {
+          lines.push(`  exclude: ${excludeRegExp.toString()},`);
+        }
+        lines.push("  mode: 'lazy',");
+        lines.push('});');
+      };
+
+      if (includeSource.length === 0) {
+        emitContext(varName, includeRegExp);
+      } else {
+        // In-source test files (`includeSource`) carry an
+        // `if (import.meta.rstest)` block. The include context can't see them,
+        // so a second context over the `includeSource` globs backs
+        // host-scheduled loads, while `keys()` only unions the entry-probed
+        // in-source files (the probe does not apply inside the bundle, so raw
+        // source-context keys would execute never-probed files and fail with
+        // "No test suites found"). The probed list can go stale until a
+        // manifest refresh; scheduled-by-path loading never does.
+        emitContext(`${varName}_include`, includeRegExp);
+        emitContext(`${varName}_source`, globPatternsToRegExp(includeSource));
+        const probedKeys = testFiles.map((filePath) =>
+          toContextKey(filePath, projectRootPosix),
+        );
+        lines.push(`const ${varName}_probed = ${JSON.stringify(probedKeys)};`);
+        lines.push(
+          `const ${varName}_includeKeys = new Set(${varName}_include.keys());`,
+        );
+        lines.push(`const ${varName} = Object.assign(`);
+        lines.push(
+          `  (key) => ${varName}_includeKeys.has(key) ? ${varName}_include(key) : ${varName}_source(key),`,
+        );
+        lines.push('  {');
+        lines.push(
+          `    keys: () => Array.from(new Set([...${varName}_includeKeys, ...${varName}_probed])),`,
+        );
+        lines.push('  },');
+        lines.push(');');
       }
-      lines.push("  mode: 'lazy',");
-      lines.push('});');
     } else {
       // One-shot runs: the file set is fixed and already filtered, so emit an
       // explicit lazy-import map (one chunk per literal `import()`, like the
@@ -1546,11 +1585,13 @@ const createBrowserRuntime = async ({
   // Shared by every project — only the per-project `@rstest/browser-manifest`
   // alias varies (one virtual manifest per server).
   const staticRstestAliases = {
-    // User test code: import { describe, it } from '@rstest/core'
-    '@rstest/core': resolveBrowserFile('client/public.ts'),
+    // User test code `import { describe, it } from '@rstest/core'` is NOT
+    // aliased: `applyWebMockRspackConfig` keeps the request external against
+    // `globalThis['@rstest/core']` (node parity), which also keeps the mock
+    // hoister's provider-import ordering correct for `rs.hoisted` callbacks.
     // User test code: import { page } from '@rstest/browser'
     '@rstest/browser': resolveBrowserFile('browser.ts'),
-    // Browser runtime APIs for entry.ts and public.ts
+    // Browser runtime APIs for entry.ts
     // Uses dist file with extractSourceMap to preserve sourcemap chain for inline snapshots
     '@rstest/core/internal/browser-runtime': browserRuntimePath,
   };
@@ -1712,6 +1753,9 @@ const createBrowserRuntime = async ({
 
     // Add plugin to merge user Rsbuild config with rstest required config
     rsbuildInstance.addPlugins([
+      // Same mock runtime as the node build (importActual doppelganger rule +
+      // mock webpack runtime module); order-insensitive and self-contained.
+      pluginMockRuntime,
       {
         name: 'rstest:browser-user-config',
         setup(api) {
@@ -1766,6 +1810,10 @@ const createBrowserRuntime = async ({
                     define: {
                       'process.env': rstestEnvDefine,
                       'import.meta.env': rstestEnvDefine,
+                      // In-source `if (import.meta.rstest)` blocks read the
+                      // per-file runtime API the client entry publishes on
+                      // `globalThis` (node parity: `global['@rstest/core']`).
+                      'import.meta.rstest': importMetaRstestDefine('web'),
                     },
                   },
                   output: {
@@ -1778,6 +1826,14 @@ const createBrowserRuntime = async ({
                   tools: {
                     rspack: (rspackConfig) => {
                       rspackConfig.mode = 'development';
+                      // Web parameterization of the node mock transform:
+                      // RstestPlugin (hoist + path injection), the
+                      // `@rstest/core` global external, and
+                      // `exportsPresence: 'warn'`.
+                      applyWebMockRspackConfig(rspackConfig, {
+                        rspack,
+                        rootPath: project.rootPath,
+                      });
                       // lazyCompilation's only delivery transport is the HMR
                       // runtime, so it follows the same gate as HMR (see
                       // `shouldEnableBrowserHmr`): headed watch only, everything
@@ -2854,7 +2910,8 @@ export const runBrowserController = async (
   const handleLog = async (payload: LogPayload): Promise<void> => {
     const log: UserConsoleLog = {
       content: payload.content,
-      name: payload.level,
+      // Same colored level label as the node worker's CustomConsole.
+      name: getPrettyConsoleName(payload.level),
       taskId: payload.taskId,
       taskName: payload.taskName,
       taskParentNames: payload.taskParentNames,

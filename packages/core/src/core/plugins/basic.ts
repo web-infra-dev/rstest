@@ -1,7 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { RsbuildPlugin } from '@rsbuild/core';
-import pathe from 'pathe';
 import {
   importMetaHook,
   RSTEST_DYNAMIC_IMPORT_HOOK,
@@ -10,6 +9,11 @@ import {
 import type { RstestContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
 import { runtimeChunkNameForEnvironment } from '../runtimeChunk';
+import {
+  applyMockExportsPresence,
+  getMockRstestPluginOptions,
+  importMetaRstestDefine,
+} from './mockBuild';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -84,7 +88,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         {
           source: {
             define: {
-              'import.meta.rstest': "global['@rstest/core']",
+              'import.meta.rstest': importMetaRstestDefine('node'),
               'import.meta.env': 'process.env',
             },
           },
@@ -141,10 +145,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               }
 
               const rstestPluginOptions = {
-                injectModulePathName: true,
-                importMetaPathName: true,
-                hoistMockModule: true,
-                manualMockRoot: pathe.resolve(rootPath, '__mocks__'),
+                ...getMockRstestPluginOptions({ rootPath }),
                 // The runtime hook below resolves relative dynamic-import
                 // specifiers against the source module that produced the
                 // call, instead of the test entry, fixing #1207.
@@ -215,9 +216,8 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 // sibling case; re-enabling `url` re-breaks every one of them.
                 url: false,
                 ...(config.module.parser.javascript || {}),
-                // suppress ESModulesLinkingError for exports that might be implemented in mock
-                exportsPresence: 'warn',
               };
+              applyMockExportsPresence(config);
 
               config.resolve ??= {};
               config.resolve.extensions ??= [];

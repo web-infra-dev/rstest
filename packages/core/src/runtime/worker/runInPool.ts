@@ -9,7 +9,7 @@ import type {
   TestInfo,
   WorkerState,
 } from '../../types';
-import { globalApis } from '../../utils/constants';
+import { globalApis, RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
@@ -298,7 +298,7 @@ const preparePool = async (
   };
 
   // @ts-expect-error
-  rstestContext.global['@rstest/core'] = api;
+  rstestContext.global[RSTEST_API_GLOBAL_KEY] = api;
 
   return {
     interopDefault,

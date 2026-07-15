@@ -82,14 +82,14 @@ jsdom 中行为异常?  ─── 是 ─▶ ✅ 浏览器模式
 | 配置项 / API                                                                                     | 浏览器模式下的行为                                                                                                                                                              |
 | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [coverage.provider: 'v8'](/config/test/coverage#provider)                                        | 不支持。纯浏览器运行会直接报错（`rstest list` 除外）；node + 浏览器混合运行会告警，浏览器项目文件没有覆盖率，node 项目仍使用 v8。浏览器覆盖率请使用默认的 `istanbul` provider。 |
-| [rs.mock 系列](/api/runtime-api/rstest/mock-modules)                                             | 暂不支持——`rs.mock`、`rs.doMock`、`rs.importActual`、`rs.mockRequire` 在浏览器测试中会抛出错误。                                                                                |
-| [includeSource](/config/test/include-source)                                                     | 暂不支持。源码内测试块只在 node 模式项目中运行。                                                                                                                                |
 | [isolate](/config/test/isolate)                                                                  | 被忽略——每个测试文件始终运行在全新的浏览器 context/page 中。纯浏览器运行设置 `isolate: false` 时会告警。                                                                        |
 | [pool.type / pool.execArgv](/config/test/pool)                                                   | 被忽略——它们是 node 进程机制。                                                                                                                                                  |
 | [pool.maxWorkers](/config/test/pool)                                                             | headless 运行时，测试文件在最多 `maxWorkers` 个浏览器 context 中并行执行；headed 运行时测试文件始终串行执行，因为所有测试共享同一个可见的容器页面。                             |
 | [testEnvironment](/config/test/test-environment)                                                 | 被忽略——真实浏览器本身就是运行环境。                                                                                                                                            |
 | [detectAsyncLeaks](/config/test/detect-async-leaks)、[logHeapUsage](/config/test/log-heap-usage) | 被忽略——node-only 机制。                                                                                                                                                        |
 | [bail](/config/test/bail)                                                                        | headless 运行下支持：达到失败上限后，Rstest 停止调度剩余文件。已在并行执行中的文件会先跑完，所以仍可能出现少量新结果。headed 调试 UI（`headless: false`）不应用 bail。          |
+
+模块 mock（[rs.mock 系列](/api/runtime-api/rstest/mock-modules)）与 [includeSource](/config/test/include-source) 源码内测试的行为与 Node 模式一致。`rs.mockRequire` 在浏览器测试中同样可用，但它面向 CommonJS 互操作场景——编写浏览器测试时优先使用 `rs.mock` / `rs.doMock`。
 
 ## 下一步
 

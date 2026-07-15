@@ -10,7 +10,7 @@ Mocking lets you replace dependencies in tests, control return values, and asser
 
 ## Mock modules
 
-If a dependency is loaded through the module system, you can choose different APIs based on the module type and mocking behavior.
+If a dependency is loaded through the module system, you can choose different APIs based on the module type and mocking behavior. Module mocking works the same in Node mode and [browser mode](/guide/browser-testing).
 
 ### Mock ESM modules
 
@@ -58,6 +58,8 @@ test('only mocks later imports', async () => {
 ### Mock CommonJS modules
 
 If a dependency is loaded through `require()`, you can use [rs.mockRequire()](/api/runtime-api/rstest/mock-modules#rsmockrequire) or [rs.doMockRequire()](/api/runtime-api/rstest/mock-modules#rsdomockrequire).
+
+These APIs exist for CommonJS interop. They also work in browser tests, but prefer the ESM APIs (`rs.mock` / `rs.doMock`) when writing browser tests.
 
 #### Use `rs.mockRequire()`
 
