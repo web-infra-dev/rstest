@@ -553,6 +553,18 @@ export interface RstestConfig {
    */
   includeTaskLocation?: boolean;
 
+  /**
+   * Transform TypeScript files that are loaded at runtime outside the bundle
+   * graph (e.g. via `createRequire` or dynamic `import()` with a runtime path)
+   * when their module style mismatches the package `type` scope.
+   *
+   * Requires Node.js >= 22.22.3 / >= 24.11.1; silently inactive on older
+   * versions. Applies to the node executor only.
+   *
+   * @default true
+   */
+  runtimeTsTransform?: boolean;
+
   // Rsbuild configs
 
   plugins?: RsbuildConfig['plugins'];

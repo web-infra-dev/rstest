@@ -34,7 +34,7 @@ describe('runtime node register behavior', () => {
     await runFixture(registerFixtureDir, onTestFinished);
   });
 
-  it('should preserve native node semantics for late-loaded TypeScript files', async ({
+  it('should handle late-loaded TypeScript files outside the project root', async ({
     onTestFinished,
   }) => {
     await runFixture(nativeFixtureDir, onTestFinished);

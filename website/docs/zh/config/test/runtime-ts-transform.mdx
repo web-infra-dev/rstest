@@ -1,0 +1,90 @@
+---
+description: 是否转换模块风格与 package type scope 不匹配的运行时加载 TypeScript 文件。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# runtimeTsTransform
+
+<ApiMeta addedVersion="0.12.0" />
+
+- **类型：** `boolean`
+- **默认值：** `true`
+
+是否转换在运行时加载（即 bundle graph 之外）、且模块风格与 package `type` scope 不匹配的 TypeScript 文件。
+
+Node.js 可以从 `.ts` 文件中 strip 掉 TypeScript 语法，但它不会转换模块系统：在 `"type": "module"` 作用域下 `.ts` 文件就是 ESM，在 `"type": "commonjs"` 作用域下就是 CommonJS。进入 Rstest bundle graph 的文件会由构建流水线转换，但后续交给 Node.js 加载的文件——例如通过 `createRequire` 或 `import(dynamicPath)` 加载——会保留原生 loader 语义，当它的模块风格与所在作用域不匹配时就会失败。
+
+启用该选项后，Rstest 会在 test worker 中注册一个 Node.js load hook，识别这两种不匹配情况，并使用 Rspack 内置的 SWC 转换源码：
+
+- `"type": "module"` 作用域下的 CommonJS 风格 `.ts` 文件（`module.exports`、`exports.foo`、`require()`）会被转换为 CommonJS。
+- `"type": "commonjs"` 作用域下的 ESM 风格 `.ts` 文件（`import` / `export` 声明）会被转换为 ESM。
+
+其他文件不会被改动，仍然保留 Node.js 原生语义，包括原生的 `require(esm)`。这不需要额外依赖，并且只有在第一个真正需要转换的文件出现时，才会加载 Rspack 的 SWC binding。
+
+## 示例
+
+假设项目被配置为 ESM：
+
+```json title="package.json"
+{
+  "type": "module"
+}
+```
+
+```ts title="plugin.ts"
+module.exports = {
+  name: 'plugin',
+};
+```
+
+```ts title="plugin.test.ts"
+import { createRequire } from 'node:module';
+import { expect, test } from '@rstest/core';
+
+const require = createRequire(import.meta.url);
+
+test('loads a CommonJS-style TypeScript plugin at runtime', () => {
+  const plugin = require('./plugin.ts');
+
+  expect(plugin.name).toBe('plugin');
+});
+```
+
+如果没有 `runtimeTsTransform`，Node.js 会把 `plugin.ts` 判定为 ESM，`module.exports = ...` 不会作为 CommonJS 值导出。在默认的 `runtimeTsTransform: true` 下，Rstest 会把 `plugin.ts` 转换为 CommonJS，`require` 调用即可得到预期的值。
+
+## Node.js 版本要求
+
+`runtimeTsTransform` 依赖同步的 `module.registerHooks` API，而它的 CommonJS 加载路径直到 [nodejs/node#59929](https://github.com/nodejs/node/pull/59929) 才做到 reentrancy-safe。因此 Rstest 只在以下版本中激活该 hook：
+
+- Node.js >= 22.22.3（22.x）
+- Node.js >= 24.11.1（24.x）
+- Node.js >= 25.1.0（25.x）
+- Node.js >= 26.0.0
+
+在其他版本中，该选项会静默失效，行为保持不变。这些版本上仍然适用的手动 loader 注册方式，请参考[问题排查](/guide/debug/troubleshooting)。
+
+## 限制
+
+`runtimeTsTransform` 是一种刻意保持最小化的干预，只做类型擦除和模块降级：
+
+- **不感知 tsconfig。** `paths` 别名、decorator metadata 以及其他 `compilerOptions` 都不会生效。依赖这些能力的文件应该走 bundle graph。
+- **只处理 `.ts`。** 不处理 `.tsx`（它需要 JSX 配置），而 `.mts` / `.cts` 在原生语义下本身就是明确的。
+- **排除 `node_modules`。** 依赖保持 Node.js 原生语义；如果某个依赖需要转换，请使用 [`output.bundleDependencies`](/config/build/output#outputbundledependencies)。
+- **named exports 遵循 Node.js 规则。** 当文件被转换为 CommonJS 后，对该文件的 named imports 仍由 Node.js 的 `cjs-module-lexer` 解析，因此它无法静态识别的导出依旧不能作为 named imports 使用。
+- **第三方 loader 优先。** 如果 `ts-node`、`tsx` 或 `@swc-node/register` 这类 loader 接管了 `.ts`，Rstest 的 hook 会直接放行，让该 loader 继续工作。
+- **不属于 module graph。** 通过该 hook 加载的文件对 watch 模式的重新运行和 `rstest.mock` 都是不可见的。
+
+该选项仅适用于 node executor，[browser 模式](/config/test/browser)会忽略它。
+
+## 关闭该选项
+
+设置 `runtimeTsTransform: false` 可以完全禁用该 hook，让所有运行时加载的 `.ts` 文件恢复 Node.js 原生语义：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  runtimeTsTransform: false,
+});
+```

@@ -192,11 +192,13 @@ export const serializableConfig = <
   };
 };
 
-const getNodeVersion = (): {
+export type NodeVersion = {
   major: number;
   minor: number;
   patch: number;
-} => {
+};
+
+export const getNodeVersion = (): NodeVersion => {
   if (typeof process.versions?.node === 'string') {
     const [major = 0, minor = 0, patch = 0] = process.versions.node
       .split('.')

@@ -1,0 +1,5 @@
+{
+  "name": "e2e-runtime-ts-transform-commonjs-scope",
+  "private": true,
+  "type": "commonjs"
+}

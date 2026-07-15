@@ -1,0 +1,5 @@
+{
+  "name": "e2e-runtime-ts-transform-coexist",
+  "private": true,
+  "type": "module"
+}

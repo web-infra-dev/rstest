@@ -35,6 +35,7 @@ const makeProject = (): ProjectContext =>
       chaiConfig: {},
       includeTaskLocation: false,
       silent: false,
+      runtimeTsTransform: true,
     },
   }) as unknown as ProjectContext;
 

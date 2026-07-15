@@ -367,6 +367,7 @@ export function createNodeExecutor(
                   sourceMaps,
                   interopDefault: true,
                   outputModule: p.outputModule,
+                  runtimeTsTransform: p.normalizedConfig.runtimeTsTransform,
                 }),
               globalSetupTraceArgs,
             );

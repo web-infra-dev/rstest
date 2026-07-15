@@ -518,6 +518,14 @@ importers:
         specifier: workspace:*
         version: link:../../../../../packages/core
 
+  e2e/runtimeTsTransform/fixtures: {}
+
+  e2e/runtimeTsTransform/fixtures-cjs-scope: {}
+
+  e2e/runtimeTsTransform/fixtures-coexist: {}
+
+  e2e/runtimeTsTransform/fixtures-opt-out: {}
+
   e2e/setup/fixtures/package-name/test-setup-esm-fixtures: {}
 
   e2e/setup/fixtures/package-name/test-setup-fixtures: {}

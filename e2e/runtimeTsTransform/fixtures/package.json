@@ -1,0 +1,5 @@
+{
+  "name": "e2e-runtime-ts-transform-module-scope",
+  "private": true,
+  "type": "module"
+}
