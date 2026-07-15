@@ -16,15 +16,15 @@ export type ModifyRstestConfigCallback = (
 
 export type RstestExposeAPI = {
   /**
-   * Get a snapshot of the resolved Rstest config for the current Rsbuild
-   * environment.
+   * Get the resolved Rstest config for the current Rsbuild environment.
    *
    * This API is exposed to Rsbuild plugins through `api.useExposed('rstest')`
    * in both Node Mode and Browser Mode projects.
-   * It combines the global Rstest config with the current project's config.
-   * Project-scoped values take precedence while global-only values are kept.
+   * It combines the current project's config with the effective global and
+   * run-level config.
    *
-   * Mutating the returned snapshot does not change the Rstest config.
+   * The returned config uses a read-only type. Opaque values retain their
+   * original identity and behavior.
    */
   getRstestConfig: () => Readonly<ResolvedRstestConfig>;
   /**

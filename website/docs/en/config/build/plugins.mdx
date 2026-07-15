@@ -54,7 +54,7 @@ Rstest exposes its integration APIs through [`api.useExposed('rstest')`](https:/
 
 <ApiMeta addedVersion="0.11.2" />
 
-Use `getRstestConfig` to read a snapshot of the resolved Rstest config for the current Rsbuild environment. It combines the current project's normalized config with global-only options such as `pool`, `reporters`, `shard`, and `output.distPath`.
+Use `getRstestConfig` to read the resolved Rstest config for the current Rsbuild environment. It combines the current project's normalized config with global and run-level options such as `pool`, `reporters`, `shard`, `update`, and `output.distPath`.
 
 ```ts title="rstest-plugin.ts"
 import type { RsbuildPlugin } from '@rsbuild/core';
@@ -85,7 +85,7 @@ export const myPlugin = (): RsbuildPlugin => ({
 });
 ```
 
-In multi-project mode, `getRstestConfig` returns the global config merged with the config of the project that owns the current Rsbuild environment. Mutating values on the returned snapshot does not change Rstest's internal config.
+In multi-project mode, `getRstestConfig` returns the effective global config merged with the config of the project that owns the current Rsbuild environment. Opaque values such as functions and provider-specific class instances retain their original identity and behavior.
 
 **Type:** `() => Readonly<ResolvedRstestConfig>`
 

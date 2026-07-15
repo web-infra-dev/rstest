@@ -227,9 +227,13 @@ describe('prepareRsbuild', () => {
     const getterGlobalConfig = new Map<
       string,
       {
+        forceRerunTriggers: string[] | undefined;
+        onlyFailures: boolean | undefined;
+        passWithNoTests: boolean | undefined;
         performance: unknown;
         shard: { count: number; index: number } | undefined;
         silent: boolean | 'passed-only' | undefined;
+        update: boolean | undefined;
       }
     >();
     const callbackIncludes = new Map<string, string[] | undefined>();
@@ -255,9 +259,13 @@ describe('prepareRsbuild', () => {
           typeof pool === 'string' ? pool : pool?.type,
         );
         getterGlobalConfig.set(include, {
+          forceRerunTriggers: configSnapshot?.forceRerunTriggers,
+          onlyFailures: configSnapshot?.onlyFailures,
+          passWithNoTests: configSnapshot?.passWithNoTests,
           performance: configSnapshot?.performance,
           shard: configSnapshot?.shard,
           silent: configSnapshot?.silent,
+          update: configSnapshot?.update,
         });
         configSnapshot?.include?.push('mutated-snapshot');
 
@@ -274,12 +282,16 @@ describe('prepareRsbuild', () => {
       environmentName: 'project-a',
       normalizedConfig: {
         include: ['original-a'],
+        forceRerunTriggers: ['project-a.config.ts'],
+        onlyFailures: false,
         plugins: [createModifyRstestConfigPlugin('from-project-a')],
+        passWithNoTests: false,
         resolve: {},
         source: {},
         output: { module: false },
         silent: false,
         tools: {},
+        update: false,
         testEnvironment: {
           name: 'node',
         },
@@ -292,12 +304,16 @@ describe('prepareRsbuild', () => {
       environmentName: 'project-b',
       normalizedConfig: {
         include: ['original-b'],
+        forceRerunTriggers: ['project-b.config.ts'],
+        onlyFailures: false,
         plugins: [createModifyRstestConfigPlugin('from-project-b')],
+        passWithNoTests: false,
         resolve: {},
         source: {},
         output: { module: true },
         silent: false,
         tools: {},
+        update: false,
         testEnvironment: {
           name: 'node',
         },
@@ -312,10 +328,14 @@ describe('prepareRsbuild', () => {
       normalizedConfig: {
         root: rootPath,
         name: 'test',
+        forceRerunTriggers: ['root.config.ts'],
         include: ['global-original'],
+        onlyFailures: true,
+        passWithNoTests: true,
         performance: { buildCache: false },
         shard: { count: 2, index: 1 },
         silent: 'passed-only',
+        update: true,
         output: {
           distPath: {
             root: TEMP_RSTEST_OUTPUT_DIR,
@@ -339,14 +359,22 @@ describe('prepareRsbuild', () => {
     expect(getterPoolTypes.get('from-project-a')).toBe('threads');
     expect(getterPoolTypes.get('from-project-b')).toBe('threads');
     expect(getterGlobalConfig.get('from-project-a')).toEqual({
+      forceRerunTriggers: ['root.config.ts', 'project-a.config.ts'],
+      onlyFailures: true,
+      passWithNoTests: true,
       performance: undefined,
       shard: { count: 2, index: 1 },
       silent: 'passed-only',
+      update: true,
     });
     expect(getterGlobalConfig.get('from-project-b')).toEqual({
+      forceRerunTriggers: ['root.config.ts', 'project-b.config.ts'],
+      onlyFailures: true,
+      passWithNoTests: true,
       performance: undefined,
       shard: { count: 2, index: 1 },
       silent: 'passed-only',
+      update: true,
     });
     expect(getterOutput.get('from-project-a')).toEqual({
       distPath: TEMP_RSTEST_OUTPUT_DIR,
@@ -363,36 +391,43 @@ describe('prepareRsbuild', () => {
     expect(projectB.normalizedConfig.include).toEqual(['from-project-b']);
   });
 
-  it('should detach non-plain values in exposed config snapshots', async () => {
+  it('should preserve opaque values in exposed config', async () => {
     class ProviderOption {
-      value = 'original';
+      #value = 'original';
+
+      getValue() {
+        return this.#value;
+      }
     }
 
     const providerOption = new ProviderOption();
-    const providerCallback = Object.assign(() => 'original', {
-      state: { value: 'original' },
-    });
+    const providerCallback = () => 'original';
+    const providerPromise = Promise.resolve('original');
+    const providerUrl = new URL('https://rstest.rs/guide');
+    const providerBytes = new Uint8Array([1, 2, 3]);
     const testNamePattern = /original/g;
+    type ProviderOptions = {
+      bytes: Uint8Array;
+      callback: typeof providerCallback;
+      option: ProviderOption;
+      promise: Promise<string>;
+      url: URL;
+    };
+    let exposedProviderOptions: ProviderOptions | undefined;
+    let exposedBundlePattern: RegExp | string | undefined;
     const readConfigPlugin: RsbuildPlugin = {
-      name: 'read-detached-rstest-config',
+      name: 'read-opaque-rstest-config',
       setup(api) {
         const snapshot = api
           .useExposed<RstestExposeAPI>('rstest')
           ?.getRstestConfig();
-        const providerOptions = snapshot?.browser?.providerOptions as
-          | {
-              callback: typeof providerCallback;
-              option: ProviderOption;
-            }
-          | undefined;
-
-        if (snapshot?.testNamePattern instanceof RegExp) {
-          snapshot.testNamePattern.lastIndex = 4;
-        }
-        if (providerOptions) {
-          providerOptions.option.value = 'snapshot';
-          providerOptions.callback.state.value = 'snapshot';
-        }
+        exposedProviderOptions = snapshot?.browser
+          ?.providerOptions as ProviderOptions;
+        exposedBundlePattern = Array.isArray(
+          snapshot?.output?.bundleDependencies,
+        )
+          ? snapshot.output.bundleDependencies[0]
+          : undefined;
       },
     };
     const project = {
@@ -400,19 +435,22 @@ describe('prepareRsbuild', () => {
       rootPath,
       environmentName: 'browser-project',
       normalizedConfig: {
+        forceRerunTriggers: [],
         include: ['original.test.ts'],
         plugins: [readConfigPlugin],
         resolve: {},
         source: {},
-        output: {},
+        output: { bundleDependencies: [testNamePattern] },
         tools: {},
-        testNamePattern,
         testEnvironment: { name: 'node' },
         browser: {
-          enabled: true,
+          enabled: false,
           providerOptions: {
+            bytes: providerBytes,
             callback: providerCallback,
             option: providerOption,
+            promise: providerPromise,
+            url: providerUrl,
           },
         },
       },
@@ -422,6 +460,7 @@ describe('prepareRsbuild', () => {
       command: 'run',
       originalConfig: {},
       normalizedConfig: {
+        forceRerunTriggers: [],
         output: { distPath: { root: TEMP_RSTEST_OUTPUT_DIR } },
         pool: { execArgv: [], type: 'forks' },
       },
@@ -435,9 +474,17 @@ describe('prepareRsbuild', () => {
 
     await rsbuildInstance.initConfigs();
 
-    expect(testNamePattern.lastIndex).toBe(0);
-    expect(providerOption.value).toBe('original');
-    expect(providerCallback.state.value).toBe('original');
+    expect(exposedBundlePattern).toBe(testNamePattern);
+    expect(exposedProviderOptions?.option).toBe(providerOption);
+    expect(exposedProviderOptions?.option.getValue()).toBe('original');
+    expect(exposedProviderOptions?.callback).toBe(providerCallback);
+    expect(exposedProviderOptions?.callback()).toBe('original');
+    expect(exposedProviderOptions?.promise).toBe(providerPromise);
+    await expect(exposedProviderOptions?.promise).resolves.toBe('original');
+    expect(exposedProviderOptions?.url).toBe(providerUrl);
+    expect(exposedProviderOptions?.url.href).toBe('https://rstest.rs/guide');
+    expect(exposedProviderOptions?.bytes).toBe(providerBytes);
+    expect(exposedProviderOptions?.bytes.byteLength).toBe(3);
   });
 
   it('should apply modified rstest config before generating rsbuild config', async () => {
