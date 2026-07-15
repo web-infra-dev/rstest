@@ -217,7 +217,26 @@ describe('prepareRsbuild', () => {
     }
   });
 
-  it('should expose project-scoped rstest API to Rsbuild plugins', async () => {
+  it('should expose merged global and project config snapshots', async () => {
+    const getterIncludes = new Map<string, string[]>();
+    const getterOutput = new Map<
+      string,
+      { distPath: string | undefined; module: boolean | undefined }
+    >();
+    const getterPoolTypes = new Map<string, string | undefined>();
+    const getterGlobalConfig = new Map<
+      string,
+      {
+        forceRerunTriggers: string[] | undefined;
+        onlyFailures: boolean | undefined;
+        passWithNoTests: boolean | undefined;
+        performance: unknown;
+        shard: { count: number; index: number } | undefined;
+        silent: boolean | 'passed-only' | undefined;
+        update: boolean | undefined;
+      }
+    >();
+    const callbackIncludes = new Map<string, string[] | undefined>();
     const createModifyRstestConfigPlugin = (
       include: string,
     ): RsbuildPlugin => ({
@@ -225,7 +244,33 @@ describe('prepareRsbuild', () => {
       setup(api) {
         const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
 
+        const configSnapshot = rstestApi?.getRstestConfig();
+        getterIncludes.set(include, [...(configSnapshot?.include || [])]);
+        getterOutput.set(include, {
+          distPath:
+            typeof configSnapshot?.output?.distPath === 'string'
+              ? configSnapshot.output.distPath
+              : configSnapshot?.output?.distPath?.root,
+          module: configSnapshot?.output?.module,
+        });
+        const pool = configSnapshot?.pool;
+        getterPoolTypes.set(
+          include,
+          typeof pool === 'string' ? pool : pool?.type,
+        );
+        getterGlobalConfig.set(include, {
+          forceRerunTriggers: configSnapshot?.forceRerunTriggers,
+          onlyFailures: configSnapshot?.onlyFailures,
+          passWithNoTests: configSnapshot?.passWithNoTests,
+          performance: configSnapshot?.performance,
+          shard: configSnapshot?.shard,
+          silent: configSnapshot?.silent,
+          update: configSnapshot?.update,
+        });
+        configSnapshot?.include?.push('mutated-snapshot');
+
         rstestApi?.modifyRstestConfig((config) => {
+          callbackIncludes.set(include, config.include);
           config.include = [include];
         });
       },
@@ -237,11 +282,16 @@ describe('prepareRsbuild', () => {
       environmentName: 'project-a',
       normalizedConfig: {
         include: ['original-a'],
+        forceRerunTriggers: ['project-a.config.ts'],
+        onlyFailures: false,
         plugins: [createModifyRstestConfigPlugin('from-project-a')],
+        passWithNoTests: false,
         resolve: {},
         source: {},
-        output: {},
+        output: { module: false },
+        silent: false,
         tools: {},
+        update: false,
         testEnvironment: {
           name: 'node',
         },
@@ -254,11 +304,16 @@ describe('prepareRsbuild', () => {
       environmentName: 'project-b',
       normalizedConfig: {
         include: ['original-b'],
+        forceRerunTriggers: ['project-b.config.ts'],
+        onlyFailures: false,
         plugins: [createModifyRstestConfigPlugin('from-project-b')],
+        passWithNoTests: false,
         resolve: {},
         source: {},
-        output: {},
+        output: { module: true },
+        silent: false,
         tools: {},
+        update: false,
         testEnvironment: {
           name: 'node',
         },
@@ -266,30 +321,170 @@ describe('prepareRsbuild', () => {
       },
     };
 
-    const rsbuildInstance = await prepareRsbuild({
-      context: {
-        rootPath,
-        command: 'run',
-        normalizedConfig: {
-          root: rootPath,
-          name: 'test',
-          output: {
-            distPath: {
-              root: TEMP_RSTEST_OUTPUT_DIR,
-            },
+    const context = {
+      rootPath,
+      command: 'run',
+      originalConfig: {},
+      normalizedConfig: {
+        root: rootPath,
+        name: 'test',
+        forceRerunTriggers: ['root.config.ts'],
+        include: ['global-original'],
+        onlyFailures: true,
+        passWithNoTests: true,
+        performance: { buildCache: false },
+        shard: { count: 2, index: 1 },
+        silent: 'passed-only',
+        update: true,
+        output: {
+          distPath: {
+            root: TEMP_RSTEST_OUTPUT_DIR,
           },
-          pool: { type: 'forks' },
         },
-        projects: [projectA, projectB],
-      } as unknown as RstestContext,
+        pool: { type: 'threads' },
+      },
+      projects: [projectA, projectB],
+    } as unknown as RstestContext;
+
+    const rsbuildInstance = await prepareRsbuild({
+      context,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
 
     await rsbuildInstance.initConfigs();
 
+    expect(getterIncludes.get('from-project-a')).toEqual(['original-a']);
+    expect(getterIncludes.get('from-project-b')).toEqual(['original-b']);
+    expect(getterPoolTypes.get('from-project-a')).toBe('threads');
+    expect(getterPoolTypes.get('from-project-b')).toBe('threads');
+    expect(getterGlobalConfig.get('from-project-a')).toEqual({
+      forceRerunTriggers: ['root.config.ts', 'project-a.config.ts'],
+      onlyFailures: true,
+      passWithNoTests: true,
+      performance: undefined,
+      shard: { count: 2, index: 1 },
+      silent: 'passed-only',
+      update: true,
+    });
+    expect(getterGlobalConfig.get('from-project-b')).toEqual({
+      forceRerunTriggers: ['root.config.ts', 'project-b.config.ts'],
+      onlyFailures: true,
+      passWithNoTests: true,
+      performance: undefined,
+      shard: { count: 2, index: 1 },
+      silent: 'passed-only',
+      update: true,
+    });
+    expect(getterOutput.get('from-project-a')).toEqual({
+      distPath: TEMP_RSTEST_OUTPUT_DIR,
+      module: false,
+    });
+    expect(getterOutput.get('from-project-b')).toEqual({
+      distPath: TEMP_RSTEST_OUTPUT_DIR,
+      module: true,
+    });
+    expect(callbackIncludes.get('from-project-a')).toEqual(['original-a']);
+    expect(callbackIncludes.get('from-project-b')).toEqual(['original-b']);
+    expect(context.normalizedConfig.include).toEqual(['global-original']);
     expect(projectA.normalizedConfig.include).toEqual(['from-project-a']);
     expect(projectB.normalizedConfig.include).toEqual(['from-project-b']);
+  });
+
+  it('should preserve opaque values in exposed config', async () => {
+    class ProviderOption {
+      #value = 'original';
+
+      getValue() {
+        return this.#value;
+      }
+    }
+
+    const providerOption = new ProviderOption();
+    const providerCallback = () => 'original';
+    const providerPromise = Promise.resolve('original');
+    const providerUrl = new URL('https://rstest.rs/guide');
+    const providerBytes = new Uint8Array([1, 2, 3]);
+    const testNamePattern = /original/g;
+    type ProviderOptions = {
+      bytes: Uint8Array;
+      callback: typeof providerCallback;
+      option: ProviderOption;
+      promise: Promise<string>;
+      url: URL;
+    };
+    let exposedProviderOptions: ProviderOptions | undefined;
+    let exposedBundlePattern: RegExp | string | undefined;
+    const readConfigPlugin: RsbuildPlugin = {
+      name: 'read-opaque-rstest-config',
+      setup(api) {
+        const snapshot = api
+          .useExposed<RstestExposeAPI>('rstest')
+          ?.getRstestConfig();
+        exposedProviderOptions = snapshot?.browser
+          ?.providerOptions as ProviderOptions;
+        exposedBundlePattern = Array.isArray(
+          snapshot?.output?.bundleDependencies,
+        )
+          ? snapshot.output.bundleDependencies[0]
+          : undefined;
+      },
+    };
+    const project = {
+      name: 'browser-project',
+      rootPath,
+      environmentName: 'browser-project',
+      normalizedConfig: {
+        forceRerunTriggers: [],
+        include: ['original.test.ts'],
+        plugins: [readConfigPlugin],
+        resolve: {},
+        source: {},
+        output: { bundleDependencies: [testNamePattern] },
+        tools: {},
+        testEnvironment: { name: 'node' },
+        browser: {
+          enabled: false,
+          providerOptions: {
+            bytes: providerBytes,
+            callback: providerCallback,
+            option: providerOption,
+            promise: providerPromise,
+            url: providerUrl,
+          },
+        },
+      },
+    };
+    const context = {
+      rootPath,
+      command: 'run',
+      originalConfig: {},
+      normalizedConfig: {
+        forceRerunTriggers: [],
+        output: { distPath: { root: TEMP_RSTEST_OUTPUT_DIR } },
+        pool: { execArgv: [], type: 'forks' },
+      },
+      projects: [project],
+    } as unknown as RstestContext;
+    const rsbuildInstance = await prepareRsbuild({
+      context,
+      globTestSourceEntries: async () => ({}),
+      setupFileState: createSetupFileState(),
+    });
+
+    await rsbuildInstance.initConfigs();
+
+    expect(exposedBundlePattern).toBe(testNamePattern);
+    expect(exposedProviderOptions?.option).toBe(providerOption);
+    expect(exposedProviderOptions?.option.getValue()).toBe('original');
+    expect(exposedProviderOptions?.callback).toBe(providerCallback);
+    expect(exposedProviderOptions?.callback()).toBe('original');
+    expect(exposedProviderOptions?.promise).toBe(providerPromise);
+    await expect(exposedProviderOptions?.promise).resolves.toBe('original');
+    expect(exposedProviderOptions?.url).toBe(providerUrl);
+    expect(exposedProviderOptions?.url.href).toBe('https://rstest.rs/guide');
+    expect(exposedProviderOptions?.bytes).toBe(providerBytes);
+    expect(exposedProviderOptions?.bytes.byteLength).toBe(3);
   });
 
   it('should apply modified rstest config before generating rsbuild config', async () => {

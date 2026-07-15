@@ -6,6 +6,7 @@ import type {
   NormalizedCoverageOptions,
   RstestExposeAPI,
   ProjectConfig,
+  ResolvedRstestConfig,
   RstestConfig,
 } from './types';
 
@@ -18,6 +19,7 @@ export type {
   CoverageOptions,
   CoverageProvider,
   NormalizedCoverageOptions,
+  ResolvedRstestConfig,
   RsbuildPlugin,
   RstestConfig,
   RstestExposeAPI,
