@@ -1792,7 +1792,7 @@ const createBrowserRuntime = async ({
 
                       // Extract and merge sourcemaps from pre-built @rstest/core files
                       // This preserves the sourcemap chain for inline snapshot support
-                      // See: https://rspack.dev/config/module-rules#rulesextractsourcemap
+                      // See: https://rspack.rs/config/module-rules#rulesextractsourcemap
                       const browserRuntimeDir = dirname(browserRuntimePath);
                       rspackConfig.module = rspackConfig.module || {};
                       rspackConfig.module.rules =
