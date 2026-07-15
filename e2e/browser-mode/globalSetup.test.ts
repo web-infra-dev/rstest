@@ -28,7 +28,8 @@ describe('browser mode - globalSetup', () => {
 
   it('skips globalSetup when the shard slice has no files for the project', async () => {
     // The fixture has a single test file: shard 2/2 is deterministically
-    // empty, so the stage must not run setup (or queue teardown) for it.
+    // empty, so the stage must not run setup (or queue teardown) for it —
+    // and the browser cycle must honor the same shard and run no tests.
     const { cli } = await runBrowserCli('browser-global-setup', {
       args: ['--shard=2/2'],
     });
@@ -37,6 +38,7 @@ describe('browser mode - globalSetup', () => {
 
     expect(cli.stdout).not.toContain('[browser-global-setup] executed');
     expect(cli.stdout).not.toContain('[browser-global-teardown] executed');
+    expect(cli.stdout).not.toContain('[browser-global-setup-test] running');
   });
 
   it('fails the run before tests when globalSetup throws', async () => {

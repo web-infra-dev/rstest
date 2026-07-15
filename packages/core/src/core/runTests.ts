@@ -15,6 +15,7 @@ import {
   createTraceController,
   getForceRerunTriggerMessage,
   logger,
+  resolveShardedEntries,
   type TraceEvent,
 } from '../utils';
 import {
@@ -298,9 +299,17 @@ export async function runTests(context: Rstest): Promise<void> {
           });
       };
       try {
+        // Resolve the shard once (undefined when unsharded) and share it
+        // between the setup gate and the browser cycle so they cannot
+        // disagree on which files run — the host's own shard fallback only
+        // fires on the config-hook refresh path, not on initial resolution.
+        const browserShardedEntries = await resolveShardedEntries(context, {
+          silent: true,
+        });
         const stage = await runBrowserGlobalSetupStage(
           context,
           browserProjects,
+          { entriesCache: browserShardedEntries },
         );
         if (!context.embedded && stage.env !== undefined) {
           process.on('exit', teardownOnExit);
@@ -315,6 +324,7 @@ export async function runTests(context: Rstest): Promise<void> {
               mode: 'all',
               updateSnapshot: snapshotManager.options.updateSnapshot,
               env: stage.env,
+              shardedEntries: browserShardedEntries,
               onTraceEvents: traceRun.onEvents,
             });
         await finalizeRunCycle(context, {
