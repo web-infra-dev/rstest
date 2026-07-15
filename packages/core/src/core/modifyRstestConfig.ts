@@ -551,13 +551,28 @@ export const getRsbuildEnvironmentConfig = (
 });
 
 const createRstestExposeAPI = (
-  environmentName: string,
+  context: RstestContext,
+  project: ProjectContext,
   modifyRstestConfigCallbacks: Map<string, ModifyRstestConfigCallback[]>,
 ): RstestExposeAPI => ({
+  getRstestConfig: () =>
+    clonePlainConfig({
+      ...context.normalizedConfig,
+      ...project.normalizedConfig,
+      pool: context.normalizedConfig.pool,
+      reporters: context.normalizedConfig.reporters,
+      shard: context.normalizedConfig.shard,
+      output: {
+        ...context.normalizedConfig.output,
+        ...project.normalizedConfig.output,
+        distPath: context.normalizedConfig.output.distPath,
+      },
+    }),
   modifyRstestConfig: (callback) => {
-    const callbacks = modifyRstestConfigCallbacks.get(environmentName) ?? [];
+    const callbacks =
+      modifyRstestConfigCallbacks.get(project.environmentName) ?? [];
     callbacks.push(callback);
-    modifyRstestConfigCallbacks.set(environmentName, callbacks);
+    modifyRstestConfigCallbacks.set(project.environmentName, callbacks);
   },
 });
 
@@ -602,10 +617,7 @@ export const initModifyRstestConfigHooks = (
   for (const project of exposeProjects) {
     rsbuildInstance.expose(
       'rstest',
-      createRstestExposeAPI(
-        project.environmentName,
-        modifyRstestConfigCallbacks,
-      ),
+      createRstestExposeAPI(context, project, modifyRstestConfigCallbacks),
       {
         environment: project.environmentName,
       },

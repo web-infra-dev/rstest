@@ -29,19 +29,12 @@ export default defineConfig({
 
 Check out the Rsbuild [plugin list](https://rsbuild.rs/plugins/list#official-plugins) to discover available plugins. These plugins can also be used with Rstest.
 
-## Modify Rstest config in Rsbuild plugins \{#modify-rstest-config}
+## Detect whether a plugin is running in Rstest \{#detect-rstest-environment}
 
-<ApiMeta addedVersion="0.11.1" />
-
-When an Rsbuild plugin runs inside Rstest, it can get the Rstest exposed API through [`api.useExposed`](https://rsbuild.rs/plugins/dev/core) from the Rsbuild Plugin API and call `modifyRstestConfig` to adjust the Rstest config for the current project.
-
-This API is exposed in both Node Mode and Browser Mode projects. Both modes use the `rstest` Rsbuild caller name, so plugins can guard on `api.context.callerName === 'rstest'` when they run inside Rstest.
-
-This API is intended for framework integrations and toolchain plugins. When a plugin already knows the current framework, Rsbuild environment, or project conventions, it can centrally add project config such as test entries, exclude rules, setup files, aliases, defines, or `testEnvironment` so users do not need to duplicate the same information in their Rstest config.
+Rsbuild plugins can run in different tools. Use [`api.context.callerName`](https://rsbuild.rs/api/javascript-api/instance#contextcallername) to detect whether the current plugin is running in Rstest before using Rstest-specific behavior.
 
 ```ts title="rstest-plugin.ts"
 import type { RsbuildPlugin } from '@rsbuild/core';
-import type { RstestExposeAPI } from '@rstest/core';
 
 export const myPlugin = (): RsbuildPlugin => ({
   name: 'my-plugin',
@@ -50,16 +43,75 @@ export const myPlugin = (): RsbuildPlugin => ({
       return;
     }
 
+    // Rstest-specific plugin behavior
+  },
+});
+```
+
+Rstest exposes its integration APIs through [`api.useExposed('rstest')`](https://rsbuild.rs/plugins/dev/core). `RstestExposeAPI` is exported from `@rstest/core` as the type of these APIs.
+
+## Read Rstest config in Rsbuild plugins \{#get-rstest-config}
+
+<ApiMeta addedVersion="0.11.2" />
+
+Use `getRstestConfig` to read a snapshot of the resolved Rstest config for the current Rsbuild environment. It combines the normalized global Rstest config with the current project's config: project-scoped values take precedence, while global-only options such as `pool`, `reporters`, and `output.distPath` are retained.
+
+```ts title="rstest-plugin.ts"
+import type { RsbuildPlugin } from '@rsbuild/core';
+import type { RstestExposeAPI } from '@rstest/core';
+
+export const myPlugin = (): RsbuildPlugin => ({
+  name: 'read-rstest-config',
+  setup(api) {
+    const rstestConfig = api
+      .useExposed<RstestExposeAPI>('rstest')
+      ?.getRstestConfig();
+
+    if (!rstestConfig) {
+      return;
+    }
+
+    api.modifyRsbuildConfig((config) => ({
+      ...config,
+      source: {
+        ...config.source,
+        define: {
+          ...config.source?.define,
+          __RSTEST_PROJECT_NAME__: JSON.stringify(rstestConfig.name),
+        },
+      },
+    }));
+  },
+});
+```
+
+In multi-project mode, `getRstestConfig` returns the global config merged with the config of the project that owns the current Rsbuild environment. Mutating values on the returned snapshot does not change Rstest's internal config.
+
+**Type:** `() => Readonly<RstestConfig>`
+
+## Modify Rstest config in Rsbuild plugins \{#modify-rstest-config}
+
+<ApiMeta addedVersion="0.11.1" />
+
+Use `modifyRstestConfig` to adjust the Rstest config for the current project. This API is intended for framework integrations and toolchain plugins. When a plugin already knows the current framework, Rsbuild environment, or project conventions, it can centrally add project config such as test entries, exclude rules, setup files, aliases, defines, or `testEnvironment` so users do not need to duplicate the same information in their Rstest config.
+
+```ts title="rstest-plugin.ts"
+import type { RsbuildPlugin } from '@rsbuild/core';
+import type { RstestExposeAPI } from '@rstest/core';
+
+export const myPlugin = (): RsbuildPlugin => ({
+  name: 'modify-rstest-config',
+  setup(api) {
     const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
 
     rstestApi?.modifyRstestConfig((config) => {
-      config.include = ['**/*.test.ts'];
+      config.include = ['**/*.plugin.test.ts'];
     });
   },
 });
 ```
 
-In multi-project mode, Rstest exposes one API for each Rsbuild environment. A plugin registered in one project only modifies that project's Rstest config and does not affect other projects.
+In multi-project mode, a plugin registered in one project can only modify that project's Rstest config and does not affect other projects.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -79,9 +131,7 @@ export default defineConfig({
 });
 ```
 
-### Type definitions
-
-`RstestExposeAPI` is exported from `@rstest/core` and is the type of the API exposed by Rstest to Rsbuild plugins through `api.useExposed('rstest')`.
+### Type definition
 
 ```ts
 import type { RstestConfig } from '@rstest/core';
@@ -89,13 +139,11 @@ import type { RstestConfig } from '@rstest/core';
 export type ModifyRstestConfigCallback = (
   config: RstestConfig,
 ) => RstestConfig | void | Promise<RstestConfig | void>;
-
-export type RstestExposeAPI = {
-  modifyRstestConfig: (callback: ModifyRstestConfigCallback) => void;
-};
 ```
 
-`RstestConfig` is the same user-facing config shape accepted by `defineConfig`. You can either mutate the received `config` object directly or return a config fragment that matches the `RstestConfig` shape. Rstest merges, normalizes, and validates these changes again after the callback finishes. The callback can also be asynchronous.
+**Type:** `(callback: ModifyRstestConfigCallback) => void`
+
+`RstestConfig` is the same user-facing config shape accepted by `defineConfig`. With `modifyRstestConfig`, you can either mutate the received `config` object directly or return a config fragment that matches the `RstestConfig` shape. Rstest merges, normalizes, and validates these changes again after the callback finishes. The callback can also be asynchronous.
 
 Register `modifyRstestConfig` during the Rsbuild plugin `setup` phase. Do not register it from later Rsbuild config hooks such as `api.modifyRsbuildConfig`, because Rstest applies collected callbacks while resolving the Rsbuild config; callbacks registered inside those hooks are too late for the current resolution pass.
 

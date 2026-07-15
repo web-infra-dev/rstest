@@ -56,6 +56,12 @@ Rstest 的构建配置继承自 Rsbuild。因此，在 Rstest 中，你可以使
 
 更多配置可参考 [构建配置](/config/#build-configurations)。
 
+### 在 Rsbuild 插件中读取 Rstest 配置 \{#get-rstest-config}
+
+你可以通过 Rstest 暴露的 API 读取当前 Rsbuild environment 最终的 Rstest 配置。
+
+用法和类型说明请参考 [在 Rsbuild 插件中读取 Rstest 配置](/config/build/plugins#get-rstest-config)。
+
 ### 在 Rsbuild 插件中修改 Rstest 配置 \{#modify-rstest-config}
 
 你可以在 Rsbuild 插件中通过 Rstest 暴露的 API 修改当前 Rstest project 配置。
@@ -130,22 +136,9 @@ export default defineConfig({
 });
 ```
 
-如果你正在开发 Rsbuild 插件，你可以使用 [api.context.callerName](https://rsbuild.rs/zh/api/javascript-api/instance#contextcallername) 来判断当前插件被调用的环境。
+### 在 Rsbuild 插件中判断 Rstest 环境
 
-```ts
-export const myPlugin = {
-  name: 'my-plugin',
-  setup(api) {
-    const { callerName } = api.context;
-
-    if (callerName === 'rstest') {
-      // ...
-    } else if (callerName === 'rsbuild') {
-      // ...
-    }
-  },
-};
-```
+如果你正在开发 Rsbuild 插件，请参考[判断插件是否运行在 Rstest 中](/config/build/plugins#detect-rstest-environment)，通过 `api.context.callerName` 执行特定环境下的逻辑。
 
 ## 配置集成
 

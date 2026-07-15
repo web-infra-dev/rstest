@@ -217,7 +217,14 @@ describe('prepareRsbuild', () => {
     }
   });
 
-  it('should expose project-scoped rstest API to Rsbuild plugins', async () => {
+  it('should expose merged global and project config snapshots', async () => {
+    const getterIncludes = new Map<string, string[]>();
+    const getterOutput = new Map<
+      string,
+      { distPath: string | undefined; module: boolean | undefined }
+    >();
+    const getterPoolTypes = new Map<string, string | undefined>();
+    const callbackIncludes = new Map<string, string[] | undefined>();
     const createModifyRstestConfigPlugin = (
       include: string,
     ): RsbuildPlugin => ({
@@ -225,7 +232,24 @@ describe('prepareRsbuild', () => {
       setup(api) {
         const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
 
+        const configSnapshot = rstestApi?.getRstestConfig();
+        getterIncludes.set(include, [...(configSnapshot?.include || [])]);
+        getterOutput.set(include, {
+          distPath:
+            typeof configSnapshot?.output?.distPath === 'string'
+              ? configSnapshot.output.distPath
+              : configSnapshot?.output?.distPath?.root,
+          module: configSnapshot?.output?.module,
+        });
+        const pool = configSnapshot?.pool;
+        getterPoolTypes.set(
+          include,
+          typeof pool === 'string' ? pool : pool?.type,
+        );
+        configSnapshot?.include?.push('mutated-snapshot');
+
         rstestApi?.modifyRstestConfig((config) => {
+          callbackIncludes.set(include, config.include);
           config.include = [include];
         });
       },
@@ -240,7 +264,7 @@ describe('prepareRsbuild', () => {
         plugins: [createModifyRstestConfigPlugin('from-project-a')],
         resolve: {},
         source: {},
-        output: {},
+        output: { module: false },
         tools: {},
         testEnvironment: {
           name: 'node',
@@ -257,7 +281,7 @@ describe('prepareRsbuild', () => {
         plugins: [createModifyRstestConfigPlugin('from-project-b')],
         resolve: {},
         source: {},
-        output: {},
+        output: { module: true },
         tools: {},
         testEnvironment: {
           name: 'node',
@@ -266,28 +290,46 @@ describe('prepareRsbuild', () => {
       },
     };
 
-    const rsbuildInstance = await prepareRsbuild({
-      context: {
-        rootPath,
-        command: 'run',
-        normalizedConfig: {
-          root: rootPath,
-          name: 'test',
-          output: {
-            distPath: {
-              root: TEMP_RSTEST_OUTPUT_DIR,
-            },
+    const context = {
+      rootPath,
+      command: 'run',
+      normalizedConfig: {
+        root: rootPath,
+        name: 'test',
+        include: ['global-original'],
+        output: {
+          distPath: {
+            root: TEMP_RSTEST_OUTPUT_DIR,
           },
-          pool: { type: 'forks' },
         },
-        projects: [projectA, projectB],
-      } as unknown as RstestContext,
+        pool: { type: 'threads' },
+      },
+      projects: [projectA, projectB],
+    } as unknown as RstestContext;
+
+    const rsbuildInstance = await prepareRsbuild({
+      context,
       globTestSourceEntries: async () => ({}),
       setupFileState: createSetupFileState(),
     });
 
     await rsbuildInstance.initConfigs();
 
+    expect(getterIncludes.get('from-project-a')).toEqual(['original-a']);
+    expect(getterIncludes.get('from-project-b')).toEqual(['original-b']);
+    expect(getterPoolTypes.get('from-project-a')).toBe('threads');
+    expect(getterPoolTypes.get('from-project-b')).toBe('threads');
+    expect(getterOutput.get('from-project-a')).toEqual({
+      distPath: TEMP_RSTEST_OUTPUT_DIR,
+      module: false,
+    });
+    expect(getterOutput.get('from-project-b')).toEqual({
+      distPath: TEMP_RSTEST_OUTPUT_DIR,
+      module: true,
+    });
+    expect(callbackIncludes.get('from-project-a')).toEqual(['original-a']);
+    expect(callbackIncludes.get('from-project-b')).toEqual(['original-b']);
+    expect(context.normalizedConfig.include).toEqual(['global-original']);
     expect(projectA.normalizedConfig.include).toEqual(['from-project-a']);
     expect(projectB.normalizedConfig.include).toEqual(['from-project-b']);
   });

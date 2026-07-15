@@ -29,19 +29,12 @@ export default defineConfig({
 
 查看 Rsbuild 的 [插件列表](https://rsbuild.rs/zh/plugins/list/#%E5%AE%98%E6%96%B9%E6%8F%92%E4%BB%B6) 来发现可用的插件，这些插件也适用于 Rstest。
 
-## 在 Rsbuild 插件中修改 Rstest 配置 \{#modify-rstest-config}
+## 判断插件是否运行在 Rstest 中 \{#detect-rstest-environment}
 
-<ApiMeta addedVersion="0.11.1" />
-
-当 Rsbuild 插件运行在 Rstest 中时，可以通过 Rsbuild Plugin API 中的 [`api.useExposed`](https://rsbuild.rs/zh/plugins/dev/core) 获取 Rstest 暴露的 API，并调用 `modifyRstestConfig` 来调整当前 project 的 Rstest 配置。
-
-该 API 会同时在 Node Mode 和 Browser Mode project 中暴露。两种模式都会使用 `rstest` 作为 Rsbuild caller name，因此插件可以通过 `api.context.callerName === 'rstest'` 判断当前运行在 Rstest 中。
-
-这个 API 适合框架集成或工具链插件使用：当插件已经了解当前 framework、Rsbuild environment 或项目约定时，可以集中补充测试入口、排除规则、setup files、alias、define 或 `testEnvironment` 等 project 配置，避免用户在 Rstest 配置中重复声明同一套信息。
+Rsbuild 插件可以在不同的工具中运行。使用 [`api.context.callerName`](https://rsbuild.rs/zh/api/javascript-api/instance#contextcallername) 判断当前插件是否运行在 Rstest 中，再执行 Rstest 特有的逻辑。
 
 ```ts title="rstest-plugin.ts"
 import type { RsbuildPlugin } from '@rsbuild/core';
-import type { RstestExposeAPI } from '@rstest/core';
 
 export const myPlugin = (): RsbuildPlugin => ({
   name: 'my-plugin',
@@ -50,16 +43,75 @@ export const myPlugin = (): RsbuildPlugin => ({
       return;
     }
 
+    // Rstest 特有的插件逻辑
+  },
+});
+```
+
+Rstest 通过 [`api.useExposed('rstest')`](https://rsbuild.rs/zh/plugins/dev/core) 暴露集成 API。`RstestExposeAPI` 从 `@rstest/core` 导出，用于描述这些 API 的类型。
+
+## 在 Rsbuild 插件中读取 Rstest 配置 \{#get-rstest-config}
+
+<ApiMeta addedVersion="0.11.2" />
+
+使用 `getRstestConfig` 读取当前 Rsbuild environment 最终 Rstest 配置的快照。该快照由经过规范化的 Rstest 全局配置与当前 project 配置合并而成：project 配置优先，同时保留 `pool`、`reporters`、`output.distPath` 等仅属于全局配置的选项。
+
+```ts title="rstest-plugin.ts"
+import type { RsbuildPlugin } from '@rsbuild/core';
+import type { RstestExposeAPI } from '@rstest/core';
+
+export const myPlugin = (): RsbuildPlugin => ({
+  name: 'read-rstest-config',
+  setup(api) {
+    const rstestConfig = api
+      .useExposed<RstestExposeAPI>('rstest')
+      ?.getRstestConfig();
+
+    if (!rstestConfig) {
+      return;
+    }
+
+    api.modifyRsbuildConfig((config) => ({
+      ...config,
+      source: {
+        ...config.source,
+        define: {
+          ...config.source?.define,
+          __RSTEST_PROJECT_NAME__: JSON.stringify(rstestConfig.name),
+        },
+      },
+    }));
+  },
+});
+```
+
+在多 project 模式下，`getRstestConfig` 返回全局配置与当前 Rsbuild environment 所属 project 配置合并后的结果。修改返回快照中的值不会改变 Rstest 的内部配置。
+
+**类型：** `() => Readonly<RstestConfig>`
+
+## 在 Rsbuild 插件中修改 Rstest 配置 \{#modify-rstest-config}
+
+<ApiMeta addedVersion="0.11.1" />
+
+使用 `modifyRstestConfig` 调整当前 project 的 Rstest 配置。这个 API 适合框架集成或工具链插件使用：当插件已经了解当前 framework、Rsbuild environment 或项目约定时，可以集中补充测试入口、排除规则、setup files、alias、define 或 `testEnvironment` 等 project 配置，避免用户在 Rstest 配置中重复声明同一套信息。
+
+```ts title="rstest-plugin.ts"
+import type { RsbuildPlugin } from '@rsbuild/core';
+import type { RstestExposeAPI } from '@rstest/core';
+
+export const myPlugin = (): RsbuildPlugin => ({
+  name: 'modify-rstest-config',
+  setup(api) {
     const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
 
     rstestApi?.modifyRstestConfig((config) => {
-      config.include = ['**/*.test.ts'];
+      config.include = ['**/*.plugin.test.ts'];
     });
   },
 });
 ```
 
-在多 project 模式下，Rstest 会为每个 Rsbuild environment 暴露独立的 API。注册在某个 project 中的插件只会修改该 project 的 Rstest 配置，不会影响其他 project。
+在多 project 模式下，注册在某个 project 中的插件只会修改该 project 的 Rstest 配置，不会影响其他 project。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -81,21 +133,17 @@ export default defineConfig({
 
 ### 类型说明
 
-`RstestExposeAPI` 从 `@rstest/core` 导出，用于描述 Rstest 通过 `api.useExposed('rstest')` 暴露给 Rsbuild 插件的 API。
-
 ```ts
 import type { RstestConfig } from '@rstest/core';
 
 export type ModifyRstestConfigCallback = (
   config: RstestConfig,
 ) => RstestConfig | void | Promise<RstestConfig | void>;
-
-export type RstestExposeAPI = {
-  modifyRstestConfig: (callback: ModifyRstestConfigCallback) => void;
-};
 ```
 
-`RstestConfig` 与 `defineConfig` 接收的配置类型一致。你可以直接修改回调收到的 `config` 对象，也可以返回一个符合 `RstestConfig` 结构的配置片段。Rstest 会在回调完成后重新合并、规范化并校验这些改动。该回调也可以是异步函数。
+**类型：** `(callback: ModifyRstestConfigCallback) => void`
+
+`RstestConfig` 与 `defineConfig` 接收的配置类型一致。使用 `modifyRstestConfig` 时，你可以直接修改回调收到的 `config` 对象，也可以返回一个符合 `RstestConfig` 结构的配置片段。Rstest 会在回调完成后重新合并、规范化并校验这些改动。该回调也可以是异步函数。
 
 请在 Rsbuild 插件的 `setup` 阶段注册 `modifyRstestConfig`。不要在 `api.modifyRsbuildConfig` 等更晚的 Rsbuild config hook 中注册它，因为 Rstest 会在解析 Rsbuild config 时应用已经收集到的回调；在这些 hook 内注册的回调对于当前解析流程来说已经太晚。
 

@@ -11,6 +11,9 @@ const modifyBrowserRstestConfigPlugin = (): RsbuildPlugin => ({
     }
 
     const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+    const rstestConfig = rstestApi?.getRstestConfig();
+    const pool = rstestConfig?.pool;
+    const poolType = typeof pool === 'string' ? pool : pool?.type;
     rstestApi?.modifyRstestConfig((config) => {
       if (process.env.RSTEST_E2E_MUTATE_BROWSER_HEADLESS) {
         config.browser ??= { provider: 'playwright' };
@@ -29,6 +32,11 @@ const modifyBrowserRstestConfigPlugin = (): RsbuildPlugin => ({
       config.source ??= {};
       config.source.define = {
         ...config.source.define,
+        __GET_RSTEST_CONFIG_BROWSER_ENABLED__: JSON.stringify(
+          rstestConfig?.browser?.enabled,
+        ),
+        __GET_RSTEST_CONFIG_INCLUDE__: JSON.stringify(rstestConfig?.include),
+        __GET_RSTEST_CONFIG_POOL__: JSON.stringify(poolType),
         __MODIFY_RSTEST_CONFIG_DEFINE__: JSON.stringify('modified-value'),
       };
     });
