@@ -5,7 +5,7 @@ import type {
   ProjectEntries,
   RstestContext,
 } from '../types';
-import { isDebug } from '../utils';
+import { isDebug, resolveShardedEntries } from '../utils';
 import { claimGlobalSetupOnce, runGlobalSetup } from './globalSetup';
 import { getRsbuildEnvironmentConfig } from './modifyRstestConfig';
 import { pluginBasic } from './plugins/basic';
@@ -53,12 +53,23 @@ export async function runBrowserGlobalSetupStage(
   browserProjects: ProjectContext[],
   options?: {
     /**
-     * Plan-resolved entries (mixed path) so the "no running tests -> no
-     * globalSetup" gate reuses the plan's glob instead of re-walking the fs.
+     * Plan-resolved (already shard-narrowed) entries from the mixed path so
+     * the "no running tests -> no globalSetup" gate reuses the plan's glob
+     * instead of re-walking the fs.
      */
     entriesCache?: Map<string, ProjectEntries>;
   },
 ): Promise<BrowserGlobalSetupStageResult> {
+  // Gate source, shard-aware in every run shape: the mixed path passes the
+  // plan's shard-narrowed cache; browser-only runs resolve the same sharded
+  // map the browser controller will use, so a project whose shard slice is
+  // empty never runs its globalSetup. When a map exists it is authoritative
+  // (absent project -> zero entries); only unsharded browser-only runs fall
+  // back to the per-project glob.
+  const gateEntries =
+    options?.entriesCache ??
+    (await resolveShardedEntries(context, { silent: true }));
+
   const candidates = (
     await Promise.all(
       browserProjects.map(async (project) => {
@@ -69,10 +80,10 @@ export async function runBrowserGlobalSetupStage(
           return undefined;
         }
         // Same "no running tests -> no globalSetup" gate as the node path,
-        // honoring include/exclude and CLI file filters.
-        const entries =
-          options?.entriesCache?.get(project.environmentName)?.entries ??
-          (await getProjectEntries({ context, project }));
+        // honoring include/exclude, CLI file filters, and sharding.
+        const entries = gateEntries
+          ? (gateEntries.get(project.environmentName)?.entries ?? {})
+          : await getProjectEntries({ context, project });
         const entryCount = Object.keys(entries).length;
         return entryCount > 0 ? { project, entryCount } : undefined;
       }),
