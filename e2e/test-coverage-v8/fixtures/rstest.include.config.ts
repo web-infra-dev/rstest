@@ -13,7 +13,7 @@ export default defineConfig({
       './src/c.ts',
     ],
     clean: false,
-    reporters: ['text'],
+    reporters: ['text', 'json-summary'],
   },
   setupFiles: ['./rstest.setup.ts'],
 });

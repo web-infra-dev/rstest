@@ -1327,13 +1327,7 @@ importers:
       picomatch:
         specifier: ^4.0.5
         version: 4.0.5
-      v8-to-istanbul:
-        specifier: ^9.3.0
-        version: 9.3.0
     devDependencies:
-      '@rsbuild/core':
-        specifier: ~2.1.5
-        version: 2.1.5
       '@rslib/core':
         specifier: 0.23.2
         version: 0.23.2(@microsoft/api-extractor@7.58.9(@types/node@22.18.6))(typescript@6.0.3)
