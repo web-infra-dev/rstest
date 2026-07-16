@@ -114,4 +114,58 @@ describe('jsdom environment', () => {
       }
     }
   });
+
+  it('routes timer callback errors through the jsdom window', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    const expected = new Error('timer error');
+
+    try {
+      const received = new Promise<unknown>((resolve) => {
+        testGlobal.addEventListener(
+          'error',
+          (event) => {
+            event.preventDefault();
+            resolve(event.error);
+          },
+          { once: true },
+        );
+      });
+      testGlobal.setTimeout(() => {
+        throw expected;
+      }, 0);
+
+      expect(await received).toBe(expected);
+    } finally {
+      await teardown();
+    }
+  });
+
+  it('clears a timeout refreshed from inside its callback', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    let calls = 0;
+    let tornDown = false;
+
+    try {
+      await new Promise<void>((resolve) => {
+        testGlobal.setTimeout(function (this: NodeJS.Timeout) {
+          calls++;
+          if (calls === 1) {
+            this.refresh();
+            resolve();
+          }
+        }, 10);
+      });
+
+      tornDown = true;
+      await teardown();
+      await new Promise((resolve) => nodeSetTimeout(resolve, 30));
+      expect(calls).toBe(1);
+    } finally {
+      if (!tornDown) {
+        await teardown();
+      }
+    }
+  });
 });

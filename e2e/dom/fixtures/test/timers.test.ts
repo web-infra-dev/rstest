@@ -54,6 +54,25 @@ it('keeps jsdom-owned animation frame timers working', async () => {
   expect(frameCalled).toBe(false);
 });
 
+it('routes timer callback errors through the jsdom window', async () => {
+  const expected = new Error('timer error');
+  const received = new Promise<unknown>((resolve) => {
+    window.addEventListener(
+      'error',
+      (event) => {
+        event.preventDefault();
+        resolve(event.error);
+      },
+      { once: true },
+    );
+  });
+  setTimeout(() => {
+    throw expected;
+  }, 0);
+
+  expect(await received).toBe(expected);
+});
+
 it('restores tracked real timers after fake timers', () => {
   const trackedSetTimeout = setTimeout;
 
@@ -102,4 +121,22 @@ it('keeps built-in fetch compatible through the response lifecycle', async () =>
 it('cleans up pending intervals during environment teardown', () => {
   const interval = setInterval(() => {}, 60_000);
   expect(typeof interval).toBe('object');
+});
+
+it('cleans up a timeout refreshed from inside its callback', async () => {
+  let calls = 0;
+
+  await new Promise<void>((resolve) => {
+    setTimeout(function (this: NodeJS.Timeout) {
+      calls++;
+      if (calls === 1) {
+        this.refresh();
+        resolve();
+      } else {
+        throw new Error('Refreshed timeout ran after environment teardown');
+      }
+    }, 100);
+  });
+
+  expect(calls).toBe(1);
 });

@@ -24,8 +24,26 @@ function installTimerTracking(
   global: typeof globalThis,
   nodeTimers: NodeTimers,
 ): () => void {
-  const activeTimers = new Map<unknown, () => void>();
+  const timerCancellations = new Map<unknown, () => void>();
   const descriptors = new Map<keyof NodeTimers, PropertyDescriptor>();
+
+  const runTimerCallback = <TArgs extends unknown[]>(
+    callback: (...args: TArgs) => void,
+    receiver: unknown,
+    args: TArgs,
+  ) => {
+    try {
+      Reflect.apply(callback, receiver, args);
+    } catch (error) {
+      global.dispatchEvent(
+        new global.ErrorEvent('error', {
+          cancelable: true,
+          error,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  };
 
   const setTimeout = <TArgs extends unknown[]>(
     callback: (...args: TArgs) => void,
@@ -34,13 +52,14 @@ function installTimerTracking(
   ) => {
     const timer = nodeTimers.setTimeout(
       function (this: unknown, ...callbackArgs) {
-        activeTimers.delete(this);
-        Reflect.apply(callback, this, callbackArgs);
+        runTimerCallback(callback, this, callbackArgs);
       },
       delay,
       ...args,
     );
-    activeTimers.set(timer, () => nodeTimers.clearTimeout(timer));
+    // A fired Node Timeout can be reactivated with refresh(), so keep its
+    // handle tracked until it is explicitly cleared or the environment ends.
+    timerCancellations.set(timer, () => nodeTimers.clearTimeout(timer));
     return timer;
   };
   const setInterval = <TArgs extends unknown[]>(
@@ -48,16 +67,22 @@ function installTimerTracking(
     delay?: number,
     ...args: TArgs
   ) => {
-    const timer = nodeTimers.setInterval(callback, delay, ...args);
-    activeTimers.set(timer, () => nodeTimers.clearInterval(timer));
+    const timer = nodeTimers.setInterval(
+      function (this: unknown, ...callbackArgs) {
+        runTimerCallback(callback, this, callbackArgs);
+      },
+      delay,
+      ...args,
+    );
+    timerCancellations.set(timer, () => nodeTimers.clearInterval(timer));
     return timer;
   };
   const clearTimeout = (timer: Parameters<NodeTimers['clearTimeout']>[0]) => {
-    activeTimers.delete(timer);
+    timerCancellations.delete(timer);
     nodeTimers.clearTimeout(timer);
   };
   const clearInterval = (timer: Parameters<NodeTimers['clearInterval']>[0]) => {
-    activeTimers.delete(timer);
+    timerCancellations.delete(timer);
     nodeTimers.clearInterval(timer);
   };
 
@@ -80,10 +105,10 @@ function installTimerTracking(
   }
 
   return () => {
-    for (const cancel of activeTimers.values()) {
+    for (const cancel of timerCancellations.values()) {
       cancel();
     }
-    activeTimers.clear();
+    timerCancellations.clear();
     for (const key of TIMER_KEYS) {
       const descriptor = descriptors.get(key);
       if (descriptor) {
