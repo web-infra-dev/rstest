@@ -1,7 +1,7 @@
 {
   "name": "rstest",
   "displayName": "Rstest",
-  "version": "0.11.1",
+  "version": "0.11.2",
   "private": true,
   "description": "VS Code extension for Rstest",
   "categories": [
@@ -264,7 +264,7 @@
     "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
   ],
   "devDependencies": {
-    "@rsbuild/core": "~2.1.5",
+    "@rsbuild/core": "~2.1.6",
     "@rslib/core": "0.23.2",
     "@rstest/core": "workspace:*",
     "@swc/core": "^1.15.43",

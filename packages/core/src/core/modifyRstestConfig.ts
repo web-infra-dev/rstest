@@ -551,13 +551,42 @@ export const getRsbuildEnvironmentConfig = (
 });
 
 const createRstestExposeAPI = (
-  environmentName: string,
+  context: RstestContext,
+  project: ProjectContext,
   modifyRstestConfigCallbacks: Map<string, ModifyRstestConfigCallback[]>,
 ): RstestExposeAPI => ({
+  getRstestConfig: () =>
+    clonePlainConfig({
+      ...project.normalizedConfig,
+      projects: context.originalConfig.projects,
+      pool: context.normalizedConfig.pool,
+      reporters: context.normalizedConfig.reporters,
+      isolate: context.normalizedConfig.isolate,
+      coverage: context.normalizedConfig.coverage,
+      resolveSnapshotPath: context.normalizedConfig.resolveSnapshotPath,
+      onConsoleLog: context.normalizedConfig.onConsoleLog,
+      silent: context.normalizedConfig.silent,
+      bail: context.normalizedConfig.bail,
+      update: context.normalizedConfig.update,
+      onlyFailures: context.normalizedConfig.onlyFailures,
+      passWithNoTests: context.normalizedConfig.passWithNoTests,
+      forceRerunTriggers: Array.from(
+        new Set([
+          ...context.normalizedConfig.forceRerunTriggers,
+          ...project.normalizedConfig.forceRerunTriggers,
+        ]),
+      ),
+      shard: context.normalizedConfig.shard,
+      output: {
+        ...project.normalizedConfig.output,
+        distPath: context.normalizedConfig.output.distPath,
+      },
+    }),
   modifyRstestConfig: (callback) => {
-    const callbacks = modifyRstestConfigCallbacks.get(environmentName) ?? [];
+    const callbacks =
+      modifyRstestConfigCallbacks.get(project.environmentName) ?? [];
     callbacks.push(callback);
-    modifyRstestConfigCallbacks.set(environmentName, callbacks);
+    modifyRstestConfigCallbacks.set(project.environmentName, callbacks);
   },
 });
 
@@ -602,10 +631,7 @@ export const initModifyRstestConfigHooks = (
   for (const project of exposeProjects) {
     rsbuildInstance.expose(
       'rstest',
-      createRstestExposeAPI(
-        project.environmentName,
-        modifyRstestConfigCallbacks,
-      ),
+      createRstestExposeAPI(context, project, modifyRstestConfigCallbacks),
       {
         environment: project.environmentName,
       },

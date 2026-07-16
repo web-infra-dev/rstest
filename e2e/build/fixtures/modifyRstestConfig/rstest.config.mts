@@ -13,6 +13,9 @@ const modifyRstestConfigPlugin = (projectName: string): RsbuildPlugin => ({
     }
 
     const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+    const rstestConfig = rstestApi?.getRstestConfig();
+    const pool = rstestConfig?.pool;
+    const poolType = typeof pool === 'string' ? pool : pool?.type;
 
     rstestApi?.modifyRstestConfig((config) => {
       const setupFiles = Array.isArray(config.setupFiles)
@@ -34,7 +37,9 @@ const modifyRstestConfigPlugin = (projectName: string): RsbuildPlugin => ({
         ...config.source,
         define: {
           ...(config.source?.define || {}),
+          __GET_RSTEST_CONFIG_PROJECT__: JSON.stringify(rstestConfig?.name),
           __MODIFIED_PROJECT__: JSON.stringify(projectName),
+          __GET_RSTEST_CONFIG_POOL__: JSON.stringify(poolType),
         },
       };
       config.resolve = {
@@ -58,6 +63,9 @@ const returnRstestConfigPlugin = (projectName: string): RsbuildPlugin => ({
     }
 
     const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+    const rstestConfig = rstestApi?.getRstestConfig();
+    const pool = rstestConfig?.pool;
+    const poolType = typeof pool === 'string' ? pool : pool?.type;
 
     rstestApi?.modifyRstestConfig((config) => ({
       include: [`<rootDir>/${projectName}.test.ts`],
@@ -70,7 +78,9 @@ const returnRstestConfigPlugin = (projectName: string): RsbuildPlugin => ({
         ...config.source,
         define: {
           ...(config.source?.define || {}),
+          __GET_RSTEST_CONFIG_PROJECT__: JSON.stringify(rstestConfig?.name),
           __MODIFIED_PROJECT__: JSON.stringify(projectName),
+          __GET_RSTEST_CONFIG_POOL__: JSON.stringify(poolType),
         },
       },
       resolve: {
@@ -87,6 +97,10 @@ const returnRstestConfigPlugin = (projectName: string): RsbuildPlugin => ({
 });
 
 export default defineConfig({
+  pool: {
+    type: 'forks',
+    maxWorkers: 2,
+  },
   projects: [
     {
       name: 'project-a',

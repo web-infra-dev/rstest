@@ -15,7 +15,7 @@ describe('browser mode - console forwarding', () => {
       await expectExecSuccess();
 
       // Verify all tests passed
-      expect(cli.stdout).toMatch(/Tests.*8 passed/);
+      expect(cli.stdout).toMatch(/Tests.*9 passed/);
 
       if (disableConsoleIntercept) {
         expect(cli.stdout).not.toContain('CONSOLE_LOG_TEST_MESSAGE');
@@ -44,14 +44,17 @@ describe('browser mode - console forwarding', () => {
       // Verify multiple arguments are joined with space
       expect(cli.stdout).toContain('MULTI_ARG_TEST arg1 arg2 123');
 
-      // Verify object arguments are formatted as JSON
-      expect(cli.stdout).toContain('OBJECT_TEST');
-      expect(cli.stdout).toContain('"key": "value"');
+      // Verify object arguments use node-style single-line inspection
+      expect(cli.stdout).toContain(
+        "OBJECT_TEST { key: 'value', nested: { a: 1 } }",
+      );
 
-      // Verify array arguments are formatted as JSON
-      expect(cli.stdout).toContain('ARRAY_TEST');
+      // Verify array arguments use node-style single-line inspection
+      expect(cli.stdout).toContain("ARRAY_TEST [ 1, 2, 3, 'four' ]");
+
+      // Verify errors are forwarded with their stack, like node's util.format
       expect(cli.stdout).toMatch(
-        /\[[\s\S]*1[\s\S]*2[\s\S]*3[\s\S]*"four"[\s\S]*\]/,
+        /ERROR_STACK_TEST Error: BOOM_FROM_BROWSER\n\s+at /,
       );
 
       // Verify log level prefix and test file path are displayed

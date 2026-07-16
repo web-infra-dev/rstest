@@ -200,6 +200,12 @@ export async function runGlobalSetup({
 }): Promise<{
   success: boolean;
   errors?: any[];
+  /**
+   * Env change-set (including deletions as `undefined`) the setup applied to
+   * the host `process.env`. Surfaced so the core pre-cycle stage can forward
+   * browser projects' changes onto the browser wire.
+   */
+  envChanges?: Record<string, string | undefined>;
 }> {
   const worker = new GlobalSetupWorker();
 
@@ -236,6 +242,7 @@ export async function runGlobalSetup({
   return {
     success: result.success,
     errors: result.errors,
+    envChanges: result.envChanges,
   };
 }
 

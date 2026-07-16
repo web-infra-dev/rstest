@@ -10,8 +10,8 @@ interface InheritEnvOptions {
   /** Node: spread the full env (defaults to `process.env`). */
   envMode: 'inherit';
   /**
-   * Env base to inherit from; defaults to `process.env`. A post-globalSetup
-   * snapshot is passed here once the pre-cycle stage exists.
+   * Full env base to inherit from; defaults to `process.env`, read at
+   * projection time so globalSetup mutations are already applied.
    */
   env?: EnvSource;
 }
@@ -19,7 +19,14 @@ interface InheritEnvOptions {
 interface StaticEnvOptions {
   /** Browser: emit only `NODE_ENV` + `RSTEST` plus user config env (#1351). */
   envMode: 'static';
-  env?: EnvSource;
+  /**
+   * Overlay change-set (post-globalSetup env diff), NOT a full env base:
+   * applied between the static base and the user config env. Arbitrary host
+   * env must never be passed here — it would leak onto the browser wire.
+   * Named apart from the inherit branch's `env` so a full `process.env`
+   * cannot be passed by symmetry and still typecheck.
+   */
+  envOverlay?: EnvSource;
 }
 
 /**
@@ -92,23 +99,27 @@ export function projectRuntimeConfig(
     silent,
   };
 
-  const envSource = options.env ?? process.env;
-
   if (options.envMode === 'static') {
     // Browser wire. Propagate NODE_ENV and the RSTEST flag from the host so
     // `process.env.NODE_ENV` / `process.env.RSTEST` (rewritten to the
     // `RSTEST_ENV_SYMBOL_KEY` symbol store) resolve in browser tests the same
-    // way they do in Node mode. User-supplied `env` wins so explicit overrides
-    // still take effect. See https://github.com/web-infra-dev/rstest/issues/1351
+    // way they do in Node mode. The globalSetup change-set overlays the base;
+    // user-supplied `env` wins so explicit overrides still take effect.
+    // Deletions (`undefined` values) are no-ops on the wire: JSON
+    // serialization drops them, and host-only vars never existed in the
+    // browser store. See https://github.com/web-infra-dev/rstest/issues/1351
     return {
       ...shared,
       env: {
-        NODE_ENV: envSource.NODE_ENV,
+        NODE_ENV: process.env.NODE_ENV,
         RSTEST: 'true',
+        ...options.envOverlay,
         ...env,
       },
     } satisfies BrowserRuntimeConfig;
   }
+
+  const envSource = options.env ?? process.env;
 
   return {
     ...shared,
