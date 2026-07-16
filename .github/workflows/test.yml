@@ -156,15 +156,17 @@ jobs:
         #   trigger      | node_version | test_script
         #   -------------+--------------+--------------------------------------
         #   PR (regular) | [24]         | [test]
-        #   push to main | [20, 24]     | [test, commonjs, no-isolate, threads]
-        #   release PR   | [20, 24]     | [test, commonjs, no-isolate, threads]
+        #   push to main | [20, 24, 26] | [test, commonjs, no-isolate, threads]
+        #   release PR   | [20, 24, 26] | [test, commonjs, no-isolate, threads]
         #
         # Node 20 + test:no-isolate can hit upstream vm native crashes under worker
         # reuse; tolerated on full runs in exchange for coverage.
+        # Node 26 covers the current line, where Web Storage is enabled by default
+        # and `localStorage` exists on globalThis before a DOM environment is set up.
         node_version: >-
           ${{ fromJson(
             needs.prepare.outputs.is_full_run == 'true'
-              && '["20","24"]'
+              && '["20","24","26"]'
             || '["24"]'
           ) }}
         test_script: >-

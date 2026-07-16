@@ -1,6 +1,7 @@
 import {
   createRsbuild,
   type ManifestData,
+  type RsbuildConfig,
   type RsbuildInstance,
   logger as RsbuildLogger,
   type RsbuildPlugin,
@@ -143,6 +144,20 @@ export const addCoveragePlugin = async (
   }
 };
 
+/**
+ * In-memory host compile server: no printed urls, no fixed port, no static
+ * hosting. Shared with the browser globalSetup stage's one-shot compile so
+ * the two host rsbuild instances cannot drift.
+ */
+export const hostServerConfig: NonNullable<RsbuildConfig['server']> = {
+  printUrls: false,
+  strictPort: false,
+  middlewareMode: true,
+  compress: false,
+  cors: false,
+  publicDir: false,
+};
+
 export const prepareRsbuild = async ({
   context,
   globTestSourceEntries,
@@ -186,14 +201,7 @@ export const prepareRsbuild = async ({
     callerName: 'rstest',
     config: {
       root: context.rootPath,
-      server: {
-        printUrls: false,
-        strictPort: false,
-        middlewareMode: true,
-        compress: false,
-        cors: false,
-        publicDir: false,
-      },
+      server: { ...hostServerConfig },
       dev: {
         hmr: false,
         writeToDisk,

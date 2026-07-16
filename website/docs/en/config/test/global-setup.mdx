@@ -69,7 +69,7 @@ export default async function globalSetup() {
 ```
 
 :::note
-Global setup runs in a separate context: module-scope variables defined in the setup file are not accessible from tests. However, for node test workers, `process.env` mutations made in `globalSetup` are snapshotted after setup completes and propagated to each worker — setting environment variables here is a supported way to share values with node tests. This propagation does not apply to browser-mode tests; only the static `test.env` config is forwarded to browser workers.
+Global setup runs in a separate context: module-scope variables defined in the setup file are not accessible from tests. However, for node test workers, `process.env` mutations made in `globalSetup` are snapshotted after setup completes and propagated to each worker — setting environment variables here is a supported way to share values with node tests. For browser-mode tests, the environment variable changes made in the **browser project's own** `globalSetup` are propagated too: they are injected into the browser runtime env store (readable via `process.env` / `import.meta.env`), on top of the built-in `NODE_ENV` / `RSTEST` values, with explicit `test.env` config still taking precedence. Other host environment variables are not forwarded to browser tests, and in mixed projects the env changes from Node-side `globalSetup` are not merged into browser tests. `globalSetup` entries added or modified by browser provider hooks (`modifyRstestConfig`) are not picked up. Browser-mode watch runs do not execute `globalSetup` yet.
 :::
 
 ## Multiple global setup files

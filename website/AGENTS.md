@@ -1,6 +1,6 @@
 # Rstest documentation site
 
-This is the documentation website for Rstest, built with [Rspress](https://rspress.dev).
+This is the documentation website for Rstest, built with [Rspress](https://rspress.rs).
 
 ## Structure
 

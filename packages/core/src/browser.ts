@@ -48,6 +48,18 @@ export { prepareWatchRerunState } from './core/watchState';
 // Shared silent-console buffering engine so the browser host replays
 // `silent: 'passed-only'` logs through the same controller as the node worker.
 export { createSilentConsoleController } from './runtime/worker/silentConsole';
+// Shared console level coloring so the browser host's log relay prints the
+// same level prefixes as the node worker's CustomConsole.
+export { getPrettyConsoleName } from './runtime/worker/console';
+// Core-owned mock build parameterization: the browser host registers the same
+// mock transform pipeline as the node build (web parameterization).
+export {
+  applyWebMockRspackConfig,
+  importMetaRstestDefine,
+} from './core/plugins/mockBuild';
+// The mock runtime plugin (importActual doppelganger rule + webpack runtime
+// module) is target-agnostic; the browser host registers it per project.
+export { pluginMockRuntime } from './core/plugins/mockRuntime';
 // Re-export Rstest type for convenience
 export type { Rstest } from './core/rstest';
 // Coverage support for browser mode

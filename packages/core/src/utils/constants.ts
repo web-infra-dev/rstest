@@ -28,6 +28,18 @@ export const ROOT_SUITE_NAME = 'Rstest:_internal_root_suite';
 export const RSTEST_ENV_SYMBOL_KEY = 'rstest.env';
 
 /**
+ * Key under which the per-file runtime API object is published on the
+ * executor's global; `import.meta.rstest` defines compile to a read of it, and
+ * the mock hoister keeps `@rstest/core` external against the same key.
+ * node: `rstestContext.global[KEY]` (runInPool); web: `globalThis[KEY]`
+ * (browser client entry). Other `'@rstest/core'` string literals in the
+ * codebase (the module-cache id in `core/plugins/moduleCacheControl.ts`, the
+ * reporter package label in `reporter/md.ts`) have unrelated semantics and
+ * must NOT be replaced with this constant.
+ */
+export const RSTEST_API_GLOBAL_KEY = '@rstest/core';
+
+/**
  * Single source of truth for the built-in browser provider identifiers.
  *
  * Core owns this list because the peer-dependency direction is one-way

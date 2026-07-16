@@ -16,7 +16,9 @@ import type {
 import {
   createBrowserTaskContext,
   createRstestRuntime,
+  formatConsoleArgs,
   globalApis,
+  RSTEST_API_GLOBAL_KEY,
   RSTEST_ENV_SYMBOL_KEY,
   setRealTimers,
   unwrapRegex,
@@ -32,7 +34,6 @@ import {
   createRunnerLifecycleRequest,
   sendRunnerLifecycle,
 } from './dispatchTransport';
-import { formatConsoleArgs } from './formatConsole';
 import { BrowserSnapshotEnvironment } from './snapshot';
 import {
   findNewScriptUrl,
@@ -58,6 +59,23 @@ const debugLog = (...args: unknown[]): void => {
 
 type RuntimeEnvStore = Record<string, string | undefined>;
 const RSTEST_ENV_SYMBOL = Symbol.for(RSTEST_ENV_SYMBOL_KEY);
+
+/**
+ * Publish the runtime API on the globals test modules read: the
+ * `@rstest/core` external and the `import.meta.rstest` define (node parity:
+ * `global['@rstest/core']` in runInPool), plus the `globals: true` API names.
+ */
+const installRuntimeGlobals = (
+  runtime: Awaited<ReturnType<typeof createRstestRuntime>>,
+  runtimeConfig: RuntimeConfig,
+): void => {
+  (globalThis as Record<string, unknown>)[RSTEST_API_GLOBAL_KEY] = runtime.api;
+  if (runtimeConfig.globals) {
+    for (const apiKey of globalApis) {
+      (globalThis as any)[apiKey] = (runtime.api as any)[apiKey];
+    }
+  }
+};
 
 type GlobalWithRuntimeEnv = typeof globalThis &
   Record<symbol, unknown> & {
@@ -502,12 +520,7 @@ const run = async () => {
         taskContext: createBrowserTaskContext(),
       });
 
-      // Register global APIs if globals config is enabled
-      if (runtimeConfig.globals) {
-        for (const apiKey of globalApis) {
-          (globalThis as any)[apiKey] = (runtime.api as any)[apiKey];
-        }
-      }
+      installRuntimeGlobals(runtime, runtimeConfig);
 
       try {
         // Load setup files for this project after runtime is ready.
@@ -636,12 +649,7 @@ const run = async () => {
 
     const runtime = await createRstestRuntime(workerState, { taskContext });
 
-    // Register global APIs if globals config is enabled
-    if (runtimeConfig.globals) {
-      for (const apiKey of globalApis) {
-        (globalThis as any)[apiKey] = (runtime.api as any)[apiKey];
-      }
-    }
+    installRuntimeGlobals(runtime, runtimeConfig);
 
     let failedTestsCount = 0;
 

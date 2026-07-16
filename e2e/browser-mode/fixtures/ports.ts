@@ -40,6 +40,12 @@ export const BROWSER_PORTS = {
   'no-tests-reporters': 5244,
   'browser-empty-project': 5248,
   'browser-collect-timeout': 5250,
+  'browser-global-setup': 5252,
+  'browser-global-setup-error': 5254,
+  'browser-global-setup-mixed': 5256,
+  'browser-mock': 5258,
+  'browser-in-source': 5260,
+  'browser-in-source-watch': 5262,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);

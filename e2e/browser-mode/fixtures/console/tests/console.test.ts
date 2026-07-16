@@ -40,4 +40,9 @@ describe('console forwarding', () => {
     console.log('ARRAY_TEST', [1, 2, 3, 'four']);
     expect(true).toBe(true);
   });
+
+  it('should forward error arguments with their stack', () => {
+    console.log('ERROR_STACK_TEST', new Error('BOOM_FROM_BROWSER'));
+    expect(true).toBe(true);
+  });
 });

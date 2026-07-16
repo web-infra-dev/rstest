@@ -47,18 +47,46 @@ describe('projectRuntimeConfig', () => {
     expect('detectAsyncLeaks' in config).toBe(false);
   });
 
-  it('static env propagates only NODE_ENV + RSTEST plus config env', () => {
+  it('static env emits only NODE_ENV + RSTEST plus config env by default', () => {
     const config = projectRuntimeConfig(makeProject({ env: { FOO: 'bar' } }), {
       envMode: 'static',
-      env: { NODE_ENV: 'test', SECRET: 'hidden' },
     });
+    // `toEqual` proves no arbitrary host env leaks onto the browser wire.
     expect(config.env).toEqual({
-      NODE_ENV: 'test',
+      NODE_ENV: process.env.NODE_ENV,
       RSTEST: 'true',
       FOO: 'bar',
     });
-    // Arbitrary host env must NOT leak onto the browser wire.
-    expect('SECRET' in (config.env ?? {})).toBe(false);
+  });
+
+  it('static overlays the globalSetup change-set between base and config env', () => {
+    const config = projectRuntimeConfig(
+      makeProject({ env: { FROM_CONFIG: 'config' } }),
+      {
+        envMode: 'static',
+        envOverlay: { FROM_SETUP: 'setup', FROM_CONFIG: 'setup-loses' },
+      },
+    );
+    expect(config.env).toEqual({
+      NODE_ENV: process.env.NODE_ENV,
+      RSTEST: 'true',
+      FROM_SETUP: 'setup',
+      FROM_CONFIG: 'config',
+    });
+  });
+
+  it('static keeps the NODE_ENV base unless the overlay sets it', () => {
+    const withoutNodeEnv = projectRuntimeConfig(makeProject(), {
+      envMode: 'static',
+      envOverlay: { FROM_SETUP: 'setup' },
+    });
+    expect(withoutNodeEnv.env?.NODE_ENV).toBe(process.env.NODE_ENV);
+
+    const withNodeEnv = projectRuntimeConfig(makeProject(), {
+      envMode: 'static',
+      envOverlay: { NODE_ENV: 'production' },
+    });
+    expect(withNodeEnv.env?.NODE_ENV).toBe('production');
   });
 
   it('inherit (node) keeps node-only fields and strips coverage.reporters', () => {
