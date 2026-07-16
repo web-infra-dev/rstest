@@ -384,6 +384,49 @@ describe('jsdom environment', () => {
     }
   });
 
+  it('does not keep a completed timeout referenced after teardown', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    let timer: NodeJS.Timeout | undefined;
+    let tornDown = false;
+
+    try {
+      await new Promise<void>((resolve) => {
+        timer = testGlobal.setTimeout(resolve, 1);
+      });
+
+      tornDown = true;
+      await teardown();
+      timer?.refresh();
+
+      expect(timer?.hasRef()).toBe(false);
+      timer?.ref();
+      expect(timer?.hasRef()).toBe(true);
+      timer?.unref();
+    } finally {
+      if (!tornDown) {
+        await teardown();
+      }
+      clearTimeout(timer);
+    }
+  });
+
+  it('does not reactivate a canceled timeout refreshed after teardown', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    let called = false;
+    const timer = testGlobal.setTimeout(() => {
+      called = true;
+    }, 10);
+
+    await teardown();
+    timer.refresh();
+    expect(timer.hasRef()).toBe(false);
+    await new Promise((resolve) => nodeSetTimeout(resolve, 20));
+    expect(called).toBe(false);
+    clearTimeout(timer);
+  });
+
   it('preserves Node setTimeout utility behavior', async () => {
     const testGlobal = createTestGlobal();
     const nativePromisifyDescriptor = Object.getOwnPropertyDescriptor(

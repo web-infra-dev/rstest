@@ -121,6 +121,21 @@ describe('happy-dom', () => {
     await expectExecSuccess();
   });
 
+  it('should restore timers between non-isolated happy-dom files', async () => {
+    const { expectExecSuccess } = await runCli(
+      [
+        'test/nonIsolatedTimersA',
+        'test/nonIsolatedTimersB',
+        'test/nonIsolatedTimersC',
+      ],
+      'happy-dom',
+      {
+        args: ['--isolate=false', '--pool.maxWorkers=1'],
+      },
+    );
+    await expectExecSuccess();
+  });
+
   it('should load node built-in modules correctly', async () => {
     const { expectExecSuccess } = await runCli('test/node', 'happy-dom');
     await expectExecSuccess();

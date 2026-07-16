@@ -339,6 +339,9 @@ export function installTimerTracking(
           refreshed = true;
           registerNodeTimer(this);
           timerCancellations.set(this, cancel);
+        } else {
+          registerNodeTimer(this);
+          this.unref();
         }
         return result;
       },
