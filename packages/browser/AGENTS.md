@@ -103,9 +103,7 @@ Browser mode must stay provider-neutral at the framework boundary.
   - `snapshot.ts` — Browser snapshot environment (proxies file ops to host via `snapshot` namespace)
   - `browserRpc.ts` — Client side of the `browser` dispatch namespace (locator/page RPC)
   - `api.ts` / `locator.ts` — `page` API and locator implementation
-  - `formatConsole.ts` — Console argument stringification for terminal forwarding
   - `sourceMapSupport.ts` — Source map handling for browser
-  - `public.ts` — Re-exports runtime API for browser
 
 ## Commands
 

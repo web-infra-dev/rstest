@@ -59,7 +59,6 @@
       "entry": [
         // Browser-side iframe entry (loaded at runtime by hostController)
         "src/client/entry.ts",
-        "src/client/public.ts",
         // Test files
         "tests/**/*.ts",
       ],
