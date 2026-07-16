@@ -187,6 +187,66 @@ describe('jsdom environment', () => {
     }
   });
 
+  it('reports errors with the original microtask scheduler', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    const uncaughtErrors: unknown[] = [];
+    const emitSpy = rs
+      .spyOn(process, 'emit')
+      .mockImplementation((event: string | symbol, ...args: unknown[]) => {
+        if (event === 'uncaughtException') {
+          uncaughtErrors.push(args[0]);
+        }
+        return true;
+      });
+
+    try {
+      rs.useFakeTimers({ toFake: ['queueMicrotask'] });
+      const expected = new Error('unhandled error');
+      testGlobal.dispatchEvent(
+        new testGlobal.ErrorEvent('error', {
+          cancelable: true,
+          error: expected,
+          message: expected.message,
+        }),
+      );
+      await Promise.resolve();
+
+      expect(uncaughtErrors).toEqual([expected]);
+    } finally {
+      rs.useRealTimers();
+      emitSpy.mockRestore();
+      await teardown();
+    }
+  });
+
+  it('ignores error events without an error value', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    const uncaughtErrors: unknown[] = [];
+    const emitSpy = rs
+      .spyOn(process, 'emit')
+      .mockImplementation((event: string | symbol, ...args: unknown[]) => {
+        if (event === 'uncaughtException') {
+          uncaughtErrors.push(args[0]);
+        }
+        return true;
+      });
+
+    try {
+      testGlobal.dispatchEvent(new testGlobal.Event('error'));
+      testGlobal.dispatchEvent(
+        new testGlobal.ErrorEvent('error', { message: 'notification' }),
+      );
+      await Promise.resolve();
+
+      expect(uncaughtErrors).toEqual([]);
+    } finally {
+      emitSpy.mockRestore();
+      await teardown();
+    }
+  });
+
   it('clears a timeout refreshed from inside its callback', async () => {
     const testGlobal = createTestGlobal();
     const { teardown } = await environment.setup(testGlobal, {});

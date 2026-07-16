@@ -19,6 +19,6 @@ describe('nullish timer errors', () => {
     );
 
     await expectExecFailed();
-    expectStderrLog('uncaughtException: undefined');
+    expectStderrLog('Timer callback threw undefined');
   });
 });

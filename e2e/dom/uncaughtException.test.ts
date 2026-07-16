@@ -13,5 +13,7 @@ describe('uncaughtException', () => {
     await expectExecFailed();
 
     expectStderrLog('unhandledRejection: reject error');
+    expectStderrLog('object rejection');
+    expectStderrLog('object rejection stack');
   });
 });

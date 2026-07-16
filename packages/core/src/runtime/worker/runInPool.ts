@@ -10,7 +10,7 @@ import type {
   WorkerState,
 } from '../../types';
 import { globalApis, RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
-import { getFileTaskId, toError } from '../../utils/helper';
+import { formatError, getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createAsyncLeakDetector } from './asyncLeaks';
@@ -238,7 +238,11 @@ const preparePool = async (
   const unhandledErrors: Error[] = [];
 
   const handleError = (e: unknown, type: string) => {
-    const rawError = toError(e);
+    const formattedError = formatError(e);
+    const rawError =
+      typeof formattedError === 'string'
+        ? new Error(formattedError)
+        : formattedError;
     const error =
       !rawError.name || rawError.name === 'Error'
         ? setErrorName(rawError, type)

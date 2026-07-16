@@ -6,3 +6,12 @@ test('uncaughtException', async () => {
 
   await new Promise((resolve) => setTimeout(resolve, 10));
 });
+
+test('preserves object rejection details', async () => {
+  Promise.reject({
+    message: 'object rejection',
+    stack: 'object rejection stack',
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 10));
+});
