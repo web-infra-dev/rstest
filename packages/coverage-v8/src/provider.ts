@@ -32,7 +32,7 @@ type CoverageReporterConstructor = new (
   options: Record<string, unknown>,
 ) => ReportBase;
 
-const COVERAGE_CONVERSION_CONCURRENCY = 4;
+const COVERAGE_PROCESSING_CONCURRENCY = 4;
 const SOURCE_MAP_INNER_PATTERN =
   /\s*[#@]\s*sourceMappingURL\s*=\s*([^\s'"]*)\s*/;
 const SOURCE_MAP_URL_PATTERN = new RegExp(
@@ -840,7 +840,7 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     await mapWithConcurrency(
       filteredEntries,
-      COVERAGE_CONVERSION_CONCURRENCY,
+      COVERAGE_PROCESSING_CONCURRENCY,
       async (entry) => {
         try {
           await this.applyWithAst(coverageMap, entry.filePath, entry, options);
@@ -880,7 +880,7 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     await mapWithConcurrency(
       Array.from(groups.values()),
-      COVERAGE_CONVERSION_CONCURRENCY,
+      COVERAGE_PROCESSING_CONCURRENCY,
       async ({ entries, options, root }) => {
         try {
           const transformedSource = await this.getTransformedSource(
@@ -1075,49 +1075,46 @@ export class CoverageProvider implements RstestCoverageProvider {
     files: string[];
   }): Promise<FileCoverageData[]> {
     const { transformCoverage } = await import('./plugin');
-    const CHUNK_SIZE = 100;
-    const results: FileCoverageData[] = [];
-    for (let i = 0; i < files.length; i += CHUNK_SIZE) {
-      const chunk = files.slice(i, i + CHUNK_SIZE);
-      const chunkResults = await Promise.all(
-        chunk.map(async (file) => {
-          try {
-            const source = await fs.readFile(file, 'utf-8');
-            const { code, map: sourceMapStr } = await transformCoverage(
-              environmentName,
-              source,
-              file,
-            );
-            const sourceMap = sourceMapStr
-              ? ({
-                  names: [],
-                  ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
-                } as SourceMapLike)
-              : undefined;
+    const results = await mapWithConcurrency(
+      files,
+      COVERAGE_PROCESSING_CONCURRENCY,
+      async (file) => {
+        try {
+          const source = await fs.readFile(file, 'utf-8');
+          const { code, map: sourceMapStr } = await transformCoverage(
+            environmentName,
+            source,
+            file,
+          );
+          const sourceMap = sourceMapStr
+            ? ({
+                names: [],
+                ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
+              } as SourceMapLike)
+            : undefined;
 
-            const istanbulData = await this.convertWithAst(
-              file,
-              {
-                url: pathToFileURL(file).href,
-                scriptId: '',
-                functions: [],
-              },
-              { outputModule: true },
-              { code, sourceMap, sourceMapStr },
-            );
-            return Object.values(istanbulData);
-          } catch (e) {
-            console.error(
-              `Can not generate coverage for untested file, file: ${file}, error: ${e}`,
-            );
-            process.exitCode = 1;
-            return [];
-          }
-        }),
-      );
-      results.push(...chunkResults.flat());
-    }
-    return results;
+          const istanbulData = await this.convertWithAst(
+            file,
+            {
+              url: pathToFileURL(file).href,
+              scriptId: '',
+              functions: [],
+            },
+            { outputModule: true },
+            { code, sourceMap, sourceMapStr },
+          );
+          return Object.values(istanbulData);
+        } catch (e) {
+          console.error(
+            `Can not generate coverage for untested file, file: ${file}, error: ${e}`,
+          );
+          process.exitCode = 1;
+          return [];
+        }
+      },
+    );
+
+    return results.flat();
   }
 
   async generateReports(coverageMap: CoverageMap): Promise<void> {

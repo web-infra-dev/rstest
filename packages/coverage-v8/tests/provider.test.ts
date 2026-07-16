@@ -1206,6 +1206,49 @@ export default class CustomCoverageReporter {
     }
   });
 
+  it('limits concurrent untested file coverage conversion', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-untested-concurrency');
+    const provider = new CoverageProvider(createOptions(), root);
+    const providerInternals = getProviderInternals(provider);
+    let activeConversions = 0;
+    let peakConversions = 0;
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (filePath: string) => {
+        activeConversions++;
+        peakConversions = Math.max(peakConversions, activeConversions);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        activeConversions--;
+        return {
+          [filePath]: createFileCoverage(filePath),
+        };
+      },
+    });
+
+    const files = Array.from({ length: 12 }, (_, index) =>
+      join(root, 'src', `untested-${index}.ts`),
+    );
+
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      for (const [index, file] of files.entries()) {
+        writeFileSync(file, `export const value${index} = ${index};`);
+      }
+
+      const coverage = await provider.generateCoverageForUntestedFiles({
+        environmentName: 'test',
+        files,
+      });
+
+      expect(coverage).toHaveLength(12);
+      expect(peakConversions).toBeLessThanOrEqual(4);
+      expect(peakConversions).toBeGreaterThan(1);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('keeps raw coverage groups separate when source identity differs', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-raw-source-identity');
     const file = join(root, 'dist', 'covered.js');
