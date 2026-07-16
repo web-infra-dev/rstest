@@ -19,6 +19,8 @@ const createTestGlobal = (): typeof globalThis =>
 describe('jsdom environment', () => {
   it('tracks Node timers and clears them during teardown', async () => {
     const testGlobal = createTestGlobal();
+    const nativeClearInterval = testGlobal.clearInterval;
+    testGlobal.clearInterval = rs.fn((timer) => nativeClearInterval(timer));
     const nodeTimers = {
       clearInterval: testGlobal.clearInterval,
       clearTimeout: testGlobal.clearTimeout,
@@ -41,23 +43,17 @@ describe('jsdom environment', () => {
       testGlobal.clearTimeout(timeout);
 
       let intervalCalls = 0;
-      let resolveFirstInterval = () => {};
-      const firstInterval = new Promise<void>((resolve) => {
-        resolveFirstInterval = resolve;
-      });
       const interval = testGlobal.setInterval(() => {
         intervalCalls++;
-        resolveFirstInterval();
       }, 1);
       expect(typeof interval).toBe('object');
-      await firstInterval;
-      const callsBeforeTeardown = intervalCalls;
 
       tornDown = true;
       await teardown();
+      expect(nodeTimers.clearInterval).toHaveBeenCalledWith(interval);
       await new Promise((resolve) => nodeSetTimeout(resolve, 20));
 
-      expect(intervalCalls).toBe(callsBeforeTeardown);
+      expect(intervalCalls).toBe(0);
       expect(testGlobal.setTimeout).toBe(nodeTimers.setTimeout);
       expect(testGlobal.clearTimeout).toBe(nodeTimers.clearTimeout);
       expect(testGlobal.setInterval).toBe(nodeTimers.setInterval);

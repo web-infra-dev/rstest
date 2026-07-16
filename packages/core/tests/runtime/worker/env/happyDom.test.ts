@@ -15,6 +15,8 @@ const createTestGlobal = (): typeof globalThis =>
 describe('happy-dom environment', () => {
   it('cancels active intervals during teardown', async () => {
     const testGlobal = createTestGlobal();
+    const nativeClearInterval = testGlobal.clearInterval;
+    testGlobal.clearInterval = rs.fn((timer) => nativeClearInterval(timer));
     const nodeTimers = {
       clearInterval: testGlobal.clearInterval,
       clearTimeout: testGlobal.clearTimeout,
@@ -31,19 +33,16 @@ describe('happy-dom environment', () => {
       expect(timeout.unref).toBeTypeOf('function');
       testGlobal.clearTimeout(timeout);
 
-      await new Promise<void>((resolve) => {
-        testGlobal.setInterval(() => {
-          calls++;
-          resolve();
-        }, 1);
-      });
+      const interval = testGlobal.setInterval(() => {
+        calls++;
+      }, 1);
 
       tornDown = true;
       await teardown();
-      const callsAfterTeardown = calls;
+      expect(nodeTimers.clearInterval).toHaveBeenCalledWith(interval);
       await new Promise((resolve) => nodeSetTimeout(resolve, 20));
 
-      expect(calls).toBe(callsAfterTeardown);
+      expect(calls).toBe(0);
       expect(testGlobal.setTimeout).toBe(nodeTimers.setTimeout);
       expect(testGlobal.clearTimeout).toBe(nodeTimers.clearTimeout);
       expect(testGlobal.setInterval).toBe(nodeTimers.setInterval);
