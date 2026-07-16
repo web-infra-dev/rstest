@@ -222,6 +222,35 @@ describe('jsdom environment', () => {
     }
   });
 
+  it('reports timer errors with the captured DOM dispatch', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    const expected = new Error('captured dispatch error');
+    const uncaughtErrors: unknown[] = [];
+    const emitSpy = rs
+      .spyOn(process, 'emit')
+      .mockImplementation((event: string | symbol, ...args: unknown[]) => {
+        if (event === 'uncaughtException') {
+          uncaughtErrors.push(args[0]);
+        }
+        return true;
+      });
+
+    try {
+      testGlobal.dispatchEvent = () => true;
+      testGlobal.ErrorEvent = undefined as unknown as typeof ErrorEvent;
+      testGlobal.setTimeout(() => {
+        throw expected;
+      }, 0);
+
+      await new Promise((resolve) => nodeSetTimeout(resolve, 20));
+      expect(uncaughtErrors).toEqual([expected]);
+    } finally {
+      emitSpy.mockRestore();
+      await teardown();
+    }
+  });
+
   it('ignores error events without an error value', async () => {
     const testGlobal = createTestGlobal();
     const { teardown } = await environment.setup(testGlobal, {});

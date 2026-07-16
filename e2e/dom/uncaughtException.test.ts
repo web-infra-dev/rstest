@@ -17,5 +17,11 @@ describe('uncaughtException', () => {
     expectStderrLog('object rejection stack');
     expectStderrLog('TypeError: cross-realm rejection');
     expectStderrLog('cross-realm rejection stack');
+    expectStderrLog('SecurityError: denied');
+    expectStderrLog('domExceptionOrigin');
+    expectStderrLog('AssertionError: assertion rejection');
+    expectStderrLog('assertion rejection stack');
+    expectStderrLog('expected value');
+    expectStderrLog('actual value');
   });
 });

@@ -139,6 +139,8 @@ export function installTimerTracking(
     (typeof TIMER_KEYS)[number],
     PropertyDescriptor
   >();
+  const dispatchEvent = global.dispatchEvent;
+  const ErrorEvent = global.ErrorEvent;
   let trackingEnabled = true;
 
   const runTimerCallback = <TArgs extends unknown[]>(
@@ -153,8 +155,8 @@ export function installTimerTracking(
         error == null
           ? new Error(`Timer callback threw ${String(error)}`)
           : error;
-      global.dispatchEvent(
-        new global.ErrorEvent('error', {
+      Reflect.apply(dispatchEvent, global, [
+        new ErrorEvent('error', {
           cancelable: true,
           error: reportedError,
           message:
@@ -162,7 +164,7 @@ export function installTimerTracking(
               ? reportedError.message
               : String(reportedError),
         }),
-      );
+      ]);
     }
   };
 

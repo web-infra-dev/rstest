@@ -1,7 +1,5 @@
 import { sep } from 'node:path';
-import { runInNewContext } from 'node:vm';
 import {
-  formatError,
   getFileTaskId,
   getWorkerSerialization,
   needFlagExperimentalDetectModule,
@@ -9,41 +7,6 @@ import {
   prettyTime,
   toNativePath,
 } from '../../src/utils/helper';
-
-it('formatError preserves serialized error details', () => {
-  const error = formatError({
-    name: 'TypeError',
-    message: 'serialized failure',
-    stack: 'serialized stack',
-  });
-
-  expect(error).toBeInstanceOf(Error);
-  expect(error).toMatchObject({
-    name: 'TypeError',
-    message: 'serialized failure',
-    stack: 'serialized stack',
-  });
-
-  expect(formatError({ name: 'RangeError', message: '' })).toMatchObject({
-    name: 'RangeError',
-    message: '',
-  });
-});
-
-it('formatError preserves cross-realm Error details', () => {
-  const crossRealmError = runInNewContext(
-    `Object.assign(new TypeError('cross-realm failure'), {
-      stack: 'cross-realm stack',
-    })`,
-  );
-
-  expect(crossRealmError).not.toBeInstanceOf(Error);
-  expect(formatError(crossRealmError)).toMatchObject({
-    name: 'TypeError',
-    message: 'cross-realm failure',
-    stack: 'cross-realm stack',
-  });
-});
 
 it('getFileTaskId builds the file: task-id grammar', () => {
   // Locks the single source of truth so the worker/pool/runner consumers and

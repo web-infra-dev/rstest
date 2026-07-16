@@ -32,3 +32,28 @@ test('preserves cross-realm rejection details', async () => {
 
   await new Promise((resolve) => setTimeout(resolve, 10));
 });
+
+test('preserves DOMException rejection details', async () => {
+  const error = new DOMException('denied', 'SecurityError');
+  Object.defineProperty(error, 'stack', {
+    value:
+      'SecurityError: denied\n    at domExceptionOrigin (test/uncaughtException.test.ts:1:1)',
+  });
+  Promise.reject(error);
+
+  await new Promise((resolve) => setTimeout(resolve, 10));
+});
+
+test('preserves assertion rejection metadata', async () => {
+  Promise.reject({
+    name: 'AssertionError',
+    message: 'assertion rejection',
+    stack: 'assertion rejection stack',
+    actual: 'actual value',
+    expected: 'expected value',
+    showDiff: true,
+    fullStack: true,
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 10));
+});
