@@ -4,6 +4,7 @@ import { checkPkgInstalled } from '../../util';
 import {
   addDefaultErrorHandler,
   installGlobal,
+  installObjectURLTracker,
   installTimerTracking,
   type NodeTimerPrimitives,
 } from './utils';
@@ -33,6 +34,9 @@ export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
         url: options.url || 'http://localhost:3000',
         console: console && global.console ? global.console : undefined,
       });
+      const cleanupObjectURLs = installObjectURLTracker(
+        win.URL as unknown as typeof URL,
+      );
 
       const cleanupGlobal = installGlobal(global, win, {
         additionalKeys: [
@@ -41,6 +45,7 @@ export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
           'Response',
           'MessagePort',
           'fetch',
+          'URL',
         ],
       });
       const cleanupTimers = installTimerTracking(global, nodeTimers);
@@ -53,6 +58,7 @@ export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
         async teardown() {
           cleanupHandler();
           cleanupTimers();
+          cleanupObjectURLs();
           if (win.close && win.happyDOM.abort) {
             await win.happyDOM.abort();
             win.close();
