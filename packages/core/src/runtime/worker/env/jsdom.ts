@@ -1,4 +1,4 @@
-import type { ConstructorOptions, DOMWindow } from 'jsdom';
+import type { ConstructorOptions } from 'jsdom';
 import type { TestEnvironment } from '../../../types';
 import { checkPkgInstalled } from '../../util';
 import { addDefaultErrorHandler, installGlobal } from './utils';
@@ -20,12 +20,53 @@ const TIMER_KEYS = [
   'setTimeout',
 ] as const;
 
-function runWithNodeTimers<T>(
+function installTimerTracking(
   global: typeof globalThis,
   nodeTimers: NodeTimers,
-  action: () => T,
-): T {
+): () => void {
+  const activeTimers = new Map<unknown, () => void>();
   const descriptors = new Map<keyof NodeTimers, PropertyDescriptor>();
+
+  const setTimeout = <TArgs extends unknown[]>(
+    callback: (...args: TArgs) => void,
+    delay?: number,
+    ...args: TArgs
+  ) => {
+    const timer = nodeTimers.setTimeout(
+      function (this: unknown, ...callbackArgs) {
+        activeTimers.delete(this);
+        Reflect.apply(callback, this, callbackArgs);
+      },
+      delay,
+      ...args,
+    );
+    activeTimers.set(timer, () => nodeTimers.clearTimeout(timer));
+    return timer;
+  };
+  const setInterval = <TArgs extends unknown[]>(
+    callback: (...args: TArgs) => void,
+    delay?: number,
+    ...args: TArgs
+  ) => {
+    const timer = nodeTimers.setInterval(callback, delay, ...args);
+    activeTimers.set(timer, () => nodeTimers.clearInterval(timer));
+    return timer;
+  };
+  const clearTimeout = (timer: Parameters<NodeTimers['clearTimeout']>[0]) => {
+    activeTimers.delete(timer);
+    nodeTimers.clearTimeout(timer);
+  };
+  const clearInterval = (timer: Parameters<NodeTimers['clearInterval']>[0]) => {
+    activeTimers.delete(timer);
+    nodeTimers.clearInterval(timer);
+  };
+
+  const trackedTimers = {
+    clearInterval,
+    clearTimeout,
+    setInterval,
+    setTimeout,
+  };
   for (const key of TIMER_KEYS) {
     const descriptor = Object.getOwnPropertyDescriptor(global, key);
     if (descriptor) {
@@ -33,14 +74,16 @@ function runWithNodeTimers<T>(
     }
     Object.defineProperty(global, key, {
       configurable: true,
-      value: nodeTimers[key],
+      value: trackedTimers[key],
       writable: true,
     });
   }
 
-  try {
-    return action();
-  } finally {
+  return () => {
+    for (const cancel of activeTimers.values()) {
+      cancel();
+    }
+    activeTimers.clear();
     for (const key of TIMER_KEYS) {
       const descriptor = descriptors.get(key);
       if (descriptor) {
@@ -49,116 +92,6 @@ function runWithNodeTimers<T>(
         Reflect.deleteProperty(global, key);
       }
     }
-  }
-}
-
-function installNodeFetchCompatibility(
-  global: typeof globalThis,
-  nodeTimers: NodeTimers,
-): () => void {
-  const descriptor = Object.getOwnPropertyDescriptor(global, 'fetch');
-  if (!descriptor || typeof descriptor.value !== 'function') {
-    return () => {};
-  }
-
-  const nodeFetch = descriptor.value as typeof globalThis.fetch;
-  Object.defineProperty(global, 'fetch', {
-    ...descriptor,
-    value: function (...args) {
-      return runWithNodeTimers(global, nodeTimers, () =>
-        Reflect.apply(nodeFetch, global, args),
-      );
-    } satisfies typeof globalThis.fetch,
-  });
-
-  return () => Object.defineProperty(global, 'fetch', descriptor);
-}
-
-function installWindowTimers(
-  global: typeof globalThis,
-  window: DOMWindow,
-  runScripts: ConstructorOptions['runScripts'],
-  nodeTimers: NodeTimers,
-): void {
-  const nodeSetTimeout = nodeTimers.setTimeout.bind(global);
-  const nodeClearTimeout = nodeTimers.clearTimeout.bind(global);
-  const nodeClearInterval = nodeTimers.clearInterval.bind(global);
-  const activeTimers = new Map<number, () => void>();
-  let nextTimerId = 1;
-
-  const reportException = (error: unknown) => {
-    const event = new window.ErrorEvent('error', {
-      cancelable: true,
-      error,
-      filename: window.location.href,
-      message: error instanceof Error ? error.message : String(error),
-    });
-    window.dispatchEvent(event);
-  };
-
-  const runHandler = (handler: TimerHandler, args: unknown[]) => {
-    try {
-      if (typeof handler === 'function') {
-        handler.apply(global, args);
-      } else if (runScripts === 'dangerously') {
-        global.eval(String(handler));
-      }
-    } catch (error) {
-      reportException(error);
-    }
-  };
-
-  window.setTimeout = (handler, timeout = 0, ...args) => {
-    const timerId = nextTimerId++;
-    const timer = nodeSetTimeout(() => {
-      activeTimers.delete(timerId);
-      runHandler(handler, args);
-    }, timeout);
-    activeTimers.set(timerId, () => nodeClearTimeout(timer));
-    return timerId;
-  };
-  window.setInterval = (handler, timeout = 0, ...args) => {
-    const timerId = nextTimerId++;
-    const schedule = () => {
-      const timer = nodeSetTimeout(() => {
-        if (!activeTimers.has(timerId)) {
-          return;
-        }
-        runHandler(handler, args);
-        if (activeTimers.has(timerId)) {
-          schedule();
-        }
-      }, timeout);
-      activeTimers.set(timerId, () => nodeClearTimeout(timer));
-    };
-    schedule();
-    return timerId;
-  };
-
-  const clearTimer = (
-    timerId: NodeJS.Timeout | number | undefined,
-    clearNodeTimer: (timerId: NodeJS.Timeout | number | undefined) => void,
-  ) => {
-    const cancel = activeTimers.get(Number(timerId));
-    if (cancel) {
-      cancel();
-      activeTimers.delete(Number(timerId));
-    } else if (typeof timerId === 'object') {
-      // jsdom can create native timers before beforeParse is called. Keep its
-      // cleanup path working when it passes one of those handles back to us.
-      clearNodeTimer(timerId);
-    }
-  };
-  window.clearTimeout = (timerId) => clearTimer(timerId, nodeClearTimeout);
-  window.clearInterval = (timerId) => clearTimer(timerId, nodeClearInterval);
-
-  const close = window.close.bind(window);
-  window.close = () => {
-    for (const cancel of activeTimers.values()) {
-      cancel();
-    }
-    activeTimers.clear();
-    close();
   };
 }
 
@@ -168,9 +101,12 @@ export const environment: TestEnvironment<typeof globalThis> = {
     checkPkgInstalled('jsdom');
     const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } =
       await import('jsdom');
-    const nodeTimers = Object.fromEntries(
-      TIMER_KEYS.map((key) => [key, global[key]]),
-    ) as NodeTimers;
+    const nodeTimers: NodeTimers = {
+      clearInterval: global.clearInterval,
+      clearTimeout: global.clearTimeout,
+      setInterval: global.setInterval,
+      setTimeout: global.setTimeout,
+    };
 
     const {
       html = '<!DOCTYPE html>',
@@ -183,7 +119,6 @@ export const environment: TestEnvironment<typeof globalThis> = {
       resources,
       console = false,
       cookieJar = false,
-      beforeParse,
       ...restOptions
     } = options as JSDOMOptions;
     const dom = new JSDOM(html, {
@@ -201,27 +136,11 @@ export const environment: TestEnvironment<typeof globalThis> = {
       includeNodeLocations,
       contentType,
       userAgent,
-      beforeParse(window) {
-        installWindowTimers(global, window, runScripts, nodeTimers);
-        beforeParse?.(window);
-      },
       ...restOptions,
     });
 
-    const cleanupGlobal = installGlobal(global, dom.window, {
-      // Node defines these globals, so installGlobal only replaces them when
-      // explicitly requested.
-      additionalKeys: [
-        'setTimeout',
-        'clearTimeout',
-        'setInterval',
-        'clearInterval',
-      ],
-    });
-    // Node's built-in fetch expects its timer handles to expose methods such as
-    // unref(). Temporarily restore Node timers while undici initializes a
-    // request, while keeping browser-style timers visible to test code.
-    const cleanupFetch = installNodeFetchCompatibility(global, nodeTimers);
+    const cleanupGlobal = installGlobal(global, dom.window);
+    const cleanupTimers = installTimerTracking(global, nodeTimers);
 
     const cleanupHandler = addDefaultErrorHandler(global as unknown as Window);
 
@@ -229,8 +148,8 @@ export const environment: TestEnvironment<typeof globalThis> = {
       teardown() {
         cleanupHandler();
         dom.window.close();
+        cleanupTimers();
         cleanupGlobal();
-        cleanupFetch();
       },
     };
   },

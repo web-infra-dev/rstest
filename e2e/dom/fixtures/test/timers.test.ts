@@ -1,17 +1,28 @@
+import { createServer } from 'node:http';
 import { setTimeout as nodeSetTimeout } from 'node:timers';
 import { expect, it, rstest } from '@rstest/core';
 
-it('uses jsdom timers as the real timers', () => {
+it('keeps Node timer handles while tracking real timers', async () => {
   expect(setTimeout).toBe(window.setTimeout);
   expect(setTimeout).not.toBe(nodeSetTimeout);
 
   const timeout = setTimeout(() => {}, 0);
-  expect(typeof timeout).toBe('number');
+  expect(typeof timeout).toBe('object');
+  expect(timeout.unref).toBeTypeOf('function');
+  expect(timeout.ref).toBeTypeOf('function');
+  expect(timeout.refresh).toBeTypeOf('function');
   clearTimeout(timeout);
 
   const interval = setInterval(() => {}, 0);
-  expect(typeof interval).toBe('number');
+  expect(typeof interval).toBe('object');
   clearInterval(interval);
+
+  const receiver = await new Promise<NodeJS.Timeout>((resolve) => {
+    setTimeout(function (this: NodeJS.Timeout) {
+      resolve(this);
+    }, 0);
+  });
+  expect(receiver.unref).toBeTypeOf('function');
 });
 
 it('supports nested timers and cross-clearing', async () => {
@@ -26,26 +37,13 @@ it('supports nested timers and cross-clearing', async () => {
   await new Promise<void>((resolve) => {
     const outer = setTimeout(() => {
       const inner = setTimeout(resolve, 0);
-      expect(typeof inner).toBe('number');
+      expect(typeof inner).toBe('object');
     }, 0);
-    expect(typeof outer).toBe('number');
+    expect(typeof outer).toBe('object');
   });
 });
 
-it('keeps browser callback semantics', async () => {
-  const receiver = await new Promise<typeof globalThis>((resolve) => {
-    setTimeout(function (this: typeof globalThis) {
-      resolve(this);
-    }, 0);
-  });
-  expect(receiver).toBe(window);
-
-  window.setTimeout(() => {
-    Reflect.set(window, 'timerProbe', 1);
-  }, 0);
-  await new Promise((resolve) => nodeSetTimeout(resolve, 20));
-  expect(Reflect.get(window, 'timerProbe')).toBe(1);
-
+it('keeps jsdom-owned animation frame timers working', async () => {
   let frameCalled = false;
   const frame = requestAnimationFrame(() => {
     frameCalled = true;
@@ -56,27 +54,8 @@ it('keeps browser callback semantics', async () => {
   expect(frameCalled).toBe(false);
 });
 
-it('reports timer callback errors on window', async () => {
-  const expected = new Error('timer error');
-  const received = await new Promise<Error>((resolve) => {
-    window.addEventListener(
-      'error',
-      (event) => {
-        event.preventDefault();
-        resolve(event.error);
-      },
-      { once: true },
-    );
-    setTimeout(() => {
-      throw expected;
-    }, 0);
-  });
-
-  expect(received).toBe(expected);
-});
-
-it('restores jsdom timers after fake timers', () => {
-  const jsdomSetTimeout = setTimeout;
+it('restores tracked real timers after fake timers', () => {
+  const trackedSetTimeout = setTimeout;
 
   rstest.useFakeTimers({ now: 0 });
   let called = false;
@@ -87,14 +66,40 @@ it('restores jsdom timers after fake timers', () => {
   expect(called).toBe(true);
 
   rstest.useRealTimers();
-  expect(setTimeout).toBe(jsdomSetTimeout);
+  expect(setTimeout).toBe(trackedSetTimeout);
 
   const timeout = setTimeout(() => {}, 0);
-  expect(typeof timeout).toBe('number');
+  expect(typeof timeout).toBe('object');
   clearTimeout(timeout);
+});
+
+it('keeps built-in fetch compatible through the response lifecycle', async () => {
+  const server = createServer((_request, response) => {
+    response.setHeader('connection', 'keep-alive');
+    response.end('ok');
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+  try {
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Expected an IP server address');
+    }
+
+    for (let index = 0; index < 3; index++) {
+      const response = await fetch(`http://127.0.0.1:${address.port}`);
+      expect(await response.text()).toBe('ok');
+    }
+    await new Promise((resolve) => nodeSetTimeout(resolve, 50));
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+      server.closeAllConnections();
+    });
+  }
 });
 
 it('cleans up pending intervals during environment teardown', () => {
   const interval = setInterval(() => {}, 60_000);
-  expect(typeof interval).toBe('number');
+  expect(typeof interval).toBe('object');
 });
