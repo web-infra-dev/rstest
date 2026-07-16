@@ -230,6 +230,62 @@ describe('jsdom environment', () => {
     }
   });
 
+  it('snapshots timer error cancellation after DOM dispatch', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    const expected = new Error('late timer cancellation');
+    const uncaughtErrors: unknown[] = [];
+    const emitSpy = rs
+      .spyOn(process, 'emit')
+      .mockImplementation((event: string | symbol, ...args: unknown[]) => {
+        if (event === 'uncaughtException') {
+          uncaughtErrors.push(args[0]);
+        }
+        return true;
+      });
+
+    try {
+      testGlobal.addEventListener(
+        'error',
+        (event) => queueMicrotask(() => event.preventDefault()),
+        { once: true },
+      );
+      testGlobal.setTimeout(() => {
+        throw expected;
+      }, 0);
+      await new Promise((resolve) => nodeSetTimeout(resolve, 20));
+
+      expect(uncaughtErrors).toEqual([expected]);
+    } finally {
+      emitSpy.mockRestore();
+      await teardown();
+    }
+  });
+
+  it('uses the Node fatal path for unhandled timer errors', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    const expected = new Error('captured timer error');
+    const emitSpy = rs.spyOn(process, 'emit').mockImplementation(() => true);
+    let capturedError: unknown;
+
+    try {
+      process.setUncaughtExceptionCaptureCallback((error) => {
+        capturedError = error;
+      });
+      testGlobal.setTimeout(() => {
+        throw expected;
+      }, 0);
+      await new Promise((resolve) => nodeSetTimeout(resolve, 20));
+
+      expect(capturedError).toBe(expected);
+    } finally {
+      process.setUncaughtExceptionCaptureCallback(null);
+      emitSpy.mockRestore();
+      await teardown();
+    }
+  });
+
   it('reports errors with the original microtask scheduler', async () => {
     const testGlobal = createTestGlobal();
     const { teardown } = await environment.setup(testGlobal, {});
@@ -749,6 +805,123 @@ describe('jsdom environment', () => {
       expect(unhandledRejections).toEqual([]);
     } finally {
       emitSpy.mockRestore();
+      cleanup();
+    }
+  });
+
+  it('preserves a user abort rejection when cleanup runs in the same turn', async () => {
+    const testGlobal = createTestGlobal();
+    const cleanup = installTimerTracking(testGlobal, {
+      AbortController,
+      clearInterval: testGlobal.clearInterval,
+      clearTimeout: testGlobal.clearTimeout,
+      setInterval: testGlobal.setInterval,
+      setTimeout: testGlobal.setTimeout,
+    });
+    const controller = new AbortController();
+    const userReason = new Error('user abort');
+
+    try {
+      const sleep = promisify(testGlobal.setTimeout);
+      const outcome = sleep(60_000, undefined, {
+        signal: controller.signal,
+      }).then(
+        () => 'resolved' as const,
+        (error) => error,
+      );
+      controller.abort(userReason);
+      cleanup();
+
+      await expect(
+        Promise.race([
+          outcome,
+          new Promise((resolve) =>
+            nodeSetTimeout(() => resolve('pending'), 20),
+          ),
+        ]),
+      ).resolves.toMatchObject({
+        cause: userReason,
+        code: 'ABORT_ERR',
+        name: 'AbortError',
+      });
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('suppresses signal cleanup failures caused by teardown', async () => {
+    const testGlobal = createTestGlobal();
+    const cleanup = installTimerTracking(testGlobal, {
+      AbortController,
+      clearInterval: testGlobal.clearInterval,
+      clearTimeout: testGlobal.clearTimeout,
+      setInterval: testGlobal.setInterval,
+      setTimeout: testGlobal.setTimeout,
+    });
+    const cleanupError = new Error('teardown signal cleanup');
+    const signal = {
+      aborted: false,
+      addEventListener() {},
+      removeEventListener() {
+        throw cleanupError;
+      },
+    };
+
+    try {
+      const sleep = promisify(testGlobal.setTimeout);
+      const outcome = Reflect.apply(sleep, undefined, [
+        60_000,
+        undefined,
+        { signal },
+      ]).then(
+        () => 'resolved' as const,
+        (error) => error,
+      );
+      cleanup();
+
+      await expect(
+        Promise.race([
+          outcome,
+          new Promise((resolve) =>
+            nodeSetTimeout(() => resolve('pending'), 20),
+          ),
+        ]),
+      ).resolves.toBe('pending');
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('preserves user-owned signal cleanup failures during teardown', async () => {
+    const testGlobal = createTestGlobal();
+    const cleanup = installTimerTracking(testGlobal, {
+      AbortController,
+      clearInterval: testGlobal.clearInterval,
+      clearTimeout: testGlobal.clearTimeout,
+      setInterval: testGlobal.setInterval,
+      setTimeout: testGlobal.setTimeout,
+    });
+    const controller = new AbortController();
+    const cleanupError = new Error('user signal cleanup');
+    const removeEventListener = controller.signal.removeEventListener;
+    controller.signal.removeEventListener = function (...args) {
+      Reflect.apply(removeEventListener, this, args);
+      throw cleanupError;
+    };
+
+    try {
+      const sleep = promisify(testGlobal.setTimeout);
+      const outcome = sleep(60_000, undefined, {
+        signal: controller.signal,
+      }).then(
+        () => 'resolved' as const,
+        (error) => error,
+      );
+      controller.abort(new Error('user abort'));
+      cleanup();
+
+      await expect(outcome).resolves.toBe(cleanupError);
+    } finally {
       cleanup();
     }
   });

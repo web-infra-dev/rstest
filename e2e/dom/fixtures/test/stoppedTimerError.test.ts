@@ -6,6 +6,7 @@ test('reports a timer error after DOM propagation is stopped', async () => {
       'error',
       (event) => {
         event.stopImmediatePropagation();
+        queueMicrotask(() => event.preventDefault());
         resolve();
       },
       { capture: true, once: true },
