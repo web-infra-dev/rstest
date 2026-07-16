@@ -41,7 +41,7 @@ export function installGlobal(
   const { bindFunctions = true } = options || {};
   const keys = getWindowKeys(global, win, options.additionalKeys);
 
-  const originals = new Map<string | symbol, any>();
+  const originals = new Map<string | symbol, PropertyDescriptor>();
 
   const overrides = new Map<string | symbol, any>();
   for (const key of keys) {
@@ -52,7 +52,18 @@ export function installGlobal(
       win[key].bind(win);
 
     if (key in global) {
-      originals.set(key, global[key]);
+      // capture the descriptor rather than the value, so that lazy native getters
+      // such as Node's `localStorage` are not invoked (accessing it without
+      // `--localstorage-file` emits a warning)
+      originals.set(
+        key,
+        Object.getOwnPropertyDescriptor(global, key) ?? {
+          value: global[key],
+          configurable: true,
+          writable: true,
+          enumerable: true,
+        },
+      );
     }
 
     Object.defineProperty(global, key, {
@@ -98,8 +109,8 @@ export function installGlobal(
     for (const key of keys) {
       Reflect.deleteProperty(global, key);
     }
-    originals.forEach((v, k) => {
-      global[k] = v;
+    originals.forEach((descriptor, k) => {
+      Object.defineProperty(global, k, descriptor);
     });
   };
 }
