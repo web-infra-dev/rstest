@@ -238,7 +238,7 @@ export function installTimerTracking(
     | (<T>(
         delay?: number,
         value?: T,
-        options?: { ref?: boolean; signal?: AbortSignal },
+        options?: { ref?: boolean; signal?: AbortSignal } | null,
       ) => Promise<T>)
     | undefined;
   if (
@@ -248,7 +248,7 @@ export function installTimerTracking(
     const promisifiedSetTimeout = <T>(
       delay?: number,
       value?: T,
-      options?: { ref?: boolean; signal?: AbortSignal },
+      options?: { ref?: boolean; signal?: AbortSignal } | null,
     ): Promise<T> => {
       if (
         options === null ||
