@@ -40,7 +40,9 @@ it('keeps browser callback semantics', async () => {
   });
   expect(receiver).toBe(window);
 
-  window.setTimeout('window.timerProbe = 1', 0);
+  window.setTimeout(() => {
+    Reflect.set(window, 'timerProbe', 1);
+  }, 0);
   await new Promise((resolve) => nodeSetTimeout(resolve, 20));
   expect(Reflect.get(window, 'timerProbe')).toBe(1);
 
