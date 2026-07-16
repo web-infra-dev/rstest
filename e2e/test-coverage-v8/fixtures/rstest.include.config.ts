@@ -1,7 +1,9 @@
 import { defineConfig } from '@rstest/core';
+import { pluginReact } from '@rsbuild/plugin-react';
 import { join } from 'pathe';
 
 export default defineConfig({
+  plugins: [pluginReact()],
   coverage: {
     enabled: true,
     provider: 'v8',

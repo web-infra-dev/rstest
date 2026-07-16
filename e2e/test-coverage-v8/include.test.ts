@@ -65,6 +65,14 @@ describe('test coverage-v8 include option', () => {
       functions: { total: 1, covered: 0 },
       branches: { total: 0, covered: 0 },
     });
+    expect(
+      coverageSummary[join(__dirname, 'fixtures/src/type-assertion.ts')],
+    ).toMatchObject({
+      lines: { total: 1, covered: 0 },
+      statements: { total: 1, covered: 0 },
+      functions: { total: 1, covered: 0 },
+      branches: { total: 0, covered: 0 },
+    });
 
     expectLog('Test Files 1 passed', logs);
     fs.removeSync(join(__dirname, 'fixtures/coverage'));
