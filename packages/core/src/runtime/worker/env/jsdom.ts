@@ -37,11 +37,18 @@ function installTimerTracking(
     try {
       Reflect.apply(callback, receiver, args);
     } catch (error) {
+      const reportedError =
+        error == null
+          ? new Error(`Timer callback threw ${String(error)}`)
+          : error;
       global.dispatchEvent(
         new global.ErrorEvent('error', {
           cancelable: true,
-          error,
-          message: error instanceof Error ? error.message : String(error),
+          error: reportedError,
+          message:
+            reportedError instanceof Error
+              ? reportedError.message
+              : String(reportedError),
         }),
       );
     }

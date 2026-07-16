@@ -109,7 +109,21 @@ export const restoreScopedEntry = <E>(
 };
 
 let utilitiesPromise:
-  Promise<{ rstest: RstestUtilities; resetForFile: () => void }> | undefined;
+  | Promise<{
+      rstest: RstestUtilities;
+      resetForFile: () => void;
+      resetTimersForFile: () => void;
+    }>
+  | undefined;
+
+/**
+ * Restores timer mocks created by the current file without initializing the
+ * lazy fake-timers implementation for files that never used it.
+ */
+export const resetRstestTimersForFile = async (): Promise<void> => {
+  const bound = await utilitiesPromise;
+  bound?.resetTimersForFile();
+};
 
 /**
  * `rstest`/`rs` is a build-once singleton with a STABLE identity across files,
@@ -121,8 +135,8 @@ let utilitiesPromise:
  * is kept (it holds weak references, keyed by project) so a mock from a module
  * shared across files stays tracked without one project's `*AllMocks` reaching
  * another project's mocks on a reused worker. The actual globalThis side-effects
- * are still unwound by the runner's config-gated `unstubAll*`/`*AllMocks` and the
- * per-file `useRealTimers`, unchanged.
+ * are still unwound by the runner's config-gated `unstubAll*`/`*AllMocks` and its
+ * internal per-file timer reset.
  * See https://github.com/web-infra-dev/rstest/issues/1376.
  */
 export const createRstestUtilities = async (): Promise<RstestUtilities> => {
@@ -138,6 +152,7 @@ export const createRstestUtilities = async (): Promise<RstestUtilities> => {
 const buildRstestUtilities = async (): Promise<{
   rstest: RstestUtilities;
   resetForFile: () => void;
+  resetTimersForFile: () => void;
 }> => {
   type RuntimeEnvStore = Record<string, string | undefined>;
   const RSTEST_ENV_SYMBOL = Symbol.for(RSTEST_ENV_SYMBOL_KEY);
@@ -626,8 +641,8 @@ const buildRstestUtilities = async (): Promise<{
 
   // Drop the per-file bookkeeping so the next file starts clean. The actual
   // globalThis side-effects (env/global stubs, fake timers, installed spies) are
-  // unwound elsewhere (the runner's config-gated `unstubAll*`/`*AllMocks` and the
-  // per-file `useRealTimers`), so only the tracking maps are cleared.
+  // unwound elsewhere (the runner's config-gated `unstubAll*`/`*AllMocks` and its
+  // internal per-file timer reset), so only the tracking maps are cleared.
   //
   // The mock registry is deliberately NOT reset here: under `isolate: false` a
   // mock created in a module shared across files persists, so it must stay
@@ -643,5 +658,13 @@ const buildRstestUtilities = async (): Promise<{
     currentFakeTimersConfig = undefined;
   };
 
-  return { rstest, resetForFile };
+  const resetTimersForFile = (): void => {
+    // Do not call timers() here: constructing FakeTimers is what lazy-loads
+    // @sinonjs/fake-timers, and most test files never use timer mocking.
+    _timers?.useRealTimers();
+    timerStack.length = 0;
+    currentFakeTimersConfig = undefined;
+  };
+
+  return { rstest, resetForFile, resetTimersForFile };
 };

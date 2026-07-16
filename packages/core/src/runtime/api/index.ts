@@ -12,6 +12,8 @@ import type { TaskContext } from '../worker/taskContext';
 import { assert, createFileExpect, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
 
+export { resetRstestTimersForFile } from './utilities';
+
 /**
  * Live per-file API binding under `isolate: false` (the canonical contract).
  *

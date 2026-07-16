@@ -105,27 +105,21 @@ export function installGlobal(
 }
 
 export function addDefaultErrorHandler(window: Window) {
-  let userErrorListenerCount = 0;
   const throwUnhandledError = (e: ErrorEvent) => {
-    if (userErrorListenerCount === 0 && e.error != null) {
-      process.emit('uncaughtException', e.error);
-    }
+    // Event listeners run in registration order, so cancellation may happen
+    // after this default listener is invoked. Defer reporting until dispatch
+    // has completed and only suppress errors explicitly handled with
+    // preventDefault(). Merely observing the event must not make a test pass.
+    queueMicrotask(() => {
+      if (!e.defaultPrevented) {
+        process.emit(
+          'uncaughtException',
+          e.error ?? new Error(e.message || 'Uncaught error event'),
+        );
+      }
+    });
   };
-  const addEventListener = window.addEventListener.bind(window);
-  const removeEventListener = window.removeEventListener.bind(window);
   window.addEventListener('error', throwUnhandledError);
-  window.addEventListener = function (...args: [any, any, any]) {
-    if (args[0] === 'error') {
-      userErrorListenerCount++;
-    }
-    return addEventListener.apply(this, args);
-  };
-  window.removeEventListener = function (...args: [any, any, any]) {
-    if (args[0] === 'error' && userErrorListenerCount) {
-      userErrorListenerCount--;
-    }
-    return removeEventListener.apply(this, args);
-  };
   return (): void => {
     window.removeEventListener('error', throwUnhandledError);
   };

@@ -1,4 +1,7 @@
-import { restoreScopedEntry } from '../../../src/runtime/api/utilities';
+import {
+  resetRstestTimersForFile,
+  restoreScopedEntry,
+} from '../../../src/runtime/api/utilities';
 import { setRealTimers } from '../../../src/runtime/util';
 import { createUtilities } from './helpers';
 
@@ -19,6 +22,21 @@ describe('rstest utilities per-file reset', () => {
     const second = rs2.fn();
     second();
     expect(second.mock.invocationCallOrder).toEqual([1]);
+  });
+
+  it('restores initialized timers through the internal per-file reset', async () => {
+    const rs = await createUtilities();
+    const realSetTimeout = globalThis.setTimeout;
+
+    // Calling the reset before timer mocking is intentionally a no-op.
+    await resetRstestTimersForFile();
+    expect(globalThis.setTimeout).toBe(realSetTimeout);
+
+    rs.useFakeTimers();
+    expect(globalThis.setTimeout).not.toBe(realSetTimeout);
+
+    await resetRstestTimersForFile();
+    expect(globalThis.setTimeout).toBe(realSetTimeout);
   });
 });
 

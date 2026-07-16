@@ -142,6 +142,51 @@ describe('jsdom environment', () => {
     }
   });
 
+  it('reports observed timer errors unless they are prevented', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    const uncaughtErrors: unknown[] = [];
+    const emitSpy = rs
+      .spyOn(process, 'emit')
+      .mockImplementation((event: string | symbol, ...args: unknown[]) => {
+        if (event === 'uncaughtException') {
+          uncaughtErrors.push(args[0]);
+        }
+        return true;
+      });
+
+    try {
+      const observedError = new Promise<unknown>((resolve) => {
+        testGlobal.addEventListener('error', (event) => resolve(event.error), {
+          once: true,
+        });
+      });
+      testGlobal.setTimeout(() => {
+        throw undefined;
+      }, 0);
+
+      const normalizedError = await observedError;
+      await Promise.resolve();
+      expect(normalizedError).toBeInstanceOf(Error);
+      expect((normalizedError as Error).message).toBe(
+        'Timer callback threw undefined',
+      );
+      expect(uncaughtErrors).toEqual([normalizedError]);
+
+      testGlobal.addEventListener('error', (event) => event.preventDefault(), {
+        once: true,
+      });
+      testGlobal.setTimeout(() => {
+        throw new Error('handled timer error');
+      }, 0);
+      await new Promise((resolve) => nodeSetTimeout(resolve, 20));
+      expect(uncaughtErrors).toHaveLength(1);
+    } finally {
+      emitSpy.mockRestore();
+      await teardown();
+    }
+  });
+
   it('clears a timeout refreshed from inside its callback', async () => {
     const testGlobal = createTestGlobal();
     const { teardown } = await environment.setup(testGlobal, {});

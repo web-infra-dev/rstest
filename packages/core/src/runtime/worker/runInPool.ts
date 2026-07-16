@@ -10,7 +10,7 @@ import type {
   WorkerState,
 } from '../../types';
 import { globalApis } from '../../utils/constants';
-import { getFileTaskId } from '../../utils/helper';
+import { getFileTaskId, toError } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createAsyncLeakDetector } from './asyncLeaks';
@@ -232,12 +232,13 @@ const preparePool = async (
     environment: 'node',
   };
 
-  const { createRstestRuntime } = await import('../api');
+  const { createRstestRuntime, resetRstestTimersForFile } =
+    await import('../api');
 
   const unhandledErrors: Error[] = [];
 
-  const handleError = (e: Error | string, type: string) => {
-    const rawError: Error = typeof e === 'string' ? new Error(e) : e;
+  const handleError = (e: unknown, type: string) => {
+    const rawError = toError(e);
     const error =
       !rawError.name || rawError.name === 'Error'
         ? setErrorName(rawError, type)
@@ -252,8 +253,9 @@ const preparePool = async (
     }
   };
 
-  const uncaughtException = (e: Error) => handleError(e, 'uncaughtException');
-  const unhandledRejection = (e: Error) => handleError(e, 'unhandledRejection');
+  const uncaughtException = (e: unknown) => handleError(e, 'uncaughtException');
+  const unhandledRejection = (e: unknown) =>
+    handleError(e, 'unhandledRejection');
 
   process.on('uncaughtException', uncaughtException);
   process.on('unhandledRejection', unhandledRejection);
@@ -309,8 +311,9 @@ const preparePool = async (
     api,
     taskContext,
     unhandledErrors,
+    resetTimersForFile: resetRstestTimersForFile,
     cleanup: async () => {
-      api.rstest.useRealTimers();
+      await resetRstestTimersForFile();
       await Promise.all(cleanupFns.map((fn) => fn()));
     },
   };
@@ -540,6 +543,7 @@ export const runInPool = async (
       rpc,
       silentConsoleController,
       api,
+      resetTimersForFile,
       cleanup,
       unhandledErrors,
       interopDefault,
@@ -659,10 +663,10 @@ export const runInPool = async (
 
     if (asyncLeakDetector) {
       // Undo any time mocking before collecting leaks and before a reused worker
-      // runs the next file. This must cover BOTH full fake timers and a
-      // date-only `setSystemTime()` pin (which leaves `isFakeTimers()` false);
-      // `useRealTimers()` is an idempotent no-op when nothing is mocked.
-      api.rstest.useRealTimers();
+      // runs the next file. The internal reset covers both full fake timers and
+      // a date-only `setSystemTime()` pin, but does not initialize fake timers
+      // for files that never used them.
+      await resetTimersForFile();
       const asyncLeakErrors = await asyncLeakDetector.collectErrors();
       if (asyncLeakErrors.length > 0) {
         results.status = 'fail';
