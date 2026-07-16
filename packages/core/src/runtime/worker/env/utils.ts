@@ -19,6 +19,26 @@ const SKIP_KEYS: string[] = ['window', 'self', 'top', 'parent'];
 
 const scheduleMicrotask = queueMicrotask;
 const trackedTimerErrorEvents = new WeakSet<ErrorEvent>();
+const trackedTimerCleanupByHandle = new WeakMap<object, () => void>();
+
+function patchTimerCancellationMethods<T extends NodeJS.Timeout>(timer: T): T {
+  for (const key of ['close', Symbol.dispose] as const) {
+    const method = Reflect.get(timer, key, timer);
+    if (typeof method !== 'function') {
+      continue;
+    }
+    Object.defineProperty(timer, key, {
+      configurable: true,
+      value: function (this: NodeJS.Timeout, ...args: unknown[]) {
+        const result = Reflect.apply(method, this, args);
+        trackedTimerCleanupByHandle.get(this)?.();
+        return result;
+      },
+      writable: true,
+    });
+  }
+  return timer;
+}
 
 function reportUnhandledError(event: ErrorEvent) {
   scheduleMicrotask(() => {
@@ -231,7 +251,22 @@ export function installTimerTracking(
   const ErrorEvent = global.ErrorEvent;
   let trackingEnabled = true;
 
-  const registerNodeTimer = <T>(timer: T): T => {
+  const forgetNodeTimer = (timer: unknown) => {
+    const id = nodeTimerIdsByHandle.get(timer);
+    if (id !== undefined && nodeTimerHandlesById.get(id) === timer) {
+      nodeTimerHandlesById.delete(id);
+    }
+    nodeTimerIdsByHandle.delete(timer);
+    if (typeof timer === 'object' && timer !== null) {
+      trackedTimerCleanupByHandle.delete(timer);
+    }
+  };
+  const forgetTrackedNodeTimer = (timer: unknown) => {
+    timerCancellations.delete(timer);
+    forgetNodeTimer(timer);
+  };
+  const registerNodeTimer = <T extends NodeJS.Timeout>(timer: T): T => {
+    trackedTimerCleanupByHandle.set(timer, () => forgetTrackedNodeTimer(timer));
     const id = Number(timer);
     if (Number.isFinite(id)) {
       nodeTimerHandlesById.set(id, timer);
@@ -239,12 +274,17 @@ export function installTimerTracking(
     }
     return timer;
   };
-  const forgetNodeTimer = (timer: unknown) => {
-    const id = nodeTimerIdsByHandle.get(timer);
-    if (id !== undefined && nodeTimerHandlesById.get(id) === timer) {
-      nodeTimerHandlesById.delete(id);
+  const resolveTrackedNodeTimer = (timer: unknown) => {
+    if (nodeTimerIdsByHandle.has(timer)) {
+      return timer;
     }
-    nodeTimerIdsByHandle.delete(timer);
+    if (typeof timer === 'number' || typeof timer === 'string') {
+      const id = Number(timer);
+      if (Number.isFinite(id)) {
+        return nodeTimerHandlesById.get(id);
+      }
+    }
+    return undefined;
   };
 
   const runTimerCallback = <TArgs extends unknown[]>(
@@ -294,13 +334,15 @@ export function installTimerTracking(
         ]);
       }
       const timer = registerNodeTimer(
-        nodeTimers.setTimeout(
-          function (this: NodeJS.Timeout, ...callbackArgs) {
-            forgetNodeTimer(this);
-            Reflect.apply(callback, this, callbackArgs);
-          },
-          delay,
-          ...args,
+        patchTimerCancellationMethods(
+          nodeTimers.setTimeout(
+            function (this: NodeJS.Timeout, ...callbackArgs) {
+              forgetNodeTimer(this);
+              Reflect.apply(callback, this, callbackArgs);
+            },
+            delay,
+            ...args,
+          ),
         ),
       );
       timer.unref();
@@ -315,17 +357,19 @@ export function installTimerTracking(
     }
 
     let refreshed = false;
-    const timer = nodeTimers.setTimeout(
-      function (this: NodeJS.Timeout, ...callbackArgs) {
-        forgetNodeTimer(this);
-        refreshed = false;
-        runTimerCallback(callback, this, callbackArgs);
-        if (!refreshed) {
-          timerCancellations.delete(this);
-        }
-      },
-      delay,
-      ...args,
+    const timer = patchTimerCancellationMethods(
+      nodeTimers.setTimeout(
+        function (this: NodeJS.Timeout, ...callbackArgs) {
+          forgetNodeTimer(this);
+          refreshed = false;
+          runTimerCallback(callback, this, callbackArgs);
+          if (!refreshed) {
+            timerCancellations.delete(this);
+          }
+        },
+        delay,
+        ...args,
+      ),
     );
     registerNodeTimer(timer);
     const cancel = () => {
@@ -359,11 +403,13 @@ export function installTimerTracking(
   ) => {
     if (!trackingEnabled) {
       const timer = registerNodeTimer(
-        Reflect.apply(nodeTimers.setInterval, global, [
-          callback,
-          delay,
-          ...args,
-        ]),
+        patchTimerCancellationMethods(
+          Reflect.apply(nodeTimers.setInterval, global, [
+            callback,
+            delay,
+            ...args,
+          ]),
+        ),
       );
       timer.unref();
       return timer;
@@ -376,12 +422,14 @@ export function installTimerTracking(
       ]);
     }
 
-    const timer = nodeTimers.setInterval(
-      function (this: unknown, ...callbackArgs) {
-        runTimerCallback(callback, this, callbackArgs);
-      },
-      delay,
-      ...args,
+    const timer = patchTimerCancellationMethods(
+      nodeTimers.setInterval(
+        function (this: unknown, ...callbackArgs) {
+          runTimerCallback(callback, this, callbackArgs);
+        },
+        delay,
+        ...args,
+      ),
     );
     registerNodeTimer(timer);
     timerCancellations.set(timer, () => {
@@ -642,11 +690,9 @@ export function installTimerTracking(
   const clearTimeout = (
     timer: Parameters<NodeTimerPrimitives['clearTimeout']>[0],
   ) => {
-    const nodeTimer =
-      typeof timer === 'number' ? nodeTimerHandlesById.get(timer) : timer;
-    timerCancellations.delete(nodeTimer);
+    const nodeTimer = resolveTrackedNodeTimer(timer);
     if (nodeTimer !== undefined) {
-      forgetNodeTimer(nodeTimer);
+      forgetTrackedNodeTimer(nodeTimer);
     }
     if (typeof timer === 'number' && nodeTimer === undefined) {
       domTimers?.clearTimeout(timer);
@@ -656,11 +702,9 @@ export function installTimerTracking(
   const clearInterval = (
     timer: Parameters<NodeTimerPrimitives['clearInterval']>[0],
   ) => {
-    const nodeTimer =
-      typeof timer === 'number' ? nodeTimerHandlesById.get(timer) : timer;
-    timerCancellations.delete(nodeTimer);
+    const nodeTimer = resolveTrackedNodeTimer(timer);
     if (nodeTimer !== undefined) {
-      forgetNodeTimer(nodeTimer);
+      forgetTrackedNodeTimer(nodeTimer);
     }
     if (typeof timer === 'number' && nodeTimer === undefined) {
       domTimers?.clearInterval(timer);

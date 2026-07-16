@@ -754,6 +754,169 @@ describe('jsdom environment', () => {
     }
   });
 
+  it('forgets timers cleared by their numeric string ids', () => {
+    const testGlobal = createTestGlobal();
+    const clearTimeout = rs.fn(testGlobal.clearTimeout);
+    const clearInterval = rs.fn(testGlobal.clearInterval);
+    const cleanup = installTimerTracking(testGlobal, {
+      AbortController,
+      clearInterval,
+      clearTimeout,
+      setInterval: testGlobal.setInterval,
+      setTimeout: testGlobal.setTimeout,
+    });
+
+    try {
+      const timeout = testGlobal.setTimeout(() => {}, 60_000);
+      const interval = testGlobal.setInterval(() => {}, 60_000);
+      const timeoutId = String(Number(timeout));
+      const intervalId = String(Number(interval));
+
+      Reflect.apply(testGlobal.clearInterval, testGlobal, [timeoutId]);
+      Reflect.apply(testGlobal.clearTimeout, testGlobal, [intervalId]);
+      cleanup();
+
+      expect(clearInterval).toHaveBeenCalledTimes(1);
+      expect(clearInterval).toHaveBeenCalledWith(timeoutId);
+      expect(clearTimeout).toHaveBeenCalledTimes(1);
+      expect(clearTimeout).toHaveBeenCalledWith(intervalId);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('keeps promisified timeouts tracked after no-op clear calls', () => {
+    const testGlobal = createTestGlobal();
+    const abortSpy = rs.spyOn(AbortController.prototype, 'abort');
+    const cleanup = installTimerTracking(testGlobal, {
+      AbortController,
+      clearInterval: testGlobal.clearInterval,
+      clearTimeout: testGlobal.clearTimeout,
+      setInterval: testGlobal.setInterval,
+      setTimeout: testGlobal.setTimeout,
+    });
+
+    try {
+      const sleep = promisify(testGlobal.setTimeout);
+      const timeoutSleep = sleep(20);
+      const intervalSleep = sleep(20);
+      Reflect.apply(testGlobal.clearTimeout, testGlobal, [timeoutSleep]);
+      Reflect.apply(testGlobal.clearInterval, testGlobal, [intervalSleep]);
+      cleanup();
+
+      expect(abortSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      abortSpy.mockRestore();
+      cleanup();
+    }
+  });
+
+  it('forgets timers canceled through their handles', () => {
+    const testGlobal = createTestGlobal();
+    const clearTimeout = rs.fn(testGlobal.clearTimeout);
+    const clearInterval = rs.fn(testGlobal.clearInterval);
+    const cleanup = installTimerTracking(testGlobal, {
+      AbortController,
+      clearInterval,
+      clearTimeout,
+      setInterval: testGlobal.setInterval,
+      setTimeout: testGlobal.setTimeout,
+    });
+
+    try {
+      const disposedTimeout = testGlobal.setTimeout(() => {}, 60_000);
+      const closedTimeout = testGlobal.setTimeout(() => {}, 60_000);
+      const disposedInterval = testGlobal.setInterval(() => {}, 60_000);
+      const closedInterval = testGlobal.setInterval(() => {}, 60_000);
+
+      expect(disposedTimeout[Symbol.dispose]()).toBeUndefined();
+      expect(closedTimeout.close()).toBe(closedTimeout);
+      expect(disposedInterval[Symbol.dispose]()).toBeUndefined();
+      expect(closedInterval.close()).toBe(closedInterval);
+      cleanup();
+
+      expect(clearTimeout).not.toHaveBeenCalled();
+      expect(clearInterval).not.toHaveBeenCalled();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('forgets a timer canceled by a wrapper from another environment', () => {
+    const firstGlobal = createTestGlobal();
+    const secondGlobal = createTestGlobal();
+    const firstClearTimeout = rs.fn(firstGlobal.clearTimeout);
+    const secondClearTimeout = rs.fn(secondGlobal.clearTimeout);
+    const firstCleanup = installTimerTracking(firstGlobal, {
+      AbortController,
+      clearInterval: firstGlobal.clearInterval,
+      clearTimeout: firstClearTimeout,
+      setInterval: firstGlobal.setInterval,
+      setTimeout: firstGlobal.setTimeout,
+    });
+    const secondCleanup = installTimerTracking(secondGlobal, {
+      AbortController,
+      clearInterval: secondGlobal.clearInterval,
+      clearTimeout: secondClearTimeout,
+      setInterval: secondGlobal.setInterval,
+      setTimeout: secondGlobal.setTimeout,
+    });
+
+    try {
+      const firstTimer = firstGlobal.setTimeout(() => {}, 60_000);
+      const secondTimer = secondGlobal.setTimeout(() => {}, 60_000);
+      expect(Reflect.apply(firstTimer.close, secondTimer, [])).toBe(
+        secondTimer,
+      );
+      secondCleanup();
+
+      expect(secondClearTimeout).not.toHaveBeenCalled();
+      firstCleanup();
+      expect(firstClearTimeout).toHaveBeenCalledTimes(1);
+      expect(firstClearTimeout).toHaveBeenCalledWith(firstTimer);
+    } finally {
+      firstCleanup();
+      secondCleanup();
+    }
+  });
+
+  it('forgets timers canceled through stale handle wrappers', () => {
+    const testGlobal = createTestGlobal();
+    const domClearTimeout = rs.fn();
+    const domClearInterval = rs.fn();
+    const cleanup = installTimerTracking(
+      testGlobal,
+      {
+        AbortController,
+        clearInterval: testGlobal.clearInterval,
+        clearTimeout: testGlobal.clearTimeout,
+        setInterval: testGlobal.setInterval,
+        setTimeout: testGlobal.setTimeout,
+      },
+      {
+        clearInterval: domClearInterval,
+        clearTimeout: domClearTimeout,
+      },
+    );
+    const staleSetTimeout = testGlobal.setTimeout;
+    const staleSetInterval = testGlobal.setInterval;
+    const staleClearTimeout = testGlobal.clearTimeout;
+    const staleClearInterval = testGlobal.clearInterval;
+    cleanup();
+
+    const timeout = staleSetTimeout(() => {}, 60_000);
+    const interval = staleSetInterval(() => {}, 60_000);
+    const timeoutId = Number(timeout);
+    const intervalId = Number(interval);
+    timeout[Symbol.dispose]();
+    interval.close();
+    staleClearTimeout(timeoutId);
+    staleClearInterval(intervalId);
+
+    expect(domClearTimeout).toHaveBeenCalledWith(timeoutId);
+    expect(domClearInterval).toHaveBeenCalledWith(intervalId);
+  });
+
   it('cancels native promisified timeouts during cleanup', () => {
     const testGlobal = createTestGlobal();
     const abortSpy = rs.spyOn(AbortController.prototype, 'abort');

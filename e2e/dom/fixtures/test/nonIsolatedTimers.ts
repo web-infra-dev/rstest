@@ -5,6 +5,7 @@ const phaseKey = Symbol.for('rstest.jsdom.timer-phase');
 const staleTimerKey = Symbol.for('rstest.jsdom.stale-timer');
 const completedTimerKey = Symbol.for('rstest.jsdom.completed-timer');
 const userAbortKey = Symbol.for('rstest.jsdom.user-abort');
+const noOpClearKey = Symbol.for('rstest.jsdom.no-op-clear');
 
 export const runTimerPhase = async () => {
   const phase = (Reflect.get(process, phaseKey) as number | undefined) ?? 0;
@@ -31,6 +32,9 @@ export const runTimerPhase = async () => {
     }).catch((error) => error);
     controller.abort(userReason);
     Reflect.set(process, userAbortKey, userAbort);
+    const noOpClear = promisify(setTimeout)(50, 'resolved');
+    Reflect.apply(clearTimeout, globalThis, [noOpClear]);
+    Reflect.set(process, noOpClearKey, noOpClear);
     Reflect.set(process, phaseKey, 2);
     return;
   }
@@ -55,10 +59,19 @@ export const runTimerPhase = async () => {
     name: 'AbortError',
   });
 
+  const noOpClear = Reflect.get(process, noOpClearKey) as Promise<unknown>;
+  await expect(
+    Promise.race([
+      noOpClear,
+      new Promise((resolve) => setTimeout(() => resolve('pending'), 100)),
+    ]),
+  ).resolves.toBe('pending');
+
   await new Promise((resolve) => setTimeout(resolve, 100));
   expect(Reflect.get(process, staleTimerKey)).toBe(false);
   Reflect.deleteProperty(process, phaseKey);
   Reflect.deleteProperty(process, staleTimerKey);
   Reflect.deleteProperty(process, completedTimerKey);
   Reflect.deleteProperty(process, userAbortKey);
+  Reflect.deleteProperty(process, noOpClearKey);
 };
