@@ -8,6 +8,12 @@ export default defineConfig({
     name: 'jsdom',
     options: {
       url: 'http://localhost:8081/test-options',
+      html: `<!doctype html><script>
+        window.preInstallTimerFired = false;
+        window.preInstallTimer = setTimeout(() => {
+          window.preInstallTimerFired = true;
+        }, 1000);
+      </script>`,
     },
   },
 });

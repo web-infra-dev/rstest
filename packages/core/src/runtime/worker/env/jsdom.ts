@@ -141,7 +141,10 @@ export const environment: TestEnvironment<typeof globalThis> = {
     const cleanupGlobal = installGlobal(global, dom.window, {
       additionalKeys: ['URL', 'URLSearchParams'],
     });
-    const cleanupTimers = installTimerTracking(global, nodeTimers);
+    const cleanupTimers = installTimerTracking(global, nodeTimers, {
+      clearInterval: dom.window.clearInterval.bind(dom.window),
+      clearTimeout: dom.window.clearTimeout.bind(dom.window),
+    });
 
     const cleanupHandler = addDefaultErrorHandler(global as unknown as Window);
 

@@ -195,6 +195,10 @@ export function installGlobal(
 export function installTimerTracking(
   global: typeof globalThis,
   nodeTimers: NodeTimerPrimitives,
+  domTimers?: {
+    clearInterval(timer: number): void;
+    clearTimeout(timer: number): void;
+  },
 ): () => void {
   const timerCancellations = new Map<unknown, () => void>();
   const descriptors = new Map<
@@ -239,11 +243,13 @@ export function installTimerTracking(
     ...args: TArgs
   ) => {
     if (!trackingEnabled) {
-      return Reflect.apply(nodeTimers.setTimeout, global, [
+      const timer = Reflect.apply(nodeTimers.setTimeout, global, [
         callback,
         delay,
         ...args,
       ]);
+      timer.unref();
+      return timer;
     }
     if (typeof callback !== 'function') {
       return Reflect.apply(nodeTimers.setTimeout, global, [
@@ -288,11 +294,13 @@ export function installTimerTracking(
     ...args: TArgs
   ) => {
     if (!trackingEnabled) {
-      return Reflect.apply(nodeTimers.setInterval, global, [
+      const timer = Reflect.apply(nodeTimers.setInterval, global, [
         callback,
         delay,
         ...args,
       ]);
+      timer.unref();
+      return timer;
     }
     if (typeof callback !== 'function') {
       return Reflect.apply(nodeTimers.setInterval, global, [
@@ -337,6 +345,17 @@ export function installTimerTracking(
       options?: { ref?: boolean; signal?: AbortSignal | null } | null,
     ): Promise<T> => {
       if (!trackingEnabled) {
+        if (options === undefined) {
+          return nativePromisifiedSetTimeout(delay, value, { ref: false });
+        }
+        if (options !== null && typeof options === 'object') {
+          const unrefOptions = new Proxy(options, {
+            get(target, key) {
+              return key === 'ref' ? false : Reflect.get(target, key, target);
+            },
+          });
+          return nativePromisifiedSetTimeout(delay, value, unrefOptions);
+        }
         return nativePromisifiedSetTimeout(delay, value, options);
       }
       if (
@@ -374,17 +393,31 @@ export function installTimerTracking(
         signal: controller.signal,
       });
       let canceledByTeardown = false;
+      const detachAbortListener = () => {
+        try {
+          signal?.removeEventListener('abort', onAbort);
+          return { ok: true } as const;
+        } catch (error) {
+          return { error, ok: false } as const;
+        }
+      };
       const trackedPromise = new Promise<T>((resolve, reject) => {
         void nativePromise.then(
           (result) => {
-            signal?.removeEventListener('abort', onAbort);
             timerCancellations.delete(trackedPromise);
-            resolve(result);
+            const detached = detachAbortListener();
+            if (detached.ok) {
+              resolve(result);
+            } else {
+              reject(detached.error);
+            }
           },
           (error) => {
-            signal?.removeEventListener('abort', onAbort);
             timerCancellations.delete(trackedPromise);
-            if (!canceledByTeardown) {
+            const detached = detachAbortListener();
+            if (!canceledByTeardown && !detached.ok) {
+              reject(detached.error);
+            } else if (!canceledByTeardown) {
               reject(error);
             }
           },
@@ -392,7 +425,7 @@ export function installTimerTracking(
       });
       timerCancellations.set(trackedPromise, () => {
         canceledByTeardown = true;
-        signal?.removeEventListener('abort', onAbort);
+        detachAbortListener();
         // Internal cancellation must not reject user-created promise chains
         // after their test environment has already been destroyed.
         controller.abort();
@@ -412,12 +445,18 @@ export function installTimerTracking(
     timer: Parameters<NodeTimerPrimitives['clearTimeout']>[0],
   ) => {
     timerCancellations.delete(timer);
+    if (typeof timer === 'number') {
+      domTimers?.clearTimeout(timer);
+    }
     nodeTimers.clearTimeout(timer);
   };
   const clearInterval = (
     timer: Parameters<NodeTimerPrimitives['clearInterval']>[0],
   ) => {
     timerCancellations.delete(timer);
+    if (typeof timer === 'number') {
+      domTimers?.clearInterval(timer);
+    }
     nodeTimers.clearInterval(timer);
   };
 
@@ -465,7 +504,16 @@ export function addDefaultErrorHandler(window: Window) {
     // preventDefault(). Merely observing the event must not make a test pass.
     scheduleMicrotask(() => {
       if (!e.defaultPrevented && e.error != null) {
-        process.emit('uncaughtException', e.error);
+        Reflect.apply(process.emit, process, [
+          'uncaughtExceptionMonitor',
+          e.error,
+          'uncaughtException',
+        ]);
+        Reflect.apply(process.emit, process, [
+          'uncaughtException',
+          e.error,
+          'uncaughtException',
+        ]);
       }
     });
   };
