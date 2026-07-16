@@ -93,6 +93,11 @@ describe('jsdom', () => {
     );
     await expectExecSuccess();
   });
+
+  it('should run web storage test correctly', async () => {
+    const { expectExecSuccess } = await runCli('test/storage', 'jsdom');
+    await expectExecSuccess();
+  });
 });
 
 describe('happy-dom', () => {
@@ -115,6 +120,11 @@ describe('happy-dom', () => {
 
   it('should run test correctly with jest-dom', async () => {
     const { expectExecSuccess } = await runCli(jestDomFilters, 'happy-dom');
+    await expectExecSuccess();
+  });
+
+  it('should run web storage test correctly', async () => {
+    const { expectExecSuccess } = await runCli('test/storage', 'happy-dom');
     await expectExecSuccess();
   });
 
