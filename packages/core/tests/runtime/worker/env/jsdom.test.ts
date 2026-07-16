@@ -308,11 +308,27 @@ describe('jsdom environment', () => {
 
   it('preserves Node setTimeout utility behavior', async () => {
     const testGlobal = createTestGlobal();
+    const nativePromisifyDescriptor = Object.getOwnPropertyDescriptor(
+      testGlobal.setTimeout,
+      promisify.custom,
+    );
     const { teardown } = await environment.setup(testGlobal, {});
 
     try {
       const sleep = promisify(testGlobal.setTimeout);
       await expect(sleep(1, 'done')).resolves.toBe('done');
+
+      const trackedPromisifyDescriptor = Object.getOwnPropertyDescriptor(
+        testGlobal.setTimeout,
+        promisify.custom,
+      );
+      expect(trackedPromisifyDescriptor).toMatchObject({
+        configurable: nativePromisifyDescriptor?.configurable,
+        enumerable: nativePromisifyDescriptor?.enumerable,
+      });
+      expect('get' in (trackedPromisifyDescriptor ?? {})).toBe(
+        'get' in (nativePromisifyDescriptor ?? {}),
+      );
 
       let errorCode: string | undefined;
       try {
@@ -321,6 +337,40 @@ describe('jsdom environment', () => {
         errorCode = (error as { code?: string }).code;
       }
       expect(errorCode).toBe('ERR_INVALID_ARG_TYPE');
+    } finally {
+      await teardown();
+    }
+  });
+
+  it('preserves rejected promises for invalid promisify options', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    const sleep = promisify(testGlobal.setTimeout);
+    const callSleep = (options: unknown) =>
+      Reflect.apply(sleep, undefined, [0, undefined, options]) as Promise<void>;
+
+    try {
+      let nullSignalPromise: Promise<void> | undefined;
+      expect(() => {
+        nullSignalPromise = callSleep({ signal: null });
+      }).not.toThrow();
+      await expect(nullSignalPromise).rejects.toMatchObject({
+        code: 'ERR_INVALID_ARG_TYPE',
+      });
+
+      for (const key of ['signal', 'ref']) {
+        const expected = new Error(`${key} getter`);
+        const options = Object.defineProperty({}, key, {
+          get() {
+            throw expected;
+          },
+        });
+        let getterPromise: Promise<void> | undefined;
+        expect(() => {
+          getterPromise = callSleep(options);
+        }).not.toThrow();
+        await expect(getterPromise).rejects.toBe(expected);
+      }
     } finally {
       await teardown();
     }
@@ -345,6 +395,100 @@ describe('jsdom environment', () => {
     } finally {
       abortSpy.mockRestore();
       cleanup();
+    }
+  });
+
+  it('does not reject derived sleeps during cleanup', async () => {
+    const testGlobal = createTestGlobal();
+    const cleanup = installTimerTracking(testGlobal, {
+      AbortController,
+      clearInterval: testGlobal.clearInterval,
+      clearTimeout: testGlobal.clearTimeout,
+      setInterval: testGlobal.setInterval,
+      setTimeout: testGlobal.setTimeout,
+    });
+    const unhandledRejections: unknown[] = [];
+    const emitSpy = rs
+      .spyOn(process, 'emit')
+      .mockImplementation((event: string | symbol, ...args: unknown[]) => {
+        if (event === 'unhandledRejection') {
+          unhandledRejections.push(args[0]);
+        }
+        return true;
+      });
+
+    try {
+      const staleSleep = promisify(testGlobal.setTimeout);
+      void staleSleep(60_000).then(() => {});
+      cleanup();
+      await expect(staleSleep(1, 'done')).resolves.toBe('done');
+      await new Promise((resolve) => nodeSetTimeout(resolve, 20));
+
+      expect(unhandledRejections).toEqual([]);
+    } finally {
+      emitSpy.mockRestore();
+      cleanup();
+    }
+  });
+
+  it('reports errors from timer wrappers retained after teardown', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    const staleSetTimeout = testGlobal.setTimeout;
+    const staleSetInterval = testGlobal.setInterval;
+    const timeoutError = new Error('stale timeout error');
+    const intervalError = new Error('stale interval error');
+    const uncaughtErrors: unknown[] = [];
+    await teardown();
+    const emitSpy = rs
+      .spyOn(process, 'emit')
+      .mockImplementation((event: string | symbol, ...args: unknown[]) => {
+        if (event === 'uncaughtException') {
+          uncaughtErrors.push(args[0]);
+        }
+        return true;
+      });
+
+    try {
+      staleSetTimeout(() => {
+        throw timeoutError;
+      }, 0);
+      const interval = staleSetInterval(() => {
+        clearInterval(interval);
+        throw intervalError;
+      }, 0);
+      await new Promise((resolve) => nodeSetTimeout(resolve, 20));
+
+      expect(uncaughtErrors).toEqual([timeoutError, intervalError]);
+    } finally {
+      emitSpy.mockRestore();
+    }
+  });
+
+  it('reports timer errors when teardown runs inside the callback', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    const expected = new Error('teardown callback error');
+    const uncaughtErrors: unknown[] = [];
+    const emitSpy = rs
+      .spyOn(process, 'emit')
+      .mockImplementation((event: string | symbol, ...args: unknown[]) => {
+        if (event === 'uncaughtException') {
+          uncaughtErrors.push(args[0]);
+        }
+        return true;
+      });
+
+    try {
+      testGlobal.setTimeout(() => {
+        void teardown();
+        throw expected;
+      }, 0);
+      await new Promise((resolve) => nodeSetTimeout(resolve, 20));
+
+      expect(uncaughtErrors).toEqual([expected]);
+    } finally {
+      emitSpy.mockRestore();
     }
   });
 

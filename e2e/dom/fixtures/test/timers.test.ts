@@ -35,6 +35,9 @@ it('preserves Node setTimeout utility behavior', async () => {
   await expect(sleep(1, 'inherited ref', inheritedOptions)).resolves.toBe(
     'inherited ref',
   );
+  await expect(
+    Reflect.apply(sleep, undefined, [1, undefined, { signal: null }]),
+  ).rejects.toMatchObject({ code: 'ERR_INVALID_ARG_TYPE' });
 
   const NativeAbortController = AbortController;
   try {
@@ -68,7 +71,7 @@ it('preserves Node setTimeout utility behavior', async () => {
 
 it('cleans up pending promisified timeouts during teardown', () => {
   const sleep = promisify(setTimeout);
-  void sleep(60_000);
+  void sleep(60_000).then(() => {});
 });
 
 it('supports nested timers and cross-clearing', async () => {
@@ -89,12 +92,14 @@ it('supports nested timers and cross-clearing', async () => {
   });
 });
 
-it('keeps jsdom-owned animation frame timers working', async () => {
+it('keeps DOM-owned animation frame timers working', async () => {
   let frameCalled = false;
   const frame = requestAnimationFrame(() => {
     frameCalled = true;
   });
-  expect(typeof frame).toBe('number');
+  expect(typeof frame).toBe(
+    Reflect.has(window, 'happyDOM') ? 'object' : 'number',
+  );
   cancelAnimationFrame(frame);
   await new Promise((resolve) => nodeSetTimeout(resolve, 20));
   expect(frameCalled).toBe(false);
@@ -140,6 +145,7 @@ it('restores tracked real timers after fake timers', () => {
 
 it('keeps built-in fetch compatible through the response lifecycle', async () => {
   const server = createServer((_request, response) => {
+    response.setHeader('access-control-allow-origin', '*');
     response.setHeader('connection', 'keep-alive');
     response.end('ok');
   });

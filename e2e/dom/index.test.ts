@@ -116,6 +116,11 @@ describe('happy-dom', () => {
     await expectExecSuccess();
   });
 
+  it('should use happy-dom timers', async () => {
+    const { expectExecSuccess } = await runCli('test/timers', 'happy-dom');
+    await expectExecSuccess();
+  });
+
   it('should load node built-in modules correctly', async () => {
     const { expectExecSuccess } = await runCli('test/node', 'happy-dom');
     await expectExecSuccess();

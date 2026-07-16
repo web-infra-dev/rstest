@@ -213,6 +213,9 @@ export function installTimerTracking(
     try {
       Reflect.apply(callback, receiver, args);
     } catch (error) {
+      if (!trackingEnabled) {
+        throw error;
+      }
       const reportedError =
         error == null
           ? new Error(`Timer callback threw ${String(error)}`)
@@ -235,6 +238,13 @@ export function installTimerTracking(
     delay?: number,
     ...args: TArgs
   ) => {
+    if (!trackingEnabled) {
+      return Reflect.apply(nodeTimers.setTimeout, global, [
+        callback,
+        delay,
+        ...args,
+      ]);
+    }
     if (typeof callback !== 'function') {
       return Reflect.apply(nodeTimers.setTimeout, global, [
         callback,
@@ -277,6 +287,13 @@ export function installTimerTracking(
     delay?: number,
     ...args: TArgs
   ) => {
+    if (!trackingEnabled) {
+      return Reflect.apply(nodeTimers.setInterval, global, [
+        callback,
+        delay,
+        ...args,
+      ]);
+    }
     if (typeof callback !== 'function') {
       return Reflect.apply(nodeTimers.setInterval, global, [
         callback,
@@ -307,7 +324,7 @@ export function installTimerTracking(
     | (<T>(
         delay?: number,
         value?: T,
-        options?: { ref?: boolean; signal?: AbortSignal } | null,
+        options?: { ref?: boolean; signal?: AbortSignal | null } | null,
       ) => Promise<T>)
     | undefined;
   if (
@@ -317,21 +334,27 @@ export function installTimerTracking(
     const promisifiedSetTimeout = <T>(
       delay?: number,
       value?: T,
-      options?: { ref?: boolean; signal?: AbortSignal } | null,
+      options?: { ref?: boolean; signal?: AbortSignal | null } | null,
     ): Promise<T> => {
+      if (!trackingEnabled) {
+        return nativePromisifiedSetTimeout(delay, value, options);
+      }
       if (
         options === null ||
         (options !== undefined && typeof options !== 'object')
       ) {
         return nativePromisifiedSetTimeout(delay, value, options);
       }
-      const signal =
-        options !== null && typeof options === 'object'
-          ? options.signal
-          : undefined;
+      let signal: AbortSignal | null | undefined;
+      try {
+        signal = options?.signal;
+      } catch (error) {
+        return Promise.reject(error);
+      }
       if (
         signal !== undefined &&
-        (typeof signal.addEventListener !== 'function' ||
+        (signal === null ||
+          typeof signal.addEventListener !== 'function' ||
           typeof signal.removeEventListener !== 'function' ||
           typeof signal.aborted !== 'boolean')
       ) {
@@ -345,28 +368,44 @@ export function installTimerTracking(
       const onAbort = () => controller.abort(signal?.reason);
       signal?.addEventListener('abort', onAbort, { once: true });
       const nativePromise = nativePromisifiedSetTimeout(delay, value, {
-        ref: options?.ref,
+        get ref() {
+          return options?.ref;
+        },
         signal: controller.signal,
       });
-      const trackedPromise = nativePromise.finally(() => {
-        signal?.removeEventListener('abort', onAbort);
-        timerCancellations.delete(trackedPromise);
+      let canceledByTeardown = false;
+      const trackedPromise = new Promise<T>((resolve, reject) => {
+        void nativePromise.then(
+          (result) => {
+            signal?.removeEventListener('abort', onAbort);
+            timerCancellations.delete(trackedPromise);
+            resolve(result);
+          },
+          (error) => {
+            signal?.removeEventListener('abort', onAbort);
+            timerCancellations.delete(trackedPromise);
+            if (!canceledByTeardown) {
+              reject(error);
+            }
+          },
+        );
       });
       timerCancellations.set(trackedPromise, () => {
+        canceledByTeardown = true;
         signal?.removeEventListener('abort', onAbort);
-        // Teardown owns this cancellation, so do not report its AbortError as
-        // an unhandled rejection when the test intentionally ignored the sleep.
-        void trackedPromise.catch(() => {});
+        // Internal cancellation must not reject user-created promise chains
+        // after their test environment has already been destroyed.
         controller.abort();
       });
       return trackedPromise;
     };
-    Object.defineProperty(setTimeout, promisify.custom, {
-      configurable: customPromisifyDescriptor.configurable,
-      enumerable: customPromisifyDescriptor.enumerable,
-      value: promisifiedSetTimeout,
-      writable: false,
-    });
+    Object.defineProperty(
+      setTimeout,
+      promisify.custom,
+      'value' in customPromisifyDescriptor
+        ? { ...customPromisifyDescriptor, value: promisifiedSetTimeout }
+        : { ...customPromisifyDescriptor, get: () => promisifiedSetTimeout },
+    );
   }
 
   const clearTimeout = (
