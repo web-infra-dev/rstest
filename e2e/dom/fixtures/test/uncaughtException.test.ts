@@ -9,6 +9,7 @@ test('uncaughtException', async () => {
 
 test('preserves object rejection details', async () => {
   Promise.reject({
+    name: 'TypeError',
     message: 'object rejection',
     stack: 'object rejection stack',
   });

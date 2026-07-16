@@ -1,5 +1,6 @@
 import { sep } from 'node:path';
 import {
+  formatError,
   getFileTaskId,
   getWorkerSerialization,
   needFlagExperimentalDetectModule,
@@ -7,6 +8,26 @@ import {
   prettyTime,
   toNativePath,
 } from '../../src/utils/helper';
+
+it('formatError preserves serialized error details', () => {
+  const error = formatError({
+    name: 'TypeError',
+    message: 'serialized failure',
+    stack: 'serialized stack',
+  });
+
+  expect(error).toBeInstanceOf(Error);
+  expect(error).toMatchObject({
+    name: 'TypeError',
+    message: 'serialized failure',
+    stack: 'serialized stack',
+  });
+
+  expect(formatError({ name: 'RangeError', message: '' })).toMatchObject({
+    name: 'RangeError',
+    message: '',
+  });
+});
 
 it('getFileTaskId builds the file: task-id grammar', () => {
   // Locks the single source of truth so the worker/pool/runner consumers and

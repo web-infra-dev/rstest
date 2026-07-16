@@ -29,6 +29,18 @@ it('keeps Node timer handles while tracking real timers', async () => {
 it('preserves Node setTimeout utility behavior', async () => {
   const sleep = promisify(setTimeout);
   await expect(sleep(1, 'done')).resolves.toBe('done');
+  await expect(sleep(1, 'unref', { ref: false })).resolves.toBe('unref');
+
+  const controller = new AbortController();
+  const abortedSleep = sleep(60_000, undefined, {
+    signal: controller.signal,
+  });
+  controller.abort('test abort');
+  await expect(abortedSleep).rejects.toMatchObject({
+    name: 'AbortError',
+    code: 'ABORT_ERR',
+    cause: 'test abort',
+  });
 
   let errorCode: string | undefined;
   try {
@@ -37,6 +49,11 @@ it('preserves Node setTimeout utility behavior', async () => {
     errorCode = (error as { code?: string }).code;
   }
   expect(errorCode).toBe('ERR_INVALID_ARG_TYPE');
+});
+
+it('cleans up pending promisified timeouts during teardown', () => {
+  const sleep = promisify(setTimeout);
+  void sleep(60_000);
 });
 
 it('supports nested timers and cross-clearing', async () => {

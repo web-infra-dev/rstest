@@ -106,9 +106,11 @@ export function formatError(error: unknown): Error | string {
     return error;
   }
 
-  if (isPlainObject(error) && error.message) {
-    const e = new Error(error.name || 'unknown error');
-    e.message = error.message;
+  if (isPlainObject(error) && typeof error.message === 'string') {
+    const e = new Error(error.message);
+    if (typeof error.name === 'string' && error.name) {
+      e.name = error.name;
+    }
     e.stack = error.stack;
 
     return e;

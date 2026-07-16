@@ -231,12 +231,73 @@ export function installTimerTracking(
     nodeTimers.setTimeout,
     promisify.custom,
   );
-  if (customPromisifyDescriptor) {
-    Object.defineProperty(
-      setTimeout,
-      promisify.custom,
-      customPromisifyDescriptor,
-    );
+  const nativePromisifiedSetTimeout = Reflect.get(
+    nodeTimers.setTimeout,
+    promisify.custom,
+  ) as
+    | (<T>(
+        delay?: number,
+        value?: T,
+        options?: { ref?: boolean; signal?: AbortSignal },
+      ) => Promise<T>)
+    | undefined;
+  if (
+    customPromisifyDescriptor &&
+    typeof nativePromisifiedSetTimeout === 'function'
+  ) {
+    const promisifiedSetTimeout = <T>(
+      delay?: number,
+      value?: T,
+      options?: { ref?: boolean; signal?: AbortSignal },
+    ): Promise<T> => {
+      if (
+        options === null ||
+        (options !== undefined && typeof options !== 'object')
+      ) {
+        return nativePromisifiedSetTimeout(delay, value, options);
+      }
+      const signal =
+        options !== null && typeof options === 'object'
+          ? options.signal
+          : undefined;
+      if (
+        signal !== undefined &&
+        (typeof signal.addEventListener !== 'function' ||
+          typeof signal.removeEventListener !== 'function' ||
+          typeof signal.aborted !== 'boolean')
+      ) {
+        return nativePromisifiedSetTimeout(delay, value, options);
+      }
+      if (signal?.aborted) {
+        return nativePromisifiedSetTimeout(delay, value, options);
+      }
+
+      const controller = new AbortController();
+      const onAbort = () => controller.abort(signal?.reason);
+      signal?.addEventListener('abort', onAbort, { once: true });
+      const nativePromise = nativePromisifiedSetTimeout(delay, value, {
+        ...options,
+        signal: controller.signal,
+      });
+      const trackedPromise = nativePromise.finally(() => {
+        signal?.removeEventListener('abort', onAbort);
+        timerCancellations.delete(trackedPromise);
+      });
+      timerCancellations.set(trackedPromise, () => {
+        signal?.removeEventListener('abort', onAbort);
+        // Teardown owns this cancellation, so do not report its AbortError as
+        // an unhandled rejection when the test intentionally ignored the sleep.
+        void trackedPromise.catch(() => {});
+        controller.abort();
+      });
+      return trackedPromise;
+    };
+    Object.defineProperty(setTimeout, promisify.custom, {
+      configurable: customPromisifyDescriptor.configurable,
+      enumerable: customPromisifyDescriptor.enumerable,
+      value: promisifiedSetTimeout,
+      writable: false,
+    });
   }
 
   const clearTimeout = (timer: Parameters<NodeTimers['clearTimeout']>[0]) => {

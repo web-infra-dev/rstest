@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import { describe, expect, it } from '@rstest/core';
 import type { DOMWindow } from 'jsdom';
 import { environment } from '../../../../src/runtime/worker/env/jsdom';
+import { installTimerTracking } from '../../../../src/runtime/worker/env/utils';
 
 const createTestGlobal = (): typeof globalThis =>
   ({
@@ -292,6 +293,27 @@ describe('jsdom environment', () => {
       expect(errorCode).toBe('ERR_INVALID_ARG_TYPE');
     } finally {
       await teardown();
+    }
+  });
+
+  it('cancels native promisified timeouts during cleanup', () => {
+    const testGlobal = createTestGlobal();
+    const abortSpy = rs.spyOn(AbortController.prototype, 'abort');
+    const cleanup = installTimerTracking(testGlobal, {
+      clearInterval: testGlobal.clearInterval,
+      clearTimeout: testGlobal.clearTimeout,
+      setInterval: testGlobal.setInterval,
+      setTimeout: testGlobal.setTimeout,
+    });
+
+    try {
+      void promisify(testGlobal.setTimeout)(60_000);
+      cleanup();
+
+      expect(abortSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      abortSpy.mockRestore();
+      cleanup();
     }
   });
 
