@@ -5,7 +5,7 @@ import {
   addDefaultErrorHandler,
   installGlobal,
   installTimerTracking,
-  type NodeTimers,
+  type NodeTimerPrimitives,
 } from './utils';
 
 type HappyDOMOptions = ConstructorParameters<typeof HappyDOMWindow>[0];
@@ -17,7 +17,8 @@ export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
       checkPkgInstalled('happy-dom');
 
       const { Window, GlobalWindow } = await import('happy-dom');
-      const nodeTimers: NodeTimers = {
+      const nodeTimers: NodeTimerPrimitives = {
+        AbortController: global.AbortController,
         clearInterval: global.clearInterval,
         clearTimeout: global.clearTimeout,
         setInterval: global.setInterval,

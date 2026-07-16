@@ -15,5 +15,7 @@ describe('uncaughtException', () => {
     expectStderrLog('unhandledRejection: reject error');
     expectStderrLog('TypeError: object rejection');
     expectStderrLog('object rejection stack');
+    expectStderrLog('TypeError: cross-realm rejection');
+    expectStderrLog('cross-realm rejection stack');
   });
 });

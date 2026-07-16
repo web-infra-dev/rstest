@@ -1,10 +1,12 @@
 import { promisify } from 'node:util';
 import { KEYS } from './jsdomKeys';
 
-export type NodeTimers = Pick<
+export type NodeTimerPrimitives = Pick<
   typeof globalThis,
   'clearInterval' | 'clearTimeout' | 'setInterval' | 'setTimeout'
->;
+> & {
+  AbortController: typeof globalThis.AbortController;
+};
 
 const TIMER_KEYS = [
   'clearInterval',
@@ -130,10 +132,13 @@ export function installGlobal(
 
 export function installTimerTracking(
   global: typeof globalThis,
-  nodeTimers: NodeTimers,
+  nodeTimers: NodeTimerPrimitives,
 ): () => void {
   const timerCancellations = new Map<unknown, () => void>();
-  const descriptors = new Map<keyof NodeTimers, PropertyDescriptor>();
+  const descriptors = new Map<
+    (typeof TIMER_KEYS)[number],
+    PropertyDescriptor
+  >();
   let trackingEnabled = true;
 
   const runTimerCallback = <TArgs extends unknown[]>(
@@ -272,11 +277,11 @@ export function installTimerTracking(
         return nativePromisifiedSetTimeout(delay, value, options);
       }
 
-      const controller = new AbortController();
+      const controller = new nodeTimers.AbortController();
       const onAbort = () => controller.abort(signal?.reason);
       signal?.addEventListener('abort', onAbort, { once: true });
       const nativePromise = nativePromisifiedSetTimeout(delay, value, {
-        ...options,
+        ref: options?.ref,
         signal: controller.signal,
       });
       const trackedPromise = nativePromise.finally(() => {
@@ -300,11 +305,15 @@ export function installTimerTracking(
     });
   }
 
-  const clearTimeout = (timer: Parameters<NodeTimers['clearTimeout']>[0]) => {
+  const clearTimeout = (
+    timer: Parameters<NodeTimerPrimitives['clearTimeout']>[0],
+  ) => {
     timerCancellations.delete(timer);
     nodeTimers.clearTimeout(timer);
   };
-  const clearInterval = (timer: Parameters<NodeTimers['clearInterval']>[0]) => {
+  const clearInterval = (
+    timer: Parameters<NodeTimerPrimitives['clearInterval']>[0],
+  ) => {
     timerCancellations.delete(timer);
     nodeTimers.clearInterval(timer);
   };

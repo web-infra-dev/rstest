@@ -1,4 +1,5 @@
 import { sep } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import {
   formatError,
   getFileTaskId,
@@ -26,6 +27,21 @@ it('formatError preserves serialized error details', () => {
   expect(formatError({ name: 'RangeError', message: '' })).toMatchObject({
     name: 'RangeError',
     message: '',
+  });
+});
+
+it('formatError preserves cross-realm Error details', () => {
+  const crossRealmError = runInNewContext(
+    `Object.assign(new TypeError('cross-realm failure'), {
+      stack: 'cross-realm stack',
+    })`,
+  );
+
+  expect(crossRealmError).not.toBeInstanceOf(Error);
+  expect(formatError(crossRealmError)).toMatchObject({
+    name: 'TypeError',
+    message: 'cross-realm failure',
+    stack: 'cross-realm stack',
   });
 });
 

@@ -16,3 +16,19 @@ test('preserves object rejection details', async () => {
 
   await new Promise((resolve) => setTimeout(resolve, 10));
 });
+
+test('preserves cross-realm rejection details', async () => {
+  const iframe = document.createElement('iframe');
+  document.body.append(iframe);
+  const CrossRealmTypeError = Reflect.get(
+    iframe.contentWindow!,
+    'TypeError',
+  ) as TypeErrorConstructor;
+  const crossRealmError = Object.assign(
+    new CrossRealmTypeError('cross-realm rejection'),
+    { stack: 'cross-realm rejection stack' },
+  );
+  Promise.reject(crossRealmError);
+
+  await new Promise((resolve) => setTimeout(resolve, 10));
+});

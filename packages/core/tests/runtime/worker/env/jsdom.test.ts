@@ -7,6 +7,7 @@ import { installTimerTracking } from '../../../../src/runtime/worker/env/utils';
 
 const createTestGlobal = (): typeof globalThis =>
   ({
+    AbortController: globalThis.AbortController,
     clearInterval: globalThis.clearInterval,
     clearTimeout: globalThis.clearTimeout,
     console: globalThis.console,
@@ -300,6 +301,7 @@ describe('jsdom environment', () => {
     const testGlobal = createTestGlobal();
     const abortSpy = rs.spyOn(AbortController.prototype, 'abort');
     const cleanup = installTimerTracking(testGlobal, {
+      AbortController,
       clearInterval: testGlobal.clearInterval,
       clearTimeout: testGlobal.clearTimeout,
       setInterval: testGlobal.setInterval,
@@ -313,6 +315,57 @@ describe('jsdom environment', () => {
       expect(abortSpy).toHaveBeenCalledTimes(1);
     } finally {
       abortSpy.mockRestore();
+      cleanup();
+    }
+  });
+
+  it('uses captured Node primitives for promisified timeouts', async () => {
+    const testGlobal = createTestGlobal();
+    const NativeAbortController = AbortController;
+    let receivedOptions: { ref?: boolean; signal?: AbortSignal } | undefined;
+    const nativePromisifiedSetTimeout = rs.fn(
+      async <T>(
+        _delay?: number,
+        value?: T,
+        options?: { ref?: boolean; signal?: AbortSignal },
+      ) => {
+        receivedOptions = options;
+        return value;
+      },
+    );
+    const nativeSetTimeout = ((...args: Parameters<typeof setTimeout>) =>
+      setTimeout(...args)) as typeof setTimeout;
+    Object.defineProperty(nativeSetTimeout, promisify.custom, {
+      configurable: true,
+      value: nativePromisifiedSetTimeout,
+    });
+    const cleanup = installTimerTracking(testGlobal, {
+      AbortController: NativeAbortController,
+      clearInterval: testGlobal.clearInterval,
+      clearTimeout: testGlobal.clearTimeout,
+      setInterval: testGlobal.setInterval,
+      setTimeout: nativeSetTimeout,
+    });
+    const optionsPrototype = {};
+    let inheritedOptions: object;
+    Object.defineProperty(optionsPrototype, 'ref', {
+      get(this: unknown) {
+        expect(this).toBe(inheritedOptions);
+        return false;
+      },
+    });
+    inheritedOptions = Object.create(optionsPrototype);
+
+    try {
+      rs.stubGlobal('AbortController', undefined);
+      await expect(
+        promisify(testGlobal.setTimeout)(1, 'done', inheritedOptions),
+      ).resolves.toBe('done');
+
+      expect(receivedOptions?.ref).toBe(false);
+      expect(receivedOptions?.signal).toBeDefined();
+    } finally {
+      rs.unstubAllGlobals();
       cleanup();
     }
   });

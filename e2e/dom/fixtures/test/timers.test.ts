@@ -30,6 +30,21 @@ it('preserves Node setTimeout utility behavior', async () => {
   const sleep = promisify(setTimeout);
   await expect(sleep(1, 'done')).resolves.toBe('done');
   await expect(sleep(1, 'unref', { ref: false })).resolves.toBe('unref');
+  const inheritedOptions = Object.create(null);
+  Object.defineProperty(inheritedOptions, 'ref', { value: false });
+  await expect(sleep(1, 'inherited ref', inheritedOptions)).resolves.toBe(
+    'inherited ref',
+  );
+
+  const NativeAbortController = AbortController;
+  try {
+    Reflect.set(globalThis, 'AbortController', undefined);
+    await expect(sleep(1, 'captured controller')).resolves.toBe(
+      'captured controller',
+    );
+  } finally {
+    Reflect.set(globalThis, 'AbortController', NativeAbortController);
+  }
 
   const controller = new AbortController();
   const abortedSleep = sleep(60_000, undefined, {

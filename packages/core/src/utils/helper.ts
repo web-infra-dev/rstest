@@ -106,12 +106,23 @@ export function formatError(error: unknown): Error | string {
     return error;
   }
 
-  if (isPlainObject(error) && typeof error.message === 'string') {
-    const e = new Error(error.message);
-    if (typeof error.name === 'string' && error.name) {
-      e.name = error.name;
+  if (
+    error !== null &&
+    typeof error === 'object' &&
+    (isPlainObject(error) ||
+      Object.prototype.toString.call(error) === '[object Error]') &&
+    typeof Reflect.get(error, 'message') === 'string'
+  ) {
+    const errorLike = error as {
+      message: string;
+      name?: unknown;
+      stack?: string;
+    };
+    const e = new Error(errorLike.message);
+    if (typeof errorLike.name === 'string' && errorLike.name) {
+      e.name = errorLike.name;
     }
-    e.stack = error.stack;
+    e.stack = errorLike.stack;
 
     return e;
   }
