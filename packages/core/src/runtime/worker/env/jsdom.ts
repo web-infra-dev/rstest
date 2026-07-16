@@ -1,3 +1,4 @@
+import { promisify } from 'node:util';
 import type { ConstructorOptions } from 'jsdom';
 import type { TestEnvironment } from '../../../types';
 import { checkPkgInstalled } from '../../util';
@@ -26,6 +27,7 @@ function installTimerTracking(
 ): () => void {
   const timerCancellations = new Map<unknown, () => void>();
   const descriptors = new Map<keyof NodeTimers, PropertyDescriptor>();
+  let trackingEnabled = true;
 
   const runTimerCallback = <TArgs extends unknown[]>(
     callback: (...args: TArgs) => void,
@@ -50,16 +52,41 @@ function installTimerTracking(
     delay?: number,
     ...args: TArgs
   ) => {
+    if (typeof callback !== 'function') {
+      return Reflect.apply(nodeTimers.setTimeout, global, [
+        callback,
+        delay,
+        ...args,
+      ]);
+    }
+
+    let refreshed = false;
     const timer = nodeTimers.setTimeout(
-      function (this: unknown, ...callbackArgs) {
+      function (this: NodeJS.Timeout, ...callbackArgs) {
+        refreshed = false;
         runTimerCallback(callback, this, callbackArgs);
+        if (!refreshed) {
+          timerCancellations.delete(this);
+        }
       },
       delay,
       ...args,
     );
-    // A fired Node Timeout can be reactivated with refresh(), so keep its
-    // handle tracked until it is explicitly cleared or the environment ends.
-    timerCancellations.set(timer, () => nodeTimers.clearTimeout(timer));
+    const cancel = () => nodeTimers.clearTimeout(timer);
+    const refresh = timer.refresh;
+    Object.defineProperty(timer, 'refresh', {
+      configurable: true,
+      value: function (this: NodeJS.Timeout, ...refreshArgs: unknown[]) {
+        const result = Reflect.apply(refresh, this, refreshArgs);
+        if (trackingEnabled) {
+          refreshed = true;
+          timerCancellations.set(this, cancel);
+        }
+        return result;
+      },
+      writable: true,
+    });
+    timerCancellations.set(timer, cancel);
     return timer;
   };
   const setInterval = <TArgs extends unknown[]>(
@@ -67,6 +94,14 @@ function installTimerTracking(
     delay?: number,
     ...args: TArgs
   ) => {
+    if (typeof callback !== 'function') {
+      return Reflect.apply(nodeTimers.setInterval, global, [
+        callback,
+        delay,
+        ...args,
+      ]);
+    }
+
     const timer = nodeTimers.setInterval(
       function (this: unknown, ...callbackArgs) {
         runTimerCallback(callback, this, callbackArgs);
@@ -77,6 +112,19 @@ function installTimerTracking(
     timerCancellations.set(timer, () => nodeTimers.clearInterval(timer));
     return timer;
   };
+
+  const customPromisifyDescriptor = Object.getOwnPropertyDescriptor(
+    nodeTimers.setTimeout,
+    promisify.custom,
+  );
+  if (customPromisifyDescriptor) {
+    Object.defineProperty(
+      setTimeout,
+      promisify.custom,
+      customPromisifyDescriptor,
+    );
+  }
+
   const clearTimeout = (timer: Parameters<NodeTimers['clearTimeout']>[0]) => {
     timerCancellations.delete(timer);
     nodeTimers.clearTimeout(timer);
@@ -105,6 +153,7 @@ function installTimerTracking(
   }
 
   return () => {
+    trackingEnabled = false;
     for (const cancel of timerCancellations.values()) {
       cancel();
     }

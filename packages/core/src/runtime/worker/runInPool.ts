@@ -310,6 +310,7 @@ const preparePool = async (
     taskContext,
     unhandledErrors,
     cleanup: async () => {
+      api.rstest.useRealTimers();
       await Promise.all(cleanupFns.map((fn) => fn()));
     },
   };

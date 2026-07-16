@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { setTimeout as nodeSetTimeout } from 'node:timers';
+import { promisify } from 'node:util';
 import { expect, it, rstest } from '@rstest/core';
 
 it('keeps Node timer handles while tracking real timers', async () => {
@@ -23,6 +24,19 @@ it('keeps Node timer handles while tracking real timers', async () => {
     }, 0);
   });
   expect(receiver.unref).toBeTypeOf('function');
+});
+
+it('preserves Node setTimeout utility behavior', async () => {
+  const sleep = promisify(setTimeout);
+  await expect(sleep(1, 'done')).resolves.toBe('done');
+
+  let errorCode: string | undefined;
+  try {
+    Reflect.apply(setTimeout, globalThis, ['invalid', 0]);
+  } catch (error) {
+    errorCode = (error as { code?: string }).code;
+  }
+  expect(errorCode).toBe('ERR_INVALID_ARG_TYPE');
 });
 
 it('supports nested timers and cross-clearing', async () => {

@@ -78,6 +78,21 @@ describe('jsdom', () => {
     const { expectExecSuccess } = await runCli('test/timers', 'jsdom');
     await expectExecSuccess();
   });
+
+  it('should restore timers between non-isolated jsdom files', async () => {
+    const { expectExecSuccess } = await runCli(
+      [
+        'test/nonIsolatedTimersA',
+        'test/nonIsolatedTimersB',
+        'test/nonIsolatedTimersC',
+      ],
+      'jsdom',
+      {
+        args: ['--isolate=false', '--pool.maxWorkers=1'],
+      },
+    );
+    await expectExecSuccess();
+  });
 });
 
 describe('happy-dom', () => {

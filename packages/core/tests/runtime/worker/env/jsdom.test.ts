@@ -1,4 +1,5 @@
 import { setTimeout as nodeSetTimeout } from 'node:timers';
+import { promisify } from 'node:util';
 import { describe, expect, it } from '@rstest/core';
 import type { DOMWindow } from 'jsdom';
 import { environment } from '../../../../src/runtime/worker/env/jsdom';
@@ -162,6 +163,53 @@ describe('jsdom environment', () => {
       await teardown();
       await new Promise((resolve) => nodeSetTimeout(resolve, 30));
       expect(calls).toBe(1);
+    } finally {
+      if (!tornDown) {
+        await teardown();
+      }
+    }
+  });
+
+  it('preserves Node setTimeout utility behavior', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+
+    try {
+      const sleep = promisify(testGlobal.setTimeout);
+      await expect(sleep(1, 'done')).resolves.toBe('done');
+
+      let errorCode: string | undefined;
+      try {
+        Reflect.apply(testGlobal.setTimeout, testGlobal, ['invalid', 0]);
+      } catch (error) {
+        errorCode = (error as { code?: string }).code;
+      }
+      expect(errorCode).toBe('ERR_INVALID_ARG_TYPE');
+    } finally {
+      await teardown();
+    }
+  });
+
+  it('releases completed one-shot timeouts from teardown tracking', async () => {
+    const testGlobal = createTestGlobal();
+    const nativeClearTimeout = testGlobal.clearTimeout;
+    const clearedTimers: unknown[] = [];
+    testGlobal.clearTimeout = (timer) => {
+      clearedTimers.push(timer);
+      nativeClearTimeout(timer);
+    };
+    const { teardown } = await environment.setup(testGlobal, {});
+    let completedTimer: NodeJS.Timeout | undefined;
+    let tornDown = false;
+
+    try {
+      await new Promise<void>((resolve) => {
+        completedTimer = testGlobal.setTimeout(resolve, 0);
+      });
+      tornDown = true;
+      await teardown();
+
+      expect(clearedTimers).not.toContain(completedTimer);
     } finally {
       if (!tornDown) {
         await teardown();
