@@ -78,6 +78,16 @@ describe('jsdom', () => {
     const { expectExecSuccess } = await runCli('test/storage', 'jsdom');
     await expectExecSuccess();
   });
+
+  it('should create object URLs from jsdom Blob and File', async () => {
+    const { expectExecSuccess } = await runCli('test/objectUrl', 'jsdom');
+    await expectExecSuccess();
+  });
+
+  it('should expose object URLs to scripts in the jsdom realm', async () => {
+    const { expectExecSuccess } = await runCli('test/domScriptUrl', 'jsdom');
+    await expectExecSuccess();
+  });
 });
 
 describe('happy-dom', () => {
@@ -110,6 +120,11 @@ describe('happy-dom', () => {
 
   it('should run TextEncoder correctly in happy-dom', async () => {
     const { expectExecSuccess } = await runCli('test/textEncoder', 'happy-dom');
+    await expectExecSuccess();
+  });
+
+  it('should create object URLs from happy-dom Blob and File', async () => {
+    const { expectExecSuccess } = await runCli('test/objectUrl', 'happy-dom');
     await expectExecSuccess();
   });
 });

@@ -1,7 +1,11 @@
 import type { Window as HappyDOMWindow } from 'happy-dom';
 import type { TestEnvironment } from '../../../types';
 import { checkPkgInstalled } from '../../util';
-import { addDefaultErrorHandler, installGlobal } from './utils';
+import {
+  addDefaultErrorHandler,
+  installGlobal,
+  installObjectURLTracker,
+} from './utils';
 
 type HappyDOMOptions = ConstructorParameters<typeof HappyDOMWindow>[0];
 
@@ -21,10 +25,13 @@ export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
         url: options.url || 'http://localhost:3000',
         console: console && global.console ? global.console : undefined,
       });
+      const cleanupObjectURLs = installObjectURLTracker(
+        win.URL as unknown as typeof URL,
+      );
 
       const cleanupGlobal = installGlobal(global, win, {
         // jsdom doesn't support Request and Response, but happy-dom does
-        additionalKeys: ['Request', 'Response', 'MessagePort', 'fetch'],
+        additionalKeys: ['Request', 'Response', 'MessagePort', 'fetch', 'URL'],
       });
 
       const cleanupHandler = addDefaultErrorHandler(
@@ -34,6 +41,7 @@ export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
       return {
         async teardown() {
           cleanupHandler();
+          cleanupObjectURLs();
           if (win.close && win.happyDOM.abort) {
             await win.happyDOM.abort();
             win.close();

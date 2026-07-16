@@ -27,6 +27,68 @@ function isClassLike(name: string) {
   return name[0] && name.startsWith(name[0].toUpperCase());
 }
 
+export function installObjectURLTracker(
+  URLConstructor: typeof URL,
+): () => void {
+  const objectURLs = new Set<string>();
+  const createDescriptor = Object.getOwnPropertyDescriptor(
+    URLConstructor,
+    'createObjectURL',
+  );
+  const revokeDescriptor = Object.getOwnPropertyDescriptor(
+    URLConstructor,
+    'revokeObjectURL',
+  );
+  const createObjectURL = URLConstructor.createObjectURL;
+  const revokeObjectURL = URLConstructor.revokeObjectURL;
+
+  Object.defineProperties(URLConstructor, {
+    createObjectURL: {
+      value(object: Blob | MediaSource) {
+        const url = createObjectURL.call(URLConstructor, object);
+        objectURLs.add(url);
+        return url;
+      },
+      configurable: true,
+      writable: true,
+    },
+    revokeObjectURL: {
+      value(url: string) {
+        objectURLs.delete(url);
+        revokeObjectURL.call(URLConstructor, url);
+      },
+      configurable: true,
+      writable: true,
+    },
+  });
+
+  return () => {
+    for (const url of objectURLs) {
+      revokeObjectURL.call(URLConstructor, url);
+    }
+    objectURLs.clear();
+
+    if (createDescriptor) {
+      Object.defineProperty(
+        URLConstructor,
+        'createObjectURL',
+        createDescriptor,
+      );
+    } else {
+      Reflect.deleteProperty(URLConstructor, 'createObjectURL');
+    }
+    if (revokeDescriptor) {
+      Object.defineProperty(
+        URLConstructor,
+        'revokeObjectURL',
+        revokeDescriptor,
+      );
+    } else {
+      Reflect.deleteProperty(URLConstructor, 'revokeObjectURL');
+    }
+  };
+}
+
 export function installGlobal(
   global: any,
   win: any,
