@@ -73,6 +73,11 @@ describe('jsdom', () => {
     });
     await expectExecSuccess();
   });
+
+  it('should use jsdom timers', async () => {
+    const { expectExecSuccess } = await runCli('test/timers', 'jsdom');
+    await expectExecSuccess();
+  });
 });
 
 describe('happy-dom', () => {
