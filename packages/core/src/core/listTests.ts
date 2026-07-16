@@ -310,12 +310,20 @@ const collectBrowserTests = async ({
   // node-only lists).
   const { loadBrowserExecutor } = await import('./browserLoader');
   const executor = await loadBrowserExecutor(context, browserProjects, null, {
+    shardedEntries,
     freezeShardedEntries,
     filesOnly,
     appliedModifyRstestConfigEnvironments,
   });
-  const { list } = await executor.collect({ shardedEntries });
-  return { list, close: () => executor.close() };
+  try {
+    const { list } = await executor.collect({});
+    return { list, close: () => executor.close() };
+  } catch (error) {
+    // A rejected collect cleans up host-side resources, but the executor must
+    // still be closed so an in-flight launch cannot outlive the failure.
+    await executor.close().catch(() => undefined);
+    throw error;
+  }
 };
 
 const collectTestFiles = async ({
@@ -423,15 +431,36 @@ const collectAllTests = async ({
     };
   }
 
+  // Settle both sides before unwrapping: a fail-fast `Promise.all` would leak
+  // the surviving side's resources (node rsbuild server + pool, or browser
+  // provider + dev server) when the other side rejects. Close the survivor,
+  // then let the re-await below rethrow the first failure in order.
+  const nodePromise = collectNodeTests({
+    context,
+    nodeProjects,
+    globTestSourceEntries,
+    onRsbuildConfigResolved,
+    onModifyRstestConfigApplied,
+  });
+  const browserPromise = collectBrowser();
+  const [nodeSettled, browserSettled] = await Promise.allSettled([
+    nodePromise,
+    browserPromise,
+  ]);
+  if (
+    nodeSettled.status === 'rejected' ||
+    browserSettled.status === 'rejected'
+  ) {
+    await Promise.all([
+      nodeSettled.status === 'fulfilled' &&
+        nodeSettled.value.close().catch(() => undefined),
+      browserSettled.status === 'fulfilled' &&
+        browserSettled.value.close().catch(() => undefined),
+    ]);
+  }
   const [nodeResult, browserResult] = await Promise.all([
-    collectNodeTests({
-      context,
-      nodeProjects,
-      globTestSourceEntries,
-      onRsbuildConfigResolved,
-      onModifyRstestConfigApplied,
-    }),
-    collectBrowser(),
+    nodePromise,
+    browserPromise,
   ]);
 
   return {

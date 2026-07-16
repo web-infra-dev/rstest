@@ -433,3 +433,5 @@ npx rstest --no-clearMocks     # 禁用自动清除 mock
 :::note
 CLI 快捷键仅在 watch 模式下运行 Rstest（`rstest watch` 或 `rstest --watch`）且终端支持 TTY（交互模式）时可用。
 :::
+
+这些快捷键同样适用于 Browser Mode 的 watch 会话：`f`、`a`、`u` 和 `q` 会驱动浏览器测试重新运行，`t` 和 `p` 暂不支持浏览器 watch（帮助菜单中会置灰显示）。在 Node.js 与浏览器混合的 watch 运行中，同一个快捷键会同时作用于两侧 —— 例如 `a` 会重新运行所有 Node.js 和浏览器测试，`q` 会同时关闭两侧。

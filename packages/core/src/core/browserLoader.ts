@@ -33,6 +33,7 @@ export type {
  */
 export interface CreateBrowserExecutorOptions extends Pick<
   BrowserTestRunOptions,
+  | 'shardedEntries'
   | 'freezeShardedEntries'
   | 'filesOnly'
   | 'allowEmptyRun'
@@ -193,6 +194,7 @@ export async function loadBrowserExecutor(
   coverageProvider: CoverageProvider | null,
   runOptions?: Pick<
     BrowserTestRunOptions,
+    | 'shardedEntries'
     | 'freezeShardedEntries'
     | 'filesOnly'
     | 'allowEmptyRun'

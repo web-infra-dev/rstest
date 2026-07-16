@@ -1,9 +1,9 @@
-import { constants as osConstants } from 'node:os';
 import { isAbsolute, normalize, relative, resolve } from 'pathe';
 import { cleanCoverageReports, createCoverageProvider } from '../coverage';
 import { buildBrowserCoverageMap } from '../coverage/browserCoverageMap';
 import { ensureRunDependencies } from './dependencies';
 import type {
+  BrowserWatchHandles,
   ExecutorCycleOutcome,
   ProjectContext,
   TestExecutor,
@@ -31,7 +31,12 @@ import {
   loadBrowserExecutor,
   loadBrowserModule,
 } from './browserLoader';
-import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
+import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
+import {
+  isCliShortcutsEnabled,
+  logWatchReadyMessage,
+  setupCliShortcuts,
+} from './cliShortcuts';
 import {
   type BrowserGlobalSetupStageResult,
   runBrowserGlobalSetupStage,
@@ -75,13 +80,116 @@ const globalSetupFailureOutcome = (errors: Error[]): ExecutorCycleOutcome => ({
   duration: { buildTime: 0, testTime: 0 },
 });
 
-const getSignalExitCode = (signal: NodeJS.Signals): number => {
-  const signalNumber = osConstants.signals[signal];
-  return typeof signalNumber === 'number' ? 128 + signalNumber : 1;
-};
+/** Test paths whose latest run failed — the `f` shortcut's rerun set. */
+const collectFailedTestPaths = (context: Rstest): string[] =>
+  context.reporterResults.results
+    .filter((result) => result.status === 'fail')
+    .map((r) => r.testPath);
 
-/** Signals every run path treats as fatal and cleans up on. */
-const FATAL_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGTSTP'] as const;
+/** Test paths with unmatched snapshots — the `u` shortcut's rerun set. */
+const collectUnmatchedSnapshotTestPaths = (context: Rstest): string[] =>
+  context.reporterResults.results
+    .filter((result) => result.snapshotResult?.unmatched)
+    .map((r) => r.testPath);
+
+/**
+ * Own the fatal-signal → exit path for a browser-only watch session (node
+ * watch parity): tear the session down through the watch handles (idempotent
+ * with the host's own cleanup net) and exit with the POSIX 128+signal code.
+ * Embedded hosts own the process lifecycle, so nothing is registered there.
+ */
+function registerBrowserWatchSignalExit(
+  context: Rstest,
+  watch: BrowserWatchHandles,
+): void {
+  if (context.embedded) {
+    return;
+  }
+  const handleSignal = async (signal: NodeJS.Signals) => {
+    logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
+    await runLifecycleStep('browser watch cleanup', () => watch.close());
+    process.exit(getSignalExitCode(signal));
+  };
+  for (const signal of FATAL_SIGNALS) {
+    process.on(signal, handleSignal);
+  }
+}
+
+/**
+ * Install the watch-mode stdin owner for a browser-only watch session. The
+ * host never subscribes to stdin; core drives the host's rerun transport
+ * through the session's {@link BrowserWatchHandles}. Filter shortcuts (t/p)
+ * are not plumbed through the browser rerun pipeline yet, so they are omitted
+ * and their keys show greyed hints.
+ */
+async function setupBrowserWatchShortcuts(
+  context: Rstest,
+  watch: BrowserWatchHandles,
+): Promise<void> {
+  if (!isCliShortcutsEnabled()) {
+    return;
+  }
+  const { snapshotManager } = context;
+  const closeCliShortcuts = await setupCliShortcuts({
+    closeServer: async () => {
+      await runLifecycleStep('browser watch cleanup', () => watch.close());
+    },
+    runAll: async () => {
+      clearScreen();
+      await watch.rerun();
+    },
+    runFailedTests: async () => {
+      const failedTests = collectFailedTestPaths(context);
+
+      if (!failedTests.length) {
+        logger.log(
+          color.yellow('\nNo failed tests were found that needed to be rerun.'),
+        );
+        return;
+      }
+
+      clearScreen();
+      await watch.rerun(failedTests);
+    },
+    updateSnapshot: async () => {
+      if (!snapshotManager.summary.unmatched) {
+        logger.log(
+          color.yellow('\nNo snapshots were found that needed to be updated.'),
+        );
+        return;
+      }
+      const unmatchedTests = collectUnmatchedSnapshotTestPaths(context);
+
+      clearScreen();
+
+      const originalUpdateSnapshot = snapshotManager.options.updateSnapshot;
+      snapshotManager.options.updateSnapshot = 'all';
+      try {
+        await watch.rerun(unmatchedTests);
+      } finally {
+        snapshotManager.options.updateSnapshot = originalUpdateSnapshot;
+      }
+    },
+  });
+  const { onBeforeRestart } = await import('./restart');
+  onBeforeRestart(closeCliShortcuts);
+}
+
+/**
+ * Attach core-owned controls to a browser-only watch session: the fatal-signal
+ * exit path first, then the single stdin shortcuts owner. No-op when the run
+ * produced no watch handles.
+ */
+async function attachBrowserWatchControls(
+  context: Rstest,
+  watch: BrowserWatchHandles | undefined,
+): Promise<void> {
+  if (!watch) {
+    return;
+  }
+  registerBrowserWatchSignalExit(context, watch);
+  await setupBrowserWatchShortcuts(context, watch);
+}
 
 /**
  * Create the coverage provider when coverage is enabled and print the
@@ -193,9 +301,14 @@ export async function runTests(context: Rstest): Promise<void> {
   if (hasBrowserProjects && !hasNodeProjects) {
     if (context.relatedResolutionEmpty) {
       if (isWatchMode) {
-        await runBrowserModeTests(context, browserProjects, {
-          allowEmptyWatchRun: true,
-        });
+        const emptyWatchResult = await runBrowserModeTests(
+          context,
+          browserProjects,
+          {
+            allowEmptyWatchRun: true,
+          },
+        );
+        await attachBrowserWatchControls(context, emptyWatchResult?.watch);
       } else {
         reportNoTestFiles({ context });
         await notifyReportersOnTestRunEnd({
@@ -262,6 +375,8 @@ export async function runTests(context: Rstest): Promise<void> {
           );
         }
       }
+
+      await attachBrowserWatchControls(context, browserResult?.watch);
     } else {
       // Browser-only non-watch: one browser executor through the shared loop —
       // exit code, reporter output, coverage, and the no-test path match node
@@ -270,10 +385,18 @@ export async function runTests(context: Rstest): Promise<void> {
         context,
         coverage.enabled,
       );
+      // Resolve the shard once (undefined when unsharded) and share it between
+      // the executor construction and the setup gate so they cannot disagree on
+      // which files run — the host's own shard fallback only fires on the
+      // config-hook refresh path, not on initial resolution.
+      const browserShardedEntries = await resolveShardedEntries(context, {
+        silent: true,
+      });
       const browserExecutor = await loadBrowserExecutor(
         context,
         browserProjects,
         coverageProvider,
+        { shardedEntries: browserShardedEntries },
       );
       await browserExecutor.init();
 
@@ -299,13 +422,6 @@ export async function runTests(context: Rstest): Promise<void> {
           });
       };
       try {
-        // Resolve the shard once (undefined when unsharded) and share it
-        // between the setup gate and the browser cycle so they cannot
-        // disagree on which files run — the host's own shard fallback only
-        // fires on the config-hook refresh path, not on initial resolution.
-        const browserShardedEntries = await resolveShardedEntries(context, {
-          silent: true,
-        });
         const stage = await runBrowserGlobalSetupStage(
           context,
           browserProjects,
@@ -324,7 +440,6 @@ export async function runTests(context: Rstest): Promise<void> {
               mode: 'all',
               updateSnapshot: snapshotManager.options.updateSnapshot,
               env: stage.env,
-              shardedEntries: browserShardedEntries,
               onTraceEvents: traceRun.onEvents,
             });
         await finalizeRunCycle(context, {
@@ -334,7 +449,6 @@ export async function runTests(context: Rstest): Promise<void> {
           coverageProvider,
           reportOnFailure: coverage.reportOnFailure,
           traceRun,
-          currentDeletedEntries: [],
         });
       } finally {
         try {
@@ -553,7 +667,6 @@ export async function runTests(context: Rstest): Promise<void> {
       coverageProvider,
       reportOnFailure: coverage.reportOnFailure,
       traceRun: activeTraceRun,
-      currentDeletedEntries: [],
     });
     await runLifecycleStep('executor cleanup', () => nodeExecutor.close());
     await runLifecycleStep('trace shutdown', () =>
@@ -578,8 +691,6 @@ export async function runTests(context: Rstest): Promise<void> {
   // Non-watch: one executor loop, one finalize, one close exit path.
   // ===================================================================
   if (!isWatchMode) {
-    let browserShardedEntries:
-      Map<string, { entries: Record<string, string> }> | undefined;
     // Start the node resources (dev server, env-dependency validation, pool)
     // BEFORE constructing the browser executor, so an early node dependency
     // failure (e.g. missing `jsdom`) never leaves a browser host mid-launch —
@@ -675,12 +786,12 @@ export async function runTests(context: Rstest): Promise<void> {
       let browserExecutor: TestExecutor | undefined;
       if (hasBrowserTestsToRun) {
         const browserProjectsToRun = getBrowserProjectsToRun();
-        browserShardedEntries = getBrowserShardedEntries(browserProjectsToRun);
         browserExecutor = await loadBrowserExecutor(
           context,
           browserProjectsToRun,
           coverageProvider,
           {
+            shardedEntries: getBrowserShardedEntries(browserProjectsToRun),
             freezeShardedEntries: freezeBrowserShardedEntries,
             allowEmptyRun: shouldAllowEmptyBrowserFallback(),
             appliedModifyRstestConfigEnvironments:
@@ -713,7 +824,6 @@ export async function runTests(context: Rstest): Promise<void> {
               mode: 'all',
               updateSnapshot: snapshotManager.options.updateSnapshot,
               env: browserStage.env,
-              shardedEntries: browserShardedEntries,
               onTraceEvents: forwardBrowserTraceEvents,
             }),
       );
@@ -727,9 +837,6 @@ export async function runTests(context: Rstest): Promise<void> {
         coverageProvider,
         reportOnFailure: coverage.reportOnFailure,
         traceRun: activeTraceRun,
-        currentDeletedEntries: hasNodeTestsToRun
-          ? nodeExecutor.getLastCycleDeletedEntries()
-          : [],
       });
       isTeardown = true;
     } finally {
@@ -761,14 +868,19 @@ export async function runTests(context: Rstest): Promise<void> {
   if (!hasNodeTestsToRun) {
     const browserProjectsToRun = getBrowserProjectsToRun();
     try {
-      await runBrowserModeTests(context, browserProjectsToRun, {
-        shardedEntries: getBrowserShardedEntries(browserProjectsToRun),
-        freezeShardedEntries: freezeBrowserShardedEntries,
-        allowEmptyWatchRun: context.relatedResolutionEmpty,
-        appliedModifyRstestConfigEnvironments:
-          appliedBrowserModifyRstestConfigEnvironments,
-        onTraceEvents: forwardBrowserTraceEvents,
-      });
+      const browserResult = await runBrowserModeTests(
+        context,
+        browserProjectsToRun,
+        {
+          shardedEntries: getBrowserShardedEntries(browserProjectsToRun),
+          freezeShardedEntries: freezeBrowserShardedEntries,
+          allowEmptyWatchRun: context.relatedResolutionEmpty,
+          appliedModifyRstestConfigEnvironments:
+            appliedBrowserModifyRstestConfigEnvironments,
+          onTraceEvents: forwardBrowserTraceEvents,
+        },
+      );
+      await attachBrowserWatchControls(context, browserResult?.watch);
     } finally {
       await runLifecycleStep('trace shutdown', () =>
         traceController.shutdown(activeTraceRun),
@@ -781,6 +893,9 @@ export async function runTests(context: Rstest): Promise<void> {
   // never restart it. Deferred until after `ensureRunResources()` at the end of
   // this function, so node env-dependency validation failures never leave a
   // browser host running (the same ordering the pre-seam code had).
+  // The handles land once the initial browser run resolves; the node-owned CLI
+  // shortcuts below fan a/f/u/q out to the browser session through them.
+  let browserWatchHandles: BrowserWatchHandles | undefined;
   const startBrowserWatchSession = () => {
     if (!hasBrowserTestsToRun) {
       return;
@@ -802,13 +917,18 @@ export async function runTests(context: Rstest): Promise<void> {
     // The session promise is not awaited (it spans the whole watch session),
     // so surface a failed browser boot instead of silently dropping it — the
     // pre-seam code awaited the initial browser run and aborted on this.
-    browserWatchPromise.catch((error) => {
-      logger.error(
-        color.red('Browser Mode watch session failed to start:'),
-        error,
-      );
-      process.exitCode = 1;
-    });
+    browserWatchPromise.then(
+      (result) => {
+        browserWatchHandles = result?.watch;
+      },
+      (error) => {
+        logger.error(
+          color.red('Browser Mode watch session failed to start:'),
+          error,
+        );
+        process.exitCode = 1;
+      },
+    );
   };
 
   type Mode = 'all' | 'on-demand';
@@ -841,7 +961,6 @@ export async function runTests(context: Rstest): Promise<void> {
       coverageProvider,
       reportOnFailure: coverage.reportOnFailure,
       traceRun: activeTraceRun,
-      currentDeletedEntries: nodeExecutor.getLastCycleDeletedEntries(),
     });
     // Pre-allocate the next watch-rerun buffer so browser events emitted between
     // reruns are not lost.
@@ -849,6 +968,17 @@ export async function runTests(context: Rstest): Promise<void> {
   };
 
   const enableCliShortcuts = isCliShortcutsEnabled();
+
+  // Close the browser watch session (when one is running) before the node
+  // executor: snapshot the handle locally, it lands asynchronously above.
+  const closeBrowserWatch = async () => {
+    const browserWatch = browserWatchHandles;
+    if (browserWatch) {
+      await runLifecycleStep('browser watch cleanup', () =>
+        browserWatch.close(),
+      );
+    }
+  };
 
   let isCleaningUp = false;
   const cleanup = async () => {
@@ -858,6 +988,7 @@ export async function runTests(context: Rstest): Promise<void> {
     isCleaningUp = true;
 
     try {
+      await closeBrowserWatch();
       await runLifecycleStep('executor cleanup', () => nodeExecutor.close());
       await runLifecycleStep('trace run finalize', () =>
         activeTraceRun.finalize(),
@@ -882,21 +1013,8 @@ export async function runTests(context: Rstest): Promise<void> {
     process.on('SIGTSTP', handleSignal);
   }
 
-  const afterTestsWatchRun = () => {
-    logger.log(color.green('  Waiting for file changes...'));
-
-    if (enableCliShortcuts) {
-      if (snapshotManager.summary.unmatched) {
-        logger.log(
-          `  ${color.dim('press')} ${color.yellow(color.bold('u'))} ${color.dim('to update snapshot')}${color.dim(', press')} ${color.bold('h')} ${color.dim('to show help')}\n`,
-        );
-      } else {
-        logger.log(
-          `  ${color.dim('press')} ${color.bold('h')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q')} ${color.dim('to quit')}\n`,
-        );
-      }
-    }
-  };
+  const afterTestsWatchRun = () =>
+    logWatchReadyMessage(context, enableCliShortcuts);
 
   const { onBeforeRestart } = await import('./restart');
 
@@ -929,6 +1047,7 @@ export async function runTests(context: Rstest): Promise<void> {
     if (isFirstCompile && enableCliShortcuts) {
       const closeCliShortcuts = await setupCliShortcuts({
         closeServer: async () => {
+          await closeBrowserWatch();
           await runLifecycleStep('executor cleanup', () =>
             nodeExecutor.close(),
           );
@@ -946,6 +1065,7 @@ export async function runTests(context: Rstest): Promise<void> {
           context.fileFilters = undefined;
 
           await run({ mode: 'all' });
+          await browserWatchHandles?.rerun();
           afterTestsWatchRun();
         },
         runWithTestNamePattern: async (pattern?: string) => {
@@ -990,9 +1110,7 @@ export async function runTests(context: Rstest): Promise<void> {
           afterTestsWatchRun();
         },
         runFailedTests: async () => {
-          const failedTests = context.reporterResults.results
-            .filter((result) => result.status === 'fail')
-            .map((r) => r.testPath);
+          const failedTests = collectFailedTestPaths(context);
 
           if (!failedTests.length) {
             logger.log(
@@ -1006,6 +1124,7 @@ export async function runTests(context: Rstest): Promise<void> {
           clearScreen();
           prepareWatchRerunState(context);
           await run({ fileFilters: failedTests, mode: 'all' });
+          await browserWatchHandles?.rerun(failedTests);
           afterTestsWatchRun();
         },
         updateSnapshot: async () => {
@@ -1017,18 +1136,22 @@ export async function runTests(context: Rstest): Promise<void> {
             );
             return;
           }
-          const failedTests = context.reporterResults.results
-            .filter((result) => result.snapshotResult?.unmatched)
-            .map((r) => r.testPath);
+          const failedTests = collectUnmatchedSnapshotTestPaths(context);
 
           clearScreen();
 
           const originalUpdateSnapshot = snapshotManager.options.updateSnapshot;
           prepareWatchRerunState(context);
           snapshotManager.options.updateSnapshot = 'all';
-          await run({ fileFilters: failedTests });
-          afterTestsWatchRun();
-          snapshotManager.options.updateSnapshot = originalUpdateSnapshot;
+          try {
+            await run({ fileFilters: failedTests });
+            // Browser-owned files in the unmatched set rerun through the
+            // watch handles (no-op when none match a browser test file).
+            await browserWatchHandles?.rerun(failedTests);
+            afterTestsWatchRun();
+          } finally {
+            snapshotManager.options.updateSnapshot = originalUpdateSnapshot;
+          }
         },
       });
 

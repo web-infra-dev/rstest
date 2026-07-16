@@ -16,6 +16,10 @@ export type {
 // Shared coverage fold: the browser executor and the browser-only watch path
 // merge per-file result coverage through the same helper.
 export { buildBrowserCoverageMap } from './coverage/browserCoverageMap';
+// The single finalize implementation. Browser watch reruns feed their
+// synthetic per-rerun outcome through it so reporter payloads, exit-code
+// never-downgrade, and coverage reports match the node watch cycle.
+export { finalizeRunCycle } from './core/finalizeRun';
 // The executor seam — `@rstest/browser`'s `BrowserExecutor` writes
 // `implements TestExecutor` and returns an `ExecutorCycleOutcome` so the shared
 // `finalizeRunCycle` reduces it alongside the node outcome. Transitive dts
@@ -45,6 +49,17 @@ export {
 // Shared per-cycle state reset so the browser host and the node pool clear
 // stateManager/snapshotManager identically at the start of each watch rerun.
 export { prepareWatchRerunState } from './core/watchState';
+// Shared watch-ready banner so the browser host prints the same hint text as
+// the node watch loop.
+export { logWatchReadyMessage } from './core/cliShortcuts';
+// Shared watch invalidation policy (chunk-hash diff + setup-change=>rerun-all)
+// so the browser watch plugin applies the same rerun rules as the node
+// dev-compile pipeline, with baselines keyed per project.
+export {
+  applyWatchInvalidation,
+  type EntryHashSnapshot,
+  type WatchInvalidationState,
+} from './core/watchInvalidation';
 // Shared silent-console buffering engine so the browser host replays
 // `silent: 'passed-only'` logs through the same controller as the node worker.
 export { createSilentConsoleController } from './runtime/worker/silentConsole';
@@ -78,6 +93,7 @@ export type {
   BrowserTestRunOptions,
   BrowserTestRunResult,
   BrowserViewport,
+  BrowserWatchHandles,
   CoverageMapData,
   CoverageProvider,
   DevicePreset,
@@ -104,6 +120,9 @@ export {
   logger,
   serializableConfig,
 } from './utils';
+// Shared fatal-signal list and POSIX 128+signal exit-code policy so the
+// browser watch host terminates with the same codes as the node watch loop.
+export { FATAL_SIGNALS, getSignalExitCode } from './utils/signals';
 // Worker concurrency primitives shared with @rstest/browser
 export { getNumCpus, parseWorkers, resolveWorkerCount } from './utils/workers';
 export type { ResolveWorkerCountOptions } from './utils/workers';
