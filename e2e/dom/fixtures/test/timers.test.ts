@@ -26,6 +26,24 @@ it('keeps Node timer handles while tracking real timers', async () => {
   expect(receiver.unref).toBeTypeOf('function');
 });
 
+it('clears numeric Node timer ids without running their callbacks', async () => {
+  let timeoutCalled = false;
+  const timeout = setTimeout(() => {
+    timeoutCalled = true;
+  }, 10);
+  clearInterval(Number(timeout));
+
+  let intervalCalls = 0;
+  const interval = setInterval(() => {
+    intervalCalls++;
+  }, 1);
+  clearTimeout(Number(interval));
+
+  await new Promise((resolve) => nodeSetTimeout(resolve, 20));
+  expect(timeoutCalled).toBe(false);
+  expect(intervalCalls).toBe(0);
+});
+
 it('preserves Node setTimeout utility behavior', async () => {
   const sleep = promisify(setTimeout);
   await expect(sleep(1, 'done')).resolves.toBe('done');

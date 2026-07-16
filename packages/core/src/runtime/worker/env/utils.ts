@@ -17,6 +17,26 @@ const TIMER_KEYS = [
 
 const SKIP_KEYS: string[] = ['window', 'self', 'top', 'parent'];
 
+const scheduleMicrotask = queueMicrotask;
+const trackedTimerErrorEvents = new WeakSet<ErrorEvent>();
+
+function reportUnhandledError(event: ErrorEvent) {
+  scheduleMicrotask(() => {
+    if (!event.defaultPrevented && event.error != null) {
+      Reflect.apply(process.emit, process, [
+        'uncaughtExceptionMonitor',
+        event.error,
+        'uncaughtException',
+      ]);
+      Reflect.apply(process.emit, process, [
+        'uncaughtException',
+        event.error,
+        'uncaughtException',
+      ]);
+    }
+  });
+}
+
 function getWindowKeys(
   global: any,
   win: any,
@@ -201,6 +221,8 @@ export function installTimerTracking(
   },
 ): () => void {
   const timerCancellations = new Map<unknown, () => void>();
+  const nodeTimerHandlesById = new Map<number, unknown>();
+  const nodeTimerIdsByHandle = new Map<unknown, number>();
   const descriptors = new Map<
     (typeof TIMER_KEYS)[number],
     PropertyDescriptor
@@ -208,6 +230,22 @@ export function installTimerTracking(
   const dispatchEvent = global.dispatchEvent;
   const ErrorEvent = global.ErrorEvent;
   let trackingEnabled = true;
+
+  const registerNodeTimer = <T>(timer: T): T => {
+    const id = Number(timer);
+    if (Number.isFinite(id)) {
+      nodeTimerHandlesById.set(id, timer);
+      nodeTimerIdsByHandle.set(timer, id);
+    }
+    return timer;
+  };
+  const forgetNodeTimer = (timer: unknown) => {
+    const id = nodeTimerIdsByHandle.get(timer);
+    if (id !== undefined && nodeTimerHandlesById.get(id) === timer) {
+      nodeTimerHandlesById.delete(id);
+    }
+    nodeTimerIdsByHandle.delete(timer);
+  };
 
   const runTimerCallback = <TArgs extends unknown[]>(
     callback: (...args: TArgs) => void,
@@ -224,16 +262,19 @@ export function installTimerTracking(
         error == null
           ? new Error(`Timer callback threw ${String(error)}`)
           : error;
-      Reflect.apply(dispatchEvent, global, [
-        new ErrorEvent('error', {
-          cancelable: true,
-          error: reportedError,
-          message:
-            reportedError instanceof Error
-              ? reportedError.message
-              : String(reportedError),
-        }),
-      ]);
+      const event = new ErrorEvent('error', {
+        cancelable: true,
+        error: reportedError,
+        message:
+          reportedError instanceof Error
+            ? reportedError.message
+            : String(reportedError),
+      });
+      trackedTimerErrorEvents.add(event);
+      Reflect.apply(dispatchEvent, global, [event]);
+      // A listener registered before the default handler may stop propagation.
+      // The caller that dispatched the event therefore owns the final decision.
+      reportUnhandledError(event);
     }
   };
 
@@ -243,11 +284,23 @@ export function installTimerTracking(
     ...args: TArgs
   ) => {
     if (!trackingEnabled) {
-      const timer = Reflect.apply(nodeTimers.setTimeout, global, [
-        callback,
-        delay,
-        ...args,
-      ]);
+      if (typeof callback !== 'function') {
+        return Reflect.apply(nodeTimers.setTimeout, global, [
+          callback,
+          delay,
+          ...args,
+        ]);
+      }
+      const timer = registerNodeTimer(
+        nodeTimers.setTimeout(
+          function (this: NodeJS.Timeout, ...callbackArgs) {
+            forgetNodeTimer(this);
+            Reflect.apply(callback, this, callbackArgs);
+          },
+          delay,
+          ...args,
+        ),
+      );
       timer.unref();
       return timer;
     }
@@ -262,6 +315,7 @@ export function installTimerTracking(
     let refreshed = false;
     const timer = nodeTimers.setTimeout(
       function (this: NodeJS.Timeout, ...callbackArgs) {
+        forgetNodeTimer(this);
         refreshed = false;
         runTimerCallback(callback, this, callbackArgs);
         if (!refreshed) {
@@ -271,7 +325,11 @@ export function installTimerTracking(
       delay,
       ...args,
     );
-    const cancel = () => nodeTimers.clearTimeout(timer);
+    registerNodeTimer(timer);
+    const cancel = () => {
+      forgetNodeTimer(timer);
+      nodeTimers.clearTimeout(timer);
+    };
     const refresh = timer.refresh;
     Object.defineProperty(timer, 'refresh', {
       configurable: true,
@@ -279,6 +337,7 @@ export function installTimerTracking(
         const result = Reflect.apply(refresh, this, refreshArgs);
         if (trackingEnabled) {
           refreshed = true;
+          registerNodeTimer(this);
           timerCancellations.set(this, cancel);
         }
         return result;
@@ -294,11 +353,13 @@ export function installTimerTracking(
     ...args: TArgs
   ) => {
     if (!trackingEnabled) {
-      const timer = Reflect.apply(nodeTimers.setInterval, global, [
-        callback,
-        delay,
-        ...args,
-      ]);
+      const timer = registerNodeTimer(
+        Reflect.apply(nodeTimers.setInterval, global, [
+          callback,
+          delay,
+          ...args,
+        ]),
+      );
       timer.unref();
       return timer;
     }
@@ -317,7 +378,11 @@ export function installTimerTracking(
       delay,
       ...args,
     );
-    timerCancellations.set(timer, () => nodeTimers.clearInterval(timer));
+    registerNodeTimer(timer);
+    timerCancellations.set(timer, () => {
+      forgetNodeTimer(timer);
+      nodeTimers.clearInterval(timer);
+    });
     return timer;
   };
 
@@ -349,11 +414,16 @@ export function installTimerTracking(
           return nativePromisifiedSetTimeout(delay, value, { ref: false });
         }
         if (options !== null && typeof options === 'object') {
-          const unrefOptions = new Proxy(options, {
-            get(target, key) {
-              return key === 'ref' ? false : Reflect.get(target, key, target);
+          const unrefOptions = new Proxy(
+            {},
+            {
+              get(_target, key) {
+                return key === 'ref'
+                  ? false
+                  : Reflect.get(options, key, options);
+              },
             },
-          });
+          );
           return nativePromisifiedSetTimeout(delay, value, unrefOptions);
         }
         return nativePromisifiedSetTimeout(delay, value, options);
@@ -364,60 +434,104 @@ export function installTimerTracking(
       ) {
         return nativePromisifiedSetTimeout(delay, value, options);
       }
-      let signal: AbortSignal | null | undefined;
-      try {
-        signal = options?.signal;
-      } catch (error) {
-        return Promise.reject(error);
-      }
-      if (
-        signal !== undefined &&
-        (signal === null ||
-          typeof signal.addEventListener !== 'function' ||
-          typeof signal.removeEventListener !== 'function' ||
-          typeof signal.aborted !== 'boolean')
-      ) {
-        return nativePromisifiedSetTimeout(delay, value, options);
-      }
-      if (signal?.aborted) {
-        return nativePromisifiedSetTimeout(delay, value, options);
-      }
-
       const controller = new nodeTimers.AbortController();
-      const onAbort = () => controller.abort(signal?.reason);
-      signal?.addEventListener('abort', onAbort, { once: true });
-      const nativePromise = nativePromisifiedSetTimeout(delay, value, {
-        get ref() {
-          return options?.ref;
+      const combinedSignals = new WeakMap<object, AbortSignal>();
+      const originalOptions = options ?? {};
+      const trackedOptions = new Proxy(
+        {},
+        {
+          get(_target, key) {
+            if (key !== 'signal') {
+              return Reflect.get(originalOptions, key, originalOptions);
+            }
+            const signal = Reflect.get(
+              originalOptions,
+              key,
+              originalOptions,
+            ) as unknown;
+            if (signal === undefined) {
+              return controller.signal;
+            }
+            if (
+              signal === null ||
+              typeof signal !== 'object' ||
+              !('aborted' in signal)
+            ) {
+              return signal;
+            }
+            const existing = combinedSignals.get(signal);
+            if (existing) {
+              return existing;
+            }
+            const userSignal = signal as AbortSignal;
+            const combinedSignal = new Proxy({} as AbortSignal, {
+              has(_target, signalKey) {
+                return Reflect.has(userSignal, signalKey);
+              },
+              get(_target, signalKey) {
+                if (signalKey === 'aborted') {
+                  return (
+                    Reflect.get(userSignal, signalKey, userSignal) ||
+                    controller.signal.aborted
+                  );
+                }
+                if (signalKey === 'reason') {
+                  return controller.signal.aborted
+                    ? controller.signal.reason
+                    : Reflect.get(userSignal, signalKey, userSignal);
+                }
+                if (signalKey === 'addEventListener') {
+                  const addEventListener = Reflect.get(
+                    userSignal,
+                    signalKey,
+                    userSignal,
+                  );
+                  return (
+                    ...args: Parameters<AbortSignal['addEventListener']>
+                  ) => {
+                    Reflect.apply(addEventListener, userSignal, args);
+                    controller.signal.addEventListener(...args);
+                  };
+                }
+                if (signalKey === 'removeEventListener') {
+                  const removeEventListener = Reflect.get(
+                    userSignal,
+                    signalKey,
+                    userSignal,
+                  );
+                  return (
+                    ...args: Parameters<AbortSignal['removeEventListener']>
+                  ) => {
+                    try {
+                      Reflect.apply(removeEventListener, userSignal, args);
+                    } finally {
+                      controller.signal.removeEventListener(...args);
+                    }
+                  };
+                }
+                return Reflect.get(userSignal, signalKey, userSignal);
+              },
+            });
+            combinedSignals.set(signal, combinedSignal);
+            return combinedSignal;
+          },
         },
-        signal: controller.signal,
-      });
+      );
+      const nativePromise = nativePromisifiedSetTimeout(
+        delay,
+        value,
+        trackedOptions,
+      );
       let canceledByTeardown = false;
-      const detachAbortListener = () => {
-        try {
-          signal?.removeEventListener('abort', onAbort);
-          return { ok: true } as const;
-        } catch (error) {
-          return { error, ok: false } as const;
-        }
-      };
       const trackedPromise = new Promise<T>((resolve, reject) => {
         void nativePromise.then(
           (result) => {
             timerCancellations.delete(trackedPromise);
-            const detached = detachAbortListener();
-            if (detached.ok) {
-              resolve(result);
-            } else {
-              reject(detached.error);
-            }
+            resolve(result);
           },
           (error) => {
             timerCancellations.delete(trackedPromise);
-            const detached = detachAbortListener();
-            if (!canceledByTeardown && !detached.ok) {
-              reject(detached.error);
-            } else if (!canceledByTeardown) {
+            if (!canceledByTeardown) {
               reject(error);
             }
           },
@@ -425,7 +539,6 @@ export function installTimerTracking(
       });
       timerCancellations.set(trackedPromise, () => {
         canceledByTeardown = true;
-        detachAbortListener();
         // Internal cancellation must not reject user-created promise chains
         // after their test environment has already been destroyed.
         controller.abort();
@@ -444,8 +557,13 @@ export function installTimerTracking(
   const clearTimeout = (
     timer: Parameters<NodeTimerPrimitives['clearTimeout']>[0],
   ) => {
-    timerCancellations.delete(timer);
-    if (typeof timer === 'number') {
+    const nodeTimer =
+      typeof timer === 'number' ? nodeTimerHandlesById.get(timer) : timer;
+    timerCancellations.delete(nodeTimer);
+    if (nodeTimer !== undefined) {
+      forgetNodeTimer(nodeTimer);
+    }
+    if (typeof timer === 'number' && nodeTimer === undefined) {
       domTimers?.clearTimeout(timer);
     }
     nodeTimers.clearTimeout(timer);
@@ -453,8 +571,13 @@ export function installTimerTracking(
   const clearInterval = (
     timer: Parameters<NodeTimerPrimitives['clearInterval']>[0],
   ) => {
-    timerCancellations.delete(timer);
-    if (typeof timer === 'number') {
+    const nodeTimer =
+      typeof timer === 'number' ? nodeTimerHandlesById.get(timer) : timer;
+    timerCancellations.delete(nodeTimer);
+    if (nodeTimer !== undefined) {
+      forgetNodeTimer(nodeTimer);
+    }
+    if (typeof timer === 'number' && nodeTimer === undefined) {
       domTimers?.clearInterval(timer);
     }
     nodeTimers.clearInterval(timer);
@@ -496,26 +619,10 @@ export function installTimerTracking(
 }
 
 export function addDefaultErrorHandler(window: Window) {
-  const scheduleMicrotask = queueMicrotask;
   const throwUnhandledError = (e: ErrorEvent) => {
-    // Event listeners run in registration order, so cancellation may happen
-    // after this default listener is invoked. Defer reporting until dispatch
-    // has completed and only suppress errors explicitly handled with
-    // preventDefault(). Merely observing the event must not make a test pass.
-    scheduleMicrotask(() => {
-      if (!e.defaultPrevented && e.error != null) {
-        Reflect.apply(process.emit, process, [
-          'uncaughtExceptionMonitor',
-          e.error,
-          'uncaughtException',
-        ]);
-        Reflect.apply(process.emit, process, [
-          'uncaughtException',
-          e.error,
-          'uncaughtException',
-        ]);
-      }
-    });
+    if (!trackedTimerErrorEvents.has(e)) {
+      reportUnhandledError(e);
+    }
   };
   window.addEventListener('error', throwUnhandledError);
   return (): void => {

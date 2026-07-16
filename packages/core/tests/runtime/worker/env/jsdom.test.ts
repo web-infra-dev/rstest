@@ -198,6 +198,38 @@ describe('jsdom environment', () => {
     }
   });
 
+  it('reports timer errors when DOM propagation is stopped', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    const expected = new Error('stopped timer error');
+    const uncaughtErrors: unknown[] = [];
+    const emitSpy = rs
+      .spyOn(process, 'emit')
+      .mockImplementation((event: string | symbol, ...args: unknown[]) => {
+        if (event === 'uncaughtException') {
+          uncaughtErrors.push(args[0]);
+        }
+        return true;
+      });
+
+    try {
+      testGlobal.addEventListener(
+        'error',
+        (event) => event.stopImmediatePropagation(),
+        { capture: true, once: true },
+      );
+      testGlobal.setTimeout(() => {
+        throw expected;
+      }, 0);
+      await new Promise((resolve) => nodeSetTimeout(resolve, 20));
+
+      expect(uncaughtErrors).toEqual([expected]);
+    } finally {
+      emitSpy.mockRestore();
+      await teardown();
+    }
+  });
+
   it('reports errors with the original microtask scheduler', async () => {
     const testGlobal = createTestGlobal();
     const { teardown } = await environment.setup(testGlobal, {});
@@ -363,6 +395,17 @@ describe('jsdom environment', () => {
     try {
       const sleep = promisify(testGlobal.setTimeout);
       await expect(sleep(1, 'done')).resolves.toBe('done');
+      await expect(
+        sleep(1, 'frozen', Object.freeze({ ref: false })),
+      ).resolves.toBe('frozen');
+      const frozenController = new AbortController();
+      await expect(
+        sleep(
+          1,
+          'frozen signal',
+          Object.freeze({ signal: frozenController.signal }),
+        ),
+      ).resolves.toBe('frozen signal');
 
       const trackedPromisifyDescriptor = Object.getOwnPropertyDescriptor(
         testGlobal.setTimeout,
@@ -427,8 +470,188 @@ describe('jsdom environment', () => {
         },
       };
       await expect(callSleep({ signal })).rejects.toBe(cleanupError);
+
+      const cleanupGetterError = new Error('removeEventListener getter');
+      const signalWithCleanupGetter = Object.defineProperty(
+        {
+          aborted: false,
+          addEventListener() {},
+        },
+        'removeEventListener',
+        {
+          get() {
+            throw cleanupGetterError;
+          },
+        },
+      );
+      let cleanupGetterPromise: Promise<void> | undefined;
+      expect(() => {
+        cleanupGetterPromise = callSleep({ signal: signalWithCleanupGetter });
+      }).not.toThrow();
+      await expect(cleanupGetterPromise).rejects.toBe(cleanupGetterError);
     } finally {
       await teardown();
+    }
+  });
+
+  it('preserves native signal accessor error timing', async () => {
+    const testGlobal = createTestGlobal();
+    const nativeSleep = promisify(testGlobal.setTimeout);
+    const cleanup = installTimerTracking(testGlobal, {
+      AbortController,
+      clearInterval: testGlobal.clearInterval,
+      clearTimeout: testGlobal.clearTimeout,
+      setInterval: testGlobal.setInterval,
+      setTimeout: testGlobal.setTimeout,
+    });
+    const trackedSleep = promisify(testGlobal.setTimeout);
+    const observeCall = async (call: () => Promise<unknown>) => {
+      let promise: Promise<unknown>;
+      try {
+        promise = call();
+      } catch (error) {
+        return { error, phase: 'thrown' } as const;
+      }
+      try {
+        await promise;
+        return { phase: 'resolved' } as const;
+      } catch (error) {
+        return { error, phase: 'rejected' } as const;
+      }
+    };
+    const cases: Array<[string, (expected: Error) => { signal: object }]> = [
+      [
+        'aborted getter',
+        (expected) => ({
+          signal: Object.defineProperty(
+            { addEventListener() {}, removeEventListener() {} },
+            'aborted',
+            {
+              get() {
+                throw expected;
+              },
+            },
+          ),
+        }),
+      ],
+      [
+        'addEventListener getter',
+        (expected) => ({
+          signal: {
+            aborted: false,
+            get addEventListener(): never {
+              throw expected;
+            },
+            removeEventListener() {},
+          },
+        }),
+      ],
+      [
+        'reason getter',
+        (expected) => ({
+          signal: {
+            aborted: true,
+            addEventListener() {},
+            removeEventListener() {},
+            get reason(): never {
+              throw expected;
+            },
+          },
+        }),
+      ],
+      [
+        'addEventListener method',
+        (expected) => ({
+          signal: {
+            aborted: false,
+            addEventListener() {
+              throw expected;
+            },
+            removeEventListener() {},
+          },
+        }),
+      ],
+      [
+        'removeEventListener getter',
+        (expected) => ({
+          signal: {
+            aborted: false,
+            addEventListener() {},
+            get removeEventListener(): never {
+              throw expected;
+            },
+          },
+        }),
+      ],
+      [
+        'removeEventListener method',
+        (expected) => ({
+          signal: {
+            aborted: false,
+            addEventListener() {},
+            removeEventListener() {
+              throw expected;
+            },
+          },
+        }),
+      ],
+    ];
+
+    try {
+      for (const [name, createOptions] of cases) {
+        const expected = new Error(name);
+        const nativeResult = await observeCall(() =>
+          Reflect.apply(nativeSleep, undefined, [
+            0,
+            undefined,
+            createOptions(expected),
+          ]),
+        );
+        const trackedResult = await observeCall(() =>
+          Reflect.apply(trackedSleep, undefined, [
+            0,
+            undefined,
+            createOptions(expected),
+          ]),
+        );
+
+        expect(trackedResult).toEqual(nativeResult);
+      }
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('does not route numeric Node timer ids to DOM clear functions', () => {
+    const testGlobal = createTestGlobal();
+    const domClearTimeout = rs.fn();
+    const domClearInterval = rs.fn();
+    const cleanup = installTimerTracking(
+      testGlobal,
+      {
+        AbortController,
+        clearInterval: testGlobal.clearInterval,
+        clearTimeout: testGlobal.clearTimeout,
+        setInterval: testGlobal.setInterval,
+        setTimeout: testGlobal.setTimeout,
+      },
+      {
+        clearInterval: domClearInterval,
+        clearTimeout: domClearTimeout,
+      },
+    );
+
+    try {
+      const timeout = testGlobal.setTimeout(() => {}, 60_000);
+      const interval = testGlobal.setInterval(() => {}, 60_000);
+
+      testGlobal.clearInterval(Number(timeout));
+      testGlobal.clearTimeout(Number(interval));
+
+      expect(domClearInterval).not.toHaveBeenCalled();
+      expect(domClearTimeout).not.toHaveBeenCalled();
+    } finally {
+      cleanup();
     }
   });
 
@@ -526,6 +749,15 @@ describe('jsdom environment', () => {
     ).resolves.toBe('done');
     expect(receivedRef).toBe(false);
     expect(receivedSignal).toBeUndefined();
+
+    await expect(
+      Reflect.apply(staleSleep, undefined, [
+        1,
+        'frozen',
+        Object.freeze({ ref: true }),
+      ]),
+    ).resolves.toBe('frozen');
+    expect(receivedRef).toBe(false);
   });
 
   it('reports errors from timer wrappers retained after teardown', async () => {
