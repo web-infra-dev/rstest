@@ -53,5 +53,6 @@ pnpm --filter @rstest/core typecheck
 
 - Don't bypass the worker pool for test execution
 - Don't use `console.log` directly; use the logger utilities
+- Don't call timer globals (`setTimeout` etc.) directly in `src/runtime/` — user tests may enable fake timers; use `getRealTimers()` from `runtime/util` (lint-enforced via `no-restricted-syntax`)
 - Don't fan runner lifecycle events out to reporters or `stateManager` directly; route them through `RunnerEventSink`
 - Don't add a `RuntimeConfig` field without declaring its node/browser disposition in `executorCapabilities`

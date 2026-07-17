@@ -90,8 +90,8 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
                   const obj = await fn();
                   util.flag(assertion, 'object', obj);
                   resolve(await assertionFunction.call(assertion, ...args));
-                  clearTimeout(intervalId);
-                  clearTimeout(timeoutId);
+                  getRealTimers().clearTimeout!(intervalId);
+                  getRealTimers().clearTimeout!(timeoutId);
                 } catch (err) {
                   lastError = err;
                   if (!util.flag(assertion, '_isLastPollAttempt')) {
@@ -100,7 +100,7 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
                 }
               };
               const timeoutId = getRealTimers().setTimeout!(() => {
-                clearTimeout(intervalId);
+                getRealTimers().clearTimeout!(intervalId);
                 util.flag(assertion, '_isLastPollAttempt', true);
                 const rejectWithCause = (cause: any) => {
                   reject(
