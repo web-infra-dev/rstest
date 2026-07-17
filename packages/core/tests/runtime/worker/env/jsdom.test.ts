@@ -665,13 +665,22 @@ describe('jsdom environment', () => {
     let tornDown = false;
 
     try {
-      await new Promise<void>((resolve) => {
-        timer = testGlobal.setTimeout(resolve, 1);
+      timer = await new Promise<NodeJS.Timeout>((resolve) => {
+        const scheduledTimer = testGlobal.setTimeout(
+          () => resolve(scheduledTimer),
+          1,
+        );
       });
 
       tornDown = true;
       await teardown();
-      timer?.refresh();
+      Object.defineProperty(timer, Symbol.toPrimitive, {
+        configurable: true,
+        value() {
+          throw new Error('timer coercion');
+        },
+      });
+      expect(() => timer?.refresh()).not.toThrow();
 
       expect(timer?.hasRef()).toBe(false);
       timer?.ref();
@@ -1223,7 +1232,7 @@ describe('jsdom environment', () => {
     }
   });
 
-  it('does not reject derived sleeps during cleanup', async () => {
+  it('preserves stale promisified timeouts during cleanup', async () => {
     const testGlobal = createTestGlobal();
     const cleanup = installTimerTracking(testGlobal, getNodeTimers(testGlobal));
     const unhandledRejections: unknown[] = [];
@@ -1241,6 +1250,25 @@ describe('jsdom environment', () => {
       void staleSleep(60_000).then(() => {});
       cleanup();
       await expect(staleSleep(1, 'done')).resolves.toBe('done');
+      const callStaleSleep = (options: unknown) =>
+        Reflect.apply(staleSleep, undefined, [
+          0,
+          undefined,
+          options,
+        ]) as Promise<void>;
+      await expect(callStaleSleep({ ref: 'invalid' })).rejects.toMatchObject({
+        code: 'ERR_INVALID_ARG_TYPE',
+      });
+      const refGetterError = new Error('stale ref getter');
+      await expect(
+        callStaleSleep(
+          Object.defineProperty({}, 'ref', {
+            get() {
+              throw refGetterError;
+            },
+          }),
+        ),
+      ).rejects.toBe(refGetterError);
       await new Promise((resolve) => nodeSetTimeout(resolve, 20));
 
       expect(unhandledRejections).toEqual([]);

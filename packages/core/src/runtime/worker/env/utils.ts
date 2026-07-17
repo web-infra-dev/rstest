@@ -354,7 +354,12 @@ export function installTimerTracking(
     forgetNodeTimer(timer);
   };
   const registerNodeTimer = <T extends NodeJS.Timeout>(timer: T): T => {
-    const id = Number(timer);
+    let id: number;
+    try {
+      id = Number(timer);
+    } catch {
+      return timer;
+    }
     if (Number.isFinite(id)) {
       activeNodeTimerHandlesById.set(id, timer);
       activeNodeTimerIdsByHandle.set(timer, id);
@@ -389,7 +394,7 @@ export function installTimerTracking(
     if (
       typeof timer === 'object' &&
       timer !== null &&
-      activeNodeTimerIdsByHandle.has(timer)
+      trackedTimerLifecycleByHandle.has(timer)
     ) {
       return timer;
     }
@@ -560,9 +565,13 @@ export function installTimerTracking(
             {},
             {
               get(_target, key) {
-                return key === 'ref'
+                const value = Reflect.get(options, key, options);
+                if (key !== 'ref') {
+                  return value;
+                }
+                return value === undefined || typeof value === 'boolean'
                   ? false
-                  : Reflect.get(options, key, options);
+                  : value;
               },
             },
           );
