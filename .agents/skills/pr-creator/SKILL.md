@@ -12,7 +12,6 @@ description: Use when asked to create a pull request for this repository. It hel
    Use a descriptive branch name, preferably `feat-<topic>` or `fix-<topic>`.
 
 2. Review local changes with `git status --short`.
-   Do not revert unrelated user changes.
    Before creating the PR, ensure the intended changes are committed and never commit directly on the default branch.
 
 3. Check PR readiness before writing:

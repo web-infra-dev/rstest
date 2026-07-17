@@ -21,8 +21,10 @@ pnpm gen:release-image  # Generate a release's banner + og image (see below)
 
 Each release blog needs **two** images, generated together so they share one gradient:
 
-- **banner** — `4096x1152`, no tagline, the in-page `<img>` at the top of the post. Committed to `docs/public/` and referenced by a site-relative path (`/rstest-banner-v<ver>.png`).
-- **og image** — `2400x1260`, optional tagline, the social-share card. Committed to [rstackjs/rstack-design-resources](https://github.com/rstackjs/rstack-design-resources) under `rstest/` and served by the `assets.rspack.rs` CDN. `rspress.config.ts` wires `og:image` per blog route: `blog/announcing-<major>-<minor>` → `assets.rspack.rs/rstest/rstest-og-image-v<major>-<minor>.png`.
+- **banner** — `4096x1152`, no tagline, the in-page `<img>` at the top of the post, referenced by its CDN URL (`assets.rspack.rs/rstest/rstest-banner-v<major>-<minor>.png`).
+- **og image** — `2400x1260`, optional tagline, the social-share card. `rspress.config.ts` wires `og:image` per blog route: `blog/announcing-<major>-<minor>` → `assets.rspack.rs/rstest/rstest-og-image-v<major>-<minor>.png`.
+
+Both images are committed to [rstackjs/rstack-design-resources](https://github.com/rstackjs/rstack-design-resources) under `rstest/` and served by the `assets.rspack.rs` CDN. Always refer to that repo by its GitHub URL — collaborators keep local clones at different paths.
 
 The templates live **in this repo**; design-resources stays a passive PNG store.
 
@@ -34,7 +36,7 @@ The templates live **in this repo**; design-resources stays a passive PNG store.
 
 1. Run `pnpm gen:release-image --version <ver> [--description "<tagline>"] --out-dir <dir>` from `website/`. The gradient is randomized every run — re-run until both images look good.
 2. Compress both PNGs with [TinyPNG](https://tinypng.com) (or Squoosh / ImageOptim / `pngquant`) — the raw resvg output is ~200 KB and palette quantization typically drops it to ~1/4 the size with no visible loss.
-3. Put the banner in `docs/public/`. Commit the og image to the design-resources repo under `rstest/` and open a PR — that repo is the only place og images are stored. After CDN deploy it is reachable at `assets.rspack.rs/rstest/rstest-og-image-v<ver>.png`.
+3. Commit both images to the design-resources repo under `rstest/` and open a PR — that repo is the only place release images are stored (the generation `--out-dir` is just a local staging spot). After CDN deploy they are reachable at `assets.rspack.rs/rstest/rstest-{banner,og-image}-v<major>-<minor>.png`.
 
 ### Do
 
@@ -45,7 +47,7 @@ The templates live **in this repo**; design-resources stays a passive PNG store.
 ### Don't
 
 - Don't depend on packages like `geist` that pull in framework peer deps (`next>=13.2`); commit raw `.ttf` files directly instead
-- Don't commit og images into this repo; they belong in design-resources (the banner is the one exception — it lives in `docs/public/`)
+- Don't commit release images (banner or og) into this repo; they belong in design-resources
 - Don't bake the logo into a static asset; always fetch the SVG so logo updates propagate automatically
 
 ## Writing style guidelines
@@ -90,7 +92,7 @@ When writing or editing documentation, follow these principles:
 - First mention of a new package: include GitHub link
 - Keep technical terms in English (e.g., Context, Hook, Provider, CI)
 - For TypeScript API signatures in docs, prefer `T[]` over `Array<T>`. For unions that allow either a single value or an array, prefer `A | B | (A | B)[]` over `A | B | Array<A | B>`.
-- When documenting a newly added API or config option, add an `ApiMeta` version marker near that section. Import it with `import { ApiMeta } from '@components/ApiMeta';` and render it as `<ApiMeta addedVersion="x.y.z" />`.
+- When documenting a newly added API or config option, add an `ApiMeta` version marker near that section. Import it with `import { ApiMeta } from '@components/ApiMeta';` and render it as `<ApiMeta addedVersion="x.y.z" />`. Default `addedVersion` to the owning package's current version with its patch segment incremented by 1 (e.g. `@rstest/core` at `0.10.6` → `<ApiMeta addedVersion="0.10.7" />`).
 - If a config option has a corresponding CLI flag, surface it alongside type and default in both EN and ZH, matching the style of neighboring config pages.
 - **Punctuation by language**: In `docs/zh/`, use full-width punctuation (`：，。；（）`) for Chinese prose — including the `**类型：**` / `**默认值：**` / `**CLI：**` metadata lines and `**标签**：` bullet lead-ins. Keep half-width only inside code and inline code. In `docs/en/`, use half-width punctuation only. In both languages, keep the metadata colon inside the bold (`**Type:**` / `**类型：**`, not `**Type**:`).
 
