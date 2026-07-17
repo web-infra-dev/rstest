@@ -1327,9 +1327,6 @@ importers:
       picomatch:
         specifier: ^4.0.5
         version: 4.0.5
-      v8-to-istanbul:
-        specifier: ^9.3.0
-        version: 9.3.0
     devDependencies:
       '@rsbuild/core':
         specifier: ~2.1.6

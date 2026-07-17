@@ -1,7 +1,9 @@
 import { defineConfig } from '@rstest/core';
+import { pluginReact } from '@rsbuild/plugin-react';
 import { join } from 'pathe';
 
 export default defineConfig({
+  plugins: [pluginReact()],
   coverage: {
     enabled: true,
     provider: 'v8',
@@ -13,7 +15,7 @@ export default defineConfig({
       './src/c.ts',
     ],
     clean: false,
-    reporters: ['text'],
+    reporters: ['text', 'json-summary'],
   },
   setupFiles: ['./rstest.setup.ts'],
 });
