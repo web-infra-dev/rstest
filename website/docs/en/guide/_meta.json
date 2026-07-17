@@ -11,6 +11,11 @@
   },
   {
     "type": "dir-section-header",
+    "name": "advanced",
+    "label": "Advanced"
+  },
+  {
+    "type": "dir-section-header",
     "name": "browser-testing",
     "label": "Browser Testing"
   },
@@ -21,16 +26,6 @@
   },
   {
     "type": "dir-section-header",
-    "name": "debug",
-    "label": "Debug"
-  },
-  {
-    "type": "dir-section-header",
-    "name": "advanced",
-    "label": "Advanced"
-  },
-  {
-    "type": "dir-section-header",
     "name": "integration",
     "label": "Integration"
   },
@@ -38,5 +33,10 @@
     "type": "dir-section-header",
     "name": "migration",
     "label": "Migration"
+  },
+  {
+    "type": "dir-section-header",
+    "name": "debug",
+    "label": "Debug"
   }
 ]
