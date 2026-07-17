@@ -270,7 +270,77 @@ export function installTimerTracking(
   >();
   const dispatchEvent = global.dispatchEvent;
   const ErrorEvent = global.ErrorEvent;
+  const abortControllerPrototype = nodeTimers.AbortController.prototype;
+  const abortControllerAbort = Reflect.get(
+    abortControllerPrototype,
+    'abort',
+    abortControllerPrototype,
+  ) as AbortController['abort'];
+  const abortControllerSignalGetter = Object.getOwnPropertyDescriptor(
+    abortControllerPrototype,
+    'signal',
+  )?.get;
+  const signalProbeController = new nodeTimers.AbortController();
+  const getAbortSignal = (controller: AbortController): AbortSignal =>
+    abortControllerSignalGetter
+      ? Reflect.apply(abortControllerSignalGetter, controller, [])
+      : controller.signal;
+  const signalProbe = getAbortSignal(signalProbeController);
+  const abortSignalPrototype = Object.getPrototypeOf(signalProbe);
+  const abortSignalAbortedGetter = Object.getOwnPropertyDescriptor(
+    abortSignalPrototype,
+    'aborted',
+  )?.get;
+  const abortSignalReasonGetter = Object.getOwnPropertyDescriptor(
+    abortSignalPrototype,
+    'reason',
+  )?.get;
+  const abortSignalAddEventListener = Reflect.get(
+    signalProbe,
+    'addEventListener',
+    signalProbe,
+  ) as AbortSignal['addEventListener'];
+  const abortSignalRemoveEventListener = Reflect.get(
+    signalProbe,
+    'removeEventListener',
+    signalProbe,
+  ) as AbortSignal['removeEventListener'];
   let trackingEnabled = true;
+
+  const createTeardownController = () => {
+    const controller = new nodeTimers.AbortController();
+    const signal = getAbortSignal(controller);
+    const safeSignal = new Proxy(signal, {
+      has(target, key) {
+        if (key === 'aborted') {
+          return true;
+        }
+        return Reflect.has(target, key);
+      },
+      get(target, key) {
+        if (key === 'aborted' && abortSignalAbortedGetter) {
+          return Reflect.apply(abortSignalAbortedGetter, target, []);
+        }
+        if (key === 'reason' && abortSignalReasonGetter) {
+          return Reflect.apply(abortSignalReasonGetter, target, []);
+        }
+        if (key === 'addEventListener') {
+          return (...args: Parameters<AbortSignal['addEventListener']>) =>
+            Reflect.apply(abortSignalAddEventListener, target, args);
+        }
+        if (key === 'removeEventListener') {
+          return (...args: Parameters<AbortSignal['removeEventListener']>) =>
+            Reflect.apply(abortSignalRemoveEventListener, target, args);
+        }
+        return Reflect.get(target, key, target);
+      },
+    });
+    return {
+      abort: (reason: unknown) =>
+        Reflect.apply(abortControllerAbort, controller, [reason]),
+      signal: safeSignal,
+    };
+  };
 
   const forgetNodeTimer = (timer: unknown) => {
     const id = nodeTimerIdsByHandle.get(timer);
@@ -319,9 +389,15 @@ export function installTimerTracking(
     if (nodeTimerIdsByHandle.has(timer)) {
       return timer;
     }
-    if (typeof timer === 'number' || typeof timer === 'string') {
+    if (typeof timer === 'number') {
       const id = Number(timer);
       if (Number.isFinite(id)) {
+        return nodeTimerHandlesById.get(id);
+      }
+    }
+    if (typeof timer === 'string') {
+      const id = Number(timer);
+      if (Number.isFinite(id) && timer === String(id)) {
         return nodeTimerHandlesById.get(id);
       }
     }
@@ -496,7 +572,7 @@ export function installTimerTracking(
       ) {
         return nativePromisifiedSetTimeout(delay, value, options);
       }
-      const controller = new nodeTimers.AbortController();
+      const teardownController = createTeardownController();
       let abortSource: 'teardown' | 'user' | undefined;
       const combinedSignals = new WeakMap<object, AbortSignal>();
       const originalOptions = options ?? {};
@@ -513,7 +589,7 @@ export function installTimerTracking(
               originalOptions,
             ) as unknown;
             if (signal === undefined) {
-              return controller.signal;
+              return teardownController.signal;
             }
             if (
               signal === null ||
@@ -542,12 +618,12 @@ export function installTimerTracking(
                 if (signalKey === 'aborted') {
                   return (
                     Reflect.get(userSignal, signalKey, userSignal) ||
-                    controller.signal.aborted
+                    teardownController.signal.aborted
                   );
                 }
                 if (signalKey === 'reason') {
-                  return controller.signal.aborted
-                    ? controller.signal.reason
+                  return teardownController.signal.aborted
+                    ? teardownController.signal.reason
                     : Reflect.get(userSignal, signalKey, userSignal);
                 }
                 if (signalKey === 'addEventListener') {
@@ -566,7 +642,7 @@ export function installTimerTracking(
                         (typeof listener !== 'object' || listener === null))
                     ) {
                       Reflect.apply(addEventListener, userSignal, args);
-                      controller.signal.addEventListener(...args);
+                      teardownController.signal.addEventListener(...args);
                       return;
                     }
                     const invokeListener = function (
@@ -603,8 +679,8 @@ export function installTimerTracking(
                     const teardownArgs = [...args];
                     teardownArgs[1] = wrappers.teardown;
                     Reflect.apply(
-                      controller.signal.addEventListener,
-                      controller.signal,
+                      teardownController.signal.addEventListener,
+                      teardownController.signal,
                       teardownArgs,
                     );
                   };
@@ -635,8 +711,8 @@ export function installTimerTracking(
                       Reflect.apply(removeEventListener, userSignal, userArgs);
                     } finally {
                       Reflect.apply(
-                        controller.signal.removeEventListener,
-                        controller.signal,
+                        teardownController.signal.removeEventListener,
+                        teardownController.signal,
                         teardownArgs,
                       );
                     }
@@ -683,7 +759,7 @@ export function installTimerTracking(
       timerCancellations.set(trackedPromise, () => {
         // Internal cancellation must not reject user-created promise chains
         // after their test environment has already been destroyed.
-        controller.abort(teardownAbortReason);
+        teardownController.abort(teardownAbortReason);
       });
       return trackedPromise;
     };
@@ -703,8 +779,12 @@ export function installTimerTracking(
     if (nodeTimer !== undefined) {
       forgetTrackedNodeTimer(nodeTimer);
     }
-    if (typeof timer === 'number' && nodeTimer === undefined) {
-      domTimers?.clearTimeout(timer);
+    if (
+      nodeTimer === undefined &&
+      (typeof timer === 'number' ||
+        (typeof timer === 'string' && Number.isFinite(Number(timer))))
+    ) {
+      domTimers?.clearTimeout(timer as number);
     }
     nodeTimers.clearTimeout(timer);
   };
@@ -715,8 +795,12 @@ export function installTimerTracking(
     if (nodeTimer !== undefined) {
       forgetTrackedNodeTimer(nodeTimer);
     }
-    if (typeof timer === 'number' && nodeTimer === undefined) {
-      domTimers?.clearInterval(timer);
+    if (
+      nodeTimer === undefined &&
+      (typeof timer === 'number' ||
+        (typeof timer === 'string' && Number.isFinite(Number(timer))))
+    ) {
+      domTimers?.clearInterval(timer as number);
     }
     nodeTimers.clearInterval(timer);
   };

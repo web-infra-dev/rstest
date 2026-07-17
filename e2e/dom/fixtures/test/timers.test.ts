@@ -67,6 +67,18 @@ it('preserves Node setTimeout utility behavior', async () => {
     Reflect.set(globalThis, 'AbortController', NativeAbortController);
   }
 
+  const addEventListener = AbortSignal.prototype.addEventListener;
+  try {
+    AbortSignal.prototype.addEventListener = () => {
+      throw new Error('mutated addEventListener');
+    };
+    await expect(sleep(1, 'captured signal methods')).resolves.toBe(
+      'captured signal methods',
+    );
+  } finally {
+    AbortSignal.prototype.addEventListener = addEventListener;
+  }
+
   const controller = new AbortController();
   const abortedSleep = sleep(60_000, undefined, {
     signal: controller.signal,

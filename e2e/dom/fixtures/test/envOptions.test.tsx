@@ -7,10 +7,10 @@ it('should print the url', () => {
 
 it('clears DOM timers created before global timer tracking', async () => {
   const timerWindow = window as typeof window & {
-    preInstallTimer: number;
+    preInstallTimer: string;
     preInstallTimerFired: boolean;
   };
-  clearTimeout(timerWindow.preInstallTimer);
+  Reflect.apply(clearTimeout, globalThis, [timerWindow.preInstallTimer]);
   await new Promise((resolve) => nodeSetTimeout(resolve, 1100));
 
   expect(timerWindow.preInstallTimerFired).toBe(false);

@@ -10,9 +10,9 @@ export default defineConfig({
       url: 'http://localhost:8081/test-options',
       html: `<!doctype html><script>
         window.preInstallTimerFired = false;
-        window.preInstallTimer = setTimeout(() => {
+        window.preInstallTimer = String(setTimeout(() => {
           window.preInstallTimerFired = true;
-        }, 1000);
+        }, 1000));
       </script>`,
     },
   },

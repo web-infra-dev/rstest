@@ -4,6 +4,7 @@ import { environment } from '../../../../src/runtime/worker/env/happyDom';
 
 const createTestGlobal = (): typeof globalThis =>
   ({
+    AbortController: globalThis.AbortController,
     clearInterval: globalThis.clearInterval,
     clearTimeout: globalThis.clearTimeout,
     console: globalThis.console,

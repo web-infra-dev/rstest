@@ -1012,6 +1012,66 @@ describe('jsdom environment', () => {
     }
   });
 
+  it('keeps Node timers tracked for non-canonical numeric string ids', () => {
+    const testGlobal = createTestGlobal();
+    const clearTimeout = rs.fn(testGlobal.clearTimeout);
+    const domClearTimeout = rs.fn();
+    const cleanup = installTimerTracking(
+      testGlobal,
+      {
+        AbortController,
+        clearInterval: testGlobal.clearInterval,
+        clearTimeout,
+        setInterval: testGlobal.setInterval,
+        setTimeout: testGlobal.setTimeout,
+      },
+      {
+        clearInterval: rs.fn(),
+        clearTimeout: domClearTimeout,
+      },
+    );
+
+    try {
+      const timeout = testGlobal.setTimeout(() => {}, 60_000);
+      const nonCanonicalId = `0${Number(timeout)}`;
+
+      Reflect.apply(testGlobal.clearTimeout, testGlobal, [nonCanonicalId]);
+      cleanup();
+
+      expect(domClearTimeout).toHaveBeenCalledWith(nonCanonicalId);
+      expect(clearTimeout).toHaveBeenCalledWith(nonCanonicalId);
+      expect(clearTimeout).toHaveBeenCalledWith(timeout);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('routes unrecognized numeric string ids to DOM clear functions', () => {
+    const testGlobal = createTestGlobal();
+    const domClearTimeout = rs.fn();
+    const cleanup = installTimerTracking(
+      testGlobal,
+      {
+        AbortController,
+        clearInterval: testGlobal.clearInterval,
+        clearTimeout: testGlobal.clearTimeout,
+        setInterval: testGlobal.setInterval,
+        setTimeout: testGlobal.setTimeout,
+      },
+      {
+        clearInterval: rs.fn(),
+        clearTimeout: domClearTimeout,
+      },
+    );
+
+    try {
+      Reflect.apply(testGlobal.clearTimeout, testGlobal, ['424242']);
+      expect(domClearTimeout).toHaveBeenCalledWith('424242');
+    } finally {
+      cleanup();
+    }
+  });
+
   it('keeps promisified timeouts tracked after no-op clear calls', () => {
     const testGlobal = createTestGlobal();
     const abortSpy = rs.spyOn(AbortController.prototype, 'abort');
@@ -1162,6 +1222,104 @@ describe('jsdom environment', () => {
       expect(abortSpy).toHaveBeenCalledTimes(1);
     } finally {
       abortSpy.mockRestore();
+      cleanup();
+    }
+  });
+
+  it('uses the captured AbortController abort method during cleanup', async () => {
+    const testGlobal = createTestGlobal();
+    const cleanup = installTimerTracking(testGlobal, {
+      AbortController,
+      clearInterval: testGlobal.clearInterval,
+      clearTimeout: testGlobal.clearTimeout,
+      setInterval: testGlobal.setInterval,
+      setTimeout: testGlobal.setTimeout,
+    });
+    const abort = AbortController.prototype.abort;
+
+    try {
+      const sleep = promisify(testGlobal.setTimeout);
+      const outcome = sleep(20, 'resolved');
+      AbortController.prototype.abort = () => {};
+      cleanup();
+      AbortController.prototype.abort = abort;
+
+      await expect(
+        Promise.race([
+          outcome,
+          new Promise((resolve) =>
+            nodeSetTimeout(() => resolve('pending'), 40),
+          ),
+        ]),
+      ).resolves.toBe('pending');
+    } finally {
+      AbortController.prototype.abort = abort;
+      cleanup();
+    }
+  });
+
+  it('isolates ordinary sleeps from AbortSignal prototype changes', async () => {
+    const testGlobal = createTestGlobal();
+    const cleanup = installTimerTracking(testGlobal, {
+      AbortController,
+      clearInterval: testGlobal.clearInterval,
+      clearTimeout: testGlobal.clearTimeout,
+      setInterval: testGlobal.setInterval,
+      setTimeout: testGlobal.setTimeout,
+    });
+    const addEventListener = AbortSignal.prototype.addEventListener;
+    const removeEventListener = AbortSignal.prototype.removeEventListener;
+    const abortedDescriptor = Object.getOwnPropertyDescriptor(
+      AbortSignal.prototype,
+      'aborted',
+    );
+    const signalDescriptor = Object.getOwnPropertyDescriptor(
+      AbortController.prototype,
+      'signal',
+    );
+
+    try {
+      const sleep = promisify(testGlobal.setTimeout);
+      AbortSignal.prototype.addEventListener = () => {
+        throw new Error('mutated addEventListener');
+      };
+      const addOutcome = sleep(1, 'add');
+      AbortSignal.prototype.addEventListener = addEventListener;
+      await expect(addOutcome).resolves.toBe('add');
+
+      const removeOutcome = sleep(1, 'remove');
+      AbortSignal.prototype.removeEventListener = () => {
+        throw new Error('mutated removeEventListener');
+      };
+      await expect(removeOutcome).resolves.toBe('remove');
+
+      Reflect.deleteProperty(AbortSignal.prototype, 'aborted');
+      await expect(sleep(1, 'aborted')).resolves.toBe('aborted');
+
+      Object.defineProperty(AbortController.prototype, 'signal', {
+        configurable: true,
+        get() {
+          throw new Error('mutated signal getter');
+        },
+      });
+      await expect(sleep(1, 'signal')).resolves.toBe('signal');
+    } finally {
+      AbortSignal.prototype.addEventListener = addEventListener;
+      AbortSignal.prototype.removeEventListener = removeEventListener;
+      if (abortedDescriptor) {
+        Object.defineProperty(
+          AbortSignal.prototype,
+          'aborted',
+          abortedDescriptor,
+        );
+      }
+      if (signalDescriptor) {
+        Object.defineProperty(
+          AbortController.prototype,
+          'signal',
+          signalDescriptor,
+        );
+      }
       cleanup();
     }
   });
