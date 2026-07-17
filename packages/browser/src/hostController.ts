@@ -2138,6 +2138,15 @@ const createBrowserRuntime = async ({
     if (isDebug()) {
       await rsbuildInstance.inspectConfig({
         writeToDisk: true,
+        // The server's own distPath is isolated per project inside the run's
+        // temp dir (removed at teardown); keep the debug artifacts at the
+        // project's stable dist root so they survive the run and stay where
+        // the docs point users to.
+        outputPath: resolve(
+          context.rootPath,
+          context.normalizedConfig.output.distPath.root,
+          '.rsbuild',
+        ),
         extraConfigs: {
           rstest: {
             ...context.normalizedConfig,
