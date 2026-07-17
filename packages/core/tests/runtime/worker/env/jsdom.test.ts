@@ -258,6 +258,131 @@ describe('jsdom environment', () => {
     }
   });
 
+  it('only honors error cancellation during synchronous DOM dispatch', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {
+      beforeParse(window) {
+        window.addEventListener(
+          'error',
+          (event) =>
+            queueMicrotask(() => {
+              event.preventDefault();
+              Object.defineProperty(event, 'error', { value: null });
+            }),
+          { once: true },
+        );
+      },
+    });
+    const lateCancellationError = new Error('late cancellation');
+    const synchronouslyHandledError = new Error('synchronously handled');
+    const uncaughtErrors: unknown[] = [];
+    const emitSpy = rs
+      .spyOn(process, 'emit')
+      .mockImplementation((event: string | symbol, ...args: unknown[]) => {
+        if (event === 'uncaughtException') {
+          uncaughtErrors.push(args[0]);
+        }
+        return true;
+      });
+
+    try {
+      const lateCancellationEvent = new testGlobal.ErrorEvent('error', {
+        cancelable: true,
+        error: lateCancellationError,
+      });
+      const originalPreventDefault = lateCancellationEvent.preventDefault;
+      testGlobal.dispatchEvent(lateCancellationEvent);
+      await Promise.resolve();
+      expect(lateCancellationEvent.preventDefault).toBe(originalPreventDefault);
+
+      testGlobal.addEventListener('error', (event) => event.preventDefault(), {
+        once: true,
+      });
+      testGlobal.dispatchEvent(
+        new testGlobal.ErrorEvent('error', {
+          cancelable: true,
+          error: synchronouslyHandledError,
+        }),
+      );
+      await Promise.resolve();
+
+      const nonExtensibleError = new Error('non-extensible event');
+      testGlobal.dispatchEvent(
+        Object.preventExtensions(
+          new testGlobal.ErrorEvent('error', {
+            cancelable: true,
+            error: nonExtensibleError,
+          }),
+        ),
+      );
+      await Promise.resolve();
+
+      expect(uncaughtErrors).toEqual([
+        lateCancellationError,
+        nonExtensibleError,
+      ]);
+    } finally {
+      emitSpy.mockRestore();
+      await teardown();
+    }
+  });
+
+  it('preserves thrown values when timer error messages are unsafe', async () => {
+    const testGlobal = createTestGlobal();
+    const { teardown } = await environment.setup(testGlobal, {});
+    const toStringError = new Error('toString trap');
+    const messageError = new Error('message getter trap');
+    const nestedMessageError = new Error('nested message toString trap');
+    const thrownValues = [
+      {
+        toString() {
+          throw toStringError;
+        },
+      },
+      Object.defineProperty(new Error(), 'message', {
+        get() {
+          throw messageError;
+        },
+      }),
+      Object.defineProperty(new Error(), 'message', {
+        get() {
+          return {
+            toString() {
+              throw nestedMessageError;
+            },
+          };
+        },
+      }),
+    ];
+
+    try {
+      for (const thrownValue of thrownValues) {
+        const received = new Promise<{ error: unknown; message: string }>(
+          (resolve) => {
+            testGlobal.addEventListener(
+              'error',
+              (event) => {
+                event.preventDefault();
+                resolve({ error: event.error, message: event.message });
+              },
+              { once: true },
+            );
+          },
+        );
+        testGlobal.setTimeout(() => {
+          throw thrownValue;
+        }, 0);
+
+        await expect(received).resolves.toEqual({
+          error: thrownValue,
+          message: 'Timer callback threw an unprintable value',
+        });
+      }
+    } finally {
+      await teardown();
+    }
+  });
+
   it('uses the Node fatal path for unhandled timer errors', async () => {
     const testGlobal = createTestGlobal();
     const { teardown } = await environment.setup(testGlobal, {});
@@ -433,6 +558,112 @@ describe('jsdom environment', () => {
       if (!tornDown) {
         await teardown();
       }
+    }
+  });
+
+  it('uses the refreshed timeout receiver for teardown ownership', () => {
+    const testGlobal = createTestGlobal();
+    const clearTimeout = rs.fn(testGlobal.clearTimeout);
+    const cleanup = installTimerTracking(testGlobal, {
+      AbortController,
+      clearInterval: testGlobal.clearInterval,
+      clearTimeout,
+      setInterval: testGlobal.setInterval,
+      setTimeout: testGlobal.setTimeout,
+    });
+    const firstTimer = testGlobal.setTimeout(() => {}, 60_000);
+    const secondTimer = testGlobal.setTimeout(() => {}, 60_000);
+
+    try {
+      expect(Reflect.apply(firstTimer.refresh, secondTimer, [])).toBe(
+        secondTimer,
+      );
+      cleanup();
+
+      expect(clearTimeout).toHaveBeenCalledTimes(2);
+      expect(clearTimeout).toHaveBeenCalledWith(firstTimer);
+      expect(clearTimeout).toHaveBeenCalledWith(secondTimer);
+    } finally {
+      clearTimeout(firstTimer);
+      clearTimeout(secondTimer);
+      cleanup();
+    }
+  });
+
+  it('preserves timer lifecycle method descriptors', () => {
+    const nativeTimer = setTimeout(() => {}, 60_000);
+    const testGlobal = createTestGlobal();
+    const cleanup = installTimerTracking(testGlobal, {
+      AbortController,
+      clearInterval: testGlobal.clearInterval,
+      clearTimeout: testGlobal.clearTimeout,
+      setInterval: testGlobal.setInterval,
+      setTimeout: testGlobal.setTimeout,
+    });
+    const trackedTimer = testGlobal.setTimeout(() => {}, 60_000);
+
+    try {
+      for (const key of ['close', 'refresh', Symbol.dispose] as const) {
+        const nativeDescriptor = Object.getOwnPropertyDescriptor(
+          Object.getPrototypeOf(nativeTimer),
+          key,
+        );
+        const trackedDescriptor = Object.getOwnPropertyDescriptor(
+          trackedTimer,
+          key,
+        );
+
+        expect(trackedDescriptor).toMatchObject({
+          configurable: nativeDescriptor?.configurable,
+          enumerable: nativeDescriptor?.enumerable,
+          writable: nativeDescriptor?.writable,
+        });
+      }
+    } finally {
+      clearTimeout(nativeTimer);
+      clearTimeout(trackedTimer);
+      cleanup();
+    }
+  });
+
+  it('keeps borrowed refresh ownership in the receiver environment', () => {
+    const firstGlobal = createTestGlobal();
+    const secondGlobal = createTestGlobal();
+    const firstClearTimeout = rs.fn(firstGlobal.clearTimeout);
+    const secondClearTimeout = rs.fn(secondGlobal.clearTimeout);
+    const firstCleanup = installTimerTracking(firstGlobal, {
+      AbortController,
+      clearInterval: firstGlobal.clearInterval,
+      clearTimeout: firstClearTimeout,
+      setInterval: firstGlobal.setInterval,
+      setTimeout: firstGlobal.setTimeout,
+    });
+    const secondCleanup = installTimerTracking(secondGlobal, {
+      AbortController,
+      clearInterval: secondGlobal.clearInterval,
+      clearTimeout: secondClearTimeout,
+      setInterval: secondGlobal.setInterval,
+      setTimeout: secondGlobal.setTimeout,
+    });
+    const firstTimer = firstGlobal.setTimeout(() => {}, 60_000);
+    const secondTimer = secondGlobal.setTimeout(() => {}, 60_000);
+
+    try {
+      Reflect.apply(firstTimer.refresh, secondTimer, []);
+      firstCleanup();
+
+      expect(firstClearTimeout).toHaveBeenCalledTimes(1);
+      expect(firstClearTimeout).toHaveBeenCalledWith(firstTimer);
+      expect(secondClearTimeout).not.toHaveBeenCalled();
+
+      secondCleanup();
+      expect(secondClearTimeout).toHaveBeenCalledTimes(1);
+      expect(secondClearTimeout).toHaveBeenCalledWith(secondTimer);
+    } finally {
+      clearTimeout(firstTimer);
+      clearTimeout(secondTimer);
+      firstCleanup();
+      secondCleanup();
     }
   });
 

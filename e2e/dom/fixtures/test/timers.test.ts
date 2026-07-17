@@ -142,6 +142,29 @@ it('routes timer callback errors through the jsdom window', async () => {
   expect(await received).toBe(expected);
 });
 
+it('preserves timer errors with unsafe string conversion', async () => {
+  const expected = {
+    toString() {
+      throw new Error('unsafe timer error conversion');
+    },
+  };
+  const received = new Promise<unknown>((resolve) => {
+    window.addEventListener(
+      'error',
+      (event) => {
+        event.preventDefault();
+        resolve(event.error);
+      },
+      { once: true },
+    );
+  });
+  setTimeout(() => {
+    throw expected;
+  }, 0);
+
+  expect(await received).toBe(expected);
+});
+
 it('restores tracked real timers after fake timers', () => {
   const trackedSetTimeout = setTimeout;
 
@@ -209,4 +232,14 @@ it('cleans up a timeout refreshed from inside its callback', async () => {
   });
 
   expect(calls).toBe(1);
+});
+
+it('cleans up the receiver of a borrowed timeout refresh', () => {
+  const firstTimer = setTimeout(() => {}, 60_000);
+  const secondTimer = setTimeout(() => {
+    throw new Error('Borrowed refresh receiver ran after teardown');
+  }, 100);
+
+  Reflect.apply(firstTimer.refresh, secondTimer, []);
+  clearTimeout(firstTimer);
 });

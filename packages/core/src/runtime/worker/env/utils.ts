@@ -19,38 +19,59 @@ const SKIP_KEYS: string[] = ['window', 'self', 'top', 'parent'];
 
 const scheduleMicrotask = queueMicrotask;
 const trackedTimerErrorEvents = new WeakSet<ErrorEvent>();
-const trackedTimerCleanupByHandle = new WeakMap<object, () => void>();
+const trackedTimerLifecycleByHandle = new WeakMap<
+  object,
+  { forget(): void; rearm(): void }
+>();
 
-function patchTimerCancellationMethods<T extends NodeJS.Timeout>(timer: T): T {
+function patchTimerLifecycleMethods<T extends NodeJS.Timeout>(timer: T): T {
   for (const key of ['close', Symbol.dispose] as const) {
     const method = Reflect.get(timer, key, timer);
     if (typeof method !== 'function') {
       continue;
     }
+    const descriptor =
+      Object.getOwnPropertyDescriptor(timer, key) ??
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(timer), key);
     Object.defineProperty(timer, key, {
-      configurable: true,
+      configurable: descriptor?.configurable ?? true,
+      enumerable: descriptor?.enumerable,
       value: function (this: NodeJS.Timeout, ...args: unknown[]) {
         const result = Reflect.apply(method, this, args);
-        trackedTimerCleanupByHandle.get(this)?.();
+        trackedTimerLifecycleByHandle.get(this)?.forget();
         return result;
       },
-      writable: true,
+      writable: descriptor?.writable ?? true,
     });
   }
+  const refresh = timer.refresh;
+  const refreshDescriptor =
+    Object.getOwnPropertyDescriptor(timer, 'refresh') ??
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(timer), 'refresh');
+  Object.defineProperty(timer, 'refresh', {
+    configurable: refreshDescriptor?.configurable ?? true,
+    enumerable: refreshDescriptor?.enumerable,
+    value: function (this: NodeJS.Timeout, ...args: unknown[]) {
+      const result = Reflect.apply(refresh, this, args);
+      trackedTimerLifecycleByHandle.get(this)?.rearm();
+      return result;
+    },
+    writable: refreshDescriptor?.writable ?? true,
+  });
   return timer;
 }
 
-function reportUnhandledError(event: ErrorEvent) {
+function reportUnhandledError(error: unknown, isPrevented: () => boolean) {
   scheduleMicrotask(() => {
-    if (!event.defaultPrevented && event.error != null) {
+    if (!isPrevented() && error != null) {
       Reflect.apply(process.emit, process, [
         'uncaughtExceptionMonitor',
-        event.error,
+        error,
         'uncaughtException',
       ]);
       Reflect.apply(process.emit, process, [
         'uncaughtException',
-        event.error,
+        error,
         'uncaughtException',
       ]);
     }
@@ -257,21 +278,41 @@ export function installTimerTracking(
       nodeTimerHandlesById.delete(id);
     }
     nodeTimerIdsByHandle.delete(timer);
-    if (typeof timer === 'object' && timer !== null) {
-      trackedTimerCleanupByHandle.delete(timer);
-    }
   };
   const forgetTrackedNodeTimer = (timer: unknown) => {
     timerCancellations.delete(timer);
     forgetNodeTimer(timer);
   };
   const registerNodeTimer = <T extends NodeJS.Timeout>(timer: T): T => {
-    trackedTimerCleanupByHandle.set(timer, () => forgetTrackedNodeTimer(timer));
     const id = Number(timer);
     if (Number.isFinite(id)) {
       nodeTimerHandlesById.set(id, timer);
       nodeTimerIdsByHandle.set(timer, id);
     }
+    return timer;
+  };
+  const trackNodeTimer = <T extends NodeJS.Timeout>(
+    timer: T,
+    clearTimer: (timer: T) => void,
+  ): T => {
+    const cancel = () => {
+      forgetTrackedNodeTimer(timer);
+      clearTimer(timer);
+    };
+    const lifecycle = {
+      forget: () => forgetTrackedNodeTimer(timer),
+      rearm: () => {
+        registerNodeTimer(timer);
+        if (trackingEnabled) {
+          timerCancellations.set(timer, cancel);
+        } else {
+          timer.unref();
+        }
+      },
+    };
+    trackedTimerLifecycleByHandle.set(timer, lifecycle);
+    patchTimerLifecycleMethods(timer);
+    lifecycle.rearm();
     return timer;
   };
   const resolveTrackedNodeTimer = (timer: unknown) => {
@@ -302,13 +343,20 @@ export function installTimerTracking(
         error == null
           ? new Error(`Timer callback threw ${String(error)}`)
           : error;
+      let message: string;
+      try {
+        message = String(
+          reportedError instanceof Error
+            ? reportedError.message
+            : reportedError,
+        );
+      } catch {
+        message = 'Timer callback threw an unprintable value';
+      }
       const event = new ErrorEvent('error', {
         cancelable: true,
         error: reportedError,
-        message:
-          reportedError instanceof Error
-            ? reportedError.message
-            : String(reportedError),
+        message,
       });
       trackedTimerErrorEvents.add(event);
       Reflect.apply(dispatchEvent, global, [event]);
@@ -333,20 +381,17 @@ export function installTimerTracking(
           ...args,
         ]);
       }
-      const timer = registerNodeTimer(
-        patchTimerCancellationMethods(
-          nodeTimers.setTimeout(
-            function (this: NodeJS.Timeout, ...callbackArgs) {
-              forgetNodeTimer(this);
-              Reflect.apply(callback, this, callbackArgs);
-            },
-            delay,
-            ...args,
-          ),
+      return trackNodeTimer(
+        nodeTimers.setTimeout(
+          function (this: NodeJS.Timeout, ...callbackArgs) {
+            forgetTrackedNodeTimer(this);
+            Reflect.apply(callback, this, callbackArgs);
+          },
+          delay,
+          ...args,
         ),
+        (timer) => nodeTimers.clearTimeout(timer),
       );
-      timer.unref();
-      return timer;
     }
     if (typeof callback !== 'function') {
       return Reflect.apply(nodeTimers.setTimeout, global, [
@@ -356,45 +401,17 @@ export function installTimerTracking(
       ]);
     }
 
-    let refreshed = false;
-    const timer = patchTimerCancellationMethods(
+    return trackNodeTimer(
       nodeTimers.setTimeout(
         function (this: NodeJS.Timeout, ...callbackArgs) {
-          forgetNodeTimer(this);
-          refreshed = false;
+          forgetTrackedNodeTimer(this);
           runTimerCallback(callback, this, callbackArgs);
-          if (!refreshed) {
-            timerCancellations.delete(this);
-          }
         },
         delay,
         ...args,
       ),
+      (timer) => nodeTimers.clearTimeout(timer),
     );
-    registerNodeTimer(timer);
-    const cancel = () => {
-      forgetNodeTimer(timer);
-      nodeTimers.clearTimeout(timer);
-    };
-    const refresh = timer.refresh;
-    Object.defineProperty(timer, 'refresh', {
-      configurable: true,
-      value: function (this: NodeJS.Timeout, ...refreshArgs: unknown[]) {
-        const result = Reflect.apply(refresh, this, refreshArgs);
-        if (trackingEnabled) {
-          refreshed = true;
-          registerNodeTimer(this);
-          timerCancellations.set(this, cancel);
-        } else {
-          registerNodeTimer(this);
-          this.unref();
-        }
-        return result;
-      },
-      writable: true,
-    });
-    timerCancellations.set(timer, cancel);
-    return timer;
   };
   const setInterval = <TArgs extends unknown[]>(
     callback: (...args: TArgs) => void,
@@ -402,17 +419,14 @@ export function installTimerTracking(
     ...args: TArgs
   ) => {
     if (!trackingEnabled) {
-      const timer = registerNodeTimer(
-        patchTimerCancellationMethods(
-          Reflect.apply(nodeTimers.setInterval, global, [
-            callback,
-            delay,
-            ...args,
-          ]),
-        ),
+      return trackNodeTimer(
+        Reflect.apply(nodeTimers.setInterval, global, [
+          callback,
+          delay,
+          ...args,
+        ]),
+        (timer) => nodeTimers.clearInterval(timer),
       );
-      timer.unref();
-      return timer;
     }
     if (typeof callback !== 'function') {
       return Reflect.apply(nodeTimers.setInterval, global, [
@@ -422,7 +436,7 @@ export function installTimerTracking(
       ]);
     }
 
-    const timer = patchTimerCancellationMethods(
+    return trackNodeTimer(
       nodeTimers.setInterval(
         function (this: unknown, ...callbackArgs) {
           runTimerCallback(callback, this, callbackArgs);
@@ -430,13 +444,8 @@ export function installTimerTracking(
         delay,
         ...args,
       ),
+      (timer) => nodeTimers.clearInterval(timer),
     );
-    registerNodeTimer(timer);
-    timerCancellations.set(timer, () => {
-      forgetNodeTimer(timer);
-      nodeTimers.clearInterval(timer);
-    });
-    return timer;
   };
 
   const customPromisifyDescriptor = Object.getOwnPropertyDescriptor(
@@ -750,7 +759,55 @@ export function installTimerTracking(
 export function addDefaultErrorHandler(window: Window) {
   const throwUnhandledError = (e: ErrorEvent) => {
     if (!trackedTimerErrorEvents.has(e)) {
-      reportUnhandledError(e);
+      const error = e.error;
+      let preventedDuringDispatch = e.defaultPrevented;
+      const preventDefaultDescriptor = Object.getOwnPropertyDescriptor(
+        e,
+        'preventDefault',
+      );
+      const preventDefault = e.preventDefault;
+      const capturePreventDefault = function (
+        this: ErrorEvent,
+        ...args: unknown[]
+      ) {
+        const result = Reflect.apply(preventDefault, this, args);
+        if (this === e && e.eventPhase !== 0) {
+          preventedDuringDispatch = e.defaultPrevented;
+        }
+        return result;
+      };
+      let restorePreventDefault = () => {};
+      try {
+        Object.defineProperty(e, 'preventDefault', {
+          configurable: true,
+          value: capturePreventDefault,
+          writable: true,
+        });
+        restorePreventDefault = () => {
+          const currentDescriptor = Object.getOwnPropertyDescriptor(
+            e,
+            'preventDefault',
+          );
+          if (currentDescriptor?.value !== capturePreventDefault) {
+            return;
+          }
+          if (preventDefaultDescriptor) {
+            Object.defineProperty(
+              e,
+              'preventDefault',
+              preventDefaultDescriptor,
+            );
+          } else {
+            Reflect.deleteProperty(e, 'preventDefault');
+          }
+        };
+      } catch {
+        // Preserve error reporting for Event implementations that cannot be patched.
+      }
+      reportUnhandledError(error, () => {
+        restorePreventDefault();
+        return preventedDuringDispatch;
+      });
     }
   };
   window.addEventListener('error', throwUnhandledError);
