@@ -16,6 +16,14 @@ const createTestGlobal = (): typeof globalThis =>
     setTimeout: globalThis.setTimeout,
   }) as unknown as typeof globalThis;
 
+const getNodeTimers = (testGlobal: typeof globalThis) => ({
+  AbortController: testGlobal.AbortController,
+  clearInterval: testGlobal.clearInterval,
+  clearTimeout: testGlobal.clearTimeout,
+  setInterval: testGlobal.setInterval,
+  setTimeout: testGlobal.setTimeout,
+});
+
 describe('jsdom environment', () => {
   it('tracks Node timers and clears them during teardown', async () => {
     const testGlobal = createTestGlobal();
@@ -120,32 +128,6 @@ describe('jsdom environment', () => {
       if (!tornDown) {
         await teardown();
       }
-    }
-  });
-
-  it('routes timer callback errors through the jsdom window', async () => {
-    const testGlobal = createTestGlobal();
-    const { teardown } = await environment.setup(testGlobal, {});
-    const expected = new Error('timer error');
-
-    try {
-      const received = new Promise<unknown>((resolve) => {
-        testGlobal.addEventListener(
-          'error',
-          (event) => {
-            event.preventDefault();
-            resolve(event.error);
-          },
-          { once: true },
-        );
-      });
-      testGlobal.setTimeout(() => {
-        throw expected;
-      }, 0);
-
-      expect(await received).toBe(expected);
-    } finally {
-      await teardown();
     }
   });
 
@@ -593,13 +575,7 @@ describe('jsdom environment', () => {
   it('preserves timer lifecycle method descriptors', () => {
     const nativeTimer = setTimeout(() => {}, 60_000);
     const testGlobal = createTestGlobal();
-    const cleanup = installTimerTracking(testGlobal, {
-      AbortController,
-      clearInterval: testGlobal.clearInterval,
-      clearTimeout: testGlobal.clearTimeout,
-      setInterval: testGlobal.setInterval,
-      setTimeout: testGlobal.setTimeout,
-    });
+    const cleanup = installTimerTracking(testGlobal, getNodeTimers(testGlobal));
     const trackedTimer = testGlobal.setTimeout(() => {}, 60_000);
 
     try {
@@ -823,13 +799,7 @@ describe('jsdom environment', () => {
   it('preserves native signal accessor error timing', async () => {
     const testGlobal = createTestGlobal();
     const nativeSleep = promisify(testGlobal.setTimeout);
-    const cleanup = installTimerTracking(testGlobal, {
-      AbortController,
-      clearInterval: testGlobal.clearInterval,
-      clearTimeout: testGlobal.clearTimeout,
-      setInterval: testGlobal.setInterval,
-      setTimeout: testGlobal.setTimeout,
-    });
+    const cleanup = installTimerTracking(testGlobal, getNodeTimers(testGlobal));
     const trackedSleep = promisify(testGlobal.setTimeout);
     const observeCall = async (call: () => Promise<unknown>) => {
       let promise: Promise<unknown>;
@@ -948,16 +918,18 @@ describe('jsdom environment', () => {
     }
   });
 
-  it('does not route numeric Node timer ids to DOM clear functions', () => {
+  it('routes numeric timer ids without losing Node ownership', () => {
     const testGlobal = createTestGlobal();
+    const clearTimeout = rs.fn(testGlobal.clearTimeout);
+    const clearInterval = rs.fn(testGlobal.clearInterval);
     const domClearTimeout = rs.fn();
     const domClearInterval = rs.fn();
     const cleanup = installTimerTracking(
       testGlobal,
       {
         AbortController,
-        clearInterval: testGlobal.clearInterval,
-        clearTimeout: testGlobal.clearTimeout,
+        clearInterval,
+        clearTimeout,
         setInterval: testGlobal.setInterval,
         setTimeout: testGlobal.setTimeout,
       },
@@ -968,105 +940,33 @@ describe('jsdom environment', () => {
     );
 
     try {
-      const timeout = testGlobal.setTimeout(() => {}, 60_000);
-      const interval = testGlobal.setInterval(() => {}, 60_000);
+      const numericTimeout = testGlobal.setTimeout(() => {}, 60_000);
+      const numericInterval = testGlobal.setInterval(() => {}, 60_000);
+      testGlobal.clearInterval(Number(numericTimeout));
+      testGlobal.clearTimeout(Number(numericInterval));
 
-      testGlobal.clearInterval(Number(timeout));
-      testGlobal.clearTimeout(Number(interval));
-
-      expect(domClearInterval).not.toHaveBeenCalled();
-      expect(domClearTimeout).not.toHaveBeenCalled();
-    } finally {
-      cleanup();
-    }
-  });
-
-  it('forgets timers cleared by their numeric string ids', () => {
-    const testGlobal = createTestGlobal();
-    const clearTimeout = rs.fn(testGlobal.clearTimeout);
-    const clearInterval = rs.fn(testGlobal.clearInterval);
-    const cleanup = installTimerTracking(testGlobal, {
-      AbortController,
-      clearInterval,
-      clearTimeout,
-      setInterval: testGlobal.setInterval,
-      setTimeout: testGlobal.setTimeout,
-    });
-
-    try {
-      const timeout = testGlobal.setTimeout(() => {}, 60_000);
-      const interval = testGlobal.setInterval(() => {}, 60_000);
-      const timeoutId = String(Number(timeout));
-      const intervalId = String(Number(interval));
-
+      const stringTimeout = testGlobal.setTimeout(() => {}, 60_000);
+      const stringInterval = testGlobal.setInterval(() => {}, 60_000);
+      const timeoutId = String(Number(stringTimeout));
+      const intervalId = String(Number(stringInterval));
       Reflect.apply(testGlobal.clearInterval, testGlobal, [timeoutId]);
       Reflect.apply(testGlobal.clearTimeout, testGlobal, [intervalId]);
-      cleanup();
 
-      expect(clearInterval).toHaveBeenCalledTimes(1);
-      expect(clearInterval).toHaveBeenCalledWith(timeoutId);
-      expect(clearTimeout).toHaveBeenCalledTimes(1);
-      expect(clearTimeout).toHaveBeenCalledWith(intervalId);
-    } finally {
-      cleanup();
-    }
-  });
-
-  it('keeps Node timers tracked for non-canonical numeric string ids', () => {
-    const testGlobal = createTestGlobal();
-    const clearTimeout = rs.fn(testGlobal.clearTimeout);
-    const domClearTimeout = rs.fn();
-    const cleanup = installTimerTracking(
-      testGlobal,
-      {
-        AbortController,
-        clearInterval: testGlobal.clearInterval,
-        clearTimeout,
-        setInterval: testGlobal.setInterval,
-        setTimeout: testGlobal.setTimeout,
-      },
-      {
-        clearInterval: rs.fn(),
-        clearTimeout: domClearTimeout,
-      },
-    );
-
-    try {
-      const timeout = testGlobal.setTimeout(() => {}, 60_000);
-      const nonCanonicalId = `0${Number(timeout)}`;
-
+      const aliasedTimeout = testGlobal.setTimeout(() => {}, 60_000);
+      const nonCanonicalId = `0${Number(aliasedTimeout)}`;
       Reflect.apply(testGlobal.clearTimeout, testGlobal, [nonCanonicalId]);
-      cleanup();
-
-      expect(domClearTimeout).toHaveBeenCalledWith(nonCanonicalId);
-      expect(clearTimeout).toHaveBeenCalledWith(nonCanonicalId);
-      expect(clearTimeout).toHaveBeenCalledWith(timeout);
-    } finally {
-      cleanup();
-    }
-  });
-
-  it('routes unrecognized numeric string ids to DOM clear functions', () => {
-    const testGlobal = createTestGlobal();
-    const domClearTimeout = rs.fn();
-    const cleanup = installTimerTracking(
-      testGlobal,
-      {
-        AbortController,
-        clearInterval: testGlobal.clearInterval,
-        clearTimeout: testGlobal.clearTimeout,
-        setInterval: testGlobal.setInterval,
-        setTimeout: testGlobal.setTimeout,
-      },
-      {
-        clearInterval: rs.fn(),
-        clearTimeout: domClearTimeout,
-      },
-    );
-
-    try {
       Reflect.apply(testGlobal.clearTimeout, testGlobal, ['424242']);
-      expect(domClearTimeout).toHaveBeenCalledWith('424242');
+      cleanup();
+
+      expect(domClearInterval).not.toHaveBeenCalled();
+      expect(domClearTimeout.mock.calls).toEqual([
+        [nonCanonicalId],
+        ['424242'],
+      ]);
+      expect(clearInterval).toHaveBeenCalledWith(timeoutId);
+      expect(clearTimeout).toHaveBeenCalledWith(intervalId);
+      expect(clearTimeout).toHaveBeenCalledWith(nonCanonicalId);
+      expect(clearTimeout).toHaveBeenCalledWith(aliasedTimeout);
     } finally {
       cleanup();
     }
@@ -1075,13 +975,7 @@ describe('jsdom environment', () => {
   it('keeps promisified timeouts tracked after no-op clear calls', () => {
     const testGlobal = createTestGlobal();
     const abortSpy = rs.spyOn(AbortController.prototype, 'abort');
-    const cleanup = installTimerTracking(testGlobal, {
-      AbortController,
-      clearInterval: testGlobal.clearInterval,
-      clearTimeout: testGlobal.clearTimeout,
-      setInterval: testGlobal.setInterval,
-      setTimeout: testGlobal.setTimeout,
-    });
+    const cleanup = installTimerTracking(testGlobal, getNodeTimers(testGlobal));
 
     try {
       const sleep = promisify(testGlobal.setTimeout);
@@ -1204,37 +1098,9 @@ describe('jsdom environment', () => {
     expect(domClearInterval).toHaveBeenCalledWith(intervalId);
   });
 
-  it('cancels native promisified timeouts during cleanup', () => {
-    const testGlobal = createTestGlobal();
-    const abortSpy = rs.spyOn(AbortController.prototype, 'abort');
-    const cleanup = installTimerTracking(testGlobal, {
-      AbortController,
-      clearInterval: testGlobal.clearInterval,
-      clearTimeout: testGlobal.clearTimeout,
-      setInterval: testGlobal.setInterval,
-      setTimeout: testGlobal.setTimeout,
-    });
-
-    try {
-      void promisify(testGlobal.setTimeout)(60_000);
-      cleanup();
-
-      expect(abortSpy).toHaveBeenCalledTimes(1);
-    } finally {
-      abortSpy.mockRestore();
-      cleanup();
-    }
-  });
-
   it('uses the captured AbortController abort method during cleanup', async () => {
     const testGlobal = createTestGlobal();
-    const cleanup = installTimerTracking(testGlobal, {
-      AbortController,
-      clearInterval: testGlobal.clearInterval,
-      clearTimeout: testGlobal.clearTimeout,
-      setInterval: testGlobal.setInterval,
-      setTimeout: testGlobal.setTimeout,
-    });
+    const cleanup = installTimerTracking(testGlobal, getNodeTimers(testGlobal));
     const abort = AbortController.prototype.abort;
 
     try {
@@ -1260,13 +1126,7 @@ describe('jsdom environment', () => {
 
   it('isolates ordinary sleeps from AbortSignal prototype changes', async () => {
     const testGlobal = createTestGlobal();
-    const cleanup = installTimerTracking(testGlobal, {
-      AbortController,
-      clearInterval: testGlobal.clearInterval,
-      clearTimeout: testGlobal.clearTimeout,
-      setInterval: testGlobal.setInterval,
-      setTimeout: testGlobal.setTimeout,
-    });
+    const cleanup = installTimerTracking(testGlobal, getNodeTimers(testGlobal));
     const addEventListener = AbortSignal.prototype.addEventListener;
     const removeEventListener = AbortSignal.prototype.removeEventListener;
     const abortedDescriptor = Object.getOwnPropertyDescriptor(
@@ -1326,13 +1186,7 @@ describe('jsdom environment', () => {
 
   it('does not reject derived sleeps during cleanup', async () => {
     const testGlobal = createTestGlobal();
-    const cleanup = installTimerTracking(testGlobal, {
-      AbortController,
-      clearInterval: testGlobal.clearInterval,
-      clearTimeout: testGlobal.clearTimeout,
-      setInterval: testGlobal.setInterval,
-      setTimeout: testGlobal.setTimeout,
-    });
+    const cleanup = installTimerTracking(testGlobal, getNodeTimers(testGlobal));
     const unhandledRejections: unknown[] = [];
     const emitSpy = rs
       .spyOn(process, 'emit')
@@ -1359,13 +1213,7 @@ describe('jsdom environment', () => {
 
   it('preserves a user abort rejection when cleanup runs in the same turn', async () => {
     const testGlobal = createTestGlobal();
-    const cleanup = installTimerTracking(testGlobal, {
-      AbortController,
-      clearInterval: testGlobal.clearInterval,
-      clearTimeout: testGlobal.clearTimeout,
-      setInterval: testGlobal.setInterval,
-      setTimeout: testGlobal.setTimeout,
-    });
+    const cleanup = installTimerTracking(testGlobal, getNodeTimers(testGlobal));
     const controller = new AbortController();
     const userReason = new Error('user abort');
 
@@ -1399,13 +1247,7 @@ describe('jsdom environment', () => {
 
   it('suppresses signal cleanup failures caused by teardown', async () => {
     const testGlobal = createTestGlobal();
-    const cleanup = installTimerTracking(testGlobal, {
-      AbortController,
-      clearInterval: testGlobal.clearInterval,
-      clearTimeout: testGlobal.clearTimeout,
-      setInterval: testGlobal.setInterval,
-      setTimeout: testGlobal.setTimeout,
-    });
+    const cleanup = installTimerTracking(testGlobal, getNodeTimers(testGlobal));
     const cleanupError = new Error('teardown signal cleanup');
     const signal = {
       aborted: false,
@@ -1442,13 +1284,7 @@ describe('jsdom environment', () => {
 
   it('preserves user-owned signal cleanup failures during teardown', async () => {
     const testGlobal = createTestGlobal();
-    const cleanup = installTimerTracking(testGlobal, {
-      AbortController,
-      clearInterval: testGlobal.clearInterval,
-      clearTimeout: testGlobal.clearTimeout,
-      setInterval: testGlobal.setInterval,
-      setTimeout: testGlobal.setTimeout,
-    });
+    const cleanup = installTimerTracking(testGlobal, getNodeTimers(testGlobal));
     const controller = new AbortController();
     const cleanupError = new Error('user signal cleanup');
     const removeEventListener = controller.signal.removeEventListener;

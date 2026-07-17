@@ -1,7 +1,7 @@
 import { describe, it } from '@rstest/core';
 import { runCli } from './utils';
 
-const filters = ['test/nonIsolatedStaleTimerA', 'test/nonIsolatedStaleTimerB'];
+const filters = ['test/nonIsolatedTimersA', 'test/nonIsolatedTimersB'];
 
 for (const environment of ['jsdom', 'happy-dom'] as const) {
   describe(`${environment} stale timer errors`, () => {
@@ -9,7 +9,10 @@ for (const environment of ['jsdom', 'happy-dom'] as const) {
       const { expectExecFailed, expectStderrLog } = await runCli(
         filters,
         environment,
-        { args: ['--isolate=false', '--pool.maxWorkers=1'] },
+        {
+          args: ['--isolate=false', '--pool.maxWorkers=1'],
+          env: { RSTEST_STALE_TIMER_ERROR: '1' },
+        },
       );
 
       await expectExecFailed();
