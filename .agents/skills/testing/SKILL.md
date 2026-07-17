@@ -7,6 +7,8 @@ metadata:
 
 # Testing Workflow
 
+This skill owns the **mechanics**: how to run and write tests, fixtures, and builds. Whether a change needs test work is routed by the `development` skill; what counts as evidence that a change works is defined by the `verify` skill.
+
 ## Running tests
 
 ### Package/unit tests from repository root (single file — preferred)

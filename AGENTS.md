@@ -101,10 +101,7 @@ _Note_: E2E tests and examples consume built package output. Rebuild affected pa
 - Use camelCase for locals, PascalCase for types/components, and SCREAMING_SNAKE_CASE for constants.
 - Avoid namespace imports like `import * as foo from 'foo'` unless the module shape requires it.
 - Prefer existing local patterns over introducing new abstractions.
-- Do not add comments that restate the code; comment only non-obvious intent or constraints.
-- Avoid unnecessary defensive runtime checks when TypeScript already guarantees the type.
-- Minimize `as` casts and `any`; never let `any` leak into exported APIs, config types, or cross-package contracts.
-- Avoid one-use abstractions unless they materially improve readability.
+- In-file TypeScript quality rules (restating comments, defensive checks, `as`/`any`, one-use abstractions, drift prevention) are owned by the `typescript` skill — apply it when writing `.ts`/`.tsx`/`.mts` files.
 
 ## Skills
 
@@ -115,6 +112,7 @@ Available workflow skills in `.agents/skills/`:
 | development                | Feature / bug-fix checklist for scope review and workflow routing                 |
 | testing                    | Testing workflow for the rstest monorepo (run tests, write tests, debug failures) |
 | typescript                 | TypeScript anti-slop guardrails for `.ts`, `.tsx`, and `.mts` files               |
+| verify                     | Behavioral verification rules before claiming a change works (no proxy signals)   |
 | pr-creator                 | Create a PR for the current branch                                                |
 | create-draft-release-notes | Create or update draft GitHub releases and organize generated release notes       |
 | create-release-blog        | Draft bilingual release blog posts from a version range                           |
