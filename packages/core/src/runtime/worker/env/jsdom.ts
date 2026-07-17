@@ -116,6 +116,7 @@ export const environment: TestEnvironment<typeof globalThis> = {
       ...restOptions
     } = options as JSDOMOptions;
     let cleanupObjectURLs = () => {};
+    let cleanupHandler = () => {};
     const dom = new JSDOM(html, {
       pretendToBeVisual,
       resources:
@@ -133,6 +134,7 @@ export const environment: TestEnvironment<typeof globalThis> = {
       userAgent,
       ...restOptions,
       beforeParse(window) {
+        cleanupHandler = addDefaultErrorHandler(window as unknown as Window);
         beforeParse?.(window);
         cleanupObjectURLs = installJSDOMObjectURL(window);
       },
@@ -145,8 +147,6 @@ export const environment: TestEnvironment<typeof globalThis> = {
       clearInterval: dom.window.clearInterval.bind(dom.window),
       clearTimeout: dom.window.clearTimeout.bind(dom.window),
     });
-
-    const cleanupHandler = addDefaultErrorHandler(global as unknown as Window);
 
     return {
       teardown() {

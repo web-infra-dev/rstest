@@ -854,110 +854,17 @@ export function installTimerTracking(
 }
 
 export function addDefaultErrorHandler(window: Window) {
-  const pendingErrorCancellations = new WeakMap<
-    Event,
-    { preventedDuringDispatch: boolean }
-  >();
-  // DOM constructors are runtime Window properties, but lib.dom declares them on globalThis.
-  const EventConstructor = Reflect.get(window, 'Event', window) as typeof Event;
-  const eventPrototype = EventConstructor.prototype;
-  const prototypePreventDefaultDescriptor = Object.getOwnPropertyDescriptor(
-    eventPrototype,
-    'preventDefault',
-  );
-  const prototypePreventDefault = eventPrototype.preventDefault;
-  const trackedPrototypePreventDefault = function (this: Event) {
-    const result = Reflect.apply(prototypePreventDefault, this, []);
-    const cancellation = pendingErrorCancellations.get(this);
-    if (cancellation && this.eventPhase !== 0) {
-      cancellation.preventedDuringDispatch = this.defaultPrevented;
-    }
-    return result;
-  };
-  let restorePrototypePreventDefault = () => {};
-  try {
-    Object.defineProperty(eventPrototype, 'preventDefault', {
-      configurable: prototypePreventDefaultDescriptor?.configurable ?? true,
-      enumerable: prototypePreventDefaultDescriptor?.enumerable,
-      value: trackedPrototypePreventDefault,
-      writable: prototypePreventDefaultDescriptor?.writable ?? true,
-    });
-    restorePrototypePreventDefault = () => {
-      if (eventPrototype.preventDefault === trackedPrototypePreventDefault) {
-        if (prototypePreventDefaultDescriptor) {
-          Object.defineProperty(
-            eventPrototype,
-            'preventDefault',
-            prototypePreventDefaultDescriptor,
-          );
-        } else {
-          Reflect.deleteProperty(eventPrototype, 'preventDefault');
-        }
-      }
-    };
-  } catch {
-    // Fall back to tracking preventDefault directly on each error event.
-  }
   const throwUnhandledError = (e: ErrorEvent) => {
     if (!trackedTimerErrorEvents.has(e)) {
       const error = e.error;
-      const cancellation = {
-        preventedDuringDispatch: e.defaultPrevented,
-      };
-      pendingErrorCancellations.set(e, cancellation);
-      const preventDefaultDescriptor = Object.getOwnPropertyDescriptor(
-        e,
-        'preventDefault',
-      );
-      const preventDefault = e.preventDefault;
-      const capturePreventDefault = function (
-        this: ErrorEvent,
-        ...args: unknown[]
-      ) {
-        const result = Reflect.apply(preventDefault, this, args);
-        if (this === e && e.eventPhase !== 0) {
-          cancellation.preventedDuringDispatch = e.defaultPrevented;
-        }
-        return result;
-      };
-      let restorePreventDefault = () => {};
-      try {
-        Object.defineProperty(e, 'preventDefault', {
-          configurable: true,
-          value: capturePreventDefault,
-          writable: true,
-        });
-        restorePreventDefault = () => {
-          const currentDescriptor = Object.getOwnPropertyDescriptor(
-            e,
-            'preventDefault',
-          );
-          if (currentDescriptor?.value !== capturePreventDefault) {
-            return;
-          }
-          if (preventDefaultDescriptor) {
-            Object.defineProperty(
-              e,
-              'preventDefault',
-              preventDefaultDescriptor,
-            );
-          } else {
-            Reflect.deleteProperty(e, 'preventDefault');
-          }
-        };
-      } catch {
-        // Preserve error reporting for Event implementations that cannot be patched.
-      }
-      reportUnhandledError(error, () => {
-        restorePreventDefault();
-        pendingErrorCancellations.delete(e);
-        return cancellation.preventedDuringDispatch;
-      });
+      // This capture listener is installed before user listeners. Its microtask
+      // therefore runs after synchronous dispatch, but before cancellation from
+      // microtasks queued by later listeners.
+      reportUnhandledError(error, () => e.defaultPrevented);
     }
   };
-  window.addEventListener('error', throwUnhandledError);
+  window.addEventListener('error', throwUnhandledError, true);
   return (): void => {
-    window.removeEventListener('error', throwUnhandledError);
-    restorePrototypePreventDefault();
+    window.removeEventListener('error', throwUnhandledError, true);
   };
 }

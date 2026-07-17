@@ -242,8 +242,10 @@ describe('jsdom environment', () => {
 
   it('only honors error cancellation during synchronous DOM dispatch', async () => {
     const testGlobal = createTestGlobal();
+    let cachedPreventDefault!: typeof Event.prototype.preventDefault;
     const { teardown } = await environment.setup(testGlobal, {
       beforeParse(window) {
+        cachedPreventDefault = window.Event.prototype.preventDefault;
         window.addEventListener(
           'error',
           (event) =>
@@ -257,7 +259,8 @@ describe('jsdom environment', () => {
     });
     const lateCancellationError = new Error('late cancellation');
     const synchronouslyHandledError = new Error('synchronously handled');
-    const prototypeHandledError = new Error('prototype handled');
+    const cachedMethodHandledError = new Error('cached method handled');
+    const returnValueHandledError = new Error('return value handled');
     const uncaughtErrors: unknown[] = [];
     const emitSpy = rs
       .spyOn(process, 'emit')
@@ -289,16 +292,30 @@ describe('jsdom environment', () => {
       );
       await Promise.resolve();
 
-      const preventDefault = testGlobal.Event.prototype.preventDefault;
       testGlobal.addEventListener(
         'error',
-        (event) => Reflect.apply(preventDefault, event, []),
+        (event) => Reflect.apply(cachedPreventDefault, event, []),
         { once: true },
       );
       testGlobal.dispatchEvent(
         new testGlobal.ErrorEvent('error', {
           cancelable: true,
-          error: prototypeHandledError,
+          error: cachedMethodHandledError,
+        }),
+      );
+      await Promise.resolve();
+
+      testGlobal.addEventListener(
+        'error',
+        (event) => {
+          event.returnValue = false;
+        },
+        { once: true },
+      );
+      testGlobal.dispatchEvent(
+        new testGlobal.ErrorEvent('error', {
+          cancelable: true,
+          error: returnValueHandledError,
         }),
       );
       await Promise.resolve();

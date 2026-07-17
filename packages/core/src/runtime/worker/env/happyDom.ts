@@ -34,6 +34,7 @@ export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
         url: options.url || 'http://localhost:3000',
         console: console && global.console ? global.console : undefined,
       });
+      const cleanupHandler = addDefaultErrorHandler(win as unknown as Window);
       const cleanupObjectURLs = installObjectURLTracker(
         win.URL as unknown as typeof URL,
       );
@@ -49,10 +50,6 @@ export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
         ],
       });
       const cleanupTimers = installTimerTracking(global, nodeTimers);
-
-      const cleanupHandler = addDefaultErrorHandler(
-        global as unknown as Window,
-      );
 
       return {
         async teardown() {
