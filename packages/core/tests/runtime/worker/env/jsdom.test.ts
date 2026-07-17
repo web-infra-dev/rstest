@@ -257,6 +257,7 @@ describe('jsdom environment', () => {
     });
     const lateCancellationError = new Error('late cancellation');
     const synchronouslyHandledError = new Error('synchronously handled');
+    const prototypeHandledError = new Error('prototype handled');
     const uncaughtErrors: unknown[] = [];
     const emitSpy = rs
       .spyOn(process, 'emit')
@@ -284,6 +285,20 @@ describe('jsdom environment', () => {
         new testGlobal.ErrorEvent('error', {
           cancelable: true,
           error: synchronouslyHandledError,
+        }),
+      );
+      await Promise.resolve();
+
+      const preventDefault = testGlobal.Event.prototype.preventDefault;
+      testGlobal.addEventListener(
+        'error',
+        (event) => Reflect.apply(preventDefault, event, []),
+        { once: true },
+      );
+      testGlobal.dispatchEvent(
+        new testGlobal.ErrorEvent('error', {
+          cancelable: true,
+          error: prototypeHandledError,
         }),
       );
       await Promise.resolve();
@@ -1023,38 +1038,62 @@ describe('jsdom environment', () => {
     }
   });
 
-  it('forgets a timer canceled by a wrapper from another environment', () => {
+  it('forgets timers canceled from another environment', () => {
     const firstGlobal = createTestGlobal();
     const secondGlobal = createTestGlobal();
     const firstClearTimeout = rs.fn(firstGlobal.clearTimeout);
+    const firstClearInterval = rs.fn(firstGlobal.clearInterval);
     const secondClearTimeout = rs.fn(secondGlobal.clearTimeout);
+    const secondClearInterval = rs.fn(secondGlobal.clearInterval);
+    const domClearTimeout = rs.fn();
+    const domClearInterval = rs.fn();
     const firstCleanup = installTimerTracking(firstGlobal, {
       AbortController,
-      clearInterval: firstGlobal.clearInterval,
+      clearInterval: firstClearInterval,
       clearTimeout: firstClearTimeout,
       setInterval: firstGlobal.setInterval,
       setTimeout: firstGlobal.setTimeout,
     });
-    const secondCleanup = installTimerTracking(secondGlobal, {
-      AbortController,
-      clearInterval: secondGlobal.clearInterval,
-      clearTimeout: secondClearTimeout,
-      setInterval: secondGlobal.setInterval,
-      setTimeout: secondGlobal.setTimeout,
-    });
+    const secondCleanup = installTimerTracking(
+      secondGlobal,
+      {
+        AbortController,
+        clearInterval: secondClearInterval,
+        clearTimeout: secondClearTimeout,
+        setInterval: secondGlobal.setInterval,
+        setTimeout: secondGlobal.setTimeout,
+      },
+      {
+        clearInterval: domClearInterval,
+        clearTimeout: domClearTimeout,
+      },
+    );
 
     try {
+      const staleSetTimeout = firstGlobal.setTimeout;
+      const staleSetInterval = firstGlobal.setInterval;
       const firstTimer = firstGlobal.setTimeout(() => {}, 60_000);
       const secondTimer = secondGlobal.setTimeout(() => {}, 60_000);
       expect(Reflect.apply(firstTimer.close, secondTimer, [])).toBe(
         secondTimer,
       );
+      firstCleanup();
+
+      const crossClearedTimeout = staleSetTimeout(() => {}, 60_000);
+      const crossClearedInterval = staleSetInterval(() => {}, 60_000);
+      secondGlobal.clearTimeout(crossClearedTimeout);
+      secondGlobal.clearInterval(Number(crossClearedInterval));
       secondCleanup();
 
-      expect(secondClearTimeout).not.toHaveBeenCalled();
-      firstCleanup();
+      expect(secondClearTimeout).toHaveBeenCalledWith(crossClearedTimeout);
+      expect(secondClearInterval).toHaveBeenCalledWith(
+        Number(crossClearedInterval),
+      );
+      expect(domClearTimeout).not.toHaveBeenCalled();
+      expect(domClearInterval).not.toHaveBeenCalled();
       expect(firstClearTimeout).toHaveBeenCalledTimes(1);
       expect(firstClearTimeout).toHaveBeenCalledWith(firstTimer);
+      expect(firstClearInterval).not.toHaveBeenCalled();
     } finally {
       firstCleanup();
       secondCleanup();

@@ -23,6 +23,8 @@ const trackedTimerLifecycleByHandle = new WeakMap<
   object,
   { forget(): void; rearm(): void }
 >();
+const activeNodeTimerHandlesById = new Map<number, object>();
+const activeNodeTimerIdsByHandle = new WeakMap<object, number>();
 
 function patchTimerLifecycleMethods<T extends NodeJS.Timeout>(timer: T): T {
   for (const key of ['close', Symbol.dispose] as const) {
@@ -262,8 +264,6 @@ export function installTimerTracking(
   },
 ): () => void {
   const timerCancellations = new Map<unknown, () => void>();
-  const nodeTimerHandlesById = new Map<number, unknown>();
-  const nodeTimerIdsByHandle = new Map<unknown, number>();
   const descriptors = new Map<
     (typeof TIMER_KEYS)[number],
     PropertyDescriptor
@@ -342,22 +342,22 @@ export function installTimerTracking(
     };
   };
 
-  const forgetNodeTimer = (timer: unknown) => {
-    const id = nodeTimerIdsByHandle.get(timer);
-    if (id !== undefined && nodeTimerHandlesById.get(id) === timer) {
-      nodeTimerHandlesById.delete(id);
+  const forgetNodeTimer = (timer: object) => {
+    const id = activeNodeTimerIdsByHandle.get(timer);
+    if (id !== undefined && activeNodeTimerHandlesById.get(id) === timer) {
+      activeNodeTimerHandlesById.delete(id);
     }
-    nodeTimerIdsByHandle.delete(timer);
+    activeNodeTimerIdsByHandle.delete(timer);
   };
-  const forgetTrackedNodeTimer = (timer: unknown) => {
+  const forgetTrackedNodeTimer = (timer: NodeJS.Timeout) => {
     timerCancellations.delete(timer);
     forgetNodeTimer(timer);
   };
   const registerNodeTimer = <T extends NodeJS.Timeout>(timer: T): T => {
     const id = Number(timer);
     if (Number.isFinite(id)) {
-      nodeTimerHandlesById.set(id, timer);
-      nodeTimerIdsByHandle.set(timer, id);
+      activeNodeTimerHandlesById.set(id, timer);
+      activeNodeTimerIdsByHandle.set(timer, id);
     }
     return timer;
   };
@@ -386,19 +386,23 @@ export function installTimerTracking(
     return timer;
   };
   const resolveTrackedNodeTimer = (timer: unknown) => {
-    if (nodeTimerIdsByHandle.has(timer)) {
+    if (
+      typeof timer === 'object' &&
+      timer !== null &&
+      activeNodeTimerIdsByHandle.has(timer)
+    ) {
       return timer;
     }
     if (typeof timer === 'number') {
       const id = Number(timer);
       if (Number.isFinite(id)) {
-        return nodeTimerHandlesById.get(id);
+        return activeNodeTimerHandlesById.get(id);
       }
     }
     if (typeof timer === 'string') {
       const id = Number(timer);
       if (Number.isFinite(id) && timer === String(id)) {
-        return nodeTimerHandlesById.get(id);
+        return activeNodeTimerHandlesById.get(id);
       }
     }
     return undefined;
@@ -777,7 +781,7 @@ export function installTimerTracking(
   ) => {
     const nodeTimer = resolveTrackedNodeTimer(timer);
     if (nodeTimer !== undefined) {
-      forgetTrackedNodeTimer(nodeTimer);
+      trackedTimerLifecycleByHandle.get(nodeTimer)?.forget();
     }
     if (
       nodeTimer === undefined &&
@@ -793,7 +797,7 @@ export function installTimerTracking(
   ) => {
     const nodeTimer = resolveTrackedNodeTimer(timer);
     if (nodeTimer !== undefined) {
-      forgetTrackedNodeTimer(nodeTimer);
+      trackedTimerLifecycleByHandle.get(nodeTimer)?.forget();
     }
     if (
       nodeTimer === undefined &&
@@ -841,10 +845,57 @@ export function installTimerTracking(
 }
 
 export function addDefaultErrorHandler(window: Window) {
+  const pendingErrorCancellations = new WeakMap<
+    Event,
+    { preventedDuringDispatch: boolean }
+  >();
+  // DOM constructors are runtime Window properties, but lib.dom declares them on globalThis.
+  const EventConstructor = Reflect.get(window, 'Event', window) as typeof Event;
+  const eventPrototype = EventConstructor.prototype;
+  const prototypePreventDefaultDescriptor = Object.getOwnPropertyDescriptor(
+    eventPrototype,
+    'preventDefault',
+  );
+  const prototypePreventDefault = eventPrototype.preventDefault;
+  const trackedPrototypePreventDefault = function (this: Event) {
+    const result = Reflect.apply(prototypePreventDefault, this, []);
+    const cancellation = pendingErrorCancellations.get(this);
+    if (cancellation && this.eventPhase !== 0) {
+      cancellation.preventedDuringDispatch = this.defaultPrevented;
+    }
+    return result;
+  };
+  let restorePrototypePreventDefault = () => {};
+  try {
+    Object.defineProperty(eventPrototype, 'preventDefault', {
+      configurable: prototypePreventDefaultDescriptor?.configurable ?? true,
+      enumerable: prototypePreventDefaultDescriptor?.enumerable,
+      value: trackedPrototypePreventDefault,
+      writable: prototypePreventDefaultDescriptor?.writable ?? true,
+    });
+    restorePrototypePreventDefault = () => {
+      if (eventPrototype.preventDefault === trackedPrototypePreventDefault) {
+        if (prototypePreventDefaultDescriptor) {
+          Object.defineProperty(
+            eventPrototype,
+            'preventDefault',
+            prototypePreventDefaultDescriptor,
+          );
+        } else {
+          Reflect.deleteProperty(eventPrototype, 'preventDefault');
+        }
+      }
+    };
+  } catch {
+    // Fall back to tracking preventDefault directly on each error event.
+  }
   const throwUnhandledError = (e: ErrorEvent) => {
     if (!trackedTimerErrorEvents.has(e)) {
       const error = e.error;
-      let preventedDuringDispatch = e.defaultPrevented;
+      const cancellation = {
+        preventedDuringDispatch: e.defaultPrevented,
+      };
+      pendingErrorCancellations.set(e, cancellation);
       const preventDefaultDescriptor = Object.getOwnPropertyDescriptor(
         e,
         'preventDefault',
@@ -856,7 +907,7 @@ export function addDefaultErrorHandler(window: Window) {
       ) {
         const result = Reflect.apply(preventDefault, this, args);
         if (this === e && e.eventPhase !== 0) {
-          preventedDuringDispatch = e.defaultPrevented;
+          cancellation.preventedDuringDispatch = e.defaultPrevented;
         }
         return result;
       };
@@ -890,12 +941,14 @@ export function addDefaultErrorHandler(window: Window) {
       }
       reportUnhandledError(error, () => {
         restorePreventDefault();
-        return preventedDuringDispatch;
+        pendingErrorCancellations.delete(e);
+        return cancellation.preventedDuringDispatch;
       });
     }
   };
   window.addEventListener('error', throwUnhandledError);
   return (): void => {
     window.removeEventListener('error', throwUnhandledError);
+    restorePrototypePreventDefault();
   };
 }
