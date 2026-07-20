@@ -376,7 +376,8 @@ export function createNodeExecutor(
                 testResults: [],
                 errors,
                 assetNames,
-                getSourceMaps: () => null,
+                getAssetFiles,
+                getSourceMaps,
               };
             }
           }
@@ -407,6 +408,7 @@ export function createNodeExecutor(
             results,
             testResults,
             assetNames,
+            getAssetFiles,
             getSourceMaps,
           };
         };
@@ -442,15 +444,46 @@ export function createNodeExecutor(
     const testTime = Date.now() - testStart;
     lastDeletedEntries = currentDeletedEntries;
 
-    const nodeResourceByAssetName = new Map<
-      string,
-      (typeof returns)[number]['getSourceMaps']
-    >();
+    type NodeAssetResource = Pick<
+      (typeof returns)[number],
+      'getAssetFiles' | 'getSourceMaps'
+    >;
+    const nodeResourceByAssetName = new Map<string, NodeAssetResource>();
     for (const item of returns) {
+      const resource = {
+        getAssetFiles: item.getAssetFiles,
+        getSourceMaps: item.getSourceMaps,
+      };
       for (const assetName of item.assetNames) {
-        nodeResourceByAssetName.set(assetName, item.getSourceMaps);
+        nodeResourceByAssetName.set(assetName, resource);
       }
     }
+
+    const loadCoverageResources = async (
+      filenames: string[],
+      resourceType: keyof NodeAssetResource,
+    ) => {
+      const filenamesByResource = new Map<NodeAssetResource, string[]>();
+      for (const filename of new Set(filenames)) {
+        const resource = nodeResourceByAssetName.get(filename);
+        if (!resource) continue;
+
+        const resourceFilenames = filenamesByResource.get(resource) ?? [];
+        resourceFilenames.push(filename);
+        filenamesByResource.set(resource, resourceFilenames);
+      }
+
+      const resources: Record<string, string> = {};
+      await Promise.all(
+        Array.from(filenamesByResource, async ([resource, names]) => {
+          const loaded = await resource[resourceType](names);
+          for (const [filename, content] of Object.entries(loaded)) {
+            if (typeof content === 'string') resources[filename] = content;
+          }
+        }),
+      );
+      return resources;
+    };
 
     // Persist node results for next-run ordering. Skip partial runs
     // (`testNamePattern` narrows within files; a bail abort synthesizes skips)
@@ -477,10 +510,16 @@ export function createNodeExecutor(
       coverage: {
         map: mergedCoverageMap?.toJSON(),
         raw: rawCoverageResults,
+        loadAssetFiles: (filenames) =>
+          loadCoverageResources(filenames, 'getAssetFiles'),
+        loadSourceMaps: (filenames) =>
+          loadCoverageResources(filenames, 'getSourceMaps'),
       },
       resolveSourcemap: async (sourcePath) => {
-        const getSourceMaps = nodeResourceByAssetName.get(sourcePath);
-        const sourceMap = (await getSourceMaps?.([sourcePath]))?.[sourcePath];
+        const resource = nodeResourceByAssetName.get(sourcePath);
+        const sourceMap = (await resource?.getSourceMaps([sourcePath]))?.[
+          sourcePath
+        ];
         return {
           handled: sourceMap != null,
           sourcemap: sourceMap ? JSON.parse(sourceMap) : null,

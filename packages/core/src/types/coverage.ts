@@ -159,6 +159,22 @@ export type CoverageCollectOptions = {
   outputModule?: boolean;
 };
 
+/**
+ * Core-to-provider contract for resolving raw coverage payloads.
+ *
+ * @internal
+ */
+export type RawCoverageResolveOptions = {
+  /** Load compiled sources from the main-process asset store. */
+  loadAssetFiles?: (
+    filenames: string[],
+  ) => Promise<NonNullable<CoverageCollectOptions['assetFiles']>>;
+  /** Load source maps from the main-process asset store. */
+  loadSourceMaps?: (
+    filenames: string[],
+  ) => Promise<NonNullable<CoverageCollectOptions['sourceMaps']>>;
+};
+
 export declare class CoverageProvider {
   constructor(options: NormalizedCoverageOptions, root?: string);
   /**
@@ -180,6 +196,8 @@ export declare class CoverageProvider {
    * conversion work to the main process. Return `null` to indicate that no raw
    * coverage was collected and the runner should not call `resolveRawCoverage`
    * for that worker result.
+   *
+   * @internal
    */
   collectRaw?(
     options?: CoverageCollectOptions,
@@ -189,12 +207,17 @@ export declare class CoverageProvider {
    * Resolve raw payloads produced by `collectRaw` into an Istanbul coverage map.
    *
    * The runner passes only non-null payloads returned by the same provider.
+   * Payloads are internal transfer objects and may be consumed during
+   * resolution.
    * Implementations should ignore malformed payloads only when they can still
    * produce a valid partial report; otherwise they may reject to fail coverage
    * finalization.
+   *
+   * @internal
    */
   resolveRawCoverage?(
     payloads: unknown[],
+    options?: RawCoverageResolveOptions,
   ): CoverageMap | null | Promise<CoverageMap | null>;
 
   /**

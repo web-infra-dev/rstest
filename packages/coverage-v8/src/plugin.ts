@@ -81,6 +81,14 @@ export const transformCoverage = async (
 export const pluginCoverage = (): RsbuildPlugin => ({
   name: 'rstest:coverage-v8',
   setup: (api) => {
+    api.modifyRspackConfig((config) => {
+      config.optimization ??= {};
+      config.optimization.splitChunks = {
+        ...(config.optimization.splitChunks || {}),
+        maxSize: 512 * 1024,
+      };
+    });
+
     api.modifyBundlerChain({
       handler: (chain, { rspack, CHAIN_ID, environment }) => {
         const isV1 = api.context.version.startsWith('1.');

@@ -78,6 +78,8 @@ type FileTemplate = Omit<FileCoverageData, 's' | 'f' | 'b'> & {
   functionCount: number;
   branchLengths: Record<string, number>;
   branchCount: number;
+};
+type MutableFileTemplate = FileTemplate & {
   seen: Record<string, number>;
   fnNames: Map<string, number>;
 };
@@ -130,6 +132,23 @@ const EOL_PATTERN = /\r?\n/g;
 const MAX_PREPARED_CACHE_SIZE = 50;
 
 const preparedCache = new Map<string, Promise<PreparedCoverage>>();
+
+const createTraceMap = (sourceMap: SourceMapLike, sourceMapUrl?: string) =>
+  new TraceMap(
+    sourceMap as SourceMapInput,
+    normalizeSourceMapUrl(sourceMapUrl),
+  );
+
+export const resolveSourceMapFilenames = (
+  filename: string,
+  sourceMap: SourceMapLike,
+  sourceMapUrl?: string,
+): string[] => {
+  const directory = dirname(filename);
+  return createTraceMap(sourceMap, sourceMapUrl).resolvedSources.map((source) =>
+    resolveSourceFilename(source, directory),
+  );
+};
 
 export async function convertV8CoverageWithAst(
   options: ConvertOptions,
@@ -194,10 +213,7 @@ async function prepareCoverage(
     ? { sourceMap: options.sourceMap, sourceMapUrl: options.sourceMapUrl }
     : await getSourceMap(filename, options.code);
   const sourceMap = sourceMapResult?.sourceMap
-    ? new TraceMap(
-        sourceMapResult.sourceMap as SourceMapInput,
-        normalizeSourceMapUrl(sourceMapResult.sourceMapUrl),
-      )
+    ? createTraceMap(sourceMapResult.sourceMap, sourceMapResult.sourceMapUrl)
     : null;
   const locator = sourceMap
     ? new SourceMapLocator(sourceMap, options.code)
@@ -493,7 +509,7 @@ function toBlockStatement(node: AstNode): AstNode {
 }
 
 class CoverageBuilder {
-  private files: Record<string, FileTemplate> = {};
+  private files: Record<string, MutableFileTemplate> = {};
   private functions: FunctionDescriptor[] = [];
   private statements: StatementDescriptor[] = [];
   private branches: BranchDescriptor[] = [];
@@ -685,8 +701,14 @@ class CoverageBuilder {
   }
 
   toPreparedCoverage(): PreparedCoverage {
+    const files: Record<string, FileTemplate> = {};
+    for (const [filename, file] of Object.entries(this.files)) {
+      const { seen: _seen, fnNames: _fnNames, ...template } = file;
+      files[filename] = template;
+    }
+
     return {
-      files: this.files,
+      files,
       functions: this.functions,
       statements: this.statements,
       branches: this.branches,
@@ -712,7 +734,7 @@ interface CoverageLocator {
 }
 
 class BaseLocator {
-  private cache = new Map<number, Needle>();
+  private cache = new Map<number, number>();
   protected lineStarts: number[] = [0];
 
   constructor(code: string) {
@@ -724,9 +746,12 @@ class BaseLocator {
   }
 
   offsetToNeedle(offset: number): Needle {
-    const cached = this.cache.get(offset);
-    if (cached) {
-      return { ...cached };
+    const cachedLineIndex = this.cache.get(offset);
+    if (cachedLineIndex !== undefined) {
+      return {
+        line: cachedLineIndex + 1,
+        column: offset - this.lineStarts[cachedLineIndex]!,
+      };
     }
 
     let low = 0;
@@ -744,12 +769,11 @@ class BaseLocator {
     }
 
     const lineIndex = Math.max(0, high);
-    const needle = {
+    this.cache.set(offset, lineIndex);
+    return {
       line: lineIndex + 1,
       column: offset - this.lineStarts[lineIndex]!,
     };
-    this.cache.set(offset, needle);
-    return { ...needle };
   }
 }
 
