@@ -7,6 +7,8 @@ import {
   addDefaultErrorHandler,
   installGlobal,
   installObjectURLTracker,
+  installTimerTracking,
+  type NodeTimerPrimitives,
 } from './utils';
 
 type JSDOMOptions = ConstructorOptions & {
@@ -91,6 +93,12 @@ export const environment: TestEnvironment<typeof globalThis> = {
     checkPkgInstalled('jsdom');
     const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } =
       await import('jsdom');
+    const nodeTimers: NodeTimerPrimitives = {
+      clearInterval: global.clearInterval ?? globalThis.clearInterval,
+      clearTimeout: global.clearTimeout ?? globalThis.clearTimeout,
+      setInterval: global.setInterval ?? globalThis.setInterval,
+      setTimeout: global.setTimeout ?? globalThis.setTimeout,
+    };
 
     const {
       html = '<!DOCTYPE html>',
@@ -132,6 +140,7 @@ export const environment: TestEnvironment<typeof globalThis> = {
     const cleanupGlobal = installGlobal(global, dom.window, {
       additionalKeys: ['URL', 'URLSearchParams'],
     });
+    const cleanupTimers = installTimerTracking(global, nodeTimers);
 
     const cleanupHandler = addDefaultErrorHandler(global as unknown as Window);
 
@@ -139,6 +148,7 @@ export const environment: TestEnvironment<typeof globalThis> = {
       teardown() {
         cleanupHandler();
         cleanupObjectURLs();
+        cleanupTimers();
         dom.window.close();
         cleanupGlobal();
       },
