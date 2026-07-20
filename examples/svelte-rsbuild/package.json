@@ -14,8 +14,8 @@
     "@rsbuild/plugin-svelte": "^2.0.1",
     "@rstest/adapter-rsbuild": "workspace:*",
     "@rstest/core": "workspace:*",
-    "happy-dom": "^20.10.6",
-    "svelte": "^5.56.4",
+    "happy-dom": "^20.11.0",
+    "svelte": "^5.56.6",
     "typescript": "^6.0.3"
   }
 }
