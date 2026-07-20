@@ -1,4 +1,12 @@
+import { promisify } from 'node:util';
 import { KEYS } from './jsdomKeys';
+
+export type NodeTimerPrimitives = Pick<
+  typeof globalThis,
+  'clearInterval' | 'clearTimeout' | 'setInterval' | 'setTimeout'
+>;
+
+const TIMER_KEYS = ['setInterval', 'setTimeout'] as const;
 
 const SKIP_KEYS: string[] = ['window', 'self', 'top', 'parent'];
 
@@ -174,6 +182,88 @@ export function installGlobal(
     originals.forEach((descriptor, k) => {
       Object.defineProperty(global, k, descriptor);
     });
+  };
+}
+
+/**
+ * Keep Node timer handles scoped to one DOM environment so pending timers do
+ * not keep a worker alive after that environment has been torn down.
+ */
+export function installTimerTracking(
+  global: typeof globalThis,
+  nodeTimers: NodeTimerPrimitives,
+): () => void {
+  const timers = new Map<NodeJS.Timeout, (timer: NodeJS.Timeout) => void>();
+  const descriptors = new Map<
+    (typeof TIMER_KEYS)[number],
+    PropertyDescriptor
+  >();
+  let active = true;
+
+  const track = (
+    timer: NodeJS.Timeout,
+    clearTimer: (timer: NodeJS.Timeout) => void,
+  ): NodeJS.Timeout => {
+    if (active) {
+      timers.set(timer, clearTimer);
+    }
+    return timer;
+  };
+
+  const setTimeout = ((...args: unknown[]) =>
+    track(
+      Reflect.apply(nodeTimers.setTimeout, global, args) as NodeJS.Timeout,
+      nodeTimers.clearTimeout,
+    )) as NodeTimerPrimitives['setTimeout'];
+  const setInterval = ((...args: unknown[]) =>
+    track(
+      Reflect.apply(nodeTimers.setInterval, global, args) as NodeJS.Timeout,
+      nodeTimers.clearInterval,
+    )) as NodeTimerPrimitives['setInterval'];
+
+  const customPromisifyDescriptor = Object.getOwnPropertyDescriptor(
+    nodeTimers.setTimeout,
+    promisify.custom,
+  );
+  if (customPromisifyDescriptor) {
+    Object.defineProperty(
+      setTimeout,
+      promisify.custom,
+      customPromisifyDescriptor,
+    );
+  }
+
+  const trackedTimers = {
+    setInterval,
+    setTimeout,
+  };
+  for (const key of TIMER_KEYS) {
+    const descriptor = Object.getOwnPropertyDescriptor(global, key);
+    if (descriptor) {
+      descriptors.set(key, descriptor);
+    }
+    Object.defineProperty(global, key, {
+      configurable: true,
+      value: trackedTimers[key],
+      writable: true,
+    });
+  }
+
+  return () => {
+    active = false;
+    for (const [timer, clearTimer] of timers) {
+      clearTimer(timer);
+    }
+    timers.clear();
+
+    for (const key of TIMER_KEYS) {
+      const descriptor = descriptors.get(key);
+      if (descriptor) {
+        Object.defineProperty(global, key, descriptor);
+      } else {
+        Reflect.deleteProperty(global, key);
+      }
+    }
   };
 }
 

@@ -88,6 +88,11 @@ describe('jsdom', () => {
     const { expectExecSuccess } = await runCli('test/domScriptUrl', 'jsdom');
     await expectExecSuccess();
   });
+
+  it('should clean up pending timers', async () => {
+    const { expectExecSuccess } = await runCli('test/timers', 'jsdom');
+    await expectExecSuccess();
+  });
 });
 
 describe('happy-dom', () => {
@@ -125,6 +130,11 @@ describe('happy-dom', () => {
 
   it('should create object URLs from happy-dom Blob and File', async () => {
     const { expectExecSuccess } = await runCli('test/objectUrl', 'happy-dom');
+    await expectExecSuccess();
+  });
+
+  it('should clean up pending timers', async () => {
+    const { expectExecSuccess } = await runCli('test/timers', 'happy-dom');
     await expectExecSuccess();
   });
 });
