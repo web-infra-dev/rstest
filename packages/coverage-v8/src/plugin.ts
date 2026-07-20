@@ -86,6 +86,7 @@ export const pluginCoverage = (): RsbuildPlugin => ({
       config.optimization.splitChunks = {
         ...(config.optimization.splitChunks || {}),
         maxSize: 512 * 1024,
+        chunks: 'all',
       };
     });
 

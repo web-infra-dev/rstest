@@ -40,6 +40,7 @@ describe('coverage-v8 plugin', () => {
 
     expect(config?.optimization?.splitChunks).toMatchObject({
       maxSize: 512 * 1024,
+      chunks: 'all',
     });
   });
 
@@ -52,6 +53,7 @@ describe('coverage-v8 plugin', () => {
             optimization: {
               splitChunks: {
                 maxSize: 1024 * 1024,
+                chunks: 'async',
               },
             },
           },
@@ -63,6 +65,7 @@ describe('coverage-v8 plugin', () => {
 
     expect(config?.optimization?.splitChunks).toMatchObject({
       maxSize: 1024 * 1024,
+      chunks: 'async',
     });
   });
 });
