@@ -113,16 +113,17 @@ export default defineConfig({
 
 ## 检测 Rstest 环境
 
-你可以使用 `process.env.RSTEST` 来检测是否是 Rstest 测试环境以应用不同的配置 / 代码在你的测试中。
+你可以使用 `import.meta.env.RSTEST` 或 `process.env.RSTEST` 判断代码是否运行在 Rstest 中。在所有测试环境（包括 browser mode）下，这两个值都是 `'true'`。
+
+在兼容浏览器的 ESM 源码中，推荐使用 `import.meta.env.RSTEST`。browser mode 会在构建时替换这些表达式，但不会添加全局 `process` 对象，因此不要先通过 `typeof process !== 'undefined'` 判断是否可用。
 
 ```ts
-if (process.env.RSTEST) {
-  // 在 rstest 环境下将会返回 'true'
+if (import.meta.env.RSTEST === 'true') {
   // do something...
 }
 ```
 
-需要注意的是，如果你使用 `process.env.RSTEST` 在你的源码中，在生产环境构建时，在你的构建配置（如 `rsbuild.config.ts`）中将 `process.env.RSTEST` 定义为 `false`，这样将有助于打包工具消除无用代码。
+生产构建源码时，需要在构建配置（如 `rsbuild.config.ts`）中把用到的表达式定义为 `false`。这样打包工具就能把仅用于测试的分支作为死代码消除。
 
 ```diff title=rsbuild.config.ts
 import { defineConfig } from '@rsbuild/core';
@@ -131,6 +132,7 @@ export default defineConfig({
   source: {
     define: {
 +      'process.env.RSTEST': false,
++      'import.meta.env.RSTEST': false,
     },
   },
 });
