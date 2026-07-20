@@ -113,16 +113,17 @@ This means that you need to choose SWC plugins that match the current `swc_core`
 
 ## Detect Rstest environment
 
-You can use `process.env.RSTEST` to detect whether it is an Rstest test environment to apply different configurations/codes in your tests.
+You can use `import.meta.env.RSTEST` or `process.env.RSTEST` to detect whether code is running under Rstest. Both values are `'true'` in every test environment, including browser mode.
+
+Prefer `import.meta.env.RSTEST` in browser-compatible ESM source code. Browser mode replaces these expressions at build time but does not add a global `process` object, so do not guard access with `typeof process !== 'undefined'`.
 
 ```ts
-if (process.env.RSTEST) {
-  // 'true' will be returned in the rstest environment
+if (import.meta.env.RSTEST === 'true') {
   // do something...
 }
 ```
 
-It should be noted that if you use `process.env.RSTEST` in your source code, define `process.env.RSTEST` as `false` in your build configuration (such as `rsbuild.config.ts`) during production builds, this will help the bundler eliminate dead code.
+When building the source code for production, define the expressions you use as `false` in your build configuration (such as `rsbuild.config.ts`). This allows the bundler to eliminate the test-only branches as dead code.
 
 ```diff title=rsbuild.config.ts
 import { defineConfig } from '@rsbuild/core';
@@ -131,6 +132,7 @@ export default defineConfig({
   source: {
     define: {
 +      'process.env.RSTEST': false,
++      'import.meta.env.RSTEST': false,
     },
   },
 });
