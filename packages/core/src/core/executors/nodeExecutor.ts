@@ -1,3 +1,4 @@
+import { normalize } from 'pathe';
 import { createPool } from '../../pool';
 import type {
   EntryInfo,
@@ -34,6 +35,102 @@ import { type SequenceHints, sortTestEntries } from '../testSequencer';
 type RsbuildStats = Awaited<
   ReturnType<Awaited<ReturnType<typeof createRsbuildServer>>['getRsbuildStats']>
 >;
+
+type NodeAssetResource = Pick<
+  RsbuildStats,
+  'assetNames' | 'getAssetFiles' | 'getSourceMaps'
+>;
+type CoverageResourceLoaders = {
+  loadAssetFiles: NodeAssetResource['getAssetFiles'];
+  loadSourceMaps: NodeAssetResource['getSourceMaps'];
+};
+
+export const createCoverageResourceLoaders = (
+  items: NodeAssetResource[],
+): CoverageResourceLoaders => {
+  type Resource = Omit<NodeAssetResource, 'assetNames'>;
+  type ResourceType = keyof Resource;
+
+  const resourceByAssetName = new Map<
+    string,
+    { assetName: string; resource: Resource }
+  >();
+  const resourceEntries: { assetName: string; resource: Resource }[] = [];
+
+  for (const item of items) {
+    const resource = {
+      getAssetFiles: item.getAssetFiles,
+      getSourceMaps: item.getSourceMaps,
+    };
+    for (const assetName of item.assetNames) {
+      const entry = { assetName, resource };
+      resourceEntries.push(entry);
+      resourceByAssetName.set(assetName, entry);
+    }
+  }
+
+  for (const entry of resourceEntries) {
+    const normalizedName = normalize(entry.assetName);
+    const aliases = [normalizedName, normalizedName.toLowerCase()];
+    let privateAlias: string | undefined;
+    if (normalizedName.startsWith('/private/')) {
+      privateAlias = normalizedName.slice('/private'.length);
+    } else if (normalizedName.startsWith('/')) {
+      privateAlias = `/private${normalizedName}`;
+    }
+    if (privateAlias) {
+      aliases.push(privateAlias, privateAlias.toLowerCase());
+    }
+
+    for (const alias of aliases) {
+      if (!resourceByAssetName.has(alias)) {
+        resourceByAssetName.set(alias, entry);
+      }
+    }
+  }
+
+  const load = async (filenames: string[], resourceType: ResourceType) => {
+    const requestsByResource = new Map<Resource, Map<string, string[]>>();
+
+    for (const filename of new Set(filenames)) {
+      const normalizedFilename = normalize(filename);
+      const entry =
+        resourceByAssetName.get(filename) ??
+        resourceByAssetName.get(normalizedFilename) ??
+        resourceByAssetName.get(normalizedFilename.toLowerCase());
+      if (!entry) continue;
+
+      const requestsByAssetName =
+        requestsByResource.get(entry.resource) ?? new Map<string, string[]>();
+      const requestedNames = requestsByAssetName.get(entry.assetName) ?? [];
+      requestedNames.push(filename);
+      requestsByAssetName.set(entry.assetName, requestedNames);
+      requestsByResource.set(entry.resource, requestsByAssetName);
+    }
+
+    const resources: Record<string, string> = {};
+    await Promise.all(
+      Array.from(requestsByResource, async ([resource, requests]) => {
+        const loaded = await resource[resourceType](
+          Array.from(requests.keys()),
+        );
+        for (const [assetName, requestedNames] of requests) {
+          const content = loaded[assetName];
+          if (typeof content !== 'string') continue;
+          for (const requestedName of requestedNames) {
+            resources[requestedName] = content;
+          }
+        }
+      }),
+    );
+    return resources;
+  };
+
+  return {
+    loadAssetFiles: (filenames: string[]) => load(filenames, 'getAssetFiles'),
+    loadSourceMaps: (filenames: string[]) => load(filenames, 'getSourceMaps'),
+  };
+};
 
 /**
  * The node side of the {@link TestExecutor} seam: the existing Rsbuild dev
@@ -444,46 +541,7 @@ export function createNodeExecutor(
     const testTime = Date.now() - testStart;
     lastDeletedEntries = currentDeletedEntries;
 
-    type NodeAssetResource = Pick<
-      (typeof returns)[number],
-      'getAssetFiles' | 'getSourceMaps'
-    >;
-    const nodeResourceByAssetName = new Map<string, NodeAssetResource>();
-    for (const item of returns) {
-      const resource = {
-        getAssetFiles: item.getAssetFiles,
-        getSourceMaps: item.getSourceMaps,
-      };
-      for (const assetName of item.assetNames) {
-        nodeResourceByAssetName.set(assetName, resource);
-      }
-    }
-
-    const loadCoverageResources = async (
-      filenames: string[],
-      resourceType: keyof NodeAssetResource,
-    ) => {
-      const filenamesByResource = new Map<NodeAssetResource, string[]>();
-      for (const filename of new Set(filenames)) {
-        const resource = nodeResourceByAssetName.get(filename);
-        if (!resource) continue;
-
-        const resourceFilenames = filenamesByResource.get(resource) ?? [];
-        resourceFilenames.push(filename);
-        filenamesByResource.set(resource, resourceFilenames);
-      }
-
-      const resources: Record<string, string> = {};
-      await Promise.all(
-        Array.from(filenamesByResource, async ([resource, names]) => {
-          const loaded = await resource[resourceType](names);
-          for (const [filename, content] of Object.entries(loaded)) {
-            if (typeof content === 'string') resources[filename] = content;
-          }
-        }),
-      );
-      return resources;
-    };
+    const coverageResourceLoaders = createCoverageResourceLoaders(returns);
 
     // Persist node results for next-run ordering. Skip partial runs
     // (`testNamePattern` narrows within files; a bail abort synthesizes skips)
@@ -510,16 +568,13 @@ export function createNodeExecutor(
       coverage: {
         map: mergedCoverageMap?.toJSON(),
         raw: rawCoverageResults,
-        loadAssetFiles: (filenames) =>
-          loadCoverageResources(filenames, 'getAssetFiles'),
-        loadSourceMaps: (filenames) =>
-          loadCoverageResources(filenames, 'getSourceMaps'),
+        loadAssetFiles: coverageResourceLoaders.loadAssetFiles,
+        loadSourceMaps: coverageResourceLoaders.loadSourceMaps,
       },
       resolveSourcemap: async (sourcePath) => {
-        const resource = nodeResourceByAssetName.get(sourcePath);
-        const sourceMap = (await resource?.getSourceMaps([sourcePath]))?.[
-          sourcePath
-        ];
+        const sourceMap = (
+          await coverageResourceLoaders.loadSourceMaps([sourcePath])
+        )[sourcePath];
         return {
           handled: sourceMap != null,
           sourcemap: sourceMap ? JSON.parse(sourceMap) : null,
