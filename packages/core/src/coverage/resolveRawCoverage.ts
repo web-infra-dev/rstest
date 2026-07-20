@@ -1,4 +1,8 @@
-import type { CoverageMap, CoverageProvider } from '../types/coverage';
+import type {
+  CoverageMap,
+  CoverageProvider,
+  RawCoverageResolveOptions,
+} from '../types/coverage';
 
 type RunCoverageStep = <T>(
   label: string,
@@ -13,11 +17,13 @@ export const resolveAndMergeRawCoverage = async ({
   coverageProvider,
   mergedCoverageMap,
   rawCoverageResults,
+  resolveOptions,
   runCoverageStep,
 }: {
   coverageProvider: CoverageProvider | null;
   mergedCoverageMap?: CoverageMap;
   rawCoverageResults: unknown[];
+  resolveOptions?: RawCoverageResolveOptions;
   runCoverageStep: RunCoverageStep;
 }): Promise<void> => {
   const resolveRawCoverage =
@@ -28,7 +34,7 @@ export const resolveAndMergeRawCoverage = async ({
 
   const rawCoverageMap = await runCoverageStep(
     'coverage collect',
-    async () => resolveRawCoverage(rawCoverageResults),
+    async () => resolveRawCoverage(rawCoverageResults, resolveOptions),
     {
       slowMessage: 'processing coverage results...',
       slowDoneMessage: 'coverage results processed.',

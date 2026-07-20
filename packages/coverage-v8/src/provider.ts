@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import type {
   NormalizedCoverageOptions,
   CoverageProvider as RstestCoverageProvider,
+  RawCoverageResolveOptions,
 } from '@rstest/core';
 import { Parser } from 'acorn';
 import { type CoverageMap, type FileCoverageData } from 'istanbul-lib-coverage';
@@ -16,6 +17,7 @@ import { createFastCoverageMap, mapWithConcurrency } from './utils';
 import {
   applyV8CoverageWithAst,
   convertV8CoverageWithAst,
+  resolveSourceMapFilenames,
 } from './v8AstConverter';
 
 type SourceMapLike = {
@@ -50,9 +52,10 @@ type CollectOptions = NonNullable<
 type TransformedSource = {
   code: string;
   sourceMap?: SourceMapLike;
-  sourceMapStr?: string;
+  sourceMapKey?: string;
   sourceMapUrl?: string;
 };
+type ExternalSourceMap = Omit<TransformedSource, 'code'>;
 
 type RawCoveragePayload = {
   entries: CoverageEntry[];
@@ -450,34 +453,27 @@ export class CoverageProvider implements RstestCoverageProvider {
     return url.startsWith('data:');
   }
 
-  private async loadExternalSourceMap(
+  private loadExternalSourceMap(
     filePath: string,
     code: string,
-  ): Promise<{
-    sourceMap?: SourceMapLike;
-    sourceMapStr?: string;
-    sourceMapUrl?: string;
-  }> {
+  ): ExternalSourceMap | Promise<ExternalSourceMap> {
     const sourceMapUrl = this.getSourceMapUrl(code);
     if (!sourceMapUrl || this.isInlineSourceMapUrl(sourceMapUrl)) {
       return {};
     }
 
-    try {
-      const resolvedSourceMapUrl = resolve(dirname(filePath), sourceMapUrl);
-      const sourceMapStr = await fs.readFile(resolvedSourceMapUrl, 'utf-8');
-
-      return {
+    const resolvedSourceMapUrl = resolve(dirname(filePath), sourceMapUrl);
+    return fs
+      .readFile(resolvedSourceMapUrl, 'utf-8')
+      .then((sourceMapStr) => ({
         sourceMap: {
           names: [],
           ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
         } as SourceMapLike,
-        sourceMapStr,
+        sourceMapKey: this.getSourceMapKey(sourceMapStr),
         sourceMapUrl: resolvedSourceMapUrl,
-      };
-    } catch {
-      return {};
-    }
+      }))
+      .catch(() => ({}));
   }
 
   private async hasSourceMapOnDisk(filePath: string): Promise<boolean> {
@@ -493,29 +489,38 @@ export class CoverageProvider implements RstestCoverageProvider {
     return cached;
   }
 
-  private async getTransformedSource(
+  private getTransformedSource(
     filePath: string,
     options?: Pick<CollectOptions, 'assetFiles' | 'sourceMaps'>,
-  ): Promise<TransformedSource> {
+    parsedSourceMap?: SourceMapLike,
+  ): TransformedSource | Promise<TransformedSource> {
     const assetSource = this.findInDict(options?.assetFiles, filePath);
     const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
-    const code = assetSource ?? (await fs.readFile(filePath, 'utf-8'));
+    const transform = (
+      code: string,
+    ): TransformedSource | Promise<TransformedSource> => {
+      if (sourceMapStr) {
+        return {
+          code,
+          sourceMap:
+            parsedSourceMap ??
+            ({
+              names: [],
+              ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
+            } as SourceMapLike),
+          sourceMapKey: this.getSourceMapKey(sourceMapStr),
+        };
+      }
 
-    if (sourceMapStr) {
-      return {
-        code,
-        sourceMap: {
-          names: [],
-          ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
-        } as SourceMapLike,
-        sourceMapStr,
-      };
-    }
-
-    return {
-      code,
-      ...(await this.loadExternalSourceMap(filePath, code)),
+      const externalSourceMap = this.loadExternalSourceMap(filePath, code);
+      return externalSourceMap instanceof Promise
+        ? externalSourceMap.then((result) => ({ code, ...result }))
+        : { code, ...externalSourceMap };
     };
+
+    return assetSource === undefined
+      ? fs.readFile(filePath, 'utf-8').then(transform)
+      : transform(assetSource);
   }
 
   private parseAst(code: string, outputModule: boolean) {
@@ -532,7 +537,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     transformedSource?: TransformedSource,
     root = this.root,
   ): Promise<Record<string, FileCoverageData>> {
-    const { code, sourceMap, sourceMapStr, sourceMapUrl } =
+    const { code, sourceMap, sourceMapKey, sourceMapUrl } =
       transformedSource ?? (await this.getTransformedSource(filePath, options));
 
     if (this.shouldSkipSourceMapEntry(sourceMap)) {
@@ -545,7 +550,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       filePath,
       code,
       codeHash,
-      sourceMapStr,
+      sourceMapKey,
       outputModule,
       root,
     );
@@ -586,7 +591,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       return;
     }
 
-    const { code, sourceMap, sourceMapStr, sourceMapUrl } =
+    const { code, sourceMap, sourceMapKey, sourceMapUrl } =
       transformedSource ?? (await this.getTransformedSource(filePath, options));
 
     if (this.shouldSkipSourceMapEntry(sourceMap)) {
@@ -599,7 +604,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       filePath,
       code,
       codeHash,
-      sourceMapStr,
+      sourceMapKey,
       outputModule,
       root,
     );
@@ -624,19 +629,22 @@ export class CoverageProvider implements RstestCoverageProvider {
     filePath: string,
     code: string,
     codeHash: number,
-    sourceMapStr: string | undefined,
+    sourceMapKey: string | undefined,
     outputModule: boolean,
     root: string | undefined,
   ): string {
     return [
       this.getAstCacheKey(filePath, code, codeHash, outputModule),
-      sourceMapStr?.length ?? 0,
-      sourceMapStr ? this.hashString(sourceMapStr) : 0,
+      sourceMapKey ?? '',
       root ?? '',
       this.options.allowExternal ? 'external' : 'root-only',
       this.options.include?.join('\n') ?? '',
       this.options.exclude.join('\n'),
     ].join('\0');
+  }
+
+  private getSourceMapKey(sourceMapStr: string): string {
+    return `${sourceMapStr.length}:${this.hashString(sourceMapStr)}`;
   }
 
   private getAstCacheKey(
@@ -687,7 +695,10 @@ export class CoverageProvider implements RstestCoverageProvider {
     return this.collectImpl(options);
   }
 
-  resolveRawCoverage(payloads: unknown[]): Promise<CoverageMap | null> {
+  resolveRawCoverage(
+    payloads: unknown[],
+    options?: RawCoverageResolveOptions,
+  ): Promise<CoverageMap | null> {
     const validPayloads: RawCoveragePayload[] = [];
 
     for (const [index, payload] of payloads.entries()) {
@@ -703,7 +714,11 @@ export class CoverageProvider implements RstestCoverageProvider {
       return Promise.resolve(null);
     }
 
-    return this.collectRawPayloads(validPayloads);
+    return this.collectRawPayloads(
+      validPayloads,
+      options?.loadAssetFiles,
+      options?.loadSourceMaps,
+    );
   }
 
   async collectRaw(
@@ -725,36 +740,8 @@ export class CoverageProvider implements RstestCoverageProvider {
 
     return {
       entries: filteredEntries,
-      options: this.pickRawCoverageOptions(filteredEntries, options),
+      options: options ? { outputModule: options.outputModule } : undefined,
       root: this.root,
-    };
-  }
-
-  private pickRawCoverageOptions(
-    entries: CoverageEntry[],
-    options?: CollectOptions,
-  ): CollectOptions | undefined {
-    if (!options) return undefined;
-
-    const assetFiles: Record<string, string> = {};
-    const sourceMaps: Record<string, string> = {};
-
-    for (const entry of entries) {
-      const assetSource = this.findInDict(options.assetFiles, entry.filePath);
-      if (typeof assetSource === 'string') {
-        assetFiles[entry.filePath] = assetSource;
-      }
-
-      const sourceMap = this.findInDict(options.sourceMaps, entry.filePath);
-      if (typeof sourceMap === 'string') {
-        sourceMaps[entry.filePath] = sourceMap;
-      }
-    }
-
-    return {
-      ...(Object.keys(assetFiles).length ? { assetFiles } : {}),
-      ...(Object.keys(sourceMaps).length ? { sourceMaps } : {}),
-      outputModule: options.outputModule,
     };
   }
 
@@ -856,80 +843,198 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private async collectRawPayloads(
     payloads: RawCoveragePayload[],
+    loadAssetFiles?: RawCoverageResolveOptions['loadAssetFiles'],
+    loadSourceMaps?: RawCoverageResolveOptions['loadSourceMaps'],
   ): Promise<CoverageMap | null> {
     const coverageMap = this.createCoverageMap();
-    const groups = new Map<string, CoverageEntryGroup>();
-    const sourceIdentityIds = new Map<string, number>();
+    const entriesByFilePath = new Map<
+      string,
+      {
+        entry: CoverageEntry;
+        payload: RawCoveragePayload;
+      }[]
+    >();
 
     for (const payload of payloads) {
       for (const entry of payload.entries) {
-        const key = this.getRawCoverageGroupKey(
-          payload,
-          entry,
-          sourceIdentityIds,
-        );
-        this.mergeIntoCoverageEntries(
-          groups,
-          key,
-          entry,
-          payload.options,
-          payload.root,
-        );
+        const entries = entriesByFilePath.get(entry.filePath) ?? [];
+        entries.push({ entry, payload });
+        entriesByFilePath.set(entry.filePath, entries);
       }
+      payload.entries.length = 0;
     }
 
-    await mapWithConcurrency(
-      Array.from(groups.values()),
-      COVERAGE_PROCESSING_CONCURRENCY,
-      async ({ entries, options, root }) => {
-        try {
-          const transformedSource = await this.getTransformedSource(
-            entries[0]!.filePath,
-            options,
-          );
+    const fileEntries = Array.from(entriesByFilePath.entries());
+    entriesByFilePath.clear();
 
-          for (const entry of entries) {
+    await mapWithConcurrency(
+      fileEntries,
+      COVERAGE_PROCESSING_CONCURRENCY,
+      async ([filePath, rawEntries]) => {
+        let loadedSourceMaps = await loadSourceMaps?.([filePath]);
+        const parsedSourceMaps = new Map<string, SourceMapLike>();
+        const retainedEntries: {
+          entry: CoverageEntry;
+          payload: RawCoveragePayload;
+        }[] = [];
+
+        for (const { entry, payload } of rawEntries) {
+          const sourceMapStr =
+            this.findInDict(payload.options?.sourceMaps, filePath) ??
+            this.findInDict(loadedSourceMaps, filePath);
+
+          if (sourceMapStr) {
             try {
-              await this.applyWithAst(
-                coverageMap,
-                entry.filePath,
-                entry,
-                options,
-                transformedSource,
-                root,
-              );
-            } catch (e) {
-              console.error(`Failed to process coverage for ${entry.url}:`, e);
-              process.exitCode = 1;
+              const sourceMapKey = this.getSourceMapKey(sourceMapStr);
+              let sourceMap = parsedSourceMaps.get(sourceMapKey);
+              if (!sourceMap) {
+                sourceMap = {
+                  names: [],
+                  ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
+                } as SourceMapLike;
+                parsedSourceMaps.set(sourceMapKey, sourceMap);
+              }
+
+              if (
+                !this.shouldKeepSourceMapEntry(
+                  filePath,
+                  sourceMap,
+                  payload.root,
+                )
+              ) {
+                continue;
+              }
+            } catch {
+              // Preserve per-entry conversion errors for malformed source maps.
             }
           }
-        } catch (e) {
-          console.error(
-            `Failed to process coverage for ${entries[0]!.url}:`,
-            e,
-          );
-          process.exitCode = 1;
+
+          retainedEntries.push({ entry, payload });
         }
+        rawEntries.length = 0;
+
+        if (!retainedEntries.length) {
+          parsedSourceMaps.clear();
+          return;
+        }
+
+        let loadedAssetFiles = await loadAssetFiles?.([filePath]);
+        const loadedOptions = {
+          assetFiles: loadedAssetFiles,
+          sourceMaps: loadedSourceMaps,
+        };
+        const groups = new Map<string, CoverageEntryGroup>();
+        const sourceIdentityIds = new Map<string, number>();
+
+        for (const { entry, payload } of retainedEntries) {
+          const options = this.resolveRawCoverageEntryOptions(
+            entry,
+            payload.options,
+            loadedOptions,
+          );
+          const key = this.getRawCoverageGroupKey(
+            payload,
+            entry,
+            sourceIdentityIds,
+            options,
+          );
+          this.mergeIntoCoverageEntries(
+            groups,
+            key,
+            entry,
+            options,
+            payload.root,
+          );
+        }
+        retainedEntries.length = 0;
+        sourceIdentityIds.clear();
+        loadedOptions.assetFiles = undefined;
+        loadedOptions.sourceMaps = undefined;
+        loadedAssetFiles = undefined;
+        loadedSourceMaps = undefined;
+
+        for (const { entries, options, root } of groups.values()) {
+          try {
+            const sourceMapStr = this.findInDict(options?.sourceMaps, filePath);
+            const transformedSourceResult = this.getTransformedSource(
+              filePath,
+              options,
+              sourceMapStr
+                ? parsedSourceMaps.get(this.getSourceMapKey(sourceMapStr))
+                : undefined,
+            );
+            const transformedSource =
+              transformedSourceResult instanceof Promise
+                ? await transformedSourceResult
+                : transformedSourceResult;
+            const usesCustomConverter =
+              this.convertWithAst !== CoverageProvider.prototype.convertWithAst;
+            let conversionOptions = options;
+            if (options && !usesCustomConverter) {
+              conversionOptions = { outputModule: options.outputModule };
+              options.assetFiles = undefined;
+              options.sourceMaps = undefined;
+            }
+
+            for (const entry of entries) {
+              try {
+                await this.applyWithAst(
+                  coverageMap,
+                  filePath,
+                  entry,
+                  conversionOptions,
+                  transformedSource,
+                  root,
+                );
+              } catch (e) {
+                console.error(
+                  `Failed to process coverage for ${entry.url}:`,
+                  e,
+                );
+                process.exitCode = 1;
+              }
+            }
+          } catch (e) {
+            console.error(
+              `Failed to process coverage for ${entries[0]!.url}:`,
+              e,
+            );
+            process.exitCode = 1;
+          } finally {
+            entries.length = 0;
+          }
+        }
+
+        groups.clear();
+        parsedSourceMaps.clear();
       },
     );
+    fileEntries.length = 0;
 
     return coverageMap;
+  }
+
+  private shouldKeepSourceMapEntry(
+    filePath: string,
+    sourceMap: SourceMapLike,
+    root?: string,
+  ): boolean {
+    if (!sourceMap.sources.length) return true;
+
+    return resolveSourceMapFilenames(filePath, sourceMap).some((source) =>
+      this.shouldKeepOriginalSource(source, root),
+    );
   }
 
   private getRawCoverageGroupKey(
     payload: RawCoveragePayload,
     entry: CoverageEntry,
     sourceIdentityIds: Map<string, number>,
+    options?: CollectOptions,
   ): string {
-    const outputModule = payload.options?.outputModule ?? true;
-    const assetSource = this.findInDict(
-      payload.options?.assetFiles,
-      entry.filePath,
-    );
-    const sourceMap = this.findInDict(
-      payload.options?.sourceMaps,
-      entry.filePath,
-    );
+    const outputModule = options?.outputModule ?? true;
+    const assetSource = this.findInDict(options?.assetFiles, entry.filePath);
+    const sourceMap = this.findInDict(options?.sourceMaps, entry.filePath);
 
     return [
       payload.root ?? '',
@@ -938,6 +1043,29 @@ export class CoverageProvider implements RstestCoverageProvider {
       this.getStringIdentity(assetSource, sourceIdentityIds),
       this.getStringIdentity(sourceMap, sourceIdentityIds),
     ].join('\0');
+  }
+
+  private resolveRawCoverageEntryOptions(
+    entry: CoverageEntry,
+    payloadOptions?: CollectOptions,
+    loadedOptions?: Pick<CollectOptions, 'assetFiles' | 'sourceMaps'>,
+  ): CollectOptions {
+    const assetSource =
+      this.findInDict(payloadOptions?.assetFiles, entry.filePath) ??
+      this.findInDict(loadedOptions?.assetFiles, entry.filePath);
+    const sourceMap =
+      this.findInDict(payloadOptions?.sourceMaps, entry.filePath) ??
+      this.findInDict(loadedOptions?.sourceMaps, entry.filePath);
+
+    return {
+      ...(typeof assetSource === 'string'
+        ? { assetFiles: { [entry.filePath]: assetSource } }
+        : {}),
+      ...(typeof sourceMap === 'string'
+        ? { sourceMaps: { [entry.filePath]: sourceMap } }
+        : {}),
+      outputModule: payloadOptions?.outputModule,
+    };
   }
 
   private getStringIdentity(
@@ -991,7 +1119,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       }
     }
 
-    group.entries.push(this.cloneCoverageEntry(entry));
+    group.entries.push(entry);
   }
 
   private tryMergeCoverageEntry(
@@ -1053,16 +1181,6 @@ export class CoverageProvider implements RstestCoverageProvider {
     return true;
   }
 
-  private cloneCoverageEntry(entry: CoverageEntry): CoverageEntry {
-    return {
-      ...entry,
-      functions: entry.functions.map((fn) => ({
-        ...fn,
-        ranges: fn.ranges.map((range) => ({ ...range })),
-      })),
-    };
-  }
-
   createCoverageMap(): CoverageMap {
     return createFastCoverageMap();
   }
@@ -1101,7 +1219,13 @@ export class CoverageProvider implements RstestCoverageProvider {
               functions: [],
             },
             { outputModule: true },
-            { code, sourceMap, sourceMapStr },
+            {
+              code,
+              sourceMap,
+              sourceMapKey: sourceMapStr
+                ? this.getSourceMapKey(sourceMapStr)
+                : undefined,
+            },
           );
           return Object.values(istanbulData);
         } catch (e) {

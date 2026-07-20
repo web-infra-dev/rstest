@@ -2,7 +2,7 @@ import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { TraceEvent } from '../utils/trace';
 import type { ListCommandResult, ProjectContext } from './core';
-import type { CoverageMapData } from './coverage';
+import type { CoverageMapData, RawCoverageResolveOptions } from './coverage';
 import type { TestFileResult, TestResult } from './testSuite';
 
 /**
@@ -72,6 +72,8 @@ export interface ExecutorCycleOutcome {
   coverage?: {
     map?: CoverageMapData;
     raw?: unknown[];
+    loadAssetFiles?: RawCoverageResolveOptions['loadAssetFiles'];
+    loadSourceMaps?: RawCoverageResolveOptions['loadSourceMaps'];
   };
   /**
    * Route-aware source map resolver. `finalizeRunCycle` tries each outcome's

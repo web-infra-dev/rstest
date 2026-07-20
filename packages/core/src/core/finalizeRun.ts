@@ -235,10 +235,30 @@ export async function finalizeRunCycle(
     }
   }
 
+  const loadCoverageResources = async (
+    filenames: string[],
+    resource: 'loadAssetFiles' | 'loadSourceMaps',
+  ) => {
+    const loadedResources: Record<string, string> = {};
+    await Promise.all(
+      outcomes.map(async (outcome) => {
+        const load = outcome.coverage?.[resource];
+        Object.assign(loadedResources, await load?.(filenames));
+      }),
+    );
+    return loadedResources;
+  };
+
   await resolveAndMergeRawCoverage({
     coverageProvider,
     mergedCoverageMap,
     rawCoverageResults: outcomes.flatMap((o) => o.coverage?.raw ?? []),
+    resolveOptions: {
+      loadAssetFiles: (filenames) =>
+        loadCoverageResources(filenames, 'loadAssetFiles'),
+      loadSourceMaps: (filenames) =>
+        loadCoverageResources(filenames, 'loadSourceMaps'),
+    },
     runCoverageStep: runLifecycleStep,
   });
 

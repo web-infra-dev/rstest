@@ -1048,7 +1048,7 @@ export default class CustomCoverageReporter {
     }
   });
 
-  it('omits null source maps from raw coverage payload options', async () => {
+  it('omits compiled assets from raw coverage payload options', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-raw-null-sourcemap');
     const file = join(root, 'dist', 'covered.js');
     const code = 'function covered() { return 1; }';
@@ -1087,8 +1087,9 @@ export default class CustomCoverageReporter {
 
     const payload = await provider.collectRaw(options);
 
-    expect(payload?.options?.assetFiles).toEqual({ [file]: code });
+    expect(payload?.options?.assetFiles).toBeUndefined();
     expect(payload?.options?.sourceMaps).toBeUndefined();
+    expect(payload?.options?.outputModule).toBe(true);
   });
 
   it('collects raw v8 coverage before converting to Istanbul coverage', async () => {
@@ -1132,21 +1133,125 @@ export default class CustomCoverageReporter {
         ],
       });
 
-      const coverageMap = await provider.resolveRawCoverage([
+      const loadedAssetFilenames: string[][] = [];
+      const loadedSourceMapFilenames: string[][] = [];
+      const loadAssetFiles = async (filenames: string[]) => {
+        loadedAssetFilenames.push(filenames);
+        return { [file]: code };
+      };
+      const loadSourceMaps = async (filenames: string[]) => {
+        loadedSourceMapFilenames.push(filenames);
+        return {};
+      };
+      const payloads = [
         {
           entries: [createEntry(1)],
-          options: { assetFiles: { [file]: code }, outputModule: true },
+          options: { outputModule: true },
         },
         {
           entries: [createEntry(2)],
-          options: { assetFiles: { [file]: code }, outputModule: true },
+          options: { outputModule: true },
         },
-      ]);
+      ];
+      const coverageMap = await provider.resolveRawCoverage(payloads, {
+        loadAssetFiles,
+        loadSourceMaps,
+      });
 
+      expect(loadedSourceMapFilenames).toEqual([[file]]);
+      expect(loadedAssetFilenames).toEqual([[file]]);
+      expect(payloads.map((payload) => payload.entries)).toEqual([[], []]);
       expect(convertedCounts).toEqual([3]);
       expect(
         coverageMap?.fileCoverageFor(file).toSummary().statements.pct,
       ).toBe(100);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('filters raw assets by source map before loading compiled sources', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-sourcemap-first');
+    const includedAsset = join(root, 'dist', 'included.js');
+    const excludedAsset = join(root, 'dist', 'excluded.js');
+    const includedSource = join(root, 'src', 'included.ts');
+    const code = 'export const value = 1;';
+    const provider = new CoverageProvider(
+      createOptions({ include: ['src/**/*.ts'] }),
+      root,
+    );
+    const providerInternals = getProviderInternals(provider);
+    const convertedFiles: string[] = [];
+    const convertedSourceMapFiles: string[][] = [];
+
+    Object.defineProperty(providerInternals, 'convertWithAst', {
+      configurable: true,
+      value: async (
+        filePath: string,
+        _entry: unknown,
+        options: { sourceMaps?: Record<string, string> },
+      ) => {
+        convertedFiles.push(filePath);
+        convertedSourceMapFiles.push(Object.keys(options.sourceMaps ?? {}));
+        return { [includedSource]: createFileCoverage(includedSource) };
+      },
+    });
+
+    const createEntry = (filePath: string) => ({
+      url: pathToFileURL(filePath).href,
+      filePath,
+      scriptId: filePath,
+      functions: [
+        {
+          functionName: '',
+          isBlockCoverage: true,
+          ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+        },
+      ],
+    });
+    const createSourceMap = (source: string) =>
+      JSON.stringify({
+        version: 3,
+        names: [],
+        sources: [source],
+        sourcesContent: [code],
+        mappings: '',
+      });
+    const loadedAssetFilenames: string[][] = [];
+    const loadedSourceMapFilenames: string[][] = [];
+
+    try {
+      const coverageMap = await provider.resolveRawCoverage(
+        [
+          {
+            entries: [createEntry(includedAsset), createEntry(excludedAsset)],
+            options: { outputModule: true },
+            root,
+          },
+        ],
+        {
+          loadSourceMaps: async (filenames) => {
+            loadedSourceMapFilenames.push(filenames);
+            return {
+              [includedAsset]: createSourceMap('../src/included.ts'),
+              [excludedAsset]: createSourceMap('../test/excluded.ts'),
+            };
+          },
+          loadAssetFiles: async (filenames) => {
+            loadedAssetFilenames.push(filenames);
+            return Object.fromEntries(filenames.map((file) => [file, code]));
+          },
+        },
+      );
+
+      expect(loadedSourceMapFilenames).toEqual([
+        [includedAsset],
+        [excludedAsset],
+      ]);
+      expect(loadedAssetFilenames).toEqual([[includedAsset]]);
+      expect(convertedFiles).toEqual([includedAsset]);
+      expect(convertedSourceMapFiles).toEqual([[includedAsset]]);
+      expect(coverageMap?.files()).toEqual([includedSource]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -1158,6 +1263,9 @@ export default class CustomCoverageReporter {
     const providerInternals = getProviderInternals(provider);
     let activeConversions = 0;
     let peakConversions = 0;
+    const codeByFile: Record<string, string> = {};
+    const loadedAssetFilenames: string[][] = [];
+    const loadedSourceMapFilenames: string[][] = [];
 
     Object.defineProperty(providerInternals, 'convertWithAst', {
       configurable: true,
@@ -1175,6 +1283,7 @@ export default class CustomCoverageReporter {
     const payloads = Array.from({ length: 12 }, (_, index) => {
       const file = join(root, 'src', `covered-${index}.js`);
       const code = `function covered${index}() { return ${index}; }`;
+      codeByFile[file] = code;
 
       return {
         entries: [
@@ -1191,14 +1300,32 @@ export default class CustomCoverageReporter {
             ],
           },
         ],
-        options: { assetFiles: { [file]: code }, outputModule: true },
+        options: { outputModule: true },
       };
     });
 
     try {
-      const coverageMap = await provider.resolveRawCoverage(payloads);
+      const coverageMap = await provider.resolveRawCoverage(payloads, {
+        loadSourceMaps: async (filenames) => {
+          loadedSourceMapFilenames.push(filenames);
+          return {};
+        },
+        loadAssetFiles: async (filenames) => {
+          loadedAssetFilenames.push(filenames);
+          return Object.fromEntries(
+            filenames.map((file) => [file, codeByFile[file]!]),
+          );
+        },
+      });
 
       expect(coverageMap?.files()).toHaveLength(12);
+      expect(loadedSourceMapFilenames).toHaveLength(12);
+      expect(loadedAssetFilenames).toHaveLength(12);
+      expect(
+        [...loadedSourceMapFilenames, ...loadedAssetFilenames].every(
+          (filenames) => filenames.length === 1,
+        ),
+      ).toBe(true);
       expect(peakConversions).toBeLessThanOrEqual(4);
       expect(peakConversions).toBeGreaterThan(1);
     } finally {
