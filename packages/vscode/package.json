@@ -267,7 +267,7 @@
     "@rsbuild/core": "~2.1.6",
     "@rslib/core": "0.23.2",
     "@rstest/core": "workspace:*",
-    "@swc/core": "^1.15.43",
+    "@swc/core": "^1.15.46",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
