@@ -401,7 +401,7 @@ In this example, `rs.hoisted` allows you to create a mock function using `rs.fn(
 
 - **Type:** `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
-Loads the original implementation of a module even if it has already been mocked. Use `rs.importActual` when you want a partial mock so you can merge the real exports with your overrides.
+Loads the original implementation of an ESM module asynchronously, even if it has already been mocked. Use `rs.importActual` when asynchronous test code needs to bypass a module mock. For a CommonJS module loaded through `require()`, use [`rs.requireActual`](#rsrequireactual).
 
 ```ts title="src/sum.test.ts"
 rs.mock('./sum');
@@ -412,7 +412,7 @@ it('test', async () => {
 });
 ```
 
-Rstest also exposes a synchronous `importActual` option for static imports. Add the [import attribute](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import/with) `with { rstest: 'importActual' }` to load the real module as the file evaluates:
+For a partial ESM mock in a synchronous `rs.mock` factory, add the [import attribute](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import/with) `with { rstest: 'importActual' }` to a static import. This loads the real module as the file evaluates, so the factory can merge the real exports with its overrides:
 
 ```ts title="src/api.test.ts"
 import * as apiActual from './api' with { rstest: 'importActual' };
@@ -424,16 +424,53 @@ rs.mock('./api', () => ({
 }));
 ```
 
+## rs.requireActual
+
+- **Type:** `<T = Record<string, unknown>>(path: string) => T`
+
+Loads the original implementation of a CommonJS module synchronously, even if it has already been mocked. Use `rs.requireActual` when code consumes the module through `require()`, or when a synchronous mock factory needs the real exports. For an ESM module loaded through `import`, use [`rs.importActual`](#rsimportactual).
+
+```ts title="src/math.test.ts"
+rs.mockRequire('./math.cjs', () => ({
+  sum: () => 100,
+}));
+
+test('loads the original CommonJS module', () => {
+  const actualMath =
+    rs.requireActual<typeof import('./math.cjs')>('./math.cjs');
+
+  expect(rs.isMockFunction(actualMath.sum)).toBe(false);
+  expect(actualMath.sum(1, 2)).toBe(3);
+});
+```
+
 ## rs.importMock
 
 - **Type:** `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
-Imports a module and all its properties as mock implementations.
+Loads an ESM module asynchronously and returns it with all properties, including nested properties, replaced by mock implementations. Use `rs.importMock` when a test needs an auto-mocked module directly. For a CommonJS module loaded through `require()`, use [`rs.requireMock`](#rsrequiremock).
 
-```ts title="src/sum.test.ts"
-it('test', async () => {
-  const mockedModule = await rs.importMock('./sum');
-  expect(mockedModule.sum2(1, 2)).toBe(103);
+```ts title="src/api.test.ts"
+test('loads an ESM module as mocks', async () => {
+  const mockedApi = await rs.importMock<typeof import('./api')>('./api');
+
+  mockedApi.fetchUser('1');
+  expect(mockedApi.fetchUser).toHaveBeenCalledWith('1');
+});
+```
+
+## rs.requireMock
+
+- **Type:** `<T = Record<string, unknown>>(path: string) => T`
+
+Loads a CommonJS module synchronously and returns it with all properties, including nested properties, replaced by mock implementations. Use `rs.requireMock` when the target is consumed through `require()` and the test needs the mocked module immediately. For an ESM module loaded through `import`, use [`rs.importMock`](#rsimportmock).
+
+```ts title="src/math.test.ts"
+test('loads a CommonJS module as mocks', () => {
+  const mockedMath = rs.requireMock<typeof import('./math.cjs')>('./math.cjs');
+
+  mockedMath.sum(1, 2);
+  expect(mockedMath.sum).toHaveBeenCalledWith(1, 2);
 });
 ```
 
@@ -478,7 +515,7 @@ Same as `rs.unmock`, but it is not hoisted to the top of the file. The next impo
 
 ## rs.resetModules
 
-- **Type:** `resetModules: () => RstestUtilities`
+- **Type:** `() => RstestUtilities`
 
 Clears the cache of all modules. This allows modules to be re-executed when re-imported. This is useful for isolating the state of modules shared between different tests.
 
