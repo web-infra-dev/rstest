@@ -9,6 +9,7 @@
   "update",
   "globals",
   "pass-with-no-tests",
+  "only-failures",
   "include-source",
   "force-rerun-triggers",
   "test-name-pattern",

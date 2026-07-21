@@ -1,9 +1,11 @@
-import './setup';
 import { install } from 'source-map-support';
 import type { FormattedError } from '../../types';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
+import { installGracefulExit } from './setup';
+
+installGracefulExit();
 
 let teardownCallbacks: (() => Promise<void> | void)[] = [];
 // Track environment variable changes
@@ -87,6 +89,7 @@ const runGlobalSetup = async (data: {
       const { loadModule } = data.outputModule
         ? await import('./loadEsModule')
         : await import('./loadModule');
+
       const virtualFsAssetFiles = data.federation ? data.assetFiles : undefined;
 
       const module = await loadModule({

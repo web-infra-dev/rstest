@@ -141,6 +141,7 @@ export const deleteFixtureTarget = async (
 export const runBrowserCli = async (
   fixtureName: string,
   extra?: {
+    command?: 'run' | 'list';
     args?: string[];
     env?: Record<string, string>;
   },
@@ -151,7 +152,7 @@ export const runBrowserCli = async (
 
   const result = await runRstestCli({
     command: 'rstest',
-    args: ['run', ...args],
+    args: [extra?.command ?? 'run', ...args],
     options: {
       nodeOptions: {
         cwd: join(__dirname, 'fixtures', fixtureName),

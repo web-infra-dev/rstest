@@ -4,7 +4,10 @@ import type {
   CoverageProvider,
   InlineProjectConfig,
   NormalizedCoverageOptions,
+  RawCoverageResolveOptions,
+  RstestExposeAPI,
   ProjectConfig,
+  ResolvedRstestConfig,
   RstestConfig,
 } from './types';
 
@@ -17,8 +20,11 @@ export type {
   CoverageOptions,
   CoverageProvider,
   NormalizedCoverageOptions,
+  RawCoverageResolveOptions,
+  ResolvedRstestConfig,
   RsbuildPlugin,
   RstestConfig,
+  RstestExposeAPI,
 };
 
 export type RstestConfigAsyncFn = () => Promise<RstestConfig>;
@@ -96,20 +102,30 @@ export type { Rspack } from '@rsbuild/core';
 export type {
   Assertion,
   DescribeAPI as Describe,
+  AsymmetricMatchersContaining,
   ExpectStatic,
   ExtendConfig,
   ExtendConfigFn,
+  Fixtures,
+  Matchers,
   ProjectConfig,
+  RealTimers,
   Reporter,
   Rstest,
   RstestCommand,
   RstestExpect as Expect,
   RstestUtilities,
+  TaskMeta,
+  TaskMetaValue,
   TestCaseInfo,
   TestContext,
+  TestAPIs,
+  TestForFn,
   TestFileInfo,
   TestFileResult,
   TestInfo,
+  TestOptions,
   TestResult,
   TestSuiteInfo,
+  Use,
 } from './types';

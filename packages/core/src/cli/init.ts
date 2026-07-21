@@ -80,6 +80,7 @@ export type CommonOptions = {
         clean?: boolean | string;
       };
   passWithNoTests?: boolean;
+  onlyFailures?: boolean;
   silent?: boolean | 'passed-only';
   printConsoleTrace?: boolean;
   logHeapUsage?: boolean;
@@ -154,6 +155,7 @@ export function mergeWithCLIOptions(
     'globals',
     'isolate',
     'passWithNoTests',
+    'onlyFailures',
     'silent',
     'update',
     'testNamePattern',

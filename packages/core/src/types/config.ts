@@ -10,6 +10,40 @@ import type {
 import type { ConsoleStreamType, MaybePromise } from './utils';
 import type { BrowserProvider } from '../utils/constants';
 
+export type ModifyRstestConfigCallback = (
+  config: RstestConfig,
+) => MaybePromise<RstestConfig | void>;
+
+export type RstestExposeAPI = {
+  /**
+   * Get the resolved Rstest config for the current Rsbuild environment.
+   *
+   * This API is exposed to Rsbuild plugins through `api.useExposed('rstest')`
+   * in both Node Mode and Browser Mode projects.
+   * It combines the current project's config with the effective global and
+   * run-level config.
+   *
+   * The returned config uses a read-only type. Opaque values retain their
+   * original identity and behavior.
+   */
+  getRstestConfig: () => Readonly<ResolvedRstestConfig>;
+  /**
+   * Modify the Rstest config for the current Rsbuild environment.
+   *
+   * This API is exposed to Rsbuild plugins through `api.useExposed('rstest')`
+   * in both Node Mode and Browser Mode projects.
+   * In multi-project mode, the callback only applies to the Rstest project
+   * that owns the current Rsbuild environment.
+   *
+   * This API is suitable for modifying existing project config, but it cannot
+   * be used to dynamically add or remove Rstest projects, switch Browser Mode,
+   * modify Browser Mode launch options, modify the project name, or modify
+   * global options such as reporters, pool, isolate, coverage, update,
+   * output.distPath, or plugins.
+   */
+  modifyRstestConfig: (callback: ModifyRstestConfigCallback) => void;
+};
+
 export type ChaiConfig = Partial<
   Pick<typeof config, 'showDiff' | 'truncateThreshold'>
 >;
@@ -318,6 +352,15 @@ export interface RstestConfig {
    * @default false
    */
   passWithNoTests?: boolean;
+  /**
+   * Run only the test files that failed in the previous run, backed by the
+   * persistent results cache. File-level granularity: the whole failed test
+   * file re-runs. When there are no previously-failed files (or no cache yet),
+   * all tests run with a notice.
+   *
+   * @default false
+   */
+  onlyFailures?: boolean;
   /**
    * Pool used to run tests in.
    */

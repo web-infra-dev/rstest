@@ -44,6 +44,24 @@ describe('test worker behavior', () => {
     expect(cli.log).toContain(marker);
   });
 
+  it('should report the running test case as failed when worker exits unexpectedly', async () => {
+    const { expectExecFailed, cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'worker.panic.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: fixtureDir,
+        },
+      },
+    });
+
+    await expectExecFailed();
+    // The case that was running at crash time is attributed as a failed test
+    // case rather than silently dropped from the counts (#1535).
+    expect(cli.log).toContain('should crash the worker process');
+    expect(cli.stdout).toMatch(/Tests\s+1 failed/);
+  });
+
   it('should handle unhandledRejection error correctly', async () => {
     const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',

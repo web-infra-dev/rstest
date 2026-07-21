@@ -126,9 +126,9 @@ fn(); // 返回 undefined
 
 ## withImplementation
 
-- **类型：** `(fn: Function, callback: () => any) => void | Promise<void>`
+- **类型：** `(fn: Function, callback: () => any) => MockInstance | Promise<MockInstance>`
 
-临时替换 mock 的实现函数，在 callback 执行期间生效，执行完毕后恢复原实现。
+临时替换 mock 的实现函数，在 callback 执行期间生效，执行完毕后恢复原实现。返回该 mock 实例（callback 为异步时返回 resolve 为该实例的 promise）。
 
 ```ts
 const fn = rs.fn(() => 1);

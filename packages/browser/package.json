@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser",
-  "version": "0.10.6",
+  "version": "0.11.3",
   "description": "Browser mode support for Rstest testing framework.",
   "keywords": [
     "rstest",
@@ -49,19 +49,19 @@
     "open-editor": "^6.0.0",
     "pathe": "^2.0.3",
     "sirv": "^3.0.2",
-    "ws": "^8.21.0"
+    "ws": "^8.21.1"
   },
   "devDependencies": {
-    "@rslib/core": "0.23.1",
+    "@rslib/core": "0.23.2",
     "@rstest/browser-ui": "workspace:*",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/convert-source-map": "^2.0.3",
     "@types/picomatch": "^4.0.3",
     "@types/ws": "^8.18.1",
-    "@vitest/snapshot": "^3.2.6",
+    "@vitest/snapshot": "^3.2.7",
     "birpc": "^4.0.0",
-    "picomatch": "^4.0.4",
+    "picomatch": "^4.0.5",
     "playwright": "^1.61.1"
   },
   "peerDependencies": {

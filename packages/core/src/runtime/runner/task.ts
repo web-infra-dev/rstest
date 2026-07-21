@@ -307,10 +307,10 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
 
     try {
       const result = await Promise.race([fn(...args), timeoutPromise]);
-      if (timeoutId) clearTimeout(timeoutId);
+      if (timeoutId) getRealTimers().clearTimeout!(timeoutId);
       return result;
     } catch (error) {
-      if (timeoutId) clearTimeout(timeoutId);
+      if (timeoutId) getRealTimers().clearTimeout!(timeoutId);
       throw error;
     }
   }) as T;

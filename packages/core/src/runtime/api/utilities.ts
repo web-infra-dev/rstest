@@ -485,6 +485,15 @@ const buildRstestUtilities = async (): Promise<{
     getRealSystemTime: () => {
       return _timers ? timers().getRealSystemTime() : Date.now();
     },
+    getRealTimers: () => ({
+      setTimeout: getRealSetTimeout(),
+      clearTimeout: getRealClearTimeout(),
+      setImmediate:
+        getRealTimers().setImmediate ??
+        (typeof globalThis.setImmediate === 'function'
+          ? globalThis.setImmediate.bind(globalThis)
+          : undefined),
+    }),
     isFakeTimers: () => {
       return _timers ? timers().isFakeTimers() : false;
     },

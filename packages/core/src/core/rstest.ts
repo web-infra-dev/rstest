@@ -187,6 +187,13 @@ export class Rstest implements RstestContext {
           config.isolate = rstestConfig.isolate;
           config.coverage = rstestConfig.coverage;
           config.bail = rstestConfig.bail;
+          // `resolveSnapshotPath` and `onConsoleLog` are omitted from
+          // ProjectConfig (root-only), so they must be copied down; otherwise the
+          // per-project event pump reads `undefined` and silently drops the root
+          // behavior in multi-project mode (default snapshot paths / unfiltered
+          // console), diverging from the browser host which reads root config.
+          config.resolveSnapshotPath = rstestConfig.resolveSnapshotPath;
+          config.onConsoleLog = rstestConfig.onConsoleLog;
 
           config.source ??= {};
           if (!config.source.tsconfigPath) {
@@ -304,6 +311,16 @@ export class Rstest implements RstestContext {
           (r) => !deletedPathsSet.has(r.testPath),
         );
     }
+
+    // Reporter *presentation* order is deterministic by test path, decoupled
+    // from *execution* order (which is perf-first and cache/timing dependent —
+    // see testSequencer.ts). Without this, the order files appear in reports
+    // would shift run-to-run with the sequencer's scheduling. Sort is stable,
+    // so individual test cases keep their in-file declaration order.
+    const byTestPath = (a: { testPath: string }, b: { testPath: string }) =>
+      a.testPath.localeCompare(b.testPath);
+    this.reporterResults.results.sort(byTestPath);
+    this.reporterResults.testResults.sort(byTestPath);
   }
 }
 

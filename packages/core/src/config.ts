@@ -256,6 +256,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   isolate: true,
   globals: false,
   passWithNoTests: false,
+  onlyFailures: false,
   update: false,
   testTimeout: DEFAULT_TEST_TIMEOUT,
   hookTimeout: 10_000,

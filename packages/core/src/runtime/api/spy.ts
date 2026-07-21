@@ -95,12 +95,15 @@ export const initSpy = (
         : implementation;
     };
 
-    function withImplementation(fn: T, cb: () => void): void;
-    function withImplementation(fn: T, cb: () => Promise<void>): Promise<void>;
+    function withImplementation(fn: T, cb: () => void): Mock<T>;
+    function withImplementation(
+      fn: T,
+      cb: () => Promise<void>,
+    ): Promise<Mock<T>>;
     function withImplementation(
       fn: T,
       cb: () => void | Promise<void>,
-    ): void | Promise<void> {
+    ): Mock<T> | Promise<Mock<T>> {
       const originalImplementation = implementation;
       const originalMockImplementationOnce = mockImplementationOnce;
 
@@ -118,10 +121,12 @@ export const initSpy = (
       if (result instanceof Promise) {
         return result.then(() => {
           reset();
+          return spyFn;
         });
       }
 
       reset();
+      return spyFn;
     }
 
     spyFn.withImplementation = withImplementation;

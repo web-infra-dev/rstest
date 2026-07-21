@@ -10,6 +10,12 @@ type FakeTimerSystemTime = Parameters<FakeTimerClock['setSystemTime']>[0];
 type FakeTimerTickMode = Parameters<FakeTimerClock['setTickMode']>[0];
 type MockFactory<T = unknown> = () => Partial<T>;
 
+export type RealTimers = {
+  setTimeout: typeof globalThis.setTimeout;
+  clearTimeout: typeof globalThis.clearTimeout;
+  setImmediate?: typeof globalThis.setImmediate;
+};
+
 interface MockResultReturn<T> {
   type: 'return';
   /**
@@ -143,7 +149,7 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
   withImplementation<T2>(
     fn: NormalizedProcedure<T>,
     callback: () => T2,
-  ): T2 extends Promise<unknown> ? Promise<void> : void;
+  ): T2 extends Promise<unknown> ? Promise<this> : this;
   /**
    * Return the `this` context from the method without invoking the actual implementation.
    */
@@ -248,11 +254,30 @@ type Properties<T> = {
   [K in keyof T]: T[K] extends MockProcedure ? never : K;
 }[keyof T];
 
-export type MockedFunction<T extends MockProcedure> = Mock<T> & {
+// A mock-wrapped callable. Stripping `this` keeps `mocked(args)` callable
+// without a receiver for methods typed with an explicit `this`, which a bare
+// `T` would break — but when a `this` parameter is present,
+// `OmitThisParameter<T>` rebuilds a bare call signature and drops `T`'s
+// construct signature, so `ConstructSignature<T>` re-extracts it (the tuple
+// wrapping avoids distributing over union members). `T`'s real signatures come
+// before `Mock<T>` so a construct+call member keeps its real construct
+// signature at `new mocked.fn()` sites (`Mock<T>`'s synthetic `new` returns
+// `ReturnType<T>` and would otherwise shadow it).
+type ConstructSignature<T> = [T] extends [new (...args: infer A) => infer R]
+  ? new (...args: A) => R
+  : unknown;
+
+type MockedCallable<T extends MockProcedure> = OmitThisParameter<T> &
+  ConstructSignature<T> &
+  Mock<T>;
+
+// The extra `{ [K in keyof T]: T[K] }` restores named/static properties that
+// `OmitThisParameter` drops when it rebuilds a this-less call signature.
+export type MockedFunction<T extends MockProcedure> = MockedCallable<T> & {
   [K in keyof T]: T[K];
 };
 
-export type MockedFunctionDeep<T extends MockProcedure> = Mock<T> &
+export type MockedFunctionDeep<T extends MockProcedure> = MockedCallable<T> &
   MockedObjectDeep<T>;
 
 export type MockedObject<T> = {
@@ -559,6 +584,7 @@ export interface RstestUtilities {
    */
   setSystemTime: (now?: FakeTimerSystemTime) => RstestUtilities;
   getRealSystemTime: () => number;
+  getRealTimers: () => RealTimers;
 
   runAllTicks: () => RstestUtilities;
   runAllTimers: () => RstestUtilities;

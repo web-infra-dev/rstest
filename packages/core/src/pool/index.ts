@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
-import { basename, dirname, join, resolve } from 'pathe';
+import { dirname, join, resolve } from 'pathe';
 import type {
   CoverageMapData,
   EntryInfo,
@@ -10,95 +10,36 @@ import type {
   RuntimeConfig,
   RuntimeRPC,
   TestCaseInfo,
-  TestFileInfo,
   TestFileResult,
   TestInfo,
   TestResult,
-  TestSuiteInfo,
-  UserConsoleLog,
 } from '../types';
 import {
   color,
   getFileTaskId,
   getForceColorEnv,
   isDeno,
-  logger,
   needFlagExperimentalDetectModule,
   toError,
 } from '../utils';
 import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
-import { getNumCpus, parseWorkers } from '../utils/workers';
+import { getNumCpus, parseWorkers, resolveWorkerCount } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
+import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
+import {
+  createRunnerEventSink,
+  type RunnerEventSink,
+  sinkToRuntimeRpc,
+} from '../core/runnerEventSink';
 import { Pool } from './pool';
 import type { PoolWorkerKind } from './types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const getRuntimeConfig = (context: ProjectContext): RuntimeConfig => {
-  const {
-    testNamePattern,
-    testTimeout,
-    passWithNoTests,
-    retry,
-    globals,
-    clearMocks,
-    resetMocks,
-    restoreMocks,
-    unstubEnvs,
-    unstubGlobals,
-    maxConcurrency,
-    printConsoleTrace,
-    disableConsoleIntercept,
-    testEnvironment,
-    federation,
-    hookTimeout,
-    isolate,
-    coverage,
-    snapshotFormat,
-    env,
-    logHeapUsage,
-    detectAsyncLeaks,
-    bail,
-    chaiConfig,
-    includeTaskLocation,
-    silent,
-  } = context.normalizedConfig;
-
-  return {
-    env: {
-      // get process.env correctly when globalSetup modified it
-      ...process.env,
-      ...env,
-    },
-    testNamePattern,
-    testTimeout,
-    hookTimeout,
-    passWithNoTests,
-    retry,
-    globals,
-    clearMocks,
-    resetMocks,
-    restoreMocks,
-    unstubEnvs,
-    unstubGlobals,
-    maxConcurrency,
-    printConsoleTrace,
-    disableConsoleIntercept,
-    testEnvironment,
-    federation,
-    isolate,
-    coverage: { ...coverage, reporters: [] }, // reporters may be functions so remove it
-    snapshotFormat,
-    logHeapUsage,
-    detectAsyncLeaks,
-    bail,
-    chaiConfig,
-    includeTaskLocation,
-    silent,
-  };
-};
+const getRuntimeConfig = (context: ProjectContext): RuntimeConfig =>
+  projectRuntimeConfig(context, { envMode: 'inherit' });
 
 const filterAssetsByEntry = async (
   entryInfo: EntryInfo,
@@ -244,13 +185,18 @@ const buildTask = async ({
  * Convert a worker crash or pool error into a fail-status `TestFileResult`.
  * Enriches the error with context about which test cases were running at the
  * time of the crash (if any).
+ *
+ * Returns the file result plus the synthetic `crashedResults` (the cases that
+ * were running at crash time). The caller replays those through the live
+ * `onTestCaseResult` reporter hook so incremental reporters stay consistent
+ * with the final totals — they are already included in `fileResult.results`.
  */
 const workerErrorToResult = (
   err: unknown,
   testPath: string,
   projectName: string,
   context: RstestContext,
-): TestFileResult => {
+): { fileResult: TestFileResult; crashedResults: TestResult[] } => {
   const error = toError(err);
 
   (error as any).fullStack = true;
@@ -260,7 +206,17 @@ const workerErrorToResult = (
 
   const runningModule = context.stateManager.runningModules.get(testPath);
   const runningTests = runningModule?.runningTests;
+  const completedResults = runningModule?.results || [];
 
+  let results = completedResults;
+  let crashedResults: TestResult[] = [];
+  // The crash error stays at the file level unless we can attribute it to a
+  // running case below, in which case it moves onto that case.
+  let errors = [error];
+
+  // When the worker dies mid-test, attribute the crash to the test case(s) that
+  // were running so they surface as failed test cases in the `Tests` totals,
+  // instead of the case silently vanishing from the counts (#1535).
   if (runningTests?.length) {
     const getCaseName = (test: TestCaseInfo) =>
       `"${test.name}"${test.parentNames?.length ? ` (Under suite: ${test.parentNames?.join(' > ')})` : ''}`;
@@ -271,16 +227,34 @@ const workerErrorToResult = (
         : `The below test cases may be relevant, as they were running when the error occurred:\n  - ${runningTests.map((t) => getCaseName(t)).join('\n  - ')}`;
 
     error.message += `\n\n${color.white(hint)}`;
+
+    crashedResults = runningTests.map((test) => ({
+      testId: test.testId,
+      status: 'fail',
+      name: test.name,
+      testPath: test.testPath,
+      parentNames: test.parentNames,
+      project: test.project,
+      errors: [error],
+    }));
+
+    results = [...completedResults, ...crashedResults];
+    // The error is attributed to the crashed case(s) above; keep it off the
+    // file-level result so the failing-tests summary doesn't print it twice.
+    errors = [];
   }
 
   return {
-    testId: getFileTaskId(testPath),
-    project: projectName,
-    testPath,
-    status: 'fail',
-    name: '',
-    results: runningModule?.results || [],
-    errors: [error],
+    fileResult: {
+      testId: getFileTaskId(testPath),
+      project: projectName,
+      testPath,
+      status: 'fail',
+      name: '',
+      results,
+      errors,
+    },
+    crashedResults,
   };
 };
 
@@ -291,18 +265,24 @@ export const createPool = async ({
   context: RstestContext;
   recommendWorkerCount?: number;
 }): Promise<{
-  runTests: (
-    params: PoolDispatchParams & {
-      /** Per-compile id; bumped on each watch rebuild so reused workers flush their kept module cache. */
-      buildId?: number;
-      /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
-      onCoverageResult?: (coverage: CoverageMapData) => void;
-      /** Perfetto trace events forwarded for caller-owned dumping. */
-      onTraceEvents?: (events: TraceEvent[]) => void;
-      /** Records host-side pool slices in the caller-owned Perfetto trace. */
-      traceSpan: TraceSpan;
-    },
-  ) => Promise<{
+  runTests: (params: {
+    entries: EntryInfo[];
+    assetNames: string[];
+    getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
+    getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
+    setupEntries: EntryInfo[];
+    updateSnapshot: SnapshotUpdateState;
+    project: ProjectContext;
+    /** Per-compile id; bumped on each watch rebuild so reused workers flush their kept module cache. */
+    buildId?: number;
+    /** When provided, coverage data is passed to this callback immediately for caller-owned merging. */
+    onCoverageResult?: (coverage: CoverageMapData) => void;
+    onRawCoverageResult?: (coverage: unknown) => void;
+    /** Perfetto trace events forwarded for caller-owned dumping. */
+    onTraceEvents?: (events: TraceEvent[]) => void;
+    /** Records host-side pool slices in the caller-owned Perfetto trace. */
+    traceSpan: TraceSpan;
+  }) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
   }>;
@@ -316,43 +296,6 @@ export const createPool = async ({
   >;
   close: () => Promise<void>;
 }> => {
-  const shouldEmitUserConsoleLog = ({
-    log,
-    projectConfig,
-  }: {
-    log: UserConsoleLog;
-    projectConfig: ProjectContext['normalizedConfig'];
-  }): boolean => {
-    return projectConfig.onConsoleLog?.(log.content, log.type) !== false;
-  };
-
-  const emitUserConsoleLog = async ({
-    log,
-    projectConfig,
-  }: {
-    log: UserConsoleLog;
-    projectConfig: ProjectContext['normalizedConfig'];
-  }): Promise<void> => {
-    // The worker forwards console output fire-and-forget (see `emitInterceptedLog`
-    // in runInPool): a delivery failure is dropped silently in the worker, and an
-    // error thrown here cannot travel back to fail the originating test — the
-    // worker's swallow would hide it. A user `onConsoleLog` filter or a reporter
-    // `onUserConsoleLog` that throws is a real defect, though, so surface it here
-    // on the host — where it occurs — rather than letting it vanish. This keeps
-    // console handling best-effort without hiding bugs.
-    try {
-      if (!shouldEmitUserConsoleLog({ log, projectConfig })) {
-        return;
-      }
-
-      await Promise.all(
-        reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
-      );
-    } catch (error) {
-      logger.error(color.red('Failed to handle console log:'), toError(error));
-    }
-  };
-
   // Propagate parent execArgv to workers, except flags known to cause issues
   // in child processes (--prof writes per-worker profiling logs, --title is
   // meaningless for workers). Safe for child_process.fork; the referenced
@@ -374,21 +317,21 @@ export const createPool = async ({
 
   const {
     normalizedConfig: { pool: poolOptions, isolate },
-    reporters,
   } = context;
 
   const workerKind: PoolWorkerKind = poolOptions.type ?? 'forks';
 
-  const threadsCount =
-    context.command === 'watch'
-      ? Math.max(Math.floor(numCpus / 2), 1)
-      : Math.max(numCpus - 1, 1);
-
-  // Avoid creating unused workers when the number of tests is less than the default thread count.
-  const recommendCount =
-    context.command === 'watch'
-      ? threadsCount
-      : Math.min(recommendWorkerCount, threadsCount);
+  // CPU-derived worker recommendation via the shared override/clamp policy.
+  // The node pool's own formulas: `numCpus - 1` outside watch, half the raw CPU
+  // count in watch; watch passes `recommendWorkerCount` as `Infinity` to keep
+  // warm workers across reruns.
+  const recommendCount = resolveWorkerCount({
+    command: context.command,
+    totalTasks: recommendWorkerCount,
+    recommended: Math.max(numCpus - 1, 1),
+    watchRecommended: Math.max(Math.floor(numCpus / 2), 1),
+    numCpus,
+  });
 
   const maxWorkers = poolOptions.maxWorkers
     ? parseWorkers(poolOptions.maxWorkers, numCpus)
@@ -416,72 +359,8 @@ export const createPool = async ({
     memoryGate: selectMemoryGate(workerKind),
   });
 
-  const createRpcMethods = ({
-    runtimeConfig,
-    projectConfig,
-  }: {
-    runtimeConfig: RuntimeConfig;
-    projectConfig: ProjectContext['normalizedConfig'];
-  }): Omit<RuntimeRPC, 'getAssetsByEntry'> => ({
-    onTestCaseStart: async (test: TestCaseInfo) => {
-      context.stateManager.onTestCaseStart(test);
-      Promise.all(
-        reporters.map((reporter) => reporter.onTestCaseStart?.(test)),
-      );
-    },
-    onTestCaseResult: async (result: TestResult) => {
-      context.stateManager.onTestCaseResult(result);
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestCaseResult?.(result)),
-      );
-    },
-    getCountOfFailedTests: async (): Promise<number> => {
-      return context.stateManager.getCountOfFailedTests();
-    },
-    onConsoleLog: async (log: UserConsoleLog) => {
-      if (runtimeConfig.disableConsoleIntercept) {
-        return;
-      }
-
-      await emitUserConsoleLog({ log, projectConfig });
-    },
-    onTestFileStart: async (test: TestFileInfo) => {
-      context.stateManager.onTestFileStart(test.testPath);
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestFileStart?.(test)),
-      );
-    },
-    onTestFileReady: async (test: TestFileInfo) => {
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestFileReady?.(test)),
-      );
-    },
-    onTestSuiteStart: async (test: TestSuiteInfo) => {
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestSuiteStart?.(test)),
-      );
-    },
-    onTestSuiteResult: async (result: TestResult) => {
-      await Promise.all(
-        reporters.map((reporter) => reporter.onTestSuiteResult?.(result)),
-      );
-    },
-    resolveSnapshotPath: (testPath: string): string => {
-      const snapExtension = '.snap';
-      const resolver =
-        projectConfig.resolveSnapshotPath ||
-        // test/index.ts -> test/__snapshots__/index.ts.snap
-        (() =>
-          join(
-            dirname(testPath),
-            '__snapshots__',
-            `${basename(testPath)}${snapExtension}`,
-          ));
-
-      const snapshotPath = resolver(testPath, snapExtension);
-      return snapshotPath;
-    },
-  });
+  const createProjectSink = (project: ProjectContext): RunnerEventSink =>
+    createRunnerEventSink(context, project.normalizedConfig);
 
   return {
     runTests: async ({
@@ -494,81 +373,121 @@ export const createPool = async ({
       updateSnapshot,
       buildId,
       onCoverageResult,
+      onRawCoverageResult,
       onTraceEvents,
       traceSpan,
     }) => {
       const projectName = project.name;
       const runtimeConfig = getRuntimeConfig(project);
-      const rpcMethods = createRpcMethods({
-        runtimeConfig,
-        projectConfig: project.normalizedConfig,
-      });
+      const sink = createProjectSink(project);
+      const rpcMethods = sinkToRuntimeRpc(sink);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
+
+      // Sequential dispatch gate: `entries` is already perf-sorted, but the
+      // per-entry `buildTask` (eager asset reads) finishes out of order, so
+      // enqueueing right after it would scramble the pool's slot order. Each
+      // entry waits for the previous one to claim its pool slot before calling
+      // `pool.runTest`, then releases the next — the asset reads stay fully
+      // pipelined, only the enqueue is serialized.
+      let dispatchGate: Promise<void> = Promise.resolve();
 
       const results = await Promise.all(
         entries.map(async (entryInfo, index) => {
-          const traceArgs = {
-            project: projectName,
-            testPath: entryInfo.testPath,
-          };
-          const task = await traceSpan(
-            'host:build-task',
-            'host',
-            () =>
-              buildTask({
-                type: 'run',
-                workerKind,
-                entryInfo,
-                index,
-                context,
-                project,
-                runtimeConfig,
-                setupEntries,
-                setupAssets,
-                assetNames,
-                updateSnapshot,
-                getAssetFiles,
-                getSourceMaps,
-                rpcMethods,
-                traceSpan,
-                buildId,
-              }),
-            traceArgs,
-          );
-
-          const result = await traceSpan(
-            'host:pool-run-test',
-            'host',
-            () => pool.runTest(task),
-            { ...traceArgs, worker: task.worker },
-          ).catch((err: unknown) => {
-            return workerErrorToResult(
-              err,
-              entryInfo.testPath,
-              projectName,
-              context,
-            );
+          const gate = dispatchGate;
+          let releaseGate!: () => void;
+          dispatchGate = new Promise<void>((r) => {
+            releaseGate = r;
           });
 
-          if (result.coverage) {
-            onCoverageResult?.(result.coverage);
-            delete result.coverage;
+          try {
+            const traceArgs = {
+              project: projectName,
+              testPath: entryInfo.testPath,
+            };
+            const task = await traceSpan(
+              'host:build-task',
+              'host',
+              () =>
+                buildTask({
+                  type: 'run',
+                  workerKind,
+                  entryInfo,
+                  index,
+                  context,
+                  project,
+                  runtimeConfig,
+                  setupEntries,
+                  setupAssets,
+                  assetNames,
+                  updateSnapshot,
+                  getAssetFiles,
+                  getSourceMaps,
+                  rpcMethods,
+                  traceSpan,
+                  buildId,
+                }),
+              traceArgs,
+            );
+
+            await gate;
+            // `pool.runTest` claims a slot (or parks in `slotWaiters`)
+            // synchronously before its first await, and `traceSpan` invokes
+            // its callback synchronously, so releasing after this returns
+            // preserves the exact enqueue order.
+            const resultPromise = traceSpan(
+              'host:pool-run-test',
+              'host',
+              () => pool.runTest(task),
+              { ...traceArgs, worker: task.worker },
+            );
+            releaseGate();
+
+            const result = await resultPromise.catch(async (err: unknown) => {
+              const { fileResult, crashedResults } = workerErrorToResult(
+                err,
+                entryInfo.testPath,
+                projectName,
+                context,
+              );
+              // Each crashed case already fired `onTestCaseStart`; complete the
+              // pair with a live `onTestCaseResult` so incremental reporters
+              // (dot, custom accounting) render it, matching the final totals.
+              // Counting stays sourced from `fileResult.results`, so the state
+              // manager is intentionally not touched here to avoid
+              // double-counting.
+              for (const caseResult of crashedResults) {
+                await Promise.all(
+                  context.reporters.map((reporter) =>
+                    reporter.onTestCaseResult?.(caseResult),
+                  ),
+                );
+              }
+              return fileResult;
+            });
+
+            if (result.coverage) {
+              onCoverageResult?.(result.coverage);
+              delete result.coverage;
+            }
+            if (result.coverageRaw != null) {
+              onRawCoverageResult?.(result.coverageRaw);
+              delete result.coverageRaw;
+            }
+            if (result.traceEvents) {
+              onTraceEvents?.(result.traceEvents);
+              delete result.traceEvents;
+            }
+            await sink.onTestFileResult(result);
+            return result;
+          } finally {
+            // Unblock the next entry even if `buildTask` threw before the
+            // dispatch above ran — otherwise the whole chain would deadlock.
+            // A second call after the in-`try` release is a harmless no-op
+            // (a Promise's resolve settles once).
+            releaseGate();
           }
-          if (result.traceEvents) {
-            onTraceEvents?.(result.traceEvents);
-            delete result.traceEvents;
-          }
-          context.stateManager.onTestFileResult(result);
-          reporters.map((reporter) => reporter.onTestFileResult?.(result));
-          return result;
         }),
       );
-
-      for (const result of results) {
-        if (result.snapshotResult) {
-          context.snapshotManager.add(result.snapshotResult);
-        }
-      }
 
       const testResults = results.flatMap((r) => r.results);
 
@@ -585,10 +504,7 @@ export const createPool = async ({
     }) => {
       const runtimeConfig = getRuntimeConfig(project);
       const projectName = project.normalizedConfig.name;
-      const rpcMethods = createRpcMethods({
-        runtimeConfig,
-        projectConfig: project.normalizedConfig,
-      });
+      const rpcMethods = sinkToRuntimeRpc(createProjectSink(project));
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
 
       return Promise.all(

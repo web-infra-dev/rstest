@@ -6,6 +6,7 @@ import type {
   AfterEachListener,
   BeforeAllListener,
   BeforeEachListener,
+  TaskMeta,
   TestResult,
 } from './testSuite';
 import type { MaybePromise } from './utils';
@@ -19,8 +20,14 @@ export interface TestContext {
     id: string;
     /** Test name provided by user */
     name: string;
+    /** Absolute path of the current test file when provided by the runner */
+    filepath?: string;
+    /** Absolute path of the current project's root directory. */
+    projectRoot?: string;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
+    /** Mutable metadata copied to the current test result. */
+    meta: TaskMeta;
   };
   expect: RstestExpect;
   /** Skip the current test during execution. */
@@ -61,6 +68,11 @@ export interface TestOptions {
    * @default 0
    */
   repeats?: number;
+  /**
+   * Initial metadata for this test or suite. Suite metadata is inherited by
+   * descendant suites and tests; child metadata overrides inherited keys.
+   */
+  meta?: TaskMeta;
 }
 
 /**
@@ -178,7 +190,7 @@ interface FixtureOptions {
   auto?: boolean;
 }
 
-type Use<T> = (value: T) => Promise<void>;
+export type Use<T> = (value: T) => Promise<void>;
 
 type FixtureFn<T, K extends keyof T, ExtraContext> = (
   context: Omit<T, K> & ExtraContext,

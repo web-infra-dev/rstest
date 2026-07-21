@@ -56,6 +56,18 @@ Rstest 的构建配置继承自 Rsbuild。因此，在 Rstest 中，你可以使
 
 更多配置可参考 [构建配置](/config/#build-configurations)。
 
+### 在 Rsbuild 插件中读取 Rstest 配置 \{#get-rstest-config}
+
+你可以通过 Rstest 暴露的 API 读取当前 Rsbuild environment 最终的 Rstest 配置。
+
+用法和类型说明请参考 [在 Rsbuild 插件中读取 Rstest 配置](/config/build/plugins#get-rstest-config)。
+
+### 在 Rsbuild 插件中修改 Rstest 配置 \{#modify-rstest-config}
+
+你可以在 Rsbuild 插件中通过 Rstest 暴露的 API 修改当前 Rstest project 配置。
+
+用法、类型说明和限制请参考 [在 Rsbuild 插件中修改 Rstest 配置](/config/build/plugins#modify-rstest-config)。
+
 ## 配置 Rspack
 
 Rstest 底层使用 Rspack 进行构建，因此你可以直接使用 Rspack 的配置项来配置 Rstest 的构建行为。
@@ -101,16 +113,17 @@ export default defineConfig({
 
 ## 检测 Rstest 环境
 
-你可以使用 `process.env.RSTEST` 来检测是否是 Rstest 测试环境以应用不同的配置 / 代码在你的测试中。
+你可以使用 `import.meta.env.RSTEST` 或 `process.env.RSTEST` 判断代码是否运行在 Rstest 中。在所有测试环境（包括 browser mode）下，这两个值都是 `'true'`。
+
+在兼容浏览器的 ESM 源码中，推荐使用 `import.meta.env.RSTEST`。browser mode 会在构建时替换这些表达式，但不会添加全局 `process` 对象，因此不要先通过 `typeof process !== 'undefined'` 判断是否可用。
 
 ```ts
-if (process.env.RSTEST) {
-  // 在 rstest 环境下将会返回 'true'
+if (import.meta.env.RSTEST === 'true') {
   // do something...
 }
 ```
 
-需要注意的是，如果你使用 `process.env.RSTEST` 在你的源码中，在生产环境构建时，在你的构建配置（如 `rsbuild.config.ts`）中将 `process.env.RSTEST` 定义为 `false`，这样将有助于打包工具消除无用代码。
+生产构建源码时，需要在构建配置（如 `rsbuild.config.ts`）中把用到的表达式定义为 `false`。这样打包工具就能把仅用于测试的分支作为死代码消除。
 
 ```diff title=rsbuild.config.ts
 import { defineConfig } from '@rsbuild/core';
@@ -119,27 +132,15 @@ export default defineConfig({
   source: {
     define: {
 +      'process.env.RSTEST': false,
++      'import.meta.env.RSTEST': false,
     },
   },
 });
 ```
 
-如果你正在开发 Rsbuild 插件，你可以使用 [api.context.callerName](https://rsbuild.rs/zh/api/javascript-api/instance#contextcallername) 来判断当前插件被调用的环境。
+### 在 Rsbuild 插件中判断 Rstest 环境
 
-```ts
-export const myPlugin = {
-  name: 'my-plugin',
-  setup(api) {
-    const { callerName } = api.context;
-
-    if (callerName === 'rstest') {
-      // ...
-    } else if (callerName === 'rsbuild') {
-      // ...
-    }
-  },
-};
-```
+如果你正在开发 Rsbuild 插件，请参考[判断插件是否运行在 Rstest 中](/config/build/plugins#detect-rstest-environment)，通过 `api.context.callerName` 执行特定环境下的逻辑。
 
 ## 配置集成
 

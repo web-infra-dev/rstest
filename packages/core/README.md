@@ -4,7 +4,7 @@
 
 # Rstest
 
-Rstest is a testing framework powered by Rspack.
+Rstest is a JavaScript testing framework powered by Rspack.
 
 ## Documentation
 

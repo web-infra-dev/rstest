@@ -372,8 +372,6 @@ In one `rstest` process, all Browser Mode projects must share the same browser l
 - `provider`
 - `browser`
 - `headless`
-- `port`
-- `strictPort`
 - `providerOptions`
 
 This means mixing multiple providers, or running Chromium/Firefox/WebKit together in the same run, is not supported yet.
@@ -390,7 +388,7 @@ npx rstest --browser.name webkit
 
 When using `projects` in Browser Mode, each project still compiles and executes with its own build config (for example `plugins`, `include`, and framework-specific setup).
 
-Browser launch options still need to stay aligned across browser projects: `provider`, `browser`, `headless`, `port`, `strictPort`, and `providerOptions`.
+Browser launch options still need to stay aligned across browser projects: `provider`, `browser`, `headless`, and `providerOptions`.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

@@ -22,7 +22,7 @@ Decide what the task actually is before doing any work.
 Gather the real inputs and ground every claim in something you read **this session** — never answer from memory or impression.
 
 - For GitHub issues/PRs/checks/reviews, read the linked context before editing; do not implement from the title alone.
-- For external repros, read README/scripts/deps and reproduce with the smallest command first.
+- For external repros, reproduce with the smallest command first (workflow: `testing` → External repro projects).
 - Identify the smallest user-visible behavior, the affected package(s), and the validation path.
 - Behavioral, root-cause, version, or package-name claims must cite `path:line` — never answer from recall.
 - To answer "how does vitest/jest/rsbuild/rspack behave?", read the **latest upstream source, not the built `node_modules` dist**: if a local clone exists (e.g. `~/Projects/vitest`), bring it up to the latest default branch before reading (`git pull` — a `git fetch` alone leaves the working tree stale); otherwise shallow-clone fresh (vitest → `vitest-dev/vitest`; rsbuild/rspack → `web-infra-dev/{rsbuild,rspack}`; `npm view <pkg> repository` finds others). Prefer a subagent for the lookup.
@@ -63,7 +63,7 @@ Make the smallest **design** change that resolves the root cause — this is whe
 
 Every behavioral change — feature or bug fix — must have a corresponding e2e test. Unit tests alone are not enough; e2e tests verify the full CLI → runner → reporter pipeline.
 
-Decide _whether_ test work is required here. For test layout, fixture strategy, rebuild requirements, and exact commands, switch to the `testing` skill.
+Decide _whether_ test work is required here. For test layout, fixture strategy, rebuild requirements, and exact commands, switch to the `testing` skill. For what counts as **evidence** that the change works — forbidden proxy signals, per-change-shape observation standards — defer to the `verify` skill rather than restating its rules here.
 
 ### When Test Work Is Required
 
@@ -138,10 +138,7 @@ Documentation is not a follow-up task — it ships with the code. **Do not merge
 
 ### Docs Conventions
 
-- All docs exist in **both** `en/` and `zh/` — update both languages.
-- Use Rspress frontmatter conventions (see existing docs for examples).
-- When adding `ApiMeta` markers for a new API or config option, default `addedVersion` to the current package version with its patch segment incremented by 1. For example, if `@rstest/core` is currently `0.10.6`, a newly documented core API should use `<ApiMeta addedVersion="0.10.7" />`.
-- Include code examples that are copy-pasteable.
+- Writing style, format, bilingual sync, and `ApiMeta` marker rules are owned by `website/AGENTS.md` — read it before editing docs rather than restating its rules here.
 - **Signature fidelity:** if you changed a public type in `packages/core/src/types/`, or edited a `**Type:**` / `**类型：**` block, run the `api-doc-sync` skill. The doc signatures are hand-written copies of the real types and drift silently (missing overloads, wrong arg order, en/zh divergence); `api-doc-sync` grounds them against source and `tsc`.
 
 ## Self-Check Before Committing

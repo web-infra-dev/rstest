@@ -134,6 +134,29 @@ describe('rstest utilities wait APIs', () => {
 
     rs.useRealTimers();
   });
+
+  it('returns real timers when fake timers are enabled', async () => {
+    const rs = await createUtilities();
+    const realTimers = rs.getRealTimers();
+
+    try {
+      rs.useFakeTimers({ now: 0 });
+
+      let called = false;
+      const timer = realTimers.setTimeout(() => {
+        called = true;
+      }, 1);
+
+      await new Promise<void>((resolve) => realTimers.setTimeout(resolve, 10));
+
+      expect(called).toBe(true);
+      expect(Date.now()).toBe(0);
+
+      realTimers.clearTimeout(timer);
+    } finally {
+      rs.useRealTimers();
+    }
+  });
 });
 
 describe('rstest utilities plugin-managed APIs', () => {

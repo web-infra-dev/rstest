@@ -3,6 +3,8 @@ title: Reporter
 description: Reporter API 允许你创建自定义测试结果处理器和输出格式器。此接口是实验性的，在未来的版本中可能会发生变化。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # Reporter API
 
 Reporter API 允许你创建自定义测试结果处理器和输出格式器。此接口是实验性的，在未来的版本中可能会发生变化。
@@ -72,6 +74,10 @@ interface Reporter {
 }
 ```
 
+<ApiMeta addedVersion="0.11.1" />
+
+Reporter result 上可以读取 `meta` 字段。通过 `context.task.meta` 写入的可 JSON 序列化运行时 metadata 可以在 `onTestCaseResult` 收到的 `TestResult` 上读取。通过 hooks 的 `ctx.meta` 写入的 metadata 可以在 `onTestSuiteResult` 收到的对应 suite result 上读取，文件级 hook metadata 可以在 `onTestFileResult` 的 `TestFileResult.meta` 上读取。
+
 ## 示例
 
 ### 简单自定义报告器
@@ -116,6 +122,26 @@ const jsonReporter: Reporter = {
     };
 
     writeFileSync('test-report.json', JSON.stringify(report, null, 2));
+  },
+};
+```
+
+### 读取运行时 metadata
+
+```ts
+import type { Reporter } from '@rstest/core';
+
+const metadataReporter: Reporter = {
+  onTestCaseResult(result) {
+    console.log(result.name, result.meta);
+  },
+
+  onTestSuiteResult(result) {
+    console.log(result.name, result.meta);
+  },
+
+  onTestFileResult(result) {
+    console.log(result.testPath, result.meta);
   },
 };
 ```

@@ -28,6 +28,18 @@ export const ROOT_SUITE_NAME = 'Rstest:_internal_root_suite';
 export const RSTEST_ENV_SYMBOL_KEY = 'rstest.env';
 
 /**
+ * Key under which the per-file runtime API object is published on the
+ * executor's global; `import.meta.rstest` defines compile to a read of it, and
+ * the mock hoister keeps `@rstest/core` external against the same key.
+ * node: `rstestContext.global[KEY]` (runInPool); web: `globalThis[KEY]`
+ * (browser client entry). Other `'@rstest/core'` string literals in the
+ * codebase (the module-cache id in `core/plugins/moduleCacheControl.ts`, the
+ * reporter package label in `reporter/md.ts`) have unrelated semantics and
+ * must NOT be replaced with this constant.
+ */
+export const RSTEST_API_GLOBAL_KEY = '@rstest/core';
+
+/**
  * Single source of truth for the built-in browser provider identifiers.
  *
  * Core owns this list because the peer-dependency direction is one-way
@@ -42,6 +54,21 @@ export type BrowserProvider = (typeof BROWSER_PROVIDERS)[number];
 
 export const TEMP_RSTEST_OUTPUT_DIR = 'dist/.rstest-temp';
 const DEFAULT_BUILD_CACHE_PREFIX = 'node_modules/.cache/rstest';
+
+/**
+ * Directory for the per-file test-results cache (see `core/resultsCache.ts`),
+ * consumed by the perf-first sequencer and `onlyFailures`.
+ * The leading dot is load-bearing: it must NOT reuse `rstest` or `rstest-*`.
+ * The Rspack build cache occupies `node_modules/.cache/rstest` (no environment)
+ * and `node_modules/.cache/rstest-<environmentName>` (see
+ * `getDefaultBuildCacheDir`), so a plain `rstest-results` would collide with a
+ * build cache for an environment literally named `results`. A dotted prefix is
+ * the only construction guaranteed collision-free against every build cache dir,
+ * and it matches the `dist/.rstest-temp` style. Kept here, next to the build
+ * cache prefix, so renaming the build cache naming can't silently break this
+ * construction-based no-collision invariant.
+ */
+export const RESULTS_CACHE_DIR = 'node_modules/.cache/.rstest-results';
 const DEFAULT_BUILD_CACHE_DIRECTORY_MARKER = Symbol(
   'defaultBuildCacheDirectory',
 );
@@ -92,7 +119,7 @@ type BuildCacheInput = {
   assumeNormalized?: boolean;
 };
 
-const getDefaultBuildCacheDir = (environmentName?: string): string =>
+export const getDefaultBuildCacheDir = (environmentName?: string): string =>
   environmentName
     ? `${DEFAULT_BUILD_CACHE_PREFIX}-${environmentName}`
     : DEFAULT_BUILD_CACHE_PREFIX;
@@ -178,6 +205,18 @@ export const normalizeBuildCache = ({
 
   return normalized;
 };
+
+export const isDefaultBuildCache = (
+  buildCache: boolean | RstestBuildCacheConfig | undefined,
+): boolean =>
+  buildCache === true ||
+  Boolean(
+    buildCache &&
+    typeof buildCache === 'object' &&
+    (buildCache as InternalBuildCacheConfig)[
+      DEFAULT_BUILD_CACHE_DIRECTORY_MARKER
+    ],
+  );
 
 export const resolveBuildCacheDependencyPaths = <
   T extends {

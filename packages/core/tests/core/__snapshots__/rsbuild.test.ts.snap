@@ -317,7 +317,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\|jxl\\)\\$/i,
       },
       {
         "oneOf": [
@@ -391,7 +391,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\|vtt\\)\\$/i,
       },
       {
         "oneOf": [
@@ -433,6 +433,43 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
       {
         "oneOf": [
           {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:webmanifest\\|pdf\\|txt\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
             "type": "asset/source",
             "with": {
               "type": "text",
@@ -461,6 +498,29 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
+            },
+          },
+        ],
+      },
+      {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
             },
           },
         ],
@@ -953,7 +1013,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\|jxl\\)\\$/i,
       },
       {
         "oneOf": [
@@ -1027,7 +1087,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\|vtt\\)\\$/i,
       },
       {
         "oneOf": [
@@ -1069,6 +1129,43 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       {
         "oneOf": [
           {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:webmanifest\\|pdf\\|txt\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
             "type": "asset/source",
             "with": {
               "type": "text",
@@ -1097,6 +1194,29 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
+            },
+          },
+        ],
+      },
+      {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
             },
           },
         ],
@@ -1576,7 +1696,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\|jxl\\)\\$/i,
       },
       {
         "oneOf": [
@@ -1650,7 +1770,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\|vtt\\)\\$/i,
       },
       {
         "oneOf": [
@@ -1692,6 +1812,43 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       {
         "oneOf": [
           {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:webmanifest\\|pdf\\|txt\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
             "type": "asset/source",
             "with": {
               "type": "text",
@@ -1723,6 +1880,17 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
             },
           },
         ],
+      },
+      {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
       },
       {
         "test": /\\\\\\.mts\\$/,
@@ -2197,7 +2365,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\|jxl\\)\\$/i,
       },
       {
         "oneOf": [
@@ -2271,7 +2439,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\|vtt\\)\\$/i,
       },
       {
         "oneOf": [
@@ -2313,6 +2481,43 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       {
         "oneOf": [
           {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:webmanifest\\|pdf\\|txt\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
             "type": "asset/source",
             "with": {
               "type": "text",
@@ -2344,6 +2549,17 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
             },
           },
         ],
+      },
+      {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
       },
       {
         "test": /\\\\\\.mts\\$/,
@@ -3164,7 +3380,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\|jxl\\)\\$/i,
       },
       {
         "oneOf": [
@@ -3238,7 +3454,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\|vtt\\)\\$/i,
       },
       {
         "oneOf": [
@@ -3280,6 +3496,43 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       {
         "oneOf": [
           {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:webmanifest\\|pdf\\|txt\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
             "type": "asset/source",
             "with": {
               "type": "text",
@@ -3308,6 +3561,29 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
+            },
+          },
+        ],
+      },
+      {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
             },
           },
         ],
@@ -3787,7 +4063,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:png\\|jpg\\|jpeg\\|pjpeg\\|pjp\\|gif\\|bmp\\|webp\\|ico\\|apng\\|avif\\|tif\\|tiff\\|jfif\\|cur\\|jxl\\)\\$/i,
       },
       {
         "oneOf": [
@@ -3861,7 +4137,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "type": "asset",
           },
         ],
-        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\)\\$/i,
+        "test": /\\\\\\.\\(\\?:mp4\\|webm\\|ogg\\|mov\\|mp3\\|wav\\|flac\\|aac\\|m4a\\|opus\\|vtt\\)\\$/i,
       },
       {
         "oneOf": [
@@ -3903,6 +4179,43 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       {
         "oneOf": [
           {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "resourceQuery": /\\[\\?&\\]url\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/resource",
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]inline\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/inline",
+          },
+          {
+            "type": "asset/source",
+            "with": {
+              "type": "text",
+            },
+          },
+          {
+            "resourceQuery": /\\[\\?&\\]raw\\(\\?:&\\|=\\|\\$\\)/,
+            "type": "asset/source",
+          },
+          {
+            "generator": {
+              "filename": "static/assets/[name].[contenthash:10][ext]",
+            },
+            "parser": {
+              "dataUrlCondition": {
+                "maxSize": 4096,
+              },
+            },
+            "type": "asset",
+          },
+        ],
+        "test": /\\\\\\.\\(\\?:webmanifest\\|pdf\\|txt\\)\\$/i,
+      },
+      {
+        "oneOf": [
+          {
             "type": "asset/source",
             "with": {
               "type": "text",
@@ -3931,6 +4244,29 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
             "options": {
               "getEnvironment": [Function],
               "id": "rsbuild-transform-0",
+            },
+          },
+        ],
+      },
+      {
+        "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+        "use": [
+          {
+            "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+          },
+        ],
+        "with": {
+          "rstest": "importActual",
+        },
+      },
+      {
+        "test": [Function],
+        "use": [
+          {
+            "loader": "<PNPM_INNER>/@rsbuild/core/dist/transformLoader.mjs",
+            "options": {
+              "getEnvironment": [Function],
+              "id": "rsbuild-transform-1",
             },
           },
         ],
@@ -4171,6 +4507,17 @@ exports[`prepareRsbuild > should generate swc config correctly with user customi
       },
     ],
     "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+  },
+  {
+    "test": /\\\\\\.\\(\\?:js\\|jsx\\|mjs\\|cjs\\|ts\\|tsx\\|mts\\|cts\\)\\$/,
+    "use": [
+      {
+        "loader": "<ROOT>/packages/core/src/core/plugins/importActualLoader.mjs",
+      },
+    ],
+    "with": {
+      "rstest": "importActual",
+    },
   },
 ]
 `;

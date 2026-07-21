@@ -23,6 +23,8 @@ export default defineConfig({
 **In-source testing** is usually suitable for small functional functions and utilities, allowing for easy and rapid verification and debugging. For more complex functions and modules, independent test files are recommended.
 :::
 
+`includeSource` works in both Node mode and [browser mode](/guide/browser-testing) projects.
+
 ### Writing in-source tests
 
 When `includeSource` defined, Rstest will run all matched files with `import.meta.rstest` inside.

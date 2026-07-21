@@ -1,9 +1,13 @@
 import { existsSync } from 'node:fs';
-import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
+import type { RsbuildInstance, RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { isAbsolute, normalize, relative, resolve } from 'pathe';
-import type { ProjectContext, RstestContext } from '../types';
+import type {
+  NormalizedProjectConfig,
+  ProjectContext,
+  RstestContext,
+} from '../types';
 import { getTestEntries } from '../utils';
-import { getSetupFiles } from '../utils/getSetupFiles';
+import { createSetupFileState } from './setupFileState';
 import { prepareRsbuild } from './rsbuild';
 
 type StatsModuleReason = NonNullable<Rspack.StatsModule['reasons']>[number];
@@ -11,6 +15,54 @@ type StatsModuleReason = NonNullable<Rspack.StatsModule['reasons']>[number];
 type ModuleGraph = {
   allSources: Set<string>;
   dependentsBySource: Map<string, Set<string>>;
+};
+
+type ProjectConfigSnapshot = {
+  project: ProjectContext;
+  normalizedConfig: NormalizedProjectConfig;
+  rootPath: string;
+  outputModule: boolean;
+};
+
+const clonePlainConfig = <T>(value: T): T => {
+  if (Array.isArray(value)) {
+    return value.map((item) => clonePlainConfig(item)) as T;
+  }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    Object.getPrototypeOf(value) === Object.prototype
+  ) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, clonePlainConfig(item)]),
+    ) as T;
+  }
+
+  return value;
+};
+
+const snapshotProjectConfigs = (
+  projects: ProjectContext[],
+): ProjectConfigSnapshot[] =>
+  projects.map((project) => ({
+    project,
+    normalizedConfig: clonePlainConfig(project.normalizedConfig),
+    rootPath: project.rootPath,
+    outputModule: project.outputModule,
+  }));
+
+const restoreProjectConfigs = (snapshots: ProjectConfigSnapshot[]): void => {
+  for (const {
+    project,
+    normalizedConfig,
+    rootPath,
+    outputModule,
+  } of snapshots) {
+    project.normalizedConfig = normalizedConfig;
+    project.rootPath = rootPath;
+    project.outputModule = outputModule;
+  }
 };
 
 const stripSourceProtocol = (source: string): string => {
@@ -224,18 +276,6 @@ const collectProjectEntries = async (
   return entries;
 };
 
-const buildSetupFiles = (
-  projects: ProjectContext[],
-  key: 'setupFiles' | 'globalSetup',
-): Record<string, Record<string, string>> => {
-  return Object.fromEntries(
-    projects.map((project) => [
-      project.environmentName,
-      getSetupFiles(project.normalizedConfig[key], project.rootPath),
-    ]),
-  );
-};
-
 const createRelatedBuildSafeguardsPlugin = (): RsbuildPlugin => ({
   name: 'rstest:related-build-safeguards',
   setup(api) {
@@ -323,38 +363,58 @@ export async function resolveRelatedTestFiles(
     );
   }
 
-  const projectEntries = await collectProjectEntries(context);
-  const matchedTestFiles = new Set(
-    collectDirectlyMatchedFiles({
+  let projectEntries = new Map<string, Record<string, string>>();
+  const globTestSourceEntries = async (environmentName: string) =>
+    projectEntries.get(environmentName) ?? {};
+
+  const setupFileState = createSetupFileState();
+  projectEntries = await collectProjectEntries(context);
+
+  const projectConfigSnapshots = snapshotProjectConfigs(context.projects);
+  let devServer:
+    Awaited<ReturnType<RsbuildInstance['createDevServer']>> | undefined;
+
+  try {
+    const rsbuildInstance = await prepareRsbuild({
+      context,
+      globTestSourceEntries,
+      setupFileState,
+      targetProjects: context.projects,
+      exposeRstestAPIProjects: context.projects,
+      extraPlugins: [createRelatedBuildSafeguardsPlugin()],
+      getSetupFileProjects: () => ({
+        setupProjects: context.projects,
+        globalSetupProjects: context.projects,
+      }),
+      onModifyRstestConfigApplied: async () => {
+        projectEntries = await collectProjectEntries(context);
+      },
+    });
+
+    devServer = await rsbuildInstance.createDevServer({
+      getPortSilently: true,
+    });
+
+    const matchedTestFiles = new Set<string>();
+    projectEntries = projectEntries.size
+      ? projectEntries
+      : await collectProjectEntries(context);
+
+    for (const file of collectDirectlyMatchedFiles({
       files: Array.from(projectEntries.values()).flatMap((entries) =>
         Object.values(entries),
       ),
       sourceFilters,
       rootPath: context.rootPath,
-    }),
-  );
+    })) {
+      matchedTestFiles.add(file);
+    }
 
-  const globTestSourceEntries = async (environmentName: string) =>
-    projectEntries.get(environmentName) ?? {};
-
-  const setupFiles = buildSetupFiles(context.projects, 'setupFiles');
-  const globalSetupFiles = buildSetupFiles(context.projects, 'globalSetup');
-
-  const rsbuildInstance = await prepareRsbuild(
-    context,
-    globTestSourceEntries,
-    setupFiles,
-    globalSetupFiles,
-    context.projects,
-    [createRelatedBuildSafeguardsPlugin()],
-  );
-
-  const devServer = await rsbuildInstance.createDevServer({
-    getPortSilently: true,
-  });
-
-  try {
     for (const project of context.projects) {
+      if (!projectEntries.has(project.environmentName)) {
+        continue;
+      }
+
       const environment = devServer.environments[project.environmentName]!;
       const stats = await environment.getStats();
       const { modules } = stats.toJson({
@@ -372,10 +432,10 @@ export async function resolveRelatedTestFiles(
         projectEntries.get(project.environmentName) || {},
       );
       const setupPaths = Object.values(
-        setupFiles[project.environmentName] || {},
+        setupFileState.setupFiles[project.environmentName] || {},
       );
       const globalSetupPaths = Object.values(
-        globalSetupFiles[project.environmentName] || {},
+        setupFileState.globalSetupFiles[project.environmentName] || {},
       );
       const matchedSources = collectDirectlyMatchedFiles({
         files: Array.from(moduleGraph.allSources),
@@ -411,9 +471,10 @@ export async function resolveRelatedTestFiles(
         }
       }
     }
-  } finally {
-    await devServer.close();
-  }
 
-  return Array.from(matchedTestFiles).sort();
+    return Array.from(matchedTestFiles).sort();
+  } finally {
+    await devServer?.close();
+    restoreProjectConfigs(projectConfigSnapshots);
+  }
 }

@@ -32,6 +32,20 @@ export const BROWSER_PORTS = {
   'browser-coverage-multiproject': 5228,
   related: 5232,
   'multi-project-config': 5234,
+  'multi-project-config-hooked-b': 5246,
+  bail: 5236,
+  mixed: 5238,
+  'mixed-browser-fail': 5240,
+  'browser-only-reporters': 5242,
+  'no-tests-reporters': 5244,
+  'browser-empty-project': 5248,
+  'browser-collect-timeout': 5250,
+  'browser-global-setup': 5252,
+  'browser-global-setup-error': 5254,
+  'browser-global-setup-mixed': 5256,
+  'browser-mock': 5258,
+  'browser-in-source': 5260,
+  'browser-in-source-watch': 5262,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);

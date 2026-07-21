@@ -1,4 +1,6 @@
+import { fileURLToPath } from 'node:url';
 import { describe, it } from '@rstest/core';
+import { runRstestCli } from '../scripts';
 import { runCli } from './utils';
 
 const appFilters = 'test/App';
@@ -15,6 +17,36 @@ describe('jsdom', () => {
         args: ['--config', 'rstest.environmentComment.config.mts'],
       },
     );
+    await expectExecSuccess();
+  });
+
+  it('should keep automatic JSX runtime with an environment comment', async () => {
+    const { expectExecSuccess } = await runCli(
+      ['test/environmentCommentNode', 'test/vitestEnvironmentReact'],
+      undefined,
+      {
+        args: ['--config', 'rstest.environmentComment.config.mts'],
+      },
+    );
+    await expectExecSuccess();
+  });
+
+  it('should list tests correctly with an environment comment', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'list',
+        '--config',
+        'rstest.environmentComment.config.mts',
+        'test/environmentCommentNode',
+        'test/vitestEnvironmentReact',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: fileURLToPath(new URL('./fixtures', import.meta.url)),
+        },
+      },
+    });
     await expectExecSuccess();
   });
 
@@ -39,6 +71,26 @@ describe('jsdom', () => {
     const { expectExecSuccess } = await runCli('test/envOptions', undefined, {
       args: ['--config', 'rstest.envOptions.config.mts'],
     });
+    await expectExecSuccess();
+  });
+
+  it('should run web storage test correctly', async () => {
+    const { expectExecSuccess } = await runCli('test/storage', 'jsdom');
+    await expectExecSuccess();
+  });
+
+  it('should create object URLs from jsdom Blob and File', async () => {
+    const { expectExecSuccess } = await runCli('test/objectUrl', 'jsdom');
+    await expectExecSuccess();
+  });
+
+  it('should expose object URLs to scripts in the jsdom realm', async () => {
+    const { expectExecSuccess } = await runCli('test/domScriptUrl', 'jsdom');
+    await expectExecSuccess();
+  });
+
+  it('should clean up pending timers', async () => {
+    const { expectExecSuccess } = await runCli('test/timers', 'jsdom');
     await expectExecSuccess();
   });
 });
@@ -66,8 +118,23 @@ describe('happy-dom', () => {
     await expectExecSuccess();
   });
 
+  it('should run web storage test correctly', async () => {
+    const { expectExecSuccess } = await runCli('test/storage', 'happy-dom');
+    await expectExecSuccess();
+  });
+
   it('should run TextEncoder correctly in happy-dom', async () => {
     const { expectExecSuccess } = await runCli('test/textEncoder', 'happy-dom');
+    await expectExecSuccess();
+  });
+
+  it('should create object URLs from happy-dom Blob and File', async () => {
+    const { expectExecSuccess } = await runCli('test/objectUrl', 'happy-dom');
+    await expectExecSuccess();
+  });
+
+  it('should clean up pending timers', async () => {
+    const { expectExecSuccess } = await runCli('test/timers', 'happy-dom');
     await expectExecSuccess();
   });
 });

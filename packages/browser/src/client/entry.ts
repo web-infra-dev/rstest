@@ -16,7 +16,9 @@ import type {
 import {
   createBrowserTaskContext,
   createRstestRuntime,
+  formatConsoleArgs,
   globalApis,
+  RSTEST_API_GLOBAL_KEY,
   RSTEST_ENV_SYMBOL_KEY,
   setRealTimers,
   unwrapRegex,
@@ -32,7 +34,6 @@ import {
   createRunnerLifecycleRequest,
   sendRunnerLifecycle,
 } from './dispatchTransport';
-import { formatConsoleArgs } from './formatConsole';
 import { BrowserSnapshotEnvironment } from './snapshot';
 import {
   findNewScriptUrl,
@@ -59,6 +60,23 @@ const debugLog = (...args: unknown[]): void => {
 type RuntimeEnvStore = Record<string, string | undefined>;
 const RSTEST_ENV_SYMBOL = Symbol.for(RSTEST_ENV_SYMBOL_KEY);
 
+/**
+ * Publish the runtime API on the globals test modules read: the
+ * `@rstest/core` external and the `import.meta.rstest` define (node parity:
+ * `global['@rstest/core']` in runInPool), plus the `globals: true` API names.
+ */
+const installRuntimeGlobals = (
+  runtime: Awaited<ReturnType<typeof createRstestRuntime>>,
+  runtimeConfig: RuntimeConfig,
+): void => {
+  (globalThis as Record<string, unknown>)[RSTEST_API_GLOBAL_KEY] = runtime.api;
+  if (runtimeConfig.globals) {
+    for (const apiKey of globalApis) {
+      (globalThis as any)[apiKey] = (runtime.api as any)[apiKey];
+    }
+  }
+};
+
 type GlobalWithRuntimeEnv = typeof globalThis &
   Record<symbol, unknown> & {
     global?: typeof globalThis;
@@ -67,14 +85,19 @@ type GlobalWithRuntimeEnv = typeof globalThis &
 const restoreRuntimeConfig = (
   config: BrowserProjectRuntime['runtimeConfig'],
 ): RuntimeConfig => {
-  const { testNamePattern } = config as RuntimeConfig;
+  const { testNamePattern } = config;
+  // The browser wire (BrowserRuntimeConfig) omits node-only fields
+  // (testEnvironment / coverage / logHeapUsage / detectAsyncLeaks) that the
+  // browser runtime never reads. The shared WorkerState / runner types require
+  // the full RuntimeConfig shape and runner heap sampling is guarded against
+  // the absent logHeapUsage, so widening back here is sound.
   return {
     ...config,
     testNamePattern:
       typeof testNamePattern === 'string'
         ? unwrapRegex(testNamePattern)
         : testNamePattern,
-  };
+  } as RuntimeConfig;
 };
 
 const ensureRuntimeEnv = (env: RuntimeConfig['env'] | undefined): void => {
@@ -497,12 +520,7 @@ const run = async () => {
         taskContext: createBrowserTaskContext(),
       });
 
-      // Register global APIs if globals config is enabled
-      if (runtimeConfig.globals) {
-        for (const apiKey of globalApis) {
-          (globalThis as any)[apiKey] = (runtime.api as any)[apiKey];
-        }
-      }
+      installRuntimeGlobals(runtime, runtimeConfig);
 
       try {
         // Load setup files for this project after runtime is ready.
@@ -541,6 +559,28 @@ const run = async () => {
     window.__RSTEST_DONE__ = true;
     return;
   }
+
+  // Capture unhandled errors/rejections that escape a test file's execution.
+  // Parity with the node worker, which attaches process-level
+  // uncaughtException/unhandledRejection to the running file's result and fails
+  // the file. `activeUnhandledErrors` points at the currently running file's
+  // collector (undefined between files, so stray late events are ignored).
+  let activeUnhandledErrors: Error[] | undefined;
+  const onWindowError = (event: ErrorEvent): void => {
+    activeUnhandledErrors?.push(
+      event.error instanceof Error
+        ? event.error
+        : new Error(event.message || String(event.error)),
+    );
+  };
+  const onUnhandledRejection = (event: PromiseRejectionEvent): void => {
+    const { reason } = event;
+    activeUnhandledErrors?.push(
+      reason instanceof Error ? reason : new Error(String(reason)),
+    );
+  };
+  window.addEventListener('error', onWindowError);
+  window.addEventListener('unhandledrejection', onUnhandledRejection);
 
   // 2. Run tests for each file
   for (const key of testKeysToRun) {
@@ -609,12 +649,7 @@ const run = async () => {
 
     const runtime = await createRstestRuntime(workerState, { taskContext });
 
-    // Register global APIs if globals config is enabled
-    if (runtimeConfig.globals) {
-      for (const apiKey of globalApis) {
-        (globalThis as any)[apiKey] = (runtime.api as any)[apiKey];
-      }
-    }
+    installRuntimeGlobals(runtime, runtimeConfig);
 
     let failedTestsCount = 0;
 
@@ -669,6 +704,9 @@ const run = async () => {
       },
     });
 
+    const unhandledErrors: Error[] = [];
+    activeUnhandledErrors = unhandledErrors;
+
     try {
       // Load setup files for this project after runtime is ready.
       await loadSetupFiles();
@@ -691,6 +729,32 @@ const run = async () => {
         runnerHooks,
         runtime.api,
       );
+
+      // The browser dispatches `unhandledrejection` in a task queued at the
+      // current task's microtask checkpoint, so a rejection leaked by a
+      // synchronous test is not observable yet when `runTests()` resolves.
+      // Yield two macrotasks: the first reaches the checkpoint that queues
+      // the event task, the second runs after that task regardless of how
+      // the browser orders the timer and event task sources.
+      for (let i = 0; i < 2; i++) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        });
+      }
+
+      // An unhandled error/rejection that escaped the run fails the file even
+      // when every test passed.
+      if (unhandledErrors.length > 0) {
+        result.status = 'fail';
+        result.errors = [
+          ...(result.errors ?? []),
+          ...unhandledErrors.map((error) => ({
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+          })),
+        ];
+      }
 
       // Collect coverage data from global __coverage__ object
       if (globalThis.__coverage__) {
@@ -716,8 +780,12 @@ const run = async () => {
     } finally {
       // Restore original console methods
       restoreConsole();
+      activeUnhandledErrors = undefined;
     }
   }
+
+  window.removeEventListener('error', onWindowError);
+  window.removeEventListener('unhandledrejection', onUnhandledRejection);
 
   send({ type: 'complete' });
   window.__RSTEST_DONE__ = true;

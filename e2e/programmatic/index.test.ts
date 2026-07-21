@@ -85,4 +85,45 @@ describe('programmatic runRstest', () => {
       { status: 'pass', testName: 'virtual/programmatic.test.ts' },
     ]);
   });
+
+  it('returns metadata from test context and suite hooks', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'node',
+      args: ['run-metadata.mjs'],
+      onTestFinished,
+      options: { nodeOptions: { cwd: fixturesDir } },
+    });
+
+    await cli.exec;
+    const result = parsePayload(cli.stdout);
+
+    expect(result.ok).toBe(true);
+    expect(result.fileMeta).toEqual({ fileHook: 'afterAll' });
+    expect(result.caseMeta).toEqual([
+      { fromSuite: true, shared: 'suite' },
+      {
+        fromSuite: true,
+        shared: 'case',
+        caseOnly: true,
+        caseValue: 'second',
+        replaced: true,
+      },
+    ]);
+    expect(result.reporterFileMeta).toEqual({ fileHook: 'afterAll' });
+    expect(result.reporterCaseMeta).toEqual([
+      { fromSuite: true, shared: 'suite' },
+      {
+        fromSuite: true,
+        shared: 'case',
+        caseOnly: true,
+        caseValue: 'second',
+        replaced: true,
+      },
+    ]);
+    expect(result.suiteMeta).toEqual([
+      { fromSuite: true, shared: 'suite', suiteHook: 'afterAll' },
+    ]);
+  });
 });

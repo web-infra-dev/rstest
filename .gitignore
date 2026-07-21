@@ -42,6 +42,7 @@ test-results/
 fixtures-test/
 fixtures-test-*/
 .rstest-reports/
+.rstest-playwright/
 .rslib/
 !packages/core/src/coverage
 !packages/core/tests/coverage

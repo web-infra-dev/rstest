@@ -7,6 +7,7 @@ export default defineConfig({
     provider: 'playwright',
     headless: true,
     port: BROWSER_PORTS.related,
+    strictPort: true,
   },
   include: ['tests/**/*.test.ts'],
   testTimeout: BROWSER_TEST_TIMEOUT,

@@ -177,9 +177,11 @@ export const getFileTaskId = (testPath: string): string => `file:${testPath}`;
  * Makes some special types that are not supported for passing into the pool serializable.
  * eg. RegExp
  */
-export const serializableConfig = (
-  normalizedConfig: RuntimeConfig,
-): RuntimeConfig => {
+export const serializableConfig = <
+  T extends Pick<RuntimeConfig, 'testNamePattern'>,
+>(
+  normalizedConfig: T,
+): T => {
   const { testNamePattern } = normalizedConfig;
   return {
     ...normalizedConfig,

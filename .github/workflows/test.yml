@@ -39,7 +39,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: changes
         with:
           predicate-quantifier: 'every'
@@ -84,6 +84,9 @@ jobs:
 
       - name: Check Dependency Version
         run: pnpm run check-dependency-version
+
+      - name: Check Version Consistency
+        run: pnpm run check-version-consistency
 
       - name: Check Unused Code
         run: pnpm run check-unused
@@ -156,15 +159,17 @@ jobs:
         #   trigger      | node_version | test_script
         #   -------------+--------------+--------------------------------------
         #   PR (regular) | [24]         | [test]
-        #   push to main | [20, 24]     | [test, commonjs, no-isolate, threads]
-        #   release PR   | [20, 24]     | [test, commonjs, no-isolate, threads]
+        #   push to main | [20, 24, 26] | [test, commonjs, no-isolate, threads]
+        #   release PR   | [20, 24, 26] | [test, commonjs, no-isolate, threads]
         #
         # Node 20 + test:no-isolate can hit upstream vm native crashes under worker
         # reuse; tolerated on full runs in exchange for coverage.
+        # Node 26 covers the current line, where Web Storage is enabled by default
+        # and `localStorage` exists on globalThis before a DOM environment is set up.
         node_version: >-
           ${{ fromJson(
             needs.prepare.outputs.is_full_run == 'true'
-              && '["20","24"]'
+              && '["20","24","26"]'
             || '["24"]'
           ) }}
         test_script: >-

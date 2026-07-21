@@ -1,0 +1,136 @@
+---
+description: 'Rstest 0.11 是迈向 1.0 的过渡版本：通过一批不兼容变更收敛 test options、mock、pool、shard 等 API，同时带来更快的 V8 coverage 与升级后的 fake timers。'
+date: 2026-07-06 16:00:00
+sidebar: false
+authors:
+  - name: 9aoy
+    avatar: 'https://github.com/9aoy.png'
+    github: '9aoy'
+  - name: fi3ework
+    avatar: 'https://github.com/fi3ework.png'
+    github: 'fi3ework'
+---
+
+import { BlogAuthors } from '@rstack-dev/doc-ui/blog-authors';
+
+# Rstest 0.11 发布
+
+_2026 年 7 月 6 日_
+
+<BlogAuthors />
+
+<img
+  src="https://assets.rspack.rs/rstest/rstest-banner-v0-11.png"
+  alt="Rstest 0.11"
+  style={{
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+  }}
+/>
+
+Rstest 0.11 是迈向 1.0 的过渡版本。在 1.0 稳定版发布前，这个版本的重点是通过一批不兼容变更收敛部分公开 API；此外还带来了更快的 V8 coverage 与升级后的 fake timers。
+
+主要变更：
+
+- [迈向 1.0 的 API 变更](#api-changes)
+- [更快的 V8 coverage](#coverage-v8)
+- [fake timers 对齐 `@sinonjs/fake-timers` 15](#fake-timers)
+- [其他改进](#other-improvements)
+
+## 迈向 1.0 的 API 变更 \{#api-changes}
+
+为了在 1.0 之前稳定公开 API，Rstest 0.11 调整了以下几处接口。它们均为不兼容变更，但迁移路径都很直接。
+
+### `TestOptions` 移到第二个参数
+
+`test` / `it` / `test.each` / `test.for` 的 [`TestOptions`](/api/runtime-api/test-api/test#testoptions) 对象（`retry` / `repeats` / `timeout`）此前作为**最后一个**参数，位于测试函数之后。当测试体较长时，这个参数容易被忽略，代码格式化工具也往往将它推到一个独立的尾行。Rstest 0.11 将它移到测试函数**之前**的第二个参数位置，与 Vitest、Node.js 内置的 test runner（`node:test`）保持一致。
+
+```diff
+- test('name', () => {}, { retry: 2 });
++ test('name', { retry: 2 }, () => {});
+```
+
+数字形式的 timeout 简写保持不变，Jest 风格的 `test('name', fn, 1000)` 仍可作为最后一个参数使用。`describe` 现在同样支持在第二个参数位置传入 `TestOptions`。
+
+### mock factory 仅支持同步
+
+`rs.mock` / `rs.doMock` 的 factory 类型现在仅支持同步函数。async factory 容易引发 hoisting 与模块初始化问题，因此 TypeScript 类型不再允许这种写法。对于 partial mock，可通过同步的 `importActual` import attributes 保留真实模块，只覆盖需要的导出：
+
+```ts
+import * as actual from './date-utils' with { rstest: 'importActual' };
+
+rs.mock('./date-utils', () => ({
+  ...actual,
+  formatDate: rs.fn().mockReturnValue('2026-03-19'),
+}));
+```
+
+更多用法请参考 [部分 mock 模块](/guide/basic/mock#部分-mock-模块)。
+
+### 移除 `pool.minWorkers`
+
+`pool.minWorkers` 用于设置空闲 worker 的保留下限，但它只对 `isolate: false` 生效——默认的 `isolate: true` 不复用 worker，这个下限不起作用。移除后，`pool` 收敛为扁平的 `{ type?, maxWorkers?, execArgv? }` 结构，请改用 `pool.maxWorkers` 控制文件级并行度。内部下限仍默认按 `min(maxWorkers, recommended)` 保持，默认的 warm-worker 行为不变。
+
+### `shard` 改为 CLI-only
+
+sharding 本质上是 per-invocation 的操作：每个 CI runner 都需要传入不同的 index，而写入共享配置文件的固定值无法表达这一点。因此，`shard` 配置字段已从 `RstestConfig` 中移除，请改用 [`--shard <index>/<count>`](/guide/basic/cli#sharding-tests) CLI flag，其行为保持不变。
+
+```bash
+npx rstest run --shard=1/3
+```
+
+## 更快的 V8 coverage \{#coverage-v8}
+
+在大型 bundled 项目中收集 V8 coverage 时，将原始 V8 数据转换为 Istanbul coverage 可能耗时数十秒。Rstest 0.11 重构了这条转换路径。
+
+此前，coverage provider 会用通用的 `ast-v8-to-istanbul` 转换器处理每一条原始 V8 entry，其中包含大量不会进入报告的数据。Rstest 0.11 改用为 Rstest 产物定制的转换器，在转换前先过滤掉无关 entry，并将转换从各个 worker 收拢到主进程统一完成。
+
+在 [Rsbuild](https://github.com/web-infra-dev/rsbuild) 仓库自身的测试套件上（`pnpm test --coverage --coverage.provider=v8`），我们测得：
+
+| 版本             | 总耗时 |
+| ---------------- | -----: |
+| baseline（0.10） |  6.05s |
+| Rstest 0.11      |  1.81s |
+
+相比 baseline，重构后的路径快约 **3.34 倍**；在主进程解析 raw coverage 进一步将 Rstest 自身的处理耗时降低约 **2 倍**（同一项目），并减少了 CPU 占用。coverage 输出结果保持不变。
+
+这一优化无需任何配置改动，使用 `coverage.provider: 'v8'` 的项目会自动获得。
+
+## fake timers 对齐 `@sinonjs/fake-timers` 15 \{#fake-timers}
+
+Rstest 0.11 将 `@sinonjs/fake-timers` 升级至 `15.4.0`，并让 fake timers 运行时与其 API 对齐，新增了两个方法：
+
+- `rstest.jumpTimersByTime(ms)` 将时钟向前跳过 `ms`，期间不逐个运行 timer，落在这段区间内的 timer 最多只会在跳转终点触发一次。
+- `rstest.setTickMode({ mode })` 在手动与自动推进两种时钟模式之间切换。
+
+```ts title="example.test.ts"
+import { expect, rstest, test } from '@rstest/core';
+
+test('jump without running intermediate timers', () => {
+  rstest.useFakeTimers();
+  const fn = rstest.fn();
+
+  setInterval(fn, 1000);
+  rstest.jumpTimersByTime(5000);
+
+  expect(fn).toHaveBeenCalledTimes(1);
+});
+```
+
+`rstest.setSystemTime(date)` 现在也可以单独使用——在未调用 `rstest.useFakeTimers()` 时，它只接管全局 `Date`、保留真实 timer，因此可以只冻结系统时钟而不接管 `setTimeout` / `setInterval`。
+
+此外，本次发布还修复了 Browser Mode 的一处缺口。此前，Browser Mode 将 `@sinonjs/fake-timers` 别名到一个极简 stub，它只保留了一个 clock 形状的对象，并未真正接管 `setTimeout`、`Date` 等浏览器全局。Rstest 0.11 移除了该 stub，改为打包真实实现，使 fake timers 在 Node mode 与 Browser Mode 下行为一致，包括 `Date` / `performance`、animation frames、microtasks 以及字符串时长。请参考 [Fake Timers](/api/runtime-api/rstest/fake-timers) 了解更多。
+
+## 其他改进 \{#other-improvements}
+
+- **`rs.spyOn` 作用于 ESM namespace export 时报错更清晰。** 对只读的 ESM namespace export 做 spy 时，此前只会得到一个含糊的失败；现在会给出可操作的报错，说明它为何无法被重新赋值。
+- **`new URL()` 与 Wasm 从磁盘源码解析。** 通过 `new URL(..., import.meta.url)` 引用的资源以及 Wasm 模块，现在会从原始源码位置解析，与运行时行为一致。
+- **`isolate: false` 下共享模块状态。** 在 `isolate: false` 下，导入的模块状态现在会跨文件共享，context-bound API 也会保持存活，因此跨文件的 singleton 行为符合预期。
+- **Browser Mode 按 project 隔离。** 每个 project 现在运行在各自独立的 Rsbuild 实例中，修复了多 project browser 运行下的跨 project 模块解析问题。
+- **`testPath` 使用原生路径分隔符。** `testPath` 现在以所在平台的原生路径分隔符呈现。
+- **支持自定义 `runCLI` argv。** 编程式调用方可以向 `runCLI` 传入自定义的 `argv` 数组，`process.argv` 仍为默认值。
+
+## 升级
+
+将 `@rstest/*` 相关包升级到 0.11 即可获得上述改进。Rstest 0.11 包含少量不兼容变更，迁移步骤请参考 [迈向 1.0 的 API 变更](#api-changes)。
+
+完整变更请参考 [v0.11.0 release notes](https://github.com/web-infra-dev/rstest/releases/tag/v0.11.0)。

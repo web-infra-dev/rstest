@@ -197,12 +197,15 @@ export async function parseErrorStacktrace({
             !stackIgnores.some((entry) => frame.file?.match(entry)),
       )
       .map(async (frame) => {
-        const sourcemap = await getSourcemap?.(frame.file!);
+        const file = frame.file;
+        if (!file) return frame;
+
+        const sourcemap = await getSourcemap?.(file);
         if (sourcemap) {
-          let traceMap = traceMapCache.get(frame.file!);
+          let traceMap = traceMapCache.get(file);
           if (!traceMap) {
             traceMap = new TraceMap(sourcemap);
-            traceMapCache.set(frame.file!, traceMap);
+            traceMapCache.set(file, traceMap);
           }
           const { line, column, source, name } = originalPositionFor(traceMap, {
             line: frame.lineNumber!,
@@ -216,7 +219,7 @@ export async function parseErrorStacktrace({
           return {
             ...frame,
             file: isRelativePath(source)
-              ? resolve(frame.file!, '../', source)
+              ? resolve(file, '../', source)
               : (() => {
                   // `source` can be a filesystem path (e.g. `C:\...`) or a URL-like
                   // string (e.g. `webpack://...`). `new URL()` throws for plain paths,

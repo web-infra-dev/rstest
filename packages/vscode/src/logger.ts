@@ -13,6 +13,10 @@ class MasterLogger extends BaseLogger implements vscode.Disposable {
     this.#channel[level](message);
   }
 
+  public show() {
+    this.#channel.show();
+  }
+
   public dispose() {
     this.#channel.dispose();
   }

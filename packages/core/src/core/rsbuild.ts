@@ -1,7 +1,7 @@
-import { fileURLToPath } from 'node:url';
 import {
   createRsbuild,
   type ManifestData,
+  type RsbuildConfig,
   type RsbuildInstance,
   logger as RsbuildLogger,
   type RsbuildPlugin,
@@ -15,24 +15,42 @@ import type {
   RstestContext,
 } from '../types';
 import { isDebug } from '../utils';
-import { collectSetupPaths } from '../utils/getSetupFiles';
 import { isMemorySufficient } from '../utils/memory';
 import { pluginBasic } from './plugins/basic';
 import { pluginEntryWatch } from './plugins/entry';
 import { pluginExternal } from './plugins/external';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
+import { isNodeProject } from './isBrowserProject';
 import { pluginMockRuntime } from './plugins/mockRuntime';
 import { pluginCacheControl } from './plugins/moduleCacheControl';
+import {
+  getRsbuildEnvironmentConfig,
+  initModifyRstestConfigHooks,
+} from './modifyRstestConfig';
 import { isRuntimeChunk, runtimeChunkNameForEnvironment } from './runtimeChunk';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import {
+  createSetupFileState,
+  type SetupFileProjects,
+  type SetupFileState,
+} from './setupFileState';
 
 type TestEntryToChunkHashes = {
   name: string;
   /** key is chunk asset file path, value is chunk hash */
   chunks: Record<string, string>;
 }[];
+
+export const syncCoverageSetupExcludes = (
+  coverage: NormalizedProjectConfig['coverage'] | undefined,
+  setupPaths: string[],
+): void => {
+  if (!coverage?.enabled || !setupPaths.length) {
+    return;
+  }
+
+  coverage.exclude = Array.from(new Set([...coverage.exclude, ...setupPaths]));
+};
 
 const getRuntimeChunkFiles = ({
   chunks,
@@ -86,11 +104,11 @@ const isMultiCompiler = <
   return 'compilers' in compiler && Array.isArray(compiler.compilers);
 };
 
-export const prepareRsbuild = async (
-  context: RstestContext,
-  globTestSourceEntries: (name: string) => Promise<Record<string, string>>,
-  setupFiles: Record<string, Record<string, string>>,
-  globalSetupFiles: Record<string, Record<string, string>>,
+type PrepareRsbuildOptions = {
+  context: RstestContext;
+  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+  setupFileState?: SetupFileState;
+  getSetupFileProjects?: () => SetupFileProjects;
   /**
    * Explicit list of projects to include in the Rsbuild instance.
    *
@@ -99,39 +117,91 @@ export const prepareRsbuild = async (
    * graph for browser projects. If browser graph collection ever needs a
    * materially different build pipeline, split that behavior at the caller.
    */
-  targetProjects?: ProjectContext[],
-  extraPlugins: RsbuildPlugin[] = [],
-): Promise<RsbuildInstance> => {
+  targetProjects?: ProjectContext[];
+  exposeRstestAPIProjects?: ProjectContext[];
+  extraPlugins?: RsbuildPlugin[];
+  onModifyRstestConfigApplied?: () => Promise<void>;
+  onRsbuildConfigResolved?: () => Promise<void>;
+  onCoveragePluginLoadError?: (error: unknown) => void;
+};
+
+export const addCoveragePlugin = async (
+  rsbuildInstance: RsbuildInstance,
+  context: RstestContext,
+): Promise<void> => {
   const {
     command,
-    normalizedConfig: { isolate, dev = {}, coverage, pool },
+    normalizedConfig: { coverage },
   } = context;
+
+  if (coverage?.enabled && command !== 'list') {
+    const { loadCoverageProvider } = await import('../coverage');
+    const { pluginCoverage } = await loadCoverageProvider(
+      coverage,
+      context.rootPath,
+    );
+    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
+  }
+};
+
+/**
+ * In-memory host compile server: no printed urls, no fixed port, no static
+ * hosting. Shared with the browser globalSetup stage's one-shot compile so
+ * the two host rsbuild instances cannot drift.
+ */
+export const hostServerConfig: NonNullable<RsbuildConfig['server']> = {
+  printUrls: false,
+  strictPort: false,
+  middlewareMode: true,
+  compress: false,
+  cors: false,
+  publicDir: false,
+};
+
+export const prepareRsbuild = async ({
+  context,
+  globTestSourceEntries,
+  setupFileState = createSetupFileState(),
+  getSetupFileProjects,
+  targetProjects,
+  exposeRstestAPIProjects,
+  extraPlugins = [],
+  onModifyRstestConfigApplied,
+  onRsbuildConfigResolved,
+  onCoveragePluginLoadError,
+}: PrepareRsbuildOptions): Promise<RsbuildInstance> => {
+  const {
+    command,
+    normalizedConfig: { coverage, dev = {}, isolate, pool },
+  } = context;
+  const { setupFiles, globalSetupFiles, getSetupPaths } = setupFileState;
 
   // Default execution still excludes browser projects. Callers can opt in to a
   // broader project set when they only need graph information.
   const projects = targetProjects?.length
     ? targetProjects
-    : context.projects.filter(
-        (project) => !project.normalizedConfig.browser.enabled,
-      );
+    : context.projects.filter(isNodeProject);
   const debugMode = isDebug();
+
+  const updateSetupFileMaps = () => {
+    const setupFileProjects = getSetupFileProjects?.() ?? {
+      setupProjects: projects,
+      globalSetupProjects: context.projects,
+    };
+    setupFileState.refresh(setupFileProjects);
+    if (command !== 'list') {
+      syncCoverageSetupExcludes(coverage, getSetupPaths());
+    }
+  };
 
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
 
   const writeToDisk = dev.writeToDisk || debugMode;
-
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest',
     config: {
       root: context.rootPath,
-      server: {
-        printUrls: false,
-        strictPort: false,
-        middlewareMode: true,
-        compress: false,
-        cors: false,
-        publicDir: false,
-      },
+      server: { ...hostServerConfig },
       dev: {
         hmr: false,
         writeToDisk,
@@ -139,13 +209,7 @@ export const prepareRsbuild = async (
       environments: Object.fromEntries(
         projects.map((project) => [
           project.environmentName,
-          {
-            plugins: project.normalizedConfig.plugins,
-            root: project.rootPath,
-            output: {
-              target: 'node',
-            },
-          },
+          getRsbuildEnvironmentConfig(project),
         ]),
       ),
       plugins: [
@@ -160,26 +224,34 @@ export const prepareRsbuild = async (
           isWatch: command === 'watch',
         }),
         pluginExternal(context),
-        !isolate
-          ? pluginCacheControl(collectSetupPaths(setupFiles, globalSetupFiles))
-          : null,
+        !isolate ? pluginCacheControl(getSetupPaths) : null,
         pluginInspect({ poolExecArgv: pool.execArgv }),
         ...extraPlugins,
       ].filter(Boolean) as RsbuildPlugin[],
     },
   });
 
-  if (coverage?.enabled && command !== 'list') {
-    const { loadCoverageProvider } = await import('../coverage');
-    const { pluginCoverage } = await loadCoverageProvider(
-      coverage,
-      context.rootPath,
-    );
-    coverage.exclude.push(
-      ...collectSetupPaths(setupFiles, globalSetupFiles || {}),
-    );
+  initModifyRstestConfigHooks(
+    context,
+    rsbuildInstance,
+    projects,
+    exposeRstestAPIProjects,
+    {
+      onModifyRstestConfigApplied,
+      onRsbuildConfigResolved: async () => {
+        await onRsbuildConfigResolved?.();
+        updateSetupFileMaps();
+      },
+    },
+  );
 
-    rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
+  try {
+    await addCoveragePlugin(rsbuildInstance, context);
+  } catch (error) {
+    if (!onCoveragePluginLoadError) {
+      throw error;
+    }
+    onCoveragePluginLoadError(error);
   }
 
   return rsbuildInstance;
@@ -390,28 +462,10 @@ export const createRsbuildServer = async ({
   // Read files from memory via `rspackCompiler.outputFileSystem`
   let rspackCompiler: Rspack.Compiler | Rspack.MultiCompiler | undefined;
 
-  const rstestCompilerPlugin: RsbuildPlugin = {
-    name: 'rstest:compiler',
-    setup: (api) => {
-      api.modifyBundlerChain((chain) => {
-        // add mock-loader to this rule
-        chain.module
-          .rule('rstest-mock-module-doppelgangers')
-          .test(/\.(?:js|jsx|mjs|cjs|ts|tsx|mts|cts)$/)
-          .with({ rstest: 'importActual' })
-          .use('import-actual-loader')
-          .loader(path.resolve(__dirname, './importActualLoader.mjs'))
-          .end();
-      });
-
-      api.onAfterCreateCompiler(({ compiler }) => {
-        // outputFileSystem to be updated later by `rsbuild-dev-middleware`
-        rspackCompiler = compiler;
-      });
-    },
-  };
-
-  rsbuildInstance.addPlugins([rstestCompilerPlugin]);
+  rsbuildInstance.onAfterCreateCompiler(({ compiler }) => {
+    // outputFileSystem to be updated later by `rsbuild-dev-middleware`
+    rspackCompiler = compiler;
+  });
 
   const devServer = await rsbuildInstance.createDevServer({
     getPortSilently: true,
@@ -530,6 +584,11 @@ export const createRsbuildServer = async ({
     const globalSetupEntries: EntryInfo[] = [];
     const sourceEntries = await globTestSourceEntries(environmentName);
 
+    // Per-asset size lookup for entrypoints that only report asset names.
+    // Entrypoint-level `assetsSize`/`assets[].size` are optional in the rspack
+    // stats types, but the top-level `assets[].size` is always present.
+    const assetSizes = new Map(assets!.map((a) => [a.name, a.size]));
+
     for (const entry of Object.keys(entrypoints!)) {
       const e = entrypoints![entry]!;
 
@@ -562,6 +621,12 @@ export const createRsbuildServer = async ({
           testPath: sourceEntries[entry],
           files: entryFiles[entry],
           chunks: e.chunks || [],
+          size:
+            e.assetsSize ??
+            (e.assets ?? []).reduce(
+              (sum, a) => sum + (a.size ?? assetSizes.get(a.name) ?? 0),
+              0,
+            ),
         });
       } else if (globalSetupFiles?.[environmentName]?.[entry]) {
         globalSetupEntries.push({

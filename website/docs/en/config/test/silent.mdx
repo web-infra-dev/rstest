@@ -64,5 +64,7 @@ Rstest tries to attribute logs to specific tests, but in concurrent asynchronous
 
 In browser mode, this interception still calls the original `console.*` so logs can remain visible in DevTools. `silent` controls Rstest/reporter output, not necessarily the browser's native console view.
 
-`silent` still works when `disableConsoleIntercept` is `true`. In that case, logs do not go through the reporter console interception pipeline, so [onConsoleLog](/config/test/on-console-log) and [printConsoleTrace](/config/test/print-console-trace) still do not apply. However, with `silent: 'passed-only'`, Rstest still buffers logs internally and replays the matching logs through the original console output after failed tasks finish.
+Under `silent: 'passed-only'`, the logs replayed from failed tasks still pass through [onConsoleLog](/config/test/on-console-log), so a filter that returns `false` drops them from the replay as well.
+
+`silent` still works when `disableConsoleIntercept` is `true`, but the replay differs by environment. In Node mode the buffered logs are replayed to the original stdout/stderr, bypassing [onConsoleLog](/config/test/on-console-log) and [printConsoleTrace](/config/test/print-console-trace). In browser mode there is no host-side original stream, so the replay is not forwarded to the terminal — those logs stay visible only in the browser DevTools.
 :::

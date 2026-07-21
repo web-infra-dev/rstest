@@ -69,10 +69,19 @@ export class Pool {
     }
   }
 
+  /**
+   * Ordering invariant: a caller's slot is claimed synchronously before the
+   * first `await` in this method — either by reusing an idle runner, or by
+   * pushing onto `slotWaiters` inside the Promise executor below. The
+   * sequential dispatch gate in `pool/index.ts` relies on this to preserve
+   * perf-sorted enqueue order; do not introduce an `await` before the slot is
+   * claimed (idle-runner reuse or `slotWaiters` push) without revisiting it.
+   */
   private async acquireRunner(task: PoolTask): Promise<PoolRunner> {
     while (true) {
       // Prefer reuse of an idle runner (only meaningful when isolate=false,
-      // since isolate=true never returns runners to the idle pool).
+      // since isolate=true never returns runners to the idle pool). Most
+      // recently returned first (LIFO) — hottest kept module cache.
       const reuse = this.idleRunners.pop();
       if (reuse) {
         if (reuse.isUsable()) {

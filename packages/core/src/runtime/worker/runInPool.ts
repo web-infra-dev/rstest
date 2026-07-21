@@ -9,7 +9,7 @@ import type {
   TestInfo,
   WorkerState,
 } from '../../types';
-import { globalApis } from '../../utils/constants';
+import { globalApis, RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
@@ -311,7 +311,7 @@ const preparePool = async (
   };
 
   // @ts-expect-error
-  rstestContext.global['@rstest/core'] = api;
+  rstestContext.global[RSTEST_API_GLOBAL_KEY] = api;
 
   return {
     interopDefault,
@@ -712,20 +712,35 @@ export const runInPool = async (
 
     // Collect coverage data after test file completes
     if (coverageProvider) {
+      const provider = coverageProvider;
       tracker.transition('coverage');
-      const coverageMap = await coverageProvider.collect({
+      const collectOptions = {
         assetFiles,
         sourceMaps,
         outputModule: options.context.outputModule,
-      });
-      if (coverageMap) {
-        // Attach coverage data to test result
-        results.coverage = {};
-        Object.entries(coverageMap.toJSON()).forEach(([key, value]) => {
-          if ('toJSON' in value)
-            results.coverage![key] = value.toJSON() as FileCoverageData;
-          else results.coverage![key] = value;
-        });
+      };
+
+      const collectCoverage = async () => {
+        const coverageMap = await provider.collect(collectOptions);
+        if (coverageMap) {
+          results.coverage = {};
+          Object.entries(coverageMap.toJSON()).forEach(([key, value]) => {
+            if ('toJSON' in value)
+              results.coverage![key] = value.toJSON() as FileCoverageData;
+            else results.coverage![key] = value;
+          });
+        }
+      };
+
+      if (provider.collectRaw && provider.resolveRawCoverage) {
+        const rawCoverage = await provider.collectRaw(collectOptions);
+        if (rawCoverage != null) {
+          results.coverageRaw = rawCoverage;
+        } else {
+          await collectCoverage();
+        }
+      } else {
+        await collectCoverage();
       }
     }
 

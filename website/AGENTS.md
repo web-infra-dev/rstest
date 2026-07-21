@@ -1,6 +1,6 @@
 # Rstest documentation site
 
-This is the documentation website for Rstest, built with [Rspress](https://rspress.dev).
+This is the documentation website for Rstest, built with [Rspress](https://rspress.rs).
 
 ## Structure
 
@@ -14,34 +14,40 @@ This is the documentation website for Rstest, built with [Rspress](https://rspre
 pnpm dev      # Start dev server
 pnpm build    # Build for production
 pnpm preview  # Preview production build
-pnpm gen:og   # Generate a release Open Graph image (see below)
+pnpm gen:release-image  # Generate a release's banner + og image (see below)
 ```
 
-## Open Graph image generation
+## Release image generation
 
-Per-release og images live in [rstackjs/rstack-design-resources](https://github.com/rstackjs/rstack-design-resources) and are served by the `assets.rspack.rs` CDN. The template lives **in this repo** to keep design-resources as a passive PNG store.
+Each release blog needs **two** images, generated together so they share one gradient:
 
-- `scripts/og-image/cli.mts` — entry, parses `--version`/`--description`/`--out`
-- `scripts/og-image/render.mts` — fetches the Rstest logo SVG → rasterizes → composes with [satori](https://github.com/vercel/satori) → renders with [@resvg/resvg-js](https://github.com/yisibl/resvg-js) at 2x zoom for retina
-- `scripts/og-image/template.mts` — [satori-html](https://github.com/natemoo-re/satori-html) template, modeled after the `Rsbuild og image 1.0` artboard in design-resources
+- **banner** — `4096x1152`, no tagline, the in-page `<img>` at the top of the post, referenced by its CDN URL (`assets.rspack.rs/rstest/rstest-banner-v<major>-<minor>.png`).
+- **og image** — `2400x1260`, optional tagline, the social-share card. `rspress.config.ts` wires `og:image` per blog route: `blog/announcing-<major>-<minor>` → `assets.rspack.rs/rstest/rstest-og-image-v<major>-<minor>.png`.
+
+Both images are committed to [rstackjs/rstack-design-resources](https://github.com/rstackjs/rstack-design-resources) under `rstest/` and served by the `assets.rspack.rs` CDN. Always refer to that repo by its GitHub URL — collaborators keep local clones at different paths.
+
+The templates live **in this repo**; design-resources stays a passive PNG store.
+
+- `scripts/release-image/cli.mts` — entry, parses `--version`/`--description`/`--out-dir`; rolls one background and renders both images
+- `scripts/release-image/render.mts` — fetches the Rstest logo SVG → rasterizes → composes with [satori](https://github.com/vercel/satori) → renders with [@resvg/resvg-js](https://github.com/yisibl/resvg-js) at 2x zoom for retina; `randomBackground()` re-rolls the gradient every run (no seed flag)
+- `scripts/release-image/template.mts` — [satori-html](https://github.com/natemoo-re/satori-html) template driven by the `LAYOUTS.banner` / `LAYOUTS.og` presets
 
 ### Release workflow
 
-1. Run `pnpm gen:og --version <ver> --description "<tagline>"` from `website/`. Use `--out` to write directly into a local clone of the design-resources repo at `rstest/assets/rstest-og-image-v{version-with-hyphens}.png` (e.g. `v0-5.png`). The background gradient is randomized (color scheme, blob count, placement) on every run and there is no seed flag — re-run until you get a composition you like before committing.
-2. Commit the PNG in the design-resources repo and open a PR — that repo is the only place release PNGs are stored.
-3. After CDN deploy, the PNG is reachable at `assets.rspack.rs/rstest/assets/rstest-og-image-v0-5.png`. Wiring it up per blog `routePath` in `rspress.config.ts` is a separate follow-up — the site currently sets a single static `og:image` via `pluginOpenGraph`.
+1. Run `pnpm gen:release-image --version <ver> [--description "<tagline>"] --out-dir <dir>` from `website/`. The gradient is randomized every run — re-run until both images look good.
+2. Compress both PNGs with [TinyPNG](https://tinypng.com) (or Squoosh / ImageOptim / `pngquant`) — the raw resvg output is ~200 KB and palette quantization typically drops it to ~1/4 the size with no visible loss.
+3. Commit both images to the design-resources repo under `rstest/` and open a PR — that repo is the only place release images are stored (the generation `--out-dir` is just a local staging spot). After CDN deploy they are reachable at `assets.rspack.rs/rstest/rstest-{banner,og-image}-v<major>-<minor>.png`.
 
 ### Do
 
-- Use Space Grotesk (committed under `scripts/og-image/assets/fonts/` with SIL OFL license)
+- Use Space Grotesk (committed under `scripts/release-image/assets/fonts/` with SIL OFL license)
 - Render at 2x via `Resvg({ fitTo: { mode: 'zoom', value: 2 } })` so the PNG stays crisp on retina displays
-- Before committing the PNG to design-resources, run it through [TinyPNG](https://tinypng.com) (or Squoosh / ImageOptim / `pngquant`) — the raw resvg output is ~300 KB and palette quantization typically drops it to ~1/4 the size with no visible loss
 - Fetch the logo from the canonical CDN URL at generation time, not from a committed copy
 
 ### Don't
 
 - Don't depend on packages like `geist` that pull in framework peer deps (`next>=13.2`); commit raw `.ttf` files directly instead
-- Don't write generated PNGs into this repo; they belong in design-resources
+- Don't commit release images (banner or og) into this repo; they belong in design-resources
 - Don't bake the logo into a static asset; always fetch the SVG so logo updates propagate automatically
 
 ## Writing style guidelines
@@ -86,7 +92,7 @@ When writing or editing documentation, follow these principles:
 - First mention of a new package: include GitHub link
 - Keep technical terms in English (e.g., Context, Hook, Provider, CI)
 - For TypeScript API signatures in docs, prefer `T[]` over `Array<T>`. For unions that allow either a single value or an array, prefer `A | B | (A | B)[]` over `A | B | Array<A | B>`.
-- When documenting a newly added API or config option, add an `ApiMeta` version marker near that section. Import it with `import { ApiMeta } from '@components/ApiMeta';` and render it as `<ApiMeta addedVersion="x.y.z" />`.
+- When documenting a newly added API or config option, add an `ApiMeta` version marker near that section. Import it with `import { ApiMeta } from '@components/ApiMeta';` and render it as `<ApiMeta addedVersion="x.y.z" />`. Default `addedVersion` to the owning package's current version with its patch segment incremented by 1 (e.g. `@rstest/core` at `0.10.6` → `<ApiMeta addedVersion="0.10.7" />`).
 - If a config option has a corresponding CLI flag, surface it alongside type and default in both EN and ZH, matching the style of neighboring config pages.
 - **Punctuation by language**: In `docs/zh/`, use full-width punctuation (`：，。；（）`) for Chinese prose — including the `**类型：**` / `**默认值：**` / `**CLI：**` metadata lines and `**标签**：` bullet lead-ins. Keep half-width only inside code and inline code. In `docs/en/`, use half-width punctuation only. In both languages, keep the metadata colon inside the bold (`**Type:**` / `**类型：**`, not `**Type**:`).
 

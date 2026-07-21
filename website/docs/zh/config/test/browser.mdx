@@ -372,8 +372,6 @@ npx rstest --browser.providerOptions.launch.channel=chrome
 - `provider`
 - `browser`
 - `headless`
-- `port`
-- `strictPort`
 - `providerOptions`
 
 这意味着目前还不支持在同一次 run 里通过 `projects` 混用多个 provider，或同时配置 Chromium/Firefox/WebKit。
@@ -390,7 +388,7 @@ npx rstest --browser.name webkit
 
 在 Browser Mode 下使用 `projects` 时，每个项目会按自己的构建配置独立编译和执行（如 `plugins`、`include`、框架设置），不会复用其他项目的构建配置。
 
-但 browser 启动配置仍需保持一致：`provider`、`browser`、`headless`、`port`、`strictPort`、`providerOptions` 必须在所有 browser 项目中对齐。
+但 browser 启动配置仍需保持一致：`provider`、`browser`、`headless`、`providerOptions` 必须在所有 browser 项目中对齐。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

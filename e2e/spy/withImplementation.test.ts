@@ -40,7 +40,7 @@ describe('test withImplementation', () => {
 
     myMockFn.mockImplementationOnce(mockFn1);
 
-    myMockFn.withImplementation(
+    const withImplReturn = myMockFn.withImplementation(
       () => {
         logs.push('[call temp]');
         return 'temp';
@@ -53,6 +53,8 @@ describe('test withImplementation', () => {
       },
     );
 
+    // A sync callback returns the mock instance, so it can be chained.
+    expect(withImplReturn).toBe(myMockFn);
     expect(myMockFn.getMockImplementation()).toBe(mockFn1);
     expect(isMockCalled).toBe(false);
 
@@ -72,7 +74,8 @@ describe('test withImplementation', () => {
       return 'original';
     });
 
-    await myMockFn.withImplementation(
+    // An async callback resolves to the mock instance.
+    const withImplReturn = await myMockFn.withImplementation(
       () => {
         logs.push('[1 - call temp]');
         return 'temp';
@@ -83,6 +86,8 @@ describe('test withImplementation', () => {
         logs.push(`[1 - callback res] ${res}`);
       },
     );
+
+    expect(withImplReturn).toBe(myMockFn);
 
     logs.push('[1 - call myMockFn]');
 

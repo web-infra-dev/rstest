@@ -23,6 +23,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'globalSetup',
       'projects',
       'passWithNoTests',
+      'onlyFailures',
       'includeSource',
       'testNamePattern',
       'extends',

@@ -3,7 +3,6 @@
   "configure-rstest",
   "test-filter",
   "mock",
-  "scoped-cleanup",
   "snapshot",
   "projects",
   "reporters",

@@ -5,9 +5,8 @@ import {
   dispatchRpc,
   getRpcTimeout,
 } from './dispatchTransport';
+import { SNAPSHOT_HEADER } from '@rstest/core/internal/browser-runtime';
 import { mapStackFrame } from './sourceMapSupport';
-
-const SNAPSHOT_HEADER = '// Rstest Snapshot';
 
 const createSnapshotDispatchRequest = (
   requestId: string,
