@@ -26,4 +26,4 @@ After running these commands, open your browser at `http://localhost:3002` and o
 ## Testing
 
 - `pnpm run test` runs the Rstest suites of `main-app` (jsdom host consuming both remotes) and `component-app` (Node SSR against the local remote).
-- Both projects enable `federation: true` in `rstest.config.ts` and configure Module Federation through the `@module-federation/rstest` plugin.
+- Both projects configure Module Federation through the `@module-federation/rstest` plugin, which enables Rstest federation compatibility automatically for Node test environments.

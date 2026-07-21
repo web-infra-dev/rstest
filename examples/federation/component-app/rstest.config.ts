@@ -35,7 +35,6 @@ export default defineConfig({
         }),
       ],
       testTimeout: 15000,
-      federation: true,
     }),
     defineInlineProject({
       name: 'component-csr',

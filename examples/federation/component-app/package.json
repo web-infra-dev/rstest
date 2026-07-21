@@ -15,8 +15,8 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@module-federation/rsbuild-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@a48a1fa",
-    "@module-federation/rstest": "https://pkg.pr.new/module-federation/core/@module-federation/rstest@a48a1fa",
+    "@module-federation/rsbuild-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@9c181bf",
+    "@module-federation/rstest": "https://pkg.pr.new/module-federation/core/@module-federation/rstest@9c181bf",
     "@rsbuild/core": "~2.1.6",
     "@rsbuild/plugin-react": "^2.1.0",
     "@rstest/core": "workspace:*",
