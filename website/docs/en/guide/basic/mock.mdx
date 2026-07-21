@@ -127,7 +127,7 @@ test('overrides one export', () => {
 - [rs.importMock()](/api/runtime-api/rstest/mock-modules#rsimportmock) asynchronously loads an ESM module and returns a Promise. Use it with `await` for modules consumed through `import`.
 - [rs.requireMock()](/api/runtime-api/rstest/mock-modules#rsrequiremock) synchronously loads a CommonJS module. Use it for modules consumed through `require()`.
 
-Both APIs replace functions and nested properties with mocks, which lets the test configure selected exports or assert their calls immediately. Match the API to the module entry your code uses, especially when a package provides separate ESM and CommonJS entries.
+Both APIs replace function exports and nested functions with mocks. Primitive values are preserved, while arrays become empty arrays. In TypeScript, pass the returned module to `rs.mocked(module, true)` before calling mock control methods such as `mockReturnValue`. Match the API to the module entry your code uses, especially when a package provides separate ESM and CommonJS entries.
 
 ### Spy on a whole module
 

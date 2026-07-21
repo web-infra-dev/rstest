@@ -13,7 +13,7 @@ Rstest 基于 [tinyspy](https://github.com/tinylibs/tinyspy) 提供了一些工�
 - **类型：**
 
 ```ts
-type FunctionLike = (...args: any[]) => any;
+type FunctionLike = (...args: any) => any;
 
 export interface Mock<
   T extends FunctionLike = FunctionLike,
@@ -218,24 +218,19 @@ expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
 - **类型：**
 
 ```ts
-type MockedFn = (<T>(item: T, deep?: false) => Mocked<T>) &
-  (<T>(item: T, deep: true) => MaybeMockedDeep<T>) &
-  (<T>(item: T, options: { partial?: false; deep?: false }) => Mocked<T>) &
-  (<T>(
-    item: T,
-    options: { partial?: false; deep: true },
-  ) => MaybeMockedDeep<T>) &
-  (<T>(
-    item: T,
-    options: { partial: true; deep?: false },
-  ) => MaybePartiallyMocked<T>) &
-  (<T>(
-    item: T,
-    options: { partial: true; deep: true },
-  ) => MaybePartiallyMockedDeep<T>);
+type MockedFn = <T>(
+  item: T,
+  deepOrOptions?: boolean | { partial?: boolean; deep?: boolean },
+) =>
+  | Mocked<T>
+  | MaybeMockedDeep<T>
+  | MaybePartiallyMocked<T>
+  | MaybePartiallyMockedDeep<T>;
 ```
 
 一个 TypeScript 类型辅助函数，用于将对象包装为 mock 类型而不改变其运行时行为。当你 mock 了一个模块并想要获得正确的 mock 方法类型提示时，这很有用。
+
+推导出的返回类型会随选项变化：`{ deep: true }` 会递归应用 mock 类型，`{ partial: true }` 则使用 partial mock 类型。
 
 如果需要为 mock 对象或模块标注类型，请参考 [`Mocked`](/api/javascript-api/types#mocked) 类型。
 

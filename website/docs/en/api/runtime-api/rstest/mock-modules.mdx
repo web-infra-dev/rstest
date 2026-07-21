@@ -430,14 +430,15 @@ rs.mock('./api', () => ({
 
 Loads the original implementation of a CommonJS module synchronously, even if it has already been mocked. Use `rs.requireActual` when code consumes the module through `require()`, or when a synchronous mock factory needs the real exports. For an ESM module loaded through `import`, use [`rs.importActual`](#rsimportactual).
 
-```ts title="src/math.test.ts"
+```js title="src/math.test.cjs"
+const { expect, rs, test } = require('@rstest/core');
+
 rs.mockRequire('./math.cjs', () => ({
   sum: () => 100,
 }));
 
 test('loads the original CommonJS module', () => {
-  const actualMath =
-    rs.requireActual<typeof import('./math.cjs')>('./math.cjs');
+  const actualMath = rs.requireActual('./math.cjs');
 
   expect(rs.isMockFunction(actualMath.sum)).toBe(false);
   expect(actualMath.sum(1, 2)).toBe(3);
@@ -448,13 +449,15 @@ test('loads the original CommonJS module', () => {
 
 - **Type:** `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
-Loads an ESM module asynchronously and returns it with all properties, including nested properties, replaced by mock implementations. Use `rs.importMock` when a test needs an auto-mocked module directly. For a CommonJS module loaded through `require()`, use [`rs.requireMock`](#rsrequiremock).
+Loads an ESM module asynchronously and replaces its function exports, including nested functions, with mock functions. Primitive values are preserved, while arrays become empty arrays. Use `rs.importMock` when a test needs an auto-mocked module directly. For a CommonJS module loaded through `require()`, use [`rs.requireMock`](#rsrequiremock).
 
 ```ts title="src/api.test.ts"
 test('loads an ESM module as mocks', async () => {
-  const mockedApi = await rs.importMock<typeof import('./api')>('./api');
+  const api = await rs.importMock<typeof import('./api')>('./api');
+  const mockedApi = rs.mocked(api, true);
 
-  mockedApi.fetchUser('1');
+  mockedApi.fetchUser.mockResolvedValue({ id: '1', name: 'Alice' });
+  await mockedApi.fetchUser('1');
   expect(mockedApi.fetchUser).toHaveBeenCalledWith('1');
 });
 ```
@@ -463,14 +466,16 @@ test('loads an ESM module as mocks', async () => {
 
 - **Type:** `<T = Record<string, unknown>>(path: string) => T`
 
-Loads a CommonJS module synchronously and returns it with all properties, including nested properties, replaced by mock implementations. Use `rs.requireMock` when the target is consumed through `require()` and the test needs the mocked module immediately. For an ESM module loaded through `import`, use [`rs.importMock`](#rsimportmock).
+Loads a CommonJS module synchronously and replaces its exported functions, including nested functions, with mock functions. Primitive values are preserved, while arrays become empty arrays. Use `rs.requireMock` when the target is consumed through `require()` and the test needs the mocked module immediately. For an ESM module loaded through `import`, use [`rs.importMock`](#rsimportmock).
 
-```ts title="src/math.test.ts"
+```js title="src/math.test.cjs"
+const { expect, rs, test } = require('@rstest/core');
+
 test('loads a CommonJS module as mocks', () => {
-  const mockedMath = rs.requireMock<typeof import('./math.cjs')>('./math.cjs');
+  const mockedMath = rs.requireMock('./math.cjs');
 
-  mockedMath.sum(1, 2);
-  expect(mockedMath.sum).toHaveBeenCalledWith(1, 2);
+  mockedMath.sum.mockReturnValue(100);
+  expect(mockedMath.sum(1, 2)).toBe(100);
 });
 ```
 

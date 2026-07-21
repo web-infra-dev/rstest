@@ -13,7 +13,7 @@ Rstest provides some utility functions to help you mock functions powered by [ti
 - **Type:**
 
 ```ts
-type FunctionLike = (...args: any[]) => any;
+type FunctionLike = (...args: any) => any;
 
 export interface Mock<
   T extends FunctionLike = FunctionLike,
@@ -217,24 +217,19 @@ expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
 - **Type:**
 
 ```ts
-type MockedFn = (<T>(item: T, deep?: false) => Mocked<T>) &
-  (<T>(item: T, deep: true) => MaybeMockedDeep<T>) &
-  (<T>(item: T, options: { partial?: false; deep?: false }) => Mocked<T>) &
-  (<T>(
-    item: T,
-    options: { partial?: false; deep: true },
-  ) => MaybeMockedDeep<T>) &
-  (<T>(
-    item: T,
-    options: { partial: true; deep?: false },
-  ) => MaybePartiallyMocked<T>) &
-  (<T>(
-    item: T,
-    options: { partial: true; deep: true },
-  ) => MaybePartiallyMockedDeep<T>);
+type MockedFn = <T>(
+  item: T,
+  deepOrOptions?: boolean | { partial?: boolean; deep?: boolean },
+) =>
+  | Mocked<T>
+  | MaybeMockedDeep<T>
+  | MaybePartiallyMocked<T>
+  | MaybePartiallyMockedDeep<T>;
 ```
 
 A type helper for TypeScript that wraps an object with mock types without changing its runtime behavior. This is useful when you have mocked a module and want proper type hints for the mock methods.
+
+The inferred return type follows the options: `{ deep: true }` applies mock types recursively, while `{ partial: true }` uses the partial mock variants.
 
 See the [`Mocked`](/api/javascript-api/types#mocked) type for annotating mocked objects and modules.
 

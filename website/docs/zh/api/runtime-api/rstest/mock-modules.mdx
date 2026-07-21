@@ -432,14 +432,15 @@ rs.mock('./api', () => ({
 
 同步加载 CommonJS 模块的原始实现，即使该模块已经被 mock。当代码通过 `require()` 使用模块，或者同步 mock factory 需要真实导出时，可以使用 `rs.requireActual`。如果 ESM 模块通过 `import` 加载，请使用 [`rs.importActual`](#rsimportactual)。
 
-```ts title="src/math.test.ts"
+```js title="src/math.test.cjs"
+const { expect, rs, test } = require('@rstest/core');
+
 rs.mockRequire('./math.cjs', () => ({
   sum: () => 100,
 }));
 
 test('loads the original CommonJS module', () => {
-  const actualMath =
-    rs.requireActual<typeof import('./math.cjs')>('./math.cjs');
+  const actualMath = rs.requireActual('./math.cjs');
 
   expect(rs.isMockFunction(actualMath.sum)).toBe(false);
   expect(actualMath.sum(1, 2)).toBe(3);
@@ -450,13 +451,15 @@ test('loads the original CommonJS module', () => {
 
 - **类型：** `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
-异步加载 ESM 模块，并将其所有属性（包括嵌套属性）替换为 mock 实现后返回。当测试需要直接获得自动 mock 的模块时，可以使用 `rs.importMock`。如果 CommonJS 模块通过 `require()` 加载，请使用 [`rs.requireMock`](#rsrequiremock)。
+异步加载 ESM 模块，并将其导出的函数（包括嵌套函数）替换为 mock 函数。原始值会保留，数组则会变为空数组。当测试需要直接获得自动 mock 的模块时，可以使用 `rs.importMock`。如果 CommonJS 模块通过 `require()` 加载，请使用 [`rs.requireMock`](#rsrequiremock)。
 
 ```ts title="src/api.test.ts"
 test('loads an ESM module as mocks', async () => {
-  const mockedApi = await rs.importMock<typeof import('./api')>('./api');
+  const api = await rs.importMock<typeof import('./api')>('./api');
+  const mockedApi = rs.mocked(api, true);
 
-  mockedApi.fetchUser('1');
+  mockedApi.fetchUser.mockResolvedValue({ id: '1', name: 'Alice' });
+  await mockedApi.fetchUser('1');
   expect(mockedApi.fetchUser).toHaveBeenCalledWith('1');
 });
 ```
@@ -465,14 +468,16 @@ test('loads an ESM module as mocks', async () => {
 
 - **类型：** `<T = Record<string, unknown>>(path: string) => T`
 
-同步加载 CommonJS 模块，并将其所有属性（包括嵌套属性）替换为 mock 实现后返回。当目标通过 `require()` 使用，并且测试需要立即获得 mock 模块时，可以使用 `rs.requireMock`。如果 ESM 模块通过 `import` 加载，请使用 [`rs.importMock`](#rsimportmock)。
+同步加载 CommonJS 模块，并将其导出的函数（包括嵌套函数）替换为 mock 函数。原始值会保留，数组则会变为空数组。当目标通过 `require()` 使用，并且测试需要立即获得 mock 模块时，可以使用 `rs.requireMock`。如果 ESM 模块通过 `import` 加载，请使用 [`rs.importMock`](#rsimportmock)。
 
-```ts title="src/math.test.ts"
+```js title="src/math.test.cjs"
+const { expect, rs, test } = require('@rstest/core');
+
 test('loads a CommonJS module as mocks', () => {
-  const mockedMath = rs.requireMock<typeof import('./math.cjs')>('./math.cjs');
+  const mockedMath = rs.requireMock('./math.cjs');
 
-  mockedMath.sum(1, 2);
-  expect(mockedMath.sum).toHaveBeenCalledWith(1, 2);
+  mockedMath.sum.mockReturnValue(100);
+  expect(mockedMath.sum(1, 2)).toBe(100);
 });
 ```
 

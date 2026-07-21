@@ -127,7 +127,7 @@ test('overrides one export', () => {
 - [rs.importMock()](/api/runtime-api/rstest/mock-modules#rsimportmock) 异步加载 ESM 模块并返回 Promise。对于通过 `import` 使用的模块，需要配合 `await` 使用。
 - [rs.requireMock()](/api/runtime-api/rstest/mock-modules#rsrequiremock) 同步加载 CommonJS 模块。它适用于通过 `require()` 使用的模块。
 
-这两个 API 都会将函数和嵌套属性替换为 mock，让测试可以立即配置指定导出或断言其调用。选择 API 时应匹配代码实际使用的模块 entry，尤其是一个包分别提供 ESM 和 CommonJS entry 时。
+这两个 API 都会将导出的函数和嵌套函数替换为 mock。原始值会保留，数组则会变为空数组。在 TypeScript 中，调用 `mockReturnValue` 等 mock 控制方法之前，需要先将返回的模块传给 `rs.mocked(module, true)`。选择 API 时应匹配代码实际使用的模块 entry，尤其是一个包分别提供 ESM 和 CommonJS entry 时。
 
 ### Spy 整个模块
 
