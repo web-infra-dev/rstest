@@ -55,6 +55,26 @@ test('only mocks later imports', async () => {
 });
 ```
 
+### 与提升的 mock factory 共享值
+
+由于 `rs.mock()` 会被提升，它的 factory 无法读取模块按正常顺序执行时才初始化的变量。当 factory 和测试断言需要共享同一个 mock 函数或值时，可以使用 [rs.hoisted()](/api/runtime-api/rstest/mock-modules#rshoisted)。
+
+```ts title="api.test.ts"
+import { expect, rs, test } from '@rstest/core';
+import { fetchUser } from './api';
+
+const mocks = rs.hoisted(() => ({
+  fetchUser: rs.fn().mockResolvedValue({ id: '1', name: 'Alice' }),
+}));
+
+rs.mock('./api', () => ({ fetchUser: mocks.fetchUser }));
+
+test('shares the mock with the factory', async () => {
+  await fetchUser('1');
+  expect(mocks.fetchUser).toHaveBeenCalledWith('1');
+});
+```
+
 ### Mock CommonJS 模块
 
 如果依赖是通过 `require()` 加载的，可以使用 [rs.mockRequire()](/api/runtime-api/rstest/mock-modules#rsmockrequire) 或 [rs.doMockRequire()](/api/runtime-api/rstest/mock-modules#rsdomockrequire)。
@@ -100,6 +120,15 @@ test('overrides one export', () => {
 });
 ```
 
+### 加载 mock 的模块
+
+`rs.mock()` 用于配置通过 import 加载时获得的模块。如果测试需要直接获得自动 mock 的模块对象，可以使用下面这些 API：
+
+- [rs.importMock()](/api/runtime-api/rstest/mock-modules#rsimportmock) 异步加载 ESM 模块并返回 Promise。对于通过 `import` 使用的模块，需要配合 `await` 使用。
+- [rs.requireMock()](/api/runtime-api/rstest/mock-modules#rsrequiremock) 同步加载 CommonJS 模块。它适用于通过 `require()` 使用的模块。
+
+这两个 API 都会将导出的函数和嵌套函数替换为 mock。原始值会保留，数组则会变为空数组。在 TypeScript 中，调用 `mockReturnValue` 等 mock 控制方法之前，需要先将返回的模块传给 `rs.mocked(module, true)`。选择 API 时应匹配代码实际使用的模块 entry，尤其是一个包分别提供 ESM 和 CommonJS entry 时。
+
 ### Spy 整个模块
 
 如果你希望保留真实实现，同时提供调用断言能力，可以使用 `{ spy: true }`。
@@ -120,7 +149,13 @@ test('keeps the real implementation while tracking calls', () => {
 
 ### 部分 mock 模块
 
-如果你要做部分 mock，让一个导出保留真实实现、另一个导出被替换，可以使用 [importActual](/api/runtime-api/rstest/mock-modules#rsimportactual)。
+当被 mock 的模块仍需要部分或全部真实导出时，应根据模块的加载方式选择对应的 API：
+
+- 当提升的同步 `rs.mock()` factory 需要真实导出时，为静态 ESM import 添加 `with { rstest: 'importActual' }`。
+- 使用 [rs.importActual()](/api/runtime-api/rstest/mock-modules#rsimportactual) 在测试中异步加载原始 ESM 模块。
+- 使用 [rs.requireActual()](/api/runtime-api/rstest/mock-modules#rsrequireactual) 同步加载原始 CommonJS 模块，也可以在同步 mock factory 中使用。
+
+静态 ESM 形式适合只替换一个导出，同时保留其余导出的场景：
 
 ```ts title="date-utils.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -138,7 +173,7 @@ test('keeps parseDate real', () => {
 });
 ```
 
-需要注意的是，由于 factory 会被提升，factory 内不应该访问同文件中稍后才初始化的值。
+需要注意的是，由于 factory 会被提升，与 factory 共享的值必须来自静态 `importActual` import 或 [`rs.hoisted()`](#与提升的-mock-factory-共享值)。
 
 ### 复用 `__mocks__` 里的手写 mock
 
@@ -267,6 +302,12 @@ test('mocks nested methods', async () => {
 如果你希望保留嵌套方法的原始实现，同时记录调用，可以传入 `{ spy: true }`。
 
 关于完整 API 和更多示例，可以参考 [Mock functions](/api/runtime-api/rstest/mock-functions) 和 [MockInstance](/api/runtime-api/rstest/mock-instance)。
+
+## 标注与识别 mock 函数
+
+[rs.mocked()](/api/runtime-api/rstest/mock-functions#rsmocked) 在运行时返回同一个值，只用于告诉 TypeScript 将其视为 mock。自动 mock 的模块或对象仍保留原始静态类型时，可以使用它。
+
+[rs.isMockFunction()](/api/runtime-api/rstest/mock-functions#rsismockfunction) 会执行运行时检查。当测试逻辑需要判断一个函数当前是否为 mock 时，可以使用它；在 TypeScript 中，它也会将函数类型收窄为 `MockInstance`。
 
 ## 清理 mock 状态
 
