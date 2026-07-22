@@ -146,11 +146,10 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
   /**
    * Accepts a function which should be temporarily used as the implementation of the mock while the callback is being executed.
    */
-  withImplementation(
+  withImplementation<T2>(
     fn: NormalizedProcedure<T>,
-    callback: () => Promise<unknown>,
-  ): Promise<this>;
-  withImplementation(fn: NormalizedProcedure<T>, callback: () => unknown): this;
+    callback: () => T2,
+  ): T2 extends Promise<unknown> ? Promise<this> : this;
   /**
    * Return the `this` context from the method without invoking the actual implementation.
    */

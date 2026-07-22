@@ -96,4 +96,19 @@ describe('test withImplementation', () => {
     logs.push('[1 - call myMockFn - 1]');
     expect(myMockFn()).toBe('original');
   });
+
+  it('withImplementation maybe async', async () => {
+    const myMockFn = rstest.fn(() => 'original');
+    const callback = (): void | Promise<void> => Promise.resolve();
+
+    const withImplReturn = myMockFn.withImplementation(() => 'temp', callback);
+    // The inferred union must retain its Promise branch for maybe-async helpers.
+    const promiseReturn: Extract<
+      typeof withImplReturn,
+      Promise<unknown>
+    > = Promise.resolve(myMockFn);
+
+    expect(await promiseReturn).toBe(myMockFn);
+    expect(await withImplReturn).toBe(myMockFn);
+  });
 });
