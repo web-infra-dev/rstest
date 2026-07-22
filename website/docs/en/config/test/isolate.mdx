@@ -18,6 +18,10 @@ If your code has no side effects, turning off this option will help improve perf
 When `isolate` is `false`, a module imported by multiple test files is evaluated **once per worker**, not once per file. Any code at that shared module's top level — including hooks registered there (e.g. a helper that calls `beforeEach` at module scope) — therefore runs only for the first file that loads it, not for every file. For setup that must run per file, use [`setupFiles`](/config/test/setup-files), which Rstest re-runs for each test file even without isolation.
 :::
 
+:::warning Files that mock modules behave as if isolated
+Even with `isolate: false`, a module mock only applies to the file that declares it. To keep this guarantee, a file that uses module mocks (`rstest.mock`, `rstest.mockRequire`, `rstest.doMock`, …) re-evaluates the modules it imports instead of reusing state left by earlier files, and the shared module cache is reset again after it finishes — so the files that run after it also start from fresh modules. In other words, module-state sharing restarts at every file that mocks: it is only kept between test files with no mocking file scheduled in between. This includes setup files — a module mock installed in a setup file makes every test file start from fresh modules.
+:::
+
 import { Tab, Tabs } from '@theme';
 
 <Tabs defaultValue='rstest.config.ts'>
