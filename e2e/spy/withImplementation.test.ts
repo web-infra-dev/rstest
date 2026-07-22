@@ -96,4 +96,40 @@ describe('test withImplementation', () => {
     logs.push('[1 - call myMockFn - 1]');
     expect(myMockFn()).toBe('original');
   });
+
+  it('restores the implementation after a synchronous callback throws', () => {
+    const myMockFn = rstest.fn(() => 'original');
+    myMockFn.mockImplementationOnce(() => 'once');
+
+    expect(() =>
+      myMockFn.withImplementation(
+        () => 'temporary',
+        () => {
+          expect(myMockFn()).toBe('temporary');
+          throw new Error('sync failure');
+        },
+      ),
+    ).toThrow('sync failure');
+
+    expect(myMockFn()).toBe('once');
+    expect(myMockFn()).toBe('original');
+  });
+
+  it('restores the implementation after an asynchronous callback rejects', async () => {
+    const myMockFn = rstest.fn(() => 'original');
+    myMockFn.mockImplementationOnce(() => 'once');
+
+    await expect(
+      myMockFn.withImplementation(
+        () => 'temporary',
+        async () => {
+          expect(myMockFn()).toBe('temporary');
+          throw new Error('async failure');
+        },
+      ),
+    ).rejects.toThrow('async failure');
+
+    expect(myMockFn()).toBe('once');
+    expect(myMockFn()).toBe('original');
+  });
 });

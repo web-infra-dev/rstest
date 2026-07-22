@@ -131,6 +131,46 @@ describe('initSpy reset semantics', () => {
   });
 });
 
+describe('initSpy withImplementation', () => {
+  it('restores the implementation after a synchronous callback throws', () => {
+    const { fn } = initSpy();
+    const spy = fn(() => 'original');
+    spy.mockImplementationOnce(() => 'once');
+
+    expect(() =>
+      spy.withImplementation(
+        () => 'temporary',
+        () => {
+          expect(spy()).toBe('temporary');
+          throw new Error('sync failure');
+        },
+      ),
+    ).toThrow('sync failure');
+
+    expect(spy()).toBe('once');
+    expect(spy()).toBe('original');
+  });
+
+  it('restores the implementation after an asynchronous callback rejects', async () => {
+    const { fn } = initSpy();
+    const spy = fn(() => 'original');
+    spy.mockImplementationOnce(() => 'once');
+
+    await expect(
+      spy.withImplementation(
+        () => 'temporary',
+        async () => {
+          expect(spy()).toBe('temporary');
+          throw new Error('async failure');
+        },
+      ),
+    ).rejects.toThrow('async failure');
+
+    expect(spy()).toBe('once');
+    expect(spy()).toBe('original');
+  });
+});
+
 describe('initSpy spyOn', () => {
   it('replaces a method while preserving original behavior and restores it', () => {
     const { spyOn } = initSpy();
