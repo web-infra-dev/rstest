@@ -12,5 +12,11 @@ LICENSE.md
 # Symlinks (prettier does not handle symlinks)
 CLAUDE.md
 
+# VS Code rewrites the `.code-workspace` file it opens, and its JSON edit strips
+# the trailing commas Prettier adds back — so the two reformat each other and
+# every extension e2e run leaves the tree dirty. The file is checked in exactly
+# as VS Code writes it (that shape is stable across runs); Prettier stays out.
+packages/vscode/tests/fixtures/*.code-workspace
+
 # ignore pnpm-lock
 pnpm-lock.yaml
