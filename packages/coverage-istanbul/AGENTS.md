@@ -2,14 +2,7 @@
 
 Istanbul coverage provider for Rstest. Instruments code and generates coverage reports.
 
-## Module structure
-
-- `src/index.ts` — Package entry, exports `pluginCoverage` and `CoverageProvider` (both destructured by core's `loadCoverageProvider`)
-- `src/provider.ts` — Coverage provider implementation
-- `src/plugin.ts` — Rsbuild plugin for instrumentation
-- `src/utils.ts` — Fast coverage-map merge, initial-coverage scrape, source-map remapping
-
-Cross-package pipeline deep dive: `packages/core/src/coverage/AGENTS.md`.
+The package entry must export exactly `{ pluginCoverage, CoverageProvider }` — both are destructured by core's `loadCoverageProvider` under those names. The cross-package pipeline contract (data flow, invariants, coupling points shared with core and coverage-v8) lives in `packages/core/src/coverage/AGENTS.md`.
 
 ## Commands
 
@@ -26,20 +19,8 @@ pnpm --filter @rstest/coverage-istanbul lint     # Rslint
 - `istanbul-reports` — Report formats (html, lcov, text, etc.)
 - `swc-plugin-coverage-instrument` — SWC-based instrumentation
 
-## Do
+## Constraints
 
-- Follow istanbul-lib API conventions
-- Use `@rstest/core` types for integration
-- Keep instrumentation logic in `plugin.ts`
-- Keep provider logic in `provider.ts`
-
-## Don't
-
-- Don't modify coverage data format; follow istanbul standards
-- Don't add report formats without discussing use case
-
-## Key files
-
-- `src/provider.ts` — Main provider implementing CoverageProvider interface
-- `src/plugin.ts` — Rsbuild plugin that instruments source code
-- `src/index.ts` — Package entry point
+- Keep instrumentation logic in `src/plugin.ts` and provider logic in `src/provider.ts`.
+- Don't deviate from the istanbul coverage data format; downstream tooling expects the standard shape.
+- Don't add report formats without discussing the use case.

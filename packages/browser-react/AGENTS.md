@@ -7,7 +7,6 @@ React component testing support for Rstest browser mode. Provides `render`, `ren
 - Support React 18 and 19 only — React 17 is intentionally not supported (the package statically imports `react-dom/client`, which does not exist under React 17)
 - Use `act()` for all render/unmount/state update operations
 - Keep this package focused on React rendering lifecycle only
-- Use JSDoc comments for public API functions
 
 ## Don't
 
@@ -30,11 +29,9 @@ pnpm --filter @rstest/browser-react test
 pnpm --filter @rstest/browser-react lint
 ```
 
-## Project structure
+## Entry contract
 
-- `src/index.ts` — Default entry with auto-cleanup via `beforeEach`
-- `src/pure.tsx` — Core implementation (render, renderHook, cleanup, configure)
-- `src/act.ts` — React `act()` wrapper with `IS_REACT_ACT_ENVIRONMENT` management
+The default entry (`src/index.ts`) registers auto-cleanup via `beforeEach`; `@rstest/browser-react/pure` skips it. Keep that split — users who opt into `pure` manage cleanup themselves. Keep the cleanup in `beforeEach`, not `afterEach` — running it before the next test means the DOM can still be inspected after a test failure.
 
 ## Good and bad examples
 

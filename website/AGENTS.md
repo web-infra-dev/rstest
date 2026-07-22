@@ -1,12 +1,6 @@
 # Rstest documentation site
 
-This is the documentation website for Rstest, built with [Rspress](https://rspress.rs).
-
-## Structure
-
-- `docs/en/` — English documentation
-- `docs/zh/` — Chinese (Simplified) documentation
-- `rspress.config.ts` — Rspress configuration
+This is the documentation website for Rstest, built with [Rspress](https://rspress.rs). English docs live under `docs/en/`, Chinese under `docs/zh/`; the two trees must stay in sync (see "Bilingual maintenance").
 
 ## Commands
 
@@ -26,11 +20,7 @@ Each release blog needs **two** images, generated together so they share one gra
 
 Both images are committed to [rstackjs/rstack-design-resources](https://github.com/rstackjs/rstack-design-resources) under `rstest/` and served by the `assets.rspack.rs` CDN. Always refer to that repo by its GitHub URL — collaborators keep local clones at different paths.
 
-The templates live **in this repo**; design-resources stays a passive PNG store.
-
-- `scripts/release-image/cli.mts` — entry, parses `--version`/`--description`/`--out-dir`; rolls one background and renders both images
-- `scripts/release-image/render.mts` — fetches the Rstest logo SVG → rasterizes → composes with [satori](https://github.com/vercel/satori) → renders with [@resvg/resvg-js](https://github.com/yisibl/resvg-js) at 2x zoom for retina; `randomBackground()` re-rolls the gradient every run (no seed flag)
-- `scripts/release-image/template.mts` — [satori-html](https://github.com/natemoo-re/satori-html) template driven by the `LAYOUTS.banner` / `LAYOUTS.og` presets
+The templates live **in this repo** under `scripts/release-image/` ([satori](https://github.com/vercel/satori) + [satori-html](https://github.com/natemoo-re/satori-html) rendered by [@resvg/resvg-js](https://github.com/yisibl/resvg-js)); design-resources stays a passive PNG store. Both layouts are driven by the `LAYOUTS.banner` / `LAYOUTS.og` presets, and `randomBackground()` re-rolls the gradient every run — there is no seed flag, re-running is the only way to get a different background.
 
 ### Release workflow
 
@@ -52,8 +42,6 @@ The templates live **in this repo**; design-resources stays a passive PNG store.
 
 ## Writing style guidelines
 
-When writing or editing documentation, follow these principles:
-
 ### User perspective first
 
 - Every step should explain **what effect it produces**, not just what to do
@@ -69,7 +57,7 @@ When writing or editing documentation, follow these principles:
 - Don't just tell users to install something without explaining its purpose
 - **When installing multiple packages**, explain each one's role separately — don't assume users know what each package does
 
-### Sniff, Don't Hardcode
+### Sniff, don't hardcode
 
 - When describing automated behavior (like `rstest init`), emphasize that values are **detected/sniffed** (e.g., test directory, framework, language)
 - Don't write as if values are hardcoded
@@ -79,7 +67,7 @@ When writing or editing documentation, follow these principles:
 - Use actual command output as examples
 - Let users know what they will see when running commands
 
-### Be Concise, not redundant
+### Be concise, not redundant
 
 - Don't list specific generated filenames; say "boilerplate code" instead
 - Don't show multiple similar examples (e.g., both native DOM API and Testing Library versions)

@@ -10,18 +10,12 @@ Prebuilt browser container UI for Rstest's browser mode testing.
 - Lucide React icons
 - birpc for RPC communication
 
-## Module structure
+## Role and contracts
 
-- `src/main.tsx` — Application entry
-- `src/core/channel.ts` — Container message channel (`__rstest_dispatch__`) and dispatch RPC forwarding
-- `src/core/browserRpc.ts` — Browser-namespace (`locator`/page) RPC forwarding helpers
-- `src/core/runtime.ts` — Runtime URL helpers (`runner`/`websocket`)
-- `src/core/caseMap.ts` — Collected test case index for the tree/UI state
-- `src/core/treeNodeKey.ts` — Single owner of the test-tree node-key grammar (producer/consumer must agree byte-for-byte)
-- `src/components/` — UI components
-- `src/hooks/` — React hooks (notably `useRpc` WebSocket + birpc lifecycle)
-- `src/utils/` — Utility functions and constants
-- `src/types.ts` — TypeScript type definitions
+This package owns transport bridging and UI state projection only — host scheduling and protocol semantics belong to `@rstest/browser` (boundary map: `packages/browser/AGENTS.md`).
+
+- `src/core/channel.ts` is the validation boundary for messages forwarded between the runner iframe and the host.
+- `src/core/treeNodeKey.ts` is the single owner of the test-tree node-key grammar — producer and consumer must agree byte-for-byte; never re-encode the grammar elsewhere.
 
 ## Commands
 
@@ -36,12 +30,8 @@ pnpm --filter @rstest/browser-ui lint     # Rslint
 - Use Tailwind utility classes for styling
 - Use Ant Design components for complex UI (Tree, etc.)
 - Use Lucide React for icons
-- Keep components small and focused
-- Use functional components with hooks
-- Target modern browsers only (no IE)
 - Resolve Ant Design styling conflicts via `ConfigProvider` theme tokens (prefer seed tokens over low-level tokens)
 - Follow the [Vercel Geist design system](https://vercel.com/geist) for colors and spacing — use Geist CSS variables (`var(--ds-*)`, `var(--accents-*)`, etc.) instead of hard-coded colors
-- Do not use `!important` or Tailwind `!` modifier unless explicitly approved
 - Treat `data-testid` attributes as public API — add them to every interactive surface (buttons, inputs, tabs, tree rows, etc.); use `data-test-*` for dynamic identifiers; skip decorative elements
 
 ## Don't
@@ -49,21 +39,6 @@ pnpm --filter @rstest/browser-ui lint     # Rslint
 - Don't use inline styles; prefer Tailwind classes
 - Don't install additional UI libraries without discussion
 - Don't hard-code colors; use Geist CSS variables
-- Don't create class-based components
+- Don't create class-based components; use functional components with hooks
+- Don't use `!important` or the Tailwind `!` modifier unless explicitly approved
 - Don't use Ant Design `Typography` (including `Typography.Text`); use semantic HTML elements with Tailwind
-
-## Key files
-
-- `src/main.tsx` — App entry and root component
-- `src/core/channel.ts` — Dispatch channel forwarding and validation boundary
-- `src/components/TestFilesTree.tsx` — Main test file tree component
-- `src/hooks/useRpc.ts` — RPC communication hook
-- `tailwind.config.cjs` — Tailwind configuration
-- `rsbuild.config.ts` — Rsbuild build configuration
-
-## Component patterns
-
-- Tree rendering: `src/components/TestFilesTree.tsx`
-- Resizable panels: `src/components/Resizable.tsx`
-- Status display: `src/components/StatusGrid.tsx`
-- Header patterns: `src/components/SidebarHeader.tsx`

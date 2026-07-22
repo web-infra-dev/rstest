@@ -22,6 +22,8 @@ If a package does not have its own `AGENTS.md`, follow this root file and copy t
 
 A new `AGENTS.md` needs a sibling `CLAUDE.md` symlink (`ln -s AGENTS.md CLAUDE.md`). `pnpm check-harness-docs` enforces that, plus the command, path, and dependency claims written inside `AGENTS.md`/`SKILL.md` files.
 
+**Altitude rule**: an `AGENTS.md` documents only what cannot be read from the code — data flow across boundaries, invariants, coupling points ("change A → also change B"), and historical pitfalls. Every line must either constrain future changes or record a decision/pitfall the code cannot express; do not describe what the code plainly shows. If a fact cannot be verified against the code, delete it rather than qualify it. No per-file inventories and no `file:line` references (the checker validates paths but not line numbers, so line references are undetectable drift); refer to symbols instead.
+
 ## Monorepo structure
 
 - `packages/core/` — @rstest/core: core testing framework (CLI, runtime, reporter, pool)
@@ -83,7 +85,6 @@ _Note_: `rslint --type-check` is the repo's type check and exists at the root on
 
 ## Development workflow
 
-- Keep changes small and focused.
 - Before changing behavior, identify the affected package(s), public API/config impact, browser-mode impact, adapter impact, docs impact, and test scope.
 - Public API or config changes usually require docs updates.
 - Behavioral changes require corresponding e2e coverage unless there is a clear reason existing coverage is sufficient.
@@ -93,7 +94,6 @@ _Note_: `rslint --type-check` is the repo's type check and exists at the root on
 
 ## Testing guidance
 
-- Prefer targeted tests first, then broader validation when needed.
 - For root-discovered unit tests, prefer `pnpm rstest <package-test-path>`.
 - Do not pass `e2e/...` paths to the root `pnpm rstest` command.
 - Run e2e tests from the `e2e/` directory; when passing a path, strip the `e2e/` prefix.
@@ -107,7 +107,6 @@ _Note_: `rslint --type-check` is the repo's type check and exists at the root on
 - Use 2-space indentation and LF line endings.
 - Use camelCase for locals, PascalCase for types/components, and SCREAMING_SNAKE_CASE for constants.
 - Avoid namespace imports like `import * as foo from 'foo'` unless the module shape requires it.
-- Prefer existing local patterns over introducing new abstractions.
 - In-file TypeScript quality rules (restating comments, defensive checks, `as`/`any`, one-use abstractions, drift prevention) are owned by the `typescript` skill — apply it when writing `.ts`/`.tsx`/`.mts` files.
 
 ## Skills
