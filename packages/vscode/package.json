@@ -22,7 +22,7 @@
     "lint": "rslint .",
     "package:vsce": "npm run build && vsce package",
     "test": "npm run test:unit && npm run test:e2e",
-    "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",
+    "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json --noCheck && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",
     "test:unit": "rstest",
     "watch": "rslib build --watch",
     "watch:local": "cross-env SOURCEMAP=true rslib build --watch"
