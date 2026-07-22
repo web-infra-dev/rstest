@@ -1,0 +1,7 @@
+[
+  {
+    "file": "packages/core/src/cli/AGENTS.md",
+    "token": "src/__tests__",
+    "reason": "consumer-project test-dir probe order documented for `rstest init` sniffing, not a repo path"
+  }
+]

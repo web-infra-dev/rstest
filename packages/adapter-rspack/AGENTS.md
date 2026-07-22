@@ -1,10 +1,6 @@
 # @rstest/adapter-rspack
 
-Rspack configuration adapter for Rstest. Converts Rspack config to Rstest config.
-
-## Module structure
-
-- `src/index.ts` — Package entry, exports `withRspackConfig` and `toRstestConfig`
+Converts Rspack config to Rstest config via `withRspackConfig`.
 
 ## Commands
 
@@ -13,58 +9,15 @@ Rspack configuration adapter for Rstest. Converts Rspack config to Rstest config
 pnpm --filter @rstest/adapter-rspack build
 pnpm --filter @rstest/adapter-rspack dev     # Watch mode
 
-# Typecheck
-pnpm --filter @rstest/adapter-rspack typecheck
-
 # Test
 pnpm --filter @rstest/adapter-rspack test
+
+# Lint
+pnpm --filter @rstest/adapter-rspack lint
 ```
 
-## Usage
+## Constraints
 
-```typescript
-// rstest.config.ts
-import { defineConfig } from '@rstest/core';
-import { withRspackConfig } from '@rstest/adapter-rspack';
-
-export default defineConfig({
-  extends: withRspackConfig(),
-});
-```
-
-## API
-
-`withRspackConfig(options)` accepts:
-
-- `cwd` — Working directory (default: `process.cwd()`)
-- `configPath` — Path to rspack config file (default: `./rspack.config.ts`)
-- `configName` — Select named config when using multiple Rspack configs
-- `env` — Environment values passed to Rspack config function
-- `nodeEnv` — `NODE_ENV` value used when loading config
-- `modifyRspackConfig` — Callback to modify rspack config before conversion
-
-## Do
-
-- Follow existing config mapping conventions
-- Keep the adapter lightweight
-- Test with various rspack configurations
-
-## Don't
-
-- Don't add rspack-unrelated features
-- Don't modify rspack config semantics
-- Don't add heavy dependencies
-
-## Key files
-
-- `src/index.ts` — Main adapter logic and `withRspackConfig` function
-
-## Safety
-
-Allowed: read files, typecheck, build, run tests
-
-Ask first: add dependencies, modify config mapping logic
-
-## When stuck
-
-Ask a clarifying question or propose a plan before making large changes.
+- Route conversion logic shared with the other adapters through `@rstest/core/internal/adapter` in core, so this adapter, adapter-rsbuild, and adapter-rslib stay in lockstep instead of forking local copies.
+- Don't change the semantics of a user's rspack options during conversion — the adapter maps config onto Rstest, it never reinterprets it.
+- Don't maintain an options list in this file: the exported `WithRspackConfigOptions` type in `src/index.ts` is the source of truth, and the website owns user-facing API docs.

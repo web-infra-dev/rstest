@@ -66,6 +66,7 @@
   "scripts": {
     "build": "rslib build && npx prettier ./LICENSE.md --write",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
+    "lint": "rslint .",
     "test": "npx rstest --globals"
   },
   "dependencies": {

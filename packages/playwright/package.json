@@ -35,8 +35,8 @@
   "scripts": {
     "build": "rslib build",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
-    "test": "pnpm run build && rstest",
-    "typecheck": "pnpm -w exec tsc --noEmit -p packages/playwright/tsconfig.json"
+    "lint": "rslint .",
+    "test": "pnpm run build && rstest"
   },
   "devDependencies": {
     "@rslib/core": "0.23.2",

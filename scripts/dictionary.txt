@@ -93,6 +93,8 @@ mattcompiles
 memfs
 menlo
 metafile
+microtask
+microtasks
 microfrontend
 microfrontends
 misattributed
@@ -209,5 +211,6 @@ vnode
 watchpack
 webm
 webp
+worktree
 worktrees
 Zenbook

@@ -33,7 +33,7 @@ import {
 export class GithubActionsReporter {
   readonly flushOutputStreams = true;
 
-  private readonly onWritePath: (path: string) => string;
+  private readonly onWritePath?: (path: string) => string;
   private readonly rootPath: string;
   private readonly stepSummaryPath?: string;
   private readonly enableAnnotations: boolean;
@@ -50,7 +50,8 @@ export class GithubActionsReporter {
       name?: string;
     };
     options: {
-      onWritePath: (path: string) => string;
+      // `createReporters` never supplies this; only tests do. Optional is the truth.
+      onWritePath?: (path: string) => string;
       annotations?: boolean;
       summary?: boolean;
     };

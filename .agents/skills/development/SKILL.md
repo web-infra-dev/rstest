@@ -152,7 +152,7 @@ Run through this before you consider the work done:
 - [ ] **Docs** updated in both `en/` and `zh/`
 - [ ] **Public type surface matches docs** — TS declarations and `website/docs/{en,zh}` agree (e.g. `TestOptions.timeout?: number` is reflected for `describe`/`test`)
 - [ ] **Types** are correct — no new `any` leaking into public APIs (rule owned by the `typescript` skill)
-- [ ] **Unused exports / files checked** — run `pnpm run check-unused` before wrapping up
+- [ ] **Unused exports / files checked** — run `pnpm run check-unused` before wrapping up (rule owned by the `testing` skill's validation pass)
 - [ ] **Build passes** — `pnpm --filter <package> build` succeeds
 - [ ] **Existing tests still pass** — `pnpm test` and relevant e2e tests green
 
