@@ -18,6 +18,7 @@ Responses always travel back as transport replies — `dispatchRouter` handles i
 - The runner runtime (`src/client`) owns test execution and emits protocol messages, but never owns filesystem access — snapshot file operations go through the `snapshot` dispatch namespace.
 - Runner lifecycle events feed `@rstest/core`'s per-project `RunnerEventSink` — the same event pump the node pool uses. The host never fans out to reporters or `stateManager` directly.
 - Run finalize is split by command: non-watch runs return a `BrowserTestRunResult` with a deferred `close` and core's `finalizeRunCycle` owns reporters `onTestRunEnd`, coverage merge, and the exit code; watch runs self-finalize host-side per rerun.
+- The watch control plane is core-owned: core is the single stdin/CLI-shortcuts owner and drives watch reruns through the `BrowserWatchHandles` (`rerun`/`close`) returned on watch-mode results — the host never subscribes to stdin.
 - Browser config compatibility (which `RuntimeConfig` fields are supported / ignored / stripped) is declared in core's `executorCapabilities` table; `configValidation.ts` derives its generic warnings and errors from that table instead of hand-maintaining a list. The one exception is `coverage`, a specially handled key with a hand-written v8-provider guard (see the coverage pipeline doc in core).
 - Cross-file `bail` is enforced host-side at file boundaries in the headless scheduler (each worker checks the cycle-wide failed count before picking up the next file and drains the remaining queue as skipped). The headed debugging UI does not apply bail; the runner's per-test gate uses the client-local per-file failed count only.
 
@@ -65,7 +66,7 @@ This package requires `@rstest/core` and `playwright` as peer dependencies, and 
 
 - Don't duplicate runtime code from @rstest/core
 - Don't add node-only features here
-- Don't rely on cross-version compatibility of the internal contract with @rstest/core — core's `browserLoader` enforces an exact version match, so cross-package contract changes must land in the same release
+- Don't rely on cross-version compatibility of the internal contract with @rstest/core — core's browser loader (`packages/core/src/core/browser/loader.ts`) enforces an exact version match, so cross-package contract changes must land in the same release
 - Don't bypass the `RunnerEventSink` for runner lifecycle events (no direct reporter/`stateManager` fanout from the host)
 - Don't self-finalize non-watch runs in the host — core's `finalizeRunCycle` owns reporters, coverage, and exit code there
 - Don't hand-maintain browser config compatibility lists; add or change rows in core's `executorCapabilities` table instead
