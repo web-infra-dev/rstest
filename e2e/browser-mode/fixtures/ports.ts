@@ -46,6 +46,10 @@ export const BROWSER_PORTS = {
   'browser-mock': 5258,
   'browser-in-source': 5260,
   'browser-in-source-watch': 5262,
+  'watch-shortcuts': 5194,
+  'watch-setup': 5264,
+  'watch-multi-project': 5266,
+  'mixed-watch-shortcuts': 5268,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);

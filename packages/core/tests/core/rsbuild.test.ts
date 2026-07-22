@@ -16,7 +16,7 @@ process.env.DEBUG = 'false';
 
 const rootPath = join(__dirname, '../..');
 
-rs.mock('../../src/core/browserLoader', () => {
+rs.mock('../../src/core/browser/loader', () => {
   const listBrowserTests = async (
     context: RstestContext,
     options?: {

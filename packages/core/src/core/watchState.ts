@@ -15,3 +15,17 @@ export function prepareWatchRerunState(context: RstestContext): void {
   context.stateManager.reset();
   context.snapshotManager.clear();
 }
+
+/** Test paths whose latest run failed — the `f` shortcut's rerun set. */
+export const collectFailedTestPaths = (context: RstestContext): string[] =>
+  context.reporterResults.results
+    .filter((result) => result.status === 'fail')
+    .map((result) => result.testPath);
+
+/** Test paths with unmatched snapshots — the `u` shortcut's rerun set. */
+export const collectUnmatchedSnapshotTestPaths = (
+  context: RstestContext,
+): string[] =>
+  context.reporterResults.results
+    .filter((result) => result.snapshotResult?.unmatched)
+    .map((result) => result.testPath);

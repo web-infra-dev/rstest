@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { RsbuildPlugin } from '@rsbuild/core';
+import { color, logger } from '../utils';
 import type {
   CoverageOptions,
   CoverageProvider,
@@ -75,4 +76,31 @@ export async function createCoverageProvider(
   }
 
   throw new Error(`Unknown coverage provider: ${options.provider}`);
+}
+
+/**
+ * The `Coverage enabled with <provider>` banner. Printed once per run, either
+ * alongside provider creation or — on the browser-only watch path, which defers
+ * provider creation until the session ends — up front on its own.
+ */
+export function logCoverageEnabled(options: NormalizedCoverageOptions): void {
+  logger.log(
+    ` ${color.gray('Coverage enabled with')} %s\n`,
+    color.yellow(options.provider),
+  );
+}
+
+/**
+ * Create the coverage provider when coverage is enabled and print the
+ * {@link logCoverageEnabled} banner. Returns null when disabled.
+ */
+export async function createCoverageProviderWithLog(
+  options: NormalizedCoverageOptions,
+  root: string,
+): Promise<CoverageProvider | null> {
+  const coverageProvider = await createCoverageProvider(options, root);
+  if (coverageProvider) {
+    logCoverageEnabled(options);
+  }
+  return coverageProvider;
 }

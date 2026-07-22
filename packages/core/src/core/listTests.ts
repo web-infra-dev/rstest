@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
-import { normalize, relative, resolve as resolvePath } from 'pathe';
+import { relative } from 'pathe';
 import { createPool } from '../pool';
 import type {
   FormattedError,
@@ -15,6 +15,8 @@ import {
   bgColor,
   color,
   getTaskNameWithPrefix,
+  isFilterInsideProject as isFilterInsideProjectRoot,
+  isFuzzyBasenameFilter as isFuzzyBasenameFilterWithMode,
   logger,
   prettyTestPath,
   ROOT_SUITE_NAME,
@@ -308,14 +310,22 @@ const collectBrowserTests = async ({
   // Collect through the executor seam so `rstest list` and the run path share
   // one browser entry point (import stays dynamic: no browser module load for
   // node-only lists).
-  const { loadBrowserExecutor } = await import('./browserLoader');
+  const { loadBrowserExecutor } = await import('./browser/loader');
   const executor = await loadBrowserExecutor(context, browserProjects, null, {
+    shardedEntries,
     freezeShardedEntries,
     filesOnly,
     appliedModifyRstestConfigEnvironments,
   });
-  const { list } = await executor.collect({ shardedEntries });
-  return { list, close: () => executor.close() };
+  try {
+    const { list } = await executor.collect({});
+    return { list, close: () => executor.close() };
+  } catch (error) {
+    // A rejected collect cleans up host-side resources, but the executor must
+    // still be closed so an in-flight launch cannot outlive the failure.
+    await executor.close().catch(() => undefined);
+    throw error;
+  }
 };
 
 const collectTestFiles = async ({
@@ -423,15 +433,36 @@ const collectAllTests = async ({
     };
   }
 
+  // Settle both sides before unwrapping: a fail-fast `Promise.all` would leak
+  // the surviving side's resources (node rsbuild server + pool, or browser
+  // provider + dev server) when the other side rejects. Close the survivor,
+  // then let the re-await below rethrow the first failure in order.
+  const nodePromise = collectNodeTests({
+    context,
+    nodeProjects,
+    globTestSourceEntries,
+    onRsbuildConfigResolved,
+    onModifyRstestConfigApplied,
+  });
+  const browserPromise = collectBrowser();
+  const [nodeSettled, browserSettled] = await Promise.allSettled([
+    nodePromise,
+    browserPromise,
+  ]);
+  if (
+    nodeSettled.status === 'rejected' ||
+    browserSettled.status === 'rejected'
+  ) {
+    await Promise.all([
+      nodeSettled.status === 'fulfilled' &&
+        nodeSettled.value.close().catch(() => undefined),
+      browserSettled.status === 'fulfilled' &&
+        browserSettled.value.close().catch(() => undefined),
+    ]);
+  }
   const [nodeResult, browserResult] = await Promise.all([
-    collectNodeTests({
-      context,
-      nodeProjects,
-      globTestSourceEntries,
-      onRsbuildConfigResolved,
-      onModifyRstestConfigApplied,
-    }),
-    collectBrowser(),
+    nodePromise,
+    browserPromise,
   ]);
 
   return {
@@ -458,32 +489,11 @@ export async function listTests(
   const { shard } = context.normalizedConfig;
   const showProject = context.projects.length > 1;
 
-  const isFilterInsideProject = (filter: string, project: ProjectContext) => {
-    const absoluteFilter = normalize(
-      isAbsolute(filter) ? filter : resolvePath(rootPath, filter),
-    );
-    const relativeFilter = normalize(
-      relative(project.rootPath, absoluteFilter),
-    );
+  const isFilterInsideProject = (filter: string, project: ProjectContext) =>
+    isFilterInsideProjectRoot(filter, project.rootPath, rootPath);
 
-    return (
-      relativeFilter === '' ||
-      (!relativeFilter.startsWith('..') && !isAbsolute(relativeFilter))
-    );
-  };
-
-  const isFuzzyBasenameFilter = (filter: string) => {
-    if (context.fileFilterMode === 'exact' || isAbsolute(filter)) {
-      return false;
-    }
-
-    const normalizedFilter = normalize(filter);
-    return (
-      !normalizedFilter.startsWith('.') &&
-      !normalizedFilter.includes('/') &&
-      !normalizedFilter.includes('\\')
-    );
-  };
+  const isFuzzyBasenameFilter = (filter: string) =>
+    isFuzzyBasenameFilterWithMode(filter, context.fileFilterMode);
 
   if (context.relatedResolutionEmpty) {
     const tests: ListedTest[] = [];

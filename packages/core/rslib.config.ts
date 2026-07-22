@@ -11,7 +11,7 @@ import { version } from './package.json';
 
 // `RSTEST_VERSION` is build-injected into both @rstest/core and @rstest/browser
 // from each package's own package.json, and the browser-mode runtime gate
-// (core/src/core/browserLoader.ts) refuses to load a browser build whose version
+// (core/src/core/browser/loader.ts) refuses to load a browser build whose version
 // differs from core's. Those two reads can only drift if the packages are
 // versioned independently — which a single build cannot otherwise detect — so
 // assert the peer pair is in lockstep here, surfacing a mismatch at build time

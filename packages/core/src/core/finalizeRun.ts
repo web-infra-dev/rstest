@@ -9,13 +9,13 @@ import {
   logger,
   type TraceRun,
 } from '../utils';
-import type { Rstest } from './rstest';
+import type { RstestContext } from '../types';
 
 export const reportNoTestFiles = ({
   context,
   mode = 'all',
 }: {
-  context: Rstest;
+  context: RstestContext;
   mode?: 'all' | 'on-demand';
 }): void => {
   if (context.command === 'watch') {
@@ -85,7 +85,7 @@ export const reportNoTestFiles = ({
 };
 
 export const notifyReportersOnTestRunStart = async (
-  context: Rstest,
+  context: RstestContext,
 ): Promise<void> => {
   for (const reporter of context.reporters) {
     await reporter.onTestRunStart?.();
@@ -100,7 +100,7 @@ export const notifyReportersOnTestRunEnd = async ({
   unhandledErrors,
   filterRerunTestPaths,
 }: {
-  context: Rstest;
+  context: RstestContext;
   coverage?: CoverageMap;
   duration: Duration;
   getSourcemap: (sourcePath: string) => Promise<SourceMapInput | null>;
@@ -187,7 +187,7 @@ export const runLifecycleStep = async <T>(
  * reporter `onTestRunEnd`, exit code, and the bail message.
  */
 export async function finalizeRunCycle(
-  context: Rstest,
+  context: RstestContext,
   {
     outcomes,
     mode,
@@ -195,15 +195,18 @@ export async function finalizeRunCycle(
     coverageProvider,
     reportOnFailure,
     traceRun,
-    currentDeletedEntries,
   }: {
     outcomes: ExecutorCycleOutcome[];
     mode: 'all' | 'on-demand';
     isWatchMode: boolean;
     coverageProvider: CoverageProvider | null;
     reportOnFailure: boolean;
-    traceRun: TraceRun;
-    currentDeletedEntries: string[];
+    /**
+     * Omitted by browser watch reruns, where the trace buffer stays
+     * session-owned (core finalizes it once at session end) instead of
+     * rotating per rerun like the node watch cycle.
+     */
+    traceRun?: TraceRun;
   },
 ): Promise<void> {
   // Combined route-aware source map resolver: try each executor's resolver in
@@ -284,7 +287,7 @@ export async function finalizeRunCycle(
   context.updateReporterResultState(
     results,
     testResults,
-    currentDeletedEntries,
+    outcomes.flatMap((o) => o.deletedTestPaths ?? []),
   );
 
   if (noTestsDiscovered) {
@@ -319,12 +322,14 @@ export async function finalizeRunCycle(
         context,
         mergedCoverageMap!,
         coverageProvider,
-        traceRun.span,
+        traceRun?.span,
       ),
     );
   }
 
-  await runLifecycleStep('trace run finalize', () => traceRun.finalize());
+  if (traceRun) {
+    await runLifecycleStep('trace run finalize', () => traceRun.finalize());
+  }
 
   if (isFailure) {
     const bail = context.normalizedConfig.bail;

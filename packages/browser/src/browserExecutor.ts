@@ -36,6 +36,7 @@ export async function createBrowserExecutor(
   const {
     projects,
     coverageProvider,
+    shardedEntries,
     freezeShardedEntries,
     filesOnly,
     allowEmptyRun,
@@ -90,12 +91,13 @@ export async function createBrowserExecutor(
     ): Promise<ExecutorCycleOutcome> {
       const cycle = runBrowserController(context, {
         projects,
-        shardedEntries: opts.shardedEntries,
+        shardedEntries,
         freezeShardedEntries,
         allowEmptyRun,
         appliedModifyRstestConfigEnvironments,
         onTraceEvents: opts.onTraceEvents,
         env: opts.env,
+        updateSnapshot: opts.updateSnapshot,
       });
       inFlightCycle = cycle;
       try {
@@ -108,10 +110,10 @@ export async function createBrowserExecutor(
         inFlightCycle = undefined;
       }
     },
-    async collect(opts): Promise<{ list: ListCommandResult[] }> {
+    async collect(): Promise<{ list: ListCommandResult[] }> {
       const pending = listBrowserTests(context, {
         projects,
-        shardedEntries: opts.shardedEntries,
+        shardedEntries,
         freezeShardedEntries,
         filesOnly,
         appliedModifyRstestConfigEnvironments,

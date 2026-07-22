@@ -159,12 +159,6 @@ export interface NodeExecutor extends TestExecutor {
   /** Core injects the single run-scoped provider after it reads the plan. */
   setCoverageProvider(provider: CoverageProvider | null): void;
   /**
-   * Test paths deleted during the last cycle (watch only). `finalizeRunCycle`
-   * needs these to prune reporter state; they are node-cycle-internal (from
-   * `getRsbuildStats`), so core reads them here after each `runCycle`.
-   */
-  getLastCycleDeletedEntries(): string[];
-  /**
    * Start the dev server + worker pool up front (idempotent, in-flight guarded).
    * Watch calls this after registering the dev-compile hooks so the first compile
    * fires `onAfterDevCompile` and drives the initial run; non-watch runs let
@@ -227,7 +221,6 @@ export function createNodeExecutor(
   let runResourcesPromise:
     Promise<NonNullable<typeof runResources>> | undefined;
   let entryFiles: string[] = [];
-  let lastDeletedEntries: string[] = [];
   let didRunGlobalTeardown = false;
   // The Rsbuild project set assembled during init(); refreshPlan() keeps it in
   // sync with re-resolved plans.
@@ -539,7 +532,6 @@ export function createNodeExecutor(
     testStart ??= buildStart;
     const buildTime = testStart - buildStart;
     const testTime = Date.now() - testStart;
-    lastDeletedEntries = currentDeletedEntries;
 
     const coverageResourceLoaders = createCoverageResourceLoaders(returns);
 
@@ -564,6 +556,7 @@ export function createNodeExecutor(
       testResults: returns.flatMap((r) => r.testResults),
       errors: returns.flatMap((r) => r.errors || []),
       testPaths: currentEntries.map((e) => e.testPath),
+      deletedTestPaths: currentDeletedEntries,
       duration: { buildTime, testTime },
       coverage: {
         map: mergedCoverageMap?.toJSON(),
@@ -622,7 +615,6 @@ export function createNodeExecutor(
     setCoverageProvider: (provider) => {
       coverageProvider = provider;
     },
-    getLastCycleDeletedEntries: () => lastDeletedEntries,
     // Watch: start the dev server (and pool) up front so its first compile fires
     // `onAfterDevCompile`, which drives the initial run. In non-watch runs
     // `runCycle` triggers this lazily instead.
