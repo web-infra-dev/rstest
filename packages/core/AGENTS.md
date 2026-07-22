@@ -38,7 +38,7 @@ Contracts between modules or processes — not readable from any single file.
 - `browser` (and its `providerOptions`) merges with `plainDeepMerge`, NOT `mergeRsbuildConfig`: it carries opaque third-party data (Playwright options), so functions/arrays must be replaced, not chained/concatenated. Never re-add a `{ ...merged.browser, ...config.browser }` spread.
 - CLI options apply to **every** config layer (root and each project), not once.
 - A CLI-exposed object option must be registered in `allowedWildcardOptions` in `src/cli/commands.ts`; when changing merge behavior, add a test asserting sibling/nested keys survive a partial override.
-- `--coverage.exclude` appends to the config's exclude list while `--coverage.include` replaces it — deliberate (CLI narrows coverage further without discarding configured excludes), test-locked in `tests/cli/init.test.ts`. Don't "align" the two.
+- `--coverage.exclude` appends to the config's exclude list while `--coverage.include` replaces it. The asymmetry is asserted explicitly in `tests/cli/init.test.ts` (PR #1336), but no written rationale exists — treat it as behavior to preserve, and don't "align" the two without a maintainer decision.
 
 ### Mock/build seam (`src/core/plugins`)
 
