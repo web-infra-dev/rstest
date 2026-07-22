@@ -145,6 +145,21 @@ describe('rs.mockObject', () => {
     expect(rs.isMockFunction(MockedClass)).toBe(true);
   });
 
+  test('mocks static class methods', () => {
+    class OriginalClass {
+      static getValue(): number {
+        return 42;
+      }
+    }
+
+    const MockedClass = rs.mockObject(OriginalClass);
+    expect(rs.isMockFunction(MockedClass.getValue)).toBe(true);
+    expect(MockedClass.getValue()).toBeUndefined();
+
+    MockedClass.getValue.mockReturnValue(100);
+    expect(MockedClass.getValue()).toBe(100);
+  });
+
   // Special object types tests
   test('preserves Date objects', () => {
     const date = new Date('2024-01-01');
@@ -312,5 +327,26 @@ describe('rs.mocked', () => {
       mocked(1);
     expect(callsWithoutReceiver).toBeTypeOf('function');
     expect(callsDeep).toBeTypeOf('function');
+  });
+
+  test('Mocked<T> preserves class static members', () => {
+    class Service {
+      static label = 'service';
+      static getValue(): number {
+        return 42;
+      }
+    }
+
+    const asRealClass = (mocked: Mocked<typeof Service>): typeof Service =>
+      mocked;
+    const readsStaticProperty = (mocked: Mocked<typeof Service>): string =>
+      mocked.label;
+    const configuresStaticMethod = (mocked: Mocked<typeof Service>): void => {
+      mocked.getValue.mockReturnValue(100);
+    };
+
+    expect(asRealClass).toBeTypeOf('function');
+    expect(readsStaticProperty).toBeTypeOf('function');
+    expect(configuresStaticMethod).toBeTypeOf('function');
   });
 });

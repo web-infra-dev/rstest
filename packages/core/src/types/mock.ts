@@ -244,7 +244,7 @@ export type MockedClass<T extends Constructor> = Mock<
 > & {
   new (...args: ConstructorParameters<T>): InstanceType<T>;
   prototype: InstanceType<T>;
-};
+} & MockedObject<T>;
 
 type Methods<T> = {
   [K in keyof T]: T[K] extends MockProcedure ? K : never;
