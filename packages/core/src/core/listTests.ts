@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
-import { normalize, relative, resolve as resolvePath } from 'pathe';
+import { relative } from 'pathe';
 import { createPool } from '../pool';
 import type {
   FormattedError,
@@ -15,6 +15,8 @@ import {
   bgColor,
   color,
   getTaskNameWithPrefix,
+  isFilterInsideProject as isFilterInsideProjectRoot,
+  isFuzzyBasenameFilter as isFuzzyBasenameFilterWithMode,
   logger,
   prettyTestPath,
   ROOT_SUITE_NAME,
@@ -487,32 +489,11 @@ export async function listTests(
   const { shard } = context.normalizedConfig;
   const showProject = context.projects.length > 1;
 
-  const isFilterInsideProject = (filter: string, project: ProjectContext) => {
-    const absoluteFilter = normalize(
-      isAbsolute(filter) ? filter : resolvePath(rootPath, filter),
-    );
-    const relativeFilter = normalize(
-      relative(project.rootPath, absoluteFilter),
-    );
+  const isFilterInsideProject = (filter: string, project: ProjectContext) =>
+    isFilterInsideProjectRoot(filter, project.rootPath, rootPath);
 
-    return (
-      relativeFilter === '' ||
-      (!relativeFilter.startsWith('..') && !isAbsolute(relativeFilter))
-    );
-  };
-
-  const isFuzzyBasenameFilter = (filter: string) => {
-    if (context.fileFilterMode === 'exact' || isAbsolute(filter)) {
-      return false;
-    }
-
-    const normalizedFilter = normalize(filter);
-    return (
-      !normalizedFilter.startsWith('.') &&
-      !normalizedFilter.includes('/') &&
-      !normalizedFilter.includes('\\')
-    );
-  };
+  const isFuzzyBasenameFilter = (filter: string) =>
+    isFuzzyBasenameFilterWithMode(filter, context.fileFilterMode);
 
   if (context.relatedResolutionEmpty) {
     const tests: ListedTest[] = [];

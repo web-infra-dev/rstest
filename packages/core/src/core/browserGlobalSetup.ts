@@ -1,6 +1,7 @@
 import { createRsbuild, logger as RsbuildLogger } from '@rsbuild/core';
 import type {
   EntryInfo,
+  ExecutorCycleOutcome,
   ProjectContext,
   ProjectEntries,
   RstestContext,
@@ -29,6 +30,21 @@ export type BrowserGlobalSetupStageResult = {
 };
 
 const emptyEntries = async () => ({});
+
+/**
+ * Errors-only outcome fed into the shared finalize when the pre-cycle browser
+ * globalSetup stage fails — same error objects and exit-code path as a node
+ * in-cycle globalSetup failure.
+ */
+export const globalSetupFailureOutcome = (
+  errors: Error[],
+): ExecutorCycleOutcome => ({
+  results: [],
+  testResults: [],
+  errors,
+  testPaths: [],
+  duration: { buildTime: 0, testTime: 0 },
+});
 
 /**
  * Core-owned pre-cycle globalSetup stage for browser projects.

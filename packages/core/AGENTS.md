@@ -61,6 +61,14 @@ Contracts between modules or processes — not readable from any single file.
 - The md output format is a spec'd contract snapshot-tested in `e2e/reporter/md.test.ts` — behavior changes require snapshot updates there.
 - The blob filename grammar has a single owner; `mergeReports` must keep using `isBlobFile` rather than re-encoding the pattern.
 
+`src/core/runTests.ts` is the orchestrator and stays coarse-grained: split projects → node executor `init()` barrier → plan → drive executors → finalize. Browser-specific detail lives in its collaborators, not in the orchestrator:
+
+- `src/core/browserOnlyRun.ts` — the browser-only run path (no node projects), kept separate by the cold-start gate: constructing a `NodeExecutor` would boot a node Rsbuild instance (with empty `environments`) for every pure-browser run.
+- `src/core/browserRunPlanner.ts` — mixed-run browser-subset planning: file-filter classification, the `modifyRstestConfig` discovery boot, and the executor/watch option bags.
+- `src/core/browserWatchControls.ts` — the core-owned watch control plane for a browser watch session (fatal-signal exit, the single stdin shortcuts owner, and the `BrowserWatchSession` wrapper the mixed watch loop fans reruns out through).
+
+Two branches in the orchestrator are deliberate exceptions to executor isomorphism, both documented at their call site: the browser-only fast path (cold-start gate) and the watch dual-drive (node watch is dev-compile-hook driven; browser watch is host-driven and self-finalizing).
+
 ## Commands
 
 ```bash
