@@ -1122,21 +1122,26 @@ const playwrightFixtures = {
 };
 
 type RstestTest<ExtraContext = object> = TestAPIs<ExtraContext>;
+
 type TestCallback<ExtraContext> = (
   context: TestContext & ExtraContext,
 ) => void | Promise<void>;
+
 type BeforeEachCallback<ExtraContext> = (
   context: TestContext & ExtraContext,
 ) =>
   | void
   | TestCallback<ExtraContext>
   | Promise<void | TestCallback<ExtraContext>>;
+
 type TestForCallback<ExtraContext> = (
   param: unknown,
   context: TestContext & ExtraContext,
 ) => void | Promise<void>;
+
 type RstestTestAPI<ExtraContext> =
   RstestTest<ExtraContext> | TestAPIs<ExtraContext>;
+
 type CallableTest = (
   description: string,
   arg2?: unknown,
