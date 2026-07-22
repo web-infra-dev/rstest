@@ -234,6 +234,7 @@ const collectNodeTests = async ({
           sourceMaps,
           interopDefault: true,
           outputModule: project.outputModule,
+          runtimeTsTransform: project.normalizedConfig.runtimeTsTransform,
         });
         if (!success) {
           return {

@@ -207,6 +207,9 @@ export async function runBrowserGlobalSetupStage(
       sourceMaps: item.sourceMaps,
       interopDefault: true,
       outputModule: item.project.outputModule,
+      // The globalSetup fork is a node process even for browser projects, so
+      // the hook applies here regardless of the browser wire's `stripped` row.
+      runtimeTsTransform: item.project.normalizedConfig.runtimeTsTransform,
     });
     if (success) {
       ranAnySetup = true;

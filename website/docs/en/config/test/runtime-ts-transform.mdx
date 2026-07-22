@@ -1,0 +1,90 @@
+---
+description: Whether to transform runtime-loaded TypeScript files whose module style mismatches their package type scope.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# runtimeTsTransform
+
+<ApiMeta addedVersion="0.12.0" />
+
+- **Type:** `boolean`
+- **Default:** `true`
+
+Whether to transform TypeScript files that are loaded at runtime — outside the bundle graph — when their module style mismatches the package `type` scope.
+
+Node.js can strip TypeScript syntax from `.ts` files, but it never converts module systems: in a `"type": "module"` scope a `.ts` file is ESM, and in a `"type": "commonjs"` scope it is CommonJS. Files that Rstest bundles are transformed by the build pipeline, but a file loaded later by Node.js — for example through `createRequire` or `import(dynamicPath)` — keeps native loader semantics and fails when its module style does not match its scope.
+
+When this option is enabled, Rstest registers a Node.js load hook in the test worker that detects the two mismatch cases and transforms the source with the SWC that already ships inside Rspack:
+
+- A CommonJS-style `.ts` file (`module.exports`, `exports.foo`, `require()`) in a `"type": "module"` scope is transformed to CommonJS.
+- An ESM-style `.ts` file (`import` / `export` declarations) in a `"type": "commonjs"` scope is transformed to ESM.
+
+Every other file is left untouched and keeps Node.js native semantics, including native `require(esm)`. No extra dependency is needed, and the Rspack SWC binding is only loaded on the first file that actually needs a transform.
+
+## Example
+
+Given a package configured as ESM:
+
+```json title="package.json"
+{
+  "type": "module"
+}
+```
+
+```ts title="plugin.ts"
+module.exports = {
+  name: 'plugin',
+};
+```
+
+```ts title="plugin.test.ts"
+import { createRequire } from 'node:module';
+import { expect, test } from '@rstest/core';
+
+const require = createRequire(import.meta.url);
+
+test('loads a CommonJS-style TypeScript plugin at runtime', () => {
+  const plugin = require('./plugin.ts');
+
+  expect(plugin.name).toBe('plugin');
+});
+```
+
+Without `runtimeTsTransform`, Node.js classifies `plugin.ts` as ESM and `module.exports = ...` is not exported as a CommonJS value. With the default `runtimeTsTransform: true`, Rstest transforms `plugin.ts` to CommonJS and the `require` call resolves to the expected value.
+
+## Node.js version requirement
+
+`runtimeTsTransform` relies on the synchronous `module.registerHooks` API, whose CommonJS loading path was only made reentrancy-safe by [nodejs/node#59929](https://github.com/nodejs/node/pull/59929). Rstest therefore only activates the hook on:
+
+- Node.js >= 22.22.3 (22.x)
+- Node.js >= 24.11.1 (24.x)
+- Node.js >= 25.1.0 (25.x)
+- Node.js >= 26.0.0
+
+On any other version the option is silently inactive and behavior is unchanged. See [Troubleshooting](/guide/debug/troubleshooting) for the manual loader registration that still applies there.
+
+## Limitations
+
+`runtimeTsTransform` is a deliberately minimal intervention. It performs type erasure and module lowering only:
+
+- **No tsconfig awareness.** `paths` aliases, decorator metadata, and other `compilerOptions` are not applied. Files that need them should go through the bundle graph instead.
+- **Only `.ts`.** `.tsx` is not handled (it needs JSX configuration), and `.mts` / `.cts` are already unambiguous natively.
+- **`node_modules` is excluded.** Dependencies keep Node.js native semantics; use [`output.bundleDependencies`](/config/build/output#outputbundledependencies) when a dependency needs transformation.
+- **Named exports follow Node.js rules.** When a file is transformed to CommonJS, named imports of that file are still resolved by Node.js's `cjs-module-lexer`, so exports it cannot detect statically remain unavailable as named imports.
+- **Third-party loaders win.** If a loader such as `ts-node`, `tsx`, or `@swc-node/register` takes over `.ts`, Rstest's hook passes the file through so that loader keeps working.
+- **Not part of the module graph.** Files loaded through the hook are invisible to watch-mode re-runs and to `rstest.mock`.
+
+This option applies to the node executor only. [Browser mode](/config/test/browser) ignores it.
+
+## Opting out
+
+Set `runtimeTsTransform: false` to disable the hook entirely and restore Node.js native semantics for every runtime-loaded `.ts` file:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  runtimeTsTransform: false,
+});
+```

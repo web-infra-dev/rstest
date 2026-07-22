@@ -29,6 +29,7 @@ const baseNormalizedConfig = {
   chaiConfig: {},
   includeTaskLocation: false,
   silent: false,
+  runtimeTsTransform: true,
 };
 
 const makeProject = (
@@ -45,6 +46,7 @@ describe('projectRuntimeConfig', () => {
     expect('coverage' in config).toBe(false);
     expect('logHeapUsage' in config).toBe(false);
     expect('detectAsyncLeaks' in config).toBe(false);
+    expect('runtimeTsTransform' in config).toBe(false);
   });
 
   it('static env emits only NODE_ENV + RSTEST plus config env by default', () => {
@@ -100,6 +102,7 @@ describe('projectRuntimeConfig', () => {
     expect(config.coverage.reporters).toEqual([]);
     expect('logHeapUsage' in config).toBe(true);
     expect('testEnvironment' in config).toBe(true);
+    expect('runtimeTsTransform' in config).toBe(true);
   });
 
   it('inherit spreads the provided env base', () => {

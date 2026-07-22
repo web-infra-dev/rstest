@@ -288,6 +288,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   detectAsyncLeaks: false,
   bail: 0,
   includeTaskLocation: false,
+  runtimeTsTransform: true,
   browser: {
     enabled: false,
     provider: 'playwright',

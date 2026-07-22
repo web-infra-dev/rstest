@@ -58,6 +58,8 @@ export const executorCapabilities: Record<
   chaiConfig: { node: 'supported', browser: 'supported' },
   includeTaskLocation: { node: 'supported', browser: 'supported' },
   silent: { node: 'supported', browser: 'supported' },
+  // Node module loader mechanism (`module.registerHooks`).
+  runtimeTsTransform: { node: 'supported', browser: 'stripped' },
 };
 
 const runtimeConfigKeys = Object.keys(

@@ -191,12 +191,14 @@ export async function runGlobalSetup({
   sourceMaps,
   interopDefault,
   outputModule,
+  runtimeTsTransform,
 }: {
   globalSetupEntries: EntryInfo[];
   assetFiles: Record<string, string>;
   sourceMaps: Record<string, string>;
   interopDefault: boolean;
   outputModule: boolean;
+  runtimeTsTransform: boolean;
 }): Promise<{
   success: boolean;
   errors?: any[];
@@ -222,6 +224,7 @@ export async function runGlobalSetup({
       interopDefault,
       outputModule,
       sourceMaps,
+      runtimeTsTransform,
     },
   });
 

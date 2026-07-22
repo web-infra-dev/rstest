@@ -43,7 +43,13 @@ const createFixture = (extension: 'ts' | 'cts') => {
   return fixtureDir;
 };
 
-test('keeps native node semantics for cjs-style .ts in type module scope', async ({
+// Previously this asserted the native failure (`module is not defined`) for a
+// cjs-style `.ts` in a `type: module` scope. `runtimeTsTransform` (default on,
+// Node >= 22.22.3 / >= 24.11.1) now transforms exactly that mismatch, so the
+// load succeeds. The scope here is a tmpdir outside the project root, which
+// `e2e/runtimeTsTransform/` does not cover. See `e2e/runtimeTsTransform/` for
+// the feature's own coverage, including the opt-out repro.
+test('loads cjs-style .ts in a type module scope via runtimeTsTransform', async ({
   onTestFinished,
 }) => {
   if (!(await supportsNativeTypeScript())) {
@@ -57,15 +63,7 @@ test('keeps native node semantics for cjs-style .ts in type module scope', async
     pathToFileURL(join(fixtureDir, 'loader.mjs')).href,
   );
 
-  try {
-    expect(require('./plugin.ts')).toEqual({});
-  } catch (error) {
-    if (!(error instanceof ReferenceError)) {
-      throw error;
-    }
-
-    expect(error.message).toContain('module is not defined');
-  }
+  expect(require('./plugin.ts')).toEqual({ value: 1 });
 });
 
 test('loads cjs-style TypeScript when the runtime file uses .cts', async ({

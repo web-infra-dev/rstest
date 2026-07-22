@@ -57,7 +57,7 @@ Rstest transforms files that are part of the bundle graph. However, code that is
 
 Modern Node.js can strip supported TypeScript syntax from `.ts` files, but it still uses the same module-system rules as JavaScript files. In a `type: module` package, `.ts` is treated like `.js`: it is ESM by default. If that `.ts` file contains CommonJS globals such as `module.exports`, `exports`, or `require`, Node.js does not rewrite it into CommonJS for you.
 
-This can be different from Jest setups that use `ts-jest`, because `ts-jest` can register a runtime loader hook and compile the file before Node.js applies the same native boundary. It can also be different from Vitest, because Vitest's transform/runtime model may hide some of these Node.js loader boundaries.
+This can be different from Jest setups that use `ts-jest`, because `ts-jest` can register a runtime loader hook and compile the file before Node.js applies the same native boundary. It can also be different from Vitest, because Vitest does not transform runtime requires either.
 
 ### Solution
 
@@ -67,7 +67,15 @@ Prefer making the runtime-loaded file match Node.js native module semantics:
 - Or convert the file to ESM syntax when it lives under `type: module`.
 - Or move it into a package scope with `"type": "commonjs"`.
 
-If the dynamic load depends on a custom transform, register that transform explicitly. For migrated Jest projects, the simplest place is [`setupFiles`](/config/test/setup-files):
+If you cannot change the file, [`runtimeTsTransform`](/config/test/runtime-ts-transform) already handles this case for you. It is enabled by default, and on Node.js >= 22.22.3 / >= 24.11.1 Rstest detects the module-style mismatch and transforms the file, so the `require('./plugin.ts')` above returns the expected CommonJS value with no extra configuration. The mirror case — an ESM-style `.ts` loaded from a `type: commonjs` scope — is covered as well.
+
+The manual registration below is only needed when `runtimeTsTransform` cannot apply:
+
+- Node.js is older than the versions above, where the option is silently inactive.
+- You set `runtimeTsTransform: false`.
+- The file needs a transform Rstest's built-in hook does not perform, such as tsconfig `paths`, decorator metadata, or `.tsx`. See the [limitations](/config/test/runtime-ts-transform#limitations).
+
+In those cases, register the transform explicitly. For migrated Jest projects, the simplest place is [`setupFiles`](/config/test/setup-files):
 
 Install the runtime loader you plan to register first. Rstest does not install these loaders for you; for example, [@swc-node/register](https://github.com/swc-project/swc-node) provides a SWC-based TypeScript require hook, while [ts-node](https://github.com/TypeStrong/ts-node) provides the `ts-node/register` hook:
 

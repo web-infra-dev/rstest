@@ -26,6 +26,7 @@
   "isolate",
   "test-environment",
   "browser",
+  "runtime-ts-transform",
   "clear-mocks",
   "reset-mocks",
   "restore-mocks",

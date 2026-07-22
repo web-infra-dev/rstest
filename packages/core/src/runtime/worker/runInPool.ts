@@ -17,6 +17,7 @@ import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
 import { PhaseTracker } from './phaseTracker';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
+import { ensureRuntimeTsHook } from './runtimeTsHook';
 import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
 import { createNodeTaskContext } from './taskContext.node';
@@ -166,10 +167,12 @@ const preparePool = async (
       testEnvironment,
       snapshotFormat,
       env,
+      runtimeTsTransform,
     },
   } = context;
 
   setupEnv(env);
+  ensureRuntimeTsHook(runtimeTsTransform);
 
   const shouldInterceptConsole =
     !disableConsoleIntercept || silent === true || silent === 'passed-only';

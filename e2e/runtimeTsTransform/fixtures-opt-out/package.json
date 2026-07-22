@@ -1,0 +1,5 @@
+{
+  "name": "e2e-runtime-ts-transform-opt-out",
+  "private": true,
+  "type": "module"
+}

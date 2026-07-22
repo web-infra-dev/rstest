@@ -74,6 +74,7 @@ export function projectRuntimeConfig(
     chaiConfig,
     includeTaskLocation,
     silent,
+    runtimeTsTransform,
   } = project.normalizedConfig;
 
   const shared = {
@@ -128,6 +129,7 @@ export function projectRuntimeConfig(
     coverage: { ...coverage, reporters: [] },
     logHeapUsage,
     detectAsyncLeaks,
+    runtimeTsTransform,
     env: {
       // Read env at projection time so a globalSetup-modified `process.env`
       // (or an explicit snapshot) is captured correctly.

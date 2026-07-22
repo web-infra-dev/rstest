@@ -2,6 +2,7 @@ import { install } from 'source-map-support';
 import type { FormattedError } from '../../types';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
+import { ensureRuntimeTsHook } from './runtimeTsHook';
 import { installGracefulExit } from './setup';
 
 installGracefulExit();
@@ -46,6 +47,7 @@ const runGlobalSetup = async (data: {
   sourceMaps: Record<string, string>;
   interopDefault: boolean;
   outputModule: boolean;
+  runtimeTsTransform: boolean;
 }): Promise<{
   success: boolean;
   hasTeardown: boolean;
@@ -57,6 +59,7 @@ const runGlobalSetup = async (data: {
     if (data.entries.length === 0) {
       return { success: true, hasTeardown: false };
     }
+    ensureRuntimeTsHook(data.runtimeTsTransform);
     // provides source map support for stack traces
     install({
       environment: 'node',

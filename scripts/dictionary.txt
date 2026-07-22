@@ -42,6 +42,7 @@ desync
 desynced
 dgimsuvy
 distpath
+dlopens
 DNSCHANNEL
 docgen
 dogfooding
@@ -142,6 +143,7 @@ quxx
 RANDOMBYTESREQUEST
 rasterizes
 rebranded
+reentrancy
 resvg
 rolldown
 rootdir

@@ -55,6 +55,13 @@ const ignoredKeyWarnings: Partial<
     isNonDefault: (config) => config.logHeapUsage === true,
     message: () => 'Ignoring logHeapUsage in browser mode.',
   },
+  runtimeTsTransform: {
+    // Defaults to `true`, so opting OUT is the non-default value to warn about.
+    isNonDefault: (config) => config.runtimeTsTransform === false,
+    message: () =>
+      'Ignoring runtimeTsTransform: false in browser mode: it relies on the ' +
+      'node module loader hooks.',
+  },
 };
 
 /**

@@ -71,6 +71,7 @@ export type RuntimeConfig = Pick<
   | 'chaiConfig'
   | 'includeTaskLocation'
   | 'silent'
+  | 'runtimeTsTransform'
 >;
 
 /**
@@ -80,13 +81,18 @@ export type RuntimeConfig = Pick<
  * - `testEnvironment`: the client hardcodes `environment: 'browser'`.
  * - `coverage`: browser coverage is host-wired, not client-read.
  * - `logHeapUsage` / `detectAsyncLeaks`: node process mechanisms.
+ * - `runtimeTsTransform`: a node module loader mechanism.
  *
  * These fields stay REQUIRED on `RuntimeConfig` (node worker consumers
  * destructure them unconditionally); only the browser wire narrows.
  */
 export type BrowserRuntimeConfig = Omit<
   RuntimeConfig,
-  'testEnvironment' | 'detectAsyncLeaks' | 'logHeapUsage' | 'coverage'
+  | 'testEnvironment'
+  | 'detectAsyncLeaks'
+  | 'logHeapUsage'
+  | 'coverage'
+  | 'runtimeTsTransform'
 >;
 
 export type CurrentTaskInfo = Pick<
