@@ -1,5 +1,24 @@
+import { createHash } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { runTests } from '@vscode/test-electron';
+
+/**
+ * VS Code opens its main IPC socket inside the user data dir, and macOS caps
+ * unix socket paths at 104 bytes. The default `<extension>/.vscode-test/
+ * user-data` overruns that in a deep checkout — a Git worktree under
+ * `.claude/worktrees/<name>/` already costs ~125 bytes — and VS Code then dies
+ * with `listen EINVAL` before any test loads. Anchoring the user data dir in
+ * the OS temp dir keeps the socket path short regardless of checkout depth;
+ * hashing the extension path keeps parallel checkouts off each other's state.
+ */
+function shortUserDataDir(extensionPath: string): string {
+  const key = createHash('sha256').update(extensionPath).digest('hex');
+  const dir = path.join(tmpdir(), `rstest-vscode-${key.slice(0, 8)}`);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
 
 async function main() {
   try {
@@ -27,6 +46,8 @@ async function main() {
         workspacePath,
         // This disables all extensions except the one being testing
         '--disable-extensions',
+        '--user-data-dir',
+        shortUserDataDir(extensionDevelopmentPath),
       ],
     });
   } catch {

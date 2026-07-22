@@ -211,5 +211,6 @@ vnode
 watchpack
 webm
 webp
+worktree
 worktrees
 Zenbook
