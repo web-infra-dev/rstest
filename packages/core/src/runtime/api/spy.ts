@@ -116,17 +116,28 @@ export const initSpy = (
         mockImplementationOnce = originalMockImplementationOnce;
       };
 
-      const result = cb();
+      try {
+        const result = cb();
 
-      if (result instanceof Promise) {
-        return result.then(() => {
-          reset();
-          return spyFn;
-        });
+        if (result && typeof result.then === 'function') {
+          return result.then(
+            () => {
+              reset();
+              return spyFn;
+            },
+            (error: unknown) => {
+              reset();
+              throw error;
+            },
+          );
+        }
+
+        reset();
+        return spyFn;
+      } catch (error) {
+        reset();
+        throw error;
       }
-
-      reset();
-      return spyFn;
     }
 
     spyFn.withImplementation = withImplementation;
