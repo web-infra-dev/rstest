@@ -10,9 +10,6 @@ importers:
 
   .:
     devDependencies:
-      '@rsdoctor/rspack-plugin':
-        specifier: ^1.6.0
-        version: 1.6.0(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@rsbuild/core@2.1.6)(@rspack/core@2.1.4(@swc/helpers@0.5.23))(supports-color@10.2.2)(webpack@5.108.4(@swc/core@1.15.43(@swc/helpers@0.5.23))(csso@5.0.5)(lightningcss@1.32.0)(postcss@8.5.19))
       '@rslint/core':
         specifier: ^0.7.0
         version: 0.7.0(jiti@2.7.0)
@@ -43,9 +40,6 @@ importers:
       lefthook:
         specifier: ^2.1.10
         version: 2.1.10
-      marked:
-        specifier: ^18.0.7
-        version: 18.0.7
       path-serializer:
         specifier: 0.6.0
         version: 0.6.0
@@ -61,15 +55,6 @@ importers:
       prettier-plugin-packagejson:
         specifier: ^3.0.2
         version: 3.0.2(prettier@3.9.5)
-      rsbuild-plugin-arethetypeswrong:
-        specifier: ^0.3.1
-        version: 0.3.1(@rsbuild/core@2.1.6)(typescript@6.0.3)
-      rsbuild-plugin-publint:
-        specifier: ^1.0.0
-        version: 1.0.0(@rsbuild/core@2.1.6)
-      shell-quote:
-        specifier: ^1.10.0
-        version: 1.10.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -78,7 +63,7 @@ importers:
     dependencies:
       '@codspeed/tinybench-plugin':
         specifier: ^5.7.1
-        version: 5.7.1(supports-color@10.2.2)(tinybench@6.0.2)
+        version: 5.7.1(tinybench@6.0.2)
       '@rstest/core':
         specifier: workspace:*
         version: link:../packages/core
@@ -1452,6 +1437,24 @@ importers:
         specifier: ^1.4.2
         version: 1.4.2(typescript@6.0.3)
 
+  scripts:
+    dependencies:
+      '@rsdoctor/rspack-plugin':
+        specifier: ^1.6.0
+        version: 1.6.0(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@rsbuild/core@2.1.6)(@rspack/core@2.1.4(@swc/helpers@0.5.23))(supports-color@10.2.2)(webpack@5.108.4(@swc/core@1.15.43(@swc/helpers@0.5.23))(csso@5.0.5)(lightningcss@1.32.0)(postcss@8.5.19))
+      marked:
+        specifier: ^18.0.7
+        version: 18.0.7
+      rsbuild-plugin-arethetypeswrong:
+        specifier: ^0.3.1
+        version: 0.3.1(@rsbuild/core@2.1.6)(typescript@6.0.3)
+      rsbuild-plugin-publint:
+        specifier: ^1.0.0
+        version: 1.0.0(@rsbuild/core@2.1.6)
+      shell-quote:
+        specifier: ^1.10.0
+        version: 1.10.0
+
   scripts/tsconfig: {}
 
   website:
@@ -1464,16 +1467,16 @@ importers:
         version: 2.0.1(@rsbuild/core@2.1.6)
       '@rspress/core':
         specifier: 2.0.18
-        version: 2.0.18(@rspack/core@2.1.4(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2)
+        version: 2.0.18(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2)
       '@rspress/plugin-algolia':
         specifier: 2.0.18
-        version: 2.0.18(@rspress/core@2.0.18(@rspack/core@2.1.4(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        version: 2.0.18(@rspress/core@2.0.18(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@rspress/plugin-client-redirects':
         specifier: 2.0.18
-        version: 2.0.18(@rspress/core@2.0.18(@rspack/core@2.1.4(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2))
+        version: 2.0.18(@rspress/core@2.0.18(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2))
       '@rstack-dev/doc-ui':
         specifier: 1.14.5
-        version: 1.14.5(@rspress/core@2.0.18(@rspack/core@2.1.4(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2))
+        version: 1.14.5(@rspress/core@2.0.18(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2))
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../scripts/tsconfig
@@ -1500,7 +1503,7 @@ importers:
         version: 1.1.3(@rsbuild/core@2.1.6)
       rspress-plugin-font-open-sans:
         specifier: ^1.0.4
-        version: 1.0.4(@rspress/core@2.0.18(@rspack/core@2.1.4(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2))
+        version: 1.0.4(@rspress/core@2.0.18(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2))
       rspress-plugin-sitemap:
         specifier: ^1.2.1
         version: 1.2.1
@@ -8838,9 +8841,9 @@ snapshots:
       fast-wrap-ansi: 0.2.0
       sisteransi: 1.0.5
 
-  '@codspeed/core@5.7.1(supports-color@10.2.2)':
+  '@codspeed/core@5.7.1':
     dependencies:
-      axios: 1.18.1(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
+      axios: 1.18.1
       find-up: 6.3.0
       form-data: 4.0.5
       node-gyp-build: 4.8.4
@@ -8849,9 +8852,9 @@ snapshots:
       - debug
       - supports-color
 
-  '@codspeed/tinybench-plugin@5.7.1(supports-color@10.2.2)(tinybench@6.0.2)':
+  '@codspeed/tinybench-plugin@5.7.1(tinybench@6.0.2)':
     dependencies:
-      '@codspeed/core': 5.7.1(supports-color@10.2.2)
+      '@codspeed/core': 5.7.1
       tinybench: 6.0.2
     transitivePeerDependencies:
       - debug
@@ -10347,7 +10350,7 @@ snapshots:
       - '@emnapi/core'
       - '@emnapi/runtime'
 
-  '@rspress/core@2.0.18(@rspack/core@2.1.4(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2)':
+  '@rspress/core@2.0.18(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2)':
     dependencies:
       '@mdx-js/mdx': 3.1.1(supports-color@10.2.2)
       '@mdx-js/react': 3.1.1(@types/react@19.2.17)(react@19.2.7)
@@ -10397,11 +10400,11 @@ snapshots:
       - micromark-util-types
       - supports-color
 
-  '@rspress/plugin-algolia@2.0.18(@rspress/core@2.0.18(@rspack/core@2.1.4(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@rspress/plugin-algolia@2.0.18(@rspress/core@2.0.18(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@docsearch/css': 4.6.3
       '@docsearch/react': 4.6.3(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@rspress/core': 2.0.18(@rspack/core@2.1.4(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2)
+      '@rspress/core': 2.0.18(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2)
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
     transitivePeerDependencies:
@@ -10410,9 +10413,9 @@ snapshots:
       - algoliasearch
       - search-insights
 
-  '@rspress/plugin-client-redirects@2.0.18(@rspress/core@2.0.18(@rspack/core@2.1.4(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2))':
+  '@rspress/plugin-client-redirects@2.0.18(@rspress/core@2.0.18(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2))':
     dependencies:
-      '@rspress/core': 2.0.18(@rspack/core@2.1.4(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2)
+      '@rspress/core': 2.0.18(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2)
 
   '@rspress/shared@2.0.18':
     dependencies:
@@ -10423,9 +10426,9 @@ snapshots:
       - '@module-federation/runtime-tools'
       - core-js
 
-  '@rstack-dev/doc-ui@1.14.5(@rspress/core@2.0.18(@rspack/core@2.1.4(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2))':
+  '@rstack-dev/doc-ui@1.14.5(@rspress/core@2.0.18(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2))':
     optionalDependencies:
-      '@rspress/core': 2.0.18(@rspack/core@2.1.4(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2)
+      '@rspress/core': 2.0.18(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2)
 
   '@rushstack/node-core-library@5.23.3(@types/node@22.18.6)':
     dependencies:
@@ -11461,6 +11464,12 @@ snapshots:
 
   acorn@8.17.0: {}
 
+  agent-base@6.0.2:
+    dependencies:
+      debug: 4.4.3(supports-color@8.1.1)
+    transitivePeerDependencies:
+      - supports-color
+
   agent-base@6.0.2(supports-color@10.2.2):
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
@@ -11611,6 +11620,16 @@ snapshots:
   available-typed-arrays@1.0.7:
     dependencies:
       possible-typed-array-names: 1.1.0
+
+  axios@1.18.1:
+    dependencies:
+      follow-redirects: 1.16.0(debug@4.4.3(supports-color@10.2.2))
+      form-data: 4.0.5
+      https-proxy-agent: 5.0.1
+      proxy-from-env: 2.1.0
+    transitivePeerDependencies:
+      - debug
+      - supports-color
 
   axios@1.18.1(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2):
     dependencies:
@@ -12908,6 +12927,13 @@ snapshots:
       - supports-color
 
   https-browserify@1.0.0: {}
+
+  https-proxy-agent@5.0.1:
+    dependencies:
+      agent-base: 6.0.2
+      debug: 4.4.3(supports-color@8.1.1)
+    transitivePeerDependencies:
+      - supports-color
 
   https-proxy-agent@5.0.1(supports-color@10.2.2):
     dependencies:
@@ -14973,9 +14999,9 @@ snapshots:
       '@vue/compiler-sfc': 3.5.40
       vue: 3.5.40(typescript@6.0.3)
 
-  rspress-plugin-font-open-sans@1.0.4(@rspress/core@2.0.18(@rspack/core@2.1.4(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2)):
+  rspress-plugin-font-open-sans@1.0.4(@rspress/core@2.0.18(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2)):
     dependencies:
-      '@rspress/core': 2.0.18(@rspack/core@2.1.4(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2)
+      '@rspress/core': 2.0.18(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@10.2.2))(supports-color@10.2.2)
 
   rspress-plugin-sitemap@1.2.1: {}
 

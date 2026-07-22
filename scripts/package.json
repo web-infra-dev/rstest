@@ -1,0 +1,13 @@
+{
+  "name": "@rstest/scripts",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@rsdoctor/rspack-plugin": "^1.6.0",
+    "marked": "^18.0.7",
+    "rsbuild-plugin-arethetypeswrong": "^0.3.1",
+    "rsbuild-plugin-publint": "^1.0.0",
+    "shell-quote": "^1.10.0"
+  }
+}
