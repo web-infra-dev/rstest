@@ -20,6 +20,7 @@
 import {
   ASYMMETRIC_MATCHERS_OBJECT,
   addCustomEqualityTesters,
+  ChaiStyleAssertions,
   type ChaiPlugin,
   customMatchers,
   GLOBAL_EXPECT,
@@ -92,6 +93,7 @@ export function createExpect({
 }): RstestExpect {
   use(JestExtend);
   use(JestChaiExpect);
+  use(ChaiStyleAssertions);
   if (snapshotPlugin) {
     use(snapshotPlugin);
   }

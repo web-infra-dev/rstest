@@ -1,5 +1,11 @@
 import { describe, expect, it, rs } from '@rstest/core';
 
+declare module '@rstest/core' {
+  interface Assertion {
+    toHaveCurrentTestName(expected: string): void;
+  }
+}
+
 describe('Expect API', () => {
   it('test expect API', () => {
     expect(1 + 1).toBe(2);
@@ -84,6 +90,24 @@ describe('Expect API', () => {
     expect(1 + 3).toBe(4);
   });
 
+  it('passes the full test name to custom matchers', ({ expect }) => {
+    expect.extend({
+      toHaveCurrentTestName(_, expected) {
+        const actual = this.currentTestName;
+        return {
+          actual,
+          expected,
+          pass: actual === expected,
+          message: () => `expected current test name to be ${expected}`,
+        };
+      },
+    });
+
+    expect(null).toHaveCurrentTestName(
+      'Expect API > passes the full test name to custom matchers',
+    );
+  });
+
   it('test expect API not', () => {
     expect(1 + 1).not.toBe(3);
     expect('blue red').not.toBeUndefined();
@@ -113,6 +137,18 @@ describe('Expect API', () => {
     expect(b).toHaveBeenCalledAfter(a);
     expect(b).not.toHaveBeenCalledBefore(a);
     expect(a).not.toHaveBeenCalledAfter(b);
+  });
+
+  it('supports the spy matcher aliases preserved from Vitest 3', () => {
+    const mock = rs.fn((value: string) => value.toUpperCase());
+
+    mock('first');
+    mock('second');
+
+    expect(mock).nthCalledWith(1, 'first');
+    expect(mock).lastCalledWith('second');
+    expect(mock).nthReturnedWith(1, 'FIRST');
+    expect(mock).lastReturnedWith('SECOND');
   });
 
   it.fails('test not failed', () => {
