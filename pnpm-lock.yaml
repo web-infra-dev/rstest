@@ -40,9 +40,6 @@ importers:
       lefthook:
         specifier: ^2.1.10
         version: 2.1.10
-      path-serializer:
-        specifier: 0.6.0
-        version: 0.6.0
       pkg-pr-new:
         specifier: ^0.0.78
         version: 0.0.78
@@ -154,6 +151,9 @@ importers:
       memfs:
         specifier: ^4.64.0
         version: 4.64.0
+      path-serializer:
+        specifier: 0.6.0
+        version: 0.6.0
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -1442,9 +1442,15 @@ importers:
       '@rsdoctor/rspack-plugin':
         specifier: ^1.6.0
         version: 1.6.0(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@rsbuild/core@2.1.6)(@rspack/core@2.1.4(@swc/helpers@0.5.23))(supports-color@10.2.2)(webpack@5.108.4(@swc/core@1.15.43(@swc/helpers@0.5.23))(csso@5.0.5)(lightningcss@1.32.0)(postcss@8.5.19))
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../packages/core
       marked:
         specifier: ^18.0.7
         version: 18.0.7
+      path-serializer:
+        specifier: 0.6.0
+        version: 0.6.0
       rsbuild-plugin-arethetypeswrong:
         specifier: ^0.3.1
         version: 0.3.1(@rsbuild/core@2.1.6)(typescript@6.0.3)

@@ -5,7 +5,9 @@
   "type": "module",
   "dependencies": {
     "@rsdoctor/rspack-plugin": "^1.6.0",
+    "@rstest/core": "workspace:*",
     "marked": "^18.0.7",
+    "path-serializer": "0.6.0",
     "rsbuild-plugin-arethetypeswrong": "^0.3.1",
     "rsbuild-plugin-publint": "^1.0.0",
     "shell-quote": "^1.10.0"

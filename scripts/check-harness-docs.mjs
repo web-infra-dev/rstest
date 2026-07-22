@@ -58,7 +58,7 @@ import {
   readdirSync,
   readlinkSync,
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { argv, exit, stdout } from 'node:process';
 import { Lexer } from 'marked';
 import { parse as parseShellWords } from 'shell-quote';
@@ -176,6 +176,13 @@ for (const glob of workspaceGlobs()) {
   }
 }
 
+const DEP_FIELDS = [
+  'dependencies',
+  'devDependencies',
+  'peerDependencies',
+  'optionalDependencies',
+];
+
 /** Workspace package name → absolute dir. */
 const nameToDir = new Map();
 /** Every dependency name declared anywhere in the workspace (for C5 gating). */
@@ -184,14 +191,7 @@ for (const dir of workspaceDirs) {
   const pkg = readPkg(dir);
   if (!pkg) continue;
   if (pkg.name && !nameToDir.has(pkg.name)) nameToDir.set(pkg.name, dir);
-  for (const field of [
-    'dependencies',
-    'devDependencies',
-    'peerDependencies',
-    'optionalDependencies',
-  ]) {
-    for (const dep of Object.keys(pkg[field] ?? {})) knownDepNames.add(dep);
-  }
+  for (const dep of declaredDeps(dir)) knownDepNames.add(dep);
 }
 
 /** Nearest workspace package dir at or above `absDir` (repo root at worst). */
@@ -208,14 +208,7 @@ function owningPackageDir(absDir) {
 /** All dependency names declared by the package at `dir`. */
 function declaredDeps(dir) {
   const pkg = readPkg(dir) ?? {};
-  return new Set(
-    [
-      'dependencies',
-      'devDependencies',
-      'peerDependencies',
-      'optionalDependencies',
-    ].flatMap((field) => Object.keys(pkg[field] ?? {})),
-  );
+  return new Set(DEP_FIELDS.flatMap((field) => Object.keys(pkg[field] ?? {})));
 }
 
 // ---------------------------------------------------------------------------
@@ -306,6 +299,16 @@ function docEvents(src) {
   return events;
 }
 
+const docCache = new Map();
+/** `{ text, events }` for a repo-relative doc path; read and lexed once. */
+function parsedDoc(doc) {
+  if (!docCache.has(doc)) {
+    const text = readFileSync(join(repoRoot, doc), 'utf8');
+    docCache.set(doc, { text, events: docEvents(text) });
+  }
+  return docCache.get(doc);
+}
+
 // ---------------------------------------------------------------------------
 // Violations + allowlist.
 // ---------------------------------------------------------------------------
@@ -387,10 +390,11 @@ for (const doc of docFiles) {
 // C2 — root index completeness.
 // ---------------------------------------------------------------------------
 
-const rootDoc = readFileSync(join(repoRoot, 'AGENTS.md'), 'utf8');
-const rootEvents = docEvents(rootDoc);
+const rootDoc = parsedDoc('AGENTS.md').text;
 const structureSection = (() => {
-  const headings = rootEvents.filter((e) => e.kind === 'heading');
+  const headings = parsedDoc('AGENTS.md').events.filter(
+    (e) => e.kind === 'heading',
+  );
   const startAt = headings.findIndex(
     (h) => h.depth === 2 && h.text === 'Monorepo structure',
   );
@@ -482,6 +486,14 @@ function commandsOf(text) {
   return commands.filter((words) => words.length > 0);
 }
 
+/**
+ * Docs write placeholders (`pnpm --filter <pkg> build`) and flag-only forms
+ * (`pnpm --filter x --help`) where there is no script name to look up.
+ */
+function isScriptPlaceholder(script) {
+  return !script || script.startsWith('-') || script.includes('<');
+}
+
 function checkBashLine(doc, docDirAbs, line, text) {
   for (const words of commandsOf(text)) {
     const command = words.join(' ');
@@ -506,7 +518,7 @@ function checkBashLine(doc, docDirAbs, line, text) {
         );
         continue;
       }
-      if (!script || script.startsWith('-') || script.includes('<')) continue;
+      if (isScriptPlaceholder(script)) continue;
       if (!scriptsOf(pkgDir).has(script)) {
         report(
           'C3',
@@ -521,7 +533,7 @@ function checkBashLine(doc, docDirAbs, line, text) {
 
     if (words[0] === 'npm' && words[1] === 'run') {
       const script = words[2] ?? '';
-      if (!script || script.startsWith('-') || script.includes('<')) continue;
+      if (isScriptPlaceholder(script)) continue;
       const owning = owningPackageDir(docDirAbs);
       if (!scriptsOf(owning).has(script)) {
         report(
@@ -529,7 +541,7 @@ function checkBashLine(doc, docDirAbs, line, text) {
           doc,
           line,
           command,
-          `\`${command}\`: no script "${script}" in ${join(owning, 'package.json').slice(repoRoot.length + 1)}`,
+          `\`${command}\`: no script "${script}" in ${relative(repoRoot, join(owning, 'package.json'))}`,
         );
       }
       continue;
@@ -563,18 +575,6 @@ function checkBashLine(doc, docDirAbs, line, text) {
 // C4 — inline-code path existence.
 // ---------------------------------------------------------------------------
 
-const PATH_ROOTS = [
-  'src/',
-  'packages/',
-  'e2e/',
-  'scripts/',
-  'website/',
-  '.agents/',
-  '.github/',
-  'tests/',
-  'docs/',
-  '../',
-];
 // Runtime/output paths: never on disk in a clean checkout, skipped by rule.
 const PATH_SKIP_PREFIXES = [
   'dist/',
@@ -583,12 +583,34 @@ const PATH_SKIP_PREFIXES = [
   '.rstest-temp',
 ];
 
+/**
+ * Whether a slash-bearing token names a repo location at all. A hard-coded list
+ * of accepted roots drifts as the tree grows (it silently stopped covering
+ * `benchmarks/` and `examples/`), so the tree answers instead: the token's first
+ * segment must be a real directory under one of the resolution bases. Tokens
+ * rooted anywhere else are prose, not paths.
+ *
+ * `..` counts as a root, `.` does not: `./x` in these docs describes a path in
+ * the *consumer's* project (a config default, a CLI argument), while `../x` is
+ * a real cross-package reference.
+ */
+function looksLikeRepoPath(bases, token) {
+  const head = token.split('/')[0];
+  if (head === '..') return true;
+  if (head === '' || head === '.') return false;
+  return bases.some((base) => {
+    const candidate = join(base, head);
+    return existsSync(candidate) && lstatSync(candidate).isDirectory();
+  });
+}
+
 function checkPathToken(doc, docDirAbs, owningDirAbs, line, token) {
   if (/[\s*?{}<>$()`,]/.test(token)) return;
   if (token.includes('://') || token.includes('...')) return;
   if (token.startsWith('@')) return; // npm name, not a path
   if (!token.includes('/')) return;
-  if (!PATH_ROOTS.some((p) => token.startsWith(p))) return;
+  const bases = [docDirAbs, owningDirAbs, repoRoot];
+  if (!looksLikeRepoPath(bases, token)) return;
   // Skip generated-output references anywhere in the path (e.g. a package's
   // `dist/index.js` or `packages/core/dist/...`).
   const bare = token.replace(/^(\.\.\/)+|^\.\//, '');
@@ -643,7 +665,7 @@ function checkDepToken(doc, pkgDir, line, token) {
       doc,
       line,
       token,
-      `\`${token}\` is claimed as a dependency but "${name}" is not in ${join(pkgDir, 'package.json').slice(repoRoot.length + 1)}`,
+      `\`${token}\` is claimed as a dependency but "${name}" is not in ${relative(repoRoot, join(pkgDir, 'package.json'))}`,
     );
   }
 }
@@ -655,21 +677,17 @@ function checkDepToken(doc, pkgDir, line, token) {
 for (const doc of docFiles) {
   const docDirAbs = join(repoRoot, dirname(doc));
   const owning = owningPackageDir(docDirAbs);
-  const events = docEvents(readFileSync(join(repoRoot, doc), 'utf8'));
 
   let depSectionLevel = 0; // heading level of the open Dependencies section
-  for (const event of events) {
+  for (const event of parsedDoc(doc).events) {
     if (event.kind === 'command') {
       checkBashLine(doc, docDirAbs, event.line, event.text);
       continue;
     }
 
     if (event.kind === 'heading') {
-      depSectionLevel = DEP_SECTION_RE.test(event.text)
-        ? event.depth
-        : depSectionLevel && event.depth <= depSectionLevel
-          ? 0
-          : depSectionLevel;
+      if (DEP_SECTION_RE.test(event.text)) depSectionLevel = event.depth;
+      else if (event.depth <= depSectionLevel) depSectionLevel = 0;
       continue;
     }
 
