@@ -1,16 +1,24 @@
 #!/usr/bin/env node
 
 // Deterministic drift checker for the agent-harness docs (AGENTS.md files and
-// .agents/skills/*/SKILL.md). Design: HARNESS_AUDIT.md "Part 2 — drift checker
-// design". Modeled on .agents/skills/api-doc-sync/scripts/check-type-blocks.mjs:
-// pure Node, zero deps, per-violation messages, non-zero exit on drift.
+// .agents/skills/*/SKILL.md). Modeled on
+// .agents/skills/api-doc-sync/scripts/check-type-blocks.mjs: per-violation
+// messages, non-zero exit on drift.
+//
+// Markdown and shell are parsed by `marked` and `shell-quote` (both zero
+// dependency) rather than by regex. Hand-rolled fence/quote matching fails
+// silently — an info string like ```bash title="x" used to leave the opening
+// fence unrecognized, so the *closing* fence opened a block and the rest of the
+// doc went unchecked with no diagnostic. Regex is kept only where the task is
+// classification, not parsing (is this token a path? an npm name?).
 //
 // Checks (all deterministic, no prose/semantic judgment):
 //   C1 — every AGENTS.md has a sibling CLAUDE.md that is a symlink to AGENTS.md
 //        (git mode 120000 when tracked).
 //   C2 — root AGENTS.md references every packages/*/AGENTS.md by path, and its
 //        "Monorepo structure" section lists every direct child of packages/.
-//   C3 — commands in ```bash fences: `pnpm --filter <pkg> <script>` scripts
+//   C3 — commands in ```bash fences (`shell-quote` splits words, strips quotes,
+//        and drops comments): `pnpm --filter <pkg> <script>` scripts
 //        exist in the target package; `npm run <script>` scripts exist in the
 //        doc's owning package; bare `pnpm <script>` resolves to a root script
 //        (or, in a package doc, to a root or owning-package script).
@@ -39,8 +47,8 @@
 //   node scripts/check-harness-docs.mjs          # human output, exit 1 on drift
 //   node scripts/check-harness-docs.mjs --json   # machine-readable violations
 //
-// Non-goals (see HARNESS_AUDIT.md): no prose/behavioral checking, no signature
-// checking (api-doc-sync owns that), no auto-fix.
+// Non-goals: no prose/behavioral checking, no signature checking (api-doc-sync
+// owns that), no auto-fix.
 
 import { execFileSync } from 'node:child_process';
 import {
@@ -52,6 +60,8 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { argv, exit, stdout } from 'node:process';
+import { Lexer } from 'marked';
+import { parse as parseShellWords } from 'shell-quote';
 
 const asJson = argv.slice(2).includes('--json');
 
@@ -209,31 +219,91 @@ function declaredDeps(dir) {
 }
 
 // ---------------------------------------------------------------------------
-// Doc parsing: fenced blocks vs prose, headings, inline-code tokens.
+// Doc parsing: marked's lexer, flattened into positioned events.
 // ---------------------------------------------------------------------------
 
 /**
- * Split a doc into lines annotated with fence state. `fence` is the info
- * string of the enclosing fenced code block ('' for prose lines, 'bash' for
- * lines inside a ```bash block, and so on).
+ * Flatten a doc into ordered events: `heading` (section state for C2/C5),
+ * `command` (one per line of a ```bash fence, for C3) and `codespan` (inline
+ * code outside code blocks, for C4/C5).
+ *
+ * marked owns the grammar, so info strings, longer fences and inline code in
+ * tables, lists and blockquotes are seen the way a renderer sees them. Line
+ * numbers come from a cursor that only moves forward: container tokens move it
+ * to their start so their children stay findable, leaf tokens consume their
+ * `raw`. A `raw` that is not a contiguous substring of the source (a wrapped
+ * blockquote paragraph, say) leaves the cursor where it is, which costs at
+ * worst an imprecise line number in one message.
  */
-function annotateLines(text) {
-  const out = [];
-  let fence = '';
-  for (const [i, raw] of text.split('\n').entries()) {
-    const open = /^```([a-zA-Z]*)\s*$/.exec(raw.trim());
-    if (open) {
-      fence = fence === '' ? open[1] || 'plain' : '';
-      continue;
-    }
-    out.push({ line: i + 1, text: raw, fence });
+function docEvents(src) {
+  const lineStarts = [0];
+  for (let i = 0; i < src.length; i++) {
+    if (src[i] === '\n') lineStarts.push(i + 1);
   }
-  return out;
-}
+  const lineOf = (offset) => {
+    let lo = 0;
+    let hi = lineStarts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (lineStarts[mid] <= offset) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo + 1;
+  };
 
-/** Inline-code spans in a prose line. */
-function inlineTokens(text) {
-  return [...text.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+  const events = [];
+  let cursor = 0;
+  /** Start offset of `raw`, cursor left at that start (container tokens). */
+  const enter = (raw) => {
+    const idx = src.indexOf(raw, cursor);
+    if (idx === -1) return cursor;
+    cursor = idx;
+    return idx;
+  };
+  /** Start offset of `raw`, cursor moved past it (leaf tokens). */
+  const take = (raw) => {
+    const idx = src.indexOf(raw, cursor);
+    if (idx === -1) return cursor;
+    cursor = idx + raw.length;
+    return idx;
+  };
+
+  const walk = (tokens) => {
+    for (const token of tokens ?? []) {
+      if (token.type === 'code') {
+        const startLine = lineOf(take(token.raw));
+        // CommonMark: the language is the first word of the info string.
+        if ((token.lang ?? '').trim().split(/\s+/)[0] !== 'bash') continue;
+        for (const [i, text] of token.text.split('\n').entries()) {
+          // +1: `token.text` starts on the line after the opening fence.
+          events.push({ kind: 'command', line: startLine + 1 + i, text });
+        }
+        continue;
+      }
+      if (token.type === 'codespan') {
+        const line = lineOf(take(token.raw));
+        events.push({ kind: 'codespan', line, text: token.text });
+        continue;
+      }
+      const start = token.raw === undefined ? cursor : enter(token.raw);
+      if (token.type === 'heading') {
+        events.push({
+          kind: 'heading',
+          line: lineOf(start),
+          depth: token.depth,
+          text: token.text,
+        });
+      }
+      walk(token.tokens);
+      walk(token.items);
+      if (token.header) walk(token.header.flatMap((cell) => cell.tokens ?? []));
+      if (token.rows) {
+        walk(token.rows.flat().flatMap((cell) => cell.tokens ?? []));
+      }
+    }
+  };
+  walk(Lexer.lex(src));
+  return events;
 }
 
 // ---------------------------------------------------------------------------
@@ -318,18 +388,18 @@ for (const doc of docFiles) {
 // ---------------------------------------------------------------------------
 
 const rootDoc = readFileSync(join(repoRoot, 'AGENTS.md'), 'utf8');
+const rootEvents = docEvents(rootDoc);
 const structureSection = (() => {
+  const headings = rootEvents.filter((e) => e.kind === 'heading');
+  const startAt = headings.findIndex(
+    (h) => h.depth === 2 && h.text === 'Monorepo structure',
+  );
+  if (startAt === -1) return null;
+  const end = headings.slice(startAt + 1).find((h) => h.depth <= 2);
   const lines = rootDoc.split('\n');
-  const start = lines.findIndex((l) => /^##\s+Monorepo structure\s*$/.test(l));
-  if (start === -1) return null;
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++) {
-    if (/^##\s/.test(lines[i])) {
-      end = i;
-      break;
-    }
-  }
-  return lines.slice(start, end).join('\n');
+  return lines
+    .slice(headings[startAt].line - 1, end ? end.line - 1 : lines.length)
+    .join('\n');
 })();
 if (structureSection === null) {
   report(
@@ -385,23 +455,40 @@ const PNPM_BIN_ALLOWLIST = new Set([
   'exec',
 ]);
 
-function stripQuotes(token) {
-  return token.replace(/^['"]|['"]$/g, '');
-}
+/** Operators that end one command and start the next. */
+const COMMAND_SEPARATORS = new Set(['&&', '||', ';', '|', '&']);
 
 function scriptsOf(dir) {
   return new Set(Object.keys(readPkg(dir)?.scripts ?? {}));
 }
 
-function checkBashLine(doc, docDirAbs, line, text) {
-  const noComment = text.replace(/(^|\s)#.*$/, '');
-  for (const segment of noComment.split(/&&|\|\||;|\|/)) {
-    const tokens = segment.trim().split(/\s+/).filter(Boolean);
-    if (tokens.length === 0) continue;
+/**
+ * Words of each command on a shell line. `shell-quote` resolves quoting, so a
+ * `#` or `|` inside a quoted argument stays part of that argument instead of
+ * truncating the line. Everything after a real comment is dropped; redirection
+ * operators contribute no words.
+ */
+function commandsOf(text) {
+  const commands = [[]];
+  for (const word of parseShellWords(text)) {
+    if (typeof word === 'string') {
+      commands.at(-1).push(word);
+      continue;
+    }
+    if (word.comment !== undefined) break;
+    if (word.op === 'glob') commands.at(-1).push(word.pattern);
+    else if (COMMAND_SEPARATORS.has(word.op)) commands.push([]);
+  }
+  return commands.filter((words) => words.length > 0);
+}
 
-    if (tokens[0] === 'pnpm' && tokens[1] === '--filter') {
-      const spec = stripQuotes(tokens[2] ?? '');
-      const rest = tokens.slice(3);
+function checkBashLine(doc, docDirAbs, line, text) {
+  for (const words of commandsOf(text)) {
+    const command = words.join(' ');
+
+    if (words[0] === 'pnpm' && words[1] === '--filter') {
+      const spec = words[2] ?? '';
+      const rest = words.slice(3);
       if (rest[0] === 'run') rest.shift();
       const script = rest[0];
       // Glob filters fan out; script existence across a glob is meaningless.
@@ -414,8 +501,8 @@ function checkBashLine(doc, docDirAbs, line, text) {
           'C3',
           doc,
           line,
-          segment.trim(),
-          `\`${segment.trim()}\`: no workspace package matches filter "${spec}"`,
+          command,
+          `\`${command}\`: no workspace package matches filter "${spec}"`,
         );
         continue;
       }
@@ -425,15 +512,15 @@ function checkBashLine(doc, docDirAbs, line, text) {
           'C3',
           doc,
           line,
-          segment.trim(),
-          `\`${segment.trim()}\`: package "${spec}" has no script "${script}"`,
+          command,
+          `\`${command}\`: package "${spec}" has no script "${script}"`,
         );
       }
       continue;
     }
 
-    if (tokens[0] === 'npm' && tokens[1] === 'run') {
-      const script = stripQuotes(tokens[2] ?? '');
+    if (words[0] === 'npm' && words[1] === 'run') {
+      const script = words[2] ?? '';
       if (!script || script.startsWith('-') || script.includes('<')) continue;
       const owning = owningPackageDir(docDirAbs);
       if (!scriptsOf(owning).has(script)) {
@@ -441,15 +528,15 @@ function checkBashLine(doc, docDirAbs, line, text) {
           'C3',
           doc,
           line,
-          segment.trim(),
-          `\`${segment.trim()}\`: no script "${script}" in ${join(owning, 'package.json').slice(repoRoot.length + 1)}`,
+          command,
+          `\`${command}\`: no script "${script}" in ${join(owning, 'package.json').slice(repoRoot.length + 1)}`,
         );
       }
       continue;
     }
 
-    if (tokens[0] === 'pnpm' && tokens[1]) {
-      const word = stripQuotes(tokens[1]);
+    if (words[0] === 'pnpm' && words[1]) {
+      const word = words[1];
       if (!/^[a-z][a-z0-9:._-]*$/.test(word)) continue;
       if (PNPM_BIN_ALLOWLIST.has(word)) continue;
       const owning = owningPackageDir(docDirAbs);
@@ -464,8 +551,8 @@ function checkBashLine(doc, docDirAbs, line, text) {
           'C3',
           doc,
           line,
-          segment.trim(),
-          `\`${segment.trim()}\`: "${word}" is neither a root script nor a script of the doc's package`,
+          command,
+          `\`${command}\`: "${word}" is neither a root script nor a script of the doc's package`,
         );
       }
     }
@@ -533,7 +620,7 @@ function checkPathToken(doc, docDirAbs, owningDirAbs, line, token) {
 // C5 — dependency-name claims in Dependencies / Tech stack sections.
 // ---------------------------------------------------------------------------
 
-const DEP_SECTION_RE = /^(#{1,6})\s+(?:Dependencies|Tech stack)\s*$/i;
+const DEP_SECTION_RE = /^(?:Dependencies|Tech stack)$/i;
 const NPM_NAME_RE = /^[a-z0-9~][a-z0-9._-]*$/;
 
 function checkDepToken(doc, pkgDir, line, token) {
@@ -567,32 +654,29 @@ function checkDepToken(doc, pkgDir, line, token) {
 
 for (const doc of docFiles) {
   const docDirAbs = join(repoRoot, dirname(doc));
-  const lines = annotateLines(readFileSync(join(repoRoot, doc), 'utf8'));
   const owning = owningPackageDir(docDirAbs);
+  const events = docEvents(readFileSync(join(repoRoot, doc), 'utf8'));
 
   let depSectionLevel = 0; // heading level of the open Dependencies section
-  for (const { line, text, fence } of lines) {
-    if (fence === 'bash') {
-      checkBashLine(doc, docDirAbs, line, text);
+  for (const event of events) {
+    if (event.kind === 'command') {
+      checkBashLine(doc, docDirAbs, event.line, event.text);
       continue;
     }
-    if (fence !== '') continue; // other fenced code is out of scope
 
-    const heading = /^(#{1,6})\s/.exec(text);
-    if (heading) {
-      depSectionLevel = DEP_SECTION_RE.test(text.trim())
-        ? heading[1].length
-        : depSectionLevel && heading[1].length <= depSectionLevel
+    if (event.kind === 'heading') {
+      depSectionLevel = DEP_SECTION_RE.test(event.text)
+        ? event.depth
+        : depSectionLevel && event.depth <= depSectionLevel
           ? 0
           : depSectionLevel;
+      continue;
     }
 
-    for (const token of inlineTokens(text)) {
-      checkPathToken(doc, docDirAbs, owning, line, token);
-      // C5 only applies to package docs (root has no dependency sections).
-      if (depSectionLevel > 0 && owning !== repoRoot) {
-        checkDepToken(doc, owning, line, token);
-      }
+    checkPathToken(doc, docDirAbs, owning, event.line, event.text);
+    // C5 only applies to package docs (root has no dependency sections).
+    if (depSectionLevel > 0 && owning !== repoRoot) {
+      checkDepToken(doc, owning, event.line, event.text);
     }
   }
 }

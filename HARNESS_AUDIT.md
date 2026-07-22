@@ -17,8 +17,8 @@ In `packages/core/src/cli/init/browser/create.ts`:
 
 Repro shape: run `rstest init` (browser) twice in a project that has a test file but no matching component, or that already has `rstest.browser.config.mts`.
 
-## 3. `rstest list --json` emits no JSON on the collect-error path — fixed (uncommitted)
+## 3. `rstest list --json` emits no JSON on the collect-error path
 
-When any per-file collect or globalSetup error occurred, `listTests` printed ANSI `FAIL` / `Unhandled Error` blocks and returned before the listing/JSON stage, so a `--json` caller got human-formatted ANSI on stdout and no structured output.
+When any per-file collect or globalSetup error occurs, `listTests` prints ANSI `FAIL` / `Unhandled Error` blocks and returns before the listing/JSON stage, so a `--json` caller gets human-formatted ANSI on stdout and no structured output.
 
-Fixed here (uncommitted): the error path now emits `{ errors: [{ file?, name, message, stack }] }` to stdout/file and suppresses the ANSI blocks when JSON goes to stdout (`packages/core/src/core/listTests.ts:696`).
+Repro shape: `rstest list --json` on a project with a file that throws at collect time. Expected: a machine-parseable payload on stdout.
