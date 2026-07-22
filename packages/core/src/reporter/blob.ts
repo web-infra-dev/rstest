@@ -41,6 +41,9 @@ export const BLOB_FILE_RE: RegExp = /^blob(-\d+-\d+)?\.json$/;
 export const isBlobFile = (name: string): boolean => BLOB_FILE_RE.test(name);
 
 export class BlobReporter implements Reporter {
+  // Blob output goes to a file, never process stdout/stderr.
+  readonly flushOutputStreams = false;
+
   private readonly config: NormalizedConfig;
   private readonly outputDir: string;
   private readonly consoleLogs: UserConsoleLog[] = [];
