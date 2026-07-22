@@ -151,6 +151,15 @@ describe('Expect API', () => {
     expect(mock).lastReturnedWith('SECOND');
   });
 
+  it('checks the value passed to the returned alias', () => {
+    const mock = rs.fn(() => 'actual');
+    mock();
+
+    expect(mock).returned('actual');
+    expect(mock).not.returned('expected');
+    expect(() => expect(mock).returned('expected')).toThrow();
+  });
+
   it.fails('test not failed', () => {
     expect(1 + 1).not.toBe(2);
   });

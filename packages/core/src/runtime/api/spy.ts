@@ -122,7 +122,12 @@ export const initSpy = (
       try {
         const result = cb();
 
-        if (result && typeof result.then === 'function') {
+        if (
+          typeof result === 'object' &&
+          result !== null &&
+          'then' in result &&
+          typeof result.then === 'function'
+        ) {
           return result.then(
             () => {
               reset();
