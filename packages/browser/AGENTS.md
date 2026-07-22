@@ -4,42 +4,12 @@ Browser mode support for Rstest. Provides browser test execution using Playwrigh
 
 ## Boundary map
 
-```mermaid
-flowchart LR
-  subgraph Host["package: @rstest/browser"]
-    H1[hostController]
-    H2[dispatchRouter]
-    H3[namespace handlers]
-  end
-
-  subgraph UI["package: @rstest/browser-ui"]
-    U1[useRpc birpc]
-    U2[channel forwarding]
-    U3[lifecycle message listener]
-  end
-
-  subgraph RunnerRuntime["module: @rstest/browser src/client"]
-    R1[send lifecycle]
-    R2[dispatch rpc request — snapshot / browserRpc via dispatchTransport]
-    R3[dispatchTransport pending-request resolver]
-  end
-
-  H1 -->|inject host config + birpc callbacks| U1
-  U1 -->|birpc calls| H1
-
-  R1 -->|postMessage __rstest_dispatch__| U3
-  U3 -->|onTest* callbacks| U1
-
-  R2 -->|postMessage dispatch rpc request| U2
-  U2 -->|rpc.dispatch| U1
-  U1 -->|dispatch request| H1
-  H1 -->|route| H2 --> H3
-  H1 -->|dispatch response| U1 --> U2 -->|postMessage| R3
-
-  H1 -->|headless bridge __rstest_dispatch__ / __rstest_dispatch_rpc__| R1
+```
+Headed:   runner iframe --postMessage--> browser-ui container --birpc--> host --> dispatchRouter --> namespace handler
+Headless: runner top-level page --exposeFunction(__rstest_dispatch__ / __rstest_dispatch_rpc__)--> host (browser-ui not involved)
 ```
 
-The headed path routes runner ↔ host traffic through the browser-ui container; the headless path bridges directly via `exposeFunction`. `dispatchRouter` handles inbound request routing only; outbound delivery is a transport reply. `dispatchTransport` (client side) owns request ids, timeouts, and pending-response resolution for both transports.
+Responses always travel back as transport replies — `dispatchRouter` handles inbound request routing only and never initiates outbound delivery. `dispatchTransport` (client side) owns request ids, timeouts, and pending-response resolution for both transports.
 
 ## Contract ownership
 

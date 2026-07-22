@@ -22,7 +22,7 @@ If a package does not have its own `AGENTS.md`, follow this root file and copy t
 
 A new `AGENTS.md` needs a sibling `CLAUDE.md` symlink (`ln -s AGENTS.md CLAUDE.md`). `pnpm check-harness-docs` enforces that, plus the command, path, and dependency claims written inside `AGENTS.md`/`SKILL.md` files.
 
-**Altitude rule**: an `AGENTS.md` documents only what cannot be read from the code — data flow across boundaries, invariants, coupling points ("change A → also change B"), and historical pitfalls. Every line must either constrain future changes or record a decision/pitfall the code cannot express; do not describe what the code plainly shows. If a fact cannot be verified against the code, delete it rather than qualify it. No per-file inventories and no `file:line` references (the checker validates paths but not line numbers, so line references are undetectable drift); refer to symbols instead.
+**Altitude rule**: document only what the code cannot express — cross-boundary data flow, invariants, coupling points, pitfalls — phrased as constraints on future changes. No file inventories, no `file:line` references (the checker validates paths, not line numbers — line refs are undetectable drift); refer to symbols. A claim you cannot verify gets deleted, not hedged.
 
 ## Monorepo structure
 

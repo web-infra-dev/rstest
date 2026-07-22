@@ -40,7 +40,6 @@ The default entry (`src/index.ts`) registers auto-cleanup via `beforeEach`; `@rs
 Good — use feature detection across the supported range:
 
 ```typescript
-// src/act.ts
 // `React.act` was stabilized in React 18.3.1; 18.0.0 – 18.3.0 only expose `React.unstable_act`.
 const _act = ((React as Record<string, unknown>).act ??
   (React as Record<string, unknown>).unstable_act) as

@@ -17,9 +17,9 @@ Core testing framework for Rstest.
 
 Core owns the run-cycle contract shared by the node pool and `@rstest/browser`:
 
-- `finalizeRunCycle` (`src/core/finalizeRun.ts`) is the single finalize implementation for node-only, browser-only, and mixed runs: it reduces each executor's `ExecutorCycleOutcome` into the run verdict (merged results, coverage merge + report, reporter `onTestRunEnd`, exit code, bail message). Non-watch runs must exit through it exactly once; browser watch runs self-finalize host-side instead, and core skips its finalize for browser-only and zero-node mixed watch runs.
-- `RunnerEventSink` (`src/core/runnerEventSink.ts`) is the single event pump for runner lifecycle events on both transports (node pool RPC and browser dispatch). One sink per project, bound to that project's `normalizedConfig`, feeding `stateManager` and reporters. No direct reporter/`stateManager` fanout anywhere else.
-- `executorCapabilities` (`src/core/executorCapabilities.ts`) declares the per-executor disposition (`supported` / `ignored-warn` / `error` / `stripped`) of every `RuntimeConfig` field. Adding a field without a row is a compile error; the browser wire projection (`src/core/runtimeConfigProjection.ts`) keeps its own hand-written field list, held in lockstep by `tests/core/executorCapabilities.test.ts`.
+- `finalizeRunCycle` is the single finalize implementation for node-only, browser-only, and mixed runs: it reduces each executor's `ExecutorCycleOutcome` into the run verdict (merged results, coverage merge + report, reporter `onTestRunEnd`, exit code, bail message). Non-watch runs must exit through it exactly once; browser watch runs self-finalize host-side instead, and core skips its finalize for browser-only and zero-node mixed watch runs.
+- `RunnerEventSink` is the single event pump for runner lifecycle events on both transports (node pool RPC and browser dispatch). One sink per project, bound to that project's `normalizedConfig`, feeding `stateManager` and reporters. No direct reporter/`stateManager` fanout anywhere else.
+- `executorCapabilities` declares the per-executor disposition (`supported` / `ignored-warn` / `error` / `stripped`) of every `RuntimeConfig` field. Adding a field without a row is a compile error; the browser wire projection (`projectRuntimeConfig`) keeps its own hand-written field list, held in lockstep by `tests/core/executorCapabilities.test.ts`.
 
 ## Cross-cutting invariants
 
@@ -29,7 +29,7 @@ Contracts between modules or processes — not readable from any single file.
 
 - Exit codes never downgrade: a later zero must not clear a prior non-zero.
 - `stateManager` reset is core-owned (top of a non-watch run, or `prepareWatchRerunState` per watch rerun) — executors never reset it, so bail reads stay cycle-scoped.
-- `@rstest/browser` is version-locked to core and loaded through the core-owned `BrowserHostModule` contract (`src/core/browserLoader.ts`); the browser package constrains its exports against it via `satisfies`.
+- `@rstest/browser` is version-locked to core and loaded through the core-owned `BrowserHostModule` contract; the browser package constrains its exports against it via `satisfies`.
 - Reporter output is sorted by `testPath`, deliberately decoupled from the perf-first execution order (failed-first, then longest-processing-time). Don't "fix" one by changing the other.
 
 ### Config merge (`src/cli`)
@@ -60,7 +60,7 @@ Contracts between modules or processes — not readable from any single file.
 - Reporters are passive consumers: every mid-run event arrives through `RunnerEventSink`, which updates `stateManager` before reporter fanout — TTY renderers read state, not event payloads.
 - `reportersMap` is locked to the `BuiltInReporterNames` union via `satisfies`; a new built-in name needs both plus `BuiltinReporterOptions` (not compile-guarded).
 - The md output format is a spec'd contract snapshot-tested in `e2e/reporter/md.test.ts` — behavior changes require snapshot updates there.
-- The blob filename grammar has a single owner in `src/reporter/blob.ts`; `mergeReports` must keep using `isBlobFile` rather than re-encoding the pattern.
+- The blob filename grammar has a single owner; `mergeReports` must keep using `isBlobFile` rather than re-encoding the pattern.
 
 ## Commands
 
@@ -88,7 +88,7 @@ pnpm --filter @rstest/core lint
 ## Don't
 
 - Don't bypass the worker pool for test execution
-- Don't use `console.log` directly; use the logger utilities (sole sanctioned exception: `NonTTYProgressNotifier`'s `[PROGRESS]` lines in `src/reporter/nonTtyProgressNotifier.ts`)
+- Don't use `console.log` directly; use the logger utilities (sole sanctioned exception: `NonTTYProgressNotifier`'s `[PROGRESS]` lines)
 - Don't call timer globals (`setTimeout` etc.) directly in `src/runtime/` — user tests may enable fake timers; use `getRealTimers()` from `runtime/util` (lint-enforced via `no-restricted-syntax`)
 - Don't fan runner lifecycle events out to reporters or `stateManager` directly; route them through `RunnerEventSink`
 - Don't add a `RuntimeConfig` field without declaring its node/browser disposition in `executorCapabilities`
