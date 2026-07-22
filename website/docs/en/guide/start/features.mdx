@@ -1,5 +1,5 @@
 ---
-description: Explore Rstest features for build-integrated testing, including Rstack config reuse, browser mode, sharding, and coverage.
+description: Explore Rstest features for build-integrated testing, including Rstack config reuse, browser mode, Playwright-driven E2E tests, sharding, and coverage.
 ---
 
 # Features
@@ -57,6 +57,12 @@ Rstest provides Browser Mode for tests that need a real browser instead of a sim
 Browser Mode is powered by [Playwright](https://playwright.dev/) and can run tests in Chromium, Firefox, and WebKit, making it suitable for cross-browser verification.
 
 Learn more about [Browser mode](/guide/browser-testing).
+
+## Playwright-driven E2E tests
+
+Rstest can run E2E tests against a complete page or app with [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright). Tests run in Node.js workers and use Playwright to drive a local dev server, preview server, or deployed URL while sharing the same Rstest runner, configuration, and reporting workflow as other tests.
+
+Learn more about [Playwright](/guide/advanced/playwright).
 
 ## Code coverage
 
