@@ -103,8 +103,6 @@
         "tests/fixtures/**/test/*.{jsx,tsx}",
         // Sample project for e2e testing
         "sample/**/*.ts",
-        // VS Code test runner config
-        ".vscode-test.mjs",
       ],
       "ignoreDependencies": [
         // CLI tool used in CI/release scripts, not in code

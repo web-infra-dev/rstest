@@ -1,4 +1,5 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
+import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { ProjectContext } from './core';
 import type { GetSourcemap } from './reporter';
 import type { TestFileResult, TestResult } from './testSuite';
@@ -68,6 +69,12 @@ export interface BrowserTestRunOptions {
    * (`NODE_ENV`/`RSTEST`) and the user `test.env` config.
    */
   env?: Record<string, string | undefined>;
+  /**
+   * The cycle's snapshot update state (`ExecutorRunCycleOptions.updateSnapshot`
+   * carrier). The host falls back to reading
+   * `context.snapshotManager.options` when absent (watch startup path).
+   */
+  updateSnapshot?: SnapshotUpdateState;
 }
 
 /**
@@ -108,4 +115,23 @@ export interface BrowserTestRunResult {
   resolveSourcemap?: ResolveBrowserSourcemap;
   /** Deferred cleanup hook for unified reporter mode */
   close?: () => Promise<void>;
+  /**
+   * Watch-session handles, present only on watch-mode results (returned after
+   * the initial run while the session keeps running). Core's CLI shortcuts
+   * drive the host's rerun transport through them — the host itself never
+   * subscribes to stdin.
+   */
+  watch?: BrowserWatchHandles;
+}
+
+/** Watch-session control surface exposed to core (CLI shortcuts, restart). */
+export interface BrowserWatchHandles {
+  /**
+   * Rerun the given test paths through the host's watch rerun pipeline
+   * (all current test files when omitted). Resolves when the rerun has
+   * completed, so callers may restore toggled state afterwards.
+   */
+  rerun: (testPaths?: string[]) => Promise<void>;
+  /** Tear down the watch session (dev servers, provider, browser). */
+  close: () => Promise<void>;
 }

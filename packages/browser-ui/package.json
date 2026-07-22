@@ -23,7 +23,8 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "rsbuild build --config ./rsbuild.config.ts",
-    "dev": "rsbuild dev --config ./rsbuild.config.ts"
+    "dev": "rsbuild dev --config ./rsbuild.config.ts",
+    "lint": "rslint ."
   },
   "dependencies": {
     "antd": "^6.5.1",

@@ -8,7 +8,6 @@ Playwright fixture integration for Rstest. Provides Node-side Playwright browser
 - Treat Playwright as a peer dependency
 - Reuse `@rstest/core` runtime APIs instead of duplicating test runner behavior
 - Keep browser/context/page/request lifecycle cleanup deterministic
-- Use JSDoc comments for public API types and functions
 
 ## Don't
 
@@ -22,5 +21,5 @@ Playwright fixture integration for Rstest. Provides Node-side Playwright browser
 ```bash
 pnpm --filter @rstest/playwright build
 pnpm --filter @rstest/playwright test
-pnpm --filter @rstest/playwright typecheck
+pnpm --filter @rstest/playwright lint
 ```
