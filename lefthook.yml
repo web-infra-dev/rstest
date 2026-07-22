@@ -25,6 +25,13 @@ pre-push:
     # packages/*/LICENSE.md, is in .prettierignore so it cannot race this scan.
     format-spell:
       run: pnpm prettier --check . && pnpm run check-spell
+    # Harness-doc drift check (AGENTS.md / CLAUDE.md symlinks / SKILL.md command
+    # and path claims) — pure Node with no deps and no build, so it runs on every
+    # push like format-spell. No glob: C1/C2 assert whole-tree structure (a doc
+    # can go stale because a *source* file moved), so it cannot key off pushed
+    # paths.
+    check-harness-docs:
+      run: pnpm run check-harness-docs
     # Type-check needs built package .d.ts, so build first. Runs unless the push
     # is entirely markdown, so a docs-only push still skips the build while config
     # inputs (tsconfig.json, rslint.config.mts, ...) keep gating it. An inclusive

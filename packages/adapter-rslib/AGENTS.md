@@ -12,8 +12,9 @@ Rslib configuration adapter for Rstest. Converts Rslib config to Rstest config.
 ```bash
 pnpm --filter @rstest/adapter-rslib build
 pnpm --filter @rstest/adapter-rslib dev     # Watch mode
-pnpm --filter @rstest/adapter-rslib typecheck
 pnpm --filter @rstest/adapter-rslib test
+# Typecheck — no per-package script; run repo-wide from the root
+pnpm typecheck
 ```
 
 ## Do

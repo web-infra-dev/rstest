@@ -4,12 +4,13 @@ Rstest is an Rsbuild-based testing framework for JavaScript/TypeScript projects.
 
 ## Sub-package Instructions
 
-When working on code in a specific package, use the Read tool to load that package's `AGENTS.md` file for package-specific guidelines:
+When working on code in a specific package, read that package's `AGENTS.md` file for package-specific guidelines:
 
 - For @rstest/core: `packages/core/AGENTS.md`
 - For @rstest/browser: `packages/browser/AGENTS.md`
 - For @rstest/browser-ui: `packages/browser-ui/AGENTS.md`
 - For @rstest/browser-react: `packages/browser-react/AGENTS.md`
+- For @rstest/playwright: `packages/playwright/AGENTS.md`
 - For @rstest/coverage-istanbul: `packages/coverage-istanbul/AGENTS.md`
 - For @rstest/adapter-rslib: `packages/adapter-rslib/AGENTS.md`
 - For @rstest/adapter-rsbuild: `packages/adapter-rsbuild/AGENTS.md`
@@ -19,12 +20,15 @@ When working on code in a specific package, use the Read tool to load that packa
 
 If a package does not have its own `AGENTS.md`, follow this root file and copy the closest local patterns.
 
+Harness docs are gated by `scripts/check-harness-docs.mjs` (`pnpm check-harness-docs`, part of `pnpm lint` and pre-push): CLAUDE.md symlinks, this file's sub-package index, and command/path/dependency claims in `AGENTS.md`/`SKILL.md` files are checked deterministically.
+
 ## Monorepo structure
 
 - `packages/core/` — @rstest/core: core testing framework (CLI, runtime, reporter, pool)
 - `packages/browser/` — @rstest/browser: browser mode support (Playwright, WebSocket RPC)
 - `packages/browser-ui/` — @rstest/browser-ui: prebuilt browser container UI (React + Tailwind + Ant Design)
 - `packages/browser-react/` — @rstest/browser-react: React component testing utilities for browser mode
+- `packages/playwright/` — @rstest/playwright: Node-side Playwright browser automation fixtures
 - `packages/coverage-istanbul/` — @rstest/coverage-istanbul: Istanbul coverage provider
 - `packages/coverage-v8/` — @rstest/coverage-v8: V8 coverage provider
 - `packages/adapter-rslib/` — @rstest/adapter-rslib: Rslib configuration adapter
@@ -39,7 +43,7 @@ If a package does not have its own `AGENTS.md`, follow this root file and copy t
 
 ## Package manager and workspace
 
-- Use `pnpm` (the repository currently pins `pnpm@11.5.2`).
+- Use `pnpm` (the version is pinned via the `packageManager` field in the root `package.json`).
 - The workspace includes `benchmarks`, `website`, `scripts/**`, `packages/**`, `examples/**`, and `e2e/**`.
 - Dependency installs use pnpm's stricter settings (`minimumReleaseAge`, `strictDepBuilds`, and explicit build-script approvals). Do not loosen these settings or add heavy dependencies without discussion.
 
@@ -52,8 +56,8 @@ pnpm build                    # Build all packages under packages/*
 pnpm test                     # Run unit tests via rstest
 pnpm e2e                      # Run e2e tests
 pnpm lint                     # Prettier check + spell check + type lint
-pnpm lint:type                # Run rslint
-pnpm typecheck                # Run rslint --type-check-only
+pnpm lint:type                # Run rslint --type-check (needs built package .d.ts)
+pnpm typecheck                # Alias of lint:type
 pnpm format                   # Prettier format + heading-case --write
 pnpm check-unused             # Run knip
 pnpm test:examples            # Run example tests

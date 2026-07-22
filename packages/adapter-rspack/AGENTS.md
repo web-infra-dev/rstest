@@ -13,11 +13,11 @@ Rspack configuration adapter for Rstest. Converts Rspack config to Rstest config
 pnpm --filter @rstest/adapter-rspack build
 pnpm --filter @rstest/adapter-rspack dev     # Watch mode
 
-# Typecheck
-pnpm --filter @rstest/adapter-rspack typecheck
-
 # Test
 pnpm --filter @rstest/adapter-rspack test
+
+# Typecheck — no per-package script; run repo-wide from the root
+pnpm typecheck
 ```
 
 ## Usage

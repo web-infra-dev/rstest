@@ -78,7 +78,8 @@ Browser mode must stay provider-neutral at the framework boundary.
 
 ## Module structure
 
-- `src/index.ts` — Package entry, exports runBrowserTests, listBrowserTests, and validateBrowserConfig
+- `src/index.ts` — Package entry, exports runBrowserTests, listBrowserTests, validateBrowserConfig, and createBrowserExecutor
+- `src/browserExecutor.ts` — Executor-contract implementation (`createBrowserExecutor`) bridging core's run cycle to the browser host
 - `src/hostController.ts` — Main browser mode controller (runtime bootstrap + headless/headed scheduling)
 - `src/configValidation.ts` — Browser config validation pass driven by core's `executorCapabilities` table
 - `src/protocol.ts` — Type definitions for browser-host communication protocol
@@ -112,13 +113,13 @@ Browser mode must stay provider-neutral at the framework boundary.
 pnpm --filter @rstest/browser build
 pnpm --filter @rstest/browser dev     # Watch mode
 
-# Typecheck
-pnpm --filter @rstest/browser typecheck
+# Typecheck — no per-package script; run repo-wide from the root
+pnpm typecheck
 ```
 
 ## Dependencies
 
-This package requires `@rstest/core` as a peer dependency and consumes two internal entrypoints:
+This package requires `@rstest/core` and `playwright` as peer dependencies, and consumes two internal `@rstest/core` entrypoints:
 
 - `@rstest/core/internal/browser-runtime` (client side): `createRstestRuntime`, `setRealTimers`, `globalApis`, and types (WorkerState, RuntimeConfig, etc.)
 - `@rstest/core/internal/browser` (host side): logger/color/TTY utilities, `createRunnerEventSink`, and the run-cycle contract types

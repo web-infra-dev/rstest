@@ -25,7 +25,6 @@ Two-process design:
 npm run build                 # Build with rslib
 npm run build:local           # Build with sourcemaps
 npm run watch                 # Watch mode
-npm run typecheck             # Type check
 npm run test:unit             # Unit tests via rstest
 npm run test:e2e              # E2E tests (downloads VS Code)
 npm run lint                  # Rslint check

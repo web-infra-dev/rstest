@@ -4,9 +4,12 @@ Istanbul coverage provider for Rstest. Instruments code and generates coverage r
 
 ## Module structure
 
-- `src/index.ts` — Package entry, exports provider
+- `src/index.ts` — Package entry, exports `pluginCoverage` and `CoverageProvider` (both destructured by core's `loadCoverageProvider`)
 - `src/provider.ts` — Coverage provider implementation
 - `src/plugin.ts` — Rsbuild plugin for instrumentation
+- `src/utils.ts` — Fast coverage-map merge, initial-coverage scrape, source-map remapping
+
+Cross-package pipeline deep dive: `packages/core/src/coverage/AGENTS.md`.
 
 ## Commands
 
@@ -20,7 +23,6 @@ pnpm --filter @rstest/coverage-istanbul dev      # Watch mode
 - `istanbul-lib-coverage` — Coverage data structures
 - `istanbul-lib-report` — Report generation
 - `istanbul-reports` — Report formats (html, lcov, text, etc.)
-- `istanbul-lib-instrument` — Code instrumentation
 - `swc-plugin-coverage-instrument` — SWC-based instrumentation
 
 ## Do

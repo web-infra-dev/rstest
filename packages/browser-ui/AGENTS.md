@@ -6,7 +6,7 @@ Prebuilt browser container UI for Rstest's browser mode testing.
 
 - React 19
 - Tailwind CSS v4
-- Ant Design v5
+- Ant Design v6
 - Lucide React icons
 - birpc for RPC communication
 
@@ -28,7 +28,8 @@ Prebuilt browser container UI for Rstest's browser mode testing.
 ```bash
 pnpm --filter @rstest/browser-ui dev      # Start dev server
 pnpm --filter @rstest/browser-ui build    # Build for production
-pnpm --filter @rstest/browser-ui typecheck
+# Typecheck — no per-package script; run repo-wide from the root
+pnpm typecheck
 ```
 
 ## Do
@@ -65,5 +66,5 @@ pnpm --filter @rstest/browser-ui typecheck
 
 - Tree rendering: `src/components/TestFilesTree.tsx`
 - Resizable panels: `src/components/Resizable.tsx`
-- Status display: `src/components/StatsBar.tsx`
+- Status display: `src/components/StatusGrid.tsx`
 - Header patterns: `src/components/SidebarHeader.tsx`

@@ -117,7 +117,7 @@ Apply fixes to the `.mdx` directly. For each fix:
   internal generics (`ExtraContext`) — as long as the omission is a faithful
   simplification, not a missing overload or wrong arg order.
 - When a brand-new API/field is documented, set `<ApiMeta addedVersion="…" />`
-  per the `development` skill's convention.
+  per the convention in `website/AGENTS.md`.
 
 ### 4. Re-verify
 
