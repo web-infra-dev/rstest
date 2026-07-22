@@ -61,11 +61,15 @@ Contracts between modules or processes — not readable from any single file.
 - The md output format is a spec'd contract snapshot-tested in `e2e/reporter/md.test.ts` — behavior changes require snapshot updates there.
 - The blob filename grammar has a single owner; `mergeReports` must keep using `isBlobFile` rather than re-encoding the pattern.
 
-`src/core/runTests.ts` is the orchestrator and stays coarse-grained: split projects → node executor `init()` barrier → plan → drive executors → finalize. Browser-specific detail lives in its collaborators, not in the orchestrator:
+`src/core/runTests.ts` is the orchestrator and stays coarse-grained: split projects → node executor `init()` barrier → plan → drive executors → finalize. Browser-specific detail lives under `src/core/browser/`, not in the orchestrator:
 
-- `src/core/browserOnlyRun.ts` — the browser-only run path (no node projects), kept separate by the cold-start gate: constructing a `NodeExecutor` would boot a node Rsbuild instance (with empty `environments`) for every pure-browser run.
-- `src/core/browserRunPlanner.ts` — mixed-run browser-subset planning: file-filter classification, the `modifyRstestConfig` discovery boot, and the executor/watch option bags.
-- `src/core/browserWatchControls.ts` — the core-owned watch control plane for a browser watch session (fatal-signal exit, the single stdin shortcuts owner, and the `BrowserWatchSession` wrapper the mixed watch loop fans reruns out through).
+- `src/core/browser/loader.ts` — the core↔browser load boundary (`loadBrowserModule`, `loadBrowserExecutor`, `runBrowserModeTests`) and the `BrowserHostModule` contract.
+- `src/core/browser/onlyRun.ts` — the browser-only run path (no node projects), kept separate by the cold-start gate: constructing a `NodeExecutor` would boot a node Rsbuild instance (with empty `environments`) for every pure-browser run.
+- `src/core/browser/runPlanner.ts` — mixed-run browser-subset planning: file-filter classification, the `modifyRstestConfig` discovery boot, and the executor/watch option bags.
+- `src/core/browser/watchControls.ts` — the core-owned watch control plane for a browser watch session (fatal-signal exit, the single stdin shortcuts owner, and the `BrowserWatchSession` wrapper the mixed watch loop fans reruns out through).
+- `src/core/browser/globalSetupStage.ts` — the core-owned pre-cycle `globalSetup` stage for browser projects (named for the stage so it never reads as the node `src/core/globalSetup.ts`).
+
+`src/core/isBrowserProject.ts` stays outside that directory on purpose: it is the shared routing predicate every node-path module (plan resolution, environment grouping, Rsbuild setup) reads, not browser-mode implementation.
 
 Two branches in the orchestrator are deliberate exceptions to executor isomorphism, both documented at their call site: the browser-only fast path (cold-start gate) and the watch dual-drive (node watch is dev-compile-hook driven; browser watch is host-driven and self-finalizing).
 

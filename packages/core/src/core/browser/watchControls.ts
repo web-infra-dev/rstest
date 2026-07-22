@@ -1,15 +1,15 @@
-import type { BrowserWatchHandles } from '../types';
-import { clearScreen, color, logger } from '../utils';
-import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
-import { runBrowserModeTests } from './browserLoader';
-import type { BrowserRunPlanner } from './browserRunPlanner';
-import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
-import { runLifecycleStep } from './finalizeRun';
-import type { Rstest } from './rstest';
+import type { BrowserWatchHandles } from '../../types';
+import { clearScreen, color, logger } from '../../utils';
+import { FATAL_SIGNALS, getSignalExitCode } from '../../utils/signals';
+import { runBrowserModeTests } from './loader';
+import type { BrowserRunPlanner } from './runPlanner';
+import { isCliShortcutsEnabled, setupCliShortcuts } from '../cliShortcuts';
+import { runLifecycleStep } from '../finalizeRun';
+import type { Rstest } from '../rstest';
 import {
   collectFailedTestPaths,
   collectUnmatchedSnapshotTestPaths,
-} from './watchState';
+} from '../watchState';
 
 /**
  * Own the fatal-signal → exit path for a browser-only watch session (node
@@ -90,7 +90,7 @@ async function setupBrowserWatchShortcuts(
       }
     },
   });
-  const { onBeforeRestart } = await import('./restart');
+  const { onBeforeRestart } = await import('../restart');
   onBeforeRestart(closeCliShortcuts);
 }
 

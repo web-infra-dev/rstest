@@ -2,33 +2,33 @@ import {
   createCoverageProvider,
   createCoverageProviderWithLog,
   logCoverageEnabled,
-} from '../coverage';
-import { buildBrowserCoverageMap } from '../coverage/browserCoverageMap';
-import type { ProjectContext } from '../types';
+} from '../../coverage';
+import { buildBrowserCoverageMap } from '../../coverage/browserCoverageMap';
+import type { ProjectContext } from '../../types';
 import {
   color,
   logger,
   resolveShardedEntries,
   type TraceController,
   type TraceRun,
-} from '../utils';
-import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
+} from '../../utils';
+import { FATAL_SIGNALS, getSignalExitCode } from '../../utils/signals';
 import {
   globalSetupFailureOutcome,
   runBrowserGlobalSetupStage,
-} from './browserGlobalSetup';
-import { loadBrowserExecutor, runBrowserModeTests } from './browserLoader';
-import { attachBrowserWatchControls } from './browserWatchControls';
-import { ensureRunDependencies } from './dependencies';
+} from './globalSetupStage';
+import { loadBrowserExecutor, runBrowserModeTests } from './loader';
+import { attachBrowserWatchControls } from './watchControls';
+import { ensureRunDependencies } from '../dependencies';
 import {
   finalizeRunCycle,
   notifyReportersOnTestRunEnd,
   notifyReportersOnTestRunStart,
   reportNoTestFiles,
   runLifecycleStep,
-} from './finalizeRun';
-import { runGlobalTeardown } from './globalSetup';
-import type { Rstest } from './rstest';
+} from '../finalizeRun';
+import { runGlobalTeardown } from '../globalSetup';
+import type { Rstest } from '../rstest';
 
 /**
  * Browser-only run path (no node projects). Retained per the cold-start gate:
@@ -115,7 +115,7 @@ export async function runBrowserOnlyTests(
         coverageProvider,
       );
       if (coverageProvider && browserCoverageMap) {
-        const { generateCoverage } = await import('../coverage/generate');
+        const { generateCoverage } = await import('../../coverage/generate');
         await generateCoverage(
           context,
           browserCoverageMap,

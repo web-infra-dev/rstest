@@ -17,7 +17,7 @@ import {
   notifyReportersOnTestRunStart,
   runLifecycleStep,
 } from './finalizeRun';
-import { loadBrowserExecutor } from './browserLoader';
+import { loadBrowserExecutor } from './browser/loader';
 import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
 import {
   isCliShortcutsEnabled,
@@ -28,10 +28,10 @@ import {
   type BrowserGlobalSetupStageResult,
   globalSetupFailureOutcome,
   runBrowserGlobalSetupStage,
-} from './browserGlobalSetup';
-import { runBrowserOnlyTests } from './browserOnlyRun';
-import { createBrowserRunPlanner } from './browserRunPlanner';
-import { createBrowserWatchSession } from './browserWatchControls';
+} from './browser/globalSetupStage';
+import { runBrowserOnlyTests } from './browser/onlyRun';
+import { createBrowserRunPlanner } from './browser/runPlanner';
+import { createBrowserWatchSession } from './browser/watchControls';
 import { createNodeExecutor } from './executors/nodeExecutor';
 import { runGlobalTeardown } from './globalSetup';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';

@@ -310,7 +310,7 @@ const collectBrowserTests = async ({
   // Collect through the executor seam so `rstest list` and the run path share
   // one browser entry point (import stays dynamic: no browser module load for
   // node-only lists).
-  const { loadBrowserExecutor } = await import('./browserLoader');
+  const { loadBrowserExecutor } = await import('./browser/loader');
   const executor = await loadBrowserExecutor(context, browserProjects, null, {
     shardedEntries,
     freezeShardedEntries,

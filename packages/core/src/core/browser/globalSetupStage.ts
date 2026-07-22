@@ -5,18 +5,18 @@ import type {
   ProjectContext,
   ProjectEntries,
   RstestContext,
-} from '../types';
-import { isDebug, resolveShardedEntries } from '../utils';
-import { claimGlobalSetupOnce, runGlobalSetup } from './globalSetup';
-import { getRsbuildEnvironmentConfig } from './modifyRstestConfig';
-import { pluginBasic } from './plugins/basic';
-import { pluginEntryWatch } from './plugins/entry';
-import { pluginExternal } from './plugins/external';
-import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
-import { pluginMockRuntime } from './plugins/mockRuntime';
-import { getProjectEntries } from './projectPlan';
-import { createRsbuildServer, hostServerConfig } from './rsbuild';
-import { createSetupFileState } from './setupFileState';
+} from '../../types';
+import { isDebug, resolveShardedEntries } from '../../utils';
+import { claimGlobalSetupOnce, runGlobalSetup } from '../globalSetup';
+import { getRsbuildEnvironmentConfig } from '../modifyRstestConfig';
+import { pluginBasic } from '../plugins/basic';
+import { pluginEntryWatch } from '../plugins/entry';
+import { pluginExternal } from '../plugins/external';
+import { pluginIgnoreResolveError } from '../plugins/ignoreResolveError';
+import { pluginMockRuntime } from '../plugins/mockRuntime';
+import { getProjectEntries } from '../projectPlan';
+import { createRsbuildServer, hostServerConfig } from '../rsbuild';
+import { createSetupFileState } from '../setupFileState';
 
 export type BrowserGlobalSetupStageResult = {
   /**

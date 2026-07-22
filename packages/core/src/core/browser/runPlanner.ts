@@ -1,16 +1,13 @@
-import type { BrowserTestRunOptions, ProjectContext } from '../types';
+import type { BrowserTestRunOptions, ProjectContext } from '../../types';
 import {
   isFilterInsideProject,
   isFuzzyBasenameFilter,
   type TraceEvent,
-} from '../utils';
-import {
-  type BrowserExecutorRunOptions,
-  runBrowserModeTests,
-} from './browserLoader';
-import type { NodeExecutor } from './executors/nodeExecutor';
-import { getUserRstestConfigPluginProjects } from './modifyRstestConfig';
-import type { Rstest } from './rstest';
+} from '../../utils';
+import { type BrowserExecutorRunOptions, runBrowserModeTests } from './loader';
+import type { NodeExecutor } from '../executors/nodeExecutor';
+import { getUserRstestConfigPluginProjects } from '../modifyRstestConfig';
+import type { Rstest } from '../rstest';
 
 /**
  * Browser-side planning for a mixed (node + browser) run: which browser

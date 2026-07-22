@@ -12,7 +12,7 @@ export type {
   BrowserHostModule,
   BrowserTestExecutor,
   CreateBrowserExecutorOptions,
-} from './core/browserLoader';
+} from './core/browser/loader';
 // Shared coverage fold: the browser executor and the browser-only watch path
 // merge per-file result coverage through the same helper.
 export { buildBrowserCoverageMap } from './coverage/browserCoverageMap';
