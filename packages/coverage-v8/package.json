@@ -29,6 +29,7 @@
   ],
   "scripts": {
     "build": "rslib build",
+    "lint": "rslint .",
     "test": "rstest"
   },
   "dependencies": {

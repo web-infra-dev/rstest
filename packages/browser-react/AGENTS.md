@@ -25,6 +25,9 @@ pnpm --filter @rstest/browser-react dev     # Watch mode
 
 # Run tests
 pnpm --filter @rstest/browser-react test
+
+# Lint
+pnpm --filter @rstest/browser-react lint
 ```
 
 ## Project structure

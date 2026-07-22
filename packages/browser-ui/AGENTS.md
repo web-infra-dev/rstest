@@ -28,8 +28,7 @@ Prebuilt browser container UI for Rstest's browser mode testing.
 ```bash
 pnpm --filter @rstest/browser-ui dev      # Start dev server
 pnpm --filter @rstest/browser-ui build    # Build for production
-# Typecheck — no per-package script; run repo-wide from the root
-pnpm typecheck
+pnpm --filter @rstest/browser-ui lint     # Rslint
 ```
 
 ## Do

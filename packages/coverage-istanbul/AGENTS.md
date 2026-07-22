@@ -16,6 +16,7 @@ Cross-package pipeline deep dive: `packages/core/src/coverage/AGENTS.md`.
 ```bash
 pnpm --filter @rstest/coverage-istanbul build    # Build via Rslib
 pnpm --filter @rstest/coverage-istanbul dev      # Watch mode
+pnpm --filter @rstest/coverage-istanbul lint     # Rslint
 ```
 
 ## Dependencies

@@ -13,8 +13,7 @@ Rsbuild configuration adapter for Rstest. Converts Rsbuild config to Rstest conf
 pnpm --filter @rstest/adapter-rsbuild build
 pnpm --filter @rstest/adapter-rsbuild dev     # Watch mode
 pnpm --filter @rstest/adapter-rsbuild test
-# Typecheck — no per-package script; run repo-wide from the root
-pnpm typecheck
+pnpm --filter @rstest/adapter-rsbuild lint
 ```
 
 ## Do

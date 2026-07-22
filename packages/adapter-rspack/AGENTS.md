@@ -16,8 +16,8 @@ pnpm --filter @rstest/adapter-rspack dev     # Watch mode
 # Test
 pnpm --filter @rstest/adapter-rspack test
 
-# Typecheck — no per-package script; run repo-wide from the root
-pnpm typecheck
+# Lint
+pnpm --filter @rstest/adapter-rspack lint
 ```
 
 ## Usage

@@ -35,8 +35,8 @@ pnpm --filter @rstest/core dev            # Watch mode build
 pnpm --filter @rstest/core test           # Run all unit tests
 pnpm --filter @rstest/core test -- tests/core/rsbuild.test.ts  # Single file
 
-# Typecheck — no per-package script; run repo-wide from the root
-pnpm typecheck                            # rslint --type-check (needs built package .d.ts)
+# Lint
+pnpm --filter @rstest/core lint
 ```
 
 ## Do

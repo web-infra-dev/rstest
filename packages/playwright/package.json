@@ -35,6 +35,7 @@
   "scripts": {
     "build": "rslib build",
     "dev": "cross-env SOURCEMAP=true rslib build --watch",
+    "lint": "rslint .",
     "test": "pnpm run build && rstest"
   },
   "devDependencies": {

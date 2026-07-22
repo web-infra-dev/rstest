@@ -113,8 +113,8 @@ Browser mode must stay provider-neutral at the framework boundary.
 pnpm --filter @rstest/browser build
 pnpm --filter @rstest/browser dev     # Watch mode
 
-# Typecheck — no per-package script; run repo-wide from the root
-pnpm typecheck
+# Lint
+pnpm --filter @rstest/browser lint
 ```
 
 ## Dependencies

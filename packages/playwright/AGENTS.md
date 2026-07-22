@@ -22,5 +22,5 @@ Playwright fixture integration for Rstest. Provides Node-side Playwright browser
 ```bash
 pnpm --filter @rstest/playwright build
 pnpm --filter @rstest/playwright test
-pnpm typecheck
+pnpm --filter @rstest/playwright lint
 ```
