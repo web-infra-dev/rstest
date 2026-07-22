@@ -30,6 +30,20 @@ describe('initSpy fn()', () => {
     expect(spy.mock.results[0]!.type).toBe('throw');
   });
 
+  it('supports permanent and one-time throwing implementations', () => {
+    const { fn } = initSpy();
+    const spy = fn(() => 'default')
+      .mockThrow('permanent')
+      .mockThrowOnce('once');
+
+    expect(() => spy()).toThrow('once');
+    expect(() => spy()).toThrow('permanent');
+    expect(spy.mock.results).toEqual([
+      { type: 'throw', value: 'once' },
+      { type: 'throw', value: 'permanent' },
+    ]);
+  });
+
   it('isMockFunction distinguishes mocks from plain values', () => {
     const { fn, isMockFunction } = initSpy();
     expect(isMockFunction(fn())).toBe(true);

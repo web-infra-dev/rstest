@@ -179,6 +179,33 @@ expect(fn()).toBe(1);
 expect(fn()).toBe(undefined);
 ```
 
+## mockThrow
+
+<ApiMeta addedVersion="0.11.3" />
+
+- **类型：** `(value: unknown) => MockInstance`
+
+使 mock 在每次调用时抛出指定的值。
+
+```ts
+const fn = rs.fn().mockThrow(new Error('fail'));
+expect(() => fn()).toThrow('fail');
+```
+
+## mockThrowOnce
+
+<ApiMeta addedVersion="0.11.3" />
+
+- **类型：** `(value: unknown) => MockInstance`
+
+使 mock 仅在下一次调用时抛出指定的值。
+
+```ts
+const fn = rs.fn(() => 'ok').mockThrowOnce(new Error('fail'));
+expect(() => fn()).toThrow('fail');
+expect(fn()).toBe('ok');
+```
+
 ## mockResolvedValue
 
 - **类型：** `(value: any) => MockInstance`

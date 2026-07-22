@@ -179,6 +179,33 @@ expect(fn()).toBe(1);
 expect(fn()).toBe(undefined);
 ```
 
+## mockThrow
+
+<ApiMeta addedVersion="0.11.3" />
+
+- **Type:** `(value: unknown) => MockInstance`
+
+Makes the mock throw the specified value whenever it is called.
+
+```ts
+const fn = rs.fn().mockThrow(new Error('fail'));
+expect(() => fn()).toThrow('fail');
+```
+
+## mockThrowOnce
+
+<ApiMeta addedVersion="0.11.3" />
+
+- **Type:** `(value: unknown) => MockInstance`
+
+Makes the mock throw the specified value on the next call only.
+
+```ts
+const fn = rs.fn(() => 'ok').mockThrowOnce(new Error('fail'));
+expect(() => fn()).toThrow('fail');
+expect(fn()).toBe('ok');
+```
+
 ## mockResolvedValue
 
 - **Type:** `(value: any) => MockInstance`

@@ -146,10 +146,11 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
   /**
    * Accepts a function which should be temporarily used as the implementation of the mock while the callback is being executed.
    */
-  withImplementation<T2>(
+  withImplementation(
     fn: NormalizedProcedure<T>,
-    callback: () => T2,
-  ): T2 extends Promise<unknown> ? Promise<this> : this;
+    callback: () => Promise<unknown>,
+  ): Promise<this>;
+  withImplementation(fn: NormalizedProcedure<T>, callback: () => unknown): this;
   /**
    * Return the `this` context from the method without invoking the actual implementation.
    */
@@ -162,6 +163,14 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
    * Accepts a value that will be returned for one call to the mock function.
    */
   mockReturnValueOnce(value: ReturnType<T>): this;
+  /**
+   * Accepts a value that will be thrown whenever the mock function is called.
+   */
+  mockThrow(value: unknown): this;
+  /**
+   * Accepts a value that will be thrown during the next function call.
+   */
+  mockThrowOnce(value: unknown): this;
   /**
    * Accepts a value that will be resolved when the async function is called.
    */
