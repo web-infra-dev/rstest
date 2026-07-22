@@ -20,7 +20,7 @@ When working on code in a specific package, read that package's `AGENTS.md` file
 
 If a package does not have its own `AGENTS.md`, follow this root file and copy the closest local patterns.
 
-Harness docs are gated by `scripts/check-harness-docs.mjs` (`pnpm check-harness-docs`, part of `pnpm lint` and pre-push): CLAUDE.md symlinks, this file's sub-package index, and command/path/dependency claims in `AGENTS.md`/`SKILL.md` files are checked deterministically.
+A new `AGENTS.md` needs a sibling `CLAUDE.md` symlink (`ln -s AGENTS.md CLAUDE.md`). `pnpm check-harness-docs` enforces that, plus the command, path, and dependency claims written inside `AGENTS.md`/`SKILL.md` files.
 
 ## Monorepo structure
 
