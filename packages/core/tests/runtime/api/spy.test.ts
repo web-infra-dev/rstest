@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from '@rstest/core';
 import { initSpy } from '../../../src/runtime/api/spy';
 
@@ -166,6 +167,25 @@ describe('initSpy withImplementation', () => {
       ),
     ).rejects.toThrow('async failure');
 
+    expect(spy()).toBe('once');
+    expect(spy()).toBe('original');
+  });
+
+  it('keeps the temporary implementation until a cross-realm Promise resolves', async () => {
+    const callbackPromise: Promise<void> = runInNewContext('Promise.resolve()');
+    expect(callbackPromise).not.toBeInstanceOf(Promise);
+
+    const { fn } = initSpy();
+    const spy = fn(() => 'original');
+    spy.mockImplementationOnce(() => 'once');
+
+    const withImplReturn = spy.withImplementation(
+      () => 'temporary',
+      () => callbackPromise,
+    );
+
+    expect(spy()).toBe('temporary');
+    await withImplReturn;
     expect(spy()).toBe('once');
     expect(spy()).toBe('original');
   });

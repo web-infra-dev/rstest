@@ -119,8 +119,17 @@ export const initSpy = (
       try {
         const result = cb();
 
-        if (result instanceof Promise) {
-          return result.finally(reset).then(() => spyFn);
+        if (result && typeof result.then === 'function') {
+          return result.then(
+            () => {
+              reset();
+              return spyFn;
+            },
+            (error: unknown) => {
+              reset();
+              throw error;
+            },
+          );
         }
 
         reset();

@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { afterAll, describe, expect, it, rstest } from '@rstest/core';
 
 const logs: string[] = [];
@@ -129,6 +130,24 @@ describe('test withImplementation', () => {
       ),
     ).rejects.toThrow('async failure');
 
+    expect(myMockFn()).toBe('once');
+    expect(myMockFn()).toBe('original');
+  });
+
+  it('keeps the temporary implementation until a cross-realm Promise resolves', async () => {
+    const callbackPromise: Promise<void> = runInNewContext('Promise.resolve()');
+    expect(callbackPromise).not.toBeInstanceOf(Promise);
+
+    const myMockFn = rstest.fn(() => 'original');
+    myMockFn.mockImplementationOnce(() => 'once');
+
+    const withImplReturn = myMockFn.withImplementation(
+      () => 'temporary',
+      () => callbackPromise,
+    );
+
+    expect(myMockFn()).toBe('temporary');
+    await withImplReturn;
     expect(myMockFn()).toBe('once');
     expect(myMockFn()).toBe('original');
   });

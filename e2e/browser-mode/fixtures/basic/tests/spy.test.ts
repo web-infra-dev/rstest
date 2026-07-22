@@ -36,4 +36,36 @@ describe('Spy', () => {
     expect(spy()).toBe('once');
     expect(spy()).toBe('original');
   });
+
+  it('keeps withImplementation active for a cross-realm Promise', async () => {
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+
+    try {
+      const iframeWindow = iframe.contentWindow;
+      if (!iframeWindow) {
+        throw new Error('Expected the iframe to have a window');
+      }
+
+      // lib.dom omits realm globals such as Promise from the Window interface.
+      const iframeGlobal = iframeWindow as Window & typeof globalThis;
+      const callbackPromise = iframeGlobal.Promise.resolve();
+      expect(callbackPromise).not.toBeInstanceOf(Promise);
+
+      const spy = rstest.fn(() => 'original');
+      spy.mockImplementationOnce(() => 'once');
+
+      const withImplReturn = spy.withImplementation(
+        () => 'temporary',
+        () => callbackPromise,
+      );
+
+      expect(spy()).toBe('temporary');
+      await withImplReturn;
+      expect(spy()).toBe('once');
+      expect(spy()).toBe('original');
+    } finally {
+      iframe.remove();
+    }
+  });
 });
