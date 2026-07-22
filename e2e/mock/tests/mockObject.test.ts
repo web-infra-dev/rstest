@@ -147,6 +147,11 @@ describe('rs.mockObject', () => {
 
   test('mocks static class methods', () => {
     class OriginalClass {
+      static api = {
+        getValue(): number {
+          return 42;
+        },
+      };
       static getValue(): number {
         return 42;
       }
@@ -158,6 +163,12 @@ describe('rs.mockObject', () => {
 
     MockedClass.getValue.mockReturnValue(100);
     expect(MockedClass.getValue()).toBe(100);
+
+    expect(rs.isMockFunction(MockedClass.api.getValue)).toBe(true);
+    expect(MockedClass.api.getValue()).toBeUndefined();
+
+    MockedClass.api.getValue.mockReturnValue(200);
+    expect(MockedClass.api.getValue()).toBe(200);
   });
 
   // Special object types tests
@@ -331,6 +342,11 @@ describe('rs.mocked', () => {
 
   test('Mocked<T> preserves class static members', () => {
     class Service {
+      static api = {
+        getValue(): number {
+          return 42;
+        },
+      };
       static label = 'service';
       static getValue(): number {
         return 42;
@@ -344,9 +360,14 @@ describe('rs.mocked', () => {
     const configuresStaticMethod = (mocked: Mocked<typeof Service>): void => {
       mocked.getValue.mockReturnValue(100);
     };
+    type DeepMockedService = ReturnType<typeof rs.mockObject<typeof Service>>;
+    const configuresDeepStaticMethod = (mocked: DeepMockedService): void => {
+      mocked.api.getValue.mockReturnValue(200);
+    };
 
     expect(asRealClass).toBeTypeOf('function');
     expect(readsStaticProperty).toBeTypeOf('function');
     expect(configuresStaticMethod).toBeTypeOf('function');
+    expect(configuresDeepStaticMethod).toBeTypeOf('function');
   });
 });

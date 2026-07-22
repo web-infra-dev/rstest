@@ -239,12 +239,18 @@ type MockProcedure = (...args: any[]) => any;
 type Constructor<T = any> = new (...args: any[]) => T;
 
 // Mocked class constructor type - preserves both the constructor signature and mock capabilities
-export type MockedClass<T extends Constructor> = Mock<
+type MockedClassBase<T extends Constructor> = Mock<
   (...args: ConstructorParameters<T>) => InstanceType<T>
 > & {
   new (...args: ConstructorParameters<T>): InstanceType<T>;
   prototype: InstanceType<T>;
-} & MockedObject<T>;
+};
+
+export type MockedClass<T extends Constructor> = MockedClassBase<T> &
+  MockedObject<T>;
+
+type MockedClassDeep<T extends Constructor> = MockedClassBase<T> &
+  MockedObjectDeep<T>;
 
 type Methods<T> = {
   [K in keyof T]: T[K] extends MockProcedure ? K : never;
@@ -299,7 +305,7 @@ export type Mocked<T> = T extends Constructor
       : T;
 
 export type MaybeMockedDeep<T> = T extends Constructor
-  ? MockedClass<T>
+  ? MockedClassDeep<T>
   : T extends MockProcedure
     ? MockedFunctionDeep<T>
     : T extends object
@@ -315,7 +321,7 @@ export type MaybePartiallyMocked<T> = T extends Constructor
       : T;
 
 export type MaybePartiallyMockedDeep<T> = T extends Constructor
-  ? MockedClass<T>
+  ? MockedClassDeep<T>
   : T extends MockProcedure
     ? MockedFunctionDeep<T>
     : T extends object
