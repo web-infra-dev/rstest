@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from '@rstest/core';
 import { initSpy } from '../../../src/runtime/api/spy';
 
@@ -142,6 +143,65 @@ describe('initSpy reset semantics', () => {
     // A's own iteration still reaches it.
     forEachMock((mock) => mock.mockClear());
     expect(mockA.mock.calls).toHaveLength(0);
+  });
+});
+
+describe('initSpy withImplementation', () => {
+  it('restores the implementation after a synchronous callback throws', () => {
+    const { fn } = initSpy();
+    const spy = fn(() => 'original');
+    spy.mockImplementationOnce(() => 'once');
+
+    expect(() =>
+      spy.withImplementation(
+        () => 'temporary',
+        () => {
+          expect(spy()).toBe('temporary');
+          throw new Error('sync failure');
+        },
+      ),
+    ).toThrow('sync failure');
+
+    expect(spy()).toBe('once');
+    expect(spy()).toBe('original');
+  });
+
+  it('restores the implementation after an asynchronous callback rejects', async () => {
+    const { fn } = initSpy();
+    const spy = fn(() => 'original');
+    spy.mockImplementationOnce(() => 'once');
+
+    await expect(
+      spy.withImplementation(
+        () => 'temporary',
+        async () => {
+          expect(spy()).toBe('temporary');
+          throw new Error('async failure');
+        },
+      ),
+    ).rejects.toThrow('async failure');
+
+    expect(spy()).toBe('once');
+    expect(spy()).toBe('original');
+  });
+
+  it('keeps the temporary implementation until a cross-realm Promise resolves', async () => {
+    const callbackPromise: Promise<void> = runInNewContext('Promise.resolve()');
+    expect(callbackPromise).not.toBeInstanceOf(Promise);
+
+    const { fn } = initSpy();
+    const spy = fn(() => 'original');
+    spy.mockImplementationOnce(() => 'once');
+
+    const withImplReturn = spy.withImplementation(
+      () => 'temporary',
+      () => callbackPromise,
+    );
+
+    expect(spy()).toBe('temporary');
+    await withImplReturn;
+    expect(spy()).toBe('once');
+    expect(spy()).toBe('original');
   });
 });
 

@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { afterAll, describe, expect, it, rstest } from '@rstest/core';
 
 const logs: string[] = [];
@@ -110,5 +111,59 @@ describe('test withImplementation', () => {
 
     expect(await promiseReturn).toBe(myMockFn);
     expect(await withImplReturn).toBe(myMockFn);
+  });
+
+  it('restores the implementation after a synchronous callback throws', () => {
+    const myMockFn = rstest.fn(() => 'original');
+    myMockFn.mockImplementationOnce(() => 'once');
+
+    expect(() =>
+      myMockFn.withImplementation(
+        () => 'temporary',
+        () => {
+          expect(myMockFn()).toBe('temporary');
+          throw new Error('sync failure');
+        },
+      ),
+    ).toThrow('sync failure');
+
+    expect(myMockFn()).toBe('once');
+    expect(myMockFn()).toBe('original');
+  });
+
+  it('restores the implementation after an asynchronous callback rejects', async () => {
+    const myMockFn = rstest.fn(() => 'original');
+    myMockFn.mockImplementationOnce(() => 'once');
+
+    await expect(
+      myMockFn.withImplementation(
+        () => 'temporary',
+        async () => {
+          expect(myMockFn()).toBe('temporary');
+          throw new Error('async failure');
+        },
+      ),
+    ).rejects.toThrow('async failure');
+
+    expect(myMockFn()).toBe('once');
+    expect(myMockFn()).toBe('original');
+  });
+
+  it('keeps the temporary implementation until a cross-realm Promise resolves', async () => {
+    const callbackPromise: Promise<void> = runInNewContext('Promise.resolve()');
+    expect(callbackPromise).not.toBeInstanceOf(Promise);
+
+    const myMockFn = rstest.fn(() => 'original');
+    myMockFn.mockImplementationOnce(() => 'once');
+
+    const withImplReturn = myMockFn.withImplementation(
+      () => 'temporary',
+      () => callbackPromise,
+    );
+
+    expect(myMockFn()).toBe('temporary');
+    await withImplReturn;
+    expect(myMockFn()).toBe('once');
+    expect(myMockFn()).toBe('original');
   });
 });
