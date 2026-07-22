@@ -1125,6 +1125,12 @@ type RstestTest<ExtraContext = object> = TestAPIs<ExtraContext>;
 type TestCallback<ExtraContext> = (
   context: TestContext & ExtraContext,
 ) => void | Promise<void>;
+type BeforeEachCallback<ExtraContext> = (
+  context: TestContext & ExtraContext,
+) =>
+  | void
+  | TestCallback<ExtraContext>
+  | Promise<void | TestCallback<ExtraContext>>;
 type TestForCallback<ExtraContext> = (
   param: unknown,
   context: TestContext & ExtraContext,
@@ -1472,10 +1478,13 @@ export type PlaywrightTest<ExtraContext = PlaywrightFixture> =
     extend: <T extends Record<string, any> = object>(
       fixtures: PlaywrightFixtures<T, ExtraContext>,
     ) => PlaywrightTest<MergeContext<ExtraContext, T>>;
-    afterAll: typeof rstestAfterAll;
-    afterEach: typeof rstestAfterEach;
-    beforeAll: typeof rstestBeforeAll;
-    beforeEach: typeof rstestBeforeEach;
+    afterAll: RstestAfterAll;
+    afterEach: (fn: TestCallback<ExtraContext>, timeout?: number) => void;
+    beforeAll: RstestBeforeAll;
+    beforeEach: (
+      fn: BeforeEachCallback<ExtraContext>,
+      timeout?: number,
+    ) => void;
     describe: typeof rstestDescribe;
     fail: PlaywrightTestBase<ExtraContext>;
   };
