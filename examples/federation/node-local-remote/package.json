@@ -8,7 +8,7 @@
     "serve:node": "serve dist-node -p 3004"
   },
   "devDependencies": {
-    "@module-federation/rsbuild-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@9c181bf",
+    "@module-federation/rsbuild-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@1152301",
     "@rsbuild/core": "~2.1.6",
     "serve": "14.2.3"
   }
