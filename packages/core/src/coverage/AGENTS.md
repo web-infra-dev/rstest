@@ -18,7 +18,6 @@ Coverage spans three packages: `@rstest/core` owns the `CoverageProvider` contra
 - Memory bounds in `generateCoverage` are deliberate: projects are processed sequentially and untested files in small batches. Do not parallelize.
 - The reporting provider (main process) and the worker collection providers are distinct instances — state set during collection never reaches reporting.
 - Browser-only **watch** runs bypass `finalizeRunCycle`: a bespoke coverage report runs once after the watch session exits. Non-watch browser runs go through the shared finalize like node runs.
-- Exit codes never downgrade: coverage-set non-zero codes must survive later phases.
 
 ## Coupling points (change both sides)
 
@@ -30,6 +29,6 @@ Coverage spans three packages: `@rstest/core` owns the `CoverageProvider` contra
 
 ## Gotchas
 
-- `createFastCoverageMap` monkey-patches merge to sum hit counts in place when shapes match — returned maps mutate their inputs; never assume istanbul's copy-on-merge semantics.
+- `createFastCoverageMap` monkey-patches merge to sum hit counts in place when shapes match — retained file-coverage objects are mutated rather than copied; never assume istanbul's copy-on-merge semantics.
 - v8 `collect`/`collectRaw` are one-shot per `init`; raw payload conversion destroys its input as it goes to cap peak memory — payloads cannot be replayed.
 - istanbul's `readInitialCoverage` brace-matches around a magic value and VM-evaluates the extracted object literal — it depends on the exact generated-code shape, not on parsing.

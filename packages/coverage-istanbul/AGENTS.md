@@ -12,13 +12,6 @@ pnpm --filter @rstest/coverage-istanbul dev      # Watch mode
 pnpm --filter @rstest/coverage-istanbul lint     # Rslint
 ```
 
-## Dependencies
-
-- `istanbul-lib-coverage` — Coverage data structures
-- `istanbul-lib-report` — Report generation
-- `istanbul-reports` — Report formats (html, lcov, text, etc.)
-- `swc-plugin-coverage-instrument` — SWC-based instrumentation
-
 ## Constraints
 
 - Keep instrumentation logic in `src/plugin.ts` and provider logic in `src/provider.ts`.

@@ -37,7 +37,7 @@ Contracts between modules or processes — not readable from any single file.
 - A later/CLI layer overrides only the leaves it sets — it never wholesale-replaces a nested object an earlier layer owns.
 - `browser` (and its `providerOptions`) merges with `plainDeepMerge`, NOT `mergeRsbuildConfig`: it carries opaque third-party data (Playwright options), so functions/arrays must be replaced, not chained/concatenated. Never re-add a `{ ...merged.browser, ...config.browser }` spread.
 - CLI options apply to **every** config layer (root and each project), not once.
-- A CLI-exposed object option must be registered in `allowedWildcardOptions` in `src/cli/commands.ts`; when changing merge behavior, add a test asserting sibling/nested keys survive a partial override.
+- Wildcard object options (`--browser.*`, `--source.*`, `--dev.*`, `--output.*`) must be registered in `allowedWildcardOptions` in `src/cli/commands.ts`; `coverage` and `pool` bypass that allowlist through their own normalize passes. When changing merge behavior, add a test asserting sibling/nested keys survive a partial override.
 - `--coverage.exclude` appends to the config's exclude list while `--coverage.include` replaces it. The asymmetry is asserted explicitly in `tests/cli/init.test.ts` (PR #1336), but no written rationale exists — treat it as behavior to preserve, and don't "align" the two without a maintainer decision.
 
 ### Mock/build seam (`src/core/plugins`)
@@ -45,7 +45,6 @@ Contracts between modules or processes — not readable from any single file.
 - `rs.mock` hoisting/rewriting happens at build time inside rspack's native `RstestPlugin`; registration happens at runtime inside the injected `mockRuntimeCode.js` registry. The `rstest_*` member names are the wire contract between the two — renaming either side alone breaks mocking.
 - Setup files and test files must share one webpack runtime chunk — mock state lives on that runtime's `__webpack_require__`.
 - `@rstest/core` must stay external to the runtime-published global: hoisted callbacks run above bundled imports, so a bundled provider module would load too late.
-- The VM hook identifiers owned by `src/runtime/worker/runtimeHooks.ts` must stay byte-identical between the plugin emit side and the worker consume side.
 - Raw runtime/loader files resolved via `__dirname` at build time ↔ the dist copy list in `rslib.config.ts` — adding/renaming one requires updating both.
 
 ### Test runtime (`src/runtime`)
@@ -57,7 +56,7 @@ Contracts between modules or processes — not readable from any single file.
 
 ### Reporters (`src/reporter`)
 
-- Reporters are passive consumers: every mid-run event arrives through `RunnerEventSink`, which updates `stateManager` before reporter fanout — TTY renderers read state, not event payloads.
+- Reporters are passive consumers: `RunnerEventSink` updates `stateManager` before reporter fanout, so TTY renderers read state, not event payloads.
 - `reportersMap` is locked to the `BuiltInReporterNames` union via `satisfies`; a new built-in name needs both plus `BuiltinReporterOptions` (not compile-guarded).
 - The md output format is a spec'd contract snapshot-tested in `e2e/reporter/md.test.ts` — behavior changes require snapshot updates there.
 - The blob filename grammar has a single owner; `mergeReports` must keep using `isBlobFile` rather than re-encoding the pattern.
@@ -88,7 +87,7 @@ pnpm --filter @rstest/core lint
 ## Don't
 
 - Don't bypass the worker pool for test execution
-- Don't use `console.log` directly; use the logger utilities (sole sanctioned exception: `NonTTYProgressNotifier`'s `[PROGRESS]` lines)
+- Don't use `console.log` directly; use the logger utilities (sole sanctioned exception: `NonTTYProgressNotifier`'s progress output)
 - Don't call timer globals (`setTimeout` etc.) directly in `src/runtime/` — user tests may enable fake timers; use `getRealTimers()` from `runtime/util` (lint-enforced via `no-restricted-syntax`)
 - Don't fan runner lifecycle events out to reporters or `stateManager` directly; route them through `RunnerEventSink`
 - Don't add a `RuntimeConfig` field without declaring its node/browser disposition in `executorCapabilities`

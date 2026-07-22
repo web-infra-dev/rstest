@@ -25,7 +25,7 @@ Responses always travel back as transport replies — `dispatchRouter` handles i
 
 - `entry.ts` is the only bootstrap entry and decides `collect` vs `run` mode.
 - Console interception is per test file and must restore the original console methods in `finally`.
-- An unhandled window error or `unhandledrejection` that escapes a test file fails the file even when every test passed. Before finalizing each file result, the runner yields two macrotasks so a rejection leaked by a synchronous test is still observed (the browser dispatches `unhandledrejection` in a task queued after the current one).
+- An unhandled window error or `unhandledrejection` that escapes a test file fails the file even when every test passed. The runner deliberately yields macrotasks before finalizing each file result so late-dispatched rejections are still observed — the timing rationale is commented in `entry.ts`.
 
 ## Provider-agnostic design
 

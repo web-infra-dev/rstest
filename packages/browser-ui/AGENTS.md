@@ -15,7 +15,7 @@ Prebuilt browser container UI for Rstest's browser mode testing.
 This package owns transport bridging and UI state projection only — host scheduling and protocol semantics belong to `@rstest/browser` (boundary map: `packages/browser/AGENTS.md`).
 
 - `src/core/channel.ts` is the validation boundary for messages forwarded between the runner iframe and the host.
-- `src/core/treeNodeKey.ts` is the single owner of the test-tree node-key grammar — producer and consumer must agree byte-for-byte; never re-encode the grammar elsewhere.
+- `src/core/treeNodeKey.ts` is the single owner of the test-tree node-key grammar — never re-encode it elsewhere (the byte-for-byte producer/consumer contract is documented in its header).
 
 ## Commands
 

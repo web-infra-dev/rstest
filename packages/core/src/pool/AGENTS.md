@@ -23,7 +23,7 @@
 
 - `WorkerRequest`/`WorkerResponse` in `protocol.ts` ↔ worker-side dispatch in `../runtime/worker/index.ts` and host-side handling in `poolRunner.ts`.
 - A new `PoolWorkerKind` → `createPoolWorker`'s switch (exhaustiveness-checked) and `selectMemoryGate`.
-- Node exec flags in `index.ts` ↔ the `rstestSuppressWarnings.cjs` copy list in `../../rslib.config.ts` — the `--require` path resolves relative to dist, so renaming/moving the `.cjs` needs both sides.
+- The `--require` path for `rstestSuppressWarnings.cjs` in `index.ts` ↔ the `.cjs` copy list in `../../rslib.config.ts` — the path resolves relative to dist, so renaming/moving the `.cjs` needs both sides.
 - Assets have two delivery paths that must both stay alive: eager on the task when host memory suffices, else lazily pulled by the worker via `rpc.getAssetsByEntry`.
 
 ## Gotchas

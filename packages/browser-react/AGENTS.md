@@ -31,23 +31,6 @@ pnpm --filter @rstest/browser-react lint
 
 ## Entry contract
 
-The default entry (`src/index.ts`) registers auto-cleanup via `beforeEach`; `@rstest/browser-react/pure` skips it. Keep that split — users who opt into `pure` manage cleanup themselves. Keep the cleanup in `beforeEach`, not `afterEach` — running it before the next test means the DOM can still be inspected after a test failure.
+The default entry (`src/index.ts`) registers auto-cleanup via `beforeEach`; `@rstest/browser-react/pure` skips it. Keep that split — users who opt into `pure` manage cleanup themselves. The `beforeEach`-not-`afterEach` choice is deliberate and its rationale is commented in `src/index.ts`.
 
-## Good and bad examples
-
-### Handling React version differences
-
-Good — use feature detection across the supported range:
-
-```typescript
-// `React.act` was stabilized in React 18.3.1; 18.0.0 – 18.3.0 only expose `React.unstable_act`.
-const _act = ((React as Record<string, unknown>).act ??
-  (React as Record<string, unknown>).unstable_act) as
-  ((callback: () => unknown) => Promise<void>) | undefined;
-```
-
-Bad — assume a specific React patch:
-
-```typescript
-import { act } from 'react'; // Breaks React 18.0.0 – 18.3.0
-```
+For React version differences, follow the feature-detection pattern in `src/act.ts` (`React.act ?? React.unstable_act`) rather than assuming a specific React patch — `React.act` only stabilized in 18.3.1.
