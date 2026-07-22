@@ -29,30 +29,31 @@ if (globalThis.__rstest_federation__) {
         );
       }
       if (fallbackOrigin && !/^[A-Za-z][A-Za-z\d+\-.]*:/.test(specifier)) {
-        return Promise.all([import('node:module'), import('node:url')]).then(
-          ([module, url]) => {
-            if (
-              specifier.startsWith('node:') ||
-              module.builtinModules.includes(specifier)
-            ) {
-              return import(specifier, importAttributes);
-            }
-            if (/^\.\.?(?:[\\/]|$)/.test(specifier)) {
-              return import(
-                new URL(specifier, url.pathToFileURL(fallbackOrigin)).href,
-                importAttributes
-              );
-            }
+        return Promise.all([
+          import('node:module'),
+          import('node:url'),
+          import(
+            'data:text/' +
+              'javascript,export const resolve=(specifier,parent)=>import.meta.resolve(specifier,parent)'
+          ),
+        ]).then(([module, url, esm]) => {
+          if (
+            specifier.startsWith('node:') ||
+            module.builtinModules.includes(specifier)
+          ) {
+            return import(specifier, importAttributes);
+          }
+          if (/^\.\.?(?:[\\/]|$)/.test(specifier)) {
             return import(
-              url.pathToFileURL(
-                module
-                  .createRequire(url.pathToFileURL(fallbackOrigin).href)
-                  .resolve(specifier),
-              ).href,
+              new URL(specifier, url.pathToFileURL(fallbackOrigin)).href,
               importAttributes
             );
-          },
-        );
+          }
+          return import(
+            esm.resolve(specifier, url.pathToFileURL(fallbackOrigin).href),
+            importAttributes
+          );
+        });
       }
       return import(specifier, importAttributes);
     };

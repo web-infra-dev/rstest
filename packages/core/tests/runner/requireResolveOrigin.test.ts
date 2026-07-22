@@ -90,7 +90,7 @@ describe('require.resolve origin runtime helper', () => {
     expect(exports).toEqual(createRequire(testPath).resolve.paths('foo'));
   });
 
-  it('serves virtual assets through fs only when opted in', () => {
+  it('preserves fs read contracts for opted-in virtual assets', async () => {
     const virtualFile = path.join(
       os.tmpdir(),
       `rstest-virtual-fs-${Date.now()}`,
@@ -105,8 +105,21 @@ describe('require.resolve origin runtime helper', () => {
         const fs = require('node:fs');
         module.exports = {
           exists: fs.existsSync(${JSON.stringify(virtualFile)}),
-          content: fs.existsSync(${JSON.stringify(virtualFile)})
+          syncBuffer: fs.existsSync(${JSON.stringify(virtualFile)})
+            ? fs.readFileSync(${JSON.stringify(virtualFile)})
+            : undefined,
+          syncText: fs.existsSync(${JSON.stringify(virtualFile)})
             ? fs.readFileSync(${JSON.stringify(virtualFile)}, 'utf-8')
+            : undefined,
+          callback: fs.existsSync(${JSON.stringify(virtualFile)})
+            ? new Promise((resolve, reject) => {
+                fs.readFile(${JSON.stringify(virtualFile)}, (error, content) =>
+                  error ? reject(error) : resolve(content),
+                );
+              })
+            : undefined,
+          promise: fs.existsSync(${JSON.stringify(virtualFile)})
+            ? fs.promises.readFile(${JSON.stringify(virtualFile)}, 'utf-8')
             : undefined,
         };
       `,
@@ -122,17 +135,21 @@ describe('require.resolve origin runtime helper', () => {
 
     expect(loadModule(loadOptions)).toEqual({
       exists: false,
-      content: undefined,
+      syncBuffer: undefined,
+      syncText: undefined,
+      callback: undefined,
+      promise: undefined,
     });
-    expect(
-      loadModule({
-        ...loadOptions,
-        virtualFsAssetFiles: assetFiles,
-      }),
-    ).toEqual({
-      exists: true,
-      content: 'virtual chunk',
+    const virtual = loadModule({
+      ...loadOptions,
+      virtualFsAssetFiles: assetFiles,
     });
+    expect(virtual.exists).toBe(true);
+    expect(Buffer.isBuffer(virtual.syncBuffer)).toBe(true);
+    expect(virtual.syncBuffer.toString()).toBe('virtual chunk');
+    expect(virtual.syncText).toBe('virtual chunk');
+    expect(Buffer.isBuffer(await virtual.callback)).toBe(true);
+    expect(await virtual.promise).toBe('virtual chunk');
   });
 
   it('binds top-level this to exports in CommonJS modules', () => {

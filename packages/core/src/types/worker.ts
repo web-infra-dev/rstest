@@ -87,7 +87,11 @@ export type RuntimeConfig = Pick<
  */
 export type BrowserRuntimeConfig = Omit<
   RuntimeConfig,
-  'testEnvironment' | 'detectAsyncLeaks' | 'logHeapUsage' | 'coverage'
+  | 'testEnvironment'
+  | 'detectAsyncLeaks'
+  | 'logHeapUsage'
+  | 'coverage'
+  | 'federation'
 >;
 
 export type CurrentTaskInfo = Pick<

@@ -28,18 +28,17 @@ describe('runtime hook identifier contract', () => {
     );
   });
 
-  it('owns the federation dynamic import origin lifecycle', () => {
+  it('preserves the federation dynamic import hook while updating its origin', () => {
     const runtimeGlobal = globalThis as Record<string, unknown>;
-    runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK] = () => undefined;
+    const dynamicImportHook = () => undefined;
+    runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK] = dynamicImportHook;
 
     setFederationDynamicImportOrigin(true, '/project/test.ts');
 
     expect(runtimeGlobal[RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK]).toBe(
       '/project/test.ts',
     );
-    expect(runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK]).toBeUndefined();
-
-    runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK] = () => undefined;
+    expect(runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK]).toBe(dynamicImportHook);
 
     setFederationDynamicImportOrigin(false, '/project/other.test.ts');
 

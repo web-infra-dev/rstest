@@ -161,13 +161,16 @@ const buildTask = async ({
       type,
       setupEntries,
       updateSnapshot,
-      /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
-      assets: isMemorySufficient()
-        ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
-            ...traceArgs,
-            mode: 'eager',
-          })
-        : undefined,
+      // Federation entries need the complete compilation asset map. Fetch it
+      // when a worker starts the task so concurrent task preparation cannot
+      // retain one full copy per test entry.
+      assets:
+        isMemorySufficient() && !project.normalizedConfig.federation
+          ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
+              ...traceArgs,
+              mode: 'eager',
+            })
+          : undefined,
     },
     rpcMethods: {
       ...rpcMethods,

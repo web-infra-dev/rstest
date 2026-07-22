@@ -41,7 +41,7 @@ export const executorCapabilities: Record<
   maxConcurrency: { node: 'supported', browser: 'supported' },
   printConsoleTrace: { node: 'supported', browser: 'supported' },
   disableConsoleIntercept: { node: 'supported', browser: 'supported' },
-  federation: { node: 'supported', browser: 'supported' },
+  federation: { node: 'supported', browser: 'stripped' },
   // Stripped from the browser wire; the client hardcodes `environment: 'browser'`.
   testEnvironment: { node: 'supported', browser: 'stripped' },
   // Reaches the browser but is a no-op today (each file runs in a fresh

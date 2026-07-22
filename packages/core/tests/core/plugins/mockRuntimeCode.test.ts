@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import { join } from 'pathe';
 import { describe, expect, it, rs } from '@rstest/core';
 
@@ -81,6 +82,26 @@ describe('mockRuntimeCode federation shims', () => {
     });
 
     expect(fakeGlobal.__rstest_dynamic_import__).toBe(existing);
+  });
+
+  it('resolves bare dynamic imports with ESM export conditions', async () => {
+    const root = join(os.tmpdir(), `rstest-esm-resolution-${Date.now()}`);
+    const packageDir = join(root, 'node_modules/import-only');
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(
+      join(packageDir, 'package.json'),
+      JSON.stringify({ type: 'module', exports: { import: './index.mjs' } }),
+    );
+    writeFileSync(join(packageDir, 'index.mjs'), 'export default "esm";');
+
+    const { fakeGlobal } = evaluateRuntimeCode({ federation: true });
+    const imported = await fakeGlobal.__rstest_dynamic_import__(
+      'import-only',
+      undefined,
+      join(root, 'test.mjs'),
+    );
+
+    expect(imported.default).toBe('esm');
   });
 
   it('pre-seeds no-op consumes/remotes handlers when f is assigned', () => {

@@ -40,15 +40,15 @@ const makeProject = (
   }) as unknown as ProjectContext;
 
 describe('projectRuntimeConfig', () => {
-  it('preserves federation mode for node and browser workers', () => {
+  it('preserves federation mode only for node workers', () => {
     const project = makeProject({ federation: true });
 
     expect(
       projectRuntimeConfig(project, { envMode: 'inherit' }).federation,
     ).toBe(true);
     expect(
-      projectRuntimeConfig(project, { envMode: 'static' }).federation,
-    ).toBe(true);
+      'federation' in projectRuntimeConfig(project, { envMode: 'static' }),
+    ).toBe(false);
   });
 
   it('static (browser) wire omits node-only fields', () => {

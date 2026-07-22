@@ -30,6 +30,19 @@ const getAssetContent = (
   return undefined;
 };
 
+const formatAssetContent = (content: string, options?: unknown) => {
+  const buffer = Buffer.from(content);
+  const encoding =
+    typeof options === 'string'
+      ? options
+      : options && typeof options === 'object' && 'encoding' in options
+        ? options.encoding
+        : undefined;
+  return typeof encoding === 'string'
+    ? buffer.toString(encoding as BufferEncoding)
+    : buffer;
+};
+
 const createVirtualFsAssetProxy = (
   fsModule: typeof import('node:fs'),
   assetFiles: Record<string, string>,
@@ -57,7 +70,9 @@ const createVirtualFsAssetProxy = (
           const content = getAssetContent(assetFiles, filePath);
 
           if (content !== undefined && typeof callback === 'function') {
-            queueMicrotask(() => callback(null, content));
+            queueMicrotask(() =>
+              callback(null, formatAssetContent(content, optionsOrCallback)),
+            );
             return;
           }
 
@@ -75,13 +90,36 @@ const createVirtualFsAssetProxy = (
         return (filePath: unknown, options?: unknown) => {
           const content = getAssetContent(assetFiles, filePath);
           if (content !== undefined) {
-            return content;
+            return formatAssetContent(content, options);
           }
           return target.readFileSync(
             filePath as Parameters<typeof target.readFileSync>[0],
             options as Parameters<typeof target.readFileSync>[1],
           );
         };
+      }
+
+      if (property === 'promises') {
+        return new Proxy(target.promises, {
+          get(promisesTarget, promisesProperty, promisesReceiver) {
+            if (promisesProperty === 'readFile') {
+              return (filePath: unknown, options?: unknown) => {
+                const content = getAssetContent(assetFiles, filePath);
+                return content === undefined
+                  ? Reflect.apply(promisesTarget.readFile, promisesTarget, [
+                      filePath,
+                      options,
+                    ])
+                  : Promise.resolve(formatAssetContent(content, options));
+              };
+            }
+            return Reflect.get(
+              promisesTarget,
+              promisesProperty,
+              promisesReceiver,
+            );
+          },
+        });
       }
 
       return Reflect.get(target, property, receiver);

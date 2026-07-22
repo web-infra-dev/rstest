@@ -24,8 +24,8 @@ export const setFederationDynamicImportOrigin = (
     runtimeGlobal[RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK] = origin;
   } else {
     delete runtimeGlobal[RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK];
+    delete runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK];
   }
-  delete runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK];
 };
 
 /**
