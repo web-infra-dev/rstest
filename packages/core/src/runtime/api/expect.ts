@@ -76,11 +76,13 @@ const freshExpectState = (
   },
 });
 
-// Vitest 4.1.10 delegates `returned(value)` to the no-argument matcher.
-const ReturnedWithAlias: ChaiPlugin = (chai, utils) => {
+// Vitest 4.1 types `returned(value)`, while its runtime also accepts no arguments.
+const ReturnedAlias: ChaiPlugin = (chai, utils) => {
   utils.overwriteMethod(chai.Assertion.prototype, 'returned', () => {
-    return function (this: Assertion, expected: unknown) {
-      return this.toHaveReturnedWith(expected);
+    return function (this: Assertion, expected?: unknown) {
+      return arguments.length === 0
+        ? this.toHaveReturned()
+        : this.toHaveReturnedWith(expected);
     };
   });
 };
@@ -103,7 +105,7 @@ export function createExpect({
   use(JestExtend);
   use(JestChaiExpect);
   use(ChaiStyleAssertions);
-  use(ReturnedWithAlias);
+  use(ReturnedAlias);
   if (snapshotPlugin) {
     use(snapshotPlugin);
   }

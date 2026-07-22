@@ -155,9 +155,12 @@ describe('Expect API', () => {
     const mock = rs.fn(() => 'actual');
     mock();
 
+    // @ts-expect-error Vitest 4.1 also supports this alias without a value at runtime.
+    expect(mock).returned();
     expect(mock).returned('actual');
     expect(mock).not.returned('expected');
     expect(() => expect(mock).returned('expected')).toThrow();
+    expect(() => expect(mock).returned(undefined)).toThrow();
   });
 
   it.fails('test not failed', () => {
