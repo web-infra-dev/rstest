@@ -83,6 +83,10 @@ describe('browser mode - snapshot', () => {
     expect(content).toContain(
       'browser snapshot > should match DOM element snapshot',
     );
+    expect(content).toContain(
+      'browser snapshot > should omit shadow root from snapshots by default',
+    );
+    expect(content).not.toContain('shadow content');
     expect(content).toContain('browser snapshot > should match array snapshot');
     expect(content).toContain(
       'browser snapshot > should match nested object snapshot',
@@ -90,7 +94,7 @@ describe('browser mode - snapshot', () => {
 
     // Count the number of snapshot entries
     const snapshotCount = (content.match(/exports\[/g) || []).length;
-    expect(snapshotCount).toBe(5);
+    expect(snapshotCount).toBe(6);
 
     // Verify stdout reports snapshots written
     expect(cli.stdout).toMatch(/Snapshots.*\d+.*written/);

@@ -222,6 +222,13 @@ export const updateTestModes = (
 const updateTestParents = (tests: Test[], parentNames: string[] = []): void => {
   for (const test of tests) {
     test.parentNames = parentNames;
+    if (test.type === 'case') {
+      // Vitest 4 derives custom matcher `currentTestName` from this field.
+      Object.defineProperty(test, 'fullTestName', {
+        configurable: true,
+        value: getTaskNameWithPrefix(test),
+      });
+    }
     if (test.type === 'suite') {
       const names =
         test.name === ROOT_SUITE_NAME

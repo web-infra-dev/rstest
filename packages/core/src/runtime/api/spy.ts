@@ -95,14 +95,17 @@ export const initSpy = (
         : implementation;
     };
 
-    function withImplementation(fn: T, cb: () => void): Mock<T>;
     function withImplementation(
-      fn: T,
-      cb: () => Promise<void>,
+      fn: NormalizedProcedure<T>,
+      cb: () => Promise<unknown>,
     ): Promise<Mock<T>>;
     function withImplementation(
-      fn: T,
-      cb: () => void | Promise<void>,
+      fn: NormalizedProcedure<T>,
+      cb: () => unknown,
+    ): Mock<T>;
+    function withImplementation(
+      fn: NormalizedProcedure<T>,
+      cb: () => unknown,
     ): Mock<T> | Promise<Mock<T>> {
       const originalImplementation = implementation;
       const originalMockImplementationOnce = mockImplementationOnce;
@@ -119,7 +122,12 @@ export const initSpy = (
       try {
         const result = cb();
 
-        if (result && typeof result.then === 'function') {
+        if (
+          typeof result === 'object' &&
+          result !== null &&
+          'then' in result &&
+          typeof result.then === 'function'
+        ) {
           return result.then(
             () => {
               reset();
@@ -158,6 +166,18 @@ export const initSpy = (
 
     spyFn.mockReturnValueOnce = (value) => {
       return spyFn.mockImplementationOnce((() => value) as T);
+    };
+
+    spyFn.mockThrow = (value) => {
+      return spyFn.mockImplementation(() => {
+        throw value;
+      });
+    };
+
+    spyFn.mockThrowOnce = (value) => {
+      return spyFn.mockImplementationOnce(() => {
+        throw value;
+      });
     };
 
     spyFn.mockResolvedValue = (value) => {

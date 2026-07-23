@@ -163,6 +163,14 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
    */
   mockReturnValueOnce(value: ReturnType<T>): this;
   /**
+   * Accepts a value that will be thrown whenever the mock function is called.
+   */
+  mockThrow(value: unknown): this;
+  /**
+   * Accepts a value that will be thrown during the next function call.
+   */
+  mockThrowOnce(value: unknown): this;
+  /**
    * Accepts a value that will be resolved when the async function is called.
    */
   mockResolvedValue(value: Awaited<ReturnType<T>>): this;
