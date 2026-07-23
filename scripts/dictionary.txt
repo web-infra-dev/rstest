@@ -97,6 +97,7 @@ microtask
 microtasks
 microfrontend
 microfrontends
+midscene
 misattributed
 mjsx
 modu
@@ -141,6 +142,7 @@ pxtorem
 pytest
 quasis
 quxx
+qwen
 RANDOMBYTESREQUEST
 rasterizes
 rebranded
