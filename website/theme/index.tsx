@@ -13,6 +13,7 @@ import { BlogBackButton } from '@rstack-dev/doc-ui/blog-back-button';
 import { NavIcon } from '@rstack-dev/doc-ui/nav-icon';
 
 import { HomeLayout } from './pages';
+import './tailwind.css';
 import './index.scss';
 
 const Search = () => {

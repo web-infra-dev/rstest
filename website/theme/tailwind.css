@@ -1,0 +1,47 @@
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities) source('./');
+
+/* Rspress toggles `.dark` on <html>, so the media-query default never fires. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* `inline` keeps the Rspress variable in the emitted rule, so utilities follow
+   the theme switch instead of freezing whatever :root resolved to. */
+@theme inline {
+  --color-brand: var(--rp-c-brand);
+  --color-brand-light: var(--rp-c-brand-light);
+  --color-brand-tint: var(--rp-c-brand-tint);
+
+  --color-fg: var(--rp-c-text-1);
+  --color-fg-muted: var(--rp-c-text-2);
+  --color-fg-subtle: var(--rp-c-text-3);
+
+  --color-surface: var(--rp-c-bg);
+  --color-surface-soft: var(--rp-c-bg-soft);
+  --color-surface-mute: var(--rp-c-bg-mute);
+
+  --color-line: var(--rp-c-divider-light);
+  --color-line-strong: var(--rp-c-divider);
+
+  --color-syntax-keyword: var(--rs-syntax-keyword);
+  --color-syntax-string: var(--rs-syntax-string);
+  --color-syntax-fn: var(--rs-syntax-fn);
+  --color-syntax-comment: var(--rs-syntax-comment);
+  --color-syntax-pass: var(--rs-syntax-pass);
+}
+
+:root {
+  --rs-syntax-keyword: #cf222e;
+  --rs-syntax-string: #0a3069;
+  --rs-syntax-fn: #8250df;
+  --rs-syntax-comment: #6e7781;
+  --rs-syntax-pass: #1a7f37;
+}
+
+.dark {
+  --rs-syntax-keyword: #ff7b72;
+  --rs-syntax-string: #a5d6ff;
+  --rs-syntax-fn: #d2a8ff;
+  --rs-syntax-comment: #8b949e;
+  --rs-syntax-pass: #3fb950;
+}

@@ -12,9 +12,13 @@
     "gen:release-image": "node --experimental-strip-types scripts/release-image/cli.mts",
     "preview": "rspress preview"
   },
+  "dependencies": {
+    "motion": "^12.42.2"
+  },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "@rsbuild/plugin-sass": "^2.0.1",
+    "@rsbuild/plugin-tailwindcss": "^2.0.3",
     "@rspress/core": "2.0.18",
     "@rspress/plugin-algolia": "2.0.18",
     "@rspress/plugin-client-redirects": "2.0.18",
@@ -31,6 +35,7 @@
     "rspress-plugin-sitemap": "^1.2.1",
     "satori": "^0.28.0",
     "satori-html": "^0.3.2",
+    "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3"
   }
 }
