@@ -32,7 +32,8 @@ import {
 import { createExpect } from '../api/expect';
 import { formatTestError, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
-import { handleFixtures } from './fixtures';
+import { createFixtureResolver } from './fixtures';
+import type { FixtureResolver } from './fixtures';
 import { cloneTaskMeta } from './metadata';
 import {
   getTestStatus,
@@ -150,12 +151,14 @@ export class TestRunner {
         meta: test.meta,
       });
 
+      const fixtureResolver = this.beforeRunTest(
+        test,
+        snapshotClient.getSnapshotState(testPath),
+        fixtureCleanups,
+      );
+
       try {
-        await this.beforeRunTest(
-          test,
-          snapshotClient.getSnapshotState(testPath),
-          fixtureCleanups,
-        );
+        await fixtureResolver.resolveAutoFixtures();
       } catch (error) {
         if (error instanceof TestSkipError) {
           skipped = true;
@@ -177,9 +180,32 @@ export class TestRunner {
       if (!result) {
         try {
           for (const fn of parentHooks.beforeEachListeners) {
+            await fixtureResolver.resolveFixtures(fn);
             const cleanupFn = await fn(test.context);
             if (cleanupFn) cleanups.push(cleanupFn);
           }
+        } catch (error) {
+          if (error instanceof TestSkipError) {
+            skipped = true;
+            result = skipResult();
+          } else {
+            result = {
+              testId: test.testId,
+              status: 'fail' as const,
+              parentNames: test.parentNames,
+              name: test.name,
+              errors: await formatTestError(error, test),
+              testPath,
+              project,
+              meta: test.meta,
+            };
+          }
+        }
+      }
+
+      if (!result) {
+        try {
+          await fixtureResolver.resolveFixtures(test.originalFn);
         } catch (error) {
           if (error instanceof TestSkipError) {
             skipped = true;
@@ -291,6 +317,7 @@ export class TestRunner {
       test.context.task.result = result;
       try {
         for (const fn of afterEachFns) {
+          await fixtureResolver.resolveFixtures(fn);
           await fn(test.context);
         }
       } catch (error) {
@@ -827,11 +854,11 @@ export class TestRunner {
     );
   }
 
-  private async beforeRunTest(
+  private beforeRunTest(
     test: TestCase,
     snapshotState: SnapshotState,
     fixtureCleanups: (() => Promise<void>)[],
-  ): Promise<void> {
+  ): FixtureResolver {
     setState<MatcherState>(
       {
         assertionCalls: 0,
@@ -857,7 +884,7 @@ export class TestRunner {
       enumerable: false,
     });
 
-    await handleFixtures(test, context, fixtureCleanups);
+    return createFixtureResolver(test, context, fixtureCleanups);
   }
 
   private afterRunTest(test: TestCase): void {

@@ -442,9 +442,45 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
 });
 ```
 
+### Using fixtures in hooks
+
+<ApiMeta addedVersion="0.11.4" />
+
+`beforeEach`, `afterEach`, and a cleanup function returned by `beforeEach` can request fixtures. Fixtures remain lazy: Rstest initializes a fixture immediately before the first hook or test callback that requests it through object destructuring, shares that instance for the rest of the test attempt, and runs teardown after all per-test hooks finish.
+
+Core hooks are suite-level APIs, so provide the fixture context type explicitly and register the hook in a suite whose tests use the matching extended test API:
+
+```ts
+import { beforeEach, describe, test } from '@rstest/core';
+
+interface DbFixtures {
+  db: Database;
+}
+
+describe('database tests', () => {
+  const dbTest = test.extend<DbFixtures>({
+    db: async ({}, use) => {
+      const db = await connectTestDb();
+      await use(db);
+      await db.close();
+    },
+  });
+
+  beforeEach<DbFixtures>(({ db }) => {
+    return async ({ db }) => {
+      await db.rollback();
+    };
+  });
+
+  dbTest('creates a user', async () => {
+    // db is initialized for beforeEach even though the test does not request it.
+  });
+});
+```
+
 ### Automatic fixtures (`auto`)
 
-Fixtures are lazy by default: they only run when destructured by the test function (or required by another fixture). To make a fixture run for every test automatically — even when not destructured — use the tuple syntax with `{ auto: true }`:
+Fixtures are lazy by default: they only run when requested through object destructuring by a test or per-test hook callback (or required by another fixture). To make a fixture run for every test automatically — even when no callback requests it — use the tuple syntax with `{ auto: true }`:
 
 ```ts
 import { test } from '@rstest/core';

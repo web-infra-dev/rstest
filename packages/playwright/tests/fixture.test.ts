@@ -300,13 +300,32 @@ test.extend({}).describe('extended test API', () => {
   });
 
   hookExpectTest.describe('wrapped hooks', () => {
-    hookExpectTest.beforeEach(async () => {
+    const hookEvents: string[] = [];
+
+    hookExpectTest.beforeEach(async ({ hookTitle }) => {
       expect.assertions(2);
-      expect('hook title').toBe('hook title');
-      await expect(createPage('hook title')).toHaveTitle('hook title');
+      expect(hookTitle).toBe('hook title');
+      await expect(createPage(hookTitle)).toHaveTitle('hook title');
+      hookEvents.push(`beforeEach:${hookTitle}`);
+
+      return ({ hookTitle }) => {
+        hookEvents.push(`cleanup:${hookTitle}`);
+      };
+    });
+
+    hookExpectTest.afterEach(({ hookTitle }) => {
+      hookEvents.push(`afterEach:${hookTitle}`);
     });
 
     hookExpectTest('counts Playwright assertions in extended hooks', () => {});
+
+    hookExpectTest.afterAll(() => {
+      expect(hookEvents).toEqual([
+        'beforeEach:hook title',
+        'afterEach:hook title',
+        'cleanup:hook title',
+      ]);
+    });
   });
 
   test.extend({}).beforeEach(() => {});

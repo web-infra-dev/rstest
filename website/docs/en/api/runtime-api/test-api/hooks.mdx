@@ -61,7 +61,7 @@ afterAll(async (ctx) => {
 
 ## beforeEach
 
-- **Type:** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `<ExtraContext = object>(fn: (ctx: TestContext & ExtraContext) => MaybePromise<void | ((ctx: TestContext & ExtraContext) => MaybePromise<void>)>, timeout?: number) => void`
 
 See [`TestContext`](/api/runtime-api/test-api/test#testcontext) for the `ctx` fields (the same applies to the per-test hooks below).
 
@@ -90,9 +90,13 @@ beforeEach(async () => {
 });
 ```
 
+<ApiMeta addedVersion="0.11.4" />
+
+The `beforeEach` and `afterEach` callbacks, as well as a cleanup returned by `beforeEach`, can use fixtures created with `test.extend`. Pass the fixture type as `ExtraContext`; Rstest initializes each fixture before the callback that first requests it. See [Using fixtures in hooks](/api/runtime-api/test-api/test#using-fixtures-in-hooks).
+
 ## afterEach
 
-- **Type:** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **Type:** `<ExtraContext = object>(fn: (ctx: TestContext & ExtraContext) => void | Promise<void>, timeout?: number) => void`
 
 Runs after each test in the current suite.
 

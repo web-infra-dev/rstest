@@ -58,23 +58,25 @@ export const normalizeFixtures = (
   };
 };
 
-export const handleFixtures = async (
+export type FixtureResolver = {
+  resolveAutoFixtures: () => Promise<void>;
+  resolveFixtures: (fn?: (...args: any[]) => any) => Promise<void>;
+};
+
+export const createFixtureResolver = (
   test: TestCase,
   context: Record<string, any>,
   cleanups: (() => Promise<void>)[] = [],
-): Promise<{
-  cleanups: (() => Promise<void>)[];
-}> => {
+): FixtureResolver => {
   if (!test.fixtures) {
-    return { cleanups };
+    return {
+      resolveAutoFixtures: () => Promise.resolve(),
+      resolveFixtures: () => Promise.resolve(),
+    };
   }
 
   const doneMap = new Set<string>();
   const pendingMap = new Set<string>();
-
-  const usedKeys: string[] = test.originalFn
-    ? getFixtureUsedProps(test.originalFn)
-    : [];
 
   const useFixture = async (
     name: string,
@@ -126,17 +128,24 @@ export const handleFixtures = async (
     pendingMap.delete(name);
   };
 
-  for (const [name, params] of Object.entries(test.fixtures)) {
-    // call fixture on demand
-    const shouldAdd = params.options?.auto || usedKeys.includes(name);
-    if (!shouldAdd) {
-      continue;
+  const resolveFixtureNames = async (usedKeys: string[], auto: boolean) => {
+    for (const [name, params] of Object.entries(test.fixtures ?? {})) {
+      const shouldResolve = auto
+        ? params.options?.auto
+        : usedKeys.includes(name);
+      if (!shouldResolve) {
+        continue;
+      }
+
+      await useFixture(name, params);
     }
+  };
 
-    await useFixture(name, params);
-  }
-
-  return { cleanups };
+  return {
+    resolveAutoFixtures: () => resolveFixtureNames([], true),
+    resolveFixtures: (fn) =>
+      resolveFixtureNames(fn ? getFixtureUsedProps(fn) : [], false),
+  };
 };
 
 function splitByComma(s: string) {
@@ -181,6 +190,64 @@ function filterOutComments(s: string): string {
   return result.join('');
 }
 
+function filterOutStrings(s: string): string {
+  const result: string[] = [];
+  let quote: '"' | "'" | '`' | undefined;
+
+  for (let i = 0; i < s.length; i++) {
+    const char = s[i]!;
+    if (quote) {
+      if (char === '\\') {
+        result.push(' ', ' ');
+        i++;
+        continue;
+      }
+      if (char === quote) {
+        quote = undefined;
+      }
+      result.push(char === '\n' ? '\n' : ' ');
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      result.push(' ');
+      continue;
+    }
+
+    result.push(char);
+  }
+
+  return result.join('');
+}
+
+function getDestructuredFixtureProps(param: string): string[] | undefined {
+  if (param[0] !== '{' || !param.endsWith('}')) {
+    return undefined;
+  }
+
+  const props = splitByComma(param.substring(1, param.length - 1)).map(
+    (prop) => {
+      const colon = prop.indexOf(':');
+      const equals = prop.indexOf('=');
+      let separator = colon;
+      if (separator === -1 || (equals !== -1 && equals < separator)) {
+        separator = equals;
+      }
+      return separator === -1
+        ? prop.trim()
+        : prop.substring(0, separator).trim();
+    },
+  );
+  const restProperty = props.find((prop) => prop.startsWith('...'));
+  if (restProperty) {
+    throw new Error(
+      `Rest property "${restProperty}" is not supported. List all used fixtures explicitly, separated by comma.`,
+    );
+  }
+  return props;
+}
+
 /**
  * This method is modified based on source found in
  * https://github.com/microsoft/playwright/blob/3584e722237488c07dd23bbf12966f5509bf25c6/packages/playwright/src/common/fixtures.ts#L272
@@ -207,25 +274,30 @@ function getFixtureUsedProps(fn: (...args: any[]) => any): string[] {
   const trimmedParams = match[1]!.trim();
   if (!trimmedParams) return [];
   const [firstParam] = splitByComma(trimmedParams);
-  if (firstParam?.[0] !== '{' || !firstParam.endsWith('}')) {
-    if (firstParam?.startsWith('_')) {
-      return [];
+  const props = getDestructuredFixtureProps(firstParam ?? '');
+  if (props) {
+    return props;
+  }
+
+  if (firstParam?.startsWith('_')) {
+    return [];
+  }
+
+  if (/^[$A-Z_a-z][$\w]*$/.test(firstParam ?? '')) {
+    const escapedParam = firstParam!.replaceAll('$', '\\$');
+    const destructurePattern = new RegExp(
+      `(?:const|let|var)\\s*\\{([^}]*)\\}\\s*=\\s*${escapedParam}(?![$\\w])`,
+    );
+    const destructureMatch = destructurePattern.exec(filterOutStrings(text));
+    const transformedProps = getDestructuredFixtureProps(
+      destructureMatch ? `{${destructureMatch[1]}}` : '',
+    );
+    if (transformedProps) {
+      return transformedProps;
     }
-    throw new Error(
-      `First argument must use the object destructuring pattern: ${firstParam}`,
-    );
   }
-  const props = splitByComma(
-    firstParam.substring(1, firstParam.length - 1),
-  ).map((prop) => {
-    const colon = prop.indexOf(':');
-    return colon === -1 ? prop.trim() : prop.substring(0, colon).trim();
-  });
-  const restProperty = props.find((prop) => prop.startsWith('...'));
-  if (restProperty) {
-    throw new Error(
-      `Rest property "${restProperty}" is not supported. List all used fixtures explicitly, separated by comma.`,
-    );
-  }
-  return props;
+
+  throw new Error(
+    `First argument must use the object destructuring pattern: ${firstParam}`,
+  );
 }

@@ -442,9 +442,45 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
 });
 ```
 
+### 在 hook 中使用 fixture
+
+<ApiMeta addedVersion="0.11.4" />
+
+`beforeEach`、`afterEach` 以及 `beforeEach` 返回的 cleanup 函数都可以请求 fixture。Fixture 仍然是按需执行的：Rstest 会在第一个解构该 fixture 的 hook 或测试 callback 前完成初始化，在本次 test attempt 的后续阶段共享同一个实例，并在所有 per-test hooks 结束后执行 teardown。
+
+Core hooks 是 suite 级 API，因此需要显式传入 fixture context 类型，并在使用对应 extended test API 的 suite 内注册 hook：
+
+```ts
+import { beforeEach, describe, test } from '@rstest/core';
+
+interface DbFixtures {
+  db: Database;
+}
+
+describe('database tests', () => {
+  const dbTest = test.extend<DbFixtures>({
+    db: async ({}, use) => {
+      const db = await connectTestDb();
+      await use(db);
+      await db.close();
+    },
+  });
+
+  beforeEach<DbFixtures>(({ db }) => {
+    return async ({ db }) => {
+      await db.rollback();
+    };
+  });
+
+  dbTest('creates a user', async () => {
+    // 即使测试函数没有请求 db，也会为 beforeEach 初始化它。
+  });
+});
+```
+
 ### 自动 fixture（`auto`）
 
-Fixture 默认是按需执行的：只有测试函数中解构了它（或被其他 fixture 依赖）才会运行。如果你希望某个 fixture 对每个测试都自动生效——即使测试没有解构它——可以使用元组语法并设置 `{ auto: true }`：
+Fixture 默认是按需执行的：只有测试或 per-test hook callback 中解构了它（或被其他 fixture 依赖）才会运行。如果你希望某个 fixture 对每个测试都自动生效——即使没有 callback 解构它——可以使用元组语法并设置 `{ auto: true }`：
 
 ```ts
 import { test } from '@rstest/core';

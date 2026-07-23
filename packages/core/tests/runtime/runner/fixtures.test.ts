@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@rstest/core';
 import {
-  handleFixtures,
+  createFixtureResolver,
   normalizeFixtures,
 } from '../../../src/runtime/runner/fixtures';
 
@@ -69,10 +69,40 @@ describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
     } as any);
     expect([...(result.used.deps ?? [])].sort()).toEqual(['bar', 'foo']);
   });
+
+  it('detects destructuring moved into the body by a compiler', () => {
+    const useFn = (param: { foo: number; bar: number }) => {
+      const { foo, bar: renamedBar } = param;
+      return [foo, renamedBar];
+    };
+    const result = normalizeFixtures({
+      used: [useFn],
+      foo: 1,
+      bar: 2,
+    } as any);
+
+    expect([...(result.used.deps ?? [])].sort()).toEqual(['bar', 'foo']);
+  });
+
+  it('ignores destructuring text inside strings', () => {
+    const useFn = (context: unknown) => `const { foo } = context`;
+
+    expect(() => normalizeFixtures({ used: [useFn], foo: 1 } as any)).toThrow(
+      /object destructuring pattern/,
+    );
+  });
 });
 
-describe('handleFixtures', () => {
-  it('activates auto fixtures and on-demand fixtures used by the test fn', async () => {
+describe('createFixtureResolver', () => {
+  it('does not parse callbacks when the test has no fixtures', async () => {
+    const resolver = createFixtureResolver({} as any, {});
+
+    await expect(
+      resolver.resolveFixtures((context: unknown) => context),
+    ).resolves.toBeUndefined();
+  });
+
+  it('activates auto fixtures and resolves callback fixtures on demand', async () => {
     const order: string[] = [];
     const fixtures = normalizeFixtures({
       autoFix: [
@@ -99,16 +129,38 @@ describe('handleFixtures', () => {
     const context: Record<string, any> = {};
     const test = {
       fixtures,
-      originalFn: ({ usedFix }: any) => usedFix,
     } as any;
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver(test, context, cleanups);
 
-    const { cleanups } = await handleFixtures(test, context);
+    await resolver.resolveAutoFixtures();
+    await resolver.resolveFixtures(({ usedFix }: any) => usedFix);
 
     expect(context.autoFix).toBe('A');
     expect(context.usedFix).toBe('U');
     expect('unusedFix' in context).toBe(false);
     expect(order).toEqual(['auto', 'used']);
     expect(cleanups).toHaveLength(2);
+  });
+
+  it('shares fixture instances across hook and test callbacks', async () => {
+    const setups: string[] = [];
+    const fixtures = normalizeFixtures({
+      shared: [
+        async (_ctx: any, use: any) => {
+          setups.push('shared');
+          await use('value');
+        },
+      ],
+    } as any);
+    const context: Record<string, any> = {};
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+
+    await resolver.resolveFixtures(({ shared }: any) => shared);
+    await resolver.resolveFixtures(({ shared }: any) => shared);
+
+    expect(context.shared).toBe('value');
+    expect(setups).toEqual(['shared']);
   });
 
   it('throws on circular fixture dependencies', async () => {
@@ -119,10 +171,10 @@ describe('handleFixtures', () => {
 
     const test = {
       fixtures,
-      originalFn: ({ x }: any) => x,
     } as any;
+    const resolver = createFixtureResolver(test, {});
 
-    await expect(handleFixtures(test, {})).rejects.toThrow(
+    await expect(resolver.resolveFixtures(({ x }: any) => x)).rejects.toThrow(
       /Circular fixture dependency/,
     );
   });
@@ -148,10 +200,11 @@ describe('handleFixtures', () => {
 
     const test = {
       fixtures,
-      originalFn: () => {},
     } as any;
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver(test, {}, cleanups);
 
-    const { cleanups } = await handleFixtures(test, {});
+    await resolver.resolveAutoFixtures();
     for (const cleanup of cleanups) {
       await cleanup();
     }

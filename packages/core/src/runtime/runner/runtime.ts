@@ -141,13 +141,13 @@ export class RunnerRuntime {
    * strictly checked — a contextual `void` would silently ignore an accidental
    * `Promise` return.
    */
-  private registerHook(
+  private registerHook<ExtraContext = object>(
     key: 'beforeAll' | 'afterAll' | 'beforeEach' | 'afterEach',
     fn:
       | AfterAllListener
       | BeforeAllListener
-      | AfterEachListener
-      | BeforeEachListener,
+      | AfterEachListener<ExtraContext>
+      | BeforeEachListener<ExtraContext>,
     timeout: number,
   ): void {
     registerTestSuiteListener(

@@ -296,7 +296,7 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
     return fn;
   }
 
-  return (async (...args: Parameters<T>) => {
+  const wrapped = async (...args: Parameters<T>) => {
     let timeoutId: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise((_, reject) => {
       timeoutId = getRealTimers().setTimeout!(() => {
@@ -320,7 +320,14 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
       if (timeoutId) getRealTimers().clearTimeout!(timeoutId);
       throw error;
     }
-  }) as T;
+  };
+
+  Object.defineProperty(wrapped, 'toString', {
+    configurable: true,
+    value: () => fn.toString(),
+  });
+
+  return wrapped as T;
 }
 
 export function limitConcurrency(
