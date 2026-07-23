@@ -131,7 +131,7 @@ export class RstestApi {
     try {
       return require.resolve(specifier, { paths: [this.cwd] });
     } catch (e) {
-      if (!isModuleNotFoundError(e)) throw e;
+      if (!isModuleNotFoundError(e, specifier)) throw e;
       if (configuredPackagePath) {
         throw new Error(
           formatConfiguredCoreNotFoundMessage(configuredPackagePath),

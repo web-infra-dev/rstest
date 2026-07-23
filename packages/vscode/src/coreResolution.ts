@@ -10,10 +10,21 @@
  * does not resolve is a setting the user has to fix, so it is notified.
  */
 
-export function isModuleNotFoundError(error: unknown): boolean {
+// Whether `specifier` itself is what could not be found. `MODULE_NOT_FOUND`
+// alone is too broad: a package that is installed but whose entry file is gone
+// (an interrupted install, or a workspace link that has not been built) throws
+// it too, and that must not be reported as "not installed". Node names the
+// resolved file in that case and the requested specifier in this one, so the
+// message is what separates them. A future Node wording change therefore fails
+// towards reporting rather than towards silence.
+export function isModuleNotFoundError(
+  error: unknown,
+  specifier: string,
+): boolean {
   return (
     error instanceof Error &&
-    (error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND'
+    (error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND' &&
+    error.message.startsWith(`Cannot find module '${specifier}'`)
   );
 }
 

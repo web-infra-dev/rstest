@@ -1,5 +1,7 @@
+import fs from 'node:fs';
 import os from 'node:os';
-import { beforeEach, describe, expect, it, rs } from '@rstest/core';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, rs } from '@rstest/core';
 import { RstestApi } from '../../src/master';
 
 // Everything the extension surfaces: notifications the user cannot miss, the
@@ -55,12 +57,12 @@ rs.mock('vscode', () => {
 // the workspace `node_modules` and `@rstest/core` is genuinely missing.
 const noCoreDir = os.tmpdir();
 
-const createApi = () => {
-  const workspace = { uri: { fsPath: noCoreDir } };
+const createApi = (cwd = noCoreDir) => {
+  const workspace = { uri: { fsPath: cwd } };
   return new RstestApi(
     workspace as any,
-    noCoreDir,
-    `${noCoreDir}/rstest.config.ts`,
+    cwd,
+    `${cwd}/rstest.config.ts`,
     {} as any,
   );
 };
@@ -102,6 +104,38 @@ describe('RstestApi with a missing @rstest/core', () => {
     createApi().runInTerminal({});
     expect(shownMessages).toEqual([]);
     expect(createdTerminals).toEqual([]);
+  });
+});
+
+// Installed but unusable — an interrupted install, or a workspace link that
+// has not been built. Advising an install would be wrong, and staying silent
+// would hide a broken state the user has to repair.
+describe('RstestApi with an unusable @rstest/core', () => {
+  let root: string;
+
+  beforeEach(() => {
+    shownMessages.length = 0;
+    loggedErrors.length = 0;
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'rstest-vscode-'));
+    const pkgDir = path.join(root, 'node_modules', '@rstest', 'core');
+    fs.mkdirSync(pkgDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(pkgDir, 'package.json'),
+      '{"name":"@rstest/core","version":"9.9.9","main":"./gone.js"}',
+    );
+  });
+
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('should notify instead of reporting it as not installed', async () => {
+    await expect(createApi(root).getNormalizedConfig()).rejects.toThrow();
+    expect(shownMessages).toHaveLength(1);
+    expect(shownMessages[0]).toContain('gone.js');
+    expect(loggedErrors.join('\n')).not.toContain(
+      'Install the project dependencies',
+    );
   });
 });
 
