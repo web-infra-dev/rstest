@@ -15,6 +15,7 @@
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "@rsbuild/plugin-sass": "catalog:",
+    "@rsbuild/plugin-tailwindcss": "^2.0.3",
     "@rspress/core": "2.1.0-beta.1",
     "@rspress/plugin-algolia": "2.1.0-beta.1",
     "@rspress/plugin-client-redirects": "2.1.0-beta.1",
@@ -30,6 +31,7 @@
     "rspress-plugin-font-open-sans": "^1.0.4",
     "satori": "^0.62.0",
     "satori-html": "^0.3.2",
+    "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3"
   }
 }
