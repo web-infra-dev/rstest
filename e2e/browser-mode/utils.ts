@@ -1,6 +1,5 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import treeKill from 'tree-kill';
 import { runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -84,22 +83,13 @@ const POSIX_PROCESS_CLEANUP_RETRY_COUNT = 20;
 type BrowserCli = Awaited<ReturnType<typeof runRstestCli>>['cli'];
 
 /**
- * Kill a spawned rstest process tree without adding a fixed post-kill delay.
- * The tree-kill callback is enough for POSIX cleanup; Windows cleanup retries are
- * handled by deleteFixtureTarget where file handle contention can surface.
+ * Kill a spawned rstest process tree before the fixture directory is removed.
+ * The `onTestFinished` hook fires too late for that ordering, so watch tests
+ * still call this explicitly; Windows file-handle contention is absorbed by
+ * `deleteFixtureTarget`'s retries.
  */
-export const killCliProcessTree = async (cli: BrowserCli): Promise<void> => {
-  const pid = cli.exec.process?.pid;
-  if (!pid) {
-    cli.exec.kill();
-    await sleep(50);
-    return;
-  }
-
-  await new Promise<void>((resolve) => {
-    treeKill(pid, 'SIGKILL', () => resolve());
-  });
-};
+export const killCliProcessTree = (cli: BrowserCli): Promise<void> =>
+  cli.killProcessTree();
 
 export const deleteFixtureTarget = async (
   fixtureFs: { delete: (targetPath: string) => void } | undefined,
