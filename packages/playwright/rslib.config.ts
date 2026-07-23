@@ -9,9 +9,6 @@ export default defineConfig({
       format: 'esm',
       syntax: 'es2023',
       dts: true,
-      redirect: {
-        dts: { extension: true },
-      },
       output: {
         sourceMap: process.env.SOURCEMAP === 'true',
         externals: {

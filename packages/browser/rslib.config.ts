@@ -21,11 +21,6 @@ export default defineConfig({
         isolated: true,
         bundle: false,
       },
-      redirect: {
-        // Append `.js` to relative imports in emitted .d.ts so they resolve
-        // under NodeNext/Node16 module resolution (ESM requires explicit ext).
-        dts: { extension: true },
-      },
       output: {
         externals: {
           // Keep @rstest/core as external
