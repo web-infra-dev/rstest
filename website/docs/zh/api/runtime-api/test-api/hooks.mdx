@@ -61,7 +61,7 @@ afterAll(async (ctx) => {
 
 ## beforeEach
 
-- **类型：** `<ExtraContext = object>(fn: (ctx: TestContext & ExtraContext) => MaybePromise<void | ((ctx: TestContext & ExtraContext) => MaybePromise<void>)>, timeout?: number) => void`
+- **类型：** `<ExtraContext = object>(fn: (ctx: TestContext & ExtraContext) => void | ((ctx: TestContext & ExtraContext) => void | Promise<void>) | Promise<void | ((ctx: TestContext & ExtraContext) => void | Promise<void>)>, timeout?: number) => void`
 
 `ctx` 的字段详见 [`TestContext`](/api/runtime-api/test-api/test#testcontext)(以下测试级 hook 同理)。
 

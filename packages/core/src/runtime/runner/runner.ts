@@ -158,7 +158,7 @@ export class TestRunner {
       );
 
       try {
-        await fixtureResolver.resolveAutoFixtures();
+        await fixtureResolver.resolveTestFixtures(test.originalFn);
       } catch (error) {
         if (error instanceof TestSkipError) {
           skipped = true;
@@ -180,32 +180,10 @@ export class TestRunner {
       if (!result) {
         try {
           for (const fn of parentHooks.beforeEachListeners) {
-            await fixtureResolver.resolveFixtures(fn);
+            await fixtureResolver.resolveHookFixtures(fn);
             const cleanupFn = await fn(test.context);
             if (cleanupFn) cleanups.push(cleanupFn);
           }
-        } catch (error) {
-          if (error instanceof TestSkipError) {
-            skipped = true;
-            result = skipResult();
-          } else {
-            result = {
-              testId: test.testId,
-              status: 'fail' as const,
-              parentNames: test.parentNames,
-              name: test.name,
-              errors: await formatTestError(error, test),
-              testPath,
-              project,
-              meta: test.meta,
-            };
-          }
-        }
-      }
-
-      if (!result) {
-        try {
-          await fixtureResolver.resolveFixtures(test.originalFn);
         } catch (error) {
           if (error instanceof TestSkipError) {
             skipped = true;
@@ -317,7 +295,7 @@ export class TestRunner {
       test.context.task.result = result;
       try {
         for (const fn of afterEachFns) {
-          await fixtureResolver.resolveFixtures(fn);
+          await fixtureResolver.resolveHookFixtures(fn);
           await fn(test.context);
         }
       } catch (error) {

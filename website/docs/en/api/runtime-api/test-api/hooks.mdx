@@ -61,7 +61,7 @@ afterAll(async (ctx) => {
 
 ## beforeEach
 
-- **Type:** `<ExtraContext = object>(fn: (ctx: TestContext & ExtraContext) => MaybePromise<void | ((ctx: TestContext & ExtraContext) => MaybePromise<void>)>, timeout?: number) => void`
+- **Type:** `<ExtraContext = object>(fn: (ctx: TestContext & ExtraContext) => void | ((ctx: TestContext & ExtraContext) => void | Promise<void>) | Promise<void | ((ctx: TestContext & ExtraContext) => void | Promise<void>)>, timeout?: number) => void`
 
 See [`TestContext`](/api/runtime-api/test-api/test#testcontext) for the `ctx` fields (the same applies to the per-test hooks below).
 

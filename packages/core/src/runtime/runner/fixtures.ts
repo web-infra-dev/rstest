@@ -59,8 +59,8 @@ export const normalizeFixtures = (
 };
 
 export type FixtureResolver = {
-  resolveAutoFixtures: () => Promise<void>;
-  resolveFixtures: (fn?: (...args: any[]) => any) => Promise<void>;
+  resolveTestFixtures: (fn?: (...args: any[]) => any) => Promise<void>;
+  resolveHookFixtures: (fn: (...args: any[]) => any) => Promise<void>;
 };
 
 export const createFixtureResolver = (
@@ -70,8 +70,8 @@ export const createFixtureResolver = (
 ): FixtureResolver => {
   if (!test.fixtures) {
     return {
-      resolveAutoFixtures: () => Promise.resolve(),
-      resolveFixtures: () => Promise.resolve(),
+      resolveTestFixtures: () => Promise.resolve(),
+      resolveHookFixtures: () => Promise.resolve(),
     };
   }
 
@@ -128,11 +128,13 @@ export const createFixtureResolver = (
     pendingMap.delete(name);
   };
 
-  const resolveFixtureNames = async (usedKeys: string[], auto: boolean) => {
+  const resolveFixtureNames = async (
+    usedKeys: string[],
+    includeAuto: boolean,
+  ) => {
     for (const [name, params] of Object.entries(test.fixtures ?? {})) {
-      const shouldResolve = auto
-        ? params.options?.auto
-        : usedKeys.includes(name);
+      const shouldResolve =
+        usedKeys.includes(name) || (includeAuto && params.options?.auto);
       if (!shouldResolve) {
         continue;
       }
@@ -142,9 +144,10 @@ export const createFixtureResolver = (
   };
 
   return {
-    resolveAutoFixtures: () => resolveFixtureNames([], true),
-    resolveFixtures: (fn) =>
-      resolveFixtureNames(fn ? getFixtureUsedProps(fn) : [], false),
+    resolveTestFixtures: (fn) =>
+      resolveFixtureNames(fn ? getFixtureUsedProps(fn) : [], true),
+    resolveHookFixtures: (fn) =>
+      resolveFixtureNames(getFixtureUsedProps(fn, true), false),
   };
 };
 
@@ -267,11 +270,21 @@ function getDestructuredFixtureProps(param: string): string[] | undefined {
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-function getFixtureUsedProps(fn: (...args: any[]) => any): string[] {
-  const text = filterOutComments(fn.toString());
-  const match = /(?:async)?(?:\s+function)?[^(]*\(([^)]*)/.exec(text);
-  if (!match) return [];
-  const trimmedParams = match[1]!.trim();
+function getFixtureUsedProps(
+  fn: (...args: any[]) => any,
+  allowNamedContext = false,
+): string[] {
+  const text = filterOutComments(fn.toString()).trim();
+  const parenthesizedMatch =
+    /^(?:async\s+)?(?:function(?:\s+[$A-Z_a-z][$\w]*)?\s*|[$A-Z_a-z][$\w]*\s*)?\(([^)]*)\)/.exec(
+      text,
+    );
+  const singleParamMatch = parenthesizedMatch
+    ? undefined
+    : /^(?:async\s+)?([$A-Z_a-z][$\w]*)\s*=>/.exec(text);
+  const params = parenthesizedMatch?.[1] ?? singleParamMatch?.[1];
+  if (params === undefined) return [];
+  const trimmedParams = params.trim();
   if (!trimmedParams) return [];
   const [firstParam] = splitByComma(trimmedParams);
   const props = getDestructuredFixtureProps(firstParam ?? '');
@@ -294,6 +307,9 @@ function getFixtureUsedProps(fn: (...args: any[]) => any): string[] {
     );
     if (transformedProps) {
       return transformedProps;
+    }
+    if (allowNamedContext) {
+      return [];
     }
   }
 
