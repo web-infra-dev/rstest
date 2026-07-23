@@ -98,6 +98,18 @@ describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
     expect([...(result.used.deps ?? [])].sort()).toEqual(['bar', 'foo']);
   });
 
+  it('detects compiler-moved destructuring from an _-prefixed context', () => {
+    const useFn = Object.assign(() => {}, {
+      toString: () => '(_ref) => { const { foo } = _ref; return foo; }',
+    });
+    const result = normalizeFixtures({
+      used: [useFn],
+      foo: 1,
+    } as any);
+
+    expect(result.used.deps).toEqual(['foo']);
+  });
+
   it('ignores destructuring text inside strings', () => {
     const useFn = (context: unknown) => `const { foo } = context`;
 
@@ -137,6 +149,19 @@ describe('createFixtureResolver', () => {
     });
 
     expect(context).toEqual({ task: 'task', fixture: 'fixture' });
+  });
+
+  it('collects fixtures from an _-prefixed compiled hook context', async () => {
+    const context: Record<string, any> = {};
+    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+    const hook = Object.assign(() => {}, {
+      toString: () => '(_ref) => { const { fixture } = _ref; }',
+    });
+
+    await resolver.resolveHookFixtures(hook);
+
+    expect(context.fixture).toBe('fixture');
   });
 
   it('does not collect named context destructuring from member access', async () => {

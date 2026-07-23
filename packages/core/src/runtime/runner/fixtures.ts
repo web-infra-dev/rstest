@@ -700,10 +700,6 @@ function parseFixtureUsedProps(
     return props;
   }
 
-  if (firstParam?.startsWith('_')) {
-    return [];
-  }
-
   if (/^[$A-Z_a-z][$\w]*$/.test(firstParam ?? '')) {
     const transformedProps = getNamedContextFixtureProps(
       text,
@@ -713,7 +709,7 @@ function parseFixtureUsedProps(
     if (transformedProps.length) {
       return transformedProps;
     }
-    if (allowNamedContext) {
+    if (firstParam!.startsWith('_') || allowNamedContext) {
       return [];
     }
   }
