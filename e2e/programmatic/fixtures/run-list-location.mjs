@@ -18,8 +18,13 @@ const rstest = await createRstest({
 const withLocation = await rstest.listTests({ printLocation: true });
 const withoutLocation = await rstest.listTests({ printLocation: false });
 
+// `listTests` returns a tree (file > internal root suite > user suites >
+// cases), so walk it rather than only looking at the top level.
+const flatten = (tests) =>
+  tests.flatMap((test) => [test, ...flatten(test.tests ?? [])]);
+
 const firstCaseLocation = (results) => {
-  const cases = results.flatMap((r) => r.tests);
+  const cases = flatten(results.flatMap((r) => r.tests));
   const withLoc = cases.find((t) => t.location);
   return withLoc ? { line: typeof withLoc.location.line === 'number' } : null;
 };
