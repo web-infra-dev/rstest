@@ -13,7 +13,9 @@ if (enableCompileCache) {
 }
 
 async function main() {
-  const { runCLI } = await import('../dist/cli.js');
+  // Load the CLI router from the `./api` artifact rather than the main entry:
+  // `runCLI` is exported from `@rstest/core/api`, never from `@rstest/core`.
+  const { runCLI } = await import('../dist/api/index.js');
   await runCLI();
 }
 

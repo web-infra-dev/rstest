@@ -110,11 +110,6 @@ export default defineConfig({
           index: './src/index.ts',
           'api/index': './src/api/index.ts',
           adapter: './src/adapter.ts',
-          // Source of the public `runCLI` (re-exported by `./api`) and the
-          // entry the `rstest` bin loads. The built `dist/cli.js` chunk is
-          // intentionally absent from `package.json` `exports` so the bin can
-          // load it directly while the public surface stays on `./api`.
-          cli: './src/cli/index.ts',
           browser: './src/browser.ts',
           worker: './src/runtime/worker/index.ts',
           globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',
