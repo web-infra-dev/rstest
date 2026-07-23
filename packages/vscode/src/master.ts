@@ -5,12 +5,18 @@ import { type BirpcReturn, createBirpc } from 'birpc';
 import regexpEscape from 'core-js-pure/actual/regexp/escape';
 import vscode from 'vscode';
 import { getConfigValue } from './config';
+import {
+  formatConfiguredCoreNotFoundMessage,
+  formatCoreNotFoundMessage,
+  isModuleNotFoundError,
+} from './coreResolution';
 import type { RstestDiagnostics } from './diagnostics';
 import type { TestErrorStore } from './errorStore';
 import { logger } from './logger';
 import type { Project } from './project';
 import { runInTerminal as sendToTerminal, shellQuote } from './terminal';
 import { TestRunReporter } from './testRunReporter';
+import { toErrorMessage } from './utils';
 import {
   formatCoreVersionWarningMessage,
   shouldWarnCoreVersion,
@@ -25,6 +31,9 @@ export const runningWorkers = new Set<BirpcReturn<Worker, TestRunReporter>>();
 // the debugger would attach to the wrong endpoint. Prefer an explicit IPv4
 // literal over `localhost` so both ends agree.
 const DEFAULT_DEBUG_HOST = '127.0.0.1';
+
+// The specifier used when `rstestPackagePath` is unset.
+const CORE_PACKAGE_JSON = '@rstest/core/package.json';
 
 // Probe whether a fixed inspector port can be bound. `--inspect-wait=host:port`
 // does not fall back when the port is taken: Node reports address-in-use and
@@ -84,18 +93,18 @@ export class RstestApi {
     };
   }
 
-  // Resolve the `@rstest/core` package.json specifier honoring a configured
-  // `rstestPackagePath`: the bare package spec when it is not set, or the
-  // validated absolute path to the configured package.json. Shared by the
-  // worker resolution and the terminal CLI resolution.
-  private resolveConfiguredPackageJson(): string {
+  // The validated absolute path to the package.json a `rstestPackagePath`
+  // setting points at, or `undefined` when the setting is unset and the bare
+  // `CORE_PACKAGE_JSON` specifier applies. Shared by the worker resolution and
+  // the terminal CLI resolution, which both also report the configured path.
+  private resolveConfiguredPackageJson(): string | undefined {
     // TODO: support Yarn PnP
     let configuredPackagePath = getConfigValue(
       'rstestPackagePath',
       this.workspace,
     );
     if (!configuredPackagePath) {
-      return '@rstest/core/package.json';
+      return undefined;
     }
     configuredPackagePath = this.expandWorkspaceFolder(configuredPackagePath);
     if (!configuredPackagePath.endsWith('package.json')) {
@@ -108,20 +117,45 @@ export class RstestApi {
       : path.resolve(this.workspace.uri.fsPath, configuredPackagePath);
   }
 
+  // Resolve `specifier` from the config file's directory. `undefined` means
+  // `@rstest/core` is not installed at all — the normal state of a repository
+  // whose dependencies are not installed yet, so it is written to the output
+  // channel and never raised as a notification. This is the only place that
+  // policy lives, and it deliberately does not cover `configuredPackagePath`:
+  // a `rstestPackagePath` that does not resolve is a setting the user got
+  // wrong, so it is rethrown for the caller to report like any other failure.
+  private resolveFromCwd(
+    specifier: string,
+    configuredPackagePath?: string,
+  ): string | undefined {
+    try {
+      return require.resolve(specifier, { paths: [this.cwd] });
+    } catch (e) {
+      if (!isModuleNotFoundError(e, specifier)) throw e;
+      if (configuredPackagePath) {
+        throw new Error(
+          formatConfiguredCoreNotFoundMessage(configuredPackagePath),
+        );
+      }
+      logger.error(formatCoreNotFoundMessage(this.cwd));
+      return undefined;
+    }
+  }
+
+  // Returns '' when resolution failed. Every such branch has already reported
+  // itself — silently for a missing core, with a notification otherwise — so
+  // callers must fail quietly rather than report again.
   private resolveRstestPath(): string {
     try {
-      const packageJson = this.resolveConfiguredPackageJson();
-      const configured = packageJson !== '@rstest/core/package.json';
+      const configured = this.resolveConfiguredPackageJson();
+      const packageJson = configured ?? CORE_PACKAGE_JSON;
       if (configured) {
-        logger.debug('Using configured rstestPackagePath:', packageJson);
+        logger.debug('Using configured rstestPackagePath:', configured);
       }
 
-      const nodeExport = require.resolve(
-        configured ? dirname(packageJson) : '@rstest/core',
-        {
-          paths: [this.cwd],
-        },
-      );
+      // `dirname` turns either package.json specifier into its package entry.
+      const nodeExport = this.resolveFromCwd(dirname(packageJson), configured);
+      if (!nodeExport) return '';
 
       let corePackageJsonPath: string;
       try {
@@ -159,7 +193,7 @@ export class RstestApi {
 
       return nodeExport;
     } catch (e) {
-      vscode.window.showErrorMessage((e as any).toString());
+      vscode.window.showErrorMessage(toErrorMessage(e));
       throw e;
     }
   }
@@ -167,10 +201,13 @@ export class RstestApi {
   // Resolve the rstest CLI executable (its package `bin`) for the terminal run
   // mode, honoring a configured `rstestPackagePath` the same way as the worker
   // resolution above.
-  private resolveRstestBin(): string {
-    const pkgJsonPath = require.resolve(this.resolveConfiguredPackageJson(), {
-      paths: [this.cwd],
-    });
+  private resolveRstestBin(): string | undefined {
+    const configured = this.resolveConfiguredPackageJson();
+    const pkgJsonPath = this.resolveFromCwd(
+      configured ?? CORE_PACKAGE_JSON,
+      configured,
+    );
+    if (!pkgJsonPath) return undefined;
     const pkg = require(pkgJsonPath) as {
       bin?: string | Record<string, string>;
     };
@@ -280,8 +317,7 @@ export class RstestApi {
       })
       .catch((error) => {
         if (!token.isCancellationRequested) {
-          const message =
-            error instanceof Error ? error.message : String(error);
+          const message = toErrorMessage(error);
           logger.error('Failed to run tests', error);
           run.appendOutput(`\n[rstest] ${message}\n`.replaceAll('\n', '\r\n'));
           vscode.window.showErrorMessage(`Rstest test run failed: ${message}`);
@@ -299,15 +335,18 @@ export class RstestApi {
     await promise;
   }
 
-  private buildCliCommand({
-    fileFilter,
-    testCaseNamePath,
-    isSuite,
-  }: {
-    fileFilter?: string;
-    testCaseNamePath?: string[];
-    isSuite?: boolean;
-  }): string {
+  private buildCliCommand(
+    rstestBin: string,
+    {
+      fileFilter,
+      testCaseNamePath,
+      isSuite,
+    }: {
+      fileFilter?: string;
+      testCaseNamePath?: string[];
+      isSuite?: boolean;
+    },
+  ): string {
     const { nodeExecutable, nodeExecArgs } = this.resolveNodeCommand();
 
     // Prefer a path relative to the run cwd for readability; fall back to the
@@ -332,7 +371,7 @@ export class RstestApi {
     // `-c` is resolved relative to the process cwd, which is `this.cwd`.
     args.push('-c', relativeToCwd(this.configFilePath));
 
-    return [nodeExecutable, ...nodeExecArgs, this.resolveRstestBin(), ...args]
+    return [nodeExecutable, ...nodeExecArgs, rstestBin, ...args]
       .map(shellQuote)
       .join(' ');
   }
@@ -344,10 +383,11 @@ export class RstestApi {
   }): void {
     let command: string;
     try {
-      command = this.buildCliCommand(options);
+      const rstestBin = this.resolveRstestBin();
+      if (!rstestBin) return;
+      command = this.buildCliCommand(rstestBin, options);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      vscode.window.showErrorMessage(`Rstest: ${message}`);
+      vscode.window.showErrorMessage(`Rstest: ${toErrorMessage(error)}`);
       return;
     }
     sendToTerminal(command, {
