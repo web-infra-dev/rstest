@@ -1,9 +1,4 @@
-import {
-  defineConfig,
-  defineInlineProject,
-  defineProject,
-  type ProjectConfig,
-} from '@rstest/core';
+import { defineConfig, defineInlineProject, defineProject } from '@rstest/core';
 
 export const inlineNodeProject = defineInlineProject({
   name: 'runtime-utils-node',
@@ -43,10 +38,16 @@ export const exportedProject = defineProject({
   include: ['tests/node/**/*.test.ts'],
 });
 
-export const exportedProjectFactory = defineProject((): ProjectConfig => ({
+export const exportedProjectFactory = defineProject(() => ({
   root: __dirname,
   testEnvironment: 'jsdom',
   include: ['tests/dom/**/*.test.ts'],
+}));
+
+export const exportedAsyncProjectFactory = defineProject(async () => ({
+  root: __dirname,
+  testEnvironment: 'node',
+  include: ['tests/node/**/*.test.ts'],
 }));
 
 export const exportedNestedProjects = defineProject({
@@ -82,6 +83,23 @@ export const exportedNestedProjectsFactory = defineProject(async () => ({
     }),
   ],
 }));
+
+export const exportedConfigFactory = defineConfig(() => ({
+  testEnvironment: 'node',
+}));
+
+export const exportedAsyncConfigFactory = defineConfig(async () => ({
+  testEnvironment: 'jsdom',
+}));
+
+// @ts-expect-error unknown config property
+defineConfig({ testEnvironment: 'node', testEnvironmnt: 'node' });
+
+// @ts-expect-error invalid test environment
+defineConfig(async () => ({ testEnvironment: 'invalid' }));
+
+// @ts-expect-error invalid project test environment
+defineProject(async () => ({ testEnvironment: 'invalid' }));
 
 export default defineConfig({
   projects: [
