@@ -6,7 +6,6 @@ export default defineConfig({
   plugins: publishCheckPlugins(),
   lib: [
     {
-      format: 'esm',
       syntax: ['chrome 100'],
       dts: {
         isolated: true,

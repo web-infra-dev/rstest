@@ -15,7 +15,6 @@ export default defineConfig({
   lib: [
     {
       id: 'rstest-browser',
-      format: 'esm',
       syntax: 'es2023',
       dts: {
         isolated: true,

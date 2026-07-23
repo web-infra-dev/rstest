@@ -6,7 +6,6 @@ export default defineConfig({
   plugins: publishCheckPlugins(),
   lib: [
     {
-      format: 'esm',
       syntax: 'es2023',
       dts: {
         isolated: true,

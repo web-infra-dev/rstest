@@ -14,7 +14,6 @@ export default defineConfig({
   },
   lib: [
     {
-      format: 'esm',
       dts: {
         isolated: true,
         bundle: true,

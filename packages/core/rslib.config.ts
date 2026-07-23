@@ -40,7 +40,6 @@ export default defineConfig({
   lib: [
     {
       id: 'rstest',
-      format: 'esm',
       syntax: 'es2023',
       dts: {
         isolated: true,
@@ -145,7 +144,6 @@ export default defineConfig({
     },
     {
       id: 'browser_runtime',
-      format: 'esm',
       syntax: 'es2023',
       dts: {
         isolated: true,
