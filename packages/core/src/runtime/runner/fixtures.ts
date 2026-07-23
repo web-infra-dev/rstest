@@ -300,13 +300,21 @@ function getFixtureUsedProps(
     const escapedParam = firstParam!.replaceAll('$', '\\$');
     const destructurePattern = new RegExp(
       `(?:const|let|var)\\s*\\{([^}]*)\\}\\s*=\\s*${escapedParam}(?![$\\w])`,
+      'g',
     );
-    const destructureMatch = destructurePattern.exec(filterOutStrings(text));
-    const transformedProps = getDestructuredFixtureProps(
-      destructureMatch ? `{${destructureMatch[1]}}` : '',
-    );
-    if (transformedProps) {
-      return transformedProps;
+    const transformedProps = new Set<string>();
+    let hasTransformedDestructure = false;
+    for (const match of filterOutStrings(text).matchAll(destructurePattern)) {
+      const props = getDestructuredFixtureProps(`{${match[1]}}`);
+      if (props) {
+        hasTransformedDestructure = true;
+        for (const prop of props) {
+          transformedProps.add(prop);
+        }
+      }
+    }
+    if (hasTransformedDestructure) {
+      return [...transformedProps];
     }
     if (allowNamedContext) {
       return [];

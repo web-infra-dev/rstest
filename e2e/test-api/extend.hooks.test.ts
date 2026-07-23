@@ -41,10 +41,16 @@ const hookTest = test.extend<HookFixtures>({
   },
 });
 
-beforeEach<HookFixtures>(({ beforeValue }) => {
+beforeEach<HookFixtures>((context) => {
+  const { task } = context;
+  const { beforeValue } = context;
+  expect(task.name).toBe('resolves fixtures used only by hooks');
   events.push(`beforeEach:${beforeValue}`);
 
-  return ({ cleanupValue }) => {
+  return (cleanupContext) => {
+    const { task } = cleanupContext;
+    const { cleanupValue } = cleanupContext;
+    expect(task.name).toBe('resolves fixtures used only by hooks');
     events.push(`cleanup:${cleanupValue}`);
   };
 });

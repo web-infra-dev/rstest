@@ -1467,34 +1467,15 @@ type MergeContext<ExtraContext, FixturesContext> = {
       : never;
 };
 
-type PlaywrightAfterEach<ExtraContext> = (
-  context: TestContext & ExtraContext,
-) => void | Promise<void>;
-
-type PlaywrightBeforeEach<ExtraContext> = (
-  context: TestContext & ExtraContext,
-) =>
-  | void
-  | PlaywrightAfterEach<ExtraContext>
-  | Promise<void | PlaywrightAfterEach<ExtraContext>>;
-
 export type PlaywrightTest<ExtraContext = PlaywrightFixture> =
   PlaywrightTestBase<ExtraContext> & {
     extend: <T extends Record<string, any> = object>(
       fixtures: PlaywrightFixtures<T, ExtraContext>,
     ) => PlaywrightTest<MergeContext<ExtraContext, T>>;
     afterAll: typeof rstestAfterAll;
-    /** Register an afterEach hook with access to this test's fixtures. */
-    afterEach: (
-      fn: PlaywrightAfterEach<ExtraContext>,
-      timeout?: number,
-    ) => void;
+    afterEach: typeof rstestAfterEach;
     beforeAll: typeof rstestBeforeAll;
-    /** Register a beforeEach hook with access to this test's fixtures. */
-    beforeEach: (
-      fn: PlaywrightBeforeEach<ExtraContext>,
-      timeout?: number,
-    ) => void;
+    beforeEach: typeof rstestBeforeEach;
     describe: typeof rstestDescribe;
     fail: PlaywrightTestBase<ExtraContext>;
   };

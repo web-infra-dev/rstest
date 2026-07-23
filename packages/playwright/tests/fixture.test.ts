@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { expect as coreExpect } from '@rstest/core';
-import { beforeEach, expect, test } from '../src';
+import { afterEach, beforeEach, expect, test } from '../src';
 import { getDebugOptions, resolveLaunchOptions } from '../src/fixture';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type {
@@ -302,7 +302,7 @@ test.extend({}).describe('extended test API', () => {
   hookExpectTest.describe('wrapped hooks', () => {
     const hookEvents: string[] = [];
 
-    hookExpectTest.beforeEach(async ({ hookTitle }) => {
+    beforeEach<{ hookTitle: string }>(async ({ hookTitle }) => {
       expect.assertions(2);
       expect(hookTitle).toBe('hook title');
       await expect(createPage(hookTitle)).toHaveTitle('hook title');
@@ -313,7 +313,7 @@ test.extend({}).describe('extended test API', () => {
       };
     });
 
-    hookExpectTest.afterEach(({ hookTitle }) => {
+    afterEach<{ hookTitle: string }>(({ hookTitle }) => {
       hookEvents.push(`afterEach:${hookTitle}`);
     });
 
@@ -329,6 +329,17 @@ test.extend({}).describe('extended test API', () => {
   });
 
   test.extend({}).beforeEach(() => {});
+
+  const assertExtendedHookTypes = () => {
+    const typedHookTest = test.extend<{ hookTitle: string }>({
+      hookTitle: 'hook title',
+    });
+    // @ts-expect-error Extended test hooks are suite-level and cannot safely infer one test API's fixtures.
+    typedHookTest.beforeEach(({ hookTitle }) => {
+      void hookTitle;
+    });
+  };
+  void assertExtendedHookTypes;
 
   test.extend({}).for<{ value: string }>`
     value

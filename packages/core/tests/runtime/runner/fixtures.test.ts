@@ -125,6 +125,20 @@ describe('createFixtureResolver', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('collects fixtures from every named hook context destructure', async () => {
+    const context = { task: 'task' };
+    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+
+    await resolver.resolveHookFixtures((ctx: any) => {
+      const { task } = ctx;
+      const { fixture } = ctx;
+      return [task, fixture];
+    });
+
+    expect(context).toEqual({ task: 'task', fixture: 'fixture' });
+  });
+
   it('activates auto and requested test fixtures', async () => {
     const order: string[] = [];
     const fixtures = normalizeFixtures({

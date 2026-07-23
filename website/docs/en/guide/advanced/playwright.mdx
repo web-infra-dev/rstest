@@ -111,25 +111,37 @@ The sections below show how each fixture is commonly used. `page` and `serve` li
 
 <ApiMeta addedVersion="0.11.4" />
 
-Hooks attached to an extended test infer and lazily initialize its fixtures. A fixture used only by a hook does not need `auto: true`:
+Suite-level hooks can request fixtures provided by the tests in that suite. Specify the hook's fixture context type explicitly; a fixture used only by a hook does not need `auto: true`:
 
 ```ts
-import { expect, test } from '@rstest/playwright';
+import {
+  beforeEach,
+  describe,
+  expect,
+  test,
+  type PlaywrightFixture,
+} from '@rstest/playwright';
 
-const dashboardTest = test.extend({
+type DashboardFixtures = PlaywrightFixture & {
+  route: string;
+};
+
+const dashboardTest = test.extend<{ route: string }>({
   route: '/dashboard',
 });
 
-dashboardTest.beforeEach(async ({ page, route }) => {
-  await page.goto(`http://localhost:3000${route}`);
-});
+describe('dashboard', () => {
+  beforeEach<DashboardFixtures>(async ({ page, route }) => {
+    await page.goto(`http://localhost:3000${route}`);
+  });
 
-dashboardTest('shows the dashboard', async ({ page }) => {
-  await expect(page.locator('h1')).toHaveText('Dashboard');
+  dashboardTest('shows the dashboard', async ({ page }) => {
+    await expect(page.locator('h1')).toHaveText('Dashboard');
+  });
 });
 ```
 
-The same behavior applies to `afterEach` and to cleanup functions returned by `beforeEach`. Fixture instances are shared across the hooks and test body for one test attempt, then torn down in reverse setup order.
+Hooks are scoped to their `describe` block, not to an extended test object. Every test in the block must provide the fixtures requested by the hook. The same behavior applies to `afterEach` and to cleanup functions returned by `beforeEach`. Fixture instances are shared across the hooks and test body for one test attempt, then torn down in reverse setup order.
 
 ### `browser`
 

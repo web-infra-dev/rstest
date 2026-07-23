@@ -446,7 +446,7 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
 
 <ApiMeta addedVersion="0.11.4" />
 
-`beforeEach`, `afterEach`, and a cleanup function returned by `beforeEach` can request fixtures. Fixtures remain lazy: Rstest initializes a fixture immediately before the first hook or test callback that requests it through object destructuring, shares that instance for the rest of the test attempt, and runs teardown after all per-test hooks finish.
+`beforeEach`, `afterEach`, and a cleanup function returned by `beforeEach` can request fixtures. Rstest initializes fixtures requested by the test callback before `beforeEach`, preserving the existing test setup order. A fixture requested only by a hook is initialized before that hook runs. The same instance is shared for the rest of the test attempt, then torn down after all per-test hooks finish.
 
 Core hooks are suite-level APIs, so provide the fixture context type explicitly and register the hook in a suite whose tests use the matching extended test API:
 

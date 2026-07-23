@@ -446,7 +446,7 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
 
 <ApiMeta addedVersion="0.11.4" />
 
-`beforeEach`、`afterEach` 以及 `beforeEach` 返回的 cleanup 函数都可以请求 fixture。Fixture 仍然是按需执行的：Rstest 会在第一个解构该 fixture 的 hook 或测试 callback 前完成初始化，在本次 test attempt 的后续阶段共享同一个实例，并在所有 per-test hooks 结束后执行 teardown。
+`beforeEach`、`afterEach` 以及 `beforeEach` 返回的 cleanup 函数都可以请求 fixture。Rstest 会在 `beforeEach` 之前初始化测试 callback 请求的 fixture，以保持现有的测试 setup 顺序；仅由 hook 请求的 fixture 则会在该 hook 运行前初始化。同一个实例会在本次 test attempt 的后续阶段共享，并在所有 per-test hooks 结束后执行 teardown。
 
 Core hooks 是 suite 级 API，因此需要显式传入 fixture context 类型，并在使用对应 extended test API 的 suite 内注册 hook：
 

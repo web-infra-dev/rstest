@@ -111,25 +111,37 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.11.4" />
 
-挂载在 extended test 上的 hook 会自动推断并按需初始化对应 fixture。只在 hook 中使用的 fixture 不需要设置 `auto: true`：
+Suite 级 hook 可以请求该 suite 内测试所提供的 fixture。需要显式指定 hook 的 fixture context 类型；只在 hook 中使用的 fixture 不需要设置 `auto: true`：
 
 ```ts
-import { expect, test } from '@rstest/playwright';
+import {
+  beforeEach,
+  describe,
+  expect,
+  test,
+  type PlaywrightFixture,
+} from '@rstest/playwright';
 
-const dashboardTest = test.extend({
+type DashboardFixtures = PlaywrightFixture & {
+  route: string;
+};
+
+const dashboardTest = test.extend<{ route: string }>({
   route: '/dashboard',
 });
 
-dashboardTest.beforeEach(async ({ page, route }) => {
-  await page.goto(`http://localhost:3000${route}`);
-});
+describe('dashboard', () => {
+  beforeEach<DashboardFixtures>(async ({ page, route }) => {
+    await page.goto(`http://localhost:3000${route}`);
+  });
 
-dashboardTest('shows the dashboard', async ({ page }) => {
-  await expect(page.locator('h1')).toHaveText('Dashboard');
+  dashboardTest('shows the dashboard', async ({ page }) => {
+    await expect(page.locator('h1')).toHaveText('Dashboard');
+  });
 });
 ```
 
-`afterEach` 和 `beforeEach` 返回的 cleanup 函数同样支持这一行为。在一次 test attempt 内，hooks 与测试函数共享 fixture 实例，最后按 setup 的反序执行 teardown。
+Hook 的作用域是所在的 `describe` block，而不是某个 extended test 对象。因此，该 block 内的每个测试都必须提供 hook 请求的 fixture。`afterEach` 和 `beforeEach` 返回的 cleanup 函数同样支持这一行为。在一次 test attempt 内，hooks 与测试函数共享 fixture 实例，最后按 setup 的反序执行 teardown。
 
 ### `browser`
 
