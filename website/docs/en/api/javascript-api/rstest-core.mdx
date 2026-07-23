@@ -71,7 +71,8 @@ type NestedProjectConfig = {
 
 type ProjectConfigExport = ProjectConfig | NestedProjectConfig;
 
-function defineProject(config: ProjectConfigExport): ProjectConfigExport;
+function defineProject(config: ProjectConfig): ProjectConfig;
+function defineProject(config: NestedProjectConfig): NestedProjectConfig;
 function defineProject(
   config: () => ProjectConfigExport,
 ): () => ProjectConfigExport;
