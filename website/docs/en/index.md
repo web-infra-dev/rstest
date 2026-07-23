@@ -1,8 +1,9 @@
 ---
-description: Rspack based testing framework. Rstest docs cover CLI, configuration, runtime APIs, browser testing, migration, and integration guides.
+description: Rstest is a fast, modern JavaScript testing framework powered by Rspack. Explore its CLI, configuration, runtime APIs, browser testing, migration, and integrations.
 pageType: home
+titleSuffix: ' - JavaScript Testing Framework'
 
 hero:
   name: Rstest
-  text: Rspack based testing framework
+  text: JavaScript testing framework
 ---

@@ -10,7 +10,7 @@ import pluginSitemap from 'rspress-plugin-sitemap';
 
 const siteUrl = 'https://rstest.rs';
 const description =
-  'Rstest is a JavaScript testing framework powered by Rspack';
+  'Rstest is a fast, modern JavaScript testing framework powered by Rspack';
 
 export default defineConfig({
   root: path.join(__dirname, 'docs'),
@@ -66,7 +66,7 @@ export default defineConfig({
       {
         lang: 'zh',
         label: '简体中文',
-        description: 'Rstest 是由 Rspack 驱动的 JavaScript 测试框架',
+        description: 'Rstest 是由 Rspack 驱动的快速、现代 JavaScript 测试框架',
       },
     ],
   },

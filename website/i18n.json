@@ -8,12 +8,12 @@
     "zh": "快速上手"
   },
   "subtitle": {
-    "en": "Rspack-based Testing Framework",
-    "zh": "由 Rspack 驱动的测试框架"
+    "en": "JavaScript Testing Framework",
+    "zh": "JavaScript 测试框架"
   },
   "slogan": {
-    "en": "Provide first-class support for Rspack ecosystem",
-    "zh": "为 Rspack 生态提供全面、一流的支持"
+    "en": "Fast, modern testing powered by Rspack",
+    "zh": "由 Rspack 驱动，提供快速、现代的测试体验"
   },
   "reuseBuildConfig": {
     "en": "Reuse your build setup",
@@ -56,11 +56,11 @@
     "zh": "TypeScript、ESM、CJS、CSS Modules 和现代 JavaScript 开箱即用。"
   },
   "testingReady": {
-    "en": "Testing essentials included",
-    "zh": "核心测试能力内置"
+    "en": "Familiar testing APIs",
+    "zh": "熟悉的测试 API"
   },
   "testingReadyDesc": {
-    "en": "Assertions, snapshots, mocks, coverage, and lifecycle hooks are ready when you start.",
-    "zh": "断言、快照、Mock、覆盖率和生命周期钩子等能力开箱即用。"
+    "en": "Use Jest-compatible assertions, snapshots, mocks, coverage, and lifecycle hooks out of the box.",
+    "zh": "兼容 Jest 的断言、快照、Mock、覆盖率和生命周期钩子等能力开箱即用。"
   }
 }
