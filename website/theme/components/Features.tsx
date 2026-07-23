@@ -12,12 +12,12 @@ export function Features() {
     {
       title: t('testingReady'),
       details: t('testingReadyDesc'),
-      icon: '🧰',
+      icon: '🧪',
     },
     {
       title: t('modernByDefault'),
       details: t('modernByDefaultDesc'),
-      icon: '🧠',
+      icon: '✨',
     },
     {
       title: t('blazingFast'),
@@ -27,12 +27,12 @@ export function Features() {
     {
       title: t('reuseBuildConfig'),
       details: t('reuseBuildConfigDesc'),
-      icon: '♻️',
+      icon: '🔁',
     },
     {
       title: t('productionAccurateTesting'),
       details: t('productionAccurateTestingDesc'),
-      icon: '🎯',
+      icon: '🏗️',
     },
     {
       title: t('realBrowserTesting'),
