@@ -6,6 +6,7 @@ import regexpEscape from 'core-js-pure/actual/regexp/escape';
 import vscode from 'vscode';
 import { getConfigValue } from './config';
 import {
+  formatConfiguredCoreNotFoundMessage,
   formatCoreNotFoundMessage,
   isModuleNotFoundError,
 } from './coreResolution';
@@ -120,8 +121,9 @@ export class RstestApi {
   // `@rstest/core` is not installed at all — the normal state of a repository
   // whose dependencies are not installed yet, so it is written to the output
   // channel and never raised as a notification. This is the only place that
-  // policy lives; any other resolution failure is rethrown for the caller to
-  // report. `configuredPackagePath` only shapes the logged message.
+  // policy lives, and it deliberately does not cover `configuredPackagePath`:
+  // a `rstestPackagePath` that does not resolve is a setting the user got
+  // wrong, so it is rethrown for the caller to report like any other failure.
   private resolveFromCwd(
     specifier: string,
     configuredPackagePath?: string,
@@ -130,14 +132,12 @@ export class RstestApi {
       return require.resolve(specifier, { paths: [this.cwd] });
     } catch (e) {
       if (!isModuleNotFoundError(e)) throw e;
-      // Node's own message is dropped on purpose: its require stack points at
-      // the extension bundle, not at anything the user can act on.
-      logger.error(
-        formatCoreNotFoundMessage({
-          searchedFrom: this.cwd,
-          configuredPackagePath,
-        }),
-      );
+      if (configuredPackagePath) {
+        throw new Error(
+          formatConfiguredCoreNotFoundMessage(configuredPackagePath),
+        );
+      }
+      logger.error(formatCoreNotFoundMessage(this.cwd));
       return undefined;
     }
   }

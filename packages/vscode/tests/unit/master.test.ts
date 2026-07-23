@@ -7,6 +7,7 @@ import { RstestApi } from '../../src/master';
 const shownMessages: string[] = [];
 const loggedErrors: string[] = [];
 const createdTerminals: string[] = [];
+const settings: Record<string, unknown> = {};
 
 rs.mock('vscode', () => {
   const channel = {
@@ -41,7 +42,9 @@ rs.mock('vscode', () => {
       showInformationMessage: (message: string) => shownMessages.push(message),
     },
     workspace: {
-      getConfiguration: () => ({ get: () => undefined }),
+      getConfiguration: () => ({
+        get: (key: string) => settings[key],
+      }),
       onDidChangeConfiguration: () => ({ dispose: () => {} }),
     },
   };
@@ -67,6 +70,7 @@ describe('RstestApi with a missing @rstest/core', () => {
     shownMessages.length = 0;
     loggedErrors.length = 0;
     createdTerminals.length = 0;
+    for (const key of Object.keys(settings)) delete settings[key];
   });
 
   it('should log an actionable message instead of notifying, while discovering projects', async () => {
@@ -97,6 +101,32 @@ describe('RstestApi with a missing @rstest/core', () => {
   it('should stay silent, and open no terminal, for a terminal run', () => {
     createApi().runInTerminal({});
     expect(shownMessages).toEqual([]);
+    expect(createdTerminals).toEqual([]);
+  });
+});
+
+// A configured `rstestPackagePath` that does not resolve is not the
+// "dependencies are not installed yet" state — the user picked that path and
+// has to fix it, so silence would strand them.
+describe('RstestApi with an unresolvable rstestPackagePath', () => {
+  const configured = `${noCoreDir}/vendor/core/package.json`;
+
+  beforeEach(() => {
+    shownMessages.length = 0;
+    settings.rstestPackagePath = configured;
+  });
+
+  it('should notify while discovering projects', async () => {
+    await expect(createApi().getNormalizedConfig()).rejects.toThrow();
+    expect(shownMessages).toHaveLength(1);
+    expect(shownMessages[0]).toContain('rstest.rstestPackagePath');
+    expect(shownMessages[0]).toContain(configured);
+  });
+
+  it('should notify for a terminal run', () => {
+    createApi().runInTerminal({});
+    expect(shownMessages).toHaveLength(1);
+    expect(shownMessages[0]).toContain('rstest.rstestPackagePath');
     expect(createdTerminals).toEqual([]);
   });
 });

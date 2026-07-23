@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@rstest/core';
 import {
+  formatConfiguredCoreNotFoundMessage,
   formatCoreNotFoundMessage,
   isModuleNotFoundError,
 } from '../../src/coreResolution';
@@ -26,13 +27,15 @@ describe('isModuleNotFoundError', () => {
   });
 });
 
-describe('formatCoreNotFoundMessage', () => {
+describe('core-not-found messages', () => {
   it('should point at the configured package path instead of the install hint', () => {
-    const message = formatCoreNotFoundMessage({
-      searchedFrom: '/repo/app',
-      configuredPackagePath: '/repo/vendor/core/package.json',
-    });
+    const message = formatConfiguredCoreNotFoundMessage(
+      '/repo/vendor/core/package.json',
+    );
     expect(message).toContain('/repo/vendor/core/package.json');
     expect(message).not.toContain('Install the project dependencies');
+    expect(formatCoreNotFoundMessage('/repo/app')).toContain(
+      'Install the project dependencies',
+    );
   });
 });
