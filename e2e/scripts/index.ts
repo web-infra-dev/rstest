@@ -20,6 +20,8 @@ class Cli {
   private stderrListeners: Array<() => void> = [];
   private stdoutEnded: Promise<void>;
   private stderrEnded: Promise<void>;
+  /** tinyexec's own `kill`, captured before the tree-killing override below. */
+  private execKill: () => boolean;
 
   constructor(
     exec: Result,
@@ -66,20 +68,43 @@ class Cli {
       }
     });
 
-    const execKill = this.exec.kill.bind(this.exec);
+    this.execKill = this.exec.kill.bind(this.exec);
 
     this.exec.kill = () => {
       // Ensure we kill the entire process tree (important on Windows where child
       // processes may survive and keep the test worker alive).
-      const pid = this.exec.process?.pid;
-      if (pid) {
-        treeKill(pid, 'SIGKILL');
-        return true;
-      }
-
-      return execKill();
+      void this.killProcessTree();
+      return true;
     };
   }
+
+  /**
+   * Kill the process tree and resolve only once it is gone. A watch-mode CLI
+   * that outlives its test keeps holding the fixture's dev-server port and keeps
+   * rebuilding the fixture directory, so a retry of that test races a stale
+   * server over the same files — awaiting the kill is what stops one failed
+   * attempt from poisoning the next.
+   */
+  killProcessTree = (): Promise<void> => {
+    const child = this.exec.process;
+
+    // `tree-kill` spawns a `pgrep` per pid in the tree, and this runs in the
+    // finish hook of every CLI test — skip that walk for the already-exited
+    // processes that make up most of the suite.
+    if (child?.exitCode != null || child?.signalCode != null) {
+      return Promise.resolve();
+    }
+
+    const pid = child?.pid;
+    if (!pid) {
+      this.execKill();
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve) => {
+      treeKill(pid, 'SIGKILL', () => resolve());
+    });
+  };
 
   /**
    * Wait for stdout and stderr streams to end.
@@ -98,16 +123,23 @@ class Cli {
   };
 
   private waitForStd = (expect: string | RegExp, io: IoType): Promise<void> => {
+    const matched = () =>
+      typeof expect === 'string'
+        ? this[io].includes(expect)
+        : Boolean(this[io].match(expect));
+
+    // The buffer accumulates asynchronously, so the awaited output may already
+    // have landed before this call. Listeners only fire on the *next* chunk, so
+    // checking the buffer up front is what keeps a caller from waiting forever
+    // on a line the process has already printed and will never print again.
+    if (matched()) {
+      return Promise.resolve();
+    }
+
     return new Promise((resolve) => {
       this[`${io}Listeners`].push(() => {
-        if (typeof expect === 'string') {
-          if (this[io].includes(expect)) {
-            resolve(undefined);
-          }
-        } else {
-          if (this[io].match(expect)) {
-            resolve(undefined);
-          }
+        if (matched()) {
+          resolve(undefined);
         }
       });
     });
@@ -174,9 +206,7 @@ export async function runRstestCli({
 
   const cli = new Cli(exec, { stripAnsi });
 
-  (onTestFinished || onRstestFinished)(() => {
-    if (!cli.exec.killed) cli.exec.kill();
-  });
+  (onTestFinished || onRstestFinished)(() => cli.killProcessTree());
 
   (onTestFailed || onRstestFailed)?.(({ task }) => {
     if (task.result?.errors?.[0]) {
