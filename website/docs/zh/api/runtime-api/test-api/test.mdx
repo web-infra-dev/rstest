@@ -370,7 +370,7 @@ Fixture 函数接收两个参数：
 1. **context** — 包含其他 fixture 以及 `TestContext`（`task`、`expect`、`onTestFinished`、`onTestFailed`）。使用对象解构来声明你需要的依赖。
 2. **use** — 调用 `await use(value)` 把 fixture 的值传递给测试。
 
-使用 fixture 的 callback 必须显式列出所有请求的 fixture。测试 callback、fixture 函数和 per-test hook 不支持 `({ db, ...rest })` 这类对象 rest property，因为按需 fixture 解析无法确定 rest 对象请求了哪些 fixture。
+使用 fixture 的 callback 必须在 callback 参数中通过直接对象解构显式列出所有请求的 fixture。Rstest 不会从函数体内的解构推断依赖。测试 callback、fixture 函数和 per-test hook 不支持 `({ db, ...rest })` 这类对象 rest property，也不支持 `({ db = fallback })` 或 `({ db } = {})` 这类默认值。
 
 `await use(value)` 之前的代码是 **setup**，之后的代码是 **teardown**（测试结束后执行）。
 
@@ -449,6 +449,8 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
 <ApiMeta addedVersion="0.11.4" />
 
 `beforeEach`、`afterEach` 以及 `beforeEach` 返回的 cleanup 函数都可以请求 fixture。Rstest 会在 `beforeEach` 之前初始化测试 callback 请求的 fixture，以保持现有的测试 setup 顺序；仅由 hook 请求的 fixture 则会在该 hook 运行前初始化。同一个实例会在本次 test attempt 的后续阶段共享，并在所有 per-test hooks 结束后执行 teardown。
+
+Hook 必须直接在 callback 参数中声明 fixture 依赖，例如 `beforeEach(({ db }) => {})`。`beforeEach((context) => {})` 这类 named hook context 仍可用于访问常规 `TestContext`，但在函数体内解构 `context` 不会初始化惰性 fixture。
 
 Core hooks 是 suite 级 API，因此需要显式传入 fixture context 类型，并在使用对应 extended test API 的 suite 内注册 hook：
 

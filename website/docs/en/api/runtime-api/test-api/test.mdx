@@ -370,7 +370,7 @@ A fixture function receives two parameters:
 1. **context** — contains other fixtures as well as `TestContext` (`task`, `expect`, `onTestFinished`, `onTestFailed`). Use object destructuring to declare the dependencies you need.
 2. **use** — call `await use(value)` to pass the fixture value to the test.
 
-Fixture-aware callbacks must list every requested fixture explicitly. Object rest properties such as `({ db, ...rest })` are not supported in test callbacks, fixture functions, or per-test hooks because lazy fixture resolution cannot determine which fixtures the rest object requests.
+Fixture-aware callbacks must list every requested fixture explicitly through direct object destructuring in the callback parameter. Rstest does not infer dependencies from destructuring inside the function body. Object rest properties such as `({ db, ...rest })` and default values such as `({ db = fallback })` or `({ db } = {})` are not supported in test callbacks, fixture functions, or per-test hooks.
 
 Code before `await use(value)` is **setup**; code after it is **teardown** (runs after the test finishes).
 
@@ -449,6 +449,8 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
 <ApiMeta addedVersion="0.11.4" />
 
 `beforeEach`, `afterEach`, and a cleanup function returned by `beforeEach` can request fixtures. Rstest initializes fixtures requested by the test callback before `beforeEach`, preserving the existing test setup order. A fixture requested only by a hook is initialized before that hook runs. The same instance is shared for the rest of the test attempt, then torn down after all per-test hooks finish.
+
+Declare hook fixture dependencies directly in the callback parameter, for example `beforeEach(({ db }) => {})`. A named hook context such as `beforeEach((context) => {})` remains valid for accessing the regular `TestContext`, but destructuring `context` inside the function body does not initialize lazy fixtures.
 
 Core hooks are suite-level APIs, so provide the fixture context type explicitly and register the hook in a suite whose tests use the matching extended test API:
 

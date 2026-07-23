@@ -1954,6 +1954,19 @@ const createBrowserRuntime = async ({
                     },
                   },
                   tools: {
+                    swc: (swcConfig) => {
+                      // Fixture dependency discovery reads callback parameters
+                      // through Function#toString(). Playwright's supported
+                      // browsers all support parameter destructuring, so keep
+                      // that syntax intact in the browser test bundle.
+                      swcConfig.env ??= {};
+                      swcConfig.env.exclude = Array.from(
+                        new Set([
+                          ...(swcConfig.env.exclude ?? []),
+                          'transform-parameters',
+                        ]),
+                      );
+                    },
                     rspack: (rspackConfig) => {
                       rspackConfig.mode = 'development';
                       // Web parameterization of the node mock transform:

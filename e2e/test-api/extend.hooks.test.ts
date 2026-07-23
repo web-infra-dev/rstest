@@ -54,13 +54,14 @@ const hookTest = test.extend<HookFixtures>({
   },
 });
 
-beforeEach<HookFixtures>((context) => {
-  // A compiler's output can preserve this comment before destructuring.
-  const { task } = context;
-  const { name } = context.task;
+beforeEach((context) => {
+  expect(context.task.name).toBe('resolves fixtures used only by hooks');
+  events.push('beforeEach:context');
+});
+
+beforeEach<HookFixtures>(({ beforeValue, task }) => {
+  const { name } = task;
   const closingBrace = /}/;
-  let beforeValue = '';
-  ({ beforeValue } = context);
   expect(task.name).toBe('resolves fixtures used only by hooks');
   expect(name).toBe('resolves fixtures used only by hooks');
   expect(beforeValue).toBe('before:base');
@@ -68,16 +69,14 @@ beforeEach<HookFixtures>((context) => {
   events.push(`beforeEach:${beforeValue}`);
 
   return {
-    cleanup(cleanupContext: TestContext & HookFixtures) {
-      const { task } = cleanupContext;
-      const { cleanupValue } = cleanupContext;
+    cleanup({ cleanupValue, task }: TestContext & HookFixtures) {
       expect(task.name).toBe('resolves fixtures used only by hooks');
       events.push(`cleanup:${cleanupValue}`);
     },
   }.cleanup;
 });
 
-afterEach<HookFixtures>(({ afterValue = 'fallback' }) => {
+afterEach<HookFixtures>(({ afterValue }) => {
   events.push(`afterEach:${afterValue}`);
 });
 
@@ -88,6 +87,7 @@ hookTest('resolves fixtures used only by hooks', () => {
 afterAll(() => {
   expect(events).toEqual([
     'setup:auto',
+    'beforeEach:context',
     'setup:base',
     'setup:before',
     'beforeEach:before:base',

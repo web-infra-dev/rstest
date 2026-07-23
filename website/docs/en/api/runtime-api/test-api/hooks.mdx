@@ -94,7 +94,7 @@ beforeEach(async () => {
 
 The `beforeEach` and `afterEach` callbacks, as well as a cleanup returned by `beforeEach`, can use fixtures created with `test.extend`. Pass the fixture type as `ExtraContext`; Rstest initializes each fixture before the callback that first requests it. See [Using fixtures in hooks](/api/runtime-api/test-api/test#using-fixtures-in-hooks).
 
-List fixture dependencies explicitly in fixture-aware hook callbacks. Object rest properties such as `({ db, ...rest })` are not supported.
+List fixture dependencies through direct object destructuring in the hook parameter. Rstest does not infer dependencies from the hook body. Object rest properties and default values are not supported in fixture-aware callbacks.
 
 ## afterEach
 

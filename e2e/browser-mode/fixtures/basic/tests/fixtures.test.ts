@@ -24,8 +24,8 @@ const browserTest = test.extend<HookFixtures>({
   },
 });
 
-beforeEach<HookFixtures>((_ref) => {
-  const { element } = _ref;
+beforeEach<HookFixtures>(async ({ element }) => {
+  await Promise.resolve();
   expect(element.textContent).toBe('fixture');
   events.push('beforeEach');
 });

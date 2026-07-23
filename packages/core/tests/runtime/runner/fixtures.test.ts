@@ -60,62 +60,35 @@ describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
     );
   });
 
-  it('strips comments before parsing the destructured params', () => {
-    const useFn = ({ foo /* inline */, bar }: any) => [foo, bar];
-    const result = normalizeFixtures({
-      used: [useFn],
-      foo: 1,
-      bar: 2,
-    } as any);
-    expect([...(result.used.deps ?? [])].sort()).toEqual(['bar', 'foo']);
-  });
-
-  it('detects destructuring moved into the body by a compiler', () => {
-    const useFn = (param: { foo: number; bar: number }) => {
-      const { foo, bar: renamedBar } = param;
-      return [foo, renamedBar];
-    };
-    const result = normalizeFixtures({
-      used: [useFn],
-      foo: 1,
-      bar: 2,
-    } as any);
-
-    expect([...(result.used.deps ?? [])].sort()).toEqual(['bar', 'foo']);
-  });
-
-  it('detects compiler-moved destructuring for an unparenthesized arrow', () => {
-    const useFn = Object.assign(() => {}, {
-      toString: () =>
-        'param => { const { foo, bar: renamedBar } = param; return [foo, renamedBar]; }',
+  it('throws when a destructured fixture has a default value', () => {
+    const fixtureFn = Object.assign(() => {}, {
+      toString: () => '({ value = "default" }, use) => use(value)',
     });
+    expect(() =>
+      normalizeFixtures({ a: [fixtureFn], value: 1 } as any),
+    ).toThrow(/Default values are not supported/);
+  });
+
+  it('throws when the fixture context has a default value', () => {
+    const fixtureFn = Object.assign(() => {}, {
+      toString: () => '({ value } = {}, use) => use(value)',
+    });
+    expect(() =>
+      normalizeFixtures({ a: [fixtureFn], value: 1 } as any),
+    ).toThrow(/Default values are not supported/);
+  });
+
+  it('parses comments and aliases in destructured params', () => {
+    const useFn = ({ foo /* inline */, bar: renamedBar }: any) => [
+      foo,
+      renamedBar,
+    ];
     const result = normalizeFixtures({
       used: [useFn],
       foo: 1,
       bar: 2,
     } as any);
-
     expect([...(result.used.deps ?? [])].sort()).toEqual(['bar', 'foo']);
-  });
-
-  it('detects compiler-moved destructuring from an _-prefixed context', () => {
-    const useFn = Object.assign(() => {}, {
-      toString: () => '(_ref) => { const { foo } = _ref; return foo; }',
-    });
-    const result = normalizeFixtures({
-      used: [useFn],
-      foo: 1,
-    } as any);
-
-    expect(result.used.deps).toEqual(['foo']);
-  });
-
-  it('ignores destructuring text inside strings', () => {
-    const useFn = (context: unknown) => `const { foo } = context`;
-
-    expect(() => normalizeFixtures({ used: [useFn], foo: 1 } as any)).toThrow(
-      /object destructuring pattern/,
-    );
   });
 });
 
@@ -128,76 +101,39 @@ describe('createFixtureResolver', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('allows named hook contexts when the test has fixtures', async () => {
-    const fixtures = normalizeFixtures({ fixture: 1 } as any);
-    const resolver = createFixtureResolver({ fixtures } as any, {});
-
-    await expect(
-      resolver.resolveHookFixtures((context: unknown) => context),
-    ).resolves.toEqual({ status: 'resolved' });
-  });
-
-  it('collects fixtures from every named hook context destructuring', async () => {
-    const context = { task: 'task' };
-    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
-    const resolver = createFixtureResolver({ fixtures } as any, context);
-
-    await resolver.resolveHookFixtures((ctx: any) => {
-      const { task } = ctx;
-      const { fixture } = ctx;
-      return [task, fixture];
-    });
-
-    expect(context).toEqual({ task: 'task', fixture: 'fixture' });
-  });
-
-  it('collects fixtures from an _-prefixed compiled hook context', async () => {
-    const context: Record<string, any> = {};
-    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
-    const resolver = createFixtureResolver({ fixtures } as any, context);
-    const hook = Object.assign(() => {}, {
-      toString: () => '(_ref) => { const { fixture } = _ref; }',
-    });
-
-    await resolver.resolveHookFixtures(hook);
-
-    expect(context.fixture).toBe('fixture');
-  });
-
-  it('does not collect named context destructuring from member access', async () => {
+  it('allows named hook contexts without inferring fixture dependencies', async () => {
     let setupAttempts = 0;
-    const context = { task: { name: 'task name' } };
+    const context = { task: { name: 'test' } };
     const fixtures = normalizeFixtures({
-      name: [
+      page: [
         async (_context: any, use: any) => {
           setupAttempts++;
-          await use('fixture name');
+          await use('page');
         },
       ],
     } as any);
     const resolver = createFixtureResolver({ fixtures } as any, context);
 
-    await resolver.resolveHookFixtures((ctx: any) => {
-      const { name } = ctx.task;
-      return name;
+    await resolver.resolveHookFixtures((hookContext: any) => {
+      const { page } = hookContext;
+      for (const hookContext of [{ page: 'local' }]) {
+        expect(hookContext.page).toBe('local');
+      }
+      return [hookContext.task.name, page];
     });
 
     expect(setupAttempts).toBe(0);
-    expect(context).toEqual({ task: { name: 'task name' } });
+    expect(context).toEqual({ task: { name: 'test' } });
   });
 
-  it('rejects rest properties when scanning named hook contexts', async () => {
-    const context = { task: 'task' };
+  it('resolves fixtures directly destructured by hooks', async () => {
+    const context: Record<string, any> = {};
     const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
     const resolver = createFixtureResolver({ fixtures } as any, context);
 
-    await expect(
-      resolver.resolveHookFixtures((ctx: any) => {
-        const { fixture, ...rest } = ctx;
-        return [fixture, rest.task];
-      }),
-    ).rejects.toThrow(/Rest property/);
-    expect(context).toEqual({ task: 'task' });
+    await resolver.resolveHookFixtures(({ fixture }: any) => fixture);
+
+    expect(context.fixture).toBe('fixture');
   });
 
   it('rejects rest properties in destructured hook parameters', async () => {
@@ -212,167 +148,26 @@ describe('createFixtureResolver', () => {
     ).rejects.toThrow(/Rest property/);
   });
 
-  it('finds named context destructuring after strings with comment tokens', async () => {
-    const context: Record<string, any> = {};
-    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
-    const resolver = createFixtureResolver({ fixtures } as any, context);
-    const hook = Object.assign(() => {}, {
-      toString: () =>
-        "(ctx) => { const url = 'http://localhost'; const { fixture } = ctx; }",
-    });
-
-    await resolver.resolveHookFixtures(hook);
-
-    expect(context.fixture).toBe('fixture');
-  });
-
-  it('finds named context destructuring after comments with quotes', async () => {
-    const context: Record<string, any> = {};
-    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
-    const resolver = createFixtureResolver({ fixtures } as any, context);
-    const hook = Object.assign(() => {}, {
-      toString: () => `(ctx) => {
-        // don't hide fixtures
-        const { fixture } = ctx;
-      }`,
-    });
-
-    await resolver.resolveHookFixtures(hook);
-
-    expect(context.fixture).toBe('fixture');
-  });
-
-  it('does not collect named context destructuring from nested functions', async () => {
-    const context: Record<string, any> = {};
+  it('rejects defaults instead of partially resolving fixture names', async () => {
     const fixtures = normalizeFixtures({
-      beforeValue: 'before',
-      arrowCleanupValue: 'arrow cleanup',
-      functionCleanupValue: 'function cleanup',
-    } as any);
-    const resolver = createFixtureResolver({ fixtures } as any, context);
-    const hook = Object.assign(() => {}, {
-      toString: () =>
-        '(ctx) => { if (true) { const { beforeValue } = ctx; } const cleanup = (ctx) => { const { arrowCleanupValue } = ctx; }; return function (ctx) { const { functionCleanupValue } = ctx; }; }',
-    });
-
-    await resolver.resolveHookFixtures(hook);
-
-    expect(context).toEqual({ beforeValue: 'before' });
-  });
-
-  it('does not collect named context destructuring from object or class methods', async () => {
-    const context: Record<string, any> = {};
-    const fixtures = normalizeFixtures({
-      objectMethodValue: 'object method',
-      classMethodValue: 'class method',
-      beforeValue: 'before',
-    } as any);
-    const resolver = createFixtureResolver({ fixtures } as any, context);
-    const hook = Object.assign(() => {}, {
-      toString: () =>
-        '(ctx) => { const cleanup = { run() { const { objectMethodValue } = ctx; } }; class Cleanup { run() { const { classMethodValue } = ctx; } } const { beforeValue } = ctx; return [cleanup, Cleanup, beforeValue]; }',
-    });
-
-    await resolver.resolveHookFixtures(hook);
-
-    expect(context).toEqual({ beforeValue: 'before' });
-  });
-
-  it('stops semicolon-free concise arrow ranges at the next statement', async () => {
-    const context: Record<string, any> = {};
-    const fixtures = normalizeFixtures({
-      cleanupValue: 'cleanup',
-      beforeValue: 'before',
-    } as any);
-    const resolver = createFixtureResolver({ fixtures } as any, context);
-    const hook = Object.assign(() => {}, {
-      toString: () => `(ctx) => {
-        const cleanup = () => ({ cleanupValue } = ctx)
-        const { beforeValue } = ctx
-        return [cleanup, beforeValue]
-      }`,
-    });
-
-    await resolver.resolveHookFixtures(hook);
-
-    expect(context).toEqual({ beforeValue: 'before' });
-  });
-
-  it('finds named context destructuring after regular expression literals', async () => {
-    const context: Record<string, any> = {};
-    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
-    const resolver = createFixtureResolver({ fixtures } as any, context);
-    const hook = Object.assign(() => {}, {
-      toString: () =>
-        '(ctx) => { const closingBrace = /}/; const commentTokens = /https?:\\/\\//; const { fixture } = ctx; return [closingBrace, commentTokens, fixture]; }',
-    });
-
-    await resolver.resolveHookFixtures(hook);
-
-    expect(context.fixture).toBe('fixture');
-  });
-
-  it('finds named context destructuring after division expressions', async () => {
-    const context: Record<string, any> = {};
-    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
-    const resolver = createFixtureResolver({ fixtures } as any, context);
-    const hook = Object.assign(() => {}, {
-      toString: () =>
-        '(ctx) => { const ratio = 4 / 2; const { fixture } = ctx; return [ratio, fixture]; }',
-    });
-
-    await resolver.resolveHookFixtures(hook);
-
-    expect(context.fixture).toBe('fixture');
-  });
-
-  it('detects direct destructuring assignments from a named context', async () => {
-    const context: Record<string, any> = {};
-    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
-    const resolver = createFixtureResolver({ fixtures } as any, context);
-    const hook = Object.assign(() => {}, {
-      toString: () =>
-        '(ctx) => { let fixture; ({ fixture } = ctx); return fixture; }',
-    });
-
-    await resolver.resolveHookFixtures(hook);
-
-    expect(context.fixture).toBe('fixture');
-  });
-
-  it('parses balanced named context destructuring', async () => {
-    const context: Record<string, any> = {};
-    const fixtures = normalizeFixtures({
-      options: { baseURL: 'http://localhost' },
-      settings: { mode: 'fixture' },
+      title: 'title',
       page: 'page',
     } as any);
-    const resolver = createFixtureResolver({ fixtures } as any, context);
-    const hook = Object.assign(() => {}, {
-      toString: () =>
-        "(ctx) => { const { options: { baseURL }, settings = { mode: 'default' }, page } = ctx; }",
+    const resolver = createFixtureResolver({ fixtures } as any, {});
+
+    const propertyDefault = Object.assign(() => {}, {
+      toString: () => '({ title = "🔒", page }) => page',
     });
+    await expect(resolver.resolveHookFixtures(propertyDefault)).rejects.toThrow(
+      /Default values are not supported/,
+    );
 
-    await resolver.resolveHookFixtures(hook);
-
-    expect(context).toEqual({
-      options: { baseURL: 'http://localhost' },
-      settings: { mode: 'fixture' },
-      page: 'page',
+    const contextDefault = Object.assign(() => {}, {
+      toString: () => '({ page } = {}) => page',
     });
-  });
-
-  it('parses parenthesized defaults in destructured callback params', async () => {
-    const context: Record<string, any> = {};
-    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
-    const resolver = createFixtureResolver({ fixtures } as any, context);
-    const hook = Object.assign(() => {}, {
-      toString: () => '({ fixture = createFixture() }) => { return fixture; }',
-    });
-
-    await resolver.resolveHookFixtures(hook);
-
-    expect(context.fixture).toBe('fixture');
+    await expect(resolver.resolveHookFixtures(contextDefault)).rejects.toThrow(
+      /Default values are not supported/,
+    );
   });
 
   it('caches parsed fixture props across test attempts', async () => {
