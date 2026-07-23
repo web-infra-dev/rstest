@@ -16,8 +16,14 @@ on:
         default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.ref_name != 'main' }}
+  # On push the group is keyed by ref (not sha), so consecutive merges to main
+  # coalesce onto the newest commit instead of queueing one full matrix per
+  # merge. event_name is part of the key so a manual dispatch is not cancelled
+  # by a merge landing while it runs. Do not copy this key to bundle-diff or
+  # codspeed: their push-to-main runs produce per-commit baseline artifacts and
+  # must not coalesce.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.ref) }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -148,19 +154,26 @@ jobs:
     needs: [prepare, lint, ut]
     if: needs.prepare.outputs.changed == 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    # Full runs execute all four e2e scripts sequentially in one job; the
+    # slowest measured combo (windows/20) takes ~31 min.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        # run ut in macOS, as SWC cases will fail in Ubuntu CI
         os: [macos-latest, windows-latest]
-        # Trigger-dependent axes (gated by prepare.outputs.is_full_run):
+        # The e2e scripts (test, test:commonjs, test:no-isolate, test:threads)
+        # are sequential steps of one job, not a matrix axis: they share the
+        # same ~2 min checkout/install/build setup, and collapsing them cuts
+        # the full-run job count from 24 to 6 so a burst of merges does not
+        # starve the org-wide runner pool.
         #
-        #   trigger      | node_version | test_script
+        # Trigger-dependent axis (gated by prepare.outputs.is_full_run):
+        #
+        #   trigger      | node_version | scripts run as steps
         #   -------------+--------------+--------------------------------------
-        #   PR (regular) | [24]         | [test]
-        #   push to main | [20, 24, 26] | [test, commonjs, no-isolate, threads]
-        #   release PR   | [20, 24, 26] | [test, commonjs, no-isolate, threads]
+        #   PR (regular) | [24]         | test
+        #   push to main | [20, 24, 26] | test, commonjs, no-isolate, threads
+        #   release PR   | [20, 24, 26] | test, commonjs, no-isolate, threads
         #
         # Node 20 + test:no-isolate can hit upstream vm native crashes under worker
         # reuse; tolerated on full runs in exchange for coverage.
@@ -171,12 +184,6 @@ jobs:
             needs.prepare.outputs.is_full_run == 'true'
               && '["20","24","26"]'
             || '["24"]'
-          ) }}
-        test_script: >-
-          ${{ fromJson(
-            needs.prepare.outputs.is_full_run == 'true'
-              && '["test","test:commonjs","test:no-isolate","test:threads"]'
-            || '["test"]'
           ) }}
 
     steps:
@@ -206,25 +213,42 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Build Packages
+        id: build
         run: pnpm run build
 
       - name: Setup Playwright
-        # Only test/test:commonjs run browser-mode e2e (incl. the WebKit
-        # fixture). test:no-isolate and test:threads exclude browser-mode/**,
-        # so they need no Playwright browsers.
-        if: matrix.test_script == 'test' || matrix.test_script == 'test:commonjs'
+        # Every job runs the `test` script, which includes browser-mode e2e
+        # (incl. the WebKit fixture), so browsers are always needed.
         uses: ./.github/actions/setup-playwright
         with:
           install-webkit: 'true'
 
-      - name: E2E Test (${{ matrix.test_script }})
-        run: cd e2e && pnpm ${{ matrix.test_script }}
+      - name: E2E Test (test)
+        id: e2e_test
+        run: cd e2e && pnpm test
+
+      # Each remaining script is gated on the build having succeeded but NOT on
+      # the previous scripts, so one failing script does not mask the others'
+      # results — they were independent matrix jobs before being collapsed into
+      # steps.
+      - name: E2E Test (test:commonjs)
+        if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
+        run: cd e2e && pnpm test:commonjs
+
+      - name: E2E Test (test:no-isolate)
+        if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
+        run: cd e2e && pnpm test:no-isolate
+
+      - name: E2E Test (test:threads)
+        if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
+        run: cd e2e && pnpm test:threads
 
       - name: VS Code Extension Test
         # OS-sensitive (Extension Host) but node-insensitive: on PR, pin to a
-        # single combo (Windows + node 24) instead of every e2e row. FULL runs
-        # still exercise it on every 'test' row.
-        if: matrix.test_script == 'test' && (needs.prepare.outputs.is_full_run == 'true' || (matrix.os == 'windows-latest' && matrix.node_version == '24'))
+        # single combo (Windows + node 24). Full runs exercise it on every job.
+        # Gated on the `test` script succeeding, matching the pre-collapse
+        # behavior where it ran after the `test` row's e2e step.
+        if: ${{ !cancelled() && steps.e2e_test.outcome == 'success' && (needs.prepare.outputs.is_full_run == 'true' || (matrix.os == 'windows-latest' && matrix.node_version == '24')) }}
         run: pnpm run test:vscode
 
   # ======== codspeed ========

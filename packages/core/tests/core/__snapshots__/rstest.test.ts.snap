@@ -91,7 +91,9 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
   "setupFiles": [],
   "silent": false,
   "slowTestThreshold": 300,
-  "snapshotFormat": {},
+  "snapshotFormat": {
+    "printShadowRoot": false,
+  },
   "testEnvironment": {
     "name": "node",
   },
@@ -197,7 +199,9 @@ exports[`rstest context > should generate rstest context correctly with multiple
   ],
   "silent": false,
   "slowTestThreshold": 300,
-  "snapshotFormat": {},
+  "snapshotFormat": {
+    "printShadowRoot": false,
+  },
   "source": {},
   "testEnvironment": {
     "name": "node",
@@ -304,7 +308,9 @@ exports[`rstest context > should generate rstest context correctly with multiple
   ],
   "silent": false,
   "slowTestThreshold": 300,
-  "snapshotFormat": {},
+  "snapshotFormat": {
+    "printShadowRoot": false,
+  },
   "source": {},
   "testEnvironment": {
     "name": "node",

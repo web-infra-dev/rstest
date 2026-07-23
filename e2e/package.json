@@ -11,7 +11,7 @@
   "devDependencies": {
     "@rsbuild/core": "~2.1.6",
     "@rsbuild/plugin-react": "^2.1.0",
-    "@rslib/core": "0.23.2",
+    "@rslib/core": "1.0.0-beta.1",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
     "@rstest/core": "workspace:*",

@@ -53,14 +53,14 @@
     "ws": "^8.21.1"
   },
   "devDependencies": {
-    "@rslib/core": "0.23.2",
+    "@rslib/core": "1.0.0-beta.1",
     "@rstest/browser-ui": "workspace:*",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/convert-source-map": "^2.0.3",
     "@types/picomatch": "^4.0.3",
     "@types/ws": "^8.18.1",
-    "@vitest/snapshot": "^3.2.7",
+    "@vitest/snapshot": "^4.1.10",
     "birpc": "^4.0.0",
     "picomatch": "^4.0.5",
     "playwright": "^1.61.1"

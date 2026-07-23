@@ -280,7 +280,9 @@ const createDefaultConfig = (): NormalizedConfig => ({
   printConsoleTrace: false,
   disableConsoleIntercept: false,
   silent: false,
-  snapshotFormat: {},
+  snapshotFormat: {
+    printShadowRoot: false,
+  },
   env: {},
   hideSkippedTests: false,
   hideSkippedTestFiles: false,

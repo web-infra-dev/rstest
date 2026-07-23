@@ -5,9 +5,11 @@ description: Customize the snapshot format using options from the pretty-format.
 # snapshotFormat
 
 - **Type:** `PrettyFormatOptions`
-- **Default:** `undefined`
+- **Default:** `{ printShadowRoot: false }`
 
 Customize the snapshot format using options from the [pretty-format](https://www.npmjs.com/package/pretty-format).
+
+Rstest omits shadow roots from snapshots by default. Set `printShadowRoot` to `true` to include them.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

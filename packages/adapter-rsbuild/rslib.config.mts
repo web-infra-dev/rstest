@@ -14,16 +14,12 @@ export default defineConfig({
   },
   lib: [
     {
-      format: 'esm',
       dts: {
         isolated: true,
         bundle: true,
       },
       bundle: true,
       syntax: 'es2023',
-      experiments: {
-        advancedEsm: true,
-      },
     },
   ],
   tools: {
