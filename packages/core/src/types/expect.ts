@@ -23,6 +23,7 @@ import type {
   MatcherState as VitestMatcherState,
 } from '@vitest/expect';
 import type { addSerializer, SnapshotState } from '@vitest/snapshot';
+import type { MockInstance } from './mock';
 
 interface SnapshotMatcher<T> {
   <U extends { [P in keyof T]: any }>(
@@ -61,7 +62,27 @@ type Promisify<O> = {
 
 type PromisifyAssertion<T> = Promisify<Assertion<T>>;
 
+type CallOrderMock =
+  MockInstance | Parameters<VitestAssertion['toHaveBeenCalledBefore']>[0];
+
+type VitestExpectProperties = {
+  [K in keyof VitestExpectStatic]: VitestExpectStatic[K];
+};
+
 export interface Assertion<T = any> extends VitestAssertion<T> {
+  not: Assertion<T>;
+
+  // Vitest types these against @vitest/spy, but Rstest matchers accept rs.fn()
+  // and rs.spyOn() mocks without requiring structural compatibility.
+  toHaveBeenCalledBefore: (
+    mock: CallOrderMock,
+    failIfNoFirstInvocation?: boolean,
+  ) => void;
+  toHaveBeenCalledAfter: (
+    mock: CallOrderMock,
+    failIfNoFirstInvocation?: boolean,
+  ) => void;
+
   // Snapshots are extended in @vitest/snapshot and are not part of @vitest/expect
   matchSnapshot: SnapshotMatcher<T>;
   toMatchSnapshot: SnapshotMatcher<T>;
@@ -123,7 +144,7 @@ export interface Assertion<T = any> extends VitestAssertion<T> {
 
 export type { AsymmetricMatchersContaining, Matchers } from '@vitest/expect';
 
-export interface ExpectStatic extends VitestExpectStatic {
+export interface ExpectStatic extends VitestExpectProperties {
   <T>(actual: T, message?: string): Assertion<T>;
   unreachable: (message?: string) => never;
   soft: <T>(actual: T, message?: string) => Assertion<T>;

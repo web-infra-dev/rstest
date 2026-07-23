@@ -1,4 +1,4 @@
-import { format } from '@vitest/utils';
+import { format } from '@vitest/utils/display';
 
 /**
  * The imported `format` mimics `node:util.format`'s inspection (single-line
