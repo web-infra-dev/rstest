@@ -264,12 +264,6 @@ function getDestructuredFixtureProps(param: string): string[] | undefined {
         : prop.substring(0, separator).trim();
     },
   );
-  const restProperty = props.find((prop) => prop.startsWith('...'));
-  if (restProperty) {
-    throw new Error(
-      `Rest property "${restProperty}" is not supported. List all used fixtures explicitly, separated by comma.`,
-    );
-  }
   return props;
 }
 
@@ -384,7 +378,9 @@ function getNamedContextFixtureProps(
     bodyEnd,
   );
   const escapedParam = param.replaceAll('$', '\\$');
-  const assignmentPattern = new RegExp(`^\\s*=\\s*${escapedParam}(?![$\\w])`);
+  const assignmentPattern = new RegExp(
+    `^\\s*=\\s*${escapedParam}(?![$\\w])(?!\\s*(?:\\.|\\[|\\?\\.))`,
+  );
   const declarationPattern = /\b(?:const|let|var)\s*\{/g;
   declarationPattern.lastIndex = bodyStart + 1;
   const props = new Set<string>();
@@ -417,7 +413,9 @@ function getNamedContextFixtureProps(
     for (const prop of getDestructuredFixtureProps(
       text.slice(openingIndex, closingIndex + 1),
     ) ?? []) {
-      props.add(prop);
+      if (!prop.startsWith('...')) {
+        props.add(prop);
+      }
     }
   }
 
@@ -462,6 +460,12 @@ function getFixtureUsedProps(
   const [firstParam] = splitByComma(trimmedParams);
   const props = getDestructuredFixtureProps(firstParam ?? '');
   if (props) {
+    const restProperty = props.find((prop) => prop.startsWith('...'));
+    if (restProperty) {
+      throw new Error(
+        `Rest property "${restProperty}" is not supported. List all used fixtures explicitly, separated by comma.`,
+      );
+    }
     return props;
   }
 

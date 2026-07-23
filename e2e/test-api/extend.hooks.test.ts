@@ -6,6 +6,7 @@ type HookFixtures = {
   beforeValue: string;
   afterValue: string;
   cleanupValue: string;
+  name: string;
 };
 
 const events: string[] = [];
@@ -39,13 +40,21 @@ const hookTest = test.extend<HookFixtures>({
     await use('cleanup');
     events.push('teardown:cleanup');
   },
+  name: async (_, use) => {
+    events.push('setup:name');
+    await use('fixture name');
+    events.push('teardown:name');
+  },
 });
 
 beforeEach<HookFixtures>((context) => {
   // A compiler's output can preserve this comment before destructuring.
-  const { task } = context;
+  const { task, ...rest } = context;
+  const { name } = context.task;
   const { beforeValue } = context;
   expect(task.name).toBe('resolves fixtures used only by hooks');
+  expect(name).toBe('resolves fixtures used only by hooks');
+  expect(rest.beforeValue).toBe('before:base');
   events.push(`beforeEach:${beforeValue}`);
 
   return (cleanupContext) => {

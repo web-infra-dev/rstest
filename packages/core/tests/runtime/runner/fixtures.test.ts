@@ -139,6 +139,41 @@ describe('createFixtureResolver', () => {
     expect(context).toEqual({ task: 'task', fixture: 'fixture' });
   });
 
+  it('does not collect named context destructuring from member access', async () => {
+    let setupAttempts = 0;
+    const context = { task: { name: 'task name' } };
+    const fixtures = normalizeFixtures({
+      name: [
+        async (_context: any, use: any) => {
+          setupAttempts++;
+          await use('fixture name');
+        },
+      ],
+    } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+
+    await resolver.resolveHookFixtures((ctx: any) => {
+      const { name } = ctx.task;
+      return name;
+    });
+
+    expect(setupAttempts).toBe(0);
+    expect(context).toEqual({ task: { name: 'task name' } });
+  });
+
+  it('ignores rest properties when scanning named hook contexts', async () => {
+    const context = { task: 'task' };
+    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+
+    await resolver.resolveHookFixtures((ctx: any) => {
+      const { fixture, ...rest } = ctx;
+      return [fixture, rest.task];
+    });
+
+    expect(context).toEqual({ task: 'task', fixture: 'fixture' });
+  });
+
   it('finds named context destructuring after strings with comment tokens', async () => {
     const context: Record<string, any> = {};
     const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);

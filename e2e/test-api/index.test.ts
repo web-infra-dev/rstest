@@ -68,8 +68,14 @@ describe('Test API', () => {
     await cli.exec;
 
     expect(cli.exec.process?.exitCode).toBe(1);
-    expect(`${cli.stdout}\n${cli.stderr}`).toContain('later afterEach ran');
-    expect(cli.stderr).toContain('fixture setup failed');
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'later afterEach ran after test fixture failure',
+    );
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'later afterEach ran after afterEach fixture failure',
+    );
+    expect(cli.stderr).toContain('test fixture setup failed');
+    expect(cli.stderr).toContain('afterEach fixture setup failed');
     expect(cli.stderr).not.toContain('Circular fixture dependency');
   });
 });
