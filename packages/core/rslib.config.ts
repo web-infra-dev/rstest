@@ -42,9 +42,6 @@ export default defineConfig({
       id: 'rstest',
       format: 'esm',
       syntax: 'es2023',
-      experiments: {
-        advancedEsm: true,
-      },
       dts: {
         isolated: true,
         bundle: process.env.SOURCEMAP

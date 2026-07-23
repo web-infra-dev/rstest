@@ -20,9 +20,6 @@ export default defineConfig({
       },
       bundle: true,
       syntax: 'es2023',
-      experiments: {
-        advancedEsm: true,
-      },
     },
   ],
   tools: {
