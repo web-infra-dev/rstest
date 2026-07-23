@@ -16,12 +16,15 @@ This function helps you to autocomplete configuration types. It accepts a Rstest
 
 ```ts
 function defineConfig(config: RstestConfig): RstestConfig;
-function defineConfig(config: RstestConfigSyncFn): RstestConfigSyncFn;
-function defineConfig(config: RstestConfigAsyncFn): RstestConfigAsyncFn;
-function defineConfig(config: RstestConfigExport): RstestConfigExport;
+function defineConfig(config: () => RstestConfig): () => RstestConfig;
+function defineConfig(
+  config: () => Promise<RstestConfig>,
+): () => Promise<RstestConfig>;
 ```
 
-- **Example:**
+- **Examples:**
+
+Pass a config object directly:
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -35,6 +38,26 @@ export default defineConfig({
 });
 ```
 
+Return a config from a synchronous factory:
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig(() => ({
+  testTimeout: 10000,
+}));
+```
+
+Return a config from an asynchronous factory:
+
+```ts
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig(async () => ({
+  testTimeout: 10000,
+}));
+```
+
 ## defineProject
 
 This function helps you to autocomplete configuration types for [Rstest Project](/guide/basic/projects). It accepts a Rstest project config object, or a function that returns a config.
@@ -46,21 +69,20 @@ type NestedProjectConfig = {
   projects: (InlineProjectConfig | string)[];
 };
 
-function defineProject(config: ProjectConfig): ProjectConfig;
-function defineProject(config: NestedProjectConfig): NestedProjectConfig;
-function defineProject(config: () => ProjectConfig): () => ProjectConfig;
+type ProjectConfigExport = ProjectConfig | NestedProjectConfig;
+
+function defineProject(config: ProjectConfigExport): ProjectConfigExport;
 function defineProject(
-  config: () => NestedProjectConfig,
-): () => NestedProjectConfig;
+  config: () => ProjectConfigExport,
+): () => ProjectConfigExport;
 function defineProject(
-  config: () => Promise<ProjectConfig>,
-): () => Promise<ProjectConfig>;
-function defineProject(
-  config: () => Promise<NestedProjectConfig>,
-): () => Promise<NestedProjectConfig>;
+  config: () => Promise<ProjectConfigExport>,
+): () => Promise<ProjectConfigExport>;
 ```
 
-- **Example:**
+- **Examples:**
+
+Pass a project config object directly:
 
 ```ts
 import { defineProject } from '@rstest/core';
@@ -68,6 +90,47 @@ import { defineProject } from '@rstest/core';
 export default defineProject({
   root: './apps/web',
   testTimeout: 15000,
+});
+```
+
+Return a project config from a synchronous factory:
+
+```ts
+import { defineProject } from '@rstest/core';
+
+export default defineProject(() => ({
+  root: './apps/web',
+  testEnvironment: 'node',
+}));
+```
+
+Return a project config from an asynchronous factory:
+
+```ts
+import { defineProject } from '@rstest/core';
+
+export default defineProject(async () => ({
+  root: './apps/web',
+  testEnvironment: 'node',
+}));
+```
+
+Define multiple nested projects:
+
+```ts
+import { defineProject } from '@rstest/core';
+
+export default defineProject({
+  projects: [
+    {
+      name: 'web',
+      root: './apps/web',
+    },
+    {
+      name: 'server',
+      root: './apps/server',
+    },
+  ],
 });
 ```
 
