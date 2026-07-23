@@ -56,14 +56,14 @@ const hookTest = test.extend<HookFixtures>({
 
 beforeEach<HookFixtures>((context) => {
   // A compiler's output can preserve this comment before destructuring.
-  const { task, ...rest } = context;
+  const { task } = context;
   const { name } = context.task;
   const closingBrace = /}/;
   let beforeValue = '';
   ({ beforeValue } = context);
   expect(task.name).toBe('resolves fixtures used only by hooks');
   expect(name).toBe('resolves fixtures used only by hooks');
-  expect(rest.beforeValue).toBe('before:base');
+  expect(beforeValue).toBe('before:base');
   expect(closingBrace.test('}')).toBe(true);
   events.push(`beforeEach:${beforeValue}`);
 

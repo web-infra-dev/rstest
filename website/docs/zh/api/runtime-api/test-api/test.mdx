@@ -370,6 +370,8 @@ Fixture 函数接收两个参数：
 1. **context** — 包含其他 fixture 以及 `TestContext`（`task`、`expect`、`onTestFinished`、`onTestFailed`）。使用对象解构来声明你需要的依赖。
 2. **use** — 调用 `await use(value)` 把 fixture 的值传递给测试。
 
+使用 fixture 的 callback 必须显式列出所有请求的 fixture。测试 callback、fixture 函数和 per-test hook 不支持 `({ db, ...rest })` 这类对象 rest property，因为按需 fixture 解析无法确定 rest 对象请求了哪些 fixture。
+
 `await use(value)` 之前的代码是 **setup**，之后的代码是 **teardown**（测试结束后执行）。
 
 ```ts

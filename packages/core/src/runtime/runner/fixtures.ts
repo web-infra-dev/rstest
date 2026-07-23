@@ -59,7 +59,7 @@ export const normalizeFixtures = (
 };
 
 export type FixtureResolver = {
-  cancelPendingFixtures: () => void;
+  cancelPendingFixtures: () => { teardownStarted: Promise<void> } | undefined;
   resolveTestFixtures: (fn?: (...args: any[]) => any) => Promise<void>;
   resolveHookFixtures: (
     fn: (...args: any[]) => any,
@@ -90,7 +90,7 @@ export const createFixtureResolver = (
 ): FixtureResolver => {
   if (!test.fixtures) {
     return {
-      cancelPendingFixtures: () => {},
+      cancelPendingFixtures: () => undefined,
       resolveTestFixtures: () => Promise.resolve(),
       resolveHookFixtures: () => Promise.resolve({ status: 'resolved' }),
     };
@@ -100,6 +100,8 @@ export const createFixtureResolver = (
   const cancelledFixtures = new Set<string>();
   const failedFixtures = new Set<string>();
   const pendingMap = new Set<string>();
+  const cancelFixtureSetups = new Map<string, () => void>();
+  const cancelledFixtureTeardownStarts = new Map<string, () => void>();
 
   const useFixture = async (
     name: string,
@@ -134,10 +136,16 @@ export const createFixtureResolver = (
       // but why not return cleanup function?
       await new Promise<void>((fixtureResolve, fixtureReject) => {
         let useDone: (() => void) | undefined;
+        let blockSettled = false;
+        cancelFixtureSetups.set(name, () => {
+          if (blockSettled) {
+            fixtureResolve();
+          }
+        });
         const block = Promise.resolve().then(() =>
           fixtureValue(context, async (value: any) => {
             if (cancelledFixtures.has(name)) {
-              fixtureResolve();
+              cancelledFixtureTeardownStarts.get(name)?.();
               return;
             }
             context[name] = value;
@@ -151,7 +159,12 @@ export const createFixtureResolver = (
             });
           }),
         );
-        block.catch(fixtureReject);
+        block.then(() => {
+          blockSettled = true;
+          if (cancelledFixtures.has(name)) {
+            fixtureResolve();
+          }
+        }, fixtureReject);
       });
 
       if (cancelledFixtures.has(name)) {
@@ -163,6 +176,8 @@ export const createFixtureResolver = (
       throw error;
     } finally {
       pendingMap.delete(name);
+      cancelFixtureSetups.delete(name);
+      cancelledFixtureTeardownStarts.delete(name);
     }
   };
 
@@ -183,10 +198,18 @@ export const createFixtureResolver = (
 
   return {
     cancelPendingFixtures: () => {
-      for (const name of pendingMap) {
-        cancelledFixtures.add(name);
-        failedFixtures.add(name);
+      if (pendingMap.size === 0) {
+        return undefined;
       }
+      const teardownStarted = new Promise<void>((notifyTeardownStarted) => {
+        for (const name of pendingMap) {
+          cancelledFixtures.add(name);
+          failedFixtures.add(name);
+          cancelledFixtureTeardownStarts.set(name, notifyTeardownStarted);
+          cancelFixtureSetups.get(name)?.();
+        }
+      });
+      return { teardownStarted };
     },
     resolveTestFixtures: (fn) =>
       resolveFixtureNames(fn ? getFixtureUsedProps(fn) : [], true),
@@ -652,12 +675,11 @@ function getNamedContextFixtureProps(
       continue;
     }
 
-    for (const prop of getDestructuredFixtureProps(
-      text.slice(index, closingIndex + 1),
-    ) ?? []) {
-      if (!prop.startsWith('...')) {
-        props.add(prop);
-      }
+    const destructuredProps =
+      getDestructuredFixtureProps(text.slice(index, closingIndex + 1)) ?? [];
+    assertNoRestProperty(destructuredProps);
+    for (const prop of destructuredProps) {
+      props.add(prop);
     }
     index = closingIndex;
   }
@@ -673,6 +695,15 @@ function getFixtureCallbackSource(fn: FixtureCallback): FixtureCallback {
     source = callbackSources.get(source)!;
   }
   return source;
+}
+
+function assertNoRestProperty(props: string[]): void {
+  const restProperty = props.find((prop) => prop.startsWith('...'));
+  if (restProperty) {
+    throw new Error(
+      `Rest property "${restProperty}" is not supported. List all used fixtures explicitly, separated by comma.`,
+    );
+  }
 }
 
 function parseFixtureUsedProps(
@@ -691,12 +722,7 @@ function parseFixtureUsedProps(
   const [firstParam] = splitByComma(trimmedParams);
   const props = getDestructuredFixtureProps(firstParam ?? '');
   if (props) {
-    const restProperty = props.find((prop) => prop.startsWith('...'));
-    if (restProperty) {
-      throw new Error(
-        `Rest property "${restProperty}" is not supported. List all used fixtures explicitly, separated by comma.`,
-      );
-    }
+    assertNoRestProperty(props);
     return props;
   }
 

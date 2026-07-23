@@ -186,17 +186,30 @@ describe('createFixtureResolver', () => {
     expect(context).toEqual({ task: { name: 'task name' } });
   });
 
-  it('ignores rest properties when scanning named hook contexts', async () => {
+  it('rejects rest properties when scanning named hook contexts', async () => {
     const context = { task: 'task' };
     const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
     const resolver = createFixtureResolver({ fixtures } as any, context);
 
-    await resolver.resolveHookFixtures((ctx: any) => {
-      const { fixture, ...rest } = ctx;
-      return [fixture, rest.task];
-    });
+    await expect(
+      resolver.resolveHookFixtures((ctx: any) => {
+        const { fixture, ...rest } = ctx;
+        return [fixture, rest.task];
+      }),
+    ).rejects.toThrow(/Rest property/);
+    expect(context).toEqual({ task: 'task' });
+  });
 
-    expect(context).toEqual({ task: 'task', fixture: 'fixture' });
+  it('rejects rest properties in destructured hook parameters', async () => {
+    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, {});
+
+    await expect(
+      resolver.resolveHookFixtures(({ fixture, ...rest }: any) => [
+        fixture,
+        rest,
+      ]),
+    ).rejects.toThrow(/Rest property/);
   });
 
   it('finds named context destructuring after strings with comment tokens', async () => {
@@ -481,8 +494,16 @@ describe('createFixtureResolver', () => {
   it('tears down fixture setup that finishes after cancellation', async () => {
     const events: string[] = [];
     let continueSetup: (() => void) | undefined;
+    let continueTeardown: (() => void) | undefined;
     const setupPaused = new Promise<void>((resolve) => {
       continueSetup = resolve;
+    });
+    const teardownPaused = new Promise<void>((resolve) => {
+      continueTeardown = resolve;
+    });
+    let teardownStarted: (() => void) | undefined;
+    const teardownStartedPromise = new Promise<void>((resolve) => {
+      teardownStarted = resolve;
     });
     const fixtures = normalizeFixtures({
       slow: [
@@ -490,6 +511,9 @@ describe('createFixtureResolver', () => {
           await setupPaused;
           events.push('setup');
           await use('slow');
+          events.push('teardown:start');
+          teardownStarted!();
+          await teardownPaused;
           events.push('teardown');
         },
       ],
@@ -504,13 +528,54 @@ describe('createFixtureResolver', () => {
 
     const resolution = resolver.resolveHookFixtures(({ slow }: any) => slow);
     await Promise.resolve();
+    const cancellation = resolver.cancelPendingFixtures();
+    continueSetup!();
+
+    await expect(cancellation?.teardownStarted).resolves.toBeUndefined();
+    await teardownStartedPromise;
+    const resolutionSettled = await Promise.race([
+      resolution.then(() => true),
+      new Promise<false>((resolve) => {
+        setImmediate(() => resolve(false));
+      }),
+    ]);
+
+    expect(resolutionSettled).toBe(false);
+    continueTeardown!();
+    await expect(resolution).resolves.toEqual({ status: 'skipped' });
+    expect(events).toEqual(['setup', 'teardown:start', 'teardown']);
+    expect(context).toEqual({});
+    expect(cleanups).toEqual([]);
+  });
+
+  it('settles a cancelled fixture that returns without calling use', async () => {
+    let continueSetup: (() => void) | undefined;
+    const setupPaused = new Promise<void>((resolve) => {
+      continueSetup = resolve;
+    });
+    const fixtures = normalizeFixtures({
+      slow: [
+        async () => {
+          await setupPaused;
+        },
+      ],
+    } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, {});
+
+    const resolution = resolver.resolveHookFixtures(({ slow }: any) => slow);
+    await Promise.resolve();
     resolver.cancelPendingFixtures();
     continueSetup!();
 
+    const resolutionSettled = await Promise.race([
+      resolution.then(() => true),
+      new Promise<false>((resolve) => {
+        setImmediate(() => resolve(false));
+      }),
+    ]);
+
+    expect(resolutionSettled).toBe(true);
     await expect(resolution).resolves.toEqual({ status: 'skipped' });
-    expect(events).toEqual(['setup', 'teardown']);
-    expect(context).toEqual({});
-    expect(cleanups).toEqual([]);
   });
 
   it('registers cleanups in reverse (unshift) order', async () => {

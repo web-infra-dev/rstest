@@ -191,20 +191,65 @@ export class TestRunner {
           }
       > => {
         let callbackStarted = false;
+        const runHook = async (callback: (...args: any[]) => any) => {
+          const resolution =
+            await fixtureResolver.resolveHookFixtures(callback);
+          if (resolution.status === 'skipped') {
+            return { status: 'skipped' as const };
+          }
+          callbackStarted = true;
+          const cleanup = await callback(test.context);
+          return { status: 'completed' as const, cleanup };
+        };
+        let hookExecution: ReturnType<typeof runHook> | undefined;
         try {
-          return await runWithTimeout(fn, async (callback) => {
-            const resolution =
-              await fixtureResolver.resolveHookFixtures(callback);
-            if (resolution.status === 'skipped') {
-              return { status: 'skipped' as const };
-            }
-            callbackStarted = true;
-            const cleanup = await callback(test.context);
-            return { status: 'completed' as const, cleanup };
+          return await runWithTimeout(fn, (callback) => {
+            hookExecution = runHook(callback);
+            return hookExecution;
           });
         } catch (error) {
-          if (!callbackStarted) {
-            fixtureResolver.cancelPendingFixtures();
+          const cancellation =
+            !callbackStarted && fixtureResolver.cancelPendingFixtures();
+          if (cancellation && hookExecution) {
+            const hookCompletion = hookExecution.then(
+              () => ({ status: 'completed' as const }),
+              (fixtureError: unknown) => ({
+                status: 'failed' as const,
+                error: fixtureError,
+              }),
+            );
+            const cancellationProgress = Promise.race([
+              hookCompletion.then((completion) => ({
+                status: 'completed' as const,
+                completion,
+              })),
+              cancellation.teardownStarted.then(() => ({
+                status: 'teardown-started' as const,
+              })),
+            ]);
+            const waitForCancellationProgress = inheritTimeout(
+              fn,
+              () => cancellationProgress,
+            );
+            fixtureCleanups.unshift(async () => {
+              let progress: Awaited<typeof cancellationProgress>;
+              try {
+                progress = await waitForCancellationProgress();
+              } catch {
+                // The original hook timeout is already reported. This timeout
+                // only bounds how long unfinished setup may delay the test.
+                return;
+              }
+              // Once `use` is reached, match normal fixture cleanup semantics:
+              // teardown must finish before the runner continues.
+              const completion =
+                progress.status === 'teardown-started'
+                  ? await hookCompletion
+                  : progress.completion;
+              if (completion.status === 'failed') {
+                throw completion.error;
+              }
+            });
           }
           return {
             status: 'failed',

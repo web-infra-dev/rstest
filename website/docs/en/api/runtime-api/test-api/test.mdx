@@ -370,6 +370,8 @@ A fixture function receives two parameters:
 1. **context** — contains other fixtures as well as `TestContext` (`task`, `expect`, `onTestFinished`, `onTestFailed`). Use object destructuring to declare the dependencies you need.
 2. **use** — call `await use(value)` to pass the fixture value to the test.
 
+Fixture-aware callbacks must list every requested fixture explicitly. Object rest properties such as `({ db, ...rest })` are not supported in test callbacks, fixture functions, or per-test hooks because lazy fixture resolution cannot determine which fixtures the rest object requests.
+
 Code before `await use(value)` is **setup**; code after it is **teardown** (runs after the test finishes).
 
 ```ts
