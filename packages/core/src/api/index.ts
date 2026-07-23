@@ -211,8 +211,8 @@ export interface RstestProjectSummary {
 }
 
 /**
- * Read-only view of the resolved context exposed on
- * {@link RstestInstance.context}. A stable projection of Rstest's internal
+ * Read-only view of the resolved context exposed on the `context` property of
+ * {@link RstestInstance}. A stable projection of Rstest's internal
  * context — the resolved config and projects — without the internal run state
  * or the reporter/snapshot managers.
  *
@@ -409,9 +409,8 @@ const executeHostSafeRun = async (
  * Create a programmatic Rstest instance. The static `config` is the instance's
  * identity, but it is **re-resolved on every** `run()` / `listTests()` /
  * `mergeReports()` (and once eagerly at creation), so no mutable state is
- * shared across runs and
- * {@link RstestInstance.context} reflects the most recent build rather than a
- * creation-time snapshot. Each call performs a full build → execute → teardown.
+ * shared across runs and the `context` property of {@link RstestInstance}
+ * reflects the most recent build rather than a creation-time snapshot. Each call performs a full build → execute → teardown.
  *
  * Resolves config-load errors at creation time. `run()` resolves on every
  * termination path — including worker crashes — with `ok` reflecting success.
