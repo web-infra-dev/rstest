@@ -14,6 +14,7 @@ import { NavIcon } from '@rstackjs/doc-ui/nav-icon';
 
 import { HomeLayout } from './pages';
 import '@rstackjs/doc-ui/theme.css';
+import './tailwind.css';
 import './index.scss';
 
 const Search = () => {
