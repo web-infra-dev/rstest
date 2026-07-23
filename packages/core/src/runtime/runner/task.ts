@@ -10,6 +10,7 @@ import type {
 import { ROOT_SUITE_NAME, TEST_DELIMITER } from '../../utils/constants';
 import { getTaskNameWithPrefix } from '../../utils/helper';
 import { getRealTimers } from '../util';
+import { setFixtureCallbackSource } from './fixtures';
 
 /**
  * Coerce a user-supplied retry/repeats count into a non-negative integer.
@@ -279,19 +280,26 @@ function makeError(message: string, stackTraceError?: Error): Error {
   return error;
 }
 
+type TimeoutOptions<T extends (...args: any[]) => any> = {
+  name: string;
+  fn: T;
+  timeout?: number;
+  getAssertionCalls?: () => number;
+  stackTraceError: Error;
+};
+
+const timeoutOptions = new WeakMap<
+  (...args: any[]) => any,
+  TimeoutOptions<(...args: any[]) => any>
+>();
+
 export function wrapTimeout<T extends (...args: any[]) => any>({
   name,
   fn,
   timeout,
   getAssertionCalls,
   stackTraceError,
-}: {
-  name: string;
-  fn: T;
-  timeout?: number;
-  getAssertionCalls?: () => number;
-  stackTraceError: Error;
-}): T {
+}: TimeoutOptions<T>): T {
   if (!timeout) {
     return fn;
   }
@@ -322,12 +330,46 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
     }
   };
 
-  Object.defineProperty(wrapped, 'toString', {
-    configurable: true,
-    value: () => fn.toString(),
+  timeoutOptions.set(wrapped, {
+    name,
+    fn,
+    timeout,
+    getAssertionCalls,
+    stackTraceError,
   });
+  setFixtureCallbackSource(wrapped, fn);
 
   return wrapped as T;
+}
+
+export async function runWithTimeout<T>(
+  fn: (...args: any[]) => any,
+  run: (callback: (...args: any[]) => any) => T | PromiseLike<T>,
+): Promise<T> {
+  const options = timeoutOptions.get(fn);
+  if (!options) {
+    return run(fn);
+  }
+
+  const wrapped = wrapTimeout({
+    ...options,
+    fn: () => run(options.fn),
+  });
+  return wrapped();
+}
+
+export function inheritTimeout<T extends (...args: any[]) => any>(
+  source: (...args: any[]) => any,
+  fn: T,
+): T {
+  const options = timeoutOptions.get(source);
+  if (!options) {
+    return fn;
+  }
+  return wrapTimeout({
+    ...options,
+    fn,
+  });
 }
 
 export function limitConcurrency(

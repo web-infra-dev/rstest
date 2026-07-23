@@ -1,4 +1,11 @@
-import { afterAll, afterEach, beforeEach, expect, test } from '@rstest/core';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  test,
+  type TestContext,
+} from '@rstest/core';
 
 type HookFixtures = {
   autoValue: undefined;
@@ -51,21 +58,26 @@ beforeEach<HookFixtures>((context) => {
   // A compiler's output can preserve this comment before destructuring.
   const { task, ...rest } = context;
   const { name } = context.task;
-  const { beforeValue } = context;
+  const closingBrace = /}/;
+  let beforeValue = '';
+  ({ beforeValue } = context);
   expect(task.name).toBe('resolves fixtures used only by hooks');
   expect(name).toBe('resolves fixtures used only by hooks');
   expect(rest.beforeValue).toBe('before:base');
+  expect(closingBrace.test('}')).toBe(true);
   events.push(`beforeEach:${beforeValue}`);
 
-  return (cleanupContext) => {
-    const { task } = cleanupContext;
-    const { cleanupValue } = cleanupContext;
-    expect(task.name).toBe('resolves fixtures used only by hooks');
-    events.push(`cleanup:${cleanupValue}`);
-  };
+  return {
+    cleanup(cleanupContext: TestContext & HookFixtures) {
+      const { task } = cleanupContext;
+      const { cleanupValue } = cleanupContext;
+      expect(task.name).toBe('resolves fixtures used only by hooks');
+      events.push(`cleanup:${cleanupValue}`);
+    },
+  }.cleanup;
 });
 
-afterEach<HookFixtures>(({ afterValue }) => {
+afterEach<HookFixtures>(({ afterValue = 'fallback' }) => {
   events.push(`afterEach:${afterValue}`);
 });
 

@@ -37,8 +37,10 @@ import type { FixtureResolver } from './fixtures';
 import { cloneTaskMeta } from './metadata';
 import {
   getTestStatus,
+  inheritTimeout,
   limitConcurrency,
   markAllTestAsSkipped,
+  runWithTimeout,
   sanitizeAttemptCount,
   wrapTimeout,
 } from './task';
@@ -177,15 +179,54 @@ export class TestRunner {
         }
       }
 
-      if (!result) {
-        try {
-          for (const fn of parentHooks.beforeEachListeners) {
-            await fixtureResolver.resolveHookFixtures(fn);
-            const cleanupFn = await fn(test.context);
-            if (cleanupFn) cleanups.push(cleanupFn);
+      const runPerTestHook = async (
+        fn: BeforeEachListener | AfterEachListener,
+      ): Promise<
+        | { status: 'completed'; cleanup?: AfterEachListener }
+        | { status: 'skipped' }
+        | {
+            status: 'failed';
+            phase: 'fixture' | 'callback';
+            error: unknown;
           }
+      > => {
+        let callbackStarted = false;
+        try {
+          return await runWithTimeout(fn, async (callback) => {
+            const resolution =
+              await fixtureResolver.resolveHookFixtures(callback);
+            if (resolution.status === 'skipped') {
+              return { status: 'skipped' as const };
+            }
+            callbackStarted = true;
+            const cleanup = await callback(test.context);
+            return { status: 'completed' as const, cleanup };
+          });
         } catch (error) {
-          if (error instanceof TestSkipError) {
+          if (!callbackStarted) {
+            fixtureResolver.cancelPendingFixtures();
+          }
+          return {
+            status: 'failed',
+            phase: callbackStarted ? 'callback' : 'fixture',
+            error,
+          };
+        }
+      };
+
+      if (!result) {
+        for (const fn of parentHooks.beforeEachListeners) {
+          const hookResult = await runPerTestHook(fn);
+          if (hookResult.status === 'completed') {
+            if (hookResult.cleanup) {
+              cleanups.push(inheritTimeout(fn, hookResult.cleanup));
+            }
+            continue;
+          }
+          if (hookResult.status === 'skipped') {
+            continue;
+          }
+          if (hookResult.error instanceof TestSkipError) {
             skipped = true;
             result = skipResult();
           } else {
@@ -194,12 +235,13 @@ export class TestRunner {
               status: 'fail' as const,
               parentNames: test.parentNames,
               name: test.name,
-              errors: await formatTestError(error, test),
+              errors: await formatTestError(hookResult.error, test),
               testPath,
               project,
               meta: test.meta,
             };
           }
+          break;
         }
       }
 
@@ -293,28 +335,21 @@ export class TestRunner {
         .concat(cleanups);
 
       test.context.task.result = result;
-      try {
-        for (const fn of afterEachFns) {
-          let shouldRun: void | false;
-          try {
-            shouldRun = await fixtureResolver.resolveHookFixtures(fn);
-          } catch (error) {
-            result.status = 'fail';
-            result.errors ??= [];
-            result.errors.push(...(await formatTestError(error)));
-            test.context.task.result = result;
-            continue;
-          }
-          if (shouldRun === false) {
-            continue;
-          }
-          await fn(test.context);
+      for (const fn of afterEachFns) {
+        const hookResult = await runPerTestHook(fn);
+        if (
+          hookResult.status === 'completed' ||
+          hookResult.status === 'skipped'
+        ) {
+          continue;
         }
-      } catch (error) {
         result.status = 'fail';
         result.errors ??= [];
-        result.errors.push(...(await formatTestError(error)));
+        result.errors.push(...(await formatTestError(hookResult.error)));
         test.context.task.result = result;
+        if (hookResult.phase === 'callback') {
+          break;
+        }
       }
 
       for (const fn of fixtureCleanups) {

@@ -122,7 +122,7 @@ describe('createFixtureResolver', () => {
 
     await expect(
       resolver.resolveHookFixtures((context: unknown) => context),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ status: 'resolved' });
   });
 
   it('collects fixtures from every named hook context destructuring', async () => {
@@ -222,6 +222,86 @@ describe('createFixtureResolver', () => {
     expect(context).toEqual({ beforeValue: 'before' });
   });
 
+  it('does not collect named context destructuring from object or class methods', async () => {
+    const context: Record<string, any> = {};
+    const fixtures = normalizeFixtures({
+      objectMethodValue: 'object method',
+      classMethodValue: 'class method',
+      beforeValue: 'before',
+    } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+    const hook = Object.assign(() => {}, {
+      toString: () =>
+        '(ctx) => { const cleanup = { run() { const { objectMethodValue } = ctx; } }; class Cleanup { run() { const { classMethodValue } = ctx; } } const { beforeValue } = ctx; return [cleanup, Cleanup, beforeValue]; }',
+    });
+
+    await resolver.resolveHookFixtures(hook);
+
+    expect(context).toEqual({ beforeValue: 'before' });
+  });
+
+  it('stops semicolon-free concise arrow ranges at the next statement', async () => {
+    const context: Record<string, any> = {};
+    const fixtures = normalizeFixtures({
+      cleanupValue: 'cleanup',
+      beforeValue: 'before',
+    } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+    const hook = Object.assign(() => {}, {
+      toString: () => `(ctx) => {
+        const cleanup = () => ({ cleanupValue } = ctx)
+        const { beforeValue } = ctx
+        return [cleanup, beforeValue]
+      }`,
+    });
+
+    await resolver.resolveHookFixtures(hook);
+
+    expect(context).toEqual({ beforeValue: 'before' });
+  });
+
+  it('finds named context destructuring after regular expression literals', async () => {
+    const context: Record<string, any> = {};
+    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+    const hook = Object.assign(() => {}, {
+      toString: () =>
+        '(ctx) => { const closingBrace = /}/; const commentTokens = /https?:\\/\\//; const { fixture } = ctx; return [closingBrace, commentTokens, fixture]; }',
+    });
+
+    await resolver.resolveHookFixtures(hook);
+
+    expect(context.fixture).toBe('fixture');
+  });
+
+  it('finds named context destructuring after division expressions', async () => {
+    const context: Record<string, any> = {};
+    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+    const hook = Object.assign(() => {}, {
+      toString: () =>
+        '(ctx) => { const ratio = 4 / 2; const { fixture } = ctx; return [ratio, fixture]; }',
+    });
+
+    await resolver.resolveHookFixtures(hook);
+
+    expect(context.fixture).toBe('fixture');
+  });
+
+  it('detects direct destructuring assignments from a named context', async () => {
+    const context: Record<string, any> = {};
+    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+    const hook = Object.assign(() => {}, {
+      toString: () =>
+        '(ctx) => { let fixture; ({ fixture } = ctx); return fixture; }',
+    });
+
+    await resolver.resolveHookFixtures(hook);
+
+    expect(context.fixture).toBe('fixture');
+  });
+
   it('parses balanced named context destructuring', async () => {
     const context: Record<string, any> = {};
     const fixtures = normalizeFixtures({
@@ -242,6 +322,37 @@ describe('createFixtureResolver', () => {
       settings: { mode: 'fixture' },
       page: 'page',
     });
+  });
+
+  it('parses parenthesized defaults in destructured callback params', async () => {
+    const context: Record<string, any> = {};
+    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+    const hook = Object.assign(() => {}, {
+      toString: () => '({ fixture = createFixture() }) => { return fixture; }',
+    });
+
+    await resolver.resolveHookFixtures(hook);
+
+    expect(context.fixture).toBe('fixture');
+  });
+
+  it('caches parsed fixture props across test attempts', async () => {
+    let parseCalls = 0;
+    const context: Record<string, any> = {};
+    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+    const hook = Object.assign(() => {}, {
+      toString: () => {
+        parseCalls++;
+        return '({ fixture }) => fixture';
+      },
+    });
+
+    await resolver.resolveHookFixtures(hook);
+    await resolver.resolveHookFixtures(hook);
+
+    expect(parseCalls).toBe(1);
   });
 
   it('activates auto and requested test fixtures', async () => {
@@ -337,9 +448,44 @@ describe('createFixtureResolver', () => {
     ).rejects.toThrow('fixture setup failed');
     await expect(
       resolver.resolveHookFixtures(({ failing }: any) => failing),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ status: 'skipped' });
 
     expect(setupAttempts).toBe(1);
+  });
+
+  it('tears down fixture setup that finishes after cancellation', async () => {
+    const events: string[] = [];
+    let continueSetup: (() => void) | undefined;
+    const setupPaused = new Promise<void>((resolve) => {
+      continueSetup = resolve;
+    });
+    const fixtures = normalizeFixtures({
+      slow: [
+        async (_context: any, use: any) => {
+          await setupPaused;
+          events.push('setup');
+          await use('slow');
+          events.push('teardown');
+        },
+      ],
+    } as any);
+    const context: Record<string, any> = {};
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver(
+      { fixtures } as any,
+      context,
+      cleanups,
+    );
+
+    const resolution = resolver.resolveHookFixtures(({ slow }: any) => slow);
+    await Promise.resolve();
+    resolver.cancelPendingFixtures();
+    continueSetup!();
+
+    await expect(resolution).resolves.toEqual({ status: 'skipped' });
+    expect(events).toEqual(['setup', 'teardown']);
+    expect(context).toEqual({});
+    expect(cleanups).toEqual([]);
   });
 
   it('registers cleanups in reverse (unshift) order', async () => {

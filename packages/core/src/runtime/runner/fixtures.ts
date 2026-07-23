@@ -59,11 +59,29 @@ export const normalizeFixtures = (
 };
 
 export type FixtureResolver = {
+  cancelPendingFixtures: () => void;
   resolveTestFixtures: (fn?: (...args: any[]) => any) => Promise<void>;
-  resolveHookFixtures: (fn: (...args: any[]) => any) => Promise<void | false>;
+  resolveHookFixtures: (
+    fn: (...args: any[]) => any,
+  ) => Promise<{ status: 'resolved' } | { status: 'skipped' }>;
 };
 
 class PreviouslyFailedFixtureError extends Error {}
+
+type FixtureCallback = (...args: any[]) => any;
+
+const callbackSources = new WeakMap<FixtureCallback, FixtureCallback>();
+const fixturePropsCache = new WeakMap<
+  FixtureCallback,
+  { namedContext?: string[]; destructuredContext?: string[] }
+>();
+
+export function setFixtureCallbackSource(
+  callback: (...args: any[]) => any,
+  source: (...args: any[]) => any,
+): void {
+  callbackSources.set(callback, source);
+}
 
 export const createFixtureResolver = (
   test: TestCase,
@@ -72,12 +90,14 @@ export const createFixtureResolver = (
 ): FixtureResolver => {
   if (!test.fixtures) {
     return {
+      cancelPendingFixtures: () => {},
       resolveTestFixtures: () => Promise.resolve(),
-      resolveHookFixtures: () => Promise.resolve(),
+      resolveHookFixtures: () => Promise.resolve({ status: 'resolved' }),
     };
   }
 
   const doneMap = new Set<string>();
+  const cancelledFixtures = new Set<string>();
   const failedFixtures = new Set<string>();
   const pendingMap = new Set<string>();
 
@@ -116,6 +136,10 @@ export const createFixtureResolver = (
         let useDone: (() => void) | undefined;
         const block = Promise.resolve().then(() =>
           fixtureValue(context, async (value: any) => {
+            if (cancelledFixtures.has(name)) {
+              fixtureResolve();
+              return;
+            }
             context[name] = value;
             cleanups.unshift(() => {
               useDone?.();
@@ -130,6 +154,9 @@ export const createFixtureResolver = (
         block.catch(fixtureReject);
       });
 
+      if (cancelledFixtures.has(name)) {
+        throw new PreviouslyFailedFixtureError(name);
+      }
       doneMap.add(name);
     } catch (error) {
       failedFixtures.add(name);
@@ -155,6 +182,12 @@ export const createFixtureResolver = (
   };
 
   return {
+    cancelPendingFixtures: () => {
+      for (const name of pendingMap) {
+        cancelledFixtures.add(name);
+        failedFixtures.add(name);
+      }
+    },
     resolveTestFixtures: (fn) =>
       resolveFixtureNames(fn ? getFixtureUsedProps(fn) : [], true),
     resolveHookFixtures: async (fn) => {
@@ -162,25 +195,27 @@ export const createFixtureResolver = (
         await resolveFixtureNames(getFixtureUsedProps(fn, true), false);
       } catch (error) {
         if (error instanceof PreviouslyFailedFixtureError) {
-          return false;
+          return { status: 'skipped' };
         }
         throw error;
       }
-      return undefined;
+      return { status: 'resolved' };
     },
   };
 };
 
 function splitByComma(s: string) {
+  const filtered = filterOutNonCode(s);
   const result: string[] = [];
   const stack: string[] = [];
   let start = 0;
   for (let i = 0; i < s.length; i++) {
-    if (s[i] === '{' || s[i] === '[') {
-      stack.push(s[i] === '{' ? '}' : ']');
-    } else if (s[i] === stack[stack.length - 1]) {
+    const char = filtered[i];
+    if (char === '{' || char === '[' || char === '(') {
+      stack.push(char === '{' ? '}' : char === '[' ? ']' : ')');
+    } else if (char === stack[stack.length - 1]) {
       stack.pop();
-    } else if (!stack.length && s[i] === ',') {
+    } else if (!stack.length && char === ',') {
       const token = s.substring(start, i).trim();
       if (token) result.push(token);
       start = i + 1;
@@ -191,8 +226,49 @@ function splitByComma(s: string) {
   return result;
 }
 
-function filterOutCommentsAndStrings(s: string): string {
-  const result: string[] = [];
+const REGEX_PREFIX_KEYWORDS = new Set([
+  'await',
+  'case',
+  'delete',
+  'do',
+  'else',
+  'in',
+  'instanceof',
+  'new',
+  'of',
+  'return',
+  'throw',
+  'typeof',
+  'void',
+  'yield',
+]);
+
+function canStartRegex(text: readonly string[], index: number): boolean {
+  let cursor = index - 1;
+  while (cursor >= 0 && /\s/.test(text[cursor]!)) {
+    cursor--;
+  }
+  if (cursor < 0) {
+    return true;
+  }
+
+  const previous = text[cursor]!;
+  if ('([{=,:;!&|?+-*%^~<>'.includes(previous)) {
+    return true;
+  }
+  if (!/[$\w]/.test(previous)) {
+    return false;
+  }
+
+  const end = cursor + 1;
+  while (cursor >= 0 && /[$\w]/.test(text[cursor]!)) {
+    cursor--;
+  }
+  return REGEX_PREFIX_KEYWORDS.has(text.slice(cursor + 1, end).join(''));
+}
+
+function filterOutNonCode(s: string): string {
+  const result = [...s];
   let commentState: 'none' | 'singleline' | 'multiline' = 'none';
   let quote: '"' | "'" | '`' | undefined;
 
@@ -201,45 +277,68 @@ function filterOutCommentsAndStrings(s: string): string {
     if (commentState === 'singleline') {
       if (char === '\n') {
         commentState = 'none';
-        result.push('\n');
       } else {
-        result.push(' ');
+        result[i] = ' ';
       }
     } else if (commentState === 'multiline') {
       if (char === '*' && s[i + 1] === '/') {
-        result.push(' ', ' ');
+        result[i] = ' ';
+        result[i + 1] = ' ';
         commentState = 'none';
         i++;
       } else {
-        result.push(char === '\n' ? '\n' : ' ');
+        result[i] = char === '\n' ? '\n' : ' ';
       }
     } else if (quote) {
       if (char === '\\') {
-        result.push(' ');
+        result[i] = ' ';
         if (i + 1 < s.length) {
           i++;
-          result.push(s[i] === '\n' ? '\n' : ' ');
+          result[i] = s[i] === '\n' ? '\n' : ' ';
         }
       } else {
         if (char === quote) {
           quote = undefined;
         }
-        result.push(char === '\n' ? '\n' : ' ');
+        result[i] = char === '\n' ? '\n' : ' ';
       }
     } else {
       if (char === '/' && s[i + 1] === '/') {
-        result.push(' ', ' ');
+        result[i] = ' ';
+        result[i + 1] = ' ';
         commentState = 'singleline';
         i++;
       } else if (char === '/' && s[i + 1] === '*') {
-        result.push(' ', ' ');
+        result[i] = ' ';
+        result[i + 1] = ' ';
         commentState = 'multiline';
         i++;
+      } else if (char === '/' && canStartRegex(result, i)) {
+        result[i] = ' ';
+        let inCharacterClass = false;
+        for (i++; i < s.length; i++) {
+          const regexChar = s[i]!;
+          result[i] = regexChar === '\n' ? '\n' : ' ';
+          if (regexChar === '\\') {
+            if (i + 1 < s.length) {
+              i++;
+              result[i] = s[i] === '\n' ? '\n' : ' ';
+            }
+          } else if (regexChar === '[') {
+            inCharacterClass = true;
+          } else if (regexChar === ']') {
+            inCharacterClass = false;
+          } else if (regexChar === '/' && !inCharacterClass) {
+            while (i + 1 < s.length && /[A-Za-z]/.test(s[i + 1]!)) {
+              i++;
+              result[i] = ' ';
+            }
+            break;
+          }
+        }
       } else if (char === '"' || char === "'" || char === '`') {
         quote = char;
-        result.push(' ');
-      } else {
-        result.push(char);
+        result[i] = ' ';
       }
     }
   }
@@ -253,11 +352,19 @@ function getDestructuredFixtureProps(param: string): string[] | undefined {
 
   const props = splitByComma(param.substring(1, param.length - 1)).map(
     (prop) => {
-      const colon = prop.indexOf(':');
-      const equals = prop.indexOf('=');
-      let separator = colon;
-      if (separator === -1 || (equals !== -1 && equals < separator)) {
-        separator = equals;
+      const filtered = filterOutNonCode(prop);
+      const stack: string[] = [];
+      let separator = -1;
+      for (let index = 0; index < filtered.length; index++) {
+        const char = filtered[index];
+        if (char === '{' || char === '[' || char === '(') {
+          stack.push(char === '{' ? '}' : char === '[' ? ']' : ')');
+        } else if (char === stack[stack.length - 1]) {
+          stack.pop();
+        } else if (!stack.length && (char === ':' || char === '=')) {
+          separator = index;
+          break;
+        }
       }
       return separator === -1
         ? prop.trim()
@@ -287,6 +394,26 @@ function findClosingDelimiter(
   return undefined;
 }
 
+function findOpeningDelimiter(
+  text: string,
+  closingIndex: number,
+  opening: string,
+  closing: string,
+): number | undefined {
+  let depth = 0;
+  for (let index = closingIndex; index >= 0; index--) {
+    if (text[index] === closing) {
+      depth++;
+    } else if (text[index] === opening) {
+      depth--;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return undefined;
+}
+
 function skipWhitespace(text: string, start: number): number {
   let index = start;
   while (index < text.length && /\s/.test(text[index]!)) {
@@ -295,64 +422,185 @@ function skipWhitespace(text: string, start: number): number {
   return index;
 }
 
+function skipWhitespaceBackwards(text: string, start: number): number {
+  let index = start;
+  while (index >= 0 && /\s/.test(text[index]!)) {
+    index--;
+  }
+  return index;
+}
+
+function isWordAt(text: string, index: number, word: string): boolean {
+  return (
+    text.startsWith(word, index) &&
+    !/[$\w]/.test(text[index - 1] ?? '') &&
+    !/[$\w]/.test(text[index + word.length] ?? '')
+  );
+}
+
+function getPreviousWord(text: string, start: number): string {
+  let cursor = skipWhitespaceBackwards(text, start);
+  const end = cursor + 1;
+  while (cursor >= 0 && /[$\w]/.test(text[cursor]!)) {
+    cursor--;
+  }
+  return text.slice(cursor + 1, end);
+}
+
+function findExpressionEnd(
+  text: string,
+  expressionStart: number,
+  bodyEnd: number,
+): number {
+  const stack: string[] = [];
+  for (let index = expressionStart; index < bodyEnd; index++) {
+    const char = text[index];
+    if (char === '{' || char === '[' || char === '(') {
+      stack.push(char === '{' ? '}' : char === '[' ? ']' : ')');
+    } else if (char === stack[stack.length - 1]) {
+      stack.pop();
+    } else if (!stack.length && (char === ',' || char === ';')) {
+      return index - 1;
+    } else if (!stack.length && char === '\n') {
+      const nextLine = text.slice(skipWhitespace(text, index + 1));
+      if (
+        /^(?:class|const|for|function|if|let|return|switch|throw|try|var|while)\b/.test(
+          nextLine,
+        )
+      ) {
+        return index - 1;
+      }
+    }
+  }
+  return bodyEnd - 1;
+}
+
 function getNestedFunctionRanges(
   text: string,
   bodyStart: number,
   bodyEnd: number,
 ): [number, number][] {
   const ranges: [number, number][] = [];
-  const addBodyRange = (openingIndex: number) => {
-    const closingIndex = findClosingDelimiter(text, openingIndex, '{', '}');
-    if (closingIndex !== undefined && closingIndex <= bodyEnd) {
-      ranges.push([openingIndex, closingIndex]);
-      return closingIndex;
-    }
-    return openingIndex;
-  };
+  const controlKeywords = new Set([
+    'catch',
+    'for',
+    'if',
+    'switch',
+    'while',
+    'with',
+  ]);
 
-  const arrowPattern = /=>\s*\{/g;
-  arrowPattern.lastIndex = bodyStart + 1;
-  let arrowMatch: RegExpExecArray | null;
-  while ((arrowMatch = arrowPattern.exec(text))) {
-    if (arrowMatch.index >= bodyEnd) {
-      break;
-    }
-    const openingIndex = arrowMatch.index + arrowMatch[0].lastIndexOf('{');
-    arrowPattern.lastIndex = addBodyRange(openingIndex) + 1;
-  }
-
-  const functionPattern = /\bfunction\b/g;
-  functionPattern.lastIndex = bodyStart + 1;
-  let functionMatch: RegExpExecArray | null;
-  while ((functionMatch = functionPattern.exec(text))) {
-    if (functionMatch.index >= bodyEnd) {
-      break;
-    }
-    let cursor = skipWhitespace(
-      text,
-      functionMatch.index + functionMatch[0].length,
-    );
-    if (text[cursor] === '*') {
-      cursor = skipWhitespace(text, cursor + 1);
-    }
-    const nameMatch = /^[$A-Z_a-z][$\w]*/.exec(text.slice(cursor));
-    if (nameMatch) {
-      cursor = skipWhitespace(text, cursor + nameMatch[0].length);
-    }
-    if (text[cursor] !== '(') {
+  for (let index = bodyStart + 1; index < bodyEnd; index++) {
+    if (isWordAt(text, index, 'function')) {
+      const paramsStart = text.indexOf('(', index + 'function'.length);
+      if (paramsStart === -1 || paramsStart >= bodyEnd) {
+        continue;
+      }
+      const paramsEnd = findClosingDelimiter(text, paramsStart, '(', ')');
+      const nestedBodyStart =
+        paramsEnd === undefined ? bodyEnd : skipWhitespace(text, paramsEnd + 1);
+      if (text[nestedBodyStart] !== '{') {
+        continue;
+      }
+      const nestedBodyEnd = findClosingDelimiter(
+        text,
+        nestedBodyStart,
+        '{',
+        '}',
+      );
+      if (nestedBodyEnd !== undefined && nestedBodyEnd <= bodyEnd) {
+        ranges.push([nestedBodyStart, nestedBodyEnd]);
+        index = nestedBodyEnd;
+      }
       continue;
     }
-    const paramsEnd = findClosingDelimiter(text, cursor, '(', ')');
-    if (paramsEnd === undefined) {
+
+    if (text[index] === '=' && text[index + 1] === '>') {
+      const nestedBodyStart = skipWhitespace(text, index + 2);
+      const nestedBodyEnd =
+        text[nestedBodyStart] === '{'
+          ? findClosingDelimiter(text, nestedBodyStart, '{', '}')
+          : findExpressionEnd(text, nestedBodyStart, bodyEnd);
+      if (nestedBodyEnd !== undefined && nestedBodyEnd <= bodyEnd) {
+        ranges.push([nestedBodyStart, nestedBodyEnd]);
+        index = nestedBodyEnd;
+      }
       continue;
     }
-    const openingIndex = skipWhitespace(text, paramsEnd + 1);
-    if (text[openingIndex] === '{') {
-      functionPattern.lastIndex = addBodyRange(openingIndex) + 1;
+
+    if (text[index] !== '{') {
+      continue;
+    }
+    const paramsEnd = skipWhitespaceBackwards(text, index - 1);
+    if (text[paramsEnd] !== ')') {
+      continue;
+    }
+    const paramsStart = findOpeningDelimiter(text, paramsEnd, '(', ')');
+    if (paramsStart === undefined) {
+      continue;
+    }
+    const previousWord = getPreviousWord(text, paramsStart - 1);
+    if (controlKeywords.has(previousWord)) {
+      continue;
+    }
+    const nestedBodyEnd = findClosingDelimiter(text, index, '{', '}');
+    if (nestedBodyEnd !== undefined && nestedBodyEnd <= bodyEnd) {
+      ranges.push([index, nestedBodyEnd]);
+      index = nestedBodyEnd;
     }
   }
 
   return ranges;
+}
+
+function getCallbackParams(
+  text: string,
+): { params: string; signatureEnd: number } | undefined {
+  const singleParamMatch = /^(?:async\s+)?([$A-Z_a-z][$\w]*)\s*=>/.exec(text);
+  if (singleParamMatch) {
+    return {
+      params: singleParamMatch[1]!,
+      signatureEnd: singleParamMatch[0].length,
+    };
+  }
+
+  const paramsStart = text.indexOf('(');
+  if (paramsStart === -1) {
+    return undefined;
+  }
+  const paramsEnd = findClosingDelimiter(text, paramsStart, '(', ')');
+  if (paramsEnd === undefined) {
+    return undefined;
+  }
+  return {
+    params: text.slice(paramsStart + 1, paramsEnd),
+    signatureEnd: paramsEnd + 1,
+  };
+}
+
+function isContextAssignment(
+  text: string,
+  closingIndex: number,
+  param: string,
+): boolean {
+  let cursor = skipWhitespace(text, closingIndex + 1);
+  if (text[cursor] !== '=') {
+    return false;
+  }
+  cursor = skipWhitespace(text, cursor + 1);
+  if (!text.startsWith(param, cursor)) {
+    return false;
+  }
+  const next = text[cursor + param.length];
+  if (/[$\w]/.test(next ?? '')) {
+    return false;
+  }
+  const memberStart = skipWhitespace(text, cursor + param.length);
+  return !(
+    text[memberStart] === '.' ||
+    text[memberStart] === '[' ||
+    text.startsWith('?.', memberStart)
+  );
 }
 
 function getNamedContextFixtureProps(
@@ -377,49 +625,102 @@ function getNamedContextFixtureProps(
     bodyStart,
     bodyEnd,
   );
-  const escapedParam = param.replaceAll('$', '\\$');
-  const assignmentPattern = new RegExp(
-    `^\\s*=\\s*${escapedParam}(?![$\\w])(?!\\s*(?:\\.|\\[|\\?\\.))`,
-  );
-  const declarationPattern = /\b(?:const|let|var)\s*\{/g;
-  declarationPattern.lastIndex = bodyStart + 1;
   const props = new Set<string>();
+  let rangeIndex = 0;
 
-  let declarationMatch: RegExpExecArray | null;
-  while ((declarationMatch = declarationPattern.exec(text))) {
-    if (declarationMatch.index >= bodyEnd) {
-      break;
+  for (let index = bodyStart + 1; index < bodyEnd; index++) {
+    while (
+      nestedFunctionRanges[rangeIndex] &&
+      index > nestedFunctionRanges[rangeIndex]![1]
+    ) {
+      rangeIndex++;
     }
-    const declarationIndex = declarationMatch.index;
-    const nestedRange = nestedFunctionRanges.find(
-      ([start, end]) => declarationIndex > start && declarationIndex < end,
-    );
-    if (nestedRange) {
-      declarationPattern.lastIndex = nestedRange[1] + 1;
+    const nestedRange = nestedFunctionRanges[rangeIndex];
+    if (nestedRange && index >= nestedRange[0]) {
+      index = nestedRange[1];
+      rangeIndex++;
       continue;
     }
-
-    const openingIndex =
-      declarationIndex + declarationMatch[0].lastIndexOf('{');
-    const closingIndex = findClosingDelimiter(text, openingIndex, '{', '}');
+    if (text[index] !== '{') {
+      continue;
+    }
+    const closingIndex = findClosingDelimiter(text, index, '{', '}');
     if (closingIndex === undefined || closingIndex > bodyEnd) {
       break;
     }
-    declarationPattern.lastIndex = closingIndex + 1;
-    if (!assignmentPattern.test(text.slice(closingIndex + 1, bodyEnd + 1))) {
+    if (!isContextAssignment(text, closingIndex, param)) {
       continue;
     }
 
     for (const prop of getDestructuredFixtureProps(
-      text.slice(openingIndex, closingIndex + 1),
+      text.slice(index, closingIndex + 1),
     ) ?? []) {
       if (!prop.startsWith('...')) {
         props.add(prop);
       }
     }
+    index = closingIndex;
   }
 
   return [...props];
+}
+
+function getFixtureCallbackSource(fn: FixtureCallback): FixtureCallback {
+  const seen = new Set<FixtureCallback>();
+  let source = fn;
+  while (callbackSources.has(source) && !seen.has(source)) {
+    seen.add(source);
+    source = callbackSources.get(source)!;
+  }
+  return source;
+}
+
+function parseFixtureUsedProps(
+  fn: (...args: any[]) => any,
+  allowNamedContext: boolean,
+): string[] {
+  const text = filterOutNonCode(fn.toString()).trim();
+  const signature = getCallbackParams(text);
+  if (!signature) {
+    return [];
+  }
+  const trimmedParams = signature.params.trim();
+  if (!trimmedParams) {
+    return [];
+  }
+  const [firstParam] = splitByComma(trimmedParams);
+  const props = getDestructuredFixtureProps(firstParam ?? '');
+  if (props) {
+    const restProperty = props.find((prop) => prop.startsWith('...'));
+    if (restProperty) {
+      throw new Error(
+        `Rest property "${restProperty}" is not supported. List all used fixtures explicitly, separated by comma.`,
+      );
+    }
+    return props;
+  }
+
+  if (firstParam?.startsWith('_')) {
+    return [];
+  }
+
+  if (/^[$A-Z_a-z][$\w]*$/.test(firstParam ?? '')) {
+    const transformedProps = getNamedContextFixtureProps(
+      text,
+      firstParam!,
+      signature.signatureEnd,
+    );
+    if (transformedProps.length) {
+      return transformedProps;
+    }
+    if (allowNamedContext) {
+      return [];
+    }
+  }
+
+  throw new Error(
+    `First argument must use the object destructuring pattern: ${firstParam}`,
+  );
 }
 
 /**
@@ -445,53 +746,19 @@ function getFixtureUsedProps(
   fn: (...args: any[]) => any,
   allowNamedContext = false,
 ): string[] {
-  const text = filterOutCommentsAndStrings(fn.toString()).trim();
-  const parenthesizedMatch =
-    /^(?:async\s+)?(?:function(?:\s+[$A-Z_a-z][$\w]*)?\s*|[$A-Z_a-z][$\w]*\s*)?\(([^)]*)\)/.exec(
-      text,
-    );
-  const singleParamMatch = parenthesizedMatch
-    ? undefined
-    : /^(?:async\s+)?([$A-Z_a-z][$\w]*)\s*=>/.exec(text);
-  const params = parenthesizedMatch?.[1] ?? singleParamMatch?.[1];
-  if (params === undefined) return [];
-  const trimmedParams = params.trim();
-  if (!trimmedParams) return [];
-  const [firstParam] = splitByComma(trimmedParams);
-  const props = getDestructuredFixtureProps(firstParam ?? '');
-  if (props) {
-    const restProperty = props.find((prop) => prop.startsWith('...'));
-    if (restProperty) {
-      throw new Error(
-        `Rest property "${restProperty}" is not supported. List all used fixtures explicitly, separated by comma.`,
-      );
-    }
-    return props;
+  const source = getFixtureCallbackSource(fn);
+  let cached = fixturePropsCache.get(source);
+  const cacheKey = allowNamedContext ? 'namedContext' : 'destructuredContext';
+  if (cached?.[cacheKey]) {
+    return cached[cacheKey]!;
   }
 
-  if (firstParam?.startsWith('_')) {
-    return [];
-  }
-
-  if (/^[$A-Z_a-z][$\w]*$/.test(firstParam ?? '')) {
-    const signatureEnd =
-      parenthesizedMatch?.[0].length ?? singleParamMatch?.[0].length;
-    if (signatureEnd !== undefined) {
-      const transformedProps = getNamedContextFixtureProps(
-        text,
-        firstParam!,
-        signatureEnd,
-      );
-      if (transformedProps.length) {
-        return transformedProps;
-      }
-    }
-    if (allowNamedContext) {
-      return [];
-    }
-  }
-
-  throw new Error(
-    `First argument must use the object destructuring pattern: ${firstParam}`,
+  const props = parseFixtureUsedProps(
+    source as (...args: any[]) => any,
+    allowNamedContext,
   );
+  cached ??= {};
+  cached[cacheKey] = props;
+  fixturePropsCache.set(source, cached);
+  return props;
 }
