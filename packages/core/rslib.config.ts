@@ -40,11 +40,7 @@ export default defineConfig({
   lib: [
     {
       id: 'rstest',
-      format: 'esm',
       syntax: 'es2023',
-      experiments: {
-        advancedEsm: true,
-      },
       dts: {
         isolated: true,
         bundle: process.env.SOURCEMAP
@@ -148,7 +144,6 @@ export default defineConfig({
     },
     {
       id: 'browser_runtime',
-      format: 'esm',
       syntax: 'es2023',
       dts: {
         isolated: true,
