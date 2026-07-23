@@ -27,6 +27,14 @@ if (version !== browserVersion) {
 const isBuildWatch = process.argv.includes('--watch');
 const isLibBuild = process.argv.includes('build');
 
+// API Extractor keeps this reference from bundled @vitest/expect but omits
+// the matching global augmentation that makes the declaration self-contained.
+const jestMatchersDtsBanner = `declare global {
+  namespace jest {
+    interface Matchers<R, T = {}> {}
+  }
+}`;
+
 export default defineConfig({
   plugins: publishCheckPlugins(),
   lib: [
@@ -56,6 +64,9 @@ export default defineConfig({
                 '@vitest/pretty-format',
               ],
             },
+      },
+      banner: {
+        dts: jestMatchersDtsBanner,
       },
       output: {
         sourceMap: process.env.SOURCEMAP === 'true',
@@ -142,6 +153,9 @@ export default defineConfig({
       dts: {
         isolated: true,
         bundle: true,
+      },
+      banner: {
+        dts: jestMatchersDtsBanner,
       },
       source: {
         entry: {
