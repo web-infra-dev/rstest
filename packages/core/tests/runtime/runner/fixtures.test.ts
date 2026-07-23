@@ -153,6 +153,22 @@ describe('createFixtureResolver', () => {
     expect(context.fixture).toBe('fixture');
   });
 
+  it('finds named context destructuring after comments with quotes', async () => {
+    const context: Record<string, any> = {};
+    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+    const hook = Object.assign(() => {}, {
+      toString: () => `(ctx) => {
+        // don't hide fixtures
+        const { fixture } = ctx;
+      }`,
+    });
+
+    await resolver.resolveHookFixtures(hook);
+
+    expect(context.fixture).toBe('fixture');
+  });
+
   it('does not collect named context destructuring from nested functions', async () => {
     const context: Record<string, any> = {};
     const fixtures = normalizeFixtures({

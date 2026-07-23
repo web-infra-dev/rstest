@@ -42,6 +42,7 @@ const hookTest = test.extend<HookFixtures>({
 });
 
 beforeEach<HookFixtures>((context) => {
+  // A compiler's output can preserve this comment before destructuring.
   const { task } = context;
   const { beforeValue } = context;
   expect(task.name).toBe('resolves fixtures used only by hooks');

@@ -191,56 +191,58 @@ function splitByComma(s: string) {
   return result;
 }
 
-function filterOutComments(s: string): string {
+function filterOutCommentsAndStrings(s: string): string {
   const result: string[] = [];
   let commentState: 'none' | 'singleline' | 'multiline' = 'none';
-  for (let i = 0; i < s.length; ++i) {
-    if (commentState === 'singleline') {
-      if (s[i] === '\n') commentState = 'none';
-    } else if (commentState === 'multiline') {
-      if (s[i - 1] === '*' && s[i] === '/') commentState = 'none';
-    } else if (commentState === 'none') {
-      if (s[i] === '/' && s[i + 1] === '/') {
-        commentState = 'singleline';
-      } else if (s[i] === '/' && s[i + 1] === '*') {
-        commentState = 'multiline';
-        i += 2;
-      } else {
-        result.push(s[i]!);
-      }
-    }
-  }
-  return result.join('');
-}
-
-function filterOutStrings(s: string): string {
-  const result: string[] = [];
   let quote: '"' | "'" | '`' | undefined;
 
-  for (let i = 0; i < s.length; i++) {
+  for (let i = 0; i < s.length; ++i) {
     const char = s[i]!;
-    if (quote) {
-      if (char === '\\') {
+    if (commentState === 'singleline') {
+      if (char === '\n') {
+        commentState = 'none';
+        result.push('\n');
+      } else {
+        result.push(' ');
+      }
+    } else if (commentState === 'multiline') {
+      if (char === '*' && s[i + 1] === '/') {
         result.push(' ', ' ');
+        commentState = 'none';
         i++;
-        continue;
+      } else {
+        result.push(char === '\n' ? '\n' : ' ');
       }
-      if (char === quote) {
-        quote = undefined;
+    } else if (quote) {
+      if (char === '\\') {
+        result.push(' ');
+        if (i + 1 < s.length) {
+          i++;
+          result.push(s[i] === '\n' ? '\n' : ' ');
+        }
+      } else {
+        if (char === quote) {
+          quote = undefined;
+        }
+        result.push(char === '\n' ? '\n' : ' ');
       }
-      result.push(char === '\n' ? '\n' : ' ');
-      continue;
+    } else {
+      if (char === '/' && s[i + 1] === '/') {
+        result.push(' ', ' ');
+        commentState = 'singleline';
+        i++;
+      } else if (char === '/' && s[i + 1] === '*') {
+        result.push(' ', ' ');
+        commentState = 'multiline';
+        i++;
+      } else if (char === '"' || char === "'" || char === '`') {
+        quote = char;
+        result.push(' ');
+      } else {
+        result.push(char);
+      }
     }
-
-    if (char === '"' || char === "'" || char === '`') {
-      quote = char;
-      result.push(' ');
-      continue;
-    }
-
-    result.push(char);
   }
-
   return result.join('');
 }
 
@@ -445,7 +447,7 @@ function getFixtureUsedProps(
   fn: (...args: any[]) => any,
   allowNamedContext = false,
 ): string[] {
-  const text = filterOutComments(filterOutStrings(fn.toString())).trim();
+  const text = filterOutCommentsAndStrings(fn.toString()).trim();
   const parenthesizedMatch =
     /^(?:async\s+)?(?:function(?:\s+[$A-Z_a-z][$\w]*)?\s*|[$A-Z_a-z][$\w]*\s*)?\(([^)]*)\)/.exec(
       text,
