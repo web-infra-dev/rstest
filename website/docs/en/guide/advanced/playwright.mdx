@@ -393,3 +393,19 @@ test('home page', async ({ onTestFailed, page, serve }) => {
 ```
 
 This keeps the test runner non-blocking while preserving the failed page state as an artifact. See `examples/playwright` for a complete Rsbuild + Playwright example.
+
+## Midscene for AI-driven tests
+
+Selectors break when the UI changes. [Midscene](/guide/advanced/midscene) builds on `@rstest/playwright` and lets you describe interactions and assertions in natural language instead, with a visual HTML report that replays each AI step with screenshots:
+
+```ts
+import { expect, test } from '@midscene/rstest/playwright';
+
+test('adds a todo', async ({ agent, page }) => {
+  await page.goto('http://localhost:5173/');
+  await agent.aiAct("type 'Study AI' in the input and press Enter");
+  await agent.aiAssert('the list contains exactly one item: "Study AI"');
+});
+```
+
+Every fixture and option on this page stays available, so you can mix `agent` calls with plain Playwright APIs in the same test.

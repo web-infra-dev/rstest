@@ -1,1 +1,1 @@
-["ci", "metadata", "scoped-cleanup", "playwright"]
+["ci", "metadata", "scoped-cleanup", "playwright", "midscene"]

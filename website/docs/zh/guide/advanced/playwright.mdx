@@ -393,3 +393,19 @@ test('home page', async ({ onTestFailed, page, serve }) => {
 ```
 
 这种方式不会阻塞测试运行，同时可以把失败时的页面状态保留下来作为 artifact。完整的 Rsbuild + Playwright 示例可以参考 `examples/playwright`。
+
+## 用 Midscene 编写 AI 驱动的测试
+
+UI 一变，selector 就会失效。[Midscene](/guide/advanced/midscene) 构建在 `@rstest/playwright` 之上，让你改用自然语言描述交互和断言，并生成可视化 HTML 报告，带着截图回放每一步 AI 操作：
+
+```ts
+import { expect, test } from '@midscene/rstest/playwright';
+
+test('adds a todo', async ({ agent, page }) => {
+  await page.goto('http://localhost:5173/');
+  await agent.aiAct("type 'Study AI' in the input and press Enter");
+  await agent.aiAssert('the list contains exactly one item: "Study AI"');
+});
+```
+
+本页的所有 fixture 和选项依然可用，你可以在同一个测试里混用 `agent` 调用和原生 Playwright API。
