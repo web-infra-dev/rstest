@@ -125,7 +125,7 @@ describe('createFixtureResolver', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('collects fixtures from every named hook context destructure', async () => {
+  it('collects fixtures from every named hook context destructuring', async () => {
     const context = { task: 'task' };
     const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
     const resolver = createFixtureResolver({ fixtures } as any, context);
@@ -137,6 +137,60 @@ describe('createFixtureResolver', () => {
     });
 
     expect(context).toEqual({ task: 'task', fixture: 'fixture' });
+  });
+
+  it('finds named context destructuring after strings with comment tokens', async () => {
+    const context: Record<string, any> = {};
+    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+    const hook = Object.assign(() => {}, {
+      toString: () =>
+        "(ctx) => { const url = 'http://localhost'; const { fixture } = ctx; }",
+    });
+
+    await resolver.resolveHookFixtures(hook);
+
+    expect(context.fixture).toBe('fixture');
+  });
+
+  it('does not collect named context destructuring from nested functions', async () => {
+    const context: Record<string, any> = {};
+    const fixtures = normalizeFixtures({
+      beforeValue: 'before',
+      arrowCleanupValue: 'arrow cleanup',
+      functionCleanupValue: 'function cleanup',
+    } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+    const hook = Object.assign(() => {}, {
+      toString: () =>
+        '(ctx) => { if (true) { const { beforeValue } = ctx; } const cleanup = (ctx) => { const { arrowCleanupValue } = ctx; }; return function (ctx) { const { functionCleanupValue } = ctx; }; }',
+    });
+
+    await resolver.resolveHookFixtures(hook);
+
+    expect(context).toEqual({ beforeValue: 'before' });
+  });
+
+  it('parses balanced named context destructuring', async () => {
+    const context: Record<string, any> = {};
+    const fixtures = normalizeFixtures({
+      options: { baseURL: 'http://localhost' },
+      settings: { mode: 'fixture' },
+      page: 'page',
+    } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+    const hook = Object.assign(() => {}, {
+      toString: () =>
+        "(ctx) => { const { options: { baseURL }, settings = { mode: 'default' }, page } = ctx; }",
+    });
+
+    await resolver.resolveHookFixtures(hook);
+
+    expect(context).toEqual({
+      options: { baseURL: 'http://localhost' },
+      settings: { mode: 'fixture' },
+      page: 'page',
+    });
   });
 
   it('activates auto and requested test fixtures', async () => {
@@ -213,6 +267,28 @@ describe('createFixtureResolver', () => {
     await expect(
       resolver.resolveTestFixtures(({ x }: any) => x),
     ).rejects.toThrow(/Circular fixture dependency/);
+  });
+
+  it('does not retry fixtures after setup failures', async () => {
+    let setupAttempts = 0;
+    const fixtures = normalizeFixtures({
+      failing: [
+        async () => {
+          setupAttempts++;
+          throw new Error('fixture setup failed');
+        },
+      ],
+    } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, {});
+
+    await expect(
+      resolver.resolveTestFixtures(({ failing }: any) => failing),
+    ).rejects.toThrow('fixture setup failed');
+    await expect(
+      resolver.resolveHookFixtures(({ failing }: any) => failing),
+    ).resolves.toBe(false);
+
+    expect(setupAttempts).toBe(1);
   });
 
   it('registers cleanups in reverse (unshift) order', async () => {

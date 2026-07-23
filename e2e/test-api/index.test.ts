@@ -54,4 +54,22 @@ describe('Test API', () => {
       logs.find((log) => log.includes('Tests 1 passed | 3 skipped')),
     ).toBeTruthy();
   });
+
+  it('continues afterEach hooks after fixture setup fails', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/fixtureSetupHookCleanup.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: dirname(fileURLToPath(import.meta.url)),
+        },
+      },
+    });
+    await cli.exec;
+
+    expect(cli.exec.process?.exitCode).toBe(1);
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain('later afterEach ran');
+    expect(cli.stderr).toContain('fixture setup failed');
+    expect(cli.stderr).not.toContain('Circular fixture dependency');
+  });
 });

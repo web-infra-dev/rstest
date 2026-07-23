@@ -60,8 +60,10 @@ export const normalizeFixtures = (
 
 export type FixtureResolver = {
   resolveTestFixtures: (fn?: (...args: any[]) => any) => Promise<void>;
-  resolveHookFixtures: (fn: (...args: any[]) => any) => Promise<void>;
+  resolveHookFixtures: (fn: (...args: any[]) => any) => Promise<void | false>;
 };
+
+class PreviouslyFailedFixtureError extends Error {}
 
 export const createFixtureResolver = (
   test: TestCase,
@@ -76,6 +78,7 @@ export const createFixtureResolver = (
   }
 
   const doneMap = new Set<string>();
+  const failedFixtures = new Set<string>();
   const pendingMap = new Set<string>();
 
   const useFixture = async (
@@ -84,6 +87,9 @@ export const createFixtureResolver = (
   ) => {
     if (doneMap.has(name)) {
       return;
+    }
+    if (failedFixtures.has(name)) {
+      throw new PreviouslyFailedFixtureError(name);
     }
     if (pendingMap.has(name)) {
       throw new Error(`Circular fixture dependency: ${name}`);
@@ -97,35 +103,40 @@ export const createFixtureResolver = (
     }
 
     pendingMap.add(name);
-
-    if (deps?.length) {
-      for (const dep of deps) {
-        await useFixture(dep, test.fixtures![dep]!);
+    try {
+      if (deps?.length) {
+        for (const dep of deps) {
+          await useFixture(dep, test.fixtures![dep]!);
+        }
       }
+
+      // This API behavior follows Vitest & Playwright
+      // but why not return cleanup function?
+      await new Promise<void>((fixtureResolve, fixtureReject) => {
+        let useDone: (() => void) | undefined;
+        const block = Promise.resolve().then(() =>
+          fixtureValue(context, async (value: any) => {
+            context[name] = value;
+            cleanups.unshift(() => {
+              useDone?.();
+              return block;
+            });
+            fixtureResolve();
+            return new Promise<void>((useFnResolve) => {
+              useDone = useFnResolve;
+            });
+          }),
+        );
+        block.catch(fixtureReject);
+      });
+
+      doneMap.add(name);
+    } catch (error) {
+      failedFixtures.add(name);
+      throw error;
+    } finally {
+      pendingMap.delete(name);
     }
-
-    // This API behavior follows Vitest & Playwright
-    // but why not return cleanup function?
-    await new Promise<void>((fixtureResolve, fixtureReject) => {
-      let useDone: (() => void) | undefined;
-      const block = Promise.resolve().then(() =>
-        fixtureValue(context, async (value: any) => {
-          context[name] = value;
-          cleanups.unshift(() => {
-            useDone?.();
-            return block;
-          });
-          fixtureResolve();
-          return new Promise<void>((useFnResolve) => {
-            useDone = useFnResolve;
-          });
-        }),
-      );
-      block.catch(fixtureReject);
-    });
-
-    doneMap.add(name);
-    pendingMap.delete(name);
   };
 
   const resolveFixtureNames = async (
@@ -146,8 +157,17 @@ export const createFixtureResolver = (
   return {
     resolveTestFixtures: (fn) =>
       resolveFixtureNames(fn ? getFixtureUsedProps(fn) : [], true),
-    resolveHookFixtures: (fn) =>
-      resolveFixtureNames(getFixtureUsedProps(fn, true), false),
+    resolveHookFixtures: async (fn) => {
+      try {
+        await resolveFixtureNames(getFixtureUsedProps(fn, true), false);
+      } catch (error) {
+        if (error instanceof PreviouslyFailedFixtureError) {
+          return false;
+        }
+        throw error;
+      }
+      return undefined;
+    },
   };
 };
 
@@ -251,6 +271,157 @@ function getDestructuredFixtureProps(param: string): string[] | undefined {
   return props;
 }
 
+function findClosingDelimiter(
+  text: string,
+  openingIndex: number,
+  opening: string,
+  closing: string,
+): number | undefined {
+  let depth = 0;
+  for (let index = openingIndex; index < text.length; index++) {
+    if (text[index] === opening) {
+      depth++;
+    } else if (text[index] === closing) {
+      depth--;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return undefined;
+}
+
+function skipWhitespace(text: string, start: number): number {
+  let index = start;
+  while (index < text.length && /\s/.test(text[index]!)) {
+    index++;
+  }
+  return index;
+}
+
+function getNestedFunctionRanges(
+  text: string,
+  bodyStart: number,
+  bodyEnd: number,
+): [number, number][] {
+  const ranges: [number, number][] = [];
+  const addBodyRange = (openingIndex: number) => {
+    const closingIndex = findClosingDelimiter(text, openingIndex, '{', '}');
+    if (closingIndex !== undefined && closingIndex <= bodyEnd) {
+      ranges.push([openingIndex, closingIndex]);
+      return closingIndex;
+    }
+    return openingIndex;
+  };
+
+  const arrowPattern = /=>\s*\{/g;
+  arrowPattern.lastIndex = bodyStart + 1;
+  let arrowMatch: RegExpExecArray | null;
+  while ((arrowMatch = arrowPattern.exec(text))) {
+    if (arrowMatch.index >= bodyEnd) {
+      break;
+    }
+    const openingIndex = arrowMatch.index + arrowMatch[0].lastIndexOf('{');
+    arrowPattern.lastIndex = addBodyRange(openingIndex) + 1;
+  }
+
+  const functionPattern = /\bfunction\b/g;
+  functionPattern.lastIndex = bodyStart + 1;
+  let functionMatch: RegExpExecArray | null;
+  while ((functionMatch = functionPattern.exec(text))) {
+    if (functionMatch.index >= bodyEnd) {
+      break;
+    }
+    let cursor = skipWhitespace(
+      text,
+      functionMatch.index + functionMatch[0].length,
+    );
+    if (text[cursor] === '*') {
+      cursor = skipWhitespace(text, cursor + 1);
+    }
+    const nameMatch = /^[$A-Z_a-z][$\w]*/.exec(text.slice(cursor));
+    if (nameMatch) {
+      cursor = skipWhitespace(text, cursor + nameMatch[0].length);
+    }
+    if (text[cursor] !== '(') {
+      continue;
+    }
+    const paramsEnd = findClosingDelimiter(text, cursor, '(', ')');
+    if (paramsEnd === undefined) {
+      continue;
+    }
+    const openingIndex = skipWhitespace(text, paramsEnd + 1);
+    if (text[openingIndex] === '{') {
+      functionPattern.lastIndex = addBodyRange(openingIndex) + 1;
+    }
+  }
+
+  return ranges;
+}
+
+function getNamedContextFixtureProps(
+  text: string,
+  param: string,
+  signatureEnd: number,
+): string[] {
+  let bodyStart = skipWhitespace(text, signatureEnd);
+  if (text.startsWith('=>', bodyStart)) {
+    bodyStart = skipWhitespace(text, bodyStart + 2);
+  }
+  if (text[bodyStart] !== '{') {
+    return [];
+  }
+  const bodyEnd = findClosingDelimiter(text, bodyStart, '{', '}');
+  if (bodyEnd === undefined) {
+    return [];
+  }
+
+  const nestedFunctionRanges = getNestedFunctionRanges(
+    text,
+    bodyStart,
+    bodyEnd,
+  );
+  const escapedParam = param.replaceAll('$', '\\$');
+  const assignmentPattern = new RegExp(`^\\s*=\\s*${escapedParam}(?![$\\w])`);
+  const declarationPattern = /\b(?:const|let|var)\s*\{/g;
+  declarationPattern.lastIndex = bodyStart + 1;
+  const props = new Set<string>();
+
+  let declarationMatch: RegExpExecArray | null;
+  while ((declarationMatch = declarationPattern.exec(text))) {
+    if (declarationMatch.index >= bodyEnd) {
+      break;
+    }
+    const declarationIndex = declarationMatch.index;
+    const nestedRange = nestedFunctionRanges.find(
+      ([start, end]) => declarationIndex > start && declarationIndex < end,
+    );
+    if (nestedRange) {
+      declarationPattern.lastIndex = nestedRange[1] + 1;
+      continue;
+    }
+
+    const openingIndex =
+      declarationIndex + declarationMatch[0].lastIndexOf('{');
+    const closingIndex = findClosingDelimiter(text, openingIndex, '{', '}');
+    if (closingIndex === undefined || closingIndex > bodyEnd) {
+      break;
+    }
+    declarationPattern.lastIndex = closingIndex + 1;
+    if (!assignmentPattern.test(text.slice(closingIndex + 1, bodyEnd + 1))) {
+      continue;
+    }
+
+    for (const prop of getDestructuredFixtureProps(
+      text.slice(openingIndex, closingIndex + 1),
+    ) ?? []) {
+      props.add(prop);
+    }
+  }
+
+  return [...props];
+}
+
 /**
  * This method is modified based on source found in
  * https://github.com/microsoft/playwright/blob/3584e722237488c07dd23bbf12966f5509bf25c6/packages/playwright/src/common/fixtures.ts#L272
@@ -274,7 +445,7 @@ function getFixtureUsedProps(
   fn: (...args: any[]) => any,
   allowNamedContext = false,
 ): string[] {
-  const text = filterOutComments(fn.toString()).trim();
+  const text = filterOutComments(filterOutStrings(fn.toString())).trim();
   const parenthesizedMatch =
     /^(?:async\s+)?(?:function(?:\s+[$A-Z_a-z][$\w]*)?\s*|[$A-Z_a-z][$\w]*\s*)?\(([^)]*)\)/.exec(
       text,
@@ -297,24 +468,17 @@ function getFixtureUsedProps(
   }
 
   if (/^[$A-Z_a-z][$\w]*$/.test(firstParam ?? '')) {
-    const escapedParam = firstParam!.replaceAll('$', '\\$');
-    const destructurePattern = new RegExp(
-      `(?:const|let|var)\\s*\\{([^}]*)\\}\\s*=\\s*${escapedParam}(?![$\\w])`,
-      'g',
-    );
-    const transformedProps = new Set<string>();
-    let hasTransformedDestructure = false;
-    for (const match of filterOutStrings(text).matchAll(destructurePattern)) {
-      const props = getDestructuredFixtureProps(`{${match[1]}}`);
-      if (props) {
-        hasTransformedDestructure = true;
-        for (const prop of props) {
-          transformedProps.add(prop);
-        }
+    const signatureEnd =
+      parenthesizedMatch?.[0].length ?? singleParamMatch?.[0].length;
+    if (signatureEnd !== undefined) {
+      const transformedProps = getNamedContextFixtureProps(
+        text,
+        firstParam!,
+        signatureEnd,
+      );
+      if (transformedProps.length) {
+        return transformedProps;
       }
-    }
-    if (hasTransformedDestructure) {
-      return [...transformedProps];
     }
     if (allowNamedContext) {
       return [];

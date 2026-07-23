@@ -295,7 +295,10 @@ export class TestRunner {
       test.context.task.result = result;
       try {
         for (const fn of afterEachFns) {
-          await fixtureResolver.resolveHookFixtures(fn);
+          const shouldRun = await fixtureResolver.resolveHookFixtures(fn);
+          if (shouldRun === false) {
+            continue;
+          }
           await fn(test.context);
         }
       } catch (error) {
