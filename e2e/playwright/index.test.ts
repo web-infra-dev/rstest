@@ -160,6 +160,22 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_FAILURE_DIAGNOSTICS_OK');
   });
 
+  it('cleans up request and serve fixtures after another fixture fails', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'cleanup-failure.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expect(cli.log).toContain('user cleanup failed');
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CLEANUP_OK');
+  });
+
   it('does not write retained traces for passing tests', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
