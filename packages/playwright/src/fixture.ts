@@ -1122,15 +1122,26 @@ const playwrightFixtures = {
 };
 
 type RstestTest<ExtraContext = object> = TestAPIs<ExtraContext>;
+
 type TestCallback<ExtraContext> = (
   context: TestContext & ExtraContext,
 ) => void | Promise<void>;
+
+type BeforeEachCallback<ExtraContext> = (
+  context: TestContext & ExtraContext,
+) =>
+  | void
+  | TestCallback<ExtraContext>
+  | Promise<void | TestCallback<ExtraContext>>;
+
 type TestForCallback<ExtraContext> = (
   param: unknown,
   context: TestContext & ExtraContext,
 ) => void | Promise<void>;
+
 type RstestTestAPI<ExtraContext> =
   RstestTest<ExtraContext> | TestAPIs<ExtraContext>;
+
 type CallableTest = (
   description: string,
   arg2?: unknown,
@@ -1376,10 +1387,16 @@ export type PlaywrightTest<ExtraContext = PlaywrightFixture> =
     extend: <T extends Record<string, any> = object>(
       fixtures: PlaywrightFixtures<T, ExtraContext>,
     ) => PlaywrightTest<MergeContext<ExtraContext, T>>;
-    afterAll: typeof rstestAfterAll;
-    afterEach: typeof rstestAfterEach;
-    beforeAll: typeof rstestBeforeAll;
-    beforeEach: typeof rstestBeforeEach;
+    afterAll: RstestAfterAll;
+    afterEach: <HookContext = ExtraContext>(
+      fn: TestCallback<HookContext>,
+      timeout?: number,
+    ) => void;
+    beforeAll: RstestBeforeAll;
+    beforeEach: <HookContext = ExtraContext>(
+      fn: BeforeEachCallback<HookContext>,
+      timeout?: number,
+    ) => void;
     describe: typeof rstestDescribe;
     fail: PlaywrightTestBase<ExtraContext>;
   };

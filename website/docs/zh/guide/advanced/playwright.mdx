@@ -141,7 +141,7 @@ describe('dashboard', () => {
 });
 ```
 
-Hook 的作用域是所在的 `describe` block，而不是某个 extended test 对象。因此，该 block 内的每个测试都必须提供 hook 请求的 fixture。`afterEach` 和 `beforeEach` 返回的 cleanup 函数同样支持这一行为。在一次 test attempt 内，hooks 与测试函数共享 fixture 实例，最后按 setup 的反序执行 teardown。
+Hook 的作用域是所在的 `describe` block，而不是某个 extended test 对象。因此，该 block 内的每个测试都必须提供 hook 请求的 fixture；否则，Rstest 会在调用 hook 前让该测试失败，并报告缺失的 fixture。`afterEach` 和 `beforeEach` 返回的 cleanup 函数同样支持这一行为。在一次 test attempt 内，hooks 与测试函数共享 fixture 实例，最后按 setup 的反序执行 teardown。
 
 请在 hook 参数中通过直接对象解构声明 fixture 依赖。在 hook 函数体内解构 named context 不会请求 fixture。使用 fixture 的 callback 不支持 rest property 和默认值。
 

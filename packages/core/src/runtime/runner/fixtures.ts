@@ -75,6 +75,7 @@ const fixturePropsCache = new WeakMap<
   FixtureCallback,
   { namedContext?: string[]; destructuredContext?: string[] }
 >();
+const functionPropertyNames = new Set(Object.getOwnPropertyNames(() => {}));
 
 export function setFixtureCallbackSource(
   callback: (...args: any[]) => any,
@@ -88,14 +89,7 @@ export const createFixtureResolver = (
   context: Record<string, any>,
   cleanups: (() => Promise<void>)[] = [],
 ): FixtureResolver => {
-  if (!test.fixtures) {
-    return {
-      cancelPendingFixtures: () => undefined,
-      resolveTestFixtures: () => Promise.resolve(),
-      resolveHookFixtures: () => Promise.resolve({ status: 'resolved' }),
-    };
-  }
-
+  const fixtures = test.fixtures ?? {};
   const doneMap = new Set<string>();
   const cancelledFixtures = new Set<string>();
   const failedFixtures = new Set<string>();
@@ -128,7 +122,7 @@ export const createFixtureResolver = (
     try {
       if (deps?.length) {
         for (const dep of deps) {
-          await useFixture(dep, test.fixtures![dep]!);
+          await useFixture(dep, fixtures[dep]!);
         }
       }
 
@@ -185,7 +179,7 @@ export const createFixtureResolver = (
     usedKeys: string[],
     includeAuto: boolean,
   ) => {
-    for (const [name, params] of Object.entries(test.fixtures ?? {})) {
+    for (const [name, params] of Object.entries(fixtures)) {
       const shouldResolve =
         usedKeys.includes(name) || (includeAuto && params.options?.auto);
       if (!shouldResolve) {
@@ -212,10 +206,23 @@ export const createFixtureResolver = (
       return { teardownStarted };
     },
     resolveTestFixtures: (fn) =>
-      resolveFixtureNames(fn ? getFixtureUsedProps(fn) : [], true),
+      test.fixtures
+        ? resolveFixtureNames(fn ? getFixtureUsedProps(fn) : [], true)
+        : Promise.resolve(),
     resolveHookFixtures: async (fn) => {
       try {
-        await resolveFixtureNames(getFixtureUsedProps(fn, true), false);
+        const usedKeys = getFixtureUsedProps(fn, true);
+        const missingFixture = usedKeys.find(
+          (name) =>
+            !Object.hasOwn(fixtures, name) &&
+            (!Object.hasOwn(context, name) || functionPropertyNames.has(name)),
+        );
+        if (missingFixture) {
+          throw new Error(
+            `Hook has unknown fixture "${missingFixture}". Every test in the hook's suite must provide it.`,
+          );
+        }
+        await resolveFixtureNames(usedKeys, false);
       } catch (error) {
         if (error instanceof PreviouslyFailedFixtureError) {
           return { status: 'skipped' };
