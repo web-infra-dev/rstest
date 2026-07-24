@@ -85,6 +85,14 @@ const fixtures: Record<string, { code: string; hits: number }> = {
     code: `const os = require('node:os');\nconst { type: t } = os;\nexport const k = t();`,
     hits: 1,
   },
+  "platform through await import('node:process')": {
+    code: `export const p = async () => {\n  const proc = await import('node:process');\n  return proc.platform;\n};`,
+    hits: 1,
+  },
+  "platform() destructured from await import('node:os')": {
+    code: `export const p = async () => {\n  const { platform } = await import('node:os');\n  return platform();\n};`,
+    hits: 1,
+  },
   "named import of platform from 'node:os'": {
     code: `import { platform } from 'node:os';\nexport const p = platform();`,
     hits: 1,

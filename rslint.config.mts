@@ -94,17 +94,21 @@ export const osAgnosticTests = {
 
     const isOsRef = (node: IdentNode) => identBoundTo(node, osNames);
 
-    // Which provider a `require('node:os')` / `require('node:process')` call
-    // resolves to, so the CommonJS binding form is tracked like an import.
-    const requiredModule = (node: {
+    // Which provider a `require('node:os')` or `import('node:os')` load
+    // resolves to, so both module-loading forms are tracked like a static
+    // import. `await import(...)` is handled by unwrapping in providerOf.
+    const loadedModule = (node: {
       type?: string;
       callee?: { name?: string };
       arguments?: Array<{ value?: unknown }>;
+      source?: { value?: unknown };
     }) => {
-      if (node.type !== 'CallExpression' || node.callee?.name !== 'require') {
-        return null;
-      }
-      const source = node.arguments?.[0]?.value;
+      const source =
+        node.type === 'ImportExpression'
+          ? node.source?.value
+          : node.type === 'CallExpression' && node.callee?.name === 'require'
+            ? node.arguments?.[0]?.value
+            : undefined;
       if (source === 'os' || source === 'node:os') return 'os' as const;
       if (source === 'process' || source === 'node:process') {
         return 'process' as const;
@@ -113,11 +117,16 @@ export const osAgnosticTests = {
     };
 
     // Which provider an initializer resolves to: a `process`/`os` reference
-    // (bare, aliased, or global) or a `require()` of the module.
+    // (bare, aliased, or global), or a `require()` / (`await`) `import()` of
+    // the module.
     const providerOf = (node: MemberNode | IdentNode) => {
-      if (isProcessRef(node)) return 'process' as const;
-      if (isOsRef(node)) return 'os' as const;
-      return requiredModule(node);
+      const load =
+        node.type === 'AwaitExpression'
+          ? (node as { argument?: MemberNode }).argument
+          : node;
+      if (load && isProcessRef(load)) return 'process' as const;
+      if (load && isOsRef(load)) return 'os' as const;
+      return load ? loadedModule(load) : null;
     };
 
     return {
