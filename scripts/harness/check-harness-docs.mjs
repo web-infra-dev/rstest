@@ -39,13 +39,13 @@
 // everything is committed). AGENTS.md is the content source; CLAUDE.md is only
 // checked structurally (C1).
 //
-// Allowlist: scripts/check-harness-docs.allow.json — `{file, token, reason}`
-// entries suppress a violation whose doc path and offending token both match.
-// Every entry must carry a reason; review entries in PR like code.
+// Allowlist: scripts/harness/check-harness-docs.allow.json — `{file, token,
+// reason}` entries suppress a violation whose doc path and offending token both
+// match. Every entry must carry a reason; review entries in PR like code.
 //
 // Usage:
-//   node scripts/check-harness-docs.mjs          # human output, exit 1 on drift
-//   node scripts/check-harness-docs.mjs --json   # machine-readable violations
+//   node scripts/harness/check-harness-docs.mjs          # human output, exit 1 on drift
+//   node scripts/harness/check-harness-docs.mjs --json   # machine-readable violations
 //
 // Non-goals: no prose/behavioral checking, no signature checking (api-doc-sync
 // owns that), no auto-fix.
@@ -313,7 +313,10 @@ function parsedDoc(doc) {
 // Violations + allowlist.
 // ---------------------------------------------------------------------------
 
-const allowlistPath = join(repoRoot, 'scripts/check-harness-docs.allow.json');
+const allowlistPath = join(
+  repoRoot,
+  'scripts/harness/check-harness-docs.allow.json',
+);
 const allowlist = existsSync(allowlistPath)
   ? JSON.parse(readFileSync(allowlistPath, 'utf8'))
   : [];
