@@ -452,7 +452,7 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
 
 Hook 必须直接在 callback 参数中声明 fixture 依赖，例如 `beforeEach(({ db }) => {})`。`beforeEach((context) => {})` 这类 named hook context 仍可用于访问常规 `TestContext`，但在函数体内解构 `context` 不会初始化惰性 fixture。
 
-Core hooks 是 suite 级 API，因此需要显式传入 fixture context 类型，并在使用对应 extended test API 的 suite 内注册 hook：
+Core hooks 是 suite 级 API，因此需要显式传入 fixture context 类型，并在使用对应 extended test API 的 suite 内注册 hook。如果 suite 中的某个测试没有提供 hook 请求的 fixture，Rstest 会在调用 hook 前让该测试失败，并报告缺失的 fixture：
 
 ```ts
 import { beforeEach, describe, test } from '@rstest/core';

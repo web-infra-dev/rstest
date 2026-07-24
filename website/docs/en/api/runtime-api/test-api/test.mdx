@@ -452,7 +452,7 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
 
 Declare hook fixture dependencies directly in the callback parameter, for example `beforeEach(({ db }) => {})`. A named hook context such as `beforeEach((context) => {})` remains valid for accessing the regular `TestContext`, but destructuring `context` inside the function body does not initialize lazy fixtures.
 
-Core hooks are suite-level APIs, so provide the fixture context type explicitly and register the hook in a suite whose tests use the matching extended test API:
+Core hooks are suite-level APIs, so provide the fixture context type explicitly and register the hook in a suite whose tests use the matching extended test API. If a test in the suite does not provide a requested fixture, Rstest fails that test before invoking the hook and reports the missing fixture:
 
 ```ts
 import { beforeEach, describe, test } from '@rstest/core';
