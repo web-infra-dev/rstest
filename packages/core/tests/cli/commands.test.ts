@@ -16,7 +16,7 @@ import {
   validateRelatedCliOptions,
   valueTakingOptions,
 } from '../../src/cli/commands';
-import type { RstestRunner } from '../../src/types';
+import type { ResolvedRstest } from '../../src/types';
 import { logger } from '../../src/utils';
 
 const renderHelp = (argv: string[]): string => {
@@ -862,7 +862,7 @@ describe('buildResolvedRunner merge-reports short-circuit', () => {
         normalizedConfig: { coverage: { changed: 'HEAD' } },
         projects: [],
       };
-      return { context } as unknown as RstestRunner;
+      return { context } as unknown as ResolvedRstest;
     };
     return { createRstest, calls };
   };

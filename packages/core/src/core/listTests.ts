@@ -231,6 +231,7 @@ const collectNodeTests = async ({
         ]);
 
         const { success, errors } = await runGlobalSetup({
+          scope: context,
           globalSetupEntries,
           assetFiles,
           sourceMaps,
@@ -272,7 +273,7 @@ const collectNodeTests = async ({
       return (await resource?.getSourceMaps([name]))?.[name];
     },
     close: async () => {
-      await runGlobalTeardown();
+      await runGlobalTeardown(context);
       await closeServer();
       await pool.close();
     },

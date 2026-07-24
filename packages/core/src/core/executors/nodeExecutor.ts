@@ -177,11 +177,19 @@ export function createNodeExecutor(
     browserProjects,
     nodeProjects,
     isWatchMode,
+    keepWorkersAcrossCycles,
     getTraceRun,
   }: {
     browserProjects: ProjectContext[];
     nodeProjects: ProjectContext[];
     isWatchMode: boolean;
+    /**
+     * Size the worker pool for repeated cycles (the CPU-derived recommendation)
+     * instead of the one-shot entry count, so kept workers survive between
+     * cycles. Set by every caller whose pool outlives a single cycle — watch
+     * mode and the reusable test runner.
+     */
+    keepWorkersAcrossCycles: boolean;
     /** Returns the cycle's active trace buffer (reallocated by core each cycle). */
     getTraceRun: () => TraceRun;
   },
@@ -334,7 +342,7 @@ export function createNodeExecutor(
       ).length;
     };
 
-    const recommendWorkerCount = isWatchMode
+    const recommendWorkerCount = keepWorkersAcrossCycles
       ? Number.POSITIVE_INFINITY
       : getRecommendWorkerCount();
 
@@ -452,6 +460,7 @@ export function createNodeExecutor(
               'host',
               () =>
                 runGlobalSetup({
+                  scope: context,
                   globalSetupEntries,
                   assetFiles,
                   sourceMaps,
@@ -583,7 +592,7 @@ export function createNodeExecutor(
       return;
     }
     didRunGlobalTeardown = true;
-    await runGlobalTeardown();
+    await runGlobalTeardown(context);
     // Settle an in-flight resource start first: a close racing startup (e.g. a
     // config-change restart during watch boot) must tear down the server and
     // pool that start is about to produce, not skip them.

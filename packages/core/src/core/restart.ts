@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { ChokidarOptions } from 'chokidar';
 import { type CommonOptions, runTestCommand } from '../cli/commands';
-import type { RstestRunner } from '../types';
+import type { ResolvedRstest } from '../types';
 import { color, isColorSupported, isTTY, logger } from '../utils';
 import { createChokidar } from '../utils/watchFiles';
 
@@ -82,7 +82,7 @@ export async function watchFilesForRestart({
 }: {
   options: CommonOptions;
   filters: Array<string | number>;
-  rstest: RstestRunner;
+  rstest: ResolvedRstest;
   watchOptions?: ChokidarOptions;
   cwd?: string;
 }): Promise<void> {

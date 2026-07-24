@@ -130,6 +130,49 @@ const result = await rstest.run({
 });
 ```
 
+### rstest.createRunner
+
+Create a reusable [`RstestRunner`](#rstestrunner): compile the selected test set **once**, then execute it as many times as needed over a single Rsbuild dev server and worker pool. Reach for it when the same test set is executed repeatedly — the compile and the pool startup are paid once instead of per run.
+
+`options` are build-scoped and fixed for the runner's lifetime; per-execution selection and control go to [`runner.run`](#runnerrun). The caller owns the runner's lifetime — always `close()` it, or the dev server and worker pool stay alive.
+
+- **Type:**
+
+```ts
+function createRunner(options?: CreateRunnerOptions): Promise<RstestRunner>;
+
+interface CreateRunnerOptions {
+  filters?: string[];
+  filterMode?: 'fuzzy' | 'exact';
+  related?: boolean;
+  changed?: boolean | string;
+  shard?: string | { index: number; count: number };
+  project?: string[];
+}
+```
+
+`CreateRunnerOptions` is the build-scoped half of [`RunOptions`](#runoptions) — the fields that decide _which_ test files get compiled, with the same meanings documented there. `related` and `changed` resolve their git state once, at creation.
+
+- **Example:** build once, run many
+
+```ts
+const runner = await rstest.createRunner({ filters: ['math'] });
+try {
+  const { testFiles } = await runner.build();
+  console.log(`compiled ${testFiles.length} test files`);
+
+  const first = await runner.run();
+  const second = await runner.run({ testNamePattern: 'adds' });
+  console.log(first.ok, second.ok);
+} finally {
+  await runner.close();
+}
+```
+
+:::warning Browser mode not supported yet
+`createRunner()` rejects when the resolved config has any browser-mode project. Run browser-mode tests with [`run()`](#rstestrun), which builds and tears down per call, or use the CLI `rstest run`.
+:::
+
 ### rstest.watch
 
 Start a watch session: run the matching tests, then re-run them as files change. The promise resolves once watching starts — call `close()` on the returned handle to stop and release the dev server and worker pool.
@@ -230,9 +273,76 @@ if (!result.ok) {
 // (missing blob directory, corrupt blob file).
 ```
 
-:::tip No `close()` to call
-There is no `close()` on the instance. Each `run()` builds and tears down its own worker pool and Rsbuild server, so an instance holds no resources between calls. A [`watch`](#rstestwatch) session is the exception — it keeps a dev server alive, so call `close()` on the returned watcher when you're done.
+:::tip No `close()` on the instance
+There is no `close()` on the instance itself. Each `run()` builds and tears down its own worker pool and Rsbuild server, so an instance holds no resources between calls. The handles that _do_ hold resources carry their own `close()`: a [`watch`](#rstestwatch) session and a [`createRunner`](#rstestcreaterunner) runner both keep a dev server and worker pool alive until you close them.
 :::
+
+## RstestRunner
+
+The object returned by [`rstest.createRunner`](#rstestcreaterunner). It owns one compiled test set plus the resources that execute it, until you [`close()`](#runnerclose) it.
+
+Three semantics distinguish a runner from the one-shot [`rstest.run`](#rstestrun):
+
+- **Every run starts from a clean runtime.** Each `run()` gets a fresh module registry and fresh test / snapshot / result state, so module-level state, mocks, and results from one run never leak into the next. This is a contract, not an option — it holds under `isolate: false` too, where a worker is kept alive across runs.
+- **`globalSetup` runs once per runner**, not once per run; its teardown runs in `close()`. A failing teardown therefore rejects `close()` rather than landing in the last run's result.
+- **Runs are serial.** Calling `run()` while another `run()` is in flight rejects instead of queueing, as does `build()`.
+
+A runner also carries `context`, the same read-only [`RstestInstanceContext`](#rstestcontext) projection as `rstest.context`. It is resolved once at creation and stays fixed as later runs execute.
+
+### runner.build
+
+Compile the test set and start the run resources (Rsbuild dev server + worker pool), resolving the list of compiled test files. It is the explicit form of what the first [`run()`](#runnerrun) does implicitly — call it to separate compilation from execution, or to learn which test files the runner will execute before running any.
+
+- **Type:**
+
+```ts
+function build(): Promise<RunnerBuildResult>;
+
+interface RunnerBuildResult {
+  testFiles: string[];
+}
+```
+
+- `testFiles`: Absolute paths of the test files compiled into this build.
+
+It takes no options: the compiled set is decided by [`createRunner`](#rstestcreaterunner) and fixed for the runner's lifetime. `build()` is re-entrant, but calling it again — or concurrently — resolves that same build instead of recompiling, so source edits made after the runner was created are not picked up. Create a new runner for a new build.
+
+`build()` **rejects** on a compile error. That is the deliberate contrast with [`run()`](#runnerrun), which contains every failure in its result; a failed build is final for the runner, so later `build()` and `run()` calls report the same error.
+
+### runner.run
+
+Execute the built set once, building first if it never was. Resolves a [`TestRunResult`](#testrunresult) covering only this run — results never accumulate across runs.
+
+- **Type:**
+
+```ts
+function run(options?: RunnerRunOptions): Promise<TestRunResult>;
+
+interface RunnerRunOptions {
+  filters?: string[];
+  filterMode?: 'fuzzy' | 'exact';
+  testNamePattern?: RegExp | string;
+  update?: boolean;
+  bail?: number | boolean;
+  passWithNoTests?: boolean;
+}
+```
+
+`RunnerRunOptions` is the run-scoped half of [`RunOptions`](#runoptions), with the same meanings. Every field applies to this one execution and is restored afterwards, so it never leaks into the next run. `filters` can only **narrow** within the built set: a filter matching no compiled test file runs nothing rather than widening the build.
+
+Like [`rstest.run`](#rstestrun), it **never rejects for a failing run** — test failures, worker crashes, and a failing implicit build all come back as `ok: false`, with the errors in `unhandledErrors`. It rejects only on misuse: a run overlapping another run, or a closed runner.
+
+### runner.close
+
+Run the `globalSetup` teardown, release the worker pool and dev server, and restore the process globals (`process.env`, `process.exitCode`) snapshotted at creation. It waits for an in-flight run or build first, and is idempotent — a second call resolves the same promise. The runner cannot be reused afterwards: `build()` and `run()` reject once it is closed.
+
+- **Type:**
+
+```ts
+function close(): Promise<void>;
+```
+
+`close()` **rejects** when a `globalSetup` teardown failed. That is the only failure a runner reports outside a run — the process globals are restored and every resource is released either way.
 
 ## RunOptions
 
@@ -263,6 +373,8 @@ interface RunOptions {
 - `shard`: Run only a slice of files, as `'<index>/<count>'` (1-based) or `{ index, count }`.
 - `project`: Run only the named projects (`*` wildcards, `!` negation).
 - `passWithNoTests`: Treat a run that matched no files as a pass instead of a failure.
+
+`RunOptions` is the union of the two scopes a runner keeps apart: the build-scoped [`CreateRunnerOptions`](#rstestcreaterunner) (`filters`, `filterMode`, `related`, `changed`, `shard`, `project` — what gets compiled) and the run-scoped [`RunnerRunOptions`](#runnerrun) (`filters`, `filterMode`, `testNamePattern`, `update`, `bail`, `passWithNoTests` — what runs, and how). A one-shot `run()` compiles and executes in the same call, so it takes both at once.
 
 ## runCLI
 

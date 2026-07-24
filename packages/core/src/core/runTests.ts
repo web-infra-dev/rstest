@@ -14,7 +14,7 @@ import {
 } from '../utils';
 import {
   finalizeRunCycle,
-  notifyReportersOnTestRunStart,
+  runAndFinalizeCycle,
   runLifecycleStep,
 } from './finalizeRun';
 import { loadBrowserExecutor } from './browser/loader';
@@ -139,6 +139,8 @@ export async function runTests(
     browserProjects,
     nodeProjects,
     isWatchMode,
+    // Watch reuses one pool across every rerun; a one-shot run does not.
+    keepWorkersAcrossCycles: isWatchMode,
     getTraceRun: () => activeTraceRun,
   });
   await nodeExecutor.init();
@@ -231,7 +233,9 @@ export async function runTests(
         // so `NodeExecutor.close()` alone cannot drain the browser stage's
         // setups. A second drain is a no-op, and it must run even when an
         // executor close throws.
-        await runLifecycleStep('global teardown', () => runGlobalTeardown());
+        await runLifecycleStep('global teardown', () =>
+          runGlobalTeardown(context),
+        );
       }
     };
 
@@ -268,7 +272,7 @@ export async function runTests(
             `Rstest exited unexpectedly with code ${code}, terminating test run.`,
           ),
         );
-        runGlobalTeardown().catch((error) => {
+        runGlobalTeardown(context).catch((error) => {
           logger.log(color.red(`Error in global teardown: ${error}`));
         });
         process.exitCode = 1;
@@ -311,28 +315,19 @@ export async function runTests(
         );
       }
 
-      await notifyReportersOnTestRunStart(context);
-      // Settle every cycle before propagating a failure: a fail-fast
-      // `Promise.all` would reach the `finally` teardown while a sibling
-      // executor is still mid-cycle, truncating its tests and firing global
-      // teardown early. The re-await unwraps the already-settled promises,
-      // rejecting with the first failure in executor order.
-      const cyclePromises = executors.map((executor) =>
-        executor === browserExecutor && browserStage.errors.length
-          ? Promise.resolve(globalSetupFailureOutcome(browserStage.errors))
-          : executor.runCycle({
-              buildId: 1,
-              mode: 'all',
-              updateSnapshot: snapshotManager.options.updateSnapshot,
-              env: browserStage.env,
-              onTraceEvents: forwardBrowserTraceEvents,
-            }),
-      );
-      await Promise.allSettled(cyclePromises);
-      const outcomes = await Promise.all(cyclePromises);
-
-      await finalizeRunCycle(context, {
-        outcomes,
+      await runAndFinalizeCycle(context, {
+        startCycles: () =>
+          executors.map((executor) =>
+            executor === browserExecutor && browserStage.errors.length
+              ? Promise.resolve(globalSetupFailureOutcome(browserStage.errors))
+              : executor.runCycle({
+                  buildId: 1,
+                  mode: 'all',
+                  updateSnapshot: snapshotManager.options.updateSnapshot,
+                  env: browserStage.env,
+                  onTraceEvents: forwardBrowserTraceEvents,
+                }),
+          ),
         mode: 'all',
         isWatchMode: false,
         coverageProvider,
@@ -394,16 +389,16 @@ export async function runTests(
     buildStart?: number;
   } = {}) => {
     buildId += 1;
-    await notifyReportersOnTestRunStart(context);
-    const outcome = await nodeExecutor.runCycle({
-      buildId,
-      mode,
-      fileFilters,
-      buildStart,
-      updateSnapshot: snapshotManager.options.updateSnapshot,
-    });
-    await finalizeRunCycle(context, {
-      outcomes: [outcome],
+    await runAndFinalizeCycle(context, {
+      startCycles: () => [
+        nodeExecutor.runCycle({
+          buildId,
+          mode,
+          fileFilters,
+          buildStart,
+          updateSnapshot: snapshotManager.options.updateSnapshot,
+        }),
+      ],
       mode,
       isWatchMode: true,
       coverageProvider,

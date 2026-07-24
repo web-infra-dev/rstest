@@ -2,15 +2,15 @@ import type {
   FileFilterMode,
   ListCommandOptions,
   Project,
+  ResolvedRstest,
   RstestCommand,
   RstestConfig,
-  RstestRunner,
   RstestWatchHandle,
 } from '../types';
 import { Rstest } from './rstest';
 
 /**
- * Build an internal {@link RstestRunner} for a single command + filter set. The
+ * Build an internal {@link ResolvedRstest} for a single command + filter set. The
  * public, async, instance-shaped `createRstest` (with `run`/`listTests`/
  * `close`) lives in `@rstest/core/api` and composes this factory.
  */
@@ -42,7 +42,7 @@ export function createRstestContext(
   command: RstestCommand,
   fileFilters: string[],
   fileFilterMode?: FileFilterMode,
-): RstestRunner {
+): ResolvedRstest {
   const context = new Rstest(
     {
       cwd,
@@ -62,6 +62,11 @@ export function createRstestContext(
     return runTests(context);
   };
 
+  const createTestRunner = async () => {
+    const { createTestRunner } = await import('./testRunner');
+    return createTestRunner(context);
+  };
+
   const listTests = async (options: ListCommandOptions) => {
     const { listTests } = await import('./listTests');
     return listTests(context, options);
@@ -78,6 +83,7 @@ export function createRstestContext(
   return {
     context,
     runTests,
+    createTestRunner,
     listTests,
     mergeReports,
   };

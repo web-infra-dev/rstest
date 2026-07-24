@@ -5,9 +5,9 @@ import type {
   FileFilterMode,
   ListCommandOptions,
   Project,
+  ResolvedRstest,
   RstestCommand,
   RstestConfig,
-  RstestRunner,
 } from '../types';
 import { color, determineAgent, formatError, logger } from '../utils';
 import type { CommonOptions } from './init';
@@ -537,7 +537,7 @@ const filterHelpOptions = (
     };
   });
 
-const handleUnexpectedExit = (rstest: RstestRunner | undefined, err: any) => {
+const handleUnexpectedExit = (rstest: ResolvedRstest | undefined, err: any) => {
   for (const reporter of rstest?.context.reporters || []) {
     reporter.onExit?.();
   }
@@ -749,7 +749,7 @@ export type CreateRstestContextFn = (
   command: RstestCommand,
   fileFilters: string[],
   fileFilterMode?: FileFilterMode,
-) => RstestRunner;
+) => ResolvedRstest;
 
 const resolveEffectiveCliFilters = async ({
   options,
@@ -859,7 +859,7 @@ const resolveEffectiveCliFilters = async ({
 };
 
 const resolveCoverageChangedFilters = async (
-  rstest: RstestRunner,
+  rstest: ResolvedRstest,
   seed: string[] | undefined,
 ): Promise<string[] | undefined> => {
   const { changed } = rstest.context.normalizedConfig.coverage;
@@ -894,7 +894,7 @@ const resolveCoverageChangedFilters = async (
  * `resolveCoverageChangedFilters` returns when `coverage.changed` is unset.
  */
 const applyResolvedFilters = async (
-  rstest: RstestRunner,
+  rstest: ResolvedRstest,
   resolved: Awaited<ReturnType<typeof resolveEffectiveCliFilters>>,
 ): Promise<void> => {
   const { context } = rstest;
@@ -947,7 +947,7 @@ export const buildResolvedRunner = async ({
   embedded?: boolean;
   trace?: boolean;
   filterMode?: FileFilterMode;
-}): Promise<RstestRunner> => {
+}): Promise<ResolvedRstest> => {
   // `merge-reports` only reads on-disk blob files: it has no positional filters
   // and no related/changed semantics, so skip filter resolution entirely. Going
   // through `resolveEffectiveCliFilters` would otherwise shell out to git (and
@@ -1001,7 +1001,7 @@ export const runTestCommand = async ({
   command: RstestCommand;
   cwd?: string;
 }): Promise<void> => {
-  let rstest: RstestRunner | undefined;
+  let rstest: ResolvedRstest | undefined;
   const unexpectedlyExitHandler = (err: any) => {
     handleUnexpectedExit(rstest, err);
   };

@@ -203,8 +203,9 @@ type CapturedRunState = {
   /**
    * `process.exitCode` observed at the end of the run, before the host-safe
    * guard restores it. Captures failures that only surface as a non-zero exit
-   * code (coverage thresholds/report generation, global teardown) — the CLI
-   * fails on these, so `ok` must too.
+   * code (coverage thresholds/report generation, and global teardown for a
+   * one-shot run, which tears down within the run) — the CLI fails on these, so
+   * `ok` must too.
    */
   exitCode?: number | string;
   /**
@@ -288,11 +289,17 @@ export const createResultReporter = (
  * Assemble the final {@link TestRunResult} from collected per-file results and
  * the captured run summary. `context` is the run's context (or `undefined` when
  * the run aborted before a context existed, e.g. a config load error).
+ *
+ * `passWithNoTests` defaults to the resolved config's value; a reusable runner
+ * passes its run-scoped value explicitly, because that run's config override is
+ * already restored by the time the result is assembled.
  */
 export const assembleTestRunResult = (
   files: TestFileResult[],
   captured: CapturedRunState,
   context: RstestContext | undefined,
+  passWithNoTests: boolean | undefined = context?.normalizedConfig
+    .passWithNoTests,
 ): TestRunResult => {
   const stats = computeStats(files);
 
@@ -310,7 +317,7 @@ export const assembleTestRunResult = (
     context.command !== 'watch' &&
     context.command !== 'merge-reports' &&
     files.length === 0 &&
-    !context.normalizedConfig.passWithNoTests;
+    !passWithNoTests;
 
   const ok =
     stats.tests.failed === 0 &&

@@ -54,7 +54,7 @@ export const globalSetupFailureOutcome = (
  * created only when a browser project both declares `globalSetup` and has at
  * least one test entry (the cold-start gate stays intact for everyone else).
  * Setups run host-side in the same forked worker node projects use; teardown
- * callbacks queue into the shared `runGlobalTeardown` drain.
+ * callbacks queue into this context's `runGlobalTeardown` drain.
  *
  * Known restriction: browser `modifyRstestConfig` hooks apply later (inside
  * the browser run cycle), so hook-added `globalSetup` entries or hook-added
@@ -218,6 +218,7 @@ export async function runBrowserGlobalSetupStage(
       errors: setupErrors,
       envChanges,
     } = await runGlobalSetup({
+      scope: context,
       globalSetupEntries: item.globalSetupEntries,
       assetFiles: item.assetFiles,
       sourceMaps: item.sourceMaps,

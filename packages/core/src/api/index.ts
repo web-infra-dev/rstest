@@ -20,13 +20,15 @@ import { initRstestEnv } from '../cli/prepare';
 import { mergeRstestConfig, resolveExtends } from '../config';
 import { createRstestContext } from '../core';
 import type {
+  CoreTestRunner,
   FileFilterMode,
   ListCommandOptions,
   ListCommandResult,
   NormalizedConfig,
+  ResolvedRstest,
   RstestCommand,
   RstestConfig,
-  RstestRunner,
+  RstestContext,
 } from '../types';
 import { getAbsolutePath } from '../utils';
 import {
@@ -121,15 +123,14 @@ export interface CreateRstestOptions {
 }
 
 /**
- * Per-invocation options for {@link RstestInstance.run} / `listTests`. These
- * map to the CLI's positional args + per-run flags. With `related`, the
- * positional `filters` are treated as the source files whose tests are run;
- * `changed` cannot be combined with positional `filters` (validated at run
- * time).
+ * Build-scoped selection for {@link RstestInstance.createRunner}: decides which
+ * test files get compiled. Fixed for the runner's lifetime — which is why
+ * {@link RstestRunner.build} takes no options, and why `related`/`changed`
+ * resolve their git state once, at creation.
  *
  * @experimental Subject to change until 1.0.0.
  */
-export interface RunOptions {
+export interface CreateRunnerOptions {
   /** Positional test-file filters; matched per `filterMode`. */
   filters?: string[];
 
@@ -140,14 +141,42 @@ export interface RunOptions {
    */
   filterMode?: FileFilterMode;
 
-  /** Run only tests whose full name matches (string coerced via `new RegExp`). */
-  testNamePattern?: RegExp | string;
-
   /** Treat positional `filters` as source files and run only their related tests. */
   related?: boolean;
 
   /** Derive the run set from git: `true` = working-tree + staged; a string = a `since` ref. */
   changed?: boolean | string;
+
+  /** Run only a slice of files, as `<index>/<count>` (1-based) or `{ index, count }`. */
+  shard?: string | { index: number; count: number };
+
+  /** Run only the named projects (`*` wildcards, `!` negation). */
+  project?: string[];
+}
+
+/**
+ * Run-scoped selection and control for {@link RstestRunner.run}: picks within
+ * the already-compiled test set and configures that one execution. Every field
+ * is restored afterwards, so it never leaks into the next run.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export interface RunnerRunOptions {
+  /**
+   * Narrows within the built set, matched per `filterMode`. It can only narrow:
+   * a filter matching no compiled test file runs nothing rather than widening
+   * the build.
+   */
+  filters?: string[];
+
+  /**
+   * Matching strategy for `filters`: `'fuzzy'` (default; case-insensitive
+   * substring) or `'exact'` (normalized path equality).
+   */
+  filterMode?: FileFilterMode;
+
+  /** Run only tests whose full name matches (string coerced via `new RegExp`). */
+  testNamePattern?: RegExp | string;
 
   /** Update outdated snapshots. */
   update?: boolean;
@@ -155,15 +184,24 @@ export interface RunOptions {
   /** Stop the run after N failing tests (`0`/`false` = run all). */
   bail?: number | boolean;
 
-  /** Run only a slice of files, as `<index>/<count>` (1-based) or `{ index, count }`. */
-  shard?: string | { index: number; count: number };
-
-  /** Run only the named projects (`*` wildcards, `!` negation). */
-  project?: string[];
-
   /** Treat a run that matched no files as pass instead of failure. */
   passWithNoTests?: boolean;
 }
+
+/**
+ * Per-invocation options for {@link RstestInstance.run} / `listTests`. These
+ * map to the CLI's positional args + per-run flags. With `related`, the
+ * positional `filters` are treated as the source files whose tests are run;
+ * `changed` cannot be combined with positional `filters` (validated at run
+ * time).
+ *
+ * A one-shot `run()` builds and executes in the same call, so it takes both of
+ * the runner's scopes at once — declared as their union so the three types
+ * cannot drift.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export interface RunOptions extends CreateRunnerOptions, RunnerRunOptions {}
 
 /**
  * Watch-only options for {@link RstestInstance.watch}, merged with the
@@ -235,6 +273,80 @@ export interface RstestInstanceContext {
 }
 
 /**
+ * What one {@link RstestRunner.build} produced. Lifecycle belongs to the runner,
+ * so there is nothing to release here.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export interface RunnerBuildResult {
+  /** Absolute paths of the test files compiled into this build. */
+  testFiles: string[];
+}
+
+/**
+ * A reusable runner: compiles a test set once and executes it many times,
+ * keeping the Rsbuild dev server and the worker pool alive in between. Created
+ * by {@link RstestInstance.createRunner}; the caller owns its lifetime and must
+ * {@link RstestRunner.close} it.
+ *
+ * Semantics that differ from the one-shot {@link RstestInstance.run}:
+ *
+ * - **Clean runtime per run**: every `run()` starts from a fresh module
+ *   registry and fresh test/snapshot/result state, so runs cannot contaminate
+ *   each other. This is a contract, not an option.
+ * - **`globalSetup` runs once per runner**, not per run, and its teardown runs
+ *   in `close()` — so a failing teardown rejects `close()` instead of landing
+ *   in the last run's result.
+ * - **Runs are serial**: `run()` or `build()` while a run is in flight rejects
+ *   instead of queueing.
+ * - **The compiled test set is fixed at creation**: source edits made afterwards
+ *   are not picked up, and per-run `filters` can only narrow it. Create a new
+ *   runner for a new build.
+ *
+ * @experimental Subject to change until 1.0.0.
+ */
+export interface RstestRunner {
+  /**
+   * Same projection as the `context` property of {@link RstestInstance},
+   * resolved once at runner creation (it does not change as later runs
+   * execute).
+   */
+  readonly context: RstestInstanceContext;
+
+  /**
+   * Compile the test set and start the run resources (Rsbuild dev server +
+   * worker pool). The first `run()` does this implicitly; call it explicitly to
+   * separate compilation from execution, or to learn the compiled test files
+   * before running. Resolves the same build for the runner's lifetime.
+   *
+   * Rejects on a compile error — the deliberate contrast with `run()`.
+   */
+  build(): Promise<RunnerBuildResult>;
+
+  /**
+   * Execute the built set once, building first if it never was. Resolves a
+   * {@link TestRunResult} covering only this run.
+   *
+   * Never rejects for a failing run: test failures, worker crashes and
+   * implicit-build failures are contained in the result (`ok: false`, with the
+   * error in `unhandledErrors`) — the same contract as
+   * {@link RstestInstance.run}. It does reject on misuse: an overlapping run,
+   * or a closed runner.
+   */
+  run(options?: RunnerRunOptions): Promise<TestRunResult>;
+
+  /**
+   * Run `globalSetup` teardown, release the worker pool + dev server, and
+   * restore the process globals snapshotted at creation. Waits for an in-flight
+   * run (or build) first. Idempotent; the runner cannot be reused afterwards.
+   *
+   * Rejects when a `globalSetup` teardown failed — the only failure a runner
+   * can produce outside a run. Every resource is released either way.
+   */
+  close(): Promise<void>;
+}
+
+/**
  * A programmatic Rstest instance. Created by {@link createRstest}; holds the
  * resolved config identity and runs tests against it per invocation.
  *
@@ -246,6 +358,19 @@ export interface RstestInstance {
 
   /** Run tests once with `options`; resolves a structured {@link TestRunResult}. */
   run(options?: RunOptions): Promise<TestRunResult>;
+
+  /**
+   * Create a reusable {@link RstestRunner}: compile the selected test set once,
+   * then execute it as many times as needed over one dev server + worker pool.
+   * `options` are build-scoped; per-execution selection and control go to
+   * {@link RstestRunner.run}. The caller owns the runner's lifetime — always
+   * `close()` it, or the dev server and pool stay alive.
+   *
+   * Browser mode is not supported yet: `createRunner()` rejects when the
+   * resolved config has any browser-mode project (use `run()`, which builds and
+   * tears down per call).
+   */
+  createRunner(options?: CreateRunnerOptions): Promise<RstestRunner>;
 
   /**
    * Start a watch session: run the matching tests, then keep re-running them as
@@ -361,48 +486,50 @@ const toCommonOptions = (options: RunOptions): CommonOptions => ({
         : `${options.shard.index}/${options.shard.count}`,
 });
 
+const BROWSER_RUNNER_UNSUPPORTED =
+  'The programmatic createRunner() does not support browser mode yet. ' +
+  'Run browser-mode tests with run(), or use the CLI `rstest run`.';
+
 /**
- * Run a freshly-built runner host-safely and assemble a {@link TestRunResult}:
- * snapshot/restore process globals so the embedding host isn't left with leaked
- * `exitCode`/`env` state, and contain any build/run error as an `unhandledError`
- * (with `ok: false`) instead of throwing or exiting. Used by
- * {@link createRstest}'s `run`.
+ * Execute one run against an already-resolved context and assemble its
+ * {@link TestRunResult}: start from a clean exit code, capture the run summary
+ * through a temporary reporter, contain every error as an `unhandledError`
+ * (with `ok: false`) instead of throwing, and read the per-file results back
+ * from the context.
  *
- * `buildRunner` runs inside the guarded `try` so config/build errors are
- * captured too; results are read in `finally` so a failure in a post-run step
- * doesn't discard results already gathered during the run.
+ * Everything here is run-scoped, because one runner context serves many runs:
+ * the capture reporter is removed again, and the results are read in `finally`
+ * so a failure in a post-run step doesn't discard results already gathered.
+ * Process globals are guarded around the runner's whole lifetime instead.
  */
-const executeHostSafeRun = async (
-  buildRunner: () => Promise<RstestRunner>,
+const executeHostSafeCycle = async (
+  context: RstestContext,
+  runCycle: () => Promise<void>,
+  passWithNoTests?: boolean,
 ): Promise<TestRunResult> => {
-  const restoreProcessGuards = snapshotProcessGuards();
   // Start from a clean exit code (like the CLI) so `ok` reflects only failures
-  // this run produced — not a non-zero code the embedding host set earlier. The
-  // guard restores the host's original value afterwards.
+  // this run produced — not a non-zero code an earlier run or the embedding
+  // host set. The runner's guard restores the host's value at `close()`.
   process.exitCode = undefined;
   const captured = createCapturedRunState();
+  const captureReporter = createCaptureReporter(captured);
+  const { reporters } = context;
+  reporters.push(captureReporter);
   let files: TestFileResult[] = [];
-  let runner: RstestRunner | undefined;
 
   try {
-    runner = await buildRunner();
-    runner.context.reporters.push(createCaptureReporter(captured));
-    await runner.runTests();
+    await runCycle();
   } catch (err) {
     captured.unhandledErrors.unshift(toSerializedError(err));
   } finally {
-    if (runner) {
-      files = runner.context.reporterResults.results.map(
-        toPublicTestFileResult,
-      );
-    }
+    files = context.reporterResults.results.map(toPublicTestFileResult);
     // Observe the run's final exit code before the guard restores it, so `ok`
-    // reflects exit-code-only failures (coverage thresholds, teardown).
+    // reflects exit-code-only failures (coverage thresholds).
     captured.exitCode = process.exitCode;
-    restoreProcessGuards();
+    reporters.splice(reporters.indexOf(captureReporter), 1);
   }
 
-  return assembleTestRunResult(files, captured, runner?.context);
+  return assembleTestRunResult(files, captured, context, passWithNoTests);
 };
 
 /**
@@ -435,7 +562,7 @@ export async function createRstest(
     command: RstestCommand,
     runOptions: RunOptions,
     prepareOptions?: (options: CommonOptions) => void,
-  ): Promise<RstestRunner> => {
+  ): Promise<ResolvedRstest> => {
     // Match the CLI's environment setup so workers (spawned per run) observe
     // `NODE_ENV=test` / `RSTEST=true`. Every entry that calls `build` snapshots
     // and restores process globals around it (construction, `run`, `watch`,
@@ -529,8 +656,155 @@ export async function createRstest(
     restoreCreation();
   }
 
-  const run = (runOptions: RunOptions = {}): Promise<TestRunResult> =>
-    executeHostSafeRun(() => build('run', runOptions));
+  /**
+   * The single runner factory behind both `createRunner()` and the one-shot
+   * `run()`. `oneShot` marks the `run()` path, which owns the runner's whole
+   * lifetime and keeps two behaviors that predate the runner and are locked by
+   * the programmatic e2e suite:
+   *
+   * - browser-mode projects are accepted — the reusable driver is node-only
+   *   (it would plan browser projects but never execute them), so they are
+   *   backed by the one-shot orchestrator instead;
+   * - teardown runs as part of the run, so a failing `globalSetup` teardown
+   *   still lands in that run's result instead of after it.
+   */
+  const createRunnerInstance = async (
+    runnerOptions: RunOptions,
+    { oneShot }: { oneShot: boolean },
+  ): Promise<RstestRunner> => {
+    // Held for the runner's whole lifetime, exactly like `watch()`: the dev
+    // server and workers stay alive between runs, so `env` must remain in test
+    // mode until `close()` puts the host snapshot back.
+    const restoreProcessGuards = snapshotProcessGuards();
+    try {
+      const resolved = await build('run', runnerOptions);
+      // The instance-level `context` projection is rebuilt by every later
+      // build; this runner's stays the one it was created with.
+      const runnerContext = context;
+
+      const hasBrowserProject = resolved.context.projects.some(
+        (project) => project.normalizedConfig.browser.enabled,
+      );
+      if (hasBrowserProject && !oneShot) {
+        throw new Error(BROWSER_RUNNER_UNSUPPORTED);
+      }
+
+      const driver: CoreTestRunner = hasBrowserProject
+        ? {
+            // Unreachable from the public surface (`createRunner()` rejected
+            // above), and the one-shot orchestrator has no separable compile
+            // step to expose anyway.
+            build: () => Promise.reject(new Error(BROWSER_RUNNER_UNSUPPORTED)),
+            runCycle: async () => {
+              await resolved.runTests();
+            },
+            close: () => Promise.resolve(),
+          }
+        : await resolved.createTestRunner();
+
+      let inFlightRun: Promise<TestRunResult> | undefined;
+      let closePromise: Promise<void> | undefined;
+
+      const assertOpen = (): void => {
+        if (closePromise) {
+          throw new Error('The test runner is closed.');
+        }
+      };
+
+      return {
+        context: runnerContext,
+        build: async () => {
+          assertOpen();
+          return driver.build();
+        },
+        run: async (cycleOptions = {}) => {
+          // Misuse rejects instead of resolving a failed result: a closed or
+          // busy runner is a caller bug, not an outcome of executing tests.
+          assertOpen();
+          if (inFlightRun) {
+            throw new Error(
+              'A test run is already in progress; runs on one runner are serial.',
+            );
+          }
+          const pending = executeHostSafeCycle(
+            resolved.context,
+            oneShot
+              ? async () => {
+                  try {
+                    await driver.runCycle(cycleOptions);
+                  } catch (error) {
+                    // Teardown still has to run, but the cycle's failure is the
+                    // one to report — `close()` can reject on its own now.
+                    await driver.close().catch(() => undefined);
+                    throw error;
+                  }
+                  await driver.close();
+                }
+              : () => driver.runCycle(cycleOptions),
+            cycleOptions.passWithNoTests,
+          );
+          // Never rejects, so `close()` can await it directly.
+          inFlightRun = pending;
+          try {
+            return await pending;
+          } finally {
+            inFlightRun = undefined;
+          }
+        },
+        close: () => {
+          closePromise ??= (async () => {
+            await inFlightRun;
+            try {
+              await driver.close();
+            } finally {
+              restoreProcessGuards();
+            }
+          })();
+          return closePromise;
+        },
+      };
+    } catch (err) {
+      // Creation failed before a runner existed, so its `close()` will never
+      // run — restore the host snapshot here instead of leaking it.
+      restoreProcessGuards();
+      throw err;
+    }
+  };
+
+  const createRunner = (
+    runnerOptions: CreateRunnerOptions = {},
+  ): Promise<RstestRunner> =>
+    createRunnerInstance(runnerOptions, { oneShot: false });
+
+  const run = async (runOptions: RunOptions = {}): Promise<TestRunResult> => {
+    let runner: RstestRunner | undefined;
+    try {
+      runner = await createRunnerInstance(runOptions, { oneShot: true });
+      // Build scope already absorbed every option (`toCommonOptions` stamps the
+      // run-scoped ones onto the config too); re-stating them keeps the sugar
+      // faithful if the two scopes ever diverge. `filters` is deliberately not
+      // forwarded: at build scope it may be a `related` source-file list, which
+      // would match no compiled test file as a run-scoped filter.
+      const { testNamePattern, update, bail, passWithNoTests } = runOptions;
+      return await runner.run({
+        testNamePattern,
+        update,
+        bail,
+        passWithNoTests,
+      });
+    } catch (err) {
+      // Only reachable when the runner could not be created (config load,
+      // project resolution) — `runner.run()` contains its own failures. `run()`
+      // never rejects, so report it as an unhandled error instead.
+      const captured = createCapturedRunState();
+      captured.unhandledErrors.push(toSerializedError(err));
+      return assembleTestRunResult([], captured, undefined);
+    } finally {
+      // Teardown already ran inside the run (see `oneShot`) and any failure of
+      // it is in the result; this only releases the process guards.
+      await runner?.close().catch(() => undefined);
+    }
+  };
 
   const watch = async (
     watchOptions: WatchOptions & RunOptions = {},
@@ -663,6 +937,7 @@ export async function createRstest(
       return context;
     },
     run,
+    createRunner,
     watch,
     listTests,
     mergeReports,

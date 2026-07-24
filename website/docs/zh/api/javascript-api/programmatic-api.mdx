@@ -130,6 +130,49 @@ const result = await rstest.run({
 });
 ```
 
+### rstest.createRunner
+
+创建一个可复用的 [`RstestRunner`](#rstestrunner)：把选中的测试集合**只编译一次**，随后在同一个 Rsbuild dev server 与 worker pool 上按需反复执行。当同一个测试集合需要被反复执行时应选它 —— 编译与 pool 启动只付出一次，而不是每次运行都付出一次。
+
+`options` 是 build 作用域的，在 runner 的整个生命周期内固定不变；每次执行的筛选与控制则交给 [`runner.run`](#runnerrun)。runner 的生命周期由调用方掌管 —— 请务必 `close()` 它，否则 dev server 与 worker pool 会一直存活。
+
+- **类型：**
+
+```ts
+function createRunner(options?: CreateRunnerOptions): Promise<RstestRunner>;
+
+interface CreateRunnerOptions {
+  filters?: string[];
+  filterMode?: 'fuzzy' | 'exact';
+  related?: boolean;
+  changed?: boolean | string;
+  shard?: string | { index: number; count: number };
+  project?: string[];
+}
+```
+
+`CreateRunnerOptions` 是 [`RunOptions`](#runoptions) 中 build 作用域的那一半 —— 决定*哪些*测试文件会被编译的字段，含义与那里的文档一致。`related` 与 `changed` 的 git 状态只在创建时解析一次。
+
+- **示例：**编译一次，运行多次
+
+```ts
+const runner = await rstest.createRunner({ filters: ['math'] });
+try {
+  const { testFiles } = await runner.build();
+  console.log(`compiled ${testFiles.length} test files`);
+
+  const first = await runner.run();
+  const second = await runner.run({ testNamePattern: 'adds' });
+  console.log(first.ok, second.ok);
+} finally {
+  await runner.close();
+}
+```
+
+:::warning 暂不支持 browser mode
+当解析后的配置包含任何 browser mode project 时，`createRunner()` 会 reject。请改用 [`run()`](#rstestrun) 运行 browser mode 测试（它每次调用都会自行构建并拆除），或使用 CLI `rstest run`。
+:::
+
 ### rstest.watch
 
 启动一个 watch 会话：先运行匹配的测试，随后在文件变化时重跑。promise 在 watch 启动后 resolve —— 调用返回句柄的 `close()` 可停止并释放 dev server 与 worker pool。
@@ -230,9 +273,76 @@ if (!result.ok) {
 //（blob 目录不存在、blob 文件损坏）。
 ```
 
-:::tip 无需调用 `close()`
-实例上没有 `close()`。每次 `run()` 都会自行构建并拆除其 worker pool 与 Rsbuild server，因此实例在两次调用之间不持有任何资源。唯一的例外是 [`watch`](#rstestwatch) 会话 —— 它会保持一个 dev server 常驻，用完后请调用返回的 watcher 的 `close()`。
+:::tip 实例上没有 `close()`
+实例本身没有 `close()`。每次 `run()` 都会自行构建并拆除其 worker pool 与 Rsbuild server，因此实例在两次调用之间不持有任何资源。真正持有资源的句柄各自带有 `close()`：[`watch`](#rstestwatch) 会话与 [`createRunner`](#rstestcreaterunner) 返回的 runner 都会让 dev server 与 worker pool 常驻，直到你关闭它们。
 :::
+
+## RstestRunner
+
+[`rstest.createRunner`](#rstestcreaterunner) 返回的对象。它持有一份编译好的测试集合以及执行它所需的资源，直到你 [`close()`](#runnerclose) 为止。
+
+runner 与一次性的 [`rstest.run`](#rstestrun) 有三点语义差异：
+
+- **每次运行都从干净的 runtime 开始。** 每次 `run()` 都会获得全新的模块注册表以及全新的 test / snapshot / 结果状态，因此模块级状态、mocks 和结果都不会从上一次运行泄漏到下一次。这是一项契约而非可选项 —— 在 `isolate: false`（worker 会跨运行保留）下同样成立。
+- **`globalSetup` 每个 runner 只运行一次**，而不是每次运行都跑；其 teardown 在 `close()` 中执行。因此 teardown 失败会让 `close()` reject，而不是体现在最后一次运行的结果里。
+- **运行是串行的。** 在一次 `run()` 进行中再次调用 `run()` 会 reject 而不是排队，`build()` 亦然。
+
+runner 上还带有 `context`，即与 `rstest.context` 相同的只读 [`RstestInstanceContext`](#rstestcontext) 投影。它在创建时解析一次，并在后续运行中保持不变。
+
+### runner.build
+
+编译测试集合并启动运行资源（Rsbuild dev server + worker pool），resolve 出编译产生的测试文件列表。它是首次 [`run()`](#runnerrun) 隐式完成之事的显式形式 —— 当你想把编译与执行分开，或想在运行任何测试前知道 runner 将执行哪些测试文件时调用它。
+
+- **类型：**
+
+```ts
+function build(): Promise<RunnerBuildResult>;
+
+interface RunnerBuildResult {
+  testFiles: string[];
+}
+```
+
+- `testFiles`：本次 build 编译进来的测试文件的绝对路径。
+
+它不接收任何选项：编译集合由 [`createRunner`](#rstestcreaterunner) 决定，并在 runner 的整个生命周期内固定不变。`build()` 是可重入的，但再次调用（或并发调用）只会 resolve 出同一个 build，而不会重新编译，因此 runner 创建之后的源码改动不会被感知。若需要新的 build，请创建新的 runner。
+
+`build()` 在编译错误时会 **reject**。这是与 [`run()`](#runnerrun) 有意形成的对比 —— 后者会把所有失败收敛进其结果；一次失败的 build 对该 runner 是终局的，后续的 `build()` 与 `run()` 都会报出同一个错误。
+
+### runner.run
+
+执行一次已编译的集合；若尚未 build 过，则先 build。它 resolve 出只覆盖本次运行的 [`TestRunResult`](#testrunresult) —— 结果不会跨运行累积。
+
+- **类型：**
+
+```ts
+function run(options?: RunnerRunOptions): Promise<TestRunResult>;
+
+interface RunnerRunOptions {
+  filters?: string[];
+  filterMode?: 'fuzzy' | 'exact';
+  testNamePattern?: RegExp | string;
+  update?: boolean;
+  bail?: number | boolean;
+  passWithNoTests?: boolean;
+}
+```
+
+`RunnerRunOptions` 是 [`RunOptions`](#runoptions) 中 run 作用域的那一半，含义相同。每个字段都只作用于这一次执行，执行完毕后会被还原，因此不会泄漏到下一次运行。`filters` 只能在已编译集合内**收窄**：未匹配到任何已编译测试文件的 filter 只会什么都不跑，而不会把 build 放宽。
+
+与 [`rstest.run`](#rstestrun) 一样，它**不会因运行失败而 reject** —— 测试失败、worker 崩溃以及隐式 build 失败都会以 `ok: false` 返回，错误位于 `unhandledErrors` 中。它只在误用时 reject：与另一次运行重叠，或 runner 已关闭。
+
+### runner.close
+
+执行 `globalSetup` 的 teardown，释放 worker pool 与 dev server，并还原创建时快照的进程全局状态（`process.env`、`process.exitCode`）。它会先等待进行中的运行或构建结束，且是幂等的 —— 第二次调用会 resolve 同一个 promise。关闭后 runner 无法再被复用：`build()` 与 `run()` 都会 reject。
+
+- **类型：**
+
+```ts
+function close(): Promise<void>;
+```
+
+当 `globalSetup` 的 teardown 失败时，`close()` 会 **reject**。这是 runner 在运行之外唯一会报告的失败 —— 无论是否 reject，进程全局状态都已还原，资源也都已释放。
 
 ## RunOptions
 
@@ -263,6 +373,8 @@ interface RunOptions {
 - `shard`：只运行文件的一个切片，形式为 `'<index>/<count>'`（从 1 开始）或 `{ index, count }`。
 - `project`：只运行指定名称的 projects（支持 `*` 通配、`!` 取反）。
 - `passWithNoTests`：将未匹配到任何文件的运行视为通过而非失败。
+
+`RunOptions` 是 runner 所区分的两个作用域的并集：build 作用域的 [`CreateRunnerOptions`](#rstestcreaterunner)（`filters`、`filterMode`、`related`、`changed`、`shard`、`project` —— 决定编译什么）与 run 作用域的 [`RunnerRunOptions`](#runnerrun)（`filters`、`filterMode`、`testNamePattern`、`update`、`bail`、`passWithNoTests` —— 决定运行什么以及如何运行）。一次性的 `run()` 在同一次调用中完成编译与执行，因此同时接收两者。
 
 ## runCLI
 
