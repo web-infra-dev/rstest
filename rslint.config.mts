@@ -31,6 +31,12 @@ const osAgnosticTests = {
     const report = (node: unknown, read: string) =>
       context.report({ node, messageId: 'banned', data: { read } });
 
+    // Local names bound to the os module via default/namespace imports
+    // (`import hostOs from 'node:os'`, `import * as hostOs from 'node:os'`),
+    // so aliasing cannot bypass the member-access check. Imports precede any
+    // use in document order, so the set is populated before it is consulted.
+    const osModuleNames = new Set(['os']);
+
     return {
       MemberExpression(node: {
         object: { type: string; name?: string };
@@ -44,10 +50,11 @@ const osAgnosticTests = {
           report(node, 'process.platform');
         }
         if (
-          node.object.name === 'os' &&
+          node.object.name !== undefined &&
+          osModuleNames.has(node.object.name) &&
           (property === 'platform' || property === 'type')
         ) {
-          report(node, `os.${property}()`);
+          report(node, `\`${property}()\` from node:os`);
         }
       },
       VariableDeclarator(node: {
@@ -73,6 +80,7 @@ const osAgnosticTests = {
         source: { value?: unknown };
         specifiers: Array<{
           type: string;
+          local?: { type: string; name?: string };
           imported?: { type: string; name?: string };
         }>;
       }) {
@@ -80,9 +88,14 @@ const osAgnosticTests = {
           return;
         }
         for (const specifier of node.specifiers) {
-          const imported = specifier.imported?.name;
-          if (imported === 'platform' || imported === 'type') {
-            report(specifier, `importing \`${imported}\` from node:os`);
+          if (specifier.type === 'ImportSpecifier') {
+            const imported = specifier.imported?.name;
+            if (imported === 'platform' || imported === 'type') {
+              report(specifier, `importing \`${imported}\` from node:os`);
+            }
+          } else if (specifier.local?.name !== undefined) {
+            // ImportDefaultSpecifier / ImportNamespaceSpecifier
+            osModuleNames.add(specifier.local.name);
           }
         }
       },
