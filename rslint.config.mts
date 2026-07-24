@@ -7,7 +7,11 @@ import { defineConfig, ts } from '@rslint/core';
 // instead — see `withPlatform` in packages/core/tests/core/related.test.ts.
 // Stub/restore via Object.defineProperty + Object.getOwnPropertyDescriptor is
 // intentionally not flagged: it is the sanctioned pattern.
-const osAgnosticTests = {
+//
+// Exported so scripts/os-agnostic-rule.test.ts can mount it in a minimal,
+// project-free config — linting fixtures without the type-aware program this
+// config otherwise builds (which the syntactic rule does not need).
+export const osAgnosticTests = {
   meta: {
     type: 'problem',
     docs: { description: 'disallow reading the host platform in unit tests' },

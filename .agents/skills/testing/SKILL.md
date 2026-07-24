@@ -87,7 +87,7 @@ Important:
 
 ## Unit tests are OS-agnostic
 
-CI runs unit tests (the `ut` job) on ubuntu only; OS-specific coverage lives in the e2e job's macOS/Windows rows. Enforced by the `rstest/os-agnostic-tests` rule in `rslint.config.mts` as part of `pnpm lint`.
+CI runs unit tests (the `ut` job) on ubuntu only; OS-specific coverage lives in the e2e job's macOS/Windows rows. Enforced by the `rstest/os-agnostic-tests` rule in `rslint.config.mts` as part of `pnpm lint`; the rule itself is unit-tested by `scripts/lint/os-agnostic-rule.test.ts` (in the `lint` project).
 
 - Do not write unit tests whose behavior or expectations depend on the host OS (reading `process.platform`, `os.platform()`, etc.). CI would only ever exercise the Linux branch.
 - To cover platform-dependent code paths in a unit test, stub the platform for the test's duration so every branch runs deterministically on any host — see `withPlatform` in `packages/core/tests/core/related.test.ts`.
