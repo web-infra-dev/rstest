@@ -1,6 +1,23 @@
 import { resolveStatsPathCandidate } from '../../src/core/related';
 import { filterFiles } from '../../src/utils/testFiles';
 
+// Run `fn` with a stubbed `process.platform` so both platform branches of
+// `filterFiles` execute deterministically on any host — CI runs unit tests on
+// Linux only (enforced by the `rstest/os-agnostic-tests` rule in
+// rslint.config.mts). The original value is captured via its property
+// descriptor rather than a direct read, which is the stub/restore idiom that
+// rule sanctions.
+const withPlatform = (platform: NodeJS.Platform, fn: () => void) => {
+  // `process.platform` always exists, so the descriptor lookup cannot miss.
+  const original = Object.getOwnPropertyDescriptor(process, 'platform')!;
+  Object.defineProperty(process, 'platform', { value: platform });
+  try {
+    fn();
+  } finally {
+    Object.defineProperty(process, 'platform', original);
+  }
+};
+
 describe('resolveStatsPathCandidate', () => {
   it('preserves POSIX absolute paths after stripping file protocol', () => {
     expect(
@@ -43,17 +60,28 @@ describe('filterFiles', () => {
   });
 
   it('keeps exact matching case-sensitive outside Windows', () => {
-    expect(
-      filterFiles(
-        ['/repo/tests/Foo.test.ts', '/repo/tests/foo.test.ts'],
-        ['/repo/tests/Foo.test.ts'],
-        '/repo',
-        'exact',
-      ),
-    ).toEqual(
-      process.platform === 'win32'
-        ? ['/repo/tests/Foo.test.ts', '/repo/tests/foo.test.ts']
-        : ['/repo/tests/Foo.test.ts'],
-    );
+    withPlatform('linux', () => {
+      expect(
+        filterFiles(
+          ['/repo/tests/Foo.test.ts', '/repo/tests/foo.test.ts'],
+          ['/repo/tests/Foo.test.ts'],
+          '/repo',
+          'exact',
+        ),
+      ).toEqual(['/repo/tests/Foo.test.ts']);
+    });
+  });
+
+  it('matches exact paths case-insensitively on Windows', () => {
+    withPlatform('win32', () => {
+      expect(
+        filterFiles(
+          ['/repo/tests/Foo.test.ts', '/repo/tests/foo.test.ts'],
+          ['/repo/tests/Foo.test.ts'],
+          '/repo',
+          'exact',
+        ),
+      ).toEqual(['/repo/tests/Foo.test.ts', '/repo/tests/foo.test.ts']);
+    });
   });
 });
