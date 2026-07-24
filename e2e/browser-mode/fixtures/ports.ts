@@ -50,6 +50,10 @@ export const BROWSER_PORTS = {
   'watch-setup': 5264,
   'watch-multi-project': 5266,
   'mixed-watch-shortcuts': 5268,
+  // Hardcoded in e2e/programmatic/fixtures/run-runner-browser.mjs, which is
+  // plain JS and cannot import this module — registered here so the port stays
+  // reserved.
+  'programmatic-runner': 5270,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);

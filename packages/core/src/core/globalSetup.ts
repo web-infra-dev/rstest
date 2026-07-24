@@ -1,7 +1,12 @@
 import { type ChildProcess, type ForkOptions, fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'pathe';
-import type { EntryInfo, FormattedError, ProjectContext } from '../types';
+import type {
+  EntryInfo,
+  FormattedError,
+  ProjectContext,
+  RstestContext,
+} from '../types';
 import {
   bgColor,
   color,
@@ -41,7 +46,19 @@ export function claimGlobalSetupOnce(
 
 const CLOSE_TIMEOUT_MS = 10_000;
 
-let globalTeardownCallbacks: (() => Promise<void> | void)[] = [];
+/** Resolves `false` when the teardown it owns reported a failure. */
+type GlobalTeardownCallback = () => Promise<boolean>;
+
+/**
+ * Teardown callbacks keyed by the context whose setup registered them. One host
+ * process can hold several live contexts at once — concurrent programmatic runs,
+ * or two reusable runners — and a single shared queue would let one context's
+ * teardown drain (and tear down) another context's still-running setup.
+ */
+const globalTeardownCallbacks = new WeakMap<
+  RstestContext,
+  GlobalTeardownCallback[]
+>();
 
 function applyEnvChanges(changes: Record<string, string | undefined>) {
   for (const key in changes) {
@@ -186,6 +203,7 @@ export class GlobalSetupWorker {
 }
 
 export async function runGlobalSetup({
+  scope,
   globalSetupEntries,
   assetFiles,
   sourceMaps,
@@ -193,6 +211,8 @@ export async function runGlobalSetup({
   outputModule,
   federation,
 }: {
+  /** Owns the teardown this setup registers; drained by {@link runGlobalTeardown}. */
+  scope: RstestContext;
   globalSetupEntries: EntryInfo[];
   assetFiles: Record<string, string>;
   sourceMaps: Record<string, string>;
@@ -235,7 +255,9 @@ export async function runGlobalSetup({
     }
 
     if (result.hasTeardown) {
-      globalTeardownCallbacks.push(() => runWorkerTeardown(worker));
+      const callbacks = globalTeardownCallbacks.get(scope) ?? [];
+      callbacks.push(() => runWorkerTeardown(worker));
+      globalTeardownCallbacks.set(scope, callbacks);
     } else {
       await worker.close();
     }
@@ -249,23 +271,35 @@ export async function runGlobalSetup({
   };
 }
 
-async function runWorkerTeardown(worker: GlobalSetupWorker): Promise<void> {
+async function runWorkerTeardown(worker: GlobalSetupWorker): Promise<boolean> {
+  // The worker already printed the user teardown's error before answering.
   const result = await worker.call<{ success: boolean }>({ type: 'teardown' });
-  if (!result.success) {
-    process.exitCode = 1;
-  }
-
   await worker.close();
+  return result.success;
 }
 
-export async function runGlobalTeardown(): Promise<void> {
-  const teardownCallbacks = [...globalTeardownCallbacks];
-  globalTeardownCallbacks = [];
+/**
+ * Drain the teardown callbacks registered against `scope`.
+ *
+ * @returns `false` when any teardown failed. `process.exitCode` carries the same
+ * verdict for the CLI, which has no other channel; a host that owns its process
+ * (the programmatic runner) reads the return value instead, because it restores
+ * the exit code it snapshotted.
+ */
+export async function runGlobalTeardown(
+  scope: RstestContext,
+): Promise<boolean> {
+  const teardownCallbacks = globalTeardownCallbacks.get(scope) ?? [];
+  globalTeardownCallbacks.delete(scope);
+
+  let succeeded = true;
 
   // Run teardown in reverse order (LIFO - Last In, First Out)
   for (const teardown of teardownCallbacks.reverse()) {
     try {
-      await teardown();
+      if (!(await teardown())) {
+        succeeded = false;
+      }
     } catch (error) {
       console.error(bgColor('bgRed', 'Error during global teardown'));
       if (error instanceof Error) {
@@ -274,7 +308,13 @@ export async function runGlobalTeardown(): Promise<void> {
         console.error(color.red(String(error)));
       }
 
-      process.exitCode = 1;
+      succeeded = false;
     }
   }
+
+  if (!succeeded) {
+    process.exitCode = 1;
+  }
+
+  return succeeded;
 }

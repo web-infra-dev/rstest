@@ -3,7 +3,7 @@ import {
   createCoverageProviderWithLog,
 } from '../coverage';
 import { ensureRunDependencies } from './dependencies';
-import type { TestExecutor } from '../types';
+import type { RstestWatchHandle, TestExecutor } from '../types';
 import {
   clearScreen,
   color,
@@ -14,7 +14,7 @@ import {
 } from '../utils';
 import {
   finalizeRunCycle,
-  notifyReportersOnTestRunStart,
+  runAndFinalizeCycle,
   runLifecycleStep,
 } from './finalizeRun';
 import { loadBrowserExecutor } from './browser/loader';
@@ -42,7 +42,9 @@ import {
   prepareWatchRerunState,
 } from './watchState';
 
-export async function runTests(context: Rstest): Promise<void> {
+export async function runTests(
+  context: Rstest,
+): Promise<void | RstestWatchHandle> {
   // High-level flow (post-executor-seam):
   // 1. Split browser/node projects (the single `isBrowserProject` predicate).
   // 2. Browser-only runs (no node projects) take a fast path so they skip the
@@ -137,6 +139,8 @@ export async function runTests(context: Rstest): Promise<void> {
     browserProjects,
     nodeProjects,
     isWatchMode,
+    // Watch reuses one pool across every rerun; a one-shot run does not.
+    keepWorkersAcrossCycles: isWatchMode,
     getTraceRun: () => activeTraceRun,
   });
   await nodeExecutor.init();
@@ -229,7 +233,9 @@ export async function runTests(context: Rstest): Promise<void> {
         // so `NodeExecutor.close()` alone cannot drain the browser stage's
         // setups. A second drain is a no-op, and it must run even when an
         // executor close throws.
-        await runLifecycleStep('global teardown', () => runGlobalTeardown());
+        await runLifecycleStep('global teardown', () =>
+          runGlobalTeardown(context),
+        );
       }
     };
 
@@ -266,7 +272,7 @@ export async function runTests(context: Rstest): Promise<void> {
             `Rstest exited unexpectedly with code ${code}, terminating test run.`,
           ),
         );
-        runGlobalTeardown().catch((error) => {
+        runGlobalTeardown(context).catch((error) => {
           logger.log(color.red(`Error in global teardown: ${error}`));
         });
         process.exitCode = 1;
@@ -309,28 +315,19 @@ export async function runTests(context: Rstest): Promise<void> {
         );
       }
 
-      await notifyReportersOnTestRunStart(context);
-      // Settle every cycle before propagating a failure: a fail-fast
-      // `Promise.all` would reach the `finally` teardown while a sibling
-      // executor is still mid-cycle, truncating its tests and firing global
-      // teardown early. The re-await unwraps the already-settled promises,
-      // rejecting with the first failure in executor order.
-      const cyclePromises = executors.map((executor) =>
-        executor === browserExecutor && browserStage.errors.length
-          ? Promise.resolve(globalSetupFailureOutcome(browserStage.errors))
-          : executor.runCycle({
-              buildId: 1,
-              mode: 'all',
-              updateSnapshot: snapshotManager.options.updateSnapshot,
-              env: browserStage.env,
-              onTraceEvents: forwardBrowserTraceEvents,
-            }),
-      );
-      await Promise.allSettled(cyclePromises);
-      const outcomes = await Promise.all(cyclePromises);
-
-      await finalizeRunCycle(context, {
-        outcomes,
+      await runAndFinalizeCycle(context, {
+        startCycles: () =>
+          executors.map((executor) =>
+            executor === browserExecutor && browserStage.errors.length
+              ? Promise.resolve(globalSetupFailureOutcome(browserStage.errors))
+              : executor.runCycle({
+                  buildId: 1,
+                  mode: 'all',
+                  updateSnapshot: snapshotManager.options.updateSnapshot,
+                  env: browserStage.env,
+                  onTraceEvents: forwardBrowserTraceEvents,
+                }),
+          ),
         mode: 'all',
         isWatchMode: false,
         coverageProvider,
@@ -392,16 +389,16 @@ export async function runTests(context: Rstest): Promise<void> {
     buildStart?: number;
   } = {}) => {
     buildId += 1;
-    await notifyReportersOnTestRunStart(context);
-    const outcome = await nodeExecutor.runCycle({
-      buildId,
-      mode,
-      fileFilters,
-      buildStart,
-      updateSnapshot: snapshotManager.options.updateSnapshot,
-    });
-    await finalizeRunCycle(context, {
-      outcomes: [outcome],
+    await runAndFinalizeCycle(context, {
+      startCycles: () => [
+        nodeExecutor.runCycle({
+          buildId,
+          mode,
+          fileFilters,
+          buildStart,
+          updateSnapshot: snapshotManager.options.updateSnapshot,
+        }),
+      ],
       mode,
       isWatchMode: true,
       coverageProvider,
@@ -413,7 +410,11 @@ export async function runTests(context: Rstest): Promise<void> {
     activeTraceRun = traceController.beginRun();
   };
 
-  const enableCliShortcuts = isCliShortcutsEnabled();
+  // Interactive CLI shortcuts put stdin in raw mode, install a keypress
+  // listener, and let `q` call `process.exit()`. An embedded (programmatic)
+  // host owns its own process + stdin, and `watcher.close()` doesn't dispose
+  // them, so never install them in embedded mode — even with a TTY stdin.
+  const enableCliShortcuts = isCliShortcutsEnabled() && !context.embedded;
 
   let isCleaningUp = false;
   const cleanup = async () => {
@@ -609,4 +610,9 @@ export async function runTests(context: Rstest): Promise<void> {
   // failures never leave a browser host running (the same ordering the
   // pre-seam code had). Node reruns above never restart it.
   browserWatch.startBackground();
+
+  // The Rsbuild dev server keeps watching after this returns; hand the caller
+  // a teardown so a programmatic (embedded) host can stop watching. The CLI
+  // ignores this and tears down via its signal handlers instead.
+  return { close: cleanup };
 }

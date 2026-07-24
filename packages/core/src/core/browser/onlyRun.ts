@@ -153,13 +153,13 @@ export async function runBrowserOnlyTests(
     // Registered only when a setup actually ran — failed setups never queue
     // teardown callbacks, so there is nothing to drain for them.
     const teardownOnExit = () => {
-      runGlobalTeardown().catch((error) => {
+      runGlobalTeardown(context).catch((error) => {
         logger.log(color.red(`Error in global teardown: ${error}`));
       });
     };
     const teardownOnSignal = (signal: NodeJS.Signals) => {
       logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
-      runGlobalTeardown()
+      runGlobalTeardown(context)
         .catch((error) => {
           logger.log(color.red(`Error in global teardown: ${error}`));
         })
@@ -196,7 +196,9 @@ export async function runBrowserOnlyTests(
       });
     } finally {
       try {
-        await runLifecycleStep('global teardown', () => runGlobalTeardown());
+        await runLifecycleStep('global teardown', () =>
+          runGlobalTeardown(context),
+        );
       } finally {
         // The executor close must survive a throwing teardown — a skipped
         // close leaks the launched browser and dev servers. `process.off`

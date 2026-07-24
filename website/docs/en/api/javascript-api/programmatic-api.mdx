@@ -1,0 +1,503 @@
+---
+description: Run Rstest programmatically from Node.js — create a reusable in-process instance with createRstest, or drive the CLI from a raw argv with runCLI.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Programmatic API
+
+<ApiMeta addedVersion="0.12.0" />
+
+:::warning Experimental
+The programmatic API is experimental and its shape may change until `1.0.0`. Pin an exact `@rstest/core` version if you depend on it.
+:::
+
+Besides the CLI, Rstest can be driven from your own Node.js code through the `@rstest/core/api` subpath — for build tools, editor integrations, CI scripts, or your own tooling.
+
+```ts
+import { createRstest, runCLI } from '@rstest/core/api';
+```
+
+`@rstest/core/api` is separate from the main `@rstest/core` entry. The main entry exposes the in-test runtime globals (`test`, `expect`, `rs`, …), config helpers (`defineConfig`, `loadConfig`, `merge*`), and types; the programmatic API (`createRstest`, `runCLI`) lives under `@rstest/core/api`.
+
+Rstest offers two programmatic entries for two different jobs:
+
+- [`createRstest`](#createrstest) — an async factory that returns a reusable in-process instance. Use it to resolve config once and then run, list, watch, or merge repeatedly, or to inspect the resolved context. Each `run()` resolves a structured [`TestRunResult`](#testrunresult) rather than printing and exiting.
+- [`runCLI`](#runcli) — runs the Rstest **CLI** from a raw `process.argv`-shaped array. Use it to bridge Rstest into another CLI (e.g. a unified `rs` command). Calling it behaves just like running the `rstest` CLI — it prints all its output to the terminal and may call `process.exit` — so reach for `createRstest` in any host you need to keep running.
+
+## createRstest
+
+Create a programmatic Rstest instance.
+
+- **Type:**
+
+```ts
+function createRstest(options?: CreateRstestOptions): Promise<RstestInstance>;
+```
+
+Config is resolved during `createRstest`, so a config-load error is thrown here rather than on the first `run()`.
+
+- **Example:**
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  cwd: './my-project',
+  config: {
+    include: ['**/*.test.ts'],
+    reporters: [],
+  },
+});
+
+const result = await rstest.run();
+console.log(result.ok, result.stats.tests);
+```
+
+### Options
+
+The first argument is an `options` object with the following properties:
+
+```ts
+interface CreateRstestOptions {
+  cwd?: string;
+  config?: RstestConfig | RstestConfigFn;
+}
+```
+
+- `cwd`: Working directory. Defaults to `process.cwd()`, and is the base for resolving `root`.
+- `config`: Config to run with. The programmatic API never auto-discovers a config file — this is the single source for all config, including `projects` and `reporters`.
+  - **Object**: used as the config directly.
+  - **Function** (`RstestConfigFn`): a zero-argument factory returning the config. To run against a config file on disk, load it here with [`loadConfig`](/api/javascript-api/rstest-core#loadconfig) and return it as-is, merged, or transformed:
+
+    ```ts
+    import { loadConfig, mergeRstestConfig } from '@rstest/core';
+    import { createRstest } from '@rstest/core/api';
+
+    const cwd = './my-project';
+    const rstest = await createRstest({
+      cwd,
+      config: async () => {
+        // `loadConfig` defaults to `process.cwd()`, so pass the same `cwd`
+        const { content } = await loadConfig({ cwd, path: 'rstest.config.ts' });
+        // return `content` as-is, or merge / transform it before returning
+        return mergeRstestConfig(content, { testTimeout: 10000 });
+      },
+    });
+    ```
+
+## RstestInstance
+
+The object returned by `createRstest`. It holds the resolved config and runs tests against it on each call. It exposes the following members.
+
+### rstest.context
+
+A read-only view of the resolved context — the resolved config and projects. Available as soon as `createRstest` resolves, so you can inspect config without running any tests.
+
+- **Type:**
+
+```ts
+readonly context: RstestInstanceContext;
+
+interface RstestInstanceContext {
+  version: string;
+  rootPath: string;
+  normalizedConfig: NormalizedConfig;
+  projects: { name: string; rootPath: string }[];
+  configFilePath?: string;
+}
+```
+
+`NormalizedConfig` is the resolved, normalized form of the config Rstest runs with — the counterpart of the [`RstestConfig`](/api/javascript-api/types#configuration-types) you write. It is also exported from `@rstest/core/api`.
+
+### rstest.run
+
+Run tests once and resolve a structured [`TestRunResult`](#testrunresult).
+
+- **Type:**
+
+```ts
+function run(options?: RunOptions): Promise<TestRunResult>;
+```
+
+- **Example:**
+
+```ts
+const result = await rstest.run({
+  filters: ['math'],
+  testNamePattern: 'adds',
+  bail: 1,
+});
+```
+
+### rstest.createRunner
+
+Create a reusable [`RstestRunner`](#rstestrunner): compile the selected test set **once**, then execute it as many times as needed over a single Rsbuild dev server and worker pool. Reach for it when the same test set is executed repeatedly — the compile and the pool startup are paid once instead of per run.
+
+`options` are build-scoped and fixed for the runner's lifetime; per-execution selection and control go to [`runner.run`](#runnerrun). The caller owns the runner's lifetime — always `close()` it, or the dev server and worker pool stay alive.
+
+- **Type:**
+
+```ts
+function createRunner(options?: CreateRunnerOptions): Promise<RstestRunner>;
+
+interface CreateRunnerOptions {
+  filters?: string[];
+  filterMode?: 'fuzzy' | 'exact';
+  related?: boolean;
+  changed?: boolean | string;
+  shard?: string | { index: number; count: number };
+  project?: string[];
+}
+```
+
+`CreateRunnerOptions` is the build-scoped half of [`RunOptions`](#runoptions) — the fields that decide _which_ test files get compiled, with the same meanings documented there. `related` and `changed` resolve their git state once, at creation.
+
+- **Example:** build once, run many
+
+```ts
+const runner = await rstest.createRunner({ filters: ['math'] });
+try {
+  const { testFiles } = await runner.build();
+  console.log(`compiled ${testFiles.length} test files`);
+
+  const first = await runner.run();
+  const second = await runner.run({ testNamePattern: 'adds' });
+  console.log(first.ok, second.ok);
+} finally {
+  await runner.close();
+}
+```
+
+:::warning Browser mode not supported yet
+`createRunner()` rejects when the resolved config has any browser-mode project. Run browser-mode tests with [`run()`](#rstestrun), which builds and tears down per call, or use the CLI `rstest run`.
+:::
+
+### rstest.watch
+
+Start a watch session: run the matching tests, then re-run them as files change. The promise resolves once watching starts — call `close()` on the returned handle to stop and release the dev server and worker pool.
+
+The session resolves no per-run results. To observe each run, pass an `onResult` callback: it fires after every run (including the first) with that run's [`TestRunResult`](#testrunresult), so you can read failures and `unhandledErrors` without registering a reporter.
+
+- **Type:**
+
+```ts
+function watch(options?: WatchOptions & RunOptions): Promise<RstestWatcher>;
+
+interface WatchOptions {
+  onResult?: (result: TestRunResult) => void;
+}
+```
+
+`onResult` receives the same [`TestRunResult`](#testrunresult) as `run()`, except exit-code-only failures (unmet coverage thresholds, global teardown) are not reflected in its `ok` — test/file failures and `unhandledErrors` are. A throwing `onResult` is isolated so it cannot tear down the watch session.
+
+:::warning Browser mode not supported yet
+`watch()` rejects when the resolved config has any browser-mode project. Run browser-mode tests with [`run()`](#rstestrun), or use the CLI `rstest watch`. Browser watch support is planned.
+:::
+
+- **Example:**
+
+```ts
+const watcher = await rstest.watch({
+  filters: ['math'],
+  onResult: (result) => {
+    if (!result.ok) {
+      console.error(
+        result.stats.tests.failed,
+        'failed',
+        result.unhandledErrors,
+      );
+    }
+  },
+});
+// … later …
+await watcher.close();
+```
+
+### rstest.listTests
+
+Collect matching test files and cases without running them. It accepts the same file-selection [`RunOptions`](#runoptions) as `run`, plus list-specific options; the execution-only fields (`update`, `bail`, `shard`) are ignored.
+
+`printLocation` enables task-location collection on its own — without it, `test.location` in the results is `undefined`.
+
+- **Type:**
+
+```ts
+function listTests(
+  options?: ListCommandOptions & RunOptions,
+): Promise<ListCommandResult[]>;
+
+type ListCommandOptions = {
+  filesOnly?: boolean;
+  json?: boolean | string;
+  includeSuites?: boolean;
+  printLocation?: boolean;
+  summary?: boolean;
+};
+```
+
+- **Example:**
+
+```ts
+const list = await rstest.listTests({ printLocation: true });
+for (const file of list) {
+  console.log(file.testPath, file.tests.length);
+}
+```
+
+### rstest.mergeReports
+
+Merge on-disk blob reports into a single aggregate report. Resolves the merged [`TestRunResult`](#testrunresult) — the aggregate of the sharded runs, the same shape `run()` resolves.
+
+`ok` is `false` when the merged blobs contain failed tests or unhandled errors (mirroring the CLI's exit code); those are data in `stats` / `files`, not an exception. It **rejects** only when the merge itself cannot be performed — a missing blob directory, no blob files, or corrupt blob JSON — since there is no aggregate to return. This is the intentional contrast with `run()` (which never rejects): `run()` owns a test execution and contains every failure in its result, whereas `mergeReports` is an aggregation utility with a clean "couldn't do it at all" failure mode.
+
+- **Type:**
+
+```ts
+function mergeReports(options?: {
+  path?: string;
+  cleanup?: boolean;
+}): Promise<TestRunResult>;
+```
+
+- **Example:**
+
+```ts
+const result = await rstest.mergeReports({ path: './.rstest-reports' });
+// The resolved value is the merged aggregate of the sharded runs:
+if (!result.ok) {
+  const failed = result.files.filter((f) => f.status === 'fail');
+  console.log(`${result.stats.tests.failed} failed tests`, failed);
+}
+// A rejection only means the merge itself could not be performed
+// (missing blob directory, corrupt blob file).
+```
+
+:::tip No `close()` on the instance
+There is no `close()` on the instance itself. Each `run()` builds and tears down its own worker pool and Rsbuild server, so an instance holds no resources between calls. The handles that _do_ hold resources carry their own `close()`: a [`watch`](#rstestwatch) session and a [`createRunner`](#rstestcreaterunner) runner both keep a dev server and worker pool alive until you close them.
+:::
+
+## RstestRunner
+
+The object returned by [`rstest.createRunner`](#rstestcreaterunner). It owns one compiled test set plus the resources that execute it, until you [`close()`](#runnerclose) it.
+
+Three semantics distinguish a runner from the one-shot [`rstest.run`](#rstestrun):
+
+- **Every run starts from a clean runtime.** Each `run()` gets a fresh module registry and fresh test / snapshot / result state, so module-level state, mocks, and results from one run never leak into the next. This is a contract, not an option — it holds under `isolate: false` too, where a worker is kept alive across runs.
+- **`globalSetup` runs once per runner**, not once per run; its teardown runs in `close()`. A failing teardown therefore rejects `close()` rather than landing in the last run's result.
+- **Runs are serial.** Calling `run()` while another `run()` is in flight rejects instead of queueing, as does `build()`.
+
+A runner also carries `context`, the same read-only [`RstestInstanceContext`](#rstestcontext) projection as `rstest.context`. It is resolved once at creation and stays fixed as later runs execute.
+
+### runner.build
+
+Compile the test set and start the run resources (Rsbuild dev server + worker pool), resolving the list of compiled test files. It is the explicit form of what the first [`run()`](#runnerrun) does implicitly — call it to separate compilation from execution, or to learn which test files the runner will execute before running any.
+
+- **Type:**
+
+```ts
+function build(): Promise<RunnerBuildResult>;
+
+interface RunnerBuildResult {
+  testFiles: string[];
+}
+```
+
+- `testFiles`: Absolute paths of the test files compiled into this build.
+
+It takes no options: the compiled set is decided by [`createRunner`](#rstestcreaterunner) and fixed for the runner's lifetime. `build()` is re-entrant, but calling it again — or concurrently — resolves that same build instead of recompiling, so source edits made after the runner was created are not picked up. Create a new runner for a new build.
+
+`build()` **rejects** on a compile error. That is the deliberate contrast with [`run()`](#runnerrun), which contains every failure in its result; a failed build is final for the runner, so later `build()` and `run()` calls report the same error.
+
+### runner.run
+
+Execute the built set once, building first if it never was. Resolves a [`TestRunResult`](#testrunresult) covering only this run — results never accumulate across runs.
+
+- **Type:**
+
+```ts
+function run(options?: RunnerRunOptions): Promise<TestRunResult>;
+
+interface RunnerRunOptions {
+  filters?: string[];
+  filterMode?: 'fuzzy' | 'exact';
+  testNamePattern?: RegExp | string;
+  update?: boolean;
+  bail?: number | boolean;
+  passWithNoTests?: boolean;
+}
+```
+
+`RunnerRunOptions` is the run-scoped half of [`RunOptions`](#runoptions), with the same meanings. Every field applies to this one execution and is restored afterwards, so it never leaks into the next run. `filters` can only **narrow** within the built set: a filter matching no compiled test file runs nothing rather than widening the build.
+
+Like [`rstest.run`](#rstestrun), it **never rejects for a failing run** — test failures, worker crashes, and a failing implicit build all come back as `ok: false`, with the errors in `unhandledErrors`. It rejects only on misuse: a run overlapping another run, or a closed runner.
+
+### runner.close
+
+Run the `globalSetup` teardown, release the worker pool and dev server, and restore the process globals (`process.env`, `process.exitCode`) snapshotted at creation. It waits for an in-flight run or build first, and is idempotent — a second call resolves the same promise. The runner cannot be reused afterwards: `build()` and `run()` reject once it is closed.
+
+- **Type:**
+
+```ts
+function close(): Promise<void>;
+```
+
+`close()` **rejects** when a `globalSetup` teardown failed. That is the only failure a runner reports outside a run — the process globals are restored and every resource is released either way.
+
+## RunOptions
+
+Per-invocation options for `run`, `watch`, and `listTests`. They map to the CLI's positional arguments plus per-run flags.
+
+```ts
+interface RunOptions {
+  filters?: string[];
+  filterMode?: 'fuzzy' | 'exact';
+  testNamePattern?: RegExp | string;
+  related?: boolean;
+  changed?: boolean | string;
+  update?: boolean;
+  bail?: number | boolean;
+  shard?: string | { index: number; count: number };
+  project?: string[];
+  passWithNoTests?: boolean;
+}
+```
+
+- `filters`: Positional test-file filters, matched per `filterMode`.
+- `filterMode`: Matching strategy for `filters`: `'fuzzy'` (default; case-insensitive substring) or `'exact'` (normalized path equality). Ignored for `related` / `changed`, which always match exactly.
+- `testNamePattern`: Run only tests whose full name matches. A string is coerced via `new RegExp`.
+- `related`: Treat positional `filters` as source files and run only their related tests.
+- `changed`: Derive the run set from git: `true` = working-tree + staged changes; a string = a `since` ref. Cannot be combined with positional `filters`.
+- `update`: Update outdated snapshots.
+- `bail`: Stop the run after N failing tests (`0` / `false` = run all).
+- `shard`: Run only a slice of files, as `'<index>/<count>'` (1-based) or `{ index, count }`.
+- `project`: Run only the named projects (`*` wildcards, `!` negation).
+- `passWithNoTests`: Treat a run that matched no files as a pass instead of a failure.
+
+`RunOptions` is the union of the two scopes a runner keeps apart: the build-scoped [`CreateRunnerOptions`](#rstestcreaterunner) (`filters`, `filterMode`, `related`, `changed`, `shard`, `project` — what gets compiled) and the run-scoped [`RunnerRunOptions`](#runnerrun) (`filters`, `filterMode`, `testNamePattern`, `update`, `bail`, `passWithNoTests` — what runs, and how). A one-shot `run()` compiles and executes in the same call, so it takes both at once.
+
+## runCLI
+
+Run the Rstest CLI programmatically. `runCLI` parses a raw `process.argv`-shaped `argv`, routes it to the matched command (`run` / `watch` / `list` / `merge-reports` / `init`), and runs it to completion — the same entry point the `rstest` CLI uses. It auto-discovers the config file from `cwd`, prints all output to the terminal, and may call `process.exit` on a fatal error. It returns nothing.
+
+It mirrors rsbuild's `runCLI`, so it is the entry to reach for when **bridging Rstest into another CLI** — for example a unified `rs` command that forwards a reconstructed `argv` to Rstest. For in-process runs that return a structured [`TestRunResult`](#testrunresult) instead of handing the process to the CLI, use [`createRstest`](#createrstest).
+
+- **Type:**
+
+```ts
+interface RunCLIOptions {
+  // CLI arguments, matching the shape of Node.js `process.argv`
+  // (i.e. including the leading `node` / bin entries). Defaults to `process.argv`.
+  argv?: string[];
+  // Working directory to resolve the config file and test files from.
+  // Defaults to `process.cwd()`.
+  cwd?: string;
+}
+
+function runCLI(options?: RunCLIOptions): Promise<void>;
+```
+
+- **Example:**
+
+```ts
+import { runCLI } from '@rstest/core/api';
+
+// Forward a reconstructed argv to Rstest, exactly as if `rstest run foo.test.ts
+// --coverage` had been typed. Rstest owns the process from here.
+await runCLI({
+  argv: ['node', 'rstest', 'run', 'foo.test.ts', '--coverage'],
+  cwd: process.cwd(),
+});
+```
+
+## TestRunResult
+
+The value resolved by `rstest.run` (and passed to each `watch` rerun).
+
+```ts
+interface TestRunResult {
+  ok: boolean;
+  files: TestFileResult[];
+  stats: {
+    tests: {
+      total: number;
+      passed: number;
+      failed: number;
+      skipped: number;
+      todo: number;
+    };
+    files: {
+      total: number;
+      failed: number;
+    };
+  };
+  unhandledErrors: SerializedError[];
+  duration: { total: number };
+  snapshot?: SnapshotSummary;
+  coverage?: CoverageMapData;
+}
+```
+
+- `ok`: `true` when no test and no file failed and there were no unhandled errors. It is also `false` when no test file matched, unless `passWithNoTests` is set. Mirrors the CLI exit code.
+- `files`: Per-file aggregate results (see [`TestFileResult`](#testfileresult)).
+- `stats`: Pre-computed counts for tests and files.
+- `unhandledErrors`: Errors not attributable to a single test (worker crash, config load failure).
+- `duration`: Wall-clock duration in ms.
+- `snapshot`: Snapshot summary. Absent only when the run aborted before any test executed (for example, a config load error).
+- `coverage`: Coverage data. Present only when `coverage.enabled` in the resolved config.
+
+### TestFileResult
+
+Per-file result. Extends [`TestResult`](#testresult) with the per-case breakdown.
+
+```ts
+interface TestFileResult extends TestResult {
+  // Flattened list of test cases discovered in this file.
+  results: TestResult[];
+}
+```
+
+### TestResult
+
+Public per-test result. It is a stable subset of Rstest's internal reporter type, so internal refactors do not break this surface.
+
+```ts
+interface TestResult {
+  status: TestResultStatus;
+  name: string;
+  testPath: string;
+  parentNames?: string[];
+  duration?: number;
+  errors?: SerializedError[];
+  retryErrors?: SerializedError[];
+  retryCount?: number;
+  project: string;
+}
+```
+
+- `status`: Final state of the test case.
+- `name`: Test case name (no parent suite names included).
+- `testPath`: Absolute path to the test file.
+- `parentNames`: Names of parent `describe` blocks, outermost first.
+- `duration`: Wall-clock duration in ms; absent for skipped / todo tests.
+- `errors`: Errors from the final attempt.
+- `retryErrors`: Errors from previous failed attempts when `retry` is configured.
+- `retryCount`: Number of retries performed (`0` when the first attempt passed).
+- `project`: Project name from `projects` config; the default project is `'default'`.
+
+### SerializedError
+
+A plain, serializable error shape used throughout the result types (workers run in separate processes, so errors cross a process boundary).
+
+```ts
+interface SerializedError {
+  name: string;
+  message: string;
+  stack?: string;
+  diff?: string;
+  actual?: string;
+  expected?: string;
+  retryCount?: number;
+  cause?: SerializedError;
+}
+```

@@ -115,7 +115,13 @@ export type RstestContext = {
    * @internal
    */
   trace: boolean;
-  /** See the `embedded` option on `createRstest`. */
+  /**
+   * True when running inside a programmatic host (via `@rstest/core/api`)
+   * rather than the CLI: the caller owns the process, so Rstest installs no
+   * signal handlers and never calls `process.exit`.
+   *
+   * @internal
+   */
   embedded: boolean;
   reporters: Reporter[];
   snapshotManager: SnapshotManager;
@@ -147,9 +153,69 @@ export type ListCommandResult = {
   errors?: FormattedError[];
 };
 
-export type RstestInstance = {
+/**
+ * Handle returned by `runTests()` when it runs in `watch` mode: watch keeps the
+ * Rsbuild dev server and worker pool alive re-running tests on file changes, so
+ * a programmatic caller needs an explicit teardown. `close()` stops watching and
+ * releases the pool + dev server. Absent for one-shot (`run`) runs.
+ */
+export type RstestWatchHandle = {
+  close: () => Promise<void>;
+};
+
+/** What one build of the reusable runner (`src/core/testRunner.ts`) produced. */
+export type RunnerBuildOutput = {
+  /** Absolute paths of the test files compiled into this build. */
+  testFiles: string[];
+};
+
+/**
+ * Selection and control for one cycle of the reusable runner. Every field is
+ * applied to the live config/snapshot state for that cycle only and restored
+ * afterwards, so it never leaks into the next one. `filters` resolves against
+ * the built set — it can narrow it, never widen it.
+ */
+export type RunnerCycleOptions = {
+  filters?: string[];
+  filterMode?: FileFilterMode;
+  testNamePattern?: RegExp | string;
+  update?: boolean;
+  bail?: number | boolean;
+  passWithNoTests?: boolean;
+};
+
+/**
+ * Core-side build-once/run-many driver over the non-watch pipeline. Owns the
+ * dev server, the worker pool and `globalSetup` for its whole lifetime; the
+ * host owns `process.exitCode`/`process.env` and turns a cycle into a public
+ * result. `runCycle` resolves for a failing run and rejects only when the run
+ * could not be driven at all (a failed implicit build included).
+ */
+export type CoreTestRunner = {
+  build: () => Promise<RunnerBuildOutput>;
+  runCycle: (options?: RunnerCycleOptions) => Promise<void>;
+  close: () => Promise<void>;
+};
+
+/**
+ * Internal runner returned by the sync `createRstestContext` factory: a context
+ * bound to one command + filter set, plus the side-effecting drive methods. The
+ * public, async, instance-shaped API (`run`/`listTests`/`close`) lives in
+ * `@rstest/core/api` and is built on top of this.
+ */
+export type ResolvedRstest = {
   context: RstestContext;
-  runTests: () => Promise<void>;
+  /**
+   * Drive the run. Resolves to an {@link RstestWatchHandle} in `watch` mode (the
+   * dev server keeps running after this resolves), or `void` for one-shot runs.
+   */
+  runTests: () => Promise<void | RstestWatchHandle>;
+  /**
+   * Build once, run many: the same non-watch pipeline `runTests` drives, with
+   * the compile and the run cycle split so the built test set can be executed
+   * repeatedly. Node projects only.
+   */
+  createTestRunner: () => Promise<CoreTestRunner>;
   listTests: (options: ListCommandOptions) => Promise<ListCommandResult[]>;
   mergeReports: (options?: {
     path?: string;

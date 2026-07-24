@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { normalize } from 'pathe';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import {
+  buildResolvedRunner,
+  type CreateRstestContextFn,
   createCli,
   getForceRerunTriggerFiles,
   getForceRerunTriggers,
@@ -14,6 +16,8 @@ import {
   validateRelatedCliOptions,
   valueTakingOptions,
 } from '../../src/cli/commands';
+import type { ResolvedRstest } from '../../src/types';
+import { logger } from '../../src/utils';
 
 const renderHelp = (argv: string[]): string => {
   const logs: string[] = [];
@@ -840,5 +844,67 @@ describe('related CLI options', () => {
       normalize(join(cwd, 'staged.ts')),
       normalize(join(cwd, 'unstaged.ts')),
     ]);
+  });
+});
+
+describe('buildResolvedRunner merge-reports short-circuit', () => {
+  // A fake context factory: records how it was called and hands back a minimal
+  // runner whose `coverage.changed` is set and whose rootPath is a non-git
+  // directory. If filter resolution runs, `resolveCoverageChangedFilters` shells
+  // out to git there, fails, and warns — which the tests use as the observable
+  // signal that coverage-changed resolution happened.
+  const makeFactory = () => {
+    const calls: Array<{ command: string; filters: string[] }> = [];
+    const createRstest: CreateRstestContextFn = (_input, command, filters) => {
+      calls.push({ command, filters });
+      const context = {
+        rootPath: tmpdir(),
+        normalizedConfig: { coverage: { changed: 'HEAD' } },
+        projects: [],
+      };
+      return { context } as unknown as ResolvedRstest;
+    };
+    return { createRstest, calls };
+  };
+
+  it('skips filter/coverage-changed resolution for merge-reports (no git shell-out)', async () => {
+    const warn = rs.spyOn(logger, 'warn').mockImplementation(() => {});
+    onTestFinished(() => warn.mockRestore());
+    const { createRstest, calls } = makeFactory();
+
+    const runner = await buildResolvedRunner({
+      createRstest,
+      config: { coverage: { changed: 'HEAD' } },
+      projects: [],
+      command: 'merge-reports',
+      options: {},
+      filters: [],
+    });
+
+    // Built once, straight through with empty filters — no related/changed work.
+    expect(calls).toEqual([{ command: 'merge-reports', filters: [] }]);
+    // `applyResolvedFilters` never ran, so no changed-coverage filters stamped.
+    expect(runner.context.changedCoverageFilters).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('still resolves coverage.changed for a normal run (control proving the spy fires)', async () => {
+    const warn = rs.spyOn(logger, 'warn').mockImplementation(() => {});
+    onTestFinished(() => warn.mockRestore());
+    const { createRstest } = makeFactory();
+
+    await buildResolvedRunner({
+      createRstest,
+      config: { coverage: { changed: 'HEAD' } },
+      projects: [],
+      command: 'run',
+      options: {},
+      filters: [],
+    });
+
+    // The run path DOES resolve coverage.changed; the fake rootPath is not a git
+    // repo, so it falls back with a warning — confirming the merge-reports case
+    // above skipped this work rather than the spy being inert.
+    expect(warn).toHaveBeenCalled();
   });
 });

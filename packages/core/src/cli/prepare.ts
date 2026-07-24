@@ -9,8 +9,9 @@ function initNodeEnv() {
 
 /**
  * Initialize the test environment variables that worker processes inherit via
- * `process.env`. Shared by the CLI (`prepareCli`) and the programmatic API
- * (`runRstest`) so both paths run tests with `NODE_ENV=test` and `RSTEST=true`.
+ * `process.env`. Shared by the CLI (`prepareCli`, including the programmatic
+ * `runCLI` bridge) and the in-process API (`createRstest`) so both paths run
+ * tests with `NODE_ENV=test` and `RSTEST=true`.
  */
 export function initRstestEnv(): void {
   initNodeEnv();

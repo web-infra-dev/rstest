@@ -11,9 +11,7 @@ import type {
   RstestConfig,
 } from './types';
 
-export { initCli, runCLI, type RunCLIOptions } from './cli';
 export { loadConfig, mergeProjectConfig, mergeRstestConfig } from './config';
-export { createRstest } from './core';
 export * from './runtime/api/public';
 
 export type {

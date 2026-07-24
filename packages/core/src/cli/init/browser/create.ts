@@ -42,6 +42,12 @@ import {
 interface CreateOptions {
   /** Non-interactive mode, use default options */
   yes?: boolean;
+  /**
+   * Directory to scaffold into. Defaults to `process.cwd()`. Threaded from
+   * `runCLI({ cwd })` so a CLI bridge scaffolds into the targeted project
+   * rather than the bridge's own cwd.
+   */
+  cwd?: string;
 }
 
 type ProjectInfo = Awaited<ReturnType<typeof detectProject>>;
@@ -58,7 +64,7 @@ interface FilePreview {
  * Main init function for browser mode.
  */
 export async function create(options: CreateOptions = {}): Promise<void> {
-  const cwd = process.cwd();
+  const cwd = options.cwd ?? process.cwd();
   const { yes: nonInteractive } = options;
 
   // Detect project info

@@ -16,10 +16,10 @@ import { Bench } from 'tinybench';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = resolve(__dirname, 'fixtures');
 
-const { initCli, createRstest } = await import('@rstest/core');
+const { createRstest } = await import('@rstest/core/api');
 
 const benchmarkOptions = {
-  reporter: [],
+  reporters: [],
 };
 
 const bench = withCodSpeed(
@@ -31,37 +31,24 @@ const bench = withCodSpeed(
   }),
 );
 
-async function runFixture(fixtureName) {
-  const { config, configFilePath, projects } = await initCli({
-    root: resolve(fixturesRoot, fixtureName),
-    ...benchmarkOptions,
+// Create one reusable instance per fixture up front so the eager creation build
+// is amortized out of the measured iterations; each iteration then measures a
+// single host-safe `run()`, which resolves a structured result instead of
+// setting `process.exitCode` (no per-iteration exit-code reset needed).
+const fixtureNames = ['compile', 'runner', 'integration'];
+for (const fixtureName of fixtureNames) {
+  const instance = await createRstest({
+    config: { root: resolve(fixturesRoot, fixtureName), ...benchmarkOptions },
   });
 
-  const rstest = createRstest({ config, configFilePath, projects }, 'run', []);
-  await rstest.runTests();
+  bench.add(fixtureName, async () => {
+    const result = await instance.run();
 
-  if (process.exitCode && process.exitCode !== 0) {
-    throw new Error(
-      `CPU benchmark fixture "${fixtureName}" failed with exit code ${process.exitCode}`,
-    );
-  }
-
-  // Reset process.exitCode between iterations because runTests() uses it to
-  // signal failures to the CLI.
-  process.exitCode = undefined;
+    if (!result.ok) {
+      throw new Error(`CPU benchmark fixture "${fixtureName}" failed`);
+    }
+  });
 }
-
-bench.add('compile', async () => {
-  await runFixture('compile');
-});
-
-bench.add('runner', async () => {
-  await runFixture('runner');
-});
-
-bench.add('integration', async () => {
-  await runFixture('integration');
-});
 
 await bench.run();
 

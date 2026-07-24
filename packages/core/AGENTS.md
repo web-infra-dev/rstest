@@ -19,6 +19,7 @@ Core testing framework for Rstest.
 Core owns the run-cycle contract shared by the node pool and `@rstest/browser`:
 
 - `finalizeRunCycle` is the single finalize implementation for node-only, browser-only, and mixed runs: it reduces each executor's `ExecutorCycleOutcome` into the run verdict (merged results, coverage merge + report, reporter `onTestRunEnd`, exit code, bail message). Non-watch runs must exit through it exactly once; browser watch runs self-finalize host-side instead, and core skips its finalize for browser-only and zero-node mixed watch runs.
+- `runAndFinalizeCycle` is the pump that pairs the reporter run-start notification with that single finalize. Every core-driven run path — the non-watch run, node watch reruns, and the reusable runner — starts its cycles through it; a new run path must not hand-roll the notify/settle/finalize sequence.
 - `RunnerEventSink` is the single event pump for runner lifecycle events on both transports (node pool RPC and browser dispatch). One sink per project, bound to that project's `normalizedConfig`, feeding `stateManager` and reporters. No direct reporter/`stateManager` fanout anywhere else.
 - `executorCapabilities` declares the per-executor disposition (`supported` / `ignored-warn` / `error` / `stripped`) of every `RuntimeConfig` field. Adding a field without a row is a compile error; the browser wire projection (`projectRuntimeConfig`) keeps its own hand-written field list, held in lockstep by `tests/core/executorCapabilities.test.ts`.
 
@@ -30,6 +31,8 @@ Contracts between modules or processes — not readable from any single file.
 
 - Exit codes never downgrade: a later zero must not clear a prior non-zero.
 - `stateManager` reset is core-owned (top of a non-watch run, or `prepareWatchRerunState` per watch rerun) — executors never reset it, so bail reads stay cycle-scoped.
+- `globalSetup` teardown callbacks are registered against the `RstestContext` that ran the setup and drained by `runGlobalTeardown(context)`. One host process can hold several live contexts (concurrent programmatic runs, two reusable runners), so nothing may reintroduce a process-wide queue. Its verdict travels two ways: `process.exitCode` for the CLI, and the return value for a host that restores the exit code it snapshotted.
+- The reusable runner (`src/core/testRunner.ts`) drives the non-watch pipeline with one context across many runs, so it also owns what a single-shot run never has to reset: `reporterResults` (watch deliberately accumulates it), a `buildId` bump per run (the `isolate: false` loader-cache boundary), a fresh trace buffer per run, and save/restore of run-scoped config overrides on the root config _and_ every dispatched project. Its build is one-shot — command `run` compiles with watching off, so the entry set and the compiled output are fixed for the runner's lifetime — and `globalSetup` runs once per runner, with teardown at `close()`.
 - `@rstest/browser` is version-locked to core and loaded through the core-owned `BrowserHostModule` contract; the browser package constrains its exports against it via `satisfies`.
 - Reporter output is sorted by `testPath`, deliberately decoupled from the perf-first execution order (failed-first, then longest-processing-time). Don't "fix" one by changing the other.
 

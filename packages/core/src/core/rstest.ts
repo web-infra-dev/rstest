@@ -46,8 +46,8 @@ function formatEnvironmentName(name: string): string {
 
 /**
  * Report a fatal configuration error. In embedded (programmatic) mode the
- * caller owns the process, so throw and let `runRstest` surface it; otherwise
- * log and exit the CLI process.
+ * caller owns the process, so throw and let the programmatic caller
+ * (`createRstest`) surface it; otherwise log and exit the CLI process.
  */
 function failConfig(embedded: boolean, message: string): never {
   if (embedded) {
@@ -77,7 +77,7 @@ type Options = {
   configFilePath?: string;
   projects: Project[];
   trace?: boolean;
-  /** See the `embedded` option on `createRstest`. */
+  /** True in programmatic (`@rstest/core/api`) mode: the caller owns the process. */
   embedded?: boolean;
 };
 
