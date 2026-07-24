@@ -77,6 +77,14 @@ const fixtures: Record<string, { code: string; hits: number }> = {
     code: `const { platform: p } = require('node:process');\nexport { p };`,
     hits: 1,
   },
+  'platform destructured from a namespace os import': {
+    code: `import * as hostOs from 'node:os';\nconst { platform: p } = hostOs;\nexport const win = p();`,
+    hits: 1,
+  },
+  'type destructured from an os require': {
+    code: `const os = require('node:os');\nconst { type: t } = os;\nexport const k = t();`,
+    hits: 1,
+  },
   "named import of platform from 'node:os'": {
     code: `import { platform } from 'node:os';\nexport const p = platform();`,
     hits: 1,

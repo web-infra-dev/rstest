@@ -159,14 +159,19 @@ export const osAgnosticTests = {
           }
           return;
         }
-        // `const { platform } = process` / `= require('node:process')`.
-        if (
-          node.id.type === 'ObjectPattern' &&
-          providerOf(node.init) === 'process'
-        ) {
+        // `const { platform } = process`, `const { platform, type } = os`
+        // (or a require()/alias of either).
+        if (node.id.type === 'ObjectPattern') {
+          const provider = providerOf(node.init);
           for (const property of node.id.properties ?? []) {
-            if (property.key?.name === 'platform') {
+            const key = property.key?.name;
+            if (provider === 'process' && key === 'platform') {
               report(property, 'destructuring `platform` from process');
+            } else if (
+              provider === 'os' &&
+              (key === 'platform' || key === 'type')
+            ) {
+              report(property, `destructuring \`${key}\` from node:os`);
             }
           }
         }
