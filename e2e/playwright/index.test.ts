@@ -37,6 +37,21 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('Test Files 2 passed');
   });
 
+  it('only resolves directly destructured test.for fixtures', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'for-fixtures.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_FOR_FIXTURES_OK');
+  });
+
   it('writes Playwright trace debug artifacts', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
