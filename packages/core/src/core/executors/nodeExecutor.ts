@@ -457,6 +457,7 @@ export function createNodeExecutor(
                   sourceMaps,
                   interopDefault: true,
                   outputModule: p.outputModule,
+                  federation: p.normalizedConfig.federation,
                 }),
               globalSetupTraceArgs,
             );
@@ -481,6 +482,7 @@ export function createNodeExecutor(
           currentEntries.push(...sortedEntries);
           const { results, testResults } = await pool.runTests({
             entries: sortedEntries,
+            assetNames,
             getSourceMaps,
             setupEntries,
             getAssetFiles,

@@ -17,12 +17,17 @@ allowBuilds:
 
 autoInstallPeers: false
 
+# The federation examples consume `@module-federation/rstest` canaries from
+# pkg.pr.new (not yet published to npm), which pnpm treats as exotic.
+blockExoticSubdeps: false
+
 # for vsce
 hoistPattern: ['@secretlint/*']
 
 # Reduce the risk of installing compromised packages
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
+  - '@module-federation/*'
   - '@rspack/*'
   - '@rsbuild/*'
   - '@rslib/*'

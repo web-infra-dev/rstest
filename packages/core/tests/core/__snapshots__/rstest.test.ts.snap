@@ -51,6 +51,7 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
       "**/dist/.rstest-temp",
     ],
   },
+  "federation": false,
   "forceRerunTriggers": [
     "**/package.json/**",
     "**/rstest.config.*",
@@ -154,6 +155,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
       "**/dist/.rstest-temp",
     ],
   },
+  "federation": false,
   "forceRerunTriggers": [
     "**/package.json/**",
     "**/rstest.config.*",
@@ -262,6 +264,7 @@ exports[`rstest context > should generate rstest context correctly with multiple
       "**/dist/.rstest-temp",
     ],
   },
+  "federation": false,
   "forceRerunTriggers": [
     "**/package.json/**",
     "**/rstest.config.*",

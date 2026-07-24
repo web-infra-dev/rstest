@@ -29,6 +29,7 @@ const baseNormalizedConfig = {
   chaiConfig: {},
   includeTaskLocation: false,
   silent: false,
+  federation: false,
 };
 
 const makeProject = (
@@ -39,6 +40,17 @@ const makeProject = (
   }) as unknown as ProjectContext;
 
 describe('projectRuntimeConfig', () => {
+  it('preserves federation mode only for node workers', () => {
+    const project = makeProject({ federation: true });
+
+    expect(
+      projectRuntimeConfig(project, { envMode: 'inherit' }).federation,
+    ).toBe(true);
+    expect(
+      'federation' in projectRuntimeConfig(project, { envMode: 'static' }),
+    ).toBe(false);
+  });
+
   it('static (browser) wire omits node-only fields', () => {
     const config = projectRuntimeConfig(makeProject(), { envMode: 'static' });
     expect('testEnvironment' in config).toBe(false);

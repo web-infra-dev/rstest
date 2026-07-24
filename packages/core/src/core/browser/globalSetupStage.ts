@@ -223,6 +223,7 @@ export async function runBrowserGlobalSetupStage(
       sourceMaps: item.sourceMaps,
       interopDefault: true,
       outputModule: item.project.outputModule,
+      federation: item.project.normalizedConfig.federation,
     });
     if (success) {
       ranAnySetup = true;

@@ -45,6 +45,12 @@ const ignoredKeyWarnings: Partial<
       'a fresh context.',
     browserOnly: true,
   },
+  federation: {
+    isNonDefault: (config) => config.federation === true,
+    message: () =>
+      'Ignoring federation in browser mode: it only applies to the Node runner.',
+    browserOnly: true,
+  },
   detectAsyncLeaks: {
     isNonDefault: (config) => config.detectAsyncLeaks === true,
     message: () =>
