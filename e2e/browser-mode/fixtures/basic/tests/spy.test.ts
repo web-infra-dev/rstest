@@ -1,6 +1,18 @@
 import { describe, expect, it, rstest } from '@rstest/core';
 
 describe('Spy', () => {
+  it('checks the value passed to the returned alias', () => {
+    const spy = rstest.fn(() => 'actual');
+    spy();
+
+    // @ts-expect-error Vitest 4.1 also supports this alias without a value at runtime.
+    expect(spy).returned();
+    expect(spy).returned('actual');
+    expect(spy).not.returned('expected');
+    expect(() => expect(spy).returned('expected')).toThrow();
+    expect(() => expect(spy).returned(undefined)).toThrow();
+  });
+
   it('restores withImplementation after a synchronous callback throws', () => {
     const spy = rstest.fn(() => 'original');
     spy.mockImplementationOnce(() => 'once');

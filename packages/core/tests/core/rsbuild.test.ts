@@ -16,7 +16,7 @@ process.env.DEBUG = 'false';
 
 const rootPath = join(__dirname, '../..');
 
-rs.mock('../../src/core/browserLoader', () => {
+rs.mock('../../src/core/browser/loader', () => {
   const listBrowserTests = async (
     context: RstestContext,
     options?: {
@@ -567,6 +567,63 @@ describe('prepareRsbuild', () => {
     expect(JSON.stringify(bundlerConfigs[0]?.plugins)).toContain(
       '__RSTEST_MODIFIED__',
     );
+  });
+
+  it('should disable output modules when modifyRstestConfig enables federation', async () => {
+    const enableFederationPlugin: RsbuildPlugin = {
+      name: 'enable-rstest-federation',
+      setup(api) {
+        api
+          .useExposed<RstestExposeAPI>('rstest')
+          ?.modifyRstestConfig((config) => {
+            config.federation = true;
+          });
+      },
+    };
+
+    const project = {
+      name: 'test',
+      rootPath,
+      environmentName: 'test',
+      outputModule: true,
+      normalizedConfig: {
+        federation: false,
+        plugins: [enableFederationPlugin],
+        resolve: {},
+        source: {},
+        output: {},
+        tools: {},
+        testEnvironment: {
+          name: 'node',
+        },
+        browser: { enabled: false },
+      },
+    };
+
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
+        rootPath,
+        command: 'run',
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          pool: { type: 'forks' },
+        },
+        projects: [project],
+      } as unknown as RstestContext,
+      globTestSourceEntries: async () => ({}),
+      setupFileState: createSetupFileState(),
+    });
+
+    await rsbuildInstance.initConfigs();
+
+    expect(project.normalizedConfig.federation).toBe(true);
+    expect(project.outputModule).toBe(false);
   });
 
   it('should not allow modifyRstestConfig to switch browser mode', async () => {

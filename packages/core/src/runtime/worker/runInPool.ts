@@ -17,6 +17,7 @@ import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
 import { PhaseTracker } from './phaseTracker';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
+import { setFederationDynamicImportOrigin } from './runtimeHooks';
 import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
 import { createNodeTaskContext } from './taskContext.node';
@@ -142,6 +143,18 @@ const preparePool = async (
 
   const taskContext = createNodeTaskContext();
   setRealTimers();
+
+  // `mockRuntimeCode.js` gates its Module Federation shims on this worker-wide
+  // flag, so it must be set before any bundle code is evaluated.
+  const federation = context.runtimeConfig.federation === true;
+  (globalThis as Record<string, unknown>).__rstest_federation__ = federation;
+  // With `isolate: false` a previous file in this worker may have installed
+  // the global dynamic-import fallback (`mockRuntimeCode.js`). Always drop it:
+  // it keeps federation strictly opt-in for non-federation files, and for
+  // federation files the runtime module reinstalls a fresh hook whose
+  // `import()` is bound to the current bundle's vm dynamic-import context
+  // rather than the previous file's.
+  setFederationDynamicImportOrigin(federation, testPath);
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
 
@@ -325,6 +338,7 @@ const loadFiles = async ({
   interopDefault,
   isolate,
   outputModule,
+  federation,
   tracker,
 }: {
   setupEntries: RunWorkerOptions['options']['setupEntries'];
@@ -336,11 +350,13 @@ const loadFiles = async ({
   interopDefault: boolean;
   isolate: boolean;
   outputModule: boolean;
+  federation: boolean;
   tracker?: PhaseTracker;
 }): Promise<void> => {
   const { loadModule } = outputModule
     ? await import('./loadEsModule')
     : await import('./loadModule');
+  const virtualFsAssetFiles = federation ? assetFiles : undefined;
 
   // Clean each kept runtime chunk's webpack module cache before re-running setup
   // + entry. A reused worker can hold several projects' runtime chunks at once
@@ -358,26 +374,33 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
+      virtualFsAssetFiles,
     });
   }
 
   // run setup files
   tracker?.transition('setupFiles');
-  for (const { distPath, testPath } of setupEntries) {
-    const setupCodeContent = assetFiles[distPath]!;
+  for (const {
+    distPath: setupDistPath,
+    testPath: setupTestPath,
+  } of setupEntries) {
+    const setupCodeContent = assetFiles[setupDistPath]!;
+    setFederationDynamicImportOrigin(federation, setupTestPath);
 
     await loadModule({
       codeContent: setupCodeContent,
-      distPath,
+      distPath: setupDistPath,
       runtimeDistPath,
-      testPath,
+      testPath: setupTestPath,
       rstestContext,
       assetFiles,
       interopDefault,
+      virtualFsAssetFiles,
     });
   }
 
   tracker?.transition('collect');
+  setFederationDynamicImportOrigin(federation, testPath);
   await loadModule({
     codeContent: assetFiles[distPath]!,
     distPath,
@@ -386,6 +409,7 @@ const loadFiles = async ({
     rstestContext,
     assetFiles,
     interopDefault,
+    virtualFsAssetFiles,
   });
 };
 
@@ -407,7 +431,7 @@ export const runInPool = async (
     context: {
       project,
       buildId,
-      runtimeConfig: { isolate, bail, detectAsyncLeaks },
+      runtimeConfig: { isolate, bail, detectAsyncLeaks, federation },
     },
   } = options;
 
@@ -496,6 +520,7 @@ export const runInPool = async (
         interopDefault,
         isolate,
         outputModule: options.context.outputModule,
+        federation: federation === true,
       });
       const tests = await runner.collectTests();
       return {
@@ -606,6 +631,7 @@ export const runInPool = async (
         interopDefault,
         isolate,
         outputModule: options.context.outputModule,
+        federation: federation === true,
         tracker,
       });
     } finally {

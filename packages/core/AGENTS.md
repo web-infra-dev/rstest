@@ -6,6 +6,7 @@ Core testing framework for Rstest.
 
 - `src/cli/` — CLI parsing and the CLI → config merge
 - `src/core/` — run orchestration: Rsbuild integration, executor seam, scheduling, state management
+- `src/core/browser/` — core-side browser-mode orchestration (load boundary, browser-only run, mixed-run planning, watch controls)
 - `src/core/plugins/` — Rsbuild/Rspack plugins (mock seam, externals, entry assembly)
 - `src/runtime/` — test-side runtime: expect, spy, fakeTimers, fixtures, runner, worker entry
 - `src/reporter/` — output reporters
@@ -31,6 +32,14 @@ Contracts between modules or processes — not readable from any single file.
 - `stateManager` reset is core-owned (top of a non-watch run, or `prepareWatchRerunState` per watch rerun) — executors never reset it, so bail reads stay cycle-scoped.
 - `@rstest/browser` is version-locked to core and loaded through the core-owned `BrowserHostModule` contract; the browser package constrains its exports against it via `satisfies`.
 - Reporter output is sorted by `testPath`, deliberately decoupled from the perf-first execution order (failed-first, then longest-processing-time). Don't "fix" one by changing the other.
+
+### Browser orchestration (`src/core/browser`)
+
+- `src/core/runTests.ts` stays a coarse orchestrator — split projects → node executor `init()` barrier → plan → drive executors → finalize. Browser-mode detail lives under `src/core/browser/`, behind the `BrowserHostModule` load boundary in `src/core/browser/loader.ts`, never inline in the orchestrator.
+- Exactly two orchestrator branches break executor isomorphism, both deliberate and commented at the call site: the browser-only fast path (constructing a `NodeExecutor` boots a node Rsbuild instance, so zero-node runs must skip it) and the watch dual-drive (node watch is dev-compile-hook driven; browser watch is host-driven and self-finalizing).
+- The browser watch control plane is core-owned (`src/core/browser/watchControls.ts`): core is the single stdin/CLI-shortcuts owner and fans reruns out through the host's `BrowserWatchHandles` — the host never subscribes to stdin (mirrored in `packages/browser/AGENTS.md`).
+- `src/core/isBrowserProject.ts` stays outside `src/core/browser/` on purpose: it is the shared routing predicate every node-path module reads, not browser-mode implementation.
+- Browser projects run their own pre-cycle `globalSetup` stage (`src/core/browser/globalSetupStage.ts`), distinct from the node `src/core/globalSetup.ts` — don't merge the two.
 
 ### Config merge (`src/cli`)
 

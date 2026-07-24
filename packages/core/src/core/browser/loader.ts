@@ -6,38 +6,39 @@ import type {
   ProjectContext,
   RstestContext,
   TestExecutor,
-} from '../types';
-import type { CoverageProvider } from '../types/coverage';
-import { color, logger } from '../utils';
+} from '../../types';
+import type { CoverageProvider } from '../../types/coverage';
+import { color, logger } from '../../utils';
 
 export type {
   BrowserTestRunOptions,
   BrowserTestRunResult,
   ListBrowserTestsOptions,
-} from '../types';
+} from '../../types';
 
 /**
- * Core-owned contract for the `@rstest/browser/internal` host module.
- *
- * This is the single source of truth for the core↔browser load boundary:
- * `loadBrowserModule` returns it, and `@rstest/browser`'s public entry
- * constrains its exports against it via `satisfies`. The `context` is typed
- * as {@link RstestContext} (not `unknown`) so drift between the two sides —
- * such as a dropped `options` argument — surfaces as a type error.
+ * The subset of {@link BrowserTestRunOptions} that configures a browser
+ * executor construction (as opposed to a host-driven watch session). Single
+ * source of truth for the field list: the executor options interface, the
+ * `loadBrowserExecutor` argument, and the planner's option bag all derive
+ * from it.
  */
+export type BrowserExecutorRunOptions = Pick<
+  BrowserTestRunOptions,
+  | 'shardedEntries'
+  | 'freezeShardedEntries'
+  | 'filesOnly'
+  | 'allowEmptyRun'
+  | 'appliedModifyRstestConfigEnvironments'
+>;
+
 /**
  * Options for {@link BrowserHostModule.createBrowserExecutor}. `projects` is the
  * explicit browser-project subset the plan resolved; `coverageProvider` is the
  * single run-scoped provider core owns, shared so the browser host folds its
  * per-file coverage into the same map shape the node pool produces.
  */
-export interface CreateBrowserExecutorOptions extends Pick<
-  BrowserTestRunOptions,
-  | 'freezeShardedEntries'
-  | 'filesOnly'
-  | 'allowEmptyRun'
-  | 'appliedModifyRstestConfigEnvironments'
-> {
+export interface CreateBrowserExecutorOptions extends BrowserExecutorRunOptions {
   projects: ProjectContext[];
   coverageProvider: CoverageProvider | null;
 }
@@ -49,6 +50,15 @@ export interface CreateBrowserExecutorOptions extends Pick<
 export type BrowserTestExecutor = TestExecutor &
   Required<Pick<TestExecutor, 'collect'>>;
 
+/**
+ * Core-owned contract for the `@rstest/browser/internal` host module.
+ *
+ * This is the single source of truth for the core↔browser load boundary:
+ * `loadBrowserModule` returns it, and `@rstest/browser`'s public entry
+ * constrains its exports against it via `satisfies`. The `context` is typed
+ * as {@link RstestContext} (not `unknown`) so drift between the two sides —
+ * such as a dropped `options` argument — surfaces as a type error.
+ */
 export interface BrowserHostModule {
   validateBrowserConfig: (context: RstestContext) => void;
   /**
@@ -183,6 +193,25 @@ export async function loadBrowserModule(
 }
 
 /**
+ * Run browser mode tests host-driven (watch self-finalize path). Non-watch runs
+ * go through {@link BrowserTestExecutor} instead; this shim stays for the
+ * browser watch loop and the browser-only watch coverage path.
+ */
+export async function runBrowserModeTests(
+  context: RstestContext,
+  browserProjects: ProjectContext[],
+  options: BrowserTestRunOptions,
+): Promise<BrowserTestRunResult | void> {
+  const projectRoots = browserProjects.map((p) => p.rootPath);
+  const { validateBrowserConfig, runBrowserTests } = await loadBrowserModule({
+    projectRoots,
+    embedded: context.embedded,
+  });
+  validateBrowserConfig(context);
+  return runBrowserTests(context, { ...options, projects: browserProjects });
+}
+
+/**
  * Load `@rstest/browser` and build the browser side of the executor seam,
  * validating the browser config first. Shared by the run path (`runTests`) and
  * the list path (`listTests`) so both go through one browser entry point.
@@ -191,13 +220,7 @@ export async function loadBrowserExecutor(
   context: RstestContext,
   browserProjects: ProjectContext[],
   coverageProvider: CoverageProvider | null,
-  runOptions?: Pick<
-    BrowserTestRunOptions,
-    | 'freezeShardedEntries'
-    | 'filesOnly'
-    | 'allowEmptyRun'
-    | 'appliedModifyRstestConfigEnvironments'
-  >,
+  runOptions?: BrowserExecutorRunOptions,
 ): Promise<BrowserTestExecutor> {
   const projectRoots = browserProjects.map((p) => p.rootPath);
   const { validateBrowserConfig, createBrowserExecutor } =

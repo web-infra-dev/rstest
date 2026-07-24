@@ -2,6 +2,7 @@ import { install } from 'source-map-support';
 import type { FormattedError } from '../../types';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
+import { setFederationDynamicImportOrigin } from './runtimeHooks';
 import { installGracefulExit } from './setup';
 
 installGracefulExit();
@@ -46,6 +47,7 @@ const runGlobalSetup = async (data: {
   sourceMaps: Record<string, string>;
   interopDefault: boolean;
   outputModule: boolean;
+  federation: boolean;
 }): Promise<{
   success: boolean;
   hasTeardown: boolean;
@@ -75,12 +77,20 @@ const runGlobalSetup = async (data: {
     // Start tracking environment changes
     trackEnvChanges();
 
+    // `mockRuntimeCode.js` gates its Module Federation shims on this
+    // worker-wide flag, so it must be set before any setup code is evaluated.
+    (globalThis as Record<string, unknown>).__rstest_federation__ =
+      data.federation === true;
+
     for (const entry of data.entries) {
       const { distPath, runtimeDistPath, testPath } = entry;
       const setupCodeContent = data.assetFiles[distPath]!;
+      setFederationDynamicImportOrigin(data.federation, testPath);
       const { loadModule } = data.outputModule
         ? await import('./loadEsModule')
         : await import('./loadModule');
+
+      const virtualFsAssetFiles = data.federation ? data.assetFiles : undefined;
 
       const module = await loadModule({
         codeContent: setupCodeContent,
@@ -94,6 +104,7 @@ const runGlobalSetup = async (data: {
         },
         assetFiles: data.assetFiles,
         interopDefault: data.interopDefault,
+        virtualFsAssetFiles,
       });
 
       let teardownCallback: (() => Promise<void> | void) | undefined;

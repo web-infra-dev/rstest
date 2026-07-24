@@ -62,6 +62,7 @@ export function projectRuntimeConfig(
     maxConcurrency,
     printConsoleTrace,
     disableConsoleIntercept,
+    federation,
     testEnvironment,
     hookTimeout,
     isolate,
@@ -123,6 +124,7 @@ export function projectRuntimeConfig(
 
   return {
     ...shared,
+    federation,
     testEnvironment,
     // `reporters` may be functions, which are not serializable — strip them.
     coverage: { ...coverage, reporters: [] },

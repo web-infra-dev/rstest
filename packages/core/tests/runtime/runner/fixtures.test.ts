@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@rstest/core';
 import {
-  handleFixtures,
+  createFixtureResolver,
   normalizeFixtures,
 } from '../../../src/runtime/runner/fixtures';
 
@@ -60,8 +60,29 @@ describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
     );
   });
 
-  it('strips comments before parsing the destructured params', () => {
-    const useFn = ({ foo /* inline */, bar }: any) => [foo, bar];
+  it('throws when a destructured fixture has a default value', () => {
+    const fixtureFn = Object.assign(() => {}, {
+      toString: () => '({ value = "default" }, use) => use(value)',
+    });
+    expect(() =>
+      normalizeFixtures({ a: [fixtureFn], value: 1 } as any),
+    ).toThrow(/Default values are not supported/);
+  });
+
+  it('throws when the fixture context has a default value', () => {
+    const fixtureFn = Object.assign(() => {}, {
+      toString: () => '({ value } = {}, use) => use(value)',
+    });
+    expect(() =>
+      normalizeFixtures({ a: [fixtureFn], value: 1 } as any),
+    ).toThrow(/Default values are not supported/);
+  });
+
+  it('parses comments and aliases in destructured params', () => {
+    const useFn = ({ foo /* inline */, bar: renamedBar }: any) => [
+      foo,
+      renamedBar,
+    ];
     const result = normalizeFixtures({
       used: [useFn],
       foo: 1,
@@ -71,8 +92,103 @@ describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
   });
 });
 
-describe('handleFixtures', () => {
-  it('activates auto fixtures and on-demand fixtures used by the test fn', async () => {
+describe('createFixtureResolver', () => {
+  it('does not parse callbacks when the test has no fixtures', async () => {
+    const resolver = createFixtureResolver({} as any, {});
+
+    await expect(
+      resolver.resolveTestFixtures((context: unknown) => context),
+    ).resolves.toBeUndefined();
+  });
+
+  it('allows named hook contexts without inferring fixture dependencies', async () => {
+    let setupAttempts = 0;
+    const context = { task: { name: 'test' } };
+    const fixtures = normalizeFixtures({
+      page: [
+        async (_context: any, use: any) => {
+          setupAttempts++;
+          await use('page');
+        },
+      ],
+    } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+
+    await resolver.resolveHookFixtures((hookContext: any) => {
+      const { page } = hookContext;
+      for (const hookContext of [{ page: 'local' }]) {
+        expect(hookContext.page).toBe('local');
+      }
+      return [hookContext.task.name, page];
+    });
+
+    expect(setupAttempts).toBe(0);
+    expect(context).toEqual({ task: { name: 'test' } });
+  });
+
+  it('resolves fixtures directly destructured by hooks', async () => {
+    const context: Record<string, any> = {};
+    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+
+    await resolver.resolveHookFixtures(({ fixture }: any) => fixture);
+
+    expect(context.fixture).toBe('fixture');
+  });
+
+  it('rejects rest properties in destructured hook parameters', async () => {
+    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, {});
+
+    await expect(
+      resolver.resolveHookFixtures(({ fixture, ...rest }: any) => [
+        fixture,
+        rest,
+      ]),
+    ).rejects.toThrow(/Rest property/);
+  });
+
+  it('rejects defaults instead of partially resolving fixture names', async () => {
+    const fixtures = normalizeFixtures({
+      title: 'title',
+      page: 'page',
+    } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, {});
+
+    const propertyDefault = Object.assign(() => {}, {
+      toString: () => '({ title = "🔒", page }) => page',
+    });
+    await expect(resolver.resolveHookFixtures(propertyDefault)).rejects.toThrow(
+      /Default values are not supported/,
+    );
+
+    const contextDefault = Object.assign(() => {}, {
+      toString: () => '({ page } = {}) => page',
+    });
+    await expect(resolver.resolveHookFixtures(contextDefault)).rejects.toThrow(
+      /Default values are not supported/,
+    );
+  });
+
+  it('caches parsed fixture props across test attempts', async () => {
+    let parseCalls = 0;
+    const context: Record<string, any> = {};
+    const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+    const hook = Object.assign(() => {}, {
+      toString: () => {
+        parseCalls++;
+        return '({ fixture }) => fixture';
+      },
+    });
+
+    await resolver.resolveHookFixtures(hook);
+    await resolver.resolveHookFixtures(hook);
+
+    expect(parseCalls).toBe(1);
+  });
+
+  it('activates auto and requested test fixtures', async () => {
     const order: string[] = [];
     const fixtures = normalizeFixtures({
       autoFix: [
@@ -99,16 +215,37 @@ describe('handleFixtures', () => {
     const context: Record<string, any> = {};
     const test = {
       fixtures,
-      originalFn: ({ usedFix }: any) => usedFix,
     } as any;
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver(test, context, cleanups);
 
-    const { cleanups } = await handleFixtures(test, context);
+    await resolver.resolveTestFixtures(({ usedFix }: any) => usedFix);
 
     expect(context.autoFix).toBe('A');
     expect(context.usedFix).toBe('U');
     expect('unusedFix' in context).toBe(false);
     expect(order).toEqual(['auto', 'used']);
     expect(cleanups).toHaveLength(2);
+  });
+
+  it('shares fixture instances across hook and test callbacks', async () => {
+    const setups: string[] = [];
+    const fixtures = normalizeFixtures({
+      shared: [
+        async (_ctx: any, use: any) => {
+          setups.push('shared');
+          await use('value');
+        },
+      ],
+    } as any);
+    const context: Record<string, any> = {};
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+
+    await resolver.resolveTestFixtures(({ shared }: any) => shared);
+    await resolver.resolveHookFixtures(({ shared }: any) => shared);
+
+    expect(context.shared).toBe('value');
+    expect(setups).toEqual(['shared']);
   });
 
   it('throws on circular fixture dependencies', async () => {
@@ -119,12 +256,121 @@ describe('handleFixtures', () => {
 
     const test = {
       fixtures,
-      originalFn: ({ x }: any) => x,
     } as any;
+    const resolver = createFixtureResolver(test, {});
 
-    await expect(handleFixtures(test, {})).rejects.toThrow(
-      /Circular fixture dependency/,
+    await expect(
+      resolver.resolveTestFixtures(({ x }: any) => x),
+    ).rejects.toThrow(/Circular fixture dependency/);
+  });
+
+  it('does not retry fixtures after setup failures', async () => {
+    let setupAttempts = 0;
+    const fixtures = normalizeFixtures({
+      failing: [
+        async () => {
+          setupAttempts++;
+          throw new Error('fixture setup failed');
+        },
+      ],
+    } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, {});
+
+    await expect(
+      resolver.resolveTestFixtures(({ failing }: any) => failing),
+    ).rejects.toThrow('fixture setup failed');
+    await expect(
+      resolver.resolveHookFixtures(({ failing }: any) => failing),
+    ).resolves.toEqual({ status: 'skipped' });
+
+    expect(setupAttempts).toBe(1);
+  });
+
+  it('tears down fixture setup that finishes after cancellation', async () => {
+    const events: string[] = [];
+    let continueSetup: (() => void) | undefined;
+    let continueTeardown: (() => void) | undefined;
+    const setupPaused = new Promise<void>((resolve) => {
+      continueSetup = resolve;
+    });
+    const teardownPaused = new Promise<void>((resolve) => {
+      continueTeardown = resolve;
+    });
+    let teardownStarted: (() => void) | undefined;
+    const teardownStartedPromise = new Promise<void>((resolve) => {
+      teardownStarted = resolve;
+    });
+    const fixtures = normalizeFixtures({
+      slow: [
+        async (_context: any, use: any) => {
+          await setupPaused;
+          events.push('setup');
+          await use('slow');
+          events.push('teardown:start');
+          teardownStarted!();
+          await teardownPaused;
+          events.push('teardown');
+        },
+      ],
+    } as any);
+    const context: Record<string, any> = {};
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver(
+      { fixtures } as any,
+      context,
+      cleanups,
     );
+
+    const resolution = resolver.resolveHookFixtures(({ slow }: any) => slow);
+    await Promise.resolve();
+    const cancellation = resolver.cancelPendingFixtures();
+    continueSetup!();
+
+    await expect(cancellation?.teardownStarted).resolves.toBeUndefined();
+    await teardownStartedPromise;
+    const resolutionSettled = await Promise.race([
+      resolution.then(() => true),
+      new Promise<false>((resolve) => {
+        setImmediate(() => resolve(false));
+      }),
+    ]);
+
+    expect(resolutionSettled).toBe(false);
+    continueTeardown!();
+    await expect(resolution).resolves.toEqual({ status: 'skipped' });
+    expect(events).toEqual(['setup', 'teardown:start', 'teardown']);
+    expect(context).toEqual({});
+    expect(cleanups).toEqual([]);
+  });
+
+  it('settles a cancelled fixture that returns without calling use', async () => {
+    let continueSetup: (() => void) | undefined;
+    const setupPaused = new Promise<void>((resolve) => {
+      continueSetup = resolve;
+    });
+    const fixtures = normalizeFixtures({
+      slow: [
+        async () => {
+          await setupPaused;
+        },
+      ],
+    } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, {});
+
+    const resolution = resolver.resolveHookFixtures(({ slow }: any) => slow);
+    await Promise.resolve();
+    resolver.cancelPendingFixtures();
+    continueSetup!();
+
+    const resolutionSettled = await Promise.race([
+      resolution.then(() => true),
+      new Promise<false>((resolve) => {
+        setImmediate(() => resolve(false));
+      }),
+    ]);
+
+    expect(resolutionSettled).toBe(true);
+    await expect(resolution).resolves.toEqual({ status: 'skipped' });
   });
 
   it('registers cleanups in reverse (unshift) order', async () => {
@@ -148,10 +394,11 @@ describe('handleFixtures', () => {
 
     const test = {
       fixtures,
-      originalFn: () => {},
     } as any;
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver(test, {}, cleanups);
 
-    const { cleanups } = await handleFixtures(test, {});
+    await resolver.resolveTestFixtures();
     for (const cleanup of cleanups) {
       await cleanup();
     }

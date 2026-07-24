@@ -17,12 +17,17 @@ allowBuilds:
 
 autoInstallPeers: false
 
+# The federation examples consume `@module-federation/rstest` canaries from
+# pkg.pr.new (not yet published to npm), which pnpm treats as exotic.
+blockExoticSubdeps: false
+
 # for vsce
 hoistPattern: ['@secretlint/*']
 
 # Reduce the risk of installing compromised packages
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
+  - '@module-federation/*'
   - '@rspack/*'
   - '@rsbuild/*'
   - '@rslib/*'
@@ -31,8 +36,7 @@ minimumReleaseAgeExclude:
   - '@rsdoctor/*'
   - '@rslint/*'
   - '@rstack-dev/doc-ui'
-  # Renovate update: @rslib/core@0.23.0 depends on rsbuild-plugin-dts@0.23.0
-  - rsbuild-plugin-dts@0.23.0
+  - rsbuild-plugin-dts
   # Renovate security update: svelte@5.55.7
   - svelte@5.55.7
 

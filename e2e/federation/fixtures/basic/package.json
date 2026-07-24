@@ -1,0 +1,5 @@
+{
+  "name": "e2e-federation-basic",
+  "private": true,
+  "type": "module"
+}

@@ -33,8 +33,6 @@ export interface ExecutorRunCycleOptions {
    * `test.env` config.
    */
   env?: Record<string, string | undefined>;
-  /** Pre-resolved sharded entries per project (key: `environmentName`). */
-  shardedEntries?: Map<string, { entries: Record<string, string> }>;
   onTraceEvents?: (events: TraceEvent[]) => void;
   /**
    * Cycle build-start timestamp. In watch this is the rebuild start (from the
@@ -61,6 +59,13 @@ export interface ExecutorCycleOutcome {
    * failing-test summary never silently omits an executor's failures.
    */
   testPaths: string[];
+  /**
+   * Test paths deleted during this cycle (watch only). `finalizeRunCycle`
+   * prunes reporter state with these. The node executor fills them from the
+   * dev-compile stats diff; the browser host's watch file-set diff prunes
+   * reporter state directly today, so its outcomes omit them.
+   */
+  deletedTestPaths?: string[];
   duration: { buildTime: number; testTime: number };
   /**
    * Coverage this executor produced this cycle. `finalizeRunCycle` merges every
@@ -111,16 +116,18 @@ export interface TestExecutor {
    * later phase converges it onto the seam.
    */
   collect?(
-    options: Pick<ExecutorRunCycleOptions, 'fileFilters' | 'shardedEntries'>,
+    options: Pick<ExecutorRunCycleOptions, 'fileFilters'>,
   ): Promise<{ list: ListCommandResult[] }>;
   close(): Promise<void>;
   /**
-   * Watch (Phase 6). Signal-only: the callback tells core "something changed";
-   * affected-entry resolution happens inside `runCycle({ mode: 'on-demand' })`,
-   * because node resolves affected entries by pull at cycle time and doing it in
-   * the hook would consume the diff baseline (double-diff hazard). The optional
-   * hint carries only what the transport already knows for free; core treats it
-   * as advisory.
+   * Reserved watch contract, not yet implemented by either executor: the node
+   * watch trigger stays on the dev-compile hooks core attaches directly, and
+   * browser watch reruns are host-driven end to end. Signal-only by design —
+   * the callback tells core "something changed"; affected-entry resolution
+   * happens inside `runCycle({ mode: 'on-demand' })`, because node resolves
+   * affected entries by pull at cycle time and doing it in the hook would
+   * consume the diff baseline (double-diff hazard). The optional hint carries
+   * only what the transport already knows for free; core treats it as advisory.
    */
   onInvalidate?(
     cb: (hint?: {

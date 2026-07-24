@@ -436,9 +436,10 @@ const normalizeMutableConfigFields = (
 
 const syncProjectDerivedFields = (project: ProjectContext): void => {
   project.rootPath = project.normalizedConfig.root || project.rootPath;
-  project.outputModule =
-    project.normalizedConfig.output?.module ??
-    process.env[ENV.OUTPUT_MODULE] !== 'false';
+  project.outputModule = project.normalizedConfig.federation
+    ? false
+    : (project.normalizedConfig.output?.module ??
+      process.env[ENV.OUTPUT_MODULE] !== 'false');
 };
 
 const isUserRstestConfigPlugin = (plugin: unknown): boolean => {

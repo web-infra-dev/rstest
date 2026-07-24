@@ -11,7 +11,7 @@ import { version } from './package.json';
 
 // `RSTEST_VERSION` is build-injected into both @rstest/core and @rstest/browser
 // from each package's own package.json, and the browser-mode runtime gate
-// (core/src/core/browserLoader.ts) refuses to load a browser build whose version
+// (core/src/core/browser/loader.ts) refuses to load a browser build whose version
 // differs from core's. Those two reads can only drift if the packages are
 // versioned independently — which a single build cannot otherwise detect — so
 // assert the peer pair is in lockstep here, surfacing a mismatch at build time
@@ -27,16 +27,20 @@ if (version !== browserVersion) {
 const isBuildWatch = process.argv.includes('--watch');
 const isLibBuild = process.argv.includes('build');
 
+// API Extractor keeps this reference from bundled @vitest/expect but omits
+// the matching global augmentation that makes the declaration self-contained.
+const jestMatchersDtsBanner = `declare global {
+  namespace jest {
+    interface Matchers<R, T = {}> {}
+  }
+}`;
+
 export default defineConfig({
   plugins: publishCheckPlugins(),
   lib: [
     {
       id: 'rstest',
-      format: 'esm',
       syntax: 'es2023',
-      experiments: {
-        advancedEsm: true,
-      },
       dts: {
         isolated: true,
         bundle: process.env.SOURCEMAP
@@ -56,6 +60,9 @@ export default defineConfig({
                 '@vitest/pretty-format',
               ],
             },
+      },
+      banner: {
+        dts: jestMatchersDtsBanner,
       },
       output: {
         sourceMap: process.env.SOURCEMAP === 'true',
@@ -137,11 +144,13 @@ export default defineConfig({
     },
     {
       id: 'browser_runtime',
-      format: 'esm',
       syntax: 'es2023',
       dts: {
         isolated: true,
         bundle: true,
+      },
+      banner: {
+        dts: jestMatchersDtsBanner,
       },
       source: {
         entry: {

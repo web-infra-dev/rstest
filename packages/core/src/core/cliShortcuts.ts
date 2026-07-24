@@ -1,6 +1,30 @@
+import type { RstestContext } from '../types';
 import { clearScreen, color, isTTY, logger } from '../utils';
 
 export const isCliShortcutsEnabled = (): boolean => isTTY('stdin');
+
+/**
+ * Watch-ready banner printed after the initial run and every rerun. Shared by
+ * the node watch loop and the browser watch host so the hint text cannot drift.
+ */
+export const logWatchReadyMessage = (
+  context: RstestContext,
+  enableCliShortcuts: boolean,
+): void => {
+  logger.log(color.green('  Waiting for file changes...'));
+
+  if (enableCliShortcuts) {
+    if (context.snapshotManager.summary.unmatched) {
+      logger.log(
+        `  ${color.dim('press')} ${color.yellow(color.bold('u'))} ${color.dim('to update snapshot')}${color.dim(', press')} ${color.bold('h')} ${color.dim('to show help')}\n`,
+      );
+    } else {
+      logger.log(
+        `  ${color.dim('press')} ${color.bold('h')} ${color.dim('to show help')}${color.dim(', press')} ${color.bold('q')} ${color.dim('to quit')}\n`,
+      );
+    }
+  }
+};
 
 type CliShortcut = {
   /**
@@ -17,6 +41,39 @@ type CliShortcut = {
   action: () => void | Promise<void>;
 };
 
+const notSupportedHint = (key: string): CliShortcut['action'] => {
+  return () => {
+    logger.log(
+      color.yellow(`\n'${key}' is not yet supported in browser watch.\n`),
+    );
+  };
+};
+
+const greyedDescription = (key: string, text: string): string =>
+  `${color.bold(key)}  ${color.dim(`${text} (not yet supported in browser watch)`)}`;
+
+/**
+ * A shortcut whose callback a run type may not support yet: present callback
+ * ⇒ real description/action, absent ⇒ greyed description + hint action.
+ */
+const optionalShortcut = (
+  key: string,
+  label: string,
+  action: CliShortcut['action'] | undefined,
+): CliShortcut => ({
+  key,
+  description: action
+    ? `${color.bold(key)}  ${color.dim(label)}`
+    : greyedDescription(key, label),
+  action: action ?? notSupportedHint(key),
+});
+
+/**
+ * Install the single watch-mode stdin owner. Actions other than quit are
+ * optional: a run type that cannot support one yet (browser-only watch)
+ * omits the callback and the key shows a greyed hint instead — there is
+ * never a second raw-mode stdin subscriber.
+ */
 export async function setupCliShortcuts({
   closeServer,
   runAll,
@@ -25,12 +82,12 @@ export async function setupCliShortcuts({
   runWithTestNamePattern,
   runWithFileFilters,
 }: {
-  runFailedTests: () => Promise<void>;
+  runFailedTests?: () => Promise<void>;
   closeServer: () => Promise<void>;
-  runAll: () => Promise<void>;
-  updateSnapshot: () => Promise<void>;
-  runWithTestNamePattern: (pattern: string | undefined) => Promise<void>;
-  runWithFileFilters: (filters: string[] | undefined) => Promise<void>;
+  runAll?: () => Promise<void>;
+  updateSnapshot?: () => Promise<void>;
+  runWithTestNamePattern?: (pattern: string | undefined) => Promise<void>;
+  runWithFileFilters?: (filters: string[] | undefined) => Promise<void>;
 }): Promise<() => void> {
   const { createInterface, emitKeypressEvents } = await import('node:readline');
 
@@ -130,56 +187,40 @@ export async function setupCliShortcuts({
   };
 
   const shortcuts = [
-    {
-      key: 'f',
-      description: `${color.bold('f')}  ${color.dim('rerun failed tests')}`,
-      action: async () => {
-        await runFailedTests();
-      },
-    },
-    {
-      key: 'a',
-      description: `${color.bold('a')}  ${color.dim('rerun all tests')}`,
-      action: async () => {
-        await runAll();
-      },
-    },
-    {
-      key: 'u',
-      description: `${color.bold('u')}  ${color.dim('update snapshot')}`,
-      action: async () => {
-        await updateSnapshot();
-      },
-    },
-    {
-      key: 't',
-      description: `${color.bold('t')}  ${color.dim('filter by a test name regex pattern')}`,
-      action: () => {
-        clearCurrentInputLine();
-        promptInput(
-          'Enter test name pattern (empty to clear): ',
-          async (pattern) => {
-            await runWithTestNamePattern(pattern);
-          },
-        );
-      },
-    },
-    {
-      key: 'p',
-      description: `${color.bold('p')}  ${color.dim('filter by a filename regex pattern')}`,
-      action: () => {
-        clearCurrentInputLine();
-        promptInput(
-          'Enter file name pattern (empty to clear): ',
-          async (input) => {
-            const filters = input
-              ? input.split(/\s+/).filter(Boolean)
-              : undefined;
-            await runWithFileFilters(filters);
-          },
-        );
-      },
-    },
+    optionalShortcut('f', 'rerun failed tests', runFailedTests),
+    optionalShortcut('a', 'rerun all tests', runAll),
+    optionalShortcut('u', 'update snapshot', updateSnapshot),
+    optionalShortcut(
+      't',
+      'filter by a test name regex pattern',
+      runWithTestNamePattern &&
+        (() => {
+          clearCurrentInputLine();
+          promptInput(
+            'Enter test name pattern (empty to clear): ',
+            async (pattern) => {
+              await runWithTestNamePattern(pattern);
+            },
+          );
+        }),
+    ),
+    optionalShortcut(
+      'p',
+      'filter by a filename regex pattern',
+      runWithFileFilters &&
+        (() => {
+          clearCurrentInputLine();
+          promptInput(
+            'Enter file name pattern (empty to clear): ',
+            async (input) => {
+              const filters = input
+                ? input.split(/\s+/).filter(Boolean)
+                : undefined;
+              await runWithFileFilters(filters);
+            },
+          );
+        }),
+    ),
     {
       key: 'c',
       description: `${color.bold('c')}  ${color.dim('clear screen')}`,
@@ -198,7 +239,7 @@ export async function setupCliShortcuts({
         }
       },
     },
-  ] as CliShortcut[];
+  ] satisfies CliShortcut[];
 
   const handleKeypress = (
     str: string,

@@ -46,8 +46,14 @@ const filterAssetsByEntry = async (
   getAssetFiles: (names: string[]) => Promise<Record<string, string>>,
   getSourceMaps: (names: string[]) => Promise<Record<string, string>>,
   setupAssets: string[],
+  allAssetNames: string[] | undefined,
+  federation: boolean,
 ) => {
-  const assetNames = Array.from(new Set([...entryInfo.files!, ...setupAssets]));
+  const entryAssetNames =
+    federation && allAssetNames
+      ? allAssetNames.filter((name) => !name.endsWith('.map'))
+      : entryInfo.files!;
+  const assetNames = Array.from(new Set([...entryAssetNames, ...setupAssets]));
   const [neededFiles, neededSourceMaps] = await Promise.all([
     getAssetFiles(assetNames),
     getSourceMaps(assetNames),
@@ -73,6 +79,7 @@ const getNodeExecArgv = () => {
 /** Shared parameter type for `runTests` and `collectTests`. */
 type PoolDispatchParams = {
   entries: EntryInfo[];
+  assetNames: string[];
   getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
   getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
   setupEntries: EntryInfo[];
@@ -96,6 +103,7 @@ const buildTask = async ({
   runtimeConfig,
   setupEntries,
   setupAssets,
+  assetNames,
   updateSnapshot,
   getAssetFiles,
   getSourceMaps,
@@ -112,6 +120,7 @@ const buildTask = async ({
   runtimeConfig: RuntimeConfig;
   setupEntries: EntryInfo[];
   setupAssets: string[];
+  assetNames: string[];
   updateSnapshot: SnapshotUpdateState;
   getAssetFiles: PoolDispatchParams['getAssetFiles'];
   getSourceMaps: PoolDispatchParams['getSourceMaps'];
@@ -120,7 +129,14 @@ const buildTask = async ({
   buildId?: number;
 }) => {
   const getAssets = () =>
-    filterAssetsByEntry(entryInfo, getAssetFiles, getSourceMaps, setupAssets);
+    filterAssetsByEntry(
+      entryInfo,
+      getAssetFiles,
+      getSourceMaps,
+      setupAssets,
+      assetNames,
+      project.normalizedConfig.federation,
+    );
   const traceArgs = {
     project: project.name,
     testPath: entryInfo.testPath,
@@ -145,13 +161,16 @@ const buildTask = async ({
       type,
       setupEntries,
       updateSnapshot,
-      /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
-      assets: isMemorySufficient()
-        ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
-            ...traceArgs,
-            mode: 'eager',
-          })
-        : undefined,
+      // Federation entries need the complete compilation asset map. Fetch it
+      // when a worker starts the task so concurrent task preparation cannot
+      // retain one full copy per test entry.
+      assets:
+        isMemorySufficient() && !project.normalizedConfig.federation
+          ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
+              ...traceArgs,
+              mode: 'eager',
+            })
+          : undefined,
     },
     rpcMethods: {
       ...rpcMethods,
@@ -251,6 +270,7 @@ export const createPool = async ({
 }): Promise<{
   runTests: (params: {
     entries: EntryInfo[];
+    assetNames: string[];
     getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
     getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
     setupEntries: EntryInfo[];
@@ -348,6 +368,7 @@ export const createPool = async ({
   return {
     runTests: async ({
       entries,
+      assetNames,
       getAssetFiles,
       getSourceMaps,
       setupEntries,
@@ -400,6 +421,7 @@ export const createPool = async ({
                   runtimeConfig,
                   setupEntries,
                   setupAssets,
+                  assetNames,
                   updateSnapshot,
                   getAssetFiles,
                   getSourceMaps,
@@ -476,6 +498,7 @@ export const createPool = async ({
     },
     collectTests: async ({
       entries,
+      assetNames,
       getAssetFiles,
       getSourceMaps,
       setupEntries,
@@ -499,6 +522,7 @@ export const createPool = async ({
             runtimeConfig,
             setupEntries,
             setupAssets,
+            assetNames,
             updateSnapshot,
             getAssetFiles,
             getSourceMaps,

@@ -37,6 +37,21 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('Test Files 2 passed');
   });
 
+  it('only resolves directly destructured test.for fixtures', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'for-fixtures.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_FOR_FIXTURES_OK');
+  });
+
   it('writes Playwright trace debug artifacts', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
@@ -158,6 +173,22 @@ describe('@rstest/playwright', () => {
     await cli.exec;
     expect(cli.exec.process?.exitCode).toBe(1);
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_FAILURE_DIAGNOSTICS_OK');
+  });
+
+  it('cleans up request and serve fixtures after another fixture fails', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'cleanup-failure.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expect(cli.log).toContain('user cleanup failed');
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CLEANUP_OK');
   });
 
   it('does not write retained traces for passing tests', async () => {
