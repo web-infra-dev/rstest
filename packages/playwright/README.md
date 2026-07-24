@@ -91,7 +91,7 @@ describe('dashboard', () => {
 });
 ```
 
-Hooks are scoped to their `describe` block, not to an extended test object. Every test in the block must provide the fixtures requested by the hook. The same behavior applies to `afterEach` and to cleanup functions returned by `beforeEach`. Fixture instances are shared across the hooks and test body for one test attempt, then torn down in reverse setup order.
+Hooks are scoped to their `describe` block, not to an extended test object. Every test in the block must provide the fixtures requested by the hook; otherwise, Rstest fails that test before invoking the hook and reports the missing fixture. The same behavior applies to `afterEach` and to cleanup functions returned by `beforeEach`. Fixture instances are shared across the hooks and test body for one test attempt, then torn down in reverse setup order.
 
 Declare fixture dependencies through direct object destructuring in the hook parameter. Destructuring a named context inside the hook body does not request fixtures. Rest properties and default values are not supported in fixture-aware callbacks.
 

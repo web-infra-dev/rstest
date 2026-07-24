@@ -126,6 +126,58 @@ describe('createFixtureResolver', () => {
     expect(context).toEqual({ task: { name: 'test' } });
   });
 
+  it('allows TestContext properties in destructured hooks', async () => {
+    const context = Object.assign(() => {}, { task: { name: 'test' } });
+    const resolver = createFixtureResolver({} as any, context);
+
+    await expect(
+      resolver.resolveHookFixtures(({ task }: any) => task.name),
+    ).resolves.toEqual({ status: 'resolved' });
+  });
+
+  it('does not treat Function properties as TestContext properties', async () => {
+    const context = Object.assign(() => {}, { task: { name: 'test' } });
+    const resolver = createFixtureResolver({} as any, context);
+
+    await expect(
+      resolver.resolveHookFixtures(({ name }: any) => name),
+    ).rejects.toThrow('Hook has unknown fixture "name"');
+  });
+
+  it('rejects hook fixtures missing from the current test', async () => {
+    const resolver = createFixtureResolver({} as any, {
+      task: { name: 'plain test' },
+    });
+
+    await expect(
+      resolver.resolveHookFixtures(({ custom }: any) => custom),
+    ).rejects.toThrow(
+      'Hook has unknown fixture "custom". Every test in the hook\'s suite must provide it.',
+    );
+  });
+
+  it('validates all hook fixtures before starting requested fixture setup', async () => {
+    let setupAttempts = 0;
+    const fixtures = normalizeFixtures({
+      available: [
+        async (_context: any, use: any) => {
+          setupAttempts++;
+          await use('available');
+        },
+      ],
+    } as any);
+    const resolver = createFixtureResolver({ fixtures } as any, {
+      task: { name: 'test' },
+    });
+
+    await expect(
+      resolver.resolveHookFixtures(
+        ({ available, missing }: any) => available ?? missing,
+      ),
+    ).rejects.toThrow('Hook has unknown fixture "missing"');
+    expect(setupAttempts).toBe(0);
+  });
+
   it('resolves fixtures directly destructured by hooks', async () => {
     const context: Record<string, any> = {};
     const fixtures = normalizeFixtures({ fixture: 'fixture' } as any);

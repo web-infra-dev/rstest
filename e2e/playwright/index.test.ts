@@ -176,6 +176,23 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CLEANUP_OK');
   });
 
+  it('reports extended hook fixtures missing from base tests', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'hook-fixture-mismatch.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('Hook has unknown fixture "customValue"');
+    expect(output).not.toContain('Playwright hook received a missing fixture');
+  });
+
   it('does not write retained traces for passing tests', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
