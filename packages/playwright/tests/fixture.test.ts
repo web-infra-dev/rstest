@@ -334,8 +334,15 @@ test.extend({}).describe('extended test API', () => {
     const typedHookTest = test.extend<{ hookTitle: string }>({
       hookTitle: 'hook title',
     });
-    // @ts-expect-error Extended test hooks are suite-level and cannot safely infer one test API's fixtures.
+
     typedHookTest.beforeEach(({ hookTitle }) => {
+      void hookTitle;
+
+      return ({ hookTitle }) => {
+        void hookTitle;
+      };
+    });
+    typedHookTest.afterEach(({ hookTitle }) => {
       void hookTitle;
     });
   };

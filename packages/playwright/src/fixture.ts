@@ -1388,10 +1388,13 @@ export type PlaywrightTest<ExtraContext = PlaywrightFixture> =
       fixtures: PlaywrightFixtures<T, ExtraContext>,
     ) => PlaywrightTest<MergeContext<ExtraContext, T>>;
     afterAll: RstestAfterAll;
-    afterEach: (fn: TestCallback<ExtraContext>, timeout?: number) => void;
+    afterEach: <HookContext = ExtraContext>(
+      fn: TestCallback<HookContext>,
+      timeout?: number,
+    ) => void;
     beforeAll: RstestBeforeAll;
-    beforeEach: (
-      fn: BeforeEachCallback<ExtraContext>,
+    beforeEach: <HookContext = ExtraContext>(
+      fn: BeforeEachCallback<HookContext>,
       timeout?: number,
     ) => void;
     describe: typeof rstestDescribe;
