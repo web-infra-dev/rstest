@@ -46,9 +46,10 @@ export const osAgnosticTests = {
 
     // Local names that alias a provider, so aliasing cannot bypass the
     // member-access check: default/namespace imports (`import hostOs from
-    // 'node:os'`, `import proc from 'node:process'`) and `const`-bindings of
-    // one (`const host = process`). Both the import and the binding precede any
-    // use in document order, so the sets are populated before they are read.
+    // 'node:os'`), `require()` bindings (`const proc = require('node:process')`)
+    // and `const`-bindings of another alias (`const host = process`). The
+    // import/binding precedes any use in document order, so the sets are
+    // populated before they are read.
     const osNames = new Set(['os']);
     const processNames = new Set(['process']);
 
@@ -93,6 +94,32 @@ export const osAgnosticTests = {
 
     const isOsRef = (node: IdentNode) => identBoundTo(node, osNames);
 
+    // Which provider a `require('node:os')` / `require('node:process')` call
+    // resolves to, so the CommonJS binding form is tracked like an import.
+    const requiredModule = (node: {
+      type?: string;
+      callee?: { name?: string };
+      arguments?: Array<{ value?: unknown }>;
+    }) => {
+      if (node.type !== 'CallExpression' || node.callee?.name !== 'require') {
+        return null;
+      }
+      const source = node.arguments?.[0]?.value;
+      if (source === 'os' || source === 'node:os') return 'os' as const;
+      if (source === 'process' || source === 'node:process') {
+        return 'process' as const;
+      }
+      return null;
+    };
+
+    // Which provider an initializer resolves to: a `process`/`os` reference
+    // (bare, aliased, or global) or a `require()` of the module.
+    const providerOf = (node: MemberNode | IdentNode) => {
+      if (isProcessRef(node)) return 'process' as const;
+      if (isOsRef(node)) return 'os' as const;
+      return requiredModule(node);
+    };
+
     return {
       MemberExpression(node: MemberNode) {
         const property = memberName(node);
@@ -120,18 +147,23 @@ export const osAgnosticTests = {
         if (!node.init) {
           return;
         }
-        // `const host = process` / `const host = os` propagates the alias into
-        // the name sets so a later `host.platform` / `host.type()` is caught.
+        // `const host = process` / `const host = require('node:os')`
+        // propagates the alias into the name sets so a later `host.platform` /
+        // `host.type()` is caught.
         if (node.id.type === 'Identifier' && node.id.name !== undefined) {
-          if (isProcessRef(node.init)) {
+          const provider = providerOf(node.init);
+          if (provider === 'process') {
             processNames.add(node.id.name);
-          } else if (isOsRef(node.init)) {
+          } else if (provider === 'os') {
             osNames.add(node.id.name);
           }
           return;
         }
-        // `const { platform } = process` (or `globalThis.process`).
-        if (node.id.type === 'ObjectPattern' && isProcessRef(node.init)) {
+        // `const { platform } = process` / `= require('node:process')`.
+        if (
+          node.id.type === 'ObjectPattern' &&
+          providerOf(node.init) === 'process'
+        ) {
           for (const property of node.id.properties ?? []) {
             if (property.key?.name === 'platform') {
               report(property, 'destructuring `platform` from process');
