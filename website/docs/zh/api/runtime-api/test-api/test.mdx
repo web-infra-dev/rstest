@@ -370,6 +370,8 @@ Fixture 函数接收两个参数：
 1. **context** — 包含其他 fixture 以及 `TestContext`（`task`、`expect`、`onTestFinished`、`onTestFailed`）。使用对象解构来声明你需要的依赖。
 2. **use** — 调用 `await use(value)` 把 fixture 的值传递给测试。
 
+使用 fixture 的 callback 必须在 callback 参数中通过直接对象解构显式列出所有请求的 fixture。Rstest 不会从函数体内的解构推断依赖。测试 callback、fixture 函数和 per-test hook 不支持 `({ db, ...rest })` 这类对象 rest property，也不支持 `({ db = fallback })` 或 `({ db } = {})` 这类默认值。
+
 `await use(value)` 之前的代码是 **setup**，之后的代码是 **teardown**（测试结束后执行）。
 
 ```ts
@@ -442,9 +444,47 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
 });
 ```
 
+### 在 hook 中使用 fixture
+
+<ApiMeta addedVersion="0.11.4" />
+
+`beforeEach`、`afterEach` 以及 `beforeEach` 返回的 cleanup 函数都可以请求 fixture。Rstest 会在 `beforeEach` 之前初始化测试 callback 请求的 fixture，以保持现有的测试 setup 顺序；仅由 hook 请求的 fixture 则会在该 hook 运行前初始化。同一个实例会在本次 test attempt 的后续阶段共享，并在所有 per-test hooks 结束后执行 teardown。
+
+Hook 必须直接在 callback 参数中声明 fixture 依赖，例如 `beforeEach(({ db }) => {})`。`beforeEach((context) => {})` 这类 named hook context 仍可用于访问常规 `TestContext`，但在函数体内解构 `context` 不会初始化惰性 fixture。
+
+Core hooks 是 suite 级 API，因此需要显式传入 fixture context 类型，并在使用对应 extended test API 的 suite 内注册 hook：
+
+```ts
+import { beforeEach, describe, test } from '@rstest/core';
+
+interface DbFixtures {
+  db: Database;
+}
+
+describe('database tests', () => {
+  const dbTest = test.extend<DbFixtures>({
+    db: async ({}, use) => {
+      const db = await connectTestDb();
+      await use(db);
+      await db.close();
+    },
+  });
+
+  beforeEach<DbFixtures>(({ db }) => {
+    return async ({ db }) => {
+      await db.rollback();
+    };
+  });
+
+  dbTest('creates a user', async () => {
+    // 即使测试函数没有请求 db，也会为 beforeEach 初始化它。
+  });
+});
+```
+
 ### 自动 fixture（`auto`）
 
-Fixture 默认是按需执行的：只有测试函数中解构了它（或被其他 fixture 依赖）才会运行。如果你希望某个 fixture 对每个测试都自动生效——即使测试没有解构它——可以使用元组语法并设置 `{ auto: true }`：
+Fixture 默认是按需执行的：只有测试或 per-test hook callback 中解构了它（或被其他 fixture 依赖）才会运行。如果你希望某个 fixture 对每个测试都自动生效——即使没有 callback 解构它——可以使用元组语法并设置 `{ auto: true }`：
 
 ```ts
 import { test } from '@rstest/core';

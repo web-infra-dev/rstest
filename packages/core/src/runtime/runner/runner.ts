@@ -32,12 +32,15 @@ import {
 import { createExpect } from '../api/expect';
 import { formatTestError, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
-import { handleFixtures } from './fixtures';
+import { createFixtureResolver } from './fixtures';
+import type { FixtureResolver } from './fixtures';
 import { cloneTaskMeta } from './metadata';
 import {
   getTestStatus,
+  inheritTimeout,
   limitConcurrency,
   markAllTestAsSkipped,
+  runWithTimeout,
   sanitizeAttemptCount,
   wrapTimeout,
 } from './task';
@@ -150,12 +153,14 @@ export class TestRunner {
         meta: test.meta,
       });
 
+      const fixtureResolver = this.beforeRunTest(
+        test,
+        snapshotClient.getSnapshotState(testPath),
+        fixtureCleanups,
+      );
+
       try {
-        await this.beforeRunTest(
-          test,
-          snapshotClient.getSnapshotState(testPath),
-          fixtureCleanups,
-        );
+        await fixtureResolver.resolveTestFixtures(test.originalFn);
       } catch (error) {
         if (error instanceof TestSkipError) {
           skipped = true;
@@ -174,14 +179,99 @@ export class TestRunner {
         }
       }
 
-      if (!result) {
-        try {
-          for (const fn of parentHooks.beforeEachListeners) {
-            const cleanupFn = await fn(test.context);
-            if (cleanupFn) cleanups.push(cleanupFn);
+      const runPerTestHook = async (
+        fn: BeforeEachListener | AfterEachListener,
+      ): Promise<
+        | { status: 'completed'; cleanup?: AfterEachListener }
+        | { status: 'skipped' }
+        | {
+            status: 'failed';
+            phase: 'fixture' | 'callback';
+            error: unknown;
           }
+      > => {
+        let callbackStarted = false;
+        const runHook = async (callback: (...args: any[]) => any) => {
+          const resolution =
+            await fixtureResolver.resolveHookFixtures(callback);
+          if (resolution.status === 'skipped') {
+            return { status: 'skipped' as const };
+          }
+          callbackStarted = true;
+          const cleanup = await callback(test.context);
+          return { status: 'completed' as const, cleanup };
+        };
+        let hookExecution: ReturnType<typeof runHook> | undefined;
+        try {
+          return await runWithTimeout(fn, (callback) => {
+            hookExecution = runHook(callback);
+            return hookExecution;
+          });
         } catch (error) {
-          if (error instanceof TestSkipError) {
+          const cancellation =
+            !callbackStarted && fixtureResolver.cancelPendingFixtures();
+          if (cancellation && hookExecution) {
+            const hookCompletion = hookExecution.then(
+              () => ({ status: 'completed' as const }),
+              (fixtureError: unknown) => ({
+                status: 'failed' as const,
+                error: fixtureError,
+              }),
+            );
+            const cancellationProgress = Promise.race([
+              hookCompletion.then((completion) => ({
+                status: 'completed' as const,
+                completion,
+              })),
+              cancellation.teardownStarted.then(() => ({
+                status: 'teardown-started' as const,
+              })),
+            ]);
+            const waitForCancellationProgress = inheritTimeout(
+              fn,
+              () => cancellationProgress,
+            );
+            fixtureCleanups.unshift(async () => {
+              let progress: Awaited<typeof cancellationProgress>;
+              try {
+                progress = await waitForCancellationProgress();
+              } catch {
+                // The original hook timeout is already reported. This timeout
+                // only bounds how long unfinished setup may delay the test.
+                return;
+              }
+              // Once `use` is reached, match normal fixture cleanup semantics:
+              // teardown must finish before the runner continues.
+              const completion =
+                progress.status === 'teardown-started'
+                  ? await hookCompletion
+                  : progress.completion;
+              if (completion.status === 'failed') {
+                throw completion.error;
+              }
+            });
+          }
+          return {
+            status: 'failed',
+            phase: callbackStarted ? 'callback' : 'fixture',
+            error,
+          };
+        }
+      };
+
+      if (!result) {
+        for (const fn of parentHooks.beforeEachListeners) {
+          const hookResult = await runPerTestHook(fn);
+          if (hookResult.status === 'completed') {
+            if (hookResult.cleanup) {
+              cleanups.push(inheritTimeout(fn, hookResult.cleanup));
+            }
+            continue;
+          }
+          if (hookResult.status === 'skipped') {
+            continue;
+          }
+          if (hookResult.error instanceof TestSkipError) {
             skipped = true;
             result = skipResult();
           } else {
@@ -190,12 +280,13 @@ export class TestRunner {
               status: 'fail' as const,
               parentNames: test.parentNames,
               name: test.name,
-              errors: await formatTestError(error, test),
+              errors: await formatTestError(hookResult.error, test),
               testPath,
               project,
               meta: test.meta,
             };
           }
+          break;
         }
       }
 
@@ -289,15 +380,21 @@ export class TestRunner {
         .concat(cleanups);
 
       test.context.task.result = result;
-      try {
-        for (const fn of afterEachFns) {
-          await fn(test.context);
+      for (const fn of afterEachFns) {
+        const hookResult = await runPerTestHook(fn);
+        if (
+          hookResult.status === 'completed' ||
+          hookResult.status === 'skipped'
+        ) {
+          continue;
         }
-      } catch (error) {
         result.status = 'fail';
         result.errors ??= [];
-        result.errors.push(...(await formatTestError(error)));
+        result.errors.push(...(await formatTestError(hookResult.error)));
         test.context.task.result = result;
+        if (hookResult.phase === 'callback') {
+          break;
+        }
       }
 
       for (const fn of fixtureCleanups) {
@@ -827,11 +924,11 @@ export class TestRunner {
     );
   }
 
-  private async beforeRunTest(
+  private beforeRunTest(
     test: TestCase,
     snapshotState: SnapshotState,
     fixtureCleanups: (() => Promise<void>)[],
-  ): Promise<void> {
+  ): FixtureResolver {
     setState<MatcherState>(
       {
         assertionCalls: 0,
@@ -857,7 +954,7 @@ export class TestRunner {
       enumerable: false,
     });
 
-    await handleFixtures(test, context, fixtureCleanups);
+    return createFixtureResolver(test, context, fixtureCleanups);
   }
 
   private afterRunTest(test: TestCase): void {

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { expect as coreExpect } from '@rstest/core';
-import { beforeEach, expect, test } from '../src';
+import { afterEach, beforeEach, expect, test } from '../src';
 import { getDebugOptions, resolveLaunchOptions } from '../src/fixture';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type {
@@ -300,16 +300,46 @@ test.extend({}).describe('extended test API', () => {
   });
 
   hookExpectTest.describe('wrapped hooks', () => {
-    hookExpectTest.beforeEach(async () => {
+    const hookEvents: string[] = [];
+
+    beforeEach<{ hookTitle: string }>(async ({ hookTitle }) => {
       expect.assertions(2);
-      expect('hook title').toBe('hook title');
-      await expect(createPage('hook title')).toHaveTitle('hook title');
+      expect(hookTitle).toBe('hook title');
+      await expect(createPage(hookTitle)).toHaveTitle('hook title');
+      hookEvents.push(`beforeEach:${hookTitle}`);
+
+      return ({ hookTitle }) => {
+        hookEvents.push(`cleanup:${hookTitle}`);
+      };
+    });
+
+    afterEach<{ hookTitle: string }>(({ hookTitle }) => {
+      hookEvents.push(`afterEach:${hookTitle}`);
     });
 
     hookExpectTest('counts Playwright assertions in extended hooks', () => {});
+
+    hookExpectTest.afterAll(() => {
+      expect(hookEvents).toEqual([
+        'beforeEach:hook title',
+        'afterEach:hook title',
+        'cleanup:hook title',
+      ]);
+    });
   });
 
   test.extend({}).beforeEach(() => {});
+
+  const assertExtendedHookTypes = () => {
+    const typedHookTest = test.extend<{ hookTitle: string }>({
+      hookTitle: 'hook title',
+    });
+    // @ts-expect-error Extended test hooks are suite-level and cannot safely infer one test API's fixtures.
+    typedHookTest.beforeEach(({ hookTitle }) => {
+      void hookTitle;
+    });
+  };
+  void assertExtendedHookTypes;
 
   test.extend({}).for<{ value: string }>`
     value

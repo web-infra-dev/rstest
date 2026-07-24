@@ -107,6 +107,44 @@ export default defineConfig({
 
 下面说明每个 fixture 的常见用法。`page` 和 `serve` 会链接到已有示例，避免重复展示相同代码。
 
+### 在 hook 中使用 fixture
+
+<ApiMeta addedVersion="0.11.4" />
+
+Suite 级 hook 可以请求该 suite 内测试所提供的 fixture。需要显式指定 hook 的 fixture context 类型；只在 hook 中使用的 fixture 不需要设置 `auto: true`：
+
+```ts
+import {
+  beforeEach,
+  describe,
+  expect,
+  test,
+  type PlaywrightFixture,
+} from '@rstest/playwright';
+
+type DashboardFixtures = PlaywrightFixture & {
+  route: string;
+};
+
+const dashboardTest = test.extend<{ route: string }>({
+  route: '/dashboard',
+});
+
+describe('dashboard', () => {
+  beforeEach<DashboardFixtures>(async ({ page, route }) => {
+    await page.goto(`http://localhost:3000${route}`);
+  });
+
+  dashboardTest('shows the dashboard', async ({ page }) => {
+    await expect(page.locator('h1')).toHaveText('Dashboard');
+  });
+});
+```
+
+Hook 的作用域是所在的 `describe` block，而不是某个 extended test 对象。因此，该 block 内的每个测试都必须提供 hook 请求的 fixture。`afterEach` 和 `beforeEach` 返回的 cleanup 函数同样支持这一行为。在一次 test attempt 内，hooks 与测试函数共享 fixture 实例，最后按 setup 的反序执行 teardown。
+
+请在 hook 参数中通过直接对象解构声明 fixture 依赖。在 hook 函数体内解构 named context 不会请求 fixture。使用 fixture 的 callback 不支持 rest property 和默认值。
+
 ### `browser`
 
 当你需要自己创建自定义 browser context 时，可以使用 `browser`：

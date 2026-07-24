@@ -59,6 +59,42 @@ test('page title', async ({ page }) => {
 
 The sections below show how each fixture is commonly used. `page` and `serve` link to the existing examples to avoid repeating the same code.
 
+### Using fixtures in hooks
+
+Suite-level hooks can request fixtures provided by the tests in that suite. Specify the hook's fixture context type explicitly; a fixture used only by a hook does not need `auto: true`:
+
+```ts
+import {
+  beforeEach,
+  describe,
+  expect,
+  test,
+  type PlaywrightFixture,
+} from '@rstest/playwright';
+
+type DashboardFixtures = PlaywrightFixture & {
+  route: string;
+};
+
+const dashboardTest = test.extend<{ route: string }>({
+  route: '/dashboard',
+});
+
+describe('dashboard', () => {
+  beforeEach<DashboardFixtures>(async ({ page, route }) => {
+    await page.goto(`http://localhost:3000${route}`);
+  });
+
+  dashboardTest('shows the dashboard', async ({ page }) => {
+    await expect(page.locator('h1')).toHaveText('Dashboard');
+  });
+});
+```
+
+Hooks are scoped to their `describe` block, not to an extended test object. Every test in the block must provide the fixtures requested by the hook. The same behavior applies to `afterEach` and to cleanup functions returned by `beforeEach`. Fixture instances are shared across the hooks and test body for one test attempt, then torn down in reverse setup order.
+
+Declare fixture dependencies through direct object destructuring in the hook parameter. Destructuring a named context inside the hook body does not request fixtures. Rest properties and default values are not supported in fixture-aware callbacks.
+
 ### `browser`
 
 Use `browser` when you need to create a custom browser context yourself:
