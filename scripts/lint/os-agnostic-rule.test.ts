@@ -25,6 +25,14 @@ const fixtures: Record<string, { code: string; hits: number }> = {
     code: `const isWin = process['platform'] === 'win32';`,
     hits: 1,
   },
+  'process[`platform`] (template-literal key)': {
+    code: 'const p = process[`platform`];',
+    hits: 1,
+  },
+  'globalThis[`process`].platform (template-literal key)': {
+    code: 'const p = globalThis[`process`].platform;',
+    hits: 1,
+  },
   'globalThis.process.platform': {
     code: `const p = globalThis.process.platform;`,
     hits: 1,

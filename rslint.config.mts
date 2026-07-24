@@ -57,10 +57,21 @@ export const osAgnosticTests = {
       node.name !== undefined &&
       names.has(node.name);
 
+    // The accessed property name: `.name` for a static member, the literal
+    // `.value` for a computed string key, or the cooked text for a
+    // no-substitution template key (`obj[`platform`]`, which would otherwise
+    // parse as a TemplateLiteral with an undefined `.value` and slip through).
     const memberName = (node: {
-      property: { name?: string; value?: unknown };
+      property: {
+        name?: string;
+        value?: unknown;
+        quasis?: Array<{ value?: { cooked?: unknown } }>;
+      };
       computed: boolean;
-    }) => (node.computed ? node.property.value : node.property.name);
+    }) =>
+      node.computed
+        ? (node.property.value ?? node.property.quasis?.[0]?.value?.cooked)
+        : node.property.name;
 
     const isGlobalObject = (node: IdentNode) =>
       node.type === 'Identifier' &&
