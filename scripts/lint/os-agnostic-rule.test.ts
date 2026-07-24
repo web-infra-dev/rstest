@@ -25,8 +25,28 @@ const fixtures: Record<string, { code: string; hits: number }> = {
     code: `const isWin = process['platform'] === 'win32';`,
     hits: 1,
   },
+  'globalThis.process.platform': {
+    code: `const p = globalThis.process.platform;`,
+    hits: 1,
+  },
+  'global.process.platform': {
+    code: `const p = global.process.platform;`,
+    hits: 1,
+  },
   'platform destructured from process': {
     code: `const { platform: p } = process;\nexport { p };`,
+    hits: 1,
+  },
+  'platform destructured from globalThis.process': {
+    code: `const { platform: p } = globalThis.process;\nexport { p };`,
+    hits: 1,
+  },
+  "named import of platform from 'node:process'": {
+    code: `import { platform } from 'node:process';\nexport const p = platform;`,
+    hits: 1,
+  },
+  'platform through an aliased default process import': {
+    code: `import proc from 'node:process';\nexport const p = proc.platform;`,
     hits: 1,
   },
   "named import of platform from 'node:os'": {

@@ -8,7 +8,7 @@ import { defineConfig, ts } from '@rslint/core';
 // Stub/restore via Object.defineProperty + Object.getOwnPropertyDescriptor is
 // intentionally not flagged: it is the sanctioned pattern.
 //
-// Exported so scripts/os-agnostic-rule.test.ts can mount it in a minimal,
+// Exported so scripts/lint/os-agnostic-rule.test.ts can mount it in a minimal,
 // project-free config — linting fixtures without the type-aware program this
 // config otherwise builds (which the syntactic rule does not need).
 export const osAgnosticTests = {
@@ -32,31 +32,62 @@ export const osAgnosticTests = {
   }) {
     // ESTree nodes; typed structurally since the plugin worker passes plain
     // ESLint-shaped objects.
+    type MemberNode = {
+      type: string;
+      object: MemberNode | { type: string; name?: string };
+      property: { name?: string; value?: unknown };
+      computed: boolean;
+      name?: string;
+    };
     const report = (node: unknown, read: string) =>
       context.report({ node, messageId: 'banned', data: { read } });
 
-    // Local names bound to the os module via default/namespace imports
-    // (`import hostOs from 'node:os'`, `import * as hostOs from 'node:os'`),
-    // so aliasing cannot bypass the member-access check. Imports precede any
-    // use in document order, so the set is populated before it is consulted.
-    const osModuleNames = new Set(['os']);
+    // Local names bound to a module via default/namespace imports, so aliasing
+    // cannot bypass the member-access check (`import hostOs from 'node:os'`,
+    // `import proc from 'node:process'`). Imports precede any use in document
+    // order, so the sets are populated before they are consulted.
+    const osNames = new Set(['os']);
+    const processNames = new Set(['process']);
+
+    const memberName = (node: {
+      property: { name?: string; value?: unknown };
+      computed: boolean;
+    }) => (node.computed ? node.property.value : node.property.name);
+
+    const isGlobalObject = (node: { type: string; name?: string }) =>
+      node.type === 'Identifier' &&
+      (node.name === 'globalThis' || node.name === 'global');
+
+    // Whether an expression resolves to the `process` global: the bare (or
+    // aliased) identifier, or `globalThis.process` / `global.process`.
+    const isProcessRef = (
+      node: MemberNode | { type: string; name?: string },
+    ) => {
+      if (node.type === 'Identifier') {
+        return node.name !== undefined && processNames.has(node.name);
+      }
+      const member = node as MemberNode;
+      return (
+        member.type === 'MemberExpression' &&
+        isGlobalObject(member.object as { type: string; name?: string }) &&
+        memberName(member) === 'process'
+      );
+    };
+
+    const isOsRef = (node: { type: string; name?: string }) =>
+      node.type === 'Identifier' &&
+      node.name !== undefined &&
+      osNames.has(node.name);
 
     return {
-      MemberExpression(node: {
-        object: { type: string; name?: string };
-        property: { type: string; name?: string; value?: unknown };
-        computed: boolean;
-      }) {
-        const property = node.computed
-          ? node.property.value
-          : node.property.name;
-        if (node.object.name === 'process' && property === 'platform') {
+      MemberExpression(node: MemberNode) {
+        const property = memberName(node);
+        if (property === 'platform' && isProcessRef(node.object)) {
           report(node, 'process.platform');
         }
         if (
-          node.object.name !== undefined &&
-          osModuleNames.has(node.object.name) &&
-          (property === 'platform' || property === 'type')
+          (property === 'platform' || property === 'type') &&
+          isOsRef(node.object as { type: string; name?: string })
         ) {
           report(node, `\`${property}()\` from node:os`);
         }
@@ -69,9 +100,13 @@ export const osAgnosticTests = {
             key?: { type: string; name?: string };
           }>;
         };
-        init?: { type: string; name?: string } | null;
+        init?: (MemberNode & { name?: string }) | null;
       }) {
-        if (node.init?.name !== 'process' || node.id.type !== 'ObjectPattern') {
+        if (
+          node.id.type !== 'ObjectPattern' ||
+          !node.init ||
+          !isProcessRef(node.init)
+        ) {
           return;
         }
         for (const property of node.id.properties ?? []) {
@@ -88,18 +123,24 @@ export const osAgnosticTests = {
           imported?: { type: string; name?: string };
         }>;
       }) {
-        if (node.source.value !== 'os' && node.source.value !== 'node:os') {
+        const source = node.source.value;
+        const fromOs = source === 'os' || source === 'node:os';
+        const fromProcess = source === 'process' || source === 'node:process';
+        if (!fromOs && !fromProcess) {
           return;
         }
         for (const specifier of node.specifiers) {
           if (specifier.type === 'ImportSpecifier') {
             const imported = specifier.imported?.name;
-            if (imported === 'platform' || imported === 'type') {
+            if (fromOs && (imported === 'platform' || imported === 'type')) {
               report(specifier, `importing \`${imported}\` from node:os`);
+            }
+            if (fromProcess && imported === 'platform') {
+              report(specifier, 'importing `platform` from node:process');
             }
           } else if (specifier.local?.name !== undefined) {
             // ImportDefaultSpecifier / ImportNamespaceSpecifier
-            osModuleNames.add(specifier.local.name);
+            (fromOs ? osNames : processNames).add(specifier.local.name);
           }
         }
       },
