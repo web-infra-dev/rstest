@@ -44,10 +44,11 @@ export const osAgnosticTests = {
     const report = (node: unknown, read: string) =>
       context.report({ node, messageId: 'banned', data: { read } });
 
-    // Local names bound to a module via default/namespace imports, so aliasing
-    // cannot bypass the member-access check (`import hostOs from 'node:os'`,
-    // `import proc from 'node:process'`). Imports precede any use in document
-    // order, so the sets are populated before they are consulted.
+    // Local names that alias a provider, so aliasing cannot bypass the
+    // member-access check: default/namespace imports (`import hostOs from
+    // 'node:os'`, `import proc from 'node:process'`) and `const`-bindings of
+    // one (`const host = process`). Both the import and the binding precede any
+    // use in document order, so the sets are populated before they are read.
     const osNames = new Set(['os']);
     const processNames = new Set(['process']);
 
@@ -97,6 +98,7 @@ export const osAgnosticTests = {
       VariableDeclarator(node: {
         id: {
           type: string;
+          name?: string;
           properties?: Array<{
             type: string;
             key?: { type: string; name?: string };
@@ -104,16 +106,25 @@ export const osAgnosticTests = {
         };
         init?: MemberNode | null;
       }) {
-        if (
-          node.id.type !== 'ObjectPattern' ||
-          !node.init ||
-          !isProcessRef(node.init)
-        ) {
+        if (!node.init) {
           return;
         }
-        for (const property of node.id.properties ?? []) {
-          if (property.key?.name === 'platform') {
-            report(property, 'destructuring `platform` from process');
+        // `const host = process` / `const host = os` propagates the alias into
+        // the name sets so a later `host.platform` / `host.type()` is caught.
+        if (node.id.type === 'Identifier' && node.id.name !== undefined) {
+          if (isProcessRef(node.init)) {
+            processNames.add(node.id.name);
+          } else if (isOsRef(node.init)) {
+            osNames.add(node.id.name);
+          }
+          return;
+        }
+        // `const { platform } = process` (or `globalThis.process`).
+        if (node.id.type === 'ObjectPattern' && isProcessRef(node.init)) {
+          for (const property of node.id.properties ?? []) {
+            if (property.key?.name === 'platform') {
+              report(property, 'destructuring `platform` from process');
+            }
           }
         }
       },
@@ -167,7 +178,13 @@ export default defineConfig([
     },
   },
   {
-    files: ['packages/*/tests/**'],
+    // Most packages keep unit tests under tests/; browser-ui colocates them as
+    // src/**/*.test.{ts,tsx}. Both are ubuntu-only in CI, so cover both.
+    files: [
+      'packages/*/tests/**',
+      'packages/*/src/**/*.test.ts',
+      'packages/*/src/**/*.test.tsx',
+    ],
     plugins: { rstest: { rules: { 'os-agnostic-tests': osAgnosticTests } } },
     rules: {
       'rstest/os-agnostic-tests': 'error',

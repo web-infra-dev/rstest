@@ -49,6 +49,14 @@ const fixtures: Record<string, { code: string; hits: number }> = {
     code: `import proc from 'node:process';\nexport const p = proc.platform;`,
     hits: 1,
   },
+  'platform through a const-aliased process': {
+    code: `const host = process;\nexport const p = host.platform;`,
+    hits: 1,
+  },
+  'type() through a const-aliased os import': {
+    code: `import os from 'node:os';\nconst host = os;\nexport const t = host.type();`,
+    hits: 1,
+  },
   "named import of platform from 'node:os'": {
     code: `import { platform } from 'node:os';\nexport const p = platform();`,
     hits: 1,
