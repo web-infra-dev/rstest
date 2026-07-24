@@ -30,11 +30,13 @@ export const osAgnosticTests = {
       data: { read: string };
     }) => void;
   }) {
-    // ESTree nodes; typed structurally since the plugin worker passes plain
-    // ESLint-shaped objects.
+    // ESTree nodes, typed structurally since the plugin worker passes plain
+    // ESLint-shaped objects. IdentNode is the identifier-shaped subset the
+    // predicates inspect; MemberNode adds the member-access fields.
+    type IdentNode = { type: string; name?: string };
     type MemberNode = {
       type: string;
-      object: MemberNode | { type: string; name?: string };
+      object: MemberNode | IdentNode;
       property: { name?: string; value?: unknown };
       computed: boolean;
       name?: string;
@@ -49,35 +51,35 @@ export const osAgnosticTests = {
     const osNames = new Set(['os']);
     const processNames = new Set(['process']);
 
+    const identBoundTo = (node: IdentNode, names: Set<string>) =>
+      node.type === 'Identifier' &&
+      node.name !== undefined &&
+      names.has(node.name);
+
     const memberName = (node: {
       property: { name?: string; value?: unknown };
       computed: boolean;
     }) => (node.computed ? node.property.value : node.property.name);
 
-    const isGlobalObject = (node: { type: string; name?: string }) =>
+    const isGlobalObject = (node: IdentNode) =>
       node.type === 'Identifier' &&
       (node.name === 'globalThis' || node.name === 'global');
 
     // Whether an expression resolves to the `process` global: the bare (or
     // aliased) identifier, or `globalThis.process` / `global.process`.
-    const isProcessRef = (
-      node: MemberNode | { type: string; name?: string },
-    ) => {
+    const isProcessRef = (node: MemberNode | IdentNode) => {
       if (node.type === 'Identifier') {
-        return node.name !== undefined && processNames.has(node.name);
+        return identBoundTo(node, processNames);
       }
       const member = node as MemberNode;
       return (
         member.type === 'MemberExpression' &&
-        isGlobalObject(member.object as { type: string; name?: string }) &&
+        isGlobalObject(member.object) &&
         memberName(member) === 'process'
       );
     };
 
-    const isOsRef = (node: { type: string; name?: string }) =>
-      node.type === 'Identifier' &&
-      node.name !== undefined &&
-      osNames.has(node.name);
+    const isOsRef = (node: IdentNode) => identBoundTo(node, osNames);
 
     return {
       MemberExpression(node: MemberNode) {
@@ -87,7 +89,7 @@ export const osAgnosticTests = {
         }
         if (
           (property === 'platform' || property === 'type') &&
-          isOsRef(node.object as { type: string; name?: string })
+          isOsRef(node.object)
         ) {
           report(node, `\`${property}()\` from node:os`);
         }
@@ -100,7 +102,7 @@ export const osAgnosticTests = {
             key?: { type: string; name?: string };
           }>;
         };
-        init?: (MemberNode & { name?: string }) | null;
+        init?: MemberNode | null;
       }) {
         if (
           node.id.type !== 'ObjectPattern' ||
