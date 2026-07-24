@@ -145,6 +145,21 @@ Hooks are scoped to their `describe` block, not to an extended test object. Ever
 
 Declare fixture dependencies through direct object destructuring in the hook parameter. Destructuring a named context inside the hook body does not request fixtures. Rest properties and default values are not supported in fixture-aware callbacks.
 
+### Using fixtures with `test.for`
+
+Destructure fixtures directly from the second callback parameter when using `test.for`:
+
+```ts
+test.for([{ path: '/dashboard' }])(
+  'opens $path',
+  async ({ path }, { page }) => {
+    await page.goto(`http://localhost:3000${path}`);
+  },
+);
+```
+
+A named second parameter can still access built-in `TestContext` APIs such as `task` and `expect`, but property access or destructuring through that name does not request fixtures.
+
 ### `browser`
 
 Use `browser` when you need to create a custom browser context yourself:

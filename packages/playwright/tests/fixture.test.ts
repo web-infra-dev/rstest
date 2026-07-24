@@ -395,22 +395,24 @@ test.extend({}).describe('extended test API', () => {
     },
   );
 
-  browserTest.for([{ path: 'about:blank' }])(
-    'detects fixtures from named test.for callback context',
-    async ({ path }, context) => {
-      await context.page.goto(path);
-
-      expect(context.page.url()).toBe(path);
+  let fixtureSetupCount = 0;
+  const namedForTest = test.extend<{ shadowedValue: string }>({
+    shadowedValue: async (_, use) => {
+      fixtureSetupCount++;
+      await use('fixture value');
     },
-  );
+  });
 
-  browserTest.for([{ path: 'about:blank' }])(
-    'detects destructured fixtures from named test.for callback context',
-    async ({ path }, context) => {
-      const { page } = context;
-      await page.goto(path);
-
-      expect(page.url()).toBe(path);
+  namedForTest.for([{ rows: [{ shadowedValue: 'local value' }] }])(
+    'ignores fixtures from a shadowed named test.for context',
+    ({ rows }, context) => {
+      expect(rows.map((context) => context.shadowedValue)).toEqual([
+        'local value',
+      ]);
+      expect(context.task.name).toBe(
+        'ignores fixtures from a shadowed named test.for context',
+      );
+      expect(fixtureSetupCount).toBe(0);
     },
   );
 
