@@ -10,7 +10,10 @@ import { filterFiles } from '../../src/utils/testFiles';
 const withPlatform = (platform: NodeJS.Platform, fn: () => void) => {
   // `process.platform` always exists, so the descriptor lookup cannot miss.
   const original = Object.getOwnPropertyDescriptor(process, 'platform')!;
-  Object.defineProperty(process, 'platform', { value: platform });
+  // Spread the original descriptor so the stub keeps its configurable/writable
+  // flags — the restore in `finally` then always succeeds regardless of how the
+  // host defined `process.platform`.
+  Object.defineProperty(process, 'platform', { ...original, value: platform });
   try {
     fn();
   } finally {

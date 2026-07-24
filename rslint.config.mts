@@ -148,7 +148,12 @@ export const osAgnosticTests = {
           name?: string;
           properties?: Array<{
             type: string;
-            key?: { type: string; name?: string };
+            computed?: boolean;
+            key?: {
+              name?: string;
+              value?: unknown;
+              quasis?: Array<{ value?: { cooked?: unknown } }>;
+            };
           }>;
         };
         init?: MemberNode | null;
@@ -169,11 +174,15 @@ export const osAgnosticTests = {
           return;
         }
         // `const { platform } = process`, `const { platform, type } = os`
-        // (or a require()/alias of either).
+        // (or a require()/alias of either), including computed keys like
+        // `const { ['platform']: p } = process`.
         if (node.id.type === 'ObjectPattern') {
           const provider = providerOf(node.init);
           for (const property of node.id.properties ?? []) {
-            const key = property.key?.name;
+            const key = memberName({
+              property: property.key ?? {},
+              computed: property.computed ?? false,
+            });
             if (provider === 'process' && key === 'platform') {
               report(property, 'destructuring `platform` from process');
             } else if (

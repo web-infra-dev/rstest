@@ -93,6 +93,14 @@ const fixtures: Record<string, { code: string; hits: number }> = {
     code: `export const p = async () => {\n  const { platform } = await import('node:os');\n  return platform();\n};`,
     hits: 1,
   },
+  'computed-key destructure from process': {
+    code: `const { ['platform']: p } = process;\nexport { p };`,
+    hits: 1,
+  },
+  'template-key destructure from an os alias': {
+    code: "import * as o from 'node:os';\nconst { [`type`]: t } = o;\nexport const k = t();",
+    hits: 1,
+  },
   "named import of platform from 'node:os'": {
     code: `import { platform } from 'node:os';\nexport const p = platform();`,
     hits: 1,
