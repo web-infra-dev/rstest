@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { expect as coreExpect } from '@rstest/core';
-import { beforeEach, expect, test } from '../src';
+import { afterEach, beforeEach, expect, test } from '../src';
 import { getDebugOptions, resolveLaunchOptions } from '../src/fixture';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type {
@@ -300,16 +300,53 @@ test.extend({}).describe('extended test API', () => {
   });
 
   hookExpectTest.describe('wrapped hooks', () => {
-    hookExpectTest.beforeEach(async () => {
+    const hookEvents: string[] = [];
+
+    beforeEach<{ hookTitle: string }>(async ({ hookTitle }) => {
       expect.assertions(2);
-      expect('hook title').toBe('hook title');
-      await expect(createPage('hook title')).toHaveTitle('hook title');
+      expect(hookTitle).toBe('hook title');
+      await expect(createPage(hookTitle)).toHaveTitle('hook title');
+      hookEvents.push(`beforeEach:${hookTitle}`);
+
+      return ({ hookTitle }) => {
+        hookEvents.push(`cleanup:${hookTitle}`);
+      };
+    });
+
+    afterEach<{ hookTitle: string }>(({ hookTitle }) => {
+      hookEvents.push(`afterEach:${hookTitle}`);
     });
 
     hookExpectTest('counts Playwright assertions in extended hooks', () => {});
+
+    hookExpectTest.afterAll(() => {
+      expect(hookEvents).toEqual([
+        'beforeEach:hook title',
+        'afterEach:hook title',
+        'cleanup:hook title',
+      ]);
+    });
   });
 
   test.extend({}).beforeEach(() => {});
+
+  const assertExtendedHookTypes = () => {
+    const typedHookTest = test.extend<{ hookTitle: string }>({
+      hookTitle: 'hook title',
+    });
+
+    typedHookTest.beforeEach(({ hookTitle }) => {
+      void hookTitle;
+
+      return ({ hookTitle }) => {
+        void hookTitle;
+      };
+    });
+    typedHookTest.afterEach(({ hookTitle }) => {
+      void hookTitle;
+    });
+  };
+  void assertExtendedHookTypes;
 
   test.extend({}).for<{ value: string }>`
     value
@@ -365,22 +402,24 @@ test.extend({}).describe('extended test API', () => {
     },
   );
 
-  browserTest.for([{ path: 'about:blank' }])(
-    'detects fixtures from named test.for callback context',
-    async ({ path }, context) => {
-      await context.page.goto(path);
-
-      expect(context.page.url()).toBe(path);
+  let fixtureSetupCount = 0;
+  const namedForTest = test.extend<{ shadowedValue: string }>({
+    shadowedValue: async (_, use) => {
+      fixtureSetupCount++;
+      await use('fixture value');
     },
-  );
+  });
 
-  browserTest.for([{ path: 'about:blank' }])(
-    'detects destructured fixtures from named test.for callback context',
-    async ({ path }, context) => {
-      const { page } = context;
-      await page.goto(path);
-
-      expect(page.url()).toBe(path);
+  namedForTest.for([{ rows: [{ shadowedValue: 'local value' }] }])(
+    'ignores fixtures from a shadowed named test.for context',
+    ({ rows }, context) => {
+      expect(rows.map((context) => context.shadowedValue)).toEqual([
+        'local value',
+      ]);
+      expect(context.task.name).toBe(
+        'ignores fixtures from a shadowed named test.for context',
+      );
+      expect(fixtureSetupCount).toBe(0);
     },
   );
 

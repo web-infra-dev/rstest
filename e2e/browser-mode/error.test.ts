@@ -63,4 +63,15 @@ describe('browser mode - error handling', () => {
       'UNHANDLED_BROWSER_REJECTION',
     );
   });
+
+  it('reports hook fixtures missing from browser tests', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: ['tests/hookFixtureMismatch.test.ts'],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('Hook has unknown fixture "browserValue"');
+    expect(output).not.toContain('browser hook received a missing fixture');
+  });
 });

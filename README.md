@@ -30,7 +30,7 @@ The project is currently in active development, and we will continue to refine f
 
 ## 🦀 Rstack
 
-Rstack is a unified JavaScript toolchain centered on Rspack, with high performance and consistent architecture.
+Rstest is part of Rstack, the fast, unified JavaScript toolchain for developers and agents.
 
 | Name                                                  | Description              | Version                                                                                                                                                                          |
 | ----------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

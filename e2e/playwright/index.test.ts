@@ -37,6 +37,21 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('Test Files 2 passed');
   });
 
+  it('only resolves directly destructured test.for fixtures', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'for-fixtures.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_FOR_FIXTURES_OK');
+  });
+
   it('writes Playwright trace debug artifacts', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',
@@ -174,6 +189,23 @@ describe('@rstest/playwright', () => {
     await expectExecFailed();
     expect(cli.log).toContain('user cleanup failed');
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CLEANUP_OK');
+  });
+
+  it('reports extended hook fixtures missing from base tests', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'hook-fixture-mismatch.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('Hook has unknown fixture "customValue"');
+    expect(output).not.toContain('Playwright hook received a missing fixture');
   });
 
   it('does not write retained traces for passing tests', async () => {

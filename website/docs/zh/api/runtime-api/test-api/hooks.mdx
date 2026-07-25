@@ -61,7 +61,7 @@ afterAll(async (ctx) => {
 
 ## beforeEach
 
-- **类型：** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **类型：** `<ExtraContext = object>(fn: (ctx: TestContext & ExtraContext) => void | ((ctx: TestContext & ExtraContext) => void | Promise<void>) | Promise<void | ((ctx: TestContext & ExtraContext) => void | Promise<void>)>, timeout?: number) => void`
 
 `ctx` 的字段详见 [`TestContext`](/api/runtime-api/test-api/test#testcontext)(以下测试级 hook 同理)。
 
@@ -90,9 +90,15 @@ beforeEach(async () => {
 });
 ```
 
+<ApiMeta addedVersion="0.11.4" />
+
+`beforeEach`、`afterEach` callback 以及 `beforeEach` 返回的 cleanup 函数都可以使用通过 `test.extend` 创建的 fixture。将 fixture 类型作为 `ExtraContext` 传入；Rstest 会在某个 callback 第一次请求 fixture 前完成初始化。详见[在 hook 中使用 fixture](/api/runtime-api/test-api/test#在-hook-中使用-fixture)。
+
+使用 fixture 的 hook callback 必须在 hook 参数中通过直接对象解构声明 fixture 依赖。Rstest 不会从 hook 函数体推断依赖。使用 fixture 的 callback 不支持对象 rest property 和默认值。
+
 ## afterEach
 
-- **类型：** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
+- **类型：** `<ExtraContext = object>(fn: (ctx: TestContext & ExtraContext) => void | Promise<void>, timeout?: number) => void`
 
 在当前套件的每个测试之后运行。
 

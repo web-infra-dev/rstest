@@ -105,11 +105,13 @@ export type BeforeAllListener = (
   ctx: SuiteContext,
 ) => MaybePromise<void | AfterAllListener>;
 
-export type AfterEachListener = (ctx: TestContext) => MaybePromise<void>;
+export type AfterEachListener<ExtraContext = object> = (
+  ctx: TestContext & ExtraContext,
+) => MaybePromise<void>;
 
-export type BeforeEachListener = (
-  ctx: TestContext,
-) => MaybePromise<void | AfterEachListener>;
+export type BeforeEachListener<ExtraContext = object> = (
+  ctx: TestContext & ExtraContext,
+) => MaybePromise<void | AfterEachListener<ExtraContext>>;
 
 export type TestSuiteInfo = {
   testId: string;

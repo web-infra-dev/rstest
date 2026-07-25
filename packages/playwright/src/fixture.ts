@@ -1122,15 +1122,26 @@ const playwrightFixtures = {
 };
 
 type RstestTest<ExtraContext = object> = TestAPIs<ExtraContext>;
+
 type TestCallback<ExtraContext> = (
   context: TestContext & ExtraContext,
 ) => void | Promise<void>;
+
+type BeforeEachCallback<ExtraContext> = (
+  context: TestContext & ExtraContext,
+) =>
+  | void
+  | TestCallback<ExtraContext>
+  | Promise<void | TestCallback<ExtraContext>>;
+
 type TestForCallback<ExtraContext> = (
   param: unknown,
   context: TestContext & ExtraContext,
 ) => void | Promise<void>;
+
 type RstestTestAPI<ExtraContext> =
   RstestTest<ExtraContext> | TestAPIs<ExtraContext>;
+
 type CallableTest = (
   description: string,
   arg2?: unknown,
@@ -1217,108 +1228,12 @@ const getFunctionParameterSource = (fn: (...args: never[]) => unknown) => {
   return match ? splitByTopLevelComma(match[1]!.trim()) : [];
 };
 
-const stripCommentsAndStrings = (source: string) => {
-  let result = '';
-  let quote: '"' | "'" | '`' | undefined;
-
-  for (let i = 0; i < source.length; i++) {
-    const char = source[i];
-    const next = source[i + 1];
-
-    if (quote) {
-      if (char === '\\') {
-        result += '  ';
-        i++;
-        continue;
-      }
-      if (char === quote) {
-        quote = undefined;
-      }
-      result += char === '\n' ? '\n' : ' ';
-      continue;
-    }
-
-    if (char === '/' && next === '/') {
-      while (i < source.length && source[i] !== '\n') {
-        result += ' ';
-        i++;
-      }
-      result += '\n';
-      continue;
-    }
-
-    if (char === '/' && next === '*') {
-      result += '  ';
-      i++;
-      while (i + 1 < source.length) {
-        if (source[i] === '*' && source[i + 1] === '/') {
-          result += '  ';
-          i++;
-          break;
-        }
-        result += source[i] === '\n' ? '\n' : ' ';
-        i++;
-      }
-      continue;
-    }
-
-    if (char === '"' || char === "'" || char === '`') {
-      quote = char;
-      result += ' ';
-      continue;
-    }
-
-    result += char;
-  }
-
-  return result;
-};
-
-const getPropertyFixtureParam = (
-  source: string,
-  contextParam: string | undefined,
-) => {
-  const match = /^[$A-Z_a-z][$\w]*$/.exec(contextParam ?? '');
-  if (!match) {
-    return '_';
-  }
-
-  const fixtureProps = new Set<string>();
-  const escapedParam = match[0].replaceAll('$', '\\$');
-  const propertyPattern = new RegExp(
-    `(?<![$\\w])${escapedParam}\\s*(?:\\?\\.|\\.)\\s*([$A-Z_a-z][$\\w]*)`,
-    'g',
-  );
-  const destructurePattern = new RegExp(
-    `(?:const|let|var)\\s*\\{([^}]*)\\}\\s*=\\s*${escapedParam}(?![$\\w])`,
-    'g',
-  );
-  const strippedSource = stripCommentsAndStrings(source);
-
-  for (const propertyMatch of strippedSource.matchAll(propertyPattern)) {
-    fixtureProps.add(propertyMatch[1]!);
-  }
-
-  for (const destructureMatch of strippedSource.matchAll(destructurePattern)) {
-    for (const prop of splitByTopLevelComma(destructureMatch[1]!)) {
-      const name = prop.split(':', 1)[0]!.trim();
-      if (name && !name.startsWith('...')) {
-        fixtureProps.add(name);
-      }
-    }
-  }
-
-  return fixtureProps.size ? `{ ${Array.from(fixtureProps).join(', ')} }` : '_';
-};
-
 const preserveForFixtureSource = <Fn extends (...args: never[]) => unknown>(
   original: Fn,
   wrapped: Fn,
 ): Fn => {
   const [, contextParam] = getFunctionParameterSource(original);
-  const fixtureParam = contextParam?.startsWith('{')
-    ? contextParam
-    : getPropertyFixtureParam(original.toString(), contextParam);
+  const fixtureParam = contextParam?.startsWith('{') ? contextParam : '_';
 
   Object.defineProperty(wrapped, 'toString', {
     configurable: true,
@@ -1472,10 +1387,16 @@ export type PlaywrightTest<ExtraContext = PlaywrightFixture> =
     extend: <T extends Record<string, any> = object>(
       fixtures: PlaywrightFixtures<T, ExtraContext>,
     ) => PlaywrightTest<MergeContext<ExtraContext, T>>;
-    afterAll: typeof rstestAfterAll;
-    afterEach: typeof rstestAfterEach;
-    beforeAll: typeof rstestBeforeAll;
-    beforeEach: typeof rstestBeforeEach;
+    afterAll: RstestAfterAll;
+    afterEach: <HookContext = ExtraContext>(
+      fn: TestCallback<HookContext>,
+      timeout?: number,
+    ) => void;
+    beforeAll: RstestBeforeAll;
+    beforeEach: <HookContext = ExtraContext>(
+      fn: BeforeEachCallback<HookContext>,
+      timeout?: number,
+    ) => void;
     describe: typeof rstestDescribe;
     fail: PlaywrightTestBase<ExtraContext>;
   };

@@ -7,7 +7,7 @@
     "build": "pnpm --filter \"./packages/*\" run build",
     "bump": "bumpp",
     "check-dependency-version": "pnpx check-dependency-version-consistency --ignore-package @rstest/test-mock-re-exports . && echo",
-    "check-harness-docs": "node scripts/check-harness-docs.mjs",
+    "check-harness-docs": "node scripts/harness/check-harness-docs.mjs",
     "check-spell": "pnpx cspell && heading-case",
     "check-unused": "knip",
     "check-version-consistency": "node scripts/checkVersionConsistency.mjs",

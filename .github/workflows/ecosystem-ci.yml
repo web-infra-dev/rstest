@@ -3,6 +3,19 @@ name: Ecosystem CI
 on:
   push:
     branches: ['main']
+    # Ecosystem CI builds rstest from source and runs downstream suites against
+    # it, so a push is only worth dispatching when it can change the built
+    # packages. Docs, e2e fixtures, examples and workflow files cannot.
+    # Negations are order-sensitive and must stay after the positive patterns.
+    paths:
+      - 'packages/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '!**/*.md'
+      - '!**/*.mdx'
+      - '!**/dictionary.txt'
   workflow_dispatch:
     inputs:
       branch:
@@ -16,29 +29,6 @@ permissions:
   pull-requests: write
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    if: github.repository == 'web-infra-dev/rstest' && github.event_name != 'workflow_dispatch'
-    outputs:
-      changed: ${{ steps.changes.outputs.changed }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with:
-          fetch-depth: 1
-
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
-        id: changes
-        with:
-          predicate-quantifier: 'every'
-          filters: |
-            changed:
-              - "!**/*.md"
-              - "!**/*.mdx"
-              - "!**/_meta.json"
-              - "!**/dictionary.txt"
-              - "!document/**"
-
   ecosystem_ci_dispatch:
     name: Dispatch ecosystem CI
     runs-on: ubuntu-latest
@@ -56,9 +46,8 @@ jobs:
 
   ecosystem_ci_per_commit:
     name: Run ecosystem CI per commit
-    needs: changes
     runs-on: ubuntu-latest
-    if: github.repository == 'web-infra-dev/rstest' && github.event_name != 'workflow_dispatch' && needs.changes.outputs.changed == 'true'
+    if: github.repository == 'web-infra-dev/rstest' && github.event_name != 'workflow_dispatch'
     steps:
       - name: Trigger Ecosystem CI
         uses: rstackjs/rstack-ecosystem-ci/.github/actions/ecosystem_ci_per_commit@0ac412700ec0275dbb4d54958cb524dd08af4294 # main

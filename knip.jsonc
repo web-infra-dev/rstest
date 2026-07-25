@@ -23,6 +23,15 @@
         ".claude/skills/**/scripts/**/*.mjs",
       ],
     },
+    "scripts": {
+      "entry": [
+        // Tests for repo-level lint tooling, run by the `lint` rstest project,
+        // its project config, and the minimal rslint config it loads by path.
+        "lint/rstest.config.ts",
+        "lint/*.test.ts",
+        "lint/os-agnostic-rule.rslint.mjs",
+      ],
+    },
     "benchmarks": {
       "entry": [
         "createFrontendMemoryFixture.mjs",
