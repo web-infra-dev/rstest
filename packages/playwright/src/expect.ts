@@ -208,7 +208,7 @@ const getStrictLocatorTextContent = async (locator: Locator) => {
 };
 
 const getLocatorTextContents = (locator: Locator) =>
-  locator.evaluateAll<string[]>((elements) => {
+  locator.evaluateAll((elements) => {
     const getDeepTextContent = (node: Node): string => {
       let text = '';
 
