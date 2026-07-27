@@ -60,7 +60,7 @@ const makeContext = (
 };
 
 const log = (content: string): UserConsoleLog =>
-  ({ content, type: 'stdout' }) as UserConsoleLog;
+  ({ content, project: 'test', type: 'stdout' }) as UserConsoleLog;
 
 describe('createRunnerEventSink', () => {
   it('exposes the compile-time drift guard against RuntimeRPC', () => {

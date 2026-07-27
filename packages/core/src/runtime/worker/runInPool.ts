@@ -609,6 +609,7 @@ export const runInPool = async (
     rpc.onTestFileStart?.({
       testId: getFileTaskId(testPath),
       testPath,
+      project,
       tests: [],
     });
 

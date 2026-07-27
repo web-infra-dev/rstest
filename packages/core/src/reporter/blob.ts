@@ -53,12 +53,6 @@ export type BlobData = {
   duration: Duration;
   snapshotSummary: SnapshotSummary;
   unhandledErrors?: { message: string; stack?: string; name?: string }[];
-  /**
-   * Output that could not be attributed to a file window (no `project` on the
-   * log). Everything else lives on its file's replay track instead, so the two
-   * never hold the same log twice.
-   */
-  consoleLogs?: UserConsoleLog[];
   /** Keyed by {@link blobFileKey}. */
   files?: Record<string, BlobFileData>;
 };
@@ -97,14 +91,11 @@ export const parseBlobFile = (content: string, fileName: string): BlobData => {
 /**
  * Single owner of the `BlobData.files` key grammar: both sides must key through
  * here, never by test path alone — a path is ambiguous once several projects
- * run the same file. `TestFileInfo` carries no project name, so the writer
- * derives it from the collected tree; every other producer has one on its own
- * payload, and the reader takes `TestFileResult.project`.
+ * run the same file. Every producer carries its project on its own payload;
+ * the reader takes `TestFileResult.project`.
  */
-export const blobFileKey = (
-  project: string | undefined,
-  testPath: string,
-): string => JSON.stringify([project ?? '', testPath]);
+export const blobFileKey = (project: string, testPath: string): string =>
+  JSON.stringify([project, testPath]);
 
 export class BlobReporter implements Reporter {
   // Blob output goes to a file, never process stdout/stderr.
@@ -112,7 +103,6 @@ export class BlobReporter implements Reporter {
 
   private readonly config: NormalizedConfig;
   private readonly outputDir: string;
-  private readonly untrackedLogs: UserConsoleLog[] = [];
   private readonly files = new Map<string, BlobFileData>();
 
   constructor({
@@ -131,18 +121,11 @@ export class BlobReporter implements Reporter {
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {
-    // `project` is optional on the wire; without it a run where several
-    // projects share a test path cannot say whose window the log belongs to,
-    // so it replays outside any file rather than under the wrong one.
-    if (log.project === undefined) {
-      this.untrackedLogs.push(log);
-      return;
-    }
     this.fileData(log.project, log.testPath).events.push({ h: 'log', log });
   }
 
   onTestFileReady(test: TestFileInfo): void {
-    const data = this.fileData(test.tests[0]?.project, test.testPath);
+    const data = this.fileData(test.project, test.testPath);
     data.tests = test.tests;
     data.events.push({ h: 'ready' });
   }
@@ -175,10 +158,7 @@ export class BlobReporter implements Reporter {
     });
   }
 
-  private fileData(
-    project: string | undefined,
-    testPath: string,
-  ): BlobFileData {
+  private fileData(project: string, testPath: string): BlobFileData {
     const key = blobFileKey(project, testPath);
     let data = this.files.get(key);
     if (!data) {
@@ -219,8 +199,6 @@ export class BlobReporter implements Reporter {
         stack: e.stack,
         name: e.name,
       })),
-      consoleLogs:
-        this.untrackedLogs.length > 0 ? this.untrackedLogs : undefined,
       files: Object.fromEntries(this.files),
     };
 

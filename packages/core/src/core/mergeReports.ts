@@ -18,7 +18,6 @@ import type {
   TestFileResult,
   TestInfo,
   TestResult,
-  UserConsoleLog,
 } from '../types';
 import type { CoverageMap } from '../types/coverage';
 import {
@@ -147,7 +146,12 @@ async function replayTestFile(
 
   // The live runner reports the file before it is loaded, so its tree is still
   // empty here; the track's `ready` event carries the collected one.
-  await sink.onTestFileStart({ testId: fileTaskId, testPath, tests: [] });
+  await sink.onTestFileStart({
+    testId: fileTaskId,
+    testPath,
+    project: fileResult.project,
+    tests: [],
+  });
 
   for (const event of data.events) {
     switch (event.h) {
@@ -155,6 +159,7 @@ async function replayTestFile(
         await sink.onTestFileReady({
           testId: fileTaskId,
           testPath,
+          project: fileResult.project,
           tests: data.tests,
         });
         break;
@@ -229,7 +234,6 @@ export async function mergeReports(
   );
 
   const replayFiles: ReplayFile[] = [];
-  const orphanLogs: UserConsoleLog[] = [];
   const allTestResults: TestResult[] = [];
   const allDurations: Duration[] = [];
   const shardDurations: { label: string; duration: Duration }[] = [];
@@ -264,26 +268,9 @@ export async function mergeReports(
       }
     }
 
-    for (const log of blob.consoleLogs ?? []) {
-      orphanLogs.push(log);
-    }
-
-    const unclaimed = new Map(Object.entries(blob.files ?? {}));
     for (const result of blob.results) {
-      const key = blobFileKey(result.project, result.testPath);
-      const data = unclaimed.get(key);
-      unclaimed.delete(key);
+      const data = blob.files?.[blobFileKey(result.project, result.testPath)];
       replayFiles.push({ result, data: data ?? { tests: [], events: [] } });
-    }
-
-    // A track with no matching result has no file window to replay into, but
-    // its output still happened; emit it rather than losing it.
-    for (const data of unclaimed.values()) {
-      for (const event of data.events) {
-        if (event.h === 'log') {
-          orphanLogs.push(event.log);
-        }
-      }
     }
   }
 
@@ -330,10 +317,6 @@ export async function mergeReports(
 
   for (const file of replayFiles) {
     await replayTestFile(sinks.get(file.result.project) ?? fallbackSink!, file);
-  }
-
-  for (const log of orphanLogs) {
-    await fallbackSink!.emitConsoleLog(log);
   }
 
   for (const reporter of context.reporters) {

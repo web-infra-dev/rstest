@@ -348,6 +348,26 @@ describe('merge-reports lifecycle replay', () => {
     expect(mergedEvents).toEqual(liveEvents);
   });
 
+  it('replays a file with no tests, including its file window', async () => {
+    // A test-less file fails the run ("No test found") but still fires
+    // file-start/ready/result and its module-level log. The tree is empty, so
+    // the blob cannot derive the owning project from it — this is the case
+    // that forces every payload to carry `project` explicitly.
+    const { live: liveEvents, merged: mergedEvents } = await captureReplay(
+      ['-c', 'rstest.empty.config.mts'],
+      true,
+    );
+
+    expect(liveEvents).toContainEqual(
+      expect.stringMatching(/^onTestFileReady \| .* \| 0 roots$/),
+    );
+    expect(liveEvents).toContainEqual(
+      expect.stringContaining('module-level log from a file with no tests'),
+    );
+
+    expect(mergedEvents).toEqual(liveEvents);
+  });
+
   it('refuses to merge blob reports from another Rstest version', async () => {
     // The gate rejects before any payload is read, so a hand-written stub is
     // enough — no need to spend a fixture run producing a real blob.

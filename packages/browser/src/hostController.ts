@@ -2371,7 +2371,9 @@ export const runBrowserController = async (
   // passes `onTraceEvents`). The browser host shares one Node process across
   // every test file, so each tracker is assigned a synthetic per-file pid
   // (`nextBrowserFilePid`) that lets Perfetto render each file as its own
-  // process track with the file path as the title.
+  // process track with the file path as the title. Known limitation: keyed by
+  // test path alone, so concurrent projects running the same file share (and
+  // clobber) one tracker — affects `--trace` diagnostics only, never routing.
   const phaseTrackers = onTraceEvents
     ? new Map<string, PhaseTracker>()
     : undefined;
@@ -3022,23 +3024,18 @@ export const runBrowserController = async (
       createRunnerEventSink(context, project.normalizedConfig),
     ]),
   );
-  const firstBrowserSink = runnerSinks.get(browserProjects[0]!.name)!;
-
-  // testPath -> owning project name, stamped from the authoritative client
-  // file-start event (it carries the manifest-resolved projectName) before any
-  // other per-file event for that path fires — including on watch reruns, so the
-  // mapping stays correct when a rerun adds a file. Fully eliminating this map in
-  // favor of a project stamp on every wire event is deferred: the suite/case
-  // payloads already carry `project`, but `TestFileInfo` and `BrowserLogPayload`
-  // do not, so those two would have to gain it first.
-  const projectNameByTestPath = new Map<string, string>();
-
-  const sinkForProjectName = (projectName: string): RunnerEventSink =>
-    runnerSinks.get(projectName) ?? firstBrowserSink;
-
-  const sinkForTestPath = (testPath: string): RunnerEventSink => {
-    const projectName = projectNameByTestPath.get(testPath);
-    return projectName ? sinkForProjectName(projectName) : firstBrowserSink;
+  // Every per-file wire payload carries its owning project name, so routing
+  // never derives a project from a test path — concurrent projects can run the
+  // same file, and a path-keyed lookup would attribute events to the wrong one.
+  // The client resolves its project from the host's own manifest, so a miss is
+  // a protocol bug; fail loudly rather than route through another project's
+  // config.
+  const sinkForProjectName = (projectName: string): RunnerEventSink => {
+    const sink = runnerSinks.get(projectName);
+    if (!sink) {
+      throw new Error(`No runner event sink for project "${projectName}"`);
+    }
+    return sink;
   };
 
   // Silent-console buffering runs through the shared controller — the same
@@ -3055,7 +3052,7 @@ export const runBrowserController = async (
       disableConsoleIntercept: context.normalizedConfig.disableConsoleIntercept,
     },
     emitInterceptedLog: (log) =>
-      sinkForTestPath(log.testPath).onConsoleLog(log),
+      sinkForProjectName(log.project).onConsoleLog(log),
     writeOriginalLog: () => {},
   });
 
@@ -3090,7 +3087,6 @@ export const runBrowserController = async (
   const handleTestFileStart = async (
     payload: TestFileStartPayload,
   ): Promise<void> => {
-    projectNameByTestPath.set(payload.testPath, payload.projectName);
     if (phaseTrackers) {
       const tracker = new PhaseTracker({
         trace: {
@@ -3107,6 +3103,7 @@ export const runBrowserController = async (
     await sinkForProjectName(payload.projectName).onTestFileStart({
       testId: getFileTaskId(payload.testPath),
       testPath: payload.testPath,
+      project: payload.projectName,
       tests: [],
     });
   };
@@ -3115,21 +3112,21 @@ export const runBrowserController = async (
     payload: TestFileReadyPayload,
   ): Promise<void> => {
     phaseTrackers?.get(payload.testPath)?.transition('tests');
-    await sinkForTestPath(payload.testPath).onTestFileReady(payload);
+    await sinkForProjectName(payload.project).onTestFileReady(payload);
   };
 
   const handleTestSuiteStart = async (
     payload: TestSuiteStartPayload,
   ): Promise<void> => {
     phaseTrackers?.get(payload.testPath)?.recordSuiteStart(payload);
-    await sinkForTestPath(payload.testPath).onTestSuiteStart(payload);
+    await sinkForProjectName(payload.project).onTestSuiteStart(payload);
   };
 
   const handleTestSuiteResult = async (
     payload: TestSuiteResultPayload,
   ): Promise<void> => {
     phaseTrackers?.get(payload.testPath)?.recordSuiteResult(payload);
-    await sinkForTestPath(payload.testPath).onTestSuiteResult(payload);
+    await sinkForProjectName(payload.project).onTestSuiteResult(payload);
 
     if (context.normalizedConfig.silent === 'passed-only') {
       silentConsoleController.flushBufferedLogsForTask({
@@ -3147,13 +3144,13 @@ export const runBrowserController = async (
   ): Promise<void> => {
     phaseTrackers?.get(payload.testPath)?.recordCaseStart(payload);
     // Fire-and-forget on both transports (the sink does not await case-start).
-    sinkForTestPath(payload.testPath).onTestCaseStart(payload);
+    sinkForProjectName(payload.project).onTestCaseStart(payload);
   };
 
   const handleTestCaseResult = async (payload: TestResult): Promise<void> => {
     caseResults.push(payload);
     phaseTrackers?.get(payload.testPath)?.recordCaseResult(payload);
-    await sinkForTestPath(payload.testPath).onTestCaseResult(payload);
+    await sinkForProjectName(payload.project).onTestCaseResult(payload);
 
     if (context.normalizedConfig.silent === 'passed-only') {
       silentConsoleController.flushBufferedLogsForTask({
@@ -3194,7 +3191,7 @@ export const runBrowserController = async (
 
     // Feeds stateManager, fans out onTestFileResult to reporters, and ingests
     // payload.snapshotResult (the snapshotManager.add moved into the sink).
-    await sinkForTestPath(payload.testPath).onTestFileResult(payload);
+    await sinkForProjectName(payload.project).onTestFileResult(payload);
     // In non-watch runs core owns the exit code via `finalizeRunCycle` (the
     // failing file rides the returned outcome); watch reruns set it here.
     if (isWatchMode && payload.status === 'fail') {
@@ -3212,7 +3209,7 @@ export const runBrowserController = async (
       taskParentNames: payload.taskParentNames,
       taskType: payload.taskType,
       testPath: payload.testPath,
-      project: projectNameByTestPath.get(payload.testPath),
+      project: payload.projectName,
       type: payload.type,
       trace: payload.trace,
     };

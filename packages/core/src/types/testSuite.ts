@@ -161,6 +161,7 @@ export type TestInfo = TestCaseInfo | (TestSuiteInfo & { tests: TestInfo[] });
 export type TestFileInfo = {
   testId: string;
   testPath: TestPath;
+  project: string;
   tests: TestInfo[];
 };
 
@@ -228,6 +229,6 @@ export interface UserConsoleLog {
    * a file (the blob reporter's replay track, the browser host's sink routing)
    * cannot recover it from the other fields.
    */
-  project?: string;
+  project: string;
   type: ConsoleStreamType;
 }
