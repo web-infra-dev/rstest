@@ -217,8 +217,9 @@ export async function mergeReports(
     if (mergedCoverageMap && mergeBlobCoverage(blob, mergedCoverageMap)) {
       hasCoverage = true;
     }
-    // Merged (or unusable) either way — release the raw shard payload before
-    // the replay below, which holds `blobs` alive for its whole duration.
+    // Merged (or unusable) either way — drop the coverage payload, by far the
+    // largest part of a blob, before the replay below, which holds `blobs`
+    // alive for its whole duration.
     blob.coverage = undefined;
 
     if (blob.unhandledErrors) {
