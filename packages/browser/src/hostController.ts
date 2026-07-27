@@ -2371,12 +2371,13 @@ export const runBrowserController = async (
   // passes `onTraceEvents`). The browser host shares one Node process across
   // every test file, so each tracker is assigned a synthetic per-file pid
   // (`nextBrowserFilePid`) that lets Perfetto render each file as its own
-  // process track with the file path as the title. Known limitation: keyed by
-  // test path alone, so concurrent projects running the same file share (and
-  // clobber) one tracker — affects `--trace` diagnostics only, never routing.
+  // process track with the file path as the title. Keyed by project + path so
+  // concurrent projects running the same file keep separate trackers.
   const phaseTrackers = onTraceEvents
     ? new Map<string, PhaseTracker>()
     : undefined;
+  const trackerKey = (project: string, testPath: string) =>
+    `${project}\u0000${testPath}`;
   // Explicit projects input (plan output) replaces re-deriving `browser.enabled`
   // projects from `context`, whose `projects` array is mutated during planning.
   // Falls back to re-derivation only when the caller passes no list at all —
@@ -3096,7 +3097,10 @@ export const runBrowserController = async (
         pid: nextBrowserFilePid++,
       });
       tracker.transition('prepare');
-      phaseTrackers.set(payload.testPath, tracker);
+      phaseTrackers.set(
+        trackerKey(payload.projectName, payload.testPath),
+        tracker,
+      );
     }
     // The client sends `{ testPath, projectName }`; the sink adapter builds the
     // `TestFileInfo` the reporters and stateManager expect.
@@ -3111,21 +3115,27 @@ export const runBrowserController = async (
   const handleTestFileReady = async (
     payload: TestFileReadyPayload,
   ): Promise<void> => {
-    phaseTrackers?.get(payload.testPath)?.transition('tests');
+    phaseTrackers
+      ?.get(trackerKey(payload.project, payload.testPath))
+      ?.transition('tests');
     await sinkForProjectName(payload.project).onTestFileReady(payload);
   };
 
   const handleTestSuiteStart = async (
     payload: TestSuiteStartPayload,
   ): Promise<void> => {
-    phaseTrackers?.get(payload.testPath)?.recordSuiteStart(payload);
+    phaseTrackers
+      ?.get(trackerKey(payload.project, payload.testPath))
+      ?.recordSuiteStart(payload);
     await sinkForProjectName(payload.project).onTestSuiteStart(payload);
   };
 
   const handleTestSuiteResult = async (
     payload: TestSuiteResultPayload,
   ): Promise<void> => {
-    phaseTrackers?.get(payload.testPath)?.recordSuiteResult(payload);
+    phaseTrackers
+      ?.get(trackerKey(payload.project, payload.testPath))
+      ?.recordSuiteResult(payload);
     await sinkForProjectName(payload.project).onTestSuiteResult(payload);
 
     if (context.normalizedConfig.silent === 'passed-only') {
@@ -3142,14 +3152,18 @@ export const runBrowserController = async (
   const handleTestCaseStart = async (
     payload: TestCaseStartPayload,
   ): Promise<void> => {
-    phaseTrackers?.get(payload.testPath)?.recordCaseStart(payload);
+    phaseTrackers
+      ?.get(trackerKey(payload.project, payload.testPath))
+      ?.recordCaseStart(payload);
     // Fire-and-forget on both transports (the sink does not await case-start).
     sinkForProjectName(payload.project).onTestCaseStart(payload);
   };
 
   const handleTestCaseResult = async (payload: TestResult): Promise<void> => {
     caseResults.push(payload);
-    phaseTrackers?.get(payload.testPath)?.recordCaseResult(payload);
+    phaseTrackers
+      ?.get(trackerKey(payload.project, payload.testPath))
+      ?.recordCaseResult(payload);
     await sinkForProjectName(payload.project).onTestCaseResult(payload);
 
     if (context.normalizedConfig.silent === 'passed-only') {
@@ -3170,12 +3184,13 @@ export const runBrowserController = async (
     context.updateReporterResultState([payload], payload.results);
 
     if (phaseTrackers) {
-      const tracker = phaseTrackers.get(payload.testPath);
+      const key = trackerKey(payload.project, payload.testPath);
+      const tracker = phaseTrackers.get(key);
       if (tracker) {
         tracker.end();
         const events = tracker.getTraceEvents();
         if (events) onTraceEvents?.(events);
-        phaseTrackers.delete(payload.testPath);
+        phaseTrackers.delete(key);
       }
     }
 

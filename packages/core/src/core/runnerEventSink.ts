@@ -192,6 +192,15 @@ export function sinkToRuntimeRpc(
 // method into the host-driven category on purpose, not editing a name list.
 type RunnerRpcMethod = keyof Omit<RuntimeRPC, 'getAssetsByEntry'>;
 type SinkRpcMethod = keyof Omit<RunnerEventSink, keyof HostDrivenEvents>;
+/**
+ * The runner lifecycle events reporters observe — the wire methods minus the
+ * host-answered queries. `BlobReporter`'s compile guard consumes this so a new
+ * lifecycle event cannot ship without a blob track recording for it.
+ */
+export type RunnerLifecycleEvent = Exclude<
+  SinkRpcMethod,
+  'getCountOfFailedTests' | 'resolveSnapshotPath'
+>;
 type _SinkCoversRpc = RunnerRpcMethod extends SinkRpcMethod ? true : never;
 type _RpcCoversSink = SinkRpcMethod extends RunnerRpcMethod ? true : never;
 export const RUNNER_EVENT_SINK_MATCHES_RPC: _SinkCoversRpc & _RpcCoversSink =

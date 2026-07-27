@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import fs from 'fs-extra';
-import { runRstestCli } from '../scripts';
+import { parseMarkerPayload, runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -241,13 +241,8 @@ describe('merge-reports lifecycle replay', () => {
       options: { nodeOptions: { cwd: replayFixturesDir } },
     });
 
-  const parseLifecycle = (stdout: string): string[] => {
-    const match = stdout.match(/__RSTEST_LIFECYCLE__(.*?)__END__/);
-    if (!match) {
-      throw new Error(`No lifecycle events recorded in:\n${stdout}`);
-    }
-    return JSON.parse(match[1]!) as string[];
-  };
+  const parseLifecycle = (stdout: string): string[] =>
+    parseMarkerPayload<string[]>(stdout, '__RSTEST_LIFECYCLE__');
 
   /**
    * Records one fixture run live and replays that same run's blob, so the two

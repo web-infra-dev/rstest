@@ -1,9 +1,5 @@
-import { defineConfig } from '@rstest/core';
-import { LifecycleRecorder } from './lifecycleRecorder';
+import { replayConfig } from './replayConfig';
 
-export default defineConfig({
-  // See the notes in `rstest.config.mts`: one file per config, recorder + blob
-  // on the same run.
+export default replayConfig({
   include: ['empty.test.ts'],
-  reporters: [new LifecycleRecorder(), 'blob'],
 });

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { describe, expect, it, onTestFinished } from '@rstest/core';
 import { join } from 'pathe';
 import {
+  BLOB_TRACK_MATCHES_RUNNER_EVENTS,
   blobFileKey,
   blobFileName,
   BlobReporter,
@@ -11,30 +12,17 @@ import {
 } from '../../src/reporter/blob';
 import type {
   NormalizedConfig,
-  SnapshotSummary,
   TestFileResult,
   TestResult,
   UserConsoleLog,
 } from '../../src/types';
-
-const emptySnapshotSummary: SnapshotSummary = {
-  added: 0,
-  didUpdate: false,
-  failure: false,
-  filesAdded: 0,
-  filesRemoved: 0,
-  filesRemovedList: [],
-  filesUnmatched: 0,
-  filesUpdated: 0,
-  matched: 0,
-  total: 0,
-  unchecked: 0,
-  uncheckedKeysByFile: [],
-  unmatched: 0,
-  updated: 0,
-};
+import { emptySnapshotSummary } from './helpers';
 
 describe('blob wire-format', () => {
+  it('records every runner lifecycle event on the track (compile guard)', () => {
+    expect(BLOB_TRACK_MATCHES_RUNNER_EVENTS).toBe(true);
+  });
+
   it('names the unsharded blob deterministically', () => {
     expect(blobFileName()).toBe('blob.json');
     expect(blobFileName(undefined)).toBe('blob.json');
@@ -71,23 +59,40 @@ describe('blob wire-format', () => {
 });
 
 describe('blob event track', () => {
-  it('a run cycle replaces the track, keeping events from before file-start', async () => {
+  const setupReporter = () => {
     const outputDir = mkdtempSync(join(tmpdir(), 'rstest-blob-'));
     onTestFinished(() => {
       rmSync(outputDir, { recursive: true, force: true });
     });
-
     const reporter = new BlobReporter({
       rootPath: outputDir,
       config: { shard: undefined } as NormalizedConfig,
     });
+    const readBlob = <T>() =>
+      JSON.parse(
+        readFileSync(join(outputDir, '.rstest-reports', 'blob.json'), 'utf-8'),
+      ) as T;
+    return { reporter, readBlob };
+  };
 
-    const fileInfo = {
-      testId: 'file:/a.test.ts',
-      testPath: '/a.test.ts',
-      project: 'p',
-      tests: [],
-    };
+  const fileInfo = (testPath: string) => ({
+    testId: `file:${testPath}`,
+    testPath,
+    project: 'p',
+    tests: [],
+  });
+
+  const runEnd = (reporter: BlobReporter, results: TestFileResult[] = []) =>
+    reporter.onTestRunEnd({
+      results,
+      testResults: [],
+      duration: { totalTime: 0, buildTime: 0, testTime: 0 },
+      snapshotSummary: emptySnapshotSummary,
+    });
+
+  it('a run cycle replaces the track, keeping events from before file-start', async () => {
+    const { reporter, readBlob } = setupReporter();
+
     const caseResult = (name: string): TestResult => ({
       testId: `case-${name}`,
       status: 'pass',
@@ -106,25 +111,18 @@ describe('blob event track', () => {
     // First run of the file, then a watch rerun where environment setup logs
     // before the file starts.
     reporter.onTestRunStart();
-    reporter.onTestFileStart(fileInfo);
+    reporter.onTestFileStart(fileInfo('/a.test.ts'));
     reporter.onTestCaseResult(caseResult('first'));
     reporter.onTestRunStart();
     reporter.onUserConsoleLog(log('setup log before rerun start'));
-    reporter.onTestFileStart(fileInfo);
+    reporter.onTestFileStart(fileInfo('/a.test.ts'));
     reporter.onTestCaseResult(caseResult('rerun'));
 
-    await reporter.onTestRunEnd({
-      results: [],
-      testResults: [],
-      duration: { totalTime: 0, buildTime: 0, testTime: 0 },
-      snapshotSummary: emptySnapshotSummary,
-    });
+    await runEnd(reporter);
 
-    const blob = JSON.parse(
-      readFileSync(join(outputDir, '.rstest-reports', 'blob.json'), 'utf-8'),
-    ) as {
+    const blob = readBlob<{
       files: Record<string, { events: { h: string; result?: TestResult }[] }>;
-    };
+    }>();
     // Only the rerun cycle's events survive — replaying both cycles against
     // the file's single (latest) result would double every lifecycle hook —
     // and the cycle starts at its first event, not at file-start, so the
@@ -139,22 +137,8 @@ describe('blob event track', () => {
   });
 
   it('drops the track of a file deleted between watch cycles', async () => {
-    const outputDir = mkdtempSync(join(tmpdir(), 'rstest-blob-'));
-    onTestFinished(() => {
-      rmSync(outputDir, { recursive: true, force: true });
-    });
+    const { reporter, readBlob } = setupReporter();
 
-    const reporter = new BlobReporter({
-      rootPath: outputDir,
-      config: { shard: undefined } as NormalizedConfig,
-    });
-
-    const fileInfo = (testPath: string) => ({
-      testId: `file:${testPath}`,
-      testPath,
-      project: 'p',
-      tests: [],
-    });
     const fileResult = (testPath: string): TestFileResult => ({
       testId: `file:${testPath}`,
       status: 'pass',
@@ -174,16 +158,12 @@ describe('blob event track', () => {
     reporter.onTestRunStart();
     reporter.onTestFileStart(fileInfo('/kept.test.ts'));
 
-    await reporter.onTestRunEnd({
-      results: [fileResult('/kept.test.ts'), fileResult('/untouched.test.ts')],
-      testResults: [],
-      duration: { totalTime: 0, buildTime: 0, testTime: 0 },
-      snapshotSummary: emptySnapshotSummary,
-    });
+    await runEnd(reporter, [
+      fileResult('/kept.test.ts'),
+      fileResult('/untouched.test.ts'),
+    ]);
 
-    const blob = JSON.parse(
-      readFileSync(join(outputDir, '.rstest-reports', 'blob.json'), 'utf-8'),
-    ) as { files: Record<string, unknown> };
+    const blob = readBlob<{ files: Record<string, unknown> }>();
     expect(Object.keys(blob.files).sort()).toEqual([
       blobFileKey('p', '/kept.test.ts'),
       blobFileKey('p', '/untouched.test.ts'),

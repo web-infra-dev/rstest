@@ -8,8 +8,8 @@ import {
   type BlobData,
   type BlobFileData,
   blobFileKey,
+  blobFileKeyProject,
   isBlobFile,
-  parseBlobFileKey,
   parseBlobFile,
 } from '../reporter/blob';
 import type {
@@ -152,6 +152,8 @@ async function replayTestFile(
       case 'log':
         await sink.emitConsoleLog(event.log);
         break;
+      default:
+        event satisfies never;
     }
   }
 
@@ -238,15 +240,15 @@ export async function mergeReports(
       replayFiles.push({
         project: result.project,
         result,
-        data: blob.files?.[key] ?? { events: [] },
+        data: blob.files[key] ?? { events: [] },
       });
     }
 
     // A track can outlive its result (see `ReplayFile`); its events still
     // fired live, so they still replay.
-    for (const [key, data] of Object.entries(blob.files ?? {})) {
+    for (const [key, data] of Object.entries(blob.files)) {
       if (!claimed.has(key)) {
-        replayFiles.push({ project: parseBlobFileKey(key).project, data });
+        replayFiles.push({ project: blobFileKeyProject(key), data });
       }
     }
   }
@@ -292,6 +294,10 @@ export async function mergeReports(
       createRunnerEventSink(context, project.normalizedConfig),
     ]),
   );
+  // Unlike the browser host's throwing lookup, a project-name miss here is
+  // not a protocol bug: blobs are cross-run artifacts, so a project renamed
+  // between recording and merging is user-reachable. Replay reads only
+  // run-level context today, so any sink serves such a file.
   const [fallbackSink] = sinks.values();
 
   for (const file of replayFiles) {

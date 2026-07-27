@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'pathe';
+import type { RunnerLifecycleEvent } from '../core/runnerEventSink';
 import type {
   CoverageMapData,
   Duration,
@@ -24,7 +25,7 @@ import { color } from '../utils';
  * what the live run emitted (an order a tree walk cannot represent, a
  * `startTime` only the live event carries).
  */
-export type BlobFileEvent =
+type BlobFileEvent =
   | { h: 'start' | 'ready'; test: TestFileInfo }
   | { h: 'suiteStart'; test: TestSuiteInfo }
   | { h: 'caseStart'; test: TestCaseInfo }
@@ -49,7 +50,7 @@ export type BlobData = {
   snapshotSummary: SnapshotSummary;
   unhandledErrors?: { message: string; stack?: string; name?: string }[];
   /** Keyed by {@link blobFileKey}. */
-  files?: Record<string, BlobFileData>;
+  files: Record<string, BlobFileData>;
 };
 
 const DEFAULT_OUTPUT_DIR = '.rstest-reports';
@@ -101,13 +102,12 @@ export const parseBlobFile = (content: string, fileName: string): BlobData => {
 export const blobFileKey = (project: string, testPath: string): string =>
   JSON.stringify([project, testPath]);
 
-/** Inverse of {@link blobFileKey}, for tracks the reader must key-walk. */
-export const parseBlobFileKey = (
-  key: string,
-): { project: string; testPath: string } => {
-  const [project, testPath] = JSON.parse(key) as [string, string];
-  return { project, testPath };
-};
+/**
+ * Reads the project back out of a {@link blobFileKey} — the only field the
+ * reader needs when a track has no result to take it from.
+ */
+export const blobFileKeyProject = (key: string): string =>
+  (JSON.parse(key) as [string, string])[0];
 
 export class BlobReporter implements Reporter {
   // Blob output goes to a file, never process stdout/stderr.
@@ -227,15 +227,17 @@ export class BlobReporter implements Reporter {
     // A track still stale here was untouched for the whole final cycle. It
     // survives only if its file's carried-over result did too — otherwise the
     // file was deleted mid-watch, and replaying its track would resurrect it.
+    // No event can arrive between run end and the next run start, so the
+    // leftover markings are simply cleared.
     const resultKeys = new Set(
       results.map((r) => blobFileKey(r.project, r.testPath)),
     );
     for (const key of this.staleKeys) {
       if (!resultKeys.has(key)) {
-        this.staleKeys.delete(key);
         this.files.delete(key);
       }
     }
+    this.staleKeys.clear();
 
     const blobData: BlobData = {
       version: RSTEST_VERSION,
@@ -261,3 +263,16 @@ export class BlobReporter implements Reporter {
     );
   }
 }
+
+/**
+ * Compile guard: every runner lifecycle event must be recorded on the track —
+ * a hook missing here is an event replay silently drops. The console event is
+ * recorded under its `Reporter` hook name, and file results deliberately
+ * travel on `BlobData.results`, not the track.
+ */
+type RecordedHook =
+  Exclude<RunnerLifecycleEvent, 'onConsoleLog'> | 'onUserConsoleLog';
+type _TrackRecordsEveryRunnerEvent = RecordedHook extends keyof BlobReporter
+  ? true
+  : never;
+export const BLOB_TRACK_MATCHES_RUNNER_EVENTS: _TrackRecordsEveryRunnerEvent = true;
