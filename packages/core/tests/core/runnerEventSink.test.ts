@@ -59,8 +59,13 @@ const makeContext = (
   return { context, projectConfig, calls };
 };
 
-const log = (content: string): UserConsoleLog =>
-  ({ content, project: 'test', type: 'stdout' }) as UserConsoleLog;
+const log = (content: string): UserConsoleLog => ({
+  content,
+  name: 'log',
+  testPath: '/a.test.ts',
+  project: 'test',
+  type: 'stdout',
+});
 
 describe('createRunnerEventSink', () => {
   it('exposes the compile-time drift guard against RuntimeRPC', () => {
