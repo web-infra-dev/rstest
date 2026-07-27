@@ -8,7 +8,7 @@
     "serve": "serve dist -p 3001",
     "serve:node": "serve dist-node -p 3001",
     "start": "concurrently \"npm run build\" \"npm run serve\"",
-    "pretest": "pnpm run build:node && pnpm -C ../node-local-remote build:node",
+    "pretest": "pnpm -C ../node-local-remote build:node",
     "test": "rstest --reporter=verbose"
   },
   "dependencies": {
