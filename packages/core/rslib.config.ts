@@ -1,5 +1,5 @@
 import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
-import { defineConfig, rspack } from '@rslib/core';
+import { defineConfig, rspack, type Rsbuild } from '@rslib/core';
 import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 import {
@@ -26,6 +26,32 @@ if (version !== browserVersion) {
 
 const isBuildWatch = process.argv.includes('--watch');
 const isLibBuild = process.argv.includes('build');
+
+const readableMinifyConfig = {
+  jsOptions: {
+    minimizerOptions: {
+      mangle: false,
+      minify: false,
+      compress: {
+        defaults: false,
+        unused: true,
+        dead_code: true,
+        toplevel: true,
+        // Inline snapshots locate their call site through this function name.
+        keep_fnames: true,
+      },
+      format: {
+        comments: 'some',
+        preserve_annotations: true,
+      },
+    },
+  },
+} satisfies Rsbuild.Minify;
+
+const fullyMinifiedNodeChunks =
+  /(?:^|\/)(?:@babel\/code-frame|@clack\/prompts|@vitest\/pretty-format|chokidar|diff|fake-timers|magic-string\.es)~0\.js$/;
+const fullyMinifiedBrowserChunks =
+  /(?:^|\/)(?:fake-timers|magic-string\.es)~1\.js$/;
 
 // API Extractor keeps this reference from bundled @vitest/expect but omits
 // the matching global augmentation that makes the declaration self-contained.
@@ -75,25 +101,15 @@ export default defineConfig({
           path: 'node:path',
         },
         minify: {
-          jsOptions: {
-            minimizerOptions: {
-              mangle: false,
-              minify: false,
-              compress: {
-                defaults: false,
-                unused: true,
-                dead_code: true,
-                toplevel: true,
-                // fix `Couldn't infer stack frame for inline snapshot` error
-                // should keep function name used to filter stack trace
-                keep_fnames: true,
-              },
-              format: {
-                comments: 'some',
-                preserve_annotations: true,
-              },
+          jsOptions: [
+            {
+              include: fullyMinifiedNodeChunks,
             },
-          },
+            {
+              ...readableMinifyConfig.jsOptions,
+              exclude: fullyMinifiedNodeChunks,
+            },
+          ],
         },
       },
       shims: {
@@ -162,25 +178,15 @@ export default defineConfig({
         distPath: 'dist/browser-runtime',
         sourceMap: process.env.SOURCEMAP === 'true',
         minify: {
-          jsOptions: {
-            minimizerOptions: {
-              mangle: false,
-              minify: false,
-              compress: {
-                defaults: false,
-                unused: true,
-                dead_code: true,
-                toplevel: true,
-                // fix `Couldn't infer stack frame for inline snapshot` error
-                // should keep function name __INLINE_SNAPSHOT__ used to filter stack trace
-                keep_fnames: true,
-              },
-              format: {
-                comments: 'some',
-                preserve_annotations: true,
-              },
+          jsOptions: [
+            {
+              include: fullyMinifiedBrowserChunks,
             },
-          },
+            {
+              ...readableMinifyConfig.jsOptions,
+              exclude: fullyMinifiedBrowserChunks,
+            },
+          ],
         },
       },
       plugins: [pluginNodePolyfill()],
