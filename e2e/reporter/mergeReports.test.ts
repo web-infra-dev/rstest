@@ -385,6 +385,79 @@ describe('merge-reports lifecycle replay', () => {
     expect(mergedEvents).toEqual(liveEvents);
   });
 
+  it('replays a track that has no file result, minus the result hook', async () => {
+    // A browser client that goes fatal after file-start records events but
+    // never produces a `TestFileResult` (the error outcome carries empty
+    // results). Hand-write that blob shape: the version must match, and no
+    // fixture run can produce it without a real browser crash.
+    const { createRequire } = await import('node:module');
+    const { version } = createRequire(import.meta.url)(
+      '@rstest/core/package.json',
+    ) as { version: string };
+
+    const testPath = join(replayFixturesDir, 'fatal.test.ts');
+    fs.removeSync(blobDir);
+    fs.outputFileSync(
+      join(blobDir, 'blob.json'),
+      JSON.stringify({
+        version,
+        results: [],
+        testResults: [],
+        // The real fatal outcome always carries the error here — it is what
+        // makes the merge exit non-zero, since no failed result exists.
+        unhandledErrors: [{ message: 'fatal: setup exploded', name: 'Error' }],
+        duration: { totalTime: 1, buildTime: 1, testTime: 0 },
+        snapshotSummary: {
+          added: 0,
+          didUpdate: false,
+          failure: false,
+          filesAdded: 0,
+          filesRemoved: 0,
+          filesRemovedList: [],
+          filesUnmatched: 0,
+          filesUpdated: 0,
+          matched: 0,
+          total: 0,
+          unchecked: 0,
+          uncheckedKeysByFile: [],
+          unmatched: 0,
+          updated: 0,
+        },
+        files: {
+          [JSON.stringify(['rstest', testPath])]: {
+            tests: [],
+            events: [
+              { h: 'start' },
+              {
+                h: 'log',
+                log: {
+                  content: 'log before the fatal',
+                  name: 'log',
+                  testPath,
+                  project: 'rstest',
+                  type: 'stdout',
+                },
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    const { cli, expectExecFailed } = await runFixture([
+      'merge-reports',
+      '--cleanup',
+    ]);
+    await expectExecFailed();
+
+    expect(parseLifecycle(cli.stdout)).toEqual([
+      'onTestRunStart',
+      expect.stringMatching(/^onTestFileStart \| .*fatal\.test\.ts$/),
+      expect.stringContaining('log before the fatal'),
+      'onTestRunEnd',
+    ]);
+  });
+
   it('refuses to merge blob reports from another Rstest version', async () => {
     // The gate rejects before any payload is read, so a hand-written stub is
     // enough — no need to spend a fixture run producing a real blob.

@@ -9,6 +9,7 @@ import {
   type BlobFileData,
   blobFileKey,
   isBlobFile,
+  parseBlobFileKey,
   parseBlobFile,
 } from '../reporter/blob';
 import type {
@@ -109,9 +110,17 @@ function mergeDurations(durations: Duration[]): Duration {
   return { totalTime, buildTime, testTime };
 }
 
-/** One test file's recorded lifecycle, reassembled from a single blob. */
+/**
+ * One test file's recorded lifecycle, reassembled from a single blob.
+ * `result` is absent when the run recorded events but never produced a
+ * `TestFileResult` — a browser client that goes fatal mid-file, for example —
+ * in which case the track still replays, minus the file-result hook and any
+ * `caseResult` events, whose payloads only the missing result carries.
+ */
 type ReplayFile = {
-  result: TestFileResult;
+  project: string;
+  testPath: string;
+  result?: TestFileResult;
   data: BlobFileData;
 };
 
@@ -125,12 +134,13 @@ type ReplayFile = {
  */
 async function replayTestFile(
   sink: RunnerEventSink,
-  { result: fileResult, data }: ReplayFile,
+  { project, testPath, result: fileResult, data }: ReplayFile,
 ): Promise<void> {
-  const { testPath } = fileResult;
   const fileTaskId = getFileTaskId(testPath);
 
-  const caseResults = new Map(fileResult.results.map((r) => [r.testId, r]));
+  const caseResults = new Map(
+    (fileResult?.results ?? []).map((r) => [r.testId, r]),
+  );
 
   for (const event of data.events) {
     switch (event.h) {
@@ -142,7 +152,7 @@ async function replayTestFile(
         await sink.onTestFileStart({
           testId: fileTaskId,
           testPath,
-          project: fileResult.project,
+          project,
           tests: [],
         });
         break;
@@ -150,7 +160,7 @@ async function replayTestFile(
         await sink.onTestFileReady({
           testId: fileTaskId,
           testPath,
-          project: fileResult.project,
+          project,
           tests: data.tests,
         });
         break;
@@ -176,7 +186,9 @@ async function replayTestFile(
     }
   }
 
-  await sink.onTestFileResult(fileResult);
+  if (fileResult) {
+    await sink.onTestFileResult(fileResult);
+  }
 }
 
 function mergeBlobCoverage(blob: BlobData, coverageMap: CoverageMap): boolean {
@@ -249,13 +261,30 @@ export async function mergeReports(
       }
     }
 
+    const claimed = new Set<string>();
     for (const result of blob.results) {
-      const data = blob.files?.[blobFileKey(result.project, result.testPath)];
-      replayFiles.push({ result, data: data ?? { tests: [], events: [] } });
+      const key = blobFileKey(result.project, result.testPath);
+      claimed.add(key);
+      replayFiles.push({
+        project: result.project,
+        testPath: result.testPath,
+        result,
+        data: blob.files?.[key] ?? { tests: [], events: [] },
+      });
+    }
+
+    // A track can outlive its result (see `ReplayFile`); its events still
+    // fired live, so they still replay.
+    for (const [key, data] of Object.entries(blob.files ?? {})) {
+      if (!claimed.has(key)) {
+        replayFiles.push({ ...parseBlobFileKey(key), data });
+      }
     }
   }
 
-  const allResults: TestFileResult[] = replayFiles.map((file) => file.result);
+  const allResults: TestFileResult[] = replayFiles
+    .map((file) => file.result)
+    .filter((result) => result !== undefined);
   const mergedDuration = mergeDurations(allDurations);
   const mergedSnapshotSummary = mergeSnapshots(allSnapshotSummaries);
   const mergedCoverage: CoverageMapData | undefined =
@@ -297,7 +326,7 @@ export async function mergeReports(
   const [fallbackSink] = sinks.values();
 
   for (const file of replayFiles) {
-    await replayTestFile(sinks.get(file.result.project) ?? fallbackSink!, file);
+    await replayTestFile(sinks.get(file.project) ?? fallbackSink!, file);
   }
 
   for (const reporter of context.reporters) {

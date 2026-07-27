@@ -24,7 +24,8 @@ import { color } from '../utils';
  * a start payload from the collected tree drops the fields only the live
  * event carries (a case start's `startTime`/`timeout`). The one exception is
  * `caseResult`, referenced by `testId` into `BlobData.results`, the payload
- * the blob already stores in full.
+ * the blob already stores in full — which also means a track whose result
+ * never arrived (fatal mid-file) replays without its case results.
  */
 export type BlobFileEvent =
   | { h: 'start' | 'ready' }
@@ -96,10 +97,19 @@ export const parseBlobFile = (content: string, fileName: string): BlobData => {
  * Single owner of the `BlobData.files` key grammar: both sides must key through
  * here, never by test path alone — a path is ambiguous once several projects
  * run the same file. Every producer carries its project on its own payload;
- * the reader takes `TestFileResult.project`.
+ * the reader takes `TestFileResult.project`, or parses the key back apart
+ * when a track has no result.
  */
 export const blobFileKey = (project: string, testPath: string): string =>
   JSON.stringify([project, testPath]);
+
+/** Inverse of {@link blobFileKey}, for tracks the reader must key-walk. */
+export const parseBlobFileKey = (
+  key: string,
+): { project: string; testPath: string } => {
+  const [project, testPath] = JSON.parse(key) as [string, string];
+  return { project, testPath };
+};
 
 export class BlobReporter implements Reporter {
   // Blob output goes to a file, never process stdout/stderr.
