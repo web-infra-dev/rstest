@@ -1,9 +1,9 @@
 import { expect, test } from '@rstest/core';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import Button from '../src/Button.jsx';
+import Button from 'component-app/Button';
 
-test('CSR: Button renders primary', async () => {
+test('CSR: federated Button renders primary', async () => {
   const container = document.createElement('div');
   document.body.appendChild(container);
 

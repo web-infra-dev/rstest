@@ -3,6 +3,14 @@ import { federation } from '@module-federation/rstest';
 import { pluginReact } from '@rsbuild/plugin-react';
 import { defineConfig, defineInlineProject } from '@rstest/core';
 
+const shared = {
+  react: { singleton: true, requiredVersion: '^19.2.0' },
+  'react-dom': {
+    singleton: true,
+    requiredVersion: '^19.2.0',
+  },
+};
+
 export default defineConfig({
   projects: [
     defineInlineProject({
@@ -11,7 +19,6 @@ export default defineConfig({
         './test/*.ssr.test.ts',
         './test/NodeLocalRemote.container.test.ts',
       ],
-      globalSetup: ['./scripts/rstestGlobalSetup.ts'],
       setupFiles: ['./scripts/rstest.setup.ts'],
       testEnvironment: 'node',
       plugins: [
@@ -25,13 +32,7 @@ export default defineConfig({
               '../node-local-remote/dist-node/remoteEntry.js',
             )}`,
           },
-          shared: {
-            react: { singleton: true, requiredVersion: '^19.2.0' },
-            'react-dom': {
-              singleton: true,
-              requiredVersion: '^19.2.0',
-            },
-          },
+          shared,
         }),
       ],
       testTimeout: 15000,
@@ -40,7 +41,20 @@ export default defineConfig({
       name: 'component-csr',
       include: ['./test/*.csr.test.tsx'],
       testEnvironment: 'jsdom',
-      plugins: [pluginReact()],
+      plugins: [
+        pluginReact(),
+        federation({
+          name: 'component_app_csr_test',
+          remoteType: 'commonjs',
+          remotes: {
+            'component-app': `commonjs ${path.resolve(
+              __dirname,
+              './dist-node/remoteEntry.cjs',
+            )}`,
+          },
+          shared,
+        }),
+      ],
     }),
   ],
 });

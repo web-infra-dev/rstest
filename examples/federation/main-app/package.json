@@ -1,6 +1,7 @@
 {
   "name": "@examples/federation-main-app",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "rsbuild build --config rsbuild.browser.config.js",
     "serve": "serve dist -p 3002",

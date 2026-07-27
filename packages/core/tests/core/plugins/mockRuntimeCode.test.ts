@@ -125,7 +125,7 @@ describe('mockRuntimeCode federation shims', () => {
     expect(typeof proxiedRequire.f.remotes).toBe('function');
   });
 
-  it('blocks overwriting installed chunk-loading handlers', () => {
+  it('silently blocks overwriting installed chunk-loading handlers', () => {
     const warn = rs.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const { proxiedRequire } = evaluateRuntimeCode({ federation: true });
@@ -141,7 +141,7 @@ describe('mockRuntimeCode federation shims', () => {
 
       expect(proxiedRequire.f.readFileVm).toBe(installedLoader);
       expect(proxiedRequire.f.require).toBe(installedLoader);
-      expect(warn).toHaveBeenCalledTimes(2);
+      expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }

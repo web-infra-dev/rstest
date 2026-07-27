@@ -99,11 +99,6 @@ __webpack_require__ = new Proxy(
         const proxied = new Proxy(value, {
           set(obj, key, val) {
             if ((key === 'readFileVm' || key === 'require') && obj[key]) {
-              console.warn(
-                `[Rstest Federation] Ignoring attempt to overwrite __webpack_require__.f.${String(
-                  key,
-                )} after it was initialized.`,
-              );
               return true;
             }
             obj[key] = val;
