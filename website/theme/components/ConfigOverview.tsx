@@ -23,6 +23,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'globalSetup',
       'projects',
       'passWithNoTests',
+      'onlyFailures',
       'includeSource',
       'testNamePattern',
       'extends',
@@ -52,7 +53,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
   },
   {
     name: 'environment',
-    items: ['pool', 'isolate', 'testEnvironment'],
+    items: ['pool', 'isolate', 'testEnvironment', 'federation'],
   },
   {
     name: 'browser',

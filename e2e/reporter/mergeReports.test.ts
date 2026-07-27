@@ -163,4 +163,69 @@ describe('merge-reports', () => {
     // Clean up
     fs.removeSync(coverageDir);
   });
+
+  it('should generate V8 coverage for untested files when merging reports', async () => {
+    const coverageDir = join(fixturesDir, 'coverage');
+    const blobDir = join(fixturesDir, '.rstest-reports');
+    fs.removeSync(coverageDir);
+    fs.removeSync(blobDir);
+
+    for (const shard of ['1/2', '2/2']) {
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '--shard',
+          shard,
+          '--reporters=blob',
+          '-c',
+          'rstest.coverage-v8.config.mts',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: fixturesDir,
+          },
+        },
+      });
+      await expectExecSuccess();
+    }
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'merge-reports',
+        '--cleanup',
+        '-c',
+        'rstest.coverage-v8.config.mts',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: fixturesDir,
+        },
+      },
+    });
+    await expectExecSuccess();
+
+    const coverageSummary = fs.readJsonSync(
+      join(coverageDir, 'coverage-summary.json'),
+    ) as Record<string, Record<string, { total: number; covered: number }>>;
+    expect(
+      coverageSummary[join(fixturesDir, 'v8-src/types-only.ts')],
+    ).toMatchObject({
+      lines: { total: 0, covered: 0 },
+      statements: { total: 0, covered: 0 },
+      functions: { total: 0, covered: 0 },
+      branches: { total: 0, covered: 0 },
+    });
+    expect(
+      coverageSummary[join(fixturesDir, 'v8-src/untested.ts')],
+    ).toMatchObject({
+      lines: { total: 1, covered: 0 },
+      statements: { total: 1, covered: 0 },
+      functions: { total: 1, covered: 0 },
+      branches: { total: 0, covered: 0 },
+    });
+
+    fs.removeSync(coverageDir);
+  });
 });

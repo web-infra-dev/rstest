@@ -6,6 +6,22 @@ import { runRstestCli } from '../scripts';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const REPORTER_METADATA_RE = /__RSTEST_REPORTER_METADATA__(.*?)__END__/;
+
+const parseReporterMetadata = (stdout: string) => {
+  const match = stdout.match(REPORTER_METADATA_RE);
+  const payload = match?.[1];
+  if (!payload) {
+    throw new Error(
+      `reporter metadata payload not found in stdout. Got:\n${stdout.slice(
+        0,
+        4000,
+      )}`,
+    );
+  }
+  return JSON.parse(payload) as Record<string, any>;
+};
+
 describe.concurrent('reporters', () => {
   it('default - single file', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
@@ -313,6 +329,72 @@ describe.concurrent('reporters', () => {
 
     expect(cli.stdout).toContain('[custom reporter] onTestRunStart');
     expect(cli.stdout).toContain('[custom reporter] onTestRunEnd');
+  });
+
+  it('exposes metadata to custom reporter hooks', async ({
+    onTestFinished,
+  }) => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', './rstest.metadataReporterConfig.ts'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await cli.exec;
+    const result = parseReporterMetadata(cli.stdout);
+
+    expect(result.caseStartMeta).toEqual([
+      {
+        name: 'inherits metadata',
+        meta: { fromSuite: true, shared: 'suite' },
+      },
+      {
+        name: 'skipped metadata',
+        meta: { fromSuite: true, shared: 'skip', skippedCase: true },
+      },
+      {
+        name: 'todo metadata',
+        meta: { fromSuite: true, shared: 'todo', todoCase: true },
+      },
+      {
+        name: 'overrides metadata',
+        meta: { fromSuite: true, shared: 'case', caseOnly: true },
+      },
+    ]);
+    expect(result.caseResultMeta).toEqual([
+      {
+        name: 'inherits metadata',
+        meta: { fromSuite: true, shared: 'suite', runtime: 'first' },
+      },
+      {
+        name: 'skipped metadata',
+        meta: { fromSuite: true, shared: 'skip', skippedCase: true },
+      },
+      {
+        name: 'todo metadata',
+        meta: { fromSuite: true, shared: 'todo', todoCase: true },
+      },
+      {
+        name: 'overrides metadata',
+        meta: {
+          fromSuite: true,
+          shared: 'case',
+          caseOnly: true,
+          runtime: 'second',
+          replaced: true,
+          afterEach: true,
+        },
+      },
+    ]);
+    expect(result.suiteResultMeta).toEqual([
+      { fromSuite: true, shared: 'suite', suiteHook: 'afterAll' },
+    ]);
+    expect(result.fileResultMeta).toEqual({ fileHook: 'afterAll' });
   });
 
   it('empty', async ({ onTestFinished }) => {

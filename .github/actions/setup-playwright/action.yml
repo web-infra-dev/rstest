@@ -14,5 +14,11 @@ runs:
       if: inputs.install-webkit == 'true'
       shell: bash
       # Only browser-mode e2e includes the explicit WebKit fixture.
+      # Linux runners also need WebKit's system libraries (--with-deps);
+      # the macOS/Windows images already provide them.
       run: |
-        npx playwright install webkit
+        if [ "$RUNNER_OS" = "Linux" ]; then
+          npx playwright install --with-deps webkit
+        else
+          npx playwright install webkit
+        fi

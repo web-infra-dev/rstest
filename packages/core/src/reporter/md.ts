@@ -906,10 +906,6 @@ export class MdReporter implements Reporter {
       filterRerunTestPaths,
     });
 
-    const packageManagerAgent = this.options.reproduction
-      ? await detectPackageManagerAgent(rootPath)
-      : 'npm';
-
     const {
       failedTests,
       passedTests,
@@ -967,6 +963,9 @@ export class MdReporter implements Reporter {
         lines.push('Note: all tests passed. Lists omitted for brevity.');
       }
     } else {
+      const packageManagerAgent = this.options.reproduction
+        ? await detectPackageManagerAgent(rootPath)
+        : 'npm';
       const maxFailures = Math.max(0, this.options.failures.max);
       const shouldTruncate = failures.length > maxFailures;
       const displayedFailures = shouldTruncate

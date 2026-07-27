@@ -13,14 +13,21 @@ Rstest provides some utility functions to help you mock functions powered by [ti
 - **Type:**
 
 ```ts
-export interface Mock<T extends Function> extends MockInstance<T> {
+type FunctionLike = (...args: any) => any;
+
+export interface Mock<
+  T extends FunctionLike = FunctionLike,
+> extends MockInstance<T> {
+  new (...args: Parameters<T>): ReturnType<T>;
   (...args: Parameters<T>): ReturnType<T>;
 }
 
-export type MockFn = <T extends Function>(fn?: T) => Mock<T>;
+export type MockFn = <T extends FunctionLike = FunctionLike>(fn?: T) => Mock<T>;
 ```
 
 Creates a spy on a function.
+
+See the [`Mock`](/api/javascript-api/types#mock) type for annotating callable mock functions.
 
 ```ts
 const sayHi = rs.fn((name: string) => `hi ${name}`);
@@ -38,14 +45,16 @@ expect(sayHi).toHaveBeenCalledTimes(1);
 - **Type:**
 
 ```ts
-export type SpyFn = (
-  obj: Record<string, any>,
-  methodName: string,
+export type SpyFn = <T extends Record<string, any>, K extends keyof T>(
+  obj: T,
+  methodName: K,
   accessType?: 'get' | 'set',
-) => MockInstance;
+) => MockInstance<T[K]>;
 ```
 
 Creates a spy on a method of an object.
+
+See the [`MockInstance`](/api/javascript-api/types#mockinstance) type for the control API returned by a spy.
 
 ```ts
 const sayHi = () => 'hi';
@@ -210,11 +219,19 @@ expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
 ```ts
 type MockedFn = <T>(
   item: T,
-  deep?: boolean | { partial?: boolean; deep?: boolean },
-) => Mocked<T>;
+  deepOrOptions?: boolean | { partial?: boolean; deep?: boolean },
+) =>
+  | Mocked<T>
+  | MaybeMockedDeep<T>
+  | MaybePartiallyMocked<T>
+  | MaybePartiallyMockedDeep<T>;
 ```
 
 A type helper for TypeScript that wraps an object with mock types without changing its runtime behavior. This is useful when you have mocked a module and want proper type hints for the mock methods.
+
+The inferred return type follows the options: `{ deep: true }` applies mock types recursively, while `{ partial: true }` uses the partial mock variants.
+
+See the [`Mocked`](/api/javascript-api/types#mocked) type for annotating mocked objects and modules.
 
 ```ts
 import { myModule } from './myModule';

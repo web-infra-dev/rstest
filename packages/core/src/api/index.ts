@@ -22,6 +22,7 @@ import type {
   Reporter,
   RstestConfig,
   SnapshotSummary,
+  TaskMeta,
   TestFileResult as InternalTestFileResult,
   TestResult as InternalTestResult,
   TestResultStatus,
@@ -91,6 +92,8 @@ export interface TestResult {
   retryCount?: number;
   /** Project name from `projects` config; default project is `'default'`. */
   project: string;
+  /** User-defined metadata attached during test or suite execution. */
+  meta?: TaskMeta;
 }
 
 /**
@@ -213,6 +216,7 @@ const toPublicTestResult = (r: InternalTestResult): TestResult => ({
   retryErrors: r.retryErrors?.map((err) => toSerializedError(err)),
   retryCount: r.retryCount,
   project: r.project,
+  meta: r.meta,
 });
 
 const toPublicTestFileResult = (f: InternalTestFileResult): TestFileResult => ({

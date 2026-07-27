@@ -256,6 +256,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   isolate: true,
   globals: false,
   passWithNoTests: false,
+  onlyFailures: false,
   update: false,
   testTimeout: DEFAULT_TEST_TIMEOUT,
   hookTimeout: 10_000,
@@ -279,7 +280,9 @@ const createDefaultConfig = (): NormalizedConfig => ({
   printConsoleTrace: false,
   disableConsoleIntercept: false,
   silent: false,
-  snapshotFormat: {},
+  snapshotFormat: {
+    printShadowRoot: false,
+  },
   env: {},
   hideSkippedTests: false,
   hideSkippedTestFiles: false,
@@ -287,6 +290,7 @@ const createDefaultConfig = (): NormalizedConfig => ({
   detectAsyncLeaks: false,
   bail: 0,
   includeTaskLocation: false,
+  federation: false,
   browser: {
     enabled: false,
     provider: 'playwright',

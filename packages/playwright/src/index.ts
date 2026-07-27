@@ -28,5 +28,7 @@ export type {
   PlaywrightServeOptions,
   PlaywrightServeResult,
   PlaywrightTest,
+  PlaywrightTraceMode,
+  PlaywrightTraceOptions,
   PlaywrightUse,
 } from './fixture';

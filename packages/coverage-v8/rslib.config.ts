@@ -4,7 +4,6 @@ import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 export default defineConfig({
   lib: [
     {
-      format: 'esm',
       syntax: 'es2021',
       dts: {
         isolated: true,

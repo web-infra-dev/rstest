@@ -80,6 +80,7 @@ export type CommonOptions = {
         clean?: boolean | string;
       };
   passWithNoTests?: boolean;
+  onlyFailures?: boolean;
   silent?: boolean | 'passed-only';
   printConsoleTrace?: boolean;
   logHeapUsage?: boolean;
@@ -104,6 +105,7 @@ export type CommonOptions = {
   bail?: number | boolean;
   shard?: string;
   includeTaskLocation?: boolean;
+  federation?: boolean;
   source?: {
     tsconfigPath?: string;
   };
@@ -153,6 +155,7 @@ export function mergeWithCLIOptions(
     'globals',
     'isolate',
     'passWithNoTests',
+    'onlyFailures',
     'silent',
     'update',
     'testNamePattern',
@@ -174,6 +177,7 @@ export function mergeWithCLIOptions(
     'logHeapUsage',
     'detectAsyncLeaks',
     'includeTaskLocation',
+    'federation',
   ];
   for (const key of keys) {
     if (options[key] !== undefined) {

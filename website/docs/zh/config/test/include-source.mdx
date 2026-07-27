@@ -23,6 +23,8 @@ export default defineConfig({
 源码内联测试通常适用于小型功能函数和工具方法，能够方便地进行快速验证和调试。对于更复杂的功能和模块，建议使用独立的测试文件。
 :::
 
+`includeSource` 同时适用于 Node 模式与[浏览器模式](/guide/browser-testing)项目。
+
 ### 编写内联测试
 
 当定义了 `includeSource` 后，Rstest 会运行所有通过 glob 匹配且包含 `import.meta.rstest` 的文件。

@@ -98,6 +98,12 @@ export type ContainerRPC = {
     testFile: string,
     testNamePattern?: string,
   ) => Promise<ReloadTestFileAck>;
+  /**
+   * Watch reruns push a refreshed host config (e.g. a flipped
+   * `snapshot.updateSnapshot`) so runner iframes loaded from now on receive
+   * live values instead of the boot-time snapshot.
+   */
+  onHostConfigUpdate: (config: BrowserHostConfig) => void;
 };
 
 export type {

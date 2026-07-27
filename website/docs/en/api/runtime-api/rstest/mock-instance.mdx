@@ -126,9 +126,9 @@ fn(); // returns undefined
 
 ## withImplementation
 
-- **Type:** `(fn: Function, callback: () => any) => void | Promise<void>`
+- **Type:** `(fn: Function, callback: () => any) => MockInstance | Promise<MockInstance>`
 
-Temporarily replaces the mock implementation while the callback is executed, then restores the original implementation.
+Temporarily replaces the mock implementation while the callback is executed, then restores the original implementation. Returns the mock instance (or a promise resolving to it when the callback is async).
 
 ```ts
 const fn = rs.fn(() => 1);
@@ -177,6 +177,33 @@ const fn = rs.fn();
 fn.mockReturnValueOnce(1);
 expect(fn()).toBe(1);
 expect(fn()).toBe(undefined);
+```
+
+## mockThrow
+
+<ApiMeta addedVersion="0.11.4" />
+
+- **Type:** `(value: unknown) => MockInstance`
+
+Makes the mock throw the specified value whenever it is called.
+
+```ts
+const fn = rs.fn().mockThrow(new Error('fail'));
+expect(() => fn()).toThrow('fail');
+```
+
+## mockThrowOnce
+
+<ApiMeta addedVersion="0.11.4" />
+
+- **Type:** `(value: unknown) => MockInstance`
+
+Makes the mock throw the specified value on the next call only.
+
+```ts
+const fn = rs.fn(() => 'ok').mockThrowOnce(new Error('fail'));
+expect(() => fn()).toThrow('fail');
+expect(fn()).toBe('ok');
 ```
 
 ## mockResolvedValue

@@ -1,0 +1,224 @@
+---
+title: Metadata
+description: Attach structured metadata to tests, suites, and files for custom reporters and programmatic result processing.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Metadata
+
+<ApiMeta addedVersion="0.11.1" />
+
+Metadata lets you attach JSON-serializable data to test, suite, and file results. Built-in reporters do not print it by default; it is intended for custom reporters, the programmatic API, CI integrations, dashboards, ownership mapping, and external tools such as mutation testing runners.
+
+## Add metadata to a test
+
+Pass `meta` in the test options object to set the initial metadata for a test case.
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test(
+  'charges credit card',
+  { meta: { owner: 'payments', feature: 'checkout' } },
+  () => {
+    expect(1 + 1).toBe(2);
+  },
+);
+```
+
+Reporter hooks and the programmatic API can read this declared metadata from `TestResult.meta`. You can define metadata when declaring the test, or modify and add fields through `task.meta` during the test:
+
+```ts
+test('records runtime data', ({ task }) => {
+  task.meta = {
+    durationBucket: 'fast',
+  };
+});
+```
+
+## Add metadata to a suite
+
+Pass `meta` to `describe` when several tests share the same fields.
+
+```ts
+import { describe, expect, test } from '@rstest/core';
+
+describe(
+  'checkout',
+  { meta: { owner: 'payments', layer: 'integration' } },
+  () => {
+    test('creates an order', ({ task }) => {
+      // task.meta is { owner: 'payments', layer: 'integration' }
+      expect(task.meta.owner).toBe('payments');
+    });
+
+    test(
+      'uses coupon',
+      { meta: { layer: 'e2e', caseId: 'PAY-456' } },
+      ({ task }) => {
+        // task.meta is { owner: 'payments', layer: 'e2e', caseId: 'PAY-456' }
+        expect(task.meta.layer).toBe('e2e');
+      },
+    );
+  },
+);
+```
+
+Suite metadata is inherited by descendant suites and tests. Child top-level keys override parent keys, so a test can override only the fields that are different.
+
+## Add file and suite metadata from hooks
+
+Lifecycle hooks receive a metadata object through `ctx.meta`.
+
+```ts
+import { afterAll, describe, test } from '@rstest/core';
+
+afterAll((ctx) => {
+  ctx.meta.fileTag = 'ci-shard-1';
+});
+
+describe('checkout', { meta: { owner: 'payments' } }, () => {
+  afterAll((ctx) => {
+    ctx.meta.suiteDurationBucket = 'slow';
+  });
+
+  test('creates an order', () => {
+    // ...
+  });
+});
+```
+
+A file-level hook writes to `TestFileResult.meta`. A hook inside a `describe` block writes to that suite result's `meta`, which is passed to custom reporters through `onTestSuiteResult`.
+
+## Read metadata in a custom reporter
+
+Custom reporters can read metadata from case, suite, and file results.
+
+```ts
+import type { Reporter } from '@rstest/core';
+
+const metadataReporter: Reporter = {
+  onTestCaseStart(test) {
+    // Initial metadata after suite inheritance and test-level overrides.
+    console.log('case start', test.name, test.meta);
+  },
+
+  onTestCaseResult(result) {
+    // Final metadata after test execution and hooks.
+    console.log('case result', result.name, result.meta);
+  },
+
+  onTestSuiteResult(result) {
+    console.log('suite result', result.name, result.meta);
+  },
+
+  onTestFileResult(result) {
+    console.log('file result', result.testPath, result.meta);
+  },
+};
+```
+
+Use `onTestCaseStart` when you need the declared metadata before the test runs. Use `onTestCaseResult`, `onTestSuiteResult`, or `onTestFileResult` when you need final metadata produced during runtime.
+
+## Read metadata from the programmatic API
+
+The `runRstest` result includes the same result metadata as reporters.
+
+```ts
+import { runRstest } from '@rstest/core/api';
+
+const result = await runRstest({
+  cwd: process.cwd(),
+  inlineConfig: {
+    include: ['src/**/*.test.ts'],
+  },
+});
+
+for (const file of result.files) {
+  console.log(file.testPath, file.meta);
+
+  for (const test of file.results) {
+    console.log(test.name, test.meta);
+  }
+}
+```
+
+This is useful when an external tool owns the Node.js process and wants to run Rstest, then consume structured results without parsing terminal output.
+
+## Metadata value type
+
+Metadata must be JSON-serializable. `TaskMeta` and `TaskMetaValue` are exported from `@rstest/core`:
+
+```ts
+type TaskMeta = Record<string, TaskMetaValue>;
+
+type TaskMetaValue =
+  | string
+  | number
+  | boolean
+  | null
+  | TaskMetaValue[]
+  | { [key: string]: TaskMetaValue };
+```
+
+Do not store functions, class instances, symbols, `BigInt`, or large objects in metadata. Prefer small strings, numbers, booleans, arrays, and plain objects.
+
+## Inheritance and isolation rules
+
+Rstest applies these rules when metadata is collected and reported:
+
+- Suite metadata is inherited by child suites and tests.
+- Child top-level keys override parent top-level keys.
+- Inherited metadata is copied for each descendant, so runtime mutation does not leak to sibling tests or sibling suites.
+- Nested objects and arrays are copied during inheritance.
+- Mutating `task.meta` during a test affects that test's final `TestResult.meta`.
+- Mutating `ctx.meta` in file-level hooks affects `TestFileResult.meta`; mutating it in suite hooks affects that suite result's `meta`.
+
+## Skipped and todo tests
+
+Declared metadata is still available for skipped and todo tests.
+
+```ts
+import { test } from '@rstest/core';
+
+test.skip(
+  'blocked by upstream',
+  { meta: { owner: 'payments', reason: 'upstream' } },
+  () => {
+    // This body does not run.
+  },
+);
+
+test.todo('add refund coverage', {
+  meta: { owner: 'payments', tracking: 'PAY-789' },
+});
+```
+
+Because these tests do not execute, runtime mutations are not possible, but reporters can still read their declared metadata from `onTestCaseStart` and `onTestCaseResult`.
+
+## When to use metadata
+
+Common use cases include:
+
+- Ownership fields such as `owner`, `team`, or `feature`.
+- Links to a test management system, such as `caseId` or `tracking`.
+- CI dashboard fields, such as shard, environment, or risk level.
+- Custom reporter output for JSON, Markdown, or internal dashboards.
+- External tools that need to map test results to source analysis, such as mutation testing runners.
+
+## Best practices
+
+- Keep values small and JSON-serializable.
+- Prefer stable field names such as `owner`, `feature`, `caseId`, and `tracking`.
+- Put shared fields on `describe` and only override exceptions on individual tests.
+- Write runtime metadata only when it depends on information discovered during execution.
+- Use a custom reporter or the programmatic API to consume metadata; built-in reporters are optimized for human-readable test output.
+
+## Related APIs
+
+- [`test` options](/api/runtime-api/test-api/test#testoptions)
+- [`describe` options](/api/runtime-api/test-api/describe#testoptions)
+- [Lifecycle hooks](/api/runtime-api/test-api/hooks)
+- [Reporter](/api/javascript-api/reporter)
+- [Rstest types](/api/javascript-api/types)

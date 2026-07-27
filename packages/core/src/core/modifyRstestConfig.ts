@@ -31,6 +31,13 @@ import {
 
 type RstestEnvironmentConfig = EnvironmentConfig & Pick<RsbuildConfig, 'root'>;
 
+type InitModifyRstestConfigHooksOptions = {
+  onModifyRstestConfigApplied?: () => Promise<void>;
+  onRsbuildConfigResolved?: (applied: boolean) => Promise<void>;
+  getEnvironmentConfig?: (project: ProjectContext) => RstestEnvironmentConfig;
+  appliedEnvironmentNames?: Set<string>;
+};
+
 type NormalizedProjectConfigWithDistPath = NormalizedProjectConfig & {
   output?: NormalizedProjectConfig['output'] & {
     distPath?: NormalizedConfig['output']['distPath'];
@@ -53,6 +60,30 @@ const forbiddenModifyRstestConfigPaths: ForbiddenModifyRstestConfigPath[] = [
   {
     path: 'browser.enabled',
     get: (config) => config.browser?.enabled,
+  },
+  {
+    path: 'browser.provider',
+    get: (config) => config.browser?.provider,
+  },
+  {
+    path: 'browser.browser',
+    get: (config) => config.browser?.browser,
+  },
+  {
+    path: 'browser.headless',
+    get: (config) => config.browser?.headless,
+  },
+  {
+    path: 'browser.port',
+    get: (config) => config.browser?.port,
+  },
+  {
+    path: 'browser.strictPort',
+    get: (config) => config.browser?.strictPort,
+  },
+  {
+    path: 'browser.providerOptions',
+    get: (config) => config.browser?.providerOptions,
   },
   {
     path: 'name',
@@ -405,10 +436,39 @@ const normalizeMutableConfigFields = (
 
 const syncProjectDerivedFields = (project: ProjectContext): void => {
   project.rootPath = project.normalizedConfig.root || project.rootPath;
-  project.outputModule =
-    project.normalizedConfig.output?.module ??
-    process.env[ENV.OUTPUT_MODULE] !== 'false';
+  project.outputModule = project.normalizedConfig.federation
+    ? false
+    : (project.normalizedConfig.output?.module ??
+      process.env[ENV.OUTPUT_MODULE] !== 'false');
 };
+
+const isUserRstestConfigPlugin = (plugin: unknown): boolean => {
+  if (!plugin) {
+    return false;
+  }
+
+  if (Array.isArray(plugin)) {
+    return plugin.some(isUserRstestConfigPlugin);
+  }
+
+  if (typeof plugin === 'object') {
+    const name = 'name' in plugin ? plugin.name : undefined;
+    return name !== 'rstest:browser-user-config';
+  }
+
+  return true;
+};
+
+export const getUserRstestConfigPluginProjects = (
+  projects: ProjectContext[],
+): ProjectContext[] =>
+  projects.filter((project) =>
+    project.normalizedConfig.plugins?.some(isUserRstestConfigPlugin),
+  );
+
+export const hasUserRstestConfigPlugins = (
+  projects: ProjectContext[],
+): boolean => getUserRstestConfigPluginProjects(projects).length > 0;
 
 const applyModifyRstestConfig = async (
   config: NormalizedProjectConfig,
@@ -492,13 +552,42 @@ export const getRsbuildEnvironmentConfig = (
 });
 
 const createRstestExposeAPI = (
-  environmentName: string,
+  context: RstestContext,
+  project: ProjectContext,
   modifyRstestConfigCallbacks: Map<string, ModifyRstestConfigCallback[]>,
 ): RstestExposeAPI => ({
+  getRstestConfig: () =>
+    clonePlainConfig({
+      ...project.normalizedConfig,
+      projects: context.originalConfig.projects,
+      pool: context.normalizedConfig.pool,
+      reporters: context.normalizedConfig.reporters,
+      isolate: context.normalizedConfig.isolate,
+      coverage: context.normalizedConfig.coverage,
+      resolveSnapshotPath: context.normalizedConfig.resolveSnapshotPath,
+      onConsoleLog: context.normalizedConfig.onConsoleLog,
+      silent: context.normalizedConfig.silent,
+      bail: context.normalizedConfig.bail,
+      update: context.normalizedConfig.update,
+      onlyFailures: context.normalizedConfig.onlyFailures,
+      passWithNoTests: context.normalizedConfig.passWithNoTests,
+      forceRerunTriggers: Array.from(
+        new Set([
+          ...context.normalizedConfig.forceRerunTriggers,
+          ...project.normalizedConfig.forceRerunTriggers,
+        ]),
+      ),
+      shard: context.normalizedConfig.shard,
+      output: {
+        ...project.normalizedConfig.output,
+        distPath: context.normalizedConfig.output.distPath,
+      },
+    }),
   modifyRstestConfig: (callback) => {
-    const callbacks = modifyRstestConfigCallbacks.get(environmentName) ?? [];
+    const callbacks =
+      modifyRstestConfigCallbacks.get(project.environmentName) ?? [];
     callbacks.push(callback);
-    modifyRstestConfigCallbacks.set(environmentName, callbacks);
+    modifyRstestConfigCallbacks.set(project.environmentName, callbacks);
   },
 });
 
@@ -507,15 +596,21 @@ export const initModifyRstestConfigHooks = (
   rsbuildInstance: RsbuildInstance,
   projects: ProjectContext[],
   exposeProjects: ProjectContext[] = projects,
-  onModifyRstestConfigApplied?: () => Promise<void>,
+  options: InitModifyRstestConfigHooksOptions = {},
 ): void => {
+  const {
+    getEnvironmentConfig = getRsbuildEnvironmentConfig,
+    onModifyRstestConfigApplied,
+    onRsbuildConfigResolved,
+    appliedEnvironmentNames = new Set<string>(),
+  } = options;
   const modifyRstestConfigCallbacks = new Map<
     string,
     ModifyRstestConfigCallback[]
   >();
-  const appliedEnvironmentNames = new Set<string>();
+  const applyModifyRstestConfigCallbacks = async (): Promise<boolean> => {
+    let applied = false;
 
-  const applyModifyRstestConfigCallbacks = async () => {
     for (const project of exposeProjects) {
       if (appliedEnvironmentNames.has(project.environmentName)) {
         continue;
@@ -528,16 +623,16 @@ export const initModifyRstestConfigHooks = (
       }
       await applyProjectModifyRstestConfig(context, project, callbacks);
       appliedEnvironmentNames.add(project.environmentName);
+      applied = true;
     }
+
+    return applied;
   };
 
   for (const project of exposeProjects) {
     rsbuildInstance.expose(
       'rstest',
-      createRstestExposeAPI(
-        project.environmentName,
-        modifyRstestConfigCallbacks,
-      ),
+      createRstestExposeAPI(context, project, modifyRstestConfigCallbacks),
       {
         environment: project.environmentName,
       },
@@ -547,15 +642,18 @@ export const initModifyRstestConfigHooks = (
   rsbuildInstance.modifyRsbuildConfig({
     order: 'pre',
     handler: async (config) => {
-      await applyModifyRstestConfigCallbacks();
-      await onModifyRstestConfigApplied?.();
+      const applied = await applyModifyRstestConfigCallbacks();
+      if (applied) {
+        await onModifyRstestConfigApplied?.();
+      }
+      await onRsbuildConfigResolved?.(applied);
 
       return {
         ...config,
         environments: Object.fromEntries(
           projects.map((project) => [
             project.environmentName,
-            getRsbuildEnvironmentConfig(project),
+            getEnvironmentConfig(project),
           ]),
         ),
       };

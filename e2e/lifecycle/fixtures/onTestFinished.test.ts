@@ -21,3 +21,12 @@ describe('level A', () => {
 it('it in level B', () => {
   expect(1 + 1).toBe(2);
 });
+
+it('does not run callbacks registered during cleanup', () => {
+  onTestFinished(() => {
+    console.log('[onTestFinished] outer');
+    onTestFinished(() => {
+      console.log('[onTestFinished] nested');
+    });
+  });
+});

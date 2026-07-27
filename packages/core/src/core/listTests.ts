@@ -15,6 +15,8 @@ import {
   bgColor,
   color,
   getTaskNameWithPrefix,
+  isFilterInsideProject as isFilterInsideProjectRoot,
+  isFuzzyBasenameFilter as isFuzzyBasenameFilterWithMode,
   logger,
   prettyTestPath,
   ROOT_SUITE_NAME,
@@ -26,7 +28,9 @@ import {
 } from './globalSetup';
 import { createSetupFileState } from './setupFileState';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
+import { isBrowserProject, isNodeProject } from './isBrowserProject';
 import { createListProjectPlanState, syncNodeProjects } from './projectPlan';
+import { getUserRstestConfigPluginProjects } from './modifyRstestConfig';
 
 type ListedTest = {
   file: string;
@@ -147,11 +151,13 @@ const collectNodeTests = async ({
   context,
   nodeProjects,
   globTestSourceEntries,
+  onRsbuildConfigResolved,
   onModifyRstestConfigApplied,
 }: {
   context: RstestContext;
   nodeProjects: ProjectContext[];
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+  onRsbuildConfigResolved?: () => Promise<void>;
   onModifyRstestConfigApplied?: () => Promise<void>;
 }) => {
   if (nodeProjects.length === 0) {
@@ -175,6 +181,10 @@ const collectNodeTests = async ({
     }),
     onModifyRstestConfigApplied: async () => {
       await onModifyRstestConfigApplied?.();
+      syncNodeProjects(nodeProjects, context.projects);
+    },
+    onRsbuildConfigResolved: async () => {
+      await onRsbuildConfigResolved?.();
       syncNodeProjects(nodeProjects, context.projects);
     },
   });
@@ -226,6 +236,7 @@ const collectNodeTests = async ({
           sourceMaps,
           interopDefault: true,
           outputModule: project.outputModule,
+          federation: project.normalizedConfig.federation,
         });
         if (!success) {
           return {
@@ -239,6 +250,7 @@ const collectNodeTests = async ({
 
       const list = await pool.collectTests({
         entries,
+        assetNames,
         setupEntries,
         getAssetFiles,
         getSourceMaps,
@@ -276,10 +288,16 @@ const collectBrowserTests = async ({
   context,
   browserProjects,
   shardedEntries,
+  freezeShardedEntries,
+  filesOnly,
+  appliedModifyRstestConfigEnvironments,
 }: {
   context: RstestContext;
   browserProjects: ProjectContext[];
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
+  freezeShardedEntries?: boolean;
+  filesOnly?: boolean;
+  appliedModifyRstestConfigEnvironments?: Set<string>;
 }): Promise<{
   list: ListCommandResult[];
   close: () => Promise<void>;
@@ -291,15 +309,25 @@ const collectBrowserTests = async ({
     };
   }
 
-  const { loadBrowserModule } = await import('./browserLoader');
-  // Pass project roots to resolve @rstest/browser from project-specific node_modules
-  const projectRoots = browserProjects.map((p) => p.rootPath);
-  const { validateBrowserConfig, listBrowserTests } = await loadBrowserModule({
-    projectRoots,
-    embedded: context.embedded,
+  // Collect through the executor seam so `rstest list` and the run path share
+  // one browser entry point (import stays dynamic: no browser module load for
+  // node-only lists).
+  const { loadBrowserExecutor } = await import('./browser/loader');
+  const executor = await loadBrowserExecutor(context, browserProjects, null, {
+    shardedEntries,
+    freezeShardedEntries,
+    filesOnly,
+    appliedModifyRstestConfigEnvironments,
   });
-  validateBrowserConfig(context);
-  return listBrowserTests(context, { shardedEntries });
+  try {
+    const { list } = await executor.collect({});
+    return { list, close: () => executor.close() };
+  } catch (error) {
+    // A rejected collect cleans up host-side resources, but the executor must
+    // still be closed so an in-flight launch cannot outlive the failure.
+    await executor.close().catch(() => undefined);
+    throw error;
+  }
 };
 
 const collectTestFiles = async ({
@@ -339,6 +367,8 @@ const collectAllTests = async ({
   getShardedEntries,
   collectBrowserAfterConfigHooks,
   onModifyRstestConfigApplied,
+  onRsbuildConfigResolved,
+  appliedModifyRstestConfigEnvironments,
 }: {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
@@ -346,6 +376,8 @@ const collectAllTests = async ({
     Map<string, { entries: Record<string, string> }> | undefined;
   collectBrowserAfterConfigHooks?: boolean;
   onModifyRstestConfigApplied?: () => Promise<void>;
+  onRsbuildConfigResolved?: () => Promise<void>;
+  appliedModifyRstestConfigEnvironments?: Set<string>;
 }): Promise<{
   errors?: FormattedError[];
   list: ListCommandResult[];
@@ -353,27 +385,38 @@ const collectAllTests = async ({
   close: () => Promise<void>;
 }> => {
   // Separate browser and node mode projects
-  const browserProjects = context.projects.filter(
-    (p) => p.normalizedConfig.browser.enabled,
-  );
-  const nodeProjects = context.projects.filter(
-    (p) => !p.normalizedConfig.browser.enabled,
-  );
+  const browserProjects = context.projects.filter(isBrowserProject);
+  const nodeProjects = context.projects.filter(isNodeProject);
 
   const collectBrowser = () =>
     collectBrowserTests({
       context,
       browserProjects,
       shardedEntries: getShardedEntries?.(),
+      freezeShardedEntries: Boolean(
+        context.normalizedConfig.shard && nodeProjects.length,
+      ),
+      appliedModifyRstestConfigEnvironments,
     });
 
   if (collectBrowserAfterConfigHooks && nodeProjects.length) {
+    let refreshedAfterConfigHooks = false;
     const nodeResult = await collectNodeTests({
       context,
       nodeProjects,
       globTestSourceEntries,
-      onModifyRstestConfigApplied,
+      onRsbuildConfigResolved,
+      onModifyRstestConfigApplied: async () => {
+        refreshedAfterConfigHooks = true;
+        await onModifyRstestConfigApplied?.();
+      },
     });
+    if (
+      !refreshedAfterConfigHooks &&
+      !context.projects.some((project) => project._environmentGroup)
+    ) {
+      await onModifyRstestConfigApplied?.();
+    }
     let browserResult: Awaited<ReturnType<typeof collectBrowser>>;
     try {
       browserResult = await collectBrowser();
@@ -392,14 +435,36 @@ const collectAllTests = async ({
     };
   }
 
+  // Settle both sides before unwrapping: a fail-fast `Promise.all` would leak
+  // the surviving side's resources (node rsbuild server + pool, or browser
+  // provider + dev server) when the other side rejects. Close the survivor,
+  // then let the re-await below rethrow the first failure in order.
+  const nodePromise = collectNodeTests({
+    context,
+    nodeProjects,
+    globTestSourceEntries,
+    onRsbuildConfigResolved,
+    onModifyRstestConfigApplied,
+  });
+  const browserPromise = collectBrowser();
+  const [nodeSettled, browserSettled] = await Promise.allSettled([
+    nodePromise,
+    browserPromise,
+  ]);
+  if (
+    nodeSettled.status === 'rejected' ||
+    browserSettled.status === 'rejected'
+  ) {
+    await Promise.all([
+      nodeSettled.status === 'fulfilled' &&
+        nodeSettled.value.close().catch(() => undefined),
+      browserSettled.status === 'fulfilled' &&
+        browserSettled.value.close().catch(() => undefined),
+    ]);
+  }
   const [nodeResult, browserResult] = await Promise.all([
-    collectNodeTests({
-      context,
-      nodeProjects,
-      globTestSourceEntries,
-      onModifyRstestConfigApplied,
-    }),
-    collectBrowser(),
+    nodePromise,
+    browserPromise,
   ]);
 
   return {
@@ -425,6 +490,12 @@ export async function listTests(
   const { rootPath } = context;
   const { shard } = context.normalizedConfig;
   const showProject = context.projects.length > 1;
+
+  const isFilterInsideProject = (filter: string, project: ProjectContext) =>
+    isFilterInsideProjectRoot(filter, project.rootPath, rootPath);
+
+  const isFuzzyBasenameFilter = (filter: string) =>
+    isFuzzyBasenameFilterWithMode(filter, context.fileFilterMode);
 
   if (context.relatedResolutionEmpty) {
     const tests: ListedTest[] = [];
@@ -466,32 +537,120 @@ export async function listTests(
   }
 
   const listPlanState = createListProjectPlanState(context);
-  const { globTestSourceEntries, refreshListEntries } = listPlanState;
+  const appliedBrowserModifyRstestConfigEnvironments = new Set<string>();
+  const {
+    globTestSourceEntries,
+    refreshListEntries,
+    validateEnvironmentComments,
+  } = listPlanState;
 
-  const nodeProjects = context.projects.filter(
-    (project) => !project.normalizedConfig.browser.enabled,
-  );
+  const nodeProjects = context.projects.filter(isNodeProject);
   const shouldPrintShardAfterConfigHooks = Boolean(
     shard && !filesOnly && nodeProjects.length,
   );
 
+  const applyBrowserFilesOnlyConfigHooks = async () => {
+    const browserProjects = context.projects.filter(isBrowserProject);
+
+    if (!browserProjects.length) {
+      return;
+    }
+
+    const browserConfigHookProjects =
+      getUserRstestConfigPluginProjects(browserProjects);
+    if (!browserConfigHookProjects.length) {
+      return;
+    }
+
+    let projectsToInitialize = browserConfigHookProjects;
+    if (
+      context.fileFilters?.length &&
+      !context.fileFilters.some(isFuzzyBasenameFilter)
+    ) {
+      const matchedProjects = browserConfigHookProjects.filter((project) =>
+        context.fileFilters?.some((filter) =>
+          isFilterInsideProject(filter, project),
+        ),
+      );
+      if (matchedProjects.length > 0) {
+        projectsToInitialize = matchedProjects;
+      } else if (
+        context.fileFilters.every((filter) =>
+          [...browserProjects, ...nodeProjects].some((project) =>
+            isFilterInsideProject(filter, project),
+          ),
+        )
+      ) {
+        return;
+      }
+    }
+
+    const browserResult = await collectBrowserTests({
+      context,
+      browserProjects: projectsToInitialize,
+      shardedEntries: shard
+        ? listPlanState.getShardedBrowserEntries?.()
+        : undefined,
+      filesOnly: true,
+      appliedModifyRstestConfigEnvironments:
+        appliedBrowserModifyRstestConfigEnvironments,
+    });
+    await browserResult.close();
+    await refreshListEntries({
+      silentShardMessage: true,
+      strictEnvironmentComments: true,
+    });
+  };
+
   if (nodeProjects.length && filesOnly) {
+    await refreshListEntries({
+      silentShardMessage: Boolean(shard),
+      strictEnvironmentComments: false,
+    });
+    syncNodeProjects(nodeProjects, context.projects);
+    let refreshedAfterConfigHooks = false;
+
     const rsbuildInstance = await prepareRsbuild({
       context,
       globTestSourceEntries,
       setupFileState: createSetupFileState(),
       targetProjects: nodeProjects,
       onModifyRstestConfigApplied: async () => {
-        await refreshListEntries();
+        refreshedAfterConfigHooks = true;
+        await refreshListEntries({
+          silentShardMessage: !shard,
+          strictEnvironmentComments: false,
+        });
         syncNodeProjects(nodeProjects, context.projects);
       },
+      onRsbuildConfigResolved: validateEnvironmentComments,
     });
     await rsbuildInstance.initConfigs({ action: 'dev' });
-  }
+    if (!refreshedAfterConfigHooks) {
+      await refreshListEntries({
+        silentShardMessage: !shard,
+        strictEnvironmentComments: true,
+      });
+      syncNodeProjects(nodeProjects, context.projects);
+    }
 
-  await refreshListEntries({
-    silentShardMessage: shouldPrintShardAfterConfigHooks,
-  });
+    await applyBrowserFilesOnlyConfigHooks();
+  } else if (filesOnly) {
+    await refreshListEntries({
+      silentShardMessage: Boolean(shard),
+      strictEnvironmentComments: !nodeProjects.length,
+    });
+
+    await applyBrowserFilesOnlyConfigHooks();
+  } else {
+    await refreshListEntries({
+      silentShardMessage: shouldPrintShardAfterConfigHooks,
+      strictEnvironmentComments: !nodeProjects.length,
+    });
+    if (shouldPrintShardAfterConfigHooks) {
+      await applyBrowserFilesOnlyConfigHooks();
+    }
+  }
 
   const {
     list,
@@ -510,10 +669,14 @@ export async function listTests(
           ? listPlanState.getShardedBrowserEntries
           : undefined,
         collectBrowserAfterConfigHooks: shouldPrintShardAfterConfigHooks,
+        onRsbuildConfigResolved: validateEnvironmentComments,
         onModifyRstestConfigApplied: () =>
           refreshListEntries({
             silentShardMessage: !shouldPrintShardAfterConfigHooks,
+            strictEnvironmentComments: false,
           }),
+        appliedModifyRstestConfigEnvironments:
+          appliedBrowserModifyRstestConfigEnvironments,
       });
 
   const tests: ListedTest[] = [];

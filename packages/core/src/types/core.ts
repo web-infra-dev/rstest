@@ -1,6 +1,7 @@
 import type { SnapshotManager } from '@vitest/snapshot/manager';
 import type { TestStateManager } from '../core/stateManager';
 import type {
+  EnvironmentName,
   NormalizedConfig,
   NormalizedProjectConfig,
   RstestConfig,
@@ -27,6 +28,18 @@ export type Project = { config: RstestConfig; configFilePath?: string };
 export type ProjectContext = {
   name: string;
   environmentName: string;
+  _environmentGroup?: {
+    key: string;
+    baseKey: string;
+    baseTestEnvironment: NormalizedProjectConfig['testEnvironment'];
+    sourceEnvironmentName: string;
+    sourceProjectName: string;
+    hasImplicitEntries?: boolean;
+    environmentComment?: {
+      name?: EnvironmentName;
+      options?: Record<string, unknown>;
+    };
+  };
   /** The root path of current project. */
   rootPath: string;
   /** Whether to output es module. */

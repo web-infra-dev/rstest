@@ -28,6 +28,24 @@ import { color } from '../../utils/logger';
 
 const RealDate = Date;
 
+/**
+ * Colorize a console level label for terminal output. Shared by the node
+ * worker's CustomConsole and the browser host's log relay so both executors
+ * print identical level prefixes (including non-TTY color stripping).
+ */
+export const getPrettyConsoleName = (type: string): string => {
+  switch (type) {
+    case 'error':
+      return color.red(type);
+    case 'warn':
+      return color.yellow(type);
+    case 'info':
+      return color.cyan(type);
+    default:
+      return color.gray(type);
+  }
+};
+
 class NullWritable extends Writable {
   override _write(
     _chunk: any,
@@ -76,19 +94,6 @@ export function createCustomConsole({
 
     override Console: typeof Console = Console;
 
-    private getPrettyName(type: string): string {
-      switch (type) {
-        case 'error':
-          return color.red(type);
-        case 'warn':
-          return color.yellow(type);
-        case 'info':
-          return color.cyan(type);
-        default:
-          return color.gray(type);
-      }
-    }
-
     private _log(
       name: string,
       message: string,
@@ -98,7 +103,7 @@ export function createCustomConsole({
 
       onConsoleLog({
         content: '  '.repeat(this._groupDepth) + message,
-        name: this.getPrettyName(name),
+        name: getPrettyConsoleName(name),
         taskId: currentTask?.taskId,
         taskName: currentTask?.taskName,
         taskParentNames: currentTask?.taskParentNames,

@@ -2,11 +2,13 @@ import { type BirpcReturn, createBirpc } from 'birpc';
 import { useEffect, useRef, useState } from 'react';
 import { createWebSocketUrl, RECONNECT_DELAYS } from '../core/runtime';
 import type {
+  BrowserHostConfig,
   ContainerRPC,
   HostRPC,
   ReloadTestFileAck,
   TestFileInfo,
 } from '../types';
+import type { ContainerWindow } from '../utils/constants';
 import { logger } from '../utils/logger';
 
 type RpcState = {
@@ -84,6 +86,18 @@ export const useRpc = (
             throw new Error('reloadTestFile handler is not available');
           }
           return onReloadTestFileRef.current(testFile, testNamePattern);
+        },
+        onHostConfigUpdate(config: BrowserHostConfig) {
+          logger.debug('[Container RPC] onHostConfigUpdate called');
+          // Mutate in place: the App and the iframe config postMessage hold
+          // this object by reference, so runner iframes loaded after this
+          // update spread the fresh values.
+          const containerWindow = window as ContainerWindow;
+          if (containerWindow.__RSTEST_BROWSER_OPTIONS__) {
+            Object.assign(containerWindow.__RSTEST_BROWSER_OPTIONS__, config);
+          } else {
+            containerWindow.__RSTEST_BROWSER_OPTIONS__ = config;
+          }
         },
       };
 

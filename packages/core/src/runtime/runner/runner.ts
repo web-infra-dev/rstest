@@ -20,7 +20,10 @@ import type {
   TestResultStatus,
   WorkerState,
 } from '../../types';
-import { SYNTHETIC_STACK_ERROR_MESSAGE } from '../../utils/constants';
+import {
+  ROOT_SUITE_NAME,
+  SYNTHETIC_STACK_ERROR_MESSAGE,
+} from '../../utils/constants';
 import {
   getFileTaskId,
   getTaskNameWithPrefix,
@@ -29,16 +32,35 @@ import {
 import { createExpect } from '../api/expect';
 import { formatTestError, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
-import { handleFixtures } from './fixtures';
+import { createFixtureResolver } from './fixtures';
+import type { FixtureResolver } from './fixtures';
+import { cloneTaskMeta } from './metadata';
 import {
   getTestStatus,
+  inheritTimeout,
   limitConcurrency,
   markAllTestAsSkipped,
+  runWithTimeout,
   sanitizeAttemptCount,
   wrapTimeout,
 } from './task';
 
 const RealDate = Date;
+
+/**
+ * Sample heap usage when `logHeapUsage` is enabled. Guarded so the shared
+ * runner is safe when bundled into the web-target browser runtime, where
+ * `process.memoryUsage` does not exist and an unguarded call would crash
+ * (see #1389).
+ */
+export const sampleHeapUsed = (
+  logHeapUsage: boolean | undefined,
+): number | undefined =>
+  logHeapUsage &&
+  typeof process !== 'undefined' &&
+  typeof process.memoryUsage === 'function'
+    ? process.memoryUsage().heapUsed
+    : undefined;
 
 export class TestRunner {
   /** current test case */
@@ -88,6 +110,7 @@ export class TestRunner {
           name: test.name,
           testPath,
           project,
+          meta: test.meta,
         };
         return result;
       }
@@ -99,6 +122,7 @@ export class TestRunner {
           name: test.name,
           testPath,
           project,
+          meta: test.meta,
         };
         return result;
       }
@@ -126,14 +150,17 @@ export class TestRunner {
         name: test.name,
         testPath,
         project,
+        meta: test.meta,
       });
 
+      const fixtureResolver = this.beforeRunTest(
+        test,
+        snapshotClient.getSnapshotState(testPath),
+        fixtureCleanups,
+      );
+
       try {
-        await this.beforeRunTest(
-          test,
-          snapshotClient.getSnapshotState(testPath),
-          fixtureCleanups,
-        );
+        await fixtureResolver.resolveTestFixtures(test.originalFn);
       } catch (error) {
         if (error instanceof TestSkipError) {
           skipped = true;
@@ -147,18 +174,104 @@ export class TestRunner {
             errors: await formatTestError(error, test),
             testPath,
             project,
+            meta: test.meta,
           };
         }
       }
 
-      if (!result) {
-        try {
-          for (const fn of parentHooks.beforeEachListeners) {
-            const cleanupFn = await fn(test.context);
-            if (cleanupFn) cleanups.push(cleanupFn);
+      const runPerTestHook = async (
+        fn: BeforeEachListener | AfterEachListener,
+      ): Promise<
+        | { status: 'completed'; cleanup?: AfterEachListener }
+        | { status: 'skipped' }
+        | {
+            status: 'failed';
+            phase: 'fixture' | 'callback';
+            error: unknown;
           }
+      > => {
+        let callbackStarted = false;
+        const runHook = async (callback: (...args: any[]) => any) => {
+          const resolution =
+            await fixtureResolver.resolveHookFixtures(callback);
+          if (resolution.status === 'skipped') {
+            return { status: 'skipped' as const };
+          }
+          callbackStarted = true;
+          const cleanup = await callback(test.context);
+          return { status: 'completed' as const, cleanup };
+        };
+        let hookExecution: ReturnType<typeof runHook> | undefined;
+        try {
+          return await runWithTimeout(fn, (callback) => {
+            hookExecution = runHook(callback);
+            return hookExecution;
+          });
         } catch (error) {
-          if (error instanceof TestSkipError) {
+          const cancellation =
+            !callbackStarted && fixtureResolver.cancelPendingFixtures();
+          if (cancellation && hookExecution) {
+            const hookCompletion = hookExecution.then(
+              () => ({ status: 'completed' as const }),
+              (fixtureError: unknown) => ({
+                status: 'failed' as const,
+                error: fixtureError,
+              }),
+            );
+            const cancellationProgress = Promise.race([
+              hookCompletion.then((completion) => ({
+                status: 'completed' as const,
+                completion,
+              })),
+              cancellation.teardownStarted.then(() => ({
+                status: 'teardown-started' as const,
+              })),
+            ]);
+            const waitForCancellationProgress = inheritTimeout(
+              fn,
+              () => cancellationProgress,
+            );
+            fixtureCleanups.unshift(async () => {
+              let progress: Awaited<typeof cancellationProgress>;
+              try {
+                progress = await waitForCancellationProgress();
+              } catch {
+                // The original hook timeout is already reported. This timeout
+                // only bounds how long unfinished setup may delay the test.
+                return;
+              }
+              // Once `use` is reached, match normal fixture cleanup semantics:
+              // teardown must finish before the runner continues.
+              const completion =
+                progress.status === 'teardown-started'
+                  ? await hookCompletion
+                  : progress.completion;
+              if (completion.status === 'failed') {
+                throw completion.error;
+              }
+            });
+          }
+          return {
+            status: 'failed',
+            phase: callbackStarted ? 'callback' : 'fixture',
+            error,
+          };
+        }
+      };
+
+      if (!result) {
+        for (const fn of parentHooks.beforeEachListeners) {
+          const hookResult = await runPerTestHook(fn);
+          if (hookResult.status === 'completed') {
+            if (hookResult.cleanup) {
+              cleanups.push(inheritTimeout(fn, hookResult.cleanup));
+            }
+            continue;
+          }
+          if (hookResult.status === 'skipped') {
+            continue;
+          }
+          if (hookResult.error instanceof TestSkipError) {
             skipped = true;
             result = skipResult();
           } else {
@@ -167,11 +280,13 @@ export class TestRunner {
               status: 'fail' as const,
               parentNames: test.parentNames,
               name: test.name,
-              errors: await formatTestError(error, test),
+              errors: await formatTestError(hookResult.error, test),
               testPath,
               project,
+              meta: test.meta,
             };
           }
+          break;
         }
       }
 
@@ -188,6 +303,7 @@ export class TestRunner {
               name: test.name,
               testPath,
               project,
+              meta: test.meta,
               errors: [
                 {
                   message: 'Expect test to fail',
@@ -206,6 +322,7 @@ export class TestRunner {
                 parentNames: test.parentNames,
                 name: test.name,
                 testPath,
+                meta: test.meta,
               };
             }
           }
@@ -236,6 +353,7 @@ export class TestRunner {
               name: test.name,
               status: 'pass' as const,
               testPath,
+              meta: test.meta,
             };
           } catch (error) {
             if (error instanceof TestSkipError) {
@@ -250,6 +368,7 @@ export class TestRunner {
                 name: test.name,
                 errors: await formatTestError(error, test),
                 testPath,
+                meta: test.meta,
               };
             }
           }
@@ -258,19 +377,46 @@ export class TestRunner {
 
       const afterEachFns = [...(parentHooks.afterEachListeners || [])]
         .reverse()
-        .concat(cleanups)
-        .concat(fixtureCleanups)
-        .concat(test.onFinished);
+        .concat(cleanups);
 
       test.context.task.result = result;
-      try {
-        for (const fn of afterEachFns) {
-          await fn(test.context);
+      for (const fn of afterEachFns) {
+        const hookResult = await runPerTestHook(fn);
+        if (
+          hookResult.status === 'completed' ||
+          hookResult.status === 'skipped'
+        ) {
+          continue;
         }
-      } catch (error) {
         result.status = 'fail';
         result.errors ??= [];
-        result.errors.push(...(await formatTestError(error)));
+        result.errors.push(...(await formatTestError(hookResult.error)));
+        test.context.task.result = result;
+        if (hookResult.phase === 'callback') {
+          break;
+        }
+      }
+
+      for (const fn of fixtureCleanups) {
+        try {
+          await fn();
+        } catch (error) {
+          result.status = 'fail';
+          result.errors ??= [];
+          result.errors.push(...(await formatTestError(error)));
+          test.context.task.result = result;
+        }
+      }
+
+      for (const fn of [...test.onFinished]) {
+        try {
+          await fn(test.context);
+        } catch (error) {
+          result.status = 'fail';
+          result.errors ??= [];
+          result.errors.push(...(await formatTestError(error)));
+          test.context.task.result = result;
+        }
       }
 
       if (skipped) {
@@ -289,6 +435,8 @@ export class TestRunner {
         // should not be updated for snapshots that have not been run when the test run fails
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
       }
+
+      result.meta = test.meta;
 
       test.onFinished.length = onFinishedSnapshot;
       test.onFailed.length = onFailedSnapshot;
@@ -354,6 +502,7 @@ export class TestRunner {
         project,
         duration: 0,
         errors: [],
+        meta: test.meta,
       };
 
       if (bail && (await hooks.getCountOfFailedTests()) >= bail) {
@@ -382,6 +531,7 @@ export class TestRunner {
               type: 'suite',
               location: test.location,
               runMode: test.runMode,
+              meta: test.meta,
             });
 
             if (test.tests.length === 0) {
@@ -405,6 +555,18 @@ export class TestRunner {
 
             const cleanups: ((ctx: SuiteContext) => void)[] = [];
             let hasBeforeAllError = false;
+            const suiteContext: SuiteContext = {
+              // `ctx.filepath` is user-facing; expose the OS-native path
+              // so it matches `__filename`/`import.meta.filename` (#1465).
+              filepath: toNativePath(testPath),
+              get meta() {
+                return (test.meta ??= {});
+              },
+              set meta(value) {
+                test.meta = cloneTaskMeta(value);
+                result.meta = test.meta;
+              },
+            };
 
             if (
               ['run', 'only'].includes(test.runMode) &&
@@ -412,11 +574,7 @@ export class TestRunner {
             ) {
               try {
                 for (const fn of test.beforeAllListeners) {
-                  const cleanupFn = await fn({
-                    // `ctx.filepath` is user-facing; expose the OS-native path
-                    // so it matches `__filename`/`import.meta.filename` (#1465).
-                    filepath: toNativePath(testPath),
-                  });
+                  const cleanupFn = await fn(suiteContext);
                   if (cleanupFn) cleanups.push(cleanupFn);
                 }
               } catch (error) {
@@ -445,11 +603,7 @@ export class TestRunner {
             if (['run', 'only'].includes(test.runMode) && afterAllFns.length) {
               try {
                 for (const fn of afterAllFns) {
-                  await fn({
-                    // `ctx.filepath` is user-facing; expose the OS-native path
-                    // so it matches `__filename`/`import.meta.filename` (#1465).
-                    filepath: toNativePath(testPath),
-                  });
+                  await fn(suiteContext);
                 }
               } catch (error) {
                 result.errors?.push(...(await formatTestError(error)));
@@ -502,6 +656,7 @@ export class TestRunner {
               type: 'case',
               location: test.location,
               runMode: test.runMode,
+              meta: test.meta,
             });
 
             for (let repeat = 0; repeat <= repeats; repeat++) {
@@ -548,9 +703,7 @@ export class TestRunner {
             if (result.status === 'pass' && retryErrors.length > 0) {
               result.retryErrors = retryErrors;
             }
-            result.heap = state.runtimeConfig.logHeapUsage
-              ? process.memoryUsage().heapUsed
-              : undefined;
+            result.heap = sampleHeapUsed(state.runtimeConfig.logHeapUsage);
             hooks.onTestCaseResult?.(result);
             results.push(result);
             return result;
@@ -581,9 +734,7 @@ export class TestRunner {
         name: '',
         status: 'fail',
         results,
-        heap: state.runtimeConfig.logHeapUsage
-          ? process.memoryUsage().heapUsed
-          : undefined,
+        heap: sampleHeapUsed(state.runtimeConfig.logHeapUsage),
         errors: [
           {
             message: `No test suites found in file: ${testPath}`,
@@ -597,6 +748,10 @@ export class TestRunner {
       beforeEachListeners: [],
       afterEachListeners: [],
     });
+
+    const fileMeta = tests.find(
+      (test) => test.type === 'suite' && test.name === ROOT_SUITE_NAME,
+    )?.meta;
 
     // saves files and returns SnapshotResult
     const snapshotResult = await snapshotClient.finish(testPath);
@@ -613,14 +768,13 @@ export class TestRunner {
         project,
         testPath,
         name: '',
-        heap: state.runtimeConfig.logHeapUsage
-          ? process.memoryUsage().heapUsed
-          : undefined,
+        heap: sampleHeapUsed(state.runtimeConfig.logHeapUsage),
         status: errors.length ? 'fail' : getTestStatus(results, defaultStatus),
         results,
         snapshotResult,
         errors,
         duration: RealDate.now() - start,
+        meta: fileMeta,
       };
     } finally {
       this.taskContext.setFallback(undefined);
@@ -683,6 +837,12 @@ export class TestRunner {
       name: test.name,
       filepath: toNativePath(test.testPath),
       projectRoot: toNativePath(this.workerState!.projectRoot),
+      get meta() {
+        return (test.meta ??= {});
+      },
+      set meta(value) {
+        test.meta = cloneTaskMeta(value);
+      },
     };
 
     Object.defineProperty(context, 'expect', {
@@ -740,7 +900,7 @@ export class TestRunner {
       wrapTimeout({
         name: 'onTestFinished hook',
         fn,
-        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
+        timeout: timeout ?? this.workerState!.runtimeConfig.hookTimeout,
         stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );
@@ -758,17 +918,17 @@ export class TestRunner {
       wrapTimeout({
         name: 'onTestFailed hook',
         fn,
-        timeout: timeout || this.workerState!.runtimeConfig.hookTimeout,
+        timeout: timeout ?? this.workerState!.runtimeConfig.hookTimeout,
         stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );
   }
 
-  private async beforeRunTest(
+  private beforeRunTest(
     test: TestCase,
     snapshotState: SnapshotState,
     fixtureCleanups: (() => Promise<void>)[],
-  ): Promise<void> {
+  ): FixtureResolver {
     setState<MatcherState>(
       {
         assertionCalls: 0,
@@ -794,7 +954,7 @@ export class TestRunner {
       enumerable: false,
     });
 
-    await handleFixtures(test, context, fixtureCleanups);
+    return createFixtureResolver(test, context, fixtureCleanups);
   }
 
   private afterRunTest(test: TestCase): void {

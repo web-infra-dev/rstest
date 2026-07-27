@@ -6,6 +6,49 @@ import type { FileFilterMode, Project } from '../types';
 import { castArray, parsePosix } from './helper';
 import { color } from './logger';
 
+/**
+ * Whether a CLI file filter points inside `projectRootPath`. Shared by the run
+ * path's browser-subset planning and `rstest list` so both commands classify a
+ * filter against the same project boundaries.
+ */
+export const isFilterInsideProject = (
+  filter: string,
+  projectRootPath: string,
+  rootPath: string,
+): boolean => {
+  const absoluteFilter = pathe.normalize(
+    pathe.isAbsolute(filter) ? filter : pathe.resolve(rootPath, filter),
+  );
+  const relativeFilter = pathe.normalize(
+    pathe.relative(projectRootPath, absoluteFilter),
+  );
+
+  return (
+    relativeFilter === '' ||
+    (!relativeFilter.startsWith('..') && !pathe.isAbsolute(relativeFilter))
+  );
+};
+
+/**
+ * Whether a CLI file filter is a bare basename fragment (no path separator, no
+ * leading `.`) that `fuzzy` mode matches against every project.
+ */
+export const isFuzzyBasenameFilter = (
+  filter: string,
+  mode: FileFilterMode | undefined,
+): boolean => {
+  if (mode === 'exact' || pathe.isAbsolute(filter)) {
+    return false;
+  }
+
+  const normalizedFilter = pathe.normalize(filter);
+  return (
+    !normalizedFilter.startsWith('.') &&
+    !normalizedFilter.includes('/') &&
+    !normalizedFilter.includes('\\')
+  );
+};
+
 export const filterFiles = (
   testFiles: string[],
   filters: string[],

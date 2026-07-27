@@ -52,6 +52,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
       "**/dist/.rstest-temp",
     ],
   },
+  "federation": false,
   "forceRerunTriggers": [
     "**/package.json/**",
     "**/rstest.config.*",
@@ -72,6 +73,7 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   "logHeapUsage": false,
   "maxConcurrency": 5,
   "name": "rstest",
+  "onlyFailures": false,
   "output": {
     "distPath": {
       "root": "dist/.rstest-temp",
@@ -94,7 +96,9 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
   ],
   "silent": false,
   "slowTestThreshold": 300,
-  "snapshotFormat": {},
+  "snapshotFormat": {
+    "printShadowRoot": false,
+  },
   "testEnvironment": {
     "name": "node",
   },

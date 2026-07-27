@@ -403,7 +403,7 @@ it('hoisted', () => {
 
 - **类型：** `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
-无视一个模块是否被 mock，导入其原始的模块。如果你想 mock 模块的部分实现，可以使用 `rs.importActual` 来获取原始模块的实现与 mock 的实现进行合并进行部分 mock。
+异步加载 ESM 模块的原始实现，即使该模块已经被 mock。异步测试代码需要绕过模块 mock 时，可以使用 `rs.importActual`。如果 CommonJS 模块通过 `require()` 加载，请使用 [`rs.requireActual`](#rsrequireactual)。
 
 ```ts title="src/sum.test.ts"
 rs.mock('./sum');
@@ -414,7 +414,7 @@ it('test', async () => {
 });
 ```
 
-Rstest 也提供了同步的 `importActual` 能力，允许你在同步的 `import` 语句中导入未被 mock 的模块实现。使用方法是在 `import` 语句中添加 `with { rstest: 'importActual' }` 的 [import attributes](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import/with)：
+如果要在同步的 `rs.mock` factory 中对 ESM 模块做部分 mock，可以为静态 import 添加 `with { rstest: 'importActual' }` [import attribute](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import/with)。这样会在文件执行时加载真实模块，让 factory 可以合并真实导出与覆盖实现：
 
 ```ts title="src/api.test.ts"
 import * as apiActual from './api' with { rstest: 'importActual' };
@@ -426,16 +426,58 @@ rs.mock('./api', () => ({
 }));
 ```
 
+## rs.requireActual
+
+- **类型：** `<T = Record<string, unknown>>(path: string) => T`
+
+同步加载 CommonJS 模块的原始实现，即使该模块已经被 mock。当代码通过 `require()` 使用模块，或者同步 mock factory 需要真实导出时，可以使用 `rs.requireActual`。如果 ESM 模块通过 `import` 加载，请使用 [`rs.importActual`](#rsimportactual)。
+
+```js title="src/math.test.cjs"
+const { expect, rs, test } = require('@rstest/core');
+
+rs.mockRequire('./math.cjs', () => ({
+  sum: () => 100,
+}));
+
+test('loads the original CommonJS module', () => {
+  const actualMath = rs.requireActual('./math.cjs');
+
+  expect(rs.isMockFunction(actualMath.sum)).toBe(false);
+  expect(actualMath.sum(1, 2)).toBe(3);
+});
+```
+
 ## rs.importMock
 
 - **类型：** `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
-导入一个模块及其所有属性的 mock 实现。
+异步加载 ESM 模块，并将其导出的函数（包括嵌套函数）替换为 mock 函数。原始值会保留，数组则会变为空数组。当测试需要直接获得自动 mock 的模块时，可以使用 `rs.importMock`。如果 CommonJS 模块通过 `require()` 加载，请使用 [`rs.requireMock`](#rsrequiremock)。
 
-```ts title="src/sum.test.ts"
-it('test', async () => {
-  const mockedModule = await rs.importMock('./sum');
-  expect(mockedModule.sum2(1, 2)).toBe(103);
+```ts title="src/api.test.ts"
+test('loads an ESM module as mocks', async () => {
+  const api = await rs.importMock<typeof import('./api')>('./api');
+  const mockedApi = rs.mocked(api, true);
+
+  mockedApi.fetchUser.mockResolvedValue({ id: '1', name: 'Alice' });
+  await mockedApi.fetchUser('1');
+  expect(mockedApi.fetchUser).toHaveBeenCalledWith('1');
+});
+```
+
+## rs.requireMock
+
+- **类型：** `<T = Record<string, unknown>>(path: string) => T`
+
+同步加载 CommonJS 模块，并将其导出的函数（包括嵌套函数）替换为 mock 函数。原始值会保留，数组则会变为空数组。当目标通过 `require()` 使用，并且测试需要立即获得 mock 模块时，可以使用 `rs.requireMock`。如果 ESM 模块通过 `import` 加载，请使用 [`rs.importMock`](#rsimportmock)。
+
+```js title="src/math.test.cjs"
+const { expect, rs, test } = require('@rstest/core');
+
+test('loads a CommonJS module as mocks', () => {
+  const mockedMath = rs.requireMock('./math.cjs');
+
+  mockedMath.sum.mockReturnValue(100);
+  expect(mockedMath.sum(1, 2)).toBe(100);
 });
 ```
 
@@ -480,7 +522,7 @@ it('test', async () => {
 
 ## rs.resetModules
 
-- **类型：** `resetModules: () => RstestUtilities`
+- **类型：** `() => RstestUtilities`
 
 清除所有模块的缓存。这允许在重新导入时重新执行模块。这在隔离不同测试中共享的模块的状态时非常有用。
 

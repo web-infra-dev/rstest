@@ -95,12 +95,18 @@ export const initSpy = (
         : implementation;
     };
 
-    function withImplementation(fn: T, cb: () => void): void;
-    function withImplementation(fn: T, cb: () => Promise<void>): Promise<void>;
     function withImplementation(
-      fn: T,
-      cb: () => void | Promise<void>,
-    ): void | Promise<void> {
+      fn: NormalizedProcedure<T>,
+      cb: () => Promise<unknown>,
+    ): Promise<Mock<T>>;
+    function withImplementation(
+      fn: NormalizedProcedure<T>,
+      cb: () => unknown,
+    ): Mock<T>;
+    function withImplementation(
+      fn: NormalizedProcedure<T>,
+      cb: () => unknown,
+    ): Mock<T> | Promise<Mock<T>> {
       const originalImplementation = implementation;
       const originalMockImplementationOnce = mockImplementationOnce;
 
@@ -113,15 +119,33 @@ export const initSpy = (
         mockImplementationOnce = originalMockImplementationOnce;
       };
 
-      const result = cb();
+      try {
+        const result = cb();
 
-      if (result instanceof Promise) {
-        return result.then(() => {
-          reset();
-        });
+        if (
+          typeof result === 'object' &&
+          result !== null &&
+          'then' in result &&
+          typeof result.then === 'function'
+        ) {
+          return result.then(
+            () => {
+              reset();
+              return spyFn;
+            },
+            (error: unknown) => {
+              reset();
+              throw error;
+            },
+          );
+        }
+
+        reset();
+        return spyFn;
+      } catch (error) {
+        reset();
+        throw error;
       }
-
-      reset();
     }
 
     spyFn.withImplementation = withImplementation;
@@ -142,6 +166,18 @@ export const initSpy = (
 
     spyFn.mockReturnValueOnce = (value) => {
       return spyFn.mockImplementationOnce((() => value) as T);
+    };
+
+    spyFn.mockThrow = (value) => {
+      return spyFn.mockImplementation(() => {
+        throw value;
+      });
+    };
+
+    spyFn.mockThrowOnce = (value) => {
+      return spyFn.mockImplementationOnce(() => {
+        throw value;
+      });
     };
 
     spyFn.mockResolvedValue = (value) => {

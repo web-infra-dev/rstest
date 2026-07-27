@@ -191,15 +191,23 @@ export async function runGlobalSetup({
   sourceMaps,
   interopDefault,
   outputModule,
+  federation,
 }: {
   globalSetupEntries: EntryInfo[];
   assetFiles: Record<string, string>;
   sourceMaps: Record<string, string>;
   interopDefault: boolean;
   outputModule: boolean;
+  federation: boolean;
 }): Promise<{
   success: boolean;
   errors?: any[];
+  /**
+   * Env change-set (including deletions as `undefined`) the setup applied to
+   * the host `process.env`. Surfaced so the core pre-cycle stage can forward
+   * browser projects' changes onto the browser wire.
+   */
+  envChanges?: Record<string, string | undefined>;
 }> {
   const worker = new GlobalSetupWorker();
 
@@ -215,6 +223,7 @@ export async function runGlobalSetup({
       assetFiles,
       interopDefault,
       outputModule,
+      federation,
       sourceMaps,
     },
   });
@@ -236,6 +245,7 @@ export async function runGlobalSetup({
   return {
     success: result.success,
     errors: result.errors,
+    envChanges: result.envChanges,
   };
 }
 

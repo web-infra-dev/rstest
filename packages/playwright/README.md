@@ -59,6 +59,57 @@ test('page title', async ({ page }) => {
 
 The sections below show how each fixture is commonly used. `page` and `serve` link to the existing examples to avoid repeating the same code.
 
+### Using fixtures in hooks
+
+Suite-level hooks can request fixtures provided by the tests in that suite. Specify the hook's fixture context type explicitly; a fixture used only by a hook does not need `auto: true`:
+
+```ts
+import {
+  beforeEach,
+  describe,
+  expect,
+  test,
+  type PlaywrightFixture,
+} from '@rstest/playwright';
+
+type DashboardFixtures = PlaywrightFixture & {
+  route: string;
+};
+
+const dashboardTest = test.extend<{ route: string }>({
+  route: '/dashboard',
+});
+
+describe('dashboard', () => {
+  beforeEach<DashboardFixtures>(async ({ page, route }) => {
+    await page.goto(`http://localhost:3000${route}`);
+  });
+
+  dashboardTest('shows the dashboard', async ({ page }) => {
+    await expect(page.locator('h1')).toHaveText('Dashboard');
+  });
+});
+```
+
+Hooks are scoped to their `describe` block, not to an extended test object. Every test in the block must provide the fixtures requested by the hook; otherwise, Rstest fails that test before invoking the hook and reports the missing fixture. The same behavior applies to `afterEach` and to cleanup functions returned by `beforeEach`. Fixture instances are shared across the hooks and test body for one test attempt, then torn down in reverse setup order.
+
+Declare fixture dependencies through direct object destructuring in the hook parameter. Destructuring a named context inside the hook body does not request fixtures. Rest properties and default values are not supported in fixture-aware callbacks.
+
+### Using fixtures with `test.for`
+
+Destructure fixtures directly from the second callback parameter when using `test.for`:
+
+```ts
+test.for([{ path: '/dashboard' }])(
+  'opens $path',
+  async ({ path }, { page }) => {
+    await page.goto(`http://localhost:3000${path}`);
+  },
+);
+```
+
+A named second parameter can still access built-in `TestContext` APIs such as `task` and `expect`, but property access or destructuring through that name does not request fixtures.
+
 ### `browser`
 
 Use `browser` when you need to create a custom browser context yourself:
@@ -195,6 +246,65 @@ e2e('mobile page', async ({ page }) => {
   await expect(page.locator('main')).toBeAttached();
 });
 ```
+
+## Trace debugging
+
+Set `playwright.trace` or `RSTEST_PLAYWRIGHT_TRACE` to capture Playwright's official `trace.zip` artifact from the `context` fixture. The trace covers the default `page` fixture and pages created with `context.newPage()`. Fixture configuration takes priority over the environment variable, then falls back to `off`.
+
+```ts
+import { expect, test } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+const e2e = test.extend({
+  playwright: {
+    trace: process.env.CI ? 'retain-on-failure' : 'off',
+  } satisfies PlaywrightOptions,
+});
+
+e2e('checkout', async ({ page }) => {
+  await page.goto('http://localhost:3000/checkout');
+  await expect(page.locator('main')).toBeAttached();
+});
+```
+
+For temporary CLI-style debugging without changing test code, set `RSTEST_PLAYWRIGHT_TRACE`:
+
+```bash
+RSTEST_PLAYWRIGHT_TRACE=retain-on-failure rstest
+```
+
+Use `RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR` to override the default output directory when trace is enabled by the environment variable:
+
+```bash
+RSTEST_PLAYWRIGHT_TRACE=on RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR=.rstest/playwright-traces rstest
+```
+
+`trace` accepts `'off'`, `'on'`, `'retain-on-failure'`, or an options object:
+
+```ts
+const e2e = test.extend({
+  playwright: {
+    trace: {
+      mode: 'retain-on-failure',
+      outputDir: '.rstest/playwright-traces',
+      screenshots: true,
+      snapshots: true,
+      sources: true,
+    },
+  } satisfies PlaywrightOptions,
+});
+```
+
+By default, traces are written to `.rstest/playwright-traces/<test-name>-<hash>/`. If the same test saves multiple traces, for example across retries, later attempts use a numeric suffix to avoid overwriting earlier traces. Every saved trace contains:
+
+- `trace.zip`: Playwright's official trace artifact. Open it with `npx playwright show-trace <path-to-trace.zip>`.
+
+When `summary` is enabled (the default), the directory also contains:
+
+- `trace-summary.json`: Rstest-aware test metadata, artifact paths, and error stacks for tools and AI assistants.
+- `debug.md`: a human-readable debugging report.
+
+`trace.zip` is not a generic Chrome/Perfetto trace. It is Playwright's trace format and is intended to be inspected with Playwright Trace Viewer.
 
 ## Local app server
 

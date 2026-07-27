@@ -122,6 +122,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     'Stop running tests after n failures. Set to 0 to run all tests regardless of failures',
   ],
   [
+    '-f, --onlyFailures',
+    'Run only the test files that failed in the previous run',
+  ],
+  [
     '--shard <index/count>',
     'Split tests into several shards. This is useful for running tests in parallel on multiple machines.',
   ],
@@ -157,6 +161,7 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     '--includeTaskLocation',
     'Collect test and suite locations. This might increase the running time.',
   ],
+  ['--federation', 'Enable Module Federation compatibility mode'],
   ['--source.*', 'Internal parser helper for source.* options'],
   ['--source.tsconfigPath <path>', 'Path to the tsconfig.json file'],
   ['--dev.*', 'Internal parser helper for dev.* options'],
@@ -937,17 +942,23 @@ export const runRest = async ({
 export function createCli(): CAC {
   const cli = cac('rstest');
 
+  // Internal parser-helper wildcards, hidden from every command's help.
+  const hiddenHelpPrefixes = ['--source.*', '--dev.*', '--output.*'];
   cli.help((sections) => {
     switch (cli.matchedCommand?.name) {
       case 'init':
       case 'merge-reports':
         return filterHelpOptions(sections, ['--isolate']);
-      default:
+      case 'list':
+        // `list` shares the runtime option definitions but does not honor
+        // `--onlyFailures` (the failure filter lives in the run path), so keep
+        // it out of `list --help`.
         return filterHelpOptions(sections, [
-          '--source.*',
-          '--dev.*',
-          '--output.*',
+          ...hiddenHelpPrefixes,
+          '-f, --onlyFailures',
         ]);
+      default:
+        return filterHelpOptions(sections, hiddenHelpPrefixes);
     }
   });
   cli.version(RSTEST_VERSION);

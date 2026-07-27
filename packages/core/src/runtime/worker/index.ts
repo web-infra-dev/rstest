@@ -1,4 +1,3 @@
-import './setup';
 import { isMainThread } from 'node:worker_threads';
 import {
   isWorkerRequestEnvelope,
@@ -10,6 +9,9 @@ import {
 import { ENV } from '../../utils/env';
 import { channel } from './channels';
 import { runInPool } from './runInPool';
+import { installGracefulExit } from './setup';
+
+installGracefulExit();
 
 const send = (response: WorkerResponse): void => {
   channel.send(wrapWorkerResponse(response));

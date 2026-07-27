@@ -1,7 +1,7 @@
 {
   "name": "rstest",
   "displayName": "Rstest",
-  "version": "0.11.0",
+  "version": "0.11.4",
   "private": true,
   "description": "VS Code extension for Rstest",
   "categories": [
@@ -22,7 +22,7 @@
     "lint": "rslint .",
     "package:vsce": "npm run build && vsce package",
     "test": "npm run test:unit && npm run test:e2e",
-    "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",
+    "test:e2e": "cross-env FORCE_COLOR=1 tsc -p tsconfig.test.json --noCheck && cross-env FORCE_COLOR=1 node ./tests-dist/runTest.js",
     "test:unit": "rstest",
     "watch": "rslib build --watch",
     "watch:local": "cross-env SOURCEMAP=true rslib build --watch"
@@ -34,6 +34,34 @@
         "title": "Update Snapshot",
         "category": "Testing",
         "icon": "$(merge)"
+      },
+      {
+        "command": "rstest.openOutput",
+        "title": "Show Output",
+        "category": "Rstest"
+      },
+      {
+        "command": "rstest.revealInTestExplorer",
+        "title": "Reveal in Test Explorer",
+        "category": "Rstest"
+      },
+      {
+        "command": "rstest.copyErrorOutput",
+        "title": "Copy Error Output",
+        "category": "Rstest",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "rstest.copyTestItemErrors",
+        "title": "Copy Test Errors",
+        "category": "Rstest",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "rstest.runInTerminal",
+        "title": "Run in Terminal",
+        "category": "Rstest",
+        "icon": "$(terminal)"
       }
     ],
     "configuration": {
@@ -41,6 +69,74 @@
       "properties": {
         "rstest.rstestPackagePath": {
           "markdownDescription": "The path to a `package.json` file of a Rstest executable (it's usually inside `node_modules`) in case the extension cannot find it. It will be used to resolve Rstest API paths. This should be used as a last resort fix. Supports `${workspaceFolder}` placeholder.",
+          "scope": "resource",
+          "type": "string"
+        },
+        "rstest.nodeExecutable": {
+          "markdownDescription": "Overrides the `node` binary used to spawn the Rstest test worker process. Provide an absolute path to a Node.js executable (for example, a version-manager or custom build). When empty, the `node` binary on `PATH` is used. Supports `${workspaceFolder}` placeholder.",
+          "scope": "resource",
+          "type": "string"
+        },
+        "rstest.nodeExecArgs": {
+          "description": "Extra arguments passed to the Node executable when spawning the test worker (e.g. --experimental-vm-modules). Must be an array of strings.",
+          "scope": "resource",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "rstest.nodeEnv": {
+          "markdownDescription": "Environment variables passed to the test worker process, in addition to `process.env`.",
+          "scope": "resource",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": null
+        },
+        "rstest.debugNodeEnv": {
+          "markdownDescription": "Environment variables passed to the test worker process when debugging, in addition to `process.env` and `rstest.nodeEnv`.",
+          "scope": "resource",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": null
+        },
+        "rstest.debugExclude": {
+          "markdownDescription": "Glob patterns for files to skip while debugging tests (maps to the debug session's `skipFiles`).",
+          "scope": "resource",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "<node_internals>/**"
+          ]
+        },
+        "rstest.debugOutFiles": {
+          "markdownDescription": "When source maps are enabled, glob patterns locating the generated JavaScript files (maps to the debug session's `outFiles`).",
+          "scope": "resource",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "rstest.debuggerPort": {
+          "description": "Port the debugger attaches to. Defaults to Node's inspector behavior (9229, or a free port if taken).",
+          "scope": "resource",
+          "type": "number"
+        },
+        "rstest.debuggerAddress": {
+          "description": "TCP/IP address the debugger attaches to. Defaults to localhost.",
           "scope": "resource",
           "type": "string"
         },
@@ -74,6 +170,18 @@
           "description": "Show diagnostics in editor and Problems panel for failed tests.",
           "type": "boolean",
           "default": true
+        },
+        "rstest.terminalShellPath": {
+          "markdownDescription": "Path to the shell used by the **Run in Terminal** command. Leave empty to use your default integrated terminal so its profile and environment are honored. Note: command arguments are quoted for POSIX shells; on Windows point this at a POSIX-style shell (e.g. Git Bash) if a test name needs quoting.",
+          "type": "string"
+        },
+        "rstest.terminalShellArgs": {
+          "markdownDescription": "Arguments passed to the shell used by the **Run in Terminal** command.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
         }
       }
     },
@@ -82,12 +190,38 @@
         {
           "command": "rstest.updateSnapshot",
           "when": "false"
+        },
+        {
+          "command": "rstest.revealInTestExplorer",
+          "when": "false"
+        },
+        {
+          "command": "rstest.copyErrorOutput",
+          "when": "false"
+        },
+        {
+          "command": "rstest.copyTestItemErrors",
+          "when": "false"
+        },
+        {
+          "command": "rstest.runInTerminal",
+          "when": "false"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "rstest.revealInTestExplorer",
+          "when": "resourcePath in rstest.testFiles"
         }
       ],
       "testing/message/content": [
         {
           "command": "rstest.updateSnapshot",
           "when": "testMessage == canUpdateSnapshot"
+        },
+        {
+          "command": "rstest.copyErrorOutput",
+          "when": "resourcePath in rstest.testFiles"
         }
       ],
       "testing/message/context": [
@@ -95,6 +229,32 @@
           "command": "rstest.updateSnapshot",
           "group": "inline@1",
           "when": "testMessage == canUpdateSnapshot"
+        },
+        {
+          "command": "rstest.copyErrorOutput",
+          "group": "inline@2",
+          "when": "resourcePath in rstest.testFiles"
+        }
+      ],
+      "testing/item/context": [
+        {
+          "command": "rstest.runInTerminal",
+          "group": "rstest@1",
+          "when": "controllerId == 'rstest'"
+        },
+        {
+          "command": "rstest.copyTestItemErrors",
+          "when": "controllerId == 'rstest'"
+        }
+      ],
+      "testing/item/gutter": [
+        {
+          "command": "rstest.runInTerminal",
+          "when": "controllerId == 'rstest'"
+        },
+        {
+          "command": "rstest.copyTestItemErrors",
+          "when": "controllerId == 'rstest'"
         }
       ]
     }
@@ -104,17 +264,16 @@
     "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
   ],
   "devDependencies": {
-    "@rsbuild/core": "~2.1.4",
-    "@rslib/core": "0.23.2",
+    "@rsbuild/core": "~2.1.8",
+    "@rslib/core": "1.0.0-beta.1",
     "@rstest/core": "workspace:*",
-    "@swc/core": "^1.15.43",
+    "@swc/core": "^1.15.46",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
     "@types/picomatch": "^4.0.3",
     "@types/semver": "^7.7.1",
     "@types/vscode": "1.97.0",
-    "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "3.9.2",
     "birpc": "^4.0.0",

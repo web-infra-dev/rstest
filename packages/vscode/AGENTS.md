@@ -1,23 +1,10 @@
 # Rstest VS Code extension
 
-VS Code extension providing integrated testing experience for Rstest.
-
 ## Architecture
 
-Two-process design:
+Two-process design: the extension (`src/extension.ts`, TestController + test tree) spawns a worker (`src/worker/`, spawn owned by `src/master.ts`) that runs tests and reports back over Node `child_process` IPC with `serialization: 'advanced'` (WebSocket was replaced by IPC in #691 — values must survive structured clone). The worker protocol types in `src/types.ts` are shared by both sides — a protocol change must land on both ends in the same commit.
 
-- Extension (`extension.ts`) — TestController, manages test tree
-- Worker (`worker/index.ts`) — Runs tests via WebSocket communication
-
-## Module structure
-
-- `src/extension.ts` — Entry point, TestController setup
-- `src/testTree.ts` — Builds TestItem tree from test files
-- `src/parserTest.ts` — SWC-based test parser
-- `src/master.ts` — Spawns and manages worker process
-- `src/worker/` — Test runner and reporter
-- `tests/suite/` — E2E tests (VS Code Extension Host)
-- `tests/unit/` — Unit tests (rstest)
+Tests are split by harness and the two patterns must not mix in one file: unit tests live in `tests/unit/` and run via rstest; E2E tests live in `tests/suite/` and run inside the VS Code Extension Host. For stable test-tree assertions in E2E, use `toLabelTree()` from `tests/suite/helpers.ts`.
 
 ## Commands
 
@@ -25,33 +12,14 @@ Two-process design:
 npm run build                 # Build with rslib
 npm run build:local           # Build with sourcemaps
 npm run watch                 # Watch mode
-npm run typecheck             # Type check
 npm run test:unit             # Unit tests via rstest
 npm run test:e2e              # E2E tests (downloads VS Code)
 npm run lint                  # Rslint check
 ```
 
-## Do
+## Conventions
 
-- Use camelCase for files (e.g., `testTree.ts`, `parserTest.ts`)
-- Use PascalCase for classes
-- Place unit tests in `tests/unit/`, E2E in `tests/suite/`
-- Use `toLabelTree()` from `tests/suite/index.test.ts` for stable tree assertions
-
-## Don't
-
-- Don't edit `dist/` directly
-- Don't mix unit and E2E test patterns
-- Don't modify worker protocol without updating both sides
-
-## Key files
-
-- `src/extension.ts` — Extension entry, TestController
-- `src/testTree.ts` — Test tree builder
-- `src/parserTest.ts` — Test file parser
-- `src/master.ts` — Worker manager
-- `src/worker/index.ts` — Worker entry
-- `src/types.ts` — Shared type definitions
+- camelCase file names (e.g., `testTree.ts`, `parserTest.ts`); PascalCase classes.
 
 ## References
 

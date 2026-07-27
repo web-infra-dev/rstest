@@ -10,10 +10,11 @@ import vscode from 'vscode';
 import { ROOT_SUITE_NAME } from '../../core/src/utils/constants';
 import { parseErrorStacktrace } from '../../core/src/utils/error';
 import type { DiagnosticEntry, RstestDiagnostics } from './diagnostics';
+import type { TestErrorStore } from './errorStore';
 import { logger } from './logger';
 import type { Project } from './project';
 import type { LogLevel } from './shared/logger';
-import { TestFile, testData } from './testTree';
+import { getTestItemId, TestFile, testData } from './testTree';
 
 export class TestRunReporter implements Reporter {
   constructor(
@@ -25,6 +26,7 @@ export class TestRunReporter implements Reporter {
     private createTestRun?: () => vscode.TestRun,
     private projectKey = '',
     private diagnostics?: RstestDiagnostics,
+    private errorStore?: TestErrorStore,
   ) {}
 
   public async log(level: LogLevel, message: string) {
@@ -36,19 +38,52 @@ export class TestRunReporter implements Reporter {
     this.run?.appendOutput(message.replaceAll('\n', '\r\n'));
   }
 
+  // Core reports results by name path only, so duplicate sibling names are
+  // indistinguishable from the path alone. We reproduce the tree's id scheme
+  // (see getTestItemId) by counting same-named siblings under each parent, and
+  // pair a test's start/result events via its stable testId so a given test
+  // always resolves to the same occurrence. Both caches are per-run and reset
+  // in onTestRunStart (the reporter instance is reused across watch runs).
+  private resolvedItems = new Map<string, vscode.TestItem | undefined>();
+  private siblingCounters = new Map<vscode.TestItem, Map<string, number>>();
+
   private generatePath(value: TestCaseInfo | TestSuiteInfo | TestResult) {
     return value.name === ROOT_SUITE_NAME
       ? []
       : [...(value.parentNames || []), value.name];
   }
+  private pickSibling(parent: vscode.TestItem, name: string) {
+    let counts = this.siblingCounters.get(parent);
+    if (!counts) {
+      counts = new Map();
+      this.siblingCounters.set(parent, counts);
+    }
+    const index = counts.get(name) ?? 0;
+    counts.set(name, index + 1);
+    return parent.children.get(getTestItemId(name, index));
+  }
   private findTestItem(value: TestCaseInfo | TestSuiteInfo | TestResult) {
+    if (this.resolvedItems.has(value.testId)) {
+      return this.resolvedItems.get(value.testId);
+    }
     const fileItem = this.project?.testFiles.get(
       vscode.Uri.file(value.testPath).toString(),
     )?.testItem;
-    return this.generatePath(value).reduce<vscode.TestItem | undefined>(
-      (item, name) => item?.children.get(name),
-      fileItem,
-    );
+    const path = this.generatePath(value);
+    // Ancestors are assumed unique and resolved by their plain name; only the
+    // reported item's own segment needs sibling disambiguation.
+    const parent = path
+      .slice(0, -1)
+      .reduce<vscode.TestItem | undefined>(
+        (item, name) => item?.children.get(name),
+        fileItem,
+      );
+    const item =
+      path.length === 0
+        ? fileItem
+        : parent && this.pickSibling(parent, path[path.length - 1]);
+    this.resolvedItems.set(value.testId, item);
+    return item;
   }
   /** check whether current running suite/case contains reported suite/case */
   private contains(value: TestCaseInfo | TestSuiteInfo | TestResult) {
@@ -79,7 +114,7 @@ export class TestRunReporter implements Reporter {
       }
     }
   }
-  onTestFileResult(test: TestFileResult) {
+  async onTestFileResult(test: TestFileResult) {
     // only update test file result when explicit run itself or parent
     if (this.path.length) return;
 
@@ -92,13 +127,32 @@ export class TestRunReporter implements Reporter {
       case 'todo':
       case 'skip':
         this.run?.skipped(fileItem);
+        this.errorStore?.clear(fileItem);
         break;
       case 'pass':
         this.run?.passed(fileItem, test.duration);
+        this.errorStore?.clear(fileItem);
         break;
-      case 'fail':
-        this.run?.failed(fileItem, [], test.duration);
+      case 'fail': {
+        // When a file fails before any test case runs (a syntax/collection
+        // error or a worker crash during collection), the errors live only on
+        // the file result and no onTestCaseResult fires to surface or store
+        // them. Surface them on the file item so they appear in the failure
+        // widget and copyTestItemErrors can find them. When cases did run,
+        // their per-case results already carry the errors (core also
+        // re-aggregates suite hook errors onto file.errors, but those are
+        // already surfaced/stored via onTestSuiteResult on the file item), so
+        // we skip here to avoid double-reporting. This relies on core keeping
+        // file.errors as the sole carrier only when no case ran.
+        const fileErrors = test.results?.length
+          ? []
+          : await this.createErrors(test.errors, test.testPath);
+        this.run?.failed(fileItem, fileErrors, test.duration);
+        if (fileErrors.length) {
+          this.errorStore?.set(fileItem, fileErrors);
+        }
         break;
+      }
     }
   }
 
@@ -137,26 +191,25 @@ export class TestRunReporter implements Reporter {
       case 'pass': {
         this.run?.passed(testItem, result.duration);
         this.diagnostics?.clearForTest(this.projectKey, testItem);
+        this.errorStore?.clear(testItem);
         break;
       }
       case 'skip':
       case 'todo': {
         this.run?.skipped(testItem);
         this.diagnostics?.clearForTest(this.projectKey, testItem);
+        this.errorStore?.clear(testItem);
         break;
       }
       case 'fail': {
-        const errors = await Promise.all(
-          (result.errors || []).map(async (error) =>
-            this.createError(error, result.testPath),
-          ),
-        );
+        const errors = await this.createErrors(result.errors, result.testPath);
         this.run?.failed(testItem, errors, result.duration);
         this.diagnostics?.setForTest(
           this.projectKey,
           testItem,
           this.createDiagnostics(testItem, errors),
         );
+        this.errorStore?.set(testItem, errors);
         break;
       }
     }
@@ -200,6 +253,8 @@ export class TestRunReporter implements Reporter {
   private isFirstRun = true;
 
   async onTestRunStart() {
+    this.resolvedItems.clear();
+    this.siblingCounters.clear();
     this.diagnostics?.clearForProject(this.projectKey);
     if (!this.isFirstRun) {
       this.run = this.createTestRun?.();
@@ -269,6 +324,12 @@ export class TestRunReporter implements Reporter {
               );
         }),
       ),
+    );
+  }
+
+  private createErrors(errors: TestResult['errors'], testPath: string) {
+    return Promise.all(
+      (errors || []).map((error) => this.createError(error, testPath)),
     );
   }
 

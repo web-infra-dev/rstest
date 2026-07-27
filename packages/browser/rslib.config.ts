@@ -15,16 +15,10 @@ export default defineConfig({
   lib: [
     {
       id: 'rstest-browser',
-      format: 'esm',
       syntax: 'es2023',
       dts: {
         isolated: true,
         bundle: false,
-      },
-      redirect: {
-        // Append `.js` to relative imports in emitted .d.ts so they resolve
-        // under NodeNext/Node16 module resolution (ESM requires explicit ext).
-        dts: { extension: true },
       },
       output: {
         externals: {

@@ -39,7 +39,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: changes
         with:
           predicate-quantifier: 'every'
@@ -64,7 +64,7 @@ jobs:
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           package-manager-cache: false
@@ -100,18 +100,18 @@ jobs:
 
   # ======== ut ========
   ut:
-    # Gate behind lint so a lint failure skips the (billed-premium) macOS +
-    # Windows ut runners — and transitively e2e — before they start; e2e already
-    # needs lint. Trade-off: any lint nit (prettier/spell/dedupe/knip) now blocks
-    # ut+e2e too, instead of running them in parallel with lint.
+    # Gate behind lint so a lint failure skips ut — and transitively e2e —
+    # before they start; e2e already needs lint. Trade-off: any lint nit
+    # (prettier/spell/dedupe/knip) now blocks ut+e2e too, instead of running
+    # them in parallel with lint.
+    #
+    # ut is OS-agnostic by convention: it runs only on ubuntu (the cheapest,
+    # most plentiful runner in the org pool), and OS-specific behavior is
+    # covered by the e2e job's macOS/Windows rows instead.
     needs: [prepare, lint]
     if: needs.prepare.outputs.changed == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      matrix:
-        # run ut in macOS, as SWC cases will fail in Ubuntu CI
-        os: [macos-latest, windows-latest]
 
     steps:
       - name: Checkout
@@ -123,7 +123,7 @@ jobs:
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Setup Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           package-manager-cache: false
@@ -140,38 +140,49 @@ jobs:
       - name: Run Examples Test
         run: pnpm run test:examples
 
+      - name: Run Federation Example Test
+        run: pnpm run test:federation
+
   # ======== e2e ========
   e2e:
     needs: [prepare, lint, ut]
     if: needs.prepare.outputs.changed == 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    # Full runs execute all four e2e scripts sequentially in one job; the
+    # slowest measured combo (windows/20) takes ~31 min.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        # run ut in macOS, as SWC cases will fail in Ubuntu CI
-        os: [macos-latest, windows-latest]
-        # Trigger-dependent axes (gated by prepare.outputs.is_full_run):
+        # Sparse matrix (include-only), not an os × node cross-product:
+        #   - macOS/Windows run the primary Node (24) to catch OS-specific
+        #     breakage — ut runs on ubuntu only, so this is where OS coverage
+        #     lives.
+        #   - The extra Node versions (20, 26) run on ubuntu: Node-version
+        #     compat is OS-independent, and ubuntu runners are the cheapest
+        #     and most plentiful in the org pool.
         #
-        #   trigger      | node_version | test_script
-        #   -------------+--------------+--------------------------------------
-        #   PR (regular) | [24]         | [test]
-        #   push to main | [20, 24]     | [test, commonjs, no-isolate, threads]
-        #   release PR   | [20, 24]     | [test, commonjs, no-isolate, threads]
+        #   trigger      | combos                  | scripts run as steps
+        #   -------------+-------------------------+------------------------------
+        #   PR (regular) | macos/24, windows/24    | test
+        #   push to main | + ubuntu/20, ubuntu/26  | test, commonjs, no-isolate, threads
+        #   release PR   | + ubuntu/20, ubuntu/26  | test, commonjs, no-isolate, threads
+        #
+        # The e2e scripts (test, test:commonjs, test:no-isolate, test:threads)
+        # are sequential steps of one job, not a matrix axis: they share the
+        # same ~2 min checkout/install/build setup, and collapsing them keeps
+        # the job count down so a burst of merges does not starve the org-wide
+        # runner pool.
         #
         # Node 20 + test:no-isolate can hit upstream vm native crashes under worker
         # reuse; tolerated on full runs in exchange for coverage.
-        node_version: >-
+        # Node 26 covers the current line, where Web Storage is enabled by default
+        # and `localStorage` exists on globalThis before a DOM environment is set up.
+        include: >-
           ${{ fromJson(
             needs.prepare.outputs.is_full_run == 'true'
-              && '["20","24"]'
-            || '["24"]'
-          ) }}
-        test_script: >-
-          ${{ fromJson(
-            needs.prepare.outputs.is_full_run == 'true'
-              && '["test","test:commonjs","test:no-isolate","test:threads"]'
-            || '["test"]'
+              && '[{"os":"macos-latest","node_version":"24"},{"os":"windows-latest","node_version":"24"},{"os":"ubuntu-latest","node_version":"20"},{"os":"ubuntu-latest","node_version":"26"}]'
+            || '[{"os":"macos-latest","node_version":"24"},{"os":"windows-latest","node_version":"24"}]'
           ) }}
 
     steps:
@@ -192,7 +203,7 @@ jobs:
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
       - name: Setup Node.js ${{ matrix.node_version }}
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: ${{ matrix.node_version }}
           package-manager-cache: false
@@ -201,25 +212,43 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Build Packages
+        id: build
         run: pnpm run build
 
       - name: Setup Playwright
-        # Only test/test:commonjs run browser-mode e2e (incl. the WebKit
-        # fixture). test:no-isolate and test:threads exclude browser-mode/**,
-        # so they need no Playwright browsers.
-        if: matrix.test_script == 'test' || matrix.test_script == 'test:commonjs'
+        # Every job runs the `test` script, which includes browser-mode e2e
+        # (incl. the WebKit fixture), so browsers are always needed.
         uses: ./.github/actions/setup-playwright
         with:
           install-webkit: 'true'
 
-      - name: E2E Test (${{ matrix.test_script }})
-        run: cd e2e && pnpm ${{ matrix.test_script }}
+      - name: E2E Test (test)
+        id: e2e_test
+        run: cd e2e && pnpm test
+
+      # Each remaining script is gated on the build having succeeded but NOT on
+      # the previous scripts, so one failing script does not mask the others'
+      # results — they were independent matrix jobs before being collapsed into
+      # steps.
+      - name: E2E Test (test:commonjs)
+        if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
+        run: cd e2e && pnpm test:commonjs
+
+      - name: E2E Test (test:no-isolate)
+        if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
+        run: cd e2e && pnpm test:no-isolate
+
+      - name: E2E Test (test:threads)
+        if: ${{ needs.prepare.outputs.is_full_run == 'true' && !cancelled() && steps.build.outcome == 'success' }}
+        run: cd e2e && pnpm test:threads
 
       - name: VS Code Extension Test
-        # OS-sensitive (Extension Host) but node-insensitive: on PR, pin to a
-        # single combo (Windows + node 24) instead of every e2e row. FULL runs
-        # still exercise it on every 'test' row.
-        if: matrix.test_script == 'test' && (needs.prepare.outputs.is_full_run == 'true' || (matrix.os == 'windows-latest' && matrix.node_version == '24'))
+        # OS-sensitive (Extension Host) but node-insensitive: run once per OS
+        # on full runs (the node 24 combos) and on the single PR combo
+        # (Windows + node 24). Gated on the `test` script succeeding, matching
+        # the pre-collapse behavior where it ran after the `test` row's e2e
+        # step.
+        if: ${{ !cancelled() && steps.e2e_test.outcome == 'success' && matrix.node_version == '24' && (needs.prepare.outputs.is_full_run == 'true' || matrix.os == 'windows-latest') }}
         run: pnpm run test:vscode
 
   # ======== codspeed ========

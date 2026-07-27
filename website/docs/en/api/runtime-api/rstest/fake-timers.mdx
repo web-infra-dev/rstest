@@ -18,6 +18,8 @@ Rstest provides some utility functions to help you fake timers powered by [@sino
 
 To enable mocking timers, you need to call this method. It uses [@sinonjs/fake-timers](https://github.com/sinonjs/fake-timers) under the hood.
 
+- **Example:**
+
 ```ts
 rs.useFakeTimers();
 ```
@@ -26,17 +28,21 @@ You can also pass a configuration object to customize the behavior of the fake t
 
 The configuration is forwarded to `@sinonjs/fake-timers`. For example, `toFake` and `toNotFake` control which timer APIs are mocked, `now` sets the initial fake system time, and `shouldAdvanceTime` / `advanceTimeDelta` enable automatic advancement.
 
-**Disposable / `using` syntax**
+- **`using` syntax**
 
 <ApiMeta addedVersion="0.10.3" />
 
-Rstest supports the `using` syntax to restore real timers automatically when the block exits:
+`rs.useFakeTimers()` returns a `Disposable` that works with the `using` syntax to restore real timers automatically when the block exits.
+
+The `_timers` binding is intentionally unused, as indicated by its leading underscore. A binding is required by the `using` syntax, so it cannot be omitted.
 
 ```ts
 {
   using _timers = rs.useFakeTimers();
   // Fake timers are active in this block.
 }
+
+// Real timers are restored.
 ```
 
 ## rs.useRealTimers

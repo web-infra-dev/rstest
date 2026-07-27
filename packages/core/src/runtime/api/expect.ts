@@ -20,6 +20,7 @@
 import {
   ASYMMETRIC_MATCHERS_OBJECT,
   addCustomEqualityTesters,
+  ChaiStyleAssertions,
   type ChaiPlugin,
   customMatchers,
   GLOBAL_EXPECT,
@@ -75,6 +76,17 @@ const freshExpectState = (
   },
 });
 
+// Vitest 4.1 types `returned(value)`, while its runtime also accepts no arguments.
+const ReturnedAlias: ChaiPlugin = (chai, utils) => {
+  utils.overwriteMethod(chai.Assertion.prototype, 'returned', () => {
+    return function (this: Assertion, expected?: unknown) {
+      return arguments.length === 0
+        ? this.toHaveReturned()
+        : this.toHaveReturnedWith(expected);
+    };
+  });
+};
+
 export function createExpect({
   getCurrentTest,
   getWorkerState,
@@ -92,6 +104,8 @@ export function createExpect({
 }): RstestExpect {
   use(JestExtend);
   use(JestChaiExpect);
+  use(ChaiStyleAssertions);
+  use(ReturnedAlias);
   if (snapshotPlugin) {
     use(snapshotPlugin);
   }

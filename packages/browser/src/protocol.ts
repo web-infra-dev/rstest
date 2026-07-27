@@ -1,6 +1,6 @@
 import type { BrowserViewport } from '@rstest/core/internal/browser';
 import type {
-  RuntimeConfig,
+  BrowserRuntimeConfig,
   TestFileResult,
   TestInfo,
   TestResult,
@@ -28,7 +28,7 @@ export const DISPATCH_NAMESPACE_BROWSER = 'browser';
 export const DISPATCH_NAMESPACE_SNAPSHOT = 'snapshot';
 export const DISPATCH_METHOD_RPC = 'rpc';
 
-export type SerializedRuntimeConfig = RuntimeConfig;
+export type SerializedRuntimeConfig = BrowserRuntimeConfig;
 
 // `BrowserViewport` is a core config type (`@rstest/core` owns the canonical
 // definition used by `NormalizedBrowserModeConfig`). Re-export it so the host

@@ -118,6 +118,7 @@ function toTestInfo(test: Test): TestInfo {
     project: test.project,
     type: test.type,
     location: test.location,
+    meta: test.meta,
     tests: test.type === 'suite' ? test.tests.map(toTestInfo) : [],
     runMode: test.runMode,
   };

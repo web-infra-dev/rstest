@@ -187,7 +187,7 @@ npx rstest run --trace
 
 在 TTY 下，Rstest 会启动一个本地 helper，使打印出的链接直接在 Perfetto UI 中打开 trace。在 CI 下，trace 会写入 `<rootPath>/.rstest/trace-<ts>.json`，方便作为 artifact 上传。
 
-对于其他 profiling 需求，例如使用 samply 分析 CPU 时间分布、使用 `--heap-prof` 分析内存、使用 `--inspect` 进行单步调试，请参考 [Profiler](/guide/advanced/profiling#profiler) 一节。
+对于其他 profiling 需求，例如使用 samply 分析 CPU 时间分布、使用 `--heap-prof` 分析内存、使用 `--inspect` 进行单步调试，请参考 [Profiler](/guide/debug/profiling#profiler) 一节。
 
 ## 更清晰的 worker 输出归属 \{#worker-pool}
 

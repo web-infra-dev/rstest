@@ -149,7 +149,7 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
   withImplementation<T2>(
     fn: NormalizedProcedure<T>,
     callback: () => T2,
-  ): T2 extends Promise<unknown> ? Promise<void> : void;
+  ): T2 extends Promise<unknown> ? Promise<this> : this;
   /**
    * Return the `this` context from the method without invoking the actual implementation.
    */
@@ -162,6 +162,14 @@ export interface MockInstance<T extends FunctionLike = FunctionLike> {
    * Accepts a value that will be returned for one call to the mock function.
    */
   mockReturnValueOnce(value: ReturnType<T>): this;
+  /**
+   * Accepts a value that will be thrown whenever the mock function is called.
+   */
+  mockThrow(value: unknown): this;
+  /**
+   * Accepts a value that will be thrown during the next function call.
+   */
+  mockThrowOnce(value: unknown): this;
   /**
    * Accepts a value that will be resolved when the async function is called.
    */
@@ -239,12 +247,18 @@ type MockProcedure = (...args: any[]) => any;
 type Constructor<T = any> = new (...args: any[]) => T;
 
 // Mocked class constructor type - preserves both the constructor signature and mock capabilities
-export type MockedClass<T extends Constructor> = Mock<
+type MockedClassBase<T extends Constructor> = Mock<
   (...args: ConstructorParameters<T>) => InstanceType<T>
 > & {
   new (...args: ConstructorParameters<T>): InstanceType<T>;
   prototype: InstanceType<T>;
 };
+
+export type MockedClass<T extends Constructor> = MockedClassBase<T> &
+  MockedObject<T>;
+
+type MockedClassDeep<T extends Constructor> = MockedClassBase<T> &
+  MockedObjectDeep<T>;
 
 type Methods<T> = {
   [K in keyof T]: T[K] extends MockProcedure ? K : never;
@@ -254,11 +268,30 @@ type Properties<T> = {
   [K in keyof T]: T[K] extends MockProcedure ? never : K;
 }[keyof T];
 
-export type MockedFunction<T extends MockProcedure> = Mock<T> & {
+// A mock-wrapped callable. Stripping `this` keeps `mocked(args)` callable
+// without a receiver for methods typed with an explicit `this`, which a bare
+// `T` would break — but when a `this` parameter is present,
+// `OmitThisParameter<T>` rebuilds a bare call signature and drops `T`'s
+// construct signature, so `ConstructSignature<T>` re-extracts it (the tuple
+// wrapping avoids distributing over union members). `T`'s real signatures come
+// before `Mock<T>` so a construct+call member keeps its real construct
+// signature at `new mocked.fn()` sites (`Mock<T>`'s synthetic `new` returns
+// `ReturnType<T>` and would otherwise shadow it).
+type ConstructSignature<T> = [T] extends [new (...args: infer A) => infer R]
+  ? new (...args: A) => R
+  : unknown;
+
+type MockedCallable<T extends MockProcedure> = OmitThisParameter<T> &
+  ConstructSignature<T> &
+  Mock<T>;
+
+// The extra `{ [K in keyof T]: T[K] }` restores named/static properties that
+// `OmitThisParameter` drops when it rebuilds a this-less call signature.
+export type MockedFunction<T extends MockProcedure> = MockedCallable<T> & {
   [K in keyof T]: T[K];
 };
 
-export type MockedFunctionDeep<T extends MockProcedure> = Mock<T> &
+export type MockedFunctionDeep<T extends MockProcedure> = MockedCallable<T> &
   MockedObjectDeep<T>;
 
 export type MockedObject<T> = {
@@ -280,7 +313,7 @@ export type Mocked<T> = T extends Constructor
       : T;
 
 export type MaybeMockedDeep<T> = T extends Constructor
-  ? MockedClass<T>
+  ? MockedClassDeep<T>
   : T extends MockProcedure
     ? MockedFunctionDeep<T>
     : T extends object
@@ -296,7 +329,7 @@ export type MaybePartiallyMocked<T> = T extends Constructor
       : T;
 
 export type MaybePartiallyMockedDeep<T> = T extends Constructor
-  ? MockedClass<T>
+  ? MockedClassDeep<T>
   : T extends MockProcedure
     ? MockedFunctionDeep<T>
     : T extends object

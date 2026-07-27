@@ -1,4 +1,10 @@
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, rs } from '@rstest/core';
+
+declare module '@rstest/core' {
+  interface Assertion {
+    toHaveCurrentTestName(expected: string): void;
+  }
+}
 
 describe('Expect API', () => {
   it('test expect API', () => {
@@ -84,6 +90,24 @@ describe('Expect API', () => {
     expect(1 + 3).toBe(4);
   });
 
+  it('passes the full test name to custom matchers', ({ expect }) => {
+    expect.extend({
+      toHaveCurrentTestName(_, expected) {
+        const actual = this.currentTestName;
+        return {
+          actual,
+          expected,
+          pass: actual === expected,
+          message: () => `expected current test name to be ${expected}`,
+        };
+      },
+    });
+
+    expect(null).toHaveCurrentTestName(
+      'Expect API > passes the full test name to custom matchers',
+    );
+  });
+
   it('test expect API not', () => {
     expect(1 + 1).not.toBe(3);
     expect('blue red').not.toBeUndefined();
@@ -95,6 +119,48 @@ describe('Expect API', () => {
 
     expect(['blue', 'red']).not.toContain('blu');
     expect('blue red').not.toMatch('redd');
+  });
+
+  // Regression guard for #1514: a mock from `rs.fn()` / `rs.spyOn()` must be
+  // accepted by the call-order matchers without a cast under strict
+  // type-checking, including through inherited chains like `.not`. The value is
+  // the no-cast usage being type-checked (`e2e` is in the `pnpm typecheck`
+  // scope); reverting the fix makes these lines fail to compile.
+  it('toHaveBeenCalledBefore / toHaveBeenCalledAfter accept a mock without a cast', () => {
+    const a = rs.fn();
+    const b = rs.fn();
+
+    a();
+    b();
+
+    expect(a).toHaveBeenCalledBefore(b);
+    expect(b).toHaveBeenCalledAfter(a);
+    expect(b).not.toHaveBeenCalledBefore(a);
+    expect(a).not.toHaveBeenCalledAfter(b);
+  });
+
+  it('supports the spy matcher aliases preserved from Vitest 3', () => {
+    const mock = rs.fn((value: string) => value.toUpperCase());
+
+    mock('first');
+    mock('second');
+
+    expect(mock).nthCalledWith(1, 'first');
+    expect(mock).lastCalledWith('second');
+    expect(mock).nthReturnedWith(1, 'FIRST');
+    expect(mock).lastReturnedWith('SECOND');
+  });
+
+  it('checks the value passed to the returned alias', () => {
+    const mock = rs.fn(() => 'actual');
+    mock();
+
+    // @ts-expect-error Vitest 4.1 also supports this alias without a value at runtime.
+    expect(mock).returned();
+    expect(mock).returned('actual');
+    expect(mock).not.returned('expected');
+    expect(() => expect(mock).returned('expected')).toThrow();
+    expect(() => expect(mock).returned(undefined)).toThrow();
   });
 
   it.fails('test not failed', () => {

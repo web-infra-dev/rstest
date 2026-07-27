@@ -4,8 +4,10 @@ import type {
   CoverageProvider,
   InlineProjectConfig,
   NormalizedCoverageOptions,
+  RawCoverageResolveOptions,
   RstestExposeAPI,
   ProjectConfig,
+  ResolvedRstestConfig,
   RstestConfig,
 } from './types';
 
@@ -18,6 +20,8 @@ export type {
   CoverageOptions,
   CoverageProvider,
   NormalizedCoverageOptions,
+  RawCoverageResolveOptions,
+  ResolvedRstestConfig,
   RsbuildPlugin,
   RstestConfig,
   RstestExposeAPI,
@@ -34,9 +38,13 @@ export type RstestConfigExport =
  * This function helps you to autocomplete configuration types.
  * It accepts a Rstest config object, or a function that returns a config.
  */
+export function defineConfig<const Config extends RstestConfig>(
+  config: () => Config,
+): RstestConfigSyncFn;
+export function defineConfig<const Config extends RstestConfig>(
+  config: () => Promise<Config>,
+): RstestConfigAsyncFn;
 export function defineConfig(config: RstestConfig): RstestConfig;
-export function defineConfig(config: RstestConfigSyncFn): RstestConfigSyncFn;
-export function defineConfig(config: RstestConfigAsyncFn): RstestConfigAsyncFn;
 export function defineConfig(config: RstestConfigExport): RstestConfigExport;
 export function defineConfig(config: RstestConfigExport) {
   return config;
@@ -47,6 +55,7 @@ type NestedProjectConfig = {
 };
 
 type ExportedProjectConfig = ProjectConfig;
+type RstestProjectConfig = ExportedProjectConfig | NestedProjectConfig;
 
 type ProjectConfigAsyncFn = () => Promise<ExportedProjectConfig>;
 type NestedProjectConfigAsyncFn = () => Promise<NestedProjectConfig>;
@@ -54,8 +63,7 @@ type ProjectConfigSyncFn = () => ExportedProjectConfig;
 type NestedProjectConfigSyncFn = () => NestedProjectConfig;
 
 type RstestProjectConfigExport =
-  | ExportedProjectConfig
-  | NestedProjectConfig
+  | RstestProjectConfig
   | ProjectConfigSyncFn
   | NestedProjectConfigSyncFn
   | ProjectConfigAsyncFn
@@ -75,20 +83,20 @@ export function defineInlineProject(config: InlineProjectConfig) {
  * This function helps you to autocomplete project configuration types.
  * It accepts an inline or nested Rstest project config object, or a function that returns one.
  */
+export function defineProject<const Config extends RstestProjectConfig>(
+  config: () => Config,
+): Config extends NestedProjectConfig
+  ? NestedProjectConfigSyncFn
+  : ProjectConfigSyncFn;
+export function defineProject<const Config extends RstestProjectConfig>(
+  config: () => Promise<Config>,
+): Config extends NestedProjectConfig
+  ? NestedProjectConfigAsyncFn
+  : ProjectConfigAsyncFn;
 export function defineProject(
   config: ExportedProjectConfig,
 ): ExportedProjectConfig;
 export function defineProject(config: NestedProjectConfig): NestedProjectConfig;
-export function defineProject(config: ProjectConfigSyncFn): ProjectConfigSyncFn;
-export function defineProject(
-  config: NestedProjectConfigSyncFn,
-): NestedProjectConfigSyncFn;
-export function defineProject(
-  config: ProjectConfigAsyncFn,
-): ProjectConfigAsyncFn;
-export function defineProject(
-  config: NestedProjectConfigAsyncFn,
-): NestedProjectConfigAsyncFn;
 export function defineProject(config: RstestProjectConfigExport) {
   return config;
 }
@@ -98,10 +106,12 @@ export type { Rspack } from '@rsbuild/core';
 export type {
   Assertion,
   DescribeAPI as Describe,
+  AsymmetricMatchersContaining,
   ExpectStatic,
   ExtendConfig,
   ExtendConfigFn,
   Fixtures,
+  Matchers,
   ProjectConfig,
   RealTimers,
   Reporter,
@@ -109,6 +119,8 @@ export type {
   RstestCommand,
   RstestExpect as Expect,
   RstestUtilities,
+  TaskMeta,
+  TaskMetaValue,
   TestCaseInfo,
   TestContext,
   TestAPIs,

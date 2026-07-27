@@ -69,7 +69,7 @@ export default async function globalSetup() {
 ```
 
 :::note
-globalSetup 文件在独立的上下文中运行：setup 文件里模块作用域的变量在测试中无法访问。对于 node 测试 worker，`globalSetup` 执行结束后 Rstest 会对 `process.env` 做一次快照并分发给每个 worker —— 所以通过在此处修改环境变量把值传给 node 测试是被支持的用法。此行为不适用于 browser 模式测试：只有静态的 `test.env` 配置会被转发到 browser worker。
+globalSetup 文件在独立的上下文中运行：setup 文件里模块作用域的变量在测试中无法访问。对于 node 测试 worker，`globalSetup` 执行结束后 Rstest 会对 `process.env` 做一次快照并分发给每个 worker —— 所以通过在此处修改环境变量把值传给 node 测试是被支持的用法。对于 browser 模式测试，**browser 项目自身**的 `globalSetup` 中所做的环境变量变更也会被传递：它们会被注入到 browser 运行时的 env 存储中（可通过 `process.env` / `import.meta.env` 读取），叠加在内置的 `NODE_ENV` / `RSTEST` 之上，且显式的 `test.env` 配置仍然优先。其他宿主环境变量不会被转发到 browser 测试；在混合项目中，Node 侧 `globalSetup` 的环境变量变更不会合并进 browser 测试。由 browser provider hook（`modifyRstestConfig`）新增或修改的 `globalSetup` 条目不会被识别。browser 模式的 watch 运行目前不会执行 `globalSetup`。
 :::
 
 ## 多个全局设置文件

@@ -294,7 +294,7 @@ Path: `website/docs/zh/blog/announcing-<major>-<minor>.mdx`. Mirror the EN struc
   `完整变更请参考 [vX.Y.Z release notes](URL)。`. Keep the link text in English (it
   reads as a proper noun referring to the GitHub page).
 - **Keep technical terms in English** (Rspack, ESM, TypeScript, threads pool, snapshot,
-  worker, pool, cache, build, CLI, CI, TTY, artifact, etc.), per the website's `CLAUDE.md`.
+  worker, pool, cache, build, CLI, CI, TTY, artifact, etc.), per the website's `AGENTS.md`.
   Do **not** translate them to 工作进程 / 池 / 缓存 / 构建 / 制品 / 命令行 / 持续集成 / 终端 / 快照.
 - **Keep code samples, frontmatter `date`, table contents, PR links, and `\{#kebab-case}`
   anchor slugs identical to EN** — the slug match is what makes the intro-bullet links work
@@ -373,7 +373,7 @@ Mirror the EN voice using these ZH conventions:
 ### Formatting
 
 - **Heading case (EN)**: sentence-style (`## A new threads pool`, not `## A New Threads
-Pool`), per the website's `CLAUDE.md`. Run `npx heading-case` to check.
+Pool`), per the website's `AGENTS.md`. Run `npx heading-case` to check.
 - **Section anchors**: every highlight heading takes an explicit `\{#kebab-case}` anchor
   (e.g. `## A new threads pool \{#threads-pool}`). EN and ZH **must share the same anchor
   slug** so the intro-bullet links resolve in both locales and cross-locale deep links
@@ -382,7 +382,7 @@ Pool`), per the website's `CLAUDE.md`. Run `npx heading-case` to check.
   `package.json`, etc.), set `title="<path>"` on the fence so the rendered header shows it.
 - **First mention of a non-core package** uses the GitHub-link form
   `[@rstest/adapter-rslib](https://github.com/web-infra-dev/rstest/tree/main/packages/adapter-rslib)`,
-  per `website/CLAUDE.md`. No backticks around the npm name in links.
+  per `website/AGENTS.md`. No backticks around the npm name in links.
 - **Frontmatter date**: use the release date if the user supplies one; otherwise leave a
   clear `TODO: release date` so it isn't silently wrong. Do **not** set it to the current
   timestamp.
