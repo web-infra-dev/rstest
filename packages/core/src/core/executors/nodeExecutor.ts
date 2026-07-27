@@ -396,6 +396,7 @@ export function createNodeExecutor(
               'host',
               () =>
                 runGlobalSetup({
+                  scope: context,
                   globalSetupEntries,
                   assetFiles,
                   sourceMaps,
@@ -571,7 +572,7 @@ export function createNodeExecutor(
       return;
     }
     didRunGlobalTeardown = true;
-    await runGlobalTeardown();
+    await runGlobalTeardown(context);
     if (runDependencyValidationPromise) {
       await runDependencyValidationPromise.catch(() => undefined);
     }

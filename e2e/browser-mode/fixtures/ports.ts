@@ -55,6 +55,10 @@ export const BROWSER_PORTS = {
   // One key for every config `configWarnings.test.ts` launches: its tests run
   // serially, so they may share — the rule above only splits across files.
   'browser-coverage-config-warnings': 5272,
+  // Hardcoded in e2e/programmatic/fixtures/run-runner-browser-sugar.mjs, which
+  // is plain JS and cannot import this module — registered here so the port
+  // stays reserved.
+  'programmatic-runner': 5280,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);

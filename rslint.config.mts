@@ -228,7 +228,12 @@ export const osAgnosticTests = {
 };
 
 export default defineConfig([
-  { ignores: ['**/dist/**', '**/dist-types/**'] },
+  {
+    // `.claude/worktrees` holds gitignored checkouts of other branches (agent
+    // worktrees). Linting them reports another branch's errors against this
+    // one, so the gate must never look inside.
+    ignores: ['**/dist/**', '**/dist-types/**', '**/.claude/worktrees/**'],
+  },
   ts.configs.recommended,
   {
     languageOptions: {

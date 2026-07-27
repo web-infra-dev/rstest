@@ -17,7 +17,6 @@ import type {
 import {
   color,
   getFileTaskId,
-  getForceColorEnv,
   isDeno,
   needFlagExperimentalDetectModule,
   toError,
@@ -28,6 +27,7 @@ import { getNumCpus, parseWorkers } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
 import { getEnvironmentKey } from '../core/environmentGroups';
 import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
+import { composeWorkerEnv } from '../core/workerEnv';
 import {
   createRunnerEventSink,
   type RunnerEventSink,
@@ -39,8 +39,17 @@ import type { PoolWorkerKind } from './types';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const getRuntimeConfig = (context: ProjectContext): RuntimeConfig =>
-  projectRuntimeConfig(context, { envMode: 'inherit' });
+const getRuntimeConfig = (
+  context: RstestContext,
+  project: ProjectContext,
+): RuntimeConfig =>
+  projectRuntimeConfig(project, {
+    envMode: 'inherit',
+    // Composed per dispatch, not once at `createPool`: the pool is always
+    // created before `globalSetup` runs, so this is where the run's change-set
+    // reaches node workers (they apply it over their spawn env).
+    env: composeWorkerEnv(context.workerEnv),
+  });
 
 const filterAssetsByEntry = async (
   entryInfo: EntryInfo,
@@ -355,11 +364,10 @@ export const createPool = async ({
       ...execArgv,
       ...(isDeno ? [] : getNodeExecArgv()),
     ],
-    env: {
-      NODE_ENV: 'test',
-      ...getForceColorEnv(),
-      ...process.env,
-    } as Record<string, string>,
+    // Materialized at pool construction, so a worker spawned later inherits a
+    // pre-`globalSetup` env; the change-set reaches workers through
+    // `getRuntimeConfig` instead.
+    env: composeWorkerEnv(context.workerEnv) as Record<string, string>,
     memoryGate: selectMemoryGate(workerKind),
   });
 
@@ -382,7 +390,7 @@ export const createPool = async ({
       traceSpan,
     }) => {
       const projectName = project.name;
-      const runtimeConfig = getRuntimeConfig(project);
+      const runtimeConfig = getRuntimeConfig(context, project);
       const sink = createProjectSink(project);
       const rpcMethods = sinkToRuntimeRpc(sink);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
@@ -506,7 +514,7 @@ export const createPool = async ({
       project,
       updateSnapshot,
     }) => {
-      const runtimeConfig = getRuntimeConfig(project);
+      const runtimeConfig = getRuntimeConfig(context, project);
       const projectName = project.normalizedConfig.name;
       const rpcMethods = sinkToRuntimeRpc(createProjectSink(project));
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);

@@ -146,6 +146,7 @@ describe('createWatchTeardown', () => {
       await closeBlocked;
     };
     const teardown = createWatchTeardown({
+      context: createContext(),
       executors: [executor],
       traceController: {
         close: async () => {},
@@ -457,6 +458,7 @@ describe('createWatchCycleDriver', () => {
     ];
     const { executor, release, started } = createGatedExecutor('node');
     const teardown = createWatchTeardown({
+      context,
       executors: [executor],
       traceController: {
         close: async () => {},

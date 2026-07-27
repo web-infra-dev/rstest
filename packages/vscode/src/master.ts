@@ -297,8 +297,39 @@ export class RstestApi {
       kind === vscode.TestRunProfileKind.Debug,
       run,
     );
-    token.onCancellationRequested(() => {
+
+    // Stop the worker, releasing a continuous run's watch session first. The
+    // embedded API installs no signal handlers, so killing the worker outright
+    // would skip globalSetup teardown + pool/dev-server close and leak/orphan
+    // those resources. Ask the watch session to close over RPC, then kill;
+    // `$close()` (which kills the process) stays the fallback if the RPC hangs.
+    let stopped = false;
+    const stopWorker = async () => {
+      if (stopped) return;
+      stopped = true;
+      if (continuous) {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await Promise.race([
+            worker.closeWatch(),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(
+                () => reject(new Error('closeWatch timed out')),
+                5000,
+              );
+            }),
+          ]);
+        } catch (error) {
+          logger.debug('closeWatch failed or timed out; killing worker', error);
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      }
       worker.$close();
+    };
+
+    token.onCancellationRequested(() => {
+      void stopWorker();
       onFinish();
     });
 
@@ -324,7 +355,7 @@ export class RstestApi {
         }
 
         if (continuous) {
-          worker.$close();
+          void stopWorker();
         }
         onFinish();
       })
@@ -543,6 +574,11 @@ export class RstestApi {
   }
 
   public dispose() {
+    // `dispose()` is the synchronous VS Code `Disposable` contract, so it can't
+    // await the graceful `closeWatch()` RPC that `stopWorker` uses. The kill
+    // still runs continuous-run teardown: `kill()` sends SIGTERM, which the
+    // worker's own signal handler catches to release an active watch session's
+    // pool / dev server before exiting (see packages/vscode/src/worker/index.ts).
     for (const child of this.childProcesses) {
       child.kill();
     }

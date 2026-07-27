@@ -266,7 +266,7 @@ export async function mergeReports(
     allUnhandledErrors.length > 0;
 
   if (hasFailure) {
-    process.exitCode = 1;
+    context.exitCode.raise(1);
   }
 
   for (const reporter of context.reporters) {

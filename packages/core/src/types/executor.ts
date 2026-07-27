@@ -47,10 +47,10 @@ export interface ExecutorRunCycleOptions {
   /**
    * Post-globalSetup env change-set produced by the core-owned pre-cycle
    * globalSetup stage (browser projects' setups only). The node executor
-   * ignores it — the stage already mutated the host `process.env`, which the
-   * pool re-reads at dispatch; the browser executor merges it into the per-run
-   * env store between the static base (`NODE_ENV`/`RSTEST`) and the user
-   * `test.env` config.
+   * ignores it — the stage already merged it into `context.workerEnv`, which
+   * the pool composes at dispatch; the browser executor merges it into the
+   * per-run env store between the static base (`NODE_ENV`/`RSTEST`) and the
+   * user `test.env` config.
    */
   env?: Record<string, string | undefined>;
   onTraceEvents?: (events: TraceEvent[]) => void;

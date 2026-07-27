@@ -1,18 +1,19 @@
-import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { runRstest } from '@rstest/core/api';
+import { fileURLToPath } from 'node:url';
+import { createRstest } from '@rstest/core/api';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const cwd = join(__dirname, 'disk');
 
-const result = await runRstest({
+const rstest = await createRstest({
   cwd,
-  inlineConfig: {
+  config: {
     include: ['*.test.ts'],
     exclude: ['failing.test.ts'],
     reporters: [],
   },
 });
+const result = await rstest.run();
 
 console.log(
   `__RSTEST_API_RESULT__${JSON.stringify({
@@ -20,11 +21,12 @@ console.log(
     stats: result.stats,
     files: result.files.map((f) => ({
       status: f.status,
-      // strip absolute path so snapshot is stable across machines
+      // strip absolute path so the assertion is stable across machines
       testPath: f.testPath.split('/').pop(),
     })),
     unhandledErrors: result.unhandledErrors,
     duration: { hasTotal: typeof result.duration.total === 'number' },
     snapshotPresent: typeof result.snapshot === 'object',
+    hostExitCode: process.exitCode ?? 0,
   })}__END__`,
 );

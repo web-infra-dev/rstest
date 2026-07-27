@@ -45,55 +45,99 @@ const createCoverageMap = (
     },
   }) as CoverageMap;
 
+/**
+ * A temp project whose `src` holds `files`, plus the context and provider stub
+ * `generateCoverage` needs to walk it. Callers override the one provider method
+ * under test and read `raised` for the exit codes core raised.
+ */
+const createUntestedFilesFixture = (
+  files: Record<string, string>,
+  providerOverrides: Partial<CoverageProvider>,
+) => {
+  const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
+  const srcDir = path.join(rootPath, 'src');
+  mkdirSync(srcDir, { recursive: true });
+  for (const [name, source] of Object.entries(files)) {
+    writeFileSync(path.join(srcDir, name), source);
+  }
+
+  const provider = {
+    init: () => {},
+    collect: () => null,
+    cleanup: () => {},
+    createCoverageMap: () => createCoverageMap(),
+    async generateCoverageForUntestedFiles({ files }) {
+      return files.map(createFileCoverage);
+    },
+    async generateReports() {},
+    ...providerOverrides,
+  } satisfies CoverageProvider;
+
+  const raised: number[] = [];
+  const context = {
+    rootPath,
+    normalizedConfig: {
+      coverage: {
+        ...withDefaultConfig({}).coverage,
+        include: ['src/**/*.ts'],
+      },
+    },
+    projects: [{ rootPath, environmentName: 'node' }],
+    exitCode: { raise: (code: number) => raised.push(code) },
+  } as unknown as RstestContext;
+
+  return {
+    provider,
+    context,
+    raised,
+    run: () => generateCoverage(context, createCoverageMap(), provider),
+    cleanup: () => rmSync(rootPath, { recursive: true, force: true }),
+  };
+};
+
 describe('generateCoverage', () => {
   it('batches untested files before asking the provider to instrument them', async () => {
-    const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
-    const srcDir = path.join(rootPath, 'src');
-    mkdirSync(srcDir, { recursive: true });
-
-    for (let index = 0; index < 55; index++) {
-      writeFileSync(
-        path.join(srcDir, `file-${index}.ts`),
-        `export const value${index} = ${index};\n`,
-      );
-    }
-
-    const defaultCoverage = withDefaultConfig({}).coverage;
     const batches: number[] = [];
+    const sources = Object.fromEntries(
+      Array.from({ length: 55 }, (_, index) => [
+        `file-${index}.ts`,
+        `export const value${index} = ${index};\n`,
+      ]),
+    );
 
-    const provider = {
-      init: () => {},
-      collect: () => null,
-      cleanup: () => {},
-      createCoverageMap: () => createCoverageMap(),
+    const fixture = createUntestedFilesFixture(sources, {
       async generateCoverageForUntestedFiles({ files }) {
         batches.push(files.length);
         return files.map(createFileCoverage);
       },
-      async generateReports() {},
-    } satisfies CoverageProvider;
-
-    const context = {
-      rootPath,
-      normalizedConfig: {
-        coverage: {
-          ...defaultCoverage,
-          include: ['src/**/*.ts'],
-        },
-      },
-      projects: [
-        {
-          rootPath,
-          environmentName: 'node',
-        },
-      ],
-    } as RstestContext;
+    });
 
     try {
-      await generateCoverage(context, createCoverageMap(), provider);
+      await fixture.run();
       expect(batches).toEqual([25, 25, 5]);
     } finally {
-      rmSync(rootPath, { recursive: true, force: true });
+      fixture.cleanup();
+    }
+  });
+
+  it('raises the run exit code when the provider reports an uninstrumentable file', async () => {
+    // A provider that recovers from the failure (partial report) and reports it
+    // through the callback instead of writing `process.exitCode`.
+    const fixture = createUntestedFilesFixture(
+      { 'untested.ts': 'export const value = 1;\n' },
+      {
+        async generateCoverageForUntestedFiles({ onFailure }) {
+          onFailure();
+          return [];
+        },
+      },
+    );
+
+    try {
+      await fixture.run();
+      expect(fixture.raised).toEqual([1]);
+    } finally {
+      fixture.cleanup();
     }
   });
 

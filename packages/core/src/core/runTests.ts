@@ -3,7 +3,7 @@ import {
   createCoverageProviderWithLog,
 } from '../coverage';
 import { ensureRunDependencies } from './dependencies';
-import type { TestExecutor } from '../types';
+import type { RstestWatchHandle, TestExecutor } from '../types';
 import {
   color,
   createTraceController,
@@ -14,6 +14,7 @@ import {
 import {
   finalizeRunCycle,
   notifyReportersOnTestRunStart,
+  runAndFinalizeCycle,
   runLifecycleStep,
 } from './finalizeRun';
 import {
@@ -45,7 +46,9 @@ import {
   type WatchSessionTargets,
 } from './watchSession';
 
-export async function runTests(context: Rstest): Promise<void> {
+export async function runTests(
+  context: Rstest,
+): Promise<void | RstestWatchHandle> {
   // High-level flow (post-executor-seam):
   // 1. Split browser/node projects (the single `isBrowserProject` predicate).
   // 2. Resolve the plan first (each side's `modifyRstestConfig` hooks fire and
@@ -265,7 +268,9 @@ export async function runTests(context: Rstest): Promise<void> {
         // so `NodeExecutor.close()` alone cannot drain the browser stage's
         // setups. A second drain is a no-op, and it must run even when an
         // executor close throws.
-        await runLifecycleStep('global teardown', () => runGlobalTeardown());
+        await runLifecycleStep('global teardown', () =>
+          runGlobalTeardown(context),
+        );
       }
     };
 
@@ -319,10 +324,13 @@ export async function runTests(context: Rstest): Promise<void> {
             `Rstest exited unexpectedly with code ${code}, terminating test run.`,
           ),
         );
-        runGlobalTeardown().catch((error) => {
+        runGlobalTeardown(context).catch((error) => {
           logger.log(color.red(`Error in global teardown: ${error}`));
         });
-        process.exitCode = 1;
+        // Registered on `process.on('exit')` (CLI only), so there is no caller
+        // frame left: the CLI's exit-code mirror is what turns this into an exit
+        // code, synchronously.
+        context.exitCode.raise(1);
       }
     };
 
@@ -353,8 +361,8 @@ export async function runTests(context: Rstest): Promise<void> {
         executors.push(browserExecutor);
         await browserExecutor.init();
         // Core-owned pre-cycle globalSetup stage over the resolved browser
-        // subset. It mutates the shared host `process.env`, so browser setups'
-        // env changes are also visible to node workers dispatched below.
+        // subset. Its change-set also lands on `context.workerEnv`, so browser
+        // setups' env changes stay visible to node workers dispatched below.
         browserStage = await runBrowserGlobalSetupStage(
           context,
           browserProjectsToRun,
@@ -362,31 +370,23 @@ export async function runTests(context: Rstest): Promise<void> {
         );
       }
 
-      // After the browser globalSetup stage, not before it: a setup that fails
-      // takes the run down before any reporter was told one started, which is
-      // the pairing every other shape already has.
-      await notifyReportersOnTestRunStart(context);
-      // Settle every cycle before propagating a failure: a fail-fast
-      // `Promise.all` would reach the `finally` teardown while a sibling
-      // executor is still mid-cycle, truncating its tests and firing global
-      // teardown early. The re-await unwraps the already-settled promises,
-      // rejecting with the first failure in executor order.
-      const cyclePromises = executors.map((executor) =>
-        executor === browserExecutor && browserStage.errors.length
-          ? Promise.resolve(globalSetupFailureOutcome(browserStage.errors))
-          : executor.runCycle({
-              buildId: 1,
-              mode: 'all',
-              updateSnapshot: snapshotManager.options.updateSnapshot,
-              env: browserStage.env,
-              onTraceEvents: forwardBrowserTraceEvents,
-            }),
-      );
-      await Promise.allSettled(cyclePromises);
-      const outcomes = await Promise.all(cyclePromises);
-
-      await finalizeRunCycle(context, {
-        outcomes,
+      // After the browser globalSetup stage, not before it: the pump notifies
+      // the reporters of the run start, and a setup that fails must take the run
+      // down before any reporter was told one started — the pairing every other
+      // shape already has.
+      await runAndFinalizeCycle(context, {
+        startCycles: () =>
+          executors.map((executor) =>
+            executor === browserExecutor && browserStage.errors.length
+              ? Promise.resolve(globalSetupFailureOutcome(browserStage.errors))
+              : executor.runCycle({
+                  buildId: 1,
+                  mode: 'all',
+                  updateSnapshot: snapshotManager.options.updateSnapshot,
+                  env: browserStage.env,
+                  onTraceEvents: forwardBrowserTraceEvents,
+                }),
+          ),
         mode: 'all',
         isWatchMode: false,
         coverageProvider,
@@ -486,6 +486,7 @@ export async function runTests(context: Rstest): Promise<void> {
   // config-change restart hook. The browser side closes first: its runtime owns
   // the servers the node executor's shutdown does not know about.
   const watchTeardown = createWatchTeardown({
+    context,
     executors: [
       ...(browserExecutor ? [browserExecutor] : []),
       ...(nodeExecutor ? [nodeExecutor] : []),
@@ -605,7 +606,9 @@ export async function runTests(context: Rstest): Promise<void> {
         // boots in the background; a failed boot must still be reported.
         initialBrowserCycle.catch((error) => {
           logger.error(color.red('Browser Mode watch session failed:'), error);
-          process.exitCode = 1;
+          // Detached: nothing awaits this arm, so the context carrier is the
+          // only channel this failure can reach the exit code through.
+          context.exitCode.raise(1);
         });
       } else {
         await initialBrowserCycle;
@@ -621,4 +624,10 @@ export async function runTests(context: Rstest): Promise<void> {
     }
     throw error;
   }
+
+  // The session keeps watching after this returns; hand the caller the same
+  // teardown the `q` shortcut and the fatal-signal handler use, so a
+  // programmatic (embedded) host can stop watching. The CLI ignores it and
+  // tears down through those paths instead.
+  return { close: closeWatchSession };
 }

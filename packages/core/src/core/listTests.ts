@@ -251,6 +251,7 @@ const collectNodeTests = async ({
         ]);
 
         const { success, errors } = await runGlobalSetup({
+          scope: context,
           globalSetupEntries,
           assetFiles,
           sourceMaps,
@@ -294,7 +295,7 @@ const collectNodeTests = async ({
       return (await resource?.getSourceMaps([name]))?.[name];
     },
     close: async () => {
-      await runGlobalTeardown();
+      await runGlobalTeardown(context);
       await closeServer();
       await pool.close();
     },
@@ -347,7 +348,7 @@ const collectBrowserTests = async ({
 
   const close = async () => {
     try {
-      await runGlobalTeardown();
+      await runGlobalTeardown(context);
     } finally {
       await executor.close();
     }
@@ -759,7 +760,7 @@ export async function listTests(
   try {
     collected = await collection;
   } catch (error) {
-    await runGlobalTeardown();
+    await runGlobalTeardown(context);
     throw error;
   }
   const { list, close, getSourceMap, errors = [] } = collected;
@@ -793,7 +794,7 @@ export async function listTests(
   const hasError = list.some((file) => file.errors?.length) || errors.length;
   if (hasError) {
     const { printError } = await import('../utils/error');
-    process.exitCode = 1;
+    context.exitCode.raise(1);
     for (const file of list) {
       const relativePath = relative(rootPath, file.testPath);
 

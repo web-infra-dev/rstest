@@ -23,7 +23,7 @@ export const resolveAndMergeRawCoverage = async ({
   coverageProvider: CoverageProvider | null;
   mergedCoverageMap?: CoverageMap;
   rawCoverageResults: unknown[];
-  resolveOptions?: RawCoverageResolveOptions;
+  resolveOptions: RawCoverageResolveOptions;
   runCoverageStep: RunCoverageStep;
 }): Promise<void> => {
   const resolveRawCoverage =

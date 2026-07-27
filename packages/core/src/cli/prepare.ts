@@ -1,20 +1,14 @@
-import { ENV } from '../utils/env';
+import { applyTestEnvMarkers } from '../utils/env';
 import { logger } from '../utils/logger';
 
-function initNodeEnv() {
-  if (!process.env.NODE_ENV) {
-    process.env.NODE_ENV = 'test';
-  }
-}
-
 /**
- * Initialize the test environment variables that worker processes inherit via
- * `process.env`. Shared by the CLI (`prepareCli`) and the programmatic API
- * (`runRstest`) so both paths run tests with `NODE_ENV=test` and `RSTEST=true`.
+ * Mark the host process as running Rstest, so anything evaluated here — the
+ * user's config factory, Rsbuild's `loadConfig`, browserslist — sees the same
+ * markers the tests themselves run under. Both entry points call it: the CLI
+ * (`prepareCli`, including the `runCLI` bridge) and the in-process API.
  */
 export function initRstestEnv(): void {
-  initNodeEnv();
-  process.env[ENV.RSTEST] = 'true';
+  applyTestEnvMarkers(process.env);
 }
 
 export function prepareCli(): void {

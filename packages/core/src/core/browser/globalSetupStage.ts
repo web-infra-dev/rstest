@@ -20,9 +20,9 @@ import { createSetupFileState } from '../setupFileState';
 
 export type BrowserGlobalSetupStageResult = {
   /**
-   * Merged env change-set the browser projects' globalSetup applied to the
-   * host `process.env` (later projects win). `undefined` when no setup ran,
-   * so the browser wire stays byte-identical to a run without globalSetup.
+   * Merged env change-set the browser projects' globalSetup produced (later
+   * projects win). `undefined` when no setup ran, so the browser wire stays
+   * byte-identical to a run without globalSetup.
    */
   env?: Record<string, string | undefined>;
   /** Setup failures; when non-empty the browser cycle must be skipped. */
@@ -54,7 +54,7 @@ export const globalSetupFailureOutcome = (
  * created only when a browser project both declares `globalSetup` and has at
  * least one test entry (the cold-start gate stays intact for everyone else).
  * Setups run host-side in the same forked worker node projects use; teardown
- * callbacks queue into the shared `runGlobalTeardown` drain.
+ * callbacks queue into this context's `runGlobalTeardown` drain.
  *
  * Hook-added config is visible here: the planner's config-hook discovery has
  * already fired the browser `modifyRstestConfig` hooks and re-resolved the
@@ -225,6 +225,7 @@ export async function runBrowserGlobalSetupStage(
       errors: setupErrors,
       envChanges,
     } = await runGlobalSetup({
+      scope: context,
       globalSetupEntries: item.globalSetupEntries,
       assetFiles: item.assetFiles,
       sourceMaps: item.sourceMaps,

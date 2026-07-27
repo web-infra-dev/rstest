@@ -1270,6 +1270,7 @@ export default class CustomCoverageReporter {
       const coverageMap = await provider.resolveRawCoverage(payloads, {
         loadAssetFiles,
         loadSourceMaps,
+        onFailure: () => {},
       });
 
       expect(loadedSourceMapFilenames).toEqual([[file]]);
@@ -1355,6 +1356,7 @@ export default class CustomCoverageReporter {
             loadedAssetFilenames.push(filenames);
             return Object.fromEntries(filenames.map((file) => [file, code]));
           },
+          onFailure: () => {},
         },
       );
 
@@ -1430,6 +1432,7 @@ export default class CustomCoverageReporter {
             filenames.map((file) => [file, codeByFile[file]!]),
           );
         },
+        onFailure: () => {},
       });
 
       expect(coverageMap?.files()).toHaveLength(12);
@@ -1480,6 +1483,7 @@ export default class CustomCoverageReporter {
       const coverage = await provider.generateCoverageForUntestedFiles({
         environmentName: 'test',
         files,
+        onFailure: () => {},
       });
 
       expect(coverage).toHaveLength(12);
@@ -1487,6 +1491,41 @@ export default class CustomCoverageReporter {
       expect(peakConversions).toBeGreaterThan(1);
     } finally {
       rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports an untested file it cannot instrument without touching the exit code', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-untested-failure');
+    const provider = new CoverageProvider(createOptions(), root);
+    const originalError = console.error;
+    const originalExitCode = process.exitCode;
+    const errors: string[] = [];
+    let failures = 0;
+
+    console.error = (...args: unknown[]) => {
+      errors.push(args.join(' '));
+    };
+
+    try {
+      const coverage = await provider.generateCoverageForUntestedFiles({
+        environmentName: 'test',
+        files: [join(root, 'src', 'missing.ts')],
+        onFailure: () => {
+          failures++;
+        },
+      });
+
+      expect(coverage).toEqual([]);
+      expect(errors[0]).toContain(
+        'Can not generate coverage for untested file',
+      );
+      // This runs in the host process (it is core's untested-file backfill), so
+      // the failure is a reported value and the host's exit code is its own.
+      expect(failures).toBe(1);
+      expect(process.exitCode).toBe(originalExitCode);
+    } finally {
+      console.error = originalError;
+      process.exitCode = originalExitCode;
     }
   });
 
@@ -1536,16 +1575,19 @@ export default class CustomCoverageReporter {
         ],
       });
 
-      const coverageMap = await provider.resolveRawCoverage([
-        {
-          entries: [createEntry(1, firstCode)],
-          options: { assetFiles: { [file]: firstCode }, outputModule: true },
-        },
-        {
-          entries: [createEntry(2, secondCode)],
-          options: { assetFiles: { [file]: secondCode }, outputModule: true },
-        },
-      ]);
+      const coverageMap = await provider.resolveRawCoverage(
+        [
+          {
+            entries: [createEntry(1, firstCode)],
+            options: { assetFiles: { [file]: firstCode }, outputModule: true },
+          },
+          {
+            entries: [createEntry(2, secondCode)],
+            options: { assetFiles: { [file]: secondCode }, outputModule: true },
+          },
+        ],
+        { onFailure: () => {} },
+      );
 
       expect(convertedCodes).toEqual([firstCode, secondCode]);
       expect(convertedCounts).toEqual([1, 2]);
@@ -1567,6 +1609,7 @@ export default class CustomCoverageReporter {
     const originalError = console.error;
     const originalExitCode = process.exitCode;
     let hasError = false;
+    let failures = 0;
 
     Object.defineProperty(providerInternals, 'convertWithAst', {
       configurable: true,
@@ -1595,20 +1638,30 @@ export default class CustomCoverageReporter {
         ],
       });
 
-      const coverageMap = await provider.resolveRawCoverage([
+      const coverageMap = await provider.resolveRawCoverage(
+        [
+          {
+            entries: [createEntry(missingFile)],
+            options: { outputModule: true },
+          },
+          {
+            entries: [createEntry(validFile)],
+            options: { assetFiles: { [validFile]: code }, outputModule: true },
+          },
+        ],
         {
-          entries: [createEntry(missingFile)],
-          options: { outputModule: true },
+          onFailure: () => {
+            failures++;
+          },
         },
-        {
-          entries: [createEntry(validFile)],
-          options: { assetFiles: { [validFile]: code }, outputModule: true },
-        },
-      ]);
+      );
 
       expect(coverageMap?.files()).toEqual([validFile]);
       expect(hasError).toBe(true);
-      expect(process.exitCode).toBe(1);
+      // The failure travels back to core as a value; this runs in the host
+      // process, so its exit code must stay untouched.
+      expect(failures).toBe(1);
+      expect(process.exitCode).toBe(originalExitCode);
     } finally {
       console.error = originalError;
       process.exitCode = originalExitCode;
@@ -1625,6 +1678,7 @@ export default class CustomCoverageReporter {
     const originalError = console.error;
     const originalExitCode = process.exitCode;
     let hasError = false;
+    let failures = 0;
 
     Object.defineProperty(providerInternals, 'convertWithAst', {
       configurable: true,
@@ -1638,55 +1692,9 @@ export default class CustomCoverageReporter {
     };
 
     try {
-      const coverageMap = await provider.resolveRawCoverage([
-        { entries: [{ filePath: file }] },
-        {
-          entries: [
-            {
-              url: pathToFileURL(file).href,
-              filePath: file,
-              scriptId: 'valid',
-              functions: [
-                {
-                  functionName: '',
-                  isBlockCoverage: true,
-                  ranges: [
-                    { startOffset: 0, endOffset: code.length, count: 1 },
-                  ],
-                },
-              ],
-            },
-          ],
-          options: { assetFiles: { [file]: code }, outputModule: true },
-        },
-      ]);
-
-      expect(coverageMap?.files()).toEqual([file]);
-      expect(hasError).toBe(true);
-      expect(process.exitCode).toBe(1);
-    } finally {
-      console.error = originalError;
-      process.exitCode = originalExitCode;
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it('reports raw coverage payload shape errors with invalid field paths', async () => {
-    const root = join(tmpdir(), 'rstest-coverage-v8-raw-malformed-message');
-    const file = join(root, 'valid.js');
-    const code = 'function covered() { return 1; }';
-    const provider = new CoverageProvider(createOptions(), root);
-    const originalError = console.error;
-    const originalExitCode = process.exitCode;
-    const errors: string[] = [];
-
-    console.error = (...args: unknown[]) => {
-      errors.push(args.join(' '));
-    };
-
-    try {
-      await expect(
-        provider.resolveRawCoverage([
+      const coverageMap = await provider.resolveRawCoverage(
+        [
+          { entries: [{ filePath: file }] },
           {
             entries: [
               {
@@ -1704,9 +1712,71 @@ export default class CustomCoverageReporter {
                 ],
               },
             ],
-            options: { sourceMaps: { [file]: null }, outputModule: true },
+            options: { assetFiles: { [file]: code }, outputModule: true },
           },
-        ]),
+        ],
+        {
+          onFailure: () => {
+            failures++;
+          },
+        },
+      );
+
+      expect(coverageMap?.files()).toEqual([file]);
+      expect(hasError).toBe(true);
+      expect(failures).toBe(1);
+      expect(process.exitCode).toBe(originalExitCode);
+    } finally {
+      console.error = originalError;
+      process.exitCode = originalExitCode;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports raw coverage payload shape errors with invalid field paths', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-raw-malformed-message');
+    const file = join(root, 'valid.js');
+    const code = 'function covered() { return 1; }';
+    const provider = new CoverageProvider(createOptions(), root);
+    const originalError = console.error;
+    const originalExitCode = process.exitCode;
+    const errors: string[] = [];
+    let failures = 0;
+
+    console.error = (...args: unknown[]) => {
+      errors.push(args.join(' '));
+    };
+
+    try {
+      await expect(
+        provider.resolveRawCoverage(
+          [
+            {
+              entries: [
+                {
+                  url: pathToFileURL(file).href,
+                  filePath: file,
+                  scriptId: 'valid',
+                  functions: [
+                    {
+                      functionName: '',
+                      isBlockCoverage: true,
+                      ranges: [
+                        { startOffset: 0, endOffset: code.length, count: 1 },
+                      ],
+                    },
+                  ],
+                },
+              ],
+              options: { sourceMaps: { [file]: null }, outputModule: true },
+            },
+          ],
+          {
+            onFailure: () => {
+              failures++;
+            },
+          },
+        ),
       ).resolves.toBeNull();
 
       expect(errors[0]).toContain(
@@ -1715,7 +1785,8 @@ export default class CustomCoverageReporter {
       expect(errors[0]).toContain('options.sourceMaps');
       expect(errors[0]).toContain(JSON.stringify(file));
       expect(errors[0]).toContain('received null');
-      expect(process.exitCode).toBe(1);
+      expect(failures).toBe(1);
+      expect(process.exitCode).toBe(originalExitCode);
     } finally {
       console.error = originalError;
       process.exitCode = originalExitCode;
@@ -1728,6 +1799,7 @@ export default class CustomCoverageReporter {
     const originalError = console.error;
     const originalExitCode = process.exitCode;
     let hasError = false;
+    let failures = 0;
 
     console.error = () => {
       hasError = true;
@@ -1735,12 +1807,18 @@ export default class CustomCoverageReporter {
 
     try {
       await expect(
-        provider.resolveRawCoverage([
-          { entries: [{ filePath: 'invalid.js' }] },
-        ]),
+        provider.resolveRawCoverage(
+          [{ entries: [{ filePath: 'invalid.js' }] }],
+          {
+            onFailure: () => {
+              failures++;
+            },
+          },
+        ),
       ).resolves.toBeNull();
       expect(hasError).toBe(true);
-      expect(process.exitCode).toBe(1);
+      expect(failures).toBe(1);
+      expect(process.exitCode).toBe(originalExitCode);
     } finally {
       console.error = originalError;
       process.exitCode = originalExitCode;
@@ -1766,26 +1844,34 @@ export default class CustomCoverageReporter {
       }),
     });
 
-    const coverageMap = await provider.resolveRawCoverage([
-      {
-        entries: [
-          {
-            url: pathToFileURL(generatedFile).href,
-            filePath: generatedFile,
-            scriptId: generatedFile,
-            functions: [
-              {
-                functionName: '',
-                isBlockCoverage: true,
-                ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
-              },
-            ],
+    const coverageMap = await provider.resolveRawCoverage(
+      [
+        {
+          entries: [
+            {
+              url: pathToFileURL(generatedFile).href,
+              filePath: generatedFile,
+              scriptId: generatedFile,
+              functions: [
+                {
+                  functionName: '',
+                  isBlockCoverage: true,
+                  ranges: [
+                    { startOffset: 0, endOffset: code.length, count: 1 },
+                  ],
+                },
+              ],
+            },
+          ],
+          options: {
+            assetFiles: { [generatedFile]: code },
+            outputModule: true,
           },
-        ],
-        options: { assetFiles: { [generatedFile]: code }, outputModule: true },
-        root: projectRoot,
-      },
-    ]);
+          root: projectRoot,
+        },
+      ],
+      { onFailure: () => {} },
+    );
 
     expect(coverageMap?.files()).toEqual([originalFile]);
   });
