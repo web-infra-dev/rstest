@@ -144,17 +144,20 @@ async function replayTestFile(
   indexTree(data.tests, nodes);
   const caseResults = new Map(fileResult.results.map((r) => [r.testId, r]));
 
-  // The live runner reports the file before it is loaded, so its tree is still
-  // empty here; the track's `ready` event carries the collected one.
-  await sink.onTestFileStart({
-    testId: fileTaskId,
-    testPath,
-    project: fileResult.project,
-    tests: [],
-  });
-
   for (const event of data.events) {
     switch (event.h) {
+      // The live runner reports the file before it is loaded, so its tree is
+      // still empty at `start`; the `ready` event carries the collected one.
+      // Not every result has a `start` — a file skipped by the cross-file bail
+      // check reports a result without ever starting — so the track decides.
+      case 'start':
+        await sink.onTestFileStart({
+          testId: fileTaskId,
+          testPath,
+          project: fileResult.project,
+          tests: [],
+        });
+        break;
       case 'ready':
         await sink.onTestFileReady({
           testId: fileTaskId,

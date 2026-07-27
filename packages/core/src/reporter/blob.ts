@@ -25,7 +25,7 @@ import { color } from '../utils';
  * a payload nothing else stores is inlined here.
  */
 export type BlobFileEvent =
-  | { h: 'ready' }
+  | { h: 'start' | 'ready' }
   | { h: 'suiteStart' | 'caseStart' | 'caseResult'; id: string }
   | { h: 'suiteResult'; result: TestResult }
   | { h: 'log'; log: UserConsoleLog };
@@ -118,6 +118,20 @@ export class BlobReporter implements Reporter {
     this.outputDir = options?.outputDir
       ? join(rootPath, options.outputDir)
       : join(rootPath, DEFAULT_OUTPUT_DIR);
+  }
+
+  onTestFileStart(test: TestFileInfo): void {
+    // Replace, not append: a watch rerun records the file anew, and its stale
+    // track would otherwise replay both runs. `start` is recorded like every
+    // other event because not every result has one — a file skipped by the
+    // cross-file bail check reports a result without ever starting. (A file
+    // bail-skipped during a watch rerun keeps its previous cycle's track
+    // alongside its new skip result — a known non-goal: nothing fires for the
+    // skip, and blob-in-watch is a fringe pairing.)
+    this.files.set(blobFileKey(test.project, test.testPath), {
+      tests: [],
+      events: [{ h: 'start' }],
+    });
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {

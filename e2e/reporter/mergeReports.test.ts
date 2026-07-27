@@ -348,6 +348,23 @@ describe('merge-reports lifecycle replay', () => {
     expect(mergedEvents).toEqual(liveEvents);
   });
 
+  it('replays a bail-skipped file as a result with no file window', async () => {
+    const { live: liveEvents, merged: mergedEvents } = await captureReplay(
+      ['-c', 'rstest.bailCross.config.mts'],
+      true,
+    );
+
+    // The live worker returns the skipped file's result before its
+    // `onTestFileStart` would fire, so the file reports a result and nothing
+    // else — replay must not invent the missing file window.
+    const skipped = liveEvents.filter((event) => event.includes('bailSecond'));
+    expect(skipped).toEqual([
+      expect.stringMatching(/^onTestFileResult \| .* \| skip$/),
+    ]);
+
+    expect(mergedEvents).toEqual(liveEvents);
+  });
+
   it('replays a file with no tests, including its file window', async () => {
     // A test-less file fails the run ("No test found") but still fires
     // file-start/ready/result and its module-level log. The tree is empty, so
