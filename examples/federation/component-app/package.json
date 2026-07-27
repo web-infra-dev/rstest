@@ -6,7 +6,7 @@
     "build": "rsbuild build --config rsbuild.browser.config.js",
     "build:node": "rsbuild build --config rsbuild.node.config.js",
     "serve": "serve dist -p 3001",
-    "serve:node": "serve dist-node -p 3001",
+    "serve:node": "serve dist-node -p 3001 -L",
     "start": "concurrently \"npm run build\" \"npm run serve\"",
     "pretest": "pnpm -C ../node-local-remote build:node",
     "test": "rstest --reporter=verbose"
