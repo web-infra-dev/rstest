@@ -7,23 +7,41 @@ import type {
   Reporter,
   ShardConfig,
   SnapshotSummary,
+  TestCaseInfo,
   TestFileInfo,
   TestFileResult,
   TestInfo,
   TestResult,
+  TestSuiteInfo,
   UserConsoleLog,
 } from '../types';
 import type { BlobReporterOptions } from '../types/reporter';
 import { color } from '../utils';
 
 /**
+ * One recorded lifecycle event, in the order the run emitted it. A payload the
+ * blob already stores for its own reasons is referenced by `testId` — the
+ * collected tree for the start events, `BlobData.results` for a case result;
+ * a payload nothing else stores is inlined here.
+ */
+export type BlobFileEvent =
+  | { h: 'ready' }
+  | { h: 'suiteStart' | 'caseStart' | 'caseResult'; id: string }
+  | { h: 'suiteResult'; result: TestResult }
+  | { h: 'log'; log: UserConsoleLog };
+
+/**
  * Per-file data that `TestFileResult` cannot carry: `results` holds case
- * results only, so without this a merge replay has no collected tree to walk
- * and no suite results to emit.
+ * results only, with no collected tree and no record of the order any of it
+ * was reported in.
+ *
+ * `events` is the authority for replay. Reconstructing an order from `tests`
+ * instead would serialize what `concurrent` siblings interleaved, and would
+ * hoist a suite's `afterAll` output above the child results it followed.
  */
 export type BlobFileData = {
   tests: TestInfo[];
-  suiteResults: TestResult[];
+  events: BlobFileEvent[];
 };
 
 export type BlobData = {
@@ -35,6 +53,11 @@ export type BlobData = {
   duration: Duration;
   snapshotSummary: SnapshotSummary;
   unhandledErrors?: { message: string; stack?: string; name?: string }[];
+  /**
+   * Output that could not be attributed to a file window (no `project` on the
+   * log). Everything else lives on its file's replay track instead, so the two
+   * never hold the same log twice.
+   */
   consoleLogs?: UserConsoleLog[];
   /** Keyed by {@link blobFileKey}. */
   files?: Record<string, BlobFileData>;
@@ -75,8 +98,8 @@ export const parseBlobFile = (content: string, fileName: string): BlobData => {
  * Single owner of the `BlobData.files` key grammar: both sides must key through
  * here, never by test path alone — a path is ambiguous once several projects
  * run the same file. `TestFileInfo` carries no project name, so the writer
- * derives it from the collected tree while the reader takes
- * `TestFileResult.project`; a new caller must use those same two sources.
+ * derives it from the collected tree; every other producer has one on its own
+ * payload, and the reader takes `TestFileResult.project`.
  */
 export const blobFileKey = (
   project: string | undefined,
@@ -89,7 +112,7 @@ export class BlobReporter implements Reporter {
 
   private readonly config: NormalizedConfig;
   private readonly outputDir: string;
-  private readonly consoleLogs: UserConsoleLog[] = [];
+  private readonly untrackedLogs: UserConsoleLog[] = [];
   private readonly files = new Map<string, BlobFileData>();
 
   constructor({
@@ -108,15 +131,48 @@ export class BlobReporter implements Reporter {
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {
-    this.consoleLogs.push(log);
+    // `project` is optional on the wire; without it a run where several
+    // projects share a test path cannot say whose window the log belongs to,
+    // so it replays outside any file rather than under the wrong one.
+    if (log.project === undefined) {
+      this.untrackedLogs.push(log);
+      return;
+    }
+    this.fileData(log.project, log.testPath).events.push({ h: 'log', log });
   }
 
   onTestFileReady(test: TestFileInfo): void {
-    this.fileData(test.tests[0]?.project, test.testPath).tests = test.tests;
+    const data = this.fileData(test.tests[0]?.project, test.testPath);
+    data.tests = test.tests;
+    data.events.push({ h: 'ready' });
+  }
+
+  onTestSuiteStart(test: TestSuiteInfo): void {
+    this.fileData(test.project, test.testPath).events.push({
+      h: 'suiteStart',
+      id: test.testId,
+    });
   }
 
   onTestSuiteResult(result: TestResult): void {
-    this.fileData(result.project, result.testPath).suiteResults.push(result);
+    this.fileData(result.project, result.testPath).events.push({
+      h: 'suiteResult',
+      result,
+    });
+  }
+
+  onTestCaseStart(test: TestCaseInfo): void {
+    this.fileData(test.project, test.testPath).events.push({
+      h: 'caseStart',
+      id: test.testId,
+    });
+  }
+
+  onTestCaseResult(result: TestResult): void {
+    this.fileData(result.project, result.testPath).events.push({
+      h: 'caseResult',
+      id: result.testId,
+    });
   }
 
   private fileData(
@@ -126,7 +182,7 @@ export class BlobReporter implements Reporter {
     const key = blobFileKey(project, testPath);
     let data = this.files.get(key);
     if (!data) {
-      data = { tests: [], suiteResults: [] };
+      data = { tests: [], events: [] };
       this.files.set(key, data);
     }
     return data;
@@ -163,7 +219,8 @@ export class BlobReporter implements Reporter {
         stack: e.stack,
         name: e.name,
       })),
-      consoleLogs: this.consoleLogs.length > 0 ? this.consoleLogs : undefined,
+      consoleLogs:
+        this.untrackedLogs.length > 0 ? this.untrackedLogs : undefined,
       files: Object.fromEntries(this.files),
     };
 

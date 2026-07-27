@@ -6,6 +6,7 @@ import {
 } from '../coverage';
 import {
   type BlobData,
+  type BlobFileData,
   blobFileKey,
   isBlobFile,
   parseBlobFile,
@@ -113,82 +114,79 @@ function mergeDurations(durations: Duration[]): Duration {
 /** One test file's recorded lifecycle, reassembled from a single blob. */
 type ReplayFile = {
   result: TestFileResult;
-  tests: TestInfo[];
-  suiteResults: TestResult[];
-  /** Recorded output, bucketed by the task it was written under. */
-  logs: Map<string, UserConsoleLog[]>;
+  data: BlobFileData;
 };
+
+function indexTree(nodes: TestInfo[], into: Map<string, TestInfo>): void {
+  for (const node of nodes) {
+    into.set(node.testId, node);
+    if (node.type === 'suite') {
+      indexTree(node.tests, into);
+    }
+  }
+}
 
 /**
  * Replays one file's lifecycle through the live-run dispatch path, so a
  * reporter sees the same hook sequence it would see during a real run.
  *
- * A tree node is replayed only when the blob holds a result for it: the live
- * runner fires `on*Start` and `on*Result` as a pair, and `bail` returns from a
- * task before either, so a missing result means nothing fired.
+ * The blob's event track is the authority for what fired and in what order;
+ * walking the collected tree instead would invent an order (see
+ * `BlobFileEvent`).
  */
 async function replayTestFile(
   sink: RunnerEventSink,
-  file: ReplayFile,
+  { result: fileResult, data }: ReplayFile,
 ): Promise<void> {
-  const { result: fileResult, tests, logs } = file;
   const { testPath } = fileResult;
   const fileTaskId = getFileTaskId(testPath);
 
-  const pending = new Map(logs);
-  const flushLogs = async (taskId: string): Promise<void> => {
-    const bucket = pending.get(taskId);
-    if (!bucket) {
-      return;
-    }
-    pending.delete(taskId);
-    for (const log of bucket) {
-      await sink.emitConsoleLog(log);
-    }
-  };
+  const nodes = new Map<string, TestInfo>();
+  indexTree(data.tests, nodes);
+  const caseResults = new Map(fileResult.results.map((r) => [r.testId, r]));
 
   // The live runner reports the file before it is loaded, so its tree is still
-  // empty here; `onTestFileReady` carries the collected one.
+  // empty here; the track's `ready` event carries the collected one.
   await sink.onTestFileStart({ testId: fileTaskId, testPath, tests: [] });
-  // Top-level module output is recorded against the file task, and live it is
-  // written while the file loads — before collection finishes.
-  await flushLogs(fileTaskId);
-  await sink.onTestFileReady({ testId: fileTaskId, testPath, tests });
 
-  const caseResults = new Map(fileResult.results.map((r) => [r.testId, r]));
-  const suiteResults = new Map(file.suiteResults.map((r) => [r.testId, r]));
-
-  const replayNodes = async (nodes: TestInfo[]): Promise<void> => {
-    for (const node of nodes) {
-      if (node.type === 'suite') {
-        const result = suiteResults.get(node.testId);
-        if (!result) {
-          continue;
+  for (const event of data.events) {
+    switch (event.h) {
+      case 'ready':
+        await sink.onTestFileReady({
+          testId: fileTaskId,
+          testPath,
+          tests: data.tests,
+        });
+        break;
+      case 'log':
+        await sink.emitConsoleLog(event.log);
+        break;
+      case 'suiteResult':
+        await sink.onTestSuiteResult(event.result);
+        break;
+      // The `type` checks below narrow `TestInfo` to the hook's payload type;
+      // the tree always holds the node the event names.
+      case 'suiteStart': {
+        const node = nodes.get(event.id);
+        if (node?.type === 'suite') {
+          await sink.onTestSuiteStart(node);
         }
-        await sink.onTestSuiteStart(node);
-        await flushLogs(node.testId);
-        await replayNodes(node.tests);
-        await sink.onTestSuiteResult(result);
-      } else {
-        const result = caseResults.get(node.testId);
-        if (!result) {
-          continue;
-        }
-        sink.onTestCaseStart(node);
-        await flushLogs(node.testId);
-        await sink.onTestCaseResult(result);
+        break;
       }
-    }
-  };
-
-  await replayNodes(tests);
-
-  // Whatever is left belongs to a task the walk never reached (or to a blob
-  // written before trees were persisted); emit it inside the file's window
-  // rather than dropping it.
-  for (const bucket of pending.values()) {
-    for (const log of bucket) {
-      await sink.emitConsoleLog(log);
+      case 'caseStart': {
+        const node = nodes.get(event.id);
+        if (node?.type === 'case') {
+          sink.onTestCaseStart(node);
+        }
+        break;
+      }
+      case 'caseResult': {
+        const result = caseResults.get(event.id);
+        if (result) {
+          await sink.onTestCaseResult(result);
+        }
+        break;
+      }
     }
   }
 
@@ -266,40 +264,25 @@ export async function mergeReports(
       }
     }
 
-    // Bucketed by file, then by the task the log was written under, so each
-    // file's replay can drop its output into the same slot the live run did.
-    const logsByPath = new Map<string, Map<string, UserConsoleLog[]>>();
     for (const log of blob.consoleLogs ?? []) {
-      let byTask = logsByPath.get(log.testPath);
-      if (!byTask) {
-        byTask = new Map();
-        logsByPath.set(log.testPath, byTask);
-      }
-      const taskId = log.taskId ?? getFileTaskId(log.testPath);
-      const bucket = byTask.get(taskId);
-      if (bucket) {
-        bucket.push(log);
-      } else {
-        byTask.set(taskId, [log]);
-      }
+      orphanLogs.push(log);
     }
 
+    const unclaimed = new Map(Object.entries(blob.files ?? {}));
     for (const result of blob.results) {
-      const data = blob.files?.[blobFileKey(result.project, result.testPath)];
-      replayFiles.push({
-        result,
-        tests: data?.tests ?? [],
-        suiteResults: data?.suiteResults ?? [],
-        logs: logsByPath.get(result.testPath) ?? new Map(),
-      });
-      logsByPath.delete(result.testPath);
+      const key = blobFileKey(result.project, result.testPath);
+      const data = unclaimed.get(key);
+      unclaimed.delete(key);
+      replayFiles.push({ result, data: data ?? { tests: [], events: [] } });
     }
 
-    // Output recorded for a file that produced no result has no window to
-    // replay into; keep it rather than losing it.
-    for (const byTask of logsByPath.values()) {
-      for (const bucket of byTask.values()) {
-        orphanLogs.push(...bucket);
+    // A track with no matching result has no file window to replay into, but
+    // its output still happened; emit it rather than losing it.
+    for (const data of unclaimed.values()) {
+      for (const event of data.events) {
+        if (event.h === 'log') {
+          orphanLogs.push(event.log);
+        }
       }
     }
   }

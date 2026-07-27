@@ -6,5 +6,5 @@ export default defineConfig({
   // Elides every task after the first failure, so the replay is forced to
   // agree with the live runner about what a bail-elided task reports.
   bail: 1,
-  reporters: [new LifecycleRecorder()],
+  reporters: [new LifecycleRecorder(), 'blob'],
 });

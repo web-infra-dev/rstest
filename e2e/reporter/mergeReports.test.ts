@@ -250,10 +250,15 @@ describe('merge-reports lifecycle replay', () => {
   };
 
   /**
-   * Records the same fixture twice — once live, once replayed from its own
-   * blob — so the two event sequences can be compared. `expectFailure` covers
-   * fixtures that end non-zero; it is threaded through all three runs at once
-   * because a run whose exit code goes unasserted would hide a broken fixture.
+   * Records one fixture run live and replays that same run's blob, so the two
+   * event sequences can be compared. Every fixture config carries both the
+   * recorder and the blob reporter for that reason: a baseline recorded from a
+   * separate run would be a different run's order, which for the concurrent
+   * fixture is a different interleaving.
+   *
+   * `expectFailure` covers fixtures that end non-zero, and is threaded through
+   * both runs — a run whose exit code goes unasserted would hide a broken
+   * fixture.
    */
   const captureReplay = async (config: string[], expectFailure = false) => {
     fs.removeSync(blobDir);
@@ -267,7 +272,6 @@ describe('merge-reports lifecycle replay', () => {
     };
 
     const live = parseLifecycle(await run(['run']));
-    await run(['run', '--reporters=blob']);
     const merged = parseLifecycle(await run(['merge-reports', '--cleanup']));
     return { live, merged };
   };
@@ -314,6 +318,32 @@ describe('merge-reports lifecycle replay', () => {
     expect(
       liveEvents.filter((event) => event.includes('failing case')),
     ).toHaveLength(2);
+
+    expect(mergedEvents).toEqual(liveEvents);
+  });
+
+  it('replays orderings a tree walk cannot represent', async () => {
+    const { live: liveEvents, merged: mergedEvents } = await captureReplay([
+      '-c',
+      'rstest.ordering.config.mts',
+    ]);
+
+    const names = liveEvents.map((event) =>
+      event.split(' | ').slice(2).join(' | '),
+    );
+    // Both cases start before either reports, and the faster one reports first
+    // — a depth-first walk would emit start/result strictly in tree order.
+    expect(names.filter((n) => n.startsWith('concurrent'))).toEqual([
+      'concurrent slow',
+      'concurrent fast',
+      'concurrent fast | pass',
+      'concurrent slow | pass',
+    ]);
+    // `afterAll` output carries the suite's task id but is written after the
+    // child results, so it cannot be flushed at suite start.
+    expect(names.indexOf('afterAll log')).toBeGreaterThan(
+      names.indexOf('concurrent slow | pass'),
+    );
 
     expect(mergedEvents).toEqual(liveEvents);
   });

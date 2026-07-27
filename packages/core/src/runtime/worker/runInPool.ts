@@ -223,6 +223,7 @@ const preparePool = async (
         silentConsoleController.onConsoleLog(log);
       },
       testPath,
+      project: context.project,
       printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
       getCurrentTask: () => taskContext.getCurrent(),
     });

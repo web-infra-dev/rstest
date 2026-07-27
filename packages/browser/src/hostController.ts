@@ -3028,8 +3028,9 @@ export const runBrowserController = async (
   // file-start event (it carries the manifest-resolved projectName) before any
   // other per-file event for that path fires — including on watch reruns, so the
   // mapping stays correct when a rerun adds a file. Fully eliminating this map in
-  // favor of a project stamp on every wire event is deferred (it would add
-  // `project` to the shared `TestResult`/`TestFileResult` payloads).
+  // favor of a project stamp on every wire event is deferred: the suite/case
+  // payloads already carry `project`, but `TestFileInfo` and `BrowserLogPayload`
+  // do not, so those two would have to gain it first.
   const projectNameByTestPath = new Map<string, string>();
 
   const sinkForProjectName = (projectName: string): RunnerEventSink =>
@@ -3211,6 +3212,7 @@ export const runBrowserController = async (
       taskParentNames: payload.taskParentNames,
       taskType: payload.taskType,
       testPath: payload.testPath,
+      project: projectNameByTestPath.get(payload.testPath),
       type: payload.type,
       trace: payload.trace,
     };

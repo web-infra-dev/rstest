@@ -69,8 +69,7 @@ Contracts between modules or processes — not readable from any single file.
 - `reportersMap` is locked to the `BuiltInReporterNames` union via `satisfies`; a new built-in name needs both plus `BuiltinReporterOptions` (not compile-guarded).
 - The md output format is a spec'd contract snapshot-tested in `e2e/reporter/md.test.ts` — behavior changes require snapshot updates there.
 - The blob filename grammar has a single owner; `mergeReports` must keep using `isBlobFile` rather than re-encoding the pattern. Likewise both sides must key `BlobData.files` through `blobFileKey`, never by test path alone — a path is ambiguous once several projects run the same file.
-- `BlobData` is a same-version wire format between `BlobReporter` and `mergeReports`: the merge replays the full reporter lifecycle from it, so a new runner event reporters can observe must be persisted there too or replay silently loses it. A `version` mismatch is rejected outright — never a partial merge.
-- In `BlobData` a _missing_ result is load-bearing: replay walks the collected tree but reports only nodes that carry one, because the live runner returns from a `bail`-elided task before either of its hooks fires. So `BlobReporter` must never filter recorded results nor synthesize absent ones — doing either makes replay emit hooks the live run did not.
+- `BlobData` is a same-version wire format between `BlobReporter` and `mergeReports`, and a `version` mismatch is rejected outright — never a partial merge. The merge replays the full reporter lifecycle from `BlobFileData.events`, never from a walk of the collected tree, because the observed order is not derivable (rationale at `BlobFileEvent`). So a new reporter-visible runner event must be appended to the track with its payload reachable, and the track and its payloads must stay written in one pass — filtering, reordering, or deduping either side alone breaks replay.
 
 ## Commands
 
