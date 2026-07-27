@@ -23,12 +23,12 @@ export const sleep = (ms: number) => {
  * script printed to stdout. Each suite prints under its own marker.
  */
 export const parseMarkerPayload = <T>(stdout: string, marker: string): T => {
-  const match = stdout.match(new RegExp(`${marker}(.*?)__END__`));
-  const payload = match?.[1];
-  if (!payload) {
+  const start = stdout.indexOf(marker);
+  const end = start === -1 ? -1 : stdout.indexOf('__END__', start);
+  if (start === -1 || end === -1) {
     throw new Error(
       `${marker} payload not found in stdout. Got:\n${stdout.slice(0, 4000)}`,
     );
   }
-  return JSON.parse(payload) as T;
+  return JSON.parse(stdout.slice(start + marker.length, end)) as T;
 };
