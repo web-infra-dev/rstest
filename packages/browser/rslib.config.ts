@@ -48,6 +48,7 @@ export default defineConfig({
                   globOptions: {
                     ignore: ['**/*.LICENSE.txt', '**/rsdoctor-data.json'],
                   },
+                  info: { minimized: true },
                 },
               ],
             }),
