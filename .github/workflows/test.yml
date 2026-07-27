@@ -16,14 +16,8 @@ on:
         default: false
 
 concurrency:
-  # On push the group is keyed by ref (not sha), so consecutive merges to main
-  # coalesce onto the newest commit instead of queueing one full matrix per
-  # merge. event_name is part of the key so a manual dispatch is not cancelled
-  # by a merge landing while it runs. Do not copy this key to bundle-diff or
-  # codspeed: their push-to-main runs produce per-commit baseline artifacts and
-  # must not coalesce.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.ref) }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 permissions:
   contents: read
