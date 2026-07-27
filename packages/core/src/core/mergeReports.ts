@@ -16,7 +16,6 @@ import type {
   Duration,
   SnapshotSummary,
   TestFileResult,
-  TestInfo,
   TestResult,
 } from '../types';
 import type { CoverageMap } from '../types/coverage';
@@ -116,15 +115,6 @@ type ReplayFile = {
   data: BlobFileData;
 };
 
-function indexTree(nodes: TestInfo[], into: Map<string, TestInfo>): void {
-  for (const node of nodes) {
-    into.set(node.testId, node);
-    if (node.type === 'suite') {
-      indexTree(node.tests, into);
-    }
-  }
-}
-
 /**
  * Replays one file's lifecycle through the live-run dispatch path, so a
  * reporter sees the same hook sequence it would see during a real run.
@@ -140,8 +130,6 @@ async function replayTestFile(
   const { testPath } = fileResult;
   const fileTaskId = getFileTaskId(testPath);
 
-  const nodes = new Map<string, TestInfo>();
-  indexTree(data.tests, nodes);
   const caseResults = new Map(fileResult.results.map((r) => [r.testId, r]));
 
   for (const event of data.events) {
@@ -172,22 +160,12 @@ async function replayTestFile(
       case 'suiteResult':
         await sink.onTestSuiteResult(event.result);
         break;
-      // The `type` checks below narrow `TestInfo` to the hook's payload type;
-      // the tree always holds the node the event names.
-      case 'suiteStart': {
-        const node = nodes.get(event.id);
-        if (node?.type === 'suite') {
-          await sink.onTestSuiteStart(node);
-        }
+      case 'caseStart':
+        sink.onTestCaseStart(event.test);
         break;
-      }
-      case 'caseStart': {
-        const node = nodes.get(event.id);
-        if (node?.type === 'case') {
-          sink.onTestCaseStart(node);
-        }
+      case 'suiteStart':
+        await sink.onTestSuiteStart(event.test);
         break;
-      }
       case 'caseResult': {
         const result = caseResults.get(event.id);
         if (result) {

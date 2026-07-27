@@ -43,7 +43,16 @@ export class LifecycleRecorder implements Reporter {
   }
 
   onTestCaseStart(test: TestCaseInfo): void {
-    this.record('onTestCaseStart', test.testId, test.name);
+    // `startTime`/`timeout` exist only on the live payload, not in the
+    // collected tree — record them so a replay that rebuilds the payload from
+    // the tree cannot pass. Same run on both sides, so the values are stable.
+    this.record(
+      'onTestCaseStart',
+      test.testId,
+      test.name,
+      `startTime=${test.startTime === undefined ? 'unset' : 'set'}`,
+      `timeout=${test.timeout}`,
+    );
   }
 
   onTestCaseResult(result: TestResult): void {

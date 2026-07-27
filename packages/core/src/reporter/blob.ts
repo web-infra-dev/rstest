@@ -19,14 +19,18 @@ import type { BlobReporterOptions } from '../types/reporter';
 import { color } from '../utils';
 
 /**
- * One recorded lifecycle event, in the order the run emitted it. A payload the
- * blob already stores for its own reasons is referenced by `testId` — the
- * collected tree for the start events, `BlobData.results` for a case result;
- * a payload nothing else stores is inlined here.
+ * One recorded lifecycle event, in the order the run emitted it. Payloads are
+ * inlined verbatim so replay hands reporters exactly what fired — rebuilding
+ * a start payload from the collected tree drops the fields only the live
+ * event carries (a case start's `startTime`/`timeout`). The one exception is
+ * `caseResult`, referenced by `testId` into `BlobData.results`, the payload
+ * the blob already stores in full.
  */
 export type BlobFileEvent =
   | { h: 'start' | 'ready' }
-  | { h: 'suiteStart' | 'caseStart' | 'caseResult'; id: string }
+  | { h: 'caseResult'; id: string }
+  | { h: 'suiteStart'; test: TestSuiteInfo }
+  | { h: 'caseStart'; test: TestCaseInfo }
   | { h: 'suiteResult'; result: TestResult }
   | { h: 'log'; log: UserConsoleLog };
 
@@ -147,7 +151,7 @@ export class BlobReporter implements Reporter {
   onTestSuiteStart(test: TestSuiteInfo): void {
     this.fileData(test.project, test.testPath).events.push({
       h: 'suiteStart',
-      id: test.testId,
+      test,
     });
   }
 
@@ -161,7 +165,7 @@ export class BlobReporter implements Reporter {
   onTestCaseStart(test: TestCaseInfo): void {
     this.fileData(test.project, test.testPath).events.push({
       h: 'caseStart',
-      id: test.testId,
+      test,
     });
   }
 

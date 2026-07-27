@@ -334,8 +334,8 @@ describe('merge-reports lifecycle replay', () => {
     // Both cases start before either reports, and the faster one reports first
     // — a depth-first walk would emit start/result strictly in tree order.
     expect(names.filter((n) => n.startsWith('concurrent'))).toEqual([
-      'concurrent slow',
-      'concurrent fast',
+      expect.stringMatching(/^concurrent slow \| startTime=/),
+      expect.stringMatching(/^concurrent fast \| startTime=/),
       'concurrent fast | pass',
       'concurrent slow | pass',
     ]);
