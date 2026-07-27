@@ -120,7 +120,10 @@ type ReplayFile = {
  * Replays one file's recorded events through the live-run dispatch path:
  * every event carries the payload the live run emitted (see `BlobFileEvent`),
  * so replay is pure playback — a reporter sees the same hook sequence with
- * the same payloads it would see during a real run.
+ * the same payloads it would see during a real run. Tracks replay one file
+ * at a time: cross-file interleaving from parallel workers is deliberately
+ * dropped — merged output reads like a `maxWorkers: 1` run, and no
+ * cross-file order can exist across shard blobs anyway.
  */
 async function replayTestFile(
   sink: RunnerEventSink,
