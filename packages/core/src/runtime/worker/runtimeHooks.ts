@@ -15,6 +15,23 @@ export const RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK =
 export const RSTEST_REQUIRE_RESOLVE_HOOK =
   '__rstest_require_resolve__' as const;
 
+/**
+ * Point the federation dynamic-import fallback at the source file currently
+ * being loaded, so relative specifiers reaching `globalThis` resolve against it.
+ *
+ * Only the origin is per-file — never delete `RSTEST_DYNAMIC_IMPORT_HOOK` here.
+ * A project's runtime chunk installs it as `hook = hook || fallback`, and
+ * `clearModuleCache` keeps evaluated runtime chunks alive, so re-entering that
+ * project never re-runs the install. Under `isolate: false` a non-federation
+ * file that dropped the hook on its way past would strand the federation
+ * project's remaining files on an unresolved free identifier. (Only a project
+ * whose runtime chunk has not run yet reinstalls it, so the hazard is an
+ * interleaving rather than every mixed run.)
+ *
+ * Leaving it installed is inert: normally-loaded modules get the hook as a VM
+ * argument that shadows the global, and a cleared origin makes the fallback
+ * defer to Node's native `import()`.
+ */
 export const setFederationDynamicImportOrigin = (
   federation: boolean,
   origin: string,
@@ -24,7 +41,6 @@ export const setFederationDynamicImportOrigin = (
     runtimeGlobal[RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK] = origin;
   } else {
     delete runtimeGlobal[RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK];
-    delete runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK];
   }
 };
 

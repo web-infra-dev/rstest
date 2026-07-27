@@ -42,7 +42,9 @@ describe('runtime hook identifier contract', () => {
 
     setFederationDynamicImportOrigin(false, '/project/other.test.ts');
 
+    // Nothing reinstalls the hook for an already-evaluated project, so passing
+    // through a non-federation file may clear the origin but not the hook.
     expect(runtimeGlobal[RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK]).toBeUndefined();
-    expect(runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK]).toBeUndefined();
+    expect(runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK]).toBe(dynamicImportHook);
   });
 });
