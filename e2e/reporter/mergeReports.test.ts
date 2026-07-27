@@ -234,15 +234,22 @@ describe('merge-reports', () => {
 describe('merge-reports lifecycle replay', () => {
   const blobDir = join(replayFixturesDir, '.rstest-reports');
 
-  const runReplayFixture = async (args: string[]) => {
-    const { cli, expectExecSuccess } = await runRstestCli({
+  const runReplayFixture = async (args: string[], expectFailure = false) => {
+    const { cli, expectExecSuccess, expectExecFailed } = await runRstestCli({
       command: 'rstest',
       args,
       options: { nodeOptions: { cwd: replayFixturesDir } },
     });
-    await expectExecSuccess();
+    await (expectFailure ? expectExecFailed() : expectExecSuccess());
     return cli.stdout;
   };
+
+  /** Drops the `testId` field so an expectation can be written literally. */
+  const withoutTestIds = (events: string[]): string[] =>
+    events.map((event) => {
+      const [hook, _testId, ...rest] = event.split(' | ');
+      return [hook, ...rest].join(' | ');
+    });
 
   const parseLifecycle = (stdout: string): string[] => {
     const match = stdout.match(/__RSTEST_LIFECYCLE__(.*)__END__/s);
@@ -277,6 +284,39 @@ describe('merge-reports lifecycle replay', () => {
         'onTestRunEnd',
       ]),
     );
+
+    expect(mergedEvents).toEqual(liveEvents);
+  });
+
+  it('replays a bail-elided run exactly as the live run reported it', async () => {
+    fs.removeSync(blobDir);
+    const config = ['-c', 'rstest.bail.config.mts'];
+
+    const liveEvents = parseLifecycle(
+      await runReplayFixture(['run', ...config], true),
+    );
+    await runReplayFixture(['run', ...config, '--reporters=blob'], true);
+    const mergedEvents = parseLifecycle(
+      await runReplayFixture(['merge-reports', '--cleanup', ...config], true),
+    );
+
+    // The live runner returns from a bail-elided task before either of its
+    // hooks fires, so nothing after the failure is reported — not the sibling
+    // case, not the suites that would have held the rest. `2 roots` shows the
+    // collected tree still carries those nodes, so replay only stays faithful
+    // by skipping the ones with no recorded result. Test ids are dropped: they
+    // hash the absolute test path, which differs per checkout.
+    expect(withoutTestIds(liveEvents)).toEqual([
+      'onTestRunStart',
+      'onTestFileStart',
+      'onTestFileReady | 2 roots',
+      'onTestSuiteStart | bail outer',
+      'onTestCaseStart | failing case',
+      'onTestCaseResult | failing case | fail',
+      'onTestSuiteResult | bail outer | fail',
+      'onTestFileResult | fail',
+      'onTestRunEnd',
+    ]);
 
     expect(mergedEvents).toEqual(liveEvents);
   });

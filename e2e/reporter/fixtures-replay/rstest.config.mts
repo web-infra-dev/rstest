@@ -1,72 +1,7 @@
-import type {
-  Reporter,
-  TestCaseInfo,
-  TestFileInfo,
-  TestFileResult,
-  TestResult,
-  TestSuiteInfo,
-} from '@rstest/core';
 import { defineConfig } from '@rstest/core';
-
-// `UserConsoleLog` is not part of the public `@rstest/core` type exports.
-type UserConsoleLog = Parameters<NonNullable<Reporter['onUserConsoleLog']>>[0];
-
-/**
- * Records every reporter hook it receives so a live run and a
- * `--merge-reports` replay of the same run can be compared event for event.
- * Identifiers rather than payloads: timings and stacks legitimately differ.
- */
-class LifecycleRecorder implements Reporter {
-  readonly flushOutputStreams = false;
-
-  private readonly events: string[] = [];
-
-  private record(hook: string, ...detail: (string | undefined)[]): void {
-    this.events.push([hook, ...detail].join(' | '));
-  }
-
-  onTestRunStart(): void {
-    this.record('onTestRunStart');
-  }
-
-  onTestFileStart(file: TestFileInfo): void {
-    this.record('onTestFileStart', file.testId);
-  }
-
-  onTestFileReady(file: TestFileInfo): void {
-    this.record('onTestFileReady', file.testId, `${file.tests.length} roots`);
-  }
-
-  onTestSuiteStart(suite: TestSuiteInfo): void {
-    this.record('onTestSuiteStart', suite.testId, suite.name);
-  }
-
-  onTestSuiteResult(result: TestResult): void {
-    this.record('onTestSuiteResult', result.testId, result.name, result.status);
-  }
-
-  onTestCaseStart(test: TestCaseInfo): void {
-    this.record('onTestCaseStart', test.testId, test.name);
-  }
-
-  onTestCaseResult(result: TestResult): void {
-    this.record('onTestCaseResult', result.testId, result.name, result.status);
-  }
-
-  onTestFileResult(result: TestFileResult): void {
-    this.record('onTestFileResult', result.testId, result.status);
-  }
-
-  onUserConsoleLog(log: UserConsoleLog): void {
-    this.record('onUserConsoleLog', log.taskId, log.content.trim());
-  }
-
-  onTestRunEnd(): void {
-    this.record('onTestRunEnd');
-    console.log(`__RSTEST_LIFECYCLE__${JSON.stringify(this.events)}__END__`);
-  }
-}
+import { LifecycleRecorder } from './lifecycleRecorder';
 
 export default defineConfig({
+  include: ['lifecycle.test.ts'],
   reporters: [new LifecycleRecorder()],
 });
