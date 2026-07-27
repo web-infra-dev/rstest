@@ -4,17 +4,31 @@ import {
   createCoverageProvider,
   ensureCoverageProviderInstalled,
 } from '../coverage';
-import { type BlobData, isBlobFile } from '../reporter/blob';
+import {
+  type BlobData,
+  blobFileKey,
+  isBlobFile,
+  parseBlobFile,
+} from '../reporter/blob';
 import type {
   CoverageMapData,
   Duration,
   SnapshotSummary,
   TestFileResult,
+  TestInfo,
   TestResult,
+  UserConsoleLog,
 } from '../types';
 import type { CoverageMap } from '../types/coverage';
-import { color, flushOutputStreams, logger, prettyTime } from '../utils';
+import {
+  color,
+  flushOutputStreams,
+  getFileTaskId,
+  logger,
+  prettyTime,
+} from '../utils';
 import type { Rstest } from './rstest';
+import { createRunnerEventSink, type RunnerEventSink } from './runnerEventSink';
 
 const DEFAULT_BLOB_DIR = '.rstest-reports';
 
@@ -35,10 +49,9 @@ function loadBlobFiles(blobDir: string): BlobData[] {
     );
   }
 
-  return files.map((file) => {
-    const content = readFileSync(join(blobDir, file), 'utf-8');
-    return JSON.parse(content) as BlobData;
-  });
+  return files.map((file) =>
+    parseBlobFile(readFileSync(join(blobDir, file), 'utf-8'), file),
+  );
 }
 
 function mergeSnapshots(summaries: SnapshotSummary[]): SnapshotSummary {
@@ -97,6 +110,91 @@ function mergeDurations(durations: Duration[]): Duration {
   return { totalTime, buildTime, testTime };
 }
 
+/** One test file's recorded lifecycle, reassembled from a single blob. */
+type ReplayFile = {
+  result: TestFileResult;
+  tests: TestInfo[];
+  suiteResults: TestResult[];
+  /** Recorded output, bucketed by the task it was written under. */
+  logs: Map<string, UserConsoleLog[]>;
+};
+
+/**
+ * Replays one file's lifecycle through the live-run dispatch path, so a
+ * reporter sees the same hook sequence it would see during a real run.
+ *
+ * A tree node is replayed only when the blob holds a result for it: the live
+ * runner fires `on*Start` and `on*Result` as a pair, and `bail` returns from a
+ * task before either, so a missing result means nothing fired.
+ */
+async function replayTestFile(
+  sink: RunnerEventSink,
+  file: ReplayFile,
+): Promise<void> {
+  const { result: fileResult, tests, logs } = file;
+  const { testPath } = fileResult;
+  const fileTaskId = getFileTaskId(testPath);
+
+  const pending = new Map(logs);
+  const flushLogs = async (taskId: string): Promise<void> => {
+    const bucket = pending.get(taskId);
+    if (!bucket) {
+      return;
+    }
+    pending.delete(taskId);
+    for (const log of bucket) {
+      await sink.emitConsoleLog(log);
+    }
+  };
+
+  // The live runner reports the file before it is loaded, so its tree is still
+  // empty here; `onTestFileReady` carries the collected one.
+  await sink.onTestFileStart({ testId: fileTaskId, testPath, tests: [] });
+  // Top-level module output is recorded against the file task, and live it is
+  // written while the file loads — before collection finishes.
+  await flushLogs(fileTaskId);
+  await sink.onTestFileReady({ testId: fileTaskId, testPath, tests });
+
+  const caseResults = new Map(fileResult.results.map((r) => [r.testId, r]));
+  const suiteResults = new Map(file.suiteResults.map((r) => [r.testId, r]));
+
+  const replayNodes = async (nodes: TestInfo[]): Promise<void> => {
+    for (const node of nodes) {
+      if (node.type === 'suite') {
+        const result = suiteResults.get(node.testId);
+        if (!result) {
+          continue;
+        }
+        await sink.onTestSuiteStart(node);
+        await flushLogs(node.testId);
+        await replayNodes(node.tests);
+        await sink.onTestSuiteResult(result);
+      } else {
+        const result = caseResults.get(node.testId);
+        if (!result) {
+          continue;
+        }
+        sink.onTestCaseStart(node);
+        await flushLogs(node.testId);
+        await sink.onTestCaseResult(result);
+      }
+    }
+  };
+
+  await replayNodes(tests);
+
+  // Whatever is left belongs to a task the walk never reached (or to a blob
+  // written before trees were persisted); emit it inside the file's window
+  // rather than dropping it.
+  for (const bucket of pending.values()) {
+    for (const log of bucket) {
+      await sink.emitConsoleLog(log);
+    }
+  }
+
+  await sink.onTestFileResult(fileResult);
+}
+
 function mergeBlobCoverage(blob: BlobData, coverageMap: CoverageMap): boolean {
   if (!blob.coverage) {
     return false;
@@ -132,7 +230,8 @@ export async function mergeReports(
     `\nMerging ${color.bold(String(blobs.length))} blob ${blobs.length === 1 ? 'report' : 'reports'} from ${color.cyan(relativeBlobDir)}\n`,
   );
 
-  const allResults: TestFileResult[] = [];
+  const replayFiles: ReplayFile[] = [];
+  const orphanLogs: UserConsoleLog[] = [];
   const allTestResults: TestResult[] = [];
   const allDurations: Duration[] = [];
   const shardDurations: { label: string; duration: Duration }[] = [];
@@ -142,7 +241,6 @@ export async function mergeReports(
   let hasCoverage = false;
 
   for (const blob of blobs) {
-    allResults.push(...blob.results);
     allTestResults.push(...blob.testResults);
     allDurations.push(blob.duration);
     allSnapshotSummaries.push(blob.snapshotSummary);
@@ -155,6 +253,9 @@ export async function mergeReports(
     if (mergedCoverageMap && mergeBlobCoverage(blob, mergedCoverageMap)) {
       hasCoverage = true;
     }
+    // Merged (or unusable) either way — release the raw shard payload before
+    // the replay below, which holds `blobs` alive for its whole duration.
+    blob.coverage = undefined;
 
     if (blob.unhandledErrors) {
       for (const e of blob.unhandledErrors) {
@@ -165,15 +266,45 @@ export async function mergeReports(
       }
     }
 
-    if (blob.consoleLogs) {
-      for (const log of blob.consoleLogs) {
-        for (const reporter of context.reporters) {
-          reporter.onUserConsoleLog?.(log);
-        }
+    // Bucketed by file, then by the task the log was written under, so each
+    // file's replay can drop its output into the same slot the live run did.
+    const logsByPath = new Map<string, Map<string, UserConsoleLog[]>>();
+    for (const log of blob.consoleLogs ?? []) {
+      let byTask = logsByPath.get(log.testPath);
+      if (!byTask) {
+        byTask = new Map();
+        logsByPath.set(log.testPath, byTask);
+      }
+      const taskId = log.taskId ?? getFileTaskId(log.testPath);
+      const bucket = byTask.get(taskId);
+      if (bucket) {
+        bucket.push(log);
+      } else {
+        byTask.set(taskId, [log]);
+      }
+    }
+
+    for (const result of blob.results) {
+      const data = blob.files?.[blobFileKey(result.project, result.testPath)];
+      replayFiles.push({
+        result,
+        tests: data?.tests ?? [],
+        suiteResults: data?.suiteResults ?? [],
+        logs: logsByPath.get(result.testPath) ?? new Map(),
+      });
+      logsByPath.delete(result.testPath);
+    }
+
+    // Output recorded for a file that produced no result has no window to
+    // replay into; keep it rather than losing it.
+    for (const byTask of logsByPath.values()) {
+      for (const bucket of byTask.values()) {
+        orphanLogs.push(...bucket);
       }
     }
   }
 
+  const allResults: TestFileResult[] = replayFiles.map((file) => file.result);
   const mergedDuration = mergeDurations(allDurations);
   const mergedSnapshotSummary = mergeSnapshots(allSnapshotSummaries);
   const mergedCoverage: CoverageMapData | undefined =
@@ -203,10 +334,23 @@ export async function mergeReports(
     logger.log('');
   }
 
-  for (const result of allResults) {
-    for (const reporter of context.reporters) {
-      reporter.onTestFileResult?.(result);
-    }
+  // One sink per project, mirroring a live run: the sink binds the owning
+  // project's config, so a multi-project merge must not replay every file
+  // through the first project's.
+  const sinks = new Map<string, RunnerEventSink>(
+    context.projects.map((project) => [
+      project.name,
+      createRunnerEventSink(context, project.normalizedConfig),
+    ]),
+  );
+  const [fallbackSink] = sinks.values();
+
+  for (const file of replayFiles) {
+    await replayTestFile(sinks.get(file.result.project) ?? fallbackSink!, file);
+  }
+
+  for (const log of orphanLogs) {
+    await fallbackSink!.emitConsoleLog(log);
   }
 
   for (const reporter of context.reporters) {

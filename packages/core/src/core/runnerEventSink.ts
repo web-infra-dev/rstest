@@ -40,6 +40,13 @@ export interface RunnerEventSink {
   onTestCaseResult(result: TestResult): Promise<void>;
   /** Applies the owning project's `onConsoleLog` filter before reporter fanout. */
   onConsoleLog(log: UserConsoleLog): Promise<void>;
+  /**
+   * Reporter fanout without the filter, for output that was already filtered
+   * once — the merge-reports replay, whose logs only reached the blob because
+   * the recording run's filter admitted them. Re-filtering there could drop
+   * output the recorded run kept.
+   */
+  emitConsoleLog(log: UserConsoleLog): Promise<void>;
   getCountOfFailedTests(): number;
   /** Resolves via the owning project's `resolveSnapshotPath` (per-project). */
   resolveSnapshotPath(testPath: string): string;
@@ -50,6 +57,25 @@ export function createRunnerEventSink(
   projectConfig: ProjectContext['normalizedConfig'],
 ): RunnerEventSink {
   const { reporters } = context;
+
+  const fanoutConsoleLog = async (log: UserConsoleLog): Promise<void> => {
+    await Promise.all(
+      reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
+    );
+  };
+
+  // The worker forwards console output fire-and-forget: a delivery failure is
+  // dropped in the worker, and an error thrown here cannot travel back to fail
+  // the originating test. A user `onConsoleLog` filter or a reporter
+  // `onUserConsoleLog` that throws is a real defect, though, so surface it
+  // here — where it occurs — rather than letting it vanish.
+  const guarded = async (handle: () => Promise<void>): Promise<void> => {
+    try {
+      await handle();
+    } catch (error) {
+      logger.error(color.red('Failed to handle console log:'), toError(error));
+    }
+  };
 
   return {
     onTestCaseStart(test) {
@@ -97,27 +123,18 @@ export function createRunnerEventSink(
       }
     },
     async onConsoleLog(log) {
-      // The worker forwards console output fire-and-forget: a delivery failure
-      // is dropped in the worker, and an error thrown here cannot travel back to
-      // fail the originating test. A user `onConsoleLog` filter or a reporter
-      // `onUserConsoleLog` that throws is a real defect, though, so surface it
-      // here — where it occurs — rather than letting it vanish.
       if (projectConfig.disableConsoleIntercept) {
         return;
       }
-      try {
+      await guarded(async () => {
         if (projectConfig.onConsoleLog?.(log.content, log.type) === false) {
           return;
         }
-        await Promise.all(
-          reporters.map((reporter) => reporter.onUserConsoleLog?.(log)),
-        );
-      } catch (error) {
-        logger.error(
-          color.red('Failed to handle console log:'),
-          toError(error),
-        );
-      }
+        await fanoutConsoleLog(log);
+      });
+    },
+    emitConsoleLog(log) {
+      return guarded(() => fanoutConsoleLog(log));
     },
     getCountOfFailedTests() {
       // `stateManager` is reset at the top of every run/rerun (node's
@@ -160,10 +177,14 @@ export function sinkToRuntimeRpc(
 
 // Compile-time drift guard: the sink covers exactly the runner-facing RuntimeRPC
 // methods — everything except the task-scoped `getAssetsByEntry` and the
-// host-driven `onTestFileResult`. Adding a runner event on one side without the
-// other collapses one of these to `never` and fails the assignment.
+// host-driven `onTestFileResult` / `emitConsoleLog`. Adding a runner event on
+// one side without the other collapses one of these to `never` and fails the
+// assignment.
 type RunnerRpcMethod = keyof Omit<RuntimeRPC, 'getAssetsByEntry'>;
-type SinkRpcMethod = keyof Omit<RunnerEventSink, 'onTestFileResult'>;
+type SinkRpcMethod = keyof Omit<
+  RunnerEventSink,
+  'onTestFileResult' | 'emitConsoleLog'
+>;
 type _SinkCoversRpc = RunnerRpcMethod extends SinkRpcMethod ? true : never;
 type _RpcCoversSink = SinkRpcMethod extends RunnerRpcMethod ? true : never;
 export const RUNNER_EVENT_SINK_MATCHES_RPC: _SinkCoversRpc & _RpcCoversSink =
