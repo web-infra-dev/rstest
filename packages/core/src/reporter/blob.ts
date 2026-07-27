@@ -10,7 +10,6 @@ import type {
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
-  TestInfo,
   TestResult,
   TestSuiteInfo,
   UserConsoleLog,
@@ -19,33 +18,24 @@ import type { BlobReporterOptions } from '../types/reporter';
 import { color } from '../utils';
 
 /**
- * One recorded lifecycle event, in the order the run emitted it. Payloads are
- * inlined verbatim so replay hands reporters exactly what fired — rebuilding
- * a start payload from the collected tree drops the fields only the live
- * event carries (a case start's `startTime`/`timeout`). The one exception is
- * `caseResult`, referenced by `testId` into `BlobData.results`, the payload
- * the blob already stores in full — which also means a track whose result
- * never arrived (fatal mid-file) replays without its case results.
+ * One recorded lifecycle event: the hook that fired, with the payload the
+ * reporter received, verbatim. Replay is playback, never reconstruction —
+ * every payload rebuilt from other blob data has eventually diverged from
+ * what the live run emitted (an order a tree walk cannot represent, a
+ * `startTime` only the live event carries).
  */
 export type BlobFileEvent =
-  | { h: 'start' | 'ready' }
-  | { h: 'caseResult'; id: string }
+  | { h: 'start' | 'ready'; test: TestFileInfo }
   | { h: 'suiteStart'; test: TestSuiteInfo }
   | { h: 'caseStart'; test: TestCaseInfo }
-  | { h: 'suiteResult'; result: TestResult }
+  | { h: 'suiteResult' | 'caseResult'; result: TestResult }
   | { h: 'log'; log: UserConsoleLog };
 
 /**
- * Per-file data that `TestFileResult` cannot carry: `results` holds case
- * results only, with no collected tree and no record of the order any of it
- * was reported in.
- *
- * `events` is the authority for replay. Reconstructing an order from `tests`
- * instead would serialize what `concurrent` siblings interleaved, and would
- * hoist a suite's `afterAll` output above the child results it followed.
+ * One file's replay track — what `TestFileResult` cannot carry: `results`
+ * holds case results only, with no record of what fired or in what order.
  */
 export type BlobFileData = {
-  tests: TestInfo[];
   events: BlobFileEvent[];
 };
 
@@ -97,8 +87,8 @@ export const parseBlobFile = (content: string, fileName: string): BlobData => {
  * Single owner of the `BlobData.files` key grammar: both sides must key through
  * here, never by test path alone — a path is ambiguous once several projects
  * run the same file. Every producer carries its project on its own payload;
- * the reader takes `TestFileResult.project`, or parses the key back apart
- * when a track has no result.
+ * the reader takes `TestFileResult.project`, or parses the project back out
+ * of the key when a track has no result.
  */
 export const blobFileKey = (project: string, testPath: string): string =>
   JSON.stringify([project, testPath]);
@@ -118,6 +108,7 @@ export class BlobReporter implements Reporter {
   private readonly config: NormalizedConfig;
   private readonly outputDir: string;
   private readonly files = new Map<string, BlobFileData>();
+  private readonly staleKeys = new Set<string>();
 
   constructor({
     rootPath,
@@ -134,17 +125,26 @@ export class BlobReporter implements Reporter {
       : join(rootPath, DEFAULT_OUTPUT_DIR);
   }
 
-  onTestFileStart(test: TestFileInfo): void {
-    // Replace, not append: a watch rerun records the file anew, and its stale
-    // track would otherwise replay both runs. `start` is recorded like every
-    // other event because not every result has one — a file skipped by the
-    // cross-file bail check reports a result without ever starting. (A file
+  onTestRunStart(): void {
+    // A track lives for one run cycle: `onTestRunEnd` carries the latest
+    // result per file across watch reruns, so a rerun file's track must be
+    // recorded anew — appending would replay both runs against one result.
+    // Marking (rather than clearing) keeps tracks of files the rerun does not
+    // touch, whose results the final blob still carries, and lets the file's
+    // first event of the cycle do the replacement — which may be a log emitted
+    // during environment setup, before the file ever starts. (A file
     // bail-skipped during a watch rerun keeps its previous cycle's track
     // alongside its new skip result — a known non-goal: nothing fires for the
     // skip, and blob-in-watch is a fringe pairing.)
-    this.files.set(blobFileKey(test.project, test.testPath), {
-      tests: [],
-      events: [{ h: 'start' }],
+    for (const key of this.files.keys()) {
+      this.staleKeys.add(key);
+    }
+  }
+
+  onTestFileStart(test: TestFileInfo): void {
+    this.fileData(test.project, test.testPath).events.push({
+      h: 'start',
+      test,
     });
   }
 
@@ -153,9 +153,10 @@ export class BlobReporter implements Reporter {
   }
 
   onTestFileReady(test: TestFileInfo): void {
-    const data = this.fileData(test.project, test.testPath);
-    data.tests = test.tests;
-    data.events.push({ h: 'ready' });
+    this.fileData(test.project, test.testPath).events.push({
+      h: 'ready',
+      test,
+    });
   }
 
   onTestSuiteStart(test: TestSuiteInfo): void {
@@ -182,15 +183,16 @@ export class BlobReporter implements Reporter {
   onTestCaseResult(result: TestResult): void {
     this.fileData(result.project, result.testPath).events.push({
       h: 'caseResult',
-      id: result.testId,
+      result,
     });
   }
 
   private fileData(project: string, testPath: string): BlobFileData {
     const key = blobFileKey(project, testPath);
+    const stale = this.staleKeys.delete(key);
     let data = this.files.get(key);
-    if (!data) {
-      data = { tests: [], events: [] };
+    if (!data || stale) {
+      data = { events: [] };
       this.files.set(key, data);
     }
     return data;

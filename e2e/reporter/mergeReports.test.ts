@@ -425,9 +425,16 @@ describe('merge-reports lifecycle replay', () => {
         },
         files: {
           [JSON.stringify(['rstest', testPath])]: {
-            tests: [],
             events: [
-              { h: 'start' },
+              {
+                h: 'start',
+                test: {
+                  testId: `file:${testPath}`,
+                  testPath,
+                  project: 'rstest',
+                  tests: [],
+                },
+              },
               {
                 h: 'log',
                 log: {

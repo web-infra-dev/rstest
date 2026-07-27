@@ -59,7 +59,7 @@ describe('blob wire-format', () => {
 });
 
 describe('blob event track', () => {
-  it('file-start replaces the track, so a watch rerun records the file anew', async () => {
+  it('a run cycle replaces the track, keeping events from before file-start', async () => {
     const outputDir = mkdtempSync(join(tmpdir(), 'rstest-blob-'));
     onTestFinished(() => {
       rmSync(outputDir, { recursive: true, force: true });
@@ -70,13 +70,11 @@ describe('blob event track', () => {
       config: { shard: undefined } as NormalizedConfig,
     });
 
-    const fileStart = () => {
-      reporter.onTestFileStart({
-        testId: 'file:/a.test.ts',
-        testPath: '/a.test.ts',
-        project: 'p',
-        tests: [],
-      });
+    const fileInfo = {
+      testId: 'file:/a.test.ts',
+      testPath: '/a.test.ts',
+      project: 'p',
+      tests: [],
     };
     const caseResult = (name: string): TestResult => ({
       testId: `case-${name}`,
@@ -85,19 +83,22 @@ describe('blob event track', () => {
       testPath: '/a.test.ts',
       project: 'p',
     });
-    const log: UserConsoleLog = {
-      content: 'first run',
+    const log = (content: string): UserConsoleLog => ({
+      content,
       name: 'log',
       testPath: '/a.test.ts',
       project: 'p',
       type: 'stdout',
-    };
+    });
 
-    // First run of the file, then a watch rerun of the same file.
-    fileStart();
-    reporter.onUserConsoleLog(log);
+    // First run of the file, then a watch rerun where environment setup logs
+    // before the file starts.
+    reporter.onTestRunStart();
+    reporter.onTestFileStart(fileInfo);
     reporter.onTestCaseResult(caseResult('first'));
-    fileStart();
+    reporter.onTestRunStart();
+    reporter.onUserConsoleLog(log('setup log before rerun start'));
+    reporter.onTestFileStart(fileInfo);
     reporter.onTestCaseResult(caseResult('rerun'));
 
     await reporter.onTestRunEnd({
@@ -109,12 +110,19 @@ describe('blob event track', () => {
 
     const blob = JSON.parse(
       readFileSync(join(outputDir, '.rstest-reports', 'blob.json'), 'utf-8'),
-    ) as { files: Record<string, { events: unknown[] }> };
-    // Only the rerun's events survive — replaying both runs' events against
-    // the file's single (latest) result would double every lifecycle hook.
-    expect(blob.files[blobFileKey('p', '/a.test.ts')]?.events).toEqual([
-      { h: 'start' },
-      { h: 'caseResult', id: 'case-rerun' },
+    ) as {
+      files: Record<string, { events: { h: string; result?: TestResult }[] }>;
+    };
+    // Only the rerun cycle's events survive — replaying both cycles against
+    // the file's single (latest) result would double every lifecycle hook —
+    // and the cycle starts at its first event, not at file-start, so the
+    // setup log is part of the rerun, not discarded with the stale track.
+    const events = blob.files[blobFileKey('p', '/a.test.ts')]?.events;
+    expect(events?.map((event) => event.h)).toEqual([
+      'log',
+      'start',
+      'caseResult',
     ]);
+    expect(events?.at(-1)?.result?.name).toBe('rerun');
   });
 });

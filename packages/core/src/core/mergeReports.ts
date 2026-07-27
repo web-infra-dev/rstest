@@ -20,13 +20,7 @@ import type {
   TestResult,
 } from '../types';
 import type { CoverageMap } from '../types/coverage';
-import {
-  color,
-  flushOutputStreams,
-  getFileTaskId,
-  logger,
-  prettyTime,
-} from '../utils';
+import { color, flushOutputStreams, logger, prettyTime } from '../utils';
 import type { Rstest } from './rstest';
 import { createRunnerEventSink, type RunnerEventSink } from './runnerEventSink';
 
@@ -114,58 +108,34 @@ function mergeDurations(durations: Duration[]): Duration {
  * One test file's recorded lifecycle, reassembled from a single blob.
  * `result` is absent when the run recorded events but never produced a
  * `TestFileResult` — a browser client that goes fatal mid-file, for example —
- * in which case the track still replays, minus the file-result hook and any
- * `caseResult` events, whose payloads only the missing result carries.
+ * in which case the track still replays, minus the file-result hook.
  */
 type ReplayFile = {
   project: string;
-  testPath: string;
   result?: TestFileResult;
   data: BlobFileData;
 };
 
 /**
- * Replays one file's lifecycle through the live-run dispatch path, so a
- * reporter sees the same hook sequence it would see during a real run.
- *
- * The blob's event track is the authority for what fired and in what order;
- * walking the collected tree instead would invent an order (see
- * `BlobFileEvent`).
+ * Replays one file's recorded events through the live-run dispatch path:
+ * every event carries the payload the live run emitted (see `BlobFileEvent`),
+ * so replay is pure playback — a reporter sees the same hook sequence with
+ * the same payloads it would see during a real run.
  */
 async function replayTestFile(
   sink: RunnerEventSink,
-  { project, testPath, result: fileResult, data }: ReplayFile,
+  { result: fileResult, data }: ReplayFile,
 ): Promise<void> {
-  const fileTaskId = getFileTaskId(testPath);
-
-  const caseResults = new Map(
-    (fileResult?.results ?? []).map((r) => [r.testId, r]),
-  );
-
   for (const event of data.events) {
     switch (event.h) {
-      // The live runner reports the file before it is loaded, so its tree is
-      // still empty at `start`; the `ready` event carries the collected one.
-      // Not every result has a `start` — a file skipped by the cross-file bail
-      // check reports a result without ever starting — so the track decides.
       case 'start':
-        await sink.onTestFileStart({
-          testId: fileTaskId,
-          testPath,
-          project,
-          tests: [],
-        });
+        await sink.onTestFileStart(event.test);
         break;
       case 'ready':
-        await sink.onTestFileReady({
-          testId: fileTaskId,
-          testPath,
-          project,
-          tests: data.tests,
-        });
+        await sink.onTestFileReady(event.test);
         break;
-      case 'log':
-        await sink.emitConsoleLog(event.log);
+      case 'suiteStart':
+        await sink.onTestSuiteStart(event.test);
         break;
       case 'suiteResult':
         await sink.onTestSuiteResult(event.result);
@@ -173,16 +143,12 @@ async function replayTestFile(
       case 'caseStart':
         sink.onTestCaseStart(event.test);
         break;
-      case 'suiteStart':
-        await sink.onTestSuiteStart(event.test);
+      case 'caseResult':
+        await sink.onTestCaseResult(event.result);
         break;
-      case 'caseResult': {
-        const result = caseResults.get(event.id);
-        if (result) {
-          await sink.onTestCaseResult(result);
-        }
+      case 'log':
+        await sink.emitConsoleLog(event.log);
         break;
-      }
     }
   }
 
@@ -267,9 +233,8 @@ export async function mergeReports(
       claimed.add(key);
       replayFiles.push({
         project: result.project,
-        testPath: result.testPath,
         result,
-        data: blob.files?.[key] ?? { tests: [], events: [] },
+        data: blob.files?.[key] ?? { events: [] },
       });
     }
 
@@ -277,7 +242,7 @@ export async function mergeReports(
     // fired live, so they still replay.
     for (const [key, data] of Object.entries(blob.files ?? {})) {
       if (!claimed.has(key)) {
-        replayFiles.push({ ...parseBlobFileKey(key), data });
+        replayFiles.push({ project: parseBlobFileKey(key).project, data });
       }
     }
   }
