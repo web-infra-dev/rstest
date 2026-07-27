@@ -42,7 +42,7 @@
     "@rslib/core": "1.0.0-beta.1",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
-    "playwright": "^1.61.1",
+    "playwright": "^1.62.0",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {

@@ -11,16 +11,16 @@
     "test": "rstest --reporter=verbose"
   },
   "dependencies": {
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@module-federation/rsbuild-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@1152301",
     "@module-federation/rstest": "https://pkg.pr.new/module-federation/core/@module-federation/rstest@1152301",
-    "@rsbuild/core": "~2.1.6",
+    "@rsbuild/core": "~2.1.8",
     "@rsbuild/plugin-react": "^2.1.0",
     "@rstest/core": "workspace:*",
     "concurrently": "8.2.2",
-    "serve": "14.2.3"
+    "serve": "14.2.6"
   }
 }

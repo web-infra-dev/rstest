@@ -264,10 +264,10 @@
     "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
   ],
   "devDependencies": {
-    "@rsbuild/core": "~2.1.6",
+    "@rsbuild/core": "~2.1.8",
     "@rslib/core": "1.0.0-beta.1",
     "@rstest/core": "workspace:*",
-    "@swc/core": "^1.15.43",
+    "@swc/core": "^1.15.46",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
