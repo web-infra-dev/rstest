@@ -53,7 +53,15 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
   },
   {
     name: 'environment',
-    items: ['pool', 'isolate', 'testEnvironment', 'federation'],
+    items: [
+      'pool',
+      'isolate',
+      'testEnvironment',
+      // Unreleased: its page is excluded from the production route table by
+      // `unreleasedRoutes` in rspress.config.ts, so linking it in a production
+      // build would be a dead link.
+      ...(process.env.NODE_ENV === 'production' ? [] : ['federation']),
+    ],
   },
   {
     name: 'browser',
