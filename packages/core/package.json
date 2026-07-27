@@ -70,7 +70,7 @@
     "test": "npx rstest --globals"
   },
   "dependencies": {
-    "@rsbuild/core": "~2.1.6",
+    "@rsbuild/core": "~2.1.8",
     "@types/chai": "^5.2.3"
   },
   "devDependencies": {
@@ -78,7 +78,7 @@
     "@babel/code-frame": "^7.29.7",
     "@clack/prompts": "^1.7.0",
     "@jridgewell/trace-mapping": "0.3.31",
-    "@microsoft/api-extractor": "^7.58.11",
+    "@microsoft/api-extractor": "^7.58.12",
     "@rsbuild/plugin-less": "^2.0.1",
     "@rsbuild/plugin-node-polyfill": "^1.4.6",
     "@rsbuild/plugin-sass": "^2.0.1",
@@ -101,10 +101,10 @@
     "chai": "^6.2.2",
     "chokidar": "^5.0.0",
     "deepmerge": "^4.3.1",
-    "happy-dom": "^20.11.0",
+    "happy-dom": "^20.11.1",
     "jsdom": "^29.1.1",
     "memfs": "^4.64.0",
-    "package-manager-detector": "^1.7.0",
+    "package-manager-detector": "^1.8.0",
     "pathe": "^2.0.3",
     "picocolors": "^1.1.1",
     "picomatch": "^4.0.5",
@@ -116,7 +116,7 @@
     "tinyglobby": "^0.2.17",
     "tinyspy": "^4.0.4",
     "url-extras": "^0.1.0",
-    "webpack": "^5.108.4",
+    "webpack": "^5.109.0",
     "webpack-license-plugin": "^4.5.1"
   },
   "peerDependencies": {

@@ -10,11 +10,7 @@ import type {
 import type { CoverageProvider } from '../../types/coverage';
 import { color, logger } from '../../utils';
 
-export type {
-  BrowserTestRunOptions,
-  BrowserTestRunResult,
-  ListBrowserTestsOptions,
-} from '../../types';
+export type { BrowserTestRunOptions, BrowserTestRunResult } from '../../types';
 
 /**
  * The subset of {@link BrowserTestRunOptions} that configures a browser
