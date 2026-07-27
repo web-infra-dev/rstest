@@ -12,6 +12,7 @@ import {
 import type {
   NormalizedConfig,
   SnapshotSummary,
+  TestFileResult,
   TestResult,
   UserConsoleLog,
 } from '../../src/types';
@@ -135,5 +136,57 @@ describe('blob event track', () => {
       'caseResult',
     ]);
     expect(events?.at(-1)?.result?.name).toBe('rerun');
+  });
+
+  it('drops the track of a file deleted between watch cycles', async () => {
+    const outputDir = mkdtempSync(join(tmpdir(), 'rstest-blob-'));
+    onTestFinished(() => {
+      rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    const reporter = new BlobReporter({
+      rootPath: outputDir,
+      config: { shard: undefined } as NormalizedConfig,
+    });
+
+    const fileInfo = (testPath: string) => ({
+      testId: `file:${testPath}`,
+      testPath,
+      project: 'p',
+      tests: [],
+    });
+    const fileResult = (testPath: string): TestFileResult => ({
+      testId: `file:${testPath}`,
+      status: 'pass',
+      name: testPath,
+      testPath,
+      project: 'p',
+      results: [],
+    });
+
+    // Cycle 1 runs both files; cycle 2 reruns only kept.test.ts. The rerun
+    // result set carries kept.test.ts (rerun) and untouched.test.ts (result
+    // kept from cycle 1) — deleted.test.ts was removed from disk.
+    reporter.onTestRunStart();
+    reporter.onTestFileStart(fileInfo('/kept.test.ts'));
+    reporter.onTestFileStart(fileInfo('/untouched.test.ts'));
+    reporter.onTestFileStart(fileInfo('/deleted.test.ts'));
+    reporter.onTestRunStart();
+    reporter.onTestFileStart(fileInfo('/kept.test.ts'));
+
+    await reporter.onTestRunEnd({
+      results: [fileResult('/kept.test.ts'), fileResult('/untouched.test.ts')],
+      testResults: [],
+      duration: { totalTime: 0, buildTime: 0, testTime: 0 },
+      snapshotSummary: emptySnapshotSummary,
+    });
+
+    const blob = JSON.parse(
+      readFileSync(join(outputDir, '.rstest-reports', 'blob.json'), 'utf-8'),
+    ) as { files: Record<string, unknown> };
+    expect(Object.keys(blob.files).sort()).toEqual([
+      blobFileKey('p', '/kept.test.ts'),
+      blobFileKey('p', '/untouched.test.ts'),
+    ]);
   });
 });

@@ -224,6 +224,19 @@ export class BlobReporter implements Reporter {
     const shard = this.config.shard;
     const fileName = blobFileName(shard);
 
+    // A track still stale here was untouched for the whole final cycle. It
+    // survives only if its file's carried-over result did too — otherwise the
+    // file was deleted mid-watch, and replaying its track would resurrect it.
+    const resultKeys = new Set(
+      results.map((r) => blobFileKey(r.project, r.testPath)),
+    );
+    for (const key of this.staleKeys) {
+      if (!resultKeys.has(key)) {
+        this.staleKeys.delete(key);
+        this.files.delete(key);
+      }
+    }
+
     const blobData: BlobData = {
       version: RSTEST_VERSION,
       shard: shard ? { index: shard.index, count: shard.count } : undefined,
