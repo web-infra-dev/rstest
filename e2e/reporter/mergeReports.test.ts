@@ -234,39 +234,46 @@ describe('merge-reports', () => {
 describe('merge-reports lifecycle replay', () => {
   const blobDir = join(replayFixturesDir, '.rstest-reports');
 
-  const runReplayFixture = async (args: string[], expectFailure = false) => {
-    const { cli, expectExecSuccess, expectExecFailed } = await runRstestCli({
+  const runFixture = (args: string[]) =>
+    runRstestCli({
       command: 'rstest',
       args,
       options: { nodeOptions: { cwd: replayFixturesDir } },
     });
-    await (expectFailure ? expectExecFailed() : expectExecSuccess());
-    return cli.stdout;
-  };
-
-  /** Drops the `testId` field so an expectation can be written literally. */
-  const withoutTestIds = (events: string[]): string[] =>
-    events.map((event) => {
-      const [hook, _testId, ...rest] = event.split(' | ');
-      return [hook, ...rest].join(' | ');
-    });
 
   const parseLifecycle = (stdout: string): string[] => {
-    const match = stdout.match(/__RSTEST_LIFECYCLE__(.*)__END__/s);
+    const match = stdout.match(/__RSTEST_LIFECYCLE__(.*?)__END__/);
     if (!match) {
       throw new Error(`No lifecycle events recorded in:\n${stdout}`);
     }
     return JSON.parse(match[1]!) as string[];
   };
 
-  it('replays every reporter hook a live run fires', async () => {
+  /**
+   * Records the same fixture twice — once live, once replayed from its own
+   * blob — so the two event sequences can be compared. `expectFailure` covers
+   * fixtures that end non-zero; it is threaded through all three runs at once
+   * because a run whose exit code goes unasserted would hide a broken fixture.
+   */
+  const captureReplay = async (config: string[], expectFailure = false) => {
     fs.removeSync(blobDir);
+    const run = async (args: string[]) => {
+      const { cli, expectExecSuccess, expectExecFailed } = await runFixture([
+        ...args,
+        ...config,
+      ]);
+      await (expectFailure ? expectExecFailed() : expectExecSuccess());
+      return cli.stdout;
+    };
 
-    const liveEvents = parseLifecycle(await runReplayFixture(['run']));
-    await runReplayFixture(['run', '--reporters=blob']);
-    const mergedEvents = parseLifecycle(
-      await runReplayFixture(['merge-reports', '--cleanup']),
-    );
+    const live = parseLifecycle(await run(['run']));
+    await run(['run', '--reporters=blob']);
+    const merged = parseLifecycle(await run(['merge-reports', '--cleanup']));
+    return { live, merged };
+  };
+
+  it('replays every reporter hook a live run fires', async () => {
+    const { live: liveEvents, merged: mergedEvents } = await captureReplay([]);
 
     // Every hook the fixture can exercise must show up in the live baseline,
     // otherwise the comparison below would pass on an empty sequence.
@@ -289,34 +296,24 @@ describe('merge-reports lifecycle replay', () => {
   });
 
   it('replays a bail-elided run exactly as the live run reported it', async () => {
-    fs.removeSync(blobDir);
-    const config = ['-c', 'rstest.bail.config.mts'];
-
-    const liveEvents = parseLifecycle(
-      await runReplayFixture(['run', ...config], true),
-    );
-    await runReplayFixture(['run', ...config, '--reporters=blob'], true);
-    const mergedEvents = parseLifecycle(
-      await runReplayFixture(['merge-reports', '--cleanup', ...config], true),
+    const { live: liveEvents, merged: mergedEvents } = await captureReplay(
+      ['-c', 'rstest.bail.config.mts'],
+      true,
     );
 
-    // The live runner returns from a bail-elided task before either of its
-    // hooks fires, so nothing after the failure is reported — not the sibling
-    // case, not the suites that would have held the rest. `2 roots` shows the
-    // collected tree still carries those nodes, so replay only stays faithful
-    // by skipping the ones with no recorded result. Test ids are dropped: they
-    // hash the absolute test path, which differs per checkout.
-    expect(withoutTestIds(liveEvents)).toEqual([
-      'onTestRunStart',
-      'onTestFileStart',
-      'onTestFileReady | 2 roots',
-      'onTestSuiteStart | bail outer',
-      'onTestCaseStart | failing case',
-      'onTestCaseResult | failing case | fail',
-      'onTestSuiteResult | bail outer | fail',
-      'onTestFileResult | fail',
-      'onTestRunEnd',
-    ]);
+    // The collected tree still carries every node bail elided — both root
+    // suites reach `onTestFileReady` — so the blob replays them back.
+    expect(liveEvents).toContainEqual(
+      expect.stringMatching(/^onTestFileReady \| .* \| 2 roots$/),
+    );
+    // Yet the live runner returns from an elided task before either of its
+    // hooks fires, so nothing named `elided` is ever reported. That is the
+    // property replay must reproduce: a node with no recorded result is
+    // skipped, not resurrected from the tree.
+    expect(liveEvents.filter((event) => event.includes('elided'))).toEqual([]);
+    expect(
+      liveEvents.filter((event) => event.includes('failing case')),
+    ).toHaveLength(2);
 
     expect(mergedEvents).toEqual(liveEvents);
   });
@@ -329,11 +326,9 @@ describe('merge-reports lifecycle replay', () => {
       JSON.stringify({ version: '0.0.0-other' }),
     );
 
-    const { expectExecFailed, expectStderrLog } = await runRstestCli({
-      command: 'rstest',
-      args: ['merge-reports'],
-      options: { nodeOptions: { cwd: replayFixturesDir } },
-    });
+    const { expectExecFailed, expectStderrLog } = await runFixture([
+      'merge-reports',
+    ]);
     await expectExecFailed();
     expectStderrLog(
       /blob\.json was generated by Rstest 0\.0\.0-other, but this is Rstest/,

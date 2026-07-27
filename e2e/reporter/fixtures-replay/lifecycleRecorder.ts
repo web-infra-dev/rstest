@@ -16,8 +16,6 @@ type UserConsoleLog = Parameters<NonNullable<Reporter['onUserConsoleLog']>>[0];
  * Identifiers rather than payloads: timings and stacks legitimately differ.
  */
 export class LifecycleRecorder implements Reporter {
-  readonly flushOutputStreams = false;
-
   private readonly events: string[] = [];
 
   private record(hook: string, ...detail: (string | undefined)[]): void {
