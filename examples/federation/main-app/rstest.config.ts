@@ -13,7 +13,7 @@ export default defineConfig({
       name: 'main_app_web',
       remoteType: 'script',
       remotes: {
-        'component-app': 'component_app@http://localhost:3001/remoteEntry.js',
+        'component-app': 'component_app@http://localhost:3001/remoteEntry.cjs',
         'node-local-remote': `commonjs ${path.resolve(
           __dirname,
           '../node-local-remote/dist-node/remoteEntry.js',

@@ -1,6 +1,6 @@
-const { pluginModuleFederation } = require('@module-federation/rsbuild-plugin');
-const { defineConfig } = require('@rsbuild/core');
-const { pluginReact } = require('@rsbuild/plugin-react');
+import { pluginModuleFederation } from '@module-federation/rsbuild-plugin';
+import { defineConfig } from '@rsbuild/core';
+import { pluginReact } from '@rsbuild/plugin-react';
 
 /**
  * Node-targeted remote build used by Rstest's Module Federation test.
@@ -9,7 +9,7 @@ const { pluginReact } = require('@rsbuild/plugin-react');
  * - includes a Node runtime plugin so remote chunks can be loaded over HTTP
  * - outputs to dist-node (served on a separate port from the browser remote)
  */
-module.exports = defineConfig({
+export default defineConfig({
   mode: 'development',
   environments: {
     node: {
@@ -19,6 +19,11 @@ module.exports = defineConfig({
       output: {
         assetPrefix: 'http://localhost:3001/',
       },
+    },
+  },
+  server: {
+    cors: {
+      origin: 'http://localhost:3002',
     },
   },
   source: {
@@ -51,7 +56,7 @@ module.exports = defineConfig({
         experiments: {
           asyncStartup: true,
         },
-        filename: 'remoteEntry.js',
+        filename: 'remoteEntry.cjs',
         exposes: {
           './Button': './src/Button.jsx',
           './Dialog': './src/Dialog.jsx',

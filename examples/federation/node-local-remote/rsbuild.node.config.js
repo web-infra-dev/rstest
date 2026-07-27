@@ -13,6 +13,11 @@ module.exports = defineConfig({
       },
     },
   },
+  server: {
+    cors: {
+      origin: 'http://localhost:3002',
+    },
+  },
   source: {
     entry: {
       index: {
