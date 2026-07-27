@@ -148,12 +148,11 @@ const preparePool = async (
   // flag, so it must be set before any bundle code is evaluated.
   const federation = context.runtimeConfig.federation === true;
   (globalThis as Record<string, unknown>).__rstest_federation__ = federation;
-  // With `isolate: false` a previous file in this worker may have installed
-  // the global dynamic-import fallback (`mockRuntimeCode.js`). Always drop it:
-  // it keeps federation strictly opt-in for non-federation files, and for
-  // federation files the runtime module reinstalls a fresh hook whose
-  // `import()` is bound to the current bundle's vm dynamic-import context
-  // rather than the previous file's.
+  // With `isolate: false` a previous file in this worker may have installed the
+  // global dynamic-import fallback (`mockRuntimeCode.js`). Hide it from
+  // non-federation files so federation stays strictly opt-in, and hand it back
+  // on federation re-entry — the installing runtime chunk is kept across files
+  // and never re-executes, so dropping it outright would be permanent.
   setFederationDynamicImportOrigin(federation, testPath);
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];

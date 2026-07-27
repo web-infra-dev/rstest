@@ -28,7 +28,7 @@ describe('runtime hook identifier contract', () => {
     );
   });
 
-  it('preserves the federation dynamic import hook while updating its origin', () => {
+  it('hides the federation dynamic import hook from non-federation files and hands it back', () => {
     const runtimeGlobal = globalThis as Record<string, unknown>;
     const dynamicImportHook = () => undefined;
     runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK] = dynamicImportHook;
@@ -42,9 +42,17 @@ describe('runtime hook identifier contract', () => {
 
     setFederationDynamicImportOrigin(false, '/project/other.test.ts');
 
-    // Nothing reinstalls the hook for an already-evaluated project, so passing
-    // through a non-federation file may clear the origin but not the hook.
+    // Federation stays strictly opt-in: a non-federation file sees neither.
     expect(runtimeGlobal[RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK]).toBeUndefined();
+    expect(runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK]).toBeUndefined();
+
+    setFederationDynamicImportOrigin(true, '/project/later.test.ts');
+
+    // ...but hiding is not discarding. Nothing reinstalls the hook for a project
+    // whose runtime chunk already ran, so re-entry must get the same one back.
     expect(runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK]).toBe(dynamicImportHook);
+    expect(runtimeGlobal[RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK]).toBe(
+      '/project/later.test.ts',
+    );
   });
 });
