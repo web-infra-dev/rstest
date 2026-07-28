@@ -231,9 +231,13 @@ describe('JsonReporter', () => {
       fileStart(PATH_A, 'jsdom');
       consoleLog(PATH_A, 'from jsdom', 'jsdom');
 
-      expect(
-        await runEnd([passedFile(PATH_A, 'node'), passedFile(PATH_A, 'jsdom')]),
-      ).toEqual(['a.test.ts: from node', 'a.test.ts: from jsdom']);
+      // `updateReporterResultState` keys the snapshot by path alone, so only
+      // the last project's result survives a shared file — the prune must not
+      // read that as "the node project's logs are stale".
+      expect(await runEnd([passedFile(PATH_A, 'jsdom')])).toEqual([
+        'a.test.ts: from node',
+        'a.test.ts: from jsdom',
+      ]);
     });
 
     it('should drop logs of files that left the result snapshot', async () => {

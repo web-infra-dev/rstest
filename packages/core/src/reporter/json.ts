@@ -13,7 +13,7 @@ import type {
   UserConsoleLog,
 } from '../types';
 import { getTaskNameWithPrefix, logger } from '../utils';
-import { deriveRunCounts, reportedFileKeys, reporterFileKey } from './utils';
+import { deriveRunCounts, reportedTestPaths, reporterFileKey } from './utils';
 
 type JsonReport = {
   tool: 'rstest';
@@ -194,10 +194,8 @@ export class JsonReporter implements Reporter {
     // them. Without this the report would carry logs for a file it does not
     // list, and the buffer would grow for the whole session.
     if (this.logs.length) {
-      const reportedFiles = reportedFileKeys(results);
-      this.logs = this.logs.filter((log) =>
-        reportedFiles.has(reporterFileKey(log.project, log.testPath)),
-      );
+      const reportedPaths = reportedTestPaths(results);
+      this.logs = this.logs.filter((log) => reportedPaths.has(log.testPath));
     }
 
     const report = this.createReport({

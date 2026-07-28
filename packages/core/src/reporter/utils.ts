@@ -80,17 +80,24 @@ export const deriveRunCounts = ({
 export const reporterFileKey = (project: string, testPath: string): string =>
   `${project}\u0000${testPath}`;
 
+/** Reads the test path back out of a {@link reporterFileKey}. */
+export const reporterFileKeyPath = (key: string): string =>
+  key.slice(key.indexOf('\u0000') + 1);
+
 /**
- * Collects the {@link reporterFileKey} of every file a run reports, so a
- * reporter can retire buffered per-file state. Buffers are replaced per file on
- * `onTestFileStart`, but a deleted file never starts again — only the run-end
- * result set (already purged of deleted paths by `updateReporterResultState`)
- * can retire it.
+ * Collects the paths a run reports, so a reporter can retire buffered per-file
+ * state. Buffers are replaced per file on `onTestFileStart`, but a deleted file
+ * never starts again — only the run-end result set (already purged of deleted
+ * paths by `updateReporterResultState`) can retire it.
+ *
+ * Deliberately coarser than {@link reporterFileKey}: `updateReporterResultState`
+ * keys the snapshot by path alone, so when two projects run the same file only
+ * one of them survives into the result set. Pruning at the buffer's finer
+ * project+path identity would drop the other project's logs for a file the run
+ * still reports.
  */
-export const reportedFileKeys = (results: TestFileResult[]): Set<string> =>
-  new Set(
-    results.map((result) => reporterFileKey(result.project, result.testPath)),
-  );
+export const reportedTestPaths = (results: TestFileResult[]): Set<string> =>
+  new Set(results.map((result) => result.testPath));
 
 const statusStr = {
   fail: '✗',

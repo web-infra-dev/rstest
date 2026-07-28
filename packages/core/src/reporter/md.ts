@@ -109,8 +109,9 @@ import {
   getErrorType,
   pushFencedBlock,
   pushHeading,
-  reportedFileKeys,
+  reportedTestPaths,
   reporterFileKey,
+  reporterFileKeyPath,
   stringifyJson,
 } from './utils';
 
@@ -911,9 +912,9 @@ export class MdReporter implements Reporter {
     // logs have no such signal of their own, so the reported file set prunes
     // them and the buffer stays bounded across a long session.
     if (this.logsByFile.size) {
-      const reportedFiles = reportedFileKeys(results);
+      const reportedPaths = reportedTestPaths(results);
       for (const key of this.logsByFile.keys()) {
-        if (!reportedFiles.has(key)) {
+        if (!reportedPaths.has(reporterFileKeyPath(key))) {
           this.logsByFile.delete(key);
         }
       }

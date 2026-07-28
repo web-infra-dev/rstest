@@ -330,11 +330,11 @@ describe('MdReporter watch reruns', () => {
     const nodeTest = createFailedTest(PATH_A, 'fails in a', 'node');
     const jsdomTest = createFailedTest(PATH_A, 'fails in a', 'jsdom');
 
+    // `updateReporterResultState` keys the snapshot by path alone, so only the
+    // last project's result survives a shared file — the prune must not read
+    // that as "the node project's logs are stale".
     const report = await runEnd({
-      results: [
-        createFailedFile(PATH_A, [nodeTest], 'node'),
-        createFailedFile(PATH_A, [jsdomTest], 'jsdom'),
-      ],
+      results: [createFailedFile(PATH_A, [jsdomTest], 'jsdom')],
       testResults: [nodeTest, jsdomTest],
     });
 
