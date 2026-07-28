@@ -271,7 +271,7 @@ describe('merge-reports lifecycle replay', () => {
     return { live, merged };
   };
 
-  it('replays every reporter hook a live run fires', async () => {
+  it('replays every reporter hook a live run fires, in live order', async () => {
     const { live: liveEvents, merged: mergedEvents } = await captureReplay([]);
 
     // Every hook the fixture can exercise must show up in the live baseline,
@@ -291,10 +291,27 @@ describe('merge-reports lifecycle replay', () => {
       ]),
     );
 
+    const names = liveEvents.map((event) =>
+      event.split(' | ').slice(2).join(' | '),
+    );
+    // Orderings a depth-first tree walk cannot represent: both cases start
+    // before either reports, and the faster one reports first.
+    expect(names.filter((n) => n.startsWith('concurrent'))).toEqual([
+      expect.stringMatching(/^concurrent slow \| startTime=/),
+      expect.stringMatching(/^concurrent fast \| startTime=/),
+      'concurrent fast | pass',
+      'concurrent slow | pass',
+    ]);
+    // `afterAll` output carries the suite's task id but is written after the
+    // child results, so it cannot be flushed at suite start.
+    expect(names.indexOf('afterAll log')).toBeGreaterThan(
+      names.indexOf('concurrent slow | pass'),
+    );
+
     expect(mergedEvents).toEqual(liveEvents);
   });
 
-  it('replays a bail-elided run exactly as the live run reported it', async () => {
+  it('replays bail elision and a bail-skipped file as the live run reported them', async () => {
     const { live: liveEvents, merged: mergedEvents } = await captureReplay(
       ['-c', 'rstest.bail.config.mts'],
       true,
@@ -314,44 +331,10 @@ describe('merge-reports lifecycle replay', () => {
       liveEvents.filter((event) => event.includes('failing case')),
     ).toHaveLength(2);
 
-    expect(mergedEvents).toEqual(liveEvents);
-  });
-
-  it('replays orderings a tree walk cannot represent', async () => {
-    const { live: liveEvents, merged: mergedEvents } = await captureReplay([
-      '-c',
-      'rstest.ordering.config.mts',
-    ]);
-
-    const names = liveEvents.map((event) =>
-      event.split(' | ').slice(2).join(' | '),
-    );
-    // Both cases start before either reports, and the faster one reports first
-    // — a depth-first walk would emit start/result strictly in tree order.
-    expect(names.filter((n) => n.startsWith('concurrent'))).toEqual([
-      expect.stringMatching(/^concurrent slow \| startTime=/),
-      expect.stringMatching(/^concurrent fast \| startTime=/),
-      'concurrent fast | pass',
-      'concurrent slow | pass',
-    ]);
-    // `afterAll` output carries the suite's task id but is written after the
-    // child results, so it cannot be flushed at suite start.
-    expect(names.indexOf('afterAll log')).toBeGreaterThan(
-      names.indexOf('concurrent slow | pass'),
-    );
-
-    expect(mergedEvents).toEqual(liveEvents);
-  });
-
-  it('replays a bail-skipped file as a result with no file window', async () => {
-    const { live: liveEvents, merged: mergedEvents } = await captureReplay(
-      ['-c', 'rstest.bailCross.config.mts'],
-      true,
-    );
-
-    // The live worker returns the skipped file's result before its
-    // `onTestFileStart` would fire, so the file reports a result and nothing
-    // else — replay must not invent the missing file window.
+    // The same failure trips the worker's cross-file bail check: the skipped
+    // file's result returns before its `onTestFileStart` would fire, so it
+    // reports a result and nothing else — replay must not invent the missing
+    // file window.
     const skipped = liveEvents.filter((event) => event.includes('bailSecond'));
     expect(skipped).toEqual([
       expect.stringMatching(/^onTestFileResult \| .* \| skip$/),
