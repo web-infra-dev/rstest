@@ -433,7 +433,6 @@ const loadFiles = async ({
   const { loadModule } = outputModule
     ? await import('./loadEsModule')
     : await import('./loadModule');
-  const virtualFsAssetFiles = federation ? assetFiles : undefined;
 
   // A reused worker can hold several projects' runtime chunks at once, so pass
   // the current entry path to every self-scoped cleaner. Only its
@@ -448,7 +447,6 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
-      virtualFsAssetFiles,
     });
   }
 
@@ -468,7 +466,6 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
-      virtualFsAssetFiles,
     });
   }
 
@@ -482,7 +479,6 @@ const loadFiles = async ({
     rstestContext,
     assetFiles,
     interopDefault,
-    virtualFsAssetFiles,
   });
 };
 
