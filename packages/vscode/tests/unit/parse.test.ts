@@ -259,6 +259,21 @@ describe('parseTestFile', () => {
     expect(byName.inner.range.startLine).toBe(6);
   });
 
+  it('should compute UTF-16 columns after astral characters', () => {
+    const code = `const emoji = '😀'; test('unicode', () => {});`;
+
+    const results: { name: string; range: Range }[] = [];
+    parseTestFile(code, {
+      onTest: (range: Range, name: string) => {
+        results.push({ name, range });
+      },
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].name).toBe('unicode');
+    expect(results[0].range.startChar).toBe(code.indexOf('test'));
+  });
+
   it('should handle quotes and escaped characters', () => {
     const code = `
       describe('he said "hi"', () => {
@@ -345,5 +360,13 @@ describe('parseTestFile', () => {
     });
 
     expect(tests).toEqual([{ name: 'skipped suite', type: 'suite' }]);
+  });
+
+  it('should reject invalid syntax', () => {
+    expect(() =>
+      parseTestFile('test(', {
+        onTest: () => undefined,
+      }),
+    ).toThrow(SyntaxError);
   });
 });
