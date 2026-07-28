@@ -474,7 +474,7 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.9.3" />
 
-The blob reporter serializes test results into JSON files for later merging. This is designed for use with [test sharding](/guide/basic/cli#sharding-tests) in CI environments, where tests are split across multiple machines and results need to be combined afterward.
+The blob reporter serializes test results into JSON files for later merging. This is designed for use with [test sharding](/guide/basic/cli#sharding-tests) in CI environments, where tests are split across multiple machines and results need to be combined afterward. Like sharding, it is not supported in watch mode.
 
 <Tabs defaultValue='CLI'>
   <Tab label="CLI">

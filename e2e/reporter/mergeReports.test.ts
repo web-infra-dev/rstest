@@ -443,6 +443,14 @@ describe('merge-reports lifecycle replay', () => {
     ]);
   });
 
+  it('rejects the blob reporter in watch mode', async () => {
+    // Blob reports feed the one-shot merge workflow; recording across watch
+    // reruns has no coherent semantics, so the reporter is rejected outright.
+    const { expectExecFailed, expectStderrLog } = await runFixture(['watch']);
+    await expectExecFailed();
+    expectStderrLog(/Blob reporter is not supported in watch mode/);
+  });
+
   it('refuses to merge blob reports from another Rstest version', async () => {
     // The gate rejects before any payload is read, so a hand-written stub is
     // enough — no need to spend a fixture run producing a real blob.

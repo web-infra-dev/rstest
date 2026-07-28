@@ -1,22 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { describe, expect, it, onTestFinished } from '@rstest/core';
-import { join } from 'pathe';
+import { describe, expect, it } from '@rstest/core';
 import {
   BLOB_TRACK_MATCHES_RUNNER_EVENTS,
-  blobFileKey,
   blobFileName,
-  BlobReporter,
   isBlobFile,
   parseBlobFile,
 } from '../../src/reporter/blob';
-import type {
-  NormalizedConfig,
-  TestFileResult,
-  TestResult,
-  UserConsoleLog,
-} from '../../src/types';
-import { emptySnapshotSummary } from './helpers';
 
 describe('blob wire-format', () => {
   it('records every runner lifecycle event on the track (compile guard)', () => {
@@ -55,118 +43,5 @@ describe('blob wire-format', () => {
     expect(isBlobFile('blob-1-2-3.json')).toBe(false);
     expect(isBlobFile('prefix-blob.json')).toBe(false);
     expect(isBlobFile('blob-a-b.json')).toBe(false);
-  });
-});
-
-describe('blob event track', () => {
-  const setupReporter = () => {
-    const outputDir = mkdtempSync(join(tmpdir(), 'rstest-blob-'));
-    onTestFinished(() => {
-      rmSync(outputDir, { recursive: true, force: true });
-    });
-    const reporter = new BlobReporter({
-      rootPath: outputDir,
-      config: { shard: undefined } as NormalizedConfig,
-    });
-    const readBlob = <T>() =>
-      JSON.parse(
-        readFileSync(join(outputDir, '.rstest-reports', 'blob.json'), 'utf-8'),
-      ) as T;
-    return { reporter, readBlob };
-  };
-
-  const fileInfo = (testPath: string) => ({
-    testId: `file:${testPath}`,
-    testPath,
-    project: 'p',
-    tests: [],
-  });
-
-  const runEnd = (reporter: BlobReporter, results: TestFileResult[] = []) =>
-    reporter.onTestRunEnd({
-      results,
-      testResults: [],
-      duration: { totalTime: 0, buildTime: 0, testTime: 0 },
-      snapshotSummary: emptySnapshotSummary,
-    });
-
-  it('a run cycle replaces the track, keeping events from before file-start', async () => {
-    const { reporter, readBlob } = setupReporter();
-
-    const caseResult = (name: string): TestResult => ({
-      testId: `case-${name}`,
-      status: 'pass',
-      name,
-      testPath: '/a.test.ts',
-      project: 'p',
-    });
-    const log = (content: string): UserConsoleLog => ({
-      content,
-      name: 'log',
-      testPath: '/a.test.ts',
-      project: 'p',
-      type: 'stdout',
-    });
-
-    // First run of the file, then a watch rerun where environment setup logs
-    // before the file starts.
-    reporter.onTestRunStart();
-    reporter.onTestFileStart(fileInfo('/a.test.ts'));
-    reporter.onTestCaseResult(caseResult('first'));
-    reporter.onTestRunStart();
-    reporter.onUserConsoleLog(log('setup log before rerun start'));
-    reporter.onTestFileStart(fileInfo('/a.test.ts'));
-    reporter.onTestCaseResult(caseResult('rerun'));
-
-    await runEnd(reporter);
-
-    const blob = readBlob<{
-      files: Record<string, { events: { h: string; result?: TestResult }[] }>;
-    }>();
-    // Only the rerun cycle's events survive — replaying both cycles against
-    // the file's single (latest) result would double every lifecycle hook —
-    // and the cycle starts at its first event, not at file-start, so the
-    // setup log is part of the rerun, not discarded with the stale track.
-    const events = blob.files[blobFileKey('p', '/a.test.ts')]?.events;
-    expect(events?.map((event) => event.h)).toEqual([
-      'log',
-      'start',
-      'caseResult',
-    ]);
-    expect(events?.at(-1)?.result?.name).toBe('rerun');
-  });
-
-  it('drops the track of a file deleted between watch cycles', async () => {
-    const { reporter, readBlob } = setupReporter();
-
-    const fileResult = (testPath: string): TestFileResult => ({
-      testId: `file:${testPath}`,
-      status: 'pass',
-      name: testPath,
-      testPath,
-      project: 'p',
-      results: [],
-    });
-
-    // Cycle 1 runs both files; cycle 2 reruns only kept.test.ts. The rerun
-    // result set carries kept.test.ts (rerun) and untouched.test.ts (result
-    // kept from cycle 1) — deleted.test.ts was removed from disk.
-    reporter.onTestRunStart();
-    reporter.onTestFileStart(fileInfo('/kept.test.ts'));
-    reporter.onTestFileStart(fileInfo('/untouched.test.ts'));
-    reporter.onTestFileStart(fileInfo('/deleted.test.ts'));
-    reporter.onTestRunStart();
-    reporter.onTestFileStart(fileInfo('/kept.test.ts'));
-
-    await runEnd(reporter, [
-      fileResult('/kept.test.ts'),
-      fileResult('/untouched.test.ts'),
-    ]);
-
-    const blob = readBlob<{ files: Record<string, unknown> }>();
-    expect(Object.keys(blob.files).sort()).toEqual([
-      blobFileKey('p', '/kept.test.ts'),
-      blobFileKey('p', '/untouched.test.ts'),
-    ]);
   });
 });

@@ -115,8 +115,9 @@ export class BlobReporter implements Reporter {
 
   private readonly config: NormalizedConfig;
   private readonly outputDir: string;
+  // One track per file, for a single one-shot run: watch mode is rejected at
+  // reporter construction (`rstest.ts`), so no track ever spans two cycles.
   private readonly files = new Map<string, BlobFileData>();
-  private readonly staleKeys = new Set<string>();
 
   constructor({
     rootPath,
@@ -131,22 +132,6 @@ export class BlobReporter implements Reporter {
     this.outputDir = options?.outputDir
       ? join(rootPath, options.outputDir)
       : join(rootPath, DEFAULT_OUTPUT_DIR);
-  }
-
-  onTestRunStart(): void {
-    // A track lives for one run cycle: `onTestRunEnd` carries the latest
-    // result per file across watch reruns, so a rerun file's track must be
-    // recorded anew — appending would replay both runs against one result.
-    // Marking (rather than clearing) keeps tracks of files the rerun does not
-    // touch, whose results the final blob still carries, and lets the file's
-    // first event of the cycle do the replacement — which may be a log emitted
-    // during environment setup, before the file ever starts. (A file
-    // bail-skipped during a watch rerun keeps its previous cycle's track
-    // alongside its new skip result — a known non-goal: nothing fires for the
-    // skip, and blob-in-watch is a fringe pairing.)
-    for (const key of this.files.keys()) {
-      this.staleKeys.add(key);
-    }
   }
 
   onTestFileStart(test: TestFileInfo): void {
@@ -197,9 +182,8 @@ export class BlobReporter implements Reporter {
 
   private fileData(project: string, testPath: string): BlobFileData {
     const key = blobFileKey(project, testPath);
-    const stale = this.staleKeys.delete(key);
     let data = this.files.get(key);
-    if (!data || stale) {
+    if (!data) {
       data = { events: [] };
       this.files.set(key, data);
     }
@@ -223,21 +207,6 @@ export class BlobReporter implements Reporter {
   }): Promise<void> {
     const shard = this.config.shard;
     const fileName = blobFileName(shard);
-
-    // A track still stale here was untouched for the whole final cycle. It
-    // survives only if its file's carried-over result did too — otherwise the
-    // file was deleted mid-watch, and replaying its track would resurrect it.
-    // No event can arrive between run end and the next run start, so the
-    // leftover markings are simply cleared.
-    const resultKeys = new Set(
-      results.map((r) => blobFileKey(r.project, r.testPath)),
-    );
-    for (const key of this.staleKeys) {
-      if (!resultKeys.has(key)) {
-        this.files.delete(key);
-      }
-    }
-    this.staleKeys.clear();
 
     const blobData: BlobData = {
       version: RSTEST_VERSION,
