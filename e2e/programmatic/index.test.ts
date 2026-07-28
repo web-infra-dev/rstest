@@ -1,24 +1,14 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
+import { parseMarkerPayload, runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const fixturesDir = join(__dirname, 'fixtures');
 
-const PAYLOAD_RE = /__RSTEST_API_RESULT__(.*?)__END__/;
-
-const parsePayload = (stdout: string) => {
-  const match = stdout.match(PAYLOAD_RE);
-  const payload = match?.[1];
-  if (!payload) {
-    throw new Error(
-      `runRstest payload not found in stdout. Got:\n${stdout.slice(0, 4000)}`,
-    );
-  }
-  return JSON.parse(payload) as Record<string, any>;
-};
+const parsePayload = (stdout: string) =>
+  parseMarkerPayload<Record<string, any>>(stdout, '__RSTEST_API_RESULT__');
 
 describe('programmatic runRstest', () => {
   it('runs disk tests via inlineConfig + returns nested stats', async ({

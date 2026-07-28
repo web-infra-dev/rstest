@@ -68,7 +68,8 @@ Contracts between modules or processes — not readable from any single file.
 - Reporters are passive consumers: `RunnerEventSink` updates `stateManager` before reporter fanout, so TTY renderers read state, not event payloads.
 - `reportersMap` is locked to the `BuiltInReporterNames` union via `satisfies`; a new built-in name needs both plus `BuiltinReporterOptions` (not compile-guarded).
 - The md output format is a spec'd contract snapshot-tested in `e2e/reporter/md.test.ts` — behavior changes require snapshot updates there.
-- The blob filename grammar has a single owner; `mergeReports` must keep using `isBlobFile` rather than re-encoding the pattern.
+- The blob filename grammar has a single owner; `mergeReports` must keep using `isBlobFile` rather than re-encoding the pattern. Likewise both sides must key `BlobData.files` through `blobFileKey`, never by test path alone — a path is ambiguous once several projects run the same file.
+- `BlobData` is a same-version wire format between `BlobReporter` and `mergeReports`: a `version` mismatch is rejected outright, never partially merged. The merge replays the reporter lifecycle from each file's recorded event track, where every event stores the payload the reporter received verbatim and replay is pure playback — never reconstruct a payload from other blob data (completeness is compile-guarded on both sides). Like sharding, the blob reporter is rejected in watch mode at reporter construction — blobs feed the one-shot merge workflow only, so a track never spans two run cycles.
 
 ## Commands
 

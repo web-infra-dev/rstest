@@ -273,6 +273,19 @@ export class Rstest implements RstestContext {
           })
         : [];
 
+    // Like sharding above: blob reports feed the one-shot `merge-reports` CI
+    // workflow, and recording across watch reruns has no coherent semantics
+    // (a rerun replaces results the recorded events no longer match).
+    if (
+      command === 'watch' &&
+      reporters.some((r) => r instanceof BlobReporter)
+    ) {
+      failConfig(
+        embedded,
+        'Blob reporter is not supported in watch mode. Use `rstest run --reporters=blob` to generate reports.',
+      );
+    }
+
     this.reporters = reporters;
   }
 

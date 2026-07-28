@@ -222,6 +222,7 @@ const preparePool = async (
         silentConsoleController.onConsoleLog(log);
       },
       testPath,
+      project: context.project,
       printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
       getCurrentTask: () => taskContext.getCurrent(),
     });
@@ -607,6 +608,7 @@ export const runInPool = async (
     rpc.onTestFileStart?.({
       testId: getFileTaskId(testPath),
       testPath,
+      project,
       tests: [],
     });
 

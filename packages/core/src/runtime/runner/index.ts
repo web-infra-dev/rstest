@@ -83,6 +83,7 @@ export function createRunner({
         hooks.onTestFileReady?.({
           testId: getFileTaskId(testPath),
           testPath,
+          project: workerState.project,
           tests: tests.map(toTestInfo),
         });
         runtimeInstance.updateStatus('running');

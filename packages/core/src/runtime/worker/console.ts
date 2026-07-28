@@ -65,11 +65,13 @@ type LogTimers = Record<string, Date>;
 export function createCustomConsole({
   onConsoleLog,
   testPath,
+  project,
   printConsoleTrace,
   getCurrentTask,
 }: {
   onConsoleLog: (log: UserConsoleLog) => void;
   testPath: string;
+  project: string;
   printConsoleTrace: boolean;
   getCurrentTask: () => CurrentTaskInfo | undefined;
 }): Console {
@@ -109,6 +111,7 @@ export function createCustomConsole({
         taskParentNames: currentTask?.taskParentNames,
         taskType: currentTask?.taskType,
         testPath,
+        project,
         type,
         trace: printConsoleTrace ? getConsoleTrace() : undefined,
       });

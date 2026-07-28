@@ -1,11 +1,11 @@
 import { stripVTControlCharacters } from 'node:util';
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { DefaultReporter } from '../../src/reporter/index';
+import { emptySnapshotSummary } from './helpers';
 import type {
   Duration,
   NormalizedConfig,
   RstestTestState,
-  SnapshotSummary,
   TestFileResult,
   TestResult,
 } from '../../src/types';
@@ -15,23 +15,6 @@ const baseConfig = {
   hideSkippedTests: false,
   slowTestThreshold: 300,
 } as NormalizedConfig;
-
-const emptySnapshotSummary: SnapshotSummary = {
-  added: 0,
-  didUpdate: false,
-  failure: false,
-  filesAdded: 0,
-  filesRemoved: 0,
-  filesRemovedList: [],
-  filesUnmatched: 0,
-  filesUpdated: 0,
-  matched: 0,
-  total: 0,
-  unchecked: 0,
-  uncheckedKeysByFile: [],
-  unmatched: 0,
-  updated: 0,
-};
 
 const duration: Duration = {
   totalTime: 500,

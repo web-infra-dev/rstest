@@ -69,6 +69,12 @@ export type BrowserExecutionMode = 'run' | 'collect';
 export type BrowserLogPayload = {
   level: 'log' | 'warn' | 'error' | 'info' | 'debug';
   content: string;
+  /**
+   * Owning project, resolved by the client from its manifest. The host must
+   * not re-derive it from `testPath` — concurrent projects can run the same
+   * file, so a path-keyed lookup can attribute the log to the wrong project.
+   */
+  projectName: string;
   taskId?: string;
   taskName?: string;
   taskParentNames?: string[];
