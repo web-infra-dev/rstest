@@ -1,9 +1,7 @@
 import {
-  createCoverageProvider,
   createCoverageProviderWithLog,
   logCoverageEnabled,
 } from '../../coverage';
-import { buildBrowserCoverageMap } from '../../coverage/browserCoverageMap';
 import type { ProjectContext } from '../../types';
 import {
   color,
@@ -18,7 +16,10 @@ import {
   runBrowserGlobalSetupStage,
 } from './globalSetupStage';
 import { loadBrowserExecutor, runBrowserModeTests } from './loader';
-import { attachBrowserWatchControls } from './watchControls';
+import {
+  attachBrowserWatchControls,
+  reportInitialCycleCoverage,
+} from './watchControls';
 import { ensureRunDependencies } from '../dependencies';
 import {
   finalizeRunCycle,
@@ -35,10 +36,11 @@ import type { Rstest } from '../rstest';
  * constructing/`init()`-ing a NodeExecutor would add the node Rsbuild instance
  * to every pure-browser run.
  *
- * Watch runs stay host-driven and self-finalizing (with a bespoke coverage
- * report after the session exits); non-watch runs drive one browser executor
- * through the shared finalize so exit code, reporter output, coverage, and the
- * no-test path match node and mixed runs.
+ * Watch runs stay host-driven and self-finalizing — the first cycle reports
+ * coverage here, every rerun reports through the host's per-rerun finalize;
+ * non-watch runs drive one browser executor through the shared finalize so exit
+ * code, reporter output, coverage, and the no-test path match node and mixed
+ * runs.
  */
 export async function runBrowserOnlyTests(
   context: Rstest,
@@ -59,24 +61,15 @@ export async function runBrowserOnlyTests(
   const { coverage } = context.normalizedConfig;
   const { snapshotManager } = context;
 
+  // Related runs are rejected in watch mode at the CLI, so an empty related
+  // resolution is always a one-shot run that ends right here.
   if (context.relatedResolutionEmpty) {
-    if (isWatchMode) {
-      const emptyWatchResult = await runBrowserModeTests(
-        context,
-        browserProjects,
-        {
-          allowEmptyWatchRun: true,
-        },
-      );
-      await attachBrowserWatchControls(context, emptyWatchResult?.watch);
-    } else {
-      reportNoTestFiles({ context });
-      await notifyReportersOnTestRunEnd({
-        context,
-        duration: { totalTime: 0, buildTime: 0, testTime: 0 },
-        getSourcemap: async () => null,
-      });
-    }
+    reportNoTestFiles({ context });
+    await notifyReportersOnTestRunEnd({
+      context,
+      duration: { totalTime: 0, buildTime: 0, testTime: 0 },
+      getSourcemap: async () => null,
+    });
 
     await runLifecycleStep('trace controller cleanup', () =>
       traceController.close(),
@@ -94,36 +87,14 @@ export async function runBrowserOnlyTests(
     if (coverage.enabled) {
       logCoverageEnabled(coverage);
     }
-    // Browser-only watch: the host owns per-rerun finalize. The bespoke
-    // coverage report runs once after the watch session exits (Phase 6
-    // converges this onto the executor seam).
+    // Browser-only watch: the host owns per-rerun finalize, so the initial
+    // cycle's coverage is reported here — reruns report through the host's
+    // `finalizeWatchRerun` → `finalizeRunCycle`.
     const browserResult = await runBrowserModeTests(context, browserProjects, {
       onTraceEvents: traceRun.onEvents,
     });
 
-    if (
-      coverage.enabled &&
-      browserResult?.results.length &&
-      !browserResult.unhandledErrors?.length
-    ) {
-      const coverageProvider = await createCoverageProvider(
-        coverage,
-        context.rootPath,
-      );
-      const browserCoverageMap = buildBrowserCoverageMap(
-        browserResult.results,
-        coverageProvider,
-      );
-      if (coverageProvider && browserCoverageMap) {
-        const { generateCoverage } = await import('../../coverage/generate');
-        await generateCoverage(
-          context,
-          browserCoverageMap,
-          coverageProvider,
-          traceRun.span,
-        );
-      }
-    }
+    await reportInitialCycleCoverage(context, browserResult, traceRun.span);
 
     await attachBrowserWatchControls(context, browserResult?.watch);
   } else {

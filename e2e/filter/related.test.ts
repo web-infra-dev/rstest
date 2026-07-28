@@ -172,6 +172,40 @@ describe('related test filtering', () => {
     expect(cli.log).not.toContain('invalid');
   });
 
+  it('should reject the `watch` command with related filters', async () => {
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['watch', '--related', 'src/index.ts'],
+      options: {
+        nodeOptions: {
+          cwd: relatedFixturePath,
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expectStderrLog(
+      /`--related`, `--findRelatedTests`, and `--changed` options are not supported in watch mode/,
+    );
+  });
+
+  it('should reject `--changed` with `--watch` on the default command', async () => {
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['--watch', '--changed'],
+      options: {
+        nodeOptions: {
+          cwd: relatedFixturePath,
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expectStderrLog(
+      /`--related`, `--findRelatedTests`, and `--changed` options are not supported in watch mode/,
+    );
+  });
+
   it('should keep exact related test paths without prefix matching extra files', async () => {
     const { cli, expectExecSuccess } = await runRstestCli({
       command: 'rstest',

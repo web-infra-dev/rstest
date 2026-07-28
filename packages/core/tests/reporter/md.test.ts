@@ -1,5 +1,14 @@
-import { describe, expect, it } from '@rstest/core';
-import { resolveOptions } from '../../src/reporter/md';
+import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
+import { MdReporter, resolveOptions } from '../../src/reporter/md';
+import type {
+  NormalizedConfig,
+  Reporter,
+  RstestTestState,
+  TestFileResult,
+  TestResult,
+  UserConsoleLog,
+} from '../../src/types';
+import { emptyDuration, emptySnapshotSummary } from './helpers';
 
 describe('resolveOptions', () => {
   describe('defaults', () => {
@@ -184,5 +193,171 @@ describe('resolveOptions', () => {
       const result = resolveOptions({ errors: { unhandled: false } });
       expect(result.errors.unhandled).toBe(false);
     });
+  });
+});
+
+const ROOT_PATH = '/test/root';
+const PATH_A = `${ROOT_PATH}/a.test.ts`;
+const PATH_B = `${ROOT_PATH}/b.test.ts`;
+
+const createConsoleLog = (
+  testPath: string,
+  content: string,
+  project = 'default',
+): UserConsoleLog => ({
+  content,
+  name: 'log',
+  testPath,
+  project,
+  type: 'stdout',
+});
+
+const createFailedTest = (
+  testPath: string,
+  name: string,
+  project = 'default',
+): TestResult => ({
+  testId: `${project}:${testPath}#${name}`,
+  status: 'fail',
+  name,
+  testPath,
+  project,
+  errors: [{ message: `${name} failed` }],
+});
+
+const createFailedFile = (
+  testPath: string,
+  results: TestResult[],
+  project = 'default',
+): TestFileResult => ({
+  testId: `${project}:${testPath}`,
+  status: 'fail',
+  name: testPath,
+  testPath,
+  project,
+  results,
+});
+
+const setupMdReporter = () => {
+  const reporter = new MdReporter({
+    rootPath: ROOT_PATH,
+    config: {} as NormalizedConfig,
+    options: { header: false, reproduction: false, codeFrame: false },
+    testState: {} as RstestTestState,
+  });
+
+  const output: string[] = [];
+  rs.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+    output.push(String(chunk));
+    return true;
+  });
+
+  onTestFinished(() => {
+    rs.restoreAllMocks();
+  });
+
+  return {
+    fileStart: (testPath: string, project = 'default') =>
+      reporter.onTestFileStart({
+        testId: `${project}:${testPath}`,
+        testPath,
+        project,
+        tests: [],
+      }),
+    log: (testPath: string, content: string, project = 'default') =>
+      reporter.onUserConsoleLog(createConsoleLog(testPath, content, project)),
+    // Typed through the `Reporter` contract so the payload keeps the fields the
+    // md reporter deliberately ignores.
+    runEnd: async (
+      payload: Omit<
+        Parameters<NonNullable<Reporter['onTestRunEnd']>>[0],
+        'duration' | 'getSourcemap' | 'snapshotSummary'
+      >,
+    ) => {
+      await reporter.onTestRunEnd({
+        ...payload,
+        duration: emptyDuration,
+        getSourcemap: async () => null,
+        snapshotSummary: emptySnapshotSummary,
+      });
+      return output.join('');
+    },
+  };
+};
+
+describe('MdReporter watch reruns', () => {
+  it('keeps only the latest console logs per file and reports session-wide failures', async () => {
+    const { fileStart, log, runEnd } = setupMdReporter();
+
+    fileStart(PATH_A);
+    log(PATH_A, 'a first cycle');
+    fileStart(PATH_B);
+    log(PATH_B, 'b only cycle');
+
+    // Watch rerun of file A only.
+    fileStart(PATH_A);
+    log(PATH_A, 'a second cycle');
+
+    const testA = createFailedTest(PATH_A, 'fails in a');
+    const testB = createFailedTest(PATH_B, 'fails in b');
+
+    const report = await runEnd({
+      results: [
+        createFailedFile(PATH_A, [testA]),
+        createFailedFile(PATH_B, [testB]),
+      ],
+      testResults: [testA, testB],
+      filterRerunTestPaths: [PATH_A],
+    });
+
+    expect(report).toContain('[stdout] log: a second cycle');
+    expect(report).not.toContain('[stdout] log: a first cycle');
+    expect(report).toContain('[stdout] log: b only cycle');
+
+    expect(report).toContain('### [F01] a.test.ts :: fails in a');
+    expect(report).toContain('### [F02] b.test.ts :: fails in b');
+  });
+
+  it('keeps the logs of each project running the same file', async () => {
+    const { fileStart, log, runEnd } = setupMdReporter();
+
+    fileStart(PATH_A, 'node');
+    log(PATH_A, 'from node', 'node');
+    fileStart(PATH_A, 'jsdom');
+    log(PATH_A, 'from jsdom', 'jsdom');
+
+    const nodeTest = createFailedTest(PATH_A, 'fails in a', 'node');
+    const jsdomTest = createFailedTest(PATH_A, 'fails in a', 'jsdom');
+
+    // `updateReporterResultState` keys the snapshot by path alone, so only the
+    // last project's result survives a shared file — the prune must not read
+    // that as "the node project's logs are stale".
+    const report = await runEnd({
+      results: [createFailedFile(PATH_A, [jsdomTest], 'jsdom')],
+      testResults: [nodeTest, jsdomTest],
+    });
+
+    expect(report).toContain('[stdout] log: from node');
+    expect(report).toContain('[stdout] log: from jsdom');
+  });
+
+  it('drops the logs of files that left the result snapshot', async () => {
+    const { fileStart, log, runEnd } = setupMdReporter();
+
+    fileStart(PATH_A);
+    log(PATH_A, 'a only cycle');
+    fileStart(PATH_B);
+    log(PATH_B, 'b only cycle');
+
+    const testB = createFailedTest(PATH_B, 'fails in b');
+
+    // File A was deleted, so the watch snapshot no longer lists it.
+    const report = await runEnd({
+      results: [createFailedFile(PATH_B, [testB])],
+      testResults: [testB],
+    });
+
+    expect(report).toContain('[stdout] log: b only cycle');
+    expect(report).not.toContain('[stdout] log: a only cycle');
   });
 });

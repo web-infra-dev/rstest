@@ -2353,7 +2353,6 @@ export const runBrowserController = async (
   options?: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> => {
   const {
-    allowEmptyWatchRun = false,
     allowEmptyRun = false,
     filesOnly = false,
     onTraceEvents,
@@ -2523,47 +2522,27 @@ export const runBrowserController = async (
 
   const notifyTestRunEnd = async ({
     duration,
-    unhandledErrors,
-    filterRerunTestPaths,
+    coverage,
   }: {
     duration: {
       totalTime: number;
       buildTime: number;
       testTime: number;
     };
-    unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
+    coverage?: CoverageMapData;
   }): Promise<void> => {
     if (!isWatchMode) {
       return;
     }
 
-    // Merge per-file coverage into a single CoverageMapData for reporters
-    let mergedCoverage: CoverageMapData | undefined;
-    if (coverageProvider) {
-      const coverageMap = coverageProvider.createCoverageMap();
-      let hasCoverage = false;
-      for (const result of context.reporterResults.results) {
-        if (result.coverage) {
-          coverageMap.merge(result.coverage);
-          hasCoverage = true;
-        }
-      }
-      if (hasCoverage) {
-        mergedCoverage = coverageMap.toJSON();
-      }
-    }
-
     for (const reporter of context.reporters) {
       await reporter.onTestRunEnd?.({
         results: context.reporterResults.results,
-        coverage: mergedCoverage,
+        coverage,
         testResults: context.reporterResults.testResults,
         duration,
         snapshotSummary: context.snapshotManager.summary,
         getSourcemap: getBrowserSourcemap,
-        unhandledErrors,
-        filterRerunTestPaths,
       });
     }
   };
@@ -2604,7 +2583,6 @@ export const runBrowserController = async (
     (total, item) => total + item.testFiles.length,
     0,
   );
-  const shouldKeepWatchingWithEmptySet = isWatchMode && allowEmptyWatchRun;
   const shouldInitializeEmptyBrowserHooks =
     totalTests === 0 && hasUserRstestConfigPlugins(browserProjects);
 
@@ -2624,16 +2602,14 @@ export const runBrowserController = async (
     };
   };
 
-  const reportEmptyTestSet = (): boolean => {
+  const reportEmptyTestSet = (): void => {
     const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
     if (isWatchMode || !allowEmptyRun) {
-      const message = shouldKeepWatchingWithEmptySet
-        ? 'No test files found.'
-        : getNoTestFilesMessage({
-            context,
-            code,
-            defaultMessage: `No test files found, exiting with code ${code}.`,
-          });
+      const message = getNoTestFilesMessage({
+        context,
+        code,
+        defaultMessage: `No test files found, exiting with code ${code}.`,
+      });
       if (code === 0) {
         logger.log(color.yellow(message));
       } else {
@@ -2656,22 +2632,14 @@ export const runBrowserController = async (
     // In non-watch runs the host returns a void outcome and core's
     // `reportNoTestFiles` owns the exit code and the no-test reporter lifecycle;
     // the host must not set the code itself. Watch keeps its own exit code.
-    if (
-      isWatchMode &&
-      code !== 0 &&
-      !shouldKeepWatchingWithEmptySet &&
-      !allowEmptyRun
-    ) {
+    if (isWatchMode && code !== 0 && !allowEmptyRun) {
       ensureProcessExitCode(code);
     }
-
-    return !shouldKeepWatchingWithEmptySet;
   };
 
   if (totalTests === 0 && !shouldInitializeEmptyBrowserHooks) {
-    if (reportEmptyTestSet()) {
-      return allowEmptyRun ? createEmptyRunResult() : undefined;
-    }
+    reportEmptyTestSet();
+    return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
 
   if (!filesOnly) {
@@ -2798,23 +2766,19 @@ export const runBrowserController = async (
     unhandledErrors?: Error[];
   }): Promise<void> => {
     const rerunPathSet = new Set(rerunTestPaths);
-    // Reporter coverage spans the whole session (unaffected files keep their
-    // last coverage), matching the previous self-finalize payload. The merge
-    // must not strip `result.coverage`, or later reruns would lose it.
-    let sessionCoverage: CoverageMapData | undefined;
-    const coverageMap = buildBrowserCoverageMap(
-      context.reporterResults.results,
-      coverageProvider,
-      { keepResultCoverage: true },
+    const rerunResults = context.reporterResults.results.filter((result) =>
+      rerunPathSet.has(result.testPath),
     );
+    // Watch coverage is per-cycle on both transports: only the files this
+    // rerun executed are reported.
+    let rerunCoverage: CoverageMapData | undefined;
+    const coverageMap = buildBrowserCoverageMap(rerunResults, coverageProvider);
     if (coverageMap && coverageMap.files().length > 0) {
-      sessionCoverage = coverageMap.toJSON();
+      rerunCoverage = coverageMap.toJSON();
     }
 
     const outcome: ExecutorCycleOutcome = {
-      results: context.reporterResults.results.filter((result) =>
-        rerunPathSet.has(result.testPath),
-      ),
+      results: rerunResults,
       testResults: context.reporterResults.testResults.filter((result) =>
         rerunPathSet.has(result.testPath),
       ),
@@ -2824,7 +2788,7 @@ export const runBrowserController = async (
         buildTime: drainPendingBuildTime(watchState),
         testTime,
       },
-      coverage: sessionCoverage ? { map: sessionCoverage } : undefined,
+      coverage: rerunCoverage ? { map: rerunCoverage } : undefined,
       resolveSourcemap: resolveBrowserSourcemap,
     };
 
@@ -2861,7 +2825,8 @@ export const runBrowserController = async (
     };
   }
 
-  if (totalTests === 0 && reportEmptyTestSet()) {
+  if (totalTests === 0) {
+    reportEmptyTestSet();
     await destroyBrowserRuntime(runtime);
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
@@ -3685,71 +3650,6 @@ export const runBrowserController = async (
 
     awaitHeadlessRerunIdle = () => latestRerunScheduler.whenIdle();
 
-    if (allTestFiles.length === 0) {
-      const duration = {
-        totalTime: buildTime,
-        buildTime,
-        testTime: 0,
-      };
-      const result = {
-        results: reporterResults,
-        testResults: caseResults,
-        duration,
-        hasFailure: false,
-        getSourcemap: getBrowserSourcemap,
-        resolveSourcemap: resolveBrowserSourcemap,
-        close: !isWatchMode
-          ? async () => {
-              sessionRegistry.clear();
-              await destroyBrowserRuntime(runtime);
-            }
-          : undefined,
-        watch: watchHandles,
-      };
-
-      if (isWatchMode) {
-        await notifyTestRunEnd({ duration });
-      }
-
-      if (isWatchMode) {
-        triggerRerun = async () => {
-          const newProjectEntries = await collectProjectEntries(context);
-          const rerunPlan = planWatchRerun({
-            projectEntries: newProjectEntries,
-            previousTestFiles: watchState.lastTestFiles,
-            affectedTestFiles: drainPendingAffectedTestFiles(watchState),
-          });
-
-          if (rerunPlan.filesChanged) {
-            watchState.lastTestFiles = rerunPlan.currentTestFiles;
-            if (rerunPlan.currentTestFiles.length === 0) {
-              logger.log(
-                color.cyan('No browser test files remain after update.\n'),
-              );
-              logWatchReadyMessage(context, enableCliShortcuts);
-              return;
-            }
-
-            logger.log(
-              color.cyan(
-                `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
-              ),
-            );
-            await latestRerunScheduler.enqueueLatest(
-              rerunPlan.currentTestFiles,
-            );
-            return;
-          }
-
-          logWatchReadyMessage(context, enableCliShortcuts);
-        };
-        watchState.hooksEnabled = true;
-        logWatchReadyMessage(context, enableCliShortcuts);
-      }
-
-      return result;
-    }
-
     const testStart = Date.now();
     await runFilesWithPool(allTestFiles);
     const testTime = Date.now() - testStart;
@@ -3837,6 +3737,15 @@ export const runBrowserController = async (
       ensureProcessExitCode(1);
     }
 
+    // Fold and strip the initial cycle's coverage (the same per-cycle fold
+    // reruns get in `finalizeWatchRerun`); the map rides on the result so the
+    // browser-only watch path can report it without re-merging. Non-watch runs
+    // keep `result.coverage` intact for the executor's outcome fold.
+    const cycleCoverageMap =
+      isWatchMode && coverageProvider
+        ? buildBrowserCoverageMap(reporterResults, coverageProvider)
+        : undefined;
+
     const result = {
       results: reporterResults,
       testResults: caseResults,
@@ -3847,12 +3756,18 @@ export const runBrowserController = async (
       // `closeHeadlessRuntime` is already `undefined` in watch mode, so the
       // non-watch caller (core) receives the deferred close and watch does not.
       close: closeHeadlessRuntime,
+      coverage: cycleCoverageMap,
       watch: watchHandles,
     };
 
     if (isWatchMode) {
       try {
-        await notifyTestRunEnd({ duration });
+        await notifyTestRunEnd({
+          duration,
+          coverage: cycleCoverageMap?.files().length
+            ? cycleCoverageMap.toJSON()
+            : undefined,
+        });
       } finally {
         await closeHeadlessRuntime?.();
       }
@@ -4368,6 +4283,12 @@ export const runBrowserController = async (
     ensureProcessExitCode(1);
   }
 
+  // Same per-cycle fold-and-strip as the headless path above.
+  const cycleCoverageMap =
+    isWatchMode && coverageProvider
+      ? buildBrowserCoverageMap(reporterResults, coverageProvider)
+      : undefined;
+
   const result = {
     results: reporterResults,
     testResults: caseResults,
@@ -4378,12 +4299,18 @@ export const runBrowserController = async (
     // `closeContainerRuntime` is already `undefined` in watch mode, so the
     // non-watch caller (core) receives the deferred close and watch does not.
     close: closeContainerRuntime,
+    coverage: cycleCoverageMap,
     watch: watchHandles,
   };
 
   if (isWatchMode) {
     try {
-      await notifyTestRunEnd({ duration });
+      await notifyTestRunEnd({
+        duration,
+        coverage: cycleCoverageMap?.files().length
+          ? cycleCoverageMap.toJSON()
+          : undefined,
+      });
     } finally {
       await closeContainerRuntime?.();
     }

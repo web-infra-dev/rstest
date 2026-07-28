@@ -11,13 +11,13 @@ Coverage spans three packages: `@rstest/core` owns the `CoverageProvider` contra
 
 ## Key invariants
 
-- Coverage stripping differs by path. Node strips at the pool before reporters or state see results. Browser results carry `result.coverage` through the sink during the run and are stripped retroactively at outcome assembly — reporters DO observe browser coverage at `onTestFileResult` time.
+- Coverage stripping differs by path. Node strips at the pool before reporters or state see results. Browser results carry `result.coverage` through the sink during the run and are stripped retroactively when the cycle map is folded (the executor's non-watch outcome assembly, or the host's watch finalize) — reporters DO observe browser coverage at `onTestFileResult` time.
 - Worker provider `cleanup()` runs in `finally` per file; istanbul's cleanup deletes `globalThis.__coverage__` — skipping it double-counts hits on non-isolated reruns.
 - Report-stage failures are caught and downgraded to `process.exitCode = 1`, but the raw-resolution seam inside `finalizeRunCycle` rethrows — a resource-load rejection propagates out of finalize instead of downgrading.
 - `cleanCoverageReports` must stay on the test-run lifecycle, never an rsbuild compile hook — browser-only mode has no node rsbuild instance and `--passWithNoTests` races the hook.
 - Memory bounds in `generateCoverage` are deliberate: projects are processed sequentially and untested files in small batches. Do not parallelize.
 - The reporting provider (main process) and the worker collection providers are distinct instances — state set during collection never reaches reporting.
-- Browser-only **watch** runs bypass `finalizeRunCycle`: a bespoke coverage report runs once after the watch session exits. Non-watch browser runs go through the shared finalize like node runs.
+- Browser-only **watch** runs report their first cycle through a bespoke `generateCoverage` call in `runBrowserOnlyTests`, consuming the already-folded cycle map the host hands over on `BrowserTestRunResult.coverage` (the fold strips `result.coverage`, so re-merging from results yields nothing); every rerun reports through the host's per-rerun finalize into `finalizeRunCycle`. Watch coverage is per-cycle on both transports — each report covers only the files that cycle ran. Non-watch browser runs go through the shared finalize like node runs.
 
 ## Coupling points (change both sides)
 

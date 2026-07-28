@@ -50,16 +50,18 @@ describe('runTests finalize drift-guard', () => {
   it('pins the reporter onTestRunEnd call sites in core', () => {
     const hits = countCalls('notifyReportersOnTestRunEnd');
     // 1. `finalizeRun.ts` — the single unified finalize path.
-    // 2. `runTests.ts` — the browser-only `relatedResolutionEmpty` non-watch
-    //    empty-run shortcut (no outcomes to reduce; it notifies directly).
+    // 2. `browser/onlyRun.ts` — the browser-only `relatedResolutionEmpty`
+    //    shortcut (no outcomes to reduce; it notifies directly). Related runs
+    //    are rejected in watch mode, so this shortcut is always one-shot.
     expect(total(hits)).toBe(2);
   });
 
   it('pins the run-time generateCoverage call sites in core', () => {
     const hits = countCalls('generateCoverage');
     // 1. `finalizeRun.ts` — inside `finalizeRunCycle` (the shared coverage report).
-    // 2. `runTests.ts` — the browser-only WATCH bespoke report (watch keeps its
-    //    host-driven finalize, so its coverage stays out of the cycle).
+    // 2. `browser/onlyRun.ts` — the browser-only WATCH bespoke report, which
+    //    covers the first cycle only; every rerun reports through the host's
+    //    per-rerun finalize and thus through the cycle.
     // 3. `mergeReports.ts` — the separate `merge-reports` command, not a run.
     expect(total(hits)).toBe(3);
   });

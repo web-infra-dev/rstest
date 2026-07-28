@@ -1,4 +1,4 @@
-import type { SnapshotSummary } from '../../src/types';
+import type { Duration, SnapshotSummary } from '../../src/types';
 
 export const emptySnapshotSummary: SnapshotSummary = {
   added: 0,
@@ -15,4 +15,10 @@ export const emptySnapshotSummary: SnapshotSummary = {
   uncheckedKeysByFile: [],
   unmatched: 0,
   updated: 0,
+};
+
+export const emptyDuration: Duration = {
+  totalTime: 0,
+  buildTime: 0,
+  testTime: 0,
 };

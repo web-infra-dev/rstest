@@ -93,6 +93,7 @@ import type {
   Reporter,
   RstestTestState,
   SnapshotSummary,
+  TestFileInfo,
   TestFileResult,
   TestResult,
   UserConsoleLog,
@@ -108,6 +109,9 @@ import {
   getErrorType,
   pushFencedBlock,
   pushHeading,
+  reportedTestPaths,
+  reporterFileKey,
+  reporterFileKeyPath,
   stringifyJson,
 } from './utils';
 
@@ -734,7 +738,7 @@ export class MdReporter implements Reporter {
   protected config: NormalizedConfig;
   private readonly fileFilters: string[];
   private readonly options: ResolvedOptions;
-  private readonly logsByTestPath = new Map<string, string[]>();
+  private logsByFile = new Map<string, string[]>();
 
   constructor({
     rootPath,
@@ -804,12 +808,18 @@ export class MdReporter implements Reporter {
     }
   }
 
+  // A watch rerun replays the whole file, so its previous logs are stale.
+  onTestFileStart(test: TestFileInfo): void {
+    this.logsByFile.delete(reporterFileKey(test.project, test.testPath));
+  }
+
   onUserConsoleLog(log: UserConsoleLog): void {
     if (!this.options.console.enabled) return;
 
-    const logs = this.logsByTestPath.get(log.testPath) || [];
+    const key = reporterFileKey(log.project, log.testPath);
+    const logs = this.logsByFile.get(key) || [];
     logs.push(formatConsoleLog(log, this.options));
-    this.logsByTestPath.set(log.testPath, logs);
+    this.logsByFile.set(key, logs);
   }
 
   private renderFrontMatter(lines: string[]): void {
@@ -889,7 +899,6 @@ export class MdReporter implements Reporter {
     getSourcemap,
     snapshotSummary,
     unhandledErrors,
-    filterRerunTestPaths,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
@@ -897,14 +906,23 @@ export class MdReporter implements Reporter {
     getSourcemap: GetSourcemap;
     snapshotSummary: SnapshotSummary;
     unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
   }): Promise<void> {
     const rootPath = this.rootPath || process.cwd();
-    const failures = collectFailures({
-      results,
-      testResults,
-      filterRerunTestPaths,
-    });
+    // A watch session drops deleted files from the result snapshot; the buffered
+    // logs have no such signal of their own, so the reported file set prunes
+    // them and the buffer stays bounded across a long session.
+    if (this.logsByFile.size) {
+      const reportedPaths = reportedTestPaths(results);
+      for (const key of this.logsByFile.keys()) {
+        if (!reportedPaths.has(reporterFileKeyPath(key))) {
+          this.logsByFile.delete(key);
+        }
+      }
+    }
+    // Deliberately unfiltered by `filterRerunTestPaths`: the summary counts are
+    // derived from the whole session snapshot, so scoping failures to the
+    // current watch rerun would report the two sections at different scopes.
+    const failures = collectFailures({ results, testResults });
 
     const {
       failedTests,
@@ -1177,7 +1195,9 @@ export class MdReporter implements Reporter {
 
         if (this.options.console.enabled) {
           const consoleLogs =
-            this.logsByTestPath.get(failure.test.testPath) || [];
+            this.logsByFile.get(
+              reporterFileKey(failure.test.project, failure.test.testPath),
+            ) || [];
           const limitedLogs = consoleLogs.slice(
             Math.max(
               0,
