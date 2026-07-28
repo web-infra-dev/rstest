@@ -7,12 +7,12 @@ import type {
   CoverageProvider as RstestCoverageProvider,
   RawCoverageResolveOptions,
 } from '@rstest/core';
-import { Parser } from 'acorn';
 import { type CoverageMap, type FileCoverageData } from 'istanbul-lib-coverage';
 import type { ReportBase } from 'istanbul-lib-report';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import picomatch from 'picomatch';
+import { parse } from 'yuku-parser';
 import { createFastCoverageMap, mapWithConcurrency } from './utils';
 import {
   applyV8CoverageWithAst,
@@ -524,10 +524,17 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   private parseAst(code: string, outputModule: boolean) {
-    return Parser.parse(code, {
-      ecmaVersion: 'latest',
+    const result = parse(code, {
+      preserveParens: false,
       sourceType: outputModule ? 'module' : 'script',
     });
+    const error = result.diagnostics.find(
+      (diagnostic) => diagnostic.severity === 'error',
+    );
+    if (error) {
+      throw new SyntaxError(error.message);
+    }
+    return result.program;
   }
 
   private async convertWithAst(
