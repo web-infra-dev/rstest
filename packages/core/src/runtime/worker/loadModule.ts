@@ -30,102 +30,6 @@ const getAssetContent = (
   return undefined;
 };
 
-const formatAssetContent = (content: string, options?: unknown) => {
-  const buffer = Buffer.from(content);
-  const encoding =
-    typeof options === 'string'
-      ? options
-      : options && typeof options === 'object' && 'encoding' in options
-        ? options.encoding
-        : undefined;
-  return typeof encoding === 'string'
-    ? buffer.toString(encoding as BufferEncoding)
-    : buffer;
-};
-
-const createVirtualFsAssetProxy = (
-  fsModule: typeof import('node:fs'),
-  assetFiles: Record<string, string>,
-): typeof import('node:fs') =>
-  new Proxy(fsModule, {
-    get(target, property, receiver) {
-      if (property === 'existsSync') {
-        return (filePath: unknown) =>
-          getAssetContent(assetFiles, filePath) !== undefined ||
-          target.existsSync(
-            filePath as Parameters<typeof target.existsSync>[0],
-          );
-      }
-
-      if (property === 'readFile') {
-        return (
-          filePath: unknown,
-          optionsOrCallback: unknown,
-          maybeCallback?: unknown,
-        ) => {
-          const callback =
-            typeof optionsOrCallback === 'function'
-              ? optionsOrCallback
-              : maybeCallback;
-          const content = getAssetContent(assetFiles, filePath);
-
-          if (content !== undefined && typeof callback === 'function') {
-            queueMicrotask(() =>
-              callback(null, formatAssetContent(content, optionsOrCallback)),
-            );
-            return;
-          }
-
-          return Reflect.apply(
-            target.readFile,
-            target,
-            [filePath, optionsOrCallback, maybeCallback].filter(
-              (value) => value !== undefined,
-            ),
-          );
-        };
-      }
-
-      if (property === 'readFileSync') {
-        return (filePath: unknown, options?: unknown) => {
-          const content = getAssetContent(assetFiles, filePath);
-          if (content !== undefined) {
-            return formatAssetContent(content, options);
-          }
-          return target.readFileSync(
-            filePath as Parameters<typeof target.readFileSync>[0],
-            options as Parameters<typeof target.readFileSync>[1],
-          );
-        };
-      }
-
-      if (property === 'promises') {
-        return new Proxy(target.promises, {
-          get(promisesTarget, promisesProperty, promisesReceiver) {
-            if (promisesProperty === 'readFile') {
-              return (filePath: unknown, options?: unknown) => {
-                const content = getAssetContent(assetFiles, filePath);
-                return content === undefined
-                  ? Reflect.apply(promisesTarget.readFile, promisesTarget, [
-                      filePath,
-                      options,
-                    ])
-                  : Promise.resolve(formatAssetContent(content, options));
-              };
-            }
-            return Reflect.get(
-              promisesTarget,
-              promisesProperty,
-              promisesReceiver,
-            );
-          },
-        });
-      }
-
-      return Reflect.get(target, property, receiver);
-    },
-  });
-
 const defineRstestRequireResolve =
   ({
     testPath,
@@ -170,7 +74,6 @@ const createRequire = (
   rstestContext: Record<string, any>,
   assetFiles: Record<string, string>,
   interopDefault: boolean,
-  virtualFsAssetFiles?: Record<string, string>,
 ): NodeJS.Require => {
   const _require = (() => {
     try {
@@ -182,13 +85,6 @@ const createRequire = (
   })();
 
   const require = ((id: string) => {
-    if (id === 'fs' || id === 'node:fs') {
-      const fsModule = _require(id);
-      return virtualFsAssetFiles
-        ? createVirtualFsAssetProxy(fsModule, virtualFsAssetFiles)
-        : fsModule;
-    }
-
     const currentDirectory = path.dirname(distPath);
 
     const joinedPath = isRelativePath(id)
@@ -206,7 +102,6 @@ const createRequire = (
           rstestContext,
           assetFiles,
           interopDefault,
-          virtualFsAssetFiles,
         });
       } catch (err) {
         logger.error(
@@ -289,7 +184,6 @@ export const loadModule = ({
   rstestContext,
   assetFiles: assetFilesArg,
   interopDefault,
-  virtualFsAssetFiles: virtualFsAssetFilesArg,
 }: {
   interopDefault: boolean;
   codeContent: string;
@@ -297,7 +191,6 @@ export const loadModule = ({
   testPath: string;
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
-  virtualFsAssetFiles?: Record<string, string>;
 }): any => {
   // Fold this file's assets into the persistent map. Recursive loads (require /
   // dynamic imports) re-pass that same map, so skip the no-op self-merge.
@@ -305,7 +198,6 @@ export const loadModule = ({
     Object.assign(accumulatedAssetFiles, assetFilesArg);
   }
   const assetFiles = accumulatedAssetFiles;
-  const virtualFsAssetFiles = virtualFsAssetFilesArg ? assetFiles : undefined;
   const fileDir = path.dirname(testPath);
 
   const localModule = {
@@ -327,7 +219,6 @@ export const loadModule = ({
       rstestContext,
       assetFiles,
       interopDefault,
-      virtualFsAssetFiles,
     ),
     [RSTEST_DYNAMIC_IMPORT_HOOK]: defineRstestDynamicImport({
       testPath,
@@ -372,7 +263,6 @@ export const cacheableLoadModule = ({
   rstestContext,
   assetFiles,
   interopDefault,
-  virtualFsAssetFiles,
 }: {
   interopDefault: boolean;
   codeContent: string;
@@ -380,7 +270,6 @@ export const cacheableLoadModule = ({
   testPath: string;
   rstestContext: Record<string, any>;
   assetFiles: Record<string, string>;
-  virtualFsAssetFiles?: Record<string, string>;
 }): any => {
   if (moduleCache.has(testPath)) {
     return moduleCache.get(testPath);
@@ -392,7 +281,6 @@ export const cacheableLoadModule = ({
     rstestContext,
     assetFiles,
     interopDefault,
-    virtualFsAssetFiles,
   });
   moduleCache.set(testPath, mod);
   return mod;
