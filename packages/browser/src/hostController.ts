@@ -2522,47 +2522,27 @@ export const runBrowserController = async (
 
   const notifyTestRunEnd = async ({
     duration,
-    unhandledErrors,
-    filterRerunTestPaths,
+    coverage,
   }: {
     duration: {
       totalTime: number;
       buildTime: number;
       testTime: number;
     };
-    unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
+    coverage?: CoverageMapData;
   }): Promise<void> => {
     if (!isWatchMode) {
       return;
     }
 
-    // Merge per-file coverage into a single CoverageMapData for reporters
-    let mergedCoverage: CoverageMapData | undefined;
-    if (coverageProvider) {
-      const coverageMap = coverageProvider.createCoverageMap();
-      let hasCoverage = false;
-      for (const result of context.reporterResults.results) {
-        if (result.coverage) {
-          coverageMap.merge(result.coverage);
-          hasCoverage = true;
-        }
-      }
-      if (hasCoverage) {
-        mergedCoverage = coverageMap.toJSON();
-      }
-    }
-
     for (const reporter of context.reporters) {
       await reporter.onTestRunEnd?.({
         results: context.reporterResults.results,
-        coverage: mergedCoverage,
+        coverage,
         testResults: context.reporterResults.testResults,
         duration,
         snapshotSummary: context.snapshotManager.summary,
         getSourcemap: getBrowserSourcemap,
-        unhandledErrors,
-        filterRerunTestPaths,
       });
     }
   };
@@ -3757,6 +3737,14 @@ export const runBrowserController = async (
       ensureProcessExitCode(1);
     }
 
+    // Fold and strip the initial cycle's coverage (the same per-cycle fold
+    // reruns get in `finalizeWatchRerun`); the map rides on the result so the
+    // browser-only watch path can report it without re-merging. Non-watch runs
+    // keep `result.coverage` intact for the executor's outcome fold.
+    const cycleCoverageMap = isWatchMode
+      ? buildBrowserCoverageMap(reporterResults, coverageProvider)
+      : undefined;
+
     const result = {
       results: reporterResults,
       testResults: caseResults,
@@ -3767,12 +3755,18 @@ export const runBrowserController = async (
       // `closeHeadlessRuntime` is already `undefined` in watch mode, so the
       // non-watch caller (core) receives the deferred close and watch does not.
       close: closeHeadlessRuntime,
+      coverage: cycleCoverageMap,
       watch: watchHandles,
     };
 
     if (isWatchMode) {
       try {
-        await notifyTestRunEnd({ duration });
+        await notifyTestRunEnd({
+          duration,
+          coverage: cycleCoverageMap?.files().length
+            ? cycleCoverageMap.toJSON()
+            : undefined,
+        });
       } finally {
         await closeHeadlessRuntime?.();
       }
@@ -4288,6 +4282,11 @@ export const runBrowserController = async (
     ensureProcessExitCode(1);
   }
 
+  // Same per-cycle fold-and-strip as the headless path above.
+  const cycleCoverageMap = isWatchMode
+    ? buildBrowserCoverageMap(reporterResults, coverageProvider)
+    : undefined;
+
   const result = {
     results: reporterResults,
     testResults: caseResults,
@@ -4298,12 +4297,18 @@ export const runBrowserController = async (
     // `closeContainerRuntime` is already `undefined` in watch mode, so the
     // non-watch caller (core) receives the deferred close and watch does not.
     close: closeContainerRuntime,
+    coverage: cycleCoverageMap,
     watch: watchHandles,
   };
 
   if (isWatchMode) {
     try {
-      await notifyTestRunEnd({ duration });
+      await notifyTestRunEnd({
+        duration,
+        coverage: cycleCoverageMap?.files().length
+          ? cycleCoverageMap.toJSON()
+          : undefined,
+      });
     } finally {
       await closeContainerRuntime?.();
     }

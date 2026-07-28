@@ -1,6 +1,7 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { ProjectContext } from './core';
+import type { CoverageMap } from './coverage';
 import type { GetSourcemap } from './reporter';
 import type { TestFileResult, TestResult } from './testSuite';
 import type { TraceEvent } from '../utils/trace';
@@ -111,6 +112,13 @@ export interface BrowserTestRunResult {
   resolveSourcemap?: ResolveBrowserSourcemap;
   /** Deferred cleanup hook for unified reporter mode */
   close?: () => Promise<void>;
+  /**
+   * Merged coverage of the initial watch cycle, folded (and stripped off the
+   * results) host-side. Present only on watch-mode results with a coverage
+   * provider; reruns report their own cycle through the host's per-rerun
+   * finalize.
+   */
+  coverage?: CoverageMap;
   /**
    * Watch-session handles, present only on watch-mode results (returned after
    * the initial run while the session keeps running). Core's CLI shortcuts

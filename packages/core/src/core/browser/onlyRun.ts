@@ -3,7 +3,6 @@ import {
   createCoverageProviderWithLog,
   logCoverageEnabled,
 } from '../../coverage';
-import { buildBrowserCoverageMap } from '../../coverage/browserCoverageMap';
 import type { ProjectContext } from '../../types';
 import {
   color,
@@ -93,24 +92,24 @@ export async function runBrowserOnlyTests(
       onTraceEvents: traceRun.onEvents,
     });
 
+    // The host already folded (and stripped) the cycle's coverage into
+    // `browserResult.coverage` at its watch finalize — consume it rather than
+    // re-merging from results that no longer carry coverage.
     if (
       coverage.enabled &&
-      browserResult?.results.length &&
+      browserResult?.coverage &&
+      browserResult.results.length &&
       !browserResult.unhandledErrors?.length
     ) {
       const coverageProvider = await createCoverageProvider(
         coverage,
         context.rootPath,
       );
-      const browserCoverageMap = buildBrowserCoverageMap(
-        browserResult.results,
-        coverageProvider,
-      );
-      if (coverageProvider && browserCoverageMap) {
+      if (coverageProvider) {
         const { generateCoverage } = await import('../../coverage/generate');
         await generateCoverage(
           context,
-          browserCoverageMap,
+          browserResult.coverage,
           coverageProvider,
           traceRun.span,
         );
