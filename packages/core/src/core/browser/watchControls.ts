@@ -1,5 +1,6 @@
-import type { BrowserWatchHandles } from '../../types';
-import { clearScreen, color, logger } from '../../utils';
+import { createCoverageProvider } from '../../coverage';
+import type { BrowserTestRunResult, BrowserWatchHandles } from '../../types';
+import { clearScreen, color, logger, type TraceSpan } from '../../utils';
 import { FATAL_SIGNALS, getSignalExitCode } from '../../utils/signals';
 import { runBrowserModeTests } from './loader';
 import type { BrowserRunPlanner } from './runPlanner';
@@ -95,6 +96,38 @@ async function setupBrowserWatchShortcuts(
 }
 
 /**
+ * Report the initial watch cycle's browser coverage — the single owner for both
+ * the browser-only and the mixed watch path, which would otherwise each hand the
+ * host's folded map somewhere different. Only the first cycle lands here: the
+ * host folds it onto the run result and strips it off the file results, so
+ * nothing downstream can recover it, while every rerun reports through the
+ * host's per-rerun finalize.
+ */
+export async function reportInitialCycleCoverage(
+  context: Rstest,
+  result: BrowserTestRunResult | void,
+  traceSpan?: TraceSpan,
+): Promise<void> {
+  if (
+    !result?.coverage ||
+    !result.results.length ||
+    result.unhandledErrors?.length
+  ) {
+    return;
+  }
+  const { coverage } = context.normalizedConfig;
+  const coverageProvider = await createCoverageProvider(
+    coverage,
+    context.rootPath,
+  );
+  if (!coverageProvider) {
+    return;
+  }
+  const { generateCoverage } = await import('../../coverage/generate');
+  await generateCoverage(context, result.coverage, coverageProvider, traceSpan);
+}
+
+/**
  * Attach core-owned controls to a browser-only watch session: the fatal-signal
  * exit path first, then the single stdin shortcuts owner. No-op when the run
  * produced no watch handles.
@@ -151,27 +184,31 @@ export function createBrowserWatchSession({
     );
   };
 
+  // The initial cycle's coverage arrives on the result and is stripped off the
+  // file results, so both entry paths must land it here before dropping it.
+  const landInitialCycle = async (
+    result: BrowserTestRunResult | void,
+  ): Promise<void> => {
+    handles = result?.watch;
+    await reportInitialCycleCoverage(context, result);
+  };
+
   return {
     startBackground() {
       if (!planner.hasBrowserTestsToRun()) {
         return;
       }
-      start().then(
-        (result) => {
-          handles = result?.watch;
-        },
-        (error) => {
-          logger.error(
-            color.red('Browser Mode watch session failed to start:'),
-            error,
-          );
-          process.exitCode = 1;
-        },
-      );
+      start().then(landInitialCycle, (error) => {
+        logger.error(
+          color.red('Browser Mode watch session failed to start:'),
+          error,
+        );
+        process.exitCode = 1;
+      });
     },
     async runForeground() {
       const result = await start();
-      handles = result?.watch;
+      await landInitialCycle(result);
       await attachBrowserWatchControls(context, result?.watch);
     },
     async rerun(testPaths) {

@@ -81,10 +81,11 @@ export const reporterFileKey = (project: string, testPath: string): string =>
   `${project}\u0000${testPath}`;
 
 /**
- * The file identities a run reports, for retiring buffered per-file state.
- * Buffers are replaced per file on `onTestFileStart`, but a deleted file never
- * starts again — only the run-end result set (already purged of deleted paths
- * by `updateReporterResultState`) can retire it.
+ * Collects the {@link reporterFileKey} of every file a run reports, so a
+ * reporter can retire buffered per-file state. Buffers are replaced per file on
+ * `onTestFileStart`, but a deleted file never starts again — only the run-end
+ * result set (already purged of deleted paths by `updateReporterResultState`)
+ * can retire it.
  */
 export const reportedFileKeys = (results: TestFileResult[]): Set<string> =>
   new Set(

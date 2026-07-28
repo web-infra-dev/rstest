@@ -1,5 +1,4 @@
 import {
-  createCoverageProvider,
   createCoverageProviderWithLog,
   logCoverageEnabled,
 } from '../../coverage';
@@ -17,7 +16,10 @@ import {
   runBrowserGlobalSetupStage,
 } from './globalSetupStage';
 import { loadBrowserExecutor, runBrowserModeTests } from './loader';
-import { attachBrowserWatchControls } from './watchControls';
+import {
+  attachBrowserWatchControls,
+  reportInitialCycleCoverage,
+} from './watchControls';
 import { ensureRunDependencies } from '../dependencies';
 import {
   finalizeRunCycle,
@@ -85,36 +87,14 @@ export async function runBrowserOnlyTests(
     if (coverage.enabled) {
       logCoverageEnabled(coverage);
     }
-    // Browser-only watch: the host owns per-rerun finalize, so the bespoke
-    // coverage report below covers the first cycle only — reruns report
-    // through the host's `finalizeWatchRerun` → `finalizeRunCycle`.
+    // Browser-only watch: the host owns per-rerun finalize, so the initial
+    // cycle's coverage is reported here — reruns report through the host's
+    // `finalizeWatchRerun` → `finalizeRunCycle`.
     const browserResult = await runBrowserModeTests(context, browserProjects, {
       onTraceEvents: traceRun.onEvents,
     });
 
-    // The host already folded (and stripped) the cycle's coverage into
-    // `browserResult.coverage` at its watch finalize — consume it rather than
-    // re-merging from results that no longer carry coverage.
-    if (
-      coverage.enabled &&
-      browserResult?.coverage &&
-      browserResult.results.length &&
-      !browserResult.unhandledErrors?.length
-    ) {
-      const coverageProvider = await createCoverageProvider(
-        coverage,
-        context.rootPath,
-      );
-      if (coverageProvider) {
-        const { generateCoverage } = await import('../../coverage/generate');
-        await generateCoverage(
-          context,
-          browserResult.coverage,
-          coverageProvider,
-          traceRun.span,
-        );
-      }
-    }
+    await reportInitialCycleCoverage(context, browserResult, traceRun.span);
 
     await attachBrowserWatchControls(context, browserResult?.watch);
   } else {
