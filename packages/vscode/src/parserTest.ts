@@ -1,4 +1,4 @@
-import { Compiler } from '@swc/core';
+import { type Node, parse } from 'yuku-parser';
 
 export class Range {
   constructor(
@@ -9,70 +9,11 @@ export class Range {
   ) {}
 }
 
-// Minimal AST typings and type guards to avoid using `any`.
-type Span = { start: number; end: number };
-type NodeBase = { type: string; span?: Span };
-
-type Identifier = NodeBase & { type: 'Identifier'; value: string };
-type MemberExpression = NodeBase & {
-  type: 'MemberExpression';
-  object: unknown;
-};
-type Argument = { expression: unknown };
-type CallExpression = NodeBase & {
-  type: 'CallExpression';
-  callee: unknown;
-  arguments: Argument[];
-  span: Span;
-};
-
-type StringLiteral = NodeBase & { type: 'StringLiteral'; value: string };
-type TemplateElement = { cooked?: string; raw?: string };
-type TemplateLiteral = NodeBase & {
-  type: 'TemplateLiteral';
-  quasis: TemplateElement[];
-  expressions: unknown[];
-};
-
-type Program = { span: Span } & { [key: string]: unknown };
-
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null;
-
-const isSpan = (x: unknown): x is Span =>
-  isObject(x) &&
-  typeof (x as Record<string, unknown>).start === 'number' &&
-  typeof (x as Record<string, unknown>).end === 'number';
-
-const hasSpan = (v: unknown): v is { span: Span } =>
-  isObject(v) && isSpan((v as Record<string, unknown>).span);
-
-const isNode = (v: unknown): v is NodeBase =>
-  isObject(v) && typeof (v as Record<string, unknown>).type === 'string';
-const isIdentifier = (v: unknown): v is Identifier =>
-  isNode(v) &&
-  (v as Record<string, unknown>).type === 'Identifier' &&
-  typeof (v as Record<string, unknown>).value === 'string';
-const isMemberExpression = (v: unknown): v is MemberExpression =>
-  isNode(v) &&
-  (v as Record<string, unknown>).type === 'MemberExpression' &&
-  'object' in (v as Record<string, unknown>);
-const isCallExpression = (v: unknown): v is CallExpression =>
-  isNode(v) &&
-  (v as Record<string, unknown>).type === 'CallExpression' &&
-  Array.isArray((v as Record<string, unknown>).arguments as unknown[]) &&
-  hasSpan(v);
-const isArgument = (v: unknown): v is Argument =>
-  isObject(v) && 'expression' in v;
-const isStringLiteral = (v: unknown): v is StringLiteral =>
-  isNode(v) &&
-  (v as Record<string, unknown>).type === 'StringLiteral' &&
-  typeof (v as Record<string, unknown>).value === 'string';
-const isTemplateLiteral = (v: unknown): v is TemplateLiteral =>
-  isNode(v) &&
-  (v as Record<string, unknown>).type === 'TemplateLiteral' &&
-  Array.isArray((v as Record<string, unknown>).quasis as unknown[]) &&
-  Array.isArray((v as Record<string, unknown>).expressions as unknown[]);
+const isNode = (value: unknown): value is Node =>
+  typeof value === 'object' &&
+  value !== null &&
+  'type' in value &&
+  typeof value.type === 'string';
 
 export const parseTestFile = (
   code: string,
@@ -84,126 +25,81 @@ export const parseTestFile = (
     ): (() => void) | void;
   },
 ) => {
-  const compiler = new Compiler();
-
-  // Parse the code using SWC
-  const astUnknown = compiler.parseSync(code, {
-    syntax: 'typescript',
-    tsx: true,
+  const result = parse(code, {
+    lang: 'tsx',
+    preserveParens: false,
+    sourceType: 'module',
   });
-
-  if (!hasSpan(astUnknown)) {
-    // If for some reason the parser returns a program without span, abort early.
-    return;
+  const error = result.diagnostics.find(
+    (diagnostic) => diagnostic.severity === 'error',
+  );
+  if (error) {
+    throw new SyntaxError(error.message);
   }
 
-  const ast: Program = astUnknown as unknown as Program;
-  const offset = ast.span.start - 1;
-  const codeBuffer = Buffer.from(code, 'utf8');
-
-  // Helper function to convert SWC span to VS Code range
-  const spanToRange = (span: { start: number; end: number }): Range => {
-    // Convert byte offset to character index (SWC uses UTF-8 byte offsets)
-    const startSlice = codeBuffer.subarray(0, span.start - offset);
-    const startCharIndex = startSlice.toString('utf8').length;
-
-    const endSlice = codeBuffer.subarray(0, span.end - offset);
-    const endCharIndex = endSlice.toString('utf8').length;
-
-    const lines = code.substring(0, startCharIndex).split('\n');
+  const offsetToRange = (start: number, end: number): Range => {
+    const lines = code.substring(0, start).split('\n');
     const startLine = Math.max(0, lines.length - 1);
     const startChar = lines[startLine]?.length || 0;
 
-    const endLines = code.substring(0, endCharIndex).split('\n');
+    const endLines = code.substring(0, end).split('\n');
     const endLine = Math.max(0, endLines.length - 1);
     const endChar = endLines[endLine]?.length || 0;
 
     return new Range(startLine, endLine, startChar, endChar);
   };
 
-  // Common test function names to detect
-  const testFunctions = new Set(['test', 'it', 'describe', 'suite']);
-
-  // Helper function to extract string literal value
-  const getStringLiteralValue = (node: unknown): string | null => {
-    if (!node) return null;
-
-    if (isStringLiteral(node)) {
+  const getStringLiteralValue = (node: Node | undefined): string | null => {
+    if (node?.type === 'Literal' && typeof node.value === 'string') {
       return node.value;
     }
-    if (isTemplateLiteral(node)) {
-      // For simple template literals without expressions
-      if (node.quasis?.length === 1 && node.expressions.length === 0) {
-        return node.quasis[0].cooked || node.quasis[0].raw || '';
-      }
-      // For template literals with expressions, construct the string
-      let result = '';
-      for (let i = 0; i < node.quasis.length; i++) {
-        result += node.quasis[i].cooked || node.quasis[i].raw || '';
-        if (i < node.expressions.length) {
-          result += '$' + '{...}'; // Placeholder for expressions
-        }
-      }
-      return result;
+    if (node?.type !== 'TemplateLiteral') {
+      return null;
     }
 
-    return null;
+    return node.quasis
+      .map((quasi, index) => {
+        const expression = index < node.expressions.length ? '${...}' : '';
+        return `${quasi.value.cooked ?? quasi.value.raw}${expression}`;
+      })
+      .join('');
   };
 
-  // Recursive function to walk the AST
-  const walkNode = (node: unknown): void => {
-    if (!isObject(node)) {
-      return;
-    }
-
+  const walkNode = (node: Node): void => {
     let exit: (() => void) | void | undefined;
 
-    // Check for call expressions that might be test functions
-    if (isCallExpression(node)) {
-      let functionName: string | null = null;
+    if (node.type === 'CallExpression') {
+      let functionName: string | undefined;
 
-      // Handle direct function calls: test(), it(), describe()
-      const callee = (node as CallExpression).callee;
-      if (isIdentifier(callee)) {
-        functionName = callee.value;
-      }
-      // Handle member expressions: test.only(), describe.skip()
-      else if (isMemberExpression(callee)) {
-        const obj = callee.object;
-        if (isIdentifier(obj)) {
-          functionName = obj.value;
-        }
+      if (node.callee.type === 'Identifier') {
+        functionName = node.callee.name;
+      } else if (
+        node.callee.type === 'MemberExpression' &&
+        node.callee.object.type === 'Identifier'
+      ) {
+        functionName = node.callee.object.name;
       }
 
-      if (functionName && testFunctions.has(functionName)) {
-        // Extract test name from first argument
-        const firstArg = node.arguments?.[0] || undefined;
-        const expr =
-          firstArg && isArgument(firstArg) ? firstArg.expression : undefined;
-        const testName = getStringLiteralValue(expr);
-        const range = spanToRange(node.span);
-
-        type TestFn = 'test' | 'it' | 'describe' | 'suite';
+      if (
+        functionName === 'test' ||
+        functionName === 'it' ||
+        functionName === 'describe' ||
+        functionName === 'suite'
+      ) {
         exit = events.onTest(
-          range,
-          testName || 'unnamed test',
-          functionName as TestFn,
+          offsetToRange(node.start, node.end),
+          getStringLiteralValue(node.arguments[0]) || 'unnamed test',
+          functionName,
         );
       }
     }
 
-    // Walk through all properties of the node to find nested structures
-    for (const key in node) {
-      if (key === 'span') {
-        continue;
-      }
-
-      const value = (node as Record<string, unknown>)[key];
+    for (const value of Object.values(node)) {
       if (Array.isArray(value)) {
         for (const child of value) {
-          // Recurse into array elements to discover nested structures,
-          // even if they are wrapper objects (e.g., CallExpression arguments).
-          walkNode(child as unknown);
+          if (isNode(child)) {
+            walkNode(child);
+          }
         }
       } else if (isNode(value)) {
         walkNode(value);
@@ -213,6 +109,5 @@ export const parseTestFile = (
     exit?.();
   };
 
-  // Start walking from the root
-  walkNode(ast);
+  walkNode(result.program);
 };

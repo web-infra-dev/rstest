@@ -1,5 +1,19 @@
-import { defineConfig } from '@rslib/core';
+import { createRequire } from 'node:module';
+import { defineConfig, rspack } from '@rslib/core';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
+
+const require = createRequire(import.meta.url);
+const vsceTarget =
+  process.env.VSCE_TARGET ?? `${process.platform}-${process.arch}`;
+// Rstest's Linux VSIX targets use glibc, whose Yuku bindings have a `-gnu` suffix.
+const yukuBindingSuffix = vsceTarget.startsWith('linux-')
+  ? `${vsceTarget}-gnu`
+  : vsceTarget;
+const yukuRequire = createRequire(require.resolve('yuku-parser'));
+// Yuku computes this package name at runtime, so Rspack cannot discover it.
+const yukuBindingPath = yukuRequire.resolve(
+  `@yuku-parser/binding-${yukuBindingSuffix}`,
+);
 
 export default defineConfig({
   lib: [
@@ -14,7 +28,6 @@ export default defineConfig({
       output: {
         externals: {
           vscode: 'commonjs vscode',
-          '@swc/wasm': 'commonjs @swc/wasm',
         },
         sourceMap: process.env.SOURCEMAP === 'true',
       },
@@ -24,6 +37,14 @@ export default defineConfig({
             devtoolModuleFilenameTemplate: '[absolute-resource-path]',
           },
           plugins: [
+            new rspack.CopyRspackPlugin({
+              patterns: [
+                {
+                  from: yukuBindingPath,
+                  to: `@yuku-parser/binding-${yukuBindingSuffix}/yuku-parser.node`,
+                },
+              ],
+            }),
             rsdoctorCIPlugin({ reportDir: '.rsdoctor/extension' }),
           ].filter(Boolean),
         },
@@ -55,9 +76,4 @@ export default defineConfig({
       },
     },
   ],
-  tools: {
-    rspack: {
-      ignoreWarnings: [/Module not found/],
-    },
-  },
 });
