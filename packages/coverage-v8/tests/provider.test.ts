@@ -111,17 +111,10 @@ function getProviderInternals(provider: CoverageProvider): ProviderInternals {
 }
 
 function parseModule(code: string) {
-  const result = parse(code, {
+  return parse(code, {
     preserveParens: false,
     sourceType: 'module',
   });
-  const error = result.diagnostics.find(
-    (diagnostic) => diagnostic.severity === 'error',
-  );
-  if (error) {
-    throw new SyntaxError(error.message);
-  }
-  return result.program;
 }
 
 describe('coverage-v8 provider', () => {
@@ -489,6 +482,34 @@ describe('coverage-v8 provider', () => {
 
     expect(coverage[file]?.branchMap[0]?.locations).toHaveLength(1);
     expect(coverage[file]?.b[0]).toEqual([1]);
+  });
+
+  it('uses Yuku comments for ignore hints', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-yuku-comments.js');
+    const code = `const marker = "/* v8 ignore if */";
+if (first) { foo(); } else { bar(); }
+const label = "😀";
+/** v8 ignore if */ if (second) { foo(); } else { bar(); }`;
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:yuku-comments`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.branchMap[0]?.locations).toHaveLength(2);
+    expect(coverage[file]?.branchMap[1]?.locations).toHaveLength(1);
   });
 
   it('gives implicit else branches numeric locations', async () => {

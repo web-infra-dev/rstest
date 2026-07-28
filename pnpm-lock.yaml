@@ -1388,9 +1388,6 @@ importers:
       '@jridgewell/trace-mapping':
         specifier: 0.3.31
         version: 0.3.31
-      estree-walker:
-        specifier: ^3.0.3
-        version: 3.0.3
       istanbul-lib-coverage:
         specifier: ^3.2.2
         version: 3.2.2
@@ -1400,12 +1397,12 @@ importers:
       istanbul-reports:
         specifier: ^3.2.0
         version: 3.2.0
-      js-tokens:
-        specifier: ^10.0.0
-        version: 10.0.0
       picomatch:
         specifier: ^4.0.5
         version: 4.0.5
+      yuku-ast:
+        specifier: ^0.8.0
+        version: 0.8.0
       yuku-parser:
         specifier: ^0.8.0
         version: 0.8.0
@@ -6113,9 +6110,6 @@ packages:
   js-cookie@3.0.7:
     resolution: {integrity: sha512-z/wZZgDrkNV1eA0ULjM/F9/50Ya8fbzgKneSpoPsXSGd0KnpdtHfOZWK+GcwLk+EZbS4F9RBhU+K2RgzuDaItw==}
     engines: {node: '>=20'}
-
-  js-tokens@10.0.0:
-    resolution: {integrity: sha512-lM/UBzQmfJRo9ABXbPWemivdCW8V2G8FHaHdypQaIy523snUjog0W71ayWXTjiR+ixeMyVHN2XcpnTd/liPg/Q==}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -13779,8 +13773,6 @@ snapshots:
       nopt: 7.2.1
 
   js-cookie@3.0.7: {}
-
-  js-tokens@10.0.0: {}
 
   js-tokens@4.0.0: {}
 

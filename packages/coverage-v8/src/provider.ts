@@ -524,17 +524,10 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   private parseAst(code: string, outputModule: boolean) {
-    const result = parse(code, {
+    return parse(code, {
       preserveParens: false,
       sourceType: outputModule ? 'module' : 'script',
     });
-    const error = result.diagnostics.find(
-      (diagnostic) => diagnostic.severity === 'error',
-    );
-    if (error) {
-      throw new SyntaxError(error.message);
-    }
-    return result.program;
   }
 
   private async convertWithAst(
