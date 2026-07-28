@@ -116,6 +116,12 @@ export async function reportInitialCycleCoverage(
     return;
   }
   const { coverage } = context.normalizedConfig;
+  // Same gate `finalizeRunCycle` applies to every rerun, so a failing first
+  // cycle does not write a report the configured policy withholds from the
+  // cycles after it.
+  if (result.hasFailure && !coverage.reportOnFailure) {
+    return;
+  }
   const coverageProvider = await createCoverageProvider(
     coverage,
     context.rootPath,
