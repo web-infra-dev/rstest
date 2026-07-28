@@ -44,6 +44,7 @@ import {
 import type { Profiler } from 'node:inspector';
 import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
 import jsTokens from 'js-tokens';
+import type { Program } from 'yuku-parser';
 import { walk } from 'estree-walker';
 
 type SourceMapLike = Omit<EncodedSourceMap | DecodedSourceMap, 'version'> & {
@@ -109,7 +110,7 @@ type PreparedCoverage = {
 type FileCoverageLike = FileCoverageData | { data: FileCoverageData };
 
 type ConvertOptions = {
-  ast: unknown | (() => unknown);
+  ast: Program | (() => Program);
   cacheKey: string;
   code: string;
   coverage: Pick<Profiler.ScriptCoverage, 'functions' | 'url'>;
@@ -1262,6 +1263,10 @@ function isTernarySeparatorOnly(code: string): boolean {
 
 function getIgnoreHints(code: string): IgnoreHint[] {
   const ignoreHints: IgnoreHint[] = [];
+  if (!code.includes('ignore')) {
+    return ignoreHints;
+  }
+
   const tokens = jsTokens(code);
   let current = 0;
   let previousTokenWasIgnoreHint = false;
