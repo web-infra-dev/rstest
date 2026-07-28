@@ -35,10 +35,11 @@ import type { Rstest } from '../rstest';
  * constructing/`init()`-ing a NodeExecutor would add the node Rsbuild instance
  * to every pure-browser run.
  *
- * Watch runs stay host-driven and self-finalizing (with a bespoke coverage
- * report after the session exits); non-watch runs drive one browser executor
- * through the shared finalize so exit code, reporter output, coverage, and the
- * no-test path match node and mixed runs.
+ * Watch runs stay host-driven and self-finalizing — the first cycle reports
+ * coverage here, every rerun reports through the host's per-rerun finalize;
+ * non-watch runs drive one browser executor through the shared finalize so exit
+ * code, reporter output, coverage, and the no-test path match node and mixed
+ * runs.
  */
 export async function runBrowserOnlyTests(
   context: Rstest,
@@ -85,9 +86,9 @@ export async function runBrowserOnlyTests(
     if (coverage.enabled) {
       logCoverageEnabled(coverage);
     }
-    // Browser-only watch: the host owns per-rerun finalize. The bespoke
-    // coverage report runs once after the watch session exits (Phase 6
-    // converges this onto the executor seam).
+    // Browser-only watch: the host owns per-rerun finalize, so the bespoke
+    // coverage report below covers the first cycle only — reruns report
+    // through the host's `finalizeWatchRerun` → `finalizeRunCycle`.
     const browserResult = await runBrowserModeTests(context, browserProjects, {
       onTraceEvents: traceRun.onEvents,
     });

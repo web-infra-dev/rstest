@@ -4,22 +4,17 @@ import type { CoverageMap, CoverageProvider } from '../types/coverage';
 /**
  * Merge the browser host's per-file `result.coverage` into one map, stripping it
  * from each result to avoid reporter/state cache bloat. Shared by the browser
- * executor's outcome fold and the browser watch host's per-rerun finalize —
- * the watch path passes `keepResultCoverage` because unaffected files must
- * keep their last coverage for the next rerun's session-wide merge.
+ * executor's outcome fold and the browser watch host's per-rerun finalize.
  */
 export function buildBrowserCoverageMap(
   results: TestFileResult[],
   coverageProvider: CoverageProvider | null,
-  options?: { keepResultCoverage?: boolean },
 ): CoverageMap | undefined {
   const map = coverageProvider?.createCoverageMap();
   for (const result of results) {
     if (result.coverage) {
       map?.merge(result.coverage);
-      if (!options?.keepResultCoverage) {
-        delete result.coverage;
-      }
+      delete result.coverage;
     }
   }
   return map;

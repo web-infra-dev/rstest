@@ -2786,23 +2786,19 @@ export const runBrowserController = async (
     unhandledErrors?: Error[];
   }): Promise<void> => {
     const rerunPathSet = new Set(rerunTestPaths);
-    // Reporter coverage spans the whole session (unaffected files keep their
-    // last coverage), matching the previous self-finalize payload. The merge
-    // must not strip `result.coverage`, or later reruns would lose it.
-    let sessionCoverage: CoverageMapData | undefined;
-    const coverageMap = buildBrowserCoverageMap(
-      context.reporterResults.results,
-      coverageProvider,
-      { keepResultCoverage: true },
+    const rerunResults = context.reporterResults.results.filter((result) =>
+      rerunPathSet.has(result.testPath),
     );
+    // Watch coverage is per-cycle on both transports: only the files this
+    // rerun executed are reported.
+    let rerunCoverage: CoverageMapData | undefined;
+    const coverageMap = buildBrowserCoverageMap(rerunResults, coverageProvider);
     if (coverageMap && coverageMap.files().length > 0) {
-      sessionCoverage = coverageMap.toJSON();
+      rerunCoverage = coverageMap.toJSON();
     }
 
     const outcome: ExecutorCycleOutcome = {
-      results: context.reporterResults.results.filter((result) =>
-        rerunPathSet.has(result.testPath),
-      ),
+      results: rerunResults,
       testResults: context.reporterResults.testResults.filter((result) =>
         rerunPathSet.has(result.testPath),
       ),
@@ -2812,7 +2808,7 @@ export const runBrowserController = async (
         buildTime: drainPendingBuildTime(watchState),
         testTime,
       },
-      coverage: sessionCoverage ? { map: sessionCoverage } : undefined,
+      coverage: rerunCoverage ? { map: rerunCoverage } : undefined,
       resolveSourcemap: resolveBrowserSourcemap,
     };
 

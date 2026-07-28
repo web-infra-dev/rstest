@@ -17,7 +17,7 @@ Coverage spans three packages: `@rstest/core` owns the `CoverageProvider` contra
 - `cleanCoverageReports` must stay on the test-run lifecycle, never an rsbuild compile hook — browser-only mode has no node rsbuild instance and `--passWithNoTests` races the hook.
 - Memory bounds in `generateCoverage` are deliberate: projects are processed sequentially and untested files in small batches. Do not parallelize.
 - The reporting provider (main process) and the worker collection providers are distinct instances — state set during collection never reaches reporting.
-- Browser-only **watch** runs bypass `finalizeRunCycle`: a bespoke coverage report runs once after the watch session exits. Non-watch browser runs go through the shared finalize like node runs.
+- Browser-only **watch** runs report their first cycle through a bespoke `generateCoverage` call in `runBrowserOnlyTests`; every rerun reports through the host's per-rerun finalize into `finalizeRunCycle`. Watch coverage is per-cycle on both transports — each report covers only the files that cycle ran. Non-watch browser runs go through the shared finalize like node runs.
 
 ## Coupling points (change both sides)
 
