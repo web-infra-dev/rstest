@@ -33,6 +33,13 @@ Contracts between modules or processes — not readable from any single file.
 - `@rstest/browser` is version-locked to core and loaded through the core-owned `BrowserHostModule` contract; the browser package constrains its exports against it via `satisfies`.
 - Reporter output is sorted by `testPath`, deliberately decoupled from the perf-first execution order (failed-first, then longest-processing-time). Don't "fix" one by changing the other.
 
+### Watch mode
+
+- Every feature that reads config or emits output holds one of three declared watch stances: cycle-scoped support, explicit rejection before anything runs, or documented degradation. The rejected set is exactly three — sharding, the blob reporter, and `--related`/`--findRelatedTests`/`--changed`; update this sentence when adding a fourth. A change that leaves a feature's watch behavior undeclared is incomplete: that is how the silently-undefined class grew.
+- Reject only when watch semantics are undefinable (an inherently one-shot concept), never merely unimplemented — and a rejected option must stay unreachable from every other config layer (config file, plugin hooks).
+- A degradation counts only when stated both in code (comment or public JSDoc) and in the en/zh website docs — a degradation users cannot find is a bug, not a stance.
+- Browser projects' `globalSetup` never running in watch is a gap to close, not a design, even though the code reads as deliberate (the stage is wired only into non-watch branches) — the one stance where current behavior does not equal intent. Closing it must also remove the docs sentence declaring it.
+
 ### Browser orchestration (`src/core/browser`)
 
 - `src/core/runTests.ts` stays a coarse orchestrator — split projects → node executor `init()` barrier → plan → drive executors → finalize. Browser-mode detail lives under `src/core/browser/`, behind the `BrowserHostModule` load boundary in `src/core/browser/loader.ts`, never inline in the orchestrator.
