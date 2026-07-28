@@ -7,7 +7,6 @@ import {
   getStepSummaryDisplayPath,
 } from '../../src/reporter/githubActions';
 import { emptyDuration, emptySnapshotSummary } from './helpers';
-import type { Duration } from '../../src/types';
 
 describe('getStepSummaryDisplayPath', () => {
   it('uses a placeholder for the workspace root', () => {

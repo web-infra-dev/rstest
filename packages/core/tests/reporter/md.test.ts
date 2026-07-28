@@ -1,7 +1,6 @@
 import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
 import { MdReporter, resolveOptions } from '../../src/reporter/md';
 import type {
-  Duration,
   NormalizedConfig,
   Reporter,
   RstestTestState,
