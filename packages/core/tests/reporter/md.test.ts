@@ -1,5 +1,14 @@
-import { describe, expect, it } from '@rstest/core';
-import { resolveOptions } from '../../src/reporter/md';
+import { describe, expect, it, onTestFinished, rs } from '@rstest/core';
+import { MdReporter, resolveOptions } from '../../src/reporter/md';
+import type {
+  Duration,
+  NormalizedConfig,
+  RstestTestState,
+  TestFileResult,
+  TestResult,
+  UserConsoleLog,
+} from '../../src/types';
+import { emptySnapshotSummary } from './helpers';
 
 describe('resolveOptions', () => {
   describe('defaults', () => {
@@ -184,5 +193,109 @@ describe('resolveOptions', () => {
       const result = resolveOptions({ errors: { unhandled: false } });
       expect(result.errors.unhandled).toBe(false);
     });
+  });
+});
+
+const ROOT_PATH = '/test/root';
+const PATH_A = `${ROOT_PATH}/a.test.ts`;
+const PATH_B = `${ROOT_PATH}/b.test.ts`;
+
+const emptyDuration: Duration = {
+  totalTime: 0,
+  buildTime: 0,
+  testTime: 0,
+};
+
+const createConsoleLog = (
+  testPath: string,
+  content: string,
+): UserConsoleLog => ({
+  content,
+  name: 'log',
+  testPath,
+  project: 'default',
+  type: 'stdout',
+});
+
+const createFailedTest = (testPath: string, name: string): TestResult => ({
+  testId: `${testPath}#${name}`,
+  status: 'fail',
+  name,
+  testPath,
+  project: 'default',
+  errors: [{ message: `${name} failed` }],
+});
+
+const createFailedFile = (
+  testPath: string,
+  results: TestResult[],
+): TestFileResult => ({
+  testId: testPath,
+  status: 'fail',
+  name: testPath,
+  testPath,
+  project: 'default',
+  results,
+});
+
+describe('MdReporter watch reruns', () => {
+  it('keeps only the latest console logs per test path and reports session-wide failures', async () => {
+    const reporter = new MdReporter({
+      rootPath: ROOT_PATH,
+      config: {} as NormalizedConfig,
+      options: { header: false, reproduction: false, codeFrame: false },
+      testState: {} as RstestTestState,
+    });
+
+    const output: string[] = [];
+    rs.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      output.push(String(chunk));
+      return true;
+    });
+
+    onTestFinished(() => {
+      rs.restoreAllMocks();
+    });
+
+    const fileStart = (testPath: string) =>
+      reporter.onTestFileStart({
+        testId: testPath,
+        testPath,
+        project: 'default',
+        tests: [],
+      });
+
+    fileStart(PATH_A);
+    reporter.onUserConsoleLog(createConsoleLog(PATH_A, 'a first cycle'));
+    fileStart(PATH_B);
+    reporter.onUserConsoleLog(createConsoleLog(PATH_B, 'b only cycle'));
+
+    // Watch rerun of file A only.
+    fileStart(PATH_A);
+    reporter.onUserConsoleLog(createConsoleLog(PATH_A, 'a second cycle'));
+
+    const testA = createFailedTest(PATH_A, 'fails in a');
+    const testB = createFailedTest(PATH_B, 'fails in b');
+
+    await reporter.onTestRunEnd({
+      results: [
+        createFailedFile(PATH_A, [testA]),
+        createFailedFile(PATH_B, [testB]),
+      ],
+      testResults: [testA, testB],
+      duration: emptyDuration,
+      getSourcemap: async () => null,
+      snapshotSummary: emptySnapshotSummary,
+      filterRerunTestPaths: [PATH_A],
+    });
+
+    const report = output.join('');
+
+    expect(report).toContain('[stdout] log: a second cycle');
+    expect(report).not.toContain('[stdout] log: a first cycle');
+    expect(report).toContain('[stdout] log: b only cycle');
+
+    expect(report).toContain('### [F01] a.test.ts :: fails in a');
+    expect(report).toContain('### [F02] b.test.ts :: fails in b');
   });
 });

@@ -93,6 +93,7 @@ import type {
   Reporter,
   RstestTestState,
   SnapshotSummary,
+  TestFileInfo,
   TestFileResult,
   TestResult,
   UserConsoleLog,
@@ -804,6 +805,13 @@ export class MdReporter implements Reporter {
     }
   }
 
+  // A watch rerun replays the whole file, so its previous logs are stale — the
+  // report keeps the latest logs per test path, matching how the reporter
+  // result snapshot keeps the latest result per test path.
+  onTestFileStart(test: TestFileInfo): void {
+    this.logsByTestPath.delete(test.testPath);
+  }
+
   onUserConsoleLog(log: UserConsoleLog): void {
     if (!this.options.console.enabled) return;
 
@@ -889,7 +897,6 @@ export class MdReporter implements Reporter {
     getSourcemap,
     snapshotSummary,
     unhandledErrors,
-    filterRerunTestPaths,
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
@@ -897,14 +904,12 @@ export class MdReporter implements Reporter {
     getSourcemap: GetSourcemap;
     snapshotSummary: SnapshotSummary;
     unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
   }): Promise<void> {
     const rootPath = this.rootPath || process.cwd();
-    const failures = collectFailures({
-      results,
-      testResults,
-      filterRerunTestPaths,
-    });
+    // Deliberately unfiltered by `filterRerunTestPaths`: the summary counts are
+    // derived from the whole session snapshot, so scoping failures to the
+    // current watch rerun would report the two sections at different scopes.
+    const failures = collectFailures({ results, testResults });
 
     const {
       failedTests,

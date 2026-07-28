@@ -7,6 +7,7 @@ import type {
   NormalizedConfig,
   Reporter,
   SnapshotSummary,
+  TestFileInfo,
   TestFileResult,
   TestResult,
   UserConsoleLog,
@@ -59,7 +60,7 @@ export class JsonReporter implements Reporter {
   private readonly config: NormalizedConfig;
   private readonly rootPath: string;
   private readonly outputPath?: string;
-  private readonly consoleLogs: UserConsoleLog[] = [];
+  private readonly logsByTestPath = new Map<string, UserConsoleLog[]>();
 
   constructor({
     config,
@@ -75,8 +76,20 @@ export class JsonReporter implements Reporter {
     this.outputPath = options?.outputPath;
   }
 
+  // A watch rerun replays the whole file, so its previous logs are stale — the
+  // report keeps the latest logs per test path, matching how the reporter
+  // result snapshot keeps the latest result per test path.
+  onTestFileStart(test: TestFileInfo): void {
+    this.logsByTestPath.delete(test.testPath);
+  }
+
   onUserConsoleLog(log: UserConsoleLog): void {
-    this.consoleLogs.push(log);
+    const logs = this.logsByTestPath.get(log.testPath);
+    if (logs) {
+      logs.push(log);
+    } else {
+      this.logsByTestPath.set(log.testPath, [log]);
+    }
   }
 
   private normalizeTest(test: TestResult): JsonReport['tests'][number] {
@@ -104,6 +117,7 @@ export class JsonReporter implements Reporter {
       results,
       testResults,
     });
+    const consoleLogs = Array.from(this.logsByTestPath.values()).flat();
     const noTestsDiscovered = results.length === 0 && testResults.length === 0;
     const hasFailedStatus =
       failedTests.length > 0 ||
@@ -129,13 +143,12 @@ export class JsonReporter implements Reporter {
         results: fileResult.results.map((test) => this.normalizeTest(test)),
       })),
       tests: testResults.map((test) => this.normalizeTest(test)),
-      consoleLogs:
-        this.consoleLogs.length > 0
-          ? this.consoleLogs.map((log) => ({
-              ...log,
-              testPath: relative(this.rootPath, log.testPath),
-            }))
-          : undefined,
+      consoleLogs: consoleLogs.length
+        ? consoleLogs.map((log) => ({
+            ...log,
+            testPath: relative(this.rootPath, log.testPath),
+          }))
+        : undefined,
       unhandledErrors: unhandledErrors?.map((error) => ({
         message: error.message,
         stack: error.stack,

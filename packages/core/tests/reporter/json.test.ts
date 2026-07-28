@@ -157,4 +157,68 @@ describe('JsonReporter', () => {
     expect(report.status).toBe('fail');
     expect(report.summary.tests).toBe(0);
   });
+
+  it('should keep only the latest console logs per test path across watch reruns', async () => {
+    const reporter = new JsonReporter({
+      config: baseConfig,
+      rootPath: '/test/root',
+      options: {},
+    });
+
+    const logs: string[] = [];
+
+    rs.spyOn(console, 'log').mockImplementation((...args) => {
+      logs.push(args.join(' '));
+    });
+
+    onTestFinished(() => {
+      rs.resetAllMocks();
+    });
+
+    const fileStart = (testPath: string) =>
+      reporter.onTestFileStart({
+        testId: testPath,
+        testPath,
+        project: 'default',
+        tests: [],
+      });
+
+    const consoleLog = (testPath: string, content: string) =>
+      reporter.onUserConsoleLog({
+        content,
+        name: 'log',
+        testPath,
+        project: 'default',
+        type: 'stdout',
+      });
+
+    fileStart('/test/root/a.test.ts');
+    consoleLog('/test/root/a.test.ts', 'a first cycle');
+    fileStart('/test/root/b.test.ts');
+    consoleLog('/test/root/b.test.ts', 'b only cycle');
+
+    // Watch rerun of file A only.
+    fileStart('/test/root/a.test.ts');
+    consoleLog('/test/root/a.test.ts', 'a second cycle');
+
+    await reporter.onTestRunEnd({
+      results: [],
+      testResults: [],
+      duration: {
+        totalTime: 0,
+        buildTime: 0,
+        testTime: 0,
+      },
+      snapshotSummary: emptySnapshotSummary,
+    });
+
+    const report = JSON.parse(logs.join('\n'));
+
+    expect(
+      report.consoleLogs.map(
+        (log: { testPath: string; content: string }) =>
+          `${log.testPath}: ${log.content}`,
+      ),
+    ).toEqual(['b.test.ts: b only cycle', 'a.test.ts: a second cycle']);
+  });
 });
