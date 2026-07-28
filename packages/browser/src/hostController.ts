@@ -2353,7 +2353,6 @@ export const runBrowserController = async (
   options?: BrowserTestRunOptions,
 ): Promise<BrowserTestRunResult | void> => {
   const {
-    allowEmptyWatchRun = false,
     allowEmptyRun = false,
     filesOnly = false,
     onTraceEvents,
@@ -2604,7 +2603,6 @@ export const runBrowserController = async (
     (total, item) => total + item.testFiles.length,
     0,
   );
-  const shouldKeepWatchingWithEmptySet = isWatchMode && allowEmptyWatchRun;
   const shouldInitializeEmptyBrowserHooks =
     totalTests === 0 && hasUserRstestConfigPlugins(browserProjects);
 
@@ -2624,16 +2622,14 @@ export const runBrowserController = async (
     };
   };
 
-  const reportEmptyTestSet = (): boolean => {
+  const reportEmptyTestSet = (): void => {
     const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
     if (isWatchMode || !allowEmptyRun) {
-      const message = shouldKeepWatchingWithEmptySet
-        ? 'No test files found.'
-        : getNoTestFilesMessage({
-            context,
-            code,
-            defaultMessage: `No test files found, exiting with code ${code}.`,
-          });
+      const message = getNoTestFilesMessage({
+        context,
+        code,
+        defaultMessage: `No test files found, exiting with code ${code}.`,
+      });
       if (code === 0) {
         logger.log(color.yellow(message));
       } else {
@@ -2656,22 +2652,14 @@ export const runBrowserController = async (
     // In non-watch runs the host returns a void outcome and core's
     // `reportNoTestFiles` owns the exit code and the no-test reporter lifecycle;
     // the host must not set the code itself. Watch keeps its own exit code.
-    if (
-      isWatchMode &&
-      code !== 0 &&
-      !shouldKeepWatchingWithEmptySet &&
-      !allowEmptyRun
-    ) {
+    if (isWatchMode && code !== 0 && !allowEmptyRun) {
       ensureProcessExitCode(code);
     }
-
-    return !shouldKeepWatchingWithEmptySet;
   };
 
   if (totalTests === 0 && !shouldInitializeEmptyBrowserHooks) {
-    if (reportEmptyTestSet()) {
-      return allowEmptyRun ? createEmptyRunResult() : undefined;
-    }
+    reportEmptyTestSet();
+    return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
 
   if (!filesOnly) {
@@ -2861,7 +2849,8 @@ export const runBrowserController = async (
     };
   }
 
-  if (totalTests === 0 && reportEmptyTestSet()) {
+  if (totalTests === 0) {
+    reportEmptyTestSet();
     await destroyBrowserRuntime(runtime);
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }

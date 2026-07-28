@@ -435,7 +435,6 @@ const jsdom = '// @rstest-environment jsdom';
       } as unknown as RstestContext;
       const planState = createRunProjectPlanState({
         context,
-        browserProjects: [],
         isWatchMode: false,
       });
 
@@ -490,7 +489,6 @@ const jsdom = '// @rstest-environment jsdom';
       } as unknown as RstestContext;
       const planState = createRunProjectPlanState({
         context,
-        browserProjects: [],
         isWatchMode: false,
       });
 
@@ -555,7 +553,6 @@ const jsdom = '// @rstest-environment jsdom';
       } as unknown as RstestContext;
       const planState = createRunProjectPlanState({
         context,
-        browserProjects: [],
         isWatchMode: false,
       });
 
@@ -640,7 +637,6 @@ const jsdom = '// @rstest-environment jsdom';
       } as unknown as RstestContext;
       const planState = createRunProjectPlanState({
         context,
-        browserProjects: [],
         isWatchMode: false,
       });
 
@@ -711,7 +707,6 @@ const jsdom = '// @rstest-environment jsdom';
       } as unknown as RstestContext;
       const planState = createRunProjectPlanState({
         context,
-        browserProjects: [browserProject],
         isWatchMode: false,
       });
 
@@ -763,7 +758,6 @@ const jsdom = '// @rstest-environment jsdom';
       } as unknown as RstestContext;
       const planState = createRunProjectPlanState({
         context,
-        browserProjects: [],
         isWatchMode: false,
       });
 
@@ -824,7 +818,6 @@ const jsdom = '// @rstest-environment jsdom';
       } as unknown as RstestContext;
       const planState = createRunProjectPlanState({
         context,
-        browserProjects: [],
         isWatchMode: false,
       });
 
@@ -885,7 +878,6 @@ const jsdom = '// @rstest-environment jsdom';
       } as unknown as RstestContext;
       const planState = createRunProjectPlanState({
         context,
-        browserProjects: [],
         isWatchMode: true,
       });
 
@@ -953,7 +945,6 @@ const jsdom = '// @rstest-environment jsdom';
       } as unknown as RstestContext;
       const planState = createRunProjectPlanState({
         context,
-        browserProjects: [],
         isWatchMode: false,
       });
 
@@ -1015,7 +1006,6 @@ const jsdom = '// @rstest-environment jsdom';
       } as unknown as RstestContext;
       const planState = createRunProjectPlanState({
         context,
-        browserProjects: [],
         isWatchMode: false,
       });
 
@@ -1097,7 +1087,6 @@ const jsdom = '// @rstest-environment jsdom';
       } as unknown as RstestContext;
       const planState = createRunProjectPlanState({
         context,
-        browserProjects: [],
         isWatchMode: false,
       });
 
@@ -1160,7 +1149,6 @@ const jsdom = '// @rstest-environment jsdom';
       } as unknown as RstestContext;
       const planState = createRunProjectPlanState({
         context,
-        browserProjects: [],
         isWatchMode: false,
       });
 
@@ -1311,7 +1299,6 @@ const jsdom = '// @rstest-environment jsdom';
       } as unknown as RstestContext;
       const planState = createRunProjectPlanState({
         context,
-        browserProjects: [],
         isWatchMode: false,
       });
 

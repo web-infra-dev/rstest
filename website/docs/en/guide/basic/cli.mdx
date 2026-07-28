@@ -85,6 +85,8 @@ If you only want to inspect the affected test files, combine it with `rstest lis
 npx rstest list --related src/button.ts --filesOnly
 ```
 
+Like sharding, `--related` and `--findRelatedTests` are not supported in watch mode, which already reruns the tests affected by your file changes.
+
 ### Run changed tests
 
 <ApiMeta addedVersion="0.10.0" />
@@ -112,7 +114,7 @@ Use `rstest list` to preview which tests would run without executing them:
 npx rstest list --changed --filesOnly
 ```
 
-`--changed` cannot be combined with positional filters or `--related` / `--findRelatedTests`, because it already provides the source-file filter from Git state.
+`--changed` cannot be combined with positional filters or `--related` / `--findRelatedTests`, because it already provides the source-file filter from Git state. Like sharding, it is not supported in watch mode.
 
 ### Run a shard \{#sharding-tests}
 

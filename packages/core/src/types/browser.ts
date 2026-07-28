@@ -42,10 +42,6 @@ export interface BrowserTestRunOptions {
    */
   filesOnly?: boolean;
   /**
-   * Keep watch infrastructure alive even when the initial browser test set is empty.
-   */
-  allowEmptyWatchRun?: boolean;
-  /**
    * Treat an empty browser result as a no-op instead of a run failure.
    * Used by mixed node+browser planning, where Browser Mode hooks may add
    * entries after the node-side plan initially saw an empty browser project.

@@ -870,6 +870,17 @@ export const runRest = async ({
   filters: Array<string | number>;
   command: RstestCommand;
 }): Promise<void> => {
+  // A related selection is resolved once here and frozen for the whole session,
+  // so under watch later edits stay invisible and an empty resolution yields a
+  // session that can never run a test. Rejected up front, like the sharding
+  // watch guard in the `Rstest` constructor.
+  if (command === 'watch' && isRelatedRun(options)) {
+    logger.error(
+      'The `--related`, `--findRelatedTests`, and `--changed` options are not supported in watch mode. Use `rstest run` for a one-shot related run — watch already reruns tests affected by file changes.',
+    );
+    process.exit(1);
+  }
+
   let rstest: RstestInstance | undefined;
   const unexpectedlyExitHandler = (err: any) => {
     handleUnexpectedExit(rstest, err);

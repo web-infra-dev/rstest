@@ -85,6 +85,8 @@ npx rstest run --findRelatedTests src/button.ts
 npx rstest list --related src/button.ts --filesOnly
 ```
 
+与分片一样，`--related` 和 `--findRelatedTests` 不支持在 watch 模式下使用，watch 模式本身已经会重跑受文件变更影响的测试。
+
 ### 运行变更相关测试
 
 <ApiMeta addedVersion="0.10.0" />
@@ -112,7 +114,7 @@ npx rstest run --changed=origin/main
 npx rstest list --changed --filesOnly
 ```
 
-`--changed` 不能和位置参数、`--related` / `--findRelatedTests` 一起使用，因为它已经从 Git 状态提供了源码文件过滤条件。
+`--changed` 不能和位置参数、`--related` / `--findRelatedTests` 一起使用，因为它已经从 Git 状态提供了源码文件过滤条件。与分片一样，它也不支持在 watch 模式下使用。
 
 ### 运行分片 \{#sharding-tests}
 

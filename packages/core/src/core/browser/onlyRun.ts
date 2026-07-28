@@ -59,24 +59,15 @@ export async function runBrowserOnlyTests(
   const { coverage } = context.normalizedConfig;
   const { snapshotManager } = context;
 
+  // Related runs are rejected in watch mode at the CLI, so an empty related
+  // resolution is always a one-shot run that ends right here.
   if (context.relatedResolutionEmpty) {
-    if (isWatchMode) {
-      const emptyWatchResult = await runBrowserModeTests(
-        context,
-        browserProjects,
-        {
-          allowEmptyWatchRun: true,
-        },
-      );
-      await attachBrowserWatchControls(context, emptyWatchResult?.watch);
-    } else {
-      reportNoTestFiles({ context });
-      await notifyReportersOnTestRunEnd({
-        context,
-        duration: { totalTime: 0, buildTime: 0, testTime: 0 },
-        getSourcemap: async () => null,
-      });
-    }
+    reportNoTestFiles({ context });
+    await notifyReportersOnTestRunEnd({
+      context,
+      duration: { totalTime: 0, buildTime: 0, testTime: 0 },
+      getSourcemap: async () => null,
+    });
 
     await runLifecycleStep('trace controller cleanup', () =>
       traceController.close(),
