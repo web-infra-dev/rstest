@@ -204,13 +204,15 @@ export function createBrowserWatchSession({
       if (!planner.hasBrowserTestsToRun()) {
         return;
       }
-      start().then(landInitialCycle, (error) => {
-        logger.error(
-          color.red('Browser Mode watch session failed to start:'),
-          error,
-        );
-        process.exitCode = 1;
-      });
+      // One catch after the handler, not `then(onFulfilled, onRejected)`: the
+      // rejection handler of a two-arg `then` cannot see the handler's own
+      // failure, so a throwing initial-cycle landing would escape unhandled.
+      start()
+        .then(landInitialCycle)
+        .catch((error) => {
+          logger.error(color.red('Browser Mode watch session failed:'), error);
+          process.exitCode = 1;
+        });
     },
     async runForeground() {
       const result = await start();
