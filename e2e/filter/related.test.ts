@@ -184,7 +184,9 @@ describe('related test filtering', () => {
     });
 
     await expectExecFailed();
-    expectStderrLog(/not supported in watch mode/);
+    expectStderrLog(
+      /`--related`, `--findRelatedTests`, and `--changed` options are not supported in watch mode/,
+    );
   });
 
   it('should reject `--changed` with `--watch` on the default command', async () => {
@@ -199,7 +201,9 @@ describe('related test filtering', () => {
     });
 
     await expectExecFailed();
-    expectStderrLog(/not supported in watch mode/);
+    expectStderrLog(
+      /`--related`, `--findRelatedTests`, and `--changed` options are not supported in watch mode/,
+    );
   });
 
   it('should keep exact related test paths without prefix matching extra files', async () => {

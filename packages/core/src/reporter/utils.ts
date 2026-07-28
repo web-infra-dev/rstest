@@ -69,6 +69,14 @@ export const deriveRunCounts = ({
   };
 };
 
+/**
+ * Keys reporter-internal per-file state (buffered console logs). A test path
+ * alone is ambiguous once several projects run the same file, and the emitter
+ * is only recoverable from the payload's `project`.
+ */
+export const reporterFileKey = (project: string, testPath: string): string =>
+  JSON.stringify([project, testPath]);
+
 const statusStr = {
   fail: '✗',
   pass: '✓',

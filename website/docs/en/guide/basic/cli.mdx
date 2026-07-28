@@ -85,7 +85,7 @@ If you only want to inspect the affected test files, combine it with `rstest lis
 npx rstest list --related src/button.ts --filesOnly
 ```
 
-Like sharding, `--related` and `--findRelatedTests` are not supported in watch mode, which already reruns the tests affected by your file changes.
+`--related` and `--findRelatedTests` are not supported in watch mode, which already reruns the tests affected by your file changes.
 
 ### Run changed tests
 
@@ -114,7 +114,7 @@ Use `rstest list` to preview which tests would run without executing them:
 npx rstest list --changed --filesOnly
 ```
 
-`--changed` cannot be combined with positional filters or `--related` / `--findRelatedTests`, because it already provides the source-file filter from Git state. Like sharding, it is not supported in watch mode.
+`--changed` cannot be combined with positional filters or `--related` / `--findRelatedTests`, because it already provides the source-file filter from Git state. It is not supported in watch mode either.
 
 ### Run a shard \{#sharding-tests}
 
@@ -293,7 +293,7 @@ Rstest CLI options are registered per command instead of being shared by every c
 
 ### Test commands
 
-`rstest`, `rstest run`, and `rstest watch` share the same test runtime options:
+`rstest`, `rstest run`, and `rstest watch` share the same test runtime options, except `--related`, `--findRelatedTests`, `--changed`, and `--shard`, which are rejected in watch mode:
 
 | Flag                                | Description                                                                                                                                                           |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

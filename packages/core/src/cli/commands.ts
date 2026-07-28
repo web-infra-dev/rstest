@@ -921,8 +921,6 @@ export const runRest = async ({
       await resolveCoverageChangedFilters(rstest);
     rstest.context.relatedRerunReason = relatedRerunReason;
     rstest.context.relatedRerunFiles = relatedRerunFiles;
-    rstest.context.relatedRerunReason = relatedRerunReason;
-    rstest.context.relatedRerunFiles = relatedRerunFiles;
 
     process.on('uncaughtException', unexpectedlyExitHandler);
 
@@ -1066,8 +1064,6 @@ export function createCli(): CAC {
         rstest.context.changedCoverageFilters = changedCoverageFilters;
         rstest.context.changedCoverageFilters =
           await resolveCoverageChangedFilters(rstest);
-        rstest.context.relatedRerunReason = relatedRerunReason;
-        rstest.context.relatedRerunFiles = relatedRerunFiles;
         rstest.context.relatedRerunReason = relatedRerunReason;
         rstest.context.relatedRerunFiles = relatedRerunFiles;
 

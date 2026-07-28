@@ -3,6 +3,7 @@ import { MdReporter, resolveOptions } from '../../src/reporter/md';
 import type {
   Duration,
   NormalizedConfig,
+  Reporter,
   RstestTestState,
   TestFileResult,
   TestResult,
@@ -209,87 +210,112 @@ const emptyDuration: Duration = {
 const createConsoleLog = (
   testPath: string,
   content: string,
+  project = 'default',
 ): UserConsoleLog => ({
   content,
   name: 'log',
   testPath,
-  project: 'default',
+  project,
   type: 'stdout',
 });
 
-const createFailedTest = (testPath: string, name: string): TestResult => ({
-  testId: `${testPath}#${name}`,
+const createFailedTest = (
+  testPath: string,
+  name: string,
+  project = 'default',
+): TestResult => ({
+  testId: `${project}:${testPath}#${name}`,
   status: 'fail',
   name,
   testPath,
-  project: 'default',
+  project,
   errors: [{ message: `${name} failed` }],
 });
 
 const createFailedFile = (
   testPath: string,
   results: TestResult[],
+  project = 'default',
 ): TestFileResult => ({
-  testId: testPath,
+  testId: `${project}:${testPath}`,
   status: 'fail',
   name: testPath,
   testPath,
-  project: 'default',
+  project,
   results,
 });
 
-describe('MdReporter watch reruns', () => {
-  it('keeps only the latest console logs per test path and reports session-wide failures', async () => {
-    const reporter = new MdReporter({
-      rootPath: ROOT_PATH,
-      config: {} as NormalizedConfig,
-      options: { header: false, reproduction: false, codeFrame: false },
-      testState: {} as RstestTestState,
-    });
+const setupMdReporter = () => {
+  const reporter = new MdReporter({
+    rootPath: ROOT_PATH,
+    config: {} as NormalizedConfig,
+    options: { header: false, reproduction: false, codeFrame: false },
+    testState: {} as RstestTestState,
+  });
 
-    const output: string[] = [];
-    rs.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
-      output.push(String(chunk));
-      return true;
-    });
+  const output: string[] = [];
+  rs.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+    output.push(String(chunk));
+    return true;
+  });
 
-    onTestFinished(() => {
-      rs.restoreAllMocks();
-    });
+  onTestFinished(() => {
+    rs.restoreAllMocks();
+  });
 
-    const fileStart = (testPath: string) =>
+  return {
+    fileStart: (testPath: string, project = 'default') =>
       reporter.onTestFileStart({
-        testId: testPath,
+        testId: `${project}:${testPath}`,
         testPath,
-        project: 'default',
+        project,
         tests: [],
+      }),
+    log: (testPath: string, content: string, project = 'default') =>
+      reporter.onUserConsoleLog(createConsoleLog(testPath, content, project)),
+    // Typed through the `Reporter` contract so the payload keeps the fields the
+    // md reporter deliberately ignores.
+    runEnd: async (
+      payload: Omit<
+        Parameters<NonNullable<Reporter['onTestRunEnd']>>[0],
+        'duration' | 'getSourcemap' | 'snapshotSummary'
+      >,
+    ) => {
+      await reporter.onTestRunEnd({
+        ...payload,
+        duration: emptyDuration,
+        getSourcemap: async () => null,
+        snapshotSummary: emptySnapshotSummary,
       });
+      return output.join('');
+    },
+  };
+};
+
+describe('MdReporter watch reruns', () => {
+  it('keeps only the latest console logs per file and reports session-wide failures', async () => {
+    const { fileStart, log, runEnd } = setupMdReporter();
 
     fileStart(PATH_A);
-    reporter.onUserConsoleLog(createConsoleLog(PATH_A, 'a first cycle'));
+    log(PATH_A, 'a first cycle');
     fileStart(PATH_B);
-    reporter.onUserConsoleLog(createConsoleLog(PATH_B, 'b only cycle'));
+    log(PATH_B, 'b only cycle');
 
     // Watch rerun of file A only.
     fileStart(PATH_A);
-    reporter.onUserConsoleLog(createConsoleLog(PATH_A, 'a second cycle'));
+    log(PATH_A, 'a second cycle');
 
     const testA = createFailedTest(PATH_A, 'fails in a');
     const testB = createFailedTest(PATH_B, 'fails in b');
 
-    await reporter.onTestRunEnd({
+    const report = await runEnd({
       results: [
         createFailedFile(PATH_A, [testA]),
         createFailedFile(PATH_B, [testB]),
       ],
       testResults: [testA, testB],
-      duration: emptyDuration,
-      getSourcemap: async () => null,
-      snapshotSummary: emptySnapshotSummary,
       filterRerunTestPaths: [PATH_A],
     });
-
-    const report = output.join('');
 
     expect(report).toContain('[stdout] log: a second cycle');
     expect(report).not.toContain('[stdout] log: a first cycle');
@@ -297,5 +323,48 @@ describe('MdReporter watch reruns', () => {
 
     expect(report).toContain('### [F01] a.test.ts :: fails in a');
     expect(report).toContain('### [F02] b.test.ts :: fails in b');
+  });
+
+  it('keeps the logs of each project running the same file', async () => {
+    const { fileStart, log, runEnd } = setupMdReporter();
+
+    fileStart(PATH_A, 'node');
+    log(PATH_A, 'from node', 'node');
+    fileStart(PATH_A, 'jsdom');
+    log(PATH_A, 'from jsdom', 'jsdom');
+
+    const nodeTest = createFailedTest(PATH_A, 'fails in a', 'node');
+    const jsdomTest = createFailedTest(PATH_A, 'fails in a', 'jsdom');
+
+    const report = await runEnd({
+      results: [
+        createFailedFile(PATH_A, [nodeTest], 'node'),
+        createFailedFile(PATH_A, [jsdomTest], 'jsdom'),
+      ],
+      testResults: [nodeTest, jsdomTest],
+    });
+
+    expect(report).toContain('[stdout] log: from node');
+    expect(report).toContain('[stdout] log: from jsdom');
+  });
+
+  it('drops the logs of files that left the result snapshot', async () => {
+    const { fileStart, log, runEnd } = setupMdReporter();
+
+    fileStart(PATH_A);
+    log(PATH_A, 'a only cycle');
+    fileStart(PATH_B);
+    log(PATH_B, 'b only cycle');
+
+    const testB = createFailedTest(PATH_B, 'fails in b');
+
+    // File A was deleted, so the watch snapshot no longer lists it.
+    const report = await runEnd({
+      results: [createFailedFile(PATH_B, [testB])],
+      testResults: [testB],
+    });
+
+    expect(report).toContain('[stdout] log: b only cycle');
+    expect(report).not.toContain('[stdout] log: a only cycle');
   });
 });

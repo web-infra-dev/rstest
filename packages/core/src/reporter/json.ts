@@ -13,7 +13,7 @@ import type {
   UserConsoleLog,
 } from '../types';
 import { getTaskNameWithPrefix, logger } from '../utils';
-import { deriveRunCounts } from './utils';
+import { deriveRunCounts, reporterFileKey } from './utils';
 
 type JsonReport = {
   tool: 'rstest';
@@ -60,7 +60,7 @@ export class JsonReporter implements Reporter {
   private readonly config: NormalizedConfig;
   private readonly rootPath: string;
   private readonly outputPath?: string;
-  private readonly logsByTestPath = new Map<string, UserConsoleLog[]>();
+  private logs: UserConsoleLog[] = [];
 
   constructor({
     config,
@@ -76,20 +76,17 @@ export class JsonReporter implements Reporter {
     this.outputPath = options?.outputPath;
   }
 
-  // A watch rerun replays the whole file, so its previous logs are stale — the
-  // report keeps the latest logs per test path, matching how the reporter
-  // result snapshot keeps the latest result per test path.
+  // A watch rerun replays the whole file, so its previous logs are stale.
+  // Dropping them in place keeps `consoleLogs` in global arrival order, which is
+  // the only temporal signal the payload carries.
   onTestFileStart(test: TestFileInfo): void {
-    this.logsByTestPath.delete(test.testPath);
+    this.logs = this.logs.filter(
+      (log) => log.project !== test.project || log.testPath !== test.testPath,
+    );
   }
 
   onUserConsoleLog(log: UserConsoleLog): void {
-    const logs = this.logsByTestPath.get(log.testPath);
-    if (logs) {
-      logs.push(log);
-    } else {
-      this.logsByTestPath.set(log.testPath, [log]);
-    }
+    this.logs.push(log);
   }
 
   private normalizeTest(test: TestResult): JsonReport['tests'][number] {
@@ -117,7 +114,6 @@ export class JsonReporter implements Reporter {
       results,
       testResults,
     });
-    const consoleLogs = Array.from(this.logsByTestPath.values()).flat();
     const noTestsDiscovered = results.length === 0 && testResults.length === 0;
     const hasFailedStatus =
       failedTests.length > 0 ||
@@ -143,8 +139,8 @@ export class JsonReporter implements Reporter {
         results: fileResult.results.map((test) => this.normalizeTest(test)),
       })),
       tests: testResults.map((test) => this.normalizeTest(test)),
-      consoleLogs: consoleLogs.length
-        ? consoleLogs.map((log) => ({
+      consoleLogs: this.logs.length
+        ? this.logs.map((log) => ({
             ...log,
             testPath: relative(this.rootPath, log.testPath),
           }))
@@ -189,6 +185,17 @@ export class JsonReporter implements Reporter {
     snapshotSummary: SnapshotSummary;
     unhandledErrors?: Error[];
   }): Promise<void> {
+    // A watch session drops deleted files from the result snapshot; the buffered
+    // logs have no such signal of their own, so the reported file set prunes
+    // them. Without this the report would carry logs for a file it does not
+    // list, and the buffer would grow for the whole session.
+    const reportedFiles = new Set(
+      results.map((result) => reporterFileKey(result.project, result.testPath)),
+    );
+    this.logs = this.logs.filter((log) =>
+      reportedFiles.has(reporterFileKey(log.project, log.testPath)),
+    );
+
     const report = this.createReport({
       results,
       testResults,
