@@ -34,12 +34,11 @@
   },
   "dependencies": {
     "@jridgewell/trace-mapping": "0.3.31",
-    "estree-walker": "^3.0.3",
     "istanbul-lib-coverage": "^3.2.2",
     "istanbul-lib-report": "^3.0.1",
     "istanbul-reports": "^3.2.0",
-    "js-tokens": "^10.0.0",
     "picomatch": "^4.0.5",
+    "yuku-ast": "^0.8.0",
     "yuku-parser": "^0.8.0"
   },
   "devDependencies": {
