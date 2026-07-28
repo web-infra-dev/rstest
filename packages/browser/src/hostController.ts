@@ -3741,9 +3741,10 @@ export const runBrowserController = async (
     // reruns get in `finalizeWatchRerun`); the map rides on the result so the
     // browser-only watch path can report it without re-merging. Non-watch runs
     // keep `result.coverage` intact for the executor's outcome fold.
-    const cycleCoverageMap = isWatchMode
-      ? buildBrowserCoverageMap(reporterResults, coverageProvider)
-      : undefined;
+    const cycleCoverageMap =
+      isWatchMode && coverageProvider
+        ? buildBrowserCoverageMap(reporterResults, coverageProvider)
+        : undefined;
 
     const result = {
       results: reporterResults,
@@ -4283,9 +4284,10 @@ export const runBrowserController = async (
   }
 
   // Same per-cycle fold-and-strip as the headless path above.
-  const cycleCoverageMap = isWatchMode
-    ? buildBrowserCoverageMap(reporterResults, coverageProvider)
-    : undefined;
+  const cycleCoverageMap =
+    isWatchMode && coverageProvider
+      ? buildBrowserCoverageMap(reporterResults, coverageProvider)
+      : undefined;
 
   const result = {
     results: reporterResults,

@@ -9,7 +9,7 @@ import type {
   TestResult,
   UserConsoleLog,
 } from '../../src/types';
-import { emptySnapshotSummary } from './helpers';
+import { emptyDuration, emptySnapshotSummary } from './helpers';
 
 describe('resolveOptions', () => {
   describe('defaults', () => {
@@ -200,12 +200,6 @@ describe('resolveOptions', () => {
 const ROOT_PATH = '/test/root';
 const PATH_A = `${ROOT_PATH}/a.test.ts`;
 const PATH_B = `${ROOT_PATH}/b.test.ts`;
-
-const emptyDuration: Duration = {
-  totalTime: 0,
-  buildTime: 0,
-  testTime: 0,
-};
 
 const createConsoleLog = (
   testPath: string,

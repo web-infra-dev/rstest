@@ -13,7 +13,7 @@ import type {
   UserConsoleLog,
 } from '../types';
 import { getTaskNameWithPrefix, logger } from '../utils';
-import { deriveRunCounts, reporterFileKey } from './utils';
+import { deriveRunCounts, reportedFileKeys, reporterFileKey } from './utils';
 
 type JsonReport = {
   tool: 'rstest';
@@ -80,8 +80,12 @@ export class JsonReporter implements Reporter {
   // Dropping them in place keeps `consoleLogs` in global arrival order, which is
   // the only temporal signal the payload carries.
   onTestFileStart(test: TestFileInfo): void {
+    if (!this.logs.length) {
+      return;
+    }
+    const key = reporterFileKey(test.project, test.testPath);
     this.logs = this.logs.filter(
-      (log) => log.project !== test.project || log.testPath !== test.testPath,
+      (log) => reporterFileKey(log.project, log.testPath) !== key,
     );
   }
 
@@ -189,12 +193,12 @@ export class JsonReporter implements Reporter {
     // logs have no such signal of their own, so the reported file set prunes
     // them. Without this the report would carry logs for a file it does not
     // list, and the buffer would grow for the whole session.
-    const reportedFiles = new Set(
-      results.map((result) => reporterFileKey(result.project, result.testPath)),
-    );
-    this.logs = this.logs.filter((log) =>
-      reportedFiles.has(reporterFileKey(log.project, log.testPath)),
-    );
+    if (this.logs.length) {
+      const reportedFiles = reportedFileKeys(results);
+      this.logs = this.logs.filter((log) =>
+        reportedFiles.has(reporterFileKey(log.project, log.testPath)),
+      );
+    }
 
     const report = this.createReport({
       results,

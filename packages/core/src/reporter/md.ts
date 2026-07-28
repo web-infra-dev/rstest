@@ -109,6 +109,7 @@ import {
   getErrorType,
   pushFencedBlock,
   pushHeading,
+  reportedFileKeys,
   reporterFileKey,
   stringifyJson,
 } from './utils';
@@ -909,12 +910,14 @@ export class MdReporter implements Reporter {
     // A watch session drops deleted files from the result snapshot; the buffered
     // logs have no such signal of their own, so the reported file set prunes
     // them and the buffer stays bounded across a long session.
-    const reportedFiles = new Set(
-      results.map((result) => reporterFileKey(result.project, result.testPath)),
-    );
-    this.logsByFile = new Map(
-      Array.from(this.logsByFile).filter(([key]) => reportedFiles.has(key)),
-    );
+    if (this.logsByFile.size) {
+      const reportedFiles = reportedFileKeys(results);
+      for (const key of this.logsByFile.keys()) {
+        if (!reportedFiles.has(key)) {
+          this.logsByFile.delete(key);
+        }
+      }
+    }
     // Deliberately unfiltered by `filterRerunTestPaths`: the summary counts are
     // derived from the whole session snapshot, so scoping failures to the
     // current watch rerun would report the two sections at different scopes.

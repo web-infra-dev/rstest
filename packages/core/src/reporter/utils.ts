@@ -72,10 +72,24 @@ export const deriveRunCounts = ({
 /**
  * Keys reporter-internal per-file state (buffered console logs). A test path
  * alone is ambiguous once several projects run the same file, and the emitter
- * is only recoverable from the payload's `project`.
+ * is only recoverable from the payload's `project`. Deliberately not
+ * `blobFileKey`: that one is a persisted wire format whose encoding cannot
+ * change without a blob version bump, while this key is process-local and free
+ * to stay cheap.
  */
 export const reporterFileKey = (project: string, testPath: string): string =>
-  JSON.stringify([project, testPath]);
+  `${project}\u0000${testPath}`;
+
+/**
+ * The file identities a run reports, for retiring buffered per-file state.
+ * Buffers are replaced per file on `onTestFileStart`, but a deleted file never
+ * starts again — only the run-end result set (already purged of deleted paths
+ * by `updateReporterResultState`) can retire it.
+ */
+export const reportedFileKeys = (results: TestFileResult[]): Set<string> =>
+  new Set(
+    results.map((result) => reporterFileKey(result.project, result.testPath)),
+  );
 
 const statusStr = {
   fail: '✗',
@@ -182,23 +196,14 @@ export const getRetryErrorLabel = (
 export const collectFailures = ({
   results,
   testResults,
-  filterRerunTestPaths,
 }: {
   results: TestFileResult[];
   testResults: TestResult[];
-  filterRerunTestPaths?: string[];
 }): FailureItem[] => {
-  const shouldIncludePath = (testPath: string) =>
-    filterRerunTestPaths ? filterRerunTestPaths.includes(testPath) : true;
-
   const failures: FailureItem[] = [];
 
   for (const result of results) {
-    if (
-      result.status === 'fail' &&
-      result.errors?.length &&
-      shouldIncludePath(result.testPath)
-    ) {
+    if (result.status === 'fail' && result.errors?.length) {
       failures.push({
         test: result,
         errors: result.errors,
@@ -207,7 +212,7 @@ export const collectFailures = ({
   }
 
   for (const result of testResults) {
-    if (result.status === 'fail' && shouldIncludePath(result.testPath)) {
+    if (result.status === 'fail') {
       failures.push({
         test: result,
         errors: result.errors || [],
