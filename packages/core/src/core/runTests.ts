@@ -5,7 +5,6 @@ import {
 import { ensureRunDependencies } from './dependencies';
 import type { TestExecutor } from '../types';
 import {
-  clearScreen,
   color,
   createTraceController,
   getForceRerunTriggerMessage,
@@ -17,13 +16,12 @@ import {
   notifyReportersOnTestRunStart,
   runLifecycleStep,
 } from './finalizeRun';
-import { loadBrowserExecutor } from './browser/loader';
-import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
 import {
-  isCliShortcutsEnabled,
-  logWatchReadyMessage,
-  setupCliShortcuts,
-} from './cliShortcuts';
+  type BrowserTestExecutor,
+  loadBrowserExecutor,
+} from './browser/loader';
+import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
+import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import {
   type BrowserGlobalSetupStageResult,
   globalSetupFailureOutcome,
@@ -31,10 +29,6 @@ import {
 } from './browser/globalSetupStage';
 import { runBrowserOnlyTests } from './browser/onlyRun';
 import { createBrowserRunPlanner } from './browser/runPlanner';
-import {
-  createBrowserWatchOrchestrator,
-  registerWatchSignalExit,
-} from './browser/watchControls';
 import {
   type CreateNodeExecutorOptions,
   createNodeExecutor,
@@ -44,10 +38,12 @@ import { runGlobalTeardown } from './globalSetup';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';
 import type { Rstest } from './rstest';
 import {
-  collectFailedTestPaths,
-  collectUnmatchedSnapshotTestPaths,
-  prepareWatchRerunState,
-} from './watchState';
+  createWatchCycleDriver,
+  createWatchShortcutHandlers,
+  createWatchTeardown,
+  registerWatchSignalExit,
+  type WatchSessionTargets,
+} from './watchSession';
 
 /**
  * What the orchestrator drives on the node side: the shared executor seam plus
@@ -73,7 +69,6 @@ export interface RunTestsDeps {
   ) => OrchestratedNodeExecutor;
   loadBrowserExecutor: typeof loadBrowserExecutor;
   createBrowserRunPlanner: typeof createBrowserRunPlanner;
-  createBrowserWatchOrchestrator: typeof createBrowserWatchOrchestrator;
   runBrowserOnlyTests: typeof runBrowserOnlyTests;
   runBrowserGlobalSetupStage: typeof runBrowserGlobalSetupStage;
   isCliShortcutsEnabled: typeof isCliShortcutsEnabled;
@@ -84,7 +79,6 @@ const productionDeps: RunTestsDeps = {
   createNodeExecutor,
   loadBrowserExecutor,
   createBrowserRunPlanner,
-  createBrowserWatchOrchestrator,
   runBrowserOnlyTests,
   runBrowserGlobalSetupStage,
   isCliShortcutsEnabled,
@@ -104,9 +98,9 @@ export async function runTests(
   //    `BrowserExecutor` from the resolved plan.
   // 4. Non-watch: `Promise.all(executors.map(e => e.runCycle()))` → one
   //    `finalizeRunCycle` → one `executors.close()` exit path.
-  // 5. Watch: the node executor signals each rebuild through `onInvalidate` and
-  //    every signal is one node cycle + finalize; browser watch stays
-  //    host-driven and self-finalizing (Phase 6 converges it).
+  // 5. Watch: both executors signal through `onInvalidate` and every signal is
+  //    one queued cycle + finalize, so node rebuilds, browser rebuilds, and CLI
+  //    shortcuts all run through the same loop.
   cleanCoverageReports(context.normalizedConfig.coverage);
 
   if (context.relatedRerunReason === 'forceRerunTrigger') {
@@ -411,257 +405,106 @@ export async function runTests(
   }
 
   // ===================================================================
-  // Watch mode. Browser watch stays host-driven (self-finalizing); node reruns
-  // iterate the node executor only, so a node rebuild never re-triggers the
-  // browser initial run. Browser-specific setup and host lifecycle stay behind
-  // `browserWatch`; node-owned shortcuts only fan a/f/u/q through it.
+  // Watch mode: one core-owned loop. Both executors signal invalidations, and
+  // every signal is one queued cycle + finalize — a node rebuild landing during
+  // a browser rerun waits instead of interleaving on the shared `stateManager`.
   // ===================================================================
-  const browserWatch = deps.createBrowserWatchOrchestrator({
+  const enableCliShortcuts = deps.isCliShortcutsEnabled();
+  const watchDriver = createWatchCycleDriver({
     context,
-    planner,
-    entriesCache: nodeExecutor.getPlan().entriesCache,
+    coverageProvider,
+    traceController,
+    getTraceRun: () => activeTraceRun,
+    setTraceRun: (traceRun) => {
+      activeTraceRun = traceRun;
+    },
+    enableCliShortcuts,
   });
-  let cleanupPromise: Promise<void> | undefined;
-  const cleanup = (): Promise<void> => {
-    cleanupPromise ??= (async () => {
-      try {
-        await browserWatch.close();
-        await runLifecycleStep('executor cleanup', () => nodeExecutor.close());
-        await runLifecycleStep('trace run finalize', () =>
-          activeTraceRun.finalize(),
-        );
-        await runLifecycleStep('trace controller cleanup', () =>
-          traceController.close(),
-        );
-      } catch (error) {
-        logger.log(color.red(`Error during cleanup: ${error}`));
-      }
-    })();
-    return cleanupPromise;
+
+  // Constructed (not launched) up front so its invalidation subscriber is in
+  // place before anything can compile; the first cycle below is what launches
+  // the browser.
+  let browserExecutor: BrowserTestExecutor | undefined;
+  if (hasBrowserTestsToRun) {
+    const browserProjectsToRun = planner.getBrowserProjectsToRun();
+    browserExecutor = await deps.loadBrowserExecutor(
+      context,
+      browserProjectsToRun,
+      coverageProvider,
+      planner.getExecutorRunOptions(browserProjectsToRun),
+    );
+    await browserExecutor.init();
+    const executor = browserExecutor;
+    // The host resolves the rerun scope before signalling (its file-set diff is
+    // consumed once), so the hint's filters are the cycle's scope.
+    executor.onInvalidate(({ fileFilters }) =>
+      watchDriver.runCycle(executor, { mode: 'on-demand', fileFilters }),
+    );
+  }
+
+  const watchTargets: WatchSessionTargets = {
+    node: hasNodeTestsToRun
+      ? {
+          runCycle: (options) => watchDriver.runCycle(nodeExecutor, options),
+          globTestEntries: () => nodeExecutor.globTestEntries(),
+        }
+      : undefined,
+    browser: browserExecutor && {
+      rerun: (testPaths) => browserExecutor!.requestRerun(testPaths),
+    },
   };
-  const removeWatchSignalHandlers = registerWatchSignalExit(context, cleanup);
+
+  // One teardown for the `q` shortcut, the fatal-signal handler, and the
+  // config-change restart hook. The browser side closes first: its runtime owns
+  // the servers the node executor's shutdown does not know about.
+  const closeWatchSession = createWatchTeardown({
+    executors: [...(browserExecutor ? [browserExecutor] : []), nodeExecutor],
+    traceController,
+    getTraceRun: () => activeTraceRun,
+  });
+  registerWatchSignalExit(context, closeWatchSession);
 
   const { onBeforeRestart } = await import('./restart');
-  onBeforeRestart(async () => {
-    await cleanup();
-    // A fatal signal received during cleanup must still await the same cleanup
-    // promise before exiting.
-    removeWatchSignalHandlers();
-  });
+  onBeforeRestart(closeWatchSession);
 
-  try {
-    if (!(await browserWatch.validate())) {
-      await cleanup();
-      return;
-    }
-    if (hasNodeTestsToRun) {
-      await nodeExecutor.validateRunDependencies();
-    }
-    if (!(await browserWatch.setup())) {
-      await cleanup();
-      return;
-    }
-  } catch (error) {
-    const wasCleaningUp = cleanupPromise !== undefined;
-    await cleanup();
-    if (wasCleaningUp) {
-      return;
-    }
-    throw error;
+  // Installed before the first cycle so the ready banner can never appear
+  // before stdin has an owner (a keystroke answering it would be swallowed).
+  if (enableCliShortcuts) {
+    const closeCliShortcuts = await deps.setupCliShortcuts(
+      createWatchShortcutHandlers(context, watchTargets, closeWatchSession),
+    );
+    onBeforeRestart(closeCliShortcuts);
   }
 
-  // Mixed watch with zero node files: only the browser side runs (host-driven).
-  if (!hasNodeTestsToRun) {
-    try {
-      await browserWatch.runForeground();
-    } catch (error) {
-      const wasCleaningUp = cleanupPromise !== undefined;
-      await cleanup();
-      if (!wasCleaningUp) {
-        throw error;
-      }
-    } finally {
-      await runLifecycleStep('trace shutdown', () =>
-        traceController.shutdown(activeTraceRun),
-      );
-    }
-    return;
-  }
-
-  type Mode = 'all' | 'on-demand';
-  let buildId = 0;
-
-  // One node watch cycle: reset already happened via `prepareWatchRerunState`
-  // at each trigger; run the node executor, then the shared finalize.
-  const run = async ({
-    fileFilters,
-    mode = 'all',
-  }: {
-    fileFilters?: string[];
-    mode?: Mode;
-  } = {}) => {
-    buildId += 1;
-    await notifyReportersOnTestRunStart(context);
-    const outcome = await nodeExecutor.runCycle({
-      buildId,
-      mode,
-      fileFilters,
-      updateSnapshot: snapshotManager.options.updateSnapshot,
-    });
-    await finalizeRunCycle(context, {
-      outcomes: [outcome],
-      mode,
-      isWatchMode: true,
-      coverageProvider,
-      reportOnFailure: coverage.reportOnFailure,
-      traceRun: activeTraceRun,
-    });
-    // Pre-allocate the next watch-rerun buffer so browser events emitted between
-    // reruns are not lost.
-    activeTraceRun = traceController.beginRun();
-  };
-
-  const enableCliShortcuts = deps.isCliShortcutsEnabled();
-
-  const afterTestsWatchRun = () =>
-    logWatchReadyMessage(context, enableCliShortcuts);
-
-  // The node executor's rebuilds are the watch trigger. The initial compile
-  // signals too, which is what drives the first cycle (and, after it, the
-  // single stdin owner). The callback is awaited by the executor's compile
-  // pipeline, so a rebuild can never start a second cycle mid-flight.
-  nodeExecutor.onInvalidate(async ({ isFirstBuild }) => {
-    prepareWatchRerunState(context);
-    await run({ mode: isFirstBuild ? 'all' : 'on-demand' });
-
-    if (isFirstBuild && enableCliShortcuts) {
-      const closeCliShortcuts = await deps.setupCliShortcuts({
-        closeServer: cleanup,
-        runAll: async () => {
-          clearScreen();
-          prepareWatchRerunState(context);
-          context.normalizedConfig.testNamePattern = undefined;
-          context.fileFilters = undefined;
-
-          await run({ mode: 'all' });
-          await browserWatch.rerun();
-          afterTestsWatchRun();
-        },
-        runWithTestNamePattern: async (pattern?: string) => {
-          clearScreen();
-          context.normalizedConfig.testNamePattern = pattern;
-
-          if (pattern) {
-            logger.log(
-              `\n${color.dim('Applied testNamePattern:')} ${color.bold(pattern)}\n`,
-            );
-          } else {
-            logger.log(`\n${color.dim('Cleared testNamePattern filter')}\n`);
-          }
-          prepareWatchRerunState(context);
-          await run();
-          afterTestsWatchRun();
-        },
-        runWithFileFilters: async (filters?: string[]) => {
-          clearScreen();
-          if (filters && filters.length > 0) {
-            logger.log(
-              `\n${color.dim('Applied file filters:')} ${color.bold(filters.join(', '))}\n`,
-            );
-          } else {
-            logger.log(`\n${color.dim('Cleared file filters')}\n`);
-          }
-          prepareWatchRerunState(context);
-          context.fileFilters = filters;
-          const entries = await nodeExecutor.globTestEntries();
-
-          if (!entries.length) {
-            logger.log(
-              filters
-                ? color.yellow(
-                    `\nNo matching test files to run with current file filters: ${filters.join(',')}\n`,
-                  )
-                : color.yellow('\nNo matching test files to run.\n'),
-            );
-            return;
-          }
-          await run({ fileFilters: entries });
-          afterTestsWatchRun();
-        },
-        runFailedTests: async () => {
-          const failedTests = collectFailedTestPaths(context);
-
-          if (!failedTests.length) {
-            logger.log(
-              color.yellow(
-                '\nNo failed tests were found that needed to be rerun.',
-              ),
-            );
-            return;
-          }
-
-          clearScreen();
-          prepareWatchRerunState(context);
-          await run({ fileFilters: failedTests, mode: 'all' });
-          await browserWatch.rerun(failedTests);
-          afterTestsWatchRun();
-        },
-        updateSnapshot: async () => {
-          if (!snapshotManager.summary.unmatched) {
-            logger.log(
-              color.yellow(
-                '\nNo snapshots were found that needed to be updated.',
-              ),
-            );
-            return;
-          }
-          const failedTests = collectUnmatchedSnapshotTestPaths(context);
-
-          clearScreen();
-
-          const originalUpdateSnapshot = snapshotManager.options.updateSnapshot;
-          prepareWatchRerunState(context);
-          snapshotManager.options.updateSnapshot = 'all';
-          try {
-            await run({ fileFilters: failedTests });
-            // Browser-owned files in the unmatched set rerun through the
-            // watch session (no-op when none match a browser test file).
-            await browserWatch.rerun(failedTests);
-            afterTestsWatchRun();
-          } finally {
-            snapshotManager.options.updateSnapshot = originalUpdateSnapshot;
-          }
-        },
-      });
-
-      onBeforeRestart(closeCliShortcuts);
-    }
-
-    afterTestsWatchRun();
-  });
-
-  // Start the node dev server now that the invalidation subscriber is in place:
-  // its first compile signals one, which drives the initial watch run.
-  // `runCycle` (invoked from that callback) reuses these resources via the
-  // in-flight guard rather than starting a second server.
-  try {
+  if (hasNodeTestsToRun) {
+    // The node executor's rebuilds are the watch trigger; its initial compile
+    // signals too, which is what drives the first node cycle.
+    nodeExecutor.onInvalidate(({ isFirstBuild }) =>
+      watchDriver.runCycle(nodeExecutor, {
+        mode: isFirstBuild ? 'all' : 'on-demand',
+      }),
+    );
+    // Start the node dev server now that the subscriber is in place. `runCycle`
+    // (invoked from that callback) reuses these resources via the in-flight
+    // guard rather than starting a second server.
     await nodeExecutor.ensureRunResources();
-  } catch (error) {
-    const wasCleaningUp = cleanupPromise !== undefined;
-    await cleanup();
-    if (!wasCleaningUp) {
-      throw error;
-    }
-    return;
   }
 
-  // Node resources are up (env dependencies validated); now the browser watch
-  // session may launch — deferred to here so node env-dependency validation
-  // failures never leave a browser host running (the same ordering the
-  // pre-seam code had). Node reruns above never restart it.
-  if (cleanupPromise) {
-    await cleanup();
-    return;
+  if (browserExecutor) {
+    // Deferred to here so node env-dependency validation failures never leave a
+    // browser host running — the same ordering the pre-seam code had.
+    const initialBrowserCycle = watchDriver.runCycle(browserExecutor, {
+      mode: 'all',
+    });
+    if (hasNodeTestsToRun) {
+      // The node side already keeps the process alive, so the browser session
+      // boots in the background; a failed boot must still be reported.
+      initialBrowserCycle.catch((error) => {
+        logger.error(color.red('Browser Mode watch session failed:'), error);
+        process.exitCode = 1;
+      });
+    } else {
+      await initialBrowserCycle;
+    }
   }
-  browserWatch.startBackground();
 }

@@ -1,7 +1,4 @@
-import {
-  createCoverageProviderWithLog,
-  logCoverageEnabled,
-} from '../../coverage';
+import { createCoverageProviderWithLog } from '../../coverage';
 import type { ProjectContext } from '../../types';
 import {
   color,
@@ -15,20 +12,9 @@ import {
   globalSetupFailureOutcome,
   runBrowserGlobalSetupStage,
 } from './globalSetupStage';
-import {
-  type BrowserHostModule,
-  loadAndValidateBrowserModule,
-  loadBrowserExecutor,
-  runBrowserModeTests,
-} from './loader';
-import {
-  attachBrowserWatchShortcuts,
-  createBrowserWatchLifecycle,
-  registerWatchSignalExit,
-  runBrowserWatchGlobalSetup,
-  reportInitialCycleCoverage,
-} from './watchControls';
+import { loadBrowserExecutor } from './loader';
 import { ensureRunDependencies } from '../dependencies';
+import { isCliShortcutsEnabled, setupCliShortcuts } from '../cliShortcuts';
 import {
   finalizeRunCycle,
   notifyReportersOnTestRunEnd,
@@ -38,17 +24,96 @@ import {
 } from '../finalizeRun';
 import { runGlobalTeardown } from '../globalSetup';
 import type { Rstest } from '../rstest';
+import {
+  createWatchCycleDriver,
+  createWatchShortcutHandlers,
+  createWatchTeardown,
+  registerWatchSignalExit,
+} from '../watchSession';
+
+/**
+ * The browser-only watch session: one executor, driven by the same core loop as
+ * every other watch shape. The executor's own triggers (dev rebuild, HMR, the
+ * in-page rerun button) signal back into it, and the CLI shortcuts fan out to
+ * it — `t`/`p` have no browser callback, so those keys render greyed hints.
+ *
+ * Returns once the initial cycle has finalized; the session itself outlives the
+ * call and is torn down through the shared teardown.
+ */
+async function runBrowserOnlyWatch(
+  context: Rstest,
+  browserProjects: ProjectContext[],
+  traceController: TraceController,
+  initialTraceRun: TraceRun,
+): Promise<void> {
+  const coverageProvider = await createCoverageProviderWithLog(
+    context.normalizedConfig.coverage,
+    context.rootPath,
+  );
+  const browserExecutor = await loadBrowserExecutor(
+    context,
+    browserProjects,
+    coverageProvider,
+  );
+  await browserExecutor.init();
+
+  let activeTraceRun = initialTraceRun;
+  const enableCliShortcuts = isCliShortcutsEnabled();
+  const watchDriver = createWatchCycleDriver({
+    context,
+    coverageProvider,
+    traceController,
+    getTraceRun: () => activeTraceRun,
+    setTraceRun: (traceRun) => {
+      activeTraceRun = traceRun;
+    },
+    enableCliShortcuts,
+  });
+  // The host resolves the rerun scope before it signals (its file-set diff is
+  // consumed once), so the hint's filters are this cycle's scope.
+  browserExecutor.onInvalidate(({ fileFilters }) =>
+    watchDriver.runCycle(browserExecutor, { mode: 'on-demand', fileFilters }),
+  );
+
+  const closeWatchSession = createWatchTeardown({
+    executors: [browserExecutor],
+    traceController,
+    getTraceRun: () => activeTraceRun,
+  });
+  registerWatchSignalExit(context, closeWatchSession);
+  const { onBeforeRestart } = await import('../restart');
+  onBeforeRestart(closeWatchSession);
+
+  // Installed before the first cycle so the ready banner can never appear
+  // before stdin has an owner — a keystroke answering it would be swallowed.
+  if (enableCliShortcuts) {
+    const closeCliShortcuts = await setupCliShortcuts(
+      createWatchShortcutHandlers(
+        context,
+        {
+          browser: {
+            rerun: (testPaths) => browserExecutor.requestRerun(testPaths),
+          },
+        },
+        closeWatchSession,
+      ),
+    );
+    onBeforeRestart(closeCliShortcuts);
+  }
+
+  await watchDriver.runCycle(browserExecutor, { mode: 'all' });
+}
 
 /**
  * Browser-only run path (no node projects). Retained per the cold-start gate:
  * constructing/`init()`-ing a NodeExecutor would add the node Rsbuild instance
  * to every pure-browser run.
  *
- * Watch runs stay host-driven and self-finalizing — the first cycle reports
- * coverage here, every rerun reports through the host's per-rerun finalize;
- * non-watch runs drive one browser executor through the shared finalize so exit
+ * Both commands drive one browser executor through the shared finalize, so exit
  * code, reporter output, coverage, and the no-test path match node and mixed
- * runs.
+ * runs. Watch differs only in that the executor stays alive after the first
+ * cycle, which is why its session owns the trace controller's shutdown instead
+ * of the one-shot tail below.
  */
 export async function runBrowserOnlyTests(
   context: Rstest,
@@ -65,16 +130,8 @@ export async function runBrowserOnlyTests(
     traceRun: TraceRun;
   },
 ): Promise<void> {
-  const isWatchMode = context.command === 'watch';
   const { coverage } = context.normalizedConfig;
   const { snapshotManager } = context;
-  let traceShutdownPromise: Promise<void> | undefined;
-  const shutdownTrace = (): Promise<void> => {
-    traceShutdownPromise ??= runLifecycleStep('trace shutdown', () =>
-      traceController.shutdown(traceRun),
-    );
-    return traceShutdownPromise;
-  };
 
   // Related runs are rejected in watch mode at the CLI, so an empty related
   // resolution is always a one-shot run that ends right here.
@@ -98,181 +155,99 @@ export async function runBrowserOnlyTests(
     coverage,
   });
 
-  if (isWatchMode) {
-    if (coverage.enabled) {
-      logCoverageEnabled(coverage);
-    }
-    const browserShardedEntries = await resolveShardedEntries(context, {
-      silent: true,
-    });
-    let browserResult: Awaited<ReturnType<typeof runBrowserModeTests>>;
-    let browserModule: BrowserHostModule;
-    const lifecycle = createBrowserWatchLifecycle(() => browserResult?.watch);
-    lifecycle.addControlCleanup(
-      registerWatchSignalExit(context, lifecycle.close),
-    );
-    const { onBeforeRestart } = await import('../restart');
-    onBeforeRestart(async () => {
-      await lifecycle.close();
-      await shutdownTrace();
-    });
-
-    let browserWatchEnv: Record<string, string | undefined> | undefined;
-    try {
-      browserModule = await lifecycle.track(
-        loadAndValidateBrowserModule(context, browserProjects),
-      );
-      if (lifecycle.isClosing()) {
-        return;
-      }
-      browserWatchEnv = await lifecycle.track(
-        runBrowserWatchGlobalSetup(
-          context,
-          browserProjects,
-          browserShardedEntries,
-        ),
-      );
-    } catch (error) {
-      const wasClosing = lifecycle.isClosing();
-      await lifecycle.close();
-      if (wasClosing) {
-        return;
-      }
-      await shutdownTrace();
-      throw error;
-    }
-    if (lifecycle.isClosing()) {
-      return;
-    }
-
-    // Browser-only watch: the host owns per-rerun finalize, so the initial
-    // cycle's coverage is reported here — reruns report through the host's
-    // `finalizeWatchRerun` → `finalizeRunCycle`.
-    try {
-      browserResult = await lifecycle.track(
-        runBrowserModeTests(
-          context,
-          browserProjects,
-          {
-            shardedEntries: browserShardedEntries,
-            env: browserWatchEnv,
-            onTraceEvents: traceRun.onEvents,
-          },
-          browserModule,
-        ).then(async (result) => {
-          browserResult = result;
-          await reportInitialCycleCoverage(context, result, traceRun.span);
-          return result;
-        }),
-      );
-
-      if (lifecycle.isClosing()) {
-        await lifecycle.close();
-      } else if (browserResult?.watch) {
-        await lifecycle.track(
-          attachBrowserWatchShortcuts(context, {
-            ...browserResult.watch,
-            close: lifecycle.close,
-          }).then((cleanupControls) => {
-            lifecycle.addControlCleanup(cleanupControls);
-          }),
-        );
-      } else {
-        await lifecycle.close();
-      }
-    } catch (error) {
-      const wasClosing = lifecycle.isClosing();
-      await lifecycle.close();
-      if (!wasClosing) {
-        await shutdownTrace();
-        throw error;
-      }
-    }
-  } else {
-    const coverageProvider = await createCoverageProviderWithLog(
-      coverage,
-      context.rootPath,
-    );
-    // Resolve the shard once (undefined when unsharded) and share it between
-    // the executor construction and the setup gate so they cannot disagree on
-    // which files run — the host's own shard fallback only fires on the
-    // config-hook refresh path, not on initial resolution.
-    const browserShardedEntries = await resolveShardedEntries(context, {
-      silent: true,
-    });
-    const browserExecutor = await loadBrowserExecutor(
+  if (context.command === 'watch') {
+    await runBrowserOnlyWatch(
       context,
       browserProjects,
-      coverageProvider,
-      { shardedEntries: browserShardedEntries },
+      traceController,
+      traceRun,
     );
-    await browserExecutor.init();
+    return;
+  }
 
-    await notifyReportersOnTestRunStart(context);
-    // Best-effort teardown nets for hard crashes and signal deaths between
-    // setup and teardown (parity with the mixed path's handlers); the
-    // deterministic drain in the `finally` below is the primary guarantee.
-    // Registered only when a setup actually ran — failed setups never queue
-    // teardown callbacks, so there is nothing to drain for them.
-    const teardownOnExit = () => {
-      runGlobalTeardown().catch((error) => {
+  const coverageProvider = await createCoverageProviderWithLog(
+    coverage,
+    context.rootPath,
+  );
+  // Resolve the shard once (undefined when unsharded) and share it between
+  // the executor construction and the setup gate so they cannot disagree on
+  // which files run — the host's own shard fallback only fires on the
+  // config-hook refresh path, not on initial resolution.
+  const browserShardedEntries = await resolveShardedEntries(context, {
+    silent: true,
+  });
+  const browserExecutor = await loadBrowserExecutor(
+    context,
+    browserProjects,
+    coverageProvider,
+    { shardedEntries: browserShardedEntries },
+  );
+  await browserExecutor.init();
+
+  await notifyReportersOnTestRunStart(context);
+  // Best-effort teardown nets for hard crashes and signal deaths between
+  // setup and teardown (parity with the mixed path's handlers); the
+  // deterministic drain in the `finally` below is the primary guarantee.
+  // Registered only when a setup actually ran — failed setups never queue
+  // teardown callbacks, so there is nothing to drain for them.
+  const teardownOnExit = () => {
+    runGlobalTeardown().catch((error) => {
+      logger.log(color.red(`Error in global teardown: ${error}`));
+    });
+  };
+  const teardownOnSignal = (signal: NodeJS.Signals) => {
+    logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
+    runGlobalTeardown()
+      .catch((error) => {
         logger.log(color.red(`Error in global teardown: ${error}`));
+      })
+      .finally(() => {
+        process.exit(getSignalExitCode(signal));
       });
-    };
-    const teardownOnSignal = (signal: NodeJS.Signals) => {
-      logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
-      runGlobalTeardown()
-        .catch((error) => {
-          logger.log(color.red(`Error in global teardown: ${error}`));
-        })
-        .finally(() => {
-          process.exit(getSignalExitCode(signal));
+  };
+  try {
+    const stage = await runBrowserGlobalSetupStage(context, browserProjects, {
+      entriesCache: browserShardedEntries,
+    });
+    if (!context.embedded && stage.env !== undefined) {
+      process.on('exit', teardownOnExit);
+      for (const signal of FATAL_SIGNALS) {
+        process.on(signal, teardownOnSignal);
+      }
+    }
+    const outcome = stage.errors.length
+      ? globalSetupFailureOutcome(stage.errors)
+      : await browserExecutor.runCycle({
+          buildId: 1,
+          mode: 'all',
+          updateSnapshot: snapshotManager.options.updateSnapshot,
+          env: stage.env,
+          onTraceEvents: traceRun.onEvents,
         });
-    };
+    await finalizeRunCycle(context, {
+      outcomes: [outcome],
+      mode: 'all',
+      isWatchMode: false,
+      coverageProvider,
+      reportOnFailure: coverage.reportOnFailure,
+      traceRun,
+    });
+  } finally {
     try {
-      const stage = await runBrowserGlobalSetupStage(context, browserProjects, {
-        entriesCache: browserShardedEntries,
-      });
-      if (!context.embedded && stage.env !== undefined) {
-        process.on('exit', teardownOnExit);
-        for (const signal of FATAL_SIGNALS) {
-          process.on(signal, teardownOnSignal);
-        }
-      }
-      const outcome = stage.errors.length
-        ? globalSetupFailureOutcome(stage.errors)
-        : await browserExecutor.runCycle({
-            buildId: 1,
-            mode: 'all',
-            updateSnapshot: snapshotManager.options.updateSnapshot,
-            env: stage.env,
-            onTraceEvents: traceRun.onEvents,
-          });
-      await finalizeRunCycle(context, {
-        outcomes: [outcome],
-        mode: 'all',
-        isWatchMode: false,
-        coverageProvider,
-        reportOnFailure: coverage.reportOnFailure,
-        traceRun,
-      });
+      await runLifecycleStep('global teardown', () => runGlobalTeardown());
     } finally {
-      try {
-        await runLifecycleStep('global teardown', () => runGlobalTeardown());
-      } finally {
-        // The executor close must survive a throwing teardown — a skipped
-        // close leaks the launched browser and dev servers. `process.off`
-        // on a never-registered listener is a no-op.
-        process.off('exit', teardownOnExit);
-        for (const signal of FATAL_SIGNALS) {
-          process.off(signal, teardownOnSignal);
-        }
-        await runLifecycleStep('executor cleanup', () =>
-          browserExecutor.close(),
-        );
+      // The executor close must survive a throwing teardown — a skipped
+      // close leaks the launched browser and dev servers. `process.off`
+      // on a never-registered listener is a no-op.
+      process.off('exit', teardownOnExit);
+      for (const signal of FATAL_SIGNALS) {
+        process.off(signal, teardownOnSignal);
       }
+      await runLifecycleStep('executor cleanup', () => browserExecutor.close());
     }
   }
 
-  await shutdownTrace();
+  await runLifecycleStep('trace shutdown', () =>
+    traceController.shutdown(traceRun),
+  );
 }

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, rs } from '@rstest/core';
 import { join } from 'pathe';
 import type { BrowserRunPlanner } from '../../src/core/browser/runPlanner';
-import type { BrowserWatchOrchestrator } from '../../src/core/browser/watchControls';
 import { Rstest } from '../../src/core/rstest';
 import { type RunTestsDeps, runTests } from '../../src/core/runTests';
 import type {
@@ -17,6 +16,12 @@ import type {
 const rootPath = join(__dirname, '../..');
 
 type RunEndPayload = Parameters<NonNullable<Reporter['onTestRunEnd']>>[0];
+
+/**
+ * Let the initial browser cycle — scheduled but deliberately not awaited by the
+ * mixed watch path — settle before a test inspects the session.
+ */
+const flush = () => new Promise((resolve) => setTimeout(resolve, 30));
 
 const passingFile = (testPath: string, project: string): TestFileResult => ({
   testId: testPath,
@@ -48,7 +53,7 @@ type FakeExecutor = TestExecutor & {
  * A `TestExecutor` that records what the orchestrator asked of it. `events` is
  * shared across every collaborator of one run so ordering invariants (init
  * barrier, node resources before browser load, sibling cycles settling before
- * teardown) can be asserted as a single sequence.
+ * teardown, cycles never interleaving) can be asserted as a single sequence.
  */
 const createFakeExecutor = (
   name: string,
@@ -106,9 +111,6 @@ const createFakeNodeExecutor = ({
     ensureRunResources: async () => {
       events.push('node:ensure-run-resources');
     },
-    validateRunDependencies: async () => {
-      events.push('node:validate-run-dependencies');
-    },
     globTestEntries: async () => testEntries,
     onInvalidate: (cb: ExecutorInvalidationCallback) => {
       invalidateCallback = cb;
@@ -123,11 +125,37 @@ const createFakeNodeExecutor = ({
   });
 };
 
-/** The browser side of the seam guarantees `collect` (`rstest list` uses it). */
-const createFakeBrowserExecutor = (events: string[], runCycle: RunCycleImpl) =>
-  Object.assign(createFakeExecutor('browser', events, runCycle), {
+/**
+ * The browser side of the seam guarantees `collect` (`rstest list` uses it) and
+ * the watch pair `onInvalidate`/`requestRerun`.
+ */
+const createFakeBrowserExecutor = (
+  events: string[],
+  runCycle: RunCycleImpl,
+) => {
+  let invalidateCallback: ExecutorInvalidationCallback | undefined;
+  return Object.assign(createFakeExecutor('browser', events, runCycle), {
     collect: async () => ({ list: [] }),
+    onInvalidate: (cb: ExecutorInvalidationCallback) => {
+      invalidateCallback = cb;
+    },
+    /**
+     * The host resolves the requested scope against its own file set and only
+     * then signals; a request matching nothing produces no cycle at all.
+     */
+    requestRerun: async (testPaths?: string[]) => {
+      events.push(`browser:request-rerun:${testPaths?.join(',') ?? 'all'}`);
+      await invalidateCallback!({
+        isFirstBuild: false,
+        fileFilters: testPaths,
+      });
+    },
+    /** Stand in for a browser rebuild / HMR trigger. */
+    invalidate: async (fileFilters?: string[]) => {
+      await invalidateCallback!({ isFirstBuild: false, fileFilters });
+    },
   });
+};
 
 const createFakePlanner = (
   hasBrowserTestsToRun: boolean,
@@ -137,27 +165,6 @@ const createFakePlanner = (
   hasBrowserTestsToRun: () => hasBrowserTestsToRun,
   getBrowserProjectsToRun: () => browserProjects,
   getExecutorRunOptions: () => ({}),
-  getWatchRunOptions: () => ({}),
-});
-
-/** Records the fanout a node-owned CLI shortcut makes to the browser session. */
-const createFakeBrowserWatchOrchestrator = (
-  events: string[],
-): BrowserWatchOrchestrator => ({
-  validate: async () => true,
-  setup: async () => true,
-  startBackground: () => {
-    events.push('browser-watch:start-background');
-  },
-  runForeground: async () => {
-    events.push('browser-watch:foreground');
-  },
-  rerun: async (testPaths) => {
-    events.push(`browser-watch:rerun:${testPaths?.join(',') ?? 'all'}`);
-  },
-  close: async () => {
-    events.push('browser-watch:close');
-  },
 });
 
 const unreachable = (label: string) => () => {
@@ -168,7 +175,6 @@ const createDeps = (overrides: Partial<RunTestsDeps>): RunTestsDeps => ({
   createNodeExecutor: unreachable('createNodeExecutor'),
   loadBrowserExecutor: unreachable('loadBrowserExecutor'),
   createBrowserRunPlanner: unreachable('createBrowserRunPlanner'),
-  createBrowserWatchOrchestrator: unreachable('createBrowserWatchOrchestrator'),
   runBrowserOnlyTests: unreachable('runBrowserOnlyTests'),
   runBrowserGlobalSetupStage: unreachable('runBrowserGlobalSetupStage'),
   isCliShortcutsEnabled: unreachable('isCliShortcutsEnabled'),
@@ -430,29 +436,36 @@ describe('runTests orchestration', () => {
 type CliShortcutHandlers = Parameters<RunTestsDeps['setupCliShortcuts']>[0];
 
 /**
- * Boot a node watch run and hand back the seams a real watch session is driven
- * through: the executor's invalidation trigger (the dev compile in production)
+ * Boot a watch run and hand back the seams a real watch session is driven
+ * through: each executor's invalidation trigger (a dev compile in production)
  * and the CLI shortcut handlers (a key press in production).
  */
 const startWatchRun = async ({
   runCycle,
   testEntries,
+  hasNodeTestsToRun = true,
+  withBrowser = false,
+  browserRunCycle = async () => outcomeOf([]),
 }: {
   runCycle?: RunCycleImpl;
   testEntries?: string[];
+  hasNodeTestsToRun?: boolean;
+  withBrowser?: boolean;
+  browserRunCycle?: RunCycleImpl;
 } = {}) => {
   const events: string[] = [];
   const parts = createContext({
     command: 'watch',
     nodeProjectNames: ['node-a'],
+    browserProjectNames: withBrowser ? ['browser-a'] : [],
   });
   const nodeExecutor = createFakeNodeExecutor({
     events,
-    hasNodeTestsToRun: true,
+    hasNodeTestsToRun,
     runCycle,
     testEntries,
   });
-  const browserWatch = createFakeBrowserWatchOrchestrator(events);
+  const browserExecutor = createFakeBrowserExecutor(events, browserRunCycle);
   let shortcuts: CliShortcutHandlers | undefined;
   let setupCliShortcutsCalls = 0;
 
@@ -460,8 +473,8 @@ const startWatchRun = async ({
     parts.context,
     createDeps({
       createNodeExecutor: () => nodeExecutor,
-      createBrowserRunPlanner: () => createFakePlanner(false),
-      createBrowserWatchOrchestrator: () => browserWatch,
+      createBrowserRunPlanner: () => createFakePlanner(withBrowser),
+      loadBrowserExecutor: async () => browserExecutor,
       isCliShortcutsEnabled: () => true,
       setupCliShortcuts: async (options) => {
         setupCliShortcutsCalls += 1;
@@ -470,11 +483,15 @@ const startWatchRun = async ({
       },
     }),
   );
+  // The mixed watch path schedules the initial browser cycle without awaiting
+  // it (the node side keeps the process alive).
+  await flush();
 
   return {
     ...parts,
     events,
     nodeExecutor,
+    browserExecutor,
     getShortcuts: () => shortcuts!,
     getSetupCliShortcutsCalls: () => setupCliShortcutsCalls,
   };
@@ -494,20 +511,20 @@ describe('runTests watch orchestration', () => {
     rs.restoreAllMocks();
   });
 
-  it('turns each invalidation into one cycle and one finalize, and installs the shortcuts once', async () => {
+  it('turns each invalidation into one cycle and one finalize, with the stdin owner installed once and before them', async () => {
     const {
       nodeExecutor,
       runEnds,
       getRunStarts,
       getShortcuts,
       getSetupCliShortcutsCalls,
-      events,
     } = await startWatchRun();
 
-    // Booting only subscribes; the first compile is what runs tests.
+    // Booting only subscribes; the first compile is what runs tests. The stdin
+    // owner is already in place, so the ready banner is never printed before a
+    // keystroke could be answered.
     expect(nodeExecutor.cycles).toHaveLength(0);
-    expect(events).toContain('browser-watch:start-background');
-    expect(getSetupCliShortcutsCalls()).toBe(0);
+    expect(getSetupCliShortcutsCalls()).toBe(1);
 
     await nodeExecutor.invalidate(true);
 
@@ -515,7 +532,6 @@ describe('runTests watch orchestration', () => {
     expect(nodeExecutor.cycles[0]).toMatchObject({ buildId: 1, mode: 'all' });
     expect(getRunStarts()).toBe(1);
     expect(runEnds).toHaveLength(1);
-    expect(getSetupCliShortcutsCalls()).toBe(1);
 
     await nodeExecutor.invalidate(false);
 
@@ -551,10 +567,66 @@ describe('runTests watch orchestration', () => {
     expect(seen).toEqual([{ testFiles: undefined, unmatched: 0 }]);
   });
 
+  it('runs the browser initial cycle after node resources are up, and finalizes each executor separately', async () => {
+    const { events, nodeExecutor, browserExecutor, runEnds } =
+      await startWatchRun({
+        withBrowser: true,
+        browserRunCycle: async () =>
+          outcomeOf([passingFile('/browser.test.ts', 'browser-a')]),
+      });
+
+    // Invariant #7: the browser host only launches once node resources exist.
+    expect(events.indexOf('node:ensure-run-resources')).toBeLessThan(
+      events.indexOf('browser:cycle-start'),
+    );
+    expect(browserExecutor.cycles).toHaveLength(1);
+    expect(browserExecutor.cycles[0]).toMatchObject({ mode: 'all' });
+    expect(runEnds).toHaveLength(1);
+
+    await browserExecutor.invalidate(['/browser.test.ts']);
+
+    expect(browserExecutor.cycles[1]).toMatchObject({
+      mode: 'on-demand',
+      fileFilters: ['/browser.test.ts'],
+    });
+    // One finalize per cycle, per executor — never a joint one.
+    expect(runEnds).toHaveLength(2);
+    expect(nodeExecutor.cycles).toHaveLength(0);
+  });
+
+  it('queues concurrent invalidations so two cycles never interleave', async () => {
+    const { events, nodeExecutor, browserExecutor } = await startWatchRun({
+      withBrowser: true,
+      runCycle: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return outcomeOf([]);
+      },
+      browserRunCycle: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return outcomeOf([]);
+      },
+    });
+    events.length = 0;
+
+    await Promise.all([
+      nodeExecutor.invalidate(false),
+      browserExecutor.invalidate(),
+    ]);
+
+    expect(events.filter((event) => event.includes('cycle'))).toEqual([
+      'node:cycle-start',
+      'node:cycle-end',
+      'browser:cycle-start',
+      'browser:cycle-end',
+    ]);
+  });
+
   it('reruns everything on both sides for the a shortcut, node cycle first', async () => {
-    const { context, nodeExecutor, getShortcuts, events } =
-      await startWatchRun();
+    const { context, nodeExecutor, getShortcuts, events } = await startWatchRun(
+      { withBrowser: true },
+    );
     await nodeExecutor.invalidate(true);
+    events.length = 0;
 
     context.normalizedConfig.testNamePattern = 'only-this';
     context.fileFilters = ['/scoped.test.ts'];
@@ -563,41 +635,50 @@ describe('runTests watch orchestration', () => {
 
     expect(context.normalizedConfig.testNamePattern).toBeUndefined();
     expect(context.fileFilters).toBeUndefined();
-    expect(nodeExecutor.cycles[1]).toMatchObject({
+    expect(nodeExecutor.cycles.at(-1)).toMatchObject({
       mode: 'all',
       fileFilters: undefined,
     });
-    // One node cycle finalize, then the browser session's own rerun — the
-    // output shape a mixed watch shortcut has to keep.
+    // One node cycle finalize, then the browser's own — the output shape a
+    // mixed watch shortcut has to keep.
     expect(events.indexOf('node:cycle-end')).toBeLessThan(
-      events.indexOf('browser-watch:rerun:all'),
+      events.indexOf('browser:request-rerun:all'),
+    );
+    expect(events.indexOf('browser:request-rerun:all')).toBeLessThan(
+      events.indexOf('browser:cycle-start'),
     );
   });
 
-  it('scopes the f shortcut to the failed paths and fans the same set to the browser session', async () => {
+  it('scopes the f shortcut to the failed paths and fans the same set to the browser executor', async () => {
     const failing: TestFileResult = {
       ...passingFile('/fail.test.ts', 'node-a'),
       status: 'fail',
     };
     let cycleCount = 0;
-    const { nodeExecutor, getShortcuts, events } = await startWatchRun({
-      runCycle: async () => {
-        cycleCount += 1;
-        return outcomeOf(cycleCount === 1 ? [failing] : []);
-      },
-    });
+    const { nodeExecutor, browserExecutor, getShortcuts, events } =
+      await startWatchRun({
+        withBrowser: true,
+        runCycle: async () => {
+          cycleCount += 1;
+          return outcomeOf(cycleCount === 1 ? [failing] : []);
+        },
+      });
     await nodeExecutor.invalidate(true);
 
     await getShortcuts().runFailedTests!();
 
-    expect(nodeExecutor.cycles[1]).toMatchObject({
+    expect(nodeExecutor.cycles.at(-1)).toMatchObject({
       mode: 'all',
       fileFilters: ['/fail.test.ts'],
     });
-    expect(events).toContain('browser-watch:rerun:/fail.test.ts');
+    expect(events).toContain('browser:request-rerun:/fail.test.ts');
+    expect(browserExecutor.cycles.at(-1)).toMatchObject({
+      mode: 'on-demand',
+      fileFilters: ['/fail.test.ts'],
+    });
   });
 
-  it('runs the u shortcut with updateSnapshot forced to all and restores it afterwards', async () => {
+  it('runs the u shortcut with updateSnapshot forced to all on both sides and restores it afterwards', async () => {
     const unmatched: TestFileResult = {
       ...passingFile('/snap.test.ts', 'node-a'),
       snapshotResult: {
@@ -612,14 +693,14 @@ describe('runTests watch orchestration', () => {
       },
     };
     let cycleCount = 0;
-    const { context, nodeExecutor, getShortcuts, events } = await startWatchRun(
-      {
+    const { context, nodeExecutor, browserExecutor, getShortcuts, events } =
+      await startWatchRun({
+        withBrowser: true,
         runCycle: async () => {
           cycleCount += 1;
           return outcomeOf(cycleCount === 1 ? [unmatched] : []);
         },
-      },
-    );
+      });
     await nodeExecutor.invalidate(true);
     const originalUpdateSnapshot =
       context.snapshotManager.options.updateSnapshot;
@@ -627,14 +708,19 @@ describe('runTests watch orchestration', () => {
 
     await getShortcuts().updateSnapshot!();
 
-    expect(nodeExecutor.cycles[1]).toMatchObject({
+    expect(nodeExecutor.cycles.at(-1)).toMatchObject({
       updateSnapshot: 'all',
       fileFilters: ['/snap.test.ts'],
+    });
+    // The single save/restore has to still be in force for the browser cycle,
+    // which runs after the node one.
+    expect(browserExecutor.cycles.at(-1)).toMatchObject({
+      updateSnapshot: 'all',
     });
     expect(context.snapshotManager.options.updateSnapshot).toBe(
       originalUpdateSnapshot,
     );
-    expect(events).toContain('browser-watch:rerun:/snap.test.ts');
+    expect(events).toContain('browser:request-rerun:/snap.test.ts');
   });
 
   it('restores updateSnapshot when the u shortcut rerun throws', async () => {
@@ -659,5 +745,56 @@ describe('runTests watch orchestration', () => {
     expect(context.snapshotManager.options.updateSnapshot).toBe(
       originalUpdateSnapshot,
     );
+  });
+
+  it('keeps driving cycles after one has failed', async () => {
+    const cycleError = new Error('cycle failed');
+    let cycleCount = 0;
+    const { nodeExecutor, runEnds } = await startWatchRun({
+      runCycle: async () => {
+        cycleCount += 1;
+        if (cycleCount === 1) {
+          throw cycleError;
+        }
+        return outcomeOf([]);
+      },
+    });
+
+    await expect(nodeExecutor.invalidate(true)).rejects.toBe(cycleError);
+    await nodeExecutor.invalidate(false);
+
+    expect(runEnds).toHaveLength(1);
+  });
+
+  it('offers the t and p shortcuts only when a node side exists, and closes every executor once', async () => {
+    const { getShortcuts, nodeExecutor, browserExecutor } = await startWatchRun(
+      { withBrowser: true },
+    );
+
+    expect(getShortcuts().runWithTestNamePattern).toBeDefined();
+    expect(getShortcuts().runWithFileFilters).toBeDefined();
+
+    await getShortcuts().closeServer();
+    await getShortcuts().closeServer();
+
+    expect(nodeExecutor.closeCount).toBe(1);
+    expect(browserExecutor.closeCount).toBe(1);
+  });
+
+  it('drops the t and p shortcuts when only browser tests run, and awaits the initial browser cycle', async () => {
+    const { getShortcuts, browserExecutor, runEnds } = await startWatchRun({
+      hasNodeTestsToRun: false,
+      withBrowser: true,
+    });
+
+    expect(getShortcuts().runWithTestNamePattern).toBeUndefined();
+    expect(getShortcuts().runWithFileFilters).toBeUndefined();
+    expect(browserExecutor.cycles).toHaveLength(1);
+    expect(runEnds).toHaveLength(1);
+
+    await getShortcuts().runAll!();
+
+    expect(browserExecutor.cycles).toHaveLength(2);
+    expect(runEnds).toHaveLength(2);
   });
 });

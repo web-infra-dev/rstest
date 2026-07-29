@@ -6,7 +6,7 @@ Core testing framework for Rstest.
 
 - `src/cli/` — CLI parsing and the CLI → config merge
 - `src/core/` — run orchestration: Rsbuild integration, executor seam, scheduling, state management
-- `src/core/browser/` — core-side browser-mode orchestration (load boundary, browser-only run, mixed-run planning, watch controls)
+- `src/core/browser/` — core-side browser-mode orchestration (load boundary, browser-only run, mixed-run planning)
 - `src/core/plugins/` — Rsbuild/Rspack plugins (mock seam, externals, entry assembly)
 - `src/runtime/` — test-side runtime: expect, spy, fakeTimers, fixtures, runner, worker entry
 - `src/reporter/` — output reporters
@@ -18,7 +18,7 @@ Core testing framework for Rstest.
 
 Core owns the run-cycle contract shared by the node pool and `@rstest/browser`:
 
-- `finalizeRunCycle` is the single finalize implementation for node-only, browser-only, and mixed runs: it reduces each executor's `ExecutorCycleOutcome` into the run verdict (merged results, coverage merge + report, reporter `onTestRunEnd`, exit code, bail message). Non-watch runs must exit through it exactly once; browser watch runs self-finalize host-side instead, and core skips its finalize for browser-only and zero-node mixed watch runs.
+- `finalizeRunCycle` is the single finalize implementation for node-only, browser-only, and mixed runs, on both commands: it reduces each executor's `ExecutorCycleOutcome` into the run verdict (merged results, coverage merge + report, reporter `onTestRunEnd`, exit code, bail message). A non-watch run exits through it exactly once; a watch run passes through it once per cycle, and a cycle is the only thing that may write the exit code.
 - `RunnerEventSink` is the single event pump for runner lifecycle events on both transports (node pool RPC and browser dispatch). One sink per project, bound to that project's `normalizedConfig`, feeding `stateManager` and reporters. No direct reporter/`stateManager` fanout anywhere else.
 - `executorCapabilities` declares the per-executor disposition (`supported` / `ignored-warn` / `error` / `stripped`) of every `RuntimeConfig` field. Adding a field without a row is a compile error; the browser wire projection (`projectRuntimeConfig`) keeps its own hand-written field list, held in lockstep by `tests/core/executorCapabilities.test.ts`.
 
@@ -29,7 +29,7 @@ Contracts between modules or processes — not readable from any single file.
 ### Run cycle (`src/core`)
 
 - Exit codes never downgrade: a later zero must not clear a prior non-zero.
-- `stateManager` reset is core-owned (top of a non-watch run, or `prepareWatchRerunState` per watch rerun) — executors never reset it, so bail reads stay cycle-scoped.
+- `stateManager` reset is core-owned (top of a non-watch run, or `prepareWatchRerunState` per watch cycle) — executors never reset it, so bail reads stay cycle-scoped.
 - `@rstest/browser` is version-locked to core and loaded through the core-owned `BrowserHostModule` contract; the browser package constrains its exports against it via `satisfies`.
 - Reporter output is sorted by `testPath`, deliberately decoupled from the perf-first execution order (failed-first, then longest-processing-time). Don't "fix" one by changing the other.
 
@@ -43,8 +43,9 @@ Contracts between modules or processes — not readable from any single file.
 ### Browser orchestration (`src/core/browser`)
 
 - `src/core/runTests.ts` stays a coarse orchestrator — split projects → node executor `init()` barrier → plan → drive executors → finalize. Browser-mode detail lives under `src/core/browser/`, behind the `BrowserHostModule` load boundary in `src/core/browser/loader.ts`, never inline in the orchestrator.
-- Exactly two orchestrator branches break executor isomorphism, both deliberate and commented at the call site: the browser-only fast path (constructing a `NodeExecutor` boots a node Rsbuild instance, so zero-node runs must skip it) and the watch dual-drive (node watch runs one core-owned cycle per executor invalidation signal; browser watch is host-driven and self-finalizing).
-- The browser watch control plane is core-owned (`src/core/browser/watchControls.ts`): core is the single stdin/CLI-shortcuts owner and fans reruns out through the host's `BrowserWatchHandles` — the host never subscribes to stdin (mirrored in `packages/browser/AGENTS.md`).
+- One orchestrator branch breaks executor isomorphism, deliberately and commented at the call site: the browser-only fast path, because constructing a `NodeExecutor` boots a node Rsbuild instance that a zero-node run must not pay for.
+- Watch is one core-owned loop for every executor and every trigger (`src/core/watchSession.ts`): an executor signals through `TestExecutor.onInvalidate` having already resolved its scope, and core answers with reset → `runCycle` → `finalizeRunCycle` → next trace buffer → ready banner. Cycles are queued, so two can never interleave on the shared `stateManager`. A trigger that resolves to no work must not signal — a cycle that runs nothing reports "no test files need re-run", which a scope simply missing that executor's files should not print.
+- Core is the single stdin/CLI-shortcuts owner for every watch shape; the host never subscribes to stdin (mirrored in `packages/browser/AGENTS.md`). The shortcuts fan out to whichever executors the run has: `t`/`p` are node-only (the browser rerun pipeline takes no filter input) and render greyed hints otherwise.
 - `src/core/isBrowserProject.ts` stays outside `src/core/browser/` on purpose: it is the shared routing predicate every node-path module reads, not browser-mode implementation.
 - Browser projects run their own pre-cycle `globalSetup` stage (`src/core/browser/globalSetupStage.ts`), distinct from the node `src/core/globalSetup.ts` — don't merge the two.
 

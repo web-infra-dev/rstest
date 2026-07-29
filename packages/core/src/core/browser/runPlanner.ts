@@ -4,7 +4,7 @@ import {
   isFuzzyBasenameFilter,
   type TraceEvent,
 } from '../../utils';
-import { type BrowserExecutorRunOptions, runBrowserModeTests } from './loader';
+import { type BrowserExecutorRunOptions, runBrowserDiscovery } from './loader';
 import type { NodeRunPlanAccess } from '../executors/nodeExecutor';
 import { getUserRstestConfigPluginProjects } from '../modifyRstestConfig';
 import type { Rstest } from '../rstest';
@@ -32,8 +32,6 @@ export interface BrowserRunPlanner {
   getExecutorRunOptions(
     projects: ProjectContext[],
   ): Omit<BrowserExecutorRunOptions, 'filesOnly'>;
-  /** Options for the host-driven browser watch session (background or foreground). */
-  getWatchRunOptions(projects: ProjectContext[]): BrowserTestRunOptions;
 }
 
 export function createBrowserRunPlanner({
@@ -174,7 +172,7 @@ export function createBrowserRunPlanner({
         return;
       }
       const browserProjectsForDiscovery = getBrowserProjectsForDiscovery();
-      const discoveryResult = await runBrowserModeTests(
+      const discoveryResult = await runBrowserDiscovery(
         context,
         browserProjectsForDiscovery,
         {
@@ -201,12 +199,5 @@ export function createBrowserRunPlanner({
       shouldRunBrowserDiscoveryFallback(),
     getBrowserProjectsToRun,
     getExecutorRunOptions,
-    // The watch session takes the executor bag plus the one watch-only field:
-    // trace events are forwarded from the host instead of flowing through
-    // `runCycle`.
-    getWatchRunOptions: (projects) => ({
-      ...getExecutorRunOptions(projects),
-      onTraceEvents,
-    }),
   };
 }

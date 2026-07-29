@@ -59,11 +59,11 @@ describe('runTests finalize drift-guard', () => {
   it('pins the run-time generateCoverage call sites in core', () => {
     const hits = countCalls('generateCoverage');
     // 1. `finalizeRun.ts` — inside `finalizeRunCycle` (the shared coverage report).
-    // 2. `browser/onlyRun.ts` — the browser-only WATCH bespoke report, which
-    //    covers the first cycle only; every rerun reports through the host's
-    //    per-rerun finalize and thus through the cycle.
-    // 3. `mergeReports.ts` — the separate `merge-reports` command, not a run.
-    expect(total(hits)).toBe(3);
+    // 2. `mergeReports.ts` — the separate `merge-reports` command, not a run.
+    // The browser-only watch path's bespoke first-cycle report is gone: browser
+    // watch cycles now finalize through `finalizeRunCycle` like every other
+    // cycle, so coverage has one run-time reporter again.
+    expect(total(hits)).toBe(2);
   });
 
   it('keeps a single finalizeRunCycle implementation', () => {

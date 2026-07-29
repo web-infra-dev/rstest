@@ -17,8 +17,10 @@ Responses always travel back as transport replies — `dispatchRouter` handles i
 - `@rstest/browser-ui` owns transport bridging and UI state projection only.
 - The runner runtime (`src/client`) owns test execution and emits protocol messages, but never owns filesystem access — snapshot file operations go through the `snapshot` dispatch namespace.
 - Runner lifecycle events feed `@rstest/core`'s per-project `RunnerEventSink` — the same event pump the node pool uses. The host never fans out to reporters or `stateManager` directly, and it routes every event by the project name carried on the payload — never derived from a test path, which is ambiguous when concurrent projects run the same file.
-- Run finalize is split by command: non-watch runs return a `BrowserTestRunResult` with a deferred `close` and core's `finalizeRunCycle` owns reporters `onTestRunEnd`, coverage merge, and the exit code; watch runs self-finalize host-side per rerun.
-- The watch control plane is core-owned: core is the single stdin/CLI-shortcuts owner and drives watch reruns through the `BrowserWatchHandles` (`rerun`/`close`) returned on watch-mode results — the host never subscribes to stdin.
+- Core's `finalizeRunCycle` owns reporters `onTestRunEnd`, coverage merge, and the exit code for every cycle on both commands. The host never finalizes and never writes the exit code: a failing file, a fatal error, and a launch failure all reach core as part of the cycle outcome.
+- Watch differs from one-shot only in what the host owns, not in who finalizes: a persistent runtime reused across controller re-entry, the rerun triggers, and HMR. The initial cycle returns a live watch session instead of a deferred `close`, and `executor.close()` is what tears the runtime down.
+- Every rerun trigger the host owns (dev rebuild, HMR, the in-page rerun button, an explicit request from a CLI shortcut) resolves its own scope and then signals core's `onInvalidate` subscriber, which calls back into the session to execute exactly that scope. Resolving the scope at the trigger is load-bearing twice over: the file-set diff can only be consumed once, and a trigger that resolves to no work must not signal at all.
+- The watch control plane is core-owned: core is the single stdin/CLI-shortcuts owner — the host never subscribes to stdin.
 - Browser config compatibility (which `RuntimeConfig` fields are supported / ignored / stripped) is declared in core's `executorCapabilities` table; `configValidation.ts` derives its generic warnings and errors from that table instead of hand-maintaining a list. The one exception is `coverage`, a specially handled key with a hand-written v8-provider guard (see the coverage pipeline doc in core).
 - Cross-file `bail` is enforced host-side at file boundaries in the headless scheduler (each worker checks the cycle-wide failed count before picking up the next file and drains the remaining queue as skipped). The headed debugging UI does not apply bail; the runner's per-test gate uses the client-local per-file failed count only.
 
@@ -68,6 +70,6 @@ This package requires `@rstest/core` and `playwright` as peer dependencies, and 
 - Don't add node-only features here
 - Don't rely on cross-version compatibility of the internal contract with @rstest/core — core's browser loader (`packages/core/src/core/browser/loader.ts`) enforces an exact version match, so cross-package contract changes must land in the same release
 - Don't bypass the `RunnerEventSink` for runner lifecycle events (no direct reporter/`stateManager` fanout from the host)
-- Don't self-finalize non-watch runs in the host — core's `finalizeRunCycle` owns reporters, coverage, and exit code there
+- Don't self-finalize in the host, on either command — core's `finalizeRunCycle` owns reporters, coverage, and exit code
 - Don't hand-maintain browser config compatibility lists; add or change rows in core's `executorCapabilities` table instead
 - Don't access the filesystem from the runner runtime; proxy through dispatch namespaces

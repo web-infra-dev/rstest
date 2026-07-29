@@ -40,11 +40,13 @@ export interface CreateBrowserExecutorOptions extends BrowserExecutorRunOptions 
 }
 
 /**
- * A {@link TestExecutor} with `collect` guaranteed: the browser side is the one
- * implementation that lists through the seam (`rstest list` relies on it).
+ * The browser side of the seam, with the members core relies on it to implement
+ * made non-optional: `collect` (`rstest list` lists through it) and the watch
+ * pair `onInvalidate`/`requestRerun` (core drives every browser watch cycle
+ * through them).
  */
 export type BrowserTestExecutor = TestExecutor &
-  Required<Pick<TestExecutor, 'collect'>>;
+  Required<Pick<TestExecutor, 'collect' | 'onInvalidate' | 'requestRerun'>>;
 
 /**
  * Core-owned contract for the `@rstest/browser/internal` host module.
@@ -66,6 +68,10 @@ export interface BrowserHostModule {
     context: RstestContext,
     options: CreateBrowserExecutorOptions,
   ) => Promise<BrowserTestExecutor>;
+  /**
+   * The files-only discovery boot (see {@link runBrowserDiscovery}). Runs and
+   * watch reruns go through `createBrowserExecutor`, never through here.
+   */
   runBrowserTests: (
     context: RstestContext,
     options?: BrowserTestRunOptions,
@@ -201,11 +207,12 @@ export async function loadAndValidateBrowserModule(
 }
 
 /**
- * Run browser mode tests host-driven (watch self-finalize path). Non-watch runs
- * go through {@link BrowserTestExecutor} instead; this shim stays for the
- * browser watch loop and the browser-only watch coverage path.
+ * Boot Browser Mode in files-only mode so browser `modifyRstestConfig` hooks
+ * apply and the test-file set is refreshed. The sole remaining caller is the
+ * mixed-run config-hook discovery boot — every real run and rerun goes through
+ * {@link BrowserTestExecutor}.
  */
-export async function runBrowserModeTests(
+export async function runBrowserDiscovery(
   context: RstestContext,
   browserProjects: ProjectContext[],
   options: BrowserTestRunOptions,

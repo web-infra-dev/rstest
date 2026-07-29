@@ -16,16 +16,13 @@ export type {
 // Shared coverage fold: the browser executor and the browser-only watch path
 // merge per-file result coverage through the same helper.
 export { buildBrowserCoverageMap } from './coverage/browserCoverageMap';
-// The single finalize implementation. Browser watch reruns feed their
-// synthetic per-rerun outcome through it so reporter payloads, exit-code
-// never-downgrade, and coverage reports match the node watch cycle.
-export { finalizeRunCycle } from './core/finalizeRun';
 // The executor seam — `@rstest/browser`'s `BrowserExecutor` writes
 // `implements TestExecutor` and returns an `ExecutorCycleOutcome` so the shared
 // `finalizeRunCycle` reduces it alongside the node outcome. Transitive dts
 // exposure through `BrowserHostModule` is not enough; these must be named here.
 export type {
   ExecutorCycleOutcome,
+  ExecutorInvalidationCallback,
   ExecutorRunCycleOptions,
   TestExecutor,
 } from './types';
@@ -46,9 +43,6 @@ export {
   resolveSnapshotPathDefault,
   SNAPSHOT_HEADER,
 } from './utils/snapshotPath';
-// Shared per-cycle state reset so the browser host and the node pool clear
-// stateManager/snapshotManager identically at the start of each watch rerun.
-export { prepareWatchRerunState } from './core/watchState';
 // Shared watch-ready banner so the browser host prints the same hint text as
 // the node watch loop.
 export { logWatchReadyMessage } from './core/cliShortcuts';
@@ -93,7 +87,6 @@ export type {
   BrowserTestRunOptions,
   BrowserTestRunResult,
   BrowserViewport,
-  BrowserWatchHandles,
   CoverageMapData,
   CoverageProvider,
   DevicePreset,

@@ -40,13 +40,16 @@ export interface ExecutorRunCycleOptions {
  * Watch invalidation subscriber. The hint carries only what the transport knows
  * for free at signal time: `isFirstBuild` marks the session's initial build,
  * which core runs as a full cycle and follows with the one-shot CLI-shortcut
- * install.
+ * install, and `fileFilters` carries the scope when the trigger already resolved
+ * it (the browser host plans its rerun set before signalling, so that resolution
+ * is not repeated — and never doubled — inside `runCycle`).
  *
  * Returning a promise back-pressures the transport's own build pipeline, which
  * is what keeps two watch cycles from overlapping on the shared `stateManager`.
  */
 export type ExecutorInvalidationCallback = (hint: {
   isFirstBuild: boolean;
+  fileFilters?: string[];
 }) => void | Promise<void>;
 
 /**
@@ -128,14 +131,26 @@ export interface TestExecutor {
   close(): Promise<void>;
   /**
    * Subscribe to this executor's watch trigger; the callback runs one watch
-   * cycle. Signal-only by design — it tells core "something changed";
-   * affected-entry resolution happens inside `runCycle({ mode: 'on-demand' })`,
-   * because node resolves affected entries by pull at cycle time and doing it
-   * in the hook would consume the diff baseline (double-diff hazard).
+   * cycle (core resets the cycle-scoped state, calls `runCycle`, and finalizes).
+   * Every rerun trigger a transport owns — dev rebuild, HMR, an in-page rerun
+   * button — routes through this one subscriber, so no executor ever drives a
+   * cycle of its own.
    *
-   * Implemented by the node executor (its dev-compile hooks are the signal);
-   * browser watch reruns are still host-driven end to end. Optional until that
-   * converges.
+   * The callback is awaited by the transport, and core serializes cycles behind
+   * a queue: two watch cycles never overlap on the shared `stateManager`.
+   *
+   * A trigger that resolves to no work must not fire the callback — a cycle that
+   * runs nothing still reports "no test files need re-run", which is not what a
+   * scope that simply misses this executor's files should print.
    */
   onInvalidate?(cb: ExecutorInvalidationCallback): void;
+  /**
+   * Watch only: ask this executor to schedule a cycle over `testPaths` (all of
+   * its test files when omitted), the way a CLI shortcut does. Implemented by
+   * the transports whose rerun scope core cannot express as a plain
+   * `runCycle({ fileFilters })` — the browser host has to reconcile the request
+   * against its own file-set diff first. It resolves once the resulting cycle
+   * (if any) has completed, so a caller may restore state it toggled for it.
+   */
+  requestRerun?(testPaths?: string[]): Promise<void>;
 }
