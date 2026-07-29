@@ -189,7 +189,6 @@ tinyspy
 transpiling
 treeshaking
 tsbuildinfo
-tsconfck
 tsdoc
 tsup
 unawaited
