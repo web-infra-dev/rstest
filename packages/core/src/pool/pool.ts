@@ -9,7 +9,7 @@ import { createPoolWorker } from './workers';
  *   - one task per worker at a time (concurrentTasksPerWorker=1)
  *   - parallel dispatch up to maxWorkers, slot-waiter blocks excess callers
  *   - isolate=true: fresh runner per task, stopped in the background
- *   - isolate=false: idle runners reused, lazy-spawned on demand
+ *   - isolate=false: idle runners reused (environment-matched), lazy-spawned
  */
 export class Pool {
   private readonly options: PoolOptions;
@@ -78,12 +78,19 @@ export class Pool {
    * claimed (idle-runner reuse or `slotWaiters` push) without revisiting it.
    */
   private async acquireRunner(task: PoolTask): Promise<PoolRunner> {
+    const { environmentKey } = task.options;
+
     while (true) {
       // Prefer reuse of an idle runner (only meaningful when isolate=false,
       // since isolate=true never returns runners to the idle pool). Most
-      // recently returned first (LIFO) — hottest kept module cache.
-      const reuse = this.idleRunners.pop();
-      if (reuse) {
+      // recently returned first (LIFO) — hottest kept module cache — and
+      // restricted to runners already holding this task's environment, so a
+      // reused worker never has to swap environments mid-life.
+      const reuseIndex = this.idleRunners.findLastIndex(
+        (idle) => idle.environmentKey === environmentKey,
+      );
+      if (reuseIndex !== -1) {
+        const reuse = this.idleRunners.splice(reuseIndex, 1)[0]!;
         if (reuse.isUsable()) {
           this.activeRunners.add(reuse);
           return reuse;
@@ -96,6 +103,13 @@ export class Pool {
 
       const inFlight = this.inFlightCount;
       if (inFlight >= this.options.maxWorkers) {
+        // No idle runner holds this environment. Idle runners still occupy
+        // slots, so shed the coldest one rather than parking behind workers
+        // that can never serve this task; its slot — and this waiter — is
+        // released once the child exits.
+        if (this.idleRunners.length > 0) {
+          this.disposeRunnerInBackground(this.idleRunners.shift()!);
+        }
         await new Promise<void>((resolve) => {
           this.slotWaiters.push(resolve);
         });
@@ -122,7 +136,7 @@ export class Pool {
       const workerId = this.acquireWorkerId();
       const worker = createPoolWorker(task, this.options, workerId);
       gate?.attachWorker(worker);
-      const runner = new PoolRunner(worker, { workerId });
+      const runner = new PoolRunner(worker, { workerId, environmentKey });
       this.activeRunners.add(runner);
       try {
         await runner.start();
@@ -208,10 +222,18 @@ export class Pool {
     //   2) There is no waiter, but the idle pool has not yet reached
     //      `minWorkers` — keep the runner around as steady-state capacity.
     // Otherwise the idle pool is already at the floor, so shed this runner.
+    //
+    // The floor is counted per environment, because reuse is environment-
+    // matched: idle runners holding a different environment can never serve
+    // this one, so counting them would let a cold environment's leftovers
+    // squat the floor and force this environment to respawn every task.
     const minWorkers = Math.max(this.options.minWorkers, 0);
     const hasWaiter = this.slotWaiters.length > 0;
+    const idleForEnvironment = this.idleRunners.filter(
+      (idle) => idle.environmentKey === runner.environmentKey,
+    ).length;
 
-    if (hasWaiter || this.idleRunners.length < minWorkers) {
+    if (hasWaiter || idleForEnvironment < minWorkers) {
       this.idleRunners.push(runner);
       if (hasWaiter) {
         // Idle slot is immediately consumable — wake one waiter now.

@@ -39,6 +39,8 @@ const createTask = (
   worker: 'threads',
   type,
   options: {
+    // A worker is only reused for tasks carrying the same key.
+    environmentKey: 'node',
     ...optionOverrides,
   } as any,
   rpcMethods: stubRpcMethods(),
