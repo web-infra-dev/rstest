@@ -1,7 +1,8 @@
 /**
  * Awaits a pool run that is expected to reject and hands back the rejection so
- * the test can assert on the enriched message. A run that resolves fails here
- * rather than further down on an `undefined` message.
+ * the test can assert on the enriched message. A run that resolves — or rejects
+ * with something that carries no message — fails here rather than further down
+ * on an `undefined` message.
  */
 export const expectRejection = async (
   promise: Promise<unknown>,
@@ -9,7 +10,12 @@ export const expectRejection = async (
   try {
     await promise;
   } catch (error) {
-    return error as Error;
+    if (error instanceof Error) {
+      return error;
+    }
+    throw new Error(
+      `Expected the pool run to reject with an Error, got: ${String(error)}`,
+    );
   }
   throw new Error('Expected the pool run to reject, but it resolved.');
 };
