@@ -1789,6 +1789,55 @@ const createBrowserRuntime = async ({
     }
   };
 
+  const serveContainerRoute = async (
+    req: IncomingMessage,
+    res: ServerResponse,
+    next: () => void,
+  ): Promise<void> => {
+    if (!req.url) {
+      next();
+      return;
+    }
+
+    const url = new URL(req.url, 'http://localhost');
+    if (url.pathname === '/') {
+      if (await respondWithDevServerHtml(url, res)) {
+        return;
+      }
+
+      const html =
+        injectedContainerHtml ||
+        containerHtmlTemplate?.replace(OPTIONS_PLACEHOLDER, 'null');
+
+      if (html) {
+        res.setHeader('Content-Type', 'text/html');
+        res.end(html);
+        return;
+      }
+
+      res.statusCode = 502;
+      res.end('Container UI is not available.');
+      return;
+    }
+
+    if (url.pathname.startsWith('/container-static/')) {
+      if (await proxyDevServerAsset(req, res)) {
+        return;
+      }
+
+      if (serveContainer) {
+        serveContainer(req, res, next);
+        return;
+      }
+
+      res.statusCode = 502;
+      res.end('Container assets are not available.');
+      return;
+    }
+
+    next();
+  };
+
   // ---- Build one isolated rsbuild instance + dev server per project ----
   const buildProjectServer = async (
     project: ProjectContext,
@@ -1846,6 +1895,13 @@ const createBrowserRuntime = async ({
             project.normalizedConfig.browser.port ??
             (isContainerServer ? 4000 : 0),
           strictPort: project.normalizedConfig.browser.strictPort,
+          // User plugins may emit index.html; register before Rsbuild's HTML
+          // completion middleware so `/` remains owned by the Browser UI.
+          setup: isContainerServer
+            ? ({ server }) => {
+                server.middlewares.use(serveContainerRoute);
+              }
+            : undefined,
         },
         dev: createBrowserRsbuildDevConfig(enableHmr),
         environments: {
@@ -2195,43 +2251,6 @@ const createBrowserRuntime = async ({
             res.end('Failed to open editor');
           }
           return;
-        }
-        // Container UI HTML + static assets are served by the container origin
-        // only. Per-project runner servers expose just /runner.html + assets.
-        if (isContainerServer) {
-          if (url.pathname === '/') {
-            if (await respondWithDevServerHtml(url, res)) {
-              return;
-            }
-
-            const html =
-              injectedContainerHtml ||
-              containerHtmlTemplate?.replace(OPTIONS_PLACEHOLDER, 'null');
-
-            if (html) {
-              res.setHeader('Content-Type', 'text/html');
-              res.end(html);
-              return;
-            }
-
-            res.statusCode = 502;
-            res.end('Container UI is not available.');
-            return;
-          }
-          if (url.pathname.startsWith('/container-static/')) {
-            if (await proxyDevServerAsset(req, res)) {
-              return;
-            }
-
-            if (serveContainer) {
-              serveContainer(req, res, next);
-              return;
-            }
-
-            res.statusCode = 502;
-            res.end('Container assets are not available.');
-            return;
-          }
         }
         if (url.pathname === '/runner.html') {
           res.setHeader('Content-Type', 'text/html');

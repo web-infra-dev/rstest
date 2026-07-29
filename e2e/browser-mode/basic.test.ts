@@ -27,4 +27,16 @@ describe('browser mode - basic', () => {
       expect(cli.exec.exitCode).toBe(0);
     },
   );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'should serve the Browser UI when user plugins generate an index HTML',
+    async () => {
+      const { cli } = await runBrowserCli('basic', {
+        args: ['-c', 'rstest.userHtml.config.mts'],
+      });
+
+      await cli.exec;
+      expect(cli.exec.exitCode).toBe(0);
+    },
+  );
 });
