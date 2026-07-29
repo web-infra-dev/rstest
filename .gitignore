@@ -9,6 +9,7 @@ dist/
 dist-*
 compiled/
 coverage/
+coverage-*/
 doc_build/
 playwright-report/
 tsconfig.tsbuildinfo

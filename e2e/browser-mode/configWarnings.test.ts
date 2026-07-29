@@ -46,7 +46,9 @@ describe('browser mode - config validation warnings', () => {
   });
 
   it('emits no ignore-warnings for a default browser config', async () => {
-    const { expectExecSuccess, cli } = await runBrowserCli('browser-coverage');
+    const { expectExecSuccess, cli } = await runBrowserCli('browser-coverage', {
+      args: ['-c', 'rstest.defaultWarnings.config.mts'],
+    });
     await expectExecSuccess();
     expect(`${cli.stdout}\n${cli.stderr}`).not.toMatch(
       /Ignoring .* in browser mode/,

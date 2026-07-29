@@ -57,6 +57,7 @@ export const BROWSER_PORTS = {
   'browser-coverage-v8-mixed': 5272,
   'browser-coverage-v8-browser-only': 5274,
   'browser-coverage-node-only-flags': 5276,
+  'browser-coverage-default-warnings': 5278,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);
