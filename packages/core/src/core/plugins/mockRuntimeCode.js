@@ -60,13 +60,19 @@ if (globalThis.__rstest_federation__) {
 }
 //#endregion
 
-const originalWebpackRequire = __webpack_require__;
-
 //#region proxy __webpack_require__
-__webpack_require__ = new Proxy(
-  function (...args) {
+// The proxy target is the original `__webpack_require__` itself, so all
+// property operations — get/set/`in`/`for...in`/`hasOwnProperty` — hit the
+// one real object through the default traps, regardless of whether a runtime
+// property was assigned before or after this proxy was installed. (A
+// wrapper-function target splits properties across two objects and needs
+// hand-written merge traps for every read path; rspack's HMR runtime, which
+// clones `__webpack_require__` per module via `for...in` + `hasOwnProperty`,
+// silently drops `.m`/`.c`/`.i` under that split and crashes headed watch.)
+__webpack_require__ = new Proxy(__webpack_require__, {
+  apply(target, thisArg, args) {
     try {
-      return originalWebpackRequire(...args);
+      return Reflect.apply(target, thisArg, args);
     } catch (e) {
       const errMsg = e.message ?? e.toString();
       if (errMsg.includes('__webpack_modules__[moduleId] is not a function')) {
@@ -75,52 +81,41 @@ __webpack_require__ = new Proxy(
       throw e;
     }
   },
-  {
-    set(target, property, value) {
-      if (
-        globalThis.__rstest_federation__ &&
-        property === 'f' &&
-        value &&
-        typeof value === 'object'
-      ) {
-        // The bundler assigns `__webpack_require__.f = {}` early, and later
-        // runtime modules install throwing placeholders via
-        // `f.consumes = f.consumes || thrower`. Pre-seeding no-ops keeps the
-        // placeholders from ever being installed, so eager chunk loading
-        // cannot fail before the federation runtime initializes.
-        value.consumes ??= function () {};
-        value.remotes ??= function () {};
+  set(target, property, value) {
+    if (
+      globalThis.__rstest_federation__ &&
+      property === 'f' &&
+      value &&
+      typeof value === 'object'
+    ) {
+      // The bundler assigns `__webpack_require__.f = {}` early, and later
+      // runtime modules install throwing placeholders via
+      // `f.consumes = f.consumes || thrower`. Pre-seeding no-ops keeps the
+      // placeholders from ever being installed, so eager chunk loading
+      // cannot fail before the federation runtime initializes.
+      value.consumes ??= function () {};
+      value.remotes ??= function () {};
 
-        // Module Federation's Node runtime plugin patches chunk-loading
-        // handlers (`readFileVm` / `require`) to load chunks via native
-        // require, which would evaluate them outside this runtime instance
-        // and lose Rstest's mocks and shims. Freeze those handlers once
-        // Rspack installs them.
-        const proxied = new Proxy(value, {
-          set(obj, key, val) {
-            if ((key === 'readFileVm' || key === 'require') && obj[key]) {
-              return true;
-            }
-            obj[key] = val;
+      // Module Federation's Node runtime plugin patches chunk-loading
+      // handlers (`readFileVm` / `require`) to load chunks via native
+      // require, which would evaluate them outside this runtime instance
+      // and lose Rstest's mocks and shims. Freeze those handlers once
+      // Rspack installs them.
+      target[property] = new Proxy(value, {
+        set(obj, key, val) {
+          if ((key === 'readFileVm' || key === 'require') && obj[key]) {
             return true;
-          },
-        });
-        target[property] = proxied;
-        originalWebpackRequire[property] = proxied;
-        return true;
-      }
-      target[property] = value;
-      originalWebpackRequire[property] = value;
+          }
+          obj[key] = val;
+          return true;
+        },
+      });
       return true;
-    },
-    get(target, property) {
-      if (property in target) {
-        return target[property];
-      }
-      return originalWebpackRequire[property];
-    },
+    }
+    target[property] = value;
+    return true;
   },
-);
+});
 //#endregion
 
 __webpack_require__.rstest_original_modules = {};
