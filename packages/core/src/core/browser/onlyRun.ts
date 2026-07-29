@@ -18,8 +18,9 @@ import {
 } from './globalSetupStage';
 import { loadBrowserExecutor, runBrowserModeTests } from './loader';
 import {
-  attachBrowserWatchControls,
+  attachBrowserWatchShortcuts,
   createBrowserWatchLifecycle,
+  registerWatchSignalExit,
   reportInitialCycleCoverage,
   reportBrowserWatchGlobalSetupFailure,
 } from './watchControls';
@@ -102,10 +103,11 @@ export async function runBrowserOnlyTests(
     });
     let browserResult: Awaited<ReturnType<typeof runBrowserModeTests>>;
     const lifecycle = createBrowserWatchLifecycle(() => browserResult?.watch);
-    let restartRequested = false;
+    lifecycle.addControlCleanup(
+      registerWatchSignalExit(context, lifecycle.close),
+    );
     const { onBeforeRestart } = await import('../restart');
     onBeforeRestart(async () => {
-      restartRequested = true;
       await lifecycle.close();
       await shutdownTrace();
     });
@@ -118,14 +120,15 @@ export async function runBrowserOnlyTests(
         }),
       );
     } catch (error) {
+      const wasClosing = lifecycle.isClosing();
       await lifecycle.close();
-      if (restartRequested) {
+      if (wasClosing) {
         return;
       }
       await shutdownTrace();
       throw error;
     }
-    if (restartRequested) {
+    if (lifecycle.isClosing()) {
       return;
     }
 
@@ -155,23 +158,24 @@ export async function runBrowserOnlyTests(
         }),
       );
 
-      if (restartRequested) {
+      if (lifecycle.isClosing()) {
         await lifecycle.close();
       } else if (browserResult?.watch) {
         await lifecycle.track(
-          attachBrowserWatchControls(context, {
+          attachBrowserWatchShortcuts(context, {
             ...browserResult.watch,
             close: lifecycle.close,
           }).then((cleanupControls) => {
-            lifecycle.setControlCleanup(cleanupControls);
+            lifecycle.addControlCleanup(cleanupControls);
           }),
         );
       } else {
         await lifecycle.close();
       }
     } catch (error) {
+      const wasClosing = lifecycle.isClosing();
       await lifecycle.close();
-      if (!restartRequested) {
+      if (!wasClosing) {
         await shutdownTrace();
         throw error;
       }

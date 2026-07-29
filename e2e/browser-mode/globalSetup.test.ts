@@ -67,6 +67,53 @@ const expectSignalExitDuringRestartCleanup = async ({
   }
 };
 
+const expectSignalExitDuringGlobalSetup = async ({
+  fixtureName,
+  targetName,
+  globalSetupPath,
+  setupMarker,
+  teardownMarker,
+}: {
+  fixtureName: string;
+  targetName: string;
+  globalSetupPath: string;
+  setupMarker: string;
+  teardownMarker: string;
+}) => {
+  const fixturesTargetPath = path.join(
+    __dirname,
+    `fixtures/fixtures-test-${targetName}`,
+  );
+  const { fs } = await prepareFixtures({
+    fixturesPath: path.join(__dirname, `fixtures/${fixtureName}`),
+    fixturesTargetPath,
+  });
+  fs.update(path.join(fixturesTargetPath, globalSetupPath), (content) =>
+    content.replace(
+      `console.log('${setupMarker}');`,
+      `console.log('${setupMarker}');\n  await new Promise((resolve) => setTimeout(resolve, 1500));`,
+    ),
+  );
+  const result = await runBrowserWatchCliWithCwd(fixturesTargetPath);
+  const { cli } = result;
+
+  try {
+    await cli.waitForStdout(setupMarker);
+    cli.resetStd();
+
+    cli.exec.process!.kill('SIGINT');
+    await result.expectExecFailed();
+
+    expect(cli.exec.process!.exitCode).toBe(130);
+    expect(cli.stdout).toContain('Received SIGINT, cleaning up...');
+    expect(cli.stdout).toContain(teardownMarker);
+    expect(cli.stdout).not.toContain('Waiting for file changes...');
+  } finally {
+    await killCliProcessTree(cli);
+    await deleteFixtureTarget(fs, fixturesTargetPath);
+  }
+};
+
 // Phase 5 step 5 gate (red-first): browser projects must run `globalSetup` on
 // the host — today the browser path never compiles nor executes it — and the
 // post-setup `process.env` change-set must be propagated into the browser
@@ -401,6 +448,29 @@ describe('browser mode - globalSetup', () => {
       await deleteFixtureTarget(fs, fixturesTargetPath);
     }
   }, 60_000);
+
+  it.skipIf(process.platform === 'win32').each([
+    {
+      name: 'browser-only',
+      fixtureName: 'browser-global-setup',
+      targetName: 'browser-global-setup-signal',
+      globalSetupPath: 'globalSetup.ts',
+      setupMarker: '[browser-global-setup] executed',
+      teardownMarker: '[browser-global-teardown] executed',
+    },
+    {
+      name: 'mixed',
+      fixtureName: 'browser-global-setup-mixed',
+      targetName: 'browser-global-setup-mixed-signal',
+      globalSetupPath: 'project-browser/globalSetup.ts',
+      setupMarker: '[mixed-browser-global-setup] executed',
+      teardownMarker: '[mixed-browser-global-teardown] executed',
+    },
+  ])(
+    'handles SIGINT during $name globalSetup',
+    expectSignalExitDuringGlobalSetup,
+    60_000,
+  );
 
   it.skipIf(process.platform === 'win32').each([
     {

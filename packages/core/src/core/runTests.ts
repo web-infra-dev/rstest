@@ -33,6 +33,7 @@ import { runBrowserOnlyTests } from './browser/onlyRun';
 import { createBrowserRunPlanner } from './browser/runPlanner';
 import {
   createBrowserWatchSession,
+  registerWatchSignalExit,
   reportBrowserWatchGlobalSetupFailure,
 } from './browser/watchControls';
 import { createNodeExecutor } from './executors/nodeExecutor';
@@ -371,8 +372,6 @@ export async function runTests(context: Rstest): Promise<void> {
     close?: () => Promise<void>;
   } = {};
   let browserSetupPromise: Promise<BrowserGlobalSetupStageResult> | undefined;
-  let restartRequested = false;
-  let removeWatchSignalHandlers = () => {};
   let cleanupPromise: Promise<void> | undefined;
   const cleanup = (): Promise<void> => {
     cleanupPromise ??= (async () => {
@@ -399,13 +398,13 @@ export async function runTests(context: Rstest): Promise<void> {
     })();
     return cleanupPromise;
   };
+  const removeWatchSignalHandlers = registerWatchSignalExit(context, cleanup);
 
   const { onBeforeRestart } = await import('./restart');
   onBeforeRestart(async () => {
-    restartRequested = true;
     await cleanup();
-    // A fatal signal received during cleanup must still reach `handleSignal`
-    // and await the same cleanup promise before exiting.
+    // A fatal signal received during cleanup must still await the same cleanup
+    // promise before exiting.
     removeWatchSignalHandlers();
   });
 
@@ -420,13 +419,14 @@ export async function runTests(context: Rstest): Promise<void> {
       );
       stage = await browserSetupPromise;
     } catch (error) {
+      const wasCleaningUp = cleanupPromise !== undefined;
       await cleanup();
-      if (restartRequested) {
+      if (wasCleaningUp) {
         return;
       }
       throw error;
     }
-    if (restartRequested) {
+    if (cleanupPromise) {
       await cleanup();
       return;
     }
@@ -453,8 +453,9 @@ export async function runTests(context: Rstest): Promise<void> {
     try {
       await browserWatch.runForeground();
     } catch (error) {
+      const wasCleaningUp = cleanupPromise !== undefined;
       await cleanup();
-      if (!restartRequested) {
+      if (!wasCleaningUp) {
         throw error;
       }
     } finally {
@@ -503,23 +504,6 @@ export async function runTests(context: Rstest): Promise<void> {
   };
 
   const enableCliShortcuts = isCliShortcutsEnabled();
-
-  const handleSignal = async (signal: NodeJS.Signals) => {
-    logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
-    await cleanup();
-    process.exit(getSignalExitCode(signal));
-  };
-
-  if (!context.embedded) {
-    for (const signal of FATAL_SIGNALS) {
-      process.on(signal, handleSignal);
-    }
-    removeWatchSignalHandlers = () => {
-      for (const signal of FATAL_SIGNALS) {
-        process.off(signal, handleSignal);
-      }
-    };
-  }
 
   const afterTestsWatchRun = () =>
     logWatchReadyMessage(context, enableCliShortcuts);
@@ -653,8 +637,9 @@ export async function runTests(context: Rstest): Promise<void> {
   try {
     await nodeExecutor.ensureRunResources();
   } catch (error) {
+    const wasCleaningUp = cleanupPromise !== undefined;
     await cleanup();
-    if (!restartRequested) {
+    if (!wasCleaningUp) {
       throw error;
     }
     return;
@@ -664,7 +649,7 @@ export async function runTests(context: Rstest): Promise<void> {
   // session may launch — deferred to here so node env-dependency validation
   // failures never leave a browser host running (the same ordering the
   // pre-seam code had). Node reruns above never restart it.
-  if (restartRequested) {
+  if (cleanupPromise) {
     await cleanup();
     return;
   }

@@ -19,21 +19,20 @@ import {
 } from '../watchState';
 
 /**
- * Own the fatal-signal → exit path for a browser-only watch session (node
- * watch parity): tear the session down through the watch handles (idempotent
- * with the host's own cleanup net) and exit with the POSIX 128+signal code.
+ * Keep fatal-signal handling active for the full watch lifecycle, including
+ * setup and cleanup phases where browser watch handles do not exist yet.
  * Embedded hosts own the process lifecycle, so nothing is registered there.
  */
-function registerBrowserWatchSignalExit(
+export function registerWatchSignalExit(
   context: Rstest,
-  watch: BrowserWatchHandles,
+  close: () => Promise<void>,
 ): () => void {
   if (context.embedded) {
     return () => {};
   }
   const handleSignal = async (signal: NodeJS.Signals) => {
     logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
-    await watch.close();
+    await close();
     process.exit(getSignalExitCode(signal));
   };
   for (const signal of FATAL_SIGNALS) {
@@ -112,13 +111,13 @@ export function createBrowserWatchLifecycle(
 ): {
   track<T>(pending: Promise<T>): Promise<T>;
   isClosing(): boolean;
-  setControlCleanup(cleanup: () => void): void;
+  addControlCleanup(cleanup: () => void): void;
   close(): Promise<void>;
 } {
   let pending: Promise<unknown> | undefined;
   let closePromise: Promise<void> | undefined;
   let closeRequested = false;
-  let cleanupControls = () => {};
+  const controlCleanups: Array<() => void> = [];
 
   const close = () => {
     closeRequested = true;
@@ -137,7 +136,9 @@ export function createBrowserWatchLifecycle(
         } finally {
           // Keep Ctrl+C active for the entire cleanup window. A signal arriving
           // here awaits this same close promise and exits after cleanup.
-          cleanupControls();
+          for (const cleanup of controlCleanups.splice(0)) {
+            cleanup();
+          }
         }
       }
     })();
@@ -150,11 +151,11 @@ export function createBrowserWatchLifecycle(
       return nextPending;
     },
     isClosing: () => closeRequested,
-    setControlCleanup(cleanup) {
+    addControlCleanup(cleanup) {
       if (closeRequested) {
         cleanup();
       } else {
-        cleanupControls = cleanup;
+        controlCleanups.push(cleanup);
       }
     },
     close,
@@ -219,29 +220,18 @@ export async function reportInitialCycleCoverage(
 }
 
 /**
- * Attach core-owned controls to a browser-only watch session: the fatal-signal
- * exit path first, then the single stdin shortcuts owner. The returned cleanup
- * is owned by the session lifecycle so config restart removes these controls
- * only after the browser and global teardown have settled.
+ * Attach the core-owned stdin shortcuts to a browser-only watch session. The
+ * returned cleanup is owned by the session lifecycle so config restart removes
+ * the stdin owner only after the browser and global teardown have settled.
  */
-export async function attachBrowserWatchControls(
+export async function attachBrowserWatchShortcuts(
   context: Rstest,
   watch: BrowserWatchHandles | undefined,
 ): Promise<() => void> {
   if (!watch) {
     return () => {};
   }
-  const removeSignalExit = registerBrowserWatchSignalExit(context, watch);
-  try {
-    const closeCliShortcuts = await setupBrowserWatchShortcuts(context, watch);
-    return () => {
-      closeCliShortcuts();
-      removeSignalExit();
-    };
-  } catch (error) {
-    removeSignalExit();
-    throw error;
-  }
+  return setupBrowserWatchShortcuts(context, watch);
 }
 
 /**
@@ -259,7 +249,7 @@ export interface BrowserWatchSession {
   startBackground(): void;
   /**
    * Zero-node mixed watch: only the browser side runs. Await the initial run
-   * and attach the core-owned watch controls (signal exit + stdin shortcuts).
+   * and attach the core-owned stdin shortcuts.
    */
   runForeground(): Promise<void>;
   /** Fan a node-owned CLI shortcut (a/f/u) out to the browser session. */
@@ -323,11 +313,11 @@ export function createBrowserWatchSession({
           await lifecycle.close();
         } else if (result?.watch) {
           await lifecycle.track(
-            attachBrowserWatchControls(context, {
+            attachBrowserWatchShortcuts(context, {
               ...result.watch,
               close: lifecycle.close,
             }).then((cleanupControls) => {
-              lifecycle.setControlCleanup(cleanupControls);
+              lifecycle.addControlCleanup(cleanupControls);
             }),
           );
         } else {
