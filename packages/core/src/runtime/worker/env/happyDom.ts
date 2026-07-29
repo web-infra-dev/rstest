@@ -14,7 +14,7 @@ type HappyDOMOptions = ConstructorParameters<typeof HappyDOMWindow>[0];
 export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
   {
     name: 'happy-dom',
-    setup: async (global, options = {}) => {
+    setup: async (global, options = {}, context) => {
       checkPkgInstalled('happy-dom');
 
       const { Window, GlobalWindow } = await import('happy-dom');
@@ -35,13 +35,14 @@ export const environment: TestEnvironment<typeof globalThis, HappyDOMOptions> =
       });
       const cleanupObjectURLs = installObjectURLTracker(
         win.URL as unknown as typeof URL,
+        context,
       );
 
       const cleanupGlobal = installGlobal(global, win, {
         // jsdom doesn't support Request and Response, but happy-dom does
         additionalKeys: ['Request', 'Response', 'MessagePort', 'fetch', 'URL'],
       });
-      const cleanupTimers = installTimerTracking(global, nodeTimers);
+      const cleanupTimers = installTimerTracking(global, nodeTimers, context);
 
       const cleanupHandler = addDefaultErrorHandler(
         global as unknown as Window,

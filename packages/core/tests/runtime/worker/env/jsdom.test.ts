@@ -33,7 +33,11 @@ test('clears pending Node timers during jsdom teardown', async () => {
     clearedIntervals.push(timer);
     nativeTimers.clearInterval(timer);
   }) as typeof clearInterval;
-  const { teardown } = await environment.setup(testGlobal, {});
+  const { teardown } = await environment.setup(
+    testGlobal,
+    {},
+    { scope: 'file' },
+  );
   const timeout = testGlobal.setTimeout(() => {}, 60_000);
   const interval = testGlobal.setInterval(() => {}, 60_000);
   let tornDown = false;
@@ -65,14 +69,18 @@ test('clears pending Node timers during jsdom teardown', async () => {
 test('should preserve URL customizations from beforeParse', async () => {
   const testGlobal = { console, URL, URLSearchParams } as typeof globalThis;
   const originalURL = testGlobal.URL;
-  const { teardown } = await environment.setup(testGlobal, {
-    beforeParse(window: DOMWindow) {
-      const OriginalURL = window.URL as typeof URL;
-      class CustomURL extends OriginalURL {}
-      Object.defineProperty(CustomURL, 'beforeParseMarker', { value: true });
-      window.URL = CustomURL;
+  const { teardown } = await environment.setup(
+    testGlobal,
+    {
+      beforeParse(window: DOMWindow) {
+        const OriginalURL = window.URL as typeof URL;
+        class CustomURL extends OriginalURL {}
+        Object.defineProperty(CustomURL, 'beforeParseMarker', { value: true });
+        window.URL = CustomURL;
+      },
     },
-  });
+    { scope: 'file' },
+  );
 
   try {
     expect(

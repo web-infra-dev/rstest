@@ -324,11 +324,13 @@ const preparePool = async (
       throw new Error(`Unknown test environment: ${testEnvironment.name}`);
     }
     const { environment } = await loadEnvironment();
+    const scope = isolate ? 'file' : 'worker';
     const { teardown } = await environment.setup(
       global,
       testEnvironment.options || {},
+      { scope },
     );
-    if (isolate) {
+    if (scope === 'file') {
       cleanupFns.push(() => teardown(global));
     }
   }
