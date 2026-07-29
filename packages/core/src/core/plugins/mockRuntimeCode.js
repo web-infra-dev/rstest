@@ -101,19 +101,20 @@ __webpack_require__ = new Proxy(__webpack_require__, {
       // require, which would evaluate them outside this runtime instance
       // and lose Rstest's mocks and shims. Freeze those handlers once
       // Rspack installs them.
-      target[property] = new Proxy(value, {
+      const frozenHandlers = new Proxy(value, {
         set(obj, key, val) {
           if ((key === 'readFileVm' || key === 'require') && obj[key]) {
+            // Deliberately claim success: the federation runtime assigns in
+            // strict mode, and returning false would turn the intended
+            // silent drop into a TypeError at its call site.
             return true;
           }
-          obj[key] = val;
-          return true;
+          return Reflect.set(obj, key, val);
         },
       });
-      return true;
+      return Reflect.set(target, property, frozenHandlers);
     }
-    target[property] = value;
-    return true;
+    return Reflect.set(target, property, value);
   },
 });
 //#endregion

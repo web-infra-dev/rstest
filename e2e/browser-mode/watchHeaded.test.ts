@@ -39,11 +39,15 @@ describe('browser mode - headed watch', () => {
         ],
       });
 
-      await cli.waitForStdout('Duration');
-      expect(cli.stdout).toMatch('Test Files 2 passed');
-
-      await killCliProcessTree(cli);
-      await deleteFixtureTarget(fs, fixturesTargetPath);
+      try {
+        await cli.waitForStdout('Duration');
+        expect(cli.stdout).toMatch('Test Files 2 passed');
+      } finally {
+        // A leaked headed browser is costlier than the headless leaks other
+        // watch tests tolerate — always tear down, even on assertion failure.
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
     },
   );
 });
