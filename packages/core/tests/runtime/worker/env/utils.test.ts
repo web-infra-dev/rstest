@@ -27,7 +27,7 @@ test('should not record timers for a worker-scoped environment', () => {
   expect(cleared).toEqual([]);
 });
 
-test('should revoke remaining object URLs and restore methods', () => {
+const createTestURL = () => {
   const revoked: string[] = [];
   let nextId = 0;
   class TestURL extends URL {
@@ -39,7 +39,11 @@ test('should revoke remaining object URLs and restore methods', () => {
       revoked.push(url);
     }
   }
+  return { TestURL, revoked };
+};
 
+test('should revoke remaining object URLs and restore methods', () => {
+  const { TestURL, revoked } = createTestURL();
   const originalCreateObjectURL = TestURL.createObjectURL;
   const originalRevokeObjectURL = TestURL.revokeObjectURL;
   const cleanup = installObjectURLTracker(TestURL, { scope: 'file' });
@@ -52,4 +56,19 @@ test('should revoke remaining object URLs and restore methods', () => {
   expect(revoked).toEqual([revokedByUser, revokedByCleanup]);
   expect(TestURL.createObjectURL).toBe(originalCreateObjectURL);
   expect(TestURL.revokeObjectURL).toBe(originalRevokeObjectURL);
+});
+
+test('should not track object URLs for a worker-scoped environment', () => {
+  const { TestURL, revoked } = createTestURL();
+  const originalCreateObjectURL = TestURL.createObjectURL;
+
+  const cleanup = installObjectURLTracker(TestURL, { scope: 'worker' });
+  TestURL.createObjectURL(new Blob());
+  cleanup();
+
+  // The methods are left unwrapped, so there is nothing to revoke — the
+  // worker-scoped environment must not retain what it never tears down
+  // (#1644).
+  expect(TestURL.createObjectURL).toBe(originalCreateObjectURL);
+  expect(revoked).toEqual([]);
 });
