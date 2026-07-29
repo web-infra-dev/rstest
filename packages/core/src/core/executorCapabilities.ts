@@ -20,7 +20,8 @@ export type CapabilityStatus =
  *
  * Consumers keep in lockstep with this table via tests:
  * - `runtimeConfigProjection` (the browser `static` projection omits exactly
- *   the `browser: 'stripped'` fields — see {@link browserStrippedRuntimeConfigKeys}).
+ *   the `browser: 'stripped'` fields — see
+ *   {@link browserStrippedRuntimeConfigKeys}).
  * - the browser-mode validation pass warns on the `stripped` / `ignored-warn`
  *   fields when set to a non-default value.
  */
@@ -41,7 +42,7 @@ export const executorCapabilities: Record<
   maxConcurrency: { node: 'supported', browser: 'supported' },
   printConsoleTrace: { node: 'supported', browser: 'supported' },
   disableConsoleIntercept: { node: 'supported', browser: 'supported' },
-  federation: { node: 'supported', browser: 'stripped' },
+  federation: { node: 'supported', browser: 'supported' },
   // Stripped from the browser wire; the client hardcodes `environment: 'browser'`.
   testEnvironment: { node: 'supported', browser: 'stripped' },
   // Reaches the browser but is a no-op today (each file runs in a fresh

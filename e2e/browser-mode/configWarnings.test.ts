@@ -52,4 +52,14 @@ describe('browser mode - config validation warnings', () => {
       /Ignoring .* in browser mode/,
     );
   });
+
+  it('allows Module Federation in browser mode without an ignore warning', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli('basic', {
+      args: ['-c', 'rstest.federation.config.mts'],
+    });
+    await expectExecSuccess();
+    expect(`${cli.stdout}\n${cli.stderr}`).not.toMatch(
+      /Ignoring federation in browser mode/,
+    );
+  });
 });

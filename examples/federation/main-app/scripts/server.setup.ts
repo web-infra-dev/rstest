@@ -58,7 +58,8 @@ const isPortInUse = async (
 
 const workspaceRoot = resolve(__dirname, '..', '..');
 const componentAppDir = resolve(workspaceRoot, 'component-app');
-const remoteEntryUrl = 'http://localhost:3001/remoteEntry.cjs';
+const nodeRemoteEntryUrl = 'http://localhost:3001/remoteEntry.cjs';
+const browserRemoteEntryUrl = 'http://localhost:3001/remoteEntry.js';
 
 const workerEnv = {
   ...process.env,
@@ -120,7 +121,7 @@ declare global {
   var __RSTEST_MF_CHILDREN__: TrackedChild[] | undefined;
 }
 
-export const cleanupNodeRemote = async () => {
+export const cleanupRemote = async () => {
   const inUse = await isPortInUse(3001);
   if (inUse) {
     await killPort(3001).catch(() => {});
@@ -139,12 +140,7 @@ export const cleanupNodeRemote = async () => {
 export const ensureNodeRemote = async () => {
   globalThis.__RSTEST_MF_CHILDREN__ ??= [];
 
-  // Kill port 3001 if it's already in use before starting the server
-  const inUse = await isPortInUse(3001);
-  if (inUse) {
-    await killPort(3001).catch(() => {});
-    console.log('[Federation Setup] Killed existing process on port 3001');
-  }
+  await cleanupRemote();
 
   // In federation mode, the host is built for Node execution (async-node) even if tests
   // run under JSDOM. Serve the *node* remoteEntry on 3001 so the MF node loader can
@@ -154,9 +150,21 @@ export const ensureNodeRemote = async () => {
     'serve:node',
   ]);
   globalThis.__RSTEST_MF_CHILDREN__!.push(server);
-  await waitForUrl(remoteEntryUrl, 30_000);
+  await waitForUrl(nodeRemoteEntryUrl, 30_000);
 
   // Also build node-local-remote for path-based consumption.
   const nodeLocalDir = resolve(workspaceRoot, 'node-local-remote');
   await run(nodeLocalDir, 'pnpm', ['build:node']);
+};
+
+export const ensureBrowserRemote = async () => {
+  globalThis.__RSTEST_MF_CHILDREN__ ??= [];
+
+  await cleanupRemote();
+  await run(componentAppDir, 'pnpm', ['build']);
+  const server = start('component-app(browser)', componentAppDir, 'pnpm', [
+    'serve',
+  ]);
+  globalThis.__RSTEST_MF_CHILDREN__!.push(server);
+  await waitForUrl(browserRemoteEntryUrl, 30_000);
 };
