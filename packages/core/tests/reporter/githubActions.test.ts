@@ -303,7 +303,7 @@ describe('GithubActionsReporter step summary', () => {
         ],
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
-        getSourcemap: () => null,
+        getSourcemap: async () => null,
       };
 
       await reporter.onTestRunEnd(runEndPayload);
