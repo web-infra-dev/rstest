@@ -18,11 +18,11 @@ const makeContext = (
     failedCount?: number;
   } = {},
 ) => {
-  const calls: Record<string, unknown[]> = {
-    stateFileResult: [],
-    snapshotAdd: [],
-    reporterFileResult: [],
-    reporterConsole: [],
+  const calls = {
+    stateFileResult: [] as unknown[],
+    snapshotAdd: [] as unknown[],
+    reporterFileResult: [] as unknown[],
+    reporterConsole: [] as unknown[],
   };
   const reporter = {
     onTestFileResult: (r: unknown) => {

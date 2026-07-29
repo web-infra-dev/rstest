@@ -101,6 +101,7 @@ describe('browser protocol types', () => {
           level: 'log',
           content: 'test log',
           testPath: '/test.ts',
+          projectName: 'default',
           type: 'stdout',
         },
       };

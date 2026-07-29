@@ -19,9 +19,6 @@ const createFileCoverage = (file: string): FileCoverageData => ({
   s: {},
   f: {},
   b: {},
-  all: false,
-  _coverageSchema: 'test',
-  hash: file,
 });
 
 const createCoverageMap = (
@@ -123,6 +120,7 @@ describe('generateCoverage', () => {
       async generateReports(coverageMap) {
         reportedFiles.push(coverageMap.files());
       },
+      generateCoverageForUntestedFiles: async () => [],
     } satisfies CoverageProvider;
 
     const coverageMap = createCoverageMap();
@@ -183,6 +181,7 @@ describe('generateCoverage', () => {
       async generateReports(coverageMap) {
         reportedFiles.push(coverageMap.files());
       },
+      generateCoverageForUntestedFiles: async () => [],
     } satisfies CoverageProvider;
 
     const coverageMap = createCoverageMap();
@@ -238,6 +237,7 @@ describe('generateCoverage', () => {
       async generateReports(coverageMap) {
         reportedFiles.push(coverageMap.files());
       },
+      generateCoverageForUntestedFiles: async () => [],
     } satisfies CoverageProvider;
 
     const coverageMap = createCoverageMap();
@@ -289,6 +289,7 @@ describe('generateCoverage', () => {
       async generateReports(coverageMap) {
         reportedFiles.push(coverageMap.files());
       },
+      generateCoverageForUntestedFiles: async () => [],
     } satisfies CoverageProvider;
 
     const coverageMap = createCoverageMap();
@@ -390,63 +391,16 @@ describe('generateCoverage', () => {
     const coveredFile = path.join(srcDir, 'covered.ts');
     const defaultCoverage = withDefaultConfig({}).coverage;
     const coveredFiles = new Map<string, FileCoverageData>([
-      [
-        coveredFile,
-        {
-          path: coveredFile,
-          statementMap: {},
-          fnMap: {},
-          branchMap: {},
-          s: {},
-          f: {},
-          b: {},
-          all: false,
-          _coverageSchema: 'test',
-          hash: coveredFile,
-        },
-      ],
+      [coveredFile, createFileCoverage(coveredFile)],
     ]);
-
-    const createCoverageMap = (): CoverageMap =>
-      ({
-        addFileCoverage(coverage: { path: string }) {
-          coveredFiles.set(coverage.path, coverage);
-        },
-        files() {
-          return Array.from(coveredFiles.keys());
-        },
-        filter(predicate: (filePath: string) => boolean) {
-          for (const filePath of Array.from(coveredFiles.keys())) {
-            if (!predicate(filePath)) {
-              coveredFiles.delete(filePath);
-            }
-          }
-        },
-        merge(coverage: Record<string, FileCoverageData>) {
-          Object.entries(coverage).forEach(([filePath, fileCoverage]) => {
-            coveredFiles.set(filePath, fileCoverage);
-          });
-        },
-      }) as CoverageMap;
 
     const provider = {
       init: () => {},
       collect: () => null,
       cleanup: () => {},
-      createCoverageMap: () => createCoverageMap(),
+      createCoverageMap: () => createCoverageMap(coveredFiles),
       async generateCoverageForUntestedFiles({ files }) {
-        return files.map((file) => ({
-          path: file,
-          statementMap: {},
-          fnMap: {},
-          branchMap: {},
-          s: {},
-          f: {},
-          b: {},
-          all: false,
-          _coverageSchema: 'test',
-          hash: file,
-        }));
+        return files.map(createFileCoverage);
       },
       async generateReports() {},
     } satisfies CoverageProvider;

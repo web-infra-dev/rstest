@@ -84,27 +84,29 @@ describe('DefaultReporter summary streams', () => {
     const { stdout, stderr } = spyOnConsole();
     const writes: string[] = [];
 
-    rs.spyOn(process.stderr, 'write').mockImplementation(
-      (_chunk, _encoding, callback) => {
-        writes.push('flush stderr');
-        if (typeof _encoding === 'function') {
-          _encoding();
-        } else {
-          callback?.();
-        }
+    // `write` is overloaded and the mock signature only reflects the encoding
+    // form, so the 2-arg callback has to be recovered by hand.
+    const recordWrite =
+      (label: string) =>
+      (
+        _chunk: unknown,
+        encodingOrCallback?: unknown,
+        callback?: unknown,
+      ): boolean => {
+        writes.push(label);
+        const done = (
+          typeof encodingOrCallback === 'function'
+            ? encodingOrCallback
+            : callback
+        ) as (() => void) | undefined;
+        done?.();
         return true;
-      },
+      };
+    rs.spyOn(process.stderr, 'write').mockImplementation(
+      recordWrite('flush stderr'),
     );
     rs.spyOn(process.stdout, 'write').mockImplementation(
-      (_chunk, _encoding, callback) => {
-        writes.push('flush stdout');
-        if (typeof _encoding === 'function') {
-          _encoding();
-        } else {
-          callback?.();
-        }
-        return true;
-      },
+      recordWrite('flush stdout'),
     );
 
     const reporter = new DefaultReporter({

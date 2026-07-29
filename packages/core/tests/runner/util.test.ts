@@ -18,9 +18,11 @@ it('test formatName', () => {
 
 describe('formatTestError', () => {
   it('adds a hint for missing Istanbul coverage helpers', async () => {
-    const [error] = await formatTestError(
-      new ReferenceError('cov_15453043885016330810 is not defined'),
-    );
+    const error = (
+      await formatTestError(
+        new ReferenceError('cov_15453043885016330810 is not defined'),
+      )
+    )[0]!;
 
     expect(error.message).toContain('cov_15453043885016330810 is not defined');
     expect(error.message).toContain('Istanbul coverage counter');
@@ -40,9 +42,11 @@ describe('formatTestError', () => {
     };
 
     try {
-      const [error] = await formatTestError(
-        new ReferenceError('cov_15453043885016330810 is not defined'),
-      );
+      const error = (
+        await formatTestError(
+          new ReferenceError('cov_15453043885016330810 is not defined'),
+        )
+      )[0]!;
 
       expect(error.message).toContain('coverage.exclude');
       expect(error.message).toContain('Istanbul ignore hint');
@@ -60,9 +64,9 @@ describe('formatTestError', () => {
   });
 
   it('does not add the Istanbul hint for normal reference errors', async () => {
-    const [error] = await formatTestError(
-      new ReferenceError('foo is not defined'),
-    );
+    const error = (
+      await formatTestError(new ReferenceError('foo is not defined'))
+    )[0]!;
 
     expect(error.message).toBe('foo is not defined');
   });

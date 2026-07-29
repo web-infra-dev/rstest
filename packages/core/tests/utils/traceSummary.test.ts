@@ -40,7 +40,7 @@ it('aggregates phases by name across files and ranks them', () => {
   expect(phases.map((p) => p.name)).toEqual(['tests', 'load']);
   expect(phases[0]).toMatchObject({ totalUs: 400_000, count: 2 });
   // 400 / 600 total phase time.
-  expect(phases[0].pct).toBeCloseTo(66.6667, 2);
+  expect(phases[0]!.pct).toBeCloseTo(66.6667, 2);
   expect(phases[1]).toMatchObject({ name: 'load', totalUs: 200_000 });
 });
 

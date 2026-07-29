@@ -292,9 +292,11 @@ describe('@rstest/playwright expect', () => {
     const setTimeout = rs.fn(realTimers.setTimeout);
     const getRealTimers = rs.spyOn(rstest, 'getRealTimers').mockReturnValue({
       ...realTimers,
+      // `rs.fn` cannot reproduce `setTimeout.__promisify__`, which nothing here
+      // calls.
       setTimeout,
       clearTimeout,
-    });
+    } as unknown as ReturnType<typeof rstest.getRealTimers>);
 
     try {
       await expect(createPage('Example Domain')).toHaveTitle('Example Domain');

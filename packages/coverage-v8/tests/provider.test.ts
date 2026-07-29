@@ -12,6 +12,7 @@ import type { NormalizedCoverageOptions } from '@rstest/core';
 import type { FileCoverageData } from 'istanbul-lib-coverage';
 import { parse } from 'yuku-parser';
 import { CoverageProvider } from '../src/provider';
+import type { IstanbulFileCoverageData } from '../src/utils';
 import { convertV8CoverageWithAst } from '../src/v8AstConverter';
 
 const createOptions = (
@@ -82,7 +83,13 @@ const trackNativeMerge = (
   return () => mergeCalls;
 };
 
-type ProviderInternals = CoverageProvider & {
+// `Omit`, not a plain intersection: the class declares these as private
+// members, and intersecting a private member with a public one collapses the
+// whole type to `never`.
+type ProviderInternals = Omit<
+  CoverageProvider,
+  'findInDict' | 'convertWithAst' | 'takeRawCoverage'
+> & {
   findInDict: (
     dict: Record<string, string> | undefined,
     filePath: string,
@@ -92,7 +99,11 @@ type ProviderInternals = CoverageProvider & {
     entry: {
       url: string;
       scriptId: string;
-      functions: [];
+      functions: {
+        functionName: string;
+        isBlockCoverage: boolean;
+        ranges: { startOffset: number; endOffset: number; count: number }[];
+      }[];
     },
     options?: {
       assetFiles?: Record<string, string>;
@@ -995,15 +1006,14 @@ export default class CustomCoverageReporter {
     });
     const getNativeMergeCalls = trackNativeMerge(coverageMap, file);
 
-    coverageMap.merge({
-      [file]: {
-        ...createUnhashedFileCoverage(file),
-        bT: { 0: [17, 19] },
-        s: { 0: 5 },
-        f: { 0: 7 },
-        b: { 0: [11, 13] },
-      },
-    });
+    const incoming: IstanbulFileCoverageData = {
+      ...createUnhashedFileCoverage(file),
+      bT: { 0: [17, 19] },
+      s: { 0: 5 },
+      f: { 0: 7 },
+      b: { 0: [11, 13] },
+    };
+    coverageMap.merge({ [file]: incoming });
 
     expect(getNativeMergeCalls()).toBe(1);
     const fileCoverage = coverageMap.fileCoverageFor(file).toJSON();

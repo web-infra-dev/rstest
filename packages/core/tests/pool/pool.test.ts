@@ -1,6 +1,7 @@
 import { resolve } from 'pathe';
 import { MemoryGate } from '../../src/pool/memoryGate';
 import { Pool } from '../../src/pool/pool';
+import { expectRejection } from './helpers';
 import type { PoolOptions, PoolTask } from '../../src/pool/types';
 
 const WORKER_ENTRY = resolve(__dirname, './fixtures/testWorker.mjs');
@@ -100,9 +101,9 @@ describe('Pool - fatal error', () => {
   it('should enrich error with captured stderr when worker crashes', async () => {
     const pool = new Pool(createPoolOptions());
     try {
-      const err: Error = await pool
-        .runTest(createTask('run', { __testMode: 'stderr-crash' }))
-        .catch((e: Error) => e);
+      const err = await expectRejection(
+        pool.runTest(createTask('run', { __testMode: 'stderr-crash' })),
+      );
       expect(err.message).toContain('segfault at 0x0');
     } finally {
       await pool.close();
@@ -116,9 +117,9 @@ describe('Pool - stderr handling', () => {
   it('should truncate large stderr in error messages', async () => {
     const pool = new Pool(createPoolOptions());
     try {
-      const err: Error = await pool
-        .runTest(createTask('run', { __testMode: 'stderr-large' }))
-        .catch((e: Error) => e);
+      const err = await expectRejection(
+        pool.runTest(createTask('run', { __testMode: 'stderr-large' })),
+      );
       expect(err.message).toContain('[truncated');
       expect(err.message).toContain('bytes of stderr]');
       // Tail is preserved
@@ -133,9 +134,9 @@ describe('Pool - stderr handling', () => {
   it('should capture stderr written immediately before exit', async () => {
     const pool = new Pool(createPoolOptions());
     try {
-      const err: Error = await pool
-        .runTest(createTask('run', { __testMode: 'stderr-late' }))
-        .catch((e: Error) => e);
+      const err = await expectRejection(
+        pool.runTest(createTask('run', { __testMode: 'stderr-late' })),
+      );
       expect(err.message).toContain('late-stderr-marker');
     } finally {
       await pool.close();
@@ -387,7 +388,7 @@ describe('Pool - capacity', () => {
       ...sorted.slice(0, maxWorkers).map((iv) => iv.end),
     );
     for (let i = maxWorkers; i < sorted.length; i++) {
-      expect(sorted[i].start).toBeGreaterThanOrEqual(firstBatchEarliestEnd);
+      expect(sorted[i]!.start).toBeGreaterThanOrEqual(firstBatchEarliestEnd);
     }
 
     await pool.close();

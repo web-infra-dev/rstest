@@ -5,10 +5,11 @@ import istanbulCoverage from 'istanbul-lib-coverage';
 import {
   createFastCoverageMap,
   getSourceMappingURL,
+  type IstanbulFileCoverageData,
   transformCoverage,
 } from '../src/utils';
 
-const createFileCoverage = (file: string) => ({
+const createFileCoverage = (file: string): IstanbulFileCoverageData => ({
   path: file,
   statementMap: {
     0: { start: { line: 1, column: 0 }, end: { line: 1, column: 10 } },
@@ -116,16 +117,15 @@ describe('coverage istanbul utils', () => {
     coverageMap.merge({
       [file]: createFileCoverage(file),
     });
-    coverageMap.merge({
-      [file]: {
-        ...createFileCoverage(file),
-        statementMap: {
-          0: { start: { line: 2, column: 0 }, end: { line: 2, column: 10 } },
-        },
-        s: { 0: 5 },
-        hash: 'different',
+    const rehashed: IstanbulFileCoverageData = {
+      ...createFileCoverage(file),
+      statementMap: {
+        0: { start: { line: 2, column: 0 }, end: { line: 2, column: 10 } },
       },
-    });
+      s: { 0: 5 },
+      hash: 'different',
+    };
+    coverageMap.merge({ [file]: rehashed });
 
     expect(coverageMap.fileCoverageFor(file).toJSON()).toMatchObject({
       statementMap: {
@@ -145,15 +145,14 @@ describe('coverage istanbul utils', () => {
     });
     const getNativeMergeCalls = trackNativeMerge(coverageMap, file);
 
-    coverageMap.merge({
-      [file]: {
-        ...createUnhashedFileCoverage(file),
-        bT: { 0: [17, 19] },
-        s: { 0: 5 },
-        f: { 0: 7 },
-        b: { 0: [11, 13] },
-      },
-    });
+    const incoming: IstanbulFileCoverageData = {
+      ...createUnhashedFileCoverage(file),
+      bT: { 0: [17, 19] },
+      s: { 0: 5 },
+      f: { 0: 7 },
+      b: { 0: [11, 13] },
+    };
+    coverageMap.merge({ [file]: incoming });
 
     expect(getNativeMergeCalls()).toBe(1);
     const fileCoverage = coverageMap.fileCoverageFor(file).toJSON();
@@ -179,7 +178,7 @@ describe('coverage istanbul utils', () => {
         ...createUnhashedFileCoverage(file),
         fnMap: {
           0: {
-            ...createFileCoverage(file).fnMap[0],
+            ...createFileCoverage(file).fnMap[0]!,
             name: 'renamed',
           },
         },
@@ -216,7 +215,7 @@ describe('coverage istanbul utils', () => {
         ...createUnhashedFileCoverage(file),
         branchMap: {
           0: {
-            ...createFileCoverage(file).branchMap[0],
+            ...createFileCoverage(file).branchMap[0]!,
             loc: {
               start: { line: 1, column: 0 },
               end: { line: 1, column: 11 },
@@ -247,7 +246,11 @@ describe('coverage istanbul utils', () => {
     const file = '/project/src/index.ts';
     const coverageMap = createFastCoverageMap();
 
-    coverageMap.addFileCoverage({ ...createFileCoverage(file), all: true });
+    const allFileCoverage: IstanbulFileCoverageData = {
+      ...createFileCoverage(file),
+      all: true,
+    };
+    coverageMap.addFileCoverage(allFileCoverage);
     coverageMap.addFileCoverage(createFileCoverage(file));
 
     const fileCoverage = coverageMap.fileCoverageFor(file).toJSON();

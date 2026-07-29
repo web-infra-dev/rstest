@@ -97,7 +97,7 @@ describe('GithubActionsReporter step summary', () => {
         testResults: [],
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
-        getSourcemap: () => null,
+        getSourcemap: async () => null,
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');
@@ -144,7 +144,7 @@ describe('GithubActionsReporter step summary', () => {
         testResults: [],
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
-        getSourcemap: () => null,
+        getSourcemap: async () => null,
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');
@@ -189,7 +189,7 @@ describe('GithubActionsReporter step summary', () => {
         testResults: [],
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
-        getSourcemap: () => null,
+        getSourcemap: async () => null,
         unhandledErrors: [new Error('global setup failed')],
       });
 
@@ -263,7 +263,7 @@ describe('GithubActionsReporter step summary', () => {
         ],
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
-        getSourcemap: () => null,
+        getSourcemap: async () => null,
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');
@@ -349,7 +349,7 @@ describe('GithubActionsReporter step summary', () => {
         ],
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
-        getSourcemap: () => null,
+        getSourcemap: async () => null,
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');
