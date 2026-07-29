@@ -149,6 +149,14 @@ const buildTask = async ({
     type,
     options: {
       entryInfo,
+      // Known limit: the key is `stableJson`, so environment option values
+      // JSON cannot express (an `html` ArrayBuffer, a `beforeParse` function,
+      // a `virtualConsole` instance) collapse to identical bytes — two
+      // projects differing only in such values share a key and, under
+      // `isolate: false`, may share a worker's environment. Accepted as too
+      // narrow to guard; if it ever matters, fall back to a project-scoped
+      // key when the config is not JSON-representable instead of trying to
+      // serialize those values.
       environmentKey: getEnvironmentKey(runtimeConfig.testEnvironment),
       context: {
         outputModule: project.outputModule,

@@ -312,9 +312,6 @@ const preparePool = async (
       `Test environment changed on a reused worker: ${activeEnvironmentKey} -> ${environmentKey}`,
     );
   }
-  if (!isolate) {
-    activeEnvironmentKey = environmentKey;
-  }
   // `node` is the no-op fast path; every other environment is resolved through
   // the registry so adding one is a single entry instead of a new switch arm.
   // teardown is `MaybePromise<void>` and is awaited via `Promise.all` in
@@ -333,6 +330,13 @@ const preparePool = async (
     if (isolate) {
       cleanupFns.push(() => teardown(global));
     }
+  }
+  // Pin only after setup succeeded. A setup failure (e.g. an invalid jsdom
+  // option) surfaces as a file-level failure and leaves the worker reusable;
+  // pinning eagerly would make every later same-key task skip setup and run
+  // bare-Node against a config the user asked to be a DOM.
+  if (!isolate) {
+    activeEnvironmentKey = environmentKey;
   }
   tracker?.transition('prepare');
 
