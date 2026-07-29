@@ -61,6 +61,26 @@ const registerGlobalApi = (api: Rstest) => {
 const globalCleanups: (() => void)[] = [];
 let isTeardown = false;
 /**
+ * Test environment kept alive across files on a reused worker
+ * (`isolate: false`).
+ *
+ * User modules persist per worker under `isolate: false` (#1373), and a
+ * persisted module may capture environment values at evaluation time —
+ * testing-library's `screen` binds `document.body` once, at import. The
+ * environment must therefore live exactly as long as the module registry, or
+ * such captures dangle on a torn-down window from the second file on. This is
+ * the same staleness class #1376 solved for context-bound core APIs via live
+ * bindings — an option third-party modules do not have, so here the
+ * environment's lifetime moves instead.
+ *
+ * A worker only ever holds one environment: the scheduler restricts reuse to
+ * tasks whose `environmentKey` matches (`Pool.acquireRunner`). No
+ * teardown runs at worker exit — the host owns termination (see
+ * `pool/AGENTS.md`) and process death reclaims the environment, same as the
+ * kept module cache.
+ */
+let activeEnvironmentKey: string | undefined;
+/**
  * Last per-compile `buildId` this (possibly reused) worker loaded; a change
  * means a watch rebuild and triggers a full cache flush below (#1373).
  *
@@ -132,6 +152,7 @@ const preparePool = async (
     entryInfo: { distPath, testPath },
     updateSnapshot,
     context,
+    environmentKey,
   }: RunWorkerOptions['options'],
   tracker?: PhaseTracker,
 ) => {
@@ -178,6 +199,7 @@ const preparePool = async (
       testEnvironment,
       snapshotFormat,
       env,
+      isolate,
     },
   } = context;
 
@@ -280,12 +302,25 @@ const preparePool = async (
   });
 
   tracker?.transition('envSetup');
+  const hasPinnedEnvironment = activeEnvironmentKey !== undefined;
+  if (hasPinnedEnvironment && activeEnvironmentKey !== environmentKey) {
+    // Unreachable: the scheduler only reuses a worker for tasks matching its
+    // pinned environment (`Pool.acquireRunner`). The throw guards against a
+    // future regression in that affinity — swapping environments here would
+    // leave persisted modules holding captures of the previous one.
+    throw new Error(
+      `Test environment changed on a reused worker: ${activeEnvironmentKey} -> ${environmentKey}`,
+    );
+  }
+  if (!isolate) {
+    activeEnvironmentKey = environmentKey;
+  }
   // `node` is the no-op fast path; every other environment is resolved through
   // the registry so adding one is a single entry instead of a new switch arm.
   // teardown is `MaybePromise<void>` and is awaited via `Promise.all` in
   // `cleanup`, so a single uniform wrapper preserves both the sync (jsdom) and
   // async (happy-dom) teardown shapes.
-  if (testEnvironment.name !== 'node') {
+  if (testEnvironment.name !== 'node' && !hasPinnedEnvironment) {
     const loadEnvironment = environmentLoaders[testEnvironment.name];
     if (!loadEnvironment) {
       throw new Error(`Unknown test environment: ${testEnvironment.name}`);
@@ -295,7 +330,9 @@ const preparePool = async (
       global,
       testEnvironment.options || {},
     );
-    cleanupFns.push(() => teardown(global));
+    if (isolate) {
+      cleanupFns.push(() => teardown(global));
+    }
   }
   tracker?.transition('prepare');
 

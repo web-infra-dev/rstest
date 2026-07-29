@@ -59,6 +59,7 @@ let nextTaskSeq = 0;
 
 type PoolRunnerOptions = {
   workerId: number;
+  environmentKey: string;
 };
 
 /**
@@ -73,6 +74,8 @@ type PoolRunnerOptions = {
  */
 export class PoolRunner {
   readonly workerId: number;
+  /** Environment identity this worker holds for life — see `Pool.acquireRunner`. */
+  readonly environmentKey: string;
   readonly worker: PoolWorker;
   private state: RunnerState = 'IDLE';
   private operationChain: Promise<unknown> = Promise.resolve();
@@ -95,6 +98,7 @@ export class PoolRunner {
 
   constructor(worker: PoolWorker, options: PoolRunnerOptions) {
     this.workerId = options.workerId;
+    this.environmentKey = options.environmentKey;
     this.worker = worker;
 
     this.handleMessage = this.handleMessage.bind(this);

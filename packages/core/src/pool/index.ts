@@ -26,6 +26,7 @@ import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
 import { getNumCpus, parseWorkers, resolveWorkerCount } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
+import { getEnvironmentKey } from '../core/environmentGroups';
 import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
 import {
   createRunnerEventSink,
@@ -148,6 +149,7 @@ const buildTask = async ({
     type,
     options: {
       entryInfo,
+      environmentKey: getEnvironmentKey(runtimeConfig.testEnvironment),
       context: {
         outputModule: project.outputModule,
         taskId: index + 1,
