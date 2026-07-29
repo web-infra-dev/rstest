@@ -232,16 +232,30 @@ export default defineConfig({
 
 #### 选项
 
-| 选项          | 类型      | 默认值 | 说明                                              |
-| :------------ | :-------- | :----- | :------------------------------------------------ |
-| `annotations` | `boolean` | `true` | 是否为失败的测试输出 `::error` 注解。             |
-| `summary`     | `boolean` | `true` | 是否向 `GITHUB_STEP_SUMMARY` 追加 Markdown 摘要。 |
+| 选项          | 类型                                       | 默认值 | 说明                                  |
+| :------------ | :----------------------------------------- | :----- | :------------------------------------ |
+| `annotations` | `boolean`                                  | `true` | 是否为失败的测试输出 `::error` 注解。 |
+| `summary`     | `boolean \| { maxCharsPerField?: number }` | `true` | 控制 Markdown 摘要输出和单字段长度。  |
+
+<ApiMeta addedVersion="0.11.6" />
+
+使用 `summary` 的对象形式，可以自定义每个失败消息和 diff，以及每个未处理错误消息和 stack 包含的最大字符数。`maxCharsPerField` 默认为 `400`。GitHub 将一个 step 生成的完整 Summary 限制为 [1 MiB](https://docs.github.com/zh/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#步骤隔离和限制)，因此应为该配置设置合理的上限。将 `summary` 设置为 `false` 可以禁用 Markdown 摘要。
 
 ```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  reporters: [['github-actions', { annotations: true, summary: false }]],
+  reporters: [
+    [
+      'github-actions',
+      {
+        annotations: true,
+        summary: {
+          maxCharsPerField: 2_000,
+        },
+      },
+    ],
+  ],
 });
 ```
 
