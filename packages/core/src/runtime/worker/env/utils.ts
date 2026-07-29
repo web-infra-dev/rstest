@@ -1,4 +1,5 @@
 import { promisify } from 'node:util';
+import type { TestEnvironmentContext } from '../../../types';
 import { KEYS } from './jsdomKeys';
 
 export type NodeTimerPrimitives = Pick<
@@ -35,9 +36,20 @@ function isClassLike(name: string) {
   return name[0] && name.startsWith(name[0].toUpperCase());
 }
 
+/**
+ * Record the object URLs created through `URLConstructor` so the returned
+ * cleanup can revoke the ones the test never revoked itself. Tracking only
+ * feeds environment teardown, so a worker-scoped environment gets a no-op:
+ * see `TestEnvironmentReturn.teardown`.
+ */
 export function installObjectURLTracker(
   URLConstructor: typeof URL,
+  context: TestEnvironmentContext,
 ): () => void {
+  if (context.scope === 'worker') {
+    return () => {};
+  }
+
   const objectURLs = new Set<string>();
   const createDescriptor = Object.getOwnPropertyDescriptor(
     URLConstructor,
@@ -186,37 +198,75 @@ export function installGlobal(
 }
 
 /**
- * Keep Node timer handles scoped to one DOM environment so pending timers do
- * not keep a worker alive after that environment has been torn down.
+ * Shadow the DOM timers `installGlobal` just exposed with Node's, so tests get
+ * real `NodeJS.Timeout` handles. A file-scoped environment gets wrappers that
+ * record every timer created, so the returned cleanup can clear the stragglers;
+ * a worker-scoped one gets the Node primitives unwrapped — its teardown never
+ * runs, so recording would retain every timer and its callback closure for the
+ * worker's whole life (see `TestEnvironmentReturn.teardown`).
  */
 export function installTimerTracking(
   global: typeof globalThis,
   nodeTimers: NodeTimerPrimitives,
+  context: TestEnvironmentContext,
 ): () => void {
-  const timers = new Map<NodeJS.Timeout, (timer: NodeJS.Timeout) => void>();
   const descriptors = new Map<
     (typeof TIMER_KEYS)[number],
     PropertyDescriptor
   >();
+
+  const install = (
+    timers: Pick<NodeTimerPrimitives, (typeof TIMER_KEYS)[number]>,
+  ): void => {
+    for (const key of TIMER_KEYS) {
+      const descriptor = Object.getOwnPropertyDescriptor(global, key);
+      if (descriptor) {
+        descriptors.set(key, descriptor);
+      }
+      Object.defineProperty(global, key, {
+        configurable: true,
+        value: timers[key],
+        writable: true,
+      });
+    }
+  };
+
+  const restore = (): void => {
+    for (const key of TIMER_KEYS) {
+      const descriptor = descriptors.get(key);
+      if (descriptor) {
+        Object.defineProperty(global, key, descriptor);
+      } else {
+        Reflect.deleteProperty(global, key);
+      }
+    }
+  };
+
+  if (context.scope === 'worker') {
+    install(nodeTimers);
+    return restore;
+  }
+
+  const pending = new Map<NodeJS.Timeout, (timer: NodeJS.Timeout) => void>();
   let active = true;
 
-  const track = (
+  const record = (
     timer: NodeJS.Timeout,
     clearTimer: (timer: NodeJS.Timeout) => void,
   ): NodeJS.Timeout => {
     if (active) {
-      timers.set(timer, clearTimer);
+      pending.set(timer, clearTimer);
     }
     return timer;
   };
 
   const setTimeout = ((...args: unknown[]) =>
-    track(
+    record(
       Reflect.apply(nodeTimers.setTimeout, global, args) as NodeJS.Timeout,
       nodeTimers.clearTimeout,
     )) as NodeTimerPrimitives['setTimeout'];
   const setInterval = ((...args: unknown[]) =>
-    track(
+    record(
       Reflect.apply(nodeTimers.setInterval, global, args) as NodeJS.Timeout,
       nodeTimers.clearInterval,
     )) as NodeTimerPrimitives['setInterval'];
@@ -233,37 +283,15 @@ export function installTimerTracking(
     );
   }
 
-  const trackedTimers = {
-    setInterval,
-    setTimeout,
-  };
-  for (const key of TIMER_KEYS) {
-    const descriptor = Object.getOwnPropertyDescriptor(global, key);
-    if (descriptor) {
-      descriptors.set(key, descriptor);
-    }
-    Object.defineProperty(global, key, {
-      configurable: true,
-      value: trackedTimers[key],
-      writable: true,
-    });
-  }
+  install({ setInterval, setTimeout });
 
   return () => {
     active = false;
-    for (const [timer, clearTimer] of timers) {
+    for (const [timer, clearTimer] of pending) {
       clearTimer(timer);
     }
-    timers.clear();
-
-    for (const key of TIMER_KEYS) {
-      const descriptor = descriptors.get(key);
-      if (descriptor) {
-        Object.defineProperty(global, key, descriptor);
-      } else {
-        Reflect.deleteProperty(global, key);
-      }
-    }
+    pending.clear();
+    restore();
   };
 }
 
