@@ -32,9 +32,8 @@ import {
 import { runBrowserOnlyTests } from './browser/onlyRun';
 import { createBrowserRunPlanner } from './browser/runPlanner';
 import {
-  createBrowserWatchSession,
+  createBrowserWatchOrchestrator,
   registerWatchSignalExit,
-  reportBrowserWatchGlobalSetupFailure,
 } from './browser/watchControls';
 import { createNodeExecutor } from './executors/nodeExecutor';
 import { runGlobalTeardown } from './globalSetup';
@@ -364,27 +363,19 @@ export async function runTests(context: Rstest): Promise<void> {
   // ===================================================================
   // Watch mode. Browser watch stays host-driven (self-finalizing); node reruns
   // iterate the node executor only, so a node rebuild never re-triggers the
-  // browser initial run. The session wrapper owns the watch handles; the
-  // node-owned CLI shortcuts below fan a/f/u/q out through `browserWatch`.
+  // browser initial run. Browser-specific setup and host lifecycle stay behind
+  // `browserWatch`; node-owned shortcuts only fan a/f/u/q through it.
   // ===================================================================
-  let browserWatchEnv: Record<string, string | undefined> | undefined;
-  const browserWatchState: {
-    close?: () => Promise<void>;
-  } = {};
-  let browserSetupPromise: Promise<BrowserGlobalSetupStageResult> | undefined;
+  const browserWatch = createBrowserWatchOrchestrator({
+    context,
+    planner,
+    entriesCache: nodeExecutor.getPlan().entriesCache,
+  });
   let cleanupPromise: Promise<void> | undefined;
   const cleanup = (): Promise<void> => {
     cleanupPromise ??= (async () => {
       try {
-        // A config restart can arrive while browser globalSetup is compiling or
-        // running. Wait for it, then drain whatever teardown it registered
-        // before the replacement session starts.
-        await browserSetupPromise?.catch(() => undefined);
-        if (browserWatchState.close) {
-          await browserWatchState.close();
-        } else {
-          await runLifecycleStep('global teardown', () => runGlobalTeardown());
-        }
+        await browserWatch.close();
         await runLifecycleStep('executor cleanup', () => nodeExecutor.close());
         await runLifecycleStep('trace run finalize', () =>
           activeTraceRun.finalize(),
@@ -408,45 +399,19 @@ export async function runTests(context: Rstest): Promise<void> {
     removeWatchSignalHandlers();
   });
 
-  if (hasBrowserTestsToRun) {
-    const browserProjectsToRun = planner.getBrowserProjectsToRun();
-    let stage: BrowserGlobalSetupStageResult;
-    try {
-      browserSetupPromise = runBrowserGlobalSetupStage(
-        context,
-        browserProjectsToRun,
-        { entriesCache: nodeExecutor.getPlan().entriesCache },
-      );
-      stage = await browserSetupPromise;
-    } catch (error) {
-      const wasCleaningUp = cleanupPromise !== undefined;
-      await cleanup();
-      if (wasCleaningUp) {
-        return;
-      }
-      throw error;
-    }
-    if (cleanupPromise) {
+  try {
+    if (!(await browserWatch.prepare())) {
       await cleanup();
       return;
     }
-    if (stage.errors.length) {
-      try {
-        await reportBrowserWatchGlobalSetupFailure(context, stage.errors);
-      } finally {
-        await cleanup();
-      }
-      throw new AggregateError(stage.errors, 'Browser globalSetup failed');
+  } catch (error) {
+    const wasCleaningUp = cleanupPromise !== undefined;
+    await cleanup();
+    if (wasCleaningUp) {
+      return;
     }
-    browserWatchEnv = stage.env;
+    throw error;
   }
-
-  const browserWatch = createBrowserWatchSession({
-    context,
-    planner,
-    env: browserWatchEnv,
-  });
-  browserWatchState.close = browserWatch.close;
 
   // Mixed watch with zero node files: only the browser side runs (host-driven).
   if (!hasNodeTestsToRun) {
@@ -465,7 +430,6 @@ export async function runTests(context: Rstest): Promise<void> {
     }
     return;
   }
-  const activeBrowserWatch = browserWatch;
 
   type Mode = 'all' | 'on-demand';
   let buildId = 0;
@@ -534,7 +498,7 @@ export async function runTests(context: Rstest): Promise<void> {
           context.fileFilters = undefined;
 
           await run({ mode: 'all' });
-          await activeBrowserWatch.rerun();
+          await browserWatch.rerun();
           afterTestsWatchRun();
         },
         runWithTestNamePattern: async (pattern?: string) => {
@@ -593,7 +557,7 @@ export async function runTests(context: Rstest): Promise<void> {
           clearScreen();
           prepareWatchRerunState(context);
           await run({ fileFilters: failedTests, mode: 'all' });
-          await activeBrowserWatch.rerun(failedTests);
+          await browserWatch.rerun(failedTests);
           afterTestsWatchRun();
         },
         updateSnapshot: async () => {
@@ -616,7 +580,7 @@ export async function runTests(context: Rstest): Promise<void> {
             await run({ fileFilters: failedTests });
             // Browser-owned files in the unmatched set rerun through the
             // watch session (no-op when none match a browser test file).
-            await activeBrowserWatch.rerun(failedTests);
+            await browserWatch.rerun(failedTests);
             afterTestsWatchRun();
           } finally {
             snapshotManager.options.updateSnapshot = originalUpdateSnapshot;
@@ -653,5 +617,5 @@ export async function runTests(context: Rstest): Promise<void> {
     await cleanup();
     return;
   }
-  activeBrowserWatch.startBackground();
+  browserWatch.startBackground();
 }

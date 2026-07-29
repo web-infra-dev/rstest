@@ -1,5 +1,6 @@
+import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import { prepareFixtures, sleep } from '../scripts';
 import {
@@ -228,6 +229,90 @@ describe('browser mode - globalSetup', () => {
       expect(cli.stdout).toContain('[browser-global-teardown] executed');
     } finally {
       await killCliProcessTree(cli);
+    }
+  }, 60_000);
+
+  it('preserves a global teardown failure when quitting browser-only watch', async () => {
+    const fixturesTargetPath = path.join(
+      __dirname,
+      'fixtures/fixtures-test-browser-global-teardown-error',
+    );
+    const { fs: fixtureFs } = await prepareFixtures({
+      fixturesPath: path.join(__dirname, 'fixtures/browser-global-setup'),
+      fixturesTargetPath,
+    });
+    fixtureFs.update(
+      path.join(fixturesTargetPath, 'globalSetup.ts'),
+      (content) =>
+        content.replace(
+          "console.log('[browser-global-teardown] executed');",
+          "throw new Error('Browser global teardown failed intentionally');",
+        ),
+    );
+    const result = await runBrowserWatchCliWithCwd(fixturesTargetPath);
+    const { cli } = result;
+
+    try {
+      await cli.waitForStdout('Waiting for file changes...');
+      cli.exec.process!.stdin!.write('q');
+      await result.expectExecFailed();
+
+      expect(cli.exec.process!.exitCode).toBe(1);
+      expect(cli.log).toContain('Browser global teardown failed intentionally');
+    } finally {
+      await killCliProcessTree(cli);
+      await deleteFixtureTarget(fixtureFs, fixturesTargetPath);
+    }
+  }, 60_000);
+
+  it('validates the browser package before browser-only watch globalSetup', async () => {
+    const fixturesTargetPath = path.join(
+      __dirname,
+      'fixtures/fixtures-test-browser-global-setup-version-mismatch',
+    );
+    const { fs: fixtureFs } = await prepareFixtures({
+      fixturesPath: path.join(__dirname, 'fixtures/browser-global-setup'),
+      fixturesTargetPath,
+    });
+    const browserPackagePath = path.join(
+      fixturesTargetPath,
+      'node_modules/@rstest/browser',
+    );
+    fs.mkdirSync(browserPackagePath, { recursive: true });
+    fs.writeFileSync(
+      path.join(browserPackagePath, 'package.json'),
+      JSON.stringify({
+        name: '@rstest/browser',
+        version: '0.0.0-review-test',
+        type: 'module',
+        exports: {
+          './internal': './internal.js',
+          './package.json': './package.json',
+        },
+      }),
+    );
+    const browserEntry = pathToFileURL(
+      path.join(__dirname, '../../packages/browser/dist/index.js'),
+    ).href;
+    fs.writeFileSync(
+      path.join(browserPackagePath, 'internal.js'),
+      `export * from ${JSON.stringify(browserEntry)};`,
+    );
+
+    const result = await runBrowserWatchCliWithCwd(fixturesTargetPath);
+    const { cli } = result;
+
+    try {
+      await result.expectExecFailed();
+
+      expect(cli.exec.process!.exitCode).toBe(1);
+      expect(cli.stderr).toContain(
+        'Version mismatch between @rstest/core and @rstest/browser',
+      );
+      expect(cli.stdout).not.toContain('[browser-global-setup] executed');
+    } finally {
+      await killCliProcessTree(cli);
+      await deleteFixtureTarget(fixtureFs, fixturesTargetPath);
     }
   }, 60_000);
 

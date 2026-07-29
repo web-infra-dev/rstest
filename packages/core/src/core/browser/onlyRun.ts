@@ -12,17 +12,21 @@ import {
 } from '../../utils';
 import { FATAL_SIGNALS, getSignalExitCode } from '../../utils/signals';
 import {
-  type BrowserGlobalSetupStageResult,
   globalSetupFailureOutcome,
   runBrowserGlobalSetupStage,
 } from './globalSetupStage';
-import { loadBrowserExecutor, runBrowserModeTests } from './loader';
+import {
+  type BrowserHostModule,
+  loadAndValidateBrowserModule,
+  loadBrowserExecutor,
+  runBrowserModeTests,
+} from './loader';
 import {
   attachBrowserWatchShortcuts,
   createBrowserWatchLifecycle,
   registerWatchSignalExit,
+  runBrowserWatchGlobalSetup,
   reportInitialCycleCoverage,
-  reportBrowserWatchGlobalSetupFailure,
 } from './watchControls';
 import { ensureRunDependencies } from '../dependencies';
 import {
@@ -102,6 +106,7 @@ export async function runBrowserOnlyTests(
       silent: true,
     });
     let browserResult: Awaited<ReturnType<typeof runBrowserModeTests>>;
+    let browserModule: BrowserHostModule;
     const lifecycle = createBrowserWatchLifecycle(() => browserResult?.watch);
     lifecycle.addControlCleanup(
       registerWatchSignalExit(context, lifecycle.close),
@@ -112,12 +117,20 @@ export async function runBrowserOnlyTests(
       await shutdownTrace();
     });
 
-    let stage: BrowserGlobalSetupStageResult;
+    let browserWatchEnv: Record<string, string | undefined> | undefined;
     try {
-      stage = await lifecycle.track(
-        runBrowserGlobalSetupStage(context, browserProjects, {
-          entriesCache: browserShardedEntries,
-        }),
+      browserModule = await lifecycle.track(
+        loadAndValidateBrowserModule(context, browserProjects),
+      );
+      if (lifecycle.isClosing()) {
+        return;
+      }
+      browserWatchEnv = await lifecycle.track(
+        runBrowserWatchGlobalSetup(
+          context,
+          browserProjects,
+          browserShardedEntries,
+        ),
       );
     } catch (error) {
       const wasClosing = lifecycle.isClosing();
@@ -132,26 +145,21 @@ export async function runBrowserOnlyTests(
       return;
     }
 
-    if (stage.errors.length) {
-      try {
-        await reportBrowserWatchGlobalSetupFailure(context, stage.errors);
-      } finally {
-        await lifecycle.close();
-        await shutdownTrace();
-      }
-      throw new AggregateError(stage.errors, 'Browser globalSetup failed');
-    }
-
     // Browser-only watch: the host owns per-rerun finalize, so the initial
     // cycle's coverage is reported here — reruns report through the host's
     // `finalizeWatchRerun` → `finalizeRunCycle`.
     try {
       browserResult = await lifecycle.track(
-        runBrowserModeTests(context, browserProjects, {
-          shardedEntries: browserShardedEntries,
-          env: stage.env,
-          onTraceEvents: traceRun.onEvents,
-        }).then(async (result) => {
+        runBrowserModeTests(
+          context,
+          browserProjects,
+          {
+            shardedEntries: browserShardedEntries,
+            env: browserWatchEnv,
+            onTraceEvents: traceRun.onEvents,
+          },
+          browserModule,
+        ).then(async (result) => {
           browserResult = result;
           await reportInitialCycleCoverage(context, result, traceRun.span);
           return result;

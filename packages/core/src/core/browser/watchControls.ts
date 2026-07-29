@@ -1,9 +1,21 @@
 import { createCoverageProvider } from '../../coverage';
-import type { BrowserTestRunResult, BrowserWatchHandles } from '../../types';
+import type {
+  BrowserTestRunResult,
+  BrowserWatchHandles,
+  ProjectContext,
+  ProjectEntries,
+} from '../../types';
 import { clearScreen, color, logger, type TraceSpan } from '../../utils';
 import { FATAL_SIGNALS, getSignalExitCode } from '../../utils/signals';
-import { globalSetupFailureOutcome } from './globalSetupStage';
-import { runBrowserModeTests } from './loader';
+import {
+  globalSetupFailureOutcome,
+  runBrowserGlobalSetupStage,
+} from './globalSetupStage';
+import {
+  type BrowserHostModule,
+  loadAndValidateBrowserModule,
+  runBrowserModeTests,
+} from './loader';
 import type { BrowserRunPlanner } from './runPlanner';
 import { isCliShortcutsEnabled, setupCliShortcuts } from '../cliShortcuts';
 import {
@@ -167,7 +179,7 @@ export function createBrowserWatchLifecycle(
  * command exits. The thrown AggregateError at the call site then preserves the
  * same complete error set for non-reporter consumers.
  */
-export async function reportBrowserWatchGlobalSetupFailure(
+async function reportBrowserWatchGlobalSetupFailure(
   context: Rstest,
   errors: Error[],
 ): Promise<void> {
@@ -179,6 +191,21 @@ export async function reportBrowserWatchGlobalSetupFailure(
     coverageProvider: null,
     reportOnFailure: false,
   });
+}
+
+export async function runBrowserWatchGlobalSetup(
+  context: Rstest,
+  browserProjects: ProjectContext[],
+  entriesCache?: Map<string, ProjectEntries>,
+): Promise<Record<string, string | undefined> | undefined> {
+  const stage = await runBrowserGlobalSetupStage(context, browserProjects, {
+    entriesCache,
+  });
+  if (stage.errors.length) {
+    await reportBrowserWatchGlobalSetupFailure(context, stage.errors);
+    throw new AggregateError(stage.errors, 'Browser globalSetup failed');
+  }
+  return stage.env;
 }
 
 /**
@@ -235,12 +262,17 @@ export async function attachBrowserWatchShortcuts(
 }
 
 /**
- * The browser side of a mixed watch run, wrapped so the orchestrator never
- * tracks {@link BrowserWatchHandles} directly. The session is host-driven and
- * self-finalizing; `rerun` is a safe no-op until the initial run lands the
- * handles, while `close` always drains global teardown.
+ * Own the browser side of a mixed watch run: load-boundary validation,
+ * globalSetup, environment forwarding, host launch, and browser teardown.
+ * The generic orchestrator only coordinates this lifecycle with node and trace
+ * cleanup.
  */
-export interface BrowserWatchSession {
+export interface BrowserWatchOrchestrator {
+  /**
+   * Validate Browser Mode and run globalSetup before either watch driver starts.
+   * Returns false when cleanup won the race with an in-flight phase.
+   */
+  prepare(): Promise<boolean>;
   /**
    * Launch the session without awaiting it (it spans the whole watch session);
    * a failed browser boot is surfaced as an error + exit code 1 instead of
@@ -257,24 +289,31 @@ export interface BrowserWatchSession {
   close(): Promise<void>;
 }
 
-export function createBrowserWatchSession({
+export function createBrowserWatchOrchestrator({
   context,
   planner,
-  env,
+  entriesCache,
 }: {
   context: Rstest;
   planner: BrowserRunPlanner;
-  env?: Record<string, string | undefined>;
-}): BrowserWatchSession {
+  entriesCache: Map<string, ProjectEntries>;
+}): BrowserWatchOrchestrator {
   let handles: BrowserWatchHandles | undefined;
+  let browserModule: BrowserHostModule | undefined;
+  let env: Record<string, string | undefined> | undefined;
   const lifecycle = createBrowserWatchLifecycle(() => handles);
 
   const start = () => {
     const projects = planner.getBrowserProjectsToRun();
-    return runBrowserModeTests(context, projects, {
-      ...planner.getWatchRunOptions(projects),
-      env,
-    });
+    return runBrowserModeTests(
+      context,
+      projects,
+      {
+        ...planner.getWatchRunOptions(projects),
+        env,
+      },
+      browserModule,
+    );
   };
 
   // The initial cycle's coverage arrives on the result and is stripped off the
@@ -287,6 +326,22 @@ export function createBrowserWatchSession({
   };
 
   return {
+    async prepare() {
+      if (!planner.hasBrowserTestsToRun() || lifecycle.isClosing()) {
+        return !lifecycle.isClosing();
+      }
+      const projects = planner.getBrowserProjectsToRun();
+      browserModule = await lifecycle.track(
+        loadAndValidateBrowserModule(context, projects),
+      );
+      if (lifecycle.isClosing()) {
+        return false;
+      }
+      env = await lifecycle.track(
+        runBrowserWatchGlobalSetup(context, projects, entriesCache),
+      );
+      return !lifecycle.isClosing();
+    },
     startBackground() {
       if (!planner.hasBrowserTestsToRun() || lifecycle.isClosing()) {
         return;
