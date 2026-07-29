@@ -3,12 +3,13 @@ import { createPool } from '../../pool';
 import type {
   EntryInfo,
   ExecutorCycleOutcome,
+  ExecutorInvalidationCallback,
   ExecutorRunCycleOptions,
   ProjectContext,
   TestExecutor,
 } from '../../types';
 import type { CoverageMap, CoverageProvider } from '../../types/coverage';
-import { color, logger, type TraceRun } from '../../utils';
+import { clearScreen, color, logger, type TraceRun } from '../../utils';
 import { ensureTestEnvironmentDependencies } from '../envDependencies';
 import {
   claimGlobalSetupOnce,
@@ -159,9 +160,9 @@ export interface NodeRunPlanAccess {
   setCoverageProvider(provider: CoverageProvider | null): void;
   /**
    * Start the dev server + worker pool up front (idempotent, in-flight guarded).
-   * Watch calls this after registering the dev-compile hooks so the first compile
-   * fires `onAfterDevCompile` and drives the initial run; non-watch runs let
-   * `runCycle` trigger it lazily.
+   * Watch calls this after subscribing to invalidations so the first compile
+   * signals one and drives the initial run; non-watch runs let `runCycle`
+   * trigger it lazily.
    */
   ensureRunResources(): Promise<unknown>;
   /**
@@ -176,11 +177,13 @@ export interface NodeRunPlanAccess {
 /**
  * The node side of the {@link TestExecutor} seam: the existing Rsbuild dev
  * server + worker pool, expressed as one executor the shared run loop drives.
+ * The watch loop subscribes to this executor's invalidations, so `onInvalidate`
+ * — optional on the seam while the browser side is still host-driven — is
+ * guaranteed here.
  */
-export interface NodeExecutor extends TestExecutor, NodeRunPlanAccess {
-  /** The Rsbuild instance built during `init()` (drives watch dev-compile hooks). */
-  getRsbuildInstance(): Awaited<ReturnType<typeof prepareRsbuild>>;
-}
+export type NodeExecutor = TestExecutor &
+  NodeRunPlanAccess &
+  Required<Pick<TestExecutor, 'onInvalidate'>>;
 
 export type CreateNodeExecutorOptions = {
   browserProjects: ProjectContext[];
@@ -235,6 +238,9 @@ export function createNodeExecutor(
   let runDependencyValidationPromise: Promise<void> | undefined;
   let entryFiles: string[] = [];
   let didRunGlobalTeardown = false;
+  // Set when a dev compile starts, consumed by the cycle that compile triggers,
+  // so its reported build time spans the rebuild instead of starting at dispatch.
+  let pendingBuildStart: number | undefined;
   // The Rsbuild project set assembled during init(); refreshPlan() keeps it in
   // sync with re-resolved plans.
   let rsbuildProjects: ProjectContext[] = [];
@@ -349,7 +355,10 @@ export function createNodeExecutor(
     opts: ExecutorRunCycleOptions,
   ): Promise<ExecutorCycleOutcome> => {
     const { buildId, mode, fileFilters, updateSnapshot } = opts;
-    const buildStart = opts.buildStart ?? Date.now();
+    // Consume-once: only the cycle a rebuild triggered may claim that rebuild's
+    // start. A shortcut-driven rerun compiles nothing and times itself from now.
+    const buildStart = pendingBuildStart ?? Date.now();
+    pendingBuildStart = undefined;
     const { getRsbuildStats, pool } = await ensureRunResources();
     const { nodeProjectsToRun: projects } = projectPlanState.getPlan();
 
@@ -579,6 +588,30 @@ export function createNodeExecutor(
     };
   };
 
+  /**
+   * The node transport's watch signal is the dev server's compile cycle, so the
+   * hooks are wired here rather than in the orchestrator: both the rebuild-start
+   * screen clear and the build-start timestamp have to land when the compile
+   * begins, a moment only this side observes (the callback fires after it).
+   * Awaiting the callback inside `onAfterDevCompile` keeps Rsbuild's compile
+   * hook pending for the whole cycle — that back-pressure is what stops a
+   * rebuild from starting a second cycle while one is running.
+   */
+  const onInvalidate = (cb: ExecutorInvalidationCallback): void => {
+    if (!rsbuildInstance) {
+      throw new Error('NodeExecutor.init() must run before onInvalidate().');
+    }
+    rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
+      pendingBuildStart = Date.now();
+      if (!isFirstCompile) {
+        clearScreen();
+      }
+    });
+    rsbuildInstance.onAfterDevCompile(async ({ isFirstCompile }) => {
+      await cb({ isFirstBuild: isFirstCompile });
+    });
+  };
+
   // Idempotent: the single `executors.close()` exit path may race a signal
   // handler, and closing a pool/server twice throws.
   const close = async (): Promise<void> => {
@@ -612,6 +645,7 @@ export function createNodeExecutor(
     },
     init,
     runCycle,
+    onInvalidate,
     close,
     getPlan,
     hasNodeTestsToRun,
@@ -622,16 +656,10 @@ export function createNodeExecutor(
       coverageProvider = provider;
     },
     // Watch: start the dev server (and pool) up front so its first compile fires
-    // `onAfterDevCompile`, which drives the initial run. In non-watch runs
-    // `runCycle` triggers this lazily instead.
+    // the invalidation that drives the initial run. In non-watch runs `runCycle`
+    // triggers this lazily instead.
     ensureRunResources,
     validateRunDependencies,
-    getRsbuildInstance: () => {
-      if (!rsbuildInstance) {
-        throw new Error('NodeExecutor.init() must run before watch wiring.');
-      }
-      return rsbuildInstance;
-    },
     globTestEntries: async () => {
       const projects = projectPlanState.getPlan().nodeProjectsToRun;
       const perProject = await Promise.all(

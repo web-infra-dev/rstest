@@ -34,13 +34,20 @@ export interface ExecutorRunCycleOptions {
    */
   env?: Record<string, string | undefined>;
   onTraceEvents?: (events: TraceEvent[]) => void;
-  /**
-   * Cycle build-start timestamp. In watch this is the rebuild start (from the
-   * dev-compile hook) so the reported build time spans the rebuild; defaults to
-   * the executor picking `Date.now()` at cycle start otherwise.
-   */
-  buildStart?: number;
 }
+
+/**
+ * Watch invalidation subscriber. The hint carries only what the transport knows
+ * for free at signal time: `isFirstBuild` marks the session's initial build,
+ * which core runs as a full cycle and follows with the one-shot CLI-shortcut
+ * install.
+ *
+ * Returning a promise back-pressures the transport's own build pipeline, which
+ * is what keeps two watch cycles from overlapping on the shared `stateManager`.
+ */
+export type ExecutorInvalidationCallback = (hint: {
+  isFirstBuild: boolean;
+}) => void | Promise<void>;
 
 /**
  * The result one executor (node pool or browser host) produces for a single run
@@ -120,19 +127,15 @@ export interface TestExecutor {
   ): Promise<{ list: ListCommandResult[] }>;
   close(): Promise<void>;
   /**
-   * Reserved watch contract, not yet implemented by either executor: the node
-   * watch trigger stays on the dev-compile hooks core attaches directly, and
-   * browser watch reruns are host-driven end to end. Signal-only by design —
-   * the callback tells core "something changed"; affected-entry resolution
-   * happens inside `runCycle({ mode: 'on-demand' })`, because node resolves
-   * affected entries by pull at cycle time and doing it in the hook would
-   * consume the diff baseline (double-diff hazard). The optional hint carries
-   * only what the transport already knows for free; core treats it as advisory.
+   * Subscribe to this executor's watch trigger; the callback runs one watch
+   * cycle. Signal-only by design — it tells core "something changed";
+   * affected-entry resolution happens inside `runCycle({ mode: 'on-demand' })`,
+   * because node resolves affected entries by pull at cycle time and doing it
+   * in the hook would consume the diff baseline (double-diff hazard).
+   *
+   * Implemented by the node executor (its dev-compile hooks are the signal);
+   * browser watch reruns are still host-driven end to end. Optional until that
+   * converges.
    */
-  onInvalidate?(
-    cb: (hint?: {
-      affectedTestPaths?: string[];
-      deletedTestPaths?: string[];
-    }) => void,
-  ): void;
+  onInvalidate?(cb: ExecutorInvalidationCallback): void;
 }

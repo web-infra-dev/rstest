@@ -38,7 +38,6 @@ import {
 import {
   type CreateNodeExecutorOptions,
   createNodeExecutor,
-  type NodeExecutor,
   type NodeRunPlanAccess,
 } from './executors/nodeExecutor';
 import { runGlobalTeardown } from './globalSetup';
@@ -52,19 +51,20 @@ import {
 
 /**
  * What the orchestrator drives on the node side: the shared executor seam plus
- * the named plan-access surface — never the concrete `NodeExecutor`.
- * `getRsbuildInstance` is listed apart because the watch branch still attaches
- * the dev-compile hooks itself; moving that behind `onInvalidate` drops it.
+ * the named plan-access surface — never the concrete `NodeExecutor`. Watch
+ * subscribes to invalidations, so `onInvalidate` (optional on the seam while the
+ * browser side is still host-driven) is required of the node side here.
  */
 type OrchestratedNodeExecutor = TestExecutor &
   NodeRunPlanAccess &
-  Pick<NodeExecutor, 'getRsbuildInstance'>;
+  Required<Pick<TestExecutor, 'onInvalidate'>>;
 
 /**
  * The collaborators `runTests` orchestrates, injected rather than imported at
  * the call sites so the run loop can be driven with fake executors in unit
  * tests (the browser loader `process.exit(1)`s on a missing `@rstest/browser`,
- * so it must never be reached from a test).
+ * and the CLI shortcuts take over the process's stdin — neither may be reached
+ * from a test).
  */
 export interface RunTestsDeps {
   createNodeExecutor: (
@@ -76,6 +76,8 @@ export interface RunTestsDeps {
   createBrowserWatchOrchestrator: typeof createBrowserWatchOrchestrator;
   runBrowserOnlyTests: typeof runBrowserOnlyTests;
   runBrowserGlobalSetupStage: typeof runBrowserGlobalSetupStage;
+  isCliShortcutsEnabled: typeof isCliShortcutsEnabled;
+  setupCliShortcuts: typeof setupCliShortcuts;
 }
 
 const productionDeps: RunTestsDeps = {
@@ -85,6 +87,8 @@ const productionDeps: RunTestsDeps = {
   createBrowserWatchOrchestrator,
   runBrowserOnlyTests,
   runBrowserGlobalSetupStage,
+  isCliShortcutsEnabled,
+  setupCliShortcuts,
 };
 
 export async function runTests(
@@ -100,7 +104,8 @@ export async function runTests(
   //    `BrowserExecutor` from the resolved plan.
   // 4. Non-watch: `Promise.all(executors.map(e => e.runCycle()))` → one
   //    `finalizeRunCycle` → one `executors.close()` exit path.
-  // 5. Watch: node reruns iterate the node executor only; browser watch stays
+  // 5. Watch: the node executor signals each rebuild through `onInvalidate` and
+  //    every signal is one node cycle + finalize; browser watch stays
   //    host-driven and self-finalizing (Phase 6 converges it).
   cleanCoverageReports(context.normalizedConfig.coverage);
 
@@ -491,11 +496,9 @@ export async function runTests(
   const run = async ({
     fileFilters,
     mode = 'all',
-    buildStart,
   }: {
     fileFilters?: string[];
     mode?: Mode;
-    buildStart?: number;
   } = {}) => {
     buildId += 1;
     await notifyReportersOnTestRunStart(context);
@@ -503,7 +506,6 @@ export async function runTests(
       buildId,
       mode,
       fileFilters,
-      buildStart,
       updateSnapshot: snapshotManager.options.updateSnapshot,
     });
     await finalizeRunCycle(context, {
@@ -519,29 +521,21 @@ export async function runTests(
     activeTraceRun = traceController.beginRun();
   };
 
-  const enableCliShortcuts = isCliShortcutsEnabled();
+  const enableCliShortcuts = deps.isCliShortcutsEnabled();
 
   const afterTestsWatchRun = () =>
     logWatchReadyMessage(context, enableCliShortcuts);
 
-  let buildStart: number | undefined;
-
-  const rsbuildInstance = nodeExecutor.getRsbuildInstance();
-
-  rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
-    buildStart = Date.now();
-    if (!isFirstCompile) {
-      clearScreen();
-    }
-  });
-
-  rsbuildInstance.onAfterDevCompile(async ({ isFirstCompile }) => {
+  // The node executor's rebuilds are the watch trigger. The initial compile
+  // signals too, which is what drives the first cycle (and, after it, the
+  // single stdin owner). The callback is awaited by the executor's compile
+  // pipeline, so a rebuild can never start a second cycle mid-flight.
+  nodeExecutor.onInvalidate(async ({ isFirstBuild }) => {
     prepareWatchRerunState(context);
-    await run({ buildStart, mode: isFirstCompile ? 'all' : 'on-demand' });
-    buildStart = undefined;
+    await run({ mode: isFirstBuild ? 'all' : 'on-demand' });
 
-    if (isFirstCompile && enableCliShortcuts) {
-      const closeCliShortcuts = await setupCliShortcuts({
+    if (isFirstBuild && enableCliShortcuts) {
+      const closeCliShortcuts = await deps.setupCliShortcuts({
         closeServer: cleanup,
         runAll: async () => {
           clearScreen();
@@ -646,10 +640,10 @@ export async function runTests(
     afterTestsWatchRun();
   });
 
-  // Start the node dev server now that the compile hooks are registered: its
-  // first compile fires `onAfterDevCompile`, which drives the initial watch run.
-  // `runCycle` (invoked from that hook) reuses these resources via the in-flight
-  // guard rather than starting a second server.
+  // Start the node dev server now that the invalidation subscriber is in place:
+  // its first compile signals one, which drives the initial watch run.
+  // `runCycle` (invoked from that callback) reuses these resources via the
+  // in-flight guard rather than starting a second server.
   try {
     await nodeExecutor.ensureRunResources();
   } catch (error) {
