@@ -15,4 +15,14 @@ describe('browser mode - module mocking', () => {
     expect(cli.stdout).toMatch(/Test Files.*10 passed/);
     expect(cli.stdout).toMatch(/Tests.*14 passed/);
   });
+
+  it('supports virtual module mocks through resolve.alias', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCli(
+      'browser-virtual-mock',
+    );
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).toMatch(/Tests.*1 passed/);
+  });
 });
