@@ -95,7 +95,7 @@ export async function runTests(
   // 2. Browser-only runs (no node projects) take a fast path so they skip the
   //    node Rsbuild server + worker pool entirely (cold-start gate: retained).
   // 3. Otherwise construct a `NodeExecutor`, `init()` it (its `modifyRstestConfig`
-  //    hooks fire and the plan resolves — the §3.4 barrier), then construct a
+  //    hooks fire and the plan resolves — the init barrier), then construct a
   //    `BrowserExecutor` from the resolved plan.
   // 4. Non-watch: `Promise.all(executors.map(e => e.runCycle()))` → one
   //    `finalizeRunCycle` → one `executors.close()` exit path.

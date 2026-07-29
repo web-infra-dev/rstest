@@ -96,8 +96,8 @@ export async function createBrowserExecutor(
     async init(): Promise<void> {
       // Server/provider launch stays inside `runBrowserController` (delegate in
       // place). Kept as an explicit hook so the plan → init → runCycle barrier
-      // is honored structurally and Phase 5 can attach browser-side hook
-      // application here.
+      // holds structurally for both executors, and so browser-side work that
+      // must precede the first cycle has somewhere to go.
     },
     async runCycle(
       opts: ExecutorRunCycleOptions,

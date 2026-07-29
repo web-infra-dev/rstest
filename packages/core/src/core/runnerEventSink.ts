@@ -14,8 +14,8 @@ import { resolveSnapshotPathDefault } from '../utils/snapshotPath';
 
 /**
  * The single event pump for runner lifecycle events, shared by the node pool
- * RPC and (from Phase 2's browser adoption) the browser dispatch runner
- * namespace. One implementation feeds `stateManager`, fans out to reporters,
+ * RPC and the browser dispatch runner namespace. One implementation feeds
+ * `stateManager`, fans out to reporters,
  * applies the per-project `onConsoleLog` filter, ingests snapshot results, and
  * resolves snapshot paths — so the two transports can no longer drift.
  *
