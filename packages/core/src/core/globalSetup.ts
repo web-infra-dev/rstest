@@ -229,9 +229,16 @@ export async function runGlobalSetup({
   });
 
   if (result.success) {
-    // Apply environment variable changes to main process
     if (result.envChanges) {
+      const previousEnv: Record<string, string | undefined> = {};
+      for (const key in result.envChanges) {
+        previousEnv[key] = process.env[key];
+      }
       applyEnvChanges(result.envChanges);
+      // Register the restore before the user teardown so the LIFO drain keeps
+      // setup env visible to teardown, then restores the host for a config
+      // restart. This callback is required even when setup returns no teardown.
+      globalTeardownCallbacks.push(() => applyEnvChanges(previousEnv));
     }
 
     if (result.hasTeardown) {

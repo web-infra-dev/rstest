@@ -12,12 +12,14 @@ import {
 } from '../../utils';
 import { FATAL_SIGNALS, getSignalExitCode } from '../../utils/signals';
 import {
+  type BrowserGlobalSetupStageResult,
   globalSetupFailureOutcome,
   runBrowserGlobalSetupStage,
 } from './globalSetupStage';
 import { loadBrowserExecutor, runBrowserModeTests } from './loader';
 import {
   attachBrowserWatchControls,
+  createBrowserWatchClose,
   reportInitialCycleCoverage,
 } from './watchControls';
 import { ensureRunDependencies } from '../dependencies';
@@ -87,16 +89,47 @@ export async function runBrowserOnlyTests(
     if (coverage.enabled) {
       logCoverageEnabled(coverage);
     }
+    const browserShardedEntries = await resolveShardedEntries(context, {
+      silent: true,
+    });
+    let stage: BrowserGlobalSetupStageResult;
+    try {
+      stage = await runBrowserGlobalSetupStage(context, browserProjects, {
+        entriesCache: browserShardedEntries,
+      });
+    } catch (error) {
+      await runLifecycleStep('global teardown', () => runGlobalTeardown());
+      throw error;
+    }
+    if (stage.errors.length) {
+      await runLifecycleStep('global teardown', () => runGlobalTeardown());
+      throw stage.errors[0];
+    }
     // Browser-only watch: the host owns per-rerun finalize, so the initial
     // cycle's coverage is reported here — reruns report through the host's
     // `finalizeWatchRerun` → `finalizeRunCycle`.
-    const browserResult = await runBrowserModeTests(context, browserProjects, {
-      onTraceEvents: traceRun.onEvents,
-    });
+    let browserResult: Awaited<ReturnType<typeof runBrowserModeTests>>;
+    const closeWatch = createBrowserWatchClose(() => browserResult?.watch);
+    try {
+      browserResult = await runBrowserModeTests(context, browserProjects, {
+        shardedEntries: browserShardedEntries,
+        env: stage.env,
+        onTraceEvents: traceRun.onEvents,
+      });
+      await reportInitialCycleCoverage(context, browserResult, traceRun.span);
 
-    await reportInitialCycleCoverage(context, browserResult, traceRun.span);
-
-    await attachBrowserWatchControls(context, browserResult?.watch);
+      if (browserResult?.watch) {
+        await attachBrowserWatchControls(context, {
+          ...browserResult.watch,
+          close: closeWatch,
+        });
+      } else {
+        await closeWatch();
+      }
+    } catch (error) {
+      await closeWatch();
+      throw error;
+    }
   } else {
     const coverageProvider = await createCoverageProviderWithLog(
       coverage,

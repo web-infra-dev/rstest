@@ -363,7 +363,30 @@ export async function runTests(context: Rstest): Promise<void> {
   // browser initial run. The session wrapper owns the watch handles; the
   // node-owned CLI shortcuts below fan a/f/u/q out through `browserWatch`.
   // ===================================================================
-  const browserWatch = createBrowserWatchSession({ context, planner });
+  let browserWatchEnv: Record<string, string | undefined> | undefined;
+  if (hasBrowserTestsToRun) {
+    const browserProjectsToRun = planner.getBrowserProjectsToRun();
+    let stage: BrowserGlobalSetupStageResult;
+    try {
+      stage = await runBrowserGlobalSetupStage(context, browserProjectsToRun, {
+        entriesCache: nodeExecutor.getPlan().entriesCache,
+      });
+    } catch (error) {
+      await runLifecycleStep('global teardown', () => runGlobalTeardown());
+      throw error;
+    }
+    if (stage.errors.length) {
+      await runLifecycleStep('global teardown', () => runGlobalTeardown());
+      throw stage.errors[0];
+    }
+    browserWatchEnv = stage.env;
+  }
+
+  const browserWatch = createBrowserWatchSession({
+    context,
+    planner,
+    env: browserWatchEnv,
+  });
 
   // Mixed watch with zero node files: only the browser side runs (host-driven).
   if (!hasNodeTestsToRun) {
@@ -445,9 +468,9 @@ export async function runTests(context: Rstest): Promise<void> {
   };
 
   if (!context.embedded) {
-    process.on('SIGINT', handleSignal);
-    process.on('SIGTERM', handleSignal);
-    process.on('SIGTSTP', handleSignal);
+    for (const signal of FATAL_SIGNALS) {
+      process.on(signal, handleSignal);
+    }
   }
 
   const afterTestsWatchRun = () =>
@@ -456,6 +479,12 @@ export async function runTests(context: Rstest): Promise<void> {
   const { onBeforeRestart } = await import('./restart');
 
   onBeforeRestart(async () => {
+    if (!context.embedded) {
+      for (const signal of FATAL_SIGNALS) {
+        process.off(signal, handleSignal);
+      }
+    }
+    await browserWatch.close();
     await runLifecycleStep('executor cleanup', () => nodeExecutor.close());
     await runLifecycleStep('trace run finalize', () =>
       activeTraceRun.finalize(),
@@ -602,7 +631,12 @@ export async function runTests(context: Rstest): Promise<void> {
   // first compile fires `onAfterDevCompile`, which drives the initial watch run.
   // `runCycle` (invoked from that hook) reuses these resources via the in-flight
   // guard rather than starting a second server.
-  await nodeExecutor.ensureRunResources();
+  try {
+    await nodeExecutor.ensureRunResources();
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
 
   // Node resources are up (env dependencies validated); now the browser watch
   // session may launch — deferred to here so node env-dependency validation

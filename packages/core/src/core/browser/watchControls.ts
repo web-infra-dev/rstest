@@ -6,6 +6,7 @@ import { runBrowserModeTests } from './loader';
 import type { BrowserRunPlanner } from './runPlanner';
 import { isCliShortcutsEnabled, setupCliShortcuts } from '../cliShortcuts';
 import { runLifecycleStep } from '../finalizeRun';
+import { runGlobalTeardown } from '../globalSetup';
 import type { Rstest } from '../rstest';
 import {
   collectFailedTestPaths,
@@ -21,18 +22,23 @@ import {
 function registerBrowserWatchSignalExit(
   context: Rstest,
   watch: BrowserWatchHandles,
-): void {
+): () => void {
   if (context.embedded) {
-    return;
+    return () => {};
   }
   const handleSignal = async (signal: NodeJS.Signals) => {
     logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
-    await runLifecycleStep('browser watch cleanup', () => watch.close());
+    await watch.close();
     process.exit(getSignalExitCode(signal));
   };
   for (const signal of FATAL_SIGNALS) {
     process.on(signal, handleSignal);
   }
+  return () => {
+    for (const signal of FATAL_SIGNALS) {
+      process.off(signal, handleSignal);
+    }
+  };
 }
 
 /**
@@ -51,9 +57,7 @@ async function setupBrowserWatchShortcuts(
   }
   const { snapshotManager } = context;
   const closeCliShortcuts = await setupCliShortcuts({
-    closeServer: async () => {
-      await runLifecycleStep('browser watch cleanup', () => watch.close());
-    },
+    closeServer: watch.close,
     runAll: async () => {
       clearScreen();
       await watch.rerun();
@@ -93,6 +97,26 @@ async function setupBrowserWatchShortcuts(
   });
   const { onBeforeRestart } = await import('../restart');
   onBeforeRestart(closeCliShortcuts);
+}
+
+export function createBrowserWatchClose(
+  getWatch: () => BrowserWatchHandles | undefined,
+): () => Promise<void> {
+  let closePromise: Promise<void> | undefined;
+
+  return () => {
+    closePromise ??= (async () => {
+      try {
+        const watch = getWatch();
+        if (watch) {
+          await runLifecycleStep('browser watch cleanup', () => watch.close());
+        }
+      } finally {
+        await runLifecycleStep('global teardown', () => runGlobalTeardown());
+      }
+    })();
+    return closePromise;
+  };
 }
 
 /**
@@ -135,8 +159,10 @@ export async function reportInitialCycleCoverage(
 
 /**
  * Attach core-owned controls to a browser-only watch session: the fatal-signal
- * exit path first, then the single stdin shortcuts owner. No-op when the run
- * produced no watch handles.
+ * exit path first, then the single stdin shortcuts owner. A config restart
+ * removes those process-level controls and closes the whole session so the next
+ * config creates a fresh browser host. No-op when the run produced no watch
+ * handles.
  */
 export async function attachBrowserWatchControls(
   context: Rstest,
@@ -145,15 +171,20 @@ export async function attachBrowserWatchControls(
   if (!watch) {
     return;
   }
-  registerBrowserWatchSignalExit(context, watch);
+  const removeSignalExit = registerBrowserWatchSignalExit(context, watch);
   await setupBrowserWatchShortcuts(context, watch);
+  const { onBeforeRestart } = await import('../restart');
+  onBeforeRestart(async () => {
+    removeSignalExit();
+    await watch.close();
+  });
 }
 
 /**
  * The browser side of a mixed watch run, wrapped so the orchestrator never
  * tracks {@link BrowserWatchHandles} directly. The session is host-driven and
- * self-finalizing; `rerun`/`close` are safe no-ops until the initial run lands
- * the handles.
+ * self-finalizing; `rerun` is a safe no-op until the initial run lands the
+ * handles, while `close` always drains global teardown.
  */
 export interface BrowserWatchSession {
   /**
@@ -175,19 +206,29 @@ export interface BrowserWatchSession {
 export function createBrowserWatchSession({
   context,
   planner,
+  env,
 }: {
   context: Rstest;
   planner: BrowserRunPlanner;
+  env?: Record<string, string | undefined>;
 }): BrowserWatchSession {
   let handles: BrowserWatchHandles | undefined;
+  let initialRun: Promise<void> | undefined;
+  const closeWatch = createBrowserWatchClose(() => handles);
+  const close = async (): Promise<void> => {
+    // A mixed watch returns control before the browser's initial cycle lands.
+    // Settle that launch first so a config restart cannot miss late handles and
+    // leave the old host alive after the next session starts.
+    await initialRun?.catch(() => undefined);
+    await closeWatch();
+  };
 
   const start = () => {
     const projects = planner.getBrowserProjectsToRun();
-    return runBrowserModeTests(
-      context,
-      projects,
-      planner.getWatchRunOptions(projects),
-    );
+    return runBrowserModeTests(context, projects, {
+      ...planner.getWatchRunOptions(projects),
+      env,
+    });
   };
 
   // The initial cycle's coverage arrives on the result and is stripped off the
@@ -207,7 +248,7 @@ export function createBrowserWatchSession({
       // One catch after the handler, not `then(onFulfilled, onRejected)`: the
       // rejection handler of a two-arg `then` cannot see the handler's own
       // failure, so a throwing initial-cycle landing would escape unhandled.
-      start()
+      initialRun = start()
         .then(landInitialCycle)
         .catch((error) => {
           logger.error(color.red('Browser Mode watch session failed:'), error);
@@ -215,20 +256,25 @@ export function createBrowserWatchSession({
         });
     },
     async runForeground() {
-      const result = await start();
-      await landInitialCycle(result);
-      await attachBrowserWatchControls(context, result?.watch);
+      try {
+        const result = await start();
+        await landInitialCycle(result);
+        if (result?.watch) {
+          await attachBrowserWatchControls(context, {
+            ...result.watch,
+            close,
+          });
+        } else {
+          await close();
+        }
+      } catch (error) {
+        await close();
+        throw error;
+      }
     },
     async rerun(testPaths) {
       await handles?.rerun(testPaths);
     },
-    async close() {
-      // Snapshot the handle locally: it lands asynchronously after the initial
-      // browser run resolves.
-      const current = handles;
-      if (current) {
-        await runLifecycleStep('browser watch cleanup', () => current.close());
-      }
-    },
+    close,
   };
 }
