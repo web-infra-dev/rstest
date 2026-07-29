@@ -32,8 +32,13 @@ const createProject = (): ProjectContext => ({
     },
     browser: {
       enabled: false,
+      provider: 'playwright',
+      browser: 'chromium',
+      headless: true,
+      strictPort: false,
+      providerOptions: {},
     },
-  } as ProjectContext['normalizedConfig'],
+  } as unknown as ProjectContext['normalizedConfig'],
 });
 
 describe('environment comments', () => {
@@ -699,6 +704,7 @@ const jsdom = '// @rstest-environment jsdom';
           },
           includeSource: [],
           browser: {
+            ...createProject().normalizedConfig.browser,
             enabled: true,
           },
         },
@@ -1239,6 +1245,7 @@ const jsdom = '// @rstest-environment jsdom';
           },
           includeSource: [],
           browser: {
+            ...createProject().normalizedConfig.browser,
             enabled: true,
           },
         },

@@ -274,9 +274,10 @@ describe('mergeRstestConfig', () => {
     );
 
     expect(
-      rstest.projects[0]?.normalizedConfig.performance?.buildCache
-        ?.buildDependencies,
-    ).toEqual(['/repo/configs/cache-flags.ts']);
+      rstest.projects[0]?.normalizedConfig.performance?.buildCache,
+    ).toMatchObject({
+      buildDependencies: ['/repo/configs/cache-flags.ts'],
+    });
   });
 
   it('should preserve explicit default buildCache directory for projects', () => {
@@ -303,9 +304,10 @@ describe('mergeRstestConfig', () => {
     );
 
     expect(
-      rstest.projects[0]?.normalizedConfig.performance?.buildCache
-        ?.cacheDirectory,
-    ).toBe('/repo/projects/node/node_modules/.cache/rstest');
+      rstest.projects[0]?.normalizedConfig.performance?.buildCache,
+    ).toMatchObject({
+      cacheDirectory: '/repo/projects/node/node_modules/.cache/rstest',
+    });
     expect(
       resolveProjectBuildCache({
         context: rstest,
@@ -464,6 +466,7 @@ describe('mergeRstestConfig', () => {
         },
         {
           browser: {
+            provider: 'playwright',
             providerOptions: {
               launch: { channel: 'chrome' },
               context: { locale: 'en-US' },
@@ -500,6 +503,7 @@ describe('mergeRstestConfig', () => {
       },
       {
         browser: {
+          provider: 'playwright',
           providerOptions: {
             launch: {
               args: ['--headless=new'],
@@ -534,6 +538,7 @@ describe('mergeRstestConfig', () => {
       },
       {
         browser: {
+          provider: 'playwright',
           providerOptions: { launch: { channel: 'chrome' } },
         },
       },

@@ -1,7 +1,7 @@
 {
   "extends": "@rstest/tsconfig/base",
   "compilerOptions": {
-    "types": ["node", "@rstest/core/globals"]
+    "types": ["node"]
   },
   "include": ["./**/*.ts"]
 }

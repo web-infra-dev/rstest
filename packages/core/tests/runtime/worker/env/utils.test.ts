@@ -5,7 +5,7 @@ test('should revoke remaining object URLs and restore methods', () => {
   const revoked: string[] = [];
   let nextId = 0;
   class TestURL extends URL {
-    static override createObjectURL(): string {
+    static override createObjectURL(_object: Blob | MediaSource): string {
       return `blob:test:${nextId++}`;
     }
 

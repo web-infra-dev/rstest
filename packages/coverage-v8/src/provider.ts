@@ -1089,7 +1089,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     try {
       await this.session.post('Profiler.stopPreciseCoverage');
       await this.session.post('Profiler.disable');
-    } catch (_err) {
+    } catch {
       // Ignore teardown errors to prevent masking original errors
     }
   }

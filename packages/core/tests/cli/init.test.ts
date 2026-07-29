@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 import { join } from 'pathe';
 import { mergeWithCLIOptions, resolveProjects } from '../../src/cli/init';
-import type { RstestConfig } from '../../src/types';
+import type { InlineProjectConfig, RstestConfig } from '../../src/types';
 
 const rootPath = join(__dirname, '../..');
 
@@ -598,7 +598,7 @@ describe('resolveProjects', () => {
         },
       });
 
-      expect(projects[0]!.config.browser.providerOptions).toEqual({
+      expect(projects[0]!.config.browser!.providerOptions).toEqual({
         launch: {
           channel: 'chrome',
         },
@@ -643,7 +643,7 @@ describe('resolveProjects', () => {
 
       // CLI overrides only `launch.channel`; sibling leaves (`launch.args`) and
       // the unrelated `context` object from config are preserved.
-      expect(projects[0]!.config.browser.providerOptions).toEqual({
+      expect(projects[0]!.config.browser!.providerOptions).toEqual({
         launch: {
           channel: 'chrome',
           args: ['--no-sandbox'],
@@ -655,17 +655,22 @@ describe('resolveProjects', () => {
     });
   });
 
+  // `resolveProjects` spreads an inline project into a full config, so the CLI
+  // coverage merge still reaches project-level `coverage` even though the public
+  // project config type omits the key.
+  const projectWithCoverage = (
+    coverage: RstestConfig['coverage'],
+  ): InlineProjectConfig =>
+    ({ name: 'test-project', coverage }) as InlineProjectConfig;
+
   describe('coverage CLI options', () => {
     it('should apply coverage.changed from CLI', async () => {
       const projects = await resolveProjects({
         config: {
           projects: [
-            {
-              name: 'test-project',
-              coverage: {
-                enabled: true,
-              },
-            },
+            projectWithCoverage({
+              enabled: true,
+            }),
           ],
         },
         root: rootPath,
@@ -749,7 +754,7 @@ describe('resolveProjects', () => {
       expect(projects[0]!.config.coverage).toMatchObject({
         changed: false,
       });
-      expect(projects[0]!.config.coverage.enabled).toBeUndefined();
+      expect(projects[0]!.config.coverage!.enabled).toBeUndefined();
     });
 
     it('should enable coverage when coverage provider is set from CLI', async () => {
@@ -825,13 +830,10 @@ describe('resolveProjects', () => {
       const projects = await resolveProjects({
         config: {
           projects: [
-            {
-              name: 'test-project',
-              coverage: {
-                enabled: true,
-                reporters: ['text', ['json', { file: 'coverage.json' }]],
-              },
-            },
+            projectWithCoverage({
+              enabled: true,
+              reporters: ['text', ['json', { file: 'coverage.json' }]],
+            }),
           ],
         },
         root: rootPath,
@@ -852,16 +854,13 @@ describe('resolveProjects', () => {
       const projects = await resolveProjects({
         config: {
           projects: [
-            {
-              name: 'test-project',
-              coverage: {
-                include: ['old-include/**'],
-                exclude: ['old-exclude/**'],
-                reporters: ['html'],
-                reportsDirectory: 'old-coverage',
-                clean: true,
-              },
-            },
+            projectWithCoverage({
+              include: ['old-include/**'],
+              exclude: ['old-exclude/**'],
+              reporters: ['html'],
+              reportsDirectory: 'old-coverage',
+              clean: true,
+            }),
           ],
         },
         root: rootPath,

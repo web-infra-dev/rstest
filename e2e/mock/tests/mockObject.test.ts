@@ -287,8 +287,8 @@ describe('rs.mocked', () => {
   // whether or not the call signature carries a `this` parameter — the latter
   // is the shape a `function` + `class` declaration merge produces.
   test('Mocked<T> stays assignable to T for construct+call members', () => {
-    class Handle {
-      _tag!: number;
+    interface Handle {
+      _tag: number;
     }
     interface Api {
       op: (new () => Handle) & (() => Promise<number>);
@@ -329,8 +329,8 @@ describe('rs.mocked', () => {
   // Type-level regression: mocking a function typed with an explicit `this`
   // must not force a receiver — `rs.mocked(fn)(arg)` should still type-check.
   test('mocked function stays callable without a receiver for this-typed functions', () => {
-    class Ctx {
-      _brand!: 'ctx';
+    interface Ctx {
+      _brand: 'ctx';
     }
     type Run = (this: Ctx, arg: number) => string;
     const callsWithoutReceiver = (mocked: Mocked<Run>): string => mocked(1);
@@ -365,6 +365,9 @@ describe('rs.mocked', () => {
       mocked.api.getValue.mockReturnValue(200);
     };
 
+    // `Service` must stay a class — `Mocked<typeof Service>` is what this
+    // regression covers — so it is asserted as a value, not only queried.
+    expect(Service.getValue()).toBe(42);
     expect(asRealClass).toBeTypeOf('function');
     expect(readsStaticProperty).toBeTypeOf('function');
     expect(configuresStaticMethod).toBeTypeOf('function');
