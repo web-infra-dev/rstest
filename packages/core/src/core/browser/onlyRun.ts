@@ -68,6 +68,7 @@ async function runBrowserOnlyWatch(
       activeTraceRun = traceRun;
     },
     enableCliShortcuts,
+    isSessionLive: () => browserExecutor.hasWatchSession(),
   });
   // The host resolves the rerun scope before it signals (its file-set diff is
   // consumed once), so the hint's filters are this cycle's scope.

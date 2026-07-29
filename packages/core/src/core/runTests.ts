@@ -48,8 +48,9 @@ import {
 /**
  * What the orchestrator drives on the node side: the shared executor seam plus
  * the named plan-access surface — never the concrete `NodeExecutor`. Watch
- * subscribes to invalidations, so `onInvalidate` (optional on the seam while the
- * browser side is still host-driven) is required of the node side here.
+ * subscribes to invalidations, so `onInvalidate` (optional on the seam, for
+ * executors with no watch trigger of their own) is required of the node side
+ * here.
  */
 type OrchestratedNodeExecutor = TestExecutor &
   NodeRunPlanAccess &
@@ -410,6 +411,10 @@ export async function runTests(
   // a browser rerun waits instead of interleaving on the shared `stateManager`.
   // ===================================================================
   const enableCliShortcuts = deps.isCliShortcutsEnabled();
+  // Constructed (not launched) below so its invalidation subscriber is in place
+  // before anything can compile; the first cycle further down is what launches
+  // the browser.
+  let browserExecutor: BrowserTestExecutor | undefined;
   const watchDriver = createWatchCycleDriver({
     context,
     coverageProvider,
@@ -419,12 +424,12 @@ export async function runTests(
       activeTraceRun = traceRun;
     },
     enableCliShortcuts,
+    // The node side always keeps the session open; a browser-only mixed watch
+    // has nothing left when the host's launch opened no session.
+    isSessionLive: () =>
+      hasNodeTestsToRun || (browserExecutor?.hasWatchSession() ?? false),
   });
 
-  // Constructed (not launched) up front so its invalidation subscriber is in
-  // place before anything can compile; the first cycle below is what launches
-  // the browser.
-  let browserExecutor: BrowserTestExecutor | undefined;
   if (hasBrowserTestsToRun) {
     const browserProjectsToRun = planner.getBrowserProjectsToRun();
     browserExecutor = await deps.loadBrowserExecutor(
@@ -442,6 +447,7 @@ export async function runTests(
     );
   }
 
+  const browserTarget = browserExecutor;
   const watchTargets: WatchSessionTargets = {
     node: hasNodeTestsToRun
       ? {
@@ -449,8 +455,8 @@ export async function runTests(
           globTestEntries: () => nodeExecutor.globTestEntries(),
         }
       : undefined,
-    browser: browserExecutor && {
-      rerun: (testPaths) => browserExecutor!.requestRerun(testPaths),
+    browser: browserTarget && {
+      rerun: (testPaths) => browserTarget.requestRerun(testPaths),
     },
   };
 

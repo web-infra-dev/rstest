@@ -178,7 +178,7 @@ export interface NodeRunPlanAccess {
  * The node side of the {@link TestExecutor} seam: the existing Rsbuild dev
  * server + worker pool, expressed as one executor the shared run loop drives.
  * The watch loop subscribes to this executor's invalidations, so `onInvalidate`
- * — optional on the seam while the browser side is still host-driven — is
+ * — optional on the seam, for executors with no watch trigger of their own — is
  * guaranteed here.
  */
 export type NodeExecutor = TestExecutor &

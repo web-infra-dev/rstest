@@ -105,17 +105,10 @@ export type {
   WorkerState,
 } from './types';
 // Utils needed by browser package
-export {
-  color,
-  getNoTestFilesMessage,
-  isDebug,
-  isTTY,
-  logger,
-  serializableConfig,
-} from './utils';
-// Shared fatal-signal list and POSIX 128+signal exit-code policy so the
-// browser watch host terminates with the same codes as the node watch loop.
-export { FATAL_SIGNALS, getSignalExitCode } from './utils/signals';
+export { color, isDebug, isTTY, logger, serializableConfig } from './utils';
+// Shared fatal-signal list, so the host's best-effort runtime cleanup nets hook
+// the same signals core's watch teardown exits on.
+export { FATAL_SIGNALS } from './utils/signals';
 // Worker concurrency primitives shared with @rstest/browser
 export { getNumCpus, parseWorkers, resolveWorkerCount } from './utils/workers';
 export type { ResolveWorkerCountOptions } from './utils/workers';

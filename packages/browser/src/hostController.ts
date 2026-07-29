@@ -22,7 +22,6 @@ import {
   createSilentConsoleController,
   DEFAULT_TEST_TIMEOUT,
   type FormattedError,
-  getNoTestFilesMessage,
   getPrettyConsoleName,
   getSetupFiles,
   getTestEntries,
@@ -2594,40 +2593,33 @@ export const runBrowserController = async (
     };
   };
 
-  // The host returns a void outcome and core's `reportNoTestFiles` owns the
-  // exit code and the no-test reporter lifecycle, so the host must not set the
-  // code itself. The launch-time message stays here because core's watch
-  // variant of it ("No test files found.") drops the resolved filter context.
-  const reportEmptyTestSet = (): void => {
-    const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
-    if (!allowEmptyRun) {
-      const message = getNoTestFilesMessage({
-        context,
-        code,
-        defaultMessage: `No test files found, exiting with code ${code}.`,
-      });
-      if (code === 0) {
-        logger.log(color.yellow(message));
-      } else {
-        logger.error(color.red(message));
-      }
-
-      if (context.relatedFilters?.length) {
-        logger.log(
-          color.gray('related: '),
-          context.relatedFilters.join(color.gray(', ')),
-        );
-      } else if (context.fileFilters?.length) {
-        logger.log(
-          color.gray('filter: '),
-          context.fileFilters.join(color.gray(', ')),
-        );
-      }
+  /**
+   * A launch that finds no test files at all hands core an empty cycle, and
+   * core's `reportNoTestFiles` owns the message and the no-test reporter
+   * lifecycle for it — printing here too would double it.
+   *
+   * The exit code is the one thing core cannot raise from that cycle in watch
+   * mode, where its report deliberately leaves the code alone (a rerun matching
+   * nothing is not a failure). This launch opened no session, so no later cycle
+   * can raise it either — it is written here, the same launch-path exception
+   * that lets a boot failure write a code outside a cycle.
+   */
+  const writeEmptyLaunchExitCode = (): void => {
+    if (
+      allowEmptyRun ||
+      !isWatchMode ||
+      context.normalizedConfig.passWithNoTests
+    ) {
+      return;
+    }
+    // Never downgrade: a code already raised by an earlier failure stands.
+    if (process.exitCode === undefined || process.exitCode === 0) {
+      process.exitCode = 1;
     }
   };
 
   if (totalTests === 0 && !shouldInitializeEmptyBrowserHooks) {
-    reportEmptyTestSet();
+    writeEmptyLaunchExitCode();
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
 
@@ -2763,11 +2755,24 @@ export const runBrowserController = async (
   };
 
   /**
+   * Latest-wins interrupt, installed by the run branch whose in-flight run can
+   * be cut short (headless). Core serializes cycles, so a trigger arriving
+   * mid-cycle would otherwise wait out a run the user has already superseded.
+   */
+  let interruptInFlightRun: (() => Promise<void>) | undefined;
+
+  /**
    * Hand the scope this trigger resolved to core, which resets the cycle state,
    * calls back into the session's `runCycle`, and finalizes. Awaiting it inside
    * the dev-compile hook is what back-pressures the transport for the cycle.
+   *
+   * The in-flight run is cut short here rather than at the trigger, because only
+   * this point knows a replacement cycle is actually coming: a trigger that
+   * resolves to no affected files must leave the running cycle alone, or it
+   * finalizes on results it never produced.
    */
   const signalInvalidation = async (fileFilters: string[]): Promise<void> => {
+    await interruptInFlightRun?.();
     await onInvalidate?.({ isFirstBuild: false, fileFilters });
   };
 
@@ -2796,7 +2801,7 @@ export const runBrowserController = async (
   }
 
   if (totalTests === 0) {
-    reportEmptyTestSet();
+    writeEmptyLaunchExitCode();
     await destroyBrowserRuntime(runtime);
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
@@ -3593,6 +3598,19 @@ export const runBrowserController = async (
               ? [rerunFatalError]
               : undefined,
         });
+      };
+
+      // Cutting the in-flight run short lets its cycle finalize with what it had
+      // and the queued replacement start immediately; invalidating the token
+      // first makes every late dispatch from it a no-op. Deliberately not
+      // awaiting `run.done` — the cancelled run's own cycle is what awaits it.
+      interruptInFlightRun = async () => {
+        const active = runLifecycle.activeSession;
+        if (!active || active.cancelled) {
+          return;
+        }
+        runLifecycle.invalidateActiveToken();
+        await cancelRun(active, false);
       };
 
       dispatchRerun = async () => {

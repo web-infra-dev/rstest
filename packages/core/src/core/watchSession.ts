@@ -42,6 +42,7 @@ export function createWatchCycleDriver({
   getTraceRun,
   setTraceRun,
   enableCliShortcuts,
+  isSessionLive = () => true,
 }: {
   context: Rstest;
   coverageProvider: CoverageProvider | null;
@@ -49,6 +50,13 @@ export function createWatchCycleDriver({
   getTraceRun: () => TraceRun;
   setTraceRun: (traceRun: TraceRun) => void;
   enableCliShortcuts: boolean;
+  /**
+   * Whether the run still has a session that could answer the ready banner. A
+   * browser launch that found no test files (or failed before its runtime came
+   * up) leaves none, and no trigger of any kind can fire afterwards — offering
+   * to wait for file changes there would be a promise nothing can keep.
+   */
+  isSessionLive?: () => boolean;
 }): WatchCycleDriver {
   let buildId = 0;
   // Reads the *current* buffer at emit time, so a browser cycle's events land
@@ -92,7 +100,9 @@ export function createWatchCycleDriver({
     // Pre-allocate the next cycle's buffer so events emitted between cycles are
     // not dropped.
     setTraceRun(traceController.beginRun());
-    logWatchReadyMessage(context, enableCliShortcuts);
+    if (isSessionLive()) {
+      logWatchReadyMessage(context, enableCliShortcuts);
+    }
   };
 
   return {

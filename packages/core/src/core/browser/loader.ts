@@ -14,7 +14,7 @@ export type { BrowserTestRunOptions, BrowserTestRunResult } from '../../types';
 
 /**
  * The subset of {@link BrowserTestRunOptions} that configures a browser
- * executor construction (as opposed to a host-driven watch session). Single
+ * executor construction (as opposed to the files-only discovery boot). Single
  * source of truth for the field list: the executor options interface, the
  * `loadBrowserExecutor` argument, and the planner's option bag all derive
  * from it.
@@ -46,7 +46,15 @@ export interface CreateBrowserExecutorOptions extends BrowserExecutorRunOptions 
  * through them).
  */
 export type BrowserTestExecutor = TestExecutor &
-  Required<Pick<TestExecutor, 'collect' | 'onInvalidate' | 'requestRerun'>>;
+  Required<Pick<TestExecutor, 'collect' | 'onInvalidate' | 'requestRerun'>> & {
+    /**
+     * Watch only, meaningful once the initial cycle has resolved: whether the
+     * host left a live session behind. A launch that found no test files, or
+     * that failed before the runtime came up, opens none — and with no session
+     * no trigger can ever fire, so core prints no ready banner for it.
+     */
+    hasWatchSession(): boolean;
+  };
 
 /**
  * Core-owned contract for the `@rstest/browser/internal` host module.

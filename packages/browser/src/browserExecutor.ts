@@ -142,6 +142,9 @@ export async function createBrowserExecutor(
     onInvalidate(cb: ExecutorInvalidationCallback): void {
       invalidationCallback = cb;
     },
+    hasWatchSession(): boolean {
+      return watchSession !== undefined;
+    },
     async requestRerun(testPaths?: string[]): Promise<void> {
       await watchSession?.requestRerun(testPaths);
     },

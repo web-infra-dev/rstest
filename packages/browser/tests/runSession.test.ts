@@ -41,6 +41,21 @@ describe('run session lifecycle', () => {
     expect(cancelled).toBe(true);
   });
 
+  // The primitive the headless watch loop's latest-wins interrupt is built on:
+  // a new trigger has to cut the in-flight run short and return immediately,
+  // because the cycle that started that run is what awaits its `done`.
+  it('should not wait for done when cancelling without waitForDone', async () => {
+    const lifecycle = new RunSessionLifecycle<TestRunSession>();
+    const session = lifecycle.createSession((token) => createRunSession(token));
+    session.done = new Promise<void>(() => {});
+
+    lifecycle.invalidateActiveToken();
+    await lifecycle.cancel(session, { waitForDone: false });
+
+    expect(session.cancelled).toBe(true);
+    expect(lifecycle.isTokenStale(session.token)).toBe(true);
+  });
+
   it('should wait for done when cancelling', async () => {
     const lifecycle = new RunSessionLifecycle<TestRunSession>();
     const session = lifecycle.createSession((token) => createRunSession(token));

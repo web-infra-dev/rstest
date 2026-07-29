@@ -132,10 +132,12 @@ const createFakeNodeExecutor = ({
 const createFakeBrowserExecutor = (
   events: string[],
   runCycle: RunCycleImpl,
+  hasWatchSession = true,
 ) => {
   let invalidateCallback: ExecutorInvalidationCallback | undefined;
   return Object.assign(createFakeExecutor('browser', events, runCycle), {
     collect: async () => ({ list: [] }),
+    hasWatchSession: () => hasWatchSession,
     onInvalidate: (cb: ExecutorInvalidationCallback) => {
       invalidateCallback = cb;
     },
@@ -446,12 +448,15 @@ const startWatchRun = async ({
   hasNodeTestsToRun = true,
   withBrowser = false,
   browserRunCycle = async () => outcomeOf([]),
+  browserHasWatchSession = true,
 }: {
   runCycle?: RunCycleImpl;
   testEntries?: string[];
   hasNodeTestsToRun?: boolean;
   withBrowser?: boolean;
   browserRunCycle?: RunCycleImpl;
+  /** False stands in for a host launch that found no test files to watch. */
+  browserHasWatchSession?: boolean;
 } = {}) => {
   const events: string[] = [];
   const parts = createContext({
@@ -465,7 +470,11 @@ const startWatchRun = async ({
     runCycle,
     testEntries,
   });
-  const browserExecutor = createFakeBrowserExecutor(events, browserRunCycle);
+  const browserExecutor = createFakeBrowserExecutor(
+    events,
+    browserRunCycle,
+    browserHasWatchSession,
+  );
   let shortcuts: CliShortcutHandlers | undefined;
   let setupCliShortcutsCalls = 0;
 
@@ -499,10 +508,17 @@ const startWatchRun = async ({
 
 describe('runTests watch orchestration', () => {
   let originalExitCode: typeof process.exitCode;
+  let logs: string[] = [];
+  /** The ready banner is what tells the user the session is listening. */
+  const readyBanners = () =>
+    logs.filter((line) => line.includes('Waiting for file changes')).length;
 
   beforeEach(() => {
     originalExitCode = process.exitCode;
-    rs.spyOn(console, 'log').mockImplementation(() => {});
+    logs = [];
+    rs.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.join(' '));
+    });
     rs.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -796,5 +812,31 @@ describe('runTests watch orchestration', () => {
 
     expect(browserExecutor.cycles).toHaveLength(2);
     expect(runEnds).toHaveLength(2);
+  });
+
+  it('offers no ready banner when the only launch opened no session', async () => {
+    const { browserExecutor, runEnds } = await startWatchRun({
+      hasNodeTestsToRun: false,
+      withBrowser: true,
+      browserHasWatchSession: false,
+    });
+
+    // The cycle still finalizes — that report is what tells the user there was
+    // nothing to run — but no trigger can ever fire afterwards, so promising to
+    // wait for file changes would be a promise nothing can keep.
+    expect(browserExecutor.cycles).toHaveLength(1);
+    expect(runEnds).toHaveLength(1);
+    expect(readyBanners()).toBe(0);
+  });
+
+  it('offers the ready banner while the node side keeps the session live', async () => {
+    const { nodeExecutor } = await startWatchRun({
+      withBrowser: true,
+      browserHasWatchSession: false,
+    });
+
+    await nodeExecutor.invalidate(true);
+
+    expect(readyBanners()).toBe(2);
   });
 });
