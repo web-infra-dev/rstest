@@ -19,8 +19,9 @@ import {
 import { loadBrowserExecutor, runBrowserModeTests } from './loader';
 import {
   attachBrowserWatchControls,
-  createBrowserWatchClose,
+  createBrowserWatchLifecycle,
   reportInitialCycleCoverage,
+  reportBrowserWatchGlobalSetupFailure,
 } from './watchControls';
 import { ensureRunDependencies } from '../dependencies';
 import {
@@ -62,6 +63,13 @@ export async function runBrowserOnlyTests(
   const isWatchMode = context.command === 'watch';
   const { coverage } = context.normalizedConfig;
   const { snapshotManager } = context;
+  let traceShutdownPromise: Promise<void> | undefined;
+  const shutdownTrace = (): Promise<void> => {
+    traceShutdownPromise ??= runLifecycleStep('trace shutdown', () =>
+      traceController.shutdown(traceRun),
+    );
+    return traceShutdownPromise;
+  };
 
   // Related runs are rejected in watch mode at the CLI, so an empty related
   // resolution is always a one-shot run that ends right here.
@@ -92,43 +100,81 @@ export async function runBrowserOnlyTests(
     const browserShardedEntries = await resolveShardedEntries(context, {
       silent: true,
     });
+    let browserResult: Awaited<ReturnType<typeof runBrowserModeTests>>;
+    const lifecycle = createBrowserWatchLifecycle(() => browserResult?.watch);
+    let restartRequested = false;
+    const { onBeforeRestart } = await import('../restart');
+    onBeforeRestart(async () => {
+      restartRequested = true;
+      await lifecycle.close();
+      await shutdownTrace();
+    });
+
     let stage: BrowserGlobalSetupStageResult;
     try {
-      stage = await runBrowserGlobalSetupStage(context, browserProjects, {
-        entriesCache: browserShardedEntries,
-      });
+      stage = await lifecycle.track(
+        runBrowserGlobalSetupStage(context, browserProjects, {
+          entriesCache: browserShardedEntries,
+        }),
+      );
     } catch (error) {
-      await runLifecycleStep('global teardown', () => runGlobalTeardown());
+      await lifecycle.close();
+      if (restartRequested) {
+        return;
+      }
+      await shutdownTrace();
       throw error;
     }
-    if (stage.errors.length) {
-      await runLifecycleStep('global teardown', () => runGlobalTeardown());
-      throw stage.errors[0];
+    if (restartRequested) {
+      return;
     }
+
+    if (stage.errors.length) {
+      try {
+        await reportBrowserWatchGlobalSetupFailure(context, stage.errors);
+      } finally {
+        await lifecycle.close();
+        await shutdownTrace();
+      }
+      throw new AggregateError(stage.errors, 'Browser globalSetup failed');
+    }
+
     // Browser-only watch: the host owns per-rerun finalize, so the initial
     // cycle's coverage is reported here — reruns report through the host's
     // `finalizeWatchRerun` → `finalizeRunCycle`.
-    let browserResult: Awaited<ReturnType<typeof runBrowserModeTests>>;
-    const closeWatch = createBrowserWatchClose(() => browserResult?.watch);
     try {
-      browserResult = await runBrowserModeTests(context, browserProjects, {
-        shardedEntries: browserShardedEntries,
-        env: stage.env,
-        onTraceEvents: traceRun.onEvents,
-      });
-      await reportInitialCycleCoverage(context, browserResult, traceRun.span);
+      browserResult = await lifecycle.track(
+        runBrowserModeTests(context, browserProjects, {
+          shardedEntries: browserShardedEntries,
+          env: stage.env,
+          onTraceEvents: traceRun.onEvents,
+        }).then(async (result) => {
+          browserResult = result;
+          await reportInitialCycleCoverage(context, result, traceRun.span);
+          return result;
+        }),
+      );
 
-      if (browserResult?.watch) {
-        await attachBrowserWatchControls(context, {
-          ...browserResult.watch,
-          close: closeWatch,
-        });
+      if (restartRequested) {
+        await lifecycle.close();
+      } else if (browserResult?.watch) {
+        await lifecycle.track(
+          attachBrowserWatchControls(context, {
+            ...browserResult.watch,
+            close: lifecycle.close,
+          }).then((cleanupControls) => {
+            lifecycle.setControlCleanup(cleanupControls);
+          }),
+        );
       } else {
-        await closeWatch();
+        await lifecycle.close();
       }
     } catch (error) {
-      await closeWatch();
-      throw error;
+      await lifecycle.close();
+      if (!restartRequested) {
+        await shutdownTrace();
+        throw error;
+      }
     }
   } else {
     const coverageProvider = await createCoverageProviderWithLog(
@@ -216,7 +262,5 @@ export async function runBrowserOnlyTests(
     }
   }
 
-  await runLifecycleStep('trace shutdown', () =>
-    traceController.shutdown(traceRun),
-  );
+  await shutdownTrace();
 }

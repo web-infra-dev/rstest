@@ -13,6 +13,60 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const expectSignalExitDuringRestartCleanup = async ({
+  fixtureName,
+  targetName,
+  globalSetupPath,
+  setupMarker,
+  teardownMarker,
+}: {
+  fixtureName: string;
+  targetName: string;
+  globalSetupPath: string;
+  setupMarker: string;
+  teardownMarker: string;
+}) => {
+  const fixturesTargetPath = path.join(
+    __dirname,
+    `fixtures/fixtures-test-${targetName}`,
+  );
+  const { fs } = await prepareFixtures({
+    fixturesPath: path.join(__dirname, `fixtures/${fixtureName}`),
+    fixturesTargetPath,
+  });
+  const configPath = path.join(fixturesTargetPath, 'rstest.config.mts');
+  const teardownStartedMarker = teardownMarker.replace('executed', 'started');
+  fs.update(path.join(fixturesTargetPath, globalSetupPath), (content) =>
+    content.replace(
+      `console.log('${teardownMarker}');`,
+      `console.log('${teardownStartedMarker}');\n    await new Promise((resolve) => setTimeout(resolve, 1500));\n    console.log('${teardownMarker}');`,
+    ),
+  );
+  const result = await runBrowserWatchCliWithCwd(fixturesTargetPath);
+  const { cli } = result;
+
+  try {
+    await cli.waitForStdout('Waiting for file changes...');
+    await sleep(200);
+
+    cli.resetStd();
+    fs.update(configPath, (content) => `${content}\n// trigger restart`);
+    await cli.waitForStdout('restarting Rstest');
+    await cli.waitForStdout(teardownStartedMarker);
+
+    cli.exec.process!.kill('SIGINT');
+    await result.expectExecFailed();
+
+    expect(cli.exec.process!.exitCode).toBe(130);
+    expect(cli.stdout).toContain('Received SIGINT, cleaning up...');
+    expect(cli.stdout).toContain(teardownMarker);
+    expect(cli.stdout).not.toContain(setupMarker);
+  } finally {
+    await killCliProcessTree(cli);
+    await deleteFixtureTarget(fs, fixturesTargetPath);
+  }
+};
+
 // Phase 5 step 5 gate (red-first): browser projects must run `globalSetup` on
 // the host — today the browser path never compiles nor executes it — and the
 // post-setup `process.env` change-set must be propagated into the browser
@@ -53,15 +107,17 @@ describe('browser mode - globalSetup', () => {
     expect(cli.stdout).not.toContain('[browser-global-setup-test] running');
   });
 
-  it('fails the run before tests when globalSetup throws', async () => {
+  it('reports every project globalSetup failure before tests run', async () => {
     const { cli, expectExecFailed, expectStderrLog } = await runBrowserCli(
       'browser-global-setup-error',
     );
 
     await expectExecFailed();
 
-    expectStderrLog(/Global setup failed intentionally/);
-    expect(cli.log).not.toContain('This should not be printed');
+    expectStderrLog(/Global setup A failed intentionally/);
+    expect(cli.log).toContain('Global setup B failed intentionally');
+    expect(cli.log).not.toContain('Project A test should not be printed');
+    expect(cli.log).not.toContain('Project B test should not be printed');
   });
 
   it('runs each project globalSetup in a mixed node + browser run', async () => {
@@ -174,6 +230,53 @@ describe('browser mode - globalSetup', () => {
     }
   }, 60_000);
 
+  it('waits for an in-flight browser-only globalSetup before config restart', async () => {
+    const fixturesTargetPath = path.join(
+      __dirname,
+      'fixtures/fixtures-test-browser-global-setup-inflight-restart',
+    );
+    const { fs } = await prepareFixtures({
+      fixturesPath: path.join(__dirname, 'fixtures/browser-global-setup'),
+      fixturesTargetPath,
+    });
+    const configPath = path.join(fixturesTargetPath, 'rstest.config.mts');
+    fs.update(path.join(fixturesTargetPath, 'globalSetup.ts'), (content) =>
+      content.replace(
+        "console.log('[browser-global-setup] executed');",
+        "console.log('[browser-global-setup] executed');\n  await new Promise((resolve) => setTimeout(resolve, 1500));",
+      ),
+    );
+    const result = await runBrowserWatchCliWithCwd(fixturesTargetPath);
+    const { cli } = result;
+
+    try {
+      await cli.waitForStdout('[browser-global-setup] executed');
+      fs.update(configPath, (content) => `${content}\n// trigger restart`);
+
+      await cli.waitForStdout('restarting Rstest');
+      await cli.waitForStdout('[browser-global-teardown] executed');
+      await cli.waitForStdout('Test Files 1 passed');
+      await cli.waitForStdout('Waiting for file changes...');
+
+      const setupMatches = cli.stdout.match(
+        /\[browser-global-setup\] executed/g,
+      );
+      expect(setupMatches).toHaveLength(2);
+      expect(
+        cli.stdout.indexOf('[browser-global-teardown] executed'),
+      ).toBeLessThan(cli.stdout.lastIndexOf('[browser-global-setup] executed'));
+
+      cli.exec.process!.stdin!.write('q');
+      await result.expectExecSuccess();
+      expect(
+        cli.stdout.match(/\[browser-global-teardown\] executed/g),
+      ).toHaveLength(2);
+    } finally {
+      await killCliProcessTree(cli);
+      await deleteFixtureTarget(fs, fixturesTargetPath);
+    }
+  }, 60_000);
+
   it('runs browser globalSetup during a mixed watch session', async () => {
     const result = await runBrowserWatchCli('browser-global-setup-mixed');
     const { cli } = result;
@@ -251,6 +354,77 @@ describe('browser mode - globalSetup', () => {
     }
   }, 60_000);
 
+  it('waits for an in-flight browser globalSetup before mixed config restart', async () => {
+    const fixturesTargetPath = path.join(
+      __dirname,
+      'fixtures/fixtures-test-browser-global-setup-mixed-inflight-restart',
+    );
+    const { fs } = await prepareFixtures({
+      fixturesPath: path.join(__dirname, 'fixtures/browser-global-setup-mixed'),
+      fixturesTargetPath,
+    });
+    const configPath = path.join(fixturesTargetPath, 'rstest.config.mts');
+    fs.update(
+      path.join(fixturesTargetPath, 'project-browser/globalSetup.ts'),
+      (content) =>
+        content.replace(
+          "console.log('[mixed-browser-global-setup] executed');",
+          "console.log('[mixed-browser-global-setup] executed');\n  await new Promise((resolve) => setTimeout(resolve, 1500));",
+        ),
+    );
+    const result = await runBrowserWatchCliWithCwd(fixturesTargetPath);
+    const { cli } = result;
+
+    try {
+      await cli.waitForStdout('[mixed-browser-global-setup] executed');
+      fs.update(configPath, (content) => `${content}\n// trigger restart`);
+
+      await cli.waitForStdout('restarting Rstest');
+      await cli.waitForStdout('[mixed-browser-global-teardown] executed');
+      await cli.waitForStdout('[mixed-node-global-setup] executed');
+      await cli.waitForStdout(/✓ .*node\.test\.ts/);
+      await cli.waitForStdout(/✓ .*browserOnly\.test\.ts/);
+      await cli.waitForStdout('Waiting for file changes...');
+
+      expect(
+        cli.stdout.match(/\[mixed-browser-global-setup\] executed/g),
+      ).toHaveLength(2);
+      expect(cli.stdout).not.toContain('Browser Mode watch session failed');
+
+      cli.exec.process!.stdin!.write('q');
+      await result.expectExecSuccess();
+      expect(
+        cli.stdout.match(/\[mixed-browser-global-teardown\] executed/g),
+      ).toHaveLength(2);
+    } finally {
+      await killCliProcessTree(cli);
+      await deleteFixtureTarget(fs, fixturesTargetPath);
+    }
+  }, 60_000);
+
+  it.skipIf(process.platform === 'win32').each([
+    {
+      name: 'browser-only',
+      fixtureName: 'browser-global-setup',
+      targetName: 'browser-global-setup-restart-signal',
+      globalSetupPath: 'globalSetup.ts',
+      setupMarker: '[browser-global-setup] executed',
+      teardownMarker: '[browser-global-teardown] executed',
+    },
+    {
+      name: 'mixed',
+      fixtureName: 'browser-global-setup-mixed',
+      targetName: 'browser-global-setup-mixed-restart-signal',
+      globalSetupPath: 'project-node/globalSetup.ts',
+      setupMarker: '[mixed-browser-global-setup] executed',
+      teardownMarker: '[mixed-node-global-teardown] executed',
+    },
+  ])(
+    'keeps SIGINT handling active during $name config restart cleanup',
+    expectSignalExitDuringRestartCleanup,
+    60_000,
+  );
+
   it('runs browser globalSetup in mixed watch when only browser tests are selected', async () => {
     const result = await runBrowserWatchCli('browser-global-setup-mixed', {
       args: ['project-browser/tests/browserOnly.test.ts'],
@@ -275,14 +449,16 @@ describe('browser mode - globalSetup', () => {
     }
   }, 60_000);
 
-  it('fails a browser-only watch run before tests when globalSetup throws', async () => {
+  it('reports every project globalSetup failure in browser-only watch', async () => {
     const { cli, expectExecFailed, expectStderrLog } = await runBrowserWatchCli(
       'browser-global-setup-error',
     );
 
     await expectExecFailed();
 
-    expectStderrLog(/Global setup failed intentionally/);
-    expect(cli.log).not.toContain('This should not be printed');
+    expectStderrLog(/Global setup A failed intentionally/);
+    expect(cli.log).toContain('Global setup B failed intentionally');
+    expect(cli.log).not.toContain('Project A test should not be printed');
+    expect(cli.log).not.toContain('Project B test should not be printed');
   });
 });
