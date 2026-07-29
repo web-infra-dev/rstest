@@ -67,8 +67,9 @@ export interface BrowserTestRunOptions {
   env?: Record<string, string | undefined>;
   /**
    * The cycle's snapshot update state (`ExecutorRunCycleOptions.updateSnapshot`
-   * carrier). The host falls back to reading
-   * `context.snapshotManager.options` when absent (watch startup path).
+   * carrier). Absent only on the config-hook discovery boot, which runs no
+   * tests; the host falls back to reading `context.snapshotManager.options`
+   * there.
    */
   updateSnapshot?: SnapshotUpdateState;
 }

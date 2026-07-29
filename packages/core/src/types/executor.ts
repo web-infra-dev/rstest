@@ -39,13 +39,19 @@ export interface ExecutorRunCycleOptions {
 /**
  * Watch invalidation subscriber. The hint carries only what the transport knows
  * for free at signal time: `isFirstBuild` marks the session's initial build,
- * which core runs as a full cycle and follows with the one-shot CLI-shortcut
- * install, and `fileFilters` carries the scope when the trigger already resolved
- * it (the browser host plans its rerun set before signalling, so that resolution
- * is not repeated — and never doubled — inside `runCycle`).
+ * which core runs as a full cycle rather than an on-demand one, and
+ * `fileFilters` carries the scope when the trigger already resolved it (the
+ * browser host plans its rerun set before signalling, so that resolution is not
+ * repeated — and never doubled — inside `runCycle`).
  *
- * Returning a promise back-pressures the transport's own build pipeline, which
- * is what keeps two watch cycles from overlapping on the shared `stateManager`.
+ * The returned promise settles when the queued cycle has finalized. It is there
+ * for a trigger that must wait for its own cycle, never as back-pressure: what
+ * keeps two cycles from overlapping on the shared `stateManager` is core's
+ * queue. Waiting on it inside a bundler's dev-compile hook is in fact a hazard
+ * — the bundler keeps no watcher attached while that hook is pending, so a test
+ * file created or deleted during the cycle is never noticed at all. The browser
+ * host therefore signals and returns; the node adapter still awaits its cycle
+ * in the hook and carries that hazard.
  */
 export type ExecutorInvalidationCallback = (hint: {
   isFirstBuild: boolean;
@@ -136,8 +142,10 @@ export interface TestExecutor {
    * button — routes through this one subscriber, so no executor ever drives a
    * cycle of its own.
    *
-   * The callback is awaited by the transport, and core serializes cycles behind
-   * a queue: two watch cycles never overlap on the shared `stateManager`.
+   * Core serializes cycles behind a queue, so two watch cycles never overlap on
+   * the shared `stateManager` — the transport is free to signal and move on,
+   * and should when it signals from a hook its own file watcher waits on (see
+   * {@link ExecutorInvalidationCallback}).
    *
    * A trigger that resolves to no work must not fire the callback — a cycle that
    * runs nothing still reports "no test files need re-run", which is not what a

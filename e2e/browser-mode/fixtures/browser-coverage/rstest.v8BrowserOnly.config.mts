@@ -7,7 +7,7 @@ export default defineConfig({
     enabled: true,
     provider: 'playwright',
     headless: true,
-    port: BROWSER_PORTS['browser-coverage'],
+    port: BROWSER_PORTS['browser-coverage-v8-browser-only'],
   },
   include: ['tests/sum.test.ts'],
   coverage: {

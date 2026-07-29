@@ -640,6 +640,36 @@ export const resolveListenPort = (
   return listenPort;
 };
 
+/**
+ * The exit code a launch that found no test files at all must leave behind.
+ *
+ * Core's `reportNoTestFiles` owns the message and the no-test reporter
+ * lifecycle for such a launch, but in watch mode its report deliberately leaves
+ * the exit code alone — a rerun matching nothing is not a failure. A launch
+ * opened no session, so no later cycle can raise the code either, which makes
+ * this the same launch-path exception that lets a boot failure write a code
+ * outside a cycle. One-shot runs keep going through the cycle, and an embedded
+ * caller (`allowEmptyRun`) reads the outcome instead of the process.
+ */
+export const resolveEmptyLaunchExitCode = (
+  current: number | string | undefined,
+  {
+    allowEmptyRun,
+    isWatchMode,
+    passWithNoTests,
+  }: {
+    allowEmptyRun: boolean;
+    isWatchMode: boolean;
+    passWithNoTests: boolean;
+  },
+): number | string | undefined => {
+  if (allowEmptyRun || !isWatchMode || passWithNoTests) {
+    return current;
+  }
+  // Never downgrade: a code already raised by an earlier failure stands.
+  return current === undefined || current === 0 ? 1 : current;
+};
+
 export const createBrowserLazyCompilationConfig = (
   setupFiles: string[],
 ): BrowserLazyCompilationConfig => {
@@ -2385,8 +2415,8 @@ export type BrowserWatchSession = {
 export type BrowserControllerOptions = BrowserTestRunOptions & {
   /**
    * Watch only: core's watch-cycle driver (see `TestExecutor.onInvalidate`).
-   * Awaited by the trigger, so the transport's own build pipeline is
-   * back-pressured for the whole cycle.
+   * Its promise settles when the cycle it queued has finalized, which only an
+   * explicit request may wait for (see `signalInvalidation`).
    */
   onInvalidate?: ExecutorInvalidationCallback;
 };
@@ -2593,29 +2623,12 @@ export const runBrowserController = async (
     };
   };
 
-  /**
-   * A launch that finds no test files at all hands core an empty cycle, and
-   * core's `reportNoTestFiles` owns the message and the no-test reporter
-   * lifecycle for it — printing here too would double it.
-   *
-   * The exit code is the one thing core cannot raise from that cycle in watch
-   * mode, where its report deliberately leaves the code alone (a rerun matching
-   * nothing is not a failure). This launch opened no session, so no later cycle
-   * can raise it either — it is written here, the same launch-path exception
-   * that lets a boot failure write a code outside a cycle.
-   */
   const writeEmptyLaunchExitCode = (): void => {
-    if (
-      allowEmptyRun ||
-      !isWatchMode ||
-      context.normalizedConfig.passWithNoTests
-    ) {
-      return;
-    }
-    // Never downgrade: a code already raised by an earlier failure stands.
-    if (process.exitCode === undefined || process.exitCode === 0) {
-      process.exitCode = 1;
-    }
+    process.exitCode = resolveEmptyLaunchExitCode(process.exitCode, {
+      allowEmptyRun,
+      isWatchMode,
+      passWithNoTests: context.normalizedConfig.passWithNoTests,
+    });
   };
 
   if (totalTests === 0 && !shouldInitializeEmptyBrowserHooks) {
@@ -2762,9 +2775,26 @@ export const runBrowserController = async (
   let interruptInFlightRun: (() => Promise<void>) | undefined;
 
   /**
+   * The cycle core is running for the scope last signalled. Only an explicit
+   * request awaits it, right after it dispatched: a CLI shortcut's
+   * `updateSnapshot` stays flipped only until `requestRerun` resolves, and the
+   * in-page rerun button answers its RPC when the rerun is done. A rejection is
+   * reported here rather than left to an awaiting caller, because compile-driven
+   * triggers have no caller — and a failed cycle must not end the session.
+   */
+  let signalledCycle: Promise<void> | undefined;
+
+  /**
    * Hand the scope this trigger resolved to core, which resets the cycle state,
-   * calls back into the session's `runCycle`, and finalizes. Awaiting it inside
-   * the dev-compile hook is what back-pressures the transport for the cycle.
+   * calls back into the session's `runCycle`, and finalizes.
+   *
+   * The cycle is deliberately *not* awaited here. Rebuild triggers reach this
+   * from inside the bundler's dev-compile hook, and the bundler keeps no
+   * watcher attached while that hook is pending: anything created or deleted in
+   * that window is never seen, so it never rebuilds and never reruns. Holding
+   * the hook for a whole cycle widens that blind window to the cycle's full
+   * duration, which loses test files added or removed mid-run for good. Core
+   * serializes the cycles itself, so nothing here has to.
    *
    * The in-flight run is cut short here rather than at the trigger, because only
    * this point knows a replacement cycle is actually coming: a trigger that
@@ -2773,7 +2803,11 @@ export const runBrowserController = async (
    */
   const signalInvalidation = async (fileFilters: string[]): Promise<void> => {
     await interruptInFlightRun?.();
-    await onInvalidate?.({ isFirstBuild: false, fileFilters });
+    signalledCycle = Promise.resolve(
+      onInvalidate?.({ isFirstBuild: false, fileFilters }),
+    ).catch((error) => {
+      logger.error(color.red('Browser Mode watch cycle failed:'), error);
+    });
   };
 
   projectEntries = runtime.projectEntries;
@@ -3470,18 +3504,35 @@ export const runBrowserController = async (
           await cancelRun(run, false);
         }
       } finally {
-        if (page) {
-          try {
-            await page.close();
-          } catch {
-            // ignore
+        // A superseded run can hold a renderer that will never answer again:
+        // its test file may have been deleted mid-flight, leaving the page
+        // waiting on a chunk the bundler will never produce, and closing such a
+        // page blocks for as long as the renderer stays wedged. The cycle waits
+        // on this teardown, so for an abandoned run it is detached — its
+        // results are already discarded, and the replacement cycle must not be
+        // held up by a page nobody is reading. A run that ends normally closes
+        // in band, which is what keeps the open-context count at the
+        // concurrency limit.
+        const abandoned = run.cancelled || runLifecycle.isTokenStale(run.token);
+        const teardown = async (): Promise<void> => {
+          if (page) {
+            try {
+              await page.close();
+            } catch {
+              // ignore
+            }
           }
-        }
+          await closeContextSafely(browserContext);
+        };
         if (sessionId) {
           sessionRegistry.deleteById(sessionId);
         }
         run.contexts.delete(browserContext);
-        await closeContextSafely(browserContext);
+        if (abandoned) {
+          void teardown();
+        } else {
+          await teardown();
+        }
       }
     };
 
@@ -3580,8 +3631,8 @@ export const runBrowserController = async (
           );
         } catch (error) {
           // Surfaced through the outcome rather than thrown: core finalizes
-          // this cycle either way, and a throw here would escape into the
-          // dev-compile hook that is awaiting the trigger.
+          // this cycle either way, and its results belong in the report even
+          // when the run that produced them ended badly.
           rerunError = toError(error);
         }
 
@@ -3604,13 +3655,21 @@ export const runBrowserController = async (
       // and the queued replacement start immediately; invalidating the token
       // first makes every late dispatch from it a no-op. Deliberately not
       // awaiting `run.done` — the cancelled run's own cycle is what awaits it.
+      //
+      // Unlike every other cancel this one does not tear the run's browser
+      // contexts down, because a rebuild trigger reaches it from inside the
+      // bundler's dev-compile hook: a page still fetching from the dev server
+      // that same hook is holding up cannot be closed, and the run it belongs
+      // to then never ends. Signalling the cancel is enough — the run's own
+      // teardown closes page and context as soon as it unwinds, and every page
+      // operation it can be sitting in is bounded by the driver's own timeout.
       interruptInFlightRun = async () => {
         const active = runLifecycle.activeSession;
         if (!active || active.cancelled) {
           return;
         }
         runLifecycle.invalidateActiveToken();
-        await cancelRun(active, false);
+        await runLifecycle.cancel(active, { waitForDone: false });
       };
 
       dispatchRerun = async () => {
@@ -3678,6 +3737,7 @@ export const runBrowserController = async (
             return;
           }
           await dispatchRerun?.();
+          await signalledCycle;
         },
       };
     }
@@ -4120,8 +4180,8 @@ export const runBrowserController = async (
         }
       } catch (error) {
         // Surfaced through the outcome rather than thrown: core finalizes this
-        // cycle either way, and a throw here would escape into the dev-compile
-        // hook that is awaiting the trigger.
+        // cycle either way, and its results belong in the report even when the
+        // run that produced them ended badly.
         rerunError = toError(error);
       }
 
@@ -4211,6 +4271,7 @@ export const runBrowserController = async (
       pendingTestNamePattern = testNamePattern;
       await refreshHostConfig();
       await signalInvalidation([file.testPath]);
+      await signalledCycle;
     };
 
     watchSession = {
@@ -4221,6 +4282,7 @@ export const runBrowserController = async (
           return;
         }
         await dispatchRerun?.();
+        await signalledCycle;
       },
     };
   }

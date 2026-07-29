@@ -4,6 +4,7 @@ import {
   createBrowserLazyCompilationConfig,
   createBrowserRsbuildDevConfig,
   createBrowserContextExcludeRegExp,
+  resolveEmptyLaunchExitCode,
   resolveListenPort,
   shouldEnableBrowserHmr,
   toContextKey,
@@ -365,5 +366,46 @@ describe('resolveListenPort', () => {
   it('should return 0 when httpServer.address() returns a string', () => {
     const httpServer = { address: () => '/tmp/sock' as unknown as null };
     expect(resolveListenPort(0, httpServer as any)).toBe(0);
+  });
+});
+
+describe('resolveEmptyLaunchExitCode', () => {
+  const watchLaunch = {
+    allowEmptyRun: false,
+    isWatchMode: true,
+    passWithNoTests: false,
+  };
+
+  it('should fail a watch launch that found no test files', () => {
+    expect(resolveEmptyLaunchExitCode(undefined, watchLaunch)).toBe(1);
+    expect(resolveEmptyLaunchExitCode(0, watchLaunch)).toBe(1);
+  });
+
+  it('should never downgrade a code an earlier failure already raised', () => {
+    expect(resolveEmptyLaunchExitCode(2, watchLaunch)).toBe(2);
+  });
+
+  it('should leave the code to the cycle outside watch mode', () => {
+    expect(
+      resolveEmptyLaunchExitCode(undefined, {
+        ...watchLaunch,
+        isWatchMode: false,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('should leave the code alone when no tests is not a failure', () => {
+    expect(
+      resolveEmptyLaunchExitCode(undefined, {
+        ...watchLaunch,
+        passWithNoTests: true,
+      }),
+    ).toBeUndefined();
+    expect(
+      resolveEmptyLaunchExitCode(undefined, {
+        ...watchLaunch,
+        allowEmptyRun: true,
+      }),
+    ).toBeUndefined();
   });
 });
