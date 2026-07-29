@@ -273,7 +273,7 @@
     "@types/picomatch": "^4.0.3",
     "@types/semver": "^7.7.1",
     "@types/vscode": "1.97.0",
-    "@vscode/test-electron": "^2.5.2",
+    "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "3.9.2",
     "birpc": "^4.0.0",
     "core-js-pure": "^3.49.0",
