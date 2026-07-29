@@ -132,16 +132,16 @@ export const createCoverageResourceLoaders = (
 };
 
 /**
- * The node side of the {@link TestExecutor} seam: the existing Rsbuild dev
- * server + worker pool, expressed as one executor the shared run loop drives.
+ * Everything the run orchestrator and the browser run planner need from the
+ * node side *beyond* {@link TestExecutor}. Named separately so `runTests` and
+ * `createBrowserRunPlanner` depend on this surface instead of the concrete node
+ * adapter (and so fake executors can drive the run loop in unit tests).
  *
- * The extra (non-interface) members — `getPlan`, `hasNodeTestsToRun`,
- * `hasBrowserTestsToRun`, `coveragePluginLoadError`, `setCoverageProvider` —
- * exist because core resolves the plan *after* `init()` fires the node
- * `modifyRstestConfig` hooks (the §3.4 barrier) and owns the single run-scoped
- * coverage provider it injects back before the first cycle.
+ * These members exist because core resolves the plan *after* `init()` fires the
+ * node `modifyRstestConfig` hooks (the §3.4 barrier) and owns the single
+ * run-scoped coverage provider it injects back before the first cycle.
  */
-export interface NodeExecutor extends TestExecutor {
+export interface NodeRunPlanAccess {
   /** The plan resolved during `init()` (browser + node runnable subsets). */
   getPlan(): RunProjectPlan;
   hasNodeTestsToRun(): boolean;
@@ -169,11 +169,26 @@ export interface NodeExecutor extends TestExecutor {
    * reject an invalid node project before browser globalSetup mutates state.
    */
   validateRunDependencies(): Promise<void>;
-  /** The Rsbuild instance built during `init()` (drives watch dev-compile hooks). */
-  getRsbuildInstance(): Awaited<ReturnType<typeof prepareRsbuild>>;
   /** Re-glob every runnable node project's test entries as a flat path list. */
   globTestEntries(): Promise<string[]>;
 }
+
+/**
+ * The node side of the {@link TestExecutor} seam: the existing Rsbuild dev
+ * server + worker pool, expressed as one executor the shared run loop drives.
+ */
+export interface NodeExecutor extends TestExecutor, NodeRunPlanAccess {
+  /** The Rsbuild instance built during `init()` (drives watch dev-compile hooks). */
+  getRsbuildInstance(): Awaited<ReturnType<typeof prepareRsbuild>>;
+}
+
+export type CreateNodeExecutorOptions = {
+  browserProjects: ProjectContext[];
+  nodeProjects: ProjectContext[];
+  isWatchMode: boolean;
+  /** Returns the cycle's active trace buffer (reallocated by core each cycle). */
+  getTraceRun: () => TraceRun;
+};
 
 export function createNodeExecutor(
   context: Rstest,
@@ -182,13 +197,7 @@ export function createNodeExecutor(
     nodeProjects,
     isWatchMode,
     getTraceRun,
-  }: {
-    browserProjects: ProjectContext[];
-    nodeProjects: ProjectContext[];
-    isWatchMode: boolean;
-    /** Returns the cycle's active trace buffer (reallocated by core each cycle). */
-    getTraceRun: () => TraceRun;
-  },
+  }: CreateNodeExecutorOptions,
 ): NodeExecutor {
   const { rootPath } = context;
 

@@ -35,7 +35,12 @@ import {
   createBrowserWatchOrchestrator,
   registerWatchSignalExit,
 } from './browser/watchControls';
-import { createNodeExecutor } from './executors/nodeExecutor';
+import {
+  type CreateNodeExecutorOptions,
+  createNodeExecutor,
+  type NodeExecutor,
+  type NodeRunPlanAccess,
+} from './executors/nodeExecutor';
 import { runGlobalTeardown } from './globalSetup';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';
 import type { Rstest } from './rstest';
@@ -45,7 +50,47 @@ import {
   prepareWatchRerunState,
 } from './watchState';
 
-export async function runTests(context: Rstest): Promise<void> {
+/**
+ * What the orchestrator drives on the node side: the shared executor seam plus
+ * the named plan-access surface — never the concrete `NodeExecutor`.
+ * `getRsbuildInstance` is listed apart because the watch branch still attaches
+ * the dev-compile hooks itself; moving that behind `onInvalidate` drops it.
+ */
+type OrchestratedNodeExecutor = TestExecutor &
+  NodeRunPlanAccess &
+  Pick<NodeExecutor, 'getRsbuildInstance'>;
+
+/**
+ * The collaborators `runTests` orchestrates, injected rather than imported at
+ * the call sites so the run loop can be driven with fake executors in unit
+ * tests (the browser loader `process.exit(1)`s on a missing `@rstest/browser`,
+ * so it must never be reached from a test).
+ */
+export interface RunTestsDeps {
+  createNodeExecutor: (
+    context: Rstest,
+    options: CreateNodeExecutorOptions,
+  ) => OrchestratedNodeExecutor;
+  loadBrowserExecutor: typeof loadBrowserExecutor;
+  createBrowserRunPlanner: typeof createBrowserRunPlanner;
+  createBrowserWatchOrchestrator: typeof createBrowserWatchOrchestrator;
+  runBrowserOnlyTests: typeof runBrowserOnlyTests;
+  runBrowserGlobalSetupStage: typeof runBrowserGlobalSetupStage;
+}
+
+const productionDeps: RunTestsDeps = {
+  createNodeExecutor,
+  loadBrowserExecutor,
+  createBrowserRunPlanner,
+  createBrowserWatchOrchestrator,
+  runBrowserOnlyTests,
+  runBrowserGlobalSetupStage,
+};
+
+export async function runTests(
+  context: Rstest,
+  deps: RunTestsDeps = productionDeps,
+): Promise<void> {
   // High-level flow (post-executor-seam):
   // 1. Split browser/node projects (the single `isBrowserProject` predicate).
   // 2. Browser-only runs (no node projects) take a fast path so they skip the
@@ -123,7 +168,7 @@ export async function runTests(context: Rstest): Promise<void> {
   // that instance resolves to an empty `environments: {}` anyway.
   // ===================================================================
   if (hasBrowserProjects && !hasNodeProjects) {
-    await runBrowserOnlyTests(context, browserProjects, {
+    await deps.runBrowserOnlyTests(context, browserProjects, {
       traceController,
       // The pre-allocated run buffer above is the fast path's trace run — a
       // second `beginRun()` would leave it as a dead, never-finalized twin.
@@ -136,7 +181,7 @@ export async function runTests(context: Rstest): Promise<void> {
   // Mixed / node path. Init barrier: node executor first (hooks fire, plan
   // resolves), then the browser executor from the resolved plan.
   // ===================================================================
-  const nodeExecutor = createNodeExecutor(context, {
+  const nodeExecutor = deps.createNodeExecutor(context, {
     browserProjects,
     nodeProjects,
     isWatchMode,
@@ -146,7 +191,7 @@ export async function runTests(context: Rstest): Promise<void> {
 
   // Browser-side planning (filter classification, config-hook discovery, run
   // option bags) lives behind the planner so only the coarse flow stays here.
-  const planner = createBrowserRunPlanner({
+  const planner = deps.createBrowserRunPlanner({
     context,
     nodeExecutor,
     browserProjects,
@@ -294,7 +339,7 @@ export async function runTests(context: Rstest): Promise<void> {
       let browserExecutor: TestExecutor | undefined;
       if (hasBrowserTestsToRun) {
         const browserProjectsToRun = planner.getBrowserProjectsToRun();
-        browserExecutor = await loadBrowserExecutor(
+        browserExecutor = await deps.loadBrowserExecutor(
           context,
           browserProjectsToRun,
           coverageProvider,
@@ -305,7 +350,7 @@ export async function runTests(context: Rstest): Promise<void> {
         // Core-owned pre-cycle globalSetup stage over the resolved browser
         // subset. It mutates the shared host `process.env`, so browser setups'
         // env changes are also visible to node workers dispatched below.
-        browserStage = await runBrowserGlobalSetupStage(
+        browserStage = await deps.runBrowserGlobalSetupStage(
           context,
           browserProjectsToRun,
           { entriesCache: nodeExecutor.getPlan().entriesCache },
@@ -366,7 +411,7 @@ export async function runTests(context: Rstest): Promise<void> {
   // browser initial run. Browser-specific setup and host lifecycle stay behind
   // `browserWatch`; node-owned shortcuts only fan a/f/u/q through it.
   // ===================================================================
-  const browserWatch = createBrowserWatchOrchestrator({
+  const browserWatch = deps.createBrowserWatchOrchestrator({
     context,
     planner,
     entriesCache: nodeExecutor.getPlan().entriesCache,

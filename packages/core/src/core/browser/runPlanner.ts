@@ -5,7 +5,7 @@ import {
   type TraceEvent,
 } from '../../utils';
 import { type BrowserExecutorRunOptions, runBrowserModeTests } from './loader';
-import type { NodeExecutor } from '../executors/nodeExecutor';
+import type { NodeRunPlanAccess } from '../executors/nodeExecutor';
 import { getUserRstestConfigPluginProjects } from '../modifyRstestConfig';
 import type { Rstest } from '../rstest';
 
@@ -44,7 +44,7 @@ export function createBrowserRunPlanner({
   onTraceEvents,
 }: {
   context: Rstest;
-  nodeExecutor: NodeExecutor;
+  nodeExecutor: NodeRunPlanAccess;
   browserProjects: ProjectContext[];
   nodeProjects: ProjectContext[];
   onTraceEvents?: (events: TraceEvent[]) => void;
