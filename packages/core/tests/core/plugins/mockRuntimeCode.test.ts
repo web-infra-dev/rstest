@@ -49,6 +49,38 @@ const evaluateRuntimeCode = ({
   return { fakeGlobal, webpackRequire, proxiedRequire };
 };
 
+describe('mockRuntimeCode webpack require proxy', () => {
+  it('keeps pre-existing and later-assigned properties on one enumeration surface', () => {
+    const webpackRequire = createWebpackRequireStub();
+    // Runtime properties rspack assigns before the mock runtime module
+    // installs its proxy (`.m`, `.c`, `.i` in a real bundle).
+    webpackRequire.m = {};
+    webpackRequire.i = [];
+
+    const { proxiedRequire } = evaluateRuntimeCode({
+      federation: false,
+      webpackRequire,
+    });
+
+    // rspack's HMR runtime clones `__webpack_require__` per module via
+    // `for...in` + `hasOwnProperty`. Properties assigned before and after the
+    // proxy install must both survive that clone — headed watch crashes on a
+    // missing `.i` otherwise.
+    const clone: Record<string, unknown> = {};
+    for (const key in proxiedRequire) {
+      if (Object.prototype.hasOwnProperty.call(proxiedRequire, key)) {
+        clone[key] = proxiedRequire[key];
+      }
+    }
+
+    expect(clone.m).toBe(webpackRequire.m);
+    expect(clone.i).toBe(webpackRequire.i);
+    expect(clone.rstest_original_modules).toBe(
+      proxiedRequire.rstest_original_modules,
+    );
+  });
+});
+
 describe('mockRuntimeCode federation shims', () => {
   it('does not install federation shims when federation is disabled', () => {
     const { fakeGlobal, proxiedRequire } = evaluateRuntimeCode({
