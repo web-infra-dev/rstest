@@ -316,6 +316,118 @@ describe('browser mode - globalSetup', () => {
     }
   }, 60_000);
 
+  it('validates node dependencies before mixed-watch browser globalSetup', async () => {
+    const fixturesTargetPath = path.join(
+      __dirname,
+      'fixtures/fixtures-test-browser-global-setup-mixed-node-dependency',
+    );
+    const { fs: fixtureFs } = await prepareFixtures({
+      fixturesPath: path.join(__dirname, 'fixtures/browser-global-setup-mixed'),
+      fixturesTargetPath,
+    });
+    fixtureFs.update(
+      path.join(fixturesTargetPath, 'project-node/rstest.config.mts'),
+      (content) =>
+        content.replace(
+          "include: ['tests/**/*.test.ts'],",
+          "include: ['tests/**/*.test.ts'],\n  testEnvironment: 'jsdom',",
+        ),
+    );
+    const blockJsdomPath = path.join(fixturesTargetPath, 'block-jsdom.cjs');
+    fs.writeFileSync(
+      blockJsdomPath,
+      `const Module = require('node:module');
+const originalResolveFilename = Module._resolveFilename;
+Module._resolveFilename = function (request, ...args) {
+  if (request === 'jsdom') {
+    const error = new Error('blocked jsdom resolution');
+    error.code = 'MODULE_NOT_FOUND';
+    throw error;
+  }
+  return originalResolveFilename.call(this, request, ...args);
+};
+`,
+    );
+    const result = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+      env: {
+        CI: 'true',
+        NODE_OPTIONS: `--require=${blockJsdomPath}`,
+      },
+    });
+    const { cli } = result;
+
+    try {
+      await result.expectExecFailed();
+
+      expect(cli.log).toContain(
+        'Failed to load testEnvironment "jsdom" dependency',
+      );
+      expect(cli.stdout).not.toContain('[mixed-browser-global-setup] executed');
+    } finally {
+      await killCliProcessTree(cli);
+      await deleteFixtureTarget(fixtureFs, fixturesTargetPath);
+    }
+  }, 60_000);
+
+  it('drains partial globalSetup teardowns when a later setup fails', async () => {
+    const fixturesTargetPath = path.join(
+      __dirname,
+      'fixtures/fixtures-test-browser-global-setup-partial-failure',
+    );
+    const { fs: fixtureFs } = await prepareFixtures({
+      fixturesPath: path.join(__dirname, 'fixtures/browser-global-setup'),
+      fixturesTargetPath,
+    });
+    fixtureFs.update(
+      path.join(fixturesTargetPath, 'rstest.config.mts'),
+      (content) =>
+        content.replace(
+          "globalSetup: ['./globalSetup.ts'],",
+          "globalSetup: ['./globalSetup.ts', './secondGlobalSetup.ts', './failingGlobalSetup.ts'],",
+        ),
+    );
+    fs.writeFileSync(
+      path.join(fixturesTargetPath, 'secondGlobalSetup.ts'),
+      `export default function secondGlobalSetup() {
+  return function secondGlobalTeardown() {
+    console.log('[second-browser-global-teardown] executed');
+    throw new Error('Second browser global teardown failed intentionally');
+  };
+}
+`,
+    );
+    fs.writeFileSync(
+      path.join(fixturesTargetPath, 'failingGlobalSetup.ts'),
+      `export default function failingGlobalSetup() {
+  throw new Error('Later browser globalSetup failed intentionally');
+}
+`,
+    );
+    const result = await runBrowserWatchCliWithCwd(fixturesTargetPath);
+    const { cli } = result;
+
+    try {
+      await result.expectExecFailed();
+
+      expect(cli.log).toContain(
+        'Later browser globalSetup failed intentionally',
+      );
+      expect(cli.log).toContain(
+        'Second browser global teardown failed intentionally',
+      );
+      expect(cli.stdout).toContain('[browser-global-setup] executed');
+      expect(cli.stdout).toContain('[second-browser-global-teardown] executed');
+      expect(cli.stdout).toContain('[browser-global-teardown] executed');
+      expect(
+        cli.stdout.indexOf('[second-browser-global-teardown] executed'),
+      ).toBeLessThan(cli.stdout.indexOf('[browser-global-teardown] executed'));
+      expect(cli.stdout).not.toContain('[browser-global-setup-test] running');
+    } finally {
+      await killCliProcessTree(cli);
+      await deleteFixtureTarget(fixtureFs, fixturesTargetPath);
+    }
+  }, 60_000);
+
   it('reruns globalSetup after a browser-only config restart', async () => {
     const fixturesTargetPath = path.join(
       __dirname,

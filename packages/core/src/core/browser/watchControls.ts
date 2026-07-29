@@ -269,10 +269,15 @@ export async function attachBrowserWatchShortcuts(
  */
 export interface BrowserWatchOrchestrator {
   /**
-   * Validate Browser Mode and run globalSetup before either watch driver starts.
+   * Validate Browser Mode before any user setup or watch driver starts.
    * Returns false when cleanup won the race with an in-flight phase.
    */
-  prepare(): Promise<boolean>;
+  validate(): Promise<boolean>;
+  /**
+   * Run globalSetup after every executor's dependency barrier has passed.
+   * Returns false when cleanup won the race with the setup phase.
+   */
+  setup(): Promise<boolean>;
   /**
    * Launch the session without awaiting it (it spans the whole watch session);
    * a failed browser boot is surfaced as an error + exit code 1 instead of
@@ -326,7 +331,7 @@ export function createBrowserWatchOrchestrator({
   };
 
   return {
-    async prepare() {
+    async validate() {
       if (!planner.hasBrowserTestsToRun() || lifecycle.isClosing()) {
         return !lifecycle.isClosing();
       }
@@ -334,9 +339,13 @@ export function createBrowserWatchOrchestrator({
       browserModule = await lifecycle.track(
         loadAndValidateBrowserModule(context, projects),
       );
-      if (lifecycle.isClosing()) {
-        return false;
+      return !lifecycle.isClosing();
+    },
+    async setup() {
+      if (!planner.hasBrowserTestsToRun() || lifecycle.isClosing()) {
+        return !lifecycle.isClosing();
       }
+      const projects = planner.getBrowserProjectsToRun();
       env = await lifecycle.track(
         runBrowserWatchGlobalSetup(context, projects, entriesCache),
       );

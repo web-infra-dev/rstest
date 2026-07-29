@@ -247,7 +247,7 @@ export async function runGlobalSetup({
       await worker.close();
     }
   } else {
-    await worker.close();
+    await runWorkerTeardown(worker);
   }
   return {
     success: result.success,
@@ -257,12 +257,16 @@ export async function runGlobalSetup({
 }
 
 async function runWorkerTeardown(worker: GlobalSetupWorker): Promise<void> {
-  const result = await worker.call<{ success: boolean }>({ type: 'teardown' });
-  if (!result.success) {
-    process.exitCode = 1;
+  try {
+    const result = await worker.call<{ success: boolean }>({
+      type: 'teardown',
+    });
+    if (!result.success) {
+      process.exitCode = 1;
+    }
+  } finally {
+    await worker.close();
   }
-
-  await worker.close();
 }
 
 export async function runGlobalTeardown(): Promise<void> {

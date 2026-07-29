@@ -400,7 +400,14 @@ export async function runTests(context: Rstest): Promise<void> {
   });
 
   try {
-    if (!(await browserWatch.prepare())) {
+    if (!(await browserWatch.validate())) {
+      await cleanup();
+      return;
+    }
+    if (hasNodeTestsToRun) {
+      await nodeExecutor.validateRunDependencies();
+    }
+    if (!(await browserWatch.setup())) {
       await cleanup();
       return;
     }
