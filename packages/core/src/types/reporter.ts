@@ -150,10 +150,22 @@ type GithubActionsReporterOptions = {
    */
   annotations?: boolean;
   /**
-   * Whether to append a Markdown summary to `GITHUB_STEP_SUMMARY`.
+   * Markdown summary controls.
+   * - `false`: do not append a summary to `GITHUB_STEP_SUMMARY`
+   * - `true`: append a summary with default limits
+   * - object form: append a summary with customized limits
    * @default true
    */
-  summary?: boolean;
+  summary?:
+    | boolean
+    | {
+        /**
+         * Maximum characters for each failure message and diff, and each
+         * unhandled error message and stack.
+         * @default 400
+         */
+        maxCharsPerField?: number;
+      };
 };
 
 export type BlobReporterOptions = {

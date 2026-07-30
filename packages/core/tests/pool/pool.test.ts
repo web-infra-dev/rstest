@@ -1,6 +1,7 @@
 import { resolve } from 'pathe';
 import { MemoryGate } from '../../src/pool/memoryGate';
 import { Pool } from '../../src/pool/pool';
+import { expectRejection } from './helpers';
 import type { PoolOptions, PoolTask } from '../../src/pool/types';
 
 const WORKER_ENTRY = resolve(__dirname, './fixtures/testWorker.mjs');
@@ -38,10 +39,13 @@ const stubRpcMethods = () =>
 const createTask = (
   type: PoolTask['type'] = 'run',
   optionOverrides?: Record<string, unknown>,
+  // A worker is only reused for tasks carrying the same key.
+  environmentKey = 'node',
 ): PoolTask => ({
   worker: 'forks',
   type,
   options: {
+    environmentKey,
     ...optionOverrides,
   } as any,
   rpcMethods: stubRpcMethods(),
@@ -100,9 +104,9 @@ describe('Pool - fatal error', () => {
   it('should enrich error with captured stderr when worker crashes', async () => {
     const pool = new Pool(createPoolOptions());
     try {
-      const err: Error = await pool
-        .runTest(createTask('run', { __testMode: 'stderr-crash' }))
-        .catch((e: Error) => e);
+      const err = await expectRejection(
+        pool.runTest(createTask('run', { __testMode: 'stderr-crash' })),
+      );
       expect(err.message).toContain('segfault at 0x0');
     } finally {
       await pool.close();
@@ -116,9 +120,9 @@ describe('Pool - stderr handling', () => {
   it('should truncate large stderr in error messages', async () => {
     const pool = new Pool(createPoolOptions());
     try {
-      const err: Error = await pool
-        .runTest(createTask('run', { __testMode: 'stderr-large' }))
-        .catch((e: Error) => e);
+      const err = await expectRejection(
+        pool.runTest(createTask('run', { __testMode: 'stderr-large' })),
+      );
       expect(err.message).toContain('[truncated');
       expect(err.message).toContain('bytes of stderr]');
       // Tail is preserved
@@ -133,9 +137,9 @@ describe('Pool - stderr handling', () => {
   it('should capture stderr written immediately before exit', async () => {
     const pool = new Pool(createPoolOptions());
     try {
-      const err: Error = await pool
-        .runTest(createTask('run', { __testMode: 'stderr-late' }))
-        .catch((e: Error) => e);
+      const err = await expectRejection(
+        pool.runTest(createTask('run', { __testMode: 'stderr-late' })),
+      );
       expect(err.message).toContain('late-stderr-marker');
     } finally {
       await pool.close();
@@ -172,6 +176,29 @@ describe('Pool - isolate', () => {
       // Incrementing run count proves the same process instance handled
       // both tasks — not just a recycled PID.
       expect((r1 as any)._runCount).toBe((r2 as any)._runCount - 1);
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('should not reuse a worker for a different test environment', async () => {
+    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
+    try {
+      // A worker keeps its environment alive across files under
+      // `isolate: false`, so reuse must be environment-matched — otherwise a
+      // persisted module's evaluation-time DOM captures would dangle on the
+      // previous environment (rstest#767).
+      const jsdom = await pool.runTest(createTask('run', undefined, 'jsdom'));
+      const node = await pool.runTest(createTask());
+      expect((jsdom as any)._workerIdentity).not.toBe(
+        (node as any)._workerIdentity,
+      );
+
+      // Same environment still reuses — affinity must not disable sharing.
+      const nodeAgain = await pool.runTest(createTask());
+      expect((nodeAgain as any)._workerIdentity).toBe(
+        (node as any)._workerIdentity,
+      );
     } finally {
       await pool.close();
     }
@@ -387,7 +414,7 @@ describe('Pool - capacity', () => {
       ...sorted.slice(0, maxWorkers).map((iv) => iv.end),
     );
     for (let i = maxWorkers; i < sorted.length; i++) {
-      expect(sorted[i].start).toBeGreaterThanOrEqual(firstBatchEarliestEnd);
+      expect(sorted[i]!.start).toBeGreaterThanOrEqual(firstBatchEarliestEnd);
     }
 
     await pool.close();

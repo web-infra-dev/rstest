@@ -231,7 +231,7 @@ describe('initSpy spyOn', () => {
   it('spies on a getter accessor', () => {
     const { spyOn } = initSpy();
     let backing = 1;
-    const obj = {};
+    const obj = {} as { val: number };
     Object.defineProperty(obj, 'val', {
       configurable: true,
       get() {
@@ -243,7 +243,7 @@ describe('initSpy spyOn', () => {
     });
 
     const getSpy = spyOn(obj, 'val', 'get');
-    void (obj as { val: number }).val;
+    void obj.val;
     expect(getSpy.mock.calls).toHaveLength(1);
   });
 

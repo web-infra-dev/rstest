@@ -98,7 +98,8 @@ CI runs unit tests (the `ut` job) on ubuntu only; OS-specific coverage lives in 
 Before adding a fixture, list existing ones in the same area (`ls e2e/<area>/fixtures`) and name the closest match. Prefer extending it:
 
 - Adding a project, config flag, or test file is additive reuse — "different config" alone does not justify a new fixture. **After extending, re-run every test using that fixture** to confirm none broke.
-- A new fixture is right when reuse would force an **incompatible** change to config other tests depend on, or contort the fixture's intent.
+- A new fixture is right when reuse would force an **incompatible** change to config other tests depend on, or contort the fixture's intent. Name the mechanism that blocks reuse; config expressible per file (environment docblocks, per-file options) does not make a difference incompatible.
+- The same rule applies **inside** a fixture: before adding a test file or helper module, look for one whose structure already matches — same shared module, same peer-file pairing — and extend it instead. Adding exports to an existing helper, or cases to an existing test file, is additive reuse.
 - Prefer **one consolidated regression fixture** that exercises the whole surface over many near-duplicate per-feature files. When several cases share a structural root cause, assert them together.
 
 ## E2E rstest spawns with persistent `dist/.rstest-temp/`

@@ -86,8 +86,9 @@ describe('loadEsModule', () => {
     const sm = await asModule(namespace, '/fake/id/default-and-named');
 
     expect(Object.keys(sm.namespace).sort()).toEqual(['default', 'foo']);
-    expect(sm.namespace.default).toBe(defaultVal);
-    expect(sm.namespace.foo).toBe('foo-val');
+    const namespaceExports = sm.namespace as Record<string, unknown>;
+    expect(namespaceExports.default).toBe(defaultVal);
+    expect(namespaceExports.foo).toBe('foo-val');
   });
 
   it('should reuse the cached SyntheticModule for the same resolved id', async () => {

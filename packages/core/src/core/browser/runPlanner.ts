@@ -201,12 +201,11 @@ export function createBrowserRunPlanner({
       shouldRunBrowserDiscoveryFallback(),
     getBrowserProjectsToRun,
     getExecutorRunOptions,
-    // The watch session takes the executor bag plus the two watch-only fields:
-    // an empty initial set must keep the session alive, and trace events are
-    // forwarded from the host instead of flowing through `runCycle`.
+    // The watch session takes the executor bag plus the one watch-only field:
+    // trace events are forwarded from the host instead of flowing through
+    // `runCycle`.
     getWatchRunOptions: (projects) => ({
       ...getExecutorRunOptions(projects),
-      allowEmptyWatchRun: context.relatedResolutionEmpty,
       onTraceEvents,
     }),
   };

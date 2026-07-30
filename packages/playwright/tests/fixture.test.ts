@@ -10,6 +10,7 @@ import { afterEach, beforeEach, expect, test } from '../src';
 import { getDebugOptions, resolveLaunchOptions } from '../src/fixture';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type {
+  PlaywrightFixture,
   PlaywrightFixtures,
   PlaywrightOptions,
   PlaywrightTest,
@@ -210,7 +211,7 @@ agentTest('supports third-party fixture wrappers', async ({ agent, page }) => {
 });
 
 test.extend({
-  playwright: async (_, use) => {
+  playwright: async (_, use: PlaywrightUse<PlaywrightOptions>) => {
     await use({
       browserName: 'chromium',
       launchOptions: {
@@ -222,7 +223,9 @@ test.extend({
   expect(playwright.launchOptions).toEqual({ headless: true });
 });
 
-browserTest.extend<{ url: string }>({
+// Overriding a base fixture while adding a new one has to name the overridden
+// fixture in the added set, or `page` is not assignable here.
+browserTest.extend<{ url: string } & Pick<PlaywrightFixture, 'page'>>({
   url: 'about:blank',
   page: async ({ context, url }, use) => {
     const page = await context.newPage();
@@ -250,7 +253,7 @@ const thirdPartyFixtures = {
   },
 } satisfies PlaywrightFixtures<
   { customContext: BrowserContext },
-  { playwright: PlaywrightOptions }
+  PlaywrightFixture
 >;
 
 browserTest.extend(thirdPartyFixtures)(

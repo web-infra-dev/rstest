@@ -6,14 +6,7 @@ import {
   GithubActionsReporter,
   getStepSummaryDisplayPath,
 } from '../../src/reporter/githubActions';
-import { emptySnapshotSummary } from './helpers';
-import type { Duration } from '../../src/types';
-
-const emptyDuration: Duration = {
-  totalTime: 0,
-  buildTime: 0,
-  testTime: 0,
-};
+import { emptyDuration, emptySnapshotSummary } from './helpers';
 
 describe('getStepSummaryDisplayPath', () => {
   it('uses a placeholder for the workspace root', () => {
@@ -104,7 +97,7 @@ describe('GithubActionsReporter step summary', () => {
         testResults: [],
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
-        getSourcemap: () => null,
+        getSourcemap: async () => null,
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');
@@ -151,7 +144,7 @@ describe('GithubActionsReporter step summary', () => {
         testResults: [],
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
-        getSourcemap: () => null,
+        getSourcemap: async () => null,
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');
@@ -196,7 +189,7 @@ describe('GithubActionsReporter step summary', () => {
         testResults: [],
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
-        getSourcemap: () => null,
+        getSourcemap: async () => null,
         unhandledErrors: [new Error('global setup failed')],
       });
 
@@ -204,6 +197,110 @@ describe('GithubActionsReporter step summary', () => {
       expect(summary).toContain('<summary>Rstest Test Reporter ❌</summary>');
       expect(summary).toContain('### ❌ FAIL Unhandled Error 1');
       expect(summary).toContain('**Error**: global setup failed');
+    } finally {
+      if (previousSummaryPath === undefined) {
+        delete process.env.GITHUB_STEP_SUMMARY;
+      } else {
+        process.env.GITHUB_STEP_SUMMARY = previousSummaryPath;
+      }
+
+      if (previousWorkspacePath === undefined) {
+        delete process.env.GITHUB_WORKSPACE;
+      } else {
+        process.env.GITHUB_WORKSPACE = previousWorkspacePath;
+      }
+
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('uses the configured summary field length without changing the default', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rstest-gha-'));
+    const summaryPath = path.join(tempDir, 'summary.md');
+    const defaultSummaryPath = path.join(tempDir, 'default-summary.md');
+    const previousSummaryPath = process.env.GITHUB_STEP_SUMMARY;
+    const previousWorkspacePath = process.env.GITHUB_WORKSPACE;
+    const testPath = path.join(tempDir, 'tests/long-diff.test.ts');
+    const diff = [
+      '- Expected',
+      '+ Received',
+      '',
+      '- expected first line',
+      ...Array.from(
+        { length: 40 },
+        (_, index) => `  unchanged context line ${index}`,
+      ),
+      '+ received last line',
+    ].join('\n');
+
+    process.env.GITHUB_STEP_SUMMARY = summaryPath;
+    process.env.GITHUB_WORKSPACE = tempDir;
+
+    try {
+      const reporter = new GithubActionsReporter({
+        rootPath: tempDir,
+        options: {
+          onWritePath: (value) => value,
+          annotations: false,
+          summary: {
+            maxCharsPerField: 2_000,
+          },
+        },
+      });
+
+      const runEndPayload: Parameters<
+        GithubActionsReporter['onTestRunEnd']
+      >[0] = {
+        results: [
+          {
+            testId: 'file-1',
+            status: 'fail',
+            name: 'long-diff.test.ts',
+            testPath,
+            project: 'rstest',
+            results: [],
+          },
+        ],
+        testResults: [
+          {
+            testId: 'test-1',
+            status: 'fail',
+            name: 'shows the useful diff',
+            parentNames: [],
+            testPath,
+            project: 'rstest',
+            errors: [
+              {
+                name: 'AssertionError',
+                message: 'values differ',
+                diff,
+              },
+            ],
+          },
+        ],
+        duration: emptyDuration,
+        snapshotSummary: emptySnapshotSummary,
+        getSourcemap: async () => null,
+      };
+
+      await reporter.onTestRunEnd(runEndPayload);
+
+      process.env.GITHUB_STEP_SUMMARY = defaultSummaryPath;
+      const defaultReporter = new GithubActionsReporter({
+        rootPath: tempDir,
+        options: {
+          onWritePath: (value) => value,
+          annotations: false,
+        },
+      });
+      await defaultReporter.onTestRunEnd(runEndPayload);
+
+      const summary = await fs.readFile(summaryPath, 'utf-8');
+      const defaultSummary = await fs.readFile(defaultSummaryPath, 'utf-8');
+      expect(summary).toContain('- expected first line');
+      expect(summary).toContain('+ received last line');
+      expect(defaultSummary).toContain('- expected first line');
+      expect(defaultSummary).not.toContain('+ received last line');
     } finally {
       if (previousSummaryPath === undefined) {
         delete process.env.GITHUB_STEP_SUMMARY;
@@ -270,7 +367,7 @@ describe('GithubActionsReporter step summary', () => {
         ],
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
-        getSourcemap: () => null,
+        getSourcemap: async () => null,
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');
@@ -356,7 +453,7 @@ describe('GithubActionsReporter step summary', () => {
         ],
         duration: emptyDuration,
         snapshotSummary: emptySnapshotSummary,
-        getSourcemap: () => null,
+        getSourcemap: async () => null,
       });
 
       const summary = await fs.readFile(summaryPath, 'utf-8');

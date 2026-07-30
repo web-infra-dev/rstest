@@ -15,7 +15,7 @@ By default, Rstest runs each test in an isolated environment, which avoids the i
 If your code has no side effects, turning off this option will help improve performance because module caches can be reused between different test files.
 
 :::warning Module top-level code runs once per worker
-When `isolate` is `false`, a module imported by multiple test files is evaluated **once per worker**, not once per file. Any code at that shared module's top level — including hooks registered there (e.g. a helper that calls `beforeEach` at module scope) — therefore runs only for the first file that loads it, not for every file. For setup that must run per file, use [`setupFiles`](/config/test/setup-files), which Rstest re-runs for each test file even without isolation.
+When `isolate` is `false`, a module imported by multiple test files is evaluated **once per worker**, not once per file. Any code at that shared module's top level — including hooks registered there (e.g. a helper that calls `beforeEach` at module scope) — therefore runs only for the first file that loads it, not for every file. For setup that must run per file, use [`setupFiles`](/config/test/setup-files), which Rstest re-runs for each test file even without isolation. The [test environment](/config/test/test-environment) follows the same rule — it is created once per worker, so its state (the DOM, timers you did not clear, installed fake timers) persists across files and can be reset per file in `setupFiles`.
 :::
 
 import { Tab, Tabs } from '@theme';

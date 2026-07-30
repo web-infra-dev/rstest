@@ -191,7 +191,6 @@ export function createNodeExecutor(
   const setupFileState = createSetupFileState();
   const projectPlanState = createRunProjectPlanState({
     context,
-    browserProjects,
     isWatchMode,
   });
   const { globTestSourceEntries, resolveRunnableProjects } = projectPlanState;

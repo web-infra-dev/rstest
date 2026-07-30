@@ -126,6 +126,7 @@ describe('runGlobalSetup', () => {
       globalSetupEntries: [],
       assetFiles: {},
       sourceMaps: {},
+      federation: false,
       interopDefault: true,
       outputModule: false,
     });

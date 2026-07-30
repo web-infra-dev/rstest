@@ -63,6 +63,12 @@ export const globalSetupFailureOutcome = (
  * Known limitation: browser projects share one run cycle, so any project's
  * setup failure skips the whole browser cycle (node isolates failures per
  * project). Exit code and error reporting still surface the failure.
+ *
+ * Known limitation: watch runs never reach this stage — every call site sits on
+ * a non-watch branch, and the watch run options carry no post-setup `env`. That
+ * is a gap to close (the `globalSetup` docs declare it), not a design, so wiring
+ * a watch path in must also decide whether a rerun re-runs setup: node claims
+ * its marker once per session and never resets it between reruns.
  */
 export async function runBrowserGlobalSetupStage(
   context: RstestContext,

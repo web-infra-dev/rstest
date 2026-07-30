@@ -75,34 +75,26 @@ jobs:
         include:
           - runner: ubuntu-latest
             vsce-target: linux-x64
-            platform: linux
             arch: x64
           - runner: ubuntu-22.04
             vsce-target: linux-arm64
-            platform: linux
             arch: arm64
           - runner: macos-15
             vsce-target: darwin-x64
-            platform: darwin
             arch: x64
           - runner: macos-15
             vsce-target: darwin-arm64
-            platform: darwin
             arch: arm64
           - runner: windows-2022
             vsce-target: win32-x64
-            platform: win32
             arch: x64
           - runner: windows-latest
             vsce-target: win32-arm64
-            platform: win32
             arch: arm64
     defaults:
       run:
         shell: bash
     env:
-      npm_config_arch: ${{ matrix.arch }}
-      npm_config_platform: ${{ matrix.platform }}
       VSCE_TARGET: ${{ matrix.vsce-target }}
     steps:
       - name: Checkout
@@ -122,7 +114,9 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install Dependencies
-        run: pnpm install
+        run: |
+          pnpm config set --location=project --json supportedArchitectures '{"cpu":["current","${{ matrix.arch }}"]}'
+          pnpm install
 
       - name: Build Packages
         run: pnpm run build
@@ -133,9 +127,9 @@ jobs:
       - name: Publish VS Code Extension
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: pnpm --filter ./packages/vscode exec vsce publish --target ${{ matrix.vsce-target }}
+        run: pnpm --filter ./packages/vscode exec vsce publish --target ${{ matrix.vsce-target }} --skip-duplicate
 
       - name: Publish OVSX Extension
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        run: pnpm --filter ./packages/vscode exec ovsx publish --target ${{ matrix.vsce-target }}
+        run: pnpm --filter ./packages/vscode exec ovsx publish --target ${{ matrix.vsce-target }} --skip-duplicate

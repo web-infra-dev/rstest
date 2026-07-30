@@ -28,7 +28,7 @@ describe('normalizeFixtures', () => {
   it('computes deps only for fixtures that exist in the set', () => {
     const aFn = ({ b }: any) => b;
     const result = normalizeFixtures({ a: [aFn], b: 1, c: 2 } as any);
-    expect(result.a.deps).toEqual(['b']);
+    expect(result.a!.deps).toEqual(['b']);
   });
 
   it('merges extendFixtures with local fixtures taking precedence', () => {
@@ -43,7 +43,7 @@ describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
   it('skips dependency detection for an _-prefixed first param', () => {
     const fixtureFn = (_ctx: any) => {};
     const result = normalizeFixtures({ a: [fixtureFn] } as any);
-    expect(result.a.deps).toEqual([]);
+    expect(result.a!.deps).toEqual([]);
   });
 
   it('throws when the first param is not destructured', () => {
@@ -88,7 +88,7 @@ describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
       foo: 1,
       bar: 2,
     } as any);
-    expect([...(result.used.deps ?? [])].sort()).toEqual(['bar', 'foo']);
+    expect([...(result.used!.deps ?? [])].sort()).toEqual(['bar', 'foo']);
   });
 });
 

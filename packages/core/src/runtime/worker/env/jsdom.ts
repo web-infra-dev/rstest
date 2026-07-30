@@ -1,7 +1,7 @@
 import { Blob as NodeBlob } from 'node:buffer';
 import { URL as NodeURL } from 'node:url';
 import type { ConstructorOptions, DOMWindow } from 'jsdom';
-import type { TestEnvironment } from '../../../types';
+import type { TestEnvironment, TestEnvironmentContext } from '../../../types';
 import { checkPkgInstalled } from '../../util';
 import {
   addDefaultErrorHandler,
@@ -21,7 +21,10 @@ type JSDOMBlobImpl = {
   _bytes?: Uint8Array;
 };
 
-function installJSDOMObjectURL(window: DOMWindow): () => void {
+function installJSDOMObjectURL(
+  window: DOMWindow,
+  context: TestEnvironmentContext,
+): () => void {
   const implSymbol = Object.getOwnPropertySymbols(new window.Blob())[0]!;
   const URLConstructor = window.URL as typeof URL;
   const createDescriptor = Object.getOwnPropertyDescriptor(
@@ -63,7 +66,9 @@ function installJSDOMObjectURL(window: DOMWindow): () => void {
     });
   }
 
-  const cleanupObjectURLs = installObjectURLTracker(URLConstructor);
+  // The polyfill above is behavior and always installs, unlike the tracker
+  // below, which only feeds environment teardown.
+  const cleanupObjectURLs = installObjectURLTracker(URLConstructor, context);
   return () => {
     cleanupObjectURLs();
     if (createDescriptor) {
@@ -89,7 +94,7 @@ function installJSDOMObjectURL(window: DOMWindow): () => void {
 
 export const environment: TestEnvironment<typeof globalThis> = {
   name: 'jsdom',
-  setup: async (global, options) => {
+  setup: async (global, options, context) => {
     checkPkgInstalled('jsdom');
     const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } =
       await import('jsdom');
@@ -133,14 +138,14 @@ export const environment: TestEnvironment<typeof globalThis> = {
       ...restOptions,
       beforeParse(window) {
         beforeParse?.(window);
-        cleanupObjectURLs = installJSDOMObjectURL(window);
+        cleanupObjectURLs = installJSDOMObjectURL(window, context);
       },
     });
 
     const cleanupGlobal = installGlobal(global, dom.window, {
       additionalKeys: ['URL', 'URLSearchParams'],
     });
-    const cleanupTimers = installTimerTracking(global, nodeTimers);
+    const cleanupTimers = installTimerTracking(global, nodeTimers, context);
 
     const cleanupHandler = addDefaultErrorHandler(global as unknown as Window);
 

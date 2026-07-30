@@ -7,10 +7,14 @@ import {
   syncCoverageSetupExcludes,
 } from '../../src/core/rsbuild';
 import { createSetupFileState } from '../../src/core/setupFileState';
-import type { RstestContext, RstestExposeAPI } from '../../src/types';
+import type {
+  ResolvedRstestConfig,
+  RstestContext,
+  RstestExposeAPI,
+} from '../../src/types';
 import { listTests } from '../../src/core/listTests';
 import { Rstest } from '../../src/core/rstest';
-import { TEMP_RSTEST_OUTPUT_DIR } from '../../src/utils';
+import { castArray, TEMP_RSTEST_OUTPUT_DIR } from '../../src/utils';
 
 process.env.DEBUG = 'false';
 
@@ -172,6 +176,10 @@ describe('prepareRsbuild', () => {
         },
       };
 
+      const shardedConfig: ResolvedRstestConfig = {
+        root: tempRoot,
+        shard: { index: 1, count: 2 },
+      };
       const context = new Rstest(
         {
           cwd: tempRoot,
@@ -196,10 +204,7 @@ describe('prepareRsbuild', () => {
             },
           ],
         },
-        {
-          root: tempRoot,
-          shard: { index: 1, count: 2 },
-        },
+        shardedConfig,
       );
 
       const list = await listTests(context, { json: false });
@@ -434,6 +439,8 @@ describe('prepareRsbuild', () => {
       name: 'browser-project',
       rootPath,
       environmentName: 'browser-project',
+      outputModule: false,
+      _globalSetups: false,
       normalizedConfig: {
         forceRerunTriggers: [],
         include: ['original.test.ts'],
@@ -520,6 +527,8 @@ describe('prepareRsbuild', () => {
       name: 'test',
       rootPath,
       environmentName: 'test',
+      outputModule: false,
+      _globalSetups: false,
       normalizedConfig: {
         include: ['original.test.ts'],
         plugins: [modifyRstestConfigPlugin],
@@ -635,6 +644,7 @@ describe('prepareRsbuild', () => {
         rstestApi?.modifyRstestConfig((config) => {
           config.browser = {
             ...config.browser,
+            provider: 'playwright',
             enabled: true,
           };
         });
@@ -713,6 +723,8 @@ describe('prepareRsbuild', () => {
       name: 'test',
       rootPath,
       environmentName: 'test',
+      outputModule: false,
+      _globalSetups: false,
       normalizedConfig: {
         include: ['original.test.ts'],
         exclude: {
@@ -879,6 +891,8 @@ describe('prepareRsbuild', () => {
       name: 'test',
       rootPath,
       environmentName: 'test',
+      outputModule: false,
+      _globalSetups: false,
       normalizedConfig: {
         root: rootPath,
         include: ['original.test.ts'],
@@ -972,9 +986,15 @@ describe('prepareRsbuild', () => {
         const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
 
         rstestApi?.modifyRstestConfig((config) => {
-          config.setupFiles = [...config.setupFiles, 'extra-setup.ts'];
-          config.globalSetup = [...config.globalSetup, 'extra-global.ts'];
-          config.include = [...config.include, 'extra.test.ts'];
+          config.setupFiles = [
+            ...castArray(config.setupFiles),
+            'extra-setup.ts',
+          ];
+          config.globalSetup = [
+            ...castArray(config.globalSetup),
+            'extra-global.ts',
+          ];
+          config.include = [...castArray(config.include), 'extra.test.ts'];
         });
       },
     };
@@ -983,6 +1003,8 @@ describe('prepareRsbuild', () => {
       name: 'test',
       rootPath: tempRoot,
       environmentName: 'test',
+      outputModule: false,
+      _globalSetups: false,
       normalizedConfig: {
         root: tempRoot,
         include: ['base.test.ts'],
@@ -1024,7 +1046,7 @@ describe('prepareRsbuild', () => {
             pool: { type: 'forks' },
           },
           projects: [project],
-        },
+        } as unknown as RstestContext,
         globTestSourceEntries: async () => ({}),
         setupFileState: createSetupFileState(),
       });
@@ -1073,6 +1095,8 @@ describe('prepareRsbuild', () => {
       name: 'test',
       rootPath: tempRoot,
       environmentName: 'test',
+      outputModule: false,
+      _globalSetups: false,
       normalizedConfig: {
         root: tempRoot,
         include: ['base.test.ts'],
@@ -1173,6 +1197,8 @@ describe('prepareRsbuild', () => {
       name: 'test',
       rootPath: tempRoot,
       environmentName: 'test',
+      outputModule: false,
+      _globalSetups: false,
       normalizedConfig: {
         root: tempRoot,
         include: ['base.test.ts'],
@@ -1280,6 +1306,8 @@ describe('prepareRsbuild', () => {
       name: 'test',
       rootPath: tempRoot,
       environmentName: 'test',
+      outputModule: false,
+      _globalSetups: false,
       normalizedConfig: {
         root: tempRoot,
         include: ['base.test.ts'],
@@ -1379,6 +1407,8 @@ describe('prepareRsbuild', () => {
       name: 'test',
       rootPath: tempRoot,
       environmentName: 'test',
+      outputModule: false,
+      _globalSetups: false,
       normalizedConfig: {
         root: tempRoot,
         include: ['base.test.ts'],

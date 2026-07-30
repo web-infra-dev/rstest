@@ -121,6 +121,14 @@ export type RunWorkerOptions = {
     entryInfo: EntryInfo;
     setupEntries: EntryInfo[];
     context: WorkerContext;
+    /**
+     * Identity of this task's test environment, derived host-side by
+     * `getEnvironmentKey`. The pool reuses a worker only for matching keys
+     * (see `pool/AGENTS.md`), and the worker compares it to detect a violation
+     * of that guarantee — neither side re-derives it. Node-pool only: it sits
+     * outside `context` because it is dispatch metadata, not worker state.
+     */
+    environmentKey: string;
     updateSnapshot: SnapshotUpdateState;
     type: 'run' | 'collect';
     /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
