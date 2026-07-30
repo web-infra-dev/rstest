@@ -165,6 +165,11 @@ export interface NodeExecutor extends TestExecutor {
    * `runCycle` trigger it lazily.
    */
   ensureRunResources(): Promise<unknown>;
+  /**
+   * Validate dependencies without starting the dev server, so mixed watch can
+   * reject an invalid node project before browser globalSetup mutates state.
+   */
+  validateRunDependencies(): Promise<void>;
   /** The Rsbuild instance built during `init()` (drives watch dev-compile hooks). */
   getRsbuildInstance(): Awaited<ReturnType<typeof prepareRsbuild>>;
   /** Re-glob every runnable node project's test entries as a flat path list. */
@@ -219,6 +224,7 @@ export function createNodeExecutor(
   // start instead of creating a second server + pool.
   let runResourcesPromise:
     Promise<NonNullable<typeof runResources>> | undefined;
+  let runDependencyValidationPromise: Promise<void> | undefined;
   let entryFiles: string[] = [];
   let didRunGlobalTeardown = false;
   // The Rsbuild project set assembled during init(); refreshPlan() keeps it in
@@ -282,6 +288,14 @@ export function createNodeExecutor(
     syncNodeProjects(rsbuildProjects, plan.nodeProjectsToRun);
   };
 
+  const validateRunDependencies = (): Promise<void> => {
+    runDependencyValidationPromise ??= ensureTestEnvironmentDependencies(
+      projectPlanState.getPlan().nodeProjectsToRun,
+      rootPath,
+    );
+    return runDependencyValidationPromise;
+  };
+
   const ensureRunResources = (): Promise<NonNullable<typeof runResources>> => {
     if (!runResourcesPromise) {
       runResourcesPromise = createRunResources();
@@ -298,6 +312,7 @@ export function createNodeExecutor(
 
     const { nodeProjectsToRun: projects, entriesCache } =
       projectPlanState.getPlan();
+    await validateRunDependencies();
     const { getRsbuildStats, closeServer } = await createRsbuildServer({
       inspectedConfig: {
         ...context.normalizedConfig,
@@ -310,13 +325,6 @@ export function createNodeExecutor(
       rsbuildInstance,
       rootPath,
     });
-
-    try {
-      await ensureTestEnvironmentDependencies(projects, rootPath);
-    } catch (error) {
-      await closeServer();
-      throw error;
-    }
 
     entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
       (acc, entry) => acc.concat(Object.values(entry.entries) || []),
@@ -585,6 +593,9 @@ export function createNodeExecutor(
     }
     didRunGlobalTeardown = true;
     await runGlobalTeardown();
+    if (runDependencyValidationPromise) {
+      await runDependencyValidationPromise.catch(() => undefined);
+    }
     // Settle an in-flight resource start first: a close racing startup (e.g. a
     // config-change restart during watch boot) must tear down the server and
     // pool that start is about to produce, not skip them.
@@ -620,6 +631,7 @@ export function createNodeExecutor(
     // `onAfterDevCompile`, which drives the initial run. In non-watch runs
     // `runCycle` triggers this lazily instead.
     ensureRunResources,
+    validateRunDependencies,
     getRsbuildInstance: () => {
       if (!rsbuildInstance) {
         throw new Error('NodeExecutor.init() must run before watch wiring.');

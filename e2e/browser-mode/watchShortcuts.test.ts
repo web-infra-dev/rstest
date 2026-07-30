@@ -61,9 +61,11 @@ describe('browser mode - watch CLI shortcuts', () => {
     await cli.waitForStdout('✓ tests/basic.test.ts');
     await cli.waitForStdout('Waiting for file changes...');
 
-    // ========== `q` tears the session down and exits 0 ==========
+    // The initial snapshot failure keeps the process non-zero even though the
+    // update and later rerun pass.
     cli.exec.process!.stdin!.write('q');
-    await result.expectExecSuccess();
+    await result.expectExecFailed();
+    expect(cli.exec.process!.exitCode).toBe(1);
 
     await deleteFixtureTarget(fs, fixturesTargetPath);
   }, 90_000);

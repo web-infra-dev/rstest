@@ -1518,16 +1518,21 @@ const cleanupWatchRuntime = (): Promise<void> => {
     return watchContext.cleanupPromise;
   }
 
-  watchContext.cleanupPromise = (async () => {
-    if (!watchContext.runtime) {
-      return;
+  const runtime = watchContext.runtime;
+  if (!runtime) {
+    return Promise.resolve();
+  }
+
+  const cleanupPromise = destroyBrowserRuntime(runtime).finally(() => {
+    if (watchContext.runtime === runtime) {
+      watchContext.runtime = null;
     }
-
-    await destroyBrowserRuntime(watchContext.runtime);
-    watchContext.runtime = null;
-  })();
-
-  return watchContext.cleanupPromise;
+    if (watchContext.cleanupPromise === cleanupPromise) {
+      watchContext.cleanupPromise = null;
+    }
+  });
+  watchContext.cleanupPromise = cleanupPromise;
+  return cleanupPromise;
 };
 
 const registerWatchCleanup = (embedded: boolean): void => {

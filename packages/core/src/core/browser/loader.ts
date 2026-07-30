@@ -188,6 +188,18 @@ export async function loadBrowserModule(
   process.exit(1);
 }
 
+export async function loadAndValidateBrowserModule(
+  context: RstestContext,
+  browserProjects: ProjectContext[],
+): Promise<BrowserHostModule> {
+  const browserModule = await loadBrowserModule({
+    projectRoots: browserProjects.map((project) => project.rootPath),
+    embedded: context.embedded,
+  });
+  browserModule.validateBrowserConfig(context);
+  return browserModule;
+}
+
 /**
  * Run browser mode tests host-driven (watch self-finalize path). Non-watch runs
  * go through {@link BrowserTestExecutor} instead; this shim stays for the
@@ -197,13 +209,11 @@ export async function runBrowserModeTests(
   context: RstestContext,
   browserProjects: ProjectContext[],
   options: BrowserTestRunOptions,
+  validatedModule?: BrowserHostModule,
 ): Promise<BrowserTestRunResult | void> {
-  const projectRoots = browserProjects.map((p) => p.rootPath);
-  const { validateBrowserConfig, runBrowserTests } = await loadBrowserModule({
-    projectRoots,
-    embedded: context.embedded,
-  });
-  validateBrowserConfig(context);
+  const { runBrowserTests } =
+    validatedModule ??
+    (await loadAndValidateBrowserModule(context, browserProjects));
   return runBrowserTests(context, { ...options, projects: browserProjects });
 }
 
@@ -218,13 +228,10 @@ export async function loadBrowserExecutor(
   coverageProvider: CoverageProvider | null,
   runOptions?: BrowserExecutorRunOptions,
 ): Promise<BrowserTestExecutor> {
-  const projectRoots = browserProjects.map((p) => p.rootPath);
-  const { validateBrowserConfig, createBrowserExecutor } =
-    await loadBrowserModule({
-      projectRoots,
-      embedded: context.embedded,
-    });
-  validateBrowserConfig(context);
+  const { createBrowserExecutor } = await loadAndValidateBrowserModule(
+    context,
+    browserProjects,
+  );
   return createBrowserExecutor(context, {
     projects: browserProjects,
     coverageProvider,

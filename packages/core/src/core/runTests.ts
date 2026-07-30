@@ -31,7 +31,10 @@ import {
 } from './browser/globalSetupStage';
 import { runBrowserOnlyTests } from './browser/onlyRun';
 import { createBrowserRunPlanner } from './browser/runPlanner';
-import { createBrowserWatchSession } from './browser/watchControls';
+import {
+  createBrowserWatchOrchestrator,
+  registerWatchSignalExit,
+} from './browser/watchControls';
 import { createNodeExecutor } from './executors/nodeExecutor';
 import { runGlobalTeardown } from './globalSetup';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';
@@ -360,15 +363,73 @@ export async function runTests(context: Rstest): Promise<void> {
   // ===================================================================
   // Watch mode. Browser watch stays host-driven (self-finalizing); node reruns
   // iterate the node executor only, so a node rebuild never re-triggers the
-  // browser initial run. The session wrapper owns the watch handles; the
-  // node-owned CLI shortcuts below fan a/f/u/q out through `browserWatch`.
+  // browser initial run. Browser-specific setup and host lifecycle stay behind
+  // `browserWatch`; node-owned shortcuts only fan a/f/u/q through it.
   // ===================================================================
-  const browserWatch = createBrowserWatchSession({ context, planner });
+  const browserWatch = createBrowserWatchOrchestrator({
+    context,
+    planner,
+    entriesCache: nodeExecutor.getPlan().entriesCache,
+  });
+  let cleanupPromise: Promise<void> | undefined;
+  const cleanup = (): Promise<void> => {
+    cleanupPromise ??= (async () => {
+      try {
+        await browserWatch.close();
+        await runLifecycleStep('executor cleanup', () => nodeExecutor.close());
+        await runLifecycleStep('trace run finalize', () =>
+          activeTraceRun.finalize(),
+        );
+        await runLifecycleStep('trace controller cleanup', () =>
+          traceController.close(),
+        );
+      } catch (error) {
+        logger.log(color.red(`Error during cleanup: ${error}`));
+      }
+    })();
+    return cleanupPromise;
+  };
+  const removeWatchSignalHandlers = registerWatchSignalExit(context, cleanup);
+
+  const { onBeforeRestart } = await import('./restart');
+  onBeforeRestart(async () => {
+    await cleanup();
+    // A fatal signal received during cleanup must still await the same cleanup
+    // promise before exiting.
+    removeWatchSignalHandlers();
+  });
+
+  try {
+    if (!(await browserWatch.validate())) {
+      await cleanup();
+      return;
+    }
+    if (hasNodeTestsToRun) {
+      await nodeExecutor.validateRunDependencies();
+    }
+    if (!(await browserWatch.setup())) {
+      await cleanup();
+      return;
+    }
+  } catch (error) {
+    const wasCleaningUp = cleanupPromise !== undefined;
+    await cleanup();
+    if (wasCleaningUp) {
+      return;
+    }
+    throw error;
+  }
 
   // Mixed watch with zero node files: only the browser side runs (host-driven).
   if (!hasNodeTestsToRun) {
     try {
       await browserWatch.runForeground();
+    } catch (error) {
+      const wasCleaningUp = cleanupPromise !== undefined;
+      await cleanup();
+      if (!wasCleaningUp) {
+        throw error;
+      }
     } finally {
       await runLifecycleStep('trace shutdown', () =>
         traceController.shutdown(activeTraceRun),
@@ -415,55 +476,8 @@ export async function runTests(context: Rstest): Promise<void> {
 
   const enableCliShortcuts = isCliShortcutsEnabled();
 
-  let isCleaningUp = false;
-  const cleanup = async () => {
-    if (isCleaningUp) {
-      return;
-    }
-    isCleaningUp = true;
-
-    try {
-      // Close the browser watch session (when one is running) before the node
-      // executor.
-      await browserWatch.close();
-      await runLifecycleStep('executor cleanup', () => nodeExecutor.close());
-      await runLifecycleStep('trace run finalize', () =>
-        activeTraceRun.finalize(),
-      );
-      await runLifecycleStep('trace controller cleanup', () =>
-        traceController.close(),
-      );
-    } catch (error) {
-      logger.log(color.red(`Error during cleanup: ${error}`));
-    }
-  };
-
-  const handleSignal = async (signal: NodeJS.Signals) => {
-    logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
-    await cleanup();
-    process.exit(getSignalExitCode(signal));
-  };
-
-  if (!context.embedded) {
-    process.on('SIGINT', handleSignal);
-    process.on('SIGTERM', handleSignal);
-    process.on('SIGTSTP', handleSignal);
-  }
-
   const afterTestsWatchRun = () =>
     logWatchReadyMessage(context, enableCliShortcuts);
-
-  const { onBeforeRestart } = await import('./restart');
-
-  onBeforeRestart(async () => {
-    await runLifecycleStep('executor cleanup', () => nodeExecutor.close());
-    await runLifecycleStep('trace run finalize', () =>
-      activeTraceRun.finalize(),
-    );
-    await runLifecycleStep('trace controller cleanup', () =>
-      traceController.close(),
-    );
-  });
 
   let buildStart: number | undefined;
 
@@ -483,18 +497,7 @@ export async function runTests(context: Rstest): Promise<void> {
 
     if (isFirstCompile && enableCliShortcuts) {
       const closeCliShortcuts = await setupCliShortcuts({
-        closeServer: async () => {
-          await browserWatch.close();
-          await runLifecycleStep('executor cleanup', () =>
-            nodeExecutor.close(),
-          );
-          await runLifecycleStep('trace run finalize', () =>
-            activeTraceRun.finalize(),
-          );
-          await runLifecycleStep('trace controller cleanup', () =>
-            traceController.close(),
-          );
-        },
+        closeServer: cleanup,
         runAll: async () => {
           clearScreen();
           prepareWatchRerunState(context);
@@ -602,11 +605,24 @@ export async function runTests(context: Rstest): Promise<void> {
   // first compile fires `onAfterDevCompile`, which drives the initial watch run.
   // `runCycle` (invoked from that hook) reuses these resources via the in-flight
   // guard rather than starting a second server.
-  await nodeExecutor.ensureRunResources();
+  try {
+    await nodeExecutor.ensureRunResources();
+  } catch (error) {
+    const wasCleaningUp = cleanupPromise !== undefined;
+    await cleanup();
+    if (!wasCleaningUp) {
+      throw error;
+    }
+    return;
+  }
 
   // Node resources are up (env dependencies validated); now the browser watch
   // session may launch — deferred to here so node env-dependency validation
   // failures never leave a browser host running (the same ordering the
   // pre-seam code had). Node reruns above never restart it.
+  if (cleanupPromise) {
+    await cleanup();
+    return;
+  }
   browserWatch.startBackground();
 }

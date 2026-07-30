@@ -197,26 +197,22 @@ process.on('message', async (message: unknown) => {
 
 export const runGlobalTeardown = async (): Promise<{
   success: boolean;
-  error?: string;
 }> => {
-  try {
-    const callbacks = [...teardownCallbacks];
-    teardownCallbacks = [];
+  const callbacks = [...teardownCallbacks];
+  teardownCallbacks = [];
+  let success = true;
 
-    // Run teardown in reverse order (LIFO - Last In, First Out)
-    for (const teardown of callbacks.reverse()) {
+  // Run teardown in reverse order (LIFO - Last In, First Out)
+  for (const teardown of callbacks.reverse()) {
+    try {
       await teardown();
+    } catch (error) {
+      const message =
+        error instanceof Error && error.stack ? error.stack : String(error);
+      console.error(color.red(`Error during global teardown: ${message}`));
+      success = false;
     }
-
-    return {
-      success: true,
-    };
-  } catch (error) {
-    const message =
-      error instanceof Error && error.stack ? error.stack : String(error);
-    console.error(color.red(`Error during global teardown: ${message}`));
-    return {
-      success: false,
-    };
   }
+
+  return { success };
 };
