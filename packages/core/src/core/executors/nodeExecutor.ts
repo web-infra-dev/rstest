@@ -373,8 +373,8 @@ export function createNodeExecutor(
     const currentEntries: EntryInfo[] = [];
     const currentDeletedEntries: string[] = [];
 
-    // `stateManager.reset()` is owned by core (top-of-cycle for non-watch, and
-    // `prepareWatchRerunState` per watch rerun), never here.
+    // `stateManager.reset()` is owned by core (top-of-run for non-watch, and
+    // `prepareWatchCycleState` per watch cycle), never here.
     context.stateManager.testFiles = isWatchMode ? undefined : entryFiles;
 
     const resultsCache = await readResultsCache(rootPath);
@@ -604,15 +604,20 @@ export function createNodeExecutor(
    * begins, a moment only this side observes (the callback fires after it).
    *
    * `onAfterDevCompile` returns the cycle rather than signalling and moving on,
-   * and unlike the browser transport it has to. The cycle resolves its affected
-   * entries by pulling stats from the dev server, and that pull is only correct
-   * while this hook is still pending: let the hook resolve first and the server
-   * moves on, so the cycle reads a build that reports nothing changed and the
-   * rerun prints "No test files need re-run" instead of running the edited file
-   * (`e2e/watch/index.test.ts` fails outright without the await). It is not
-   * only back-pressure, so it cannot be dropped for the reason the browser side
-   * dropped its own — see {@link ExecutorInvalidationCallback} for the blind
-   * window that costs us.
+   * and unlike the browser transport it has to. The affected-entry set does not
+   * ride on the hook: the cycle pulls it, and the pull is destructive —
+   * `calcEntriesToRerun` diffs the dev server's stats against a per-environment
+   * baseline that `applyWatchInvalidation` advances in the same call, so a
+   * compile's changes can be consumed exactly once. Holding the hook is what
+   * pairs each pull with the compile that asked for it: the bundler starts no
+   * further compile while it is pending. Signal and return, and the two
+   * decouple — one pull consumes two compiles' changes while the other cycle
+   * diffs a baseline already advanced past them, reporting "No test files need
+   * re-run" for an edit that was real (dropping the await fails
+   * `e2e/watch/index.test.ts` outright). So the await is not back-pressure and
+   * cannot go for the reason the browser side's went — see
+   * {@link ExecutorInvalidationCallback} for what holding it costs and the
+   * shape that would close it.
    */
   const onInvalidate = (cb: ExecutorInvalidationCallback): void => {
     if (!rsbuildInstance) {

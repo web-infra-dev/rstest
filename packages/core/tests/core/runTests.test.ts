@@ -596,8 +596,8 @@ describe('runTests watch orchestration', () => {
       },
     });
 
-    // The session's own first cycle, which the reset deliberately skips: there
-    // is nothing of a previous cycle's to clear yet.
+    // The session's own first cycle, where only the snapshot half of the reset
+    // is skipped — there is no previous cycle's summary to keep here anyway.
     await nodeExecutor.invalidate(true);
 
     context.stateManager.testFiles = ['/stale.test.ts'];
@@ -909,31 +909,53 @@ describe('runTests watch orchestration', () => {
 });
 
 describe('runTests trace buffer rotation', () => {
+  let originalExitCode: typeof process.exitCode;
+
+  beforeEach(() => {
+    // `finalizeRunCycle` writes `process.exitCode` and logs through rslog
+    // (which fans out to the global console).
+    originalExitCode = process.exitCode;
+    rs.spyOn(console, 'log').mockImplementation(() => {});
+    rs.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    process.exitCode = originalExitCode;
+    rs.restoreAllMocks();
+  });
+
   /**
-   * A trace controller that records every run it hands out and whether each was
-   * finalized, so a dead twin (allocated, never finalized) is observable.
+   * A trace controller that records every buffer it hands out, in allocation
+   * order, together with the buffer itself and how many times that buffer was
+   * finalized — so which cycle finalized which buffer is observable, and a dead
+   * twin (allocated, never finalized) is too.
    */
   const createRecordingTraceController = () => {
-    const runs: Array<{ finalized: number }> = [];
+    const runs: Array<{
+      finalized: number;
+      onEvents: () => void;
+      finalize: () => Promise<void>;
+    }> = [];
     return {
       runs,
       controller: (() => ({
         beginRun: () => {
-          const run = { finalized: 0 };
-          runs.push(run);
-          return {
+          const run = {
+            finalized: 0,
             onEvents: () => {},
             finalize: async () => {
               run.finalized += 1;
             },
           };
+          runs.push(run);
+          return run;
         },
         close: async () => {},
       })) as unknown as RunTestsDeps['createTraceController'],
     };
   };
 
-  it('allocates exactly one buffer per finalized watch cycle', async () => {
+  it('finalizes the buffer each watch cycle ran under and rotates the next one in', async () => {
     const { runs, controller } = createRecordingTraceController();
     const events: string[] = [];
     const { context } = createContext({
@@ -955,15 +977,21 @@ describe('runTests trace buffer rotation', () => {
       }),
     );
 
-    // One pre-allocated buffer before any cycle runs.
-    expect(runs).toHaveLength(1);
+    // One pre-allocated buffer before any cycle runs, still open so browser
+    // events arriving before the first cycle have somewhere to land.
+    expect(runs.map((run) => run.finalized)).toEqual([0]);
 
     await nodeExecutor.invalidate(true);
+
+    // The first cycle finalized the buffer it ran under — the pre-allocated
+    // one — and rotated a fresh, still-open buffer in behind it.
+    expect(runs.map((run) => run.finalized)).toEqual([1, 0]);
+
     await nodeExecutor.invalidate(false);
 
-    // Each cycle finalizes the buffer it ran under and rotates in the next, so
-    // events emitted between cycles always have somewhere to land.
-    expect(runs).toHaveLength(3);
+    // Same again for the rerun: each buffer is finalized exactly once, by the
+    // cycle that ran under it, and never by a later one.
+    expect(runs.map((run) => run.finalized)).toEqual([1, 1, 0]);
   });
 
   it('lets the browser-only fast path reuse the pre-allocated buffer', async () => {
@@ -981,9 +1009,10 @@ describe('runTests trace buffer rotation', () => {
       }),
     );
 
-    // A second `beginRun()` here would leave the pre-allocated one as a dead,
-    // never-finalized twin.
+    // The fast path is handed the pre-allocated buffer itself, so its own
+    // finalize lands on that buffer. A second `beginRun()` here would leave the
+    // pre-allocated one as a dead, never-finalized twin instead.
     expect(runs).toHaveLength(1);
-    expect(handedOver).toBeDefined();
+    expect(handedOver).toBe(runs[0]);
   });
 });

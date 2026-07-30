@@ -54,10 +54,15 @@ export interface ExecutorRunCycleOptions {
  * re-attaches by re-checking what it already knew about, so a test file created
  * or deleted in that window is never noticed at all — and under the queue the
  * window can stretch across another executor's cycle. The browser transport
- * therefore signals and returns. The node transport cannot: its cycle pulls the
- * affected-entry diff from the dev server, and that pull only reports the
- * rebuild while its own hook is still pending. Closing that gap needs a way to
- * read the diff without holding the hook, not a smaller queue.
+ * therefore signals and returns. The node transport still waits, because its
+ * cycle pulls the affected-entry diff from the dev server and that pull
+ * advances the baseline it diffs against: one pull per compile is the only
+ * pairing that consumes each compile's changes exactly once, and holding the
+ * hook is what enforces it. That is a tracked gap, not a stance, and the shape
+ * that closes it is the one the browser side already uses — resolve the scope
+ * synchronously inside the hook and hand it over as `fileFilters`, then signal
+ * and return. The doubling warned about above is diffing at hook time *and*
+ * again inside `runCycle`, not a single hook-time snapshot the cycle consumes.
  */
 export type ExecutorInvalidationCallback = (hint: {
   isFirstBuild: boolean;

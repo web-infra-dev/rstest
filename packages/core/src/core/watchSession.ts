@@ -20,7 +20,7 @@ import type { Rstest } from './rstest';
 import {
   collectFailedTestPaths,
   collectUnmatchedSnapshotTestPaths,
-  prepareWatchRerunState,
+  prepareWatchCycleState,
 } from './watchState';
 
 export type WatchCycleOptions = {
@@ -141,15 +141,11 @@ export function createWatchCycleDriver({
     // (the node pool flushes its worker cache on a change, the browser host
     // keys run-token staleness off it), never to be contiguous per executor.
     buildId += 1;
-    // Skipped for an executor's first cycle: the session starts with clean
-    // state, so there is nothing of its own to clear — and in a mixed run the
-    // browser's first cycle lands after the node's, where a reset would wipe
-    // the snapshot summary `u` reads and the press-u hint with it.
-    if (started.has(executor)) {
-      prepareWatchRerunState(context);
-    } else {
-      started.add(executor);
-    }
+    // What a first cycle skips is the snapshot half only; see
+    // `prepareWatchCycleState` for why the two halves part ways there.
+    const isFirstCycle = !started.has(executor);
+    started.add(executor);
+    prepareWatchCycleState(context, { isFirstCycle });
     await notifyReportersOnTestRunStart(context);
     const outcome = await executor.runCycle({
       buildId,

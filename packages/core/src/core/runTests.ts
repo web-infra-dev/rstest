@@ -119,7 +119,8 @@ export async function runTests(
   const isWatchMode = context.command === 'watch';
 
   // Reset the per-run test state once, before any executor streams events into
-  // `stateManager`. Watch reruns own their own reset via `prepareWatchRerunState`.
+  // `stateManager`. Watch cycles own their own reset via
+  // `prepareWatchCycleState`.
   if (!isWatchMode) {
     context.stateManager.reset();
   }
@@ -413,9 +414,13 @@ export async function runTests(
   // a browser rerun waits instead of interleaving on the shared `stateManager`.
   // ===================================================================
   const enableCliShortcuts = deps.isCliShortcutsEnabled();
-  // Constructed (not launched) below so its invalidation subscriber is in place
-  // before anything can compile; the first cycle further down is what launches
-  // the browser.
+  // Constructed (not launched) below so its invalidation subscriber, the shared
+  // teardown, and the stdin owner — all three closing over it — are in place
+  // before either side's first cycle. Loading it validates its config and can
+  // exit on a version mismatch, which is why that runs ahead of the node
+  // env-dependency validation `ensureRunResources()` does further down; the
+  // ordering that matters is the launch, and the launch is the first browser
+  // cycle, deferred until those node resources are up.
   let browserExecutor: BrowserTestExecutor | undefined;
   const watchDriver = createWatchCycleDriver({
     context,

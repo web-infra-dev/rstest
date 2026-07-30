@@ -3631,8 +3631,10 @@ export const runBrowserController = async (
           // Cross-file bail gate (parity with the node pool's pickup-time skip
           // at `runInPool.ts`): once the cycle-wide failed count reaches `bail`,
           // drain the remaining files as skipped instead of running them. The
-          // count is cycle-scoped because core resets `stateManager` at the top
-          // of every run and every watch rerun.
+          // count is cycle-scoped because core clears `stateManager` ahead of
+          // every cycle, a watch session's first one included — so a mixed
+          // launch cannot drain this queue on the node initial cycle's
+          // failures.
           if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
             let skipped = queue.shift();
             while (skipped) {

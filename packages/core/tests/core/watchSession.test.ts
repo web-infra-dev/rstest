@@ -109,7 +109,7 @@ const createDriver = (context: Rstest) => {
 };
 
 describe('createWatchCycleDriver', () => {
-  it('skips the state reset on an executor’s first cycle and applies it after', async () => {
+  it('keeps the snapshot summary on an executor’s first cycle and clears it after', async () => {
     const context = createContext();
     const { driver } = createDriver(context);
     const seen: number[] = [];
@@ -125,6 +125,36 @@ describe('createWatchCycleDriver', () => {
 
     // First cycle sees the value untouched; the rerun sees a cleared summary.
     expect(seen).toEqual([3, 0]);
+  });
+
+  it('clears the failed-test count even on a first cycle, so bail stays cycle-scoped', async () => {
+    // The other half of the mixed-watch startup order: the browser's first
+    // cycle must not inherit the node initial cycle's failures, or a `bail`
+    // limit already reached drains every browser file as skipped before the
+    // browser session has run a test.
+    const context = createContext();
+    const { driver } = createDriver(context);
+    const node = createFakeExecutor('node', () => {
+      context.stateManager.onTestFileResult({
+        testId: '/fail.test.ts',
+        name: '/fail.test.ts',
+        status: 'fail',
+        testPath: '/fail.test.ts',
+        project: 'node-a',
+        results: [],
+      });
+    });
+    const seen: number[] = [];
+    const browser = createFakeExecutor('browser', () => {
+      seen.push(context.stateManager.getCountOfFailedTests());
+    });
+
+    await driver.runCycle(node, { mode: 'all' });
+    expect(context.stateManager.getCountOfFailedTests()).toBe(1);
+
+    await driver.runCycle(browser, { mode: 'all' });
+
+    expect(seen).toEqual([0]);
   });
 
   it('does not let one executor’s first cycle clear another’s summary', async () => {
