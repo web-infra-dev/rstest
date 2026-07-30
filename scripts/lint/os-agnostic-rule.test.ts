@@ -2,7 +2,7 @@ import path from 'node:path';
 import { Rslint } from '@rslint/core';
 import { afterAll, beforeAll, describe, expect, it } from '@rstest/core';
 
-// Tests the custom `rstest/os-agnostic-tests` rule defined in rslint.config.mts.
+// Tests the custom `rstest-repo/os-agnostic-tests` rule defined in rslint.config.mts.
 // Each fixture documents one syntax the rule bans or sanctions and is linted
 // through @rslint/core, so the real rule runs — not a simulated AST walk.
 //
@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from '@rstest/core';
 // No files touch disk, and skipping the type-aware program keeps each lint at
 // ~85ms instead of ~900ms.
 
-const RULE = 'rstest/os-agnostic-tests';
+const RULE = 'rstest-repo/os-agnostic-tests';
 const configFile = path.join(__dirname, 'os-agnostic-rule.rslint.mjs');
 // Virtual path for the linted buffer; nothing is read from disk. `.ts` so the
 // buffer is parsed as TypeScript.
@@ -142,7 +142,7 @@ const countHits = async (code: string): Promise<number> => {
     .filter((message) => message.ruleId === RULE).length;
 };
 
-describe('rstest/os-agnostic-tests', () => {
+describe('rstest-repo/os-agnostic-tests', () => {
   for (const [name, { code, hits }] of Object.entries(fixtures)) {
     it(`${hits ? 'flags' : 'allows'} ${name}`, async () => {
       expect(await countHits(code)).toBe(hits);
