@@ -91,6 +91,14 @@ type PendingCycle = {
  * means the executor resolves its own scope at cycle time, which is not the
  * broader scope it looks like — the node side pulls the entries its rebuild
  * affected, while the browser side reads it as no files at all.
+ *
+ * Refusing to fold across the two kinds costs one empty summary in a narrow
+ * order: an unfiltered shortcut cycle queued ahead of an invalidation cycle
+ * runs everything and consumes the rebuild's diff on its way (the node side
+ * pulls `calcEntriesToRerun` every cycle, and each pull advances the baseline),
+ * leaving the invalidation cycle nothing to run. Accepted over a fold exception
+ * for `mode: 'all'`, which would need exactly the executor-shape awareness this
+ * predicate exists to avoid. The reverse order is unaffected.
  */
 const canFold = (
   queued: WatchCycleOptions,
