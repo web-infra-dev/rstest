@@ -107,6 +107,15 @@ export async function createBrowserExecutor(
       if (watchSession) {
         // A watch rerun: the host's trigger already resolved the scope and
         // handed it over as the invalidation hint, which core passes back here.
+        //
+        // `opts.updateSnapshot` is dropped, and that is a gap rather than a
+        // choice. Core resolves it per trigger so a cycle no `u` selected files
+        // for cannot rewrite their snapshots; the host instead re-reads the live
+        // `snapshotManager` flag for every page it loads, so a browser cycle
+        // queued inside the `u` hold window still runs under `'all'`. Closing it
+        // means plumbing this option through `watchSession.runCycle` to the
+        // per-page config, which is also what would make the seam doc on
+        // `ExecutorRunCycleOptions.updateSnapshot` true on this side.
         const cycle = watchSession.runCycle(opts.fileFilters ?? []);
         inFlightCycle = cycle;
         try {

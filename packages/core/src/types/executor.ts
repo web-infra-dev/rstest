@@ -36,6 +36,12 @@ export interface ExecutorRunCycleOptions {
    * `snapshotManager` flag, for the browser host's per-page reads, and a cycle
    * queued inside that window by anything else must not rewrite the snapshots of
    * files no `u` selected.
+   *
+   * That last guarantee reaches as far as an executor honors this field. The
+   * node pool does. The browser host reads the live flag per page load instead
+   * and its executor drops this option on a watch rerun, so a browser cycle
+   * queued inside the `u` window still runs under `'all'` — a gap to close by
+   * plumbing the option through the browser watch session, not a stance.
    */
   updateSnapshot: SnapshotUpdateState;
   /**

@@ -46,8 +46,13 @@ export type WatchCycleOptions = {
    * Only for a trigger that asks for one, which is the `u` shortcut. Left out,
    * a cycle takes the session's configured value — the `u` handler also flips
    * the live `snapshotManager` flag, for the browser host's per-page reads, and
-   * a cycle no `u` selected files for must not pick that flip up and rewrite
-   * their snapshots.
+   * a node cycle no `u` selected files for must not pick that flip up and
+   * rewrite their snapshots.
+   *
+   * Node-side only, and the qualifier is load-bearing: the browser executor
+   * drops this option on a watch rerun and its host re-reads the live flag per
+   * page load, so a browser cycle queued inside the `u` hold window still runs
+   * under `'all'`. Recorded at the drop site in `browserExecutor.runCycle`.
    */
   updateSnapshot?: SnapshotUpdateState;
 };

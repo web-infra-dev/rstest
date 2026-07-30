@@ -95,6 +95,13 @@ const createFakeNodeExecutor = ({
   let invalidateCallback: ExecutorInvalidationCallback | undefined;
   return Object.assign(createFakeExecutor('node', events, runCycle), {
     ensureRunResources: async () => {
+      // Recorded on completion, after a real macrotask, not on call. The watch
+      // #7 pin needs both: a browser cycle's `cycle-start` lands two microtask
+      // hops after it is scheduled (the driver's queue, then the awaited
+      // reporter notify), so against an `ensure` that recorded synchronously it
+      // still sorted second even when it had been scheduled first — the pin
+      // passed on the exact reordering it exists to catch.
+      await new Promise((resolve) => setTimeout(resolve, 0));
       events.push('node:ensure-run-resources');
     },
     onInvalidate: (cb: ExecutorInvalidationCallback) => {
