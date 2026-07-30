@@ -23,16 +23,33 @@ import {
   prepareWatchCycleState,
 } from './watchState';
 
+/**
+ * What asked for a cycle. Two triggers fold into one cycle only when they are
+ * the same kind asking the same thing (see {@link canFold}), so this is the
+ * identity that decides it — not the option shape, which several kinds share.
+ *
+ * `'invalidation'` is a transport's own signal (a dev rebuild, an HMR update,
+ * the browser host's file-set diff); the rest are the CLI shortcuts whose whole
+ * request lives in the options object. The session's initial cycle and the
+ * `t`/`p` shortcuts carry no trigger and so never fold: `t`/`p` bind a pattern
+ * or filter that lives on `context`, outside the options a fold would union, so
+ * two of them are not the same request even when their options match.
+ */
+export type WatchCycleTrigger =
+  'invalidation' | 'run-all' | 'run-failed' | 'update-snapshot';
+
 export type WatchCycleOptions = {
   mode?: 'all' | 'on-demand';
   fileFilters?: string[];
+  trigger?: WatchCycleTrigger;
   /**
-   * Whether this trigger is a transport's own invalidation signal (a dev
-   * rebuild, an HMR update, the browser host's file-set diff) rather than
-   * something core queued directly — a CLI shortcut, or the session's initial
-   * cycle. Only invalidation signals fold into each other; see {@link canFold}.
+   * Only for a trigger that asks for one, which is the `u` shortcut. Left out,
+   * a cycle takes the session's configured value — the `u` handler also flips
+   * the live `snapshotManager` flag, for the browser host's per-page reads, and
+   * a cycle no `u` selected files for must not pick that flip up and rewrite
+   * their snapshots.
    */
-  fromInvalidation?: boolean;
+  updateSnapshot?: SnapshotUpdateState;
 };
 
 /**
@@ -61,52 +78,59 @@ export interface WatchCycleDriver {
 }
 
 type PendingCycle = {
-  options: WatchCycleOptions;
   /**
-   * `updateSnapshot` as it stood when this trigger queued its cycle, not as it
-   * stands when the cycle is dequeued. The `u` shortcut flips it to `'all'`
-   * around the cycles it asks for, so a cycle that read it at dispatch could
+   * Resolved once, when this trigger queued its cycle — never re-read at
+   * dispatch. `updateSnapshot` is why: the `u` shortcut flips the live flag
+   * around the cycles it asks for, so a cycle reading it at dispatch could
    * inherit a flag no trigger of its own set and rewrite the snapshots of every
    * file it happens to run.
    */
-  updateSnapshot: SnapshotUpdateState;
+  options: WatchCycleOptions & { updateSnapshot: SnapshotUpdateState };
   cycle: Promise<void>;
 };
 
 /**
- * Whether a trigger may fold its scope into a queued cycle instead of queueing
- * its own behind it.
+ * Whether a trigger may fold its request into a queued cycle instead of
+ * queueing its own behind it, so a burst becomes one answer rather than the
+ * same files run back to back with a summary each time.
  *
- * Only a transport's own invalidation signals may, and only ones asking the same
- * question: what changed since the last cycle, in this `mode`? A burst of those
- * (two quick saves, one `onAfterDevCompile` per browser project) then collapses
- * into a single answer instead of running the same files back to back and
- * printing a summary each time. What core queues directly must not fold — a
- * shortcut binds state to the file list it chose (`u`'s snapshot-update flag,
- * the filter `p` just printed), so folding it would apply that state to files
- * no trigger of theirs ever selected.
+ * Two triggers fold when they are the same {@link WatchCycleTrigger} asking the
+ * same thing: same `mode`, same resolved `updateSnapshot`, and agreeing on
+ * whether they brought a file list. That covers the two bursts a user can
+ * actually produce — quick saves (one `onAfterDevCompile` per browser project,
+ * or two edits inside one cycle) and a held-down `a`/`f`/`u`, which is
+ * fire-and-forget from the stdin owner and so queues one cycle per press.
  *
- * Folding two such signals is then a plain union of their file lists, the one
- * thing they disagree on. Both lists have to be there to union: an absent list
+ * Different kinds never fold, and neither does a kind that carries no trigger.
+ * A shortcut binds state to the file list it chose, so folding across kinds
+ * would apply one kind's state to files the other selected — `u`'s
+ * snapshot-update flag is the destructive case. `t`/`p` carry no trigger at all
+ * because the pattern and filter they bind live on `context`, outside the
+ * options object: two `t` presses can have identical options and still be
+ * different requests, so identity here cannot see the difference.
+ *
+ * Folding is then a plain union of the file lists, the one thing two same-kind
+ * triggers disagree on. Both lists have to be there to union: an absent list
  * means the executor resolves its own scope at cycle time, which is not the
  * broader scope it looks like — the node side pulls the entries its rebuild
  * affected, while the browser side reads it as no files at all.
  *
- * Refusing to fold across the two kinds costs one empty summary in a narrow
- * order: an unfiltered shortcut cycle queued ahead of an invalidation cycle
- * runs everything and consumes the rebuild's diff on its way (the node side
- * pulls `calcEntriesToRerun` every cycle, and each pull advances the baseline),
+ * Keeping the kinds apart costs one empty summary in a narrow order: an
+ * unfiltered shortcut cycle queued ahead of an invalidation cycle runs
+ * everything and consumes the rebuild's diff on its way (the node side pulls
+ * `calcEntriesToRerun` every cycle, and each pull advances the baseline),
  * leaving the invalidation cycle nothing to run. Accepted over a fold exception
  * for `mode: 'all'`, which would need exactly the executor-shape awareness this
  * predicate exists to avoid. The reverse order is unaffected.
  */
 const canFold = (
-  queued: WatchCycleOptions,
-  incoming: WatchCycleOptions,
+  queued: PendingCycle['options'],
+  incoming: PendingCycle['options'],
 ): boolean =>
-  !!queued.fromInvalidation &&
-  !!incoming.fromInvalidation &&
+  queued.trigger !== undefined &&
+  queued.trigger === incoming.trigger &&
   queued.mode === incoming.mode &&
+  queued.updateSnapshot === incoming.updateSnapshot &&
   !!queued.fileFilters === !!incoming.fileFilters;
 
 export function createWatchCycleDriver({
@@ -133,6 +157,11 @@ export function createWatchCycleDriver({
   isSessionLive?: () => boolean;
 }): WatchCycleDriver {
   let buildId = 0;
+  // The session's configured value, read before any cycle can run. The `u`
+  // shortcut is the only thing that ever writes the live flag, and it writes it
+  // for the browser host's per-page reads — so this, not the live read, is what
+  // a cycle without an explicit `updateSnapshot` is entitled to.
+  const sessionUpdateSnapshot = context.snapshotManager.options.updateSnapshot;
   // Reads the *current* buffer at emit time, so a browser cycle's events land
   // in the run buffer this loop rotated in for it.
   const onTraceEvents = context.trace
@@ -156,8 +185,7 @@ export function createWatchCycleDriver({
   const runOne = async (
     executor: TestExecutor,
     {
-      options: { mode = 'all', fileFilters, fromInvalidation },
-      updateSnapshot,
+      options: { mode = 'all', fileFilters, trigger, updateSnapshot },
     }: PendingCycle,
   ): Promise<void> => {
     // One id per cycle across all executors: consumers only require it to move
@@ -175,7 +203,7 @@ export function createWatchCycleDriver({
         buildId,
         mode,
         fileFilters,
-        fromInvalidation,
+        fromInvalidation: trigger === 'invalidation',
         updateSnapshot,
         onTraceEvents,
       });
@@ -204,15 +232,19 @@ export function createWatchCycleDriver({
 
   return {
     runCycle(executor, options = {}) {
+      const resolved = {
+        ...options,
+        updateSnapshot: options.updateSnapshot ?? sessionUpdateSnapshot,
+      };
       // Fold into this executor's queued cycle that has not begun rather than
       // appending a second one. Union, never latest-wins: the folded cycle must
       // still cover every file the burst asked for.
       const queued = pending.get(executor);
-      if (queued && canFold(queued.options, options)) {
+      if (queued && canFold(queued.options, resolved)) {
         const { fileFilters } = queued.options;
-        if (fileFilters && options.fileFilters) {
+        if (fileFilters && resolved.fileFilters) {
           queued.options.fileFilters = [
-            ...new Set([...fileFilters, ...options.fileFilters]),
+            ...new Set([...fileFilters, ...resolved.fileFilters]),
           ];
         }
         // Absent on both sides (`canFold` requires they agree): no list to union.
@@ -220,15 +252,19 @@ export function createWatchCycleDriver({
       }
 
       const entry: PendingCycle = {
-        options: { ...options },
-        updateSnapshot: context.snapshotManager.options.updateSnapshot,
+        options: resolved,
         cycle: undefined as never,
       };
       entry.cycle = tail.then(() => {
         // Dropped before the run, not after: from here the options are frozen,
         // so a trigger arriving mid-cycle queues its own cycle instead of
-        // folding into one that has already read its scope.
-        pending.delete(executor);
+        // folding into one that has already read its scope. Only if this entry
+        // is still the open one — an earlier cycle reaching the queue's head
+        // after a later trigger queued its own must not close that one's fold
+        // window on its way past.
+        if (pending.get(executor) === entry) {
+          pending.delete(executor);
+        }
         return runOne(executor, entry);
       });
       pending.set(executor, entry);
@@ -289,6 +325,8 @@ export function createWatchShortcutHandlers(
   isArmed: () => boolean = () => true,
 ): Parameters<typeof setupCliShortcuts>[0] {
   const { snapshotManager } = context;
+  let updateSnapshotHolds = 0;
+  let updateSnapshotBeforeHold: SnapshotUpdateState;
 
   const canRerun = (): boolean => {
     if (isArmed()) {
@@ -331,7 +369,7 @@ export function createWatchShortcutHandlers(
         // to drop when the user asks for every test again.
         context.normalizedConfig.testNamePattern = undefined;
         context.fileFilters = undefined;
-        await node.runCycle({ mode: 'all' });
+        await node.runCycle({ mode: 'all', trigger: 'run-all' });
       }
       await browser?.rerun();
     }),
@@ -387,7 +425,10 @@ export function createWatchShortcutHandlers(
       }
 
       clearScreen();
-      await fanOut({ fileFilters: failedTests, mode: 'all' }, failedTests);
+      await fanOut(
+        { fileFilters: failedTests, mode: 'all', trigger: 'run-failed' },
+        failedTests,
+      );
     }),
     updateSnapshot: whenArmed(async () => {
       if (!snapshotManager.summary.unmatched) {
@@ -400,17 +441,32 @@ export function createWatchShortcutHandlers(
 
       clearScreen();
 
-      // The single save/restore for both sides. It has to span both cycles, not
-      // just the calls that queue them: the node side takes the value this
-      // trigger queued its cycle with, while the browser host re-reads the live
-      // one for every page it loads. And it must be restored even when one of
-      // the two throws.
-      const originalUpdateSnapshot = snapshotManager.options.updateSnapshot;
-      snapshotManager.options.updateSnapshot = 'all';
+      // The live flip is for the browser host alone, which re-reads the flag for
+      // every page it loads; the node side takes it as a cycle option instead, so
+      // it reaches only the files this trigger chose. It must span both cycles
+      // and survive either throwing.
+      //
+      // Counted, because this handler is re-entrant: the stdin owner dispatches
+      // fire-and-forget, so a second `u` pressed while the first still awaits
+      // its cycles would save the flag the first one already flipped and restore
+      // `'all'` over it — leaving every later cycle rewriting snapshots.
+      if (updateSnapshotHolds++ === 0) {
+        updateSnapshotBeforeHold = snapshotManager.options.updateSnapshot;
+        snapshotManager.options.updateSnapshot = 'all';
+      }
       try {
-        await fanOut({ fileFilters: unmatchedTests }, unmatchedTests);
+        await fanOut(
+          {
+            fileFilters: unmatchedTests,
+            trigger: 'update-snapshot',
+            updateSnapshot: 'all',
+          },
+          unmatchedTests,
+        );
       } finally {
-        snapshotManager.options.updateSnapshot = originalUpdateSnapshot;
+        if (--updateSnapshotHolds === 0) {
+          snapshotManager.options.updateSnapshot = updateSnapshotBeforeHold;
+        }
       }
     }),
   };

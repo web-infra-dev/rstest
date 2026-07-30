@@ -180,7 +180,7 @@ describe('createWatchCycleDriver', () => {
     const inFlight = driver.runCycle(executor, {
       mode: 'on-demand',
       fileFilters: ['/a.test.ts'],
-      fromInvalidation: true,
+      trigger: 'invalidation',
     });
     await started();
 
@@ -189,12 +189,12 @@ describe('createWatchCycleDriver', () => {
     const burstA = driver.runCycle(executor, {
       mode: 'on-demand',
       fileFilters: ['/b.test.ts'],
-      fromInvalidation: true,
+      trigger: 'invalidation',
     });
     const burstB = driver.runCycle(executor, {
       mode: 'on-demand',
       fileFilters: ['/c.test.ts'],
-      fromInvalidation: true,
+      trigger: 'invalidation',
     });
     // A second signal for a file already in the queued scope adds nothing: it
     // is the same cycle that will run it, which is what lets the headed host
@@ -202,7 +202,7 @@ describe('createWatchCycleDriver', () => {
     const burstC = driver.runCycle(executor, {
       mode: 'on-demand',
       fileFilters: ['/b.test.ts'],
-      fromInvalidation: true,
+      trigger: 'invalidation',
     });
     expect(burstA).toBe(burstB);
     expect(burstA).toBe(burstC);
@@ -218,6 +218,95 @@ describe('createWatchCycleDriver', () => {
     ]);
   });
 
+  it('folds a held-down shortcut into one cycle', async () => {
+    // The stdin owner dispatches fire-and-forget, so three `a` presses inside
+    // one cycle queue three of them: three full-suite runs and three summaries
+    // for one request the user made once.
+    const context = createContext();
+    const { driver } = createDriver(context);
+    const { executor, release, started } = createGatedExecutor('node');
+
+    const inFlight = driver.runCycle(executor, { mode: 'all' });
+    await started();
+
+    const pressed = [1, 2, 3].map(() =>
+      driver.runCycle(executor, { mode: 'all', trigger: 'run-all' }),
+    );
+    expect(pressed[1]).toBe(pressed[0]);
+    expect(pressed[2]).toBe(pressed[0]);
+
+    release();
+    await Promise.all([inFlight, ...pressed]);
+
+    expect(executor.cycles).toHaveLength(2);
+  });
+
+  it('folds a `u` burst into one cycle covering every file it asked for', async () => {
+    const context = createContext();
+    const { driver } = createDriver(context);
+    const { executor, release, started } = createGatedExecutor('node');
+
+    const inFlight = driver.runCycle(executor, { mode: 'all' });
+    await started();
+
+    // Each press collects the snapshots unmatched at that moment, so the two
+    // scopes can differ — the fold has to cover both, under the flag both asked
+    // for.
+    const first = driver.runCycle(executor, {
+      fileFilters: ['/a.test.ts'],
+      trigger: 'update-snapshot',
+      updateSnapshot: 'all',
+    });
+    const second = driver.runCycle(executor, {
+      fileFilters: ['/b.test.ts'],
+      trigger: 'update-snapshot',
+      updateSnapshot: 'all',
+    });
+    expect(second).toBe(first);
+
+    release();
+    await Promise.all([inFlight, first, second]);
+
+    expect(executor.cycles).toHaveLength(2);
+    expect(executor.cycles[1]).toMatchObject({
+      updateSnapshot: 'all',
+      fileFilters: ['/a.test.ts', '/b.test.ts'],
+    });
+  });
+
+  it('folds only same-kind triggers, and never one that carries no kind', async () => {
+    const context = createContext();
+    const { driver } = createDriver(context);
+    const { executor, release, started } = createGatedExecutor('node');
+
+    const inFlight = driver.runCycle(executor, { mode: 'all' });
+    await started();
+
+    // `a` then `f`: different requests that happen to share `mode: 'all'`.
+    const runAll = driver.runCycle(executor, {
+      mode: 'all',
+      trigger: 'run-all',
+    });
+    const runFailed = driver.runCycle(executor, {
+      mode: 'all',
+      fileFilters: ['/failed.test.ts'],
+      trigger: 'run-failed',
+    });
+    // Two `t` presses. Identical options, different patterns — the pattern lives
+    // on `context`, so folding by option identity would run the second press's
+    // cycle under the first press's pattern and never run the second at all.
+    const pattern = driver.runCycle(executor, {});
+    const laterPattern = driver.runCycle(executor, {});
+
+    expect(runFailed).not.toBe(runAll);
+    expect(laterPattern).not.toBe(pattern);
+
+    release();
+    await Promise.all([inFlight, runAll, runFailed, pattern, laterPattern]);
+
+    expect(executor.cycles).toHaveLength(5);
+  });
+
   it('never folds an explicit trigger together with an invalidation', async () => {
     const context = createContext();
     const { driver } = createDriver(context);
@@ -229,12 +318,12 @@ describe('createWatchCycleDriver', () => {
     // A rebuild, then the `p` shortcut's scoped cycle, then another rebuild.
     const rebuild = driver.runCycle(executor, {
       mode: 'on-demand',
-      fromInvalidation: true,
+      trigger: 'invalidation',
     });
     const scoped = driver.runCycle(executor, { fileFilters: ['/a.test.ts'] });
     const laterRebuild = driver.runCycle(executor, {
       mode: 'on-demand',
-      fromInvalidation: true,
+      trigger: 'invalidation',
     });
 
     release();
@@ -254,10 +343,11 @@ describe('createWatchCycleDriver', () => {
   });
 
   it('keeps a snapshot update inside the files its own trigger chose', async () => {
-    // The `u` shortcut flips `updateSnapshot` for the cycles it asks for and
-    // holds it flipped until they finish. Nothing it did not ask for may run
-    // under that flag: rewriting every snapshot file a rebuild happened to
-    // touch destroys data the user never offered up.
+    // The `u` shortcut asks for the flag on its own cycle and separately flips
+    // the live one, which the browser host re-reads per page. Nothing it did not
+    // ask for may run under that flag on either side of the flip: rewriting
+    // every snapshot file a rebuild happened to touch destroys data the user
+    // never offered up.
     const context = createContext();
     const { driver } = createDriver(context);
     const { executor, release, started } = createGatedExecutor('node');
@@ -268,34 +358,75 @@ describe('createWatchCycleDriver', () => {
     await started();
 
     // A save lands while the first cycle runs, queueing a rebuild cycle...
-    const rebuild = driver.runCycle(executor, {
+    const before = driver.runCycle(executor, {
       mode: 'on-demand',
-      fromInvalidation: true,
+      trigger: 'invalidation',
     });
-    // ...and then the user presses `u`.
+    // ...then the user presses `u`, which opens the flipped window...
     context.snapshotManager.options.updateSnapshot = 'all';
     const update = driver.runCycle(executor, {
       fileFilters: ['/snap.test.ts'],
+      trigger: 'update-snapshot',
+      updateSnapshot: 'all',
+    });
+    // ...and another save lands inside it. Queue position is the whole point:
+    // reading the live flag at either end would hand this cycle `'all'`.
+    const inside = driver.runCycle(executor, {
+      mode: 'on-demand',
+      trigger: 'invalidation',
     });
 
     release();
     try {
-      await Promise.all([inFlight, rebuild, update]);
+      await Promise.all([inFlight, before, update, inside]);
     } finally {
       context.snapshotManager.options.updateSnapshot = originalUpdateSnapshot;
     }
 
-    expect(executor.cycles).toHaveLength(3);
-    // The rebuild keeps the flag as it stood when its own trigger queued it,
-    // even though it was dispatched inside the `u` window.
-    expect(executor.cycles[1]).toMatchObject({
-      updateSnapshot: originalUpdateSnapshot,
-      fileFilters: undefined,
+    expect(executor.cycles).toHaveLength(4);
+    // Only the `u` cycle carries the flag, and only over the files it chose.
+    expect(
+      executor.cycles.map((cycle) => [cycle.updateSnapshot, cycle.fileFilters]),
+    ).toEqual([
+      [originalUpdateSnapshot, undefined],
+      [originalUpdateSnapshot, undefined],
+      ['all', ['/snap.test.ts']],
+      [originalUpdateSnapshot, undefined],
+    ]);
+  });
+
+  it('keeps an earlier cycle from closing a later one’s fold window', async () => {
+    // Both are queued before either reaches the head, so `pending` holds the
+    // second while the first dequeues. Deleting by executor rather than by entry
+    // drops the second's window on the first's way past, and the burst the
+    // window exists for appends instead of folding.
+    const context = createContext();
+    const { driver } = createDriver(context);
+    const { executor, release, started } = createGatedExecutor('node');
+
+    const first = driver.runCycle(executor, { mode: 'all' });
+    const second = driver.runCycle(executor, {
+      mode: 'on-demand',
+      fileFilters: ['/a.test.ts'],
+      trigger: 'invalidation',
     });
-    expect(executor.cycles[2]).toMatchObject({
-      updateSnapshot: 'all',
-      fileFilters: ['/snap.test.ts'],
+    await started();
+
+    const folded = driver.runCycle(executor, {
+      mode: 'on-demand',
+      fileFilters: ['/b.test.ts'],
+      trigger: 'invalidation',
     });
+    expect(folded).toBe(second);
+
+    release();
+    await Promise.all([first, second, folded]);
+
+    expect(executor.cycles).toHaveLength(2);
+    expect(executor.cycles[1]!.fileFilters).toEqual([
+      '/a.test.ts',
+      '/b.test.ts',
+    ]);
   });
 
   it('queues rather than folds once the cycle has read its scope', async () => {
@@ -306,7 +437,7 @@ describe('createWatchCycleDriver', () => {
     const inFlight = driver.runCycle(executor, {
       mode: 'on-demand',
       fileFilters: ['/a.test.ts'],
-      fromInvalidation: true,
+      trigger: 'invalidation',
     });
     await started();
 
@@ -315,7 +446,7 @@ describe('createWatchCycleDriver', () => {
     const next = driver.runCycle(executor, {
       mode: 'on-demand',
       fileFilters: ['/b.test.ts'],
-      fromInvalidation: true,
+      trigger: 'invalidation',
     });
     expect(next).not.toBe(inFlight);
 
@@ -400,13 +531,13 @@ describe('createWatchCycleDriver', () => {
 
     await driver.runCycle(executor, {
       mode: 'on-demand',
-      fromInvalidation: true,
+      trigger: 'invalidation',
     });
     await driver.runCycle(executor, { fileFilters: ['/a.test.ts'] });
 
     expect(executor.cycles.map((cycle) => cycle.fromInvalidation)).toEqual([
       true,
-      undefined,
+      false,
     ]);
   });
 
@@ -550,6 +681,44 @@ describe('createWatchShortcutHandlers arming', () => {
 
     armed = true;
     expect(handlers.canRerun!()).toBe(true);
+  });
+
+  it('restores the live snapshot flag after a `u` burst, not over it', async () => {
+    // The flip is for the browser host, which re-reads the flag per page load, so
+    // it has to outlive the calls that queue the cycles. The stdin owner
+    // dispatches fire-and-forget, so a second `u` arrives while the first still
+    // awaits — and a second save/restore would capture the `'all'` the first one
+    // wrote and restore that, leaving every later cycle rewriting snapshots.
+    const context = createContext();
+    context.snapshotManager.summary.unmatched = 1;
+    const original = context.snapshotManager.options.updateSnapshot;
+    const seen: (string | undefined)[] = [];
+    let release: () => void = () => {};
+    const parked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const handlers = createWatchShortcutHandlers(
+      context,
+      {
+        node: {
+          runCycle: async () => {
+            seen.push(context.snapshotManager.options.updateSnapshot);
+            await parked;
+          },
+          globTestEntries: async () => [],
+        },
+      },
+      async () => {},
+    );
+
+    const first = handlers.updateSnapshot!();
+    const second = handlers.updateSnapshot!();
+    release();
+    await Promise.all([first, second]);
+
+    expect(seen).toEqual(['all', 'all']);
+    expect(context.snapshotManager.options.updateSnapshot).toBe(original);
   });
 
   it('leaves the quit handler reachable before the first cycle', async () => {

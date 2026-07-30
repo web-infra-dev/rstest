@@ -618,13 +618,15 @@ export function createNodeExecutor(
    * `calcEntriesToRerun` diffs the dev server's stats against a per-environment
    * baseline that `applyWatchInvalidation` advances in the same call, so a
    * compile's changes can be consumed exactly once. Holding the hook is what
-   * pairs each pull with the compile that asked for it: the bundler starts no
-   * further compile while it is pending. Signal and return, and the two
-   * decouple — one pull consumes two compiles' changes while the other cycle
-   * diffs a baseline already advanced past them, reporting "No test files need
-   * re-run" for an edit that was real (dropping the await fails
-   * `e2e/watch/index.test.ts` outright). So the await is not back-pressure and
-   * cannot go for the reason the browser side's went — see
+   * keeps a second compile from starting before this one's changes have been
+   * consumed, since the bundler starts none while it is pending. Signal and
+   * return, and two compiles land against one baseline: a single pull takes both
+   * their changes and the other cycle diffs a baseline already past them,
+   * reporting "No test files need re-run" for an edit that was real. Which cycle
+   * consumes the changes is a separate question the hook does not answer — one
+   * queued ahead of the rebuild's can, and `canFold` in `watchSession.ts` records
+   * that as an accepted cost. So the await is not back-pressure and cannot go for
+   * the reason the browser side's went — see
    * {@link ExecutorInvalidationCallback} for what holding it costs and the
    * shape that would close it.
    */

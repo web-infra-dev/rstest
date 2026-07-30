@@ -120,8 +120,8 @@ const createFakeNodeExecutor = ({
      * Stand in for a dev compile. The real executor awaits the callback inside
      * `onAfterDevCompile` — not to serialize cycles, which the driver's queue
      * does on its own, but because its cycle pulls the affected-entry diff from
-     * the dev server and holding the hook is what pairs one pull with one
-     * compile.
+     * the dev server and holding the hook is what keeps a second compile from
+     * landing against the same baseline first.
      */
     invalidate: async (isFirstBuild: boolean) => {
       await invalidateCallback!({ isFirstBuild });
@@ -744,14 +744,23 @@ describe('runTests watch orchestration', () => {
       },
     };
     let cycleCount = 0;
-    const { context, nodeExecutor, browserExecutor, getShortcuts, events } =
-      await startWatchRun({
+    // What the live flag reads while each side's cycle runs. The browser host is
+    // the audience for the flip — it re-reads the flag for every page it loads
+    // and ignores the cycle option on a rerun — so this, not the recorded
+    // option, is what the flip has to hold for.
+    const liveDuringCycle: string[] = [];
+    const { context, nodeExecutor, getShortcuts, events } = await startWatchRun(
+      {
         withBrowser: true,
         runCycle: async () => {
           cycleCount += 1;
+          liveDuringCycle.push(
+            context.snapshotManager.options.updateSnapshot as string,
+          );
           return outcomeOf(cycleCount === 1 ? [unmatched] : []);
         },
-      });
+      },
+    );
     await nodeExecutor.invalidate(true);
     const originalUpdateSnapshot =
       context.snapshotManager.options.updateSnapshot;
@@ -759,15 +768,14 @@ describe('runTests watch orchestration', () => {
 
     await getShortcuts().updateSnapshot!();
 
+    // The node side takes it as a cycle option, resolved when this trigger
+    // queued the cycle rather than when the cycle was dispatched.
     expect(nodeExecutor.cycles.at(-1)).toMatchObject({
       updateSnapshot: 'all',
       fileFilters: ['/snap.test.ts'],
     });
-    // The single save/restore has to still be in force for the browser cycle,
-    // which runs after the node one.
-    expect(browserExecutor.cycles.at(-1)).toMatchObject({
-      updateSnapshot: 'all',
-    });
+    // ...and the flip is still in force for the browser cycle, which runs last.
+    expect(liveDuringCycle.at(-1)).toBe('all');
     expect(context.snapshotManager.options.updateSnapshot).toBe(
       originalUpdateSnapshot,
     );

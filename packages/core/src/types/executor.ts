@@ -30,8 +30,12 @@ export interface ExecutorRunCycleOptions {
    */
   fromInvalidation?: boolean;
   /**
-   * Read live per cycle from `context.snapshotManager.options`, never captured
-   * at executor construction, so a watch `u` (update snapshot) rerun is honored.
+   * Per cycle, never captured at executor construction, so a watch `u` (update
+   * snapshot) rerun is honored. Core resolves it when the trigger queues its
+   * cycle rather than when the cycle is dispatched: `u` also flips the live
+   * `snapshotManager` flag, for the browser host's per-page reads, and a cycle
+   * queued inside that window by anything else must not rewrite the snapshots of
+   * files no `u` selected.
    */
   updateSnapshot: SnapshotUpdateState;
   /**
@@ -66,9 +70,10 @@ export interface ExecutorRunCycleOptions {
  * window can stretch across another executor's cycle. The browser transport
  * therefore signals and returns. The node transport still waits, because its
  * cycle pulls the affected-entry diff from the dev server and that pull
- * advances the baseline it diffs against: one pull per compile is the only
- * pairing that consumes each compile's changes exactly once, and holding the
- * hook is what enforces it. That is a tracked gap, not a stance, and the shape
+ * advances the baseline it diffs against: a compile's changes are consumable
+ * exactly once, and holding the hook is what keeps a second compile from landing
+ * against the same baseline before the first one's changes are consumed. That is
+ * a tracked gap, not a stance, and the shape
  * that closes it is the one the browser side already uses — resolve the scope
  * synchronously inside the hook and hand it over as `fileFilters`, then signal
  * and return. The doubling warned about above is diffing at hook time *and*
@@ -181,11 +186,13 @@ export interface TestExecutor {
    * against its own file-set diff first. It resolves once the resulting cycle
    * (if any) has completed, so a caller may restore state it toggled for it.
    *
-   * A transport left with nothing to schedule on must report that rather than
-   * resolve as though the rerun happened. Core gates rerun keys until every
-   * executor is past its first cycle, so the only way to arrive here without a
-   * session is a side whose startup failed while another side kept the watch
-   * alive.
+   * A transport left with nothing to schedule on must say so rather than resolve
+   * in silence, as though the rerun happened. Core gates rerun keys until every
+   * executor has *settled* its first cycle, not succeeded at it, so arriving here
+   * without a session means that startup opened none — and the keys are still
+   * installed either way, because the run outlives it: a mixed run's other side
+   * keeps watching, and even a single-executor run stays up on the CLI's
+   * config-restart watcher.
    */
   requestRerun?(testPaths?: string[]): Promise<void>;
 }

@@ -77,7 +77,7 @@ async function runBrowserOnlyWatch(
     watchDriver.runCycle(browserExecutor, {
       mode: 'on-demand',
       fileFilters,
-      fromInvalidation: true,
+      trigger: 'invalidation',
     }),
   );
 

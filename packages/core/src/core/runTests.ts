@@ -454,7 +454,7 @@ export async function runTests(
       watchDriver.runCycle(executor, {
         mode: 'on-demand',
         fileFilters,
-        fromInvalidation: true,
+        trigger: 'invalidation',
       }),
     );
   }
@@ -514,7 +514,7 @@ export async function runTests(
     nodeExecutor.onInvalidate(({ isFirstBuild }) =>
       watchDriver.runCycle(nodeExecutor, {
         mode: isFirstBuild ? 'all' : 'on-demand',
-        fromInvalidation: true,
+        trigger: 'invalidation',
       }),
     );
     // Start the node dev server now that the subscriber is in place. `runCycle`

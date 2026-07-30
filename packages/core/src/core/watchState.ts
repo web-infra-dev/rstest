@@ -20,6 +20,12 @@ import type { RstestContext } from '../types';
  * cross-cycle by design: the `u` shortcut and the press-u hint read the summary
  * whichever cycle ran last produced. Clearing it on the browser's first cycle
  * would throw away the node cycle's summary before the user could act on it.
+ *
+ * That retention has a cost, accepted here: the browser initial cycle's summary
+ * counts the node initial cycle's snapshots again, so a mixed watch startup
+ * reports them twice. Keeping the counts is what makes `u` reachable for them at
+ * all, and a double count reads as noise where a lost one reads as nothing to
+ * update.
  */
 export function prepareWatchCycleState(
   context: RstestContext,
