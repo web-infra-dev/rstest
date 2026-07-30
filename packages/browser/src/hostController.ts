@@ -2437,6 +2437,38 @@ export type BrowserControllerResult = BrowserTestRunResult & {
   watchSession?: BrowserWatchSession;
 };
 
+/**
+ * A headed cycle's work list: the files of its scope that still exist, each
+ * paired with the test-name pattern whichever trigger put it in scope asked for.
+ *
+ * Both halves are resolved in one pass, synchronously, at the top of the cycle.
+ * A queued scope can go stale before its cycle is dequeued — a later trigger may
+ * have rebuilt the file set without one of these files — and it is skipped the
+ * way the headless twin skips it; throwing would abandon the still-valid files
+ * beside it and fail the run. The patterns are claimed here, and only for the
+ * paths in this scope, so a click landing once the cycle is under way keeps its
+ * pattern for the cycle it signalled instead of losing it to this one mid-loop.
+ */
+export const claimHeadedCycleScope = (
+  testPaths: string[],
+  currentTestFiles: TestFileInfo[],
+  pendingTestNamePatterns: Map<string, string>,
+): { file: TestFileInfo; testNamePattern?: string }[] => {
+  const scope: { file: TestFileInfo; testNamePattern?: string }[] = [];
+  for (const testPath of testPaths) {
+    const normalizedTestPath = normalize(testPath);
+    const testNamePattern = pendingTestNamePatterns.get(normalizedTestPath);
+    pendingTestNamePatterns.delete(normalizedTestPath);
+    const file = currentTestFiles.find(
+      (candidate) => candidate.testPath === normalizedTestPath,
+    );
+    if (file) {
+      scope.push({ file, testNamePattern });
+    }
+  }
+  return scope;
+};
+
 export const runBrowserController = async (
   context: RstestContext,
   options?: BrowserControllerOptions,
@@ -2813,8 +2845,19 @@ export const runBrowserController = async (
    * resolves to no affected files must leave the running cycle alone, or it
    * finalizes on results it never produced.
    */
-  const signalInvalidation = async (fileFilters: string[]): Promise<void> => {
+  const signalInvalidation = async (
+    fileFilters: string[],
+    /**
+     * Run state this trigger binds to its own paths, taken in the same turn as
+     * the handover — after any interrupt, so no queued cycle can be dequeued in
+     * between and read it. The headed rerun's per-file test-name pattern is the
+     * one such state; core's cycle options cannot carry it, so the only thing
+     * that makes it the property of one cycle is claiming it here.
+     */
+    claimScope?: () => void,
+  ): Promise<void> => {
     await interruptInFlightRun?.();
+    claimScope?.();
     signalledCycle = Promise.resolve(
       onInvalidate?.({ isFirstBuild: false, fileFilters }),
     ).catch((error) => {
@@ -4178,6 +4221,10 @@ export const runBrowserController = async (
     // Keyed by test path rather than held in one slot: core queues cycles, so
     // an unrelated trigger can be dequeued between the click and its own cycle,
     // and a single slot would hand the pattern to whichever cycle ran first.
+    // An entry is written with its own signal and read at a cycle's first
+    // synchronous step, so the only cycle that can take it is the one that
+    // signal started — or, when the file was already in a queued scope, the one
+    // it folded into, which is the cycle that runs the file.
     const pendingTestNamePatterns = new Map<string, string>();
 
     const runWatchCycle = async (
@@ -4187,37 +4234,17 @@ export const runBrowserController = async (
       const fatalErrorBeforeRun = fatalError;
       let rerunError: Error | undefined;
 
-      // Claimed synchronously, before the first await, and only for this
-      // cycle's own scope: a click landing once the cycle is under way keeps
-      // its pattern for the cycle it signalled instead of losing it to this one
-      // mid-loop.
-      const cyclePatterns = new Map<string, string>();
-      for (const testFile of testPaths) {
-        const normalizedTestFile = normalize(testFile);
-        const pattern = pendingTestNamePatterns.get(normalizedTestFile);
-        if (pattern !== undefined) {
-          cyclePatterns.set(normalizedTestFile, pattern);
-          pendingTestNamePatterns.delete(normalizedTestFile);
-        }
-      }
+      // Resolved before the first await, so nothing this cycle does can change
+      // what it runs or which patterns it claims.
+      const cycleScope = claimHeadedCycleScope(
+        testPaths,
+        currentTestFiles,
+        pendingTestNamePatterns,
+      );
 
       try {
-        for (const testFile of testPaths) {
-          // A queued scope can go stale before its cycle is dequeued: a later
-          // trigger may have rebuilt the file set without the file. Skip it,
-          // the way the headless twin does — throwing would abandon the
-          // still-valid files in this same cycle and fail the run.
-          const normalizedTestFile = normalize(testFile);
-          const fileInfo = currentTestFiles.find(
-            (file) => file.testPath === normalizedTestFile,
-          );
-          if (!fileInfo) {
-            continue;
-          }
-          await enqueueHeadedReload(
-            fileInfo,
-            cyclePatterns.get(normalizedTestFile),
-          );
+        for (const { file, testNamePattern } of cycleScope) {
+          await enqueueHeadedReload(file, testNamePattern);
         }
       } catch (error) {
         // Surfaced through the outcome rather than thrown: core finalizes this
@@ -4309,13 +4336,17 @@ export const runBrowserController = async (
     };
 
     runUiRequestedRerun = async (file, testNamePattern) => {
-      if (testNamePattern === undefined) {
-        pendingTestNamePatterns.delete(normalize(file.testPath));
-      } else {
-        pendingTestNamePatterns.set(normalize(file.testPath), testNamePattern);
-      }
       await refreshHostConfig();
-      await signalInvalidation([file.testPath]);
+      await signalInvalidation([file.testPath], () => {
+        if (testNamePattern === undefined) {
+          pendingTestNamePatterns.delete(normalize(file.testPath));
+        } else {
+          pendingTestNamePatterns.set(
+            normalize(file.testPath),
+            testNamePattern,
+          );
+        }
+      });
       await signalledCycle;
     };
 

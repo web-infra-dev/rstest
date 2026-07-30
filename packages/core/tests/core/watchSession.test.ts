@@ -61,7 +61,7 @@ const createFakeExecutor = (
 /**
  * An executor whose first cycle parks until released, so a test can put further
  * triggers on either side of the moment that cycle reads its scope — which is
- * what decides whether they coalesce into the queued cycle or queue behind it.
+ * what decides whether they fold into the queued cycle or queue behind it.
  */
 const createGatedExecutor = (name: string) => {
   let release: () => void = () => {};
@@ -142,7 +142,7 @@ describe('createWatchCycleDriver', () => {
     expect(context.snapshotManager.summary.unmatched).toBe(2);
   });
 
-  it('coalesces a burst of triggers into the queued cycle instead of appending', async () => {
+  it('folds a burst of invalidations into the queued cycle instead of appending', async () => {
     const context = createContext();
     const { driver } = createDriver(context);
     const { executor, release, started } = createGatedExecutor('browser');
@@ -150,6 +150,7 @@ describe('createWatchCycleDriver', () => {
     const inFlight = driver.runCycle(executor, {
       mode: 'on-demand',
       fileFilters: ['/a.test.ts'],
+      fromInvalidation: true,
     });
     await started();
 
@@ -158,25 +159,36 @@ describe('createWatchCycleDriver', () => {
     const burstA = driver.runCycle(executor, {
       mode: 'on-demand',
       fileFilters: ['/b.test.ts'],
+      fromInvalidation: true,
     });
     const burstB = driver.runCycle(executor, {
       mode: 'on-demand',
       fileFilters: ['/c.test.ts'],
+      fromInvalidation: true,
+    });
+    // A second signal for a file already in the queued scope adds nothing: it
+    // is the same cycle that will run it, which is what lets the headed host
+    // hand that cycle a per-file test-name pattern.
+    const burstC = driver.runCycle(executor, {
+      mode: 'on-demand',
+      fileFilters: ['/b.test.ts'],
+      fromInvalidation: true,
     });
     expect(burstA).toBe(burstB);
+    expect(burstA).toBe(burstC);
 
     release();
-    await Promise.all([inFlight, burstA, burstB]);
+    await Promise.all([inFlight, burstA, burstB, burstC]);
 
     expect(executor.cycles).toHaveLength(2);
-    // Widened, not replaced: neither trigger's file is dropped.
+    // The union, not the last one in: neither trigger's file is dropped.
     expect(executor.cycles[1]!.fileFilters?.slice().sort()).toEqual([
       '/b.test.ts',
       '/c.test.ts',
     ]);
   });
 
-  it('widens a coalesced cycle to the broader scope', async () => {
+  it('never folds an explicit trigger together with an invalidation', async () => {
     const context = createContext();
     const { driver } = createDriver(context);
     const { executor, release, started } = createGatedExecutor('node');
@@ -184,22 +196,79 @@ describe('createWatchCycleDriver', () => {
     const inFlight = driver.runCycle(executor, { mode: 'all' });
     await started();
 
-    const scoped = driver.runCycle(executor, {
+    // A rebuild, then the `p` shortcut's scoped cycle, then another rebuild.
+    const rebuild = driver.runCycle(executor, {
       mode: 'on-demand',
-      fileFilters: ['/a.test.ts'],
+      fromInvalidation: true,
     });
-    const everything = driver.runCycle(executor, { mode: 'all' });
+    const scoped = driver.runCycle(executor, { fileFilters: ['/a.test.ts'] });
+    const laterRebuild = driver.runCycle(executor, {
+      mode: 'on-demand',
+      fromInvalidation: true,
+    });
 
     release();
-    await Promise.all([inFlight, scoped, everything]);
+    await Promise.all([inFlight, rebuild, scoped, laterRebuild]);
 
-    expect(executor.cycles).toHaveLength(2);
-    // `all` with no filters is broader than the scoped rerun it absorbed.
-    expect(executor.cycles[1]).toMatchObject({ mode: 'all' });
-    expect(executor.cycles[1]!.fileFilters).toBeUndefined();
+    // Each cycle runs exactly the scope its own trigger asked for. A merge
+    // would either hand the shortcut's file list to a rebuild, or replace the
+    // list the shortcut chose with the rebuild's cycle-time scope.
+    expect(
+      executor.cycles.map((cycle) => [cycle.mode, cycle.fileFilters]),
+    ).toEqual([
+      ['all', undefined],
+      ['on-demand', undefined],
+      ['all', ['/a.test.ts']],
+      ['on-demand', undefined],
+    ]);
   });
 
-  it('queues rather than coalesces once the cycle has read its scope', async () => {
+  it('keeps a snapshot update inside the files its own trigger chose', async () => {
+    // The `u` shortcut flips `updateSnapshot` for the cycles it asks for and
+    // holds it flipped until they finish. Nothing it did not ask for may run
+    // under that flag: rewriting every snapshot file a rebuild happened to
+    // touch destroys data the user never offered up.
+    const context = createContext();
+    const { driver } = createDriver(context);
+    const { executor, release, started } = createGatedExecutor('node');
+    const originalUpdateSnapshot =
+      context.snapshotManager.options.updateSnapshot;
+
+    const inFlight = driver.runCycle(executor, { mode: 'all' });
+    await started();
+
+    // A save lands while the first cycle runs, queueing a rebuild cycle...
+    const rebuild = driver.runCycle(executor, {
+      mode: 'on-demand',
+      fromInvalidation: true,
+    });
+    // ...and then the user presses `u`.
+    context.snapshotManager.options.updateSnapshot = 'all';
+    const update = driver.runCycle(executor, {
+      fileFilters: ['/snap.test.ts'],
+    });
+
+    release();
+    try {
+      await Promise.all([inFlight, rebuild, update]);
+    } finally {
+      context.snapshotManager.options.updateSnapshot = originalUpdateSnapshot;
+    }
+
+    expect(executor.cycles).toHaveLength(3);
+    // The rebuild keeps the flag as it stood when its own trigger queued it,
+    // even though it was dispatched inside the `u` window.
+    expect(executor.cycles[1]).toMatchObject({
+      updateSnapshot: originalUpdateSnapshot,
+      fileFilters: undefined,
+    });
+    expect(executor.cycles[2]).toMatchObject({
+      updateSnapshot: 'all',
+      fileFilters: ['/snap.test.ts'],
+    });
+  });
+
+  it('queues rather than folds once the cycle has read its scope', async () => {
     const context = createContext();
     const { driver } = createDriver(context);
     const { executor, release, started } = createGatedExecutor('node');
@@ -207,14 +276,16 @@ describe('createWatchCycleDriver', () => {
     const inFlight = driver.runCycle(executor, {
       mode: 'on-demand',
       fileFilters: ['/a.test.ts'],
+      fromInvalidation: true,
     });
     await started();
 
-    // The running cycle has already read its scope, so this one cannot widen
-    // it — it has to run on its own.
+    // The running cycle has already read its scope, so this signal cannot fold
+    // into it — it has to run on its own.
     const next = driver.runCycle(executor, {
       mode: 'on-demand',
       fileFilters: ['/b.test.ts'],
+      fromInvalidation: true,
     });
     expect(next).not.toBe(inFlight);
 

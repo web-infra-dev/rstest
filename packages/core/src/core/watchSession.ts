@@ -1,3 +1,4 @@
+import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { TestExecutor } from '../types';
 import type { CoverageProvider } from '../types/coverage';
 import {
@@ -25,6 +26,13 @@ import {
 export type WatchCycleOptions = {
   mode?: 'all' | 'on-demand';
   fileFilters?: string[];
+  /**
+   * Whether this trigger is a transport's own invalidation signal (a dev
+   * rebuild, an HMR update, the browser host's file-set diff) rather than
+   * something core queued directly — a CLI shortcut, or the session's initial
+   * cycle. Only invalidation signals fold into each other; see {@link canFold}.
+   */
+  fromInvalidation?: boolean;
 };
 
 /**
@@ -41,28 +49,46 @@ export interface WatchCycleDriver {
   hasFinalizedCycle(): boolean;
 }
 
-type PendingCycle = { options: WatchCycleOptions; cycle: Promise<void> };
+type PendingCycle = {
+  options: WatchCycleOptions;
+  /**
+   * `updateSnapshot` as it stood when this trigger queued its cycle, not as it
+   * stands when the cycle is dequeued. The `u` shortcut flips it to `'all'`
+   * around the cycles it asks for, so a cycle that read it at dispatch could
+   * inherit a flag no trigger of its own set and rewrite the snapshots of every
+   * file it happens to run.
+   */
+  updateSnapshot: SnapshotUpdateState;
+  cycle: Promise<void>;
+};
 
 /**
- * Merge a trigger into a queued cycle's scope so the result covers both.
- * Widening, never replacing: `'all'` beats `'on-demand'`, and an absent
- * `fileFilters` means "whatever this executor resolves at cycle time", which is
- * already broader than any explicit list.
+ * Whether a trigger may fold its scope into a queued cycle instead of queueing
+ * its own behind it.
+ *
+ * Only a transport's own invalidation signals may, and only ones asking the same
+ * question: what changed since the last cycle, in this `mode`? A burst of those
+ * (two quick saves, one `onAfterDevCompile` per browser project) then collapses
+ * into a single answer instead of running the same files back to back and
+ * printing a summary each time. What core queues directly must not fold — a
+ * shortcut binds state to the file list it chose (`u`'s snapshot-update flag,
+ * the filter `p` just printed), so folding it would apply that state to files
+ * no trigger of theirs ever selected.
+ *
+ * Folding two such signals is then a plain union of their file lists, the one
+ * thing they disagree on. Both lists have to be there to union: an absent list
+ * means the executor resolves its own scope at cycle time, which is not the
+ * broader scope it looks like — the node side pulls the entries its rebuild
+ * affected, while the browser side reads it as no files at all.
  */
-const widenScope = (
+const canFold = (
   queued: WatchCycleOptions,
   incoming: WatchCycleOptions,
-): WatchCycleOptions => ({
-  // An absent `mode` is `'all'` (the `runOne` default), so it widens too.
-  mode:
-    (queued.mode ?? 'all') === 'all' || (incoming.mode ?? 'all') === 'all'
-      ? 'all'
-      : 'on-demand',
-  fileFilters:
-    queued.fileFilters && incoming.fileFilters
-      ? [...new Set([...queued.fileFilters, ...incoming.fileFilters])]
-      : undefined,
-});
+): boolean =>
+  !!queued.fromInvalidation &&
+  !!incoming.fromInvalidation &&
+  queued.mode === incoming.mode &&
+  !!queued.fileFilters === !!incoming.fileFilters;
 
 export function createWatchCycleDriver({
   context,
@@ -101,14 +127,15 @@ export function createWatchCycleDriver({
   let tail: Promise<unknown> = Promise.resolve();
   // Executors whose first cycle of this session has already been dispatched.
   const started = new Set<TestExecutor>();
-  // Per executor, the cycle that is queued but has not started reading its
-  // scope yet — the one a further trigger widens instead of queueing behind.
+  // Per executor, the cycle queued most recently that has not started reading
+  // its scope yet — the one a further invalidation folds into instead of
+  // queueing behind.
   const pending = new Map<TestExecutor, PendingCycle>();
   let finalizedACycle = false;
 
   const runOne = async (
     executor: TestExecutor,
-    { mode = 'all', fileFilters }: WatchCycleOptions,
+    { options: { mode = 'all', fileFilters }, updateSnapshot }: PendingCycle,
   ): Promise<void> => {
     // One id per cycle across all executors: consumers only require it to move
     // (the node pool flushes its worker cache on a change, the browser host
@@ -128,8 +155,7 @@ export function createWatchCycleDriver({
       buildId,
       mode,
       fileFilters,
-      // Read live per cycle, so a `u` rerun that flipped it is honored.
-      updateSnapshot: context.snapshotManager.options.updateSnapshot,
+      updateSnapshot,
       onTraceEvents,
     });
     await finalizeRunCycle(context, {
@@ -151,25 +177,32 @@ export function createWatchCycleDriver({
 
   return {
     runCycle(executor, options = {}) {
-      // Coalesce into this executor's queued cycle that has not begun rather than
-      // appending a second one. A burst of triggers (two quick saves, or one
-      // `onAfterDevCompile` per browser project) would otherwise run the same
-      // files back to back and print a summary each time. Merging is widening,
-      // never latest-wins: the cycle must still cover everything every trigger
-      // in the burst asked for.
+      // Fold into this executor's queued cycle that has not begun rather than
+      // appending a second one. Union, never latest-wins: the folded cycle must
+      // still cover every file the burst asked for.
       const queued = pending.get(executor);
-      if (queued) {
-        queued.options = widenScope(queued.options, options);
+      if (queued && canFold(queued.options, options)) {
+        const { fileFilters } = queued.options;
+        if (fileFilters && options.fileFilters) {
+          queued.options.fileFilters = [
+            ...new Set([...fileFilters, ...options.fileFilters]),
+          ];
+        }
+        // Absent on both sides (`canFold` requires they agree): no list to union.
         return queued.cycle;
       }
 
-      const entry: PendingCycle = { options, cycle: undefined as never };
+      const entry: PendingCycle = {
+        options: { ...options },
+        updateSnapshot: context.snapshotManager.options.updateSnapshot,
+        cycle: undefined as never,
+      };
       entry.cycle = tail.then(() => {
         // Dropped before the run, not after: from here the options are frozen,
         // so a trigger arriving mid-cycle queues its own cycle instead of
-        // widening one that has already read its scope.
+        // folding into one that has already read its scope.
         pending.delete(executor);
-        return runOne(executor, entry.options);
+        return runOne(executor, entry);
       });
       pending.set(executor, entry);
       // The caller still observes the rejection; the chain must not hand it to
@@ -325,9 +358,11 @@ export function createWatchShortcutHandlers(
 
       clearScreen();
 
-      // The single save/restore for both sides: every cycle reads the live
-      // value at dispatch, so it must stay flipped until both have finished and
-      // must be restored even when one of them throws.
+      // The single save/restore for both sides. It has to span both cycles, not
+      // just the calls that queue them: the node side takes the value this
+      // trigger queued its cycle with, while the browser host re-reads the live
+      // one for every page it loads. And it must be restored even when one of
+      // the two throws.
       const originalUpdateSnapshot = snapshotManager.options.updateSnapshot;
       snapshotManager.options.updateSnapshot = 'all';
       try {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 import type { ProjectContext, Rstest } from '@rstest/core/internal/browser';
 import {
+  claimHeadedCycleScope,
   createBrowserLazyCompilationConfig,
   createBrowserRsbuildDevConfig,
   createBrowserContextExcludeRegExp,
@@ -408,6 +409,89 @@ describe('resolveEmptyLaunchExitCode', () => {
         allowEmptyRun: true,
       }),
     ).toBeUndefined();
+  });
+});
+
+describe('claimHeadedCycleScope', () => {
+  const testFile = (testPath: string) => ({
+    testPath,
+    projectName: 'browser',
+  });
+
+  it('claims only the patterns of the paths in its own scope', () => {
+    // The race the per-file map exists for: a rebuild cycle for one file is
+    // dequeued while a click on another is still waiting for the cycle it
+    // signalled. The rebuild must not run with — or swallow — that pattern.
+    const patterns = new Map([
+      ['/a.test.ts', 'sums'],
+      ['/b.test.ts', 'renders'],
+    ]);
+    const currentTestFiles = [testFile('/a.test.ts'), testFile('/b.test.ts')];
+
+    const scope = claimHeadedCycleScope(
+      ['/a.test.ts'],
+      currentTestFiles,
+      patterns,
+    );
+
+    expect(scope).toEqual([
+      { file: currentTestFiles[0], testNamePattern: 'sums' },
+    ]);
+    expect([...patterns]).toEqual([['/b.test.ts', 'renders']]);
+  });
+
+  it('consumes a pattern once, so a later cycle runs the whole file', () => {
+    const patterns = new Map([['/a.test.ts', 'sums']]);
+    const currentTestFiles = [testFile('/a.test.ts')];
+
+    const claimed = claimHeadedCycleScope(
+      ['/a.test.ts'],
+      currentTestFiles,
+      patterns,
+    );
+    const afterwards = claimHeadedCycleScope(
+      ['/a.test.ts'],
+      currentTestFiles,
+      patterns,
+    );
+
+    expect(claimed[0]!.testNamePattern).toBe('sums');
+    expect(afterwards[0]!.testNamePattern).toBeUndefined();
+  });
+
+  it('skips a path the file set no longer has and keeps every live one', () => {
+    // A queued scope goes stale when a later trigger rebuilds the file set
+    // without one of its files. Skipping is what the headless twin does;
+    // failing the cycle would take the surviving files down with it.
+    const currentTestFiles = [testFile('/a.test.ts'), testFile('/c.test.ts')];
+
+    const scope = claimHeadedCycleScope(
+      ['/a.test.ts', '/deleted.test.ts', '/c.test.ts'],
+      currentTestFiles,
+      new Map(),
+    );
+
+    expect(scope.map(({ file }) => file.testPath)).toEqual([
+      '/a.test.ts',
+      '/c.test.ts',
+    ]);
+  });
+
+  it('normalizes the scope paths before matching files and patterns', () => {
+    // The scope arrives from core's cycle options while the file set and the
+    // pattern map are keyed on normalized paths.
+    const patterns = new Map([['/a.test.ts', 'sums']]);
+    const currentTestFiles = [testFile('/a.test.ts')];
+
+    const scope = claimHeadedCycleScope(
+      ['/tests/../a.test.ts'],
+      currentTestFiles,
+      patterns,
+    );
+
+    expect(scope).toEqual([
+      { file: currentTestFiles[0], testNamePattern: 'sums' },
+    ]);
   });
 });
 

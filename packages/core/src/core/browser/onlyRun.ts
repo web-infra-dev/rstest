@@ -71,9 +71,14 @@ async function runBrowserOnlyWatch(
     isSessionLive: () => browserExecutor.hasWatchSession(),
   });
   // The host resolves the rerun scope before it signals (its file-set diff is
-  // consumed once), so the hint's filters are this cycle's scope.
+  // consumed once), so the hint's filters are the scope this trigger asked for —
+  // the cycle's own is that, plus whatever any signal folded into it.
   browserExecutor.onInvalidate(({ fileFilters }) =>
-    watchDriver.runCycle(browserExecutor, { mode: 'on-demand', fileFilters }),
+    watchDriver.runCycle(browserExecutor, {
+      mode: 'on-demand',
+      fileFilters,
+      fromInvalidation: true,
+    }),
   );
 
   const closeWatchSession = createWatchTeardown({

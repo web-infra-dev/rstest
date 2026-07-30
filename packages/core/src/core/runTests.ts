@@ -443,9 +443,14 @@ export async function runTests(
     await browserExecutor.init();
     const executor = browserExecutor;
     // The host resolves the rerun scope before signalling (its file-set diff is
-    // consumed once), so the hint's filters are the cycle's scope.
+    // consumed once), so the hint's filters are the scope this trigger asked
+    // for — the cycle's own is that, plus whatever any signal folded into it.
     executor.onInvalidate(({ fileFilters }) =>
-      watchDriver.runCycle(executor, { mode: 'on-demand', fileFilters }),
+      watchDriver.runCycle(executor, {
+        mode: 'on-demand',
+        fileFilters,
+        fromInvalidation: true,
+      }),
     );
   }
 
@@ -495,6 +500,7 @@ export async function runTests(
     nodeExecutor.onInvalidate(({ isFirstBuild }) =>
       watchDriver.runCycle(nodeExecutor, {
         mode: isFirstBuild ? 'all' : 'on-demand',
+        fromInvalidation: true,
       }),
     );
     // Start the node dev server now that the subscriber is in place. `runCycle`
