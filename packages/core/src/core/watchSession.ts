@@ -33,6 +33,12 @@ export type WatchCycleOptions = {
  */
 export interface WatchCycleDriver {
   runCycle(executor: TestExecutor, options?: WatchCycleOptions): Promise<void>;
+  /**
+   * Whether a cycle has finalized yet. Shortcuts are installed before the first
+   * one so the ready banner always has a stdin owner, which leaves a window
+   * where a rerun key would reach executors that are still starting up.
+   */
+  hasFinalizedCycle(): boolean;
 }
 
 type PendingCycle = { options: WatchCycleOptions; cycle: Promise<void> };
@@ -98,6 +104,7 @@ export function createWatchCycleDriver({
   // Per executor, the cycle that is queued but has not started reading its
   // scope yet — the one a further trigger widens instead of queueing behind.
   const pending = new Map<TestExecutor, PendingCycle>();
+  let finalizedACycle = false;
 
   const runOne = async (
     executor: TestExecutor,
@@ -133,6 +140,7 @@ export function createWatchCycleDriver({
       reportOnFailure: context.normalizedConfig.coverage.reportOnFailure,
       traceRun: getTraceRun(),
     });
+    finalizedACycle = true;
     // Pre-allocate the next cycle's buffer so events emitted between cycles are
     // not dropped.
     setTraceRun(traceController.beginRun());
@@ -169,6 +177,7 @@ export function createWatchCycleDriver({
       tail = entry.cycle.catch(() => {});
       return entry.cycle;
     },
+    hasFinalizedCycle: () => finalizedACycle,
   };
 }
 
@@ -203,8 +212,30 @@ export function createWatchShortcutHandlers(
   context: Rstest,
   { node, browser }: WatchSessionTargets,
   close: () => Promise<void>,
+  /**
+   * Whether a cycle has finalized. Shortcuts are installed before the first one
+   * (the ready banner must never appear without a stdin owner), so until it
+   * lands a rerun key would reach a node side whose dev server is still coming
+   * up — starting a second full startup run — or a browser side whose watch
+   * session does not exist yet, which drops the keystroke in silence.
+   */
+  isArmed: () => boolean = () => true,
 ): Parameters<typeof setupCliShortcuts>[0] {
   const { snapshotManager } = context;
+
+  const whenArmed = <A extends unknown[]>(
+    handler: (...args: A) => Promise<void>,
+  ): ((...args: A) => Promise<void>) => {
+    return async (...args: A) => {
+      if (!isArmed()) {
+        logger.log(
+          color.yellow('\nInitial run in progress, try again once it lands.'),
+        );
+        return;
+      }
+      await handler(...args);
+    };
+  };
 
   // Node cycle first, browser cycle second: each finalizes on its own, and that
   // output order is the shape a mixed watch shortcut has always produced.
@@ -218,7 +249,7 @@ export function createWatchShortcutHandlers(
 
   return {
     closeServer: close,
-    runAll: async () => {
+    runAll: whenArmed(async () => {
       clearScreen();
       if (node) {
         // `t`/`p` scope the node side only, so only the node side has scoping
@@ -228,10 +259,10 @@ export function createWatchShortcutHandlers(
         await node.runCycle({ mode: 'all' });
       }
       await browser?.rerun();
-    },
+    }),
     runWithTestNamePattern:
       node &&
-      (async (pattern) => {
+      whenArmed(async (pattern: string | undefined) => {
         clearScreen();
         context.normalizedConfig.testNamePattern = pattern;
 
@@ -246,7 +277,7 @@ export function createWatchShortcutHandlers(
       }),
     runWithFileFilters:
       node &&
-      (async (filters) => {
+      whenArmed(async (filters: string[] | undefined) => {
         clearScreen();
         if (filters && filters.length > 0) {
           logger.log(
@@ -270,7 +301,7 @@ export function createWatchShortcutHandlers(
         }
         await node.runCycle({ fileFilters: entries });
       }),
-    runFailedTests: async () => {
+    runFailedTests: whenArmed(async () => {
       const failedTests = collectFailedTestPaths(context);
 
       if (!failedTests.length) {
@@ -282,8 +313,8 @@ export function createWatchShortcutHandlers(
 
       clearScreen();
       await fanOut({ fileFilters: failedTests, mode: 'all' }, failedTests);
-    },
-    updateSnapshot: async () => {
+    }),
+    updateSnapshot: whenArmed(async () => {
       if (!snapshotManager.summary.unmatched) {
         logger.log(
           color.yellow('\nNo snapshots were found that needed to be updated.'),
@@ -304,7 +335,7 @@ export function createWatchShortcutHandlers(
       } finally {
         snapshotManager.options.updateSnapshot = originalUpdateSnapshot;
       }
-    },
+    }),
   };
 }
 
@@ -325,19 +356,26 @@ export function createWatchTeardown({
 }): () => Promise<void> {
   let isClosing: Promise<void> | undefined;
 
+  // Each step is isolated and the trace steps run in `finally`, so one
+  // executor's close cannot leave the executors behind it — or the trace files —
+  // untouched. Teardown is the last thing that runs; a step that throws is
+  // reported, never allowed to cancel the rest.
+  const step = async (label: string, fn: () => Promise<unknown>) => {
+    try {
+      await runLifecycleStep(label, fn);
+    } catch (error) {
+      logger.log(color.red(`Error during cleanup: ${error}`));
+    }
+  };
+
   const close = async (): Promise<void> => {
     try {
       for (const executor of executors) {
-        await runLifecycleStep('executor cleanup', () => executor.close());
+        await step('executor cleanup', () => executor.close());
       }
-      await runLifecycleStep('trace run finalize', () =>
-        getTraceRun().finalize(),
-      );
-      await runLifecycleStep('trace controller cleanup', () =>
-        traceController.close(),
-      );
-    } catch (error) {
-      logger.log(color.red(`Error during cleanup: ${error}`));
+    } finally {
+      await step('trace run finalize', () => getTraceRun().finalize());
+      await step('trace controller cleanup', () => traceController.close());
     }
   };
 

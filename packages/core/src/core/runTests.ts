@@ -477,7 +477,12 @@ export async function runTests(
   // before stdin has an owner (a keystroke answering it would be swallowed).
   if (enableCliShortcuts) {
     const closeCliShortcuts = await deps.setupCliShortcuts(
-      createWatchShortcutHandlers(context, watchTargets, closeWatchSession),
+      createWatchShortcutHandlers(
+        context,
+        watchTargets,
+        closeWatchSession,
+        watchDriver.hasFinalizedCycle,
+      ),
     );
     onBeforeRestart(closeCliShortcuts);
   }

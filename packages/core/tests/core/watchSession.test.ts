@@ -1,7 +1,11 @@
 import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import { Rstest } from '../../src/core/rstest';
-import { createWatchCycleDriver } from '../../src/core/watchSession';
+import {
+  createWatchCycleDriver,
+  createWatchShortcutHandlers,
+  createWatchTeardown,
+} from '../../src/core/watchSession';
 import type {
   ExecutorCycleOutcome,
   ExecutorRunCycleOptions,
@@ -251,5 +255,134 @@ describe('createWatchCycleDriver', () => {
     await driver.runCycle(executor, { mode: 'on-demand' });
 
     expect(runs).toHaveLength(2);
+  });
+});
+
+describe('createWatchTeardown', () => {
+  const noopTrace = () =>
+    ({
+      finalize: async () => {},
+    }) as TraceRun;
+
+  it('closes every executor and finalizes the trace even when one close throws', async () => {
+    const closed: string[] = [];
+    let traceFinalized = 0;
+    let controllerClosed = 0;
+
+    const close = createWatchTeardown({
+      executors: [
+        {
+          ...createFakeExecutor('browser'),
+          close: async () => {
+            closed.push('browser');
+            throw new Error('browser close failed');
+          },
+        },
+        {
+          ...createFakeExecutor('node'),
+          close: async () => {
+            closed.push('node');
+          },
+        },
+      ],
+      traceController: {
+        beginRun: noopTrace,
+        close: async () => {
+          controllerClosed += 1;
+        },
+      } as unknown as TraceController,
+      getTraceRun: () =>
+        ({
+          finalize: async () => {
+            traceFinalized += 1;
+          },
+        }) as TraceRun,
+    });
+
+    await close();
+
+    // A throwing close must not take the executors behind it, or the trace
+    // files, down with it — teardown is the last thing that runs.
+    expect(closed).toEqual(['browser', 'node']);
+    expect(traceFinalized).toBe(1);
+    expect(controllerClosed).toBe(1);
+  });
+
+  it('runs the teardown once for repeated calls', async () => {
+    let closes = 0;
+    const close = createWatchTeardown({
+      executors: [
+        {
+          ...createFakeExecutor('node'),
+          close: async () => {
+            closes += 1;
+          },
+        },
+      ],
+      traceController: {
+        beginRun: noopTrace,
+        close: async () => {},
+      } as unknown as TraceController,
+      getTraceRun: noopTrace,
+    });
+
+    await Promise.all([close(), close()]);
+    await close();
+
+    expect(closes).toBe(1);
+  });
+});
+
+describe('createWatchShortcutHandlers arming', () => {
+  const targetsOf = (cycles: string[]) => ({
+    node: {
+      runCycle: async () => {
+        cycles.push('node');
+      },
+      globTestEntries: async () => ['/a.test.ts'],
+    },
+    browser: {
+      rerun: async () => {
+        cycles.push('browser');
+      },
+    },
+  });
+
+  it('drops rerun keys until a cycle has finalized, then honors them', async () => {
+    // Shortcuts install before the first cycle so the ready banner always has a
+    // stdin owner. An `a` in that window would start the node dev server through
+    // its own cycle and leave the first compile to enqueue a second startup run,
+    // while the browser side has no watch session to answer at all.
+    const cycles: string[] = [];
+    let armed = false;
+    const handlers = createWatchShortcutHandlers(
+      createContext(),
+      targetsOf(cycles),
+      async () => {},
+      () => armed,
+    );
+
+    await handlers.runAll!();
+    expect(cycles).toEqual([]);
+
+    armed = true;
+    await handlers.runAll!();
+    expect(cycles).toEqual(['node', 'browser']);
+  });
+
+  it('leaves the quit handler reachable before the first cycle', async () => {
+    let closed = 0;
+    const handlers = createWatchShortcutHandlers(
+      createContext(),
+      targetsOf([]),
+      async () => {
+        closed += 1;
+      },
+      () => false,
+    );
+
+    await handlers.closeServer!();
+
+    expect(closed).toBe(1);
   });
 });

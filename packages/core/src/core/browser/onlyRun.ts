@@ -97,6 +97,7 @@ async function runBrowserOnlyWatch(
           },
         },
         closeWatchSession,
+        watchDriver.hasFinalizedCycle,
       ),
     );
     onBeforeRestart(closeCliShortcuts);
