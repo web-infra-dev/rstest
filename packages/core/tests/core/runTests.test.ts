@@ -470,7 +470,7 @@ describe('runTests orchestration', () => {
     expect(nodeExecutor.closeCount).toBe(1);
   });
 
-  it('routes a browser-only run to the fast path without constructing a node executor', async () => {
+  it('routes a browser-only run to the fast path without resolving the planner', async () => {
     const { context } = createContext({ browserProjectNames: ['browser-a'] });
     const runBrowserOnlyTests = rs.fn<RunTestsDeps['runBrowserOnlyTests']>(
       async () => {},
@@ -479,8 +479,10 @@ describe('runTests orchestration', () => {
     await runTests(
       context,
       createDeps({
-        // `createNodeExecutor` stays unreachable: booting a node Rsbuild
-        // instance is exactly what the cold-start gate exists to avoid.
+        // Every other dep stays `unreachable`, and `createRunPlanner` is the
+        // load-bearing one: resolving the planner boots a node Rsbuild
+        // instance, which is exactly what the cold-start gate exists to avoid.
+        // Hoisting that call above the fast-path branch fails here.
         runBrowserOnlyTests,
       }),
     );

@@ -86,8 +86,9 @@ export async function runTests(
 ): Promise<void> {
   // High-level flow (post-executor-seam):
   // 1. Split browser/node projects (the single `isBrowserProject` predicate).
-  // 2. Browser-only runs (no node projects) take a fast path so they skip the
-  //    node Rsbuild server + worker pool entirely (cold-start gate: retained).
+  // 2. Browser-only runs (no node projects) take a fast path so they never
+  //    resolve the planner, and so never boot a node Rsbuild instance
+  //    (cold-start gate: retained).
   // 3. Otherwise resolve the plan first (the node `modifyRstestConfig` hooks fire
   //    and the plan is read inside the planner — the init barrier), then
   //    construct both executors from it.
@@ -158,9 +159,14 @@ export async function runTests(
 
   // ===================================================================
   // Browser-only fast path (no node projects). Retained per the cold-start
-  // gate: constructing/`init()`-ing a NodeExecutor here would add the node
-  // Rsbuild instance to every pure-browser run — and with zero node projects
-  // that instance resolves to an empty `environments: {}` anyway.
+  // gate, which this branch enforces by never reaching `createRunPlanner`
+  // below: resolving the planner is what boots the node Rsbuild instance, and
+  // with zero node projects that instance resolves to an empty
+  // `environments: {}` anyway. Constructing a `NodeExecutor` costs nothing on
+  // its own (closures only — server, pool, and plan all arrive later), so
+  // hoisting the planner call above this branch to unify the assembly is the
+  // regression the gate exists to prevent. Folding the branch away means
+  // teaching the planner to skip the boot for a zero-node run.
   // ===================================================================
   if (hasBrowserProjects && !hasNodeProjects) {
     await deps.runBrowserOnlyTests(context, browserProjects, {

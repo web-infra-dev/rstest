@@ -113,8 +113,10 @@ async function runBrowserOnlyWatch(
 
 /**
  * Browser-only run path (no node projects). Retained per the cold-start gate:
- * constructing/`init()`-ing a NodeExecutor would add the node Rsbuild instance
- * to every pure-browser run.
+ * resolving the run planner boots the node Rsbuild instance, so routing here
+ * instead of through the planner is what keeps a pure-browser run from paying
+ * for one. Constructing a `NodeExecutor` is not the cost being avoided — it
+ * allocates closures and nothing else.
  *
  * Both commands drive one browser executor through the shared finalize, so exit
  * code, reporter output, coverage, and the no-test path match node and mixed
