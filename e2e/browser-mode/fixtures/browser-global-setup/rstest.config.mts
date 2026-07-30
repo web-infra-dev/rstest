@@ -1,6 +1,10 @@
 import { defineConfig } from '@rstest/core';
 import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT } from '../ports';
 
+// The watch regression test drives stdin through a pipe.
+process.stdin.isTTY = true;
+process.stdin.setRawMode = () => process.stdin;
+
 // Phase 5 step 5 gate: a browser-only run must execute `globalSetup` on the
 // host and propagate its `process.env` changes into the browser runtime env
 // store, with explicit `test.env` config still taking precedence.

@@ -1,16 +1,7 @@
 import { defineConfig } from '@rstest/core';
-import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT } from '../ports';
 
-// Phase 5 step 5 gate: a failing `globalSetup` in a browser-only run must
-// fail the run before any browser test executes, matching node semantics.
+// Each browser project fails independently so the shared setup stage must
+// preserve every error instead of reporting only the first project.
 export default defineConfig({
-  browser: {
-    enabled: true,
-    provider: 'playwright',
-    headless: true,
-    port: BROWSER_PORTS['browser-global-setup-error'],
-  },
-  include: ['tests/**/*.test.ts'],
-  testTimeout: BROWSER_TEST_TIMEOUT,
-  globalSetup: ['./globalSetup.ts'],
+  projects: ['./project-a/rstest.config.mts', './project-b/rstest.config.mts'],
 });
