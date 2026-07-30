@@ -78,11 +78,7 @@ export async function createCoverageProvider(
   throw new Error(`Unknown coverage provider: ${options.provider}`);
 }
 
-/**
- * The `Coverage enabled with <provider>` banner. Printed once per run, either
- * alongside provider creation or — on the browser-only watch path, which defers
- * provider creation until the session ends — up front on its own.
- */
+/** The `Coverage enabled with <provider>` banner. Printed once per run. */
 export function logCoverageEnabled(options: NormalizedCoverageOptions): void {
   logger.log(
     ` ${color.gray('Coverage enabled with')} %s\n`,

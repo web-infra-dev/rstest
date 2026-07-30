@@ -293,8 +293,9 @@ describe('createWatchCycleDriver', () => {
       trigger: 'run-failed',
     });
     // Two `t` presses. Identical options, different patterns — the pattern lives
-    // on `context`, so folding by option identity would run the second press's
-    // cycle under the first press's pattern and never run the second at all.
+    // on `context` and is written there before dispatch, so folding by option
+    // identity would run the merged cycle under the second press's pattern and
+    // never answer the first press at all, after announcing that it would.
     const pattern = driver.runCycle(executor, {});
     const laterPattern = driver.runCycle(executor, {});
 

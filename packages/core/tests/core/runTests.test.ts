@@ -237,10 +237,12 @@ const unreachable = (label: string) => () => {
  * left-hand one gives `-1 < n` and passes. So a dropped call went unnoticed
  * only where its label sat on the left of every comparison naming it. Two of
  * the four sites this helper replaced were in that position — the watch
- * invariant-#7 pin (`node:ensure-run-resources` < `browser:cycle-start`) and
- * the mixed-watch shortcut pin (`node:cycle-end` < `browser:request-rerun:all`)
- * — and both were confirmed by experiment to pass with the call under test
- * deleted. The other two already caught it and are converted for uniformity:
+ * invariant-#7 pin (`node:ensure-run-resources` < `browser:cycle-start`), which
+ * was confirmed by experiment to pass with the call under test deleted, and the
+ * mixed-watch shortcut pin (`node:cycle-end` < `browser:request-rerun:all`),
+ * where the asymmetry is structural but the surrounding assertions were not
+ * probed — the `toMatchObject` on the last cycle would have to survive the
+ * deletion too. The other two already caught it and are converted for uniformity:
  * the non-watch invariant-#7 chain also compares `node:construct` *into*
  * `node:ensure-run-resources`, and the `node:cycle-end` < `node:close` pin
  * carried its own `toBeGreaterThan(-1)`.

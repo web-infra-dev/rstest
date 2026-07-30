@@ -30,10 +30,13 @@ import {
  *
  * `'invalidation'` is a transport's own signal (a dev rebuild, an HMR update,
  * the browser host's file-set diff); the rest are the CLI shortcuts whose whole
- * request lives in the options object. The session's initial cycle and the
- * `t`/`p` shortcuts carry no trigger and so never fold: `t`/`p` bind a pattern
- * or filter that lives on `context`, outside the options a fold would union, so
- * two of them are not the same request even when their options match.
+ * request lives in the options object. The `t`/`p` shortcuts and the browser
+ * initial cycle carry no trigger and so never fold: `t`/`p` bind a pattern or
+ * filter that lives on `context`, outside the options a fold would union, so
+ * two of them are not the same request even when their options match. (The node
+ * initial cycle is not in that group — it arrives as `'invalidation'`, because
+ * the initial compile is what signals it — but nothing can be queued behind an
+ * executor before its first cycle, so it folds with nothing reachable either.)
  */
 export type WatchCycleTrigger =
   'invalidation' | 'run-all' | 'run-failed' | 'update-snapshot';

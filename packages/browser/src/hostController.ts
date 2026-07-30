@@ -4232,9 +4232,13 @@ export const runBrowserController = async (
     // an unrelated trigger can be dequeued between the click and its own cycle,
     // and a single slot would hand the pattern to whichever cycle ran first.
     // An entry is written with its own signal and read at a cycle's first
-    // synchronous step, so the only cycle that can take it is the one that
-    // signal started — or, when the file was already in a queued scope, the one
-    // it folded into, which is the cycle that runs the file.
+    // synchronous step, so the cycle that takes it is the one that signal
+    // started — or, when the file was already in a queued scope, the one it
+    // folded into, which is the cycle that runs the file. That holds as long as
+    // nothing yields between the two: core closes the fold window and then
+    // awaits `notifyReportersOnTestRunStart` before this cycle claims, so a user
+    // reporter with an async `onTestRunStart` hook is the one thing that can
+    // stretch the gap wide enough for another signal to land in it.
     const pendingTestNamePatterns = new Map<string, string>();
 
     const runWatchCycle = async (
