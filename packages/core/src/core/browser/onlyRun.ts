@@ -102,7 +102,7 @@ async function runBrowserOnlyWatch(
           },
         },
         closeWatchSession,
-        () => watchDriver.hasFinalizedCycle([browserExecutor]),
+        () => watchDriver.hasSettledCycle([browserExecutor]),
       ),
     );
     onBeforeRestart(closeCliShortcuts);

@@ -20,6 +20,16 @@ export interface ExecutorRunCycleOptions {
   mode: 'all' | 'on-demand';
   fileFilters?: string[];
   /**
+   * Watch only: whether this cycle was queued by the executor's own invalidation
+   * signal rather than by a CLI shortcut or the session's initial trigger. It is
+   * how a transport recognizes the cycle its last signal asked for among the
+   * cycles core hands it — the node side publishes a finished rebuild's measured
+   * duration when the compile ends and lets only that cycle claim it, so a
+   * shortcut rerun dispatched from the queue in between reports its own build
+   * span instead of the rebuild's.
+   */
+  fromInvalidation?: boolean;
+  /**
    * Read live per cycle from `context.snapshotManager.options`, never captured
    * at executor construction, so a watch `u` (update snapshot) rerun is honored.
    */
@@ -170,6 +180,12 @@ export interface TestExecutor {
    * `runCycle({ fileFilters })` — the browser host has to reconcile the request
    * against its own file-set diff first. It resolves once the resulting cycle
    * (if any) has completed, so a caller may restore state it toggled for it.
+   *
+   * A transport left with nothing to schedule on must report that rather than
+   * resolve as though the rerun happened. Core gates rerun keys until every
+   * executor is past its first cycle, so the only way to arrive here without a
+   * session is a side whose startup failed while another side kept the watch
+   * alive.
    */
   requestRerun?(testPaths?: string[]): Promise<void>;
 }

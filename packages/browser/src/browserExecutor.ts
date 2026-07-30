@@ -2,11 +2,13 @@ import {
   type BrowserTestExecutor,
   type BrowserTestRunResult,
   buildBrowserCoverageMap,
+  color,
   type CreateBrowserExecutorOptions,
   type ExecutorCycleOutcome,
   type ExecutorInvalidationCallback,
   type ExecutorRunCycleOptions,
   type ListCommandResult,
+  logger,
   type RstestContext,
   type TestFileResult,
 } from '@rstest/core/internal/browser';
@@ -146,7 +148,21 @@ export async function createBrowserExecutor(
       return watchSession !== undefined;
     },
     async requestRerun(testPaths?: string[]): Promise<void> {
-      await watchSession?.requestRerun(testPaths);
+      if (!watchSession) {
+        // Core gates rerun keys until every executor is past its first cycle, so
+        // reaching here means no session will ever open: the launch found no test
+        // files or failed outright, and reported that itself. The keys stay
+        // installed either way — a mixed run's node side keeps watching, and even
+        // a browser-only run outlives a launch that opened nothing — so resolving
+        // in silence would let the shortcut claim a rerun that never happened.
+        logger.log(
+          color.yellow(
+            '\nBrowser Mode has no live watch session, so this rerun skipped it.',
+          ),
+        );
+        return;
+      }
+      await watchSession.requestRerun(testPaths);
     },
     async collect(opts): Promise<{ list: ListCommandResult[] }> {
       const pending = listBrowserTests(context, {

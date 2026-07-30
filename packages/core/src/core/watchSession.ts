@@ -42,15 +42,22 @@ export type WatchCycleOptions = {
 export interface WatchCycleDriver {
   runCycle(executor: TestExecutor, options?: WatchCycleOptions): Promise<void>;
   /**
-   * Whether every one of `executors` has finalized a cycle. Shortcuts are
-   * installed before the first one so the ready banner always has a stdin owner,
-   * which leaves a window where a rerun key would reach executors that are still
-   * starting up — and the two sides of a mixed run leave it independently. The
-   * node initial cycle finalizing says nothing about the browser host, whose
-   * watch session does not exist until its own initial cycle boots the runtime,
-   * so a shortcut is answerable only once every side it fans out to is.
+   * Whether every one of `executors` has settled its first cycle of this
+   * session. Shortcuts are installed before the first one so the ready banner
+   * always has a stdin owner, which leaves a window where a rerun key would
+   * reach executors that are still starting up — and the two sides of a mixed
+   * run leave it independently. The node initial cycle landing says nothing about
+   * the browser host, whose watch session does not exist until its own initial
+   * cycle boots the runtime, so a shortcut is answerable only once every side of
+   * the run is past startup.
+   *
+   * Settled, not succeeded: a first cycle that threw is as done starting up as
+   * one that passed, and it reported itself. Waiting for it to succeed would
+   * gate every key on a side that can never answer — in a mixed run, a browser
+   * boot failure would leave the healthy node side with no key it answers at
+   * all, only a file save.
    */
-  hasFinalizedCycle(executors: TestExecutor[]): boolean;
+  hasSettledCycle(executors: TestExecutor[]): boolean;
 }
 
 type PendingCycle = {
@@ -135,12 +142,15 @@ export function createWatchCycleDriver({
   // its scope yet — the one a further invalidation folds into instead of
   // queueing behind.
   const pending = new Map<TestExecutor, PendingCycle>();
-  // Executors that have finalized a cycle, so a shortcut key can reach them.
-  const finalized = new Set<TestExecutor>();
+  // Executors whose first cycle has settled, so a shortcut key can reach them.
+  const settled = new Set<TestExecutor>();
 
   const runOne = async (
     executor: TestExecutor,
-    { options: { mode = 'all', fileFilters }, updateSnapshot }: PendingCycle,
+    {
+      options: { mode = 'all', fileFilters, fromInvalidation },
+      updateSnapshot,
+    }: PendingCycle,
   ): Promise<void> => {
     // One id per cycle across all executors: consumers only require it to move
     // (the node pool flushes its worker cache on a change, the browser host
@@ -151,23 +161,31 @@ export function createWatchCycleDriver({
     const isFirstCycle = !started.has(executor);
     started.add(executor);
     prepareWatchCycleState(context, { isFirstCycle });
-    await notifyReportersOnTestRunStart(context);
-    const outcome = await executor.runCycle({
-      buildId,
-      mode,
-      fileFilters,
-      updateSnapshot,
-      onTraceEvents,
-    });
-    await finalizeRunCycle(context, {
-      outcomes: [outcome],
-      mode,
-      isWatchMode: true,
-      coverageProvider,
-      reportOnFailure: context.normalizedConfig.coverage.reportOnFailure,
-      traceRun: getTraceRun(),
-    });
-    finalized.add(executor);
+    try {
+      await notifyReportersOnTestRunStart(context);
+      const outcome = await executor.runCycle({
+        buildId,
+        mode,
+        fileFilters,
+        fromInvalidation,
+        updateSnapshot,
+        onTraceEvents,
+      });
+      await finalizeRunCycle(context, {
+        outcomes: [outcome],
+        mode,
+        isWatchMode: true,
+        coverageProvider,
+        reportOnFailure: context.normalizedConfig.coverage.reportOnFailure,
+        traceRun: getTraceRun(),
+      });
+    } finally {
+      // In `finally`, so a startup that failed still counts as past startup —
+      // see {@link WatchCycleDriver.hasSettledCycle}. The caller keeps the
+      // rejection; what must not happen is a rerun key gated on a cycle that
+      // will never come back.
+      settled.add(executor);
+    }
     // Pre-allocate the next cycle's buffer so events emitted between cycles are
     // not dropped.
     setTraceRun(traceController.beginRun());
@@ -211,8 +229,8 @@ export function createWatchCycleDriver({
       tail = entry.cycle.catch(() => {});
       return entry.cycle;
     },
-    hasFinalizedCycle: (executors) =>
-      executors.every((executor) => finalized.has(executor)),
+    hasSettledCycle: (executors) =>
+      executors.every((executor) => settled.has(executor)),
   };
 }
 
@@ -248,12 +266,14 @@ export function createWatchShortcutHandlers(
   { node, browser }: WatchSessionTargets,
   close: () => Promise<void>,
   /**
-   * Whether every side a shortcut fans out to has finalized a cycle. Shortcuts
-   * are installed before the first one (the ready banner must never appear
-   * without a stdin owner), so until it lands a rerun key would reach a node
-   * side whose dev server is still coming up — starting a second full startup
-   * run — or a browser side whose watch session does not exist yet, which drops
-   * the keystroke in silence.
+   * Whether every executor of this run is past its first cycle. Shortcuts are
+   * installed before that (the ready banner must never appear without a stdin
+   * owner), so until it lands a rerun key would reach a node side whose dev
+   * server is still coming up — starting a second full startup run — or a
+   * browser side whose watch session does not exist yet, which drops the
+   * keystroke in silence. One gate covers every key, `t`/`p` included: those
+   * queue no browser cycle, but the pattern and file filters they set are state
+   * the browser side reads on its next one.
    */
   isArmed: () => boolean = () => true,
 ): Parameters<typeof setupCliShortcuts>[0] {

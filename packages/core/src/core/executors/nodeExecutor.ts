@@ -243,9 +243,12 @@ export function createNodeExecutor(
   // and the wait for the queue is not build work.
   let compileStart: number | undefined;
   // A finished rebuild's measured duration, published when the compile ends and
-  // claimed by exactly one cycle. Publishing at the end rather than the start is
-  // what stops a shortcut-driven cycle dispatched mid-compile from reporting the
-  // in-progress rebuild's elapsed time as its own.
+  // claimed by exactly one cycle: the invalidation-driven one that same compile
+  // queued. Publishing at the end rather than the start keeps a cycle running
+  // mid-compile from reporting an unfinished rebuild's elapsed time, and the
+  // claim being restricted to invalidation-driven cycles keeps a shortcut rerun
+  // that was already sitting in the queue from taking the rebuild's span with it
+  // when it dispatches first.
   let pendingBuildTime: number | undefined;
   // The Rsbuild project set assembled during init(); refreshPlan() keeps it in
   // sync with re-resolved plans.
@@ -360,11 +363,17 @@ export function createNodeExecutor(
   const runCycle = async (
     opts: ExecutorRunCycleOptions,
   ): Promise<ExecutorCycleOutcome> => {
-    const { buildId, mode, fileFilters, updateSnapshot } = opts;
-    // Consume-once: only the cycle a rebuild triggered may claim that rebuild's
-    // duration. A shortcut-driven rerun compiles nothing, so it reports none.
-    const rebuildTime = pendingBuildTime;
-    pendingBuildTime = undefined;
+    const { buildId, mode, fileFilters, fromInvalidation, updateSnapshot } =
+      opts;
+    // Consume-once, and only by a cycle a rebuild triggered: a shortcut-driven
+    // rerun compiles nothing, so it reports its own span and leaves a published
+    // one for the cycle whose compile produced it — which is still queued behind
+    // it whenever the two overlap.
+    let rebuildTime: number | undefined;
+    if (fromInvalidation) {
+      rebuildTime = pendingBuildTime;
+      pendingBuildTime = undefined;
+    }
     const cycleStart = Date.now();
     const { getRsbuildStats, pool } = await ensureRunResources();
     const { nodeProjectsToRun: projects } = projectPlanState.getPlan();

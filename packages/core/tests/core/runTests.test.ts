@@ -156,6 +156,12 @@ const createFakeBrowserExecutor = (
      */
     requestRerun: async (testPaths?: string[]) => {
       events.push(`browser:request-rerun:${testPaths?.join(',') ?? 'all'}`);
+      if (!hasWatchSession) {
+        // With no session there is nothing to schedule on, ever. The real
+        // executor says so instead of resolving as though the rerun happened.
+        events.push('browser:no-watch-session');
+        return;
+      }
       const seeded =
         testPaths && ownedPaths
           ? testPaths.filter((path) => ownedPaths.includes(path))
@@ -906,6 +912,31 @@ describe('runTests watch orchestration', () => {
     await nodeExecutor.invalidate(true);
 
     expect(readyBanners()).toBe(2);
+  });
+
+  it('keeps every key answerable on the node side after the browser boot failed', async () => {
+    // The mixed watch path swallows the browser initial cycle's rejection so the
+    // node side keeps watching, and the banner it prints keeps offering
+    // `a`/`f`/`u`. Gate those on a first cycle that *succeeded* and every one of
+    // them answers "initial run in progress" for the rest of the session, and the
+    // healthy node side can only be rerun by saving a file.
+    const { nodeExecutor, getShortcuts, events } = await startWatchRun({
+      withBrowser: true,
+      browserRunCycle: async () => {
+        throw new Error('browser launch failed');
+      },
+      browserHasWatchSession: false,
+    });
+    await nodeExecutor.invalidate(true);
+    const nodeCycles = nodeExecutor.cycles.length;
+    events.length = 0;
+
+    await getShortcuts().runAll!();
+
+    expect(getShortcuts().canRerun!()).toBe(true);
+    expect(nodeExecutor.cycles).toHaveLength(nodeCycles + 1);
+    // The dead side still has to answer for itself rather than look rerun.
+    expect(events).toContain('browser:no-watch-session');
   });
 });
 

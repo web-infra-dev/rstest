@@ -347,7 +347,7 @@ describe('createWatchCycleDriver', () => {
     expect(executor.cycles).toHaveLength(3);
   });
 
-  it('arms a shortcut only once every executor it reaches has finalized', async () => {
+  it('arms a shortcut only once every executor it reaches has settled', async () => {
     // Mixed watch starts the node side first, so its cycle finalizes while the
     // browser host is still booting the runtime its rerun requests need. A
     // single driver-wide flag reads as armed there, and the `a`/`f`/`u` fanout
@@ -359,12 +359,55 @@ describe('createWatchCycleDriver', () => {
 
     await driver.runCycle(node, { mode: 'all' });
 
-    expect(driver.hasFinalizedCycle([node])).toBe(true);
-    expect(driver.hasFinalizedCycle([node, browser])).toBe(false);
+    expect(driver.hasSettledCycle([node])).toBe(true);
+    expect(driver.hasSettledCycle([node, browser])).toBe(false);
 
     await driver.runCycle(browser, { mode: 'all' });
 
-    expect(driver.hasFinalizedCycle([node, browser])).toBe(true);
+    expect(driver.hasSettledCycle([node, browser])).toBe(true);
+  });
+
+  it('arms an executor whose first cycle threw, so one failed side cannot lock the keys', async () => {
+    // Mixed watch swallows the browser initial cycle's rejection on purpose: the
+    // node side keeps the session alive and the boot failure is reported with an
+    // exit code. Arming on success rather than on settle then disarms every rerun
+    // key for the rest of the session — the banner keeps offering `a`/`f`/`u`,
+    // every one of them answers "initial run in progress", and the healthy node
+    // side can only be rerun by saving a file.
+    const context = createContext();
+    const { driver } = createDriver(context);
+    const node = createFakeExecutor('node');
+    const browser = createFakeExecutor('browser', () => {
+      throw new Error('browser launch failed');
+    });
+
+    await driver.runCycle(node, { mode: 'all' });
+    await expect(driver.runCycle(browser, { mode: 'all' })).rejects.toThrow(
+      'browser launch failed',
+    );
+
+    expect(driver.hasSettledCycle([node, browser])).toBe(true);
+  });
+
+  it('tells the executor whether its own invalidation queued the cycle', async () => {
+    // The node side publishes a finished rebuild's measured duration and lets
+    // only the cycle that rebuild queued claim it. Without this flag a shortcut
+    // rerun already sitting in the queue dispatches first and reports the
+    // rebuild's build time as its own, leaving the rebuild's cycle with none.
+    const context = createContext();
+    const { driver } = createDriver(context);
+    const executor = createFakeExecutor('node');
+
+    await driver.runCycle(executor, {
+      mode: 'on-demand',
+      fromInvalidation: true,
+    });
+    await driver.runCycle(executor, { fileFilters: ['/a.test.ts'] });
+
+    expect(executor.cycles.map((cycle) => cycle.fromInvalidation)).toEqual([
+      true,
+      undefined,
+    ]);
   });
 
   it('rotates one trace buffer per finalized cycle', async () => {
