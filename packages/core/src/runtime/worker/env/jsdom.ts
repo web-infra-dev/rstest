@@ -21,6 +21,25 @@ type JSDOMBlobImpl = {
   _bytes?: Uint8Array;
 };
 
+type VirtualConsoleForwarder =
+  | {
+      forwardTo(console: Console): unknown;
+    }
+  | {
+      sendTo(console: Console): unknown;
+    };
+
+export const forwardVirtualConsole = (
+  virtualConsole: VirtualConsoleForwarder,
+  console: Console,
+): void => {
+  if ('forwardTo' in virtualConsole) {
+    virtualConsole.forwardTo(console);
+  } else {
+    virtualConsole.sendTo(console);
+  }
+};
+
 function installJSDOMObjectURL(
   window: DOMWindow,
   context: TestEnvironmentContext,
@@ -120,6 +139,11 @@ export const environment: TestEnvironment<typeof globalThis> = {
       ...restOptions
     } = options as JSDOMOptions;
     let cleanupObjectURLs = () => {};
+    const virtualConsole =
+      console && global.console ? new VirtualConsole() : undefined;
+    if (virtualConsole && global.console) {
+      forwardVirtualConsole(virtualConsole, global.console);
+    }
     const dom = new JSDOM(html, {
       pretendToBeVisual,
       resources:
@@ -127,10 +151,7 @@ export const environment: TestEnvironment<typeof globalThis> = {
         (userAgent ? new ResourceLoader({ userAgent }) : undefined),
       runScripts,
       url,
-      virtualConsole:
-        console && global.console
-          ? new VirtualConsole().sendTo(global.console)
-          : undefined,
+      virtualConsole,
       cookieJar: cookieJar ? new CookieJar() : undefined,
       includeNodeLocations,
       contentType,
