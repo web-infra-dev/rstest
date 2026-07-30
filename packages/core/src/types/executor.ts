@@ -139,6 +139,13 @@ export interface ExecutorCycleOutcome {
  * core implementation; only what the two runtimes genuinely fork — transport,
  * module loading, isolation unit, scheduling, provider management — lives behind
  * this interface.
+ *
+ * An optional member here says "not every runtime has this capability", and
+ * every consumer re-requires it through a narrowed type (`BrowserTestExecutor`,
+ * `NodeExecutor`) before calling — none of them optional-chains. So optional is
+ * not the place for an obligation core must *perform* in a fixed order: the node
+ * side's `ensureRunResources` stays off this interface, where dropping it is a
+ * build error at the two call sites that order it against the browser launch.
  */
 export interface TestExecutor {
   /** `'node' | 'browser'`. */

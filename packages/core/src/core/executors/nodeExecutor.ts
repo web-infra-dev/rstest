@@ -139,6 +139,17 @@ export const createCoverageResourceLoaders = (
  * guaranteed here. `ensureRunResources` is the one member beyond the seam, and
  * it is there because *when* the node resources come up is core's ordering
  * decision, not the executor's.
+ *
+ * Promoting it onto the seam as an optional `prepare?()` was considered and
+ * rejected: it buys the orchestrator nothing. An optional seam member is only
+ * ever *called* through a type that re-requires it — that is how `collect`,
+ * `onInvalidate`, and `requestRerun` are consumed — so `runTests` would go on
+ * holding this same narrowed node type, which it needs for `onInvalidate`
+ * anyway. What would change is that a member only one runtime implements joins
+ * the contract `@rstest/browser` is version-locked to, and that the ordering
+ * obligation invariant #7 rests on (node resources up before the browser
+ * launch) becomes optional-chainable — a node side that stopped implementing it
+ * would compile into a silent no-op instead of a build error.
  */
 export type NodeExecutor = TestExecutor &
   Required<Pick<TestExecutor, 'onInvalidate'>> & {
@@ -588,8 +599,10 @@ export function createNodeExecutor(
     // `modifyRstestConfig` hooks and resolved the plan before this executor was
     // constructed, and everything else this side owns is started by
     // `ensureRunResources` at the moment core chooses. It stays because
-    // `TestExecutor.init` is required; loosening the seam belongs with the
-    // `ensureRunResources` promotion, not here.
+    // `TestExecutor.init` is required, and it has to stay empty: core calls it
+    // for every node build the planner returns, a run whose node side globbed
+    // no test files included, so starting the server here would boot a dev
+    // server and pool that the run then never uses.
     init: async () => {},
     runCycle,
     onInvalidate,

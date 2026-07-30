@@ -218,6 +218,20 @@ const unreachable = (label: string) => () => {
   throw new Error(`${label} must not be reached in this run shape`);
 };
 
+/**
+ * Assert each label was recorded, in this order (first occurrence, so a label
+ * that repeats across watch cycles anchors on the first). Presence is half the
+ * assertion: `indexOf(a) < indexOf(b)` on its own is satisfied by `-1`, so a
+ * call that stopped being made entirely would pass the ordering check written to
+ * guard it — the failure mode that matters most for the node-resources call
+ * invariant #7 rests on.
+ */
+const expectEventOrder = (events: string[], labels: string[]): void => {
+  const indices = labels.map((label) => events.indexOf(label));
+  expect(labels.filter((_label, i) => indices[i] === -1)).toEqual([]);
+  expect(indices).toEqual([...indices].sort((a, b) => a - b));
+};
+
 const createDeps = (overrides: Partial<RunTestsDeps>): RunTestsDeps => ({
   createRunPlanner: unreachable('createRunPlanner'),
   createNodeExecutor: unreachable('createNodeExecutor'),
@@ -353,15 +367,12 @@ describe('runTests orchestration', () => {
     // Init barrier: the plan is resolved before *any* executor is constructed,
     // so neither side can be built against a plan that is still moving. Then
     // node resources, and only then the browser executor's own init.
-    expect(events.indexOf('planner:resolve')).toBeLessThan(
-      events.indexOf('node:construct'),
-    );
-    expect(events.indexOf('node:construct')).toBeLessThan(
-      events.indexOf('node:ensure-run-resources'),
-    );
-    expect(events.indexOf('node:ensure-run-resources')).toBeLessThan(
-      events.indexOf('browser:init'),
-    );
+    expectEventOrder(events, [
+      'planner:resolve',
+      'node:construct',
+      'node:ensure-run-resources',
+      'browser:init',
+    ]);
   });
 
   it('replaces the browser cycle with the globalSetup failure outcome and still runs the node cycle', async () => {
@@ -437,10 +448,7 @@ describe('runTests orchestration', () => {
       ),
     ).rejects.toBe(cycleError);
 
-    expect(events.indexOf('node:cycle-end')).toBeGreaterThan(-1);
-    expect(events.indexOf('node:cycle-end')).toBeLessThan(
-      events.indexOf('node:close'),
-    );
+    expectEventOrder(events, ['node:cycle-end', 'node:close']);
     expect(nodeExecutor.closeCount).toBe(1);
     expect(browserExecutor.closeCount).toBe(1);
     // The run never reached the finalize.
@@ -731,9 +739,10 @@ describe('runTests watch orchestration', () => {
       });
 
     // Invariant #7: the browser host only launches once node resources exist.
-    expect(events.indexOf('node:ensure-run-resources')).toBeLessThan(
-      events.indexOf('browser:cycle-start'),
-    );
+    expectEventOrder(events, [
+      'node:ensure-run-resources',
+      'browser:cycle-start',
+    ]);
     expect(browserExecutor.cycles).toHaveLength(1);
     expect(browserExecutor.cycles[0]).toMatchObject({ mode: 'all' });
     expect(runEnds).toHaveLength(1);
@@ -797,9 +806,7 @@ describe('runTests watch orchestration', () => {
     // One node cycle finalize, then the browser's own — the output shape a
     // mixed watch shortcut has to keep. That the browser's request precedes its
     // cycle is the fake's own doing, so it is not asserted here.
-    expect(events.indexOf('node:cycle-end')).toBeLessThan(
-      events.indexOf('browser:request-rerun:all'),
-    );
+    expectEventOrder(events, ['node:cycle-end', 'browser:request-rerun:all']);
   });
 
   it('scopes the f shortcut to the failed paths and fans the same set to the browser executor', async () => {
