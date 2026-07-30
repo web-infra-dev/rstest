@@ -220,11 +220,19 @@ const unreachable = (label: string) => () => {
 
 /**
  * Assert each label was recorded, in this order (first occurrence, so a label
- * that repeats across watch cycles anchors on the first). Presence is half the
- * assertion: `indexOf(a) < indexOf(b)` on its own is satisfied by `-1`, so a
- * call that stopped being made entirely would pass the ordering check written to
- * guard it — the failure mode that matters most for the node-resources call
- * invariant #7 rests on.
+ * that repeats across watch cycles anchors on the first). Presence is the half
+ * a bare `indexOf(a) < indexOf(b)` misses, and it misses it asymmetrically: a
+ * missing right-hand label gives `n < -1`, a hard failure, while a missing
+ * left-hand one gives `-1 < n` and passes. So a dropped call went unnoticed
+ * only where its label sat on the left of every comparison naming it. Two of
+ * the four sites this helper replaced were in that position — the watch
+ * invariant-#7 pin (`node:ensure-run-resources` < `browser:cycle-start`) and
+ * the mixed-watch shortcut pin (`node:cycle-end` < `browser:request-rerun:all`)
+ * — and both were confirmed by experiment to pass with the call under test
+ * deleted. The other two already caught it and are converted for uniformity:
+ * the non-watch invariant-#7 chain also compares `node:construct` *into*
+ * `node:ensure-run-resources`, and the `node:cycle-end` < `node:close` pin
+ * carried its own `toBeGreaterThan(-1)`.
  */
 const expectEventOrder = (events: string[], labels: string[]): void => {
   const indices = labels.map((label) => events.indexOf(label));
