@@ -534,7 +534,7 @@ describe('createWatchShortcutHandlers arming', () => {
     expect(cycles).toEqual(['node', 'browser']);
   });
 
-  it('offers the same gate to the stdin owner, so a gated prompt never opens', () => {
+  it('exposes its rerun gate, so the stdin owner can check it before prompting', () => {
     // `t`/`p` ask for input before they call their handler. A gate that only
     // wraps the handler lets the prompt open, take a pattern, and throw it away
     // on Enter — or, on Escape, drop the keystroke without a word.

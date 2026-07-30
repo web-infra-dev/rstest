@@ -367,8 +367,8 @@ export function createNodeExecutor(
       opts;
     // Consume-once, and only by a cycle a rebuild triggered: a shortcut-driven
     // rerun compiles nothing, so it reports its own span and leaves a published
-    // one for the cycle whose compile produced it — which is still queued behind
-    // it whenever the two overlap.
+    // one for the cycle whose compile produced it, wherever in the queue that
+    // cycle sits.
     let rebuildTime: number | undefined;
     if (fromInvalidation) {
       rebuildTime = pendingBuildTime;

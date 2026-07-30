@@ -271,9 +271,12 @@ export function createWatchShortcutHandlers(
    * owner), so until it lands a rerun key would reach a node side whose dev
    * server is still coming up — starting a second full startup run — or a
    * browser side whose watch session does not exist yet, which drops the
-   * keystroke in silence. One gate covers every key, `t`/`p` included: those
-   * queue no browser cycle, but the pattern and file filters they set are state
-   * the browser side reads on its next one.
+   * keystroke in silence. One gate covers every key, the node-only `t`/`p`
+   * included: `p` queues no browser cycle, but it writes `context.fileFilters`,
+   * which the browser host re-reads while collecting the entries for its next
+   * one. `t`'s pattern crosses the seam only inside the runtime config the host
+   * projects at launch, so a `t` pressed later never reaches the browser side
+   * at all.
    */
   isArmed: () => boolean = () => true,
 ): Parameters<typeof setupCliShortcuts>[0] {

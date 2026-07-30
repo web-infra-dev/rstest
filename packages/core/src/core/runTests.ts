@@ -489,10 +489,10 @@ export async function runTests(
   // before stdin has an owner (a keystroke answering it would be swallowed).
   if (enableCliShortcuts) {
     // Every executor this run has, not just the ones a given key queues a cycle
-    // for: `t`/`p` are node-only, but the filters they set are state the browser
-    // side reads on its next cycle. A key is answerable only once every one of
-    // them is past its first cycle, and in a mixed run the node side gets there
-    // first while the browser host still has no watch session.
+    // for: `p` is node-only, but the `context.fileFilters` it writes are state
+    // the browser side re-reads on its next cycle. A key is answerable only once
+    // every one of them is past its first cycle, and in a mixed run the node
+    // side gets there first while the browser host still has no watch session.
     const shortcutExecutors = [
       ...(watchTargets.node ? [nodeExecutor] : []),
       ...(browserExecutor ? [browserExecutor] : []),
