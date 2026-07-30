@@ -19,6 +19,15 @@ export interface BrowserRunPlan {
   hasBrowserTestsToRun(): boolean;
   getBrowserProjectsToRun(): ProjectContext[];
   /**
+   * Whether the discovery boot ran, which means the browser executor was loaded
+   * and the browser config validated along with it. The empty-run branch asks
+   * because it validates directly — it is the one exit that may not load an
+   * executor of its own, and validating a second time reprints every
+   * unsupported-option warning (`reportUnsupportedBrowserOptions` has no
+   * cross-call guard).
+   */
+  hasValidatedBrowserConfig(): boolean;
+  /**
    * Options for the mixed non-watch browser executor construction. `filesOnly`
    * is owned by the discovery boot, never by a real run.
    */
@@ -216,6 +225,7 @@ export function createBrowserRunPlanner({
     hasBrowserTestsToRun: () =>
       getPlan().browserProjectsToRun.length > 0 ||
       shouldRunBrowserDiscoveryFallback(),
+    hasValidatedBrowserConfig: () => hasRunBrowserConfigHookDiscovery,
     getBrowserProjectsToRun,
     getExecutorRunOptions,
   };

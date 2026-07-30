@@ -181,12 +181,15 @@ const createFakeRunPlanner = ({
   hasNodeTestsToRun,
   hasNodeBuild = true,
   hasBrowserTestsToRun = false,
+  hasValidatedBrowserConfig = false,
   browserProjectsToRun = [],
   testEntries = [],
 }: {
   hasNodeTestsToRun: boolean;
   hasNodeBuild?: boolean;
   hasBrowserTestsToRun?: boolean;
+  /** True stands for "the discovery boot ran, so the config is already checked". */
+  hasValidatedBrowserConfig?: boolean;
   browserProjectsToRun?: ProjectContext[];
   /** What the `p` shortcut's re-glob returns. */
   testEntries?: string[];
@@ -199,6 +202,7 @@ const createFakeRunPlanner = ({
   }),
   hasNodeTestsToRun: () => hasNodeTestsToRun,
   hasBrowserTestsToRun: () => hasBrowserTestsToRun,
+  hasValidatedBrowserConfig: () => hasValidatedBrowserConfig,
   getBrowserProjectsToRun: () => browserProjectsToRun,
   getExecutorRunOptions: () => ({}),
   coveragePluginLoadError: () => undefined,
@@ -530,6 +534,35 @@ describe('runTests orchestration', () => {
     );
     expect(getRunStarts()).toBe(0);
     expect(runEnds).toHaveLength(0);
+  });
+
+  it('skips the empty-run validation when the discovery boot already did it', async () => {
+    // The discovery boot loads the browser executor, which is what validates the
+    // config — so a hook that adds no files, landing this run in the empty
+    // branch, would otherwise validate a second time and reprint every
+    // unsupported-option warning the user already read.
+    const { context, runEnds } = createContext({
+      browserProjectNames: ['browser-a'],
+    });
+    const validateBrowserRunConfig = rs.fn<
+      RunTestsDeps['validateBrowserRunConfig']
+    >(async () => {});
+
+    await runTests(
+      context,
+      createDeps({
+        createRunPlanner: async () =>
+          createFakeRunPlanner({
+            hasNodeTestsToRun: false,
+            hasNodeBuild: false,
+            hasValidatedBrowserConfig: true,
+          }),
+        validateBrowserRunConfig,
+      }),
+    );
+
+    expect(validateBrowserRunConfig).not.toHaveBeenCalled();
+    expect(runEnds).toHaveLength(1);
   });
 
   it('builds no node executor for a zero-node run and drives the browser through the shared assembly', async () => {

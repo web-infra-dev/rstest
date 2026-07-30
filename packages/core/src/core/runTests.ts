@@ -21,7 +21,11 @@ import {
   loadBrowserExecutor,
   validateBrowserRunConfig,
 } from './browser/loader';
-import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
+import {
+  FATAL_SIGNALS,
+  getSignalExitCode,
+  hasReportedFatalExit,
+} from '../utils/signals';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
 import {
   type BrowserGlobalSetupStageResult,
@@ -206,12 +210,22 @@ export async function runTests(
   // `--related` resolution lands — the plan globs nothing for it, so no executor
   // is ever launched and the no-test-files verdict comes from the one finalize.
   if (!hasNodeTestsToRun && !hasBrowserTestsToRun) {
-    // Every other exit from here loads the browser executor, and loading it is
-    // what validates the browser config. This branch never does, so a run whose
-    // browser config is invalid would finalize with "no test files found"
-    // instead of the config error — the plan cannot be trusted to be about a
-    // valid run in the first place. Ask for the check directly.
-    if (browserProjects.length) {
+    // Loading the browser executor is what validates the browser config, and
+    // this branch may reach the end without loading one — a run whose browser
+    // config is invalid would then finalize with "no test files found" instead
+    // of the config error, since the plan cannot be trusted to be about a valid
+    // run in the first place. So ask for the check directly, unless the planner
+    // already got it: the discovery boot loads the executor too, and validating
+    // twice reprints every unsupported-option warning.
+    //
+    // Correcting the record here rather than where it was written: this check
+    // reaches empty *mixed* runs too, not only browser-only ones as the commit
+    // that unified the assembly claimed. So an empty mixed run whose
+    // `@rstest/browser` is missing or version-mismatched now reports that and
+    // exits, where it used to finalize with "no test files found" and hide it.
+    // Kept deliberately — a broken install is the more useful verdict, and the
+    // loader's exit no longer drags the unexpected-exit banner with it.
+    if (browserProjects.length && !planner.hasValidatedBrowserConfig()) {
       await deps.validateBrowserRunConfig(context, browserProjects);
     }
     // An empty run is still a run as far as reporters are concerned. Every
@@ -264,6 +278,19 @@ export async function runTests(
     // deferred-teardown hang. `executors` is read at close time, so the browser
     // executor pushed inside the try below is covered — including when its own
     // load/init fails with the node resources above already up.
+    //
+    // Folding the browser-only assembly in here did not merely widen this net,
+    // as the commit that did it recorded. For a zero-node non-watch run it also
+    // reordered and made it louder, and all three deltas are deliberate: the old
+    // path drained `runGlobalTeardown()` *before* closing the executor, where
+    // this closes first and drains in the `finally`, so a user `globalSetup`
+    // teardown callback now runs after the browser host and its dev servers are
+    // gone; the signal path flipped the same way; and the exit handler is
+    // registered unconditionally, so a mid-run unexpected exit that used to end
+    // quietly now prints and sets a failing code. This is the order the mixed
+    // path has always used, and keeping the two apart is what Phase C existed to
+    // stop — a teardown callback that needs a live server would be the one
+    // reason to revisit it.
     let didCloseExecutors = false;
     const closeExecutors = async () => {
       if (didCloseExecutors) {
@@ -306,6 +333,16 @@ export async function runTests(
     };
 
     const unExpectedExit = (code?: number) => {
+      // A reported fatal exit is the one thing this net must stay out of. The
+      // browser loader exits this way on a missing or version-mismatched
+      // `@rstest/browser`, after printing the install command — and it exits
+      // from inside the `try` below, so the `finally` that would remove this
+      // handler never runs. Without the check the user gets an actionable error
+      // followed by a red "exited unexpectedly", plus a global teardown fired
+      // out of an exit handler.
+      if (hasReportedFatalExit()) {
+        return;
+      }
       if (isTeardown) {
         logger.log(
           color.yellow(

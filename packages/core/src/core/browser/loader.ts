@@ -9,6 +9,7 @@ import type {
 } from '../../types';
 import type { CoverageProvider } from '../../types/coverage';
 import { color, logger } from '../../utils';
+import { exitAfterReporting } from '../../utils/signals';
 
 export type { BrowserTestRunOptions, BrowserTestRunResult } from '../../types';
 
@@ -167,7 +168,7 @@ export async function loadBrowserModule(
         logger.error(
           `Please ensure both packages have the same version:\n\n  ${color.cyan(`npm install @rstest/browser@${coreVersion}`)}\n`,
         );
-        process.exit(1);
+        exitAfterReporting(1);
       }
 
       return browserModule!;
@@ -199,7 +200,7 @@ export async function loadBrowserModule(
   logger.error(
     `Or if using pnpm:\n\n  ${color.cyan(`pnpm add @rstest/browser@${coreVersion}`)}\n`,
   );
-  process.exit(1);
+  exitAfterReporting(1);
 }
 
 export async function loadAndValidateBrowserModule(
