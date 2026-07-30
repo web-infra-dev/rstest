@@ -6,23 +6,16 @@ import {
 } from '../../utils';
 import { type BrowserExecutorRunOptions, runBrowserDiscovery } from './loader';
 import { getUserRstestConfigPluginProjects } from '../modifyRstestConfig';
-import type { RunPlanner } from '../planner';
+import type { RunProjectPlan } from '../projectPlan';
 import type { Rstest } from '../rstest';
 
 /**
- * Browser-side planning for a mixed (node + browser) run: which browser
- * projects run, whether the config-hook discovery boot is needed, and the
- * option bags the browser executor/watch session are launched with. Keeps the
- * filter-classification and discovery detail out of the `runTests` orchestrator.
+ * The browser-side questions a resolved run plan can answer: which browser
+ * projects run, and the option bags the browser executor/watch session are
+ * launched with. `RunPlanner` re-exposes exactly this, so the orchestrator asks
+ * one object and the filter-classification detail stays under `core/browser/`.
  */
-export interface BrowserRunPlanner {
-  /**
-   * Boot the browser side once in files-only mode when the plan may depend on
-   * browser `modifyRstestConfig` hooks (they only apply inside a browser
-   * runtime boot and can add test files to an otherwise-empty project), then
-   * re-resolve the run plan. No-op when discovery is not needed.
-   */
-  runConfigHookDiscovery(): Promise<void>;
+export interface BrowserRunPlan {
   hasBrowserTestsToRun(): boolean;
   getBrowserProjectsToRun(): ProjectContext[];
   /**
@@ -34,15 +27,34 @@ export interface BrowserRunPlanner {
   ): Omit<BrowserExecutorRunOptions, 'filesOnly'>;
 }
 
+interface BrowserRunPlanner extends BrowserRunPlan {
+  /**
+   * Boot the browser side once in files-only mode when the plan may depend on
+   * browser `modifyRstestConfig` hooks (they only apply inside a browser
+   * runtime boot and can add test files to an otherwise-empty project), then
+   * re-resolve the run plan. No-op when discovery is not needed.
+   *
+   * `createRunPlanner` is the only caller and drives it while it is still
+   * building, which is what keeps the once-only state below — the applied-hook
+   * environment set and the discovery-ran flag — from ever being observed
+   * half-applied: by the time anything holds a `RunPlanner`, discovery has
+   * either finished or been declined.
+   */
+  runConfigHookDiscovery(): Promise<void>;
+}
+
 export function createBrowserRunPlanner({
   context,
-  planner,
+  getPlan,
+  refreshPlan,
   browserProjects,
   nodeProjects,
   onTraceEvents,
 }: {
   context: Rstest;
-  planner: RunPlanner;
+  getPlan: () => RunProjectPlan;
+  /** Re-resolve after the discovery boot's hooks changed project configs. */
+  refreshPlan: () => Promise<void>;
   browserProjects: ProjectContext[];
   nodeProjects: ProjectContext[];
   onTraceEvents?: (events: TraceEvent[]) => void;
@@ -97,7 +109,7 @@ export function createBrowserRunPlanner({
 
   const shouldAllowEmptyBrowserFallback = () =>
     shouldRunBrowserDiscoveryFallback() &&
-    planner.hasNodeTestsToRun() &&
+    getPlan().nodeProjectsToRun.length > 0 &&
     !context.fileFilters?.some(isBrowserProjectPathFilter);
 
   const getBrowserProjectsForDiscovery = () => {
@@ -125,7 +137,7 @@ export function createBrowserRunPlanner({
   };
 
   const getBrowserProjectsToRun = () => {
-    const currentPlan = planner.getPlan();
+    const currentPlan = getPlan();
     if (currentPlan.browserProjectsToRun.length > 0) {
       return currentPlan.browserProjectsToRun;
     }
@@ -139,7 +151,7 @@ export function createBrowserRunPlanner({
     if (!shard) {
       return undefined;
     }
-    const currentPlan = planner.getPlan();
+    const currentPlan = getPlan();
     const browserEntries = new Map<
       string,
       { entries: Record<string, string> }
@@ -192,10 +204,11 @@ export function createBrowserRunPlanner({
       }
       await discoveryResult?.close?.();
       hasRunBrowserConfigHookDiscovery = true;
-      await planner.refreshPlan();
+      await refreshPlan();
     },
     hasBrowserTestsToRun: () =>
-      planner.hasBrowserTestsToRun() || shouldRunBrowserDiscoveryFallback(),
+      getPlan().browserProjectsToRun.length > 0 ||
+      shouldRunBrowserDiscoveryFallback(),
     getBrowserProjectsToRun,
     getExecutorRunOptions,
   };

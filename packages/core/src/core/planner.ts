@@ -1,5 +1,10 @@
 import type { RsbuildInstance } from '@rsbuild/core';
 import type { ProjectContext } from '../types';
+import type { TraceEvent } from '../utils';
+import {
+  type BrowserRunPlan,
+  createBrowserRunPlanner,
+} from './browser/runPlanner';
 import {
   createRunProjectPlanState,
   type RunProjectPlan,
@@ -14,12 +19,18 @@ import { createSetupFileState, type SetupFileState } from './setupFileState';
  * have tests to run, and the node build machinery an executor is constructed
  * from. Planning lives here rather than inside the node executor so the question
  * "which executors does this run even need" is answerable before any of them
- * exists.
+ * exists. Both sides answer from here — the browser-side classification lives in
+ * `core/browser/runPlanner.ts` but is owned and driven from inside this call, so
+ * the orchestrator holds one planner rather than a pair to keep in step.
  *
- * Resolving is the run's init barrier — the node `modifyRstestConfig` hooks fire
- * and the plan is read while the planner is being built, so a resolved planner is
- * the only kind there is and no executor can be constructed against a plan that
- * is still moving.
+ * Resolving is the run's init barrier — the node `modifyRstestConfig` hooks fire,
+ * the browser's fire too when the plan may depend on them (inside the files-only
+ * discovery boot), and the plan is read while the planner is being built, so a
+ * resolved planner is the only kind there is and no executor can be constructed
+ * against a plan that is still moving. The browser side's once-only state (which
+ * environments already applied their hooks, whether the discovery boot has run)
+ * is settled by the time this returns and has no re-entry point afterwards, so
+ * nothing can catch it half-applied.
  *
  * Three of these members are **live shared references, not snapshots**; every
  * consumer has to keep sharing the one object:
@@ -34,20 +45,12 @@ import { createSetupFileState, type SetupFileState } from './setupFileState';
  *   `prepareRsbuild` re-reads it inside its config hook and `syncNodeProjects`
  *   splices it in place, so ownership stays here.
  */
-export interface RunPlanner {
+export interface RunPlanner extends BrowserRunPlan {
   /** The resolved plan: browser + node runnable subsets and their entries. */
   getPlan(): RunProjectPlan;
   hasNodeTestsToRun(): boolean;
-  hasBrowserTestsToRun(): boolean;
   /** A coverage-plugin load error captured while preparing Rsbuild, if any. */
   coveragePluginLoadError(): unknown;
-  /**
-   * Re-resolve the runnable plan after browser-side `modifyRstestConfig` hooks
-   * changed project configs (the mixed-run browser discovery boot can add test
-   * files to an otherwise-empty browser project), keeping the Rsbuild project
-   * set in sync.
-   */
-  refreshPlan(): Promise<void>;
   /** Re-glob every runnable node project's test entries as a flat path list. */
   globTestEntries(): Promise<string[]>;
   /** The node Rsbuild instance, with its config hooks already applied. */
@@ -60,11 +63,18 @@ export type CreateRunPlannerOptions = {
   browserProjects: ProjectContext[];
   nodeProjects: ProjectContext[];
   isWatchMode: boolean;
+  /** Forwards the discovery boot's trace events into the run's trace buffer. */
+  onTraceEvents?: (events: TraceEvent[]) => void;
 };
 
 export async function createRunPlanner(
   context: Rstest,
-  { browserProjects, nodeProjects, isWatchMode }: CreateRunPlannerOptions,
+  {
+    browserProjects,
+    nodeProjects,
+    isWatchMode,
+    onTraceEvents,
+  }: CreateRunPlannerOptions,
 ): Promise<RunPlanner> {
   const setupFileState = createSetupFileState();
   const projectPlanState = createRunProjectPlanState({
@@ -130,6 +140,9 @@ export async function createRunPlanner(
     await rsbuildInstance.initConfigs({ action: 'dev' });
   }
 
+  // Re-resolve after browser-side `modifyRstestConfig` hooks changed project
+  // configs (the discovery boot below can add test files to an otherwise-empty
+  // browser project), keeping the Rsbuild project set in sync.
   const refreshPlan = async (): Promise<void> => {
     const refreshed = await resolveRunnableProjects({
       silentShardMessage: true,
@@ -137,6 +150,19 @@ export async function createRunPlanner(
     });
     syncNodeProjects(rsbuildProjects, refreshed.nodeProjectsToRun);
   };
+
+  // The browser half of the barrier. Destructured so the discovery step is spent
+  // here and only the query half reaches the returned planner — a second caller
+  // is what the once-only flags inside it could not survive.
+  const { runConfigHookDiscovery, ...browserPlan } = createBrowserRunPlanner({
+    context,
+    getPlan,
+    refreshPlan,
+    browserProjects,
+    nodeProjects,
+    onTraceEvents,
+  });
+  await runConfigHookDiscovery();
 
   const globTestEntries = async (): Promise<string[]> => {
     const projects = getPlan().nodeProjectsToRun;
@@ -150,11 +176,10 @@ export async function createRunPlanner(
   };
 
   return {
+    ...browserPlan,
     getPlan,
     hasNodeTestsToRun: () => getPlan().nodeProjectsToRun.length > 0,
-    hasBrowserTestsToRun: () => getPlan().browserProjectsToRun.length > 0,
     coveragePluginLoadError: () => coveragePluginLoadError,
-    refreshPlan,
     globTestEntries,
     rsbuildInstance,
     setupFileState,

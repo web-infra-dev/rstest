@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, rs } from '@rstest/core';
 import { join } from 'pathe';
-import type { BrowserRunPlanner } from '../../src/core/browser/runPlanner';
 import type { RunPlanner } from '../../src/core/planner';
 import { Rstest } from '../../src/core/rstest';
 import { createSetupFileState } from '../../src/core/setupFileState';
@@ -169,28 +168,24 @@ const createFakeBrowserExecutor = (
   });
 };
 
-const createFakeBrowserPlanner = (
-  hasBrowserTestsToRun: boolean,
-  browserProjects: ProjectContext[] = [],
-): BrowserRunPlanner => ({
-  runConfigHookDiscovery: async () => {},
-  hasBrowserTestsToRun: () => hasBrowserTestsToRun,
-  getBrowserProjectsToRun: () => browserProjects,
-  getExecutorRunOptions: () => ({}),
-});
-
 /**
- * The core planner as the orchestrator sees it. `rsbuildInstance`,
- * `setupFileState` and `globTestSourceEntries` are only ever forwarded into
- * `createNodeExecutor`, which is faked too, so they never get used here — but
- * they have to be present, because forwarding the planner's *live* objects
- * rather than copies of them is the contract the node side depends on.
+ * The one planner the orchestrator sees, answering for both sides — a resolved
+ * planner is the only kind there is, so the fake has no discovery step to drive
+ * either. `rsbuildInstance`, `setupFileState` and `globTestSourceEntries` are
+ * only ever forwarded into `createNodeExecutor`, which is faked too, so they
+ * never get used here — but they have to be present, because forwarding the
+ * planner's *live* objects rather than copies of them is the contract the node
+ * side depends on.
  */
 const createFakeRunPlanner = ({
   hasNodeTestsToRun,
+  hasBrowserTestsToRun = false,
+  browserProjectsToRun = [],
   testEntries = [],
 }: {
   hasNodeTestsToRun: boolean;
+  hasBrowserTestsToRun?: boolean;
+  browserProjectsToRun?: ProjectContext[];
   /** What the `p` shortcut's re-glob returns. */
   testEntries?: string[];
 }): RunPlanner => ({
@@ -201,9 +196,10 @@ const createFakeRunPlanner = ({
     nodeProjectsToRun: [],
   }),
   hasNodeTestsToRun: () => hasNodeTestsToRun,
-  hasBrowserTestsToRun: () => false,
+  hasBrowserTestsToRun: () => hasBrowserTestsToRun,
+  getBrowserProjectsToRun: () => browserProjectsToRun,
+  getExecutorRunOptions: () => ({}),
   coveragePluginLoadError: () => undefined,
-  refreshPlan: async () => {},
   globTestEntries: async () => testEntries,
   rsbuildInstance: {} as RunPlanner['rsbuildInstance'],
   setupFileState: createSetupFileState(),
@@ -218,7 +214,6 @@ const createDeps = (overrides: Partial<RunTestsDeps>): RunTestsDeps => ({
   createRunPlanner: unreachable('createRunPlanner'),
   createNodeExecutor: unreachable('createNodeExecutor'),
   loadBrowserExecutor: unreachable('loadBrowserExecutor'),
-  createBrowserRunPlanner: unreachable('createBrowserRunPlanner'),
   runBrowserOnlyTests: unreachable('runBrowserOnlyTests'),
   runBrowserGlobalSetupStage: unreachable('runBrowserGlobalSetupStage'),
   isCliShortcutsEnabled: unreachable('isCliShortcutsEnabled'),
@@ -322,13 +317,15 @@ describe('runTests orchestration', () => {
       createDeps({
         createRunPlanner: async () => {
           events.push('planner:resolve');
-          return createFakeRunPlanner({ hasNodeTestsToRun: true });
+          return createFakeRunPlanner({
+            hasNodeTestsToRun: true,
+            hasBrowserTestsToRun: true,
+          });
         },
         createNodeExecutor: () => {
           events.push('node:construct');
           return nodeExecutor;
         },
-        createBrowserRunPlanner: () => createFakeBrowserPlanner(true),
         loadBrowserExecutor: async () => browserExecutor,
         runBrowserGlobalSetupStage: async () => ({ errors: [] }),
       }),
@@ -378,9 +375,11 @@ describe('runTests orchestration', () => {
       context,
       createDeps({
         createRunPlanner: async () =>
-          createFakeRunPlanner({ hasNodeTestsToRun: true }),
+          createFakeRunPlanner({
+            hasNodeTestsToRun: true,
+            hasBrowserTestsToRun: true,
+          }),
         createNodeExecutor: () => nodeExecutor,
-        createBrowserRunPlanner: () => createFakeBrowserPlanner(true),
         loadBrowserExecutor: async () => browserExecutor,
         runBrowserGlobalSetupStage: async () => ({ errors: [setupError] }),
       }),
@@ -419,9 +418,11 @@ describe('runTests orchestration', () => {
         context,
         createDeps({
           createRunPlanner: async () =>
-            createFakeRunPlanner({ hasNodeTestsToRun: true }),
+            createFakeRunPlanner({
+              hasNodeTestsToRun: true,
+              hasBrowserTestsToRun: true,
+            }),
           createNodeExecutor: () => nodeExecutor,
-          createBrowserRunPlanner: () => createFakeBrowserPlanner(true),
           loadBrowserExecutor: async () => browserExecutor,
           runBrowserGlobalSetupStage: async () => ({ errors: [] }),
         }),
@@ -454,7 +455,6 @@ describe('runTests orchestration', () => {
         createRunPlanner: async () =>
           createFakeRunPlanner({ hasNodeTestsToRun: false }),
         createNodeExecutor: () => nodeExecutor,
-        createBrowserRunPlanner: () => createFakeBrowserPlanner(false),
         loadBrowserExecutor,
       }),
     );
@@ -538,9 +538,12 @@ const startWatchRun = async ({
     parts.context,
     createDeps({
       createRunPlanner: async () =>
-        createFakeRunPlanner({ hasNodeTestsToRun, testEntries }),
+        createFakeRunPlanner({
+          hasNodeTestsToRun,
+          hasBrowserTestsToRun: withBrowser,
+          testEntries,
+        }),
       createNodeExecutor: () => nodeExecutor,
-      createBrowserRunPlanner: () => createFakeBrowserPlanner(withBrowser),
       loadBrowserExecutor: async () => browserExecutor,
       isCliShortcutsEnabled: () => true,
       setupCliShortcuts: async (options) => {
@@ -1038,7 +1041,6 @@ describe('runTests trace buffer rotation', () => {
         createRunPlanner: async () =>
           createFakeRunPlanner({ hasNodeTestsToRun: true }),
         createNodeExecutor: () => nodeExecutor,
-        createBrowserRunPlanner: () => createFakeBrowserPlanner(false),
         isCliShortcutsEnabled: () => false,
         createTraceController: controller,
       }),

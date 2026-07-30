@@ -28,7 +28,6 @@ import {
   runBrowserGlobalSetupStage,
 } from './browser/globalSetupStage';
 import { runBrowserOnlyTests } from './browser/onlyRun';
-import { createBrowserRunPlanner } from './browser/runPlanner';
 import {
   type CreateNodeExecutorOptions,
   createNodeExecutor,
@@ -60,7 +59,6 @@ export interface RunTestsDeps {
     options: CreateNodeExecutorOptions,
   ) => NodeExecutor;
   loadBrowserExecutor: typeof loadBrowserExecutor;
-  createBrowserRunPlanner: typeof createBrowserRunPlanner;
   runBrowserOnlyTests: typeof runBrowserOnlyTests;
   runBrowserGlobalSetupStage: typeof runBrowserGlobalSetupStage;
   isCliShortcutsEnabled: typeof isCliShortcutsEnabled;
@@ -72,7 +70,6 @@ const productionDeps: RunTestsDeps = {
   createRunPlanner,
   createNodeExecutor,
   loadBrowserExecutor,
-  createBrowserRunPlanner,
   runBrowserOnlyTests,
   runBrowserGlobalSetupStage,
   isCliShortcutsEnabled,
@@ -89,8 +86,8 @@ export async function runTests(
   // 2. Browser-only runs (no node projects) take a fast path so they never
   //    resolve the planner, and so never boot a node Rsbuild instance
   //    (cold-start gate: retained).
-  // 3. Otherwise resolve the plan first (the node `modifyRstestConfig` hooks fire
-  //    and the plan is read inside the planner — the init barrier), then
+  // 3. Otherwise resolve the plan first (each side's `modifyRstestConfig` hooks
+  //    fire and the plan is read inside the planner — the init barrier), then
   //    construct both executors from it.
   // 4. Non-watch: `Promise.all(executors.map(e => e.runCycle()))` → one
   //    `finalizeRunCycle` → one `executors.close()` exit path.
@@ -180,28 +177,21 @@ export async function runTests(
 
   // ===================================================================
   // Mixed / node path. Init barrier: the planner resolves first — the node
-  // `modifyRstestConfig` hooks fire and the plan is read while it is being
-  // built — and only then is any executor constructed from it.
+  // `modifyRstestConfig` hooks fire, the browser's do too where the plan may
+  // depend on them (inside a files-only discovery boot, hence the trace sink),
+  // and the plan is read while it is being built — and only then is any executor
+  // constructed from it. One planner answers for both sides, so there is no
+  // half-resolved pair to keep in step.
   // ===================================================================
   const planner = await deps.createRunPlanner(context, {
     browserProjects,
     nodeProjects,
     isWatchMode,
-  });
-
-  // Browser-side planning (filter classification, config-hook discovery, run
-  // option bags) lives behind its own planner so only the coarse flow stays here.
-  const browserPlanner = deps.createBrowserRunPlanner({
-    context,
-    planner,
-    browserProjects,
-    nodeProjects,
     onTraceEvents: forwardBrowserTraceEvents,
   });
-  await browserPlanner.runConfigHookDiscovery();
 
   const hasNodeTestsToRun = planner.hasNodeTestsToRun();
-  const hasBrowserTestsToRun = browserPlanner.hasBrowserTestsToRun();
+  const hasBrowserTestsToRun = planner.hasBrowserTestsToRun();
 
   if (hasNodeTestsToRun || hasBrowserTestsToRun) {
     await ensureRunDependencies({ projects: [], rootPath, coverage });
@@ -346,12 +336,12 @@ export async function runTests(
       let browserStage: BrowserGlobalSetupStageResult = { errors: [] };
       let browserExecutor: TestExecutor | undefined;
       if (hasBrowserTestsToRun) {
-        const browserProjectsToRun = browserPlanner.getBrowserProjectsToRun();
+        const browserProjectsToRun = planner.getBrowserProjectsToRun();
         browserExecutor = await deps.loadBrowserExecutor(
           context,
           browserProjectsToRun,
           coverageProvider,
-          browserPlanner.getExecutorRunOptions(browserProjectsToRun),
+          planner.getExecutorRunOptions(browserProjectsToRun),
         );
         executors.push(browserExecutor);
         await browserExecutor.init();
@@ -443,12 +433,12 @@ export async function runTests(
   });
 
   if (hasBrowserTestsToRun) {
-    const browserProjectsToRun = browserPlanner.getBrowserProjectsToRun();
+    const browserProjectsToRun = planner.getBrowserProjectsToRun();
     browserExecutor = await deps.loadBrowserExecutor(
       context,
       browserProjectsToRun,
       coverageProvider,
-      browserPlanner.getExecutorRunOptions(browserProjectsToRun),
+      planner.getExecutorRunOptions(browserProjectsToRun),
     );
     await browserExecutor.init();
     const executor = browserExecutor;
