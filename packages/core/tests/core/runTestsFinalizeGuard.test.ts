@@ -2,13 +2,12 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 
-// Drift-guard for the Phase 3 unified finalize. Phase 3 collapsed three browser
-// self-finalize copies plus the node finalize into a single `finalizeRunCycle`
-// (in `finalizeRun.ts`). A future edit that quietly reintroduces a second
-// finalize path — a stray `notifyReportersOnTestRunEnd` or run-time
-// `generateCoverage` outside the shared finalizer — would raise these counts and
-// trip this test, forcing the new site to be justified (and this guard updated
-// deliberately). Salvaged from the phase 0 prior-art branch.
+// Drift-guard for the single finalize: `finalizeRunCycle` (in `finalizeRun.ts`)
+// is the one implementation node-only, browser-only, and mixed runs all reduce
+// through, on both commands. An edit that quietly reintroduces a second finalize
+// path — a stray `notifyReportersOnTestRunEnd` or run-time `generateCoverage`
+// outside that helper — raises these counts and trips this test, forcing the new
+// site to be justified and this guard updated deliberately.
 
 const coreDir = join(__dirname, '../../src/core');
 

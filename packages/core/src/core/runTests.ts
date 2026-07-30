@@ -74,6 +74,7 @@ export interface RunTestsDeps {
   runBrowserGlobalSetupStage: typeof runBrowserGlobalSetupStage;
   isCliShortcutsEnabled: typeof isCliShortcutsEnabled;
   setupCliShortcuts: typeof setupCliShortcuts;
+  createTraceController: typeof createTraceController;
 }
 
 const productionDeps: RunTestsDeps = {
@@ -84,6 +85,7 @@ const productionDeps: RunTestsDeps = {
   runBrowserGlobalSetupStage,
   isCliShortcutsEnabled,
   setupCliShortcuts,
+  createTraceController,
 };
 
 export async function runTests(
@@ -150,7 +152,7 @@ export async function runTests(
 
   // Constructed before the browser-only fast path so `--trace` is honored for
   // pure-browser runs (browser host forwards events via `onTraceEvents`).
-  const traceController = createTraceController({
+  const traceController = deps.createTraceController({
     enabled: context.trace,
     rootPath: context.rootPath,
   });

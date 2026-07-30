@@ -16,8 +16,8 @@ export type {
 // Shared coverage fold: the browser executor and the browser-only watch path
 // merge per-file result coverage through the same helper.
 export { buildBrowserCoverageMap } from './coverage/browserCoverageMap';
-// The executor seam — `@rstest/browser`'s `BrowserExecutor` writes
-// `implements TestExecutor` and returns an `ExecutorCycleOutcome` so the shared
+// The executor seam — `@rstest/browser`'s browser executor is built against
+// `TestExecutor` and returns an `ExecutorCycleOutcome`, so the shared
 // `finalizeRunCycle` reduces it alongside the node outcome. Transitive dts
 // exposure through `BrowserHostModule` is not enough; these must be named here.
 export type {

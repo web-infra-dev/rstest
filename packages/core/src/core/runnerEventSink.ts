@@ -146,8 +146,8 @@ export function createRunnerEventSink(
       return guarded(() => fanoutConsoleLog(log));
     },
     getCountOfFailedTests() {
-      // `stateManager` is reset at the top of every run/rerun (node's
-      // top-of-cycle reset and the browser host's `prepareWatchRerunState`), so
+      // `stateManager` is reset at the top of every run/rerun (the non-watch
+      // top-of-cycle reset, and core's watch cycle driver per rerun), so
       // this read is already cycle-scoped — bail decisions never see counts
       // carried over from a previous cycle. Both the node pool and the browser
       // host's cross-file bail gate consult this.

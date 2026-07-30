@@ -1578,7 +1578,7 @@ const registerWatchCleanup = (embedded: boolean): void => {
   watchContext.cleanupRegistered = true;
 
   // Embedded (programmatic) hosts own the process lifecycle; they tear the
-  // session down through the watch handles' `close` instead of signals.
+  // session down through the browser executor's `close` instead of signals.
   if (embedded) {
     return;
   }

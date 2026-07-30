@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, rs } from '@rstest/core';
 import { join } from 'pathe';
 import type { BrowserRunPlanner } from '../../src/core/browser/runPlanner';
 import { Rstest } from '../../src/core/rstest';
+import { createTraceController } from '../../src/utils';
 import { type RunTestsDeps, runTests } from '../../src/core/runTests';
 import type {
   ExecutorCycleOutcome,
@@ -133,6 +134,11 @@ const createFakeBrowserExecutor = (
   events: string[],
   runCycle: RunCycleImpl,
   hasWatchSession = true,
+  /**
+   * The paths this host would find in its own file set. `undefined` stands for
+   * a host that owns whatever it is asked for.
+   */
+  ownedPaths?: string[],
 ) => {
   let invalidateCallback: ExecutorInvalidationCallback | undefined;
   return Object.assign(createFakeExecutor('browser', events, runCycle), {
@@ -147,9 +153,19 @@ const createFakeBrowserExecutor = (
      */
     requestRerun: async (testPaths?: string[]) => {
       events.push(`browser:request-rerun:${testPaths?.join(',') ?? 'all'}`);
+      const seeded =
+        testPaths && ownedPaths
+          ? testPaths.filter((path) => ownedPaths.includes(path))
+          : testPaths;
+      // Seeding nothing means the request matched none of this host's files, so
+      // there is no cycle to run: signalling anyway would print "no test files
+      // need re-run" for a scope that was never the browser's to begin with.
+      if (seeded && testPaths?.length && seeded.length === 0) {
+        return;
+      }
       await invalidateCallback!({
         isFirstBuild: false,
-        fileFilters: testPaths,
+        fileFilters: seeded,
       });
     },
     /** Stand in for a browser rebuild / HMR trigger. */
@@ -181,6 +197,7 @@ const createDeps = (overrides: Partial<RunTestsDeps>): RunTestsDeps => ({
   runBrowserGlobalSetupStage: unreachable('runBrowserGlobalSetupStage'),
   isCliShortcutsEnabled: unreachable('isCliShortcutsEnabled'),
   setupCliShortcuts: unreachable('setupCliShortcuts'),
+  createTraceController,
   ...overrides,
 });
 
@@ -449,6 +466,7 @@ const startWatchRun = async ({
   withBrowser = false,
   browserRunCycle = async () => outcomeOf([]),
   browserHasWatchSession = true,
+  browserOwnedPaths,
 }: {
   runCycle?: RunCycleImpl;
   testEntries?: string[];
@@ -457,6 +475,8 @@ const startWatchRun = async ({
   browserRunCycle?: RunCycleImpl;
   /** False stands in for a host launch that found no test files to watch. */
   browserHasWatchSession?: boolean;
+  /** The paths the browser host would match a rerun request against. */
+  browserOwnedPaths?: string[];
 } = {}) => {
   const events: string[] = [];
   const parts = createContext({
@@ -474,6 +494,7 @@ const startWatchRun = async ({
     events,
     browserRunCycle,
     browserHasWatchSession,
+    browserOwnedPaths,
   );
   let shortcuts: CliShortcutHandlers | undefined;
   let setupCliShortcutsCalls = 0;
@@ -746,6 +767,45 @@ describe('runTests watch orchestration', () => {
     expect(events).toContain('browser:request-rerun:/snap.test.ts');
   });
 
+  it('runs no browser cycle when the u shortcut scope is node-only', async () => {
+    // The host seeds the request against its own file set; a scope that matches
+    // none of its files seeds nothing, and a cycle that runs nothing would
+    // report "no test files need re-run" for a scope that was never the
+    // browser's. So the mixed `u` finalizes once, not twice.
+    const unmatched: TestFileResult = {
+      ...passingFile('/node-only.test.ts', 'node-a'),
+      snapshotResult: {
+        filepath: '/node-only.test.ts',
+        added: 0,
+        fileDeleted: false,
+        matched: 0,
+        unchecked: 0,
+        uncheckedKeys: [],
+        unmatched: 1,
+        updated: 0,
+      },
+    };
+    let cycleCount = 0;
+    const { nodeExecutor, browserExecutor, getShortcuts, context, runEnds } =
+      await startWatchRun({
+        withBrowser: true,
+        browserOwnedPaths: ['/browser-only.test.ts'],
+        runCycle: async () => {
+          cycleCount += 1;
+          return outcomeOf(cycleCount === 1 ? [unmatched] : []);
+        },
+      });
+    await nodeExecutor.invalidate(true);
+    context.snapshotManager.summary.unmatched = 1;
+    const browserCyclesBefore = browserExecutor.cycles.length;
+    const finalizesBefore = runEnds.length;
+
+    await getShortcuts().updateSnapshot!();
+
+    expect(browserExecutor.cycles).toHaveLength(browserCyclesBefore);
+    expect(runEnds.length - finalizesBefore).toBe(1);
+  });
+
   it('restores updateSnapshot when the u shortcut rerun throws', async () => {
     const cycleError = new Error('rerun failed');
     let cycleCount = 0;
@@ -845,5 +905,85 @@ describe('runTests watch orchestration', () => {
     await nodeExecutor.invalidate(true);
 
     expect(readyBanners()).toBe(2);
+  });
+});
+
+describe('runTests trace buffer rotation', () => {
+  /**
+   * A trace controller that records every run it hands out and whether each was
+   * finalized, so a dead twin (allocated, never finalized) is observable.
+   */
+  const createRecordingTraceController = () => {
+    const runs: Array<{ finalized: number }> = [];
+    return {
+      runs,
+      controller: (() => ({
+        beginRun: () => {
+          const run = { finalized: 0 };
+          runs.push(run);
+          return {
+            onEvents: () => {},
+            finalize: async () => {
+              run.finalized += 1;
+            },
+          };
+        },
+        close: async () => {},
+      })) as unknown as RunTestsDeps['createTraceController'],
+    };
+  };
+
+  it('allocates exactly one buffer per finalized watch cycle', async () => {
+    const { runs, controller } = createRecordingTraceController();
+    const events: string[] = [];
+    const { context } = createContext({
+      command: 'watch',
+      nodeProjectNames: ['node-a'],
+    });
+    const nodeExecutor = createFakeNodeExecutor({
+      events,
+      hasNodeTestsToRun: true,
+    });
+
+    await runTests(
+      context,
+      createDeps({
+        createNodeExecutor: () => nodeExecutor,
+        createBrowserRunPlanner: () => createFakePlanner(false),
+        isCliShortcutsEnabled: () => false,
+        createTraceController: controller,
+      }),
+    );
+
+    // One pre-allocated buffer before any cycle runs.
+    expect(runs).toHaveLength(1);
+
+    await nodeExecutor.invalidate(true);
+    await nodeExecutor.invalidate(false);
+
+    // Each cycle finalizes the buffer it ran under and rotates in the next, so
+    // events emitted between cycles always have somewhere to land.
+    expect(runs).toHaveLength(3);
+  });
+
+  it('lets the browser-only fast path reuse the pre-allocated buffer', async () => {
+    const { runs, controller } = createRecordingTraceController();
+    const { context } = createContext({ browserProjectNames: ['browser-a'] });
+    let handedOver: unknown;
+
+    await runTests(
+      context,
+      createDeps({
+        createTraceController: controller,
+        runBrowserOnlyTests: async (_context, _projects, options) => {
+          handedOver = options?.traceRun;
+        },
+      }),
+    );
+
+    // A second `beginRun()` here would leave the pre-allocated one as a dead,
+    // never-finalized twin.
+    expect(runs).toHaveLength(1);
+    expect(handedOver).toBeDefined();
   });
 });
