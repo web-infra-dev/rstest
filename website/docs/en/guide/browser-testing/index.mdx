@@ -89,7 +89,7 @@ Most config options behave the same in Browser Mode. The table below collects th
 | [detectAsyncLeaks](/config/test/detect-async-leaks), [logHeapUsage](/config/test/log-heap-usage) | Ignored — node-only mechanisms.                                                                                                                                                                                                                                        |
 | [bail](/config/test/bail)                                                                        | Supported in headless runs: once the failure budget is reached, Rstest stops dispatching the remaining files. Files already running in parallel finish first, so a few more results can still appear. The headed debugging UI (`headless: false`) does not apply bail. |
 
-Module mocking (the [rs.mock family](/api/runtime-api/rstest/mock-modules)) and [includeSource](/config/test/include-source) in-source testing behave the same as in Node mode. `rs.mockRequire` also works in browser tests, but it exists for CommonJS interop — prefer `rs.mock` / `rs.doMock` when writing browser tests.
+Module mocking (the [rs.mock family](/api/runtime-api/rstest/mock-modules)), including [virtual modules configured with `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-virtual-modules), and [includeSource](/config/test/include-source) in-source testing behave the same as in Node mode. `rs.mockRequire` also works in browser tests, but it exists for CommonJS interop — prefer `rs.mock` / `rs.doMock` when writing browser tests.
 
 ## Next steps
 

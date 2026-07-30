@@ -211,6 +211,19 @@ Rstest provides an `rs` API that you can use to access Rstest's utilities, such 
 fn.mockResolvedValue('foo');
 ```
 
+### Virtual module mocks
+
+When migrating a Jest virtual mock, first [declare the module and configure `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-virtual-modules). This setup works in both Node and Browser mode. Then remove Jest's third argument:
+
+```diff
+- jest.mock('native-runtime', () => ({ platform: 'test' }), {
+-   virtual: true,
+- });
++ rs.mock('native-runtime', () => ({ platform: 'test' }));
+```
+
+The `rs.mock` factory or a matching manual mock provides the module's runtime exports.
+
 ### Done callback
 
 The `done` callback is not supported in Rstest. Instead, you can return a Promise or use `async/await` for asynchronous tests.

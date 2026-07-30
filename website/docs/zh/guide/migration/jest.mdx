@@ -211,6 +211,19 @@ Rstest 提供了 `rs` API，你可以使用它来访问 Rstest 的工具函数�
 fn.mockResolvedValue('foo');
 ```
 
+### 虚拟模块 mock
+
+迁移 Jest 虚拟模块 mock 时，请先[声明模块并配置 `resolve.alias`](/api/runtime-api/rstest/mock-modules#mock-虚拟模块)。这套配置同时适用于 Node 和浏览器模式。然后删除 Jest 的第三个参数：
+
+```diff
+- jest.mock('native-runtime', () => ({ platform: 'test' }), {
+-   virtual: true,
+- });
++ rs.mock('native-runtime', () => ({ platform: 'test' }));
+```
+
+`rs.mock` factory 或匹配的手写 mock 会提供模块的运行时导出。
+
 ### Done 回调
 
 Rstest 不支持 `done` 回调。作为替代，你可以返回一个 Promise 或使用 `async/await` 进行异步测试。
