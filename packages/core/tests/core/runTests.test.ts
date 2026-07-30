@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, rs } from '@rstest/core';
 import { join } from 'pathe';
 import type { BrowserRunPlanner } from '../../src/core/browser/runPlanner';
+import type { RunPlanner } from '../../src/core/planner';
 import { Rstest } from '../../src/core/rstest';
+import { createSetupFileState } from '../../src/core/setupFileState';
 import { createTraceController } from '../../src/utils';
 import { type RunTestsDeps, runTests } from '../../src/core/runTests';
 import type {
@@ -86,33 +88,16 @@ const createFakeExecutor = (
 
 const createFakeNodeExecutor = ({
   events,
-  hasNodeTestsToRun,
   runCycle = async () => outcomeOf([]),
-  testEntries = [],
 }: {
   events: string[];
-  hasNodeTestsToRun: boolean;
   runCycle?: RunCycleImpl;
-  /** What the `p` shortcut's re-glob returns. */
-  testEntries?: string[];
 }) => {
   let invalidateCallback: ExecutorInvalidationCallback | undefined;
   return Object.assign(createFakeExecutor('node', events, runCycle), {
-    getPlan: () => ({
-      projects: [],
-      entriesCache: new Map(),
-      browserProjectsToRun: [],
-      nodeProjectsToRun: [],
-    }),
-    hasNodeTestsToRun: () => hasNodeTestsToRun,
-    hasBrowserTestsToRun: () => false,
-    coveragePluginLoadError: () => undefined,
-    refreshPlan: async () => {},
-    setCoverageProvider: () => {},
     ensureRunResources: async () => {
       events.push('node:ensure-run-resources');
     },
-    globTestEntries: async () => testEntries,
     onInvalidate: (cb: ExecutorInvalidationCallback) => {
       invalidateCallback = cb;
     },
@@ -184,7 +169,7 @@ const createFakeBrowserExecutor = (
   });
 };
 
-const createFakePlanner = (
+const createFakeBrowserPlanner = (
   hasBrowserTestsToRun: boolean,
   browserProjects: ProjectContext[] = [],
 ): BrowserRunPlanner => ({
@@ -194,11 +179,43 @@ const createFakePlanner = (
   getExecutorRunOptions: () => ({}),
 });
 
+/**
+ * The core planner as the orchestrator sees it. `rsbuildInstance`,
+ * `setupFileState` and `globTestSourceEntries` are only ever forwarded into
+ * `createNodeExecutor`, which is faked too, so they never get used here — but
+ * they have to be present, because forwarding the planner's *live* objects
+ * rather than copies of them is the contract the node side depends on.
+ */
+const createFakeRunPlanner = ({
+  hasNodeTestsToRun,
+  testEntries = [],
+}: {
+  hasNodeTestsToRun: boolean;
+  /** What the `p` shortcut's re-glob returns. */
+  testEntries?: string[];
+}): RunPlanner => ({
+  getPlan: () => ({
+    projects: [],
+    entriesCache: new Map(),
+    browserProjectsToRun: [],
+    nodeProjectsToRun: [],
+  }),
+  hasNodeTestsToRun: () => hasNodeTestsToRun,
+  hasBrowserTestsToRun: () => false,
+  coveragePluginLoadError: () => undefined,
+  refreshPlan: async () => {},
+  globTestEntries: async () => testEntries,
+  rsbuildInstance: {} as RunPlanner['rsbuildInstance'],
+  setupFileState: createSetupFileState(),
+  globTestSourceEntries: async () => ({}),
+});
+
 const unreachable = (label: string) => () => {
   throw new Error(`${label} must not be reached in this run shape`);
 };
 
 const createDeps = (overrides: Partial<RunTestsDeps>): RunTestsDeps => ({
+  createRunPlanner: unreachable('createRunPlanner'),
   createNodeExecutor: unreachable('createNodeExecutor'),
   loadBrowserExecutor: unreachable('loadBrowserExecutor'),
   createBrowserRunPlanner: unreachable('createBrowserRunPlanner'),
@@ -294,7 +311,6 @@ describe('runTests orchestration', () => {
     });
     const nodeExecutor = createFakeNodeExecutor({
       events,
-      hasNodeTestsToRun: true,
       runCycle: async () => outcomeOf([passingFile('/node.test.ts', 'node-a')]),
     });
     const browserExecutor = createFakeBrowserExecutor(events, async () =>
@@ -304,8 +320,15 @@ describe('runTests orchestration', () => {
     await runTests(
       context,
       createDeps({
-        createNodeExecutor: () => nodeExecutor,
-        createBrowserRunPlanner: () => createFakePlanner(true),
+        createRunPlanner: async () => {
+          events.push('planner:resolve');
+          return createFakeRunPlanner({ hasNodeTestsToRun: true });
+        },
+        createNodeExecutor: () => {
+          events.push('node:construct');
+          return nodeExecutor;
+        },
+        createBrowserRunPlanner: () => createFakeBrowserPlanner(true),
         loadBrowserExecutor: async () => browserExecutor,
         runBrowserGlobalSetupStage: async () => ({ errors: [] }),
       }),
@@ -322,8 +345,13 @@ describe('runTests orchestration', () => {
       '/browser.test.ts',
       '/node.test.ts',
     ]);
-    // Init barrier + node resources before the browser executor is loaded.
-    expect(events.indexOf('node:init')).toBeLessThan(
+    // Init barrier: the plan is resolved before *any* executor is constructed,
+    // so neither side can be built against a plan that is still moving. Then
+    // node resources, and only then the browser executor's own init.
+    expect(events.indexOf('planner:resolve')).toBeLessThan(
+      events.indexOf('node:construct'),
+    );
+    expect(events.indexOf('node:construct')).toBeLessThan(
       events.indexOf('node:ensure-run-resources'),
     );
     expect(events.indexOf('node:ensure-run-resources')).toBeLessThan(
@@ -340,7 +368,6 @@ describe('runTests orchestration', () => {
     const setupError = new Error('browser globalSetup failed');
     const nodeExecutor = createFakeNodeExecutor({
       events,
-      hasNodeTestsToRun: true,
       runCycle: async () => outcomeOf([passingFile('/node.test.ts', 'node-a')]),
     });
     const browserExecutor = createFakeBrowserExecutor(events, async () =>
@@ -350,8 +377,10 @@ describe('runTests orchestration', () => {
     await runTests(
       context,
       createDeps({
+        createRunPlanner: async () =>
+          createFakeRunPlanner({ hasNodeTestsToRun: true }),
         createNodeExecutor: () => nodeExecutor,
-        createBrowserRunPlanner: () => createFakePlanner(true),
+        createBrowserRunPlanner: () => createFakeBrowserPlanner(true),
         loadBrowserExecutor: async () => browserExecutor,
         runBrowserGlobalSetupStage: async () => ({ errors: [setupError] }),
       }),
@@ -374,7 +403,6 @@ describe('runTests orchestration', () => {
     const cycleError = new Error('browser cycle failed');
     const nodeExecutor = createFakeNodeExecutor({
       events,
-      hasNodeTestsToRun: true,
       // Resolves on a later turn than the browser rejection: a fail-fast
       // `Promise.all` would reach teardown while this cycle is still running.
       runCycle: async () => {
@@ -390,8 +418,10 @@ describe('runTests orchestration', () => {
       runTests(
         context,
         createDeps({
+          createRunPlanner: async () =>
+            createFakeRunPlanner({ hasNodeTestsToRun: true }),
           createNodeExecutor: () => nodeExecutor,
-          createBrowserRunPlanner: () => createFakePlanner(true),
+          createBrowserRunPlanner: () => createFakeBrowserPlanner(true),
           loadBrowserExecutor: async () => browserExecutor,
           runBrowserGlobalSetupStage: async () => ({ errors: [] }),
         }),
@@ -413,10 +443,7 @@ describe('runTests orchestration', () => {
     const { context, runEnds, getRunStarts } = createContext({
       nodeProjectNames: ['node-a'],
     });
-    const nodeExecutor = createFakeNodeExecutor({
-      events,
-      hasNodeTestsToRun: false,
-    });
+    const nodeExecutor = createFakeNodeExecutor({ events });
     const loadBrowserExecutor = rs.fn<RunTestsDeps['loadBrowserExecutor']>(
       unreachable('loadBrowserExecutor'),
     );
@@ -424,8 +451,10 @@ describe('runTests orchestration', () => {
     await runTests(
       context,
       createDeps({
+        createRunPlanner: async () =>
+          createFakeRunPlanner({ hasNodeTestsToRun: false }),
         createNodeExecutor: () => nodeExecutor,
-        createBrowserRunPlanner: () => createFakePlanner(false),
+        createBrowserRunPlanner: () => createFakeBrowserPlanner(false),
         loadBrowserExecutor,
       }),
     );
@@ -493,12 +522,7 @@ const startWatchRun = async ({
     nodeProjectNames: ['node-a'],
     browserProjectNames: withBrowser ? ['browser-a'] : [],
   });
-  const nodeExecutor = createFakeNodeExecutor({
-    events,
-    hasNodeTestsToRun,
-    runCycle,
-    testEntries,
-  });
+  const nodeExecutor = createFakeNodeExecutor({ events, runCycle });
   const browserExecutor = createFakeBrowserExecutor(
     events,
     browserRunCycle,
@@ -511,8 +535,10 @@ const startWatchRun = async ({
   await runTests(
     parts.context,
     createDeps({
+      createRunPlanner: async () =>
+        createFakeRunPlanner({ hasNodeTestsToRun, testEntries }),
       createNodeExecutor: () => nodeExecutor,
-      createBrowserRunPlanner: () => createFakePlanner(withBrowser),
+      createBrowserRunPlanner: () => createFakeBrowserPlanner(withBrowser),
       loadBrowserExecutor: async () => browserExecutor,
       isCliShortcutsEnabled: () => true,
       setupCliShortcuts: async (options) => {
@@ -1002,16 +1028,15 @@ describe('runTests trace buffer rotation', () => {
       command: 'watch',
       nodeProjectNames: ['node-a'],
     });
-    const nodeExecutor = createFakeNodeExecutor({
-      events,
-      hasNodeTestsToRun: true,
-    });
+    const nodeExecutor = createFakeNodeExecutor({ events });
 
     await runTests(
       context,
       createDeps({
+        createRunPlanner: async () =>
+          createFakeRunPlanner({ hasNodeTestsToRun: true }),
         createNodeExecutor: () => nodeExecutor,
-        createBrowserRunPlanner: () => createFakePlanner(false),
+        createBrowserRunPlanner: () => createFakeBrowserPlanner(false),
         isCliShortcutsEnabled: () => false,
         createTraceController: controller,
       }),

@@ -5,8 +5,8 @@ import {
   type TraceEvent,
 } from '../../utils';
 import { type BrowserExecutorRunOptions, runBrowserDiscovery } from './loader';
-import type { NodeRunPlanAccess } from '../executors/nodeExecutor';
 import { getUserRstestConfigPluginProjects } from '../modifyRstestConfig';
+import type { RunPlanner } from '../planner';
 import type { Rstest } from '../rstest';
 
 /**
@@ -20,7 +20,7 @@ export interface BrowserRunPlanner {
    * Boot the browser side once in files-only mode when the plan may depend on
    * browser `modifyRstestConfig` hooks (they only apply inside a browser
    * runtime boot and can add test files to an otherwise-empty project), then
-   * re-resolve the node executor's plan. No-op when discovery is not needed.
+   * re-resolve the run plan. No-op when discovery is not needed.
    */
   runConfigHookDiscovery(): Promise<void>;
   hasBrowserTestsToRun(): boolean;
@@ -36,13 +36,13 @@ export interface BrowserRunPlanner {
 
 export function createBrowserRunPlanner({
   context,
-  nodeExecutor,
+  planner,
   browserProjects,
   nodeProjects,
   onTraceEvents,
 }: {
   context: Rstest;
-  nodeExecutor: NodeRunPlanAccess;
+  planner: RunPlanner;
   browserProjects: ProjectContext[];
   nodeProjects: ProjectContext[];
   onTraceEvents?: (events: TraceEvent[]) => void;
@@ -97,7 +97,7 @@ export function createBrowserRunPlanner({
 
   const shouldAllowEmptyBrowserFallback = () =>
     shouldRunBrowserDiscoveryFallback() &&
-    nodeExecutor.hasNodeTestsToRun() &&
+    planner.hasNodeTestsToRun() &&
     !context.fileFilters?.some(isBrowserProjectPathFilter);
 
   const getBrowserProjectsForDiscovery = () => {
@@ -125,7 +125,7 @@ export function createBrowserRunPlanner({
   };
 
   const getBrowserProjectsToRun = () => {
-    const currentPlan = nodeExecutor.getPlan();
+    const currentPlan = planner.getPlan();
     if (currentPlan.browserProjectsToRun.length > 0) {
       return currentPlan.browserProjectsToRun;
     }
@@ -139,7 +139,7 @@ export function createBrowserRunPlanner({
     if (!shard) {
       return undefined;
     }
-    const currentPlan = nodeExecutor.getPlan();
+    const currentPlan = planner.getPlan();
     const browserEntries = new Map<
       string,
       { entries: Record<string, string> }
@@ -153,8 +153,8 @@ export function createBrowserRunPlanner({
     return browserEntries;
   };
 
-  // In a sharded mixed run the node side already resolved the browser shard
-  // slice, so the host must not re-shard on a config hook refresh.
+  // In a sharded mixed run the plan already resolved the browser shard slice, so
+  // the host must not re-shard on a config hook refresh.
   const freezeShardedEntries = Boolean(shard && nodeProjects.length);
 
   const getExecutorRunOptions = (
@@ -192,11 +192,10 @@ export function createBrowserRunPlanner({
       }
       await discoveryResult?.close?.();
       hasRunBrowserConfigHookDiscovery = true;
-      await nodeExecutor.refreshPlan();
+      await planner.refreshPlan();
     },
     hasBrowserTestsToRun: () =>
-      nodeExecutor.hasBrowserTestsToRun() ||
-      shouldRunBrowserDiscoveryFallback(),
+      planner.hasBrowserTestsToRun() || shouldRunBrowserDiscoveryFallback(),
     getBrowserProjectsToRun,
     getExecutorRunOptions,
   };

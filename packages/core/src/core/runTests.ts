@@ -32,10 +32,11 @@ import { createBrowserRunPlanner } from './browser/runPlanner';
 import {
   type CreateNodeExecutorOptions,
   createNodeExecutor,
-  type NodeRunPlanAccess,
+  type NodeExecutor,
 } from './executors/nodeExecutor';
 import { runGlobalTeardown } from './globalSetup';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';
+import { createRunPlanner } from './planner';
 import type { Rstest } from './rstest';
 import {
   createWatchCycleDriver,
@@ -46,17 +47,6 @@ import {
 } from './watchSession';
 
 /**
- * What the orchestrator drives on the node side: the shared executor seam plus
- * the named plan-access surface — never the concrete `NodeExecutor`. Watch
- * subscribes to invalidations, so `onInvalidate` (optional on the seam, for
- * executors with no watch trigger of their own) is required of the node side
- * here.
- */
-type OrchestratedNodeExecutor = TestExecutor &
-  NodeRunPlanAccess &
-  Required<Pick<TestExecutor, 'onInvalidate'>>;
-
-/**
  * The collaborators `runTests` orchestrates, injected rather than imported at
  * the call sites so the run loop can be driven with fake executors in unit
  * tests (the browser loader `process.exit(1)`s on a missing `@rstest/browser`,
@@ -64,10 +54,11 @@ type OrchestratedNodeExecutor = TestExecutor &
  * from a test).
  */
 export interface RunTestsDeps {
+  createRunPlanner: typeof createRunPlanner;
   createNodeExecutor: (
     context: Rstest,
     options: CreateNodeExecutorOptions,
-  ) => OrchestratedNodeExecutor;
+  ) => NodeExecutor;
   loadBrowserExecutor: typeof loadBrowserExecutor;
   createBrowserRunPlanner: typeof createBrowserRunPlanner;
   runBrowserOnlyTests: typeof runBrowserOnlyTests;
@@ -78,6 +69,7 @@ export interface RunTestsDeps {
 }
 
 const productionDeps: RunTestsDeps = {
+  createRunPlanner,
   createNodeExecutor,
   loadBrowserExecutor,
   createBrowserRunPlanner,
@@ -96,9 +88,9 @@ export async function runTests(
   // 1. Split browser/node projects (the single `isBrowserProject` predicate).
   // 2. Browser-only runs (no node projects) take a fast path so they skip the
   //    node Rsbuild server + worker pool entirely (cold-start gate: retained).
-  // 3. Otherwise construct a `NodeExecutor`, `init()` it (its `modifyRstestConfig`
-  //    hooks fire and the plan resolves — the init barrier), then construct a
-  //    `BrowserExecutor` from the resolved plan.
+  // 3. Otherwise resolve the plan first (the node `modifyRstestConfig` hooks fire
+  //    and the plan is read inside the planner — the init barrier), then
+  //    construct both executors from it.
   // 4. Non-watch: `Promise.all(executors.map(e => e.runCycle()))` → one
   //    `finalizeRunCycle` → one `executors.close()` exit path.
   // 5. Watch: both executors signal through `onInvalidate` and every signal is
@@ -181,47 +173,60 @@ export async function runTests(
   }
 
   // ===================================================================
-  // Mixed / node path. Init barrier: node executor first (hooks fire, plan
-  // resolves), then the browser executor from the resolved plan.
+  // Mixed / node path. Init barrier: the planner resolves first — the node
+  // `modifyRstestConfig` hooks fire and the plan is read while it is being
+  // built — and only then is any executor constructed from it.
   // ===================================================================
-  const nodeExecutor = deps.createNodeExecutor(context, {
+  const planner = await deps.createRunPlanner(context, {
     browserProjects,
     nodeProjects,
     isWatchMode,
-    getTraceRun: () => activeTraceRun,
   });
-  await nodeExecutor.init();
 
   // Browser-side planning (filter classification, config-hook discovery, run
-  // option bags) lives behind the planner so only the coarse flow stays here.
-  const planner = deps.createBrowserRunPlanner({
+  // option bags) lives behind its own planner so only the coarse flow stays here.
+  const browserPlanner = deps.createBrowserRunPlanner({
     context,
-    nodeExecutor,
+    planner,
     browserProjects,
     nodeProjects,
     onTraceEvents: forwardBrowserTraceEvents,
   });
-  await planner.runConfigHookDiscovery();
+  await browserPlanner.runConfigHookDiscovery();
 
-  const hasNodeTestsToRun = nodeExecutor.hasNodeTestsToRun();
-  const hasBrowserTestsToRun = planner.hasBrowserTestsToRun();
+  const hasNodeTestsToRun = planner.hasNodeTestsToRun();
+  const hasBrowserTestsToRun = browserPlanner.hasBrowserTestsToRun();
 
   if (hasNodeTestsToRun || hasBrowserTestsToRun) {
     await ensureRunDependencies({ projects: [], rootPath, coverage });
-    const coveragePluginLoadError = nodeExecutor.coveragePluginLoadError();
+    const coveragePluginLoadError = planner.coveragePluginLoadError();
     if (coveragePluginLoadError) {
       throw coveragePluginLoadError;
     }
   }
 
+  // The single run-scoped provider, built before the executors so both sides can
+  // take it through their constructor. A coverage-plugin load error is only
+  // thrown when something actually runs (above); on the empty path it just means
+  // no provider can be built.
+  const coverageProvider = planner.coveragePluginLoadError()
+    ? null
+    : await createCoverageProviderWithLog(coverage, rootPath);
+
+  const nodeExecutor = deps.createNodeExecutor(context, {
+    rsbuildInstance: planner.rsbuildInstance,
+    setupFileState: planner.setupFileState,
+    globTestSourceEntries: planner.globTestSourceEntries,
+    getPlan: planner.getPlan,
+    coverageProvider,
+    isWatchMode,
+    getTraceRun: () => activeTraceRun,
+  });
+  await nodeExecutor.init();
+
   // Nothing to run on either side: route the empty run through the shared
   // finalize like every other non-watch path.
   if (!hasNodeTestsToRun && !hasBrowserTestsToRun) {
-    // A coverage-plugin load error is only thrown when something actually runs
-    // (above); on the empty path it just means no provider can be built.
-    const coverageProvider = nodeExecutor.coveragePluginLoadError()
-      ? null
-      : await createCoverageProviderWithLog(coverage, rootPath);
     await finalizeRunCycle(context, {
       outcomes: [],
       mode: 'all',
@@ -236,12 +241,6 @@ export async function runTests(
     );
     return;
   }
-
-  const coverageProvider = await createCoverageProviderWithLog(
-    coverage,
-    rootPath,
-  );
-  nodeExecutor.setCoverageProvider(coverageProvider);
 
   // ===================================================================
   // Non-watch: one executor loop, one finalize, one close exit path.
@@ -341,12 +340,12 @@ export async function runTests(
       let browserStage: BrowserGlobalSetupStageResult = { errors: [] };
       let browserExecutor: TestExecutor | undefined;
       if (hasBrowserTestsToRun) {
-        const browserProjectsToRun = planner.getBrowserProjectsToRun();
+        const browserProjectsToRun = browserPlanner.getBrowserProjectsToRun();
         browserExecutor = await deps.loadBrowserExecutor(
           context,
           browserProjectsToRun,
           coverageProvider,
-          planner.getExecutorRunOptions(browserProjectsToRun),
+          browserPlanner.getExecutorRunOptions(browserProjectsToRun),
         );
         executors.push(browserExecutor);
         await browserExecutor.init();
@@ -356,7 +355,7 @@ export async function runTests(
         browserStage = await deps.runBrowserGlobalSetupStage(
           context,
           browserProjectsToRun,
-          { entriesCache: nodeExecutor.getPlan().entriesCache },
+          { entriesCache: planner.getPlan().entriesCache },
         );
       }
 
@@ -438,12 +437,12 @@ export async function runTests(
   });
 
   if (hasBrowserTestsToRun) {
-    const browserProjectsToRun = planner.getBrowserProjectsToRun();
+    const browserProjectsToRun = browserPlanner.getBrowserProjectsToRun();
     browserExecutor = await deps.loadBrowserExecutor(
       context,
       browserProjectsToRun,
       coverageProvider,
-      planner.getExecutorRunOptions(browserProjectsToRun),
+      browserPlanner.getExecutorRunOptions(browserProjectsToRun),
     );
     await browserExecutor.init();
     const executor = browserExecutor;
@@ -464,7 +463,7 @@ export async function runTests(
     node: hasNodeTestsToRun
       ? {
           runCycle: (options) => watchDriver.runCycle(nodeExecutor, options),
-          globTestEntries: () => nodeExecutor.globTestEntries(),
+          globTestEntries: () => planner.globTestEntries(),
         }
       : undefined,
     browser: browserTarget && {
