@@ -47,7 +47,6 @@ export const BROWSER_PORTS = {
   'browser-mock': 5258,
   'browser-in-source': 5260,
   'browser-in-source-watch': 5262,
-  'browser-virtual-mock': 5270,
   'watch-shortcuts': 5194,
   'watch-setup': 5264,
   'watch-multi-project': 5266,
