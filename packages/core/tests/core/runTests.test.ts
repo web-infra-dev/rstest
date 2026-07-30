@@ -171,19 +171,21 @@ const createFakeBrowserExecutor = (
 /**
  * The one planner the orchestrator sees, answering for both sides — a resolved
  * planner is the only kind there is, so the fake has no discovery step to drive
- * either. `rsbuildInstance`, `setupFileState` and `globTestSourceEntries` are
- * only ever forwarded into `createNodeExecutor`, which is faked too, so they
- * never get used here — but they have to be present, because forwarding the
- * planner's *live* objects rather than copies of them is the contract the node
- * side depends on.
+ * either. `nodeBuild` is only ever forwarded into `createNodeExecutor`, which is
+ * faked too, so its members never get used here — but they have to be present,
+ * because forwarding the planner's *live* objects rather than copies of them is
+ * the contract the node side depends on. `hasNodeBuild: false` is the zero-node
+ * run: the planner booted no node side, so no node executor exists at all.
  */
 const createFakeRunPlanner = ({
   hasNodeTestsToRun,
+  hasNodeBuild = true,
   hasBrowserTestsToRun = false,
   browserProjectsToRun = [],
   testEntries = [],
 }: {
   hasNodeTestsToRun: boolean;
+  hasNodeBuild?: boolean;
   hasBrowserTestsToRun?: boolean;
   browserProjectsToRun?: ProjectContext[];
   /** What the `p` shortcut's re-glob returns. */
@@ -201,9 +203,15 @@ const createFakeRunPlanner = ({
   getExecutorRunOptions: () => ({}),
   coveragePluginLoadError: () => undefined,
   globTestEntries: async () => testEntries,
-  rsbuildInstance: {} as RunPlanner['rsbuildInstance'],
-  setupFileState: createSetupFileState(),
-  globTestSourceEntries: async () => ({}),
+  nodeBuild: hasNodeBuild
+    ? {
+        rsbuildInstance: {} as NonNullable<
+          RunPlanner['nodeBuild']
+        >['rsbuildInstance'],
+        setupFileState: createSetupFileState(),
+        globTestSourceEntries: async () => ({}),
+      }
+    : undefined,
 });
 
 const unreachable = (label: string) => () => {
@@ -214,7 +222,7 @@ const createDeps = (overrides: Partial<RunTestsDeps>): RunTestsDeps => ({
   createRunPlanner: unreachable('createRunPlanner'),
   createNodeExecutor: unreachable('createNodeExecutor'),
   loadBrowserExecutor: unreachable('loadBrowserExecutor'),
-  runBrowserOnlyTests: unreachable('runBrowserOnlyTests'),
+  validateBrowserRunConfig: unreachable('validateBrowserRunConfig'),
   runBrowserGlobalSetupStage: unreachable('runBrowserGlobalSetupStage'),
   isCliShortcutsEnabled: unreachable('isCliShortcutsEnabled'),
   setupCliShortcuts: unreachable('setupCliShortcuts'),
@@ -462,33 +470,91 @@ describe('runTests orchestration', () => {
     expect(nodeExecutor.cycles).toHaveLength(0);
     expect(loadBrowserExecutor).not.toHaveBeenCalled();
     // The empty run still exits through the shared finalize, which reports the
-    // no-test-files verdict.
-    expect(getRunStarts()).toBe(0);
+    // no-test-files verdict — and reporters see the start/end pair every other
+    // run shape gives them, rather than an end with no start.
+    expect(getRunStarts()).toBe(1);
     expect(runEnds).toHaveLength(1);
     expect(runEnds[0]!.results).toEqual([]);
     expect(process.exitCode).toBe(1);
     expect(nodeExecutor.closeCount).toBe(1);
   });
 
-  it('routes a browser-only run to the fast path without resolving the planner', async () => {
-    const { context } = createContext({ browserProjectNames: ['browser-a'] });
-    const runBrowserOnlyTests = rs.fn<RunTestsDeps['runBrowserOnlyTests']>(
-      async () => {},
+  it('validates the browser config on an empty run that never loads an executor', async () => {
+    const { context, runEnds, getRunStarts } = createContext({
+      browserProjectNames: ['browser-a'],
+    });
+    const configError = new Error('browser.provider must be one of: x.');
+    const validateBrowserRunConfig = rs.fn<
+      RunTestsDeps['validateBrowserRunConfig']
+    >(async () => {
+      throw configError;
+    });
+
+    // Nothing to run, so no executor is loaded and nothing else would ever look
+    // at the browser config. Reporting "no test files found" for a config that
+    // cannot produce a run is the failure this pins: the verdict must be the
+    // config error, raised before the run is reported as started at all.
+    await expect(
+      runTests(
+        context,
+        createDeps({
+          createRunPlanner: async () =>
+            createFakeRunPlanner({
+              hasNodeTestsToRun: false,
+              hasNodeBuild: false,
+            }),
+          validateBrowserRunConfig,
+        }),
+      ),
+    ).rejects.toThrow(configError);
+
+    expect(validateBrowserRunConfig).toHaveBeenCalledTimes(1);
+    expect(validateBrowserRunConfig.mock.calls[0]![1]).toEqual(
+      context.projects,
+    );
+    expect(getRunStarts()).toBe(0);
+    expect(runEnds).toHaveLength(0);
+  });
+
+  it('builds no node executor for a zero-node run and drives the browser through the shared assembly', async () => {
+    const events: string[] = [];
+    const { context, runEnds, getRunStarts } = createContext({
+      browserProjectNames: ['browser-a'],
+    });
+    const browserExecutor = createFakeBrowserExecutor(events, async () =>
+      outcomeOf([passingFile('/browser.test.ts', 'browser-a')]),
     );
 
     await runTests(
       context,
       createDeps({
-        // Every other dep stays `unreachable`, and `createRunPlanner` is the
-        // load-bearing one: resolving the planner boots a node Rsbuild
-        // instance, which is exactly what the cold-start gate exists to avoid.
-        // Hoisting that call above the fast-path branch fails here.
-        runBrowserOnlyTests,
+        // The cold-start gate, now a planner condition: with no node projects
+        // the planner brings up no node build, so `createNodeExecutor` — left
+        // `unreachable` here — must never be called, and no node Rsbuild
+        // instance is ever paid for. Everything else is the one shared
+        // assembly the mixed run uses.
+        createRunPlanner: async () =>
+          createFakeRunPlanner({
+            hasNodeTestsToRun: false,
+            hasNodeBuild: false,
+            hasBrowserTestsToRun: true,
+          }),
+        loadBrowserExecutor: async () => browserExecutor,
+        runBrowserGlobalSetupStage: async () => ({ errors: [] }),
       }),
     );
 
-    expect(runBrowserOnlyTests).toHaveBeenCalledTimes(1);
-    expect(runBrowserOnlyTests.mock.calls[0]![1]).toEqual(context.projects);
+    expect(browserExecutor.cycles).toHaveLength(1);
+    expect(browserExecutor.cycles[0]).toMatchObject({
+      buildId: 1,
+      mode: 'all',
+    });
+    expect(browserExecutor.closeCount).toBe(1);
+    expect(getRunStarts()).toBe(1);
+    expect(runEnds).toHaveLength(1);
+    expect(runEnds[0]!.results.map((result) => result.testPath)).toEqual([
+      '/browser.test.ts',
+    ]);
   });
 });
 
@@ -502,6 +568,7 @@ type CliShortcutHandlers = Parameters<RunTestsDeps['setupCliShortcuts']>[0];
 const startWatchRun = async ({
   runCycle,
   testEntries,
+  withNode = true,
   hasNodeTestsToRun = true,
   withBrowser = false,
   browserRunCycle = async () => outcomeOf([]),
@@ -510,6 +577,8 @@ const startWatchRun = async ({
 }: {
   runCycle?: RunCycleImpl;
   testEntries?: string[];
+  /** False is the zero-node run: no node projects, so no node build either. */
+  withNode?: boolean;
   hasNodeTestsToRun?: boolean;
   withBrowser?: boolean;
   browserRunCycle?: RunCycleImpl;
@@ -521,7 +590,7 @@ const startWatchRun = async ({
   const events: string[] = [];
   const parts = createContext({
     command: 'watch',
-    nodeProjectNames: ['node-a'],
+    nodeProjectNames: withNode ? ['node-a'] : [],
     browserProjectNames: withBrowser ? ['browser-a'] : [],
   });
   const nodeExecutor = createFakeNodeExecutor({ events, runCycle });
@@ -539,11 +608,13 @@ const startWatchRun = async ({
     createDeps({
       createRunPlanner: async () =>
         createFakeRunPlanner({
-          hasNodeTestsToRun,
+          hasNodeTestsToRun: withNode && hasNodeTestsToRun,
+          hasNodeBuild: withNode,
           hasBrowserTestsToRun: withBrowser,
           testEntries,
         }),
-      createNodeExecutor: () => nodeExecutor,
+      // A zero-node run must not construct one, so leave the dep `unreachable`.
+      ...(withNode ? { createNodeExecutor: () => nodeExecutor } : {}),
       loadBrowserExecutor: async () => browserExecutor,
       isCliShortcutsEnabled: () => true,
       setupCliShortcuts: async (options) => {
@@ -927,6 +998,29 @@ describe('runTests watch orchestration', () => {
     expect(runEnds).toHaveLength(2);
   });
 
+  it('awaits the initial browser cycle in the foreground for a zero-node watch run', async () => {
+    // No node projects at all, so the planner brought up no node build and
+    // `createNodeExecutor` stays unreachable. Nothing else keeps the process
+    // alive, so this is the one watch shape whose first browser cycle is
+    // awaited before the call returns rather than left running behind it.
+    const { browserExecutor, getShortcuts, runEnds, events } =
+      await startWatchRun({
+        withNode: false,
+        withBrowser: true,
+      });
+
+    expect(events).not.toContain('node:ensure-run-resources');
+    expect(browserExecutor.cycles).toHaveLength(1);
+    expect(runEnds).toHaveLength(1);
+    expect(readyBanners()).toBe(1);
+    expect(getShortcuts().runWithTestNamePattern).toBeUndefined();
+    expect(getShortcuts().runWithFileFilters).toBeUndefined();
+
+    await getShortcuts().closeServer();
+
+    expect(browserExecutor.closeCount).toBe(1);
+  });
+
   it('offers no ready banner when the only launch opened no session', async () => {
     const { browserExecutor, runEnds } = await startWatchRun({
       hasNodeTestsToRun: false,
@@ -1022,6 +1116,7 @@ describe('runTests trace buffer rotation', () => {
           return run;
         },
         close: async () => {},
+        waitForExit: async () => {},
       })) as unknown as RunTestsDeps['createTraceController'],
     };
   };
@@ -1063,25 +1158,34 @@ describe('runTests trace buffer rotation', () => {
     expect(runs.map((run) => run.finalized)).toEqual([1, 1, 0]);
   });
 
-  it('lets the browser-only fast path reuse the pre-allocated buffer', async () => {
+  it('lets a zero-node run reuse the pre-allocated buffer', async () => {
     const { runs, controller } = createRecordingTraceController();
+    const events: string[] = [];
     const { context } = createContext({ browserProjectNames: ['browser-a'] });
-    let handedOver: unknown;
+    const browserExecutor = createFakeBrowserExecutor(events, async () =>
+      outcomeOf([passingFile('/browser.test.ts', 'browser-a')]),
+    );
 
     await runTests(
       context,
       createDeps({
         createTraceController: controller,
-        runBrowserOnlyTests: async (_context, _projects, options) => {
-          handedOver = options?.traceRun;
-        },
+        createRunPlanner: async () =>
+          createFakeRunPlanner({
+            hasNodeTestsToRun: false,
+            hasNodeBuild: false,
+            hasBrowserTestsToRun: true,
+          }),
+        loadBrowserExecutor: async () => browserExecutor,
+        runBrowserGlobalSetupStage: async () => ({ errors: [] }),
       }),
     );
 
-    // The fast path is handed the pre-allocated buffer itself, so its own
-    // finalize lands on that buffer. A second `beginRun()` here would leave the
-    // pre-allocated one as a dead, never-finalized twin instead.
+    // A zero-node run reaches the same single assembly, which finalizes the
+    // buffer pre-allocated before the planner resolved. The separate assembly
+    // this replaced had to be handed that buffer explicitly, and a second
+    // `beginRun()` there would have left the first a dead, never-finalized twin.
     expect(runs).toHaveLength(1);
-    expect(handedOver).toBe(runs[0]);
+    expect(runs[0]!.finalized).toBe(1);
   });
 });

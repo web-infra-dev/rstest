@@ -233,6 +233,24 @@ export async function runBrowserDiscovery(
 }
 
 /**
+ * Validate the run's browser config through the version-locked seam without
+ * building anything. An invalid browser config has to fail the run whether or
+ * not the plan found a browser test file to launch with, and the launch is the
+ * only thing that would otherwise validate it — so a run that finalizes without
+ * ever loading an executor has to ask for the check itself.
+ */
+export async function validateBrowserRunConfig(
+  context: RstestContext,
+  browserProjects: ProjectContext[],
+): Promise<void> {
+  const { validateBrowserConfig } = await loadBrowserModule({
+    projectRoots: browserProjects.map((p) => p.rootPath),
+    embedded: context.embedded,
+  });
+  validateBrowserConfig(context);
+}
+
+/**
  * Load `@rstest/browser` and build the browser side of the executor seam,
  * validating the browser config first. Shared by the run path (`runTests`) and
  * the list path (`listTests`) so both go through one browser entry point.

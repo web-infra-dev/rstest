@@ -19,6 +19,7 @@ import {
 import {
   type BrowserTestExecutor,
   loadBrowserExecutor,
+  validateBrowserRunConfig,
 } from './browser/loader';
 import { FATAL_SIGNALS, getSignalExitCode } from '../utils/signals';
 import { isCliShortcutsEnabled, setupCliShortcuts } from './cliShortcuts';
@@ -27,7 +28,6 @@ import {
   globalSetupFailureOutcome,
   runBrowserGlobalSetupStage,
 } from './browser/globalSetupStage';
-import { runBrowserOnlyTests } from './browser/onlyRun';
 import {
   type CreateNodeExecutorOptions,
   createNodeExecutor,
@@ -59,7 +59,7 @@ export interface RunTestsDeps {
     options: CreateNodeExecutorOptions,
   ) => NodeExecutor;
   loadBrowserExecutor: typeof loadBrowserExecutor;
-  runBrowserOnlyTests: typeof runBrowserOnlyTests;
+  validateBrowserRunConfig: typeof validateBrowserRunConfig;
   runBrowserGlobalSetupStage: typeof runBrowserGlobalSetupStage;
   isCliShortcutsEnabled: typeof isCliShortcutsEnabled;
   setupCliShortcuts: typeof setupCliShortcuts;
@@ -70,7 +70,7 @@ const productionDeps: RunTestsDeps = {
   createRunPlanner,
   createNodeExecutor,
   loadBrowserExecutor,
-  runBrowserOnlyTests,
+  validateBrowserRunConfig,
   runBrowserGlobalSetupStage,
   isCliShortcutsEnabled,
   setupCliShortcuts,
@@ -83,15 +83,14 @@ export async function runTests(
 ): Promise<void> {
   // High-level flow (post-executor-seam):
   // 1. Split browser/node projects (the single `isBrowserProject` predicate).
-  // 2. Browser-only runs (no node projects) take a fast path so they never
-  //    resolve the planner, and so never boot a node Rsbuild instance
-  //    (cold-start gate: retained).
-  // 3. Otherwise resolve the plan first (each side's `modifyRstestConfig` hooks
-  //    fire and the plan is read inside the planner — the init barrier), then
-  //    construct both executors from it.
-  // 4. Non-watch: `Promise.all(executors.map(e => e.runCycle()))` → one
+  // 2. Resolve the plan first (each side's `modifyRstestConfig` hooks fire and
+  //    the plan is read inside the planner — the init barrier), then construct
+  //    whichever executors it says this run needs. 0 and N node projects take
+  //    the same route: a zero-node run gets no node build from the planner and
+  //    therefore no node executor (the cold-start gate, see below).
+  // 3. Non-watch: `Promise.all(executors.map(e => e.runCycle()))` → one
   //    `finalizeRunCycle` → one `executors.close()` exit path.
-  // 5. Watch: both executors signal through `onInvalidate` and every signal is
+  // 4. Watch: both executors signal through `onInvalidate` and every signal is
   //    one queued cycle + finalize, so node rebuilds, browser rebuilds, and CLI
   //    shortcuts all run through the same loop.
   cleanCoverageReports(context.normalizedConfig.coverage);
@@ -102,9 +101,6 @@ export async function runTests(
 
   const browserProjects = context.projects.filter(isBrowserProject);
   const nodeProjects = context.projects.filter(isNodeProject);
-
-  const hasBrowserProjects = browserProjects.length > 0;
-  const hasNodeProjects = nodeProjects.length > 0;
 
   const isWatchMode = context.command === 'watch';
 
@@ -141,8 +137,6 @@ export async function runTests(
   const { coverage } = context.normalizedConfig;
   const { rootPath, snapshotManager } = context;
 
-  // Constructed before the browser-only fast path so `--trace` is honored for
-  // pure-browser runs (browser host forwards events via `onTraceEvents`).
   const traceController = deps.createTraceController({
     enabled: context.trace,
     rootPath: context.rootPath,
@@ -155,33 +149,13 @@ export async function runTests(
     : undefined;
 
   // ===================================================================
-  // Browser-only fast path (no node projects). Retained per the cold-start
-  // gate, which this branch enforces by never reaching `createRunPlanner`
-  // below: resolving the planner is what boots the node Rsbuild instance, and
-  // with zero node projects that instance resolves to an empty
-  // `environments: {}` anyway. Constructing a `NodeExecutor` costs nothing on
-  // its own (closures only — server, pool, and plan all arrive later), so
-  // hoisting the planner call above this branch to unify the assembly is the
-  // regression the gate exists to prevent. Folding the branch away means
-  // teaching the planner to skip the boot for a zero-node run.
-  // ===================================================================
-  if (hasBrowserProjects && !hasNodeProjects) {
-    await deps.runBrowserOnlyTests(context, browserProjects, {
-      traceController,
-      // The pre-allocated run buffer above is the fast path's trace run — a
-      // second `beginRun()` would leave it as a dead, never-finalized twin.
-      traceRun: activeTraceRun,
-    });
-    return;
-  }
-
-  // ===================================================================
-  // Mixed / node path. Init barrier: the planner resolves first — the node
-  // `modifyRstestConfig` hooks fire, the browser's do too where the plan may
-  // depend on them (inside a files-only discovery boot, hence the trace sink),
-  // and the plan is read while it is being built — and only then is any executor
-  // constructed from it. One planner answers for both sides, so there is no
-  // half-resolved pair to keep in step.
+  // Init barrier: the planner resolves first — the node `modifyRstestConfig`
+  // hooks fire, the browser's do too where the plan may depend on them (inside a
+  // files-only discovery boot, hence the trace sink), and the plan is read while
+  // it is being built — and only then is any executor constructed from it. One
+  // planner answers for both sides, so there is no half-resolved pair to keep in
+  // step, and every run shape — node-only, browser-only, mixed — comes through
+  // here.
   // ===================================================================
   const planner = await deps.createRunPlanner(context, {
     browserProjects,
@@ -209,20 +183,43 @@ export async function runTests(
     ? null
     : await createCoverageProviderWithLog(coverage, rootPath);
 
-  const nodeExecutor = deps.createNodeExecutor(context, {
-    rsbuildInstance: planner.rsbuildInstance,
-    setupFileState: planner.setupFileState,
-    globTestSourceEntries: planner.globTestSourceEntries,
-    getPlan: planner.getPlan,
-    coverageProvider,
-    isWatchMode,
-    getTraceRun: () => activeTraceRun,
-  });
-  await nodeExecutor.init();
+  // The cold-start gate, followed rather than re-decided here: the planner
+  // brings up no node build for a run with zero node projects, so that run
+  // constructs no node executor and pays for no node Rsbuild instance.
+  // Constructing a `NodeExecutor` is not the cost being avoided — it allocates
+  // closures and nothing else — so re-adding a branch above `createRunPlanner`
+  // to "save" it is the regression the gate exists to prevent.
+  const { nodeBuild } = planner;
+  const nodeExecutor = nodeBuild
+    ? deps.createNodeExecutor(context, {
+        ...nodeBuild,
+        getPlan: planner.getPlan,
+        coverageProvider,
+        isWatchMode,
+        getTraceRun: () => activeTraceRun,
+      })
+    : undefined;
+  await nodeExecutor?.init();
 
   // Nothing to run on either side: route the empty run through the shared
-  // finalize like every other non-watch path.
+  // finalize like every other non-watch path. This is also where an empty
+  // `--related` resolution lands — the plan globs nothing for it, so no executor
+  // is ever launched and the no-test-files verdict comes from the one finalize.
   if (!hasNodeTestsToRun && !hasBrowserTestsToRun) {
+    // Every other exit from here loads the browser executor, and loading it is
+    // what validates the browser config. This branch never does, so a run whose
+    // browser config is invalid would finalize with "no test files found"
+    // instead of the config error — the plan cannot be trusted to be about a
+    // valid run in the first place. Ask for the check directly.
+    if (browserProjects.length) {
+      await deps.validateBrowserRunConfig(context, browserProjects);
+    }
+    // An empty run is still a run as far as reporters are concerned. Every
+    // other shape pairs a start with its end — the non-watch run below, every
+    // watch cycle — and this branch was the one that finalized without ever
+    // starting, which a reporter that opens state on `onTestRunStart` cannot
+    // tell apart from a run that never happened.
+    await notifyReportersOnTestRunStart(context);
     await finalizeRunCycle(context, {
       outcomes: [],
       mode: 'all',
@@ -231,12 +228,19 @@ export async function runTests(
       reportOnFailure: coverage.reportOnFailure,
       traceRun: activeTraceRun,
     });
-    await runLifecycleStep('executor cleanup', () => nodeExecutor.close());
+    if (nodeExecutor) {
+      await runLifecycleStep('executor cleanup', () => nodeExecutor.close());
+    }
     await runLifecycleStep('trace shutdown', () =>
       traceController.shutdown(activeTraceRun),
     );
     return;
   }
+
+  // `hasNodeTestsToRun` implies the planner brought up a node build, so this is
+  // the single handle every node-side gate below reads — carrying the narrowing
+  // with it instead of re-deriving it from the boolean.
+  const nodeExecutorToRun = hasNodeTestsToRun ? nodeExecutor : undefined;
 
   // ===================================================================
   // Non-watch: one executor loop, one finalize, one close exit path.
@@ -247,11 +251,13 @@ export async function runTests(
     // failure (e.g. missing `jsdom`) never leaves a browser host mid-launch —
     // the same deliberate ordering the pre-seam code had. The build/stats phase
     // inside `runCycle` still overlaps with the browser run below.
-    if (hasNodeTestsToRun) {
-      await nodeExecutor.ensureRunResources();
+    if (nodeExecutorToRun) {
+      await nodeExecutorToRun.ensureRunResources();
     }
 
-    const executors: TestExecutor[] = hasNodeTestsToRun ? [nodeExecutor] : [];
+    const executors: TestExecutor[] = nodeExecutorToRun
+      ? [nodeExecutorToRun]
+      : [];
 
     // Single-exit-path rule: every executor closes through here exactly once
     // (idempotent), so no early return or throw can reintroduce a #1363-class
@@ -429,7 +435,8 @@ export async function runTests(
     // The node side always keeps the session open; a browser-only mixed watch
     // has nothing left when the host's launch opened no session.
     isSessionLive: () =>
-      hasNodeTestsToRun || (browserExecutor?.hasWatchSession() ?? false),
+      Boolean(nodeExecutorToRun) ||
+      (browserExecutor?.hasWatchSession() ?? false),
   });
 
   if (hasBrowserTestsToRun) {
@@ -456,9 +463,10 @@ export async function runTests(
 
   const browserTarget = browserExecutor;
   const watchTargets: WatchSessionTargets = {
-    node: hasNodeTestsToRun
+    node: nodeExecutorToRun
       ? {
-          runCycle: (options) => watchDriver.runCycle(nodeExecutor, options),
+          runCycle: (options) =>
+            watchDriver.runCycle(nodeExecutorToRun, options),
           globTestEntries: () => planner.globTestEntries(),
         }
       : undefined,
@@ -471,7 +479,10 @@ export async function runTests(
   // config-change restart hook. The browser side closes first: its runtime owns
   // the servers the node executor's shutdown does not know about.
   const closeWatchSession = createWatchTeardown({
-    executors: [...(browserExecutor ? [browserExecutor] : []), nodeExecutor],
+    executors: [
+      ...(browserExecutor ? [browserExecutor] : []),
+      ...(nodeExecutor ? [nodeExecutor] : []),
+    ],
     traceController,
     getTraceRun: () => activeTraceRun,
   });
@@ -489,7 +500,7 @@ export async function runTests(
     // every one of them is past its first cycle, and in a mixed run the node
     // side gets there first while the browser host still has no watch session.
     const shortcutExecutors = [
-      ...(watchTargets.node ? [nodeExecutor] : []),
+      ...(nodeExecutorToRun ? [nodeExecutorToRun] : []),
       ...(browserExecutor ? [browserExecutor] : []),
     ];
     const closeCliShortcuts = await deps.setupCliShortcuts(
@@ -503,11 +514,11 @@ export async function runTests(
     onBeforeRestart(closeCliShortcuts);
   }
 
-  if (hasNodeTestsToRun) {
+  if (nodeExecutorToRun) {
     // The node executor's rebuilds are the watch trigger; its initial compile
     // signals too, which is what drives the first node cycle.
-    nodeExecutor.onInvalidate(({ isFirstBuild }) =>
-      watchDriver.runCycle(nodeExecutor, {
+    nodeExecutorToRun.onInvalidate(({ isFirstBuild }) =>
+      watchDriver.runCycle(nodeExecutorToRun, {
         mode: isFirstBuild ? 'all' : 'on-demand',
         trigger: 'invalidation',
       }),
@@ -515,7 +526,7 @@ export async function runTests(
     // Start the node dev server now that the subscriber is in place. `runCycle`
     // (invoked from that callback) reuses these resources via the in-flight
     // guard rather than starting a second server.
-    await nodeExecutor.ensureRunResources();
+    await nodeExecutorToRun.ensureRunResources();
   }
 
   if (browserExecutor) {
@@ -524,7 +535,7 @@ export async function runTests(
     const initialBrowserCycle = watchDriver.runCycle(browserExecutor, {
       mode: 'all',
     });
-    if (hasNodeTestsToRun) {
+    if (nodeExecutorToRun) {
       // The node side already keeps the process alive, so the browser session
       // boots in the background; a failed boot must still be reported.
       initialBrowserCycle.catch((error) => {

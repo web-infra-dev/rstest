@@ -6,7 +6,7 @@ import type {
   ProjectEntries,
   RstestContext,
 } from '../../types';
-import { isDebug, resolveShardedEntries } from '../../utils';
+import { isDebug } from '../../utils';
 import { claimGlobalSetupOnce, runGlobalSetup } from '../globalSetup';
 import { getRsbuildEnvironmentConfig } from '../modifyRstestConfig';
 import { pluginBasic } from '../plugins/basic';
@@ -14,7 +14,6 @@ import { pluginEntryWatch } from '../plugins/entry';
 import { pluginExternal } from '../plugins/external';
 import { pluginIgnoreResolveError } from '../plugins/ignoreResolveError';
 import { pluginMockRuntime } from '../plugins/mockRuntime';
-import { getProjectEntries } from '../projectPlan';
 import { createRsbuildServer, hostServerConfig } from '../rsbuild';
 import { createSetupFileState } from '../setupFileState';
 
@@ -68,25 +67,20 @@ export const globalSetupFailureOutcome = (
 export async function runBrowserGlobalSetupStage(
   context: RstestContext,
   browserProjects: ProjectContext[],
-  options?: {
+  {
+    entriesCache,
+  }: {
     /**
-     * Plan-resolved (already shard-narrowed) entries from the mixed path so
-     * the "no running tests -> no globalSetup" gate reuses the plan's glob
-     * instead of re-walking the fs.
+     * The plan's entries, already narrowed to the shard slice, so the "no
+     * running tests -> no globalSetup" gate reuses the plan's glob instead of
+     * re-walking the fs. Required, and authoritative — an absent project means
+     * zero entries, not "look it up". Every run shape reaches this stage
+     * through the one assembly in `runTests.ts`, which has a resolved plan by
+     * then, so there is no caller left that could only offer a re-glob.
      */
-    entriesCache?: Map<string, ProjectEntries>;
+    entriesCache: Map<string, ProjectEntries>;
   },
 ): Promise<BrowserGlobalSetupStageResult> {
-  // Gate source, shard-aware in every run shape: the mixed path passes the
-  // plan's shard-narrowed cache; browser-only runs resolve the same sharded
-  // map the browser controller will use, so a project whose shard slice is
-  // empty never runs its globalSetup. When a map exists it is authoritative
-  // (absent project -> zero entries); only unsharded browser-only runs fall
-  // back to the per-project glob.
-  const gateEntries =
-    options?.entriesCache ??
-    (await resolveShardedEntries(context, { silent: true }));
-
   const candidates = (
     await Promise.all(
       browserProjects.map(async (project) => {
@@ -98,9 +92,8 @@ export async function runBrowserGlobalSetupStage(
         }
         // Same "no running tests -> no globalSetup" gate as the node path,
         // honoring include/exclude, CLI file filters, and sharding.
-        const entries = gateEntries
-          ? (gateEntries.get(project.environmentName)?.entries ?? {})
-          : await getProjectEntries({ context, project });
+        const entries =
+          entriesCache.get(project.environmentName)?.entries ?? {};
         const entryCount = Object.keys(entries).length;
         return entryCount > 0 ? { project, entryCount } : undefined;
       }),

@@ -48,11 +48,15 @@ const total = (hits: Array<{ count: number }>): number =>
 describe('runTests finalize drift-guard', () => {
   it('pins the reporter onTestRunEnd call sites in core', () => {
     const hits = countCalls('notifyReportersOnTestRunEnd');
-    // 1. `finalizeRun.ts` — the single unified finalize path.
-    // 2. `browser/onlyRun.ts` — the browser-only `relatedResolutionEmpty`
-    //    shortcut (no outcomes to reduce; it notifies directly). Related runs
-    //    are rejected in watch mode, so this shortcut is always one-shot.
-    expect(total(hits)).toBe(2);
+    // 1. `finalizeRun.ts` — the single unified finalize path, and now the only
+    //    site at all. The second one used to be the browser-only assembly's
+    //    `relatedResolutionEmpty` shortcut, which notified directly because it
+    //    had no outcomes to reduce. Folding that assembly into `runTests` gave
+    //    the shortcut somewhere to land — the shared empty-run finalize, which
+    //    reduces zero outcomes into exactly the same no-test-files verdict — so
+    //    the exception was deleted rather than relocated. A new site here means
+    //    a run shape has started reporting its own end again.
+    expect(total(hits)).toBe(1);
   });
 
   it('pins the run-time generateCoverage call sites in core', () => {
