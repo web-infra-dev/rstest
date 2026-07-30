@@ -2448,6 +2448,12 @@ export type BrowserControllerResult = BrowserTestRunResult & {
  * beside it and fail the run. The patterns are claimed here, and only for the
  * paths in this scope, so a click landing once the cycle is under way keeps its
  * pattern for the cycle it signalled instead of losing it to this one mid-loop.
+ *
+ * A skipped path keeps its pattern too, for the same reason: consuming it on the
+ * way past would leave the next cycle that does run the file — the file set can
+ * be rebuilt back — running it unfiltered, so the user's click would silently
+ * become a full-file rerun. The cost is one map entry per path that never comes
+ * back, which the next launch drops with the map.
  */
 export const claimHeadedCycleScope = (
   testPaths: string[],
@@ -2457,13 +2463,15 @@ export const claimHeadedCycleScope = (
   const scope: { file: TestFileInfo; testNamePattern?: string }[] = [];
   for (const testPath of testPaths) {
     const normalizedTestPath = normalize(testPath);
-    const testNamePattern = pendingTestNamePatterns.get(normalizedTestPath);
-    pendingTestNamePatterns.delete(normalizedTestPath);
     const file = currentTestFiles.find(
       (candidate) => candidate.testPath === normalizedTestPath,
     );
     if (file) {
-      scope.push({ file, testNamePattern });
+      scope.push({
+        file,
+        testNamePattern: pendingTestNamePatterns.get(normalizedTestPath),
+      });
+      pendingTestNamePatterns.delete(normalizedTestPath);
     }
   }
   return scope;

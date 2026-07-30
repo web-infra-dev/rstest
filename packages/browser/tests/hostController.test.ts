@@ -478,6 +478,23 @@ describe('claimHeadedCycleScope', () => {
     ]);
   });
 
+  it('leaves a skipped path’s pattern for whichever cycle runs the file', () => {
+    // The file set can be rebuilt back — the click's pattern is only spent when
+    // a cycle actually carries the file. Consuming it on the way past would turn
+    // the user's single-test click into a full-file rerun, silently.
+    const patterns = new Map([['/a.test.ts', 'sums']]);
+
+    const skipped = claimHeadedCycleScope(['/a.test.ts'], [], patterns);
+    const later = claimHeadedCycleScope(
+      ['/a.test.ts'],
+      [testFile('/a.test.ts')],
+      patterns,
+    );
+
+    expect(skipped).toEqual([]);
+    expect(later[0]!.testNamePattern).toBe('sums');
+  });
+
   it('normalizes the scope paths before matching files and patterns', () => {
     // The scope arrives from core's cycle options while the file set and the
     // pattern map are keyed on normalized paths.
