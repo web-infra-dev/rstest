@@ -221,13 +221,13 @@ export async function runTests(
   // `--related` resolution lands — the plan globs nothing for it, so no executor
   // is ever launched and the no-test-files verdict comes from the one finalize.
   if (!hasNodeTestsToRun && !hasBrowserTestsToRun) {
-    // Loading the browser executor is what validates the browser config, and
-    // this branch may reach the end without loading one — a run whose browser
-    // config is invalid would then finalize with "no test files found" instead
-    // of the config error, since the plan cannot be trusted to be about a valid
-    // run in the first place. So ask for the check directly, unless the planner
-    // already got it: the discovery boot loads the executor too, and validating
-    // twice reprints every unsupported-option warning.
+    // Loading the browser module is what validates the browser config, and this
+    // branch may reach the end without loading it — a run whose browser config
+    // is invalid would then finalize with "no test files found" instead of the
+    // config error, since the plan cannot be trusted to be about a valid run in
+    // the first place. So ask for the check directly, unless the planner already
+    // got it: the discovery boot loads the module too, and validating twice
+    // reprints every unsupported-option warning.
     //
     // Correcting the record here rather than where it was written: this check
     // reaches empty *mixed* runs too, not only browser-only ones as the commit
@@ -351,6 +351,14 @@ export async function runTests(
       // handler never runs. Without the check the user gets an actionable error
       // followed by a red "exited unexpectedly", plus a global teardown fired
       // out of an exit handler.
+      //
+      // Unpinned, and not for the reason the commit that added it recorded: a
+      // spy can stand in for `process.exit` (`utils/signals` is pinned that
+      // way). What blocks a pin here is that this is a closure reachable only by
+      // emitting a real `'exit'` event — which would fire every other listener
+      // the worker has — and that `reportedFatalExit` is a sticky module-level
+      // flag with no reset, so setting it would leak into every later test in
+      // the file.
       if (hasReportedFatalExit()) {
         return;
       }

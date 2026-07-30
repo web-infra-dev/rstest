@@ -19,10 +19,11 @@ export interface BrowserRunPlan {
   hasBrowserTestsToRun(): boolean;
   getBrowserProjectsToRun(): ProjectContext[];
   /**
-   * Whether the discovery boot ran, which means the browser executor was loaded
-   * and the browser config validated along with it. The empty-run branch asks
-   * because it validates directly — it is the one exit that may not load an
-   * executor of its own, and validating a second time reprints every
+   * Whether the discovery boot ran, which means the browser module was loaded
+   * and its config validated along with it. (The boot constructs no executor —
+   * it loads the module and does one files-only run.) The empty-run branch asks
+   * because it validates directly, being the one exit that may never load the
+   * module itself, and validating a second time reprints every
    * unsupported-option warning (`reportUnsupportedBrowserOptions` has no
    * cross-call guard).
    */
@@ -193,9 +194,16 @@ export function createBrowserRunPlanner({
       // a zero-node run took a separate assembly that launched every browser
       // project — hooks fired at launch, so discovery had nothing to add. That
       // assembly is gone: every run now launches `getBrowserProjectsToRun()`,
-      // which a project with no files on disk is resolved out of before its hook
-      // can put any there. Discovery is the only thing that fires those hooks in
-      // time, so a zero-node run needs the boot exactly as much as a mixed one.
+      // and in a non-watch run `skipEmptyProjects` resolves a project with no
+      // files on disk out of the plan before its hook can put any there.
+      // Discovery is the only thing that fires those hooks in time, so a
+      // zero-node non-watch run needs the boot exactly as much as a mixed one.
+      //
+      // Watch keeps `skipEmptyProjects: false`, so the project stays in the plan
+      // and its hooks would fire at launch anyway — a zero-node watch startup
+      // pays this boot for nothing. Accepted: gating it back on `isWatchMode`
+      // re-splits the shape this predicate exists to keep single, for one boot
+      // at startup.
       if (!shouldRunBrowserDiscoveryFallback()) {
         return;
       }

@@ -218,7 +218,7 @@ export async function loadAndValidateBrowserModule(
 /**
  * Boot Browser Mode in files-only mode so browser `modifyRstestConfig` hooks
  * apply and the test-file set is refreshed. The sole remaining caller is the
- * mixed-run config-hook discovery boot — every real run and rerun goes through
+ * config-hook discovery boot — every real run and rerun goes through
  * {@link BrowserTestExecutor}.
  */
 export async function runBrowserDiscovery(
