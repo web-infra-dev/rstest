@@ -35,6 +35,29 @@ export interface WatchCycleDriver {
   runCycle(executor: TestExecutor, options?: WatchCycleOptions): Promise<void>;
 }
 
+type PendingCycle = { options: WatchCycleOptions; cycle: Promise<void> };
+
+/**
+ * Merge a trigger into a queued cycle's scope so the result covers both.
+ * Widening, never replacing: `'all'` beats `'on-demand'`, and an absent
+ * `fileFilters` means "whatever this executor resolves at cycle time", which is
+ * already broader than any explicit list.
+ */
+const widenScope = (
+  queued: WatchCycleOptions,
+  incoming: WatchCycleOptions,
+): WatchCycleOptions => ({
+  // An absent `mode` is `'all'` (the `runOne` default), so it widens too.
+  mode:
+    (queued.mode ?? 'all') === 'all' || (incoming.mode ?? 'all') === 'all'
+      ? 'all'
+      : 'on-demand',
+  fileFilters:
+    queued.fileFilters && incoming.fileFilters
+      ? [...new Set([...queued.fileFilters, ...incoming.fileFilters])]
+      : undefined,
+});
+
 export function createWatchCycleDriver({
   context,
   coverageProvider,
@@ -70,6 +93,11 @@ export function createWatchCycleDriver({
   // make that impossible by construction; one loop has to make it impossible by
   // queueing.
   let tail: Promise<unknown> = Promise.resolve();
+  // Executors whose first cycle of this session has already been dispatched.
+  const started = new Set<TestExecutor>();
+  // Per executor, the cycle that is queued but has not started reading its
+  // scope yet — the one a further trigger widens instead of queueing behind.
+  const pending = new Map<TestExecutor, PendingCycle>();
 
   const runOne = async (
     executor: TestExecutor,
@@ -79,7 +107,15 @@ export function createWatchCycleDriver({
     // (the node pool flushes its worker cache on a change, the browser host
     // keys run-token staleness off it), never to be contiguous per executor.
     buildId += 1;
-    prepareWatchRerunState(context);
+    // Skipped for an executor's first cycle: the session starts with clean
+    // state, so there is nothing of its own to clear — and in a mixed run the
+    // browser's first cycle lands after the node's, where a reset would wipe
+    // the snapshot summary `u` reads and the press-u hint with it.
+    if (started.has(executor)) {
+      prepareWatchRerunState(context);
+    } else {
+      started.add(executor);
+    }
     await notifyReportersOnTestRunStart(context);
     const outcome = await executor.runCycle({
       buildId,
@@ -107,11 +143,31 @@ export function createWatchCycleDriver({
 
   return {
     runCycle(executor, options = {}) {
-      const cycle = tail.then(() => runOne(executor, options));
+      // Coalesce into this executor's queued cycle that has not begun rather than
+      // appending a second one. A burst of triggers (two quick saves, or one
+      // `onAfterDevCompile` per browser project) would otherwise run the same
+      // files back to back and print a summary each time. Merging is widening,
+      // never latest-wins: the cycle must still cover everything every trigger
+      // in the burst asked for.
+      const queued = pending.get(executor);
+      if (queued) {
+        queued.options = widenScope(queued.options, options);
+        return queued.cycle;
+      }
+
+      const entry: PendingCycle = { options, cycle: undefined as never };
+      entry.cycle = tail.then(() => {
+        // Dropped before the run, not after: from here the options are frozen,
+        // so a trigger arriving mid-cycle queues its own cycle instead of
+        // widening one that has already read its scope.
+        pending.delete(executor);
+        return runOne(executor, entry.options);
+      });
+      pending.set(executor, entry);
       // The caller still observes the rejection; the chain must not hand it to
       // the next trigger, which would wedge the session.
-      tail = cycle.catch(() => {});
-      return cycle;
+      tail = entry.cycle.catch(() => {});
+      return entry.cycle;
     },
   };
 }

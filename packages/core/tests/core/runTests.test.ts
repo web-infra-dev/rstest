@@ -575,12 +575,19 @@ describe('runTests watch orchestration', () => {
       },
     });
 
+    // The session's own first cycle, which the reset deliberately skips: there
+    // is nothing of a previous cycle's to clear yet.
+    await nodeExecutor.invalidate(true);
+
     context.stateManager.testFiles = ['/stale.test.ts'];
     context.snapshotManager.summary.unmatched = 3;
 
     await nodeExecutor.invalidate(false);
 
-    expect(seen).toEqual([{ testFiles: undefined, unmatched: 0 }]);
+    expect(seen).toEqual([
+      { testFiles: undefined, unmatched: 0 },
+      { testFiles: undefined, unmatched: 0 },
+    ]);
   });
 
   it('runs the browser initial cycle after node resources are up, and finalizes each executor separately', async () => {

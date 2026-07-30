@@ -1537,27 +1537,39 @@ const destroyBrowserRuntime = async (
  * WebSocket server). Idempotent, and the single teardown the browser executor's
  * `close` and the process-exit nets both go through.
  */
-export const cleanupWatchRuntime = (): Promise<void> => {
-  if (watchContext.cleanupPromise) {
-    return watchContext.cleanupPromise;
+export const runWatchRuntimeTeardown = <T>(
+  state: { runtime: T | null; cleanupPromise: Promise<void> | null },
+  destroy: (runtime: T) => Promise<void>,
+): Promise<void> => {
+  if (state.cleanupPromise) {
+    return state.cleanupPromise;
   }
 
-  const runtime = watchContext.runtime;
-  if (!runtime) {
-    return Promise.resolve();
-  }
+  state.cleanupPromise = (async () => {
+    if (!state.runtime) {
+      return;
+    }
 
-  const cleanupPromise = destroyBrowserRuntime(runtime).finally(() => {
-    if (watchContext.runtime === runtime) {
-      watchContext.runtime = null;
-    }
-    if (watchContext.cleanupPromise === cleanupPromise) {
-      watchContext.cleanupPromise = null;
-    }
+    await destroy(state.runtime);
+    state.runtime = null;
+  })();
+
+  // The memo is released once this teardown settles, because the state outlives
+  // the session: a config-file change restarts the run against a fresh runtime,
+  // and a memo left resolved from the previous session would make every later
+  // teardown a no-op — leaving the session after that to reuse a runtime built
+  // from the pre-restart config. Idempotency only has to hold within a runtime.
+  return state.cleanupPromise.finally(() => {
+    state.cleanupPromise = null;
   });
-  watchContext.cleanupPromise = cleanupPromise;
-  return cleanupPromise;
 };
+
+export const cleanupWatchRuntime = (): Promise<void> =>
+  // `cleanupRegistered` is deliberately not re-armed alongside the memo: the
+  // signal nets it installs read `watchContext.runtime` live, so they stay
+  // correct across a restart, and re-registering would stack a fresh set of
+  // listeners on every one.
+  runWatchRuntimeTeardown(watchContext, destroyBrowserRuntime);
 
 const registerWatchCleanup = (embedded: boolean): void => {
   if (watchContext.cleanupRegistered) {
@@ -4175,6 +4187,20 @@ export const runBrowserController = async (
       const fatalErrorBeforeRun = fatalError;
       let rerunError: Error | undefined;
 
+      // Claimed synchronously, before the first await, and only for this
+      // cycle's own scope: a click landing once the cycle is under way keeps
+      // its pattern for the cycle it signalled instead of losing it to this one
+      // mid-loop.
+      const cyclePatterns = new Map<string, string>();
+      for (const testFile of testPaths) {
+        const normalizedTestFile = normalize(testFile);
+        const pattern = pendingTestNamePatterns.get(normalizedTestFile);
+        if (pattern !== undefined) {
+          cyclePatterns.set(normalizedTestFile, pattern);
+          pendingTestNamePatterns.delete(normalizedTestFile);
+        }
+      }
+
       try {
         for (const testFile of testPaths) {
           // A queued scope can go stale before its cycle is dequeued: a later
@@ -4188,10 +4214,10 @@ export const runBrowserController = async (
           if (!fileInfo) {
             continue;
           }
-          const testNamePattern =
-            pendingTestNamePatterns.get(normalizedTestFile);
-          pendingTestNamePatterns.delete(normalizedTestFile);
-          await enqueueHeadedReload(fileInfo, testNamePattern);
+          await enqueueHeadedReload(
+            fileInfo,
+            cyclePatterns.get(normalizedTestFile),
+          );
         }
       } catch (error) {
         // Surfaced through the outcome rather than thrown: core finalizes this

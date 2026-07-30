@@ -47,11 +47,17 @@ export interface ExecutorRunCycleOptions {
  * The returned promise settles when the queued cycle has finalized. It is there
  * for a trigger that must wait for its own cycle, never as back-pressure: what
  * keeps two cycles from overlapping on the shared `stateManager` is core's
- * queue. Waiting on it inside a bundler's dev-compile hook is in fact a hazard
- * — the bundler keeps no watcher attached while that hook is pending, so a test
- * file created or deleted during the cycle is never noticed at all. The browser
- * host therefore signals and returns; the node adapter still awaits its cycle
- * in the hook and carries that hazard.
+ * queue.
+ *
+ * Waiting on it from inside a bundler's compile hook costs a blind window: the
+ * bundler keeps no file watcher attached while that hook is pending and
+ * re-attaches by re-checking what it already knew about, so a test file created
+ * or deleted in that window is never noticed at all — and under the queue the
+ * window can stretch across another executor's cycle. The browser transport
+ * therefore signals and returns. The node transport cannot: its cycle pulls the
+ * affected-entry diff from the dev server, and that pull only reports the
+ * rebuild while its own hook is still pending. Closing that gap needs a way to
+ * read the diff without holding the hook, not a smaller queue.
  */
 export type ExecutorInvalidationCallback = (hint: {
   isFirstBuild: boolean;

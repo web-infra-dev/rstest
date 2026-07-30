@@ -238,9 +238,15 @@ export function createNodeExecutor(
   let runDependencyValidationPromise: Promise<void> | undefined;
   let entryFiles: string[] = [];
   let didRunGlobalTeardown = false;
-  // Set when a dev compile starts, consumed by the cycle that compile triggers,
-  // so its reported build time spans the rebuild instead of starting at dispatch.
-  let pendingBuildStart: number | undefined;
+  // When a dev compile starts. Paired with the compile's end into a completed
+  // span below; on its own it is not a build time, because cycles are queued
+  // and the wait for the queue is not build work.
+  let compileStart: number | undefined;
+  // A finished rebuild's measured duration, published when the compile ends and
+  // claimed by exactly one cycle. Publishing at the end rather than the start is
+  // what stops a shortcut-driven cycle dispatched mid-compile from reporting the
+  // in-progress rebuild's elapsed time as its own.
+  let pendingBuildTime: number | undefined;
   // The Rsbuild project set assembled during init(); refreshPlan() keeps it in
   // sync with re-resolved plans.
   let rsbuildProjects: ProjectContext[] = [];
@@ -356,9 +362,10 @@ export function createNodeExecutor(
   ): Promise<ExecutorCycleOutcome> => {
     const { buildId, mode, fileFilters, updateSnapshot } = opts;
     // Consume-once: only the cycle a rebuild triggered may claim that rebuild's
-    // start. A shortcut-driven rerun compiles nothing and times itself from now.
-    const buildStart = pendingBuildStart ?? Date.now();
-    pendingBuildStart = undefined;
+    // duration. A shortcut-driven rerun compiles nothing, so it reports none.
+    const rebuildTime = pendingBuildTime;
+    pendingBuildTime = undefined;
+    const cycleStart = Date.now();
     const { getRsbuildStats, pool } = await ensureRunResources();
     const { nodeProjectsToRun: projects } = projectPlanState.getPlan();
 
@@ -541,8 +548,10 @@ export function createNodeExecutor(
       projectPlans.map((plan) => plan.execute(plan.finalEntries)),
     );
 
-    testStart ??= buildStart;
-    const buildTime = testStart - buildStart;
+    // A cycle no rebuild triggered measures its own build: the span from
+    // dispatch to the moment the first test starts.
+    testStart ??= Date.now();
+    const buildTime = rebuildTime ?? testStart - cycleStart;
     const testTime = Date.now() - testStart;
 
     const coverageResourceLoaders = createCoverageResourceLoaders(returns);
@@ -590,25 +599,37 @@ export function createNodeExecutor(
 
   /**
    * The node transport's watch signal is the dev server's compile cycle, so the
-   * hooks are wired here rather than in the orchestrator: both the rebuild-start
-   * screen clear and the build-start timestamp have to land when the compile
+   * hooks are wired here rather than in the orchestrator: the rebuild-start
+   * screen clear and the compile's own start have to land when the compile
    * begins, a moment only this side observes (the callback fires after it).
-   * Awaiting the callback inside `onAfterDevCompile` keeps Rsbuild's compile
-   * hook pending for the whole cycle — that back-pressure is what stops a
-   * rebuild from starting a second cycle while one is running.
+   *
+   * `onAfterDevCompile` returns the cycle rather than signalling and moving on,
+   * and unlike the browser transport it has to. The cycle resolves its affected
+   * entries by pulling stats from the dev server, and that pull is only correct
+   * while this hook is still pending: let the hook resolve first and the server
+   * moves on, so the cycle reads a build that reports nothing changed and the
+   * rerun prints "No test files need re-run" instead of running the edited file
+   * (`e2e/watch/index.test.ts` fails outright without the await). It is not
+   * only back-pressure, so it cannot be dropped for the reason the browser side
+   * dropped its own — see {@link ExecutorInvalidationCallback} for the blind
+   * window that costs us.
    */
   const onInvalidate = (cb: ExecutorInvalidationCallback): void => {
     if (!rsbuildInstance) {
       throw new Error('NodeExecutor.init() must run before onInvalidate().');
     }
     rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
-      pendingBuildStart = Date.now();
+      compileStart = Date.now();
       if (!isFirstCompile) {
         clearScreen();
       }
     });
-    rsbuildInstance.onAfterDevCompile(async ({ isFirstCompile }) => {
-      await cb({ isFirstBuild: isFirstCompile });
+    rsbuildInstance.onAfterDevCompile(({ isFirstCompile }) => {
+      if (compileStart !== undefined) {
+        pendingBuildTime = Date.now() - compileStart;
+        compileStart = undefined;
+      }
+      return cb({ isFirstBuild: isFirstCompile });
     });
   };
 
