@@ -23,7 +23,7 @@
     "typecheck": "pnpm run lint:type"
   },
   "devDependencies": {
-    "@rslint/core": "^0.7.1",
+    "@rslint/core": "^0.7.2",
     "@rstest/core": "workspace:*",
     "@types/node": "^22.16.5",
     "bumpp": "^11.1.0",
@@ -33,15 +33,15 @@
     "heading-case": "^1.1.3",
     "knip": "^6.29.0",
     "lefthook": "^2.1.10",
-    "pkg-pr-new": "^0.0.80",
+    "pkg-pr-new": "^0.0.82",
     "playwright": "^1.62.0",
     "prettier": "^3.9.6",
     "prettier-plugin-packagejson": "^3.0.2",
     "typescript": "^6.0.3"
   },
-  "packageManager": "pnpm@11.17.0",
+  "packageManager": "pnpm@11.18.0",
   "engines": {
     "node": "^20.19.0 || >=22.12.0",
-    "pnpm": ">=11.17.0"
+    "pnpm": ">=11.18.0"
   }
 }

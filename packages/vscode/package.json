@@ -264,7 +264,7 @@
     "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
   ],
   "devDependencies": {
-    "@rsbuild/core": "~2.1.8",
+    "@rsbuild/core": "~2.1.9",
     "@rslib/core": "1.0.0-beta.1",
     "@rstest/core": "workspace:*",
     "@types/istanbul-lib-report": "^3.0.3",
@@ -284,7 +284,7 @@
     "tinyglobby": "^0.2.17",
     "typescript": "^6.0.3",
     "valibot": "^1.4.2",
-    "yuku-parser": "^0.8.0"
+    "yuku-parser": "^0.8.1"
   },
   "engines": {
     "vscode": "^1.97.0"
