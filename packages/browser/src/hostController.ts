@@ -4160,23 +4160,38 @@ export const runBrowserController = async (
 
   let watchSession: BrowserWatchSession | undefined;
   if (isWatchMode) {
-    // Set by the in-page rerun trigger and consumed by the cycle it signals —
-    // the pattern is a headed-UI concept core's cycle options cannot carry, and
-    // the two always come from the same trigger.
-    let pendingTestNamePattern: string | undefined;
+    // Set by the in-page rerun trigger and consumed by the cycle that reloads
+    // that file — the pattern is a headed-UI concept core's cycle options
+    // cannot carry, so it travels beside the scope rather than inside it.
+    // Keyed by test path rather than held in one slot: core queues cycles, so
+    // an unrelated trigger can be dequeued between the click and its own cycle,
+    // and a single slot would hand the pattern to whichever cycle ran first.
+    const pendingTestNamePatterns = new Map<string, string>();
 
     const runWatchCycle = async (
       testPaths: string[],
     ): Promise<ExecutorCycleOutcome> => {
-      const testNamePattern = pendingTestNamePattern;
-      pendingTestNamePattern = undefined;
       const rerunStartTime = Date.now();
       const fatalErrorBeforeRun = fatalError;
       let rerunError: Error | undefined;
 
       try {
         for (const testFile of testPaths) {
-          await enqueueHeadedReload(getTestFileInfo(testFile), testNamePattern);
+          // A queued scope can go stale before its cycle is dequeued: a later
+          // trigger may have rebuilt the file set without the file. Skip it,
+          // the way the headless twin does — throwing would abandon the
+          // still-valid files in this same cycle and fail the run.
+          const normalizedTestFile = normalize(testFile);
+          const fileInfo = currentTestFiles.find(
+            (file) => file.testPath === normalizedTestFile,
+          );
+          if (!fileInfo) {
+            continue;
+          }
+          const testNamePattern =
+            pendingTestNamePatterns.get(normalizedTestFile);
+          pendingTestNamePatterns.delete(normalizedTestFile);
+          await enqueueHeadedReload(fileInfo, testNamePattern);
         }
       } catch (error) {
         // Surfaced through the outcome rather than thrown: core finalizes this
@@ -4268,7 +4283,11 @@ export const runBrowserController = async (
     };
 
     runUiRequestedRerun = async (file, testNamePattern) => {
-      pendingTestNamePattern = testNamePattern;
+      if (testNamePattern === undefined) {
+        pendingTestNamePatterns.delete(normalize(file.testPath));
+      } else {
+        pendingTestNamePatterns.set(normalize(file.testPath), testNamePattern);
+      }
       await refreshHostConfig();
       await signalInvalidation([file.testPath]);
       await signalledCycle;

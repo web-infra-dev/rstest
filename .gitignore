@@ -9,7 +9,7 @@ dist/
 dist-*
 compiled/
 coverage/
-coverage-*/
+e2e/browser-mode/fixtures/browser-coverage/coverage-*/
 doc_build/
 playwright-report/
 tsconfig.tsbuildinfo

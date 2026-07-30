@@ -139,7 +139,7 @@ export const createCoverageResourceLoaders = (
  * adapter (and so fake executors can drive the run loop in unit tests).
  *
  * These members exist because core resolves the plan *after* `init()` fires the
- * node `modifyRstestConfig` hooks (the §3.4 barrier) and owns the single
+ * node `modifyRstestConfig` hooks (the init barrier) and owns the single
  * run-scoped coverage provider it injects back before the first cycle.
  */
 export interface NodeRunPlanAccess {
