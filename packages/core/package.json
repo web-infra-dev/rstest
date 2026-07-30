@@ -121,7 +121,7 @@
   },
   "peerDependencies": {
     "happy-dom": "^20.8.3",
-    "jsdom": "*"
+    "jsdom": ">=15.0.0"
   },
   "peerDependenciesMeta": {
     "happy-dom": {
