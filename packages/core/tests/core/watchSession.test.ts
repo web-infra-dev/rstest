@@ -347,6 +347,26 @@ describe('createWatchCycleDriver', () => {
     expect(executor.cycles).toHaveLength(3);
   });
 
+  it('arms a shortcut only once every executor it reaches has finalized', async () => {
+    // Mixed watch starts the node side first, so its cycle finalizes while the
+    // browser host is still booting the runtime its rerun requests need. A
+    // single driver-wide flag reads as armed there, and the `a`/`f`/`u` fanout
+    // then reruns the node side and drops the browser half in silence.
+    const context = createContext();
+    const { driver } = createDriver(context);
+    const node = createFakeExecutor('node');
+    const browser = createFakeExecutor('browser');
+
+    await driver.runCycle(node, { mode: 'all' });
+
+    expect(driver.hasFinalizedCycle([node])).toBe(true);
+    expect(driver.hasFinalizedCycle([node, browser])).toBe(false);
+
+    await driver.runCycle(browser, { mode: 'all' });
+
+    expect(driver.hasFinalizedCycle([node, browser])).toBe(true);
+  });
+
   it('rotates one trace buffer per finalized cycle', async () => {
     const context = createContext();
     const { runs, driver } = createDriver(context);
@@ -469,6 +489,24 @@ describe('createWatchShortcutHandlers arming', () => {
     armed = true;
     await handlers.runAll!();
     expect(cycles).toEqual(['node', 'browser']);
+  });
+
+  it('offers the same gate to the stdin owner, so a gated prompt never opens', () => {
+    // `t`/`p` ask for input before they call their handler. A gate that only
+    // wraps the handler lets the prompt open, take a pattern, and throw it away
+    // on Enter — or, on Escape, drop the keystroke without a word.
+    let armed = false;
+    const handlers = createWatchShortcutHandlers(
+      createContext(),
+      targetsOf([]),
+      async () => {},
+      () => armed,
+    );
+
+    expect(handlers.canRerun!()).toBe(false);
+
+    armed = true;
+    expect(handlers.canRerun!()).toBe(true);
   });
 
   it('leaves the quit handler reachable before the first cycle', async () => {

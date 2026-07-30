@@ -42,11 +42,15 @@ export type WatchCycleOptions = {
 export interface WatchCycleDriver {
   runCycle(executor: TestExecutor, options?: WatchCycleOptions): Promise<void>;
   /**
-   * Whether a cycle has finalized yet. Shortcuts are installed before the first
-   * one so the ready banner always has a stdin owner, which leaves a window
-   * where a rerun key would reach executors that are still starting up.
+   * Whether every one of `executors` has finalized a cycle. Shortcuts are
+   * installed before the first one so the ready banner always has a stdin owner,
+   * which leaves a window where a rerun key would reach executors that are still
+   * starting up — and the two sides of a mixed run leave it independently. The
+   * node initial cycle finalizing says nothing about the browser host, whose
+   * watch session does not exist until its own initial cycle boots the runtime,
+   * so a shortcut is answerable only once every side it fans out to is.
    */
-  hasFinalizedCycle(): boolean;
+  hasFinalizedCycle(executors: TestExecutor[]): boolean;
 }
 
 type PendingCycle = {
@@ -131,7 +135,8 @@ export function createWatchCycleDriver({
   // its scope yet — the one a further invalidation folds into instead of
   // queueing behind.
   const pending = new Map<TestExecutor, PendingCycle>();
-  let finalizedACycle = false;
+  // Executors that have finalized a cycle, so a shortcut key can reach them.
+  const finalized = new Set<TestExecutor>();
 
   const runOne = async (
     executor: TestExecutor,
@@ -162,7 +167,7 @@ export function createWatchCycleDriver({
       reportOnFailure: context.normalizedConfig.coverage.reportOnFailure,
       traceRun: getTraceRun(),
     });
-    finalizedACycle = true;
+    finalized.add(executor);
     // Pre-allocate the next cycle's buffer so events emitted between cycles are
     // not dropped.
     setTraceRun(traceController.beginRun());
@@ -206,7 +211,8 @@ export function createWatchCycleDriver({
       tail = entry.cycle.catch(() => {});
       return entry.cycle;
     },
-    hasFinalizedCycle: () => finalizedACycle,
+    hasFinalizedCycle: (executors) =>
+      executors.every((executor) => finalized.has(executor)),
   };
 }
 
@@ -242,24 +248,32 @@ export function createWatchShortcutHandlers(
   { node, browser }: WatchSessionTargets,
   close: () => Promise<void>,
   /**
-   * Whether a cycle has finalized. Shortcuts are installed before the first one
-   * (the ready banner must never appear without a stdin owner), so until it
-   * lands a rerun key would reach a node side whose dev server is still coming
-   * up — starting a second full startup run — or a browser side whose watch
-   * session does not exist yet, which drops the keystroke in silence.
+   * Whether every side a shortcut fans out to has finalized a cycle. Shortcuts
+   * are installed before the first one (the ready banner must never appear
+   * without a stdin owner), so until it lands a rerun key would reach a node
+   * side whose dev server is still coming up — starting a second full startup
+   * run — or a browser side whose watch session does not exist yet, which drops
+   * the keystroke in silence.
    */
   isArmed: () => boolean = () => true,
 ): Parameters<typeof setupCliShortcuts>[0] {
   const { snapshotManager } = context;
 
+  const canRerun = (): boolean => {
+    if (isArmed()) {
+      return true;
+    }
+    logger.log(
+      color.yellow('\nInitial run in progress, try again once it lands.'),
+    );
+    return false;
+  };
+
   const whenArmed = <A extends unknown[]>(
     handler: (...args: A) => Promise<void>,
   ): ((...args: A) => Promise<void>) => {
     return async (...args: A) => {
-      if (!isArmed()) {
-        logger.log(
-          color.yellow('\nInitial run in progress, try again once it lands.'),
-        );
+      if (!canRerun()) {
         return;
       }
       await handler(...args);
@@ -278,6 +292,7 @@ export function createWatchShortcutHandlers(
 
   return {
     closeServer: close,
+    canRerun,
     runAll: whenArmed(async () => {
       clearScreen();
       if (node) {

@@ -117,8 +117,11 @@ const createFakeNodeExecutor = ({
       invalidateCallback = cb;
     },
     /**
-     * Stand in for a dev compile: the real executor awaits the callback inside
-     * `onAfterDevCompile`, which is the back-pressure that serializes cycles.
+     * Stand in for a dev compile. The real executor awaits the callback inside
+     * `onAfterDevCompile` — not to serialize cycles, which the driver's queue
+     * does on its own, but because its cycle pulls the affected-entry diff from
+     * the dev server and holding the hook is what pairs one pull with one
+     * compile.
      */
     invalidate: async (isFirstBuild: boolean) => {
       await invalidateCallback!({ isFirstBuild });
@@ -684,12 +687,10 @@ describe('runTests watch orchestration', () => {
       fileFilters: undefined,
     });
     // One node cycle finalize, then the browser's own — the output shape a
-    // mixed watch shortcut has to keep.
+    // mixed watch shortcut has to keep. That the browser's request precedes its
+    // cycle is the fake's own doing, so it is not asserted here.
     expect(events.indexOf('node:cycle-end')).toBeLessThan(
       events.indexOf('browser:request-rerun:all'),
-    );
-    expect(events.indexOf('browser:request-rerun:all')).toBeLessThan(
-      events.indexOf('browser:cycle-start'),
     );
   });
 

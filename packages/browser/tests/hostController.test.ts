@@ -5,6 +5,7 @@ import {
   createBrowserLazyCompilationConfig,
   createBrowserRsbuildDevConfig,
   createBrowserContextExcludeRegExp,
+  registerWatchCleanup,
   resolveEmptyLaunchExitCode,
   resolveListenPort,
   runWatchRuntimeTeardown,
@@ -547,5 +548,34 @@ describe('runWatchRuntimeTeardown', () => {
     ).rejects.toThrow('destroy failed');
 
     expect(state.cleanupPromise).toBeNull();
+  });
+});
+
+describe('registerWatchCleanup', () => {
+  it('installs the process nets once, so a restart cannot stack them', () => {
+    // The other half of releasing the teardown memo: the memo is per runtime,
+    // these nets are not. They read the cached runtime live, so they stay
+    // correct across a config restart — and re-arming them alongside the memo
+    // would leave a fresh, never-removed set behind on every teardown.
+    const registered: string[] = [];
+    const original = process.once;
+    // Recorded rather than installed: these are `process.once` handlers nothing
+    // removes, and the test worker outlives the test.
+    process.once = ((event: string) => {
+      registered.push(event);
+      return process;
+    }) as typeof process.once;
+
+    try {
+      registerWatchCleanup(false);
+      const afterFirst = [...registered];
+      registerWatchCleanup(false);
+
+      expect(afterFirst).toContain('exit');
+      expect(afterFirst).toContain('SIGINT');
+      expect(registered).toEqual(afterFirst);
+    } finally {
+      process.once = original;
+    }
   });
 });

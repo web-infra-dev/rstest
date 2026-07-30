@@ -488,12 +488,19 @@ export async function runTests(
   // Installed before the first cycle so the ready banner can never appear
   // before stdin has an owner (a keystroke answering it would be swallowed).
   if (enableCliShortcuts) {
+    // Exactly the executors the shortcuts fan out to: a key is answerable only
+    // once every one of them has finalized a cycle, and in a mixed run the node
+    // side gets there first while the browser host still has no watch session.
+    const shortcutExecutors = [
+      ...(watchTargets.node ? [nodeExecutor] : []),
+      ...(browserExecutor ? [browserExecutor] : []),
+    ];
     const closeCliShortcuts = await deps.setupCliShortcuts(
       createWatchShortcutHandlers(
         context,
         watchTargets,
         closeWatchSession,
-        watchDriver.hasFinalizedCycle,
+        () => watchDriver.hasFinalizedCycle(shortcutExecutors),
       ),
     );
     onBeforeRestart(closeCliShortcuts);

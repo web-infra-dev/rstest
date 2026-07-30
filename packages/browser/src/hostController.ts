@@ -1571,7 +1571,7 @@ export const cleanupWatchRuntime = (): Promise<void> =>
   // listeners on every one.
   runWatchRuntimeTeardown(watchContext, destroyBrowserRuntime);
 
-const registerWatchCleanup = (embedded: boolean): void => {
+export const registerWatchCleanup = (embedded: boolean): void => {
   if (watchContext.cleanupRegistered) {
     return;
   }
