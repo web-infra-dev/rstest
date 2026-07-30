@@ -180,7 +180,14 @@ export function createBrowserRunPlanner({
 
   return {
     async runConfigHookDiscovery() {
-      if (nodeProjects.length === 0 || !shouldRunBrowserDiscoveryFallback()) {
+      // Deliberately not gated on having node projects. It used to be, back when
+      // a zero-node run took a separate assembly that launched every browser
+      // project — hooks fired at launch, so discovery had nothing to add. That
+      // assembly is gone: every run now launches `getBrowserProjectsToRun()`,
+      // which a project with no files on disk is resolved out of before its hook
+      // can put any there. Discovery is the only thing that fires those hooks in
+      // time, so a zero-node run needs the boot exactly as much as a mixed one.
+      if (!shouldRunBrowserDiscoveryFallback()) {
         return;
       }
       const browserProjectsForDiscovery = getBrowserProjectsForDiscovery();

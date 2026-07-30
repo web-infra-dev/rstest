@@ -1,5 +1,6 @@
 import { describe, expect, it, rs } from '@rstest/core';
 import { join } from 'pathe';
+import { runBrowserDiscovery } from '../../src/core/browser/loader';
 import { createBrowserRunPlanner } from '../../src/core/browser/runPlanner';
 import {
   isBrowserProject,
@@ -7,6 +8,15 @@ import {
 } from '../../src/core/isBrowserProject';
 import type { RunProjectPlan } from '../../src/core/projectPlan';
 import { Rstest } from '../../src/core/rstest';
+
+// The discovery boot is the only observable difference between "ran the hooks"
+// and "skipped them", and booting a real browser host is not reachable here.
+// Defined inside the factory because `rs.mock` is hoisted above the imports.
+rs.mock('../../src/core/browser/loader', () => ({
+  runBrowserDiscovery: rs.fn(async () => undefined),
+}));
+
+const discoverySpy = rs.mocked(runBrowserDiscovery);
 
 const rootPath = join(__dirname, '../..');
 
@@ -62,7 +72,78 @@ const createProjects = (browserHasConfigHook: boolean) => {
   };
 };
 
+/**
+ * The zero-node shape: two browser projects, only one of which carries a hook,
+ * and no node project at all. It exists separately because the defect it pins is
+ * exactly "this planner behaves differently when the node set is empty".
+ */
+const createZeroNodeProjects = () => {
+  const context = new Rstest(
+    {
+      cwd: rootPath,
+      command: 'run',
+      projects: [
+        {
+          config: {
+            root: join(rootPath, 'browser-a'),
+            name: 'browser-a',
+            browser: { enabled: true, provider: 'playwright' },
+            plugins: [{ name: 'user-config-plugin', setup: () => {} }],
+          },
+        },
+        {
+          config: {
+            root: join(rootPath, 'browser-b'),
+            name: 'browser-b',
+            browser: { enabled: true, provider: 'playwright' },
+          },
+        },
+      ],
+    },
+    {},
+  );
+  const browserProjects = context.projects.filter(isBrowserProject);
+  return {
+    context,
+    browserProjects,
+    nodeProjects: context.projects.filter(isNodeProject),
+    hookProject: browserProjects[0]!,
+    globbedProject: browserProjects[1]!,
+  };
+};
+
 describe('createBrowserRunPlanner', () => {
+  it('boots discovery for a zero-node run, so a hook-only browser project is not dropped', async () => {
+    // Project A carries a `modifyRstestConfig` plugin and has no test files on
+    // disk, so `skipEmptyProjects` resolves it out of the plan; B globs files, so
+    // the plan is non-empty and the fallback never fires. Discovery is the only
+    // thing that can fire A's hook in time. Skipping it here — which the planner
+    // used to do whenever the node set was empty — runs B alone and never reports
+    // that A's tests did not run.
+    const {
+      context,
+      browserProjects,
+      nodeProjects,
+      hookProject,
+      globbedProject,
+    } = createZeroNodeProjects();
+    const planAccess = createPlanAccess([globbedProject]);
+    discoverySpy.mockClear();
+
+    const planner = createBrowserRunPlanner({
+      context,
+      ...planAccess,
+      browserProjects,
+      nodeProjects,
+    });
+    await planner.runConfigHookDiscovery();
+
+    expect(nodeProjects).toEqual([]);
+    expect(discoverySpy).toHaveBeenCalledTimes(1);
+    expect(discoverySpy.mock.calls[0]![1]).toEqual([hookProject]);
+    expect(planAccess.refreshPlan).toHaveBeenCalledTimes(1);
+  });
+
   it('hands the discovery boot and the real run the same applied-hook set', () => {
     const { context, browserProjects, nodeProjects } = createProjects(true);
     const planner = createBrowserRunPlanner({
