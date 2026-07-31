@@ -791,6 +791,7 @@ const run = async () => {
     window.removeEventListener('unhandledrejection', onUnhandledRejection);
 
     try {
+      send({ type: 'worker-cleanup-start' });
       await cleanupWorkerFixtures();
     } catch (_error) {
       const cleanupError =

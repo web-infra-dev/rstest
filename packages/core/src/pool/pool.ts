@@ -276,6 +276,33 @@ export class Pool {
     this.stoppingPromises.add(stopPromise);
   }
 
+  private takeWorkerStopError(): Error | undefined {
+    const errors = this.workerStopErrors.splice(0);
+    if (errors.length === 1) {
+      return errors[0];
+    }
+    if (errors.length > 1) {
+      return new AggregateError(errors, 'Failed to stop test workers.');
+    }
+    return undefined;
+  }
+
+  /**
+   * Wait for runners already stopping in the background and consume their
+   * errors without closing reusable idle runners. Watch cycles use this after
+   * all dispatched tasks settle so isolate=true cleanup failures belong to the
+   * cycle that created them instead of surfacing during a later pool close.
+   */
+  async drainWorkerStops(): Promise<void> {
+    while (this.stoppingPromises.size > 0) {
+      await Promise.all([...this.stoppingPromises]);
+    }
+    const error = this.takeWorkerStopError();
+    if (error) {
+      throw error;
+    }
+  }
+
   async close(): Promise<void> {
     if (this.isClosed) return;
     this.isClosing = true;
@@ -302,14 +329,9 @@ export class Pool {
     this.activeRunners.clear();
     this.isClosed = true;
 
-    if (this.workerStopErrors.length === 1) {
-      throw this.workerStopErrors[0];
-    }
-    if (this.workerStopErrors.length > 1) {
-      throw new AggregateError(
-        this.workerStopErrors,
-        'Failed to stop test workers.',
-      );
+    const error = this.takeWorkerStopError();
+    if (error) {
+      throw error;
     }
   }
 }

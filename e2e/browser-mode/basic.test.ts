@@ -50,6 +50,17 @@ describe('browser mode - basic', () => {
     expect(output).toContain('browser worker cleanup after fatal reached');
   });
 
+  it('should bound browser worker fixture cleanup', async () => {
+    const { expectExecFailed, cli } = await runBrowserCli('basic', {
+      args: ['-c', 'rstest.worker-cleanup-timeout.config.mts'],
+    });
+
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'Browser worker fixture cleanup did not finish within 10000ms',
+    );
+  });
+
   it.runIf(shouldRunHeadedBrowserTests)(
     'should run headed mode and exit with code 0',
     async () => {

@@ -211,6 +211,8 @@ type HeadedTestFileCompletePayload = TestFileResult & {
   runId?: string;
 };
 
+const BROWSER_WORKER_CLEANUP_TIMEOUT_MS = 10_000;
+
 type DeferredPromise<T> = {
   promise: Promise<T>;
   resolve: (value: T | PromiseLike<T>) => void;
@@ -3381,6 +3383,7 @@ export const runBrowserController = async (
       let sessionId: string | null = null;
       let settled = false;
       let resolveDone: (() => void) | null = null;
+      let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
 
       const markDone = (): void => {
         if (!settled) {
@@ -3399,6 +3402,7 @@ export const runBrowserController = async (
       // deliberately keeps no execution-duration watchdog. Our own teardown
       // close is ignored because `settled`/`run.cancelled` are set by then.
       const crashDeferred = createDeferredPromise<string>();
+      const cleanupTimeoutDeferred = createDeferredPromise<string>();
       const onPageDead = (reason: string): void => {
         if (
           settled ||
@@ -3409,6 +3413,25 @@ export const runBrowserController = async (
         }
         settled = true;
         crashDeferred.resolve(reason);
+      };
+      const startCleanupTimeout = (): void => {
+        if (settled || cleanupTimer) {
+          return;
+        }
+        cleanupTimer = setTimeout(() => {
+          cleanupTimer = undefined;
+          if (
+            settled ||
+            run.cancelled ||
+            !runLifecycle.isTokenActive(run.token)
+          ) {
+            return;
+          }
+          settled = true;
+          cleanupTimeoutDeferred.resolve(
+            `Browser worker fixture cleanup did not finish within ${BROWSER_WORKER_CLEANUP_TIMEOUT_MS}ms`,
+          );
+        }, BROWSER_WORKER_CLEANUP_TIMEOUT_MS);
       };
 
       try {
@@ -3435,6 +3458,10 @@ export const runBrowserController = async (
         await attachHeadlessRunnerTransport(page, {
           onDispatchMessage: async (message) => {
             try {
+              if (message.type === 'worker-cleanup-start') {
+                startCleanupTimeout();
+                return;
+              }
               await dispatchRunnerMessage(run, file, session.id, message);
               if (message.type === 'complete') {
                 markDone();
@@ -3498,6 +3525,10 @@ export const runBrowserController = async (
             type: 'crash' as const,
             reason,
           })),
+          cleanupTimeoutDeferred.promise.then((reason) => ({
+            type: 'cleanup-timeout' as const,
+            reason,
+          })),
           run.cancelSignal.then(() => ({ type: 'cancelled' as const })),
         ]);
 
@@ -3506,7 +3537,7 @@ export const runBrowserController = async (
         }
 
         if (
-          state.type === 'crash' &&
+          (state.type === 'crash' || state.type === 'cleanup-timeout') &&
           runLifecycle.isTokenActive(run.token) &&
           !run.cancelled
         ) {
@@ -3523,6 +3554,9 @@ export const runBrowserController = async (
           await cancelRun(run, false);
         }
       } finally {
+        if (cleanupTimer) {
+          clearTimeout(cleanupTimer);
+        }
         if (page) {
           try {
             await page.close();

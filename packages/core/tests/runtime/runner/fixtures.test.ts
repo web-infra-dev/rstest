@@ -153,6 +153,24 @@ describe('scoped fixtures', () => {
     );
   });
 
+  it('inherits auto when a scoped override repeats only its scope', () => {
+    const fixtures = normalizeBuilderFixture('workerValue', 'worker', {
+      scope: 'worker',
+      auto: true,
+    });
+    const overridden = normalizeBuilderFixture(
+      'workerValue',
+      'child',
+      { scope: 'worker' },
+      fixtures,
+    );
+
+    expect(overridden.workerValue?.options).toEqual({
+      scope: 'worker',
+      auto: true,
+    });
+  });
+
   it('supports builder fixtures and onCleanup', async () => {
     const events: string[] = [];
     const fixtures = normalizeBuilderFixture(

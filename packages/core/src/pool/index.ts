@@ -307,6 +307,7 @@ export const createPool = async ({
       project: string;
     }[]
   >;
+  drainWorkerStops: () => Promise<void>;
   close: () => Promise<void>;
 }> => {
   // Propagate parent execArgv to workers, except flags known to cause issues
@@ -553,6 +554,7 @@ export const createPool = async ({
         }),
       );
     },
+    drainWorkerStops: () => pool.drainWorkerStops(),
     close: () => pool.close(),
   };
 };

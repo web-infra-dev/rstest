@@ -75,6 +75,22 @@ const browserTest = test.extend({
   playwright: ciPlaywrightOptions,
 });
 
+const typedWorkerTest = test.extend(
+  'typedWorkerValue',
+  { scope: 'worker' },
+  () => 'worker',
+);
+const verifyScopedFixtureOverrideTypes = () => {
+  // @ts-expect-error Scoped overrides must repeat their inherited scope.
+  typedWorkerTest.extend('typedWorkerValue', () => 'child');
+  typedWorkerTest.extend(
+    'typedWorkerValue',
+    { scope: 'worker' },
+    () => 'child',
+  );
+};
+void verifyScopedFixtureOverrideTypes;
+
 let sharedBrowser: Browser | undefined;
 
 const createPage = (title: string) =>

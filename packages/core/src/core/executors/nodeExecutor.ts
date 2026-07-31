@@ -559,12 +559,14 @@ export function createNodeExecutor(
     );
 
     let workerCleanupError: Error | undefined;
-    if (!isWatchMode) {
-      try {
+    try {
+      if (isWatchMode) {
+        await pool.drainWorkerStops();
+      } else {
         await pool.close();
-      } catch (error) {
-        workerCleanupError = toError(error);
       }
+    } catch (error) {
+      workerCleanupError = toError(error);
     }
 
     testStart ??= buildStart;

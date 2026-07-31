@@ -352,6 +352,19 @@ describe('Pool - close()', () => {
     await expect(pool.close()).rejects.toThrow('intentional cleanup error');
   });
 
+  it('should drain isolated worker cleanup errors without closing the pool', async () => {
+    const pool = new Pool(createPoolOptions({ isolate: true }));
+    await pool.runTest(createTask('run', { __testMode: 'cleanup-error' }));
+
+    await expect(pool.drainWorkerStops()).rejects.toThrow(
+      'intentional cleanup error',
+    );
+    await expect(pool.runTest(createTask())).resolves.toMatchObject({
+      status: 'pass',
+    });
+    await pool.close();
+  });
+
   // Regression: rstest#1275. The host owns worker termination via SIGTERM
   // and does not wait for any IPC ack. Previously the host waited the full
   // 60s WORKER_STOP_TIMEOUT_MS plus a 5s SIGKILL escalation for workers

@@ -51,3 +51,30 @@ for (const isolate of [true, false]) {
     );
   });
 }
+
+it('reports isolated worker cleanup failures in the current watch cycle', async () => {
+  const { cli } = await runRstestCli({
+    command: 'rstest',
+    args: [
+      'watch',
+      'fixtures/workerCleanupFailure.test.ts',
+      '--isolate=true',
+      '--pool.maxWorkers=1',
+      '--disableConsoleIntercept',
+    ],
+    options: {
+      nodeOptions: {
+        cwd: __dirname,
+      },
+    },
+  });
+
+  await Promise.all([
+    cli.waitForStderr('worker fixture cleanup reached'),
+    cli.waitForStdout('Waiting for file changes...'),
+  ]);
+  expect(cli.log).toContain('Unhandled Error');
+  expect(cli.log.indexOf('worker fixture cleanup reached')).toBeLessThan(
+    cli.log.indexOf('Waiting for file changes...'),
+  );
+});

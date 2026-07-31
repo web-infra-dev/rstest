@@ -31,7 +31,7 @@ const resolveFixtureOptions = (
   }
 
   const resolved = {
-    auto: options?.auto ?? false,
+    auto: options?.auto ?? parentOptions.auto,
     scope: options?.scope ?? 'test',
   };
 
