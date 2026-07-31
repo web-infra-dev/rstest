@@ -2,6 +2,8 @@ import type { RsbuildPlugin } from '@rsbuild/core';
 import type {
   CoverageOptions,
   CoverageProvider,
+  ExpectConfig,
+  ExpectPollConfig,
   InlineProjectConfig,
   NormalizedCoverageOptions,
   RawCoverageResolveOptions,
@@ -19,6 +21,8 @@ export * from './runtime/api/public';
 export type {
   CoverageOptions,
   CoverageProvider,
+  ExpectConfig,
+  ExpectPollConfig,
   NormalizedCoverageOptions,
   RawCoverageResolveOptions,
   ResolvedRstestConfig,

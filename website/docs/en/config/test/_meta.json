@@ -21,6 +21,7 @@
   "test-timeout",
   "hook-timeout",
   "max-concurrency",
+  "expect",
 
   "pool",
   "isolate",

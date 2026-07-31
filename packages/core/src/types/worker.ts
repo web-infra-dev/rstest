@@ -65,6 +65,7 @@ export type RuntimeConfig = Pick<
   | 'hookTimeout'
   | 'coverage'
   | 'snapshotFormat'
+  | 'expect'
   | 'env'
   | 'logHeapUsage'
   | 'detectAsyncLeaks'

@@ -52,6 +52,12 @@ exports[`mergeRstestConfig > should merge config correctly with default config 1
       "**/dist/.rstest-temp",
     ],
   },
+  "expect": {
+    "poll": {
+      "interval": 50,
+      "timeout": 1000,
+    },
+  },
   "federation": false,
   "forceRerunTriggers": [
     "**/package.json/**",

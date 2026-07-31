@@ -96,6 +96,8 @@ expect.soft(1 + 2).toBe(4);
 - **默认 `interval`：** `50`（毫秒）
 - **默认 `timeout`：** `1000`（毫秒）
 
+你可以通过 [`expect.poll` 配置](/config/test/expect#expectpoll)修改这些默认值。单次调用传入的选项优先级更高。
+
 `options`：
 
 - `interval`：每次重试之间的间隔时间（毫秒）。
