@@ -35,10 +35,9 @@ describe('test coverage-istanbul', () => {
       );
       const workerCleanupCoverage = Object.values<{
         f: Record<string, number>;
+        path: string;
       }>(report).find((entry) =>
-        String((entry as { path?: string }).path).endsWith(
-          '/src/workerCleanup.ts',
-        ),
+        entry.path.replaceAll('\\', '/').endsWith('/src/workerCleanup.ts'),
       );
       expect(Object.values(workerCleanupCoverage?.f ?? {})).toEqual([1, 1]);
     });
