@@ -83,7 +83,8 @@ export type PlaywrightDebugOptions = {
   pauseOnFailure?: boolean;
 };
 
-export type PlaywrightTraceMode = 'off' | 'on' | 'retain-on-failure';
+export type PlaywrightTraceMode =
+  'off' | 'on' | 'retain-on-failure' | 'on-first-retry' | 'on-all-retries';
 
 export type PlaywrightTraceOptions = {
   /**
@@ -289,7 +290,11 @@ const normalizeTraceOptions = (
 const normalizeTraceMode = (
   mode: string | undefined,
 ): PlaywrightTraceMode | undefined => {
-  return mode === 'on' || mode === 'off' || mode === 'retain-on-failure'
+  return mode === 'on' ||
+    mode === 'off' ||
+    mode === 'retain-on-failure' ||
+    mode === 'on-first-retry' ||
+    mode === 'on-all-retries'
     ? mode
     : undefined;
 };
@@ -313,7 +318,7 @@ const getTraceArtifacts = (
 ) => {
   const options = normalizeTraceOptions(playwright.trace);
 
-  if (options.mode === 'off') {
+  if (!shouldCaptureTrace(options.mode, task.retryCount)) {
     return;
   }
 
@@ -333,6 +338,15 @@ const getTraceArtifacts = (
     debugPath: join(dir, 'debug.md'),
   };
 };
+
+export const shouldCaptureTrace = (
+  mode: PlaywrightTraceMode,
+  retryCount: number,
+): boolean =>
+  mode === 'on' ||
+  mode === 'retain-on-failure' ||
+  (mode === 'on-first-retry' && retryCount === 1) ||
+  (mode === 'on-all-retries' && retryCount > 0);
 
 type TraceArtifacts = NonNullable<ReturnType<typeof getTraceArtifacts>>;
 
@@ -917,7 +931,10 @@ const playwrightFixtures = {
         try {
           if (artifacts && traceStarted) {
             const shouldSaveTrace =
-              artifacts.options.mode === 'on' || task.result?.status === 'fail';
+              artifacts.options.mode === 'on' ||
+              artifacts.options.mode === 'on-first-retry' ||
+              artifacts.options.mode === 'on-all-retries' ||
+              task.result?.status === 'fail';
             const shouldStageTrace =
               artifacts.options.mode === 'retain-on-failure' &&
               task.result?.status !== 'fail';

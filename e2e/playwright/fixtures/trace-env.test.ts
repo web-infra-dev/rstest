@@ -16,21 +16,32 @@ afterAll(async () => {
   await rm(outputDir, { recursive: true, force: true });
 });
 
-test.sequential('writes Playwright trace from env', async ({ page }) => {
-  await rm(outputDir, { recursive: true, force: true });
-  await mkdir(outputDir, { recursive: true });
+let attempts = 0;
 
-  await page.setContent('<h1>Env trace target</h1>');
-  await expect(page.locator('h1')).toHaveText('Env trace target');
-});
+test.sequential(
+  'writes Playwright trace from env',
+  { retry: 1 },
+  async ({ page, task }) => {
+    if (attempts === 0) {
+      await rm(outputDir, { recursive: true, force: true });
+      await mkdir(outputDir, { recursive: true });
+    }
+
+    expect(task.retryCount).toBe(attempts);
+    attempts++;
+    await page.setContent('<h1>Env trace target</h1>');
+    await expect(page.locator('h1')).toHaveText('Env trace target');
+    expect(attempts).toBe(2);
+  },
+);
 
 test.sequential('verifies Playwright trace from env', async () => {
-  const [traceEntry] = (await readdir(outputDir)).filter((entry) =>
+  const traceEntries = (await readdir(outputDir)).filter((entry) =>
     entry.startsWith('writes-Playwright-trace-from-env-'),
   );
-  expect(traceEntry).toBeTruthy();
+  expect(traceEntries).toHaveLength(1);
 
-  const traceDir = join(outputDir, traceEntry!);
+  const traceDir = join(outputDir, traceEntries[0]!);
   expect((await stat(join(traceDir, 'trace.zip'))).size).toBeGreaterThan(0);
 
   const summary = JSON.parse(

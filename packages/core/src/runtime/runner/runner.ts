@@ -100,6 +100,7 @@ export class TestRunner {
         beforeEachListeners: BeforeEachListener[];
         afterEachListeners: AfterEachListener[];
       },
+      retryCount: number,
     ): Promise<TestResult> => {
       if (test.runMode === 'skip') {
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
@@ -157,6 +158,7 @@ export class TestRunner {
         test,
         snapshotClient.getSnapshotState(testPath),
         fixtureCleanups,
+        retryCount,
       );
 
       try {
@@ -665,7 +667,11 @@ export class TestRunner {
               // attributed errors from earlier repeats that already passed.
               const repeatRetryErrors: FormattedError[] = [];
               do {
-                const currentResult = await runTestsCase(test, parentHooks);
+                const currentResult = await runTestsCase(
+                  test,
+                  parentHooks,
+                  retryCount,
+                );
 
                 if (currentResult.status === 'fail') {
                   repeatRetryErrors.push(
@@ -823,7 +829,7 @@ export class TestRunner {
     }
   }
 
-  private createTestContext(test: TestCase): TestContext {
+  private createTestContext(test: TestCase, retryCount: number): TestContext {
     const context = (() => {
       throw new Error('done() callback is deprecated, use promise instead');
     }) as unknown as TestContext;
@@ -837,6 +843,7 @@ export class TestRunner {
       name: test.name,
       filepath: toNativePath(test.testPath),
       projectRoot: toNativePath(this.workerState!.projectRoot),
+      retryCount,
       get meta() {
         return (test.meta ??= {});
       },
@@ -928,6 +935,7 @@ export class TestRunner {
     test: TestCase,
     snapshotState: SnapshotState,
     fixtureCleanups: (() => Promise<void>)[],
+    retryCount: number,
   ): FixtureResolver {
     setState<MatcherState>(
       {
@@ -946,7 +954,7 @@ export class TestRunner {
       (globalThis as any)[GLOBAL_EXPECT],
     );
 
-    const context = this.createTestContext(test);
+    const context = this.createTestContext(test, retryCount);
 
     // create test context
     Object.defineProperty(test, 'context', {

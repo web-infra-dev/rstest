@@ -567,6 +567,8 @@ export interface TestContext {
     filepath?: string;
     /** Absolute path of the current project's root directory when provided by the runner. Added in 0.11.1. */
     projectRoot?: string;
+    /** Current retry index, starting at 0 for the initial attempt. Added in 0.11.6. */
+    retryCount: number;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
     /** Mutable metadata copied to the current test result. Added in 0.11.1. */
@@ -582,6 +584,10 @@ export interface TestContext {
   onTestFailed: OnTestFailed;
 }
 ```
+
+<ApiMeta addedVersion="0.11.6" />
+
+Use `context.task.retryCount` to read the current retry index from tests, hooks, and fixtures. It is `0` for the initial attempt, `1` for the first retry, and resets to `0` for each run configured through `repeats`.
 
 Use `context.task.meta` to attach JSON-serializable metadata to the current test result. You can mutate the metadata object or replace it with a new metadata object. Custom reporters and the programmatic API can read this metadata from `TestResult.meta`:
 

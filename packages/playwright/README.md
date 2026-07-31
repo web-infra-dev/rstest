@@ -257,7 +257,7 @@ import type { PlaywrightOptions } from '@rstest/playwright';
 
 const e2e = test.extend({
   playwright: {
-    trace: process.env.CI ? 'retain-on-failure' : 'off',
+    trace: process.env.CI ? 'on-first-retry' : 'off',
   } satisfies PlaywrightOptions,
 });
 
@@ -279,7 +279,7 @@ Use `RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR` to override the default output director
 RSTEST_PLAYWRIGHT_TRACE=on RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR=.rstest/playwright-traces rstest
 ```
 
-`trace` accepts `'off'`, `'on'`, `'retain-on-failure'`, or an options object:
+`trace` accepts `'off'`, `'on'`, `'retain-on-failure'`, `'on-first-retry'`, `'on-all-retries'`, or an options object. `on-first-retry` records and keeps only the first retry, while `on-all-retries` records and keeps every retry. Neither mode starts tracing during the initial attempt.
 
 ```ts
 const e2e = test.extend({
