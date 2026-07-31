@@ -7,7 +7,7 @@ const objectTest = test.extend<{ objectValue: string }>({
     async ({ task }, use) => {
       await use(task.name);
     },
-    { scope: 'test' },
+    { auto: false },
   ],
 });
 
@@ -16,11 +16,11 @@ objectTest('object fixtures remain test scoped', ({ objectValue }) => {
 });
 
 test.extend<{ workerValue: string }>({
-  // @ts-expect-error File and worker scopes use the builder overload.
   workerValue: [
     async (_context, use) => {
       await use('worker');
     },
+    // @ts-expect-error File and worker scopes use the builder overload.
     { scope: 'worker' },
   ],
 });

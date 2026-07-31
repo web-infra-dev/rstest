@@ -131,14 +131,16 @@ describe('scoped fixtures', () => {
     );
   });
 
-  it('requires the builder form for file and worker scopes', () => {
-    expect(() =>
-      normalizeFixtures({
-        workerValue: ['worker', { scope: 'worker' }],
-      } as any),
-    ).toThrow(
-      'Fixture "workerValue" must use test.extend(name, options, fixture) for "worker" scope.',
-    );
+  it('preserves array fixture values whose data contains a scope field', () => {
+    const fixtures = normalizeFixtures({
+      value: ['id', { scope: 'test' }],
+    } as any);
+
+    expect(fixtures.value?.value).toEqual(['id', { scope: 'test' }]);
+    expect(fixtures.value?.options).toEqual({
+      auto: false,
+      scope: 'test',
+    });
   });
 
   it('requires scoped overrides to repeat their scope', () => {
@@ -720,10 +722,14 @@ describe('createFixtureResolver', () => {
     expect(cleanups).toEqual([]);
   });
 
-  it('runs a builder cleanup registered after cancellation', async () => {
+  it('waits for a cancelled builder factory after running its cleanup', async () => {
     let continueSetup: (() => void) | undefined;
+    let continueFactory: (() => void) | undefined;
     const setupPaused = new Promise<void>((resolve) => {
       continueSetup = resolve;
+    });
+    const factoryPaused = new Promise<void>((resolve) => {
+      continueFactory = resolve;
     });
     const events: string[] = [];
     const fixtures = normalizeBuilderFixture(
@@ -733,7 +739,8 @@ describe('createFixtureResolver', () => {
         onCleanup(() => {
           events.push('cleanup');
         });
-        await new Promise<never>(() => {});
+        await factoryPaused;
+        events.push('factory:end');
       },
       { scope: 'file' },
     );
@@ -748,8 +755,21 @@ describe('createFixtureResolver', () => {
     const cancellation = resolver.cancelPendingFixtures();
     continueSetup!();
 
-    await expect(cancellation?.completed).resolves.toBeUndefined();
+    await cancellation?.started;
     expect(events).toEqual(['cleanup']);
+
+    const cancellationSettled = await Promise.race([
+      cancellation?.completed.then(() => true),
+      new Promise<false>((resolve) => {
+        setImmediate(() => resolve(false));
+      }),
+    ]);
+    expect(cancellationSettled).toBe(false);
+    expect(file.getContext().instances.size).toBe(1);
+
+    continueFactory!();
+    await expect(cancellation?.completed).resolves.toBeUndefined();
+    expect(events).toEqual(['cleanup', 'factory:end']);
     expect(file.getContext().instances.size).toBe(0);
 
     const resolutionSettled = await Promise.race([
@@ -758,7 +778,7 @@ describe('createFixtureResolver', () => {
         setImmediate(() => resolve(false));
       }),
     ]);
-    expect(resolutionSettled).toBe(false);
+    expect(resolutionSettled).toBe(true);
   });
 
   it('settles a cancelled fixture that returns without calling use', async () => {

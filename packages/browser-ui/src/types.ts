@@ -81,11 +81,18 @@ export type HostRPC = {
   onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
   onTestCaseResult: (payload: BrowserClientTestResult) => Promise<void>;
   onTestFileComplete: (payload: BrowserClientFileResult) => Promise<void>;
+  onWorkerCleanupStart: (payload: RunnerSignalPayload) => Promise<void>;
+  onComplete: (payload: RunnerSignalPayload) => Promise<void>;
   onLog: (payload: LogPayload) => Promise<void>;
   onFatal: (payload: FatalPayload) => Promise<void>;
   dispatch: (
     request: BrowserDispatchRequest,
   ) => Promise<BrowserDispatchResponse>;
+};
+
+export type RunnerSignalPayload = {
+  testPath: string;
+  runId?: string;
 };
 
 export type ReloadTestFileAck = {

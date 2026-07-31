@@ -210,6 +210,10 @@ type ReloadTestFileAck = {
 type HeadedTestFileCompletePayload = TestFileResult & {
   runId?: string;
 };
+type HeadedRunnerSignalPayload = {
+  testPath: string;
+  runId?: string;
+};
 
 const BROWSER_WORKER_CLEANUP_TIMEOUT_MS = 10_000;
 
@@ -247,6 +251,8 @@ type HostRpcMethods = {
   onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
   onTestCaseResult: (payload: TestResult) => Promise<void>;
   onTestFileComplete: (payload: HeadedTestFileCompletePayload) => Promise<void>;
+  onWorkerCleanupStart: (payload: HeadedRunnerSignalPayload) => Promise<void>;
+  onComplete: (payload: HeadedRunnerSignalPayload) => Promise<void>;
   onLog: (payload: LogPayload) => Promise<void>;
   onFatal: (payload: FatalPayload) => Promise<void>;
   // Generic dispatch endpoint used by runner RPC requests.
@@ -3975,6 +3981,8 @@ export const runBrowserController = async (
     {
       runId: string;
       deferred: DeferredPromise<void>;
+      fileResultHandled: DeferredPromise<void>;
+      cleanupTimer?: ReturnType<typeof setTimeout>;
     }
   >();
   let enqueueHeadedReload = async (
@@ -3997,12 +4005,16 @@ export const runBrowserController = async (
       return;
     }
     pendingHeadedReloads.delete(testPath);
+    clearTimeout(pending.cleanupTimer);
+    pending.fileResultHandled.reject(error);
     pending.deferred.reject(error);
   };
 
   const rejectAllPendingHeadedReloads = (error: Error): void => {
     for (const [testPath, pending] of pendingHeadedReloads) {
       pendingHeadedReloads.delete(testPath);
+      clearTimeout(pending.cleanupTimer);
+      pending.fileResultHandled.reject(error);
       pending.deferred.reject(error);
     }
   };
@@ -4013,18 +4025,22 @@ export const runBrowserController = async (
   ): Promise<void> => {
     const previousPending = pendingHeadedReloads.get(testPath);
     if (previousPending) {
-      previousPending.deferred.reject(
-        new Error(
-          `Reload for "${testPath}" was superseded by a newer request.`,
-        ),
+      const error = new Error(
+        `Reload for "${testPath}" was superseded by a newer request.`,
       );
+      clearTimeout(previousPending.cleanupTimer);
+      previousPending.fileResultHandled.reject(error);
+      previousPending.deferred.reject(error);
       pendingHeadedReloads.delete(testPath);
     }
 
     const deferred = createDeferredPromise<void>();
+    const fileResultHandled = createDeferredPromise<void>();
+    fileResultHandled.promise.catch(() => undefined);
     pendingHeadedReloads.set(testPath, {
       runId,
       deferred,
+      fileResultHandled,
     });
 
     return deferred.promise;
@@ -4040,12 +4056,39 @@ export const runBrowserController = async (
     }
     if (runId && pending.runId !== runId) {
       logger.debug(
-        `[Browser UI] Ignoring stale file-complete for ${testPath}. current=${pending.runId}, incoming=${runId}`,
+        `[Browser UI] Ignoring stale completion for ${testPath}. current=${pending.runId}, incoming=${runId}`,
       );
       return;
     }
     pendingHeadedReloads.delete(testPath);
+    clearTimeout(pending.cleanupTimer);
     pending.deferred.resolve();
+  };
+
+  const startPendingHeadedCleanupTimeout = (
+    testPath: string,
+    runId?: string,
+  ): void => {
+    const pending = pendingHeadedReloads.get(testPath);
+    if (
+      !pending ||
+      pending.cleanupTimer ||
+      (runId && pending.runId !== runId)
+    ) {
+      return;
+    }
+
+    pending.cleanupTimer = setTimeout(() => {
+      const current = pendingHeadedReloads.get(testPath);
+      if (current !== pending) {
+        return;
+      }
+      const error = new Error(
+        `Browser worker fixture cleanup did not finish within ${BROWSER_WORKER_CLEANUP_TIMEOUT_MS}ms`,
+      );
+      rejectPendingHeadedReload(testPath, error, runId);
+      void handleFatal({ message: error.message, stack: error.stack });
+    }, BROWSER_WORKER_CLEANUP_TIMEOUT_MS);
   };
 
   // No execution-duration watchdog: per-test/hook timeouts are enforced inside
@@ -4101,10 +4144,15 @@ export const runBrowserController = async (
       await handleTestCaseResult(payload);
     },
     async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
+      const pending = pendingHeadedReloads.get(payload.testPath);
+      if (!pending || (payload.runId && pending.runId !== payload.runId)) {
+        return;
+      }
       try {
         await handleTestFileComplete(payload);
-        resolvePendingHeadedReload(payload.testPath, payload.runId);
+        pending.fileResultHandled.resolve();
       } catch (error) {
+        pending.fileResultHandled.reject(error);
         rejectPendingHeadedReload(
           payload.testPath,
           toError(error),
@@ -4112,6 +4160,17 @@ export const runBrowserController = async (
         );
         throw error;
       }
+    },
+    async onWorkerCleanupStart(payload: HeadedRunnerSignalPayload) {
+      startPendingHeadedCleanupTimeout(payload.testPath, payload.runId);
+    },
+    async onComplete(payload: HeadedRunnerSignalPayload) {
+      const pending = pendingHeadedReloads.get(payload.testPath);
+      if (!pending || (payload.runId && pending.runId !== payload.runId)) {
+        return;
+      }
+      await pending.fileResultHandled.promise;
+      resolvePendingHeadedReload(payload.testPath, payload.runId);
     },
     async onLog(payload: LogPayload) {
       await handleLog(payload);

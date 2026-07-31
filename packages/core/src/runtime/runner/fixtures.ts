@@ -9,7 +9,7 @@ import type {
 } from '../../types';
 import { isObject } from '../../utils/helper';
 
-const fixtureOptionKeys = ['auto', 'scope'];
+const fixtureOptionKeys = ['auto'];
 const fixtureScopes: FixtureScope[] = ['worker', 'file', 'test'];
 
 const resolveFixtureOptions = (
@@ -152,11 +152,6 @@ export const normalizeFixtures = (
       ) {
         fixtureValue = value[0];
         fixtureOptions = value[1] as FixtureOptions;
-        if (fixtureOptions.scope && fixtureOptions.scope !== 'test') {
-          throw new Error(
-            `Fixture "${key}" must use test.extend(name, options, fixture) for "${fixtureOptions.scope}" scope.`,
-          );
-        }
       }
     }
 
@@ -404,18 +399,10 @@ export const createFixtureResolver = (
     let cleanupRegistered = false;
     let registeredCleanup: FixtureCleanupCallback | undefined;
     let cleanupPromise: Promise<void> | undefined;
-    let finishCancellation!: () => void;
-    let failCancellation!: (error: unknown) => void;
     let notifyCleanupStarted!: () => void;
     const cleanupStarted = new Promise<void>((resolve) => {
       notifyCleanupStarted = resolve;
     });
-    const cancellation = new Promise<void>((resolve, reject) => {
-      finishCancellation = resolve;
-      failCancellation = reject;
-    });
-    cancellation.catch(() => undefined);
-
     const runRegisteredCleanup = (): Promise<void> | undefined => {
       if (!registeredCleanup) {
         return undefined;
@@ -427,7 +414,6 @@ export const createFixtureResolver = (
         }
         notifyCleanupStarted();
         cleanupPromise = Promise.resolve().then(registeredCleanup);
-        cleanupPromise.then(finishCancellation, failCancellation);
       }
       return cleanupPromise;
     };
@@ -435,7 +421,7 @@ export const createFixtureResolver = (
     instance.cancelSetup = () => {
       instance.cancelled = true;
       runRegisteredCleanup();
-      return { started: cleanupStarted, completed: cancellation };
+      return { started: cleanupStarted, completed: instance.setup! };
     };
 
     const onCleanup = (cleanup: FixtureCleanup) => {
@@ -463,14 +449,12 @@ export const createFixtureResolver = (
           await cleanup;
         } else {
           notifyCleanupStarted();
-          finishCancellation();
         }
       }
       return value;
     } catch (error) {
       if (instance.cancelled && !cleanupPromise) {
         notifyCleanupStarted();
-        failCancellation(error);
       }
       throw error;
     }

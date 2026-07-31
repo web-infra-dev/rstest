@@ -227,9 +227,7 @@ type Fixture<T, K extends keyof T, ExtraContext = object> = ((
         ? FixtureFn<T, K, Omit<ExtraContext, Exclude<keyof T, K>>>
         : never);
 
-type TestFixtureOptions = Omit<FixtureOptions, 'scope'> & {
-  scope?: 'test';
-};
+type TestFixtureOptions = Omit<FixtureOptions, 'scope'>;
 
 export type Fixtures<
   T extends Record<string, any> = object,

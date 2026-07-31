@@ -506,6 +506,23 @@ const BrowserRunner: React.FC<{
             runId,
           });
         }
+      } else if (
+        message.type === 'worker-cleanup-start' ||
+        message.type === 'complete'
+      ) {
+        const frame = findRunnerFrameBySource(event.source);
+        const testPath = frame?.dataset.testFile;
+        if (frame && testPath) {
+          const payload = {
+            testPath,
+            runId: readRunIdFromFrame(frame) ?? runIdByTestFile[testPath],
+          };
+          if (message.type === 'worker-cleanup-start') {
+            rpc?.onWorkerCleanupStart(payload);
+          } else {
+            rpc?.onComplete(payload);
+          }
+        }
       } else if (message.type === 'fatal') {
         const payload = message.payload as FatalPayload;
         if (active) {

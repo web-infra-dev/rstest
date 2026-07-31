@@ -8,12 +8,6 @@ export default defineConfig({
     headless: true,
     port: BROWSER_PORTS.basic,
   },
-  include: ['tests/**/*.test.ts'],
-  exclude: [
-    'tests/workerCleanupFailure.test.ts',
-    'tests/workerCleanupAfterFatal.test.ts',
-    'tests/workerCleanupTimeout.test.ts',
-    'tests/workerCleanupUnhandled.test.ts',
-  ],
+  include: ['tests/workerCleanupUnhandled.test.ts'],
   testTimeout: BROWSER_TEST_TIMEOUT,
 });

@@ -11,6 +11,7 @@ import type {
   CurrentTaskInfo,
   RunnerHooks,
   RuntimeConfig,
+  TestFileResult,
   WorkerState,
 } from '@rstest/core/internal/browser-runtime';
 import {
@@ -567,7 +568,7 @@ const run = async () => {
   // Parity with the node worker, which attaches process-level
   // uncaughtException/unhandledRejection to the running file's result and fails
   // the file. `activeUnhandledErrors` points at the currently running file's
-  // collector (undefined between files, so stray late events are ignored).
+  // collector and stays active for the final file through worker cleanup.
   let activeUnhandledErrors: Error[] | undefined;
   const onWindowError = (event: ErrorEvent): void => {
     activeUnhandledErrors?.push(
@@ -585,10 +586,28 @@ const run = async () => {
   window.addEventListener('error', onWindowError);
   window.addEventListener('unhandledrejection', onUnhandledRejection);
 
+  const waitForUnhandledEvents = async (): Promise<void> => {
+    // `unhandledrejection` is dispatched from a task queued at the current
+    // microtask checkpoint. The second task runs after that event regardless
+    // of how the browser orders timer and event task sources.
+    for (let i = 0; i < 2; i++) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    }
+  };
+
   // 2. Run tests for each file
   let fatalError: Error | undefined;
+  let pendingFileResult: TestFileResult | undefined;
   try {
     for (const key of testKeysToRun) {
+      if (pendingFileResult) {
+        send({ type: 'file-complete', payload: pendingFileResult });
+        pendingFileResult = undefined;
+        activeUnhandledErrors = undefined;
+      }
+
       const testPath = toAbsolutePath(key, currentProject.projectRoot);
       const taskStack: CurrentTaskInfo[] = [
         {
@@ -737,17 +756,7 @@ const run = async () => {
             runtime.api,
           );
 
-          // The browser dispatches `unhandledrejection` in a task queued at the
-          // current task's microtask checkpoint, so a rejection leaked by a
-          // synchronous test is not observable yet when `runTests()` resolves.
-          // Yield two macrotasks: the first reaches the checkpoint that queues
-          // the event task, the second runs after that task regardless of how
-          // the browser orders the timer and event task sources.
-          for (let i = 0; i < 2; i++) {
-            await new Promise<void>((resolve) => {
-              setTimeout(resolve, 0);
-            });
-          }
+          await waitForUnhandledEvents();
 
           // An unhandled error/rejection that escaped the run fails the file even
           // when every test passed.
@@ -761,6 +770,7 @@ const run = async () => {
                 stack: error.stack,
               })),
             ];
+            unhandledErrors.length = 0;
           }
 
           // Collect coverage data from global __coverage__ object
@@ -768,16 +778,11 @@ const run = async () => {
             result.coverage = globalThis.__coverage__ as CoverageMapData;
           }
 
-          send({
-            type: 'file-complete',
-            payload: result,
-          });
+          pendingFileResult = result;
         } catch (_error) {
           fatalError =
             _error instanceof Error ? _error : new Error(String(_error));
           break;
-        } finally {
-          activeUnhandledErrors = undefined;
         }
       } finally {
         // Restore original console methods
@@ -787,9 +792,6 @@ const run = async () => {
   } catch (_error) {
     fatalError = _error instanceof Error ? _error : new Error(String(_error));
   } finally {
-    window.removeEventListener('error', onWindowError);
-    window.removeEventListener('unhandledrejection', onUnhandledRejection);
-
     try {
       send({ type: 'worker-cleanup-start' });
       await cleanupWorkerFixtures();
@@ -805,6 +807,45 @@ const run = async () => {
             ].join('\n'),
           )
         : cleanupError;
+    } finally {
+      await waitForUnhandledEvents();
+
+      if (activeUnhandledErrors && activeUnhandledErrors.length > 0) {
+        if (pendingFileResult) {
+          pendingFileResult.status = 'fail';
+          pendingFileResult.errors = [
+            ...(pendingFileResult.errors ?? []),
+            ...activeUnhandledErrors.map((error) => ({
+              name: error.name,
+              message: error.message,
+              stack: error.stack,
+            })),
+          ];
+        } else {
+          const escapedCleanupError = new AggregateError(
+            activeUnhandledErrors,
+            'Unhandled errors escaped browser worker fixture cleanup.',
+          );
+          fatalError = fatalError
+            ? new AggregateError(
+                [fatalError, escapedCleanupError],
+                'Browser test execution and worker fixture cleanup failed.',
+              )
+            : escapedCleanupError;
+        }
+      }
+
+      if (pendingFileResult) {
+        if (globalThis.__coverage__) {
+          pendingFileResult.coverage =
+            globalThis.__coverage__ as CoverageMapData;
+        }
+        send({ type: 'file-complete', payload: pendingFileResult });
+      }
+
+      activeUnhandledErrors = undefined;
+      window.removeEventListener('error', onWindowError);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
     }
   }
 
