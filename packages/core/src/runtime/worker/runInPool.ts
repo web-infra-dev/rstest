@@ -9,7 +9,11 @@ import type {
   TestInfo,
   WorkerState,
 } from '../../types';
-import { globalApis, RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
+import {
+  globalApis,
+  RSTEST_API_GLOBAL_KEY,
+  RSTEST_IMPORT_META_GLOBAL_KEY,
+} from '../../utils/constants';
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
@@ -298,9 +302,12 @@ const preparePool = async (
     process.off('unhandledRejection', unhandledRejection);
   });
 
-  const { api, runner } = await createRstestRuntime(workerState, {
-    taskContext,
-  });
+  const { api, resolveImportMetaRstest, runner } = await createRstestRuntime(
+    workerState,
+    {
+      taskContext,
+    },
+  );
 
   tracker?.transition('envSetup');
   const hasPinnedEnvironment = activeEnvironmentKey !== undefined;
@@ -353,8 +360,10 @@ const preparePool = async (
     Error,
   };
 
-  // @ts-expect-error
-  rstestContext.global[RSTEST_API_GLOBAL_KEY] = api;
+  Object.assign(rstestContext.global, {
+    [RSTEST_API_GLOBAL_KEY]: api,
+    [RSTEST_IMPORT_META_GLOBAL_KEY]: resolveImportMetaRstest,
+  });
 
   return {
     interopDefault,

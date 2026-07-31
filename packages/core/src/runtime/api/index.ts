@@ -1,3 +1,4 @@
+import { normalize } from 'pathe';
 import type {
   Rstest,
   RstestExpect,
@@ -41,6 +42,7 @@ export const createRstestRuntime = async (
   workerState: WorkerState,
   { taskContext }: { taskContext: TaskContext },
 ): Promise<{
+  resolveImportMetaRstest: (filename: string) => Rstest | undefined;
   runner: {
     runTests: (
       testPath: string,
@@ -85,5 +87,11 @@ export const createRstestRuntime = async (
   // Published live for real-module importers (`public.ts` reads `RSTEST_API`).
   globalThis.RSTEST_API = runtime.api;
 
-  return runtime;
+  const testPath = normalize(workerState.testPath);
+
+  return {
+    ...runtime,
+    resolveImportMetaRstest: (filename) =>
+      normalize(filename) === testPath ? runtime.api : undefined,
+  };
 };

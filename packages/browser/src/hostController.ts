@@ -29,7 +29,6 @@ import {
   getSetupFiles,
   getTestEntries,
   hasUserRstestConfigPlugins,
-  importMetaRstestDefine,
   initModifyRstestConfigHooks,
   isDebug,
   isTTY,
@@ -1987,10 +1986,6 @@ const createBrowserRuntime = async ({
                     define: {
                       'process.env': rstestEnvDefine,
                       'import.meta.env': rstestEnvDefine,
-                      // In-source `if (import.meta.rstest)` blocks read the
-                      // per-file runtime API the client entry publishes on
-                      // `globalThis` (node parity: `global['@rstest/core']`).
-                      'import.meta.rstest': importMetaRstestDefine('web'),
                     },
                   },
                   output: {

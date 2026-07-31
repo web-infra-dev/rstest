@@ -12,7 +12,6 @@ import { runtimeChunkNameForEnvironment } from '../runtimeChunk';
 import {
   applyMockExportsPresence,
   getMockRstestPluginOptions,
-  importMetaRstestDefine,
 } from './mockBuild';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -88,7 +87,6 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
         {
           source: {
             define: {
-              'import.meta.rstest': importMetaRstestDefine('node'),
               'import.meta.env': 'process.env',
             },
           },

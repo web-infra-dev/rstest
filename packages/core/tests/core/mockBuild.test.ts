@@ -1,24 +1,14 @@
 import { describe, expect, it } from '@rstest/core';
 import {
   getMockRstestPluginOptions,
-  importMetaRstestDefine,
   injectChunkInstallMockGuard,
 } from '../../src/core/plugins/mockBuild';
 
 describe('mock build parameterization', () => {
-  it('pins the node define to the historical byte-identical literal', () => {
-    // `pluginBasic` used to inline exactly this string; the node build output
-    // must not change.
-    expect(importMetaRstestDefine('node')).toBe("global['@rstest/core']");
-  });
-
-  it('derives the web define from the same global key', () => {
-    expect(importMetaRstestDefine('web')).toBe("globalThis['@rstest/core']");
-  });
-
   it('produces the target-agnostic RstestPlugin option base', () => {
     expect(getMockRstestPluginOptions({ rootPath: '/repo/project' })).toEqual({
       injectModulePathName: true,
+      injectImportMetaRstestOrigin: true,
       importMetaPathName: true,
       hoistMockModule: true,
       manualMockRoot: '/repo/project/__mocks__',

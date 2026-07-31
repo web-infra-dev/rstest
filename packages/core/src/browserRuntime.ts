@@ -36,6 +36,7 @@ export {
   globalApis,
   RSTEST_API_GLOBAL_KEY,
   RSTEST_ENV_SYMBOL_KEY,
+  RSTEST_IMPORT_META_GLOBAL_KEY,
 } from './utils/constants';
 // Node-parity console argument formatting for the browser console relay.
 export { formatConsoleArgs } from './runtime/consoleFormat';
