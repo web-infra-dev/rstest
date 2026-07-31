@@ -48,6 +48,26 @@ export type ChaiConfig = Partial<
   Pick<typeof config, 'showDiff' | 'truncateThreshold'>
 >;
 
+export type ExpectPollConfig = {
+  /**
+   * Polling interval in milliseconds.
+   * @default 50
+   */
+  interval?: number;
+  /**
+   * Polling timeout in milliseconds.
+   * @default 1000
+   */
+  timeout?: number;
+};
+
+export type ExpectConfig = {
+  /**
+   * Default options for `expect.poll()`.
+   */
+  poll?: ExpectPollConfig;
+};
+
 export type RstestPoolType = 'forks' | 'threads';
 
 export type RstestPoolOptions = {
@@ -566,6 +586,11 @@ export interface RstestConfig {
   performance?: RstestPerformanceConfig;
 
   /**
+   * Configuration options for `expect`.
+   */
+  expect?: ExpectConfig;
+
+  /**
    * chai configuration options
    */
   chaiConfig?: ChaiConfig;
@@ -655,6 +680,7 @@ export type NormalizedConfig = Required<
     | 'exclude'
     | 'testEnvironment'
     | 'browser'
+    | 'expect'
     | 'output'
   >
 > &
@@ -664,6 +690,9 @@ export type NormalizedConfig = Required<
     testEnvironment: EnvironmentWithOptions;
     coverage: NormalizedCoverageOptions;
     browser: NormalizedBrowserModeConfig;
+    expect: {
+      poll: Required<ExpectPollConfig>;
+    };
     setupFiles: string[];
     globalSetup: string[];
     exclude: {

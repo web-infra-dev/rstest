@@ -37,6 +37,23 @@ describe('mergeRstestConfig', () => {
     expect(merged.globalSetup).toEqual(['./single-global-setup.ts']);
   });
 
+  it('should merge expect.poll with its defaults', () => {
+    expect(
+      withDefaultConfig({
+        expect: {
+          poll: {
+            timeout: 200,
+          },
+        },
+      }).expect,
+    ).toEqual({
+      poll: {
+        interval: 50,
+        timeout: 200,
+      },
+    });
+  });
+
   it('should override forceRerunTriggers', () => {
     expect(
       withDefaultConfig({
