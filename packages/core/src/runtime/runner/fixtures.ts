@@ -251,6 +251,10 @@ export class FixtureScopeManager {
     };
   }
 
+  hasCleanups(): boolean {
+    return this.cleanups.length > 0;
+  }
+
   async cleanup(): Promise<void> {
     const cleanups = this.cleanups.splice(0);
     this.instances.clear();

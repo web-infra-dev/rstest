@@ -507,6 +507,8 @@ const BrowserRunner: React.FC<{
           });
         }
       } else if (
+        message.type === 'file-cleanup-start' ||
+        message.type === 'file-cleanup-finished' ||
         message.type === 'worker-cleanup-start' ||
         message.type === 'complete'
       ) {
@@ -517,7 +519,11 @@ const BrowserRunner: React.FC<{
             testPath,
             runId: readRunIdFromFrame(frame) ?? runIdByTestFile[testPath],
           };
-          if (message.type === 'worker-cleanup-start') {
+          if (message.type === 'file-cleanup-start') {
+            rpc?.onFileCleanupStart(payload);
+          } else if (message.type === 'file-cleanup-finished') {
+            rpc?.onFileCleanupEnd(payload);
+          } else if (message.type === 'worker-cleanup-start') {
             rpc?.onWorkerCleanupStart(payload);
           } else {
             rpc?.onComplete(payload);

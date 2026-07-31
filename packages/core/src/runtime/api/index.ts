@@ -7,7 +7,7 @@ import type {
   TestInfo,
   WorkerState,
 } from '../../types';
-import { createRunner, runnerAPI } from '../runner';
+import { createRunner, type FileCleanupHooks, runnerAPI } from '../runner';
 import type { TaskContext } from '../worker/taskContext';
 import { assert, createFileExpect, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
@@ -44,7 +44,7 @@ export const createRstestRuntime = async (
   runner: {
     runTests: (
       testPath: string,
-      hooks: RunnerHooks,
+      hooks: RunnerHooks & FileCleanupHooks,
       api: Rstest,
     ) => Promise<TestFileResult>;
     collectTests: () => Promise<TestInfo[]>;

@@ -139,6 +139,8 @@ export type BrowserClientMessage =
       type: 'fatal';
       payload: { message: string; stack?: string };
     }
+  | { type: 'file-cleanup-start' }
+  | { type: 'file-cleanup-finished' }
   | { type: 'worker-cleanup-start' }
   | { type: 'complete' }
   // Collect mode messages

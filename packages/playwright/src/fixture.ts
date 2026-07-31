@@ -1277,8 +1277,7 @@ const isFixtureOptions = (value: unknown) => {
   return (
     typeof value === 'object' &&
     value !== null &&
-    (Object.prototype.hasOwnProperty.call(value, 'auto') ||
-      Object.prototype.hasOwnProperty.call(value, 'scope'))
+    Object.prototype.hasOwnProperty.call(value, 'auto')
   );
 };
 
@@ -1451,7 +1450,7 @@ type PlaywrightExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
     >,
     fixture: PlaywrightBuilderFixture<
       Value,
-      TestContext & TestFixtures & FileFixtures & WorkerFixtures
+      Omit<TestContext & TestFixtures & FileFixtures & WorkerFixtures, Name>
     >,
   ): PlaywrightTest<
     MergeContext<TestFixtures, Record<Name, Value>>,
@@ -1466,7 +1465,7 @@ type PlaywrightExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
     options: FixtureOptions & { scope?: 'test' },
     fixture: PlaywrightBuilderFixture<
       Value,
-      TestContext & TestFixtures & FileFixtures & WorkerFixtures
+      Omit<TestContext & TestFixtures & FileFixtures & WorkerFixtures, Name>
     >,
   ): PlaywrightTest<
     MergeContext<TestFixtures, Record<Name, Value>>,
@@ -1479,7 +1478,10 @@ type PlaywrightExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
       TestFixtures & WorkerFixtures
     >,
     options: FixtureOptions & { scope: 'file' },
-    fixture: PlaywrightBuilderFixture<Value, FileFixtures & WorkerFixtures>,
+    fixture: PlaywrightBuilderFixture<
+      Value,
+      Omit<FileFixtures & WorkerFixtures, Name>
+    >,
   ): PlaywrightTest<
     TestFixtures,
     MergeContext<FileFixtures, Record<Name, Value>>,
@@ -1491,7 +1493,7 @@ type PlaywrightExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
       TestFixtures & FileFixtures
     >,
     options: FixtureOptions & { scope: 'worker' },
-    fixture: PlaywrightBuilderFixture<Value, WorkerFixtures>,
+    fixture: PlaywrightBuilderFixture<Value, Omit<WorkerFixtures, Name>>,
   ): PlaywrightTest<
     TestFixtures,
     FileFixtures,

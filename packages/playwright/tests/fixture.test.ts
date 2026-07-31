@@ -88,6 +88,12 @@ const verifyScopedFixtureOverrideTypes = () => {
     { scope: 'worker' },
     () => 'child',
   );
+  typedWorkerTest.extend(
+    'typedWorkerValue',
+    { scope: 'worker' },
+    // @ts-expect-error An override cannot depend on its own replacement.
+    ({ typedWorkerValue }) => typedWorkerValue,
+  );
 };
 void verifyScopedFixtureOverrideTypes;
 
@@ -488,6 +494,13 @@ test.extend({}).describe('extended test API', () => {
   })('preserves static array fixture values', ({ pair }) => {
     expect(pair[0]()).toBe('static value');
     expect(pair[1]).toBe(1);
+  });
+
+  test.extend<{ scopedPair: [() => string, { scope: string }] }>({
+    scopedPair: [() => 'static value', { scope: 'test' }],
+  })('preserves array fixtures with scope-shaped data', ({ scopedPair }) => {
+    expect(scopedPair[0]()).toBe('static value');
+    expect(scopedPair[1]).toEqual({ scope: 'test' });
   });
 
   test.extend({})('preserves playwright-style helpers', () => {

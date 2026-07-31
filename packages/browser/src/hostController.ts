@@ -251,6 +251,8 @@ type HostRpcMethods = {
   onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
   onTestCaseResult: (payload: TestResult) => Promise<void>;
   onTestFileComplete: (payload: HeadedTestFileCompletePayload) => Promise<void>;
+  onFileCleanupStart: (payload: HeadedRunnerSignalPayload) => Promise<void>;
+  onFileCleanupEnd: (payload: HeadedRunnerSignalPayload) => Promise<void>;
   onWorkerCleanupStart: (payload: HeadedRunnerSignalPayload) => Promise<void>;
   onComplete: (payload: HeadedRunnerSignalPayload) => Promise<void>;
   onLog: (payload: LogPayload) => Promise<void>;
@@ -3420,10 +3422,18 @@ export const runBrowserController = async (
         settled = true;
         crashDeferred.resolve(reason);
       };
-      const startCleanupTimeout = (): void => {
-        if (settled || cleanupTimer) {
+      const clearCleanupTimeout = (): void => {
+        if (!cleanupTimer) {
           return;
         }
+        clearTimeout(cleanupTimer);
+        cleanupTimer = undefined;
+      };
+      const startCleanupTimeout = (scope: 'file' | 'worker'): void => {
+        if (settled) {
+          return;
+        }
+        clearCleanupTimeout();
         cleanupTimer = setTimeout(() => {
           cleanupTimer = undefined;
           if (
@@ -3435,7 +3445,7 @@ export const runBrowserController = async (
           }
           settled = true;
           cleanupTimeoutDeferred.resolve(
-            `Browser worker fixture cleanup did not finish within ${BROWSER_WORKER_CLEANUP_TIMEOUT_MS}ms`,
+            `Browser ${scope} fixture cleanup did not finish within ${BROWSER_WORKER_CLEANUP_TIMEOUT_MS}ms`,
           );
         }, BROWSER_WORKER_CLEANUP_TIMEOUT_MS);
       };
@@ -3464,8 +3474,16 @@ export const runBrowserController = async (
         await attachHeadlessRunnerTransport(page, {
           onDispatchMessage: async (message) => {
             try {
+              if (message.type === 'file-cleanup-start') {
+                startCleanupTimeout('file');
+                return;
+              }
+              if (message.type === 'file-cleanup-finished') {
+                clearCleanupTimeout();
+                return;
+              }
               if (message.type === 'worker-cleanup-start') {
-                startCleanupTimeout();
+                startCleanupTimeout('worker');
                 return;
               }
               await dispatchRunnerMessage(run, file, session.id, message);
@@ -3560,9 +3578,7 @@ export const runBrowserController = async (
           await cancelRun(run, false);
         }
       } finally {
-        if (cleanupTimer) {
-          clearTimeout(cleanupTimer);
-        }
+        clearCleanupTimeout();
         if (page) {
           try {
             await page.close();
@@ -4067,16 +4083,15 @@ export const runBrowserController = async (
 
   const startPendingHeadedCleanupTimeout = (
     testPath: string,
+    scope: 'file' | 'worker',
     runId?: string,
   ): void => {
     const pending = pendingHeadedReloads.get(testPath);
-    if (
-      !pending ||
-      pending.cleanupTimer ||
-      (runId && pending.runId !== runId)
-    ) {
+    if (!pending || (runId && pending.runId !== runId)) {
       return;
     }
+
+    clearTimeout(pending.cleanupTimer);
 
     pending.cleanupTimer = setTimeout(() => {
       const current = pendingHeadedReloads.get(testPath);
@@ -4084,11 +4099,23 @@ export const runBrowserController = async (
         return;
       }
       const error = new Error(
-        `Browser worker fixture cleanup did not finish within ${BROWSER_WORKER_CLEANUP_TIMEOUT_MS}ms`,
+        `Browser ${scope} fixture cleanup did not finish within ${BROWSER_WORKER_CLEANUP_TIMEOUT_MS}ms`,
       );
       rejectPendingHeadedReload(testPath, error, runId);
       void handleFatal({ message: error.message, stack: error.stack });
     }, BROWSER_WORKER_CLEANUP_TIMEOUT_MS);
+  };
+
+  const finishPendingHeadedCleanup = (
+    testPath: string,
+    runId?: string,
+  ): void => {
+    const pending = pendingHeadedReloads.get(testPath);
+    if (!pending || (runId && pending.runId !== runId)) {
+      return;
+    }
+    clearTimeout(pending.cleanupTimer);
+    pending.cleanupTimer = undefined;
   };
 
   // No execution-duration watchdog: per-test/hook timeouts are enforced inside
@@ -4161,8 +4188,18 @@ export const runBrowserController = async (
         throw error;
       }
     },
+    async onFileCleanupStart(payload: HeadedRunnerSignalPayload) {
+      startPendingHeadedCleanupTimeout(payload.testPath, 'file', payload.runId);
+    },
+    async onFileCleanupEnd(payload: HeadedRunnerSignalPayload) {
+      finishPendingHeadedCleanup(payload.testPath, payload.runId);
+    },
     async onWorkerCleanupStart(payload: HeadedRunnerSignalPayload) {
-      startPendingHeadedCleanupTimeout(payload.testPath, payload.runId);
+      startPendingHeadedCleanupTimeout(
+        payload.testPath,
+        'worker',
+        payload.runId,
+      );
     },
     async onComplete(payload: HeadedRunnerSignalPayload) {
       const pending = pendingHeadedReloads.get(payload.testPath);

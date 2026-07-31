@@ -52,6 +52,46 @@ for (const isolate of [true, false]) {
   });
 }
 
+it('captures unhandled rejections from worker fixture cleanup', async () => {
+  const { cli, expectExecFailed } = await runRstestCli({
+    command: 'rstest',
+    args: [
+      'run',
+      'fixtures/workerCleanupUnhandled.test.ts',
+      '--pool.maxWorkers=1',
+    ],
+    options: {
+      nodeOptions: {
+        cwd: __dirname,
+      },
+    },
+  });
+
+  await expectExecFailed();
+  expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+    'unhandled worker fixture cleanup rejection',
+  );
+});
+
+it('bounds file fixture cleanup in the host', async () => {
+  const start = Date.now();
+  const { cli, expectExecFailed } = await runRstestCli({
+    command: 'rstest',
+    args: ['run', 'fixtures/fileCleanupTimeout.test.ts', '--pool.maxWorkers=1'],
+    options: {
+      nodeOptions: {
+        cwd: __dirname,
+      },
+    },
+  });
+
+  await expectExecFailed();
+  expect(Date.now() - start).toBeLessThan(20_000);
+  expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+    'File fixture cleanup did not finish within 10000ms',
+  );
+});
+
 it('reports isolated worker cleanup failures in the current watch cycle', async () => {
   const { cli } = await runRstestCli({
     command: 'rstest',

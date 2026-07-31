@@ -283,7 +283,7 @@ type TestExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
     name: FixtureNameWithoutOverrides<Name, FileFixtures & WorkerFixtures>,
     fixture: BuilderFixture<
       Value,
-      TestContext & TestFixtures & FileFixtures & WorkerFixtures
+      Omit<TestContext & TestFixtures & FileFixtures & WorkerFixtures, Name>
     >,
   ): TestAPIs<
     MergeFixtureContext<TestFixtures, Record<Name, Value>>,
@@ -295,7 +295,7 @@ type TestExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
     options: FixtureOptions & { scope?: 'test' },
     fixture: BuilderFixture<
       Value,
-      TestContext & TestFixtures & FileFixtures & WorkerFixtures
+      Omit<TestContext & TestFixtures & FileFixtures & WorkerFixtures, Name>
     >,
   ): TestAPIs<
     MergeFixtureContext<TestFixtures, Record<Name, Value>>,
@@ -305,7 +305,7 @@ type TestExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
   <Name extends string, Value>(
     name: FixtureNameWithoutOverrides<Name, TestFixtures & WorkerFixtures>,
     options: FixtureOptions & { scope: 'file' },
-    fixture: BuilderFixture<Value, FileFixtures & WorkerFixtures>,
+    fixture: BuilderFixture<Value, Omit<FileFixtures & WorkerFixtures, Name>>,
   ): TestAPIs<
     TestFixtures,
     MergeFixtureContext<FileFixtures, Record<Name, Value>>,
@@ -314,7 +314,7 @@ type TestExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
   <Name extends string, Value>(
     name: FixtureNameWithoutOverrides<Name, TestFixtures & FileFixtures>,
     options: FixtureOptions & { scope: 'worker' },
-    fixture: BuilderFixture<Value, WorkerFixtures>,
+    fixture: BuilderFixture<Value, Omit<WorkerFixtures, Name>>,
   ): TestAPIs<
     TestFixtures,
     FileFixtures,

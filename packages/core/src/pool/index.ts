@@ -34,7 +34,7 @@ import {
   sinkToRuntimeRpc,
 } from '../core/runnerEventSink';
 import { Pool } from './pool';
-import type { PoolWorkerKind } from './types';
+import type { PoolTask, PoolWorkerKind } from './types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -109,6 +109,7 @@ const buildTask = async ({
   getAssetFiles,
   getSourceMaps,
   rpcMethods,
+  onWorkerCleanupResult,
   traceSpan,
   buildId = 0,
 }: {
@@ -126,6 +127,7 @@ const buildTask = async ({
   getAssetFiles: PoolDispatchParams['getAssetFiles'];
   getSourceMaps: PoolDispatchParams['getSourceMaps'];
   rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
+  onWorkerCleanupResult?: PoolTask['onWorkerCleanupResult'];
   traceSpan: TraceSpan;
   buildId?: number;
 }) => {
@@ -191,6 +193,7 @@ const buildTask = async ({
           mode: 'rpc',
         }),
     },
+    onWorkerCleanupResult,
   };
 };
 
@@ -437,6 +440,14 @@ export const createPool = async ({
                   getAssetFiles,
                   getSourceMaps,
                   rpcMethods,
+                  onWorkerCleanupResult: (result) => {
+                    if (result.coverage) {
+                      onCoverageResult?.(result.coverage);
+                    }
+                    if (result.coverageRaw != null) {
+                      onRawCoverageResult?.(result.coverageRaw);
+                    }
+                  },
                   traceSpan,
                   buildId,
                 }),

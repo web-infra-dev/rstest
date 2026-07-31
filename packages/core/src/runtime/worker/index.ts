@@ -110,7 +110,14 @@ const runTask = async (
   currentTaskId = request.taskId;
 
   try {
-    const result = await runInPool(request.options);
+    const result = await runInPool(request.options, {
+      onFileCleanupStart: () => {
+        send({ type: 'fileCleanupStarted', taskId: request.taskId });
+      },
+      onFileCleanupEnd: () => {
+        send({ type: 'fileCleanupFinished', taskId: request.taskId });
+      },
+    });
     send({
       type: RESPONSE_TYPE[kind],
       taskId: request.taskId,
@@ -137,8 +144,12 @@ const runTask = async (
 
 const cleanupWorker = async (): Promise<void> => {
   try {
-    await cleanupWorkerRuntime();
-    send({ type: 'cleanupFinished' });
+    const { error, result } = await cleanupWorkerRuntime();
+    send({
+      type: 'cleanupFinished',
+      result,
+      error: error ? serializeError(error) : undefined,
+    });
   } catch (error) {
     send({
       type: 'cleanupFinished',

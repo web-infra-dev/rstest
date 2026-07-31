@@ -45,6 +45,13 @@ workerTest.extend('workerValue', 6000);
 
 workerTest.extend('workerValue', { scope: 'worker' }, 6000);
 
+workerTest.extend(
+  'workerValue',
+  { scope: 'worker' },
+  // @ts-expect-error A replacement cannot depend on itself.
+  ({ workerValue }) => workerValue,
+);
+
 // @ts-expect-error A worker fixture cannot be changed to test scope.
 workerTest.extend('workerValue', { scope: 'test' }, 6000);
 

@@ -61,6 +61,17 @@ describe('browser mode - basic', () => {
     );
   });
 
+  it('should bound browser file fixture cleanup', async () => {
+    const { expectExecFailed, cli } = await runBrowserCli('basic', {
+      args: ['-c', 'rstest.file-cleanup-timeout.config.mts'],
+    });
+
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'Browser file fixture cleanup did not finish within 10000ms',
+    );
+  });
+
   it('should capture unhandled errors from browser worker cleanup', async () => {
     const { expectExecFailed, cli } = await runBrowserCli('basic', {
       args: ['-c', 'rstest.worker-cleanup-unhandled.config.mts'],
@@ -106,6 +117,25 @@ describe('browser mode - basic', () => {
       await expectExecFailed();
       expect(`${cli.stdout}\n${cli.stderr}`).toContain(
         'Browser worker fixture cleanup did not finish within 10000ms',
+      );
+    },
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'should bound browser file fixture cleanup in headed mode',
+    async () => {
+      const { expectExecFailed, cli } = await runBrowserCli('basic', {
+        args: [
+          '-c',
+          'rstest.file-cleanup-timeout.config.mts',
+          '--browser.headless',
+          'false',
+        ],
+      });
+
+      await expectExecFailed();
+      expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+        'Browser file fixture cleanup did not finish within 10000ms',
       );
     },
   );

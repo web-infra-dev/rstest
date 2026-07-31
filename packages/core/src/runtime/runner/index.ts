@@ -18,6 +18,11 @@ import { traverseUpdateTest } from './task';
 // `../api`; `createRunner` publishes the context per file).
 const currentRunner = (): TestRunner => fileContext().testRunner;
 
+export type FileCleanupHooks = {
+  onFileCleanupStart?: () => void;
+  onFileCleanupEnd?: () => void;
+};
+
 const onTestFinished: RunnerAPI['onTestFinished'] = (...args) => {
   const runner = currentRunner();
   runner.onTestFinished(runner.getCurrentTest(), ...args);
@@ -49,7 +54,7 @@ export function createRunner({
   runner: {
     runTests: (
       testFilePath: string,
-      hooks: RunnerHooks,
+      hooks: RunnerHooks & FileCleanupHooks,
       api: Rstest,
     ) => Promise<TestFileResult>;
     collectTests: () => Promise<TestInfo[]>;
@@ -73,7 +78,11 @@ export function createRunner({
 
   return {
     runner: {
-      runTests: async (testPath: string, hooks: RunnerHooks, api: Rstest) => {
+      runTests: async (
+        testPath: string,
+        hooks: RunnerHooks & FileCleanupHooks,
+        api: Rstest,
+      ) => {
         const snapshotClient = workerState.snapshotClient!;
 
         await snapshotClient.setup(testPath, workerState.snapshotOptions);
@@ -88,6 +97,15 @@ export function createRunner({
         });
         runtimeInstance.updateStatus('running');
 
+        const cleanupFileFixtures = async (result?: TestFileResult) => {
+          hooks.onFileCleanupStart?.();
+          try {
+            return await testRunner.cleanupFileFixtures(result);
+          } finally {
+            hooks.onFileCleanupEnd?.();
+          }
+        };
+
         try {
           const results = await testRunner.runTests({
             tests,
@@ -98,10 +116,10 @@ export function createRunner({
             snapshotClient,
           });
 
-          return (await testRunner.cleanupFileFixtures(results))!;
+          return (await cleanupFileFixtures(results))!;
         } catch (error) {
           try {
-            await testRunner.cleanupFileFixtures();
+            await cleanupFileFixtures();
           } catch (cleanupError) {
             throw new AggregateError(
               [error, cleanupError],
