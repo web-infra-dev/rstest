@@ -7,7 +7,11 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { expect as coreExpect } from '@rstest/core';
 import { afterEach, beforeEach, expect, test } from '../src';
-import { getDebugOptions, resolveLaunchOptions } from '../src/fixture';
+import {
+  getDebugOptions,
+  resolveLaunchOptions,
+  shouldCaptureTrace,
+} from '../src/fixture';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type {
   PlaywrightFixture,
@@ -295,6 +299,30 @@ test('enables headed debug mode from PWDEBUG', () => {
       process.env.PWDEBUG = original;
     }
   }
+});
+
+test('selects Playwright trace attempts by mode', () => {
+  const retryCounts = [0, 1, 2];
+
+  expect(retryCounts.map((count) => shouldCaptureTrace('off', count))).toEqual([
+    false,
+    false,
+    false,
+  ]);
+  expect(retryCounts.map((count) => shouldCaptureTrace('on', count))).toEqual([
+    true,
+    true,
+    true,
+  ]);
+  expect(
+    retryCounts.map((count) => shouldCaptureTrace('retain-on-failure', count)),
+  ).toEqual([true, true, true]);
+  expect(
+    retryCounts.map((count) => shouldCaptureTrace('on-first-retry', count)),
+  ).toEqual([false, true, false]);
+  expect(
+    retryCounts.map((count) => shouldCaptureTrace('on-all-retries', count)),
+  ).toEqual([false, true, true]);
 });
 
 test.extend({}).describe('extended test API', () => {
