@@ -171,11 +171,8 @@ export async function runTests(
   const hasNodeTestsToRun = planner.hasNodeTestsToRun();
   const hasBrowserTestsToRun = planner.hasBrowserTestsToRun();
 
-  // Gated on there being something to run, which is a delta the commit that
-  // unified the assembly did not record: a zero-node run with no test files used
-  // to reach this on its own path, so a missing coverage provider was
-  // auto-installed even when nothing would use it. Installing a package for a
-  // run that has no work is the wrong default, so the gate stays.
+  // Gated on there being something to run: auto-installing a missing coverage
+  // package for a run with no work is the wrong default.
   if (hasNodeTestsToRun || hasBrowserTestsToRun) {
     await ensureRunDependencies({ projects: [], rootPath, coverage });
     const coveragePluginLoadError = planner.coveragePluginLoadError();
@@ -188,12 +185,10 @@ export async function runTests(
   // take it through their constructor. A coverage-plugin load error is only
   // thrown when something actually runs (above); on the empty path it just means
   // no provider can be built.
-  // Built for every shape, which for a zero-node run is a second unrecorded
-  // delta of unifying the assembly: the old browser-only path returned before
-  // this, so an empty `--related` resolution wrote no coverage report at all
-  // where it now writes an empty one. Kept — "coverage was requested and this
-  // run covered nothing" is a report, and suppressing it only on the shape that
-  // used to take a different branch is the split that was just removed.
+  // Built for every shape, the empty ones included: an empty `--related`
+  // resolution writes an empty coverage report rather than none at all.
+  // "Coverage was requested and this run covered nothing" is a report, and
+  // suppressing it for one run shape would re-split the single assembly.
   const coverageProvider = planner.coveragePluginLoadError()
     ? null
     : await createCoverageProviderWithLog(coverage, rootPath);
@@ -229,13 +224,11 @@ export async function runTests(
     // got it: the discovery boot loads the module too, and validating twice
     // reprints every unsupported-option warning.
     //
-    // Correcting the record here rather than where it was written: this check
-    // reaches empty *mixed* runs too, not only browser-only ones as the commit
-    // that unified the assembly claimed. So an empty mixed run whose
-    // `@rstest/browser` is missing or version-mismatched now reports that and
-    // exits, where it used to finalize with "no test files found" and hide it.
-    // Kept deliberately — a broken install is the more useful verdict, and the
-    // loader's exit no longer drags the unexpected-exit banner with it.
+    // This reaches empty *mixed* runs, not only browser-only ones: an empty
+    // mixed run whose `@rstest/browser` is missing or version-mismatched
+    // reports that and exits instead of finalizing with "no test files found"
+    // and hiding it. Deliberate — a broken install is the more useful verdict,
+    // and the loader's exit no longer drags the unexpected-exit banner with it.
     if (browserProjects.length && !planner.hasValidatedBrowserConfig()) {
       await deps.validateBrowserRunConfig(context, browserProjects);
     }
@@ -290,18 +283,14 @@ export async function runTests(
     // executor pushed inside the try below is covered — including when its own
     // load/init fails with the node resources above already up.
     //
-    // Folding the browser-only assembly in here did not merely widen this net,
-    // as the commit that did it recorded. For a zero-node non-watch run it also
-    // reordered and made it louder, and all three deltas are deliberate: the old
-    // path drained `runGlobalTeardown()` *before* closing the executor, where
-    // this closes first and drains in the `finally`, so a user `globalSetup`
-    // teardown callback now runs after the browser host and its dev servers are
-    // gone; the signal path flipped the same way; and the exit handler is
-    // registered unconditionally, so a mid-run unexpected exit that used to end
-    // quietly now prints and sets a failing code. This is the order the mixed
-    // path has always used, and keeping the two apart is what Phase C existed to
-    // stop — a teardown callback that needs a live server would be the one
-    // reason to revisit it.
+    // Three things about this net are deliberate on every run shape, zero-node
+    // included, and none is free to drift: executors close first and
+    // `runGlobalTeardown()` drains in the `finally`, so a user `globalSetup`
+    // teardown callback runs after the browser host and its dev servers are
+    // gone; the signal path uses that same order; and the exit handler is
+    // registered unconditionally, so a mid-run unexpected exit prints and sets
+    // a failing code rather than ending quietly. A teardown callback that needs
+    // a live server is the one reason to revisit the first of those.
     let didCloseExecutors = false;
     const closeExecutors = async () => {
       if (didCloseExecutors) {
@@ -352,13 +341,12 @@ export async function runTests(
       // followed by a red "exited unexpectedly", plus a global teardown fired
       // out of an exit handler.
       //
-      // Unpinned, and not for the reason the commit that added it recorded: a
-      // spy can stand in for `process.exit` (`utils/signals` is pinned that
-      // way). What blocks a pin here is that this is a closure reachable only by
-      // emitting a real `'exit'` event — which would fire every other listener
-      // the worker has — and that `reportedFatalExit` is a sticky module-level
-      // flag with no reset, so setting it would leak into every later test in
-      // the file.
+      // Unpinned, though not for want of a `process.exit` spy (`utils/signals`
+      // is pinned with one). What blocks a pin here is that this is a closure
+      // reachable only by emitting a real `'exit'` event — which would fire
+      // every other listener the worker has — and that `reportedFatalExit` is a
+      // sticky module-level flag with no reset, so setting it would leak into
+      // every later test in the file.
       if (hasReportedFatalExit()) {
         return;
       }
@@ -417,10 +405,9 @@ export async function runTests(
         );
       }
 
-      // After the browser globalSetup stage, not before it — for a zero-node run
-      // that is a third unrecorded delta of unifying the assembly, and the right
-      // way round: a setup that fails takes the run down before any reporter was
-      // told one started, which is the pairing every other shape already has.
+      // After the browser globalSetup stage, not before it: a setup that fails
+      // takes the run down before any reporter was told one started, which is
+      // the pairing every other shape already has.
       await notifyReportersOnTestRunStart(context);
       // Settle every cycle before propagating a failure: a fail-fast
       // `Promise.all` would reach the `finally` teardown while a sibling
