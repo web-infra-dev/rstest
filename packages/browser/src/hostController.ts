@@ -645,11 +645,13 @@ export const resolveListenPort = (
  *
  * Core's `reportNoTestFiles` owns the message and the no-test reporter
  * lifecycle for such a launch, but in watch mode its report deliberately leaves
- * the exit code alone — a rerun matching nothing is not a failure. A launch
- * opened no session, so no later cycle can raise the code either, which makes
- * this the same launch-path exception that lets a boot failure write a code
- * outside a cycle. One-shot runs keep going through the cycle, and an embedded
- * caller (`allowEmptyRun`) reads the outcome instead of the process.
+ * the exit code alone — a rerun matching nothing is not a failure. Such a launch
+ * opened no session, so no later cycle can raise the code either. That makes
+ * this the host's only write to `process.exitCode`: a boot failure looks like a
+ * second launch-path exception but is not one, because it rides the outcome out
+ * of `failWithError` and core raises the code from there. One-shot runs keep
+ * going through the cycle, and a caller that passed `allowEmptyRun` — today only
+ * the config-hook discovery boot — reads the outcome instead of the process.
  */
 export const resolveEmptyLaunchExitCode = (
   current: number | string | undefined,
@@ -2461,11 +2463,12 @@ export const claimHeadedCycleScope = (
   pendingTestNamePatterns: Map<string, string>,
 ): { file: TestFileInfo; testNamePattern?: string }[] => {
   const scope: { file: TestFileInfo; testNamePattern?: string }[] = [];
+  const filesByPath = new Map(
+    currentTestFiles.map((file) => [file.testPath, file]),
+  );
   for (const testPath of testPaths) {
     const normalizedTestPath = normalize(testPath);
-    const file = currentTestFiles.find(
-      (candidate) => candidate.testPath === normalizedTestPath,
-    );
+    const file = filesByPath.get(normalizedTestPath);
     if (file) {
       scope.push({
         file,
@@ -2872,6 +2875,55 @@ export const runBrowserController = async (
       logger.error(color.red('Browser Mode watch cycle failed:'), error);
     });
   };
+
+  /**
+   * The watch session both transports hand back. Only `execute` differs — the
+   * cycle's timing, its fatal-error capture window, and the error-to-outcome
+   * precedence are one contract with core, so they live in one place.
+   *
+   * `execute`'s synchronous prefix runs before `runCycle` ever suspends, which
+   * is what lets the headed transport claim its cycle scope inside it.
+   */
+  const createWatchSession = (
+    execute: (testPaths: string[]) => Promise<void>,
+  ): BrowserWatchSession => ({
+    runCycle: async (testPaths) => {
+      const rerunStartTime = Date.now();
+      const fatalErrorBeforeRun = fatalError;
+      let rerunError: Error | undefined;
+
+      try {
+        await execute(testPaths);
+      } catch (error) {
+        // Surfaced through the outcome rather than thrown: core finalizes this
+        // cycle either way, and its results belong in the report even when the
+        // run that produced them ended badly.
+        rerunError = toError(error);
+      }
+
+      const rerunFatalError =
+        fatalError && fatalError !== fatalErrorBeforeRun
+          ? fatalError
+          : undefined;
+      return buildRerunOutcome({
+        rerunTestPaths: testPaths,
+        testTime: Math.max(0, Date.now() - rerunStartTime),
+        unhandledErrors: rerunError
+          ? [rerunError]
+          : rerunFatalError
+            ? [rerunFatalError]
+            : undefined,
+      });
+    },
+    requestRerun: async (testPaths) => {
+      const seeded = seedPendingRerun(testPaths);
+      if (testPaths && seeded === 0) {
+        return;
+      }
+      await dispatchRerun?.();
+      await signalledCycle;
+    },
+  });
 
   projectEntries = runtime.projectEntries;
   totalTests = projectEntries.reduce(
@@ -3676,44 +3728,19 @@ export const runBrowserController = async (
 
     let watchSession: BrowserWatchSession | undefined;
     if (isWatchMode) {
-      const fileInfoOf = (testPath: string): TestFileInfo | undefined =>
-        watchState.lastTestFiles.find(
-          (file) => file.testPath === normalize(testPath),
+      // A queued scope can go stale before its cycle is dequeued — a later
+      // trigger may have rebuilt the file set without one of these files — so a
+      // path that no longer resolves is skipped rather than failing the cycle
+      // beside its still-valid siblings.
+      const runScope = async (testPaths: string[]): Promise<void> => {
+        const filesByPath = new Map(
+          watchState.lastTestFiles.map((file) => [file.testPath, file]),
         );
-
-      const runWatchCycle = async (
-        testPaths: string[],
-      ): Promise<ExecutorCycleOutcome> => {
-        const rerunStartTime = Date.now();
-        const fatalErrorBeforeRun = fatalError;
-        let rerunError: Error | undefined;
-
-        try {
-          await runFilesWithPool(
-            testPaths
-              .map(fileInfoOf)
-              .filter((file): file is TestFileInfo => Boolean(file)),
-          );
-        } catch (error) {
-          // Surfaced through the outcome rather than thrown: core finalizes
-          // this cycle either way, and its results belong in the report even
-          // when the run that produced them ended badly.
-          rerunError = toError(error);
-        }
-
-        const rerunFatalError =
-          fatalError && fatalError !== fatalErrorBeforeRun
-            ? fatalError
-            : undefined;
-        return buildRerunOutcome({
-          rerunTestPaths: testPaths,
-          testTime: Math.max(0, Date.now() - rerunStartTime),
-          unhandledErrors: rerunError
-            ? [rerunError]
-            : rerunFatalError
-              ? [rerunFatalError]
-              : undefined,
-        });
+        await runFilesWithPool(
+          testPaths
+            .map((testPath) => filesByPath.get(normalize(testPath)))
+            .filter((file): file is TestFileInfo => Boolean(file)),
+        );
       };
 
       // Cutting the in-flight run short lets its cycle finalize with what it had
@@ -3794,17 +3821,7 @@ export const runBrowserController = async (
         );
       };
 
-      watchSession = {
-        runCycle: runWatchCycle,
-        requestRerun: async (testPaths) => {
-          const seeded = seedPendingRerun(testPaths);
-          if (testPaths && seeded === 0) {
-            return;
-          }
-          await dispatchRerun?.();
-          await signalledCycle;
-        },
-      };
+      watchSession = createWatchSession(runScope);
     }
 
     const closeHeadlessRuntime = !isWatchMode
@@ -4241,45 +4258,18 @@ export const runBrowserController = async (
     // stretch the gap wide enough for another signal to land in it.
     const pendingTestNamePatterns = new Map<string, string>();
 
-    const runWatchCycle = async (
-      testPaths: string[],
-    ): Promise<ExecutorCycleOutcome> => {
-      const rerunStartTime = Date.now();
-      const fatalErrorBeforeRun = fatalError;
-      let rerunError: Error | undefined;
-
-      // Resolved before the first await, so nothing this cycle does can change
-      // what it runs or which patterns it claims.
+    const runScope = async (testPaths: string[]): Promise<void> => {
+      // Claimed in this synchronous prefix, before `runCycle` suspends, so
+      // nothing this cycle does can change what it runs or which patterns it
+      // takes.
       const cycleScope = claimHeadedCycleScope(
         testPaths,
         currentTestFiles,
         pendingTestNamePatterns,
       );
-
-      try {
-        for (const { file, testNamePattern } of cycleScope) {
-          await enqueueHeadedReload(file, testNamePattern);
-        }
-      } catch (error) {
-        // Surfaced through the outcome rather than thrown: core finalizes this
-        // cycle either way, and its results belong in the report even when the
-        // run that produced them ended badly.
-        rerunError = toError(error);
+      for (const { file, testNamePattern } of cycleScope) {
+        await enqueueHeadedReload(file, testNamePattern);
       }
-
-      const rerunFatalError =
-        fatalError && fatalError !== fatalErrorBeforeRun
-          ? fatalError
-          : undefined;
-      return buildRerunOutcome({
-        rerunTestPaths: testPaths,
-        testTime: Math.max(0, Date.now() - rerunStartTime),
-        unhandledErrors: rerunError
-          ? [rerunError]
-          : rerunFatalError
-            ? [rerunFatalError]
-            : undefined,
-      });
     };
 
     /**
@@ -4364,17 +4354,7 @@ export const runBrowserController = async (
       await signalledCycle;
     };
 
-    watchSession = {
-      runCycle: runWatchCycle,
-      requestRerun: async (testPaths) => {
-        const seeded = seedPendingRerun(testPaths);
-        if (testPaths && seeded === 0) {
-          return;
-        }
-        await dispatchRerun?.();
-        await signalledCycle;
-      },
-    };
+    watchSession = createWatchSession(runScope);
   }
 
   const closeContainerRuntime = !isWatchMode
