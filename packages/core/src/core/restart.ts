@@ -93,6 +93,8 @@ export async function watchFilesForRestart({
     ignoreInitial: true,
     // If watching fails due to read permissions, the errors will be suppressed silently.
     ignorePermissionErrors: true,
+    usePolling: true,
+    interval: 100,
     ...watchOptions,
   });
 
