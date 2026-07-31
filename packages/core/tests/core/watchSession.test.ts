@@ -104,6 +104,7 @@ const createDriver = (context: Rstest) => {
         activeTraceRun = run;
       },
       enableCliShortcuts: false,
+      isSessionLive: () => true,
     }),
   };
 };

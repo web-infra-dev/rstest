@@ -123,6 +123,23 @@ export async function createRunPlanner(
     ),
   ];
 
+  /**
+   * The planner's one mutation path: re-resolve after a `modifyRstestConfig`
+   * hook changed project configs, then splice the result back into
+   * `rsbuildProjects` in place, for the reason given above. Callers differ only
+   * in `silentShardMessage`, so keep that at the call site where the choice is
+   * visible.
+   */
+  const resyncPlan = async (extra?: {
+    silentShardMessage?: boolean;
+  }): Promise<void> => {
+    const refreshed = await resolveRunnableProjects({
+      strictEnvironmentComments: true,
+      ...extra,
+    });
+    syncNodeProjects(rsbuildProjects, refreshed.nodeProjectsToRun);
+  };
+
   const buildNodeSide = async (): Promise<NodeBuild> => {
     const setupFileState = createSetupFileState();
     context.projects = [...browserProjects, ...rsbuildProjects];
@@ -139,12 +156,7 @@ export async function createRunPlanner(
         setupProjects: projectPlanState.getPlan().nodeProjectsToRun,
         globalSetupProjects: context.projects,
       }),
-      onModifyRstestConfigApplied: async () => {
-        const refreshed = await resolveRunnableProjects({
-          strictEnvironmentComments: true,
-        });
-        syncNodeProjects(rsbuildProjects, refreshed.nodeProjectsToRun);
-      },
+      onModifyRstestConfigApplied: () => resyncPlan(),
       onRsbuildConfigResolved: projectPlanState.validateEnvironmentComments,
     });
 
@@ -163,14 +175,8 @@ export async function createRunPlanner(
 
   // Re-resolve after browser-side `modifyRstestConfig` hooks changed project
   // configs (the discovery boot below can add test files to an otherwise-empty
-  // browser project), keeping the Rsbuild project set in sync.
-  const refreshPlan = async (): Promise<void> => {
-    const refreshed = await resolveRunnableProjects({
-      silentShardMessage: true,
-      strictEnvironmentComments: true,
-    });
-    syncNodeProjects(rsbuildProjects, refreshed.nodeProjectsToRun);
-  };
+  // browser project).
+  const refreshPlan = () => resyncPlan({ silentShardMessage: true });
 
   // The browser half of the barrier. Destructured so the discovery step is spent
   // here and only the query half reaches the returned planner — a second caller

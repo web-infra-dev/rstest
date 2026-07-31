@@ -79,7 +79,7 @@ export async function createCoverageProvider(
 }
 
 /** The `Coverage enabled with <provider>` banner. Printed once per run. */
-export function logCoverageEnabled(options: NormalizedCoverageOptions): void {
+function logCoverageEnabled(options: NormalizedCoverageOptions): void {
   logger.log(
     ` ${color.gray('Coverage enabled with')} %s\n`,
     color.yellow(options.provider),

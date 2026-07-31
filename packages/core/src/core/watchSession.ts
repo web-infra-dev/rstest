@@ -95,6 +95,13 @@ type PendingCycle = {
    */
   options: WatchCycleOptions & { updateSnapshot: SnapshotUpdateState };
   cycle: Promise<void>;
+  /**
+   * Whether a further trigger may still fold into this cycle. Owned by the
+   * entry rather than compared against a per-executor slot, so a cycle can only
+   * ever close its own window: an earlier cycle reaching the queue's head after
+   * a later trigger queued its own has no way to express closing that one.
+   */
+  isOpen: boolean;
 };
 
 /**
@@ -148,7 +155,7 @@ export function createWatchCycleDriver({
   getTraceRun,
   setTraceRun,
   enableCliShortcuts,
-  isSessionLive = () => true,
+  isSessionLive,
 }: {
   context: Rstest;
   coverageProvider: CoverageProvider | null;
@@ -162,7 +169,7 @@ export function createWatchCycleDriver({
    * up) leaves none, and no trigger of any kind can fire afterwards — offering
    * to wait for file changes there would be a promise nothing can keep.
    */
-  isSessionLive?: () => boolean;
+  isSessionLive: () => boolean;
 }): WatchCycleDriver {
   let buildId = 0;
   // The session's configured value, read before any cycle can run. The `u`
@@ -181,13 +188,14 @@ export function createWatchCycleDriver({
   // make that impossible by construction; one loop has to make it impossible by
   // queueing.
   let tail: Promise<unknown> = Promise.resolve();
-  // Executors whose first cycle of this session has already been dispatched.
-  const started = new Set<TestExecutor>();
   // Per executor, the cycle queued most recently that has not started reading
   // its scope yet — the one a further invalidation folds into instead of
   // queueing behind.
   const pending = new Map<TestExecutor, PendingCycle>();
   // Executors whose first cycle has settled, so a shortcut key can reach them.
+  // Doubles as the first-cycle discriminator below: `tail` serializes every
+  // cycle across every executor, so anything dispatched earlier has already
+  // reached its `finally` by the time the next one asks.
   const settled = new Set<TestExecutor>();
 
   const runOne = async (
@@ -202,8 +210,7 @@ export function createWatchCycleDriver({
     buildId += 1;
     // What a first cycle skips is the snapshot half only; see
     // `prepareWatchCycleState` for why the two halves part ways there.
-    const isFirstCycle = !started.has(executor);
-    started.add(executor);
+    const isFirstCycle = !settled.has(executor);
     prepareWatchCycleState(context, { isFirstCycle });
     try {
       await notifyReportersOnTestRunStart(context);
@@ -248,7 +255,7 @@ export function createWatchCycleDriver({
       // appending a second one. Union, never latest-wins: the folded cycle must
       // still cover every file the burst asked for.
       const queued = pending.get(executor);
-      if (queued && canFold(queued.options, resolved)) {
+      if (queued?.isOpen && canFold(queued.options, resolved)) {
         const { fileFilters } = queued.options;
         if (fileFilters && resolved.fileFilters) {
           queued.options.fileFilters = [
@@ -262,17 +269,13 @@ export function createWatchCycleDriver({
       const entry: PendingCycle = {
         options: resolved,
         cycle: undefined as never,
+        isOpen: true,
       };
       entry.cycle = tail.then(() => {
-        // Dropped before the run, not after: from here the options are frozen,
+        // Closed before the run, not after: from here the options are frozen,
         // so a trigger arriving mid-cycle queues its own cycle instead of
-        // folding into one that has already read its scope. Only if this entry
-        // is still the open one — an earlier cycle reaching the queue's head
-        // after a later trigger queued its own must not close that one's fold
-        // window on its way past.
-        if (pending.get(executor) === entry) {
-          pending.delete(executor);
-        }
+        // folding into one that has already read its scope.
+        entry.isOpen = false;
         return runOne(executor, entry);
       });
       pending.set(executor, entry);
