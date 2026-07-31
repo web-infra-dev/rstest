@@ -30,7 +30,12 @@ import {
  *
  * `'invalidation'` is a transport's own signal (a dev rebuild, an HMR update,
  * the browser host's file-set diff); the rest are the CLI shortcuts whose whole
- * request lives in the options object. The `t`/`p` shortcuts and the browser
+ * request lives in the options object — on the node side. The browser host
+ * resolves every trigger it owns through the same file-set diff, a shortcut's
+ * `requestRerun` included, so every browser cycle arrives as `'invalidation'`
+ * and this identity cannot separate them. Harmless only while the browser
+ * executor drops the one option a fold could leak; see
+ * {@link WatchCycleOptions.updateSnapshot}. The `t`/`p` shortcuts and the browser
  * initial cycle carry no trigger and so never fold: `t`/`p` bind a pattern or
  * filter that lives on `context`, outside the options a fold would union, so
  * two of them are not the same request even when their options match. (The node
@@ -55,7 +60,11 @@ export type WatchCycleOptions = {
    * Node-side only, and the qualifier is load-bearing: the browser executor
    * drops this option on a watch rerun and its host re-reads the live flag per
    * page load, so a browser cycle queued inside the `u` hold window still runs
-   * under `'all'`. Recorded at the drop site in `browserExecutor.runCycle`.
+   * under `'all'`. Recorded at the drop site in `browserExecutor.runCycle`,
+   * together with the fold hazard that closing it has to settle: trigger kind is
+   * erased on the browser side, so nothing here can tell a `u` rerun from a
+   * rebuild, and a cycle that honored this option without also making that
+   * difference visible would fold the two.
    */
   updateSnapshot?: SnapshotUpdateState;
 };
