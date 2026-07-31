@@ -90,11 +90,6 @@ export async function printError(
       );
 
       if (printableFullStackFrames[0]) {
-        logger.stderr(
-          color.gray(
-            "No user error stack found, showing fullStack. Set 'DEBUG=rstest' to always show fullStack.",
-          ),
-        );
         stackFrames = printableFullStackFrames;
       } else {
         logger.stderr(
