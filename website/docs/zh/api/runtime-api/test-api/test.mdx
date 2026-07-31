@@ -458,22 +458,7 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
 
 File 和 worker scope fixture 无法访问 `TestContext`，因为在它们的完整生命周期内不存在唯一的当前测试。Fixture 只能依赖生命周期不短于自身的 fixture。比如 worker fixture 依赖 file 或 test fixture 时，Rstest 会报告错误。
 
-对象写法通过元组选项继续使用 `await use(value)` 生命周期：
-
-```ts
-const dbTest = test.extend({
-  database: [
-    async ({}, use) => {
-      const database = await connectDatabase();
-      await use(database);
-      await database.close();
-    },
-    { scope: 'worker' },
-  ],
-});
-```
-
-Builder 写法依次接收 `name`、`options` 和 fixture。Fixture 函数直接返回值，并可以通过 `onCleanup` 注册一个 cleanup：
+File 和 worker scope fixture 使用 builder 写法。它依次接收 `name`、`options` 和 fixture。Fixture 函数直接返回值，并可以通过 `onCleanup` 注册一个 cleanup：
 
 ```ts
 const apiTest = test
@@ -486,7 +471,7 @@ const apiTest = test
   .extend('client', async ({ server }) => createClient(server.url));
 ```
 
-省略 options 参数时会创建 test scope builder fixture，例如 `.extend('client', fixture)`。Setup 默认按需执行；设置 `auto: true` 后自动执行。自动 file 或 worker fixture 在各自的 scope 边界内仍然只执行一次。
+省略 options 参数时会创建 test scope builder fixture，例如 `.extend('client', fixture)`。对象写法仍可用于通过 `await use(value)` 生命周期定义 test scope fixture。Setup 默认按需执行；设置 `auto: true` 后自动执行。自动 file 或 worker fixture 在各自的 scope 边界内仍然只执行一次。
 
 ### 在 hook 中使用 fixture
 

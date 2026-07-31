@@ -586,220 +586,233 @@ const run = async () => {
   window.addEventListener('unhandledrejection', onUnhandledRejection);
 
   // 2. Run tests for each file
-  for (const key of testKeysToRun) {
-    const testPath = toAbsolutePath(key, currentProject.projectRoot);
-    const taskStack: CurrentTaskInfo[] = [
-      {
-        taskId: getFileTaskId(testPath),
-        taskType: 'file',
-        testPath,
-      },
-    ];
+  let fatalError: Error | undefined;
+  try {
+    for (const key of testKeysToRun) {
+      const testPath = toAbsolutePath(key, currentProject.projectRoot);
+      const taskStack: CurrentTaskInfo[] = [
+        {
+          taskId: getFileTaskId(testPath),
+          taskType: 'file',
+          testPath,
+        },
+      ];
 
-    // Per-file TaskContext; taskStack supplies the concurrent attribution
-    // that the single-slot fallback can't.
-    const taskContext = createBrowserTaskContext();
+      // Per-file TaskContext; taskStack supplies the concurrent attribution
+      // that the single-slot fallback can't.
+      const taskContext = createBrowserTaskContext();
 
-    const shouldInterceptConsole =
-      !runtimeConfig.disableConsoleIntercept ||
-      runtimeConfig.silent === true ||
-      runtimeConfig.silent === 'passed-only';
+      const shouldInterceptConsole =
+        !runtimeConfig.disableConsoleIntercept ||
+        runtimeConfig.silent === true ||
+        runtimeConfig.silent === 'passed-only';
 
-    // Intercept console methods to forward logs to host
-    const restoreConsole = shouldInterceptConsole
-      ? interceptConsole(
-          projectRuntime.name,
-          () => taskContext.getCurrent() ?? taskStack[taskStack.length - 1],
-          runtimeConfig.disableConsoleIntercept
-            ? false
-            : (runtimeConfig.printConsoleTrace ?? false),
-        )
-      : () => {};
+      // Intercept console methods to forward logs to host
+      const restoreConsole = shouldInterceptConsole
+        ? interceptConsole(
+            projectRuntime.name,
+            () => taskContext.getCurrent() ?? taskStack[taskStack.length - 1],
+            runtimeConfig.disableConsoleIntercept
+              ? false
+              : (runtimeConfig.printConsoleTrace ?? false),
+          )
+        : () => {};
 
-    const workerState: WorkerState = {
-      project: projectRuntime.name,
-      projectRoot: projectRuntime.projectRoot,
-      rootPath: options.rootPath,
-      runtimeConfig,
-      taskId: 0,
-      // See the `buildId` note above: inert in browser mode.
-      buildId: 0,
-      outputModule: false,
-      environment: 'browser',
-      currentTask: taskStack[0],
-      testPath,
-      distPath: testPath,
-      snapshotOptions: {
-        updateSnapshot: options.snapshot.updateSnapshot,
-        snapshotEnvironment: new BrowserSnapshotEnvironment(),
-        snapshotFormat: runtimeConfig.snapshotFormat,
-      },
-    };
+      try {
+        const workerState: WorkerState = {
+          project: projectRuntime.name,
+          projectRoot: projectRuntime.projectRoot,
+          rootPath: options.rootPath,
+          runtimeConfig,
+          taskId: 0,
+          // See the `buildId` note above: inert in browser mode.
+          buildId: 0,
+          outputModule: false,
+          environment: 'browser',
+          currentTask: taskStack[0],
+          testPath,
+          distPath: testPath,
+          snapshotOptions: {
+            updateSnapshot: options.snapshot.updateSnapshot,
+            snapshotEnvironment: new BrowserSnapshotEnvironment(),
+            snapshotFormat: runtimeConfig.snapshotFormat,
+          },
+        };
 
-    const syncCurrentTask = (): void => {
-      workerState.currentTask = taskStack[taskStack.length - 1];
-    };
+        const syncCurrentTask = (): void => {
+          workerState.currentTask = taskStack[taskStack.length - 1];
+        };
 
-    const removeTaskFromStack = (taskId: string): void => {
-      const taskIndex = taskStack.findLastIndex(
-        (task) => task.taskId === taskId,
-      );
-      if (taskIndex < 0) {
-        return;
-      }
-      taskStack.splice(taskIndex, 1);
-      syncCurrentTask();
-    };
+        const removeTaskFromStack = (taskId: string): void => {
+          const taskIndex = taskStack.findLastIndex(
+            (task) => task.taskId === taskId,
+          );
+          if (taskIndex < 0) {
+            return;
+          }
+          taskStack.splice(taskIndex, 1);
+          syncCurrentTask();
+        };
 
-    const runtime = await createRstestRuntime(workerState, { taskContext });
+        const runtime = await createRstestRuntime(workerState, { taskContext });
 
-    installRuntimeGlobals(runtime, runtimeConfig);
+        installRuntimeGlobals(runtime, runtimeConfig);
 
-    let failedTestsCount = 0;
+        let failedTestsCount = 0;
 
-    const runnerHooks: RunnerHooks = {
-      onTestFileReady: async (test) => {
-        dispatchRunnerLifecycle('file-ready', test);
-      },
-      onTestSuiteStart: async (test) => {
-        taskStack.push({
-          taskId: test.testId,
-          taskName: test.name,
-          taskParentNames: test.parentNames,
-          taskType: 'suite',
-          testPath: test.testPath,
-        });
-        syncCurrentTask();
-        dispatchRunnerLifecycle('suite-start', test);
-      },
-      onTestSuiteResult: async (result) => {
-        removeTaskFromStack(result.testId);
-        dispatchRunnerLifecycle('suite-result', result);
-      },
-      onTestCaseStart: async (test) => {
-        taskStack.push({
-          taskId: test.testId,
-          taskName: test.name,
-          taskParentNames: test.parentNames,
-          taskType: 'case',
-          testPath: test.testPath,
-        });
-        syncCurrentTask();
-        dispatchRunnerLifecycle('case-start', test);
-      },
-      onTestCaseResult: async (result) => {
-        removeTaskFromStack(result.testId);
-        if (result.status === 'fail') {
-          failedTestsCount++;
-        }
+        const runnerHooks: RunnerHooks = {
+          onTestFileReady: async (test) => {
+            dispatchRunnerLifecycle('file-ready', test);
+          },
+          onTestSuiteStart: async (test) => {
+            taskStack.push({
+              taskId: test.testId,
+              taskName: test.name,
+              taskParentNames: test.parentNames,
+              taskType: 'suite',
+              testPath: test.testPath,
+            });
+            syncCurrentTask();
+            dispatchRunnerLifecycle('suite-start', test);
+          },
+          onTestSuiteResult: async (result) => {
+            removeTaskFromStack(result.testId);
+            dispatchRunnerLifecycle('suite-result', result);
+          },
+          onTestCaseStart: async (test) => {
+            taskStack.push({
+              taskId: test.testId,
+              taskName: test.name,
+              taskParentNames: test.parentNames,
+              taskType: 'case',
+              testPath: test.testPath,
+            });
+            syncCurrentTask();
+            dispatchRunnerLifecycle('case-start', test);
+          },
+          onTestCaseResult: async (result) => {
+            removeTaskFromStack(result.testId);
+            if (result.status === 'fail') {
+              failedTestsCount++;
+            }
+            send({
+              type: 'case-result',
+              payload: result,
+            });
+          },
+          getCountOfFailedTests: async () => failedTestsCount,
+        };
+
         send({
-          type: 'case-result',
-          payload: result,
+          type: 'file-start',
+          payload: {
+            testPath,
+            projectName: projectRuntime.name,
+          },
         });
-      },
-      getCountOfFailedTests: async () => failedTestsCount,
-    };
 
-    send({
-      type: 'file-start',
-      payload: {
-        testPath,
-        projectName: projectRuntime.name,
-      },
-    });
+        const unhandledErrors: Error[] = [];
+        activeUnhandledErrors = unhandledErrors;
 
-    const unhandledErrors: Error[] = [];
-    activeUnhandledErrors = unhandledErrors;
+        try {
+          // Load setup files for this project after runtime is ready.
+          await loadSetupFiles();
+
+          // Record script URLs before loading the test file
+          const beforeScripts = getScriptUrls();
+
+          // Load the test file dynamically using this project's context
+          await currentTestContext.loadTest(key);
+
+          // Find the newly loaded chunk and preload its source map (for inline snapshots)
+          const afterScripts = getScriptUrls();
+          const chunkUrl = findNewScriptUrl(beforeScripts, afterScripts);
+          if (chunkUrl) {
+            await preloadTestFileSourceMap(chunkUrl);
+          }
+
+          const result = await runtime.runner.runTests(
+            testPath,
+            runnerHooks,
+            runtime.api,
+          );
+
+          // The browser dispatches `unhandledrejection` in a task queued at the
+          // current task's microtask checkpoint, so a rejection leaked by a
+          // synchronous test is not observable yet when `runTests()` resolves.
+          // Yield two macrotasks: the first reaches the checkpoint that queues
+          // the event task, the second runs after that task regardless of how
+          // the browser orders the timer and event task sources.
+          for (let i = 0; i < 2; i++) {
+            await new Promise<void>((resolve) => {
+              setTimeout(resolve, 0);
+            });
+          }
+
+          // An unhandled error/rejection that escaped the run fails the file even
+          // when every test passed.
+          if (unhandledErrors.length > 0) {
+            result.status = 'fail';
+            result.errors = [
+              ...(result.errors ?? []),
+              ...unhandledErrors.map((error) => ({
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+              })),
+            ];
+          }
+
+          // Collect coverage data from global __coverage__ object
+          if (globalThis.__coverage__) {
+            result.coverage = globalThis.__coverage__ as CoverageMapData;
+          }
+
+          send({
+            type: 'file-complete',
+            payload: result,
+          });
+        } catch (_error) {
+          fatalError =
+            _error instanceof Error ? _error : new Error(String(_error));
+          break;
+        } finally {
+          activeUnhandledErrors = undefined;
+        }
+      } finally {
+        // Restore original console methods
+        restoreConsole();
+      }
+    }
+  } catch (_error) {
+    fatalError = _error instanceof Error ? _error : new Error(String(_error));
+  } finally {
+    window.removeEventListener('error', onWindowError);
+    window.removeEventListener('unhandledrejection', onUnhandledRejection);
 
     try {
-      // Load setup files for this project after runtime is ready.
-      await loadSetupFiles();
-
-      // Record script URLs before loading the test file
-      const beforeScripts = getScriptUrls();
-
-      // Load the test file dynamically using this project's context
-      await currentTestContext.loadTest(key);
-
-      // Find the newly loaded chunk and preload its source map (for inline snapshots)
-      const afterScripts = getScriptUrls();
-      const chunkUrl = findNewScriptUrl(beforeScripts, afterScripts);
-      if (chunkUrl) {
-        await preloadTestFileSourceMap(chunkUrl);
-      }
-
-      const result = await runtime.runner.runTests(
-        testPath,
-        runnerHooks,
-        runtime.api,
-      );
-
-      // The browser dispatches `unhandledrejection` in a task queued at the
-      // current task's microtask checkpoint, so a rejection leaked by a
-      // synchronous test is not observable yet when `runTests()` resolves.
-      // Yield two macrotasks: the first reaches the checkpoint that queues
-      // the event task, the second runs after that task regardless of how
-      // the browser orders the timer and event task sources.
-      for (let i = 0; i < 2; i++) {
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 0);
-        });
-      }
-
-      // An unhandled error/rejection that escaped the run fails the file even
-      // when every test passed.
-      if (unhandledErrors.length > 0) {
-        result.status = 'fail';
-        result.errors = [
-          ...(result.errors ?? []),
-          ...unhandledErrors.map((error) => ({
-            name: error.name,
-            message: error.message,
-            stack: error.stack,
-          })),
-        ];
-      }
-
-      // Collect coverage data from global __coverage__ object
-      if (globalThis.__coverage__) {
-        result.coverage = globalThis.__coverage__ as CoverageMapData;
-      }
-
-      send({
-        type: 'file-complete',
-        payload: result,
-      });
+      await cleanupWorkerFixtures();
     } catch (_error) {
-      const error =
+      const cleanupError =
         _error instanceof Error ? _error : new Error(String(_error));
-      send({
-        type: 'fatal',
-        payload: {
-          message: error.message,
-          stack: error.stack,
-        },
-      });
-      window.__RSTEST_DONE__ = true;
-      return;
-    } finally {
-      // Restore original console methods
-      restoreConsole();
-      activeUnhandledErrors = undefined;
+      fatalError = fatalError
+        ? new AggregateError(
+            [fatalError, cleanupError],
+            [
+              `Browser test execution failed: ${fatalError.message}`,
+              `Worker fixture cleanup failed: ${cleanupError.message}`,
+            ].join('\n'),
+          )
+        : cleanupError;
     }
   }
 
-  window.removeEventListener('error', onWindowError);
-  window.removeEventListener('unhandledrejection', onUnhandledRejection);
-
-  try {
-    await cleanupWorkerFixtures();
-  } catch (_error) {
-    const error = _error instanceof Error ? _error : new Error(String(_error));
+  if (fatalError) {
     send({
       type: 'fatal',
       payload: {
-        message: error.message,
-        stack: error.stack,
+        message: fatalError.message,
+        stack: fatalError.stack,
       },
     });
     window.__RSTEST_DONE__ = true;

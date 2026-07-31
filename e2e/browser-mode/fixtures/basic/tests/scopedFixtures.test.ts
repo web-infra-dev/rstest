@@ -26,6 +26,15 @@ const scopedTest = test
     return value;
   });
 
+const baseGraphTest = test
+  .extend('dependency', { scope: 'worker' }, 'base')
+  .extend('derived', { scope: 'worker' }, ({ dependency }) => dependency);
+const childGraphTest = baseGraphTest.extend(
+  'dependency',
+  { scope: 'worker' },
+  'child',
+);
+
 scopedTest('first browser scoped test', ({ testValue }) => {
   expect(testValue).toBe('worker:file:test:1');
 });
@@ -33,3 +42,14 @@ scopedTest('first browser scoped test', ({ testValue }) => {
 scopedTest('second browser scoped test', ({ testValue }) => {
   expect(testValue).toBe('worker:file:test:2');
 });
+
+baseGraphTest('uses the base browser worker dependency', ({ derived }) => {
+  expect(derived).toBe('base');
+});
+
+childGraphTest(
+  'uses the overridden browser worker dependency',
+  ({ derived }) => {
+    expect(derived).toBe('child');
+  },
+);

@@ -39,6 +39,17 @@ describe('browser mode - basic', () => {
     );
   });
 
+  it('should clean up browser worker fixtures after a fatal error', async () => {
+    const { expectExecFailed, cli } = await runBrowserCli('basic', {
+      args: ['-c', 'rstest.worker-cleanup-after-fatal.config.mts'],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('browser fatal after worker fixture setup');
+    expect(output).toContain('browser worker cleanup after fatal reached');
+  });
+
   it.runIf(shouldRunHeadedBrowserTests)(
     'should run headed mode and exit with code 0',
     async () => {

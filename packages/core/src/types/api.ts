@@ -227,18 +227,23 @@ type Fixture<T, K extends keyof T, ExtraContext = object> = ((
         ? FixtureFn<T, K, Omit<ExtraContext, Exclude<keyof T, K>>>
         : never);
 
+type TestFixtureOptions = Omit<FixtureOptions, 'scope'> & {
+  scope?: 'test';
+};
+
 export type Fixtures<
   T extends Record<string, any> = object,
   ExtraContext = object,
 > = {
   [K in keyof T]:
     | Fixture<T, K, ExtraContext & TestContext>
-    | [Fixture<T, K, ExtraContext & TestContext>, FixtureOptions?];
+    | [Fixture<T, K, ExtraContext & TestContext>, TestFixtureOptions?];
 };
 
 export type NormalizedFixture = {
   isFn: boolean;
   deps?: string[];
+  dependencyFixtures: NormalizedFixture[];
   value: FixtureFn<any, any, any> | any;
   options: Required<FixtureOptions>;
   mode: 'use' | 'return';

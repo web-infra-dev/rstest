@@ -1,5 +1,8 @@
 import { describe, expect, it, rs } from '@rstest/core';
-import { createCoverageResourceLoaders } from '../../src/core/executors/nodeExecutor';
+import {
+  createCoverageResourceLoaders,
+  runNodeCleanupSteps,
+} from '../../src/core/executors/nodeExecutor';
 
 describe('createCoverageResourceLoaders', () => {
   it('loads resources by normalized aliases using canonical asset names', async () => {
@@ -32,5 +35,29 @@ describe('createCoverageResourceLoaders', () => {
     });
     expect(getAssetFiles).toHaveBeenCalledWith([privateAsset, windowsAsset]);
     expect(getSourceMaps).toHaveBeenCalledWith([privateAsset, windowsAsset]);
+  });
+});
+
+describe('runNodeCleanupSteps', () => {
+  it('continues closing resources after a cleanup failure', async () => {
+    const events: string[] = [];
+    const cleanupError = new Error('worker cleanup failed');
+
+    await expect(
+      runNodeCleanupSteps([
+        async () => {
+          events.push('worker');
+          throw cleanupError;
+        },
+        async () => {
+          events.push('global');
+        },
+        async () => {
+          events.push('server');
+        },
+      ]),
+    ).rejects.toBe(cleanupError);
+
+    expect(events).toEqual(['worker', 'global', 'server']);
   });
 });

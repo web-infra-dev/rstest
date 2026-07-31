@@ -27,6 +27,15 @@ const scopedTest = test
     return value;
   });
 
+const baseGraphTest = test
+  .extend('dependency', { scope: 'worker' }, 'base')
+  .extend('derived', { scope: 'worker' }, ({ dependency }) => dependency);
+const childGraphTest = baseGraphTest.extend(
+  'dependency',
+  { scope: 'worker' },
+  'child',
+);
+
 scopedTest('first scoped test', ({ port, testValue }) => {
   expect(port).toBe(5000);
   expect(testValue).toBe('worker:file:test:1');
@@ -35,4 +44,12 @@ scopedTest('first scoped test', ({ port, testValue }) => {
 scopedTest('second scoped test', ({ port, testValue }) => {
   expect(port).toBe(5000);
   expect(testValue).toBe('worker:file:test:2');
+});
+
+baseGraphTest('uses the base worker dependency', ({ derived }) => {
+  expect(derived).toBe('base');
+});
+
+childGraphTest('uses the overridden worker dependency', ({ derived }) => {
+  expect(derived).toBe('child');
 });

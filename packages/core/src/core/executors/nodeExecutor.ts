@@ -132,6 +132,26 @@ export const createCoverageResourceLoaders = (
   };
 };
 
+export const runNodeCleanupSteps = async (
+  steps: Array<() => Promise<void>>,
+): Promise<void> => {
+  const errors: unknown[] = [];
+  for (const step of steps) {
+    try {
+      await step();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+
+  if (errors.length === 1) {
+    throw errors[0];
+  }
+  if (errors.length > 1) {
+    throw new AggregateError(errors, 'Failed to clean up the node executor.');
+  }
+};
+
 /**
  * The node side of the {@link TestExecutor} seam: the existing Rsbuild dev
  * server + worker pool, expressed as one executor the shared run loop drives.
@@ -226,7 +246,7 @@ export function createNodeExecutor(
     Promise<NonNullable<typeof runResources>> | undefined;
   let runDependencyValidationPromise: Promise<void> | undefined;
   let entryFiles: string[] = [];
-  let didRunGlobalTeardown = false;
+  let didClose = false;
   // The Rsbuild project set assembled during init(); refreshPlan() keeps it in
   // sync with re-resolved plans.
   let rsbuildProjects: ProjectContext[] = [];
@@ -588,11 +608,10 @@ export function createNodeExecutor(
   // Idempotent: the single `executors.close()` exit path may race a signal
   // handler, and closing a pool/server twice throws.
   const close = async (): Promise<void> => {
-    if (didRunGlobalTeardown) {
+    if (didClose) {
       return;
     }
-    didRunGlobalTeardown = true;
-    await runGlobalTeardown();
+    didClose = true;
     if (runDependencyValidationPromise) {
       await runDependencyValidationPromise.catch(() => undefined);
     }
@@ -602,13 +621,18 @@ export function createNodeExecutor(
     if (runResourcesPromise) {
       await runResourcesPromise.catch(() => undefined);
     }
+    const cleanupSteps: Array<() => Promise<void>> = [];
     if (runResources) {
       const resources = runResources;
       runResources = undefined;
       runResourcesPromise = undefined;
-      await resources.pool.close();
-      await resources.closeServer();
+      cleanupSteps.push(() => resources.pool.close());
+      cleanupSteps.push(runGlobalTeardown);
+      cleanupSteps.push(resources.closeServer);
+    } else {
+      cleanupSteps.push(runGlobalTeardown);
     }
+    await runNodeCleanupSteps(cleanupSteps);
   };
 
   return {

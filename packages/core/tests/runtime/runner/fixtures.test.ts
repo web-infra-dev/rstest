@@ -34,9 +34,9 @@ describe('normalizeFixtures', () => {
   });
 
   it('merges extendFixtures with local fixtures taking precedence', () => {
-    const extend = { base: { isFn: false, value: 'base' } } as any;
+    const extend = normalizeFixtures({ base: 'base' } as any);
     const result = normalizeFixtures({ a: 1 } as any, extend);
-    expect(result.base).toEqual({ isFn: false, value: 'base' });
+    expect(result.base).toMatchObject({ isFn: false, value: 'base' });
     expect(result.a).toMatchObject({ isFn: false, value: 1 });
   });
 
@@ -108,21 +108,36 @@ describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
 
 describe('scoped fixtures', () => {
   it('validates dependency direction', () => {
+    const testValue = normalizeBuilderFixture('testValue', 1, {
+      scope: 'test',
+    });
     expect(() =>
-      normalizeFixtures({
-        testValue: [1, { scope: 'test' }],
-        workerValue: [({ testValue }: any) => testValue, { scope: 'worker' }],
-      } as any),
+      normalizeBuilderFixture(
+        'workerValue',
+        ({ testValue }: any) => testValue,
+        { scope: 'worker' },
+        testValue,
+      ),
     ).toThrow(
       'The worker fixture "workerValue" cannot depend on the test fixture "testValue".',
     );
 
     expect(() =>
-      normalizeFixtures({
-        workerValue: [({ task }: any) => task, { scope: 'worker' }],
-      } as any),
+      normalizeBuilderFixture('workerValue', ({ task }: any) => task, {
+        scope: 'worker',
+      }),
     ).toThrow(
       'The worker fixture "workerValue" cannot depend on test context "task".',
+    );
+  });
+
+  it('requires the builder form for file and worker scopes', () => {
+    expect(() =>
+      normalizeFixtures({
+        workerValue: ['worker', { scope: 'worker' }],
+      } as any),
+    ).toThrow(
+      'Fixture "workerValue" must use test.extend(name, options, fixture) for "worker" scope.',
     );
   });
 
@@ -153,29 +168,41 @@ describe('scoped fixtures', () => {
 
   it('shares file and worker fixtures at their lifecycle boundaries', async () => {
     const events: string[] = [];
-    const fixtures = normalizeFixtures({
-      workerValue: [
-        async (_context: object, use: any) => {
-          events.push('worker:setup');
-          await use('worker');
+    const workerFixtures = normalizeBuilderFixture(
+      'workerValue',
+      (_context: object, { onCleanup }: any) => {
+        events.push('worker:setup');
+        onCleanup(() => {
           events.push('worker:cleanup');
-        },
-        { scope: 'worker' },
-      ],
-      fileValue: [
-        async ({ workerValue }: any, use: any) => {
-          events.push(`file:setup:${workerValue}`);
-          await use('file');
-          events.push('file:cleanup');
-        },
-        { scope: 'file' },
-      ],
-      testValue: async ({ fileValue }: any, use: any) => {
-        events.push(`test:setup:${fileValue}`);
-        await use('test');
-        events.push('test:cleanup');
+        });
+        return 'worker';
       },
-    } as any);
+      { scope: 'worker' },
+    );
+    const fileFixtures = normalizeBuilderFixture(
+      'fileValue',
+      ({ workerValue }: any, { onCleanup }: any) => {
+        events.push(`file:setup:${workerValue}`);
+        onCleanup(() => {
+          events.push('file:cleanup');
+        });
+        return 'file';
+      },
+      { scope: 'file' },
+      workerFixtures,
+    );
+    const fixtures = normalizeBuilderFixture(
+      'testValue',
+      ({ fileValue }: any, { onCleanup }: any) => {
+        events.push(`test:setup:${fileValue}`);
+        onCleanup(() => {
+          events.push('test:cleanup');
+        });
+        return 'test';
+      },
+      { scope: 'test' },
+      fileFixtures,
+    );
     const file = new FixtureScopeManager('file');
     const worker = new FixtureScopeManager('worker');
 
@@ -214,16 +241,15 @@ describe('scoped fixtures', () => {
     const setupPaused = new Promise<void>((resolve) => {
       continueSetup = resolve;
     });
-    const fixtures = normalizeFixtures({
-      shared: [
-        async (_context: object, use: any) => {
-          setups++;
-          await setupPaused;
-          await use('shared');
-        },
-        { scope: 'file' },
-      ],
-    } as any);
+    const fixtures = normalizeBuilderFixture(
+      'shared',
+      async () => {
+        setups++;
+        await setupPaused;
+        return 'shared';
+      },
+      { scope: 'file' },
+    );
     const file = new FixtureScopeManager('file');
     const worker = new FixtureScopeManager('worker');
     const first = createFixtureResolver({ fixtures } as any, {}, [], {
@@ -245,6 +271,48 @@ describe('scoped fixtures', () => {
     await file.cleanup();
 
     expect(setups).toBe(1);
+  });
+
+  it('separates scoped instances when an effective dependency changes', async () => {
+    const dependency = normalizeBuilderFixture('dependency', 'base', {
+      scope: 'worker',
+    });
+    const baseFixtures = normalizeBuilderFixture(
+      'derived',
+      ({ dependency }: { dependency: string }) => dependency,
+      { scope: 'worker' },
+      dependency,
+    );
+    const childFixtures = normalizeBuilderFixture(
+      'dependency',
+      'child',
+      { scope: 'worker' },
+      baseFixtures,
+    );
+    const worker = new FixtureScopeManager('worker');
+    const managers = {
+      file: new FixtureScopeManager('file'),
+      worker,
+    };
+    const baseContext: Record<string, unknown> = {};
+    const childContext: Record<string, unknown> = {};
+
+    await createFixtureResolver(
+      { fixtures: baseFixtures } as any,
+      baseContext,
+      [],
+      managers,
+    ).resolveTestFixtures(({ derived }: any) => derived);
+    await createFixtureResolver(
+      { fixtures: childFixtures } as any,
+      childContext,
+      [],
+      managers,
+    ).resolveTestFixtures(({ derived }: any) => derived);
+    await worker.cleanup();
+
+    expect(baseContext.derived).toBe('base');
+    expect(childContext.derived).toBe('child');
   });
 
   it('does not retain unrelated values in scoped setup contexts', async () => {

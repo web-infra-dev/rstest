@@ -458,22 +458,7 @@ Use the `scope` option to control how long a fixture instance lives:
 
 File- and worker-scoped fixtures cannot access `TestContext`, because there is no single current test for their full lifetime. A fixture can depend only on fixtures whose lifetime is at least as long as its own. Rstest reports an error for dependencies such as a worker fixture consuming a file or test fixture.
 
-The object form uses the same `await use(value)` lifecycle with a tuple option:
-
-```ts
-const dbTest = test.extend({
-  database: [
-    async ({}, use) => {
-      const database = await connectDatabase();
-      await use(database);
-      await database.close();
-    },
-    { scope: 'worker' },
-  ],
-});
-```
-
-The builder form accepts `name`, `options`, and the fixture in that order. Its fixture function returns the value and can register one cleanup with `onCleanup`:
+File- and worker-scoped fixtures use the builder form. It accepts `name`, `options`, and the fixture in that order. Its fixture function returns the value and can register one cleanup with `onCleanup`:
 
 ```ts
 const apiTest = test
@@ -486,7 +471,7 @@ const apiTest = test
   .extend('client', async ({ server }) => createClient(server.url));
 ```
 
-Omit the options argument to create a test-scoped builder fixture, as in `.extend('client', fixture)`. Setup is lazy unless `auto: true` is set. An automatic file or worker fixture still runs only once at its corresponding scope boundary.
+Omit the options argument to create a test-scoped builder fixture, as in `.extend('client', fixture)`. The object form remains available for test-scoped fixtures using the `await use(value)` lifecycle. Setup is lazy unless `auto: true` is set. An automatic file or worker fixture still runs only once at its corresponding scope boundary.
 
 ### Using fixtures in hooks
 

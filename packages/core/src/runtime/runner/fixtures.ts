@@ -86,7 +86,43 @@ const finalizeFixtures = (
     }
   }
 
-  return fixtures;
+  const result = { ...fixtures };
+  const resolvedNames = new Set<string>();
+  const resolvingNames = new Set<string>();
+
+  const resolveDependencies = (name: string): NormalizedFixture => {
+    const fixture = result[name]!;
+    if (resolvedNames.has(name) || resolvingNames.has(name)) {
+      return fixture;
+    }
+
+    resolvingNames.add(name);
+    const dependencies = (fixture.deps ?? []).map(resolveDependencies);
+    resolvingNames.delete(name);
+    resolvedNames.add(name);
+
+    if (
+      fixture.dependencyFixtures.length === dependencies.length &&
+      fixture.dependencyFixtures.every(
+        (dependency, index) => dependency === dependencies[index],
+      )
+    ) {
+      return fixture;
+    }
+
+    const resolvedFixture = {
+      ...fixture,
+      dependencyFixtures: dependencies,
+    };
+    result[name] = resolvedFixture;
+    return resolvedFixture;
+  };
+
+  for (const name of Object.keys(result)) {
+    resolveDependencies(name);
+  }
+
+  return result;
 };
 
 export const normalizeFixtures = (
@@ -111,10 +147,16 @@ export const normalizeFixtures = (
       ) {
         fixtureValue = value[0];
         fixtureOptions = value[1] as FixtureOptions;
+        if (fixtureOptions.scope && fixtureOptions.scope !== 'test') {
+          throw new Error(
+            `Fixture "${key}" must use test.extend(name, options, fixture) for "${fixtureOptions.scope}" scope.`,
+          );
+        }
       }
     }
 
     result[key] = {
+      dependencyFixtures: [],
       isFn: typeof fixtureValue === 'function',
       value: fixtureValue,
       options: resolveFixtureOptions(key, fixtureOptions, parent),
@@ -134,6 +176,7 @@ export const normalizeBuilderFixture = (
   const result: NormalizedFixtures = {
     ...extendFixtures,
     [name]: {
+      dependencyFixtures: [],
       isFn: typeof value === 'function',
       value,
       options: resolveFixtureOptions(name, options, extendFixtures[name]),

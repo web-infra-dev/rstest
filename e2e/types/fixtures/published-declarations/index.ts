@@ -1,3 +1,55 @@
-import { expect } from '@rstest/core';
+import { expect, test } from '@rstest/core';
 
 expect(true).toBe(true);
+
+const objectTest = test.extend<{ objectValue: string }>({
+  objectValue: [
+    async ({ task }, use) => {
+      await use(task.name);
+    },
+    { scope: 'test' },
+  ],
+});
+
+objectTest('object fixtures remain test scoped', ({ objectValue }) => {
+  expect(objectValue).toBeTypeOf('string');
+});
+
+test.extend<{ workerValue: string }>({
+  // @ts-expect-error File and worker scopes use the builder overload.
+  workerValue: [
+    async (_context, use) => {
+      await use('worker');
+    },
+    { scope: 'worker' },
+  ],
+});
+
+const workerTest = test.extend(
+  'workerValue',
+  { scope: 'worker' },
+  (_context, { onCleanup }) => {
+    onCleanup(() => {});
+    return 5000;
+  },
+);
+
+const fileTest = workerTest.extend(
+  'fileValue',
+  { scope: 'file' },
+  ({ workerValue }) => String(workerValue),
+);
+
+fileTest.extend(
+  'testValue',
+  { scope: 'test' },
+  ({ fileValue, workerValue, task }) =>
+    `${fileValue}:${workerValue}:${task.name}`,
+);
+
+workerTest.extend(
+  'invalidWorkerValue',
+  { scope: 'worker' },
+  // @ts-expect-error Worker fixtures cannot access the per-test context.
+  ({ task }) => task.name,
+);

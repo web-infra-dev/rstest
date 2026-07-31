@@ -1,4 +1,4 @@
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
@@ -60,4 +60,32 @@ describe('skipped', () => {
     expect(logs.find((log) => log.includes('[afterAll]'))).toBeFalsy();
     expect(logs.find((log) => log.includes('[beforeAll]'))).toBeFalsy();
   });
+});
+
+it('cleans worker fixtures before global setup resources', async () => {
+  const { cli, expectExecSuccess } = await runRstestCli({
+    command: 'rstest',
+    args: [
+      'run',
+      'workerFixtureOrder.test.ts',
+      '--config',
+      'workerFixtureOrder.config.mts',
+      '--isolate=false',
+      '--pool.maxWorkers=1',
+    ],
+    options: {
+      nodeOptions: {
+        cwd: join(__dirname, 'fixtures'),
+      },
+    },
+  });
+
+  await expectExecSuccess();
+  expect(
+    cli.stdout.split('\n').filter((line) => line.startsWith('[scope-order]')),
+  ).toEqual([
+    '[scope-order] global setup',
+    '[scope-order] worker cleanup',
+    '[scope-order] global cleanup',
+  ]);
 });
