@@ -86,6 +86,7 @@ export type ListBrowserTestsOptions = Pick<
   | 'filesOnly'
   | 'projects'
   | 'appliedModifyRstestConfigEnvironments'
+  | 'env'
 >;
 
 /**

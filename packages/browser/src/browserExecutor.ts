@@ -110,13 +110,14 @@ export async function createBrowserExecutor(
         inFlightCycle = undefined;
       }
     },
-    async collect(): Promise<{ list: ListCommandResult[] }> {
+    async collect(opts): Promise<{ list: ListCommandResult[] }> {
       const pending = listBrowserTests(context, {
         projects,
         shardedEntries,
         freezeShardedEntries,
         filesOnly,
         appliedModifyRstestConfigEnvironments,
+        env: opts.env,
       });
       inFlightCycle = pending;
       try {

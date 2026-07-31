@@ -140,6 +140,27 @@ describe('browser mode - globalSetup', () => {
     expect(teardownIndex).toBeGreaterThan(testIndex);
   });
 
+  it('runs globalSetup and teardown around browser test collection', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCli(
+      'browser-global-setup',
+      { command: 'list' },
+    );
+
+    await expectExecSuccess();
+
+    const setupIndex = cli.stdout.indexOf('[browser-global-setup] executed');
+    const testIndex = cli.stdout.indexOf(
+      'tests/globalSetup.test.ts > browser globalSetup env propagation (from-global-setup) > reads env changes made by globalSetup on the host',
+    );
+    const teardownIndex = cli.stdout.indexOf(
+      '[browser-global-teardown] executed',
+    );
+
+    expect(setupIndex).toBeGreaterThanOrEqual(0);
+    expect(testIndex).toBeGreaterThan(setupIndex);
+    expect(teardownIndex).toBeGreaterThan(testIndex);
+  });
+
   it('skips globalSetup when the shard slice has no files for the project', async () => {
     // The fixture has a single test file: shard 2/2 is deterministically
     // empty, so the stage must not run setup (or queue teardown) for it —
@@ -181,6 +202,30 @@ describe('browser mode - globalSetup', () => {
     expect(cli.stdout).toContain('[mixed-browser-global-teardown] executed');
     expect(cli.stdout).toMatch(/Tests.*2 passed/);
   });
+
+  for (const [name, args] of [
+    ['without sharding', []],
+    ['with sharding', ['--shard=1/1']],
+  ] as const) {
+    it(`runs browser globalSetup before mixed node test collection ${name}`, async () => {
+      const { cli, expectExecSuccess } = await runBrowserCli(
+        'browser-global-setup-mixed',
+        { command: 'list', args: [...args] },
+      );
+
+      await expectExecSuccess();
+
+      const setupIndex = cli.stdout.indexOf(
+        '[mixed-browser-global-setup] executed',
+      );
+      const nodeTestIndex = cli.stdout.indexOf(
+        'project-node/tests/node.test.ts > node collection sees browser setup (from-browser-setup) > reads the node project globalSetup env change',
+      );
+
+      expect(setupIndex).toBeGreaterThanOrEqual(0);
+      expect(nodeTestIndex).toBeGreaterThan(setupIndex);
+    });
+  }
 
   it('drains global teardown on the mixed path when a file filter selects only the browser project', async () => {
     // With no node tests to run, the node executor is never constructed, so the

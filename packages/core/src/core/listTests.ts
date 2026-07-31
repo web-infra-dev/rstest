@@ -26,6 +26,11 @@ import {
   runGlobalSetup,
   runGlobalTeardown,
 } from './globalSetup';
+import {
+  type BrowserGlobalSetupStageResult,
+  runBrowserGlobalSetupStage,
+} from './browser/globalSetupStage';
+import type { BrowserTestExecutor } from './browser/loader';
 import { createSetupFileState } from './setupFileState';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';
@@ -38,6 +43,12 @@ type ListedTest = {
   project?: string;
   location?: Location;
   type: 'file' | 'suite' | 'case';
+};
+
+type PreparedBrowserCollection = {
+  executor: BrowserTestExecutor;
+  stage: BrowserGlobalSetupStageResult;
+  shardedEntries?: Map<string, { entries: Record<string, string> }>;
 };
 
 const SummaryProjectLabel = color.gray('Projects'.padStart(11));
@@ -151,12 +162,14 @@ const collectNodeTests = async ({
   context,
   nodeProjects,
   globTestSourceEntries,
+  beforeCollect,
   onRsbuildConfigResolved,
   onModifyRstestConfigApplied,
 }: {
   context: RstestContext;
   nodeProjects: ProjectContext[];
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+  beforeCollect?: () => Promise<void>;
   onRsbuildConfigResolved?: () => Promise<void>;
   onModifyRstestConfigApplied?: () => Promise<void>;
 }) => {
@@ -201,6 +214,13 @@ const collectNodeTests = async ({
     rsbuildInstance,
     rootPath: context.rootPath,
   });
+
+  try {
+    await beforeCollect?.();
+  } catch (error) {
+    await closeServer();
+    throw error;
+  }
 
   const pool = await createPool({
     context,
@@ -291,6 +311,7 @@ const collectBrowserTests = async ({
   freezeShardedEntries,
   filesOnly,
   appliedModifyRstestConfigEnvironments,
+  prepared,
 }: {
   context: RstestContext;
   browserProjects: ProjectContext[];
@@ -298,7 +319,9 @@ const collectBrowserTests = async ({
   freezeShardedEntries?: boolean;
   filesOnly?: boolean;
   appliedModifyRstestConfigEnvironments?: Set<string>;
+  prepared?: PreparedBrowserCollection;
 }): Promise<{
+  errors?: FormattedError[];
   list: ListCommandResult[];
   close: () => Promise<void>;
 }> => {
@@ -313,18 +336,38 @@ const collectBrowserTests = async ({
   // one browser entry point (import stays dynamic: no browser module load for
   // node-only lists).
   const { loadBrowserExecutor } = await import('./browser/loader');
-  const executor = await loadBrowserExecutor(context, browserProjects, null, {
-    shardedEntries,
-    freezeShardedEntries,
-    filesOnly,
-    appliedModifyRstestConfigEnvironments,
-  });
+  const executor =
+    prepared?.executor ??
+    (await loadBrowserExecutor(context, browserProjects, null, {
+      shardedEntries,
+      freezeShardedEntries,
+      filesOnly,
+      appliedModifyRstestConfigEnvironments,
+    }));
+
+  const close = async () => {
+    try {
+      await runGlobalTeardown();
+    } finally {
+      await executor.close();
+    }
+  };
+
   try {
-    const { list } = await executor.collect({});
-    return { list, close: () => executor.close() };
+    const stage = filesOnly
+      ? undefined
+      : (prepared?.stage ??
+        (await runBrowserGlobalSetupStage(context, browserProjects, {
+          entriesCache: shardedEntries,
+        })));
+    if (stage?.errors.length) {
+      return { list: [], errors: stage.errors, close };
+    }
+
+    const { list } = await executor.collect({ env: stage?.env });
+    return { list, close };
   } catch (error) {
-    // A rejected collect cleans up host-side resources, but the executor must
-    // still be closed so an in-flight launch cannot outlive the failure.
+    // A rejected setup or collect must still close an in-flight browser launch.
     await executor.close().catch(() => undefined);
     throw error;
   }
@@ -387,35 +430,72 @@ const collectAllTests = async ({
   // Separate browser and node mode projects
   const browserProjects = context.projects.filter(isBrowserProject);
   const nodeProjects = context.projects.filter(isNodeProject);
+  const freezeShardedEntries = Boolean(
+    context.normalizedConfig.shard && nodeProjects.length,
+  );
+  let preparedBrowserCollection: PreparedBrowserCollection | undefined;
+
+  const prepareBrowserCollection = async () => {
+    if (!browserProjects.length) {
+      return;
+    }
+
+    const shardedEntries = getShardedEntries?.();
+    const { loadBrowserExecutor } = await import('./browser/loader');
+    const executor = await loadBrowserExecutor(context, browserProjects, null, {
+      shardedEntries,
+      freezeShardedEntries,
+      appliedModifyRstestConfigEnvironments,
+    });
+
+    try {
+      const stage = await runBrowserGlobalSetupStage(context, browserProjects, {
+        entriesCache: shardedEntries,
+      });
+      preparedBrowserCollection = { executor, stage, shardedEntries };
+    } catch (error) {
+      await executor.close().catch(() => undefined);
+      throw error;
+    }
+  };
 
   const collectBrowser = () =>
     collectBrowserTests({
       context,
       browserProjects,
-      shardedEntries: getShardedEntries?.(),
-      freezeShardedEntries: Boolean(
-        context.normalizedConfig.shard && nodeProjects.length,
-      ),
+      shardedEntries:
+        preparedBrowserCollection?.shardedEntries ?? getShardedEntries?.(),
+      freezeShardedEntries,
       appliedModifyRstestConfigEnvironments,
+      prepared: preparedBrowserCollection,
     });
 
   if (collectBrowserAfterConfigHooks && nodeProjects.length) {
     let refreshedAfterConfigHooks = false;
-    const nodeResult = await collectNodeTests({
-      context,
-      nodeProjects,
-      globTestSourceEntries,
-      onRsbuildConfigResolved,
-      onModifyRstestConfigApplied: async () => {
-        refreshedAfterConfigHooks = true;
-        await onModifyRstestConfigApplied?.();
-      },
-    });
-    if (
-      !refreshedAfterConfigHooks &&
-      !context.projects.some((project) => project._environmentGroup)
-    ) {
-      await onModifyRstestConfigApplied?.();
+    let nodeResult: Awaited<ReturnType<typeof collectNodeTests>>;
+    try {
+      nodeResult = await collectNodeTests({
+        context,
+        nodeProjects,
+        globTestSourceEntries,
+        beforeCollect: async () => {
+          if (
+            !refreshedAfterConfigHooks &&
+            !context.projects.some((project) => project._environmentGroup)
+          ) {
+            await onModifyRstestConfigApplied?.();
+          }
+          await prepareBrowserCollection();
+        },
+        onRsbuildConfigResolved,
+        onModifyRstestConfigApplied: async () => {
+          refreshedAfterConfigHooks = true;
+          await onModifyRstestConfigApplied?.();
+        },
+      });
+    } catch (error) {
+      await preparedBrowserCollection?.executor.close().catch(() => undefined);
+      throw error;
     }
     let browserResult: Awaited<ReturnType<typeof collectBrowser>>;
     try {
@@ -426,7 +506,7 @@ const collectAllTests = async ({
     }
 
     return {
-      errors: nodeResult.errors,
+      errors: [...(nodeResult.errors ?? []), ...(browserResult.errors ?? [])],
       list: [...nodeResult.list, ...browserResult.list],
       getSourceMap: nodeResult.getSourceMap,
       close: async () => {
@@ -434,6 +514,8 @@ const collectAllTests = async ({
       },
     };
   }
+
+  await prepareBrowserCollection();
 
   // Settle both sides before unwrapping: a fail-fast `Promise.all` would leak
   // the surviving side's resources (node rsbuild server + pool, or browser
@@ -468,7 +550,7 @@ const collectAllTests = async ({
   ]);
 
   return {
-    errors: nodeResult.errors,
+    errors: [...(nodeResult.errors ?? []), ...(browserResult.errors ?? [])],
     list: [...nodeResult.list, ...browserResult.list],
     getSourceMap: nodeResult.getSourceMap,
     close: async () => {
@@ -652,17 +734,12 @@ export async function listTests(
     }
   }
 
-  const {
-    list,
-    close,
-    getSourceMap,
-    errors = [],
-  } = filesOnly
-    ? await collectTestFiles({
+  const collection = filesOnly
+    ? collectTestFiles({
         context,
         globTestSourceEntries,
       })
-    : await collectAllTests({
+    : collectAllTests({
         context,
         globTestSourceEntries,
         getShardedEntries: shard
@@ -678,6 +755,14 @@ export async function listTests(
         appliedModifyRstestConfigEnvironments:
           appliedBrowserModifyRstestConfigEnvironments,
       });
+  let collected: Awaited<typeof collection>;
+  try {
+    collected = await collection;
+  } catch (error) {
+    await runGlobalTeardown();
+    throw error;
+  }
+  const { list, close, getSourceMap, errors = [] } = collected;
 
   const tests: ListedTest[] = [];
 
