@@ -4463,7 +4463,10 @@ export const listBrowserTests = async (
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
       runtimeConfig: serializableConfig(
-        projectRuntimeConfig(project, { envMode: 'static' }),
+        projectRuntimeConfig(project, {
+          envMode: 'static',
+          envOverlay: options?.env,
+        }),
       ),
       viewport: project.normalizedConfig.browser.viewport,
     }),

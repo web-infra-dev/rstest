@@ -140,6 +140,27 @@ describe('browser mode - globalSetup', () => {
     expect(teardownIndex).toBeGreaterThan(testIndex);
   });
 
+  it('runs globalSetup and teardown around browser test collection', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCli(
+      'browser-global-setup',
+      { command: 'list' },
+    );
+
+    await expectExecSuccess();
+
+    const setupIndex = cli.stdout.indexOf('[browser-global-setup] executed');
+    const testIndex = cli.stdout.indexOf(
+      'tests/globalSetup.test.ts > browser globalSetup env propagation (from-global-setup) > reads env changes made by globalSetup on the host',
+    );
+    const teardownIndex = cli.stdout.indexOf(
+      '[browser-global-teardown] executed',
+    );
+
+    expect(setupIndex).toBeGreaterThanOrEqual(0);
+    expect(testIndex).toBeGreaterThan(setupIndex);
+    expect(teardownIndex).toBeGreaterThan(testIndex);
+  });
+
   it('skips globalSetup when the shard slice has no files for the project', async () => {
     // The fixture has a single test file: shard 2/2 is deterministically
     // empty, so the stage must not run setup (or queue teardown) for it —

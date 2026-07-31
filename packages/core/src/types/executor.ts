@@ -116,7 +116,7 @@ export interface TestExecutor {
    * later phase converges it onto the seam.
    */
   collect?(
-    options: Pick<ExecutorRunCycleOptions, 'fileFilters'>,
+    options: Pick<ExecutorRunCycleOptions, 'env' | 'fileFilters'>,
   ): Promise<{ list: ListCommandResult[] }>;
   close(): Promise<void>;
   /**
