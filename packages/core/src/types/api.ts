@@ -24,6 +24,8 @@ export interface TestContext {
     filepath?: string;
     /** Absolute path of the current project's root directory. */
     projectRoot?: string;
+    /** Current retry index, starting at 0 for the initial attempt. */
+    retryCount: number;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
     /** Mutable metadata copied to the current test result. */

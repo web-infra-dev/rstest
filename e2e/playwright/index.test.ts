@@ -66,6 +66,8 @@ describe('@rstest/playwright', () => {
     await expectExecSuccess();
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_OK');
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_RETRY_OK');
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_FIRST_RETRY_OK');
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_TRACE_ALL_RETRIES_OK');
     expect(cli.stdout).toContain('[rstest-playwright] Trace saved:');
   });
 
@@ -77,7 +79,7 @@ describe('@rstest/playwright', () => {
         nodeOptions: {
           cwd: join(__dirname, 'fixtures'),
           env: {
-            RSTEST_PLAYWRIGHT_TRACE: 'on',
+            RSTEST_PLAYWRIGHT_TRACE: 'on-first-retry',
             RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR: '.rstest-env-traces',
           },
         },

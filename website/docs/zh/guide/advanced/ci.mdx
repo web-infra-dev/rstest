@@ -1,5 +1,5 @@
 ---
-description: 在 CI 中配置 Rstest，包括基础工作流、覆盖率、Browser Mode、分片和报告产物。
+description: 在 CI 中配置 Rstest，包括基础工作流、覆盖率、浏览器测试、分片和报告产物。
 ---
 
 # CI
@@ -76,36 +76,95 @@ pnpm rstest --coverage
 
 当失败运行中的报告也有调试价值时，可以使用 `if: always()`。可用的 provider、reporter、阈值和输出路径请查看 [coverage](/config/test/coverage)。
 
-## CI 中的 browser mode
+## 在 CI 中运行浏览器测试
 
-Browser Mode 会在真实浏览器中运行测试，因此 CI 需要同时安装 Rstest 浏览器包和浏览器二进制文件。在项目中安装 [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser)，然后安装配置中使用的 Playwright 浏览器。
+[Rstest Browser Mode](/guide/browser-testing) 和 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 都通过 [Playwright](https://github.com/microsoft/playwright) 启动浏览器。安装 `playwright` npm 包只会提供自动化 API，浏览器可执行文件需要单独提供。
+
+### 选择浏览器的提供方式
+
+通用做法是安装与 Playwright 包版本匹配的浏览器：
 
 ```bash
-pnpm add @rstest/browser playwright -D
 pnpm exec playwright install --with-deps chromium
 ```
 
-在 CI 中，`browser.headless` 默认值为 `true`，所以浏览器会以无界面模式运行。GitHub Actions 工作流通常会在运行测试前添加浏览器安装步骤：
+根据 workflow 所需的覆盖范围和可复现性选择安装方式：
 
-```yaml
-jobs:
-  browser-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.12.0
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm rstest --browser
+| 需求                                                | 浏览器准备方式                                                                                                                                          |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 在标准 GitHub-hosted runner 上快速运行 Chrome       | 跳过 `playwright install`，通过 `channel: 'chrome'` 启动预装的 Chrome。                                                                                 |
+| 使用与 Playwright 包版本绑定的 Chromium             | 运行 `playwright install --with-deps chromium`。如果仅以 headless 模式运行且没有设置 channel，可以添加 `--only-shell`，避免下载完整的 headed Chromium。 |
+| 覆盖 Firefox 或 WebKit                              | 通过 `playwright install --with-deps firefox` 或 `playwright install --with-deps webkit` 安装对应的 Playwright 浏览器。                                 |
+| 使用 self-hosted runner、container job 或自定义镜像 | 安装 Playwright 浏览器，或先在镜像中准备 Chrome，再选择 `channel: 'chrome'`。                                                                           |
+
+包括 `ubuntu-latest` 在内的标准 [GitHub-hosted runner 镜像](https://github.com/actions/runner-images#available-images)预装了 Google Chrome。选择 `chrome` channel 后，两种 Rstest 集成都可以直接使用该可执行文件，无需下载 Playwright Chromium。GitHub 会定期更新 runner 软件，因此这种方式牺牲了固定的浏览器版本，以换取更快的准备速度。workflow 中的 **Set up job → Runner Image → Included Software** 链接会列出[本次运行使用的准确软件版本](https://docs.github.com/en/actions/concepts/runners/github-hosted-runners#preinstalled-software-for-github-owned-images)。
+
+Firefox 和 WebKit 仍需要下载 Playwright 提供的浏览器。Playwright 依赖这些引擎的补丁版本，不能直接替换为 runner 上安装的 Firefox 或 Safari 应用。
+
+### Browser mode
+
+安装 [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser) 和 Playwright API：
+
+```bash
+pnpm add @rstest/browser playwright -D
 ```
 
-如果使用 `firefox` 或 `webkit` 测试，需要安装与 `browser.browser` 选择一致的浏览器。完整配置方式请查看 [Browser Mode 快速开始](/guide/browser-testing/getting-started) 和 [browser 配置](/config/test/browser)。
+在标准 GitHub-hosted runner 上，通过 Browser Mode CLI 传入 Chrome channel，并省略浏览器安装步骤：
+
+```yaml
+- run: pnpm install --frozen-lockfile
+- run: pnpm rstest --browser --browser.providerOptions.launch.channel=chrome
+```
+
+如果希望在 `rstest.config.ts` 中通过环境判断启用相同优化，可以改为配置 provider：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    providerOptions:
+      process.env.GITHUB_ACTIONS === 'true'
+        ? {
+            launch: {
+              channel: 'chrome',
+            },
+          }
+        : undefined,
+  },
+});
+```
+
+在 CI 中，`browser.headless` 默认值为 `true`，无需额外配置 headless。其他 browser 和 provider 选项请查看 [Browser Mode 快速开始](/guide/browser-testing/getting-started) 和 [browser 配置](/config/test/browser)。
+
+### @rstest/playwright
+
+安装 Rstest fixtures 和 Playwright API：
+
+```bash
+pnpm add @rstest/playwright playwright -D
+```
+
+[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 通过 `playwright` fixture 配置启动选项。定义一个共享的扩展 `test`，然后在浏览器测试文件中导入：
+
+```ts title="tests/fixtures.ts"
+import { expect, test as base } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+export { expect };
+
+export const test = base.extend({
+  playwright: {
+    browserName: 'chromium',
+    launchOptions:
+      process.env.GITHUB_ACTIONS === 'true' ? { channel: 'chrome' } : undefined,
+  } satisfies PlaywrightOptions,
+});
+```
+
+使用该 fixture 后，标准 GitHub-hosted workflow 只需要安装 npm 依赖并运行 Rstest，不要再添加 `playwright install` 步骤。fixture 用法和 trace artifact 请查看 [@rstest/playwright 指南](/guide/advanced/playwright)。
 
 ## 使用分片拆分测试 \{#split-tests-with-shards}
 
@@ -195,6 +254,8 @@ export default defineConfig({
 
 建议先从包管理器缓存开始，因为它安全，通常也能带来最明显的 CI 优化。在 GitHub Actions 中，`actions/setup-node` 配合 `cache: pnpm` 会基于 lockfile 恢复 pnpm store。
 
+默认不要缓存 Playwright 浏览器二进制文件。恢复缓存所需的时间可能与重新下载相近，而且缓存不包含 Linux 系统依赖。如果 workflow 可以接受 runner 的浏览器版本，优先使用 GitHub 预装的 Chrome；否则只安装需要的浏览器，并在仅运行 headless Chromium 时使用 `--only-shell`。
+
 ## 推荐检查清单
 
 - 使用 Node.js `^20.19.0` 或 `>=22.12.0`，以匹配 Rstest 支持的运行时范围。
@@ -202,4 +263,4 @@ export default defineConfig({
 - 仅在 workflow 需要对应功能时安装 coverage 和 browser 包。
 - 如果 coverage、JUnit、JSON 或 blob artifact 有助于排查失败，使用 `if: always()` 上传。
 - 在单机 workflow 稳定后，再添加 sharding。
-- 保持 Browser Mode 的浏览器安装与 Rstest 配置中选择的浏览器一致。
+- 明确选择与 Playwright 版本匹配的浏览器或系统预装的 Chrome，并让 browser、channel 和安装步骤保持一致。

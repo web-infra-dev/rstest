@@ -556,6 +556,8 @@ export interface TestContext {
     filepath?: string;
     /** Absolute path of the current project's root directory when provided by the runner. Added in 0.11.1. */
     projectRoot?: string;
+    /** Current retry index, starting at 0 for the initial attempt. Added in 0.11.6. */
+    retryCount: number;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
     /** Mutable metadata copied to the current test result. Added in 0.11.1. */
@@ -571,6 +573,10 @@ export interface TestContext {
   onTestFailed: OnTestFailed;
 }
 ```
+
+<ApiMeta addedVersion="0.11.6" />
+
+你可以通过 `context.task.retryCount` 在测试、Hook 和 fixture 中读取当前的 retry index。初次尝试时该值为 `0`，第一次 retry 时为 `1`；配置 `repeats` 后，每次 repeat 都会从 `0` 重新计数。
 
 你可以使用 `context.task.meta` 给当前测试结果附加可 JSON 序列化的元数据。既可以修改该对象，也可以整体替换为一个新的 metadata 对象。自定义 Reporter 和 programmatic API 可以从 `TestResult.meta` 读取这些数据：
 
