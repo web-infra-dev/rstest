@@ -203,6 +203,30 @@ describe('browser mode - globalSetup', () => {
     expect(cli.stdout).toMatch(/Tests.*2 passed/);
   });
 
+  for (const [name, args] of [
+    ['without sharding', []],
+    ['with sharding', ['--shard=1/1']],
+  ] as const) {
+    it(`runs browser globalSetup before mixed node test collection ${name}`, async () => {
+      const { cli, expectExecSuccess } = await runBrowserCli(
+        'browser-global-setup-mixed',
+        { command: 'list', args: [...args] },
+      );
+
+      await expectExecSuccess();
+
+      const setupIndex = cli.stdout.indexOf(
+        '[mixed-browser-global-setup] executed',
+      );
+      const nodeTestIndex = cli.stdout.indexOf(
+        'project-node/tests/node.test.ts > node collection sees browser setup (from-browser-setup) > reads the node project globalSetup env change',
+      );
+
+      expect(setupIndex).toBeGreaterThanOrEqual(0);
+      expect(nodeTestIndex).toBeGreaterThan(setupIndex);
+    });
+  }
+
   it('drains global teardown on the mixed path when a file filter selects only the browser project', async () => {
     // With no node tests to run, the node executor is never constructed, so the
     // teardown drain must live in core — otherwise the setup's IPC child leaks
