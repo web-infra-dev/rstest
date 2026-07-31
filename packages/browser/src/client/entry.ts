@@ -14,6 +14,7 @@ import type {
   WorkerState,
 } from '@rstest/core/internal/browser-runtime';
 import {
+  cleanupWorkerFixtures,
   createBrowserTaskContext,
   createRstestRuntime,
   formatConsoleArgs,
@@ -789,6 +790,21 @@ const run = async () => {
 
   window.removeEventListener('error', onWindowError);
   window.removeEventListener('unhandledrejection', onUnhandledRejection);
+
+  try {
+    await cleanupWorkerFixtures();
+  } catch (_error) {
+    const error = _error instanceof Error ? _error : new Error(String(_error));
+    send({
+      type: 'fatal',
+      payload: {
+        message: error.message,
+        stack: error.stack,
+      },
+    });
+    window.__RSTEST_DONE__ = true;
+    return;
+  }
 
   send({ type: 'complete' });
   window.__RSTEST_DONE__ = true;

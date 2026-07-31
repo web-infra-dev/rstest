@@ -44,9 +44,16 @@ import type {
   Describe,
   Expect,
   ExpectStatic,
+  FixtureCleanup,
+  FixtureLifecycle,
+  FixtureOptions,
+  FixtureScope,
+  Fixtures,
   Rstest,
   RstestUtilities,
+  TestAPIs,
   TestContext,
+  Use,
 } from '@rstest/core';
 ```
 
@@ -60,6 +67,20 @@ import type {
 - `Describe`: The type of the `describe` API.
 - `Expect`: The assertion type returned by `expect(value)`.
 - `ExpectStatic`: The callable `expect` API type.
+
+<ApiMeta addedVersion="0.11.6" />
+
+The fixture lifecycle types are public exports starting in Rstest 0.11.6:
+
+- `FixtureScope`: `'test' | 'file' | 'worker'`.
+- `FixtureOptions`: Options for `auto` setup and fixture `scope`.
+- `FixtureLifecycle`: The builder fixture lifecycle object containing `onCleanup`.
+- `FixtureCleanup`: A synchronous or asynchronous cleanup callback.
+- `Fixtures`: The object-form fixture definition map.
+- `Use`: The function that exposes an object-form fixture value.
+- `TestAPIs`: The extended, fixture-aware `test` API type.
+
+See [`test.extend`](/api/runtime-api/test-api/test#testextend) for the object and builder forms.
 
 ## Mock types
 

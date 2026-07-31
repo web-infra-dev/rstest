@@ -17,6 +17,28 @@ describe('browser mode - basic', () => {
     expect(cli.stdout).not.toContain('/scheduler.html');
   });
 
+  it('should run scoped fixture lifecycles in the browser runner', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli('basic', {
+      args: ['tests/scopedFixtures.test.ts'],
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toMatch(
+      /browser-scope:worker:setup[\s\S]*browser-scope:file:setup[\s\S]*browser-scope:test:setup:1[\s\S]*browser-scope:test:cleanup:worker:file:test:1[\s\S]*browser-scope:test:setup:2[\s\S]*browser-scope:test:cleanup:worker:file:test:2[\s\S]*browser-scope:file:cleanup/,
+    );
+  });
+
+  it('should report browser worker fixture cleanup failures', async () => {
+    const { expectExecFailed, cli } = await runBrowserCli('basic', {
+      args: ['-c', 'rstest.worker-cleanup.config.mts'],
+    });
+
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'browser worker fixture cleanup reached',
+    );
+  });
+
   it.runIf(shouldRunHeadedBrowserTests)(
     'should run headed mode and exit with code 0',
     async () => {

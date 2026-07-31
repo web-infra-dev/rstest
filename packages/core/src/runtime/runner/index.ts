@@ -88,16 +88,28 @@ export function createRunner({
         });
         runtimeInstance.updateStatus('running');
 
-        const results = await testRunner.runTests({
-          tests,
-          testPath,
-          state: workerState,
-          hooks,
-          api,
-          snapshotClient,
-        });
+        try {
+          const results = await testRunner.runTests({
+            tests,
+            testPath,
+            state: workerState,
+            hooks,
+            api,
+            snapshotClient,
+          });
 
-        return results;
+          return (await testRunner.cleanupFileFixtures(results))!;
+        } catch (error) {
+          try {
+            await testRunner.cleanupFileFixtures();
+          } catch (cleanupError) {
+            throw new AggregateError(
+              [error, cleanupError],
+              'Test execution and file fixture cleanup both failed.',
+            );
+          }
+          throw error;
+        }
       },
       collectTests: async () => {
         const tests = await runtimeInstance.getTests();

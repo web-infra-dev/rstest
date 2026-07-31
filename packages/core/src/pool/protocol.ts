@@ -11,6 +11,7 @@ const RPC_TAG = '__rstest_rpc__' as const;
 
 export type WorkerRequest =
   | { type: 'start'; workerId: number }
+  | { type: 'cleanup' }
   | {
       type: 'run';
       taskId: number;
@@ -36,6 +37,7 @@ export type WorkerMemoryReport = {
 
 export type WorkerResponse =
   | { type: 'started'; pid: number }
+  | { type: 'cleanupFinished'; error?: SerializedError }
   | {
       type: 'runFinished';
       taskId: number;

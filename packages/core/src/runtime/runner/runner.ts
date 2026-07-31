@@ -32,7 +32,11 @@ import {
 import { createExpect } from '../api/expect';
 import { formatTestError, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
-import { createFixtureResolver } from './fixtures';
+import {
+  createFixtureResolver,
+  FixtureScopeManager,
+  workerFixtureManager,
+} from './fixtures';
 import type { FixtureResolver } from './fixtures';
 import { cloneTaskMeta } from './metadata';
 import {
@@ -66,8 +70,30 @@ export class TestRunner {
   /** current test case */
   private _test: TestCase | undefined;
   private workerState: WorkerState | undefined;
+  private readonly fileFixtureManager = new FixtureScopeManager('file');
 
-  constructor(private readonly taskContext: TaskContext) {}
+  constructor(
+    private readonly taskContext: TaskContext,
+    private readonly workerFixtures: FixtureScopeManager = workerFixtureManager,
+  ) {}
+
+  async cleanupFileFixtures(
+    result?: TestFileResult,
+  ): Promise<TestFileResult | undefined> {
+    try {
+      await this.fileFixtureManager.cleanup();
+    } catch (error) {
+      if (!result) {
+        throw error;
+      }
+      result.status = 'fail';
+      result.errors = [
+        ...(result.errors ?? []),
+        ...(await formatTestError(error)),
+      ];
+    }
+    return result;
+  }
 
   async runTests({
     tests,
@@ -962,7 +988,10 @@ export class TestRunner {
       enumerable: false,
     });
 
-    return createFixtureResolver(test, context, fixtureCleanups);
+    return createFixtureResolver(test, context, fixtureCleanups, {
+      file: this.fileFixtureManager,
+      worker: this.workerFixtures,
+    });
   }
 
   private afterRunTest(test: TestCase): void {

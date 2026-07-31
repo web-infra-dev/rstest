@@ -13,6 +13,7 @@ import { globalApis, RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
+import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
 import { PhaseTracker } from './phaseTracker';
@@ -489,6 +490,7 @@ export const runInPool = async (
   // loading (see `flushAllLoaderCaches` for why both loaders, not just this
   // task's).
   if (!isolate && lastBuildId !== undefined && lastBuildId !== buildId) {
+    await cleanupWorkerFixtures();
     const { flushAllLoaderCaches } = await import('./interop');
     await flushAllLoaderCaches();
   }
@@ -809,6 +811,19 @@ export const runInPool = async (
 
     taskContext?.setFallback(undefined);
     asyncLeakDetector?.disable();
+    if (isolate) {
+      try {
+        await cleanupWorkerFixtures();
+      } catch (error) {
+        if (runResult) {
+          runResult.status = 'fail';
+          runResult.errors = [
+            ...(runResult.errors ?? []),
+            ...(await formatTestError(error)),
+          ];
+        }
+      }
+    }
     await teardown();
     tracker.end();
     if (runResult) {

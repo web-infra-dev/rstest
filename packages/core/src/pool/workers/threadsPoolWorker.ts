@@ -92,8 +92,9 @@ export class ThreadsPoolWorker extends BasePoolWorker {
     // immediately and resolves with the exit code. There is no SIGTERM/
     // SIGKILL distinction for threads, so `force` is a no-op — unlike forks,
     // which escalate SIGTERM to SIGKILL when forced. The host owns
-    // termination outright; there is no graceful IPC stop handshake before
-    // this call (see `PoolRunner.stop`).
+    // termination outright. `PoolRunner.stop` may first request bounded
+    // worker-fixture cleanup, but this call never waits for a worker-owned
+    // exit handshake.
     await this.worker!.terminate().catch(() => undefined);
   }
 

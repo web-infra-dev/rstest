@@ -9,6 +9,7 @@ import type {
   DescribeAPI,
   DescribeEachFn,
   DescribeForFn,
+  FixtureOptions,
   Fixtures,
   Location,
   MaybePromise,
@@ -40,7 +41,7 @@ import {
   resolveTestArgs,
   TestRegisterError,
 } from '../util';
-import { normalizeFixtures } from './fixtures';
+import { normalizeBuilderFixture, normalizeFixtures } from './fixtures';
 import { cloneTaskMeta, mergeTaskMeta } from './metadata';
 import { registerTestSuiteListener, wrapTimeout } from './task';
 
@@ -691,20 +692,51 @@ const buildRuntimeAPI = (): CollectionAPI => {
 
   const it = createTestAPI() as TestAPIs;
 
-  it.extend = ((fixtures: Fixtures): TestAPIs => {
+  it.extend = ((...initialArgs: unknown[]): TestAPIs => {
     const extend = (
-      fixtures: Fixtures,
-      extendFixtures?: NormalizedFixtures,
+      args: unknown[],
+      extendFixtures: NormalizedFixtures = {},
     ) => {
-      const normalizedFixtures = normalizeFixtures(fixtures, extendFixtures);
+      let normalizedFixtures: NormalizedFixtures;
+      if (typeof args[0] === 'string') {
+        const [name] = args;
+        if (args.length === 2) {
+          normalizedFixtures = normalizeBuilderFixture(
+            name,
+            args[1],
+            undefined,
+            extendFixtures,
+          );
+        } else if (args.length === 3) {
+          normalizedFixtures = normalizeBuilderFixture(
+            name,
+            args[2],
+            args[1] as FixtureOptions,
+            extendFixtures,
+          );
+        } else {
+          throw new Error(
+            'test.extend(name, fixture) or test.extend(name, options, fixture) expects two or three arguments.',
+          );
+        }
+      } else {
+        if (args.length !== 1) {
+          throw new Error('test.extend(fixtures) expects one argument.');
+        }
+        normalizedFixtures = normalizeFixtures(
+          args[0] as Fixtures,
+          extendFixtures,
+        );
+      }
+
       const api = createTestAPI({ fixtures: normalizedFixtures }) as TestAPIs;
-      api.extend = ((subFixtures: Fixtures) => {
-        return extend(subFixtures, normalizedFixtures);
+      api.extend = ((...subArgs: unknown[]) => {
+        return extend(subArgs, normalizedFixtures);
       }) as TestAPIs['extend'];
       return api;
     };
 
-    return extend(fixtures);
+    return extend(initialArgs);
   }) as TestAPIs['extend'];
 
   const createDescribeAPI = (

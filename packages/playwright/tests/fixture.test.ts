@@ -326,6 +326,19 @@ test('selects Playwright trace attempts by mode', () => {
 });
 
 test.extend({}).describe('extended test API', () => {
+  test
+    .extend('builderTitle', { scope: 'file' }, (_context, { onCleanup }) => {
+      onCleanup(() => {});
+      return 'builder title';
+    })
+    .extend('builderCount', 1)(
+    'supports builder-style fixture extension',
+    ({ builderCount, builderTitle }) => {
+      expect(builderTitle).toBe('builder title');
+      expect(builderCount).toBe(1);
+    },
+  );
+
   const hookExpectTest = test.extend<{ hookTitle: string }>({
     hookTitle: 'hook title',
   });

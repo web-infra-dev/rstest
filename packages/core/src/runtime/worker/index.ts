@@ -9,6 +9,7 @@ import {
 import { ENV } from '../../utils/env';
 import { channel } from './channels';
 import { runInPool } from './runInPool';
+import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { installGracefulExit } from './setup';
 
 installGracefulExit();
@@ -135,6 +136,18 @@ const runTask = async (
   currentTaskId = undefined;
 };
 
+const cleanupWorker = async (): Promise<void> => {
+  try {
+    await cleanupWorkerFixtures();
+    send({ type: 'cleanupFinished' });
+  } catch (error) {
+    send({
+      type: 'cleanupFinished',
+      error: serializeError(error),
+    });
+  }
+};
+
 // No SIGTERM handler — the host owns termination and SIGTERM (default action:
 // exit) is what gets us out. Any handler that didn't unconditionally exit
 // would defeat that contract (rstest#1275). `setup.ts` may install a
@@ -156,6 +169,9 @@ channel.on((message: unknown) => {
       break;
     case 'collect':
       void runTask('collect', request);
+      break;
+    case 'cleanup':
+      void cleanupWorker();
       break;
   }
 });

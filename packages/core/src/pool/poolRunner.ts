@@ -13,7 +13,15 @@ import {
 import type { PoolTask } from './types';
 
 const WORKER_START_TIMEOUT_MS = 90_000;
+const WORKER_CLEANUP_TIMEOUT_MS = 10_000;
 const MAX_STDERR_MESSAGE_BYTES = 64 * 1024;
+
+export class WorkerFixtureCleanupError extends Error {
+  constructor(error: Error) {
+    super(`Worker fixture cleanup failed: ${error.message}`, { cause: error });
+    this.name = 'WorkerFixtureCleanupError';
+  }
+}
 
 function formatCapturedStderr(text: string): string {
   const buf = Buffer.from(text);
@@ -84,8 +92,10 @@ export class PoolRunner {
   private currentRpcDispatch:
     ((data: unknown, ...extras: unknown[]) => void) | undefined;
   private startDeferred: Deferred | undefined;
+  private cleanupDeferred: Deferred | undefined;
   private stopDeferred: Deferred | undefined;
   private startTimer: NodeJS.Timeout | undefined;
+  private cleanupTimer: NodeJS.Timeout | undefined;
   private lastFatalError: Error | undefined;
   /**
    * Set when the worker reports `fatal_error` or a transport error. The
@@ -175,12 +185,6 @@ export class PoolRunner {
     return this.runTaskInternal('collect', task) as Promise<CollectTaskResult>;
   }
 
-  /**
-   * Host owns termination — no IPC handshake. Per-task teardown runs in
-   * `runInPool`'s own `finally` before `runFinished`, so by `stop()` there
-   * is nothing process-level to drain. Relying on the worker's own
-   * `process.exit()` was the rstest#1275 hang.
-   */
   stop(options?: { force?: boolean }): Promise<void> {
     return this.runOperation(async () => {
       switch (this.state) {
@@ -217,12 +221,55 @@ export class PoolRunner {
         return;
       }
 
+      let cleanupError: Error | undefined;
+      if (!options?.force && !this.currentTask && !this.crashed) {
+        try {
+          await this.requestWorkerCleanup();
+        } catch (error) {
+          cleanupError = new WorkerFixtureCleanupError(toError(error));
+        }
+      }
+      if (!this.worker.hasLiveChild()) {
+        this.state = 'STOPPED';
+        if (cleanupError) {
+          throw cleanupError;
+        }
+        return;
+      }
+
       this.state = 'STOPPING';
-      this.stopDeferred = createDeferred();
+      const stopDeferred = createDeferred();
+      this.stopDeferred = stopDeferred;
 
       await this.worker.stop({ force: options?.force ?? false });
-      await this.stopDeferred.promise;
+      await stopDeferred.promise;
+      if (cleanupError) {
+        throw cleanupError;
+      }
     });
+  }
+
+  private requestWorkerCleanup(): Promise<void> {
+    const cleanupDeferred = createDeferred();
+    this.cleanupDeferred = cleanupDeferred;
+    cleanupDeferred.promise.catch(() => undefined);
+    this.cleanupTimer = setTimeout(() => {
+      const deferred = this.cleanupDeferred;
+      this.cleanupDeferred = undefined;
+      deferred?.reject(
+        new Error(
+          `Worker fixture cleanup did not finish within ${WORKER_CLEANUP_TIMEOUT_MS}ms`,
+        ),
+      );
+    }, WORKER_CLEANUP_TIMEOUT_MS);
+    this.cleanupTimer.unref();
+
+    try {
+      this.worker.send({ type: 'cleanup' });
+    } catch (error) {
+      this.rejectCleanup(toError(error));
+    }
+    return cleanupDeferred.promise;
   }
 
   private async runOperation<T>(op: () => Promise<T>): Promise<T> {
@@ -322,6 +369,13 @@ export class PoolRunner {
         this.startDeferred?.resolve();
         this.startDeferred = undefined;
         return;
+      case 'cleanupFinished':
+        if (response.error) {
+          this.rejectCleanup(deserializeError(response.error));
+        } else {
+          this.resolveCleanup();
+        }
+        return;
       case 'runFinished':
         this.resolveTask('run', response.taskId, response.result);
         return;
@@ -358,6 +412,11 @@ export class PoolRunner {
 
   private handleExit(code: number | null, signal: NodeJS.Signals | null): void {
     this.clearStartTimer();
+    this.rejectCleanup(
+      new Error(
+        `Worker exited during fixture cleanup (code=${code}, signal=${signal})`,
+      ),
+    );
 
     const wasStopping = this.state === 'STOPPING';
     this.state = 'STOPPED';
@@ -400,6 +459,7 @@ export class PoolRunner {
     // responds — hanging the whole run. Mark as crashed so `isUsable()`
     // returns false and `Pool.releaseRunner` disposes instead of recycling.
     this.crashed = true;
+    this.rejectCleanup(err);
     this.rejectStart(err);
     if (this.currentTask) {
       this.rejectCurrentTaskWithStderr(err);
@@ -441,5 +501,27 @@ export class PoolRunner {
     if (!this.startTimer) return;
     clearTimeout(this.startTimer);
     this.startTimer = undefined;
+  }
+
+  private resolveCleanup(): void {
+    if (!this.cleanupDeferred) return;
+    const deferred = this.cleanupDeferred;
+    this.cleanupDeferred = undefined;
+    this.clearCleanupTimer();
+    deferred.resolve();
+  }
+
+  private rejectCleanup(error: Error): void {
+    if (!this.cleanupDeferred) return;
+    const deferred = this.cleanupDeferred;
+    this.cleanupDeferred = undefined;
+    this.clearCleanupTimer();
+    deferred.reject(error);
+  }
+
+  private clearCleanupTimer(): void {
+    if (!this.cleanupTimer) return;
+    clearTimeout(this.cleanupTimer);
+    this.cleanupTimer = undefined;
   }
 }

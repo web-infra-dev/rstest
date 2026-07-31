@@ -3436,10 +3436,7 @@ export const runBrowserController = async (
           onDispatchMessage: async (message) => {
             try {
               await dispatchRunnerMessage(run, file, session.id, message);
-              if (
-                message.type === 'file-complete' ||
-                message.type === 'complete'
-              ) {
+              if (message.type === 'complete') {
                 markDone();
               } else if (message.type === 'fatal') {
                 markDone();

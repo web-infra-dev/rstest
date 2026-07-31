@@ -61,6 +61,7 @@ const workerIdentity = isThreadWorker ? threadId : process.pid;
 let assignedWorkerId = null;
 
 let runCount = 0;
+let cleanupError = false;
 
 // This worker entry runs as a real .mjs and cannot import core .ts source, so
 // it keeps a literal copy. MUST match getFileTaskId in
@@ -85,6 +86,7 @@ const makeRunResult = (request, extra) => ({
 
 const handleRun = (request) => {
   const mode = request.options?.__testMode;
+  cleanupError = mode === 'cleanup-error';
 
   const finish = (extra) => {
     send({
@@ -193,6 +195,18 @@ onHostMessage((message) => {
       break;
     case 'collect':
       handleCollect(request);
+      break;
+    case 'cleanup':
+      send({
+        type: 'cleanupFinished',
+        error: cleanupError
+          ? {
+              name: 'Error',
+              message: 'intentional cleanup error',
+              stack: 'Error: intentional cleanup error\n    at test-worker.mjs',
+            }
+          : undefined,
+      });
       break;
   }
 });

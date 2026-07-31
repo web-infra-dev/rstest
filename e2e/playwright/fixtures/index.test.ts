@@ -12,6 +12,15 @@ const test = base.extend({
   } satisfies PlaywrightOptions,
 });
 
+test.extend(
+  'fixtureValue',
+  { scope: 'file' },
+  () => 'scoped fixture',
+)('supports scoped fixtures', ({ fixtureValue }) => {
+  expect(fixtureValue).toBe('scoped fixture');
+  console.log('RSTEST_PLAYWRIGHT_SCOPED_FIXTURE_OK');
+});
+
 const cwd = import.meta.dirname;
 const distPath = 'dist-index';
 const entry = join(cwd, distPath, 'index.html');

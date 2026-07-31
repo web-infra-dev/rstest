@@ -1,6 +1,8 @@
 import { describe, expect, it } from '@rstest/core';
 import {
   createFixtureResolver,
+  FixtureScopeManager,
+  normalizeBuilderFixture,
   normalizeFixtures,
 } from '../../../src/runtime/runner/fixtures';
 
@@ -36,6 +38,18 @@ describe('normalizeFixtures', () => {
     const result = normalizeFixtures({ a: 1 } as any, extend);
     expect(result.base).toEqual({ isFn: false, value: 'base' });
     expect(result.a).toMatchObject({ isFn: false, value: 1 });
+  });
+
+  it('does not mutate inherited fixture dependencies', () => {
+    const base = normalizeFixtures({
+      base: async ({ addedLater }: any, use: any) => {
+        await use(addedLater);
+      },
+    } as any);
+
+    normalizeFixtures({ addedLater: 1 } as any, base);
+
+    expect(base.base?.deps).toEqual([]);
   });
 });
 
@@ -89,6 +103,219 @@ describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
       bar: 2,
     } as any);
     expect([...(result.used!.deps ?? [])].sort()).toEqual(['bar', 'foo']);
+  });
+});
+
+describe('scoped fixtures', () => {
+  it('validates dependency direction', () => {
+    expect(() =>
+      normalizeFixtures({
+        testValue: [1, { scope: 'test' }],
+        workerValue: [({ testValue }: any) => testValue, { scope: 'worker' }],
+      } as any),
+    ).toThrow(
+      'The worker fixture "workerValue" cannot depend on the test fixture "testValue".',
+    );
+
+    expect(() =>
+      normalizeFixtures({
+        workerValue: [({ task }: any) => task, { scope: 'worker' }],
+      } as any),
+    ).toThrow(
+      'The worker fixture "workerValue" cannot depend on test context "task".',
+    );
+  });
+
+  it('supports builder fixtures and onCleanup', async () => {
+    const events: string[] = [];
+    const fixtures = normalizeBuilderFixture(
+      'port',
+      (_context: object, { onCleanup }: any) => {
+        events.push('setup');
+        onCleanup(() => {
+          events.push('cleanup');
+        });
+        return 5000;
+      },
+      { scope: 'worker' },
+    );
+    const worker = new FixtureScopeManager('worker');
+    const resolver = createFixtureResolver({ fixtures } as any, {}, [], {
+      file: new FixtureScopeManager('file'),
+      worker,
+    });
+
+    await resolver.resolveTestFixtures(({ port }: any) => port);
+    await worker.cleanup();
+
+    expect(events).toEqual(['setup', 'cleanup']);
+  });
+
+  it('shares file and worker fixtures at their lifecycle boundaries', async () => {
+    const events: string[] = [];
+    const fixtures = normalizeFixtures({
+      workerValue: [
+        async (_context: object, use: any) => {
+          events.push('worker:setup');
+          await use('worker');
+          events.push('worker:cleanup');
+        },
+        { scope: 'worker' },
+      ],
+      fileValue: [
+        async ({ workerValue }: any, use: any) => {
+          events.push(`file:setup:${workerValue}`);
+          await use('file');
+          events.push('file:cleanup');
+        },
+        { scope: 'file' },
+      ],
+      testValue: async ({ fileValue }: any, use: any) => {
+        events.push(`test:setup:${fileValue}`);
+        await use('test');
+        events.push('test:cleanup');
+      },
+    } as any);
+    const file = new FixtureScopeManager('file');
+    const worker = new FixtureScopeManager('worker');
+
+    for (let index = 0; index < 2; index++) {
+      const cleanups: (() => Promise<void>)[] = [];
+      const resolver = createFixtureResolver(
+        { fixtures } as any,
+        {},
+        cleanups,
+        { file, worker },
+      );
+      await resolver.resolveTestFixtures(({ testValue }: any) => testValue);
+      for (const cleanup of cleanups) {
+        await cleanup();
+      }
+    }
+
+    await file.cleanup();
+    await worker.cleanup();
+
+    expect(events).toEqual([
+      'worker:setup',
+      'file:setup:worker',
+      'test:setup:file',
+      'test:cleanup',
+      'test:setup:file',
+      'test:cleanup',
+      'file:cleanup',
+      'worker:cleanup',
+    ]);
+  });
+
+  it('initializes a concurrent file fixture once', async () => {
+    let setups = 0;
+    let continueSetup: (() => void) | undefined;
+    const setupPaused = new Promise<void>((resolve) => {
+      continueSetup = resolve;
+    });
+    const fixtures = normalizeFixtures({
+      shared: [
+        async (_context: object, use: any) => {
+          setups++;
+          await setupPaused;
+          await use('shared');
+        },
+        { scope: 'file' },
+      ],
+    } as any);
+    const file = new FixtureScopeManager('file');
+    const worker = new FixtureScopeManager('worker');
+    const first = createFixtureResolver({ fixtures } as any, {}, [], {
+      file,
+      worker,
+    });
+    const second = createFixtureResolver({ fixtures } as any, {}, [], {
+      file,
+      worker,
+    });
+
+    const resolutions = [
+      first.resolveTestFixtures(({ shared }: any) => shared),
+      second.resolveTestFixtures(({ shared }: any) => shared),
+    ];
+    await Promise.resolve();
+    continueSetup!();
+    await Promise.all(resolutions);
+    await file.cleanup();
+
+    expect(setups).toBe(1);
+  });
+
+  it('does not retain unrelated values in scoped setup contexts', async () => {
+    let inspectedKeys: string[] = [];
+    const fixtures = normalizeBuilderFixture('first', () => 'first', {
+      scope: 'worker',
+    });
+    const extendedFixtures = normalizeBuilderFixture(
+      'inspector',
+      (_context: object) => {
+        inspectedKeys = Object.keys(_context);
+        return 'inspector';
+      },
+      { scope: 'worker' },
+      fixtures,
+    );
+    const worker = new FixtureScopeManager('worker');
+    const managers = {
+      file: new FixtureScopeManager('file'),
+      worker,
+    };
+
+    await createFixtureResolver(
+      { fixtures: extendedFixtures } as any,
+      {},
+      [],
+      managers,
+    ).resolveTestFixtures(({ first }: any) => first);
+    await createFixtureResolver(
+      { fixtures: extendedFixtures } as any,
+      {},
+      [],
+      managers,
+    ).resolveTestFixtures(({ inspector }: any) => inspector);
+    await worker.cleanup();
+
+    expect(inspectedKeys).toEqual([]);
+  });
+
+  it('releases scoped instances when cleanup fails', async () => {
+    let setups = 0;
+    const fixtures = normalizeBuilderFixture(
+      'value',
+      (_context: object, { onCleanup }: any) => {
+        setups++;
+        onCleanup(() => {
+          throw new Error('cleanup failed');
+        });
+        return setups;
+      },
+      { scope: 'worker' },
+    );
+    const worker = new FixtureScopeManager('worker');
+    const managers = {
+      file: new FixtureScopeManager('file'),
+      worker,
+    };
+
+    const resolveValue = () =>
+      createFixtureResolver(
+        { fixtures } as any,
+        {},
+        [],
+        managers,
+      ).resolveTestFixtures(({ value }: any) => value);
+
+    await expect(resolveValue()).resolves.toBeUndefined();
+    await expect(worker.cleanup()).rejects.toThrow('cleanup failed');
+    await expect(resolveValue()).resolves.toBeUndefined();
+
+    expect(setups).toBe(2);
   });
 });
 

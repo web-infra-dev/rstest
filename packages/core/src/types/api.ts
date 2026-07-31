@@ -185,14 +185,31 @@ export type DescribeAPI = DescribeFn & {
   sequential: DescribeAPI;
 };
 
-interface FixtureOptions {
+export type FixtureScope = 'test' | 'file' | 'worker';
+
+export interface FixtureOptions {
   /**
    * Whether to automatically set up current fixture, even though it's not being used in tests.
    */
   auto?: boolean;
+  /**
+   * Lifecycle of the fixture.
+   *
+   * @default 'test'
+   */
+  scope?: FixtureScope;
 }
 
 export type Use<T> = (value: T) => Promise<void>;
+
+export type FixtureCleanup = () => MaybePromise<void>;
+
+export type FixtureLifecycle = {
+  /**
+   * Register one cleanup callback for a fixture created with the builder API.
+   */
+  onCleanup: (cleanup: FixtureCleanup) => void;
+};
 
 type FixtureFn<T, K extends keyof T, ExtraContext> = (
   context: Omit<T, K> & ExtraContext,
@@ -223,21 +240,81 @@ export type NormalizedFixture = {
   isFn: boolean;
   deps?: string[];
   value: FixtureFn<any, any, any> | any;
-  options?: FixtureOptions;
+  options: Required<FixtureOptions>;
+  mode: 'use' | 'return';
 };
 
 export type NormalizedFixtures = Record<string, NormalizedFixture>;
 
-export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {
-  extend: <T extends Record<string, any> = object>(
-    fixtures: Fixtures<T, ExtraContext>,
-  ) => TestAPIs<{
-    [K in keyof T | keyof ExtraContext]: K extends keyof T
-      ? T[K]
-      : K extends keyof ExtraContext
-        ? ExtraContext[K]
-        : never;
-  }>;
+type MergeFixtureContext<Context, Added extends Record<string, any>> = {
+  [K in keyof Context | keyof Added]: K extends keyof Added
+    ? Added[K]
+    : K extends keyof Context
+      ? Context[K]
+      : never;
+};
+
+type BuilderFixture<Value, Context> =
+  | Value
+  | ((context: Context, lifecycle: FixtureLifecycle) => MaybePromise<Value>);
+
+type TestExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
+  <T extends Record<string, any> = object>(
+    fixtures: Fixtures<T, TestFixtures & FileFixtures & WorkerFixtures>,
+  ): TestAPIs<
+    MergeFixtureContext<TestFixtures, T>,
+    FileFixtures,
+    WorkerFixtures
+  >;
+  <Name extends string, Value>(
+    name: Name,
+    fixture: BuilderFixture<
+      Value,
+      TestContext & TestFixtures & FileFixtures & WorkerFixtures
+    >,
+  ): TestAPIs<
+    MergeFixtureContext<TestFixtures, Record<Name, Value>>,
+    FileFixtures,
+    WorkerFixtures
+  >;
+  <Name extends string, Value>(
+    name: Name,
+    options: FixtureOptions & { scope?: 'test' },
+    fixture: BuilderFixture<
+      Value,
+      TestContext & TestFixtures & FileFixtures & WorkerFixtures
+    >,
+  ): TestAPIs<
+    MergeFixtureContext<TestFixtures, Record<Name, Value>>,
+    FileFixtures,
+    WorkerFixtures
+  >;
+  <Name extends string, Value>(
+    name: Name,
+    options: FixtureOptions & { scope: 'file' },
+    fixture: BuilderFixture<Value, FileFixtures & WorkerFixtures>,
+  ): TestAPIs<
+    TestFixtures,
+    MergeFixtureContext<FileFixtures, Record<Name, Value>>,
+    WorkerFixtures
+  >;
+  <Name extends string, Value>(
+    name: Name,
+    options: FixtureOptions & { scope: 'worker' },
+    fixture: BuilderFixture<Value, WorkerFixtures>,
+  ): TestAPIs<
+    TestFixtures,
+    FileFixtures,
+    MergeFixtureContext<WorkerFixtures, Record<Name, Value>>
+  >;
+};
+
+export type TestAPIs<
+  TestFixtures = object,
+  FileFixtures = object,
+  WorkerFixtures = object,
+> = TestAPI<TestFixtures & FileFixtures & WorkerFixtures> & {
+  extend: TestExtend<TestFixtures, FileFixtures, WorkerFixtures>;
 };
 
 export type OnTestFinishedHandler = (ctx: TestContext) => MaybePromise<void>;

@@ -330,7 +330,7 @@ test.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 ## test.extend
 
-- **Type:** `test.extend(fixtures: Fixtures)`
+- **Type:** `test.extend(fixtures: Fixtures) | test.extend(name, fixture) | test.extend(name, options, fixture)`
 
 Extends the test context with custom fixtures and returns a **new** test API. The original `test` is not modified — you can have multiple independent extended versions at the same time.
 
@@ -365,7 +365,7 @@ The returned API has the same chainable modifiers as `test` (`only`, `skip`, `ea
 
 ### Fixture function lifecycle
 
-A fixture function receives two parameters:
+A test-scoped fixture function in the object form receives two parameters:
 
 1. **context** — contains other fixtures as well as `TestContext` (`task`, `expect`, `onTestFinished`, `onTestFailed`). Use object destructuring to declare the dependencies you need.
 2. **use** — call `await use(value)` to pass the fixture value to the test.
@@ -406,7 +406,7 @@ myTest('uses baseURL', ({ baseURL, expect }) => {
 
 ### Accessing TestContext
 
-The first parameter of a fixture function also includes `TestContext`, so you can read current test information or use `expect` directly inside a fixture:
+The first parameter of a test-scoped fixture function also includes `TestContext`, so you can read current test information or use `expect` directly inside a fixture:
 
 ```ts
 import { test } from '@rstest/core';
@@ -443,6 +443,50 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
   expect(res.ok).toBe(true);
 });
 ```
+
+### Fixture scopes
+
+<ApiMeta addedVersion="0.11.6" />
+
+Use the `scope` option to control how long a fixture instance lives:
+
+| Scope      | Setup and cleanup boundary                                                                                       | Available dependencies                 |
+| ---------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `'test'`   | Once per test attempt, including each retry. This is the default.                                                | Test, file, worker, and `TestContext`. |
+| `'file'`   | Once per test file, then cleaned up after all tests and suite hooks in that file.                                | File and worker fixtures.              |
+| `'worker'` | Once per worker, then cleaned up when the worker finishes. With `isolate: false`, it can be shared across files. | Worker fixtures only.                  |
+
+File- and worker-scoped fixtures cannot access `TestContext`, because there is no single current test for their full lifetime. A fixture can depend only on fixtures whose lifetime is at least as long as its own. Rstest reports an error for dependencies such as a worker fixture consuming a file or test fixture.
+
+The object form uses the same `await use(value)` lifecycle with a tuple option:
+
+```ts
+const dbTest = test.extend({
+  database: [
+    async ({}, use) => {
+      const database = await connectDatabase();
+      await use(database);
+      await database.close();
+    },
+    { scope: 'worker' },
+  ],
+});
+```
+
+The builder form accepts `name`, `options`, and the fixture in that order. Its fixture function returns the value and can register one cleanup with `onCleanup`:
+
+```ts
+const apiTest = test
+  .extend('port', { scope: 'worker' }, 5000)
+  .extend('server', { scope: 'file' }, async ({ port }, { onCleanup }) => {
+    const server = await startServer(port);
+    onCleanup(() => server.close());
+    return server;
+  })
+  .extend('client', async ({ server }) => createClient(server.url));
+```
+
+Omit the options argument to create a test-scoped builder fixture, as in `.extend('client', fixture)`. Setup is lazy unless `auto: true` is set. An automatic file or worker fixture still runs only once at its corresponding scope boundary.
 
 ### Using fixtures in hooks
 
@@ -484,7 +528,7 @@ describe('database tests', () => {
 
 ### Automatic fixtures (`auto`)
 
-Fixtures are lazy by default: they only run when requested through object destructuring by a test or per-test hook callback (or required by another fixture). To make a fixture run for every test automatically — even when no callback requests it — use the tuple syntax with `{ auto: true }`:
+Fixtures are lazy by default: they only run when requested through object destructuring by a test or per-test hook callback (or required by another fixture). To make a test-scoped fixture run for every test automatically — even when no callback requests it — use the tuple syntax with `{ auto: true }`:
 
 ```ts
 import { test } from '@rstest/core';

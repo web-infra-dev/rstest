@@ -44,9 +44,16 @@ import type {
   Describe,
   Expect,
   ExpectStatic,
+  FixtureCleanup,
+  FixtureLifecycle,
+  FixtureOptions,
+  FixtureScope,
+  Fixtures,
   Rstest,
   RstestUtilities,
+  TestAPIs,
   TestContext,
+  Use,
 } from '@rstest/core';
 ```
 
@@ -60,6 +67,20 @@ import type {
 - `Describe`：`describe` API 的类型。
 - `Expect`：`expect(value)` 返回的 assertion 类型。
 - `ExpectStatic`：可调用的 `expect` API 类型。
+
+<ApiMeta addedVersion="0.11.6" />
+
+以下 fixture 生命周期类型从 Rstest 0.11.6 开始作为公开类型导出：
+
+- `FixtureScope`：`'test' | 'file' | 'worker'`。
+- `FixtureOptions`：控制自动 setup 和 fixture `scope` 的选项。
+- `FixtureLifecycle`：包含 `onCleanup` 的 builder fixture 生命周期对象。
+- `FixtureCleanup`：同步或异步 cleanup callback。
+- `Fixtures`：对象写法的 fixture 定义 map。
+- `Use`：向对象写法 fixture 暴露值的函数。
+- `TestAPIs`：扩展后的 fixture-aware `test` API 类型。
+
+对象和 builder 两种写法请参阅 [`test.extend`](/api/runtime-api/test-api/test#testextend)。
 
 ## Mock 类型
 
