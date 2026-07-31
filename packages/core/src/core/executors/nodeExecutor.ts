@@ -8,7 +8,7 @@ import type {
   TestExecutor,
 } from '../../types';
 import type { CoverageMap, CoverageProvider } from '../../types/coverage';
-import { color, logger, type TraceRun } from '../../utils';
+import { color, logger, toError, type TraceRun } from '../../utils';
 import { ensureTestEnvironmentDependencies } from '../envDependencies';
 import { isNodeProject } from '../isBrowserProject';
 import {
@@ -558,6 +558,15 @@ export function createNodeExecutor(
       projectPlans.map((plan) => plan.execute(plan.finalEntries)),
     );
 
+    let workerCleanupError: Error | undefined;
+    if (!isWatchMode) {
+      try {
+        await pool.close();
+      } catch (error) {
+        workerCleanupError = toError(error);
+      }
+    }
+
     testStart ??= buildStart;
     const buildTime = testStart - buildStart;
     const testTime = Date.now() - testStart;
@@ -583,7 +592,10 @@ export function createNodeExecutor(
     return {
       results: returns.flatMap((r) => r.results),
       testResults: returns.flatMap((r) => r.testResults),
-      errors: returns.flatMap((r) => r.errors || []),
+      errors: [
+        ...returns.flatMap((r) => r.errors || []),
+        ...(workerCleanupError ? [workerCleanupError] : []),
+      ],
       testPaths: currentEntries.map((e) => e.testPath),
       deletedTestPaths: currentDeletedEntries,
       duration: { buildTime, testTime },

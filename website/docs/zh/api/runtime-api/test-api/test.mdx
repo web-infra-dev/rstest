@@ -471,7 +471,9 @@ const apiTest = test
   .extend('client', async ({ server }) => createClient(server.url));
 ```
 
-省略 options 参数时会创建 test scope builder fixture，例如 `.extend('client', fixture)`。对象写法仍可用于通过 `await use(value)` 生命周期定义 test scope fixture。Setup 默认按需执行；设置 `auto: true` 后自动执行。自动 file 或 worker fixture 在各自的 scope 边界内仍然只执行一次。
+省略 options 参数时会创建 test scope builder fixture，例如 `.extend('client', fixture)`。对象写法仍可用于通过 `await use(value)` 生命周期定义 test scope fixture。覆盖 file 或 worker scope fixture 时，必须再次指定相同的 `scope`；省略或更改 scope 都会报错。
+
+Setup 默认按需执行；设置 `auto: true` 后自动执行。自动 file 和 worker fixture 会在首个相关文件的 suite hook 之前初始化，并且在各自的 scope 边界内仍然只执行一次。
 
 ### 在 hook 中使用 fixture
 

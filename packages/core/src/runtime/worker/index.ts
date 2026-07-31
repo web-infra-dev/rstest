@@ -8,8 +8,7 @@ import {
 } from '../../pool/protocol';
 import { ENV } from '../../utils/env';
 import { channel } from './channels';
-import { runInPool } from './runInPool';
-import { cleanupWorkerFixtures } from '../runner/fixtures';
+import { cleanupWorkerRuntime, runInPool } from './runInPool';
 import { installGracefulExit } from './setup';
 
 installGracefulExit();
@@ -138,7 +137,7 @@ const runTask = async (
 
 const cleanupWorker = async (): Promise<void> => {
   try {
-    await cleanupWorkerFixtures();
+    await cleanupWorkerRuntime();
     send({ type: 'cleanupFinished' });
   } catch (error) {
     send({

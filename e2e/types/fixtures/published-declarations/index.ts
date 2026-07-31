@@ -40,6 +40,23 @@ const fileTest = workerTest.extend(
   ({ workerValue }) => String(workerValue),
 );
 
+// @ts-expect-error Scoped overrides must repeat their inherited scope.
+workerTest.extend('workerValue', 6000);
+
+workerTest.extend('workerValue', { scope: 'worker' }, 6000);
+
+workerTest.extend(
+  'workerValue',
+  // @ts-expect-error A worker fixture cannot be changed to test scope.
+  { scope: 'test' },
+  6000,
+);
+
+workerTest.extend<{ workerValue: number }>({
+  // @ts-expect-error Object fixtures cannot override a worker fixture.
+  workerValue: 6000,
+});
+
 fileTest.extend(
   'testValue',
   { scope: 'test' },

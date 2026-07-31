@@ -1,4 +1,4 @@
-import { expect, test } from '@rstest/core';
+import { beforeAll, expect, test } from '@rstest/core';
 
 let testSequence = 0;
 
@@ -35,6 +35,33 @@ const childGraphTest = baseGraphTest.extend(
   'child',
 );
 
+let automaticWorkerReady = false;
+let automaticFileReady = false;
+let automaticTestReady = false;
+const automaticScopedTest = test
+  .extend('automaticWorker', { scope: 'worker', auto: true }, () => {
+    automaticWorkerReady = true;
+    return 'automatic-worker';
+  })
+  .extend(
+    'automaticFile',
+    { scope: 'file', auto: true },
+    ({ automaticWorker }) => {
+      automaticFileReady = automaticWorker === 'automatic-worker';
+      return 'automatic-file';
+    },
+  )
+  .extend('automaticTest', { scope: 'test', auto: true }, () => {
+    automaticTestReady = true;
+    return 'automatic-test';
+  });
+
+beforeAll(() => {
+  expect(automaticWorkerReady).toBe(true);
+  expect(automaticFileReady).toBe(true);
+  expect(automaticTestReady).toBe(false);
+});
+
 scopedTest('first browser scoped test', ({ testValue }) => {
   expect(testValue).toBe('worker:file:test:1');
 });
@@ -53,3 +80,7 @@ childGraphTest(
     expect(derived).toBe('child');
   },
 );
+
+automaticScopedTest('initializes automatic scopes at their boundaries', () => {
+  expect(automaticTestReady).toBe(true);
+});

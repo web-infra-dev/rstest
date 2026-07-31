@@ -24,24 +24,30 @@ it('runs test, file, and worker fixture lifecycles', async () => {
   );
 });
 
-it('reports worker fixture cleanup failures', async () => {
-  const { cli, expectExecFailed } = await runRstestCli({
-    command: 'rstest',
-    args: [
-      'run',
-      'fixtures/workerCleanupFailure.test.ts',
-      '--isolate=false',
-      '--pool.maxWorkers=1',
-    ],
-    options: {
-      nodeOptions: {
-        cwd: __dirname,
+for (const isolate of [true, false]) {
+  it(`reports worker fixture cleanup failures with isolate=${isolate}`, async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/workerCleanupFailure.test.ts',
+        `--isolate=${isolate}`,
+        '--pool.maxWorkers=1',
+        '--reporters',
+        'json',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
       },
-    },
-  });
+    });
 
-  await expectExecFailed();
-  expect(`${cli.stdout}\n${cli.stderr}`).toContain(
-    'worker fixture cleanup reached',
-  );
-});
+    await expectExecFailed();
+    const report = JSON.parse(cli.stdout.slice(cli.stdout.indexOf('{')));
+    expect(report.status).toBe('fail');
+    expect(report.unhandledErrors[0].message).toContain(
+      'worker fixture cleanup reached',
+    );
+  });
+}

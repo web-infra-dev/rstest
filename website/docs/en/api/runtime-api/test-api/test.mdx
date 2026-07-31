@@ -471,7 +471,9 @@ const apiTest = test
   .extend('client', async ({ server }) => createClient(server.url));
 ```
 
-Omit the options argument to create a test-scoped builder fixture, as in `.extend('client', fixture)`. The object form remains available for test-scoped fixtures using the `await use(value)` lifecycle. Setup is lazy unless `auto: true` is set. An automatic file or worker fixture still runs only once at its corresponding scope boundary.
+Omit the options argument to create a test-scoped builder fixture, as in `.extend('client', fixture)`. The object form remains available for test-scoped fixtures using the `await use(value)` lifecycle. When overriding a file- or worker-scoped fixture, repeat the same `scope`; changing or omitting its scope is an error.
+
+Setup is lazy unless `auto: true` is set. Automatic file and worker fixtures are initialized before suite hooks in the first relevant file, and still run only once at their corresponding scope boundary.
 
 ### Using fixtures in hooks
 

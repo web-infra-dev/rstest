@@ -263,16 +263,26 @@ type BuilderFixture<Value, Context> =
   | Value
   | ((context: Context, lifecycle: FixtureLifecycle) => MaybePromise<Value>);
 
+type FixtureNameWithoutOverrides<
+  Name extends string,
+  Existing,
+> = Name extends keyof Existing ? never : Name;
+
+type FixtureObjectWithoutOverrides<Added, Existing> = {
+  [Name in Extract<keyof Added, keyof Existing>]: never;
+};
+
 type TestExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
   <T extends Record<string, any> = object>(
-    fixtures: Fixtures<T, TestFixtures & FileFixtures & WorkerFixtures>,
+    fixtures: Fixtures<T, TestFixtures & FileFixtures & WorkerFixtures> &
+      FixtureObjectWithoutOverrides<T, FileFixtures & WorkerFixtures>,
   ): TestAPIs<
     MergeFixtureContext<TestFixtures, T>,
     FileFixtures,
     WorkerFixtures
   >;
   <Name extends string, Value>(
-    name: Name,
+    name: FixtureNameWithoutOverrides<Name, FileFixtures & WorkerFixtures>,
     fixture: BuilderFixture<
       Value,
       TestContext & TestFixtures & FileFixtures & WorkerFixtures
@@ -283,7 +293,7 @@ type TestExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
     WorkerFixtures
   >;
   <Name extends string, Value>(
-    name: Name,
+    name: FixtureNameWithoutOverrides<Name, FileFixtures & WorkerFixtures>,
     options: FixtureOptions & { scope?: 'test' },
     fixture: BuilderFixture<
       Value,
@@ -295,7 +305,7 @@ type TestExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
     WorkerFixtures
   >;
   <Name extends string, Value>(
-    name: Name,
+    name: FixtureNameWithoutOverrides<Name, TestFixtures & WorkerFixtures>,
     options: FixtureOptions & { scope: 'file' },
     fixture: BuilderFixture<Value, FileFixtures & WorkerFixtures>,
   ): TestAPIs<
@@ -304,7 +314,7 @@ type TestExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
     WorkerFixtures
   >;
   <Name extends string, Value>(
-    name: Name,
+    name: FixtureNameWithoutOverrides<Name, TestFixtures & FileFixtures>,
     options: FixtureOptions & { scope: 'worker' },
     fixture: BuilderFixture<Value, WorkerFixtures>,
   ): TestAPIs<

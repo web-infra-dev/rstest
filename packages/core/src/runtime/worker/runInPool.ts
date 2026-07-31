@@ -95,6 +95,33 @@ let activeEnvironmentKey: string | undefined;
  * runtime chunk and reintroducing the cross-project regression (#1376).
  */
 let lastBuildId: number | undefined;
+let workerEnvironmentCleanup: (() => MaybePromise<void>) | undefined;
+
+export const cleanupWorkerRuntime = async (): Promise<void> => {
+  const cleanupEnvironment = workerEnvironmentCleanup;
+  workerEnvironmentCleanup = undefined;
+  const errors: unknown[] = [];
+
+  try {
+    await cleanupWorkerFixtures();
+  } catch (error) {
+    errors.push(error);
+  }
+  if (cleanupEnvironment) {
+    try {
+      await cleanupEnvironment();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+
+  if (errors.length === 1) {
+    throw errors[0];
+  }
+  if (errors.length > 1) {
+    throw new AggregateError(errors, 'Failed to clean up the test worker.');
+  }
+};
 
 const setErrorName = (error: Error, type: string): Error => {
   try {
@@ -615,6 +642,11 @@ export const runInPool = async (
       taskContext: preparedTaskContext,
     } = await preparePool(options, tracker);
     taskContext = preparedTaskContext;
+    if (isolate) {
+      workerEnvironmentCleanup = cleanup;
+    } else {
+      cleanups.push(cleanup);
+    }
     if (detectAsyncLeaks) {
       asyncLeakDetector = createAsyncLeakDetector(taskContext);
       asyncLeakDetector.enable();
@@ -647,8 +679,6 @@ export const runInPool = async (
     const { assetFiles, sourceMaps: sourceMapsFromAssets } =
       assets || (await rpc.getAssetsByEntry());
     sourceMaps = sourceMapsFromAssets;
-
-    cleanups.push(cleanup);
 
     rpc.onTestFileStart?.({
       testId: getFileTaskId(testPath),
@@ -811,19 +841,6 @@ export const runInPool = async (
 
     taskContext?.setFallback(undefined);
     asyncLeakDetector?.disable();
-    if (isolate) {
-      try {
-        await cleanupWorkerFixtures();
-      } catch (error) {
-        if (runResult) {
-          runResult.status = 'fail';
-          runResult.errors = [
-            ...(runResult.errors ?? []),
-            ...(await formatTestError(error)),
-          ];
-        }
-      }
-    }
     await teardown();
     tracker.end();
     if (runResult) {

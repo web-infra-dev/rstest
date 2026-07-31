@@ -45,6 +45,7 @@ describe('beforeEach cleanup fixture timeout', () => {
 });
 
 let lateTeardownFinished = false;
+let lateBuilderCleanupFinished = false;
 
 describe('late fixture teardown', () => {
   const timeoutTest = test.extend<{ slowFixture: string }>({
@@ -66,4 +67,29 @@ describe('late fixture teardown', () => {
 
 test('waits for late fixture teardown before continuing', () => {
   expect(lateTeardownFinished).toBe(true);
+});
+
+describe('late builder fixture cleanup', () => {
+  const timeoutTest = test.extend(
+    'slowBuilderFixture',
+    { scope: 'test' },
+    async (_context, { onCleanup }) => {
+      await wait(130);
+      onCleanup(() => {
+        lateBuilderCleanupFinished = true;
+      });
+      await never();
+    },
+  );
+
+  beforeEach<{ slowBuilderFixture: void }>(({ slowBuilderFixture }) => {
+    void slowBuilderFixture;
+  }, 50);
+
+  timeoutTest('times out before builder cleanup registration', () => {});
+});
+
+test('runs builder cleanup registered after cancellation', async () => {
+  await wait(80);
+  expect(lateBuilderCleanupFinished).toBe(true);
 });

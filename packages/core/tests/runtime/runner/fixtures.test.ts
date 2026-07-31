@@ -141,6 +141,18 @@ describe('scoped fixtures', () => {
     );
   });
 
+  it('requires scoped overrides to repeat their scope', () => {
+    const fixtures = normalizeBuilderFixture('workerValue', 'worker', {
+      scope: 'worker',
+    });
+
+    expect(() =>
+      normalizeBuilderFixture('workerValue', 'child', undefined, fixtures),
+    ).toThrow(
+      'Fixture "workerValue" must repeat its "worker" scope when overriding a scoped fixture.',
+    );
+  });
+
   it('supports builder fixtures and onCleanup', async () => {
     const events: string[] = [];
     const fixtures = normalizeBuilderFixture(
@@ -673,7 +685,6 @@ describe('createFixtureResolver', () => {
     const cancellation = resolver.cancelPendingFixtures();
     continueSetup!();
 
-    await expect(cancellation?.teardownStarted).resolves.toBeUndefined();
     await teardownStartedPromise;
     const resolutionSettled = await Promise.race([
       resolution.then(() => true),
@@ -684,10 +695,52 @@ describe('createFixtureResolver', () => {
 
     expect(resolutionSettled).toBe(false);
     continueTeardown!();
+    await expect(cancellation?.completed).resolves.toBeUndefined();
     await expect(resolution).resolves.toEqual({ status: 'skipped' });
     expect(events).toEqual(['setup', 'teardown:start', 'teardown']);
     expect(context).toEqual({});
     expect(cleanups).toEqual([]);
+  });
+
+  it('runs a builder cleanup registered after cancellation', async () => {
+    let continueSetup: (() => void) | undefined;
+    const setupPaused = new Promise<void>((resolve) => {
+      continueSetup = resolve;
+    });
+    const events: string[] = [];
+    const fixtures = normalizeBuilderFixture(
+      'slow',
+      async (_context: object, { onCleanup }: any) => {
+        await setupPaused;
+        onCleanup(() => {
+          events.push('cleanup');
+        });
+        await new Promise<never>(() => {});
+      },
+      { scope: 'file' },
+    );
+    const file = new FixtureScopeManager('file');
+    const resolver = createFixtureResolver({ fixtures } as any, {}, [], {
+      file,
+      worker: new FixtureScopeManager('worker'),
+    });
+
+    const resolution = resolver.resolveHookFixtures(({ slow }: any) => slow);
+    await Promise.resolve();
+    const cancellation = resolver.cancelPendingFixtures();
+    continueSetup!();
+
+    await expect(cancellation?.completed).resolves.toBeUndefined();
+    expect(events).toEqual(['cleanup']);
+    expect(file.getContext().instances.size).toBe(0);
+
+    const resolutionSettled = await Promise.race([
+      resolution.then(() => true),
+      new Promise<false>((resolve) => {
+        setImmediate(() => resolve(false));
+      }),
+    ]);
+    expect(resolutionSettled).toBe(false);
   });
 
   it('settles a cancelled fixture that returns without calling use', async () => {
