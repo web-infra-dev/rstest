@@ -63,7 +63,7 @@
     "@vitest/snapshot": "^4.1.10",
     "birpc": "^4.0.0",
     "picomatch": "^4.0.5",
-    "playwright": "^1.62.0"
+    "playwright": "^1.62.1"
   },
   "peerDependencies": {
     "@rstest/core": "workspace:^",
