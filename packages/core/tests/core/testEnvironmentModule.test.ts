@@ -212,6 +212,71 @@ exports.canvasInstalled = canvasInstalled;
     }
   });
 
+  it('automatically creates a bundle for supported happy-dom 20', async () => {
+    const root = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'rstest-env-supported-happy-dom-'),
+    );
+    createPackage(root, 'export class Window {}', {
+      name: 'happy-dom',
+      version: '20.11.1',
+    });
+
+    const result = await prepareTestEnvironmentModules({
+      projects: [createProject(root, { environmentName: 'happy-dom' })],
+      rootPath: root,
+    });
+
+    try {
+      const moduleReference = result.modules.get('happy-dom');
+      expect(moduleReference?.bundlePath).toBeTruthy();
+      if (!moduleReference?.bundlePath) {
+        throw new Error('Expected happy-dom to be bundled.');
+      }
+      const bundled = await import(
+        pathToFileURL(moduleReference.bundlePath).href
+      );
+      expect(typeof bundled.Window).toBe('function');
+    } finally {
+      await result.cleanup();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('forces the happy-dom prebundle outside the automatic version matrix', async () => {
+    const root = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'rstest-env-force-happy-dom-'),
+    );
+    createPackage(root, 'export class Window {}', {
+      name: 'happy-dom',
+      version: '21.0.0',
+    });
+
+    const result = await prepareTestEnvironmentModules({
+      projects: [
+        createProject(root, {
+          environmentName: 'happy-dom',
+          prebundle: true,
+        }),
+      ],
+      rootPath: root,
+    });
+
+    try {
+      const moduleReference = result.modules.get('happy-dom');
+      expect(moduleReference?.bundlePath).toBeTruthy();
+      if (!moduleReference?.bundlePath) {
+        throw new Error('Expected happy-dom to be bundled.');
+      }
+      const bundled = await import(
+        pathToFileURL(moduleReference.bundlePath).href
+      );
+      expect(typeof bundled.Window).toBe('function');
+    } finally {
+      await result.cleanup();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('creates the prebundle independently of the test output module format', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rstest-env-cjs-'));
     createPackage(root, 'export class JSDOM {}');
