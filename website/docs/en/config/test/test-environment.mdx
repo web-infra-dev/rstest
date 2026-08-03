@@ -93,6 +93,8 @@ The `options` object is passed directly to the environment's constructor.
 
 #### Environment prebundle
 
+<ApiMeta addedVersion="0.12.0" />
+
 Rstest can prebundle a test environment before workers load it. This reduces repeated module resolution and initialization work when many test files use the same DOM environment.
 
 The `prebundle` option accepts:
