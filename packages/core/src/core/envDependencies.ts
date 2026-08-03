@@ -1,5 +1,3 @@
-import { fileURLToPath } from 'node:url';
-import { dirname } from 'pathe';
 import {
   ensurePackageInstalled,
   isPackageInstalled,
@@ -8,12 +6,18 @@ import {
 import type { EnvironmentName } from '../types';
 import { color } from '../utils';
 
-const EnvironmentDependencyMap: Partial<Record<EnvironmentName, string>> = {
+export type EnvironmentDependencyName = Extract<
+  EnvironmentName,
+  'jsdom' | 'happy-dom'
+>;
+
+export const environmentDependencyPackages: Record<
+  EnvironmentDependencyName,
+  string
+> = {
   jsdom: 'jsdom',
   'happy-dom': 'happy-dom',
 };
-
-const coreRoot = dirname(fileURLToPath(import.meta.url));
 
 type PackageInstaller = (
   packageName: string,
@@ -65,7 +69,7 @@ type EnvironmentDependency = {
 };
 
 const getPackageResolutionRoots = (projectRoot: string, root: string) => {
-  return Array.from(new Set([projectRoot, root, coreRoot]));
+  return Array.from(new Set([projectRoot, root]));
 };
 
 export const ensureTestEnvironmentDependencies = async (
@@ -80,7 +84,9 @@ export const ensureTestEnvironmentDependencies = async (
   for (const project of projects) {
     const environmentName = project.normalizedConfig.testEnvironment.name;
     const packageName =
-      EnvironmentDependencyMap[environmentName as EnvironmentName];
+      environmentDependencyPackages[
+        environmentName as EnvironmentDependencyName
+      ];
 
     if (!packageName) {
       continue;

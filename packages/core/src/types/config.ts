@@ -288,9 +288,19 @@ export type ExtendConfigFn = (
 
 export type EnvironmentName = 'node' | 'jsdom' | 'happy-dom';
 
+export type TestEnvironmentPrebundle = 'auto' | boolean;
+
 export type EnvironmentWithOptions = {
   name: EnvironmentName;
   options?: Record<string, any>;
+  /**
+   * Prebundle the environment before workers load it.
+   *
+   * - `'auto'` (default): prebundle supported built-in environments.
+   * - `true`: always prebundle the selected built-in environment.
+   * - `false`: load the environment natively.
+   */
+  prebundle?: TestEnvironmentPrebundle;
 };
 
 export interface RstestConfig {

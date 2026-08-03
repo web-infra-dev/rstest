@@ -106,6 +106,7 @@ const regexp = /"/;
       applyEnvironmentComment(
         {
           name: 'jsdom',
+          prebundle: false,
           options: {
             url: 'https://base.test/',
             pretendToBeVisual: true,
@@ -119,6 +120,7 @@ const regexp = /"/;
       ),
     ).toEqual({
       name: 'jsdom',
+      prebundle: false,
       options: {
         url: 'https://comment.test/',
         pretendToBeVisual: true,

@@ -31,11 +31,13 @@ import {
   runBrowserGlobalSetupStage,
 } from './browser/globalSetupStage';
 import type { BrowserTestExecutor } from './browser/loader';
+import { ensureTestEnvironmentDependencies } from './envDependencies';
 import { createSetupFileState } from './setupFileState';
 import { createRsbuildServer, prepareRsbuild } from './rsbuild';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';
 import { createListProjectPlanState, syncNodeProjects } from './projectPlan';
 import { getUserRstestConfigPluginProjects } from './modifyRstestConfig';
+import { prepareTestEnvironmentModules } from './testEnvironmentModule';
 
 type ListedTest = {
   file: string;
@@ -215,90 +217,121 @@ const collectNodeTests = async ({
     rootPath: context.rootPath,
   });
 
+  let pool: Awaited<ReturnType<typeof createPool>> | undefined;
+  let testEnvironmentModules:
+    Awaited<ReturnType<typeof prepareTestEnvironmentModules>> | undefined;
+  const closeResources = async (): Promise<void> => {
+    try {
+      await closeServer();
+    } finally {
+      try {
+        await pool?.close();
+      } finally {
+        await testEnvironmentModules?.cleanup();
+      }
+    }
+  };
+
   try {
+    // createRsbuildServer applies modifyRstestConfig while initializing the
+    // compiler, so dependency resolution observes the final environment/root.
+    await ensureTestEnvironmentDependencies(nodeProjects, context.rootPath);
+    testEnvironmentModules = await prepareTestEnvironmentModules({
+      projects: nodeProjects,
+      rootPath: context.rootPath,
+    });
     await beforeCollect?.();
+
+    pool = await createPool({
+      context,
+      testEnvironmentModules: testEnvironmentModules.modules,
+    });
+    const activePool = pool;
+    const updateSnapshot = context.snapshotManager.options.updateSnapshot;
+
+    const returns = await Promise.all(
+      nodeProjects.map(async (project) => {
+        const {
+          entries,
+          setupEntries,
+          globalSetupEntries,
+          getSourceMaps,
+          getAssetFiles,
+          assetNames,
+        } = await getRsbuildStats({
+          environmentName: project.environmentName,
+        });
+
+        if (
+          claimGlobalSetupOnce(
+            project,
+            entries.length,
+            globalSetupEntries.length,
+          )
+        ) {
+          const files = globalSetupEntries.flatMap((e) => e.files!);
+          const assetFilesPromise = getAssetFiles(files);
+          const sourceMapsPromise = getSourceMaps(files);
+          const [assetFiles, sourceMaps] = await Promise.all([
+            assetFilesPromise,
+            sourceMapsPromise,
+          ]);
+
+          const { success, errors } = await runGlobalSetup({
+            globalSetupEntries,
+            assetFiles,
+            sourceMaps,
+            interopDefault: true,
+            outputModule: project.outputModule,
+            federation: project.normalizedConfig.federation,
+          });
+          if (!success) {
+            return {
+              list: [],
+              errors,
+              assetNames,
+              getSourceMaps: () => null,
+            };
+          }
+        }
+
+        const list = await activePool.collectTests({
+          entries,
+          assetNames,
+          setupEntries,
+          getAssetFiles,
+          getSourceMaps,
+          project,
+          updateSnapshot,
+        });
+
+        return {
+          list,
+          getSourceMaps,
+          assetNames,
+        };
+      }),
+    );
+
+    return {
+      list: returns.flatMap((r) => r.list),
+      errors: returns.flatMap((r) => r.errors || []),
+      getSourceMap: async (name: string) => {
+        const resource = returns.find((r) => r.assetNames.includes(name));
+        return (await resource?.getSourceMaps([name]))?.[name];
+      },
+      close: async () => {
+        try {
+          await runGlobalTeardown();
+        } finally {
+          await closeResources();
+        }
+      },
+    };
   } catch (error) {
-    await closeServer();
+    await closeResources();
     throw error;
   }
-
-  const pool = await createPool({
-    context,
-  });
-
-  const updateSnapshot = context.snapshotManager.options.updateSnapshot;
-
-  const returns = await Promise.all(
-    nodeProjects.map(async (project) => {
-      const {
-        entries,
-        setupEntries,
-        globalSetupEntries,
-        getSourceMaps,
-        getAssetFiles,
-        assetNames,
-      } = await getRsbuildStats({ environmentName: project.environmentName });
-
-      if (
-        claimGlobalSetupOnce(project, entries.length, globalSetupEntries.length)
-      ) {
-        const files = globalSetupEntries.flatMap((e) => e.files!);
-        const assetFilesPromise = getAssetFiles(files);
-        const sourceMapsPromise = getSourceMaps(files);
-        const [assetFiles, sourceMaps] = await Promise.all([
-          assetFilesPromise,
-          sourceMapsPromise,
-        ]);
-
-        const { success, errors } = await runGlobalSetup({
-          globalSetupEntries,
-          assetFiles,
-          sourceMaps,
-          interopDefault: true,
-          outputModule: project.outputModule,
-          federation: project.normalizedConfig.federation,
-        });
-        if (!success) {
-          return {
-            list: [],
-            errors,
-            assetNames,
-            getSourceMaps: () => null,
-          };
-        }
-      }
-
-      const list = await pool.collectTests({
-        entries,
-        assetNames,
-        setupEntries,
-        getAssetFiles,
-        getSourceMaps,
-        project,
-        updateSnapshot,
-      });
-
-      return {
-        list,
-        getSourceMaps,
-        assetNames,
-      };
-    }),
-  );
-
-  return {
-    list: returns.flatMap((r) => r.list),
-    errors: returns.flatMap((r) => r.errors || []),
-    getSourceMap: async (name: string) => {
-      const resource = returns.find((r) => r.assetNames.includes(name));
-      return (await resource?.getSourceMaps([name]))?.[name];
-    },
-    close: async () => {
-      await runGlobalTeardown();
-      await closeServer();
-      await pool.close();
-    },
-  };
 };
 
 /**

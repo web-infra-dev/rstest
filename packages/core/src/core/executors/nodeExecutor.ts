@@ -30,6 +30,7 @@ import {
 } from '../resultsCache';
 import type { Rstest } from '../rstest';
 import { createSetupFileState } from '../setupFileState';
+import { prepareTestEnvironmentModules } from '../testEnvironmentModule';
 import { type SequenceHints, sortTestEntries } from '../testSequencer';
 
 type RsbuildStats = Awaited<
@@ -215,6 +216,7 @@ export function createNodeExecutor(
         }) => Promise<RsbuildStats>;
         closeServer: () => Promise<void>;
         pool: Awaited<ReturnType<typeof createPool>>;
+        cleanupTestEnvironmentModules: () => Promise<void>;
       }
     | undefined;
   // In-flight guard: in watch mode the dev server's first compile fires
@@ -326,29 +328,56 @@ export function createNodeExecutor(
       rootPath,
     });
 
-    entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
-      (acc, entry) => acc.concat(Object.values(entry.entries) || []),
-      [],
-    );
-
-    const getRecommendWorkerCount = (): number => {
-      const nodeEntries = Array.from(entriesCache.entries()).filter(([key]) => {
-        const project = projects.find((p) => p.environmentName === key);
-        return !project || isNodeProject(project);
+    let testEnvironmentModules:
+      Awaited<ReturnType<typeof prepareTestEnvironmentModules>> | undefined;
+    try {
+      testEnvironmentModules = await prepareTestEnvironmentModules({
+        projects,
+        rootPath,
       });
-      return nodeEntries.flatMap(
-        ([_key, entry]) => Object.values(entry.entries) || [],
-      ).length;
-    };
 
-    const recommendWorkerCount = isWatchMode
-      ? Number.POSITIVE_INFINITY
-      : getRecommendWorkerCount();
+      entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
+        (acc, entry) => acc.concat(Object.values(entry.entries) || []),
+        [],
+      );
 
-    const pool = await createPool({ context, recommendWorkerCount });
+      const getRecommendWorkerCount = (): number => {
+        const nodeEntries = Array.from(entriesCache.entries()).filter(
+          ([key]) => {
+            const project = projects.find((p) => p.environmentName === key);
+            return !project || isNodeProject(project);
+          },
+        );
+        return nodeEntries.flatMap(
+          ([_key, entry]) => Object.values(entry.entries) || [],
+        ).length;
+      };
 
-    runResources = { getRsbuildStats, closeServer, pool };
-    return runResources;
+      const recommendWorkerCount = isWatchMode
+        ? Number.POSITIVE_INFINITY
+        : getRecommendWorkerCount();
+
+      const pool = await createPool({
+        context,
+        recommendWorkerCount,
+        testEnvironmentModules: testEnvironmentModules.modules,
+      });
+
+      runResources = {
+        getRsbuildStats,
+        closeServer,
+        pool,
+        cleanupTestEnvironmentModules: testEnvironmentModules.cleanup,
+      };
+      return runResources;
+    } catch (error) {
+      try {
+        await closeServer();
+      } finally {
+        await testEnvironmentModules?.cleanup();
+      }
+      throw error;
+    }
   };
 
   const runCycle = async (
@@ -592,22 +621,32 @@ export function createNodeExecutor(
       return;
     }
     didRunGlobalTeardown = true;
-    await runGlobalTeardown();
-    if (runDependencyValidationPromise) {
-      await runDependencyValidationPromise.catch(() => undefined);
-    }
-    // Settle an in-flight resource start first: a close racing startup (e.g. a
-    // config-change restart during watch boot) must tear down the server and
-    // pool that start is about to produce, not skip them.
-    if (runResourcesPromise) {
-      await runResourcesPromise.catch(() => undefined);
-    }
-    if (runResources) {
-      const resources = runResources;
-      runResources = undefined;
-      runResourcesPromise = undefined;
-      await resources.pool.close();
-      await resources.closeServer();
+    try {
+      await runGlobalTeardown();
+    } finally {
+      if (runDependencyValidationPromise) {
+        await runDependencyValidationPromise.catch(() => undefined);
+      }
+      // Settle an in-flight resource start first: a close racing startup (e.g. a
+      // config-change restart during watch boot) must tear down the server and
+      // pool that start is about to produce, not skip them.
+      if (runResourcesPromise) {
+        await runResourcesPromise.catch(() => undefined);
+      }
+      if (runResources) {
+        const resources = runResources;
+        runResources = undefined;
+        runResourcesPromise = undefined;
+        try {
+          await resources.pool.close();
+        } finally {
+          try {
+            await resources.closeServer();
+          } finally {
+            await resources.cleanupTestEnvironmentModules();
+          }
+        }
+      }
     }
   };
 

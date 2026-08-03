@@ -13,6 +13,7 @@ import type {
   TestFileResult,
   TestInfo,
   TestResult,
+  TestEnvironmentModuleReference,
 } from '../types';
 import {
   color,
@@ -110,6 +111,7 @@ const buildTask = async ({
   getSourceMaps,
   rpcMethods,
   traceSpan,
+  testEnvironmentModule,
   buildId = 0,
 }: {
   type: 'run' | 'collect';
@@ -127,6 +129,7 @@ const buildTask = async ({
   getSourceMaps: PoolDispatchParams['getSourceMaps'];
   rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
   traceSpan: TraceSpan;
+  testEnvironmentModule?: TestEnvironmentModuleReference;
   buildId?: number;
 }) => {
   const getAssets = () =>
@@ -166,6 +169,7 @@ const buildTask = async ({
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
         runtimeConfig,
+        testEnvironmentModule,
         trace: context.trace,
       },
       type,
@@ -274,9 +278,11 @@ const workerErrorToResult = (
 export const createPool = async ({
   context,
   recommendWorkerCount = Number.POSITIVE_INFINITY,
+  testEnvironmentModules,
 }: {
   context: RstestContext;
   recommendWorkerCount?: number;
+  testEnvironmentModules?: ReadonlyMap<string, TestEnvironmentModuleReference>;
 }): Promise<{
   runTests: (params: {
     entries: EntryInfo[];
@@ -437,6 +443,9 @@ export const createPool = async ({
                   getSourceMaps,
                   rpcMethods,
                   traceSpan,
+                  testEnvironmentModule: testEnvironmentModules?.get(
+                    project.environmentName,
+                  ),
                   buildId,
                 }),
               traceArgs,
@@ -539,6 +548,9 @@ export const createPool = async ({
             rpcMethods,
             // `collect` does not participate in tracing.
             traceSpan: noopTraceSpan,
+            testEnvironmentModule: testEnvironmentModules?.get(
+              project.environmentName,
+            ),
           });
 
           return pool.collectTests(task).catch((err: FormattedError) => {
