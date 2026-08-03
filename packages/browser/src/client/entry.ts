@@ -812,7 +812,11 @@ const run = async () => {
     try {
       try {
         send({ type: 'worker-cleanup-start' });
-        await cleanupWorkerFixtures();
+        try {
+          await cleanupWorkerFixtures();
+        } finally {
+          send({ type: 'worker-cleanup-finished' });
+        }
       } catch (_error) {
         const cleanupError =
           _error instanceof Error ? _error : new Error(String(_error));

@@ -254,6 +254,7 @@ type HostRpcMethods = {
   onFileCleanupStart: (payload: HeadedRunnerSignalPayload) => Promise<void>;
   onFileCleanupEnd: (payload: HeadedRunnerSignalPayload) => Promise<void>;
   onWorkerCleanupStart: (payload: HeadedRunnerSignalPayload) => Promise<void>;
+  onWorkerCleanupEnd: (payload: HeadedRunnerSignalPayload) => Promise<void>;
   onComplete: (payload: HeadedRunnerSignalPayload) => Promise<void>;
   onLog: (payload: LogPayload) => Promise<void>;
   onFatal: (payload: FatalPayload) => Promise<void>;
@@ -3497,6 +3498,10 @@ export const runBrowserController = async (
                 startCleanupTimeout('worker');
                 return;
               }
+              if (message.type === 'worker-cleanup-finished') {
+                clearCleanupTimeout();
+                return;
+              }
               await dispatchRunnerMessage(run, file, session.id, message);
               if (message.type === 'file-complete') {
                 fileResultSettled = true;
@@ -4223,6 +4228,9 @@ export const runBrowserController = async (
         'worker',
         payload.runId,
       );
+    },
+    async onWorkerCleanupEnd(payload: HeadedRunnerSignalPayload) {
+      finishPendingHeadedCleanup(payload.testPath, payload.runId);
     },
     async onComplete(payload: HeadedRunnerSignalPayload) {
       const pending = pendingHeadedReloads.get(payload.testPath);

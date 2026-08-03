@@ -128,6 +128,11 @@ describe('browser protocol types', () => {
       expect(msg.type).toBe('complete');
     });
 
+    it('should accept worker cleanup completion message', () => {
+      const msg: BrowserClientMessage = { type: 'worker-cleanup-finished' };
+      expect(msg.type).toBe('worker-cleanup-finished');
+    });
+
     it('should accept collect-result message', () => {
       const msg: BrowserClientMessage = {
         type: 'collect-result',

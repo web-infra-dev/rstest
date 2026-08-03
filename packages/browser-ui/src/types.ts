@@ -84,6 +84,7 @@ export type HostRPC = {
   onFileCleanupStart: (payload: RunnerSignalPayload) => Promise<void>;
   onFileCleanupEnd: (payload: RunnerSignalPayload) => Promise<void>;
   onWorkerCleanupStart: (payload: RunnerSignalPayload) => Promise<void>;
+  onWorkerCleanupEnd: (payload: RunnerSignalPayload) => Promise<void>;
   onComplete: (payload: RunnerSignalPayload) => Promise<void>;
   onLog: (payload: LogPayload) => Promise<void>;
   onFatal: (payload: FatalPayload) => Promise<void>;

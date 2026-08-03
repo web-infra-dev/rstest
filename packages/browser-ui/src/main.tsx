@@ -510,6 +510,7 @@ const BrowserRunner: React.FC<{
         message.type === 'file-cleanup-start' ||
         message.type === 'file-cleanup-finished' ||
         message.type === 'worker-cleanup-start' ||
+        message.type === 'worker-cleanup-finished' ||
         message.type === 'complete'
       ) {
         const frame = findRunnerFrameBySource(event.source);
@@ -525,6 +526,8 @@ const BrowserRunner: React.FC<{
             rpc?.onFileCleanupEnd(payload);
           } else if (message.type === 'worker-cleanup-start') {
             rpc?.onWorkerCleanupStart(payload);
+          } else if (message.type === 'worker-cleanup-finished') {
+            rpc?.onWorkerCleanupEnd(payload);
           } else {
             rpc?.onComplete(payload);
           }

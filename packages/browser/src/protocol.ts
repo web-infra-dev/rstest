@@ -142,6 +142,7 @@ export type BrowserClientMessage =
   | { type: 'file-cleanup-start' }
   | { type: 'file-cleanup-finished' }
   | { type: 'worker-cleanup-start' }
+  | { type: 'worker-cleanup-finished' }
   | { type: 'complete' }
   // Collect mode messages
   | {

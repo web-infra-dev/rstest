@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import { runBrowserCli } from './utils';
+import { runBrowserCli, shouldRunHeadedBrowserTests } from './utils';
 
 const getHookCount = (output: string, hookName: string): number => {
   return (
@@ -24,4 +24,17 @@ describe('browser mode - reporter lifecycle hooks', () => {
     expect(getHookCount(cli.stdout, 'onTestFileResult')).toBe(1);
     expect(getHookCount(cli.stdout, 'onTestRunEnd')).toBe(1);
   });
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'should finish worker cleanup before awaiting reporters in headed mode',
+    async () => {
+      const { expectExecSuccess, cli } = await runBrowserCli('reporter', {
+        args: ['--project', 'browser', '--browser.headless', 'false'],
+      });
+
+      await expectExecSuccess();
+      expect(getHookCount(cli.stdout, 'onTestFileResult')).toBe(1);
+      expect(getHookCount(cli.stdout, 'onTestRunEnd')).toBe(1);
+    },
+  );
 });
