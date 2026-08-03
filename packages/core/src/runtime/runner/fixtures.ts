@@ -70,7 +70,7 @@ const finalizeFixtures = (
     }
 
     const usedProps = getFixtureUsedProps(fixture.value);
-    fixture.deps = usedProps.filter((property) =>
+    const deps = usedProps.filter((property) =>
       Object.hasOwn(fixtures, property),
     );
 
@@ -94,24 +94,25 @@ const finalizeFixtures = (
         );
       }
     }
+
+    const previousDeps = fixture.deps;
+    if (
+      !previousDeps ||
+      previousDeps.length !== deps.length ||
+      previousDeps.some((dependency, index) => dependency !== deps[index])
+    ) {
+      fixtures[name] = { ...fixture, deps };
+    }
   }
 
   return fixtures;
-};
-
-const cloneFixtures = (fixtures: NormalizedFixtures): NormalizedFixtures => {
-  const result: NormalizedFixtures = {};
-  for (const name in fixtures) {
-    result[name] = { ...fixtures[name]! };
-  }
-  return result;
 };
 
 export const normalizeFixtures = (
   fixtures: Fixtures = {},
   extendFixtures: NormalizedFixtures = {},
 ): NormalizedFixtures => {
-  const result = cloneFixtures(extendFixtures);
+  const result = { ...extendFixtures };
   for (const key in fixtures) {
     const value: unknown = fixtures[key as keyof typeof fixtures];
     const parent = extendFixtures[key];
@@ -147,7 +148,7 @@ export const normalizeBuilderFixture = (
   options: FixtureOptions | undefined,
   extendFixtures: NormalizedFixtures = {},
 ): NormalizedFixtures => {
-  const result = cloneFixtures(extendFixtures);
+  const result = { ...extendFixtures };
   result[name] = {
     isFn: typeof value === 'function',
     value,

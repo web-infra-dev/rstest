@@ -205,6 +205,46 @@ describe('scoped fixtures', () => {
     expect(events).toEqual(['setup', 'cleanup']);
   });
 
+  it('preserves unchanged scoped fixture instances across extensions', async () => {
+    let setups = 0;
+    const fixtures = normalizeBuilderFixture(
+      'workerValue',
+      () => {
+        setups++;
+        return 'worker';
+      },
+      { scope: 'worker' },
+    );
+    const extendedFixtures = normalizeBuilderFixture(
+      'testValue',
+      1,
+      undefined,
+      fixtures,
+    );
+    const file = new FixtureScopeManager('file');
+    const worker = new FixtureScopeManager('worker');
+    const managers = { file, worker };
+
+    expect(extendedFixtures.workerValue).toBe(fixtures.workerValue);
+
+    await createFixtureResolver(
+      { fixtures } as any,
+      {},
+      [],
+      managers,
+    ).resolveTestFixtures(({ workerValue }: any) => workerValue);
+    await createFixtureResolver(
+      { fixtures: extendedFixtures } as any,
+      {},
+      [],
+      managers,
+    ).resolveTestFixtures(({ workerValue }: any) => workerValue);
+    await file.cleanup();
+    await worker.cleanup();
+
+    expect(setups).toBe(1);
+  });
+
   it('shares file and worker fixtures at their lifecycle boundaries', async () => {
     const events: string[] = [];
     let fixtures = normalizeBuilderFixture(
