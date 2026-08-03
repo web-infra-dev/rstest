@@ -1,6 +1,5 @@
 import type { RuntimeRPC, RunWorkerOptions } from '../types';
 import type { MemoryGate } from './memoryGate';
-import type { WorkerCleanupResult } from './protocol';
 
 export type PoolWorkerKind = 'forks' | 'threads';
 
@@ -9,7 +8,6 @@ export type PoolTask = {
   type: 'run' | 'collect';
   options: RunWorkerOptions['options'];
   rpcMethods: RuntimeRPC;
-  onWorkerCleanupResult?: (result: WorkerCleanupResult) => void;
 };
 
 export type PoolOptions = {

@@ -35,12 +35,14 @@ const stubRpcMethods = () =>
 const createTask = (
   type: PoolTask['type'] = 'run',
   optionOverrides?: Record<string, unknown>,
+  buildId = 0,
 ): PoolTask => ({
   worker: 'threads',
   type,
   options: {
     // A worker is only reused for tasks carrying the same key.
     environmentKey: 'node',
+    context: { buildId },
     ...optionOverrides,
   } as any,
   rpcMethods: stubRpcMethods(),
@@ -159,6 +161,20 @@ describe('ThreadsPool - isolate', () => {
       // Incrementing run count proves the same thread instance handled
       // both tasks — not coincidental identity collision.
       expect((r1 as any)._runCount).toBe((r2 as any)._runCount - 1);
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('should replace a reusable thread when the build changes', async () => {
+    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
+    try {
+      const first = await pool.runTest(createTask('run', undefined, 1));
+      const second = await pool.runTest(createTask('run', undefined, 2));
+
+      expect((first as any)._workerIdentity).not.toBe(
+        (second as any)._workerIdentity,
+      );
     } finally {
       await pool.close();
     }

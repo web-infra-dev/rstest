@@ -1,4 +1,4 @@
-import { beforeAll, expect, test } from '@rstest/core';
+import { expect, test } from '@rstest/core';
 
 let testSequence = 0;
 
@@ -29,37 +29,11 @@ const scopedTest = test
 const baseGraphTest = test
   .extend('dependency', { scope: 'worker' }, 'base')
   .extend('derived', { scope: 'worker' }, ({ dependency }) => dependency);
-const childGraphTest = baseGraphTest.extend(
-  'dependency',
-  { scope: 'worker' },
-  'child',
-);
 
-let automaticWorkerReady = false;
-let automaticFileReady = false;
-let automaticTestReady = false;
-const automaticScopedTest = test
-  .extend('automaticWorker', { scope: 'worker', auto: true }, () => {
-    automaticWorkerReady = true;
-    return 'automatic-worker';
-  })
-  .extend(
-    'automaticFile',
-    { scope: 'file', auto: true },
-    ({ automaticWorker }) => {
-      automaticFileReady = automaticWorker === 'automatic-worker';
-      return 'automatic-file';
-    },
-  )
-  .extend('automaticTest', { scope: 'test', auto: true }, () => {
-    automaticTestReady = true;
-    return 'automatic-test';
-  });
-
-beforeAll(() => {
-  expect(automaticWorkerReady).toBe(true);
-  expect(automaticFileReady).toBe(true);
-  expect(automaticTestReady).toBe(false);
+let unusedWorkerReady = false;
+test.extend('unusedWorker', { scope: 'worker' }, () => {
+  unusedWorkerReady = true;
+  return 'unused-worker';
 });
 
 scopedTest('first browser scoped test', ({ testValue }) => {
@@ -74,13 +48,6 @@ baseGraphTest('uses the base browser worker dependency', ({ derived }) => {
   expect(derived).toBe('base');
 });
 
-childGraphTest(
-  'uses the overridden browser worker dependency',
-  ({ derived }) => {
-    expect(derived).toBe('child');
-  },
-);
-
-automaticScopedTest('initializes automatic scopes at their boundaries', () => {
-  expect(automaticTestReady).toBe(true);
+test('does not initialize an unused scoped fixture', () => {
+  expect(unusedWorkerReady).toBe(false);
 });

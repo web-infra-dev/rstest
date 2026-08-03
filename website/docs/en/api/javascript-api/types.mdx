@@ -73,14 +73,14 @@ import type {
 The fixture lifecycle types are public exports starting in Rstest 0.11.6:
 
 - `FixtureScope`: `'test' | 'file' | 'worker'`.
-- `FixtureOptions`: Options for `auto` setup and fixture `scope`.
+- `FixtureOptions`: Builder options for fixture `scope`; `auto` is available only to test-scoped fixtures.
 - `FixtureLifecycle`: The builder fixture lifecycle object containing `onCleanup`.
 - `FixtureCleanup`: A synchronous or asynchronous cleanup callback.
 - `Fixtures`: The object-form fixture definition map.
 - `Use`: The function that exposes an object-form fixture value.
 - `TestAPIs`: The extended, fixture-aware `test` API type.
 
-See [`test.extend`](/api/runtime-api/test-api/test#testextend) for the object and builder forms.
+See [`test.extend`](/api/runtime-api/test-api/test#testextend) for the test-scoped object form and the scoped builder form.
 
 ## Mock types
 

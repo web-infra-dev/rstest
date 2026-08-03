@@ -62,6 +62,7 @@ let assignedWorkerId = null;
 
 let runCount = 0;
 let cleanupError = false;
+let cleanupLog = false;
 
 // This worker entry runs as a real .mjs and cannot import core .ts source, so
 // it keeps a literal copy. MUST match getFileTaskId in
@@ -87,6 +88,7 @@ const makeRunResult = (request, extra) => ({
 const handleRun = (request) => {
   const mode = request.options?.__testMode;
   cleanupError = mode === 'cleanup-error';
+  cleanupLog = mode === 'cleanup-log';
 
   const finish = (extra) => {
     send({
@@ -197,6 +199,18 @@ onHostMessage((message) => {
       handleCollect(request);
       break;
     case 'cleanup':
+      if (cleanupLog) {
+        send({
+          type: 'cleanupLog',
+          log: {
+            content: 'worker cleanup log',
+            name: 'log',
+            project: 'default',
+            testPath: '/test.ts',
+            type: 'stdout',
+          },
+        });
+      }
       send({
         type: 'cleanupFinished',
         error: cleanupError

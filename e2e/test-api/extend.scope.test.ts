@@ -52,27 +52,6 @@ for (const isolate of [true, false]) {
   });
 }
 
-it('captures unhandled rejections from worker fixture cleanup', async () => {
-  const { cli, expectExecFailed } = await runRstestCli({
-    command: 'rstest',
-    args: [
-      'run',
-      'fixtures/workerCleanupUnhandled.test.ts',
-      '--pool.maxWorkers=1',
-    ],
-    options: {
-      nodeOptions: {
-        cwd: __dirname,
-      },
-    },
-  });
-
-  await expectExecFailed();
-  expect(`${cli.stdout}\n${cli.stderr}`).toContain(
-    'unhandled worker fixture cleanup rejection',
-  );
-});
-
 it('bounds file fixture cleanup in the host', async () => {
   const start = Date.now();
   const { cli, expectExecFailed } = await runRstestCli({
@@ -92,16 +71,10 @@ it('bounds file fixture cleanup in the host', async () => {
   );
 });
 
-it('reports isolated worker cleanup failures in the current watch cycle', async () => {
-  const { cli } = await runRstestCli({
+it('rejects scoped fixtures declared inside a suite', async () => {
+  const { cli, expectExecFailed } = await runRstestCli({
     command: 'rstest',
-    args: [
-      'watch',
-      'fixtures/workerCleanupFailure.test.ts',
-      '--isolate=true',
-      '--pool.maxWorkers=1',
-      '--disableConsoleIntercept',
-    ],
+    args: ['run', 'fixtures/nestedScopedFixture.test.ts'],
     options: {
       nodeOptions: {
         cwd: __dirname,
@@ -109,12 +82,24 @@ it('reports isolated worker cleanup failures in the current watch cycle', async 
     },
   });
 
-  await Promise.all([
-    cli.waitForStderr('worker fixture cleanup reached'),
-    cli.waitForStdout('Waiting for file changes...'),
-  ]);
-  expect(cli.log).toContain('Unhandled Error');
-  expect(cli.log.indexOf('worker fixture cleanup reached')).toBeLessThan(
-    cli.log.indexOf('Waiting for file changes...'),
+  await expectExecFailed();
+  expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+    'worker-scoped fixtures must be defined at the top level of the test file',
   );
+});
+
+it('includes file fixture cleanup in the file duration', async () => {
+  const { cli, expectExecSuccess } = await runRstestCli({
+    command: 'rstest',
+    args: ['run', '-c', 'rstest.scoped-duration.config.mts'],
+    options: {
+      nodeOptions: {
+        cwd: __dirname,
+      },
+    },
+  });
+
+  await expectExecSuccess();
+  const duration = /SCOPED_FILE_DURATION=(\d+)/.exec(cli.stdout)?.[1];
+  expect(Number(duration)).toBeGreaterThanOrEqual(100);
 });

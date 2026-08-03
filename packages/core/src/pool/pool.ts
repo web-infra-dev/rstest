@@ -92,12 +92,16 @@ export class Pool {
       );
       if (reuseIndex !== -1) {
         const reuse = this.idleRunners.splice(reuseIndex, 1)[0]!;
-        if (reuse.isUsable()) {
+        if (
+          reuse.isUsable() &&
+          reuse.canReuseForBuild(task.options.context.buildId)
+        ) {
           this.activeRunners.add(reuse);
           return reuse;
         }
-        // Stale — dispose in the background so its slot is reclaimed only
-        // after the child has actually exited.
+        // A rebuild ends the old worker lifetime before the next task starts.
+        // Cleanup stays on the host-bounded stop path instead of running inside
+        // a task where a hanging fixture could stall the watch cycle forever.
         this.disposeRunnerInBackground(reuse);
         continue;
       }
@@ -287,12 +291,6 @@ export class Pool {
     return undefined;
   }
 
-  /**
-   * Wait for runners already stopping in the background and consume their
-   * errors without closing reusable idle runners. Watch cycles use this after
-   * all dispatched tasks settle so isolate=true cleanup failures belong to the
-   * cycle that created them instead of surfacing during a later pool close.
-   */
   async drainWorkerStops(): Promise<void> {
     while (this.stoppingPromises.size > 0) {
       await Promise.all([...this.stoppingPromises]);

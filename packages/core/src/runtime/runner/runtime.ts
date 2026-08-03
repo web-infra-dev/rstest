@@ -600,6 +600,10 @@ export class RunnerRuntime {
 
     throw new Error('Expect to find a suite, but got undefined');
   }
+
+  isTopLevelCollection(): boolean {
+    return this.getCurrentSuite().name === ROOT_SUITE_NAME;
+  }
 }
 
 // The running file's collection-phase registrar (see the live-binding
@@ -708,10 +712,19 @@ const buildRuntimeAPI = (): CollectionAPI => {
             extendFixtures,
           );
         } else if (args.length === 3) {
+          const options = args[1] as FixtureOptions;
+          if (
+            (options?.scope === 'file' || options?.scope === 'worker') &&
+            !currentRuntime().isTopLevelCollection()
+          ) {
+            throw new Error(
+              `${options.scope}-scoped fixtures must be defined at the top level of the test file.`,
+            );
+          }
           normalizedFixtures = normalizeBuilderFixture(
             name,
             args[2],
-            args[1] as FixtureOptions,
+            options,
             extendFixtures,
           );
         } else {

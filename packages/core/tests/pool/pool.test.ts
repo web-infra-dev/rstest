@@ -41,11 +41,13 @@ const createTask = (
   optionOverrides?: Record<string, unknown>,
   // A worker is only reused for tasks carrying the same key.
   environmentKey = 'node',
+  buildId = 0,
 ): PoolTask => ({
   worker: 'forks',
   type,
   options: {
     environmentKey,
+    context: { buildId },
     ...optionOverrides,
   } as any,
   rpcMethods: stubRpcMethods(),
@@ -176,6 +178,22 @@ describe('Pool - isolate', () => {
       // Incrementing run count proves the same process instance handled
       // both tasks — not just a recycled PID.
       expect((r1 as any)._runCount).toBe((r2 as any)._runCount - 1);
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('should replace a reusable worker when the build changes', async () => {
+    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
+    try {
+      const first = await pool.runTest(createTask('run', undefined, 'node', 1));
+      const second = await pool.runTest(
+        createTask('run', undefined, 'node', 2),
+      );
+
+      expect((first as any)._workerIdentity).not.toBe(
+        (second as any)._workerIdentity,
+      );
     } finally {
       await pool.close();
     }
@@ -352,17 +370,18 @@ describe('Pool - close()', () => {
     await expect(pool.close()).rejects.toThrow('intentional cleanup error');
   });
 
-  it('should drain isolated worker cleanup errors without closing the pool', async () => {
-    const pool = new Pool(createPoolOptions({ isolate: true }));
-    await pool.runTest(createTask('run', { __testMode: 'cleanup-error' }));
+  it('should forward console logs from worker fixture cleanup', async () => {
+    const logs: string[] = [];
+    const task = createTask('run', { __testMode: 'cleanup-log' });
+    task.rpcMethods.onConsoleLog = (log) => {
+      logs.push(log.content);
+    };
+    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
 
-    await expect(pool.drainWorkerStops()).rejects.toThrow(
-      'intentional cleanup error',
-    );
-    await expect(pool.runTest(createTask())).resolves.toMatchObject({
-      status: 'pass',
-    });
+    await pool.runTest(task);
     await pool.close();
+
+    expect(logs).toEqual(['worker cleanup log']);
   });
 
   // Regression: rstest#1275. The host owns worker termination via SIGTERM

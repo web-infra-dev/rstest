@@ -5,7 +5,7 @@ const scopedTest = test.extend(
   { scope: 'worker' },
   (_context, { onCleanup }) => {
     onCleanup(() => {
-      process.stdout.write('[scope-order] worker cleanup\n');
+      console.log('[scope-order] worker cleanup');
     });
     return 'worker';
   },

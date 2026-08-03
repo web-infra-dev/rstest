@@ -16,28 +16,33 @@ const resolveFixtureOptions = (
   name: string,
   options: FixtureOptions | undefined,
   parent: NormalizedFixture | undefined,
-): Required<FixtureOptions> => {
+): NormalizedFixture['options'] => {
   const parentOptions = parent?.options ?? {
     auto: false,
     scope: 'test',
   };
+  if (parentOptions.scope !== 'test') {
+    throw new Error(
+      `The ${parentOptions.scope} fixture "${name}" cannot be overridden.`,
+    );
+  }
   if (!options && parent) {
-    if (parentOptions.scope !== 'test') {
-      throw new Error(
-        `Fixture "${name}" must repeat its "${parentOptions.scope}" scope when overriding a scoped fixture.`,
-      );
-    }
     return parentOptions;
   }
 
   const resolved = {
-    auto: options?.auto ?? parentOptions.auto,
+    auto: options?.auto ?? false,
     scope: options?.scope ?? 'test',
   };
 
   if (!fixtureScopes.includes(resolved.scope)) {
     throw new Error(
       `Fixture "${name}" has unknown scope "${String(resolved.scope)}".`,
+    );
+  }
+  if (resolved.scope !== 'test' && options && Object.hasOwn(options, 'auto')) {
+    throw new Error(
+      `The ${resolved.scope} fixture "${name}" does not support auto setup.`,
     );
   }
   if (parent && parentOptions.scope !== resolved.scope) {
@@ -91,43 +96,7 @@ const finalizeFixtures = (
     }
   }
 
-  const result = { ...fixtures };
-  const resolvedNames = new Set<string>();
-  const resolvingNames = new Set<string>();
-
-  const resolveDependencies = (name: string): NormalizedFixture => {
-    const fixture = result[name]!;
-    if (resolvedNames.has(name) || resolvingNames.has(name)) {
-      return fixture;
-    }
-
-    resolvingNames.add(name);
-    const dependencies = (fixture.deps ?? []).map(resolveDependencies);
-    resolvingNames.delete(name);
-    resolvedNames.add(name);
-
-    if (
-      fixture.dependencyFixtures.length === dependencies.length &&
-      fixture.dependencyFixtures.every(
-        (dependency, index) => dependency === dependencies[index],
-      )
-    ) {
-      return fixture;
-    }
-
-    const resolvedFixture = {
-      ...fixture,
-      dependencyFixtures: dependencies,
-    };
-    result[name] = resolvedFixture;
-    return resolvedFixture;
-  };
-
-  for (const name of Object.keys(result)) {
-    resolveDependencies(name);
-  }
-
-  return result;
+  return fixtures;
 };
 
 export const normalizeFixtures = (
@@ -156,7 +125,6 @@ export const normalizeFixtures = (
     }
 
     result[key] = {
-      dependencyFixtures: [],
       isFn: typeof fixtureValue === 'function',
       value: fixtureValue,
       options: resolveFixtureOptions(key, fixtureOptions, parent),
@@ -176,7 +144,6 @@ export const normalizeBuilderFixture = (
   const result: NormalizedFixtures = {
     ...extendFixtures,
     [name]: {
-      dependencyFixtures: [],
       isFn: typeof value === 'function',
       value,
       options: resolveFixtureOptions(name, options, extendFixtures[name]),
@@ -188,9 +155,7 @@ export const normalizeBuilderFixture = (
 };
 
 export type FixtureResolver = {
-  cancelPendingFixtures: () =>
-    { started: Promise<void>; completed: Promise<void> } | undefined;
-  resolveAutomaticScopedFixtures: () => Promise<void>;
+  cancelPendingFixtures: () => { teardownStarted: Promise<void> } | undefined;
   resolveTestFixtures: (fn?: (...args: any[]) => any) => Promise<void>;
   resolveHookFixtures: (
     fn: (...args: any[]) => any,
@@ -201,21 +166,16 @@ class PreviouslyFailedFixtureError extends Error {}
 
 type FixtureCallback = (...args: any[]) => any;
 type FixtureCleanupCallback = () => Promise<void>;
-type FixtureSetupCancellation = {
-  started: Promise<void>;
-  completed: Promise<void>;
-};
 
 type FixtureInstance = {
-  fixture: NormalizedFixture;
   name: string;
-  scopeContext: FixtureScopeContext;
   status: 'pending' | 'ready' | 'failed';
   value?: unknown;
   error?: unknown;
   setup?: Promise<void>;
   cancelled: boolean;
-  cancelSetup?: () => FixtureSetupCancellation;
+  cancelSetup?: () => void;
+  teardownListeners: Set<() => void>;
 };
 
 type FixtureScopeContext = {
@@ -229,6 +189,7 @@ const releaseFixtureSetupReferences = (instance: FixtureInstance) => {
   }
   instance.setup = undefined;
   instance.cancelSetup = undefined;
+  instance.teardownListeners.clear();
 };
 
 const createFixtureScopeContext = (
@@ -249,10 +210,6 @@ export class FixtureScopeManager {
       instances: this.instances,
       cleanups: this.cleanups,
     };
-  }
-
-  hasCleanups(): boolean {
-    return this.cleanups.length > 0;
   }
 
   async cleanup(): Promise<void> {
@@ -338,26 +295,20 @@ export const createFixtureResolver = (
       let useDone: (() => void) | undefined;
       let blockSettled = false;
       let useCalled = false;
-      let notifyTeardownStarted!: () => void;
-      const teardownStarted = new Promise<void>((resolve) => {
-        notifyTeardownStarted = resolve;
-      });
       instance.cancelSetup = () => {
         instance.cancelled = true;
         if (blockSettled) {
           fixtureResolve(undefined);
         }
-        return {
-          started: teardownStarted,
-          completed: instance.setup!,
-        };
       };
 
       const block = Promise.resolve().then(() =>
         fixture.value(fixtureContext, async (value: unknown) => {
           useCalled = true;
           if (instance.cancelled) {
-            notifyTeardownStarted();
+            for (const listener of instance.teardownListeners) {
+              listener();
+            }
             return;
           }
 
@@ -372,25 +323,16 @@ export const createFixtureResolver = (
         }),
       );
 
-      block.then(
-        () => {
-          blockSettled = true;
-          if (instance.cancelled) {
-            notifyTeardownStarted();
-            fixtureResolve(undefined);
-          } else if (!useCalled) {
-            fixtureReject(
-              new Error(`Fixture "${name}" did not call await use(value).`),
-            );
-          }
-        },
-        (error: unknown) => {
-          if (instance.cancelled) {
-            notifyTeardownStarted();
-          }
-          fixtureReject(error);
-        },
-      );
+      block.then(() => {
+        blockSettled = true;
+        if (instance.cancelled) {
+          fixtureResolve(undefined);
+        } else if (!useCalled) {
+          fixtureReject(
+            new Error(`Fixture "${name}" did not call await use(value).`),
+          );
+        }
+      }, fixtureReject);
     });
 
   const setupReturnFixture = async (
@@ -398,36 +340,8 @@ export const createFixtureResolver = (
     fixture: NormalizedFixture,
     fixtureContext: Record<string, unknown>,
     scopeContext: FixtureScopeContext,
-    instance: FixtureInstance,
   ): Promise<unknown> => {
     let cleanupRegistered = false;
-    let registeredCleanup: FixtureCleanupCallback | undefined;
-    let cleanupPromise: Promise<void> | undefined;
-    let notifyCleanupStarted!: () => void;
-    const cleanupStarted = new Promise<void>((resolve) => {
-      notifyCleanupStarted = resolve;
-    });
-    const runRegisteredCleanup = (): Promise<void> | undefined => {
-      if (!registeredCleanup) {
-        return undefined;
-      }
-      if (!cleanupPromise) {
-        const cleanupIndex = scopeContext.cleanups.indexOf(registeredCleanup);
-        if (cleanupIndex !== -1) {
-          scopeContext.cleanups.splice(cleanupIndex, 1);
-        }
-        notifyCleanupStarted();
-        cleanupPromise = Promise.resolve().then(registeredCleanup);
-      }
-      return cleanupPromise;
-    };
-
-    instance.cancelSetup = () => {
-      instance.cancelled = true;
-      runRegisteredCleanup();
-      return { started: cleanupStarted, completed: instance.setup! };
-    };
-
     const onCleanup = (cleanup: FixtureCleanup) => {
       if (cleanupRegistered) {
         throw new Error(
@@ -435,33 +349,12 @@ export const createFixtureResolver = (
         );
       }
       cleanupRegistered = true;
-      registeredCleanup = async () => {
+      scopeContext.cleanups.unshift(async () => {
         await cleanup();
-      };
-      if (instance.cancelled) {
-        runRegisteredCleanup();
-      } else {
-        scopeContext.cleanups.unshift(registeredCleanup);
-      }
+      });
     };
 
-    try {
-      const value = await fixture.value(fixtureContext, { onCleanup });
-      if (instance.cancelled) {
-        const cleanup = runRegisteredCleanup();
-        if (cleanup) {
-          await cleanup;
-        } else {
-          notifyCleanupStarted();
-        }
-      }
-      return value;
-    } catch (error) {
-      if (instance.cancelled && !cleanupPromise) {
-        notifyCleanupStarted();
-      }
-      throw error;
-    }
+    return fixture.value(fixtureContext, { onCleanup });
   };
 
   const useFixture = async (
@@ -504,11 +397,10 @@ export const createFixtureResolver = (
     }
 
     instance = {
-      fixture,
       name,
-      scopeContext,
       status: 'pending',
       cancelled: false,
+      teardownListeners: new Set(),
     };
     scopeContext.instances.set(fixture, instance);
     const fixtureContext =
@@ -535,7 +427,6 @@ export const createFixtureResolver = (
           fixture,
           fixtureContext,
           scopeContext,
-          instance,
         );
       } else {
         value = await setupUseFixture(
@@ -575,14 +466,11 @@ export const createFixtureResolver = (
 
   const resolveFixtureNames = async (
     usedKeys: string[],
-    automatic: 'all' | 'scoped' | false,
+    includeAuto: boolean,
   ) => {
     for (const [name, params] of Object.entries(fixtures)) {
       const shouldResolve =
-        usedKeys.includes(name) ||
-        (params.options.auto &&
-          (automatic === 'all' ||
-            (automatic === 'scoped' && params.options.scope !== 'test')));
+        usedKeys.includes(name) || (includeAuto && params.options?.auto);
       if (!shouldResolve) {
         continue;
       }
@@ -596,78 +484,18 @@ export const createFixtureResolver = (
       if (pendingInstances.size === 0) {
         return undefined;
       }
-      const cancelledInstances = [...pendingInstances];
-      const activeCancellations: FixtureSetupCancellation[] = [];
-      const passiveCancellations: Promise<void>[] = [];
-      for (const instance of cancelledInstances) {
-        failedFixtures.add(instance.name);
-        instance.cancelled = true;
-        const cancellation = instance.cancelSetup?.();
-        if (cancellation) {
-          activeCancellations.push(cancellation);
-        } else if (instance.setup) {
-          passiveCancellations.push(instance.setup);
+      const teardownStarted = new Promise<void>((notifyTeardownStarted) => {
+        for (const instance of pendingInstances) {
+          failedFixtures.add(instance.name);
+          instance.teardownListeners.add(notifyTeardownStarted);
+          instance.cancelSetup?.();
         }
-      }
-      const normalizeCompletion = (completion: Promise<void>) =>
-        completion.catch((error: unknown) => {
-          if (!(error instanceof PreviouslyFailedFixtureError)) {
-            throw error;
-          }
-        });
-      const completions = (
-        activeCancellations.length > 0
-          ? activeCancellations.map(({ completed }) => completed)
-          : passiveCancellations
-      ).map(normalizeCompletion);
-      const started =
-        activeCancellations.length > 0
-          ? Promise.race(
-              activeCancellations.map(({ started }) =>
-                started.then(() => undefined),
-              ),
-            )
-          : Promise.race(
-              completions.map((completion) =>
-                completion.then(
-                  () => undefined,
-                  () => undefined,
-                ),
-              ),
-            );
-      const completed = Promise.allSettled(completions)
-        .then((results) => {
-          const errors = results
-            .filter(
-              (result): result is PromiseRejectedResult =>
-                result.status === 'rejected',
-            )
-            .map((result) => result.reason)
-            .filter((error, index, all) => all.indexOf(error) === index);
-          if (errors.length === 1) {
-            throw errors[0];
-          }
-          if (errors.length > 1) {
-            throw new AggregateError(errors, 'Failed to cancel fixture setup.');
-          }
-        })
-        .finally(() => {
-          for (const instance of cancelledInstances) {
-            if (
-              instance.scopeContext.instances.get(instance.fixture) === instance
-            ) {
-              instance.scopeContext.instances.delete(instance.fixture);
-            }
-          }
-        });
-      completed.catch(() => undefined);
-      return { started, completed };
+      });
+      return { teardownStarted };
     },
-    resolveAutomaticScopedFixtures: () =>
-      test.fixtures ? resolveFixtureNames([], 'scoped') : Promise.resolve(),
     resolveTestFixtures: (fn) =>
       test.fixtures
-        ? resolveFixtureNames(fn ? getFixtureUsedProps(fn) : [], 'all')
+        ? resolveFixtureNames(fn ? getFixtureUsedProps(fn) : [], true)
         : Promise.resolve(),
     resolveHookFixtures: async (fn) => {
       try {

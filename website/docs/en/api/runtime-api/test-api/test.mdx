@@ -450,15 +450,15 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
 
 Use the `scope` option to control how long a fixture instance lives:
 
-| Scope      | Setup and cleanup boundary                                                                                       | Available dependencies                 |
-| ---------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `'test'`   | Once per test attempt, including each retry. This is the default.                                                | Test, file, worker, and `TestContext`. |
-| `'file'`   | Once per test file, then cleaned up after all tests and suite hooks in that file.                                | File and worker fixtures.              |
-| `'worker'` | Once per worker, then cleaned up when the worker finishes. With `isolate: false`, it can be shared across files. | Worker fixtures only.                  |
+| Scope      | Setup and cleanup boundary                                                                                                                                                         | Available dependencies                 |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `'test'`   | Once per test attempt, including each retry. This is the default.                                                                                                                  | Test, file, worker, and `TestContext`. |
+| `'file'`   | Once per test file, then cleaned up after all tests and suite hooks in that file.                                                                                                  | File and worker fixtures.              |
+| `'worker'` | Once per worker, then cleaned up when the worker finishes. With `isolate: false`, it can be shared across files. A watch rebuild replaces the worker before running the new build. | Worker fixtures only.                  |
 
 File- and worker-scoped fixtures cannot access `TestContext`, because there is no single current test for their full lifetime. A fixture can depend only on fixtures whose lifetime is at least as long as its own. Rstest reports an error for dependencies such as a worker fixture consuming a file or test fixture.
 
-File- and worker-scoped fixtures use the builder form. It accepts `name`, `options`, and the fixture in that order. Its fixture function returns the value and can register one cleanup with `onCleanup`:
+File and worker scopes are available through the builder form, which accepts `name`, `options`, and the fixture in that order. Its fixture function returns the value and can register one cleanup with `onCleanup`:
 
 ```ts
 const apiTest = test
@@ -471,9 +471,9 @@ const apiTest = test
   .extend('client', async ({ server }) => createClient(server.url));
 ```
 
-Omit the options argument to create a test-scoped builder fixture, as in `.extend('client', fixture)`. The object form remains available for test-scoped fixtures using the `await use(value)` lifecycle. When overriding a file- or worker-scoped fixture, repeat the same `scope`; changing or omitting its scope is an error.
+Define file- and worker-scoped fixtures at the top level of the test file. They are initialized lazily when a test, hook, or another fixture requests them. These scopes do not support `auto` and cannot override an existing fixture. These restrictions keep their dependency graph stable for the full file or worker lifetime.
 
-Setup is lazy unless `auto: true` is set. Automatic file and worker fixtures are initialized before suite hooks in the first relevant file, and still run only once at their corresponding scope boundary.
+Omit the options argument to create a test-scoped builder fixture, as in `.extend('client', fixture)`. The object form also always defines test-scoped fixtures. Its tuple options recognize `auto`, not `scope`; an array such as `[value, { scope: 'file' }]` remains an ordinary test-scoped fixture value.
 
 ### Using fixtures in hooks
 

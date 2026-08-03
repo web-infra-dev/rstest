@@ -54,6 +54,8 @@ describe.skipIf(process.platform === 'win32')(
       // summary). The rerun must observe the rebuilt value, not the stale one.
       await cli.waitForStdout('Duration');
       expect(cli.stdout).toMatch('SHARED_MARKER=UPDATED');
+      expect(cli.stdout).toMatch('WORKER_FIXTURE_CLEANUP=ORIGINAL');
+      expect(cli.stdout).toMatch('WORKER_FIXTURE_SETUP=UPDATED');
       expect(cli.stdout).not.toMatch('SHARED_MARKER=ORIGINAL');
     });
   },

@@ -4,45 +4,6 @@ import fs from 'fs-extra';
 import { runRstestCli } from '../scripts';
 
 describe('test coverage-istanbul', () => {
-  for (const provider of ['istanbul', 'v8'] as const) {
-    it(`collects ${provider} coverage from worker fixture cleanup`, async () => {
-      const { expectExecSuccess, cli } = await runRstestCli({
-        command: 'rstest',
-        args: [
-          'run',
-          '-c',
-          'rstest.workerCleanup.config.ts',
-          '--coverage.provider',
-          provider,
-        ],
-        options: {
-          nodeOptions: {
-            cwd: join(__dirname, 'fixtures'),
-          },
-        },
-      });
-
-      await expectExecSuccess();
-      expect(
-        cli.stdout
-          .split('\n')
-          .find((line) => line.includes('workerCleanup.ts'))
-          ?.replaceAll(' ', ''),
-      ).toContain('|100|100|100|100|');
-
-      const report = fs.readJsonSync(
-        join(__dirname, 'fixtures/coverage/coverage-final.json'),
-      );
-      const workerCleanupCoverage = Object.values<{
-        f: Record<string, number>;
-        path: string;
-      }>(report).find((entry) =>
-        entry.path.replaceAll('\\', '/').endsWith('/src/workerCleanup.ts'),
-      );
-      expect(Object.values(workerCleanupCoverage?.f ?? {})).toEqual([1, 1]);
-    });
-  }
-
   it('coverage-istanbul', async () => {
     const { expectExecSuccess, expectLog, cli } = await runRstestCli({
       command: 'rstest',

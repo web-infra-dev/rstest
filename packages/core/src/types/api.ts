@@ -187,7 +187,7 @@ export type DescribeAPI = DescribeFn & {
 
 export type FixtureScope = 'test' | 'file' | 'worker';
 
-export interface FixtureOptions {
+type TestFixtureOptions = {
   /**
    * Whether to automatically set up current fixture, even though it's not being used in tests.
    */
@@ -197,8 +197,21 @@ export interface FixtureOptions {
    *
    * @default 'test'
    */
-  scope?: FixtureScope;
-}
+  scope?: 'test';
+};
+
+type ScopedFixtureOptions<Scope extends 'file' | 'worker'> = {
+  /**
+   * Lifecycle of the fixture.
+   */
+  scope: Scope;
+  auto?: never;
+};
+
+export type FixtureOptions =
+  | TestFixtureOptions
+  | ScopedFixtureOptions<'file'>
+  | ScopedFixtureOptions<'worker'>;
 
 export type Use<T> = (value: T) => Promise<void>;
 
@@ -227,8 +240,6 @@ type Fixture<T, K extends keyof T, ExtraContext = object> = ((
         ? FixtureFn<T, K, Omit<ExtraContext, Exclude<keyof T, K>>>
         : never);
 
-type TestFixtureOptions = Omit<FixtureOptions, 'scope'>;
-
 export type Fixtures<
   T extends Record<string, any> = object,
   ExtraContext = object,
@@ -241,9 +252,11 @@ export type Fixtures<
 export type NormalizedFixture = {
   isFn: boolean;
   deps?: string[];
-  dependencyFixtures: NormalizedFixture[];
   value: FixtureFn<any, any, any> | any;
-  options: Required<FixtureOptions>;
+  options: {
+    auto: boolean;
+    scope: FixtureScope;
+  };
   mode: 'use' | 'return';
 };
 
@@ -261,29 +274,30 @@ type BuilderFixture<Value, Context> =
   | Value
   | ((context: Context, lifecycle: FixtureLifecycle) => MaybePromise<Value>);
 
-type FixtureNameWithoutOverrides<
-  Name extends string,
-  Existing,
-> = Name extends keyof Existing ? never : Name;
+type TestFixtureName<Name, FileFixtures, WorkerFixtures> = Name extends
+  keyof FileFixtures | keyof WorkerFixtures
+  ? never
+  : Name;
 
-type FixtureObjectWithoutOverrides<Added, Existing> = {
-  [Name in Extract<keyof Added, keyof Existing>]: never;
-};
+type ScopedFixtureName<Name, TestFixtures, FileFixtures, WorkerFixtures> =
+  Name extends keyof TestFixtures | keyof FileFixtures | keyof WorkerFixtures
+    ? never
+    : Name;
 
 type TestExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
   <T extends Record<string, any> = object>(
     fixtures: Fixtures<T, TestFixtures & FileFixtures & WorkerFixtures> &
-      FixtureObjectWithoutOverrides<T, FileFixtures & WorkerFixtures>,
+      Partial<Record<keyof FileFixtures | keyof WorkerFixtures, never>>,
   ): TestAPIs<
     MergeFixtureContext<TestFixtures, T>,
     FileFixtures,
     WorkerFixtures
   >;
   <Name extends string, Value>(
-    name: FixtureNameWithoutOverrides<Name, FileFixtures & WorkerFixtures>,
+    name: TestFixtureName<Name, FileFixtures, WorkerFixtures>,
     fixture: BuilderFixture<
       Value,
-      Omit<TestContext & TestFixtures & FileFixtures & WorkerFixtures, Name>
+      TestContext & TestFixtures & FileFixtures & WorkerFixtures
     >,
   ): TestAPIs<
     MergeFixtureContext<TestFixtures, Record<Name, Value>>,
@@ -291,11 +305,11 @@ type TestExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
     WorkerFixtures
   >;
   <Name extends string, Value>(
-    name: FixtureNameWithoutOverrides<Name, FileFixtures & WorkerFixtures>,
-    options: FixtureOptions & { scope?: 'test' },
+    name: TestFixtureName<Name, FileFixtures, WorkerFixtures>,
+    options: TestFixtureOptions,
     fixture: BuilderFixture<
       Value,
-      Omit<TestContext & TestFixtures & FileFixtures & WorkerFixtures, Name>
+      TestContext & TestFixtures & FileFixtures & WorkerFixtures
     >,
   ): TestAPIs<
     MergeFixtureContext<TestFixtures, Record<Name, Value>>,
@@ -303,18 +317,18 @@ type TestExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
     WorkerFixtures
   >;
   <Name extends string, Value>(
-    name: FixtureNameWithoutOverrides<Name, TestFixtures & WorkerFixtures>,
-    options: FixtureOptions & { scope: 'file' },
-    fixture: BuilderFixture<Value, Omit<FileFixtures & WorkerFixtures, Name>>,
+    name: ScopedFixtureName<Name, TestFixtures, FileFixtures, WorkerFixtures>,
+    options: ScopedFixtureOptions<'file'>,
+    fixture: BuilderFixture<Value, FileFixtures & WorkerFixtures>,
   ): TestAPIs<
     TestFixtures,
     MergeFixtureContext<FileFixtures, Record<Name, Value>>,
     WorkerFixtures
   >;
   <Name extends string, Value>(
-    name: FixtureNameWithoutOverrides<Name, TestFixtures & FileFixtures>,
-    options: FixtureOptions & { scope: 'worker' },
-    fixture: BuilderFixture<Value, Omit<WorkerFixtures, Name>>,
+    name: ScopedFixtureName<Name, TestFixtures, FileFixtures, WorkerFixtures>,
+    options: ScopedFixtureOptions<'worker'>,
+    fixture: BuilderFixture<Value, WorkerFixtures>,
   ): TestAPIs<
     TestFixtures,
     FileFixtures,

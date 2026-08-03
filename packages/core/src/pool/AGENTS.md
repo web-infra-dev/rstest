@@ -17,7 +17,7 @@
 - `MemoryGate` is forks-only — thread RSS is host-wide and collapses parallelism (rstest#1301) — and must always admit at least one worker.
 - Worker ids are bounded `[1, maxWorkers]` and reused; consumers depend on `RSTEST_WORKER_ID` for resource partitioning. A slot and its id free only after the child actually exits.
 - birpc's timeout is disabled: a host rpc method that never resolves hangs the worker task indefinitely.
-- `buildId` threaded into the task context drives the worker-side rebuild-boundary cache flush; changing its scoping breaks `isolate: false` cross-project cache sharing (rstest#1376).
+- `buildId` threaded into the task context gates idle-runner reuse. A new build ends the old worker lifetime through the host-owned stop path before dispatch; changing its scoping can restart workers between sibling projects and break `isolate: false` cross-project sharing (rstest#1376).
 - Runner reuse is environment-matched: a worker keeps its test environment alive for its whole life under `isolate: false`, so it may only take tasks whose `environmentKey` matches. Dropping the affinity would leave persisted modules holding evaluation-time captures of a torn-down environment (rstest#767); the worker rejects a mismatched task as a file-level failure rather than swapping. The `minWorkers` idle floor is likewise counted per environment. `environmentKey` is derived host-side and threaded on the task — never re-derived in the worker.
 
 ## Coupling points (change both sides)

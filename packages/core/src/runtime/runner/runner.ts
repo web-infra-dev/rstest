@@ -6,7 +6,6 @@ import type {
   CoverageProvider,
   FormattedError,
   MatcherState,
-  NormalizedFixture,
   OnTestFailedHandler,
   OnTestFinishedHandler,
   Rstest,
@@ -81,6 +80,7 @@ export class TestRunner {
   async cleanupFileFixtures(
     result?: TestFileResult,
   ): Promise<TestFileResult | undefined> {
+    const cleanupStart = RealDate.now();
     try {
       await this.fileFixtureManager.cleanup();
     } catch (error) {
@@ -92,6 +92,10 @@ export class TestRunner {
         ...(result.errors ?? []),
         ...(await formatTestError(error)),
       ];
+    } finally {
+      if (result?.duration !== undefined) {
+        result.duration += RealDate.now() - cleanupStart;
+      }
     }
     return result;
   }
@@ -248,8 +252,11 @@ export class TestRunner {
               }),
             );
             const cancellationProgress = Promise.race([
-              hookCompletion,
-              cancellation.started.then(() => ({
+              hookCompletion.then((completion) => ({
+                status: 'completed' as const,
+                completion,
+              })),
+              cancellation.teardownStarted.then(() => ({
                 status: 'teardown-started' as const,
               })),
             ]);
@@ -266,12 +273,14 @@ export class TestRunner {
                 // only bounds how long unfinished setup may delay the test.
                 return;
               }
-              if (progress.status === 'teardown-started') {
-                await cancellation.completed;
-                return;
-              }
-              if (progress.status === 'failed') {
-                throw progress.error;
+              // Once `use` is reached, match normal fixture cleanup semantics:
+              // teardown must finish before the runner continues.
+              const completion =
+                progress.status === 'teardown-started'
+                  ? await hookCompletion
+                  : progress.completion;
+              if (completion.status === 'failed') {
+                throw completion.error;
               }
             });
           }
@@ -770,33 +779,6 @@ export class TestRunner {
           },
         ],
       };
-    }
-
-    const resolvedAutomaticFixtures = new Set<NormalizedFixture>();
-    const pendingTests = [...tests].reverse();
-    while (pendingTests.length > 0) {
-      const test = pendingTests.pop()!;
-      if (test.type === 'suite') {
-        for (let index = test.tests.length - 1; index >= 0; index--) {
-          pendingTests.push(test.tests[index]!);
-        }
-      } else if (test.runMode === 'run' || test.runMode === 'only') {
-        const automaticFixtures = Object.values(test.fixtures ?? {}).filter(
-          (fixture) =>
-            fixture.options.auto &&
-            fixture.options.scope !== 'test' &&
-            !resolvedAutomaticFixtures.has(fixture),
-        );
-        if (automaticFixtures.length > 0) {
-          await createFixtureResolver(test, Object.create(null), [], {
-            file: this.fileFixtureManager,
-            worker: this.workerFixtures,
-          }).resolveAutomaticScopedFixtures();
-          for (const fixture of automaticFixtures) {
-            resolvedAutomaticFixtures.add(fixture);
-          }
-        }
-      }
     }
 
     await runTests(tests, {

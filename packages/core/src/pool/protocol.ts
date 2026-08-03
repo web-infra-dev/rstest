@@ -3,6 +3,7 @@ import type {
   RunWorkerOptions,
   Test,
   TestFileResult,
+  UserConsoleLog,
 } from '../types';
 
 const WORKER_REQUEST_TAG = '__rstest_worker_request__' as const;
@@ -35,18 +36,10 @@ export type WorkerMemoryReport = {
   rss: number;
 };
 
-export type WorkerCleanupResult = Pick<
-  TestFileResult,
-  'coverage' | 'coverageRaw'
->;
-
 export type WorkerResponse =
   | { type: 'started'; pid: number }
-  | {
-      type: 'cleanupFinished';
-      result?: WorkerCleanupResult;
-      error?: SerializedError;
-    }
+  | { type: 'cleanupLog'; log: UserConsoleLog }
+  | { type: 'cleanupFinished'; error?: SerializedError }
   | { type: 'fileCleanupStarted'; taskId: number }
   | { type: 'fileCleanupFinished'; taskId: number }
   | {

@@ -8,7 +8,8 @@ import {
 } from '../../pool/protocol';
 import { ENV } from '../../utils/env';
 import { channel } from './channels';
-import { cleanupWorkerRuntime, runInPool } from './runInPool';
+import { runInPool, setWorkerCleanupLogSink } from './runInPool';
+import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { installGracefulExit } from './setup';
 
 installGracefulExit();
@@ -143,18 +144,19 @@ const runTask = async (
 };
 
 const cleanupWorker = async (): Promise<void> => {
+  setWorkerCleanupLogSink((log) => {
+    send({ type: 'cleanupLog', log });
+  });
   try {
-    const { error, result } = await cleanupWorkerRuntime();
-    send({
-      type: 'cleanupFinished',
-      result,
-      error: error ? serializeError(error) : undefined,
-    });
+    await cleanupWorkerFixtures();
+    send({ type: 'cleanupFinished' });
   } catch (error) {
     send({
       type: 'cleanupFinished',
       error: serializeError(error),
     });
+  } finally {
+    setWorkerCleanupLogSink(undefined);
   }
 };
 

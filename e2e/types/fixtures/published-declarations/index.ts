@@ -2,74 +2,43 @@ import { expect, test } from '@rstest/core';
 
 expect(true).toBe(true);
 
-const objectTest = test.extend<{ objectValue: string }>({
-  objectValue: [
-    async ({ task }, use) => {
-      await use(task.name);
-    },
-    { auto: false },
-  ],
+const scopedTest = test
+  .extend('port', { scope: 'worker' }, 5000)
+  .extend('server', { scope: 'file' }, ({ port }) => ({ port }))
+  .extend('client', ({ server }) => server);
+
+scopedTest('exposes scoped values', ({ client, port, server }) => {
+  expect(client).toEqual(server);
+  expect(port).toBe(5000);
 });
 
-objectTest('object fixtures remain test scoped', ({ objectValue }) => {
-  expect(objectValue).toBeTypeOf('string');
+// @ts-expect-error scoped fixtures do not support automatic setup
+test.extend('automaticWorker', { scope: 'worker', auto: true }, () => 1);
+
+const arrayValueTest = test.extend<{
+  objectValue: readonly [number, { scope: 'worker' }];
+}>({
+  objectValue: [1, { scope: 'worker' as const }],
 });
 
-test.extend<{ workerValue: string }>({
-  workerValue: [
-    async (_context, use) => {
-      await use('worker');
-    },
-    // @ts-expect-error File and worker scopes use the builder overload.
-    { scope: 'worker' },
-  ],
-});
-
-const workerTest = test.extend(
-  'workerValue',
-  { scope: 'worker' },
-  (_context, { onCleanup }) => {
-    onCleanup(() => {});
-    return 5000;
+arrayValueTest(
+  'keeps scope-shaped arrays as test fixture values',
+  ({ objectValue }) => {
+    expect(objectValue[1].scope).toBe('worker');
   },
 );
 
-const fileTest = workerTest.extend(
-  'fileValue',
-  { scope: 'file' },
-  ({ workerValue }) => String(workerValue),
-);
+const workerTest = test.extend('workerValue', { scope: 'worker' }, 'worker');
 
-// @ts-expect-error Scoped overrides must repeat their inherited scope.
-workerTest.extend('workerValue', 6000);
+// @ts-expect-error scoped fixtures cannot be overridden with the builder form
+workerTest.extend('workerValue', 'replacement');
 
-workerTest.extend('workerValue', { scope: 'worker' }, 6000);
+// @ts-expect-error scoped fixtures cannot be overridden with the object form
+workerTest.extend({ workerValue: 'replacement' });
 
-workerTest.extend(
-  'workerValue',
+test.extend(
+  'invalidWorkerContext',
   { scope: 'worker' },
-  // @ts-expect-error A replacement cannot depend on itself.
-  ({ workerValue }) => workerValue,
-);
-
-// @ts-expect-error A worker fixture cannot be changed to test scope.
-workerTest.extend('workerValue', { scope: 'test' }, 6000);
-
-workerTest.extend<{ workerValue: number }>({
-  // @ts-expect-error Object fixtures cannot override a worker fixture.
-  workerValue: 6000,
-});
-
-fileTest.extend(
-  'testValue',
-  { scope: 'test' },
-  ({ fileValue, workerValue, task }) =>
-    `${fileValue}:${workerValue}:${task.name}`,
-);
-
-workerTest.extend(
-  'invalidWorkerValue',
-  { scope: 'worker' },
-  // @ts-expect-error Worker fixtures cannot access the per-test context.
+  // @ts-expect-error worker fixtures cannot access the test context
   ({ task }) => task.name,
 );

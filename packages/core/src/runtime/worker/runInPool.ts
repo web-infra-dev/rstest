@@ -7,16 +7,13 @@ import type {
   RunWorkerOptions,
   TestFileResult,
   TestInfo,
+  UserConsoleLog,
   WorkerState,
 } from '../../types';
 import { globalApis, RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
-import {
-  cleanupWorkerFixtures,
-  workerFixtureManager,
-} from '../runner/fixtures';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
 import { PhaseTracker } from './phaseTracker';
@@ -28,6 +25,13 @@ import { createNodeTaskContext } from './taskContext.node';
 import type { TaskContext } from './taskContext';
 
 let sourceMaps: Record<string, string> = {};
+let workerCleanupLogSink: ((log: UserConsoleLog) => void) | undefined;
+
+export const setWorkerCleanupLogSink = (
+  sink: ((log: UserConsoleLog) => void) | undefined,
+): void => {
+  workerCleanupLogSink = sink;
+};
 
 // Threads-pool workers all share `process.pid` with the host, and each
 // worker_thread has its own JS context, so PhaseTracker's `nextThreadId`
@@ -98,220 +102,6 @@ let activeEnvironmentKey: string | undefined;
  * runtime chunk and reintroducing the cross-project regression (#1376).
  */
 let lastBuildId: number | undefined;
-let workerEnvironmentCleanup: (() => MaybePromise<void>) | undefined;
-let workerUnhandledErrors: Error[] | undefined;
-
-type CoverageProvider = NonNullable<
-  Awaited<ReturnType<typeof import('../../coverage').createCoverageProvider>>
->;
-type CoverageCollectOptions = Parameters<CoverageProvider['collect']>[0];
-type WorkerCleanupResult = Pick<TestFileResult, 'coverage' | 'coverageRaw'>;
-type PendingWorkerCoverage = {
-  collectOptions: CoverageCollectOptions;
-  provider: CoverageProvider;
-};
-type CoverageCounts = Pick<FileCoverageData, 'b' | 'f' | 's'> & {
-  hash?: string;
-};
-
-let pendingWorkerCoverage: PendingWorkerCoverage | undefined;
-let workerRawCoverageCollectOptions: CoverageCollectOptions | undefined;
-let workerMappedCoverageSnapshot: Record<string, CoverageCounts> = {};
-
-const isRawCoverageProvider = (provider: CoverageProvider): boolean =>
-  Boolean(provider.collectRaw && provider.resolveRawCoverage);
-
-const mergeRawCoverageCollectOptions = (
-  options: CoverageCollectOptions,
-): CoverageCollectOptions => {
-  workerRawCoverageCollectOptions ??= {};
-  if (options?.assetFiles) {
-    workerRawCoverageCollectOptions.assetFiles ??= {};
-    Object.assign(
-      workerRawCoverageCollectOptions.assetFiles,
-      options.assetFiles,
-    );
-  }
-  if (options?.sourceMaps) {
-    workerRawCoverageCollectOptions.sourceMaps ??= {};
-    Object.assign(
-      workerRawCoverageCollectOptions.sourceMaps,
-      options.sourceMaps,
-    );
-  }
-  workerRawCoverageCollectOptions.outputModule = options?.outputModule;
-  return workerRawCoverageCollectOptions;
-};
-
-const takeMappedCoverageDelta = (result: WorkerCleanupResult): void => {
-  if (!result.coverage) {
-    return;
-  }
-
-  const delta: NonNullable<WorkerCleanupResult['coverage']> = {};
-  for (const [filePath, current] of Object.entries(result.coverage)) {
-    const currentHash =
-      'hash' in current && typeof current.hash === 'string'
-        ? current.hash
-        : undefined;
-    const snapshot = workerMappedCoverageSnapshot[filePath];
-    const previous = snapshot?.hash === currentHash ? snapshot : undefined;
-    let changed = previous === undefined;
-    const s = Object.fromEntries(
-      Object.entries(current.s).map(([key, count]) => {
-        const next = count - (previous?.s[key] ?? 0);
-        changed ||= next > 0;
-        return [key, next];
-      }),
-    );
-    const f = Object.fromEntries(
-      Object.entries(current.f).map(([key, count]) => {
-        const next = count - (previous?.f[key] ?? 0);
-        changed ||= next > 0;
-        return [key, next];
-      }),
-    );
-    const b = Object.fromEntries(
-      Object.entries(current.b).map(([key, counts]) => {
-        const next = counts.map(
-          (count, index) => count - (previous?.b[key]?.[index] ?? 0),
-        );
-        changed ||= next.some((count) => count > 0);
-        return [key, next];
-      }),
-    );
-
-    workerMappedCoverageSnapshot[filePath] = {
-      hash: currentHash,
-      s: { ...current.s },
-      f: { ...current.f },
-      b: Object.fromEntries(
-        Object.entries(current.b).map(([key, counts]) => [key, [...counts]]),
-      ),
-    };
-    if (changed) {
-      delta[filePath] = { ...current, s, f, b };
-    }
-  }
-
-  result.coverage = delta;
-};
-
-const collectCoverage = async (
-  provider: CoverageProvider,
-  collectOptions: CoverageCollectOptions,
-): Promise<WorkerCleanupResult> => {
-  const result: WorkerCleanupResult = {};
-  const collectMappedCoverage = async () => {
-    const coverageMap = await provider.collect(collectOptions);
-    if (!coverageMap) {
-      return;
-    }
-    result.coverage = {};
-    Object.entries(coverageMap.toJSON()).forEach(([key, value]) => {
-      if ('toJSON' in value) {
-        result.coverage![key] = value.toJSON() as FileCoverageData;
-      } else {
-        result.coverage![key] = value;
-      }
-    });
-  };
-
-  if (provider.collectRaw && provider.resolveRawCoverage) {
-    const rawCoverage = await provider.collectRaw(collectOptions);
-    if (rawCoverage != null) {
-      result.coverageRaw = rawCoverage;
-    } else {
-      await collectMappedCoverage();
-    }
-  } else {
-    await collectMappedCoverage();
-  }
-
-  return result;
-};
-
-const createCleanupError = (errors: unknown[]): unknown => {
-  if (errors.length === 1) {
-    return errors[0];
-  }
-  if (errors.length > 1) {
-    return new AggregateError(errors, 'Failed to clean up the test worker.');
-  }
-  return undefined;
-};
-
-export const cleanupWorkerRuntime = async (): Promise<{
-  error?: unknown;
-  result?: WorkerCleanupResult;
-}> => {
-  isTeardown = false;
-  const cleanupEnvironment = workerEnvironmentCleanup;
-  workerEnvironmentCleanup = undefined;
-  const errors: unknown[] = [];
-  let result: WorkerCleanupResult | undefined;
-
-  try {
-    await cleanupWorkerFixtures();
-  } catch (error) {
-    errors.push(error);
-  }
-  if (cleanupEnvironment) {
-    try {
-      await cleanupEnvironment();
-    } catch (error) {
-      errors.push(error);
-    }
-  }
-
-  // Give promise rejections scheduled by cleanup two host macrotasks to reach
-  // the worker's process-level handlers while those handlers are still active.
-  for (let i = 0; i < 2; i++) {
-    await new Promise<void>((resolve) => {
-      getRealTimers().setTimeout!(resolve);
-    });
-  }
-
-  if (workerUnhandledErrors?.length) {
-    const unhandledErrors = workerUnhandledErrors.splice(0);
-    errors.push(
-      new AggregateError(
-        unhandledErrors,
-        [
-          'Unhandled errors escaped worker fixture cleanup:',
-          ...unhandledErrors.map((error) => error.message),
-        ].join('\n'),
-      ),
-    );
-  }
-
-  const coverage = pendingWorkerCoverage;
-  pendingWorkerCoverage = undefined;
-  if (coverage) {
-    try {
-      result = await collectCoverage(
-        coverage.provider,
-        coverage.collectOptions,
-      );
-      if (!isRawCoverageProvider(coverage.provider)) {
-        takeMappedCoverageDelta(result);
-      }
-    } catch (error) {
-      errors.push(error);
-    } finally {
-      try {
-        coverage.provider.cleanup();
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-  }
-  workerRawCoverageCollectOptions = undefined;
-  workerMappedCoverageSnapshot = {};
-
-  isTeardown = true;
-  return { error: createCleanupError(errors), result };
-};
 
 const setErrorName = (error: Error, type: string): Error => {
   try {
@@ -432,6 +222,10 @@ const preparePool = async (
       silent,
     },
     emitInterceptedLog: (log) => {
+      if (workerCleanupLogSink) {
+        workerCleanupLogSink(log);
+        return;
+      }
       // Forwarding console output to the host is best-effort, fire-and-forget:
       // the result is never awaited. With `isolate: false` a captured console
       // (e.g. a logger that flushes from a late `setTimeout`/microtask) can fire
@@ -488,7 +282,6 @@ const preparePool = async (
   const { createRstestRuntime } = await import('../api');
 
   const unhandledErrors: Error[] = [];
-  workerUnhandledErrors = unhandledErrors;
 
   const handleError = (e: Error | string, type: string) => {
     const rawError: Error = typeof e === 'string' ? new Error(e) : e;
@@ -697,13 +490,7 @@ export const runInPool = async (
     context: {
       project,
       buildId,
-      runtimeConfig: {
-        isolate,
-        bail,
-        coverage: coverageOptions,
-        detectAsyncLeaks,
-        federation,
-      },
+      runtimeConfig: { isolate, bail, detectAsyncLeaks, federation },
     },
   } = options;
 
@@ -718,7 +505,6 @@ export const runInPool = async (
   // loading (see `flushAllLoaderCaches` for why both loaders, not just this
   // task's).
   if (!isolate && lastBuildId !== undefined && lastBuildId !== buildId) {
-    await cleanupWorkerFixtures();
     const { flushAllLoaderCaches } = await import('./interop');
     await flushAllLoaderCaches();
   }
@@ -828,8 +614,6 @@ export const runInPool = async (
   );
   let runResult: TestFileResult | undefined;
   let asyncLeakDetector: ReturnType<typeof createAsyncLeakDetector> | undefined;
-  let coverageCollectOptions: CoverageCollectOptions;
-  let rawCoverageNeedsRestart = false;
 
   try {
     tracker.transition('prepare');
@@ -845,11 +629,6 @@ export const runInPool = async (
       taskContext: preparedTaskContext,
     } = await preparePool(options, tracker);
     taskContext = preparedTaskContext;
-    if (isolate) {
-      workerEnvironmentCleanup = cleanup;
-    } else {
-      cleanups.push(cleanup);
-    }
     if (detectAsyncLeaks) {
       asyncLeakDetector = createAsyncLeakDetector(taskContext);
       asyncLeakDetector.enable();
@@ -876,37 +655,14 @@ export const runInPool = async (
     }
     if (coverageProvider) {
       await coverageProvider.init();
-      const previousCoverage = pendingWorkerCoverage;
-      if (coverageOptions?.enabled && previousCoverage) {
-        if (isRawCoverageProvider(previousCoverage.provider)) {
-          previousCoverage.provider.cleanup();
-        }
-        pendingWorkerCoverage = undefined;
-      }
     }
-
-    const createWorkerCleanupCoverageProvider = async () => {
-      const { createCoverageProvider } = await import('../../coverage');
-      const provider = await createCoverageProvider(
-        coverageOptions,
-        options.context.projectRoot,
-      );
-      if (!provider) {
-        throw new Error('Failed to create worker cleanup coverage provider.');
-      }
-      await provider.init();
-      return provider;
-    };
 
     tracker.transition('load');
     const { assetFiles, sourceMaps: sourceMapsFromAssets } =
       assets || (await rpc.getAssetsByEntry());
     sourceMaps = sourceMapsFromAssets;
-    coverageCollectOptions = {
-      assetFiles,
-      sourceMaps,
-      outputModule: options.context.outputModule,
-    };
+
+    cleanups.push(cleanup);
 
     rpc.onTestFileStart?.({
       testId: getFileTaskId(testPath),
@@ -1006,7 +762,6 @@ export const runInPool = async (
       results.errors = (results.errors || []).concat(
         ...(await formatTestError(unhandledErrors)),
       );
-      unhandledErrors.length = 0;
     }
 
     silentConsoleController.flushBufferedLogsForTask({
@@ -1021,40 +776,33 @@ export const runInPool = async (
     if (coverageProvider) {
       const provider = coverageProvider;
       tracker.transition('coverage');
-      const collectOptions = coverageCollectOptions;
+      const collectOptions = {
+        assetFiles,
+        sourceMaps,
+        outputModule: options.context.outputModule,
+      };
 
-      if (workerFixtureManager.hasCleanups()) {
-        if (isRawCoverageProvider(provider)) {
-          rawCoverageNeedsRestart = true;
-          Object.assign(
-            results,
-            await collectCoverage(provider, collectOptions),
-          );
-          // Raw providers stop collection when producing the file result.
-          // Start a fresh interval dedicated to worker-scoped fixture cleanup.
-          await provider.init();
-          rawCoverageNeedsRestart = false;
-          coverageCollectOptions =
-            mergeRawCoverageCollectOptions(collectOptions);
-        } else {
-          const coverageResult = await collectCoverage(
-            provider,
-            collectOptions,
-          );
-          takeMappedCoverageDelta(coverageResult);
-          Object.assign(results, coverageResult);
-          coverageProvider = await createWorkerCleanupCoverageProvider();
+      const collectCoverage = async () => {
+        const coverageMap = await provider.collect(collectOptions);
+        if (coverageMap) {
+          results.coverage = {};
+          Object.entries(coverageMap.toJSON()).forEach(([key, value]) => {
+            if ('toJSON' in value)
+              results.coverage![key] = value.toJSON() as FileCoverageData;
+            else results.coverage![key] = value;
+          });
         }
-        // Mapped providers keep their instrumented global alive. Each file and
-        // cleanup response sends only the counter delta so host merges retain
-        // exact execution counts without disconnecting cached instruments.
-        pendingWorkerCoverage = {
-          collectOptions: coverageCollectOptions,
-          provider: coverageProvider,
-        };
-        coverageProvider = null;
+      };
+
+      if (provider.collectRaw && provider.resolveRawCoverage) {
+        const rawCoverage = await provider.collectRaw(collectOptions);
+        if (rawCoverage != null) {
+          results.coverageRaw = rawCoverage;
+        } else {
+          await collectCoverage();
+        }
       } else {
-        Object.assign(results, await collectCoverage(provider, collectOptions));
+        await collectCoverage();
       }
     }
 
@@ -1073,32 +821,6 @@ export const runInPool = async (
     return runResult;
   } finally {
     tracker.transition('teardown');
-    if (coverageProvider && workerFixtureManager.hasCleanups()) {
-      const provider = coverageProvider;
-      try {
-        if (isRawCoverageProvider(provider) && rawCoverageNeedsRestart) {
-          await provider.init();
-          rawCoverageNeedsRestart = false;
-        }
-        if (isRawCoverageProvider(provider)) {
-          coverageCollectOptions = mergeRawCoverageCollectOptions(
-            coverageCollectOptions,
-          );
-        }
-        pendingWorkerCoverage = {
-          collectOptions: coverageCollectOptions,
-          provider,
-        };
-        coverageProvider = null;
-      } catch (error) {
-        if (runResult) {
-          runResult.status = 'fail';
-          runResult.errors = (runResult.errors ?? []).concat(
-            ...(await formatTestError(error)),
-          );
-        }
-      }
-    }
     if (coverageProvider) {
       coverageProvider.cleanup();
     }

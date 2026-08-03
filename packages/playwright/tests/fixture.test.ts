@@ -75,28 +75,6 @@ const browserTest = test.extend({
   playwright: ciPlaywrightOptions,
 });
 
-const typedWorkerTest = test.extend(
-  'typedWorkerValue',
-  { scope: 'worker' },
-  () => 'worker',
-);
-const verifyScopedFixtureOverrideTypes = () => {
-  // @ts-expect-error Scoped overrides must repeat their inherited scope.
-  typedWorkerTest.extend('typedWorkerValue', () => 'child');
-  typedWorkerTest.extend(
-    'typedWorkerValue',
-    { scope: 'worker' },
-    () => 'child',
-  );
-  typedWorkerTest.extend(
-    'typedWorkerValue',
-    { scope: 'worker' },
-    // @ts-expect-error An override cannot depend on its own replacement.
-    ({ typedWorkerValue }) => typedWorkerValue,
-  );
-};
-void verifyScopedFixtureOverrideTypes;
-
 let sharedBrowser: Browser | undefined;
 
 const createPage = (title: string) =>
@@ -347,13 +325,15 @@ test('selects Playwright trace attempts by mode', () => {
   ).toEqual([false, true, true]);
 });
 
+const builderTest = test
+  .extend('builderTitle', { scope: 'file' }, (_context, { onCleanup }) => {
+    onCleanup(() => {});
+    return 'builder title';
+  })
+  .extend('builderCount', 1);
+
 test.extend({}).describe('extended test API', () => {
-  test
-    .extend('builderTitle', { scope: 'file' }, (_context, { onCleanup }) => {
-      onCleanup(() => {});
-      return 'builder title';
-    })
-    .extend('builderCount', 1)(
+  builderTest(
     'supports builder-style fixture extension',
     ({ builderCount, builderTitle }) => {
       expect(builderTitle).toBe('builder title');
@@ -494,13 +474,6 @@ test.extend({}).describe('extended test API', () => {
   })('preserves static array fixture values', ({ pair }) => {
     expect(pair[0]()).toBe('static value');
     expect(pair[1]).toBe(1);
-  });
-
-  test.extend<{ scopedPair: [() => string, { scope: string }] }>({
-    scopedPair: [() => 'static value', { scope: 'test' }],
-  })('preserves array fixtures with scope-shaped data', ({ scopedPair }) => {
-    expect(scopedPair[0]()).toBe('static value');
-    expect(scopedPair[1]).toEqual({ scope: 'test' });
   });
 
   test.extend({})('preserves playwright-style helpers', () => {

@@ -1422,14 +1422,24 @@ type PlaywrightBuilderFixture<Value, Context> =
   | Value
   | ((context: Context, lifecycle: FixtureLifecycle) => Value | Promise<Value>);
 
-type PlaywrightFixtureNameWithoutOverrides<
-  Name extends string,
-  Existing,
-> = Name extends keyof Existing ? never : Name;
+type PlaywrightTestFixtureOptions = Extract<FixtureOptions, { scope?: 'test' }>;
+type PlaywrightFileFixtureOptions = Extract<FixtureOptions, { scope: 'file' }>;
+type PlaywrightWorkerFixtureOptions = Extract<
+  FixtureOptions,
+  { scope: 'worker' }
+>;
 
-type PlaywrightFixtureObjectWithoutOverrides<Added, Existing> = {
-  [Name in Extract<keyof Added, keyof Existing>]: never;
-};
+type PlaywrightTestFixtureName<Name, FileFixtures, WorkerFixtures> =
+  Name extends keyof FileFixtures | keyof WorkerFixtures ? never : Name;
+
+type PlaywrightScopedFixtureName<
+  Name,
+  TestFixtures,
+  FileFixtures,
+  WorkerFixtures,
+> = Name extends keyof TestFixtures | keyof FileFixtures | keyof WorkerFixtures
+  ? never
+  : Name;
 
 type PlaywrightExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
   <T extends Record<string, any> = object>(
@@ -1437,20 +1447,17 @@ type PlaywrightExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
       T,
       TestFixtures & FileFixtures & WorkerFixtures
     > &
-      PlaywrightFixtureObjectWithoutOverrides<T, FileFixtures & WorkerFixtures>,
+      Partial<Record<keyof FileFixtures | keyof WorkerFixtures, never>>,
   ): PlaywrightTest<
     MergeContext<TestFixtures, T>,
     FileFixtures,
     WorkerFixtures
   >;
   <Name extends string, Value>(
-    name: PlaywrightFixtureNameWithoutOverrides<
-      Name,
-      FileFixtures & WorkerFixtures
-    >,
+    name: PlaywrightTestFixtureName<Name, FileFixtures, WorkerFixtures>,
     fixture: PlaywrightBuilderFixture<
       Value,
-      Omit<TestContext & TestFixtures & FileFixtures & WorkerFixtures, Name>
+      TestContext & TestFixtures & FileFixtures & WorkerFixtures
     >,
   ): PlaywrightTest<
     MergeContext<TestFixtures, Record<Name, Value>>,
@@ -1458,14 +1465,11 @@ type PlaywrightExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
     WorkerFixtures
   >;
   <Name extends string, Value>(
-    name: PlaywrightFixtureNameWithoutOverrides<
-      Name,
-      FileFixtures & WorkerFixtures
-    >,
-    options: FixtureOptions & { scope?: 'test' },
+    name: PlaywrightTestFixtureName<Name, FileFixtures, WorkerFixtures>,
+    options: PlaywrightTestFixtureOptions,
     fixture: PlaywrightBuilderFixture<
       Value,
-      Omit<TestContext & TestFixtures & FileFixtures & WorkerFixtures, Name>
+      TestContext & TestFixtures & FileFixtures & WorkerFixtures
     >,
   ): PlaywrightTest<
     MergeContext<TestFixtures, Record<Name, Value>>,
@@ -1473,27 +1477,28 @@ type PlaywrightExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
     WorkerFixtures
   >;
   <Name extends string, Value>(
-    name: PlaywrightFixtureNameWithoutOverrides<
+    name: PlaywrightScopedFixtureName<
       Name,
-      TestFixtures & WorkerFixtures
+      TestFixtures,
+      FileFixtures,
+      WorkerFixtures
     >,
-    options: FixtureOptions & { scope: 'file' },
-    fixture: PlaywrightBuilderFixture<
-      Value,
-      Omit<FileFixtures & WorkerFixtures, Name>
-    >,
+    options: PlaywrightFileFixtureOptions,
+    fixture: PlaywrightBuilderFixture<Value, FileFixtures & WorkerFixtures>,
   ): PlaywrightTest<
     TestFixtures,
     MergeContext<FileFixtures, Record<Name, Value>>,
     WorkerFixtures
   >;
   <Name extends string, Value>(
-    name: PlaywrightFixtureNameWithoutOverrides<
+    name: PlaywrightScopedFixtureName<
       Name,
-      TestFixtures & FileFixtures
+      TestFixtures,
+      FileFixtures,
+      WorkerFixtures
     >,
-    options: FixtureOptions & { scope: 'worker' },
-    fixture: PlaywrightBuilderFixture<Value, Omit<WorkerFixtures, Name>>,
+    options: PlaywrightWorkerFixtureOptions,
+    fixture: PlaywrightBuilderFixture<Value, WorkerFixtures>,
   ): PlaywrightTest<
     TestFixtures,
     FileFixtures,

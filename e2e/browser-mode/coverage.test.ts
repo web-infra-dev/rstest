@@ -27,11 +27,6 @@ describe('browser mode - coverage', () => {
 
     // multiply.ts should have 0% coverage (untested)
     expect(cli.stdout.replaceAll(' ', '')).toContain('multiply.ts|0|100|0|0');
-
-    // cleanupOnly.ts should include execution from worker fixture cleanup.
-    expect(cli.stdout.replaceAll(' ', '')).toContain(
-      'cleanupOnly.ts|100|100|100|100',
-    );
   });
 
   it('should collect and merge coverage from browser + node multiproject', async () => {

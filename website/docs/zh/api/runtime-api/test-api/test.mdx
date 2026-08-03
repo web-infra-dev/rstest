@@ -450,15 +450,15 @@ testWithApi('fetch profile', async ({ baseURL, token, expect }) => {
 
 使用 `scope` 选项控制 fixture 实例的存活时间：
 
-| Scope      | Setup 和 cleanup 边界                                                                | 可用依赖                                      |
-| ---------- | ------------------------------------------------------------------------------------ | --------------------------------------------- |
-| `'test'`   | 每次 test attempt 创建一次，包括每次 retry；这是默认值。                             | Test、file、worker fixture 和 `TestContext`。 |
-| `'file'`   | 每个测试文件创建一次，在该文件的所有测试和 suite hook 完成后清理。                   | File 和 worker fixture。                      |
-| `'worker'` | 每个 worker 创建一次，在 worker 结束时清理。设置 `isolate: false` 后可以跨文件共享。 | 仅 worker fixture。                           |
+| Scope      | Setup 和 cleanup 边界                                                                                                               | 可用依赖                                      |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `'test'`   | 每次 test attempt 创建一次，包括每次 retry；这是默认值。                                                                            | Test、file、worker fixture 和 `TestContext`。 |
+| `'file'`   | 每个测试文件创建一次，在该文件的所有测试和 suite hook 完成后清理。                                                                  | File 和 worker fixture。                      |
+| `'worker'` | 每个 worker 创建一次，在 worker 结束时清理。设置 `isolate: false` 后可以跨文件共享；watch rebuild 会先替换 worker，再运行新的构建。 | 仅 worker fixture。                           |
 
 File 和 worker scope fixture 无法访问 `TestContext`，因为在它们的完整生命周期内不存在唯一的当前测试。Fixture 只能依赖生命周期不短于自身的 fixture。比如 worker fixture 依赖 file 或 test fixture 时，Rstest 会报告错误。
 
-File 和 worker scope fixture 使用 builder 写法。它依次接收 `name`、`options` 和 fixture。Fixture 函数直接返回值，并可以通过 `onCleanup` 注册一个 cleanup：
+File 和 worker scope 通过 builder 写法定义，该写法依次接收 `name`、`options` 和 fixture。Fixture 函数直接返回值，并可以通过 `onCleanup` 注册一个 cleanup：
 
 ```ts
 const apiTest = test
@@ -471,9 +471,9 @@ const apiTest = test
   .extend('client', async ({ server }) => createClient(server.url));
 ```
 
-省略 options 参数时会创建 test scope builder fixture，例如 `.extend('client', fixture)`。对象写法仍可用于通过 `await use(value)` 生命周期定义 test scope fixture。覆盖 file 或 worker scope fixture 时，必须再次指定相同的 `scope`；省略或更改 scope 都会报错。
+File 和 worker scope fixture 必须在测试文件顶层定义。它们仅在测试、hook 或其他 fixture 请求时按需初始化，不支持 `auto`，也不能覆盖已存在的 fixture。这些限制确保其依赖图在整个 file 或 worker 生命周期内保持稳定。
 
-Setup 默认按需执行；设置 `auto: true` 后自动执行。自动 file 和 worker fixture 会在首个相关文件的 suite hook 之前初始化，并且在各自的 scope 边界内仍然只执行一次。
+省略 options 参数时会创建 test scope builder fixture，例如 `.extend('client', fixture)`。对象写法也始终定义 test scope fixture。它的元组选项只识别 `auto`，不识别 `scope`；`[value, { scope: 'file' }]` 这样的数组仍是普通的 test scope fixture 值。
 
 ### 在 hook 中使用 fixture
 

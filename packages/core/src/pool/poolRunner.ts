@@ -98,7 +98,8 @@ export class PoolRunner {
   private startTimer: NodeJS.Timeout | undefined;
   private cleanupTimer: NodeJS.Timeout | undefined;
   private fileCleanupTimer: NodeJS.Timeout | undefined;
-  private workerCleanupResultHandler: PoolTask['onWorkerCleanupResult'];
+  private cleanupLogHandler: RuntimeRPC['onConsoleLog'] | undefined;
+  private buildId: number | undefined;
   private lastFatalError: Error | undefined;
   /**
    * Set when the worker reports `fatal_error` or a transport error. The
@@ -125,6 +126,10 @@ export class PoolRunner {
 
   isUsable(): boolean {
     return this.state === 'STARTED' && !this.crashed;
+  }
+
+  canReuseForBuild(buildId: number): boolean {
+    return this.buildId === undefined || this.buildId === buildId;
   }
 
   start(): Promise<void> {
@@ -330,9 +335,8 @@ export class PoolRunner {
     }
 
     this.installRpc(task.rpcMethods);
-    if (kind === 'run') {
-      this.workerCleanupResultHandler = task.onWorkerCleanupResult;
-    }
+    this.cleanupLogHandler = task.rpcMethods.onConsoleLog;
+    this.buildId = task.options.context.buildId;
     // Per-task stderr attribution: discard buffered output from a prior
     // task on the same reused worker (`isolate: false`). Otherwise
     // `attachStderrToError` would mix the previous file's stderr into the
@@ -377,21 +381,14 @@ export class PoolRunner {
         this.startDeferred = undefined;
         return;
       case 'cleanupFinished':
-        try {
-          if (response.result) {
-            this.workerCleanupResultHandler?.(response.result);
-          }
-        } catch (error) {
-          this.rejectCleanup(toError(error));
-          return;
-        } finally {
-          this.workerCleanupResultHandler = undefined;
-        }
         if (response.error) {
           this.rejectCleanup(deserializeError(response.error));
         } else {
           this.resolveCleanup();
         }
+        return;
+      case 'cleanupLog':
+        this.cleanupLogHandler?.(response.log);
         return;
       case 'fileCleanupStarted':
         this.startFileCleanupTimer(response.taskId);
@@ -440,7 +437,6 @@ export class PoolRunner {
   private handleExit(code: number | null, signal: NodeJS.Signals | null): void {
     this.clearStartTimer();
     this.clearFileCleanupTimer();
-    this.workerCleanupResultHandler = undefined;
     this.rejectCleanup(
       new Error(
         `Worker exited during fixture cleanup (code=${code}, signal=${signal})`,
@@ -451,6 +447,7 @@ export class PoolRunner {
     this.state = 'STOPPED';
 
     this.disposeRpc();
+    this.cleanupLogHandler = undefined;
 
     this.rejectStart(
       new Error(
