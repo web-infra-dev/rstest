@@ -114,7 +114,7 @@ export default defineConfig({
 });
 ```
 
-如果 Rstest 无法构建或加载预打包产物，会回退到环境的原生入口。环境包会优先从当前 project 的依赖树解析，再回退到 Rstest workspace 根目录。
+如果 Rstest 无法构建或加载预打包产物，会回退到环境的原生入口。环境包会优先从当前 project 的依赖树解析，再回退到 Rstest workspace 根目录，最后通过 `@rstest/core` 的原生依赖解析保持向后兼容。
 
 ### 环境注释
 
