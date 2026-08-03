@@ -6,9 +6,10 @@ import type {
   ProjectEntries,
   RstestContext,
 } from '../../types';
-import { isDebug } from '../../utils';
+import { isDebug, resolveShardedEntries } from '../../utils';
 import { claimGlobalSetupOnce, runGlobalSetup } from '../globalSetup';
 import { getRsbuildEnvironmentConfig } from '../modifyRstestConfig';
+import { getProjectEntries } from '../projectPlan';
 import { pluginBasic } from '../plugins/basic';
 import { pluginEntryWatch } from '../plugins/entry';
 import { pluginExternal } from '../plugins/external';
@@ -73,14 +74,22 @@ export async function runBrowserGlobalSetupStage(
     /**
      * The plan's entries, already narrowed to the shard slice, so the "no
      * running tests -> no globalSetup" gate reuses the plan's glob instead of
-     * re-walking the fs. Required, and authoritative — an absent project means
-     * zero entries, not "look it up". Every run shape reaches this stage
-     * through the one assembly in `runTests.ts`, which has a resolved plan by
-     * then, so there is no caller left that could only offer a re-glob.
+     * re-walking the fs. When present it is authoritative — an absent project
+     * means zero entries, not "look it up". Optional because `listTests.ts`
+     * reaches this stage without a resolved plan; every run shape comes through
+     * the one assembly in `runTests.ts` and always passes it.
      */
-    entriesCache: Map<string, ProjectEntries>;
+    entriesCache?: Map<string, ProjectEntries>;
   },
 ): Promise<BrowserGlobalSetupStageResult> {
+  // Shard-aware in every run shape: the run path passes the plan's
+  // shard-narrowed cache; a list without one resolves the same sharded map the
+  // browser controller will use, so a project whose shard slice is empty never
+  // runs its globalSetup. Only an unsharded list falls back to a per-project
+  // glob.
+  const gateEntries =
+    entriesCache ?? (await resolveShardedEntries(context, { silent: true }));
+
   const candidates = (
     await Promise.all(
       browserProjects.map(async (project) => {
@@ -92,8 +101,9 @@ export async function runBrowserGlobalSetupStage(
         }
         // Same "no running tests -> no globalSetup" gate as the node path,
         // honoring include/exclude, CLI file filters, and sharding.
-        const entries =
-          entriesCache.get(project.environmentName)?.entries ?? {};
+        const entries = gateEntries
+          ? (gateEntries.get(project.environmentName)?.entries ?? {})
+          : await getProjectEntries({ context, project });
         const entryCount = Object.keys(entries).length;
         return entryCount > 0 ? { project, entryCount } : undefined;
       }),

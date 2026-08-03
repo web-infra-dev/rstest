@@ -561,6 +561,50 @@ export async function runTests(
     onBeforeRestart(closeCliShortcuts);
   }
 
+  // Carried only by the initial browser cycle: that cycle is the host launch,
+  // and the host stores the change-set for the session, so a rerun's options
+  // never need it (the executor drops them).
+  let browserWatchEnv: Record<string, string | undefined> | undefined;
+  if (browserExecutor) {
+    // Ahead of the node dev server, for the reason the non-watch assembly runs
+    // the stage before dispatching node work: it mutates the shared host
+    // `process.env`, which the pool re-reads at dispatch, so a node cycle
+    // started first would miss the browser setups' env changes. The node
+    // dependency check comes first in turn, so a node project that cannot run
+    // rejects the session before a user setup has mutated anything — which is
+    // why `validateRunDependencies` is a seam member of its own rather than
+    // something `ensureRunResources` alone owns.
+    try {
+      if (nodeExecutorToRun) {
+        await nodeExecutorToRun.validateRunDependencies();
+      }
+      const stage = await deps.runBrowserGlobalSetupStage(
+        context,
+        planner.getBrowserProjectsToRun(),
+        { entriesCache: planner.getPlan().entriesCache },
+      );
+      if (stage.errors.length) {
+        // Reported through the same finalize every cycle uses, so a watch
+        // session that dies in setup still leaves the reporters a run.
+        await notifyReportersOnTestRunStart(context);
+        await finalizeRunCycle(context, {
+          outcomes: [globalSetupFailureOutcome(stage.errors)],
+          mode: 'all',
+          isWatchMode: true,
+          coverageProvider,
+          reportOnFailure: coverage.reportOnFailure,
+          traceRun: activeTraceRun,
+        });
+        await closeWatchSession();
+        return;
+      }
+      browserWatchEnv = stage.env;
+    } catch (error) {
+      await closeWatchSession();
+      throw error;
+    }
+  }
+
   if (nodeExecutorToRun) {
     // The node executor's rebuilds are the watch trigger; its initial compile
     // signals too, which is what drives the first node cycle.
@@ -581,6 +625,7 @@ export async function runTests(
     // browser host running — the same ordering the pre-seam code had.
     const initialBrowserCycle = watchDriver.runCycle(browserExecutor, {
       mode: 'all',
+      env: browserWatchEnv,
     });
     if (nodeExecutorToRun) {
       // The node side already keeps the process alive, so the browser session

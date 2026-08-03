@@ -16,6 +16,7 @@ import {
   notifyReportersOnTestRunStart,
   runLifecycleStep,
 } from './finalizeRun';
+import { runGlobalTeardown } from './globalSetup';
 import type { Rstest } from './rstest';
 import {
   collectFailedTestPaths,
@@ -67,6 +68,14 @@ export type WatchCycleOptions = {
    * difference visible would fold the two.
    */
   updateSnapshot?: SnapshotUpdateState;
+  /**
+   * Post-globalSetup env change-set, produced by the core-owned pre-cycle
+   * globalSetup stage. Set on the session's initial browser cycle only — that
+   * cycle is the host launch, and the host keeps the change-set for the whole
+   * session. The node executor ignores it either way: the stage already mutated
+   * the host `process.env`, which the pool re-reads at dispatch.
+   */
+  env?: Record<string, string | undefined>;
 };
 
 /**
@@ -210,7 +219,7 @@ export function createWatchCycleDriver({
   const runOne = async (
     executor: TestExecutor,
     {
-      options: { mode = 'all', fileFilters, trigger, updateSnapshot },
+      options: { mode = 'all', fileFilters, trigger, updateSnapshot, env },
     }: PendingCycle,
   ): Promise<void> => {
     // One id per cycle across all executors: consumers only require it to move
@@ -229,6 +238,7 @@ export function createWatchCycleDriver({
         fileFilters,
         fromInvalidation: trigger === 'invalidation',
         updateSnapshot,
+        env,
         onTraceEvents,
       });
       await finalizeRunCycle(context, {
@@ -526,6 +536,12 @@ export function createWatchTeardown({
       for (const executor of executors) {
         await step('executor cleanup', () => executor.close());
       }
+      // Same order and the same reason as the non-watch net in `runTests.ts`:
+      // a user `globalSetup` teardown callback runs after the browser host and
+      // its dev servers are gone. `NodeExecutor.close()` drains too, so this is
+      // a no-op for a mixed session — but a browser-only watch has no node
+      // executor to drain the browser stage's setups.
+      await step('global teardown', () => runGlobalTeardown());
     } finally {
       await step('trace run finalize', () => getTraceRun().finalize());
       await step('trace controller cleanup', () => traceController.close());

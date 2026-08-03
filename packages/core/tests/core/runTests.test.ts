@@ -104,6 +104,9 @@ const createFakeNodeExecutor = ({
       await new Promise((resolve) => setTimeout(resolve, 0));
       events.push('node:ensure-run-resources');
     },
+    validateRunDependencies: async () => {
+      events.push('node:validate-run-dependencies');
+    },
     onInvalidate: (cb: ExecutorInvalidationCallback) => {
       invalidateCallback = cb;
     },
@@ -632,6 +635,8 @@ const startWatchRun = async ({
   browserRunCycle = async () => outcomeOf([]),
   browserHasWatchSession = true,
   browserOwnedPaths,
+  browserSetupErrors = [],
+  browserSetupEnv,
 }: {
   runCycle?: RunCycleImpl;
   testEntries?: string[];
@@ -644,6 +649,10 @@ const startWatchRun = async ({
   browserHasWatchSession?: boolean;
   /** The paths the browser host would match a rerun request against. */
   browserOwnedPaths?: string[];
+  /** Non-empty takes the watch session down before any cycle runs. */
+  browserSetupErrors?: Error[];
+  /** The change-set the stage reports, which the initial browser cycle carries. */
+  browserSetupEnv?: Record<string, string | undefined>;
 } = {}) => {
   const events: string[] = [];
   const parts = createContext({
@@ -674,6 +683,10 @@ const startWatchRun = async ({
       // A zero-node run must not construct one, so leave the dep `unreachable`.
       ...(withNode ? { createNodeExecutor: () => nodeExecutor } : {}),
       loadBrowserExecutor: async () => browserExecutor,
+      runBrowserGlobalSetupStage: async () => {
+        events.push('browser:global-setup');
+        return { errors: browserSetupErrors, env: browserSetupEnv };
+      },
       isCliShortcutsEnabled: () => true,
       setupCliShortcuts: async (options) => {
         setupCliShortcutsCalls += 1;
@@ -806,6 +819,52 @@ describe('runTests watch orchestration', () => {
     // One finalize per cycle, per executor — never a joint one.
     expect(runEnds).toHaveLength(2);
     expect(nodeExecutor.cycles).toHaveLength(0);
+  });
+
+  it('runs the browser globalSetup stage before node resources start, and carries its env into the initial browser cycle', async () => {
+    const { events, nodeExecutor, browserExecutor } = await startWatchRun({
+      withBrowser: true,
+      browserSetupEnv: { FROM_SETUP: '1' },
+    });
+
+    // The stage mutates the host `process.env`, which the pool re-reads at
+    // dispatch — so it must land before the node dev server can dispatch
+    // anything, and the node dependency check must land before the stage.
+    expectEventOrder(events, [
+      'node:validate-run-dependencies',
+      'browser:global-setup',
+      'node:ensure-run-resources',
+      'browser:cycle-start',
+    ]);
+    expect(browserExecutor.cycles[0]).toMatchObject({
+      mode: 'all',
+      env: { FROM_SETUP: '1' },
+    });
+
+    // Only the initial cycle: that cycle is the host launch, and the host keeps
+    // the change-set for the session.
+    await browserExecutor.invalidate(['/browser.test.ts']);
+    expect(browserExecutor.cycles[1]).toMatchObject({ env: undefined });
+    expect(nodeExecutor.cycles).toHaveLength(0);
+  });
+
+  it('takes the watch session down on a browser globalSetup failure, before any cycle runs', async () => {
+    const setupError = new Error('watch globalSetup failed');
+    const { events, nodeExecutor, browserExecutor, runEnds } =
+      await startWatchRun({
+        withBrowser: true,
+        browserSetupErrors: [setupError],
+      });
+
+    expect(events).not.toContain('node:ensure-run-resources');
+    expect(nodeExecutor.cycles).toHaveLength(0);
+    expect(browserExecutor.cycles).toHaveLength(0);
+    // Reported through the same finalize every cycle uses, so the reporters
+    // still see one run rather than a session that ended silently.
+    expect(runEnds).toHaveLength(1);
+    expect(runEnds[0]).toMatchObject({ results: [] });
+    expect(nodeExecutor.closeCount).toBe(1);
+    expect(browserExecutor.closeCount).toBe(1);
   });
 
   it('queues concurrent invalidations so two cycles never interleave', async () => {
