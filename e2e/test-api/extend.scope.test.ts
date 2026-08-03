@@ -1,3 +1,5 @@
+import { rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 
@@ -145,4 +147,40 @@ it('includes file fixture cleanup in the file duration', async () => {
   await expectExecSuccess();
   const duration = /SCOPED_FILE_DURATION=(\d+)/.exec(cli.stdout)?.[1];
   expect(Number(duration)).toBeGreaterThanOrEqual(100);
+});
+
+it('reports execution and file fixture cleanup failures together', async () => {
+  const snapshotPath = join(
+    __dirname,
+    'fixtures',
+    '.combined-cleanup-error.snap',
+  );
+  await rm(snapshotPath, { recursive: true, force: true });
+
+  try {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        '-c',
+        'rstest.combined-cleanup-error.config.mts',
+        '--reporters',
+        'json',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecFailed();
+    const report = JSON.parse(cli.stdout.slice(cli.stdout.indexOf('{')));
+    const message = report.files[0].errors[0].message;
+    expect(message).toContain('Test execution failed:');
+    expect(message).toContain('first file fixture cleanup root cause');
+    expect(message).toContain('second file fixture cleanup root cause');
+  } finally {
+    await rm(snapshotPath, { recursive: true, force: true });
+  }
 });

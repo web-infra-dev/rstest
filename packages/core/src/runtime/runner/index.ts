@@ -23,6 +23,13 @@ export type FileCleanupHooks = {
   onFileCleanupEnd?: () => void;
 };
 
+const collectErrorMessages = (error: unknown): string[] => {
+  if (error instanceof AggregateError && error.errors.length > 0) {
+    return error.errors.flatMap(collectErrorMessages);
+  }
+  return [error instanceof Error ? error.message : String(error)];
+};
+
 const onTestFinished: RunnerAPI['onTestFinished'] = (...args) => {
   const runner = currentRunner();
   runner.onTestFinished(runner.getCurrentTest(), ...args);
@@ -123,7 +130,15 @@ export function createRunner({
           } catch (cleanupError) {
             throw new AggregateError(
               [error, cleanupError],
-              'Test execution and file fixture cleanup both failed.',
+              [
+                'Test execution and file fixture cleanup both failed.',
+                ...collectErrorMessages(error).map(
+                  (message) => `Test execution failed: ${message}`,
+                ),
+                ...collectErrorMessages(cleanupError).map(
+                  (message) => `File fixture cleanup failed: ${message}`,
+                ),
+              ].join('\n'),
             );
           }
           throw error;

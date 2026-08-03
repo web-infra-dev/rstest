@@ -1347,13 +1347,25 @@ const wrapBuilderFixture = <Value>(fixture: Value): Value => {
 
   const callback = fixture as (...args: any[]) => unknown;
   return preserveFixtureSource(callback, (async (...args: any[]) => {
-    const [context] = args as [TestContext | object, ...unknown[]];
-    return hasExpectContext(context)
-      ? withPlaywrightExpect(
-          () => getExpectForContext(context),
-          () => callback(...args),
-        )
-      : callback(...args);
+    const [context, lifecycle, ...rest] = args as [
+      TestContext | object,
+      FixtureLifecycle,
+      ...unknown[],
+    ];
+    if (!hasExpectContext(context)) {
+      return callback(...args);
+    }
+
+    const getExpect = () => getExpectForContext(context);
+    const wrappedLifecycle: FixtureLifecycle = {
+      onCleanup(cleanup) {
+        lifecycle.onCleanup(() => withPlaywrightExpect(getExpect, cleanup));
+      },
+    };
+
+    return withPlaywrightExpect(getExpect, () =>
+      callback(context, wrappedLifecycle, ...rest),
+    );
   }) as typeof callback) as Value;
 };
 
@@ -1649,19 +1661,21 @@ const createPlaywrightTest = <ExtraContext>(
 
         return extend
           ? (...args: unknown[]) => {
-              const wrappedArgs =
-                typeof args[0] === 'string'
-                  ? args.length === 2
-                    ? [args[0], wrapBuilderFixture(args[1])]
-                    : [args[0], args[1], wrapBuilderFixture(args[2])]
-                  : [
-                      wrapFixtures(
-                        args[0] as PlaywrightFixtures<
-                          Record<string, any>,
-                          ExtraContext
-                        >,
-                      ),
-                    ];
+              let wrappedArgs = args;
+              if (typeof args[0] === 'string' && args.length === 2) {
+                wrappedArgs = [args[0], wrapBuilderFixture(args[1])];
+              } else if (typeof args[0] === 'string' && args.length === 3) {
+                wrappedArgs = [args[0], args[1], wrapBuilderFixture(args[2])];
+              } else if (typeof args[0] !== 'string' && args.length === 1) {
+                wrappedArgs = [
+                  wrapFixtures(
+                    args[0] as PlaywrightFixtures<
+                      Record<string, any>,
+                      ExtraContext
+                    >,
+                  ),
+                ];
+              }
               const extended = (
                 extend as (...args: unknown[]) => TestAPIs<ExtraContext>
               )(...wrappedArgs);

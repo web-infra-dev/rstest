@@ -406,4 +406,17 @@ describe('RunnerRuntime', () => {
       }
     });
   });
+
+  describe('test.extend builder arguments', () => {
+    it('rejects non-object fixture options', () => {
+      createApi();
+      const extend = runtimeAPI.it.extend as (...args: unknown[]) => unknown;
+
+      for (const options of [null, 1, []]) {
+        expect(() => extend('value', options, 'fixture')).toThrow(
+          'test.extend(name, options, fixture) expects options to be a plain object.',
+        );
+      }
+    });
+  });
 });

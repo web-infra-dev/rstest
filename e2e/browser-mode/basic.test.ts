@@ -24,7 +24,7 @@ describe('browser mode - basic', () => {
 
     await expectExecSuccess();
     expect(cli.stdout).toMatch(
-      /browser-scope:worker:setup[\s\S]*browser-scope:file:setup[\s\S]*browser-scope:test:setup:1[\s\S]*browser-scope:test:cleanup:worker:file:test:1[\s\S]*browser-scope:test:setup:2[\s\S]*browser-scope:test:cleanup:worker:file:test:2[\s\S]*browser-scope:file:cleanup/,
+      /browser-scope:worker:setup[\s\S]*browser-scope:file:setup[\s\S]*browser-scope:test:setup:1[\s\S]*browser-scope:test:cleanup:worker:file:test:1[\s\S]*browser-scope:test:setup:2[\s\S]*browser-scope:test:cleanup:worker:file:test:2[\s\S]*browser-scope:file:cleanup[\s\S]*browser-scope:worker:cleanup/,
     );
   });
 

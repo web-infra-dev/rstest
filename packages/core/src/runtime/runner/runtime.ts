@@ -32,7 +32,11 @@ import {
   ROOT_SUITE_NAME,
   SYNTHETIC_STACK_ERROR_MESSAGE,
 } from '../../utils/constants';
-import { castArray, generateFilePathHash } from '../../utils/helper';
+import {
+  castArray,
+  generateFilePathHash,
+  isPlainObject,
+} from '../../utils/helper';
 import { fileContext } from '../fileContext';
 import {
   formatName,
@@ -712,6 +716,11 @@ const buildRuntimeAPI = (): CollectionAPI => {
             extendFixtures,
           );
         } else if (args.length === 3) {
+          if (!isPlainObject(args[1])) {
+            throw new Error(
+              'test.extend(name, options, fixture) expects options to be a plain object.',
+            );
+          }
           const options = args[1] as FixtureOptions;
           if (
             (options?.scope === 'file' || options?.scope === 'worker') &&

@@ -332,6 +332,17 @@ const builderTest = test
   })
   .extend('builderCount', 1);
 
+const builderCleanupExpectTest = test.extend(
+  'builderCleanupExpect',
+  ({ expect: localExpect }, { onCleanup }) => {
+    const localState = localExpect.getState();
+    onCleanup(() => {
+      expect(expect.getState()).toBe(localState);
+    });
+    return true;
+  },
+);
+
 test.extend({}).describe('extended test API', () => {
   builderTest(
     'supports builder-style fixture extension',
@@ -340,6 +351,29 @@ test.extend({}).describe('extended test API', () => {
       expect(builderCount).toBe(1);
     },
   );
+
+  for (const index of [1, 2]) {
+    builderCleanupExpectTest.concurrent(
+      `keeps builder cleanup expect context for concurrent test ${index}`,
+      ({ builderCleanupExpect }) => {
+        expect(builderCleanupExpect).toBe(true);
+      },
+    );
+  }
+
+  test('preserves invalid extend calls for core validation', () => {
+    const extend = test.extend as (...args: unknown[]) => unknown;
+
+    expect(() => extend('value')).toThrow(
+      'test.extend(name, fixture) or test.extend(name, options, fixture) expects two or three arguments.',
+    );
+    expect(() => extend('value', {}, 'fixture', 'extra')).toThrow(
+      'test.extend(name, fixture) or test.extend(name, options, fixture) expects two or three arguments.',
+    );
+    expect(() => extend({}, {})).toThrow(
+      'test.extend(fixtures) expects one argument.',
+    );
+  });
 
   const hookExpectTest = test.extend<{ hookTitle: string }>({
     hookTitle: 'hook title',

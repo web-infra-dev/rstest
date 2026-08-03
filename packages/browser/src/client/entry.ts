@@ -600,6 +600,7 @@ const run = async () => {
   // 2. Run tests for each file
   let fatalError: Error | undefined;
   let pendingFileResult: TestFileResult | undefined;
+  let installWorkerCleanupConsole: (() => () => void) | undefined;
   try {
     for (const key of testKeysToRun) {
       if (pendingFileResult) {
@@ -626,16 +627,21 @@ const run = async () => {
         runtimeConfig.silent === true ||
         runtimeConfig.silent === 'passed-only';
 
-      // Intercept console methods to forward logs to host
-      const restoreConsole = shouldInterceptConsole
-        ? interceptConsole(
-            projectRuntime.name,
-            () => taskContext.getCurrent() ?? taskStack[taskStack.length - 1],
-            runtimeConfig.disableConsoleIntercept
-              ? false
-              : (runtimeConfig.printConsoleTrace ?? false),
-          )
-        : () => {};
+      const installConsole = shouldInterceptConsole
+        ? () =>
+            interceptConsole(
+              projectRuntime.name,
+              () => taskContext.getCurrent() ?? taskStack[taskStack.length - 1],
+              runtimeConfig.disableConsoleIntercept
+                ? false
+                : (runtimeConfig.printConsoleTrace ?? false),
+            )
+        : undefined;
+
+      // Intercept console methods to forward logs to host. Keep the final
+      // file's attribution available so worker cleanup uses the same transport.
+      installWorkerCleanupConsole = installConsole;
+      const restoreConsole = installConsole?.() ?? (() => {});
 
       try {
         const workerState: WorkerState = {
@@ -801,60 +807,66 @@ const run = async () => {
   } catch (_error) {
     fatalError = _error instanceof Error ? _error : new Error(String(_error));
   } finally {
+    const restoreWorkerCleanupConsole =
+      installWorkerCleanupConsole?.() ?? (() => {});
     try {
-      send({ type: 'worker-cleanup-start' });
-      await cleanupWorkerFixtures();
-    } catch (_error) {
-      const cleanupError =
-        _error instanceof Error ? _error : new Error(String(_error));
-      fatalError = fatalError
-        ? new AggregateError(
-            [fatalError, cleanupError],
-            [
-              `Browser test execution failed: ${fatalError.message}`,
-              `Worker fixture cleanup failed: ${cleanupError.message}`,
-            ].join('\n'),
-          )
-        : cleanupError;
-    } finally {
-      await waitForUnhandledEvents();
+      try {
+        send({ type: 'worker-cleanup-start' });
+        await cleanupWorkerFixtures();
+      } catch (_error) {
+        const cleanupError =
+          _error instanceof Error ? _error : new Error(String(_error));
+        fatalError = fatalError
+          ? new AggregateError(
+              [fatalError, cleanupError],
+              [
+                `Browser test execution failed: ${fatalError.message}`,
+                `Worker fixture cleanup failed: ${cleanupError.message}`,
+              ].join('\n'),
+            )
+          : cleanupError;
+      } finally {
+        await waitForUnhandledEvents();
 
-      if (activeUnhandledErrors && activeUnhandledErrors.length > 0) {
+        if (activeUnhandledErrors && activeUnhandledErrors.length > 0) {
+          if (pendingFileResult) {
+            pendingFileResult.status = 'fail';
+            pendingFileResult.errors = [
+              ...(pendingFileResult.errors ?? []),
+              ...activeUnhandledErrors.map((error) => ({
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+              })),
+            ];
+          } else {
+            const escapedCleanupError = new AggregateError(
+              activeUnhandledErrors,
+              'Unhandled errors escaped browser worker fixture cleanup.',
+            );
+            fatalError = fatalError
+              ? new AggregateError(
+                  [fatalError, escapedCleanupError],
+                  'Browser test execution and worker fixture cleanup failed.',
+                )
+              : escapedCleanupError;
+          }
+        }
+
         if (pendingFileResult) {
-          pendingFileResult.status = 'fail';
-          pendingFileResult.errors = [
-            ...(pendingFileResult.errors ?? []),
-            ...activeUnhandledErrors.map((error) => ({
-              name: error.name,
-              message: error.message,
-              stack: error.stack,
-            })),
-          ];
-        } else {
-          const escapedCleanupError = new AggregateError(
-            activeUnhandledErrors,
-            'Unhandled errors escaped browser worker fixture cleanup.',
-          );
-          fatalError = fatalError
-            ? new AggregateError(
-                [fatalError, escapedCleanupError],
-                'Browser test execution and worker fixture cleanup failed.',
-              )
-            : escapedCleanupError;
+          if (globalThis.__coverage__) {
+            pendingFileResult.coverage =
+              globalThis.__coverage__ as CoverageMapData;
+          }
+          send({ type: 'file-complete', payload: pendingFileResult });
         }
-      }
 
-      if (pendingFileResult) {
-        if (globalThis.__coverage__) {
-          pendingFileResult.coverage =
-            globalThis.__coverage__ as CoverageMapData;
-        }
-        send({ type: 'file-complete', payload: pendingFileResult });
+        activeUnhandledErrors = undefined;
+        window.removeEventListener('error', onWindowError);
+        window.removeEventListener('unhandledrejection', onUnhandledRejection);
       }
-
-      activeUnhandledErrors = undefined;
-      window.removeEventListener('error', onWindowError);
-      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    } finally {
+      restoreWorkerCleanupConsole();
     }
   }
 
