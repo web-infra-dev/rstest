@@ -440,7 +440,13 @@ export class TestRunner {
 
       for (const fn of fixtureCleanups) {
         try {
-          await fn();
+          const cleanupFixture = wrapTimeout({
+            name: 'fixture cleanup',
+            fn,
+            timeout: test.timeout,
+            stackTraceError: test.stackTraceError,
+          });
+          await cleanupFixture();
         } catch (error) {
           result.status = 'fail';
           result.errors ??= [];

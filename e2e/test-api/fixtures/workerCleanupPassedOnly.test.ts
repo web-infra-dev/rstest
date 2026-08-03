@@ -5,8 +5,8 @@ const cleanupTest = test.extend(
   { scope: 'worker' },
   (_context, { onCleanup }) => {
     onCleanup(() => {
-      console.log('browser worker cleanup passed-only log');
-      throw new Error('browser worker fixture cleanup reached');
+      console.log('worker cleanup passed-only log');
+      throw new Error('worker cleanup passed-only failure');
     });
     return 'worker';
   },

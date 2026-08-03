@@ -37,6 +37,9 @@ describe('browser mode - basic', () => {
     expect(`${cli.stdout}\n${cli.stderr}`).toContain(
       'browser worker fixture cleanup reached',
     );
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'browser worker cleanup passed-only log',
+    );
   });
 
   it('should clean up browser worker fixtures after a fatal error', async () => {
@@ -69,6 +72,17 @@ describe('browser mode - basic', () => {
     await expectExecFailed();
     expect(`${cli.stdout}\n${cli.stderr}`).toContain(
       'fixture setup timed out in 100ms',
+    );
+  });
+
+  it('should bound browser test fixture cleanup', async () => {
+    const { expectExecFailed, cli } = await runBrowserCli('basic', {
+      args: ['-c', 'rstest.test-cleanup-timeout.config.mts'],
+    });
+
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'fixture cleanup timed out in 100ms',
     );
   });
 

@@ -54,6 +54,31 @@ for (const isolate of [true, false]) {
   });
 }
 
+for (const isolate of [true, false]) {
+  it(`prints failed worker cleanup logs with passed-only and isolate=${isolate}`, async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/workerCleanupPassedOnly.test.ts',
+        `--isolate=${isolate}`,
+        '--pool.maxWorkers=1',
+        '--silent=passed-only',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'worker cleanup passed-only log',
+    );
+  });
+}
+
 it('cleans worker fixtures before the isolated test environment', async () => {
   const { cli, expectExecSuccess } = await runRstestCli({
     command: 'rstest',
@@ -132,6 +157,25 @@ it('bounds scoped fixture setup with the test timeout', async () => {
   expect(Date.now() - start).toBeLessThan(10_000);
   expect(`${cli.stdout}\n${cli.stderr}`).toContain(
     'fixture setup timed out in 100ms',
+  );
+});
+
+it('bounds test fixture cleanup with the test timeout', async () => {
+  const start = Date.now();
+  const { cli, expectExecFailed } = await runRstestCli({
+    command: 'rstest',
+    args: ['run', 'fixtures/testCleanupTimeout.test.ts'],
+    options: {
+      nodeOptions: {
+        cwd: __dirname,
+      },
+    },
+  });
+
+  await expectExecFailed();
+  expect(Date.now() - start).toBeLessThan(10_000);
+  expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+    'fixture cleanup timed out in 100ms',
   );
 });
 

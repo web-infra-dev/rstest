@@ -9,7 +9,11 @@ import {
 import { ENV } from '../../utils/env';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { channel } from './channels';
-import { runInPool, setWorkerCleanupLogSink } from './runInPool';
+import {
+  flushBufferedWorkerCleanupLogs,
+  runInPool,
+  setWorkerCleanupLogSink,
+} from './runInPool';
 import { installGracefulExit } from './setup';
 
 installGracefulExit();
@@ -125,6 +129,9 @@ const runTask = async (
         send({ type: 'workerCleanupStarted', taskId: request.taskId });
       },
       onWorkerCleanupEnd: (error) => {
+        if (error !== undefined) {
+          flushBufferedWorkerCleanupLogs();
+        }
         send({
           type: 'workerCleanupFinished',
           taskId: request.taskId,
@@ -165,6 +172,7 @@ const cleanupWorker = async (): Promise<void> => {
     await cleanupWorkerFixtures();
     send({ type: 'cleanupFinished' });
   } catch (error) {
+    flushBufferedWorkerCleanupLogs();
     send({
       type: 'cleanupFinished',
       error: serializeError(error),

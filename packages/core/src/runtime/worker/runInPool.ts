@@ -27,11 +27,26 @@ import type { TaskContext } from './taskContext';
 
 let sourceMaps: Record<string, string> = {};
 let workerCleanupLogSink: ((log: UserConsoleLog) => void) | undefined;
+// Worker cleanup runs after the file's passed-only decision, so hold its logs
+// until the cleanup lifecycle reports whether they should be emitted.
+let bufferedPassedOnlyWorkerCleanupLogs: UserConsoleLog[] | undefined;
 
 export const setWorkerCleanupLogSink = (
   sink: ((log: UserConsoleLog) => void) | undefined,
 ): void => {
   workerCleanupLogSink = sink;
+  bufferedPassedOnlyWorkerCleanupLogs = sink ? [] : undefined;
+};
+
+export const flushBufferedWorkerCleanupLogs = (): void => {
+  const logs = bufferedPassedOnlyWorkerCleanupLogs;
+  bufferedPassedOnlyWorkerCleanupLogs = [];
+  if (!workerCleanupLogSink || !logs) {
+    return;
+  }
+  for (const log of logs) {
+    workerCleanupLogSink(log);
+  }
 };
 
 // Threads-pool workers all share `process.pid` with the host, and each
@@ -254,6 +269,14 @@ const preparePool = async (
 
     global.console = createCustomConsole({
       onConsoleLog: (log) => {
+        if (
+          workerCleanupLogSink &&
+          silent === 'passed-only' &&
+          bufferedPassedOnlyWorkerCleanupLogs
+        ) {
+          bufferedPassedOnlyWorkerCleanupLogs.push(log);
+          return;
+        }
         silentConsoleController.onConsoleLog(log);
       },
       testPath,

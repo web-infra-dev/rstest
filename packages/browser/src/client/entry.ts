@@ -820,6 +820,9 @@ const run = async () => {
       } catch (_error) {
         const cleanupError =
           _error instanceof Error ? _error : new Error(String(_error));
+        if (pendingFileResult) {
+          pendingFileResult.status = 'fail';
+        }
         fatalError = fatalError
           ? new AggregateError(
               [fatalError, cleanupError],
