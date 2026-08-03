@@ -174,6 +174,7 @@ export function createWatchCycleDriver({
   setTraceRun,
   enableCliShortcuts,
   isSessionLive,
+  isSessionClosing,
 }: {
   context: Rstest;
   coverageProvider: CoverageProvider | null;
@@ -188,6 +189,15 @@ export function createWatchCycleDriver({
    * to wait for file changes there would be a promise nothing can keep.
    */
   isSessionLive: () => boolean;
+  /**
+   * Whether the session teardown has started. A cycle that was in flight when
+   * it did produces results about the teardown, not about the tests: the node
+   * pool rejects its running task with a worker-stopped error as it shuts down.
+   * Finalizing that would report a failure the user never caused — and, on a
+   * config-change restart, the exit code it writes outlives the session and
+   * fails the run that replaces it.
+   */
+  isSessionClosing: () => boolean;
 }): WatchCycleDriver {
   let buildId = 0;
   // The session's configured value, read before any cycle can run. The `u`
@@ -241,6 +251,9 @@ export function createWatchCycleDriver({
         env,
         onTraceEvents,
       });
+      if (isSessionClosing()) {
+        return;
+      }
       await finalizeRunCycle(context, {
         outcomes: [outcome],
         mode,
@@ -507,6 +520,31 @@ export function createWatchShortcutHandlers(
  * shortcut, the fatal-signal handler, and the config-change restart hook — so
  * none of them can drop an executor the others close.
  */
+export interface WatchTeardown {
+  close(): Promise<void>;
+  /**
+   * Record a startup phase that runs before any executor can be closed
+   * meaningfully — today the browser globalSetup stage. A close arriving while
+   * one is in flight (a config-change restart, Ctrl+C) settles it first, so the
+   * teardown that follows sees the state the phase produced instead of racing
+   * it: a setup whose teardown callback is still being registered would
+   * otherwise never be drained, and the replacement session would start on top
+   * of it.
+   */
+  track<T>(pending: Promise<T>): Promise<T>;
+  /**
+   * Whether a close has been requested. A tracked phase must check this before
+   * starting the next one — the close it lost the race to has already run.
+   */
+  isClosing(): boolean;
+  /**
+   * Release a process-level owner (the stdin CLI shortcuts) once teardown has
+   * settled, never before: the window between close and exit is exactly when
+   * Ctrl+C must still be answerable.
+   */
+  addCleanup(cleanup: () => void): void;
+}
+
 export function createWatchTeardown({
   executors,
   traceController,
@@ -516,8 +554,11 @@ export function createWatchTeardown({
   executors: TestExecutor[];
   traceController: TraceController;
   getTraceRun: () => TraceRun;
-}): () => Promise<void> {
-  let isClosing: Promise<void> | undefined;
+}): WatchTeardown {
+  let closePromise: Promise<void> | undefined;
+  let closeRequested = false;
+  let pending: Promise<unknown> | undefined;
+  const cleanups: Array<() => void> = [];
 
   // Each step is isolated and the trace steps run in `finally`, so one
   // executor's close cannot leave the executors behind it — or the trace files —
@@ -533,6 +574,9 @@ export function createWatchTeardown({
 
   const close = async (): Promise<void> => {
     try {
+      // The phase's own rejection is the caller's to report; here it only has
+      // to be settled.
+      await pending?.catch(() => undefined);
       for (const executor of executors) {
         await step('executor cleanup', () => executor.close());
       }
@@ -543,14 +587,36 @@ export function createWatchTeardown({
       // executor to drain the browser stage's setups.
       await step('global teardown', () => runGlobalTeardown());
     } finally {
-      await step('trace run finalize', () => getTraceRun().finalize());
-      await step('trace controller cleanup', () => traceController.close());
+      try {
+        await step('trace run finalize', () => getTraceRun().finalize());
+        await step('trace controller cleanup', () => traceController.close());
+      } finally {
+        for (const cleanup of cleanups.splice(0)) {
+          cleanup();
+        }
+      }
     }
   };
 
-  return () => {
-    isClosing ??= close();
-    return isClosing;
+  return {
+    close() {
+      closeRequested = true;
+      closePromise ??= close();
+      return closePromise;
+    },
+    track(nextPending) {
+      pending = nextPending;
+      return nextPending;
+    },
+    isClosing: () => closeRequested,
+    addCleanup(cleanup) {
+      // A close that already ran has no `finally` left to release this in.
+      if (closeRequested) {
+        cleanup();
+      } else {
+        cleanups.push(cleanup);
+      }
+    },
   };
 }
 

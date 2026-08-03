@@ -670,7 +670,8 @@ const startWatchRun = async ({
   let shortcuts: CliShortcutHandlers | undefined;
   let setupCliShortcutsCalls = 0;
 
-  await runTests(
+  let startupError: unknown;
+  const started = runTests(
     parts.context,
     createDeps({
       createRunPlanner: async () =>
@@ -695,6 +696,11 @@ const startWatchRun = async ({
       },
     }),
   );
+  // A watch session that never opened rejects (a globalSetup failure), and the
+  // caller asserts on what it left behind rather than on the throw reaching it.
+  await started.catch((error) => {
+    startupError = error;
+  });
   // The mixed watch path schedules the initial browser cycle without awaiting
   // it (the node side keeps the process alive).
   await flush();
@@ -704,6 +710,7 @@ const startWatchRun = async ({
     events,
     nodeExecutor,
     browserExecutor,
+    getStartupError: () => startupError,
     getShortcuts: () => shortcuts!,
     getSetupCliShortcutsCalls: () => setupCliShortcutsCalls,
   };
@@ -850,12 +857,16 @@ describe('runTests watch orchestration', () => {
 
   it('takes the watch session down on a browser globalSetup failure, before any cycle runs', async () => {
     const setupError = new Error('watch globalSetup failed');
-    const { events, nodeExecutor, browserExecutor, runEnds } =
+    const { events, nodeExecutor, browserExecutor, runEnds, getStartupError } =
       await startWatchRun({
         withBrowser: true,
         browserSetupErrors: [setupError],
       });
 
+    // Rethrown after reporting: a session that never opened has to end the
+    // process rather than sit on a stdin owner nothing can answer.
+    expect(getStartupError()).toBeInstanceOf(AggregateError);
+    expect((getStartupError() as AggregateError).errors).toEqual([setupError]);
     expect(events).not.toContain('node:ensure-run-resources');
     expect(nodeExecutor.cycles).toHaveLength(0);
     expect(browserExecutor.cycles).toHaveLength(0);

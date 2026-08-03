@@ -81,7 +81,10 @@ const createGatedExecutor = (name: string) => {
   return { executor, release: () => release(), started };
 };
 
-const createDriver = (context: Rstest) => {
+const createDriver = (
+  context: Rstest,
+  isSessionClosing: () => boolean = () => false,
+) => {
   const runs: TraceRun[] = [];
   let activeTraceRun = { finalize: async () => {} } as TraceRun;
   const traceController = {
@@ -105,6 +108,7 @@ const createDriver = (context: Rstest) => {
       },
       enableCliShortcuts: false,
       isSessionLive: () => true,
+      isSessionClosing,
     }),
   };
 };
@@ -126,6 +130,33 @@ describe('createWatchCycleDriver', () => {
 
     // First cycle sees the value untouched; the rerun sees a cleared summary.
     expect(seen).toEqual([3, 0]);
+  });
+
+  it('skips the finalize for a cycle the session teardown interrupted', async () => {
+    const context = createContext();
+    let closing = false;
+    const { driver, runs } = createDriver(context, () => closing);
+    const runEnds: unknown[] = [];
+    context.reporters = [
+      {
+        onTestRunEnd: (payload) => {
+          runEnds.push(payload);
+        },
+      },
+    ];
+    // What a teardown-killed cycle actually produces: the node pool rejects its
+    // running task with a worker-stopped error as the pool shuts down.
+    const executor = createFakeExecutor('node', () => {
+      closing = true;
+    });
+
+    await driver.runCycle(executor, { mode: 'all' });
+
+    // No verdict, so no exit code either — on a config-change restart it would
+    // outlive this session and fail the one that replaces it.
+    expect(runEnds).toEqual([]);
+    // And no next-cycle buffer or ready banner for a session that is ending.
+    expect(runs).toHaveLength(0);
   });
 
   it('clears the failed-test count even on a first cycle, so bail stays cycle-scoped', async () => {
@@ -566,7 +597,7 @@ describe('createWatchTeardown', () => {
     let traceFinalized = 0;
     let controllerClosed = 0;
 
-    const close = createWatchTeardown({
+    const teardown = createWatchTeardown({
       executors: [
         {
           ...createFakeExecutor('browser'),
@@ -596,7 +627,7 @@ describe('createWatchTeardown', () => {
         }) as TraceRun,
     });
 
-    await close();
+    await teardown.close();
 
     // A throwing close must not take the executors behind it, or the trace
     // files, down with it — teardown is the last thing that runs.
@@ -607,7 +638,7 @@ describe('createWatchTeardown', () => {
 
   it('runs the teardown once for repeated calls', async () => {
     let closes = 0;
-    const close = createWatchTeardown({
+    const teardown = createWatchTeardown({
       executors: [
         {
           ...createFakeExecutor('node'),
@@ -623,10 +654,68 @@ describe('createWatchTeardown', () => {
       getTraceRun: noopTrace,
     });
 
-    await Promise.all([close(), close()]);
-    await close();
+    await Promise.all([teardown.close(), teardown.close()]);
+    await teardown.close();
 
     expect(closes).toBe(1);
+  });
+
+  it('settles a tracked startup phase before closing, and releases the stdin owner last', async () => {
+    const order: string[] = [];
+    let resolveSetup: (() => void) | undefined;
+    const teardown = createWatchTeardown({
+      executors: [
+        {
+          ...createFakeExecutor('node'),
+          close: async () => {
+            order.push('close');
+          },
+        },
+      ],
+      traceController: {
+        beginRun: noopTrace,
+        close: async () => {},
+      } as unknown as TraceController,
+      getTraceRun: noopTrace,
+    });
+    teardown.addCleanup(() => order.push('release-stdin'));
+
+    // In flight when the close arrives, which is the config-restart and Ctrl+C
+    // race: the phase's own teardown callback is still being registered.
+    teardown.track(
+      new Promise<void>((resolve) => {
+        resolveSetup = () => {
+          order.push('setup-settled');
+          resolve();
+        };
+      }),
+    );
+
+    const closing = teardown.close();
+    expect(teardown.isClosing()).toBe(true);
+    expect(order).toEqual([]);
+
+    resolveSetup!();
+    await closing;
+
+    expect(order).toEqual(['setup-settled', 'close', 'release-stdin']);
+  });
+
+  it('runs a cleanup added after the teardown settled', async () => {
+    const released: string[] = [];
+    const teardown = createWatchTeardown({
+      executors: [],
+      traceController: {
+        beginRun: noopTrace,
+        close: async () => {},
+      } as unknown as TraceController,
+      getTraceRun: noopTrace,
+    });
+
+    await teardown.close();
+    teardown.addCleanup(() => released.push('stdin'));
+
+    expect(released).toEqual(['stdin']);
   });
 });
 

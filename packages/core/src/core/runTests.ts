@@ -470,6 +470,8 @@ export async function runTests(
   // ordering that matters is the launch, and the launch is the first browser
   // cycle, deferred until those node resources are up.
   let browserExecutor: BrowserTestExecutor | undefined;
+  // Assigned once the teardown below exists; until then nothing can be closing.
+  let isSessionClosing = () => false;
   const watchDriver = createWatchCycleDriver({
     context,
     coverageProvider,
@@ -484,6 +486,7 @@ export async function runTests(
     isSessionLive: () =>
       Boolean(nodeExecutorToRun) ||
       (browserExecutor?.hasWatchSession() ?? false),
+    isSessionClosing: () => isSessionClosing(),
   });
 
   if (hasBrowserTestsToRun) {
@@ -525,7 +528,7 @@ export async function runTests(
   // One teardown for the `q` shortcut, the fatal-signal handler, and the
   // config-change restart hook. The browser side closes first: its runtime owns
   // the servers the node executor's shutdown does not know about.
-  const closeWatchSession = createWatchTeardown({
+  const watchTeardown = createWatchTeardown({
     executors: [
       ...(browserExecutor ? [browserExecutor] : []),
       ...(nodeExecutor ? [nodeExecutor] : []),
@@ -533,6 +536,8 @@ export async function runTests(
     traceController,
     getTraceRun: () => activeTraceRun,
   });
+  const closeWatchSession = () => watchTeardown.close();
+  isSessionClosing = () => watchTeardown.isClosing();
   registerWatchSignalExit(context, closeWatchSession);
 
   const { onBeforeRestart } = await import('./restart');
@@ -558,7 +563,10 @@ export async function runTests(
         () => watchDriver.hasSettledCycle(shortcutExecutors),
       ),
     );
-    onBeforeRestart(closeCliShortcuts);
+    // Released by the teardown rather than the restart hook alone: it is the
+    // process-level owner that keeps the loop alive, so a session that ends
+    // without a restart (a setup failure) would otherwise never exit.
+    watchTeardown.addCleanup(closeCliShortcuts);
   }
 
   // Carried only by the initial browser cycle: that cycle is the host launch,
@@ -576,16 +584,23 @@ export async function runTests(
     // something `ensureRunResources` alone owns.
     try {
       if (nodeExecutorToRun) {
-        await nodeExecutorToRun.validateRunDependencies();
+        await watchTeardown.track(nodeExecutorToRun.validateRunDependencies());
       }
-      const stage = await deps.runBrowserGlobalSetupStage(
-        context,
-        planner.getBrowserProjectsToRun(),
-        { entriesCache: planner.getPlan().entriesCache },
+      if (watchTeardown.isClosing()) {
+        return;
+      }
+      const stage = await watchTeardown.track(
+        deps.runBrowserGlobalSetupStage(
+          context,
+          planner.getBrowserProjectsToRun(),
+          { entriesCache: planner.getPlan().entriesCache },
+        ),
       );
       if (stage.errors.length) {
         // Reported through the same finalize every cycle uses, so a watch
-        // session that dies in setup still leaves the reporters a run.
+        // session that dies in setup still leaves the reporters a run — and
+        // then rethrown, because a watch session that never opened has to end
+        // the process rather than sit on a stdin owner nothing can answer.
         await notifyReportersOnTestRunStart(context);
         await finalizeRunCycle(context, {
           outcomes: [globalSetupFailureOutcome(stage.errors)],
@@ -595,12 +610,21 @@ export async function runTests(
           reportOnFailure: coverage.reportOnFailure,
           traceRun: activeTraceRun,
         });
+        throw new AggregateError(stage.errors, 'Browser globalSetup failed');
+      }
+      if (watchTeardown.isClosing()) {
         await closeWatchSession();
         return;
       }
       browserWatchEnv = stage.env;
     } catch (error) {
+      // A close already under way owns the exit; re-throwing its victim's
+      // rejection would replace a clean shutdown with a crash.
+      const wasClosing = watchTeardown.isClosing();
       await closeWatchSession();
+      if (wasClosing) {
+        return;
+      }
       throw error;
     }
   }
