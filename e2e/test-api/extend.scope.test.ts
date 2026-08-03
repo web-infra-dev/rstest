@@ -52,6 +52,26 @@ for (const isolate of [true, false]) {
   });
 }
 
+it('cleans worker fixtures before the isolated test environment', async () => {
+  const { cli, expectExecSuccess } = await runRstestCli({
+    command: 'rstest',
+    args: [
+      'run',
+      'fixtures/workerCleanupEnvironment.test.ts',
+      '--testEnvironment=jsdom',
+      '--pool.maxWorkers=1',
+    ],
+    options: {
+      nodeOptions: {
+        cwd: __dirname,
+      },
+    },
+  });
+
+  await expectExecSuccess();
+  expect(cli.stdout).toContain('worker cleanup document: BODY');
+});
+
 it('bounds file fixture cleanup in the host', async () => {
   const start = Date.now();
   const { cli, expectExecFailed } = await runRstestCli({
@@ -68,6 +88,29 @@ it('bounds file fixture cleanup in the host', async () => {
   expect(Date.now() - start).toBeLessThan(20_000);
   expect(`${cli.stdout}\n${cli.stderr}`).toContain(
     'File fixture cleanup did not finish within 10000ms',
+  );
+});
+
+it('bounds isolated worker fixture cleanup in the host', async () => {
+  const start = Date.now();
+  const { cli, expectExecFailed } = await runRstestCli({
+    command: 'rstest',
+    args: [
+      'run',
+      'fixtures/workerCleanupTimeout.test.ts',
+      '--pool.maxWorkers=1',
+    ],
+    options: {
+      nodeOptions: {
+        cwd: __dirname,
+      },
+    },
+  });
+
+  await expectExecFailed();
+  expect(Date.now() - start).toBeLessThan(20_000);
+  expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+    'Worker fixture cleanup did not finish within 10000ms',
   );
 });
 

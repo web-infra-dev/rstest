@@ -13,8 +13,7 @@ import {
 import type { PoolTask } from './types';
 
 const WORKER_START_TIMEOUT_MS = 90_000;
-const WORKER_CLEANUP_TIMEOUT_MS = 10_000;
-const FILE_FIXTURE_CLEANUP_TIMEOUT_MS = 10_000;
+const FIXTURE_CLEANUP_TIMEOUT_MS = 10_000;
 const MAX_STDERR_MESSAGE_BYTES = 64 * 1024;
 
 export class WorkerFixtureCleanupError extends Error {
@@ -97,8 +96,10 @@ export class PoolRunner {
   private stopDeferred: Deferred | undefined;
   private startTimer: NodeJS.Timeout | undefined;
   private cleanupTimer: NodeJS.Timeout | undefined;
-  private fileCleanupTimer: NodeJS.Timeout | undefined;
+  private fixtureCleanupTimer: NodeJS.Timeout | undefined;
   private cleanupLogHandler: RuntimeRPC['onConsoleLog'] | undefined;
+  private workerCleanupCompleted = false;
+  private workerCleanupError: WorkerFixtureCleanupError | undefined;
   private buildId: number | undefined;
   private lastFatalError: Error | undefined;
   /**
@@ -195,10 +196,16 @@ export class PoolRunner {
 
   stop(options?: { force?: boolean }): Promise<void> {
     return this.runOperation(async () => {
+      let cleanupError: Error | undefined = this.workerCleanupError;
+      this.workerCleanupError = undefined;
       switch (this.state) {
         case 'STOPPED':
-        case 'IDLE':
+        case 'IDLE': {
+          if (cleanupError) {
+            throw cleanupError;
+          }
           return;
+        }
         case 'STOPPING': {
           // Wait for the in-flight stop to settle. If the caller asks for
           // `force` and the prior stop was graceful, escalate to SIGKILL —
@@ -226,11 +233,18 @@ export class PoolRunner {
       // those must still be terminated.
       if (!this.worker.hasLiveChild()) {
         this.state = 'STOPPED';
+        if (cleanupError) {
+          throw cleanupError;
+        }
         return;
       }
 
-      let cleanupError: Error | undefined;
-      if (!options?.force && !this.currentTask && !this.crashed) {
+      if (
+        !options?.force &&
+        !this.currentTask &&
+        !this.crashed &&
+        !this.workerCleanupCompleted
+      ) {
         try {
           await this.requestWorkerCleanup();
         } catch (error) {
@@ -266,10 +280,10 @@ export class PoolRunner {
       this.cleanupDeferred = undefined;
       deferred?.reject(
         new Error(
-          `Worker fixture cleanup did not finish within ${WORKER_CLEANUP_TIMEOUT_MS}ms`,
+          `Worker fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
         ),
       );
-    }, WORKER_CLEANUP_TIMEOUT_MS);
+    }, FIXTURE_CLEANUP_TIMEOUT_MS);
     this.cleanupTimer.unref();
 
     try {
@@ -352,7 +366,7 @@ export class PoolRunner {
           this.worker.send({ type: kind, taskId, options: task.options });
         } catch (err) {
           this.currentTask = undefined;
-          this.clearFileCleanupTimer();
+          this.clearFixtureCleanupTimer();
           this.disposeRpc();
           reject(toError(err));
         }
@@ -391,11 +405,25 @@ export class PoolRunner {
         this.cleanupLogHandler?.(response.log);
         return;
       case 'fileCleanupStarted':
-        this.startFileCleanupTimer(response.taskId);
+        this.startFixtureCleanupTimer(response.taskId, 'File');
         return;
       case 'fileCleanupFinished':
         if (this.currentTask?.taskId === response.taskId) {
-          this.clearFileCleanupTimer();
+          this.clearFixtureCleanupTimer();
+        }
+        return;
+      case 'workerCleanupStarted':
+        this.startFixtureCleanupTimer(response.taskId, 'Worker');
+        return;
+      case 'workerCleanupFinished':
+        if (this.currentTask?.taskId === response.taskId) {
+          this.clearFixtureCleanupTimer();
+          this.workerCleanupCompleted = true;
+          if (response.error) {
+            this.workerCleanupError = new WorkerFixtureCleanupError(
+              deserializeError(response.error),
+            );
+          }
         }
         return;
       case 'runFinished':
@@ -412,7 +440,7 @@ export class PoolRunner {
         // flag, `isUsable()` would still report true and the scheduler
         // would recycle a runner with corrupted internal state.
         this.crashed = true;
-        this.clearFileCleanupTimer();
+        this.clearFixtureCleanupTimer();
         this.rejectCurrentTaskWithStderr(error);
         // If fatal_error arrives without an active task, keep it so a
         // subsequent unexpected exit can surface it.
@@ -430,13 +458,13 @@ export class PoolRunner {
     const task = this.currentTask;
     if (!task || task.kind !== kind || task.taskId !== taskId) return;
     this.currentTask = undefined;
-    this.clearFileCleanupTimer();
+    this.clearFixtureCleanupTimer();
     task.resolve(result);
   }
 
   private handleExit(code: number | null, signal: NodeJS.Signals | null): void {
     this.clearStartTimer();
-    this.clearFileCleanupTimer();
+    this.clearFixtureCleanupTimer();
     this.rejectCleanup(
       new Error(
         `Worker exited during fixture cleanup (code=${code}, signal=${signal})`,
@@ -485,7 +513,7 @@ export class PoolRunner {
     // responds — hanging the whole run. Mark as crashed so `isUsable()`
     // returns false and `Pool.releaseRunner` disposes instead of recycling.
     this.crashed = true;
-    this.clearFileCleanupTimer();
+    this.clearFixtureCleanupTimer();
     this.rejectCleanup(err);
     this.rejectStart(err);
     if (this.currentTask) {
@@ -505,7 +533,7 @@ export class PoolRunner {
     const task = this.currentTask;
     if (!task) return;
     this.currentTask = undefined;
-    this.clearFileCleanupTimer();
+    this.clearFixtureCleanupTimer();
 
     // Defer rejection briefly so pending stderr `data` events drain before
     // reading the buffer. The worker's `exit` event fires before stderr's
@@ -531,29 +559,32 @@ export class PoolRunner {
     this.startTimer = undefined;
   }
 
-  private startFileCleanupTimer(taskId: number): void {
+  private startFixtureCleanupTimer(
+    taskId: number,
+    scope: 'File' | 'Worker',
+  ): void {
     if (this.currentTask?.taskId !== taskId) {
       return;
     }
-    this.clearFileCleanupTimer();
-    this.fileCleanupTimer = setTimeout(() => {
+    this.clearFixtureCleanupTimer();
+    this.fixtureCleanupTimer = setTimeout(() => {
       if (this.currentTask?.taskId !== taskId) {
         return;
       }
       this.crashed = true;
       this.rejectCurrentTaskWithStderr(
         new Error(
-          `File fixture cleanup did not finish within ${FILE_FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
+          `${scope} fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
         ),
       );
-    }, FILE_FIXTURE_CLEANUP_TIMEOUT_MS);
-    this.fileCleanupTimer.unref();
+    }, FIXTURE_CLEANUP_TIMEOUT_MS);
+    this.fixtureCleanupTimer.unref();
   }
 
-  private clearFileCleanupTimer(): void {
-    if (!this.fileCleanupTimer) return;
-    clearTimeout(this.fileCleanupTimer);
-    this.fileCleanupTimer = undefined;
+  private clearFixtureCleanupTimer(): void {
+    if (!this.fixtureCleanupTimer) return;
+    clearTimeout(this.fixtureCleanupTimer);
+    this.fixtureCleanupTimer = undefined;
   }
 
   private resolveCleanup(): void {

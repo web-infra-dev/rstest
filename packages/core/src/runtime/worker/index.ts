@@ -7,9 +7,9 @@ import {
   wrapWorkerResponse,
 } from '../../pool/protocol';
 import { ENV } from '../../utils/env';
+import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { channel } from './channels';
 import { runInPool, setWorkerCleanupLogSink } from './runInPool';
-import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { installGracefulExit } from './setup';
 
 installGracefulExit();
@@ -117,6 +117,20 @@ const runTask = async (
       },
       onFileCleanupEnd: () => {
         send({ type: 'fileCleanupFinished', taskId: request.taskId });
+      },
+      onWorkerCleanupStart: () => {
+        setWorkerCleanupLogSink((log) => {
+          send({ type: 'cleanupLog', log });
+        });
+        send({ type: 'workerCleanupStarted', taskId: request.taskId });
+      },
+      onWorkerCleanupEnd: (error) => {
+        send({
+          type: 'workerCleanupFinished',
+          taskId: request.taskId,
+          error: error === undefined ? undefined : serializeError(error),
+        });
+        setWorkerCleanupLogSink(undefined);
       },
     });
     send({

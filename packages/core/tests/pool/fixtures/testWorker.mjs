@@ -9,6 +9,7 @@
  *   - 'stderr-crash'       → write to stderr then exit(1)
  *   - 'stderr-large'       → write >64KB of stderr then exit(1)
  *   - 'stderr-late'        → write to stderr and exit(1) immediately
+ *   - 'in-task-cleanup-*'  → report worker cleanup before the run result
  *   - 'spawn-orphan'       → spawn a long-lived grandchild that inherits
  *                             stdio, then send result and exit normally.
  *                             Tests that `exit` (not `close`) drives the
@@ -87,7 +88,8 @@ const makeRunResult = (request, extra) => ({
 
 const handleRun = (request) => {
   const mode = request.options?.__testMode;
-  cleanupError = mode === 'cleanup-error';
+  cleanupError =
+    mode === 'cleanup-error' || mode === 'in-task-cleanup-complete';
   cleanupLog = mode === 'cleanup-log';
 
   const finish = (extra) => {
@@ -137,6 +139,25 @@ const handleRun = (request) => {
   if (mode === 'stderr-late') {
     process.stderr.write('late-stderr-marker\n');
     process.exit(1);
+    return;
+  }
+
+  if (mode === 'in-task-cleanup-complete' || mode === 'in-task-cleanup-error') {
+    send({ type: 'workerCleanupStarted', taskId: request.taskId });
+    send({
+      type: 'workerCleanupFinished',
+      taskId: request.taskId,
+      error:
+        mode === 'in-task-cleanup-error'
+          ? {
+              name: 'Error',
+              message: 'intentional in-task cleanup error',
+              stack:
+                'Error: intentional in-task cleanup error\n    at test-worker.mjs',
+            }
+          : undefined,
+    });
+    finish();
     return;
   }
 

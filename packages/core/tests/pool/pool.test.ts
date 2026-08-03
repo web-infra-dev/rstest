@@ -384,6 +384,28 @@ describe('Pool - close()', () => {
     expect(logs).toEqual(['worker cleanup log']);
   });
 
+  it('should report in-task worker fixture cleanup errors', async () => {
+    const pool = new Pool(createPoolOptions({ isolate: true }));
+    await pool.runTest(
+      createTask('run', { __testMode: 'in-task-cleanup-error' }),
+    );
+
+    await expect(pool.drainWorkerStops()).rejects.toThrow(
+      'intentional in-task cleanup error',
+    );
+    await pool.close();
+  });
+
+  it('should not request worker cleanup again after in-task cleanup', async () => {
+    const pool = new Pool(createPoolOptions({ isolate: true }));
+    await pool.runTest(
+      createTask('run', { __testMode: 'in-task-cleanup-complete' }),
+    );
+
+    await expect(pool.drainWorkerStops()).resolves.toBeUndefined();
+    await pool.close();
+  });
+
   // Regression: rstest#1275. The host owns worker termination via SIGTERM
   // and does not wait for any IPC ack. Previously the host waited the full
   // 60s WORKER_STOP_TIMEOUT_MS plus a 5s SIGKILL escalation for workers

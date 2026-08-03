@@ -42,6 +42,12 @@ export type WorkerResponse =
   | { type: 'cleanupFinished'; error?: SerializedError }
   | { type: 'fileCleanupStarted'; taskId: number }
   | { type: 'fileCleanupFinished'; taskId: number }
+  | { type: 'workerCleanupStarted'; taskId: number }
+  | {
+      type: 'workerCleanupFinished';
+      taskId: number;
+      error?: SerializedError;
+    }
   | {
       type: 'runFinished';
       taskId: number;

@@ -13,6 +13,7 @@ import type {
 import { globalApis, RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
+import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
@@ -470,9 +471,11 @@ const loadFiles = async ({
 
 export const runInPool = async (
   options: RunWorkerOptions['options'],
-  lifecycleHooks?: {
+  lifecycleHooks: {
     onFileCleanupStart?: () => void;
     onFileCleanupEnd?: () => void;
+    onWorkerCleanupStart: () => void;
+    onWorkerCleanupEnd: (error?: unknown) => void;
   },
 ): Promise<
   | {
@@ -823,6 +826,18 @@ export const runInPool = async (
     tracker.transition('teardown');
     if (coverageProvider) {
       coverageProvider.cleanup();
+    }
+
+    let workerCleanupError: unknown;
+    if (isolate) {
+      lifecycleHooks.onWorkerCleanupStart();
+      try {
+        await cleanupWorkerFixtures();
+      } catch (error) {
+        workerCleanupError = error;
+      } finally {
+        lifecycleHooks.onWorkerCleanupEnd(workerCleanupError);
+      }
     }
 
     taskContext?.setFallback(undefined);

@@ -13,7 +13,7 @@
 
 - A caller's pool slot is claimed synchronously before the first `await` in `acquireRunner`; the sequential dispatch gate in `runTests` relies on this to preserve perf-sorted enqueue order. Do not add an early `await` there.
 - `crashed` is set before rejecting a task so `isUsable()` stops `releaseRunner` from recycling a poisoned runner under `isolate: false`. Symmetrically, a worker that hits an internal fatal error must exit (it sends `fatal_error`, then re-throws through Node's default handler) — otherwise `isolate: false` would reuse a poisoned process.
-- The host owns termination: the worker-fixture cleanup request is bounded and never authorizes the worker to exit itself; after it resolves, fails, or times out, the host still terminates the worker directly. The worker must not install a SIGTERM handler that defers exit — violating this reintroduces the rstest#1275 hang.
+- The host owns termination and timeout for worker-fixture cleanup. Isolated workers run cleanup before file-environment teardown and bracket it with lifecycle envelopes so `PoolRunner` can bound it; reused workers service the host cleanup request on stop. Neither path authorizes the worker to exit itself — the host still terminates it directly. The worker must not install a SIGTERM handler that defers exit, which would reintroduce the rstest#1275 hang.
 - `MemoryGate` is forks-only — thread RSS is host-wide and collapses parallelism (rstest#1301) — and must always admit at least one worker.
 - Worker ids are bounded `[1, maxWorkers]` and reused; consumers depend on `RSTEST_WORKER_ID` for resource partitioning. A slot and its id free only after the child actually exits.
 - birpc's timeout is disabled: a host rpc method that never resolves hangs the worker task indefinitely.
