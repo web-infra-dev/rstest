@@ -115,11 +115,16 @@ describe('browser protocol types', () => {
     it('should accept fatal message', () => {
       const msg: BrowserClientMessage = {
         type: 'fatal',
-        payload: { message: 'error', stack: 'stack trace' },
+        payload: {
+          message: 'error',
+          stack: 'stack trace',
+          waitForFileResult: true,
+        },
       };
       expect(msg.type).toBe('fatal');
       if (msg.type === 'fatal') {
         expect(msg.payload.message).toBe('error');
+        expect(msg.payload.waitForFileResult).toBe(true);
       }
     });
 

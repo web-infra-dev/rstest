@@ -238,6 +238,28 @@ describe('scoped fixtures', () => {
     ]);
   });
 
+  it('preserves promise-valued scoped fixture dependencies', async () => {
+    const promisedValue = Promise.resolve('worker');
+    let fixtures = normalizeBuilderFixture('workerValue', promisedValue, {
+      scope: 'worker',
+    });
+    fixtures = normalizeBuilderFixture(
+      'fileValue',
+      ({ workerValue }: any) => workerValue === promisedValue,
+      { scope: 'file' },
+      fixtures,
+    );
+    const context: Record<string, unknown> = {};
+    const resolver = createFixtureResolver({ fixtures } as any, context);
+
+    await resolver.resolveTestFixtures(
+      ({ fileValue, workerValue }: any) => fileValue && workerValue,
+    );
+
+    expect(context.workerValue).toBe(promisedValue);
+    expect(context.fileValue).toBe(true);
+  });
+
   it('initializes a concurrent file fixture once', async () => {
     let setups = 0;
     let continueSetup: (() => void) | undefined;

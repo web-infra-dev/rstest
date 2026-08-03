@@ -61,6 +61,17 @@ describe('browser mode - basic', () => {
     );
   });
 
+  it('should bound browser worker fixture setup', async () => {
+    const { expectExecFailed, cli } = await runBrowserCli('basic', {
+      args: ['-c', 'rstest.worker-setup-timeout.config.mts'],
+    });
+
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'fixture setup timed out in 100ms',
+    );
+  });
+
   it('should bound browser file fixture cleanup', async () => {
     const { expectExecFailed, cli } = await runBrowserCli('basic', {
       args: ['-c', 'rstest.file-cleanup-timeout.config.mts'],

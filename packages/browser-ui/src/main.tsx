@@ -40,6 +40,7 @@ import type {
   BrowserHostConfig,
   FatalPayload,
   LogPayload,
+  RunnerSignalPayload,
   TestCaseStartPayload,
   TestFileInfo,
   TestFileReadyPayload,
@@ -533,7 +534,17 @@ const BrowserRunner: React.FC<{
           }
         }
       } else if (message.type === 'fatal') {
-        const payload = message.payload as FatalPayload;
+        const frame = findRunnerFrameBySource(event.source);
+        const testPath = frame?.dataset.testFile;
+        const payload: FatalPayload & Partial<RunnerSignalPayload> = {
+          ...(message.payload as FatalPayload),
+          ...(testPath
+            ? {
+                testPath,
+                runId: readRunIdFromFrame(frame) ?? runIdByTestFile[testPath],
+              }
+            : {}),
+        };
         if (active) {
           setStatusMap((prev) => ({ ...prev, [active]: 'fail' }));
         }

@@ -192,9 +192,17 @@ export class TestRunner {
         retryCount,
       );
 
+      const resolveTestFixtures = wrapTimeout({
+        name: 'fixture setup',
+        fn: () => fixtureResolver.resolveTestFixtures(test.originalFn),
+        timeout: test.timeout,
+        stackTraceError: test.stackTraceError,
+      });
+
       try {
-        await fixtureResolver.resolveTestFixtures(test.originalFn);
+        await resolveTestFixtures();
       } catch (error) {
+        fixtureResolver.cancelPendingFixtures();
         if (error instanceof TestSkipError) {
           skipped = true;
           result = skipResult();

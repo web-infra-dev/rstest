@@ -137,7 +137,11 @@ export type BrowserClientMessage =
   | { type: 'log'; payload: BrowserLogPayload }
   | {
       type: 'fatal';
-      payload: { message: string; stack?: string };
+      payload: {
+        message: string;
+        stack?: string;
+        waitForFileResult?: boolean;
+      };
     }
   | { type: 'file-cleanup-start' }
   | { type: 'file-cleanup-finished' }

@@ -880,6 +880,7 @@ const run = async () => {
       payload: {
         message: fatalError.message,
         stack: fatalError.stack,
+        waitForFileResult: Boolean(pendingFileResult),
       },
     });
     window.__RSTEST_DONE__ = true;

@@ -361,7 +361,7 @@ export const createFixtureResolver = (
     name: string,
     fixture: NormalizedFixture,
     stack: string[] = [],
-  ): Promise<unknown> => {
+  ): Promise<FixtureInstance> => {
     if (failedFixtures.has(name)) {
       throw new PreviouslyFailedFixtureError(name);
     }
@@ -375,7 +375,7 @@ export const createFixtureResolver = (
     let instance = scopeContext.instances.get(fixture);
     if (instance?.status === 'ready') {
       context[name] = instance.value;
-      return instance.value;
+      return instance;
     }
     if (instance?.status === 'failed') {
       failedFixtures.add(name);
@@ -393,7 +393,7 @@ export const createFixtureResolver = (
         releaseFixtureSetupReferences(instance);
       }
       context[name] = instance.value;
-      return instance.value;
+      return instance;
     }
 
     instance = {
@@ -410,12 +410,12 @@ export const createFixtureResolver = (
 
     instance.setup = (async () => {
       for (const dependencyName of fixture.deps ?? []) {
-        const dependencyValue = await useFixture(
+        const dependency = await useFixture(
           dependencyName,
           fixtures[dependencyName]!,
           [...stack, name],
         );
-        fixtureContext[dependencyName] = dependencyValue;
+        fixtureContext[dependencyName] = dependency.value;
       }
 
       let value: unknown;
@@ -461,7 +461,7 @@ export const createFixtureResolver = (
     }
 
     context[name] = instance.value;
-    return instance.value;
+    return instance;
   };
 
   const resolveFixtureNames = async (

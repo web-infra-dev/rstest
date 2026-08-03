@@ -116,6 +116,25 @@ it('bounds isolated worker fixture cleanup in the host', async () => {
   );
 });
 
+it('bounds scoped fixture setup with the test timeout', async () => {
+  const start = Date.now();
+  const { cli, expectExecFailed } = await runRstestCli({
+    command: 'rstest',
+    args: ['run', 'fixtures/scopedSetupTimeout.test.ts'],
+    options: {
+      nodeOptions: {
+        cwd: __dirname,
+      },
+    },
+  });
+
+  await expectExecFailed();
+  expect(Date.now() - start).toBeLessThan(10_000);
+  expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+    'fixture setup timed out in 100ms',
+  );
+});
+
 it('rejects scoped fixtures declared inside a suite', async () => {
   const { cli, expectExecFailed } = await runRstestCli({
     command: 'rstest',

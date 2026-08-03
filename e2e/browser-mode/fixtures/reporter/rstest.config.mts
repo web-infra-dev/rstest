@@ -10,6 +10,7 @@ import { defineConfig } from '@rstest/core';
 import { BROWSER_PORTS } from '../ports';
 
 const lifecycleLogs: string[] = [];
+const reporterDelay = Number(process.env.RSTEST_REPORTER_DELAY ?? 100);
 
 class BrowserLifecycleReporter implements Reporter {
   onTestFileReady(_file: TestFileInfo) {
@@ -29,7 +30,7 @@ class BrowserLifecycleReporter implements Reporter {
   }
 
   async onTestFileResult(_result: TestFileResult) {
-    await new Promise((resolve) => setTimeout(resolve, 10_100));
+    await new Promise((resolve) => setTimeout(resolve, reporterDelay));
     lifecycleLogs.push('[browser reporter] onTestFileResult');
   }
 
@@ -41,11 +42,18 @@ class BrowserLifecycleReporter implements Reporter {
   onTestRunEnd({
     results: _results,
     testResults: _testResults,
+    unhandledErrors = [],
   }: {
     results: TestFileResult[];
     testResults: TestResult[];
+    unhandledErrors?: Error[];
   }) {
     lifecycleLogs.push('[browser reporter] onTestRunEnd');
+    lifecycleLogs.push(
+      ...unhandledErrors.map(
+        (error) => `[browser reporter] unhandledError: ${error.message}`,
+      ),
+    );
     console.log(lifecycleLogs.join('\n'));
   }
 }

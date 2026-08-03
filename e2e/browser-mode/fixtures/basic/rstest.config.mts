@@ -13,6 +13,7 @@ export default defineConfig({
     'tests/workerCleanupFailure.test.ts',
     'tests/workerCleanupAfterFatal.test.ts',
     'tests/workerCleanupTimeout.test.ts',
+    'tests/workerSetupTimeout.test.ts',
     'tests/fileCleanupTimeout.test.ts',
     'tests/workerCleanupUnhandled.test.ts',
   ],

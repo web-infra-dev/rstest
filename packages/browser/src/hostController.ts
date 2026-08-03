@@ -193,6 +193,7 @@ type LogPayload = BrowserLogPayload;
 type FatalPayload = {
   message: string;
   stack?: string;
+  waitForFileResult?: boolean;
 };
 
 type ReporterHookArg<THook extends keyof Reporter> =
@@ -214,6 +215,7 @@ type HeadedRunnerSignalPayload = {
   testPath: string;
   runId?: string;
 };
+type HeadedFatalPayload = FatalPayload & Partial<HeadedRunnerSignalPayload>;
 
 const BROWSER_WORKER_CLEANUP_TIMEOUT_MS = 10_000;
 
@@ -257,7 +259,7 @@ type HostRpcMethods = {
   onWorkerCleanupEnd: (payload: HeadedRunnerSignalPayload) => Promise<void>;
   onComplete: (payload: HeadedRunnerSignalPayload) => Promise<void>;
   onLog: (payload: LogPayload) => Promise<void>;
-  onFatal: (payload: FatalPayload) => Promise<void>;
+  onFatal: (payload: HeadedFatalPayload) => Promise<void>;
   // Generic dispatch endpoint used by runner RPC requests.
   dispatch: (
     request: BrowserDispatchRequest,
@@ -3477,7 +3479,10 @@ export const runBrowserController = async (
 
         await attachHeadlessRunnerTransport(page, {
           onDispatchMessage: async (message) => {
-            if (message.type === 'complete') {
+            if (
+              message.type === 'complete' ||
+              (message.type === 'fatal' && message.payload.waitForFileResult)
+            ) {
               try {
                 await fileResultHandled.promise;
               } catch {
@@ -4243,7 +4248,13 @@ export const runBrowserController = async (
     async onLog(payload: LogPayload) {
       await handleLog(payload);
     },
-    async onFatal(payload: FatalPayload) {
+    async onFatal(payload: HeadedFatalPayload) {
+      if (payload.waitForFileResult && payload.testPath) {
+        const pending = pendingHeadedReloads.get(payload.testPath);
+        if (pending && (!payload.runId || pending.runId === payload.runId)) {
+          await pending.fileResultHandled.promise.catch(() => undefined);
+        }
+      }
       const error = new Error(payload.message);
       error.stack = payload.stack;
       rejectAllPendingHeadedReloads(error);
