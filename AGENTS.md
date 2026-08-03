@@ -89,7 +89,8 @@ _Note_: `rslint --type-check` is the repo's type check and exists at the root on
 - Public API or config changes usually require docs updates.
 - Behavioral changes require corresponding e2e coverage unless there is a clear reason existing coverage is sufficient.
 - If a config option is shared with Rsbuild/Rslib/Rspack, check whether the adapters need to transform or pass it through consistently.
-- Keep release-train versions separate from `@rstest/core` compatibility: peer ranges must start at the oldest supported core version instead of using `workspace:^`. Update the range when a package consumes a newer core capability, and review it at every potentially breaking core boundary (each minor while core is `0.x`, then each major from `1.x` onward).
+- Keep release-train versions separate from `@rstest/core` compatibility: stable peer ranges must start at the oldest supported core version. When a package starts consuming an unreleased core capability, use `workspace:^` only as a temporary marker for the next release.
+- In every `release:` PR, replace temporary `workspace:^` peer markers with the actual release range, confirm every `@rstest/core` peer range accepts the new core version, and review ranges at each potentially breaking core boundary (each minor while core is `0.x`, then each major from `1.x` onward). Do not raise a package's lower bound when its core compatibility did not change.
 - Do not make repo-wide rewrites unless explicitly asked.
 - Do not revert unrelated local changes.
 
