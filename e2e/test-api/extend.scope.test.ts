@@ -166,6 +166,7 @@ it('reports execution and file fixture cleanup failures together', async () => {
         'rstest.combined-cleanup-error.config.mts',
         '--reporters',
         'json',
+        '--update',
       ],
       options: {
         nodeOptions: {

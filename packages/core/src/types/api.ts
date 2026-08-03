@@ -208,6 +208,8 @@ type ScopedFixtureOptions<Scope extends 'file' | 'worker'> = {
   auto?: never;
 };
 
+type TestFixtureTupleOptions = Pick<TestFixtureOptions, 'auto'>;
+
 export type FixtureOptions =
   | TestFixtureOptions
   | ScopedFixtureOptions<'file'>
@@ -246,7 +248,7 @@ export type Fixtures<
 > = {
   [K in keyof T]:
     | Fixture<T, K, ExtraContext & TestContext>
-    | [Fixture<T, K, ExtraContext & TestContext>, TestFixtureOptions?];
+    | [Fixture<T, K, ExtraContext & TestContext>, TestFixtureTupleOptions?];
 };
 
 export type NormalizedFixture = {

@@ -21,6 +21,7 @@ describe('browser mode - reporter lifecycle hooks', () => {
     expect(getHookCount(cli.stdout, 'onTestSuiteStart')).toBe(1);
     expect(getHookCount(cli.stdout, 'onTestCaseStart')).toBe(1);
     expect(getHookCount(cli.stdout, 'onTestSuiteResult')).toBe(1);
+    expect(getHookCount(cli.stdout, 'onTestFileResult')).toBe(1);
     expect(getHookCount(cli.stdout, 'onTestRunEnd')).toBe(1);
   });
 });

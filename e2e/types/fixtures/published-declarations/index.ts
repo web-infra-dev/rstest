@@ -15,6 +15,11 @@ scopedTest('exposes scoped values', ({ client, port, server }) => {
 // @ts-expect-error scoped fixtures do not support automatic setup
 test.extend('automaticWorker', { scope: 'worker', auto: true }, () => 1);
 
+test.extend<{ invalidTuple: number }>({
+  // @ts-expect-error object-form tuple options do not support scope
+  invalidTuple: [1, { scope: 'test' }],
+});
+
 const arrayValueTest = test.extend<{
   objectValue: readonly [number, { scope: 'worker' }];
 }>({

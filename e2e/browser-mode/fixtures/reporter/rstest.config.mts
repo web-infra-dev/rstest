@@ -28,6 +28,11 @@ class BrowserLifecycleReporter implements Reporter {
     lifecycleLogs.push('[browser reporter] onTestCaseStart');
   }
 
+  async onTestFileResult(_result: TestFileResult) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    lifecycleLogs.push('[browser reporter] onTestFileResult');
+  }
+
   onTestRunStart() {
     lifecycleLogs.length = 0;
     lifecycleLogs.push('[browser reporter] onTestRunStart');

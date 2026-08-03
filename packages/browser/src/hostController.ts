@@ -3390,8 +3390,11 @@ export const runBrowserController = async (
       let page: BrowserProviderPage | null = null;
       let sessionId: string | null = null;
       let settled = false;
+      let fileResultSettled = false;
       let resolveDone: (() => void) | null = null;
       let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+      const fileResultHandled = createDeferredPromise<void>();
+      fileResultHandled.promise.catch(() => undefined);
 
       const markDone = (): void => {
         if (!settled) {
@@ -3473,6 +3476,14 @@ export const runBrowserController = async (
 
         await attachHeadlessRunnerTransport(page, {
           onDispatchMessage: async (message) => {
+            if (message.type === 'complete') {
+              try {
+                await fileResultHandled.promise;
+              } catch {
+                return;
+              }
+            }
+
             try {
               if (message.type === 'file-cleanup-start') {
                 startCleanupTimeout('file');
@@ -3487,13 +3498,20 @@ export const runBrowserController = async (
                 return;
               }
               await dispatchRunnerMessage(run, file, session.id, message);
-              if (message.type === 'complete') {
+              if (message.type === 'file-complete') {
+                fileResultSettled = true;
+                fileResultHandled.resolve();
+              } else if (message.type === 'complete') {
                 markDone();
               } else if (message.type === 'fatal') {
                 markDone();
                 await cancelRun(run, false);
               }
             } catch (error) {
+              if (message.type === 'file-complete') {
+                fileResultSettled = true;
+                fileResultHandled.reject(error);
+              }
               const formatted = toError(error);
               await handleFatal({
                 message: formatted.message,
@@ -3578,6 +3596,11 @@ export const runBrowserController = async (
           await cancelRun(run, false);
         }
       } finally {
+        if (!fileResultSettled) {
+          fileResultHandled.reject(
+            new Error(`Browser run ended before reporting ${file.testPath}.`),
+          );
+        }
         clearCleanupTimeout();
         if (page) {
           try {
