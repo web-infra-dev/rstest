@@ -235,9 +235,23 @@ const collectNodeTests = async ({
   try {
     // createRsbuildServer applies modifyRstestConfig while initializing the
     // compiler, so dependency resolution observes the final environment/root.
-    await ensureTestEnvironmentDependencies(nodeProjects, context.rootPath);
+    const projectsWithEntries = (
+      await Promise.all(
+        nodeProjects.map(async (project) => ({
+          project,
+          entries: await globTestSourceEntries(project.environmentName),
+        })),
+      )
+    )
+      .filter(({ entries }) => Object.keys(entries).length > 0)
+      .map(({ project }) => project);
+
+    await ensureTestEnvironmentDependencies(
+      projectsWithEntries,
+      context.rootPath,
+    );
     testEnvironmentModules = await prepareTestEnvironmentModules({
-      projects: nodeProjects,
+      projects: projectsWithEntries,
       rootPath: context.rootPath,
     });
     await beforeCollect?.();

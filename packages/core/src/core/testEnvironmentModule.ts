@@ -28,6 +28,7 @@ import { getMockRstestPluginOptions } from './plugins/mockBuild';
 
 export type PreparedTestEnvironmentModules = {
   modules: ReadonlyMap<string, TestEnvironmentModuleReference>;
+  update: (projects: ProjectContext[]) => Promise<void>;
   cleanup: () => Promise<void>;
 };
 
@@ -351,8 +352,10 @@ export const prepareTestEnvironmentModules = async ({
     }
   };
 
-  try {
-    for (const project of projects) {
+  const update = async (nextProjects: ProjectContext[]): Promise<void> => {
+    const nextModules = new Map<string, TestEnvironmentModuleReference>();
+
+    for (const project of nextProjects) {
       const name = project.normalizedConfig.testEnvironment.name;
       if (name === 'node') {
         continue;
@@ -381,7 +384,7 @@ export const prepareTestEnvironmentModules = async ({
         packageName,
         resolvedPath,
       };
-      modules.set(project.environmentName, reference);
+      nextModules.set(project.environmentName, reference);
 
       if (
         !(await shouldPrebundle({
@@ -422,6 +425,18 @@ export const prepareTestEnvironmentModules = async ({
         );
       }
     }
+
+    // The pool keeps this Map for its entire lifetime. Replace its contents
+    // only after every next reference is ready so a failed watch-plan refresh
+    // leaves the previous runnable plan intact.
+    modules.clear();
+    for (const [environmentName, reference] of nextModules) {
+      modules.set(environmentName, reference);
+    }
+  };
+
+  try {
+    await update(projects);
   } catch (error) {
     await cleanup();
     throw error;
@@ -429,6 +444,7 @@ export const prepareTestEnvironmentModules = async ({
 
   return {
     modules,
+    update,
     cleanup,
   };
 };

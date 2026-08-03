@@ -216,6 +216,9 @@ export function createNodeExecutor(
         }) => Promise<RsbuildStats>;
         closeServer: () => Promise<void>;
         pool: Awaited<ReturnType<typeof createPool>>;
+        updateTestEnvironmentModules: (
+          projects: ProjectContext[],
+        ) => Promise<void>;
         cleanupTestEnvironmentModules: () => Promise<void>;
       }
     | undefined;
@@ -288,6 +291,15 @@ export function createNodeExecutor(
       strictEnvironmentComments: true,
     });
     syncNodeProjects(rsbuildProjects, plan.nodeProjectsToRun);
+
+    // Config-hook discovery normally refreshes before the pool exists. Keep
+    // the live pool correct as well when a later refresh changes or reuses a
+    // synthetic environment partition.
+    if (runResources) {
+      runDependencyValidationPromise = undefined;
+      await validateRunDependencies();
+      await runResources.updateTestEnvironmentModules(plan.nodeProjectsToRun);
+    }
   };
 
   const validateRunDependencies = (): Promise<void> => {
@@ -367,6 +379,7 @@ export function createNodeExecutor(
         getRsbuildStats,
         closeServer,
         pool,
+        updateTestEnvironmentModules: testEnvironmentModules.update,
         cleanupTestEnvironmentModules: testEnvironmentModules.cleanup,
       };
       return runResources;

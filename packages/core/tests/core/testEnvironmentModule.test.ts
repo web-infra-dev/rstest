@@ -367,4 +367,43 @@ export class JSDOM {}`,
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('updates the live module map when a synthetic environment is reused', async () => {
+    const root = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'rstest-env-live-update-'),
+    );
+    createPackage(root, 'export class JSDOM {}');
+    createPackage(root, 'export class Window {}', {
+      name: 'happy-dom',
+      version: '20.11.1',
+    });
+    const environmentName = 'default-environment-1';
+    const result = await prepareTestEnvironmentModules({
+      projects: [createProject(root, { environmentName: 'jsdom' })].map(
+        (project) => ({ ...project, environmentName }),
+      ),
+      rootPath: root,
+    });
+    const liveModules = result.modules;
+
+    try {
+      expect(liveModules.get(environmentName)?.name).toBe('jsdom');
+
+      await result.update(
+        [createProject(root, { environmentName: 'happy-dom' })].map(
+          (project) => ({ ...project, environmentName }),
+        ),
+      );
+
+      expect(result.modules).toBe(liveModules);
+      expect(liveModules.get(environmentName)).toMatchObject({
+        name: 'happy-dom',
+        packageName: 'happy-dom',
+      });
+      expect(liveModules.get(environmentName)?.bundlePath).toBeTruthy();
+    } finally {
+      await result.cleanup();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

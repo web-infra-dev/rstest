@@ -313,6 +313,36 @@ describe('prepareRsbuild', () => {
     }
   });
 
+  it('should skip list environment preparation for projects without test entries', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'rstest-list-empty-env-'));
+
+    try {
+      const context = new Rstest(
+        {
+          cwd: tempRoot,
+          command: 'list',
+          embedded: true,
+          projects: [],
+        },
+        {
+          root: tempRoot,
+          include: ['missing/**/*.test.ts'],
+          testEnvironment: {
+            name: 'jsdom',
+            prebundle: true,
+          },
+        },
+      );
+
+      poolTestEnvironmentModules.length = 0;
+      await expect(listTests(context, { json: false })).resolves.toEqual([]);
+
+      expect(poolTestEnvironmentModules.at(-1)?.size).toBe(0);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it('should close the list pool when collecting tests fails', async () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'rstest-list-cleanup-'));
 
