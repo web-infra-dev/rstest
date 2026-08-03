@@ -114,7 +114,7 @@ export default defineConfig({
 });
 ```
 
-If Rstest cannot build or load a prebundle, it falls back to the environment's native entry. The environment package is resolved from the project's dependency tree first, then from the Rstest workspace root.
+If Rstest cannot build or load a prebundle, it falls back to the environment's native entry. The environment package is resolved from the project's dependency tree first, then from the Rstest workspace root, and finally through `@rstest/core`'s native dependency resolution for backward compatibility.
 
 ### Environment comments
 
