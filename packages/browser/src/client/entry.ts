@@ -19,6 +19,7 @@ import {
   createBrowserTaskContext,
   createRstestRuntime,
   formatConsoleArgs,
+  getRealTimers,
   globalApis,
   RSTEST_API_GLOBAL_KEY,
   RSTEST_ENV_SYMBOL_KEY,
@@ -590,9 +591,10 @@ const run = async () => {
     // `unhandledrejection` is dispatched from a task queued at the current
     // microtask checkpoint. The second task runs after that event regardless
     // of how the browser orders timer and event task sources.
+    const realSetTimeout = getRealTimers().setTimeout ?? globalThis.setTimeout;
     for (let i = 0; i < 2; i++) {
       await new Promise<void>((resolve) => {
-        setTimeout(resolve, 0);
+        realSetTimeout(resolve, 0);
       });
     }
   };

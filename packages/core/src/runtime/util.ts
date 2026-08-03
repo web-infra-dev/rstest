@@ -1,5 +1,12 @@
 import type { FormattedError, Test, TestOptions } from '../types';
 
+export const collectErrorMessages = (error: unknown): string[] => {
+  if (error instanceof AggregateError && error.errors.length > 0) {
+    return error.errors.flatMap(collectErrorMessages);
+  }
+  return [error instanceof Error ? error.message : String(error)];
+};
+
 /**
  * Resolve the overloaded trailing arguments of `test` / `it` / `test.each` /
  * `test.for`, which accept two shapes:

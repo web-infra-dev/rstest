@@ -276,6 +276,102 @@ describe('scoped fixtures', () => {
     expect(scopedSetups).toBe(1);
   });
 
+  it('cancels timed-out scoped setup and cleans resources registered later', async () => {
+    let continueSetup!: () => void;
+    let notifySetupStarted!: () => void;
+    let notifyCleanupFinished!: () => void;
+    const setupPaused = new Promise<void>((resolve) => {
+      continueSetup = resolve;
+    });
+    const setupStarted = new Promise<void>((resolve) => {
+      notifySetupStarted = resolve;
+    });
+    const cleanupFinished = new Promise<void>((resolve) => {
+      notifyCleanupFinished = resolve;
+    });
+    const fixtures = normalizeBuilderFixture(
+      'workerValue',
+      async (_context: object, { onCleanup }: any) => {
+        notifySetupStarted();
+        await setupPaused;
+        onCleanup(() => notifyCleanupFinished());
+        return 'worker';
+      },
+      { scope: 'worker' },
+    );
+    const worker = new FixtureScopeManager('worker');
+    const resolver = createFixtureResolver({ fixtures } as any, {}, [], {
+      file: new FixtureScopeManager('file'),
+      worker,
+    });
+    const timeoutError = new Error('setup timed out');
+
+    await expect(
+      resolver.resolveTestFixtures(
+        ({ workerValue }: any) => workerValue,
+        async (setup) => {
+          const pendingSetup = setup();
+          pendingSetup.catch(() => undefined);
+          await setupStarted;
+          throw timeoutError;
+        },
+      ),
+    ).rejects.toBe(timeoutError);
+
+    const cancellation = resolver.cancelPendingFixtures();
+    expect(cancellation).toBeDefined();
+    if (!cancellation) {
+      throw new Error('Expected pending fixture cancellation');
+    }
+    continueSetup();
+    await cancellation.teardownStarted;
+    await cleanupFinished;
+    await worker.cleanup();
+  });
+
+  it('preserves every scoped cleanup error message', async () => {
+    let fixtures = normalizeBuilderFixture(
+      'first',
+      (_context: object, { onCleanup }: any) => {
+        onCleanup(() => {
+          throw new Error('first cleanup failed');
+        });
+        return 'first';
+      },
+      { scope: 'worker' },
+    );
+    fixtures = normalizeBuilderFixture(
+      'second',
+      (_context: object, { onCleanup }: any) => {
+        onCleanup(() => {
+          throw new Error('second cleanup failed');
+        });
+        return 'second';
+      },
+      { scope: 'worker' },
+      fixtures,
+    );
+    const worker = new FixtureScopeManager('worker');
+    const resolver = createFixtureResolver({ fixtures } as any, {}, [], {
+      file: new FixtureScopeManager('file'),
+      worker,
+    });
+
+    await resolver.resolveTestFixtures(
+      ({ first, second }: any) => first && second,
+    );
+
+    let cleanupError: unknown;
+    try {
+      await worker.cleanup();
+    } catch (error) {
+      cleanupError = error;
+    }
+    expect(cleanupError).toBeInstanceOf(AggregateError);
+    expect((cleanupError as Error).message).toContain('first cleanup failed');
+    expect((cleanupError as Error).message).toContain('second cleanup failed');
+  });
+
   it('shares file and worker fixtures at their lifecycle boundaries', async () => {
     const events: string[] = [];
     let fixtures = normalizeBuilderFixture(

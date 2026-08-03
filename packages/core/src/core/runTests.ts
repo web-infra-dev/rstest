@@ -253,6 +253,7 @@ export async function runTests(context: Rstest): Promise<void> {
         );
       } catch (error) {
         logger.log(color.red(`Error during cleanup: ${error}`));
+        process.exitCode = 1;
       }
     };
 
@@ -385,6 +386,7 @@ export async function runTests(context: Rstest): Promise<void> {
         );
       } catch (error) {
         logger.log(color.red(`Error during cleanup: ${error}`));
+        process.exitCode = 1;
       }
     })();
     return cleanupPromise;

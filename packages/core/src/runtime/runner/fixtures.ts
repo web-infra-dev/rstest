@@ -8,6 +8,7 @@ import type {
   TestCase,
 } from '../../types';
 import { isObject } from '../../utils/helper';
+import { collectErrorMessages } from '../util';
 
 const fixtureOptionKeys = ['auto'];
 const fixtureScopes: FixtureScope[] = ['worker', 'file', 'test'];
@@ -183,6 +184,7 @@ type FixtureInstance = {
   value?: unknown;
   error?: unknown;
   setup?: Promise<void>;
+  startSetup?: () => Promise<void>;
   cancelled: boolean;
   cancelSetup?: () => void;
   teardownListeners: Set<() => void>;
@@ -218,6 +220,7 @@ const releaseFixtureSetupReferences = (instance: FixtureInstance) => {
     return;
   }
   instance.setup = undefined;
+  instance.startSetup = undefined;
   instance.cancelSetup = undefined;
   instance.teardownListeners.clear();
 };
@@ -261,7 +264,12 @@ export class FixtureScopeManager {
     if (errors.length > 1) {
       throw new AggregateError(
         errors,
-        `Failed to clean up ${this.scope}-scoped fixtures.`,
+        [
+          `Failed to clean up ${this.scope}-scoped fixtures.`,
+          ...errors
+            .flatMap(collectErrorMessages)
+            .map((message) => `Fixture cleanup failed: ${message}`),
+        ].join('\n'),
       );
     }
   }
@@ -372,8 +380,36 @@ export const createFixtureResolver = (
     fixture: NormalizedFixture,
     fixtureContext: Record<string, unknown>,
     scopeContext: FixtureScopeContext,
+    instance: FixtureInstance,
   ): Promise<unknown> => {
     let cleanupRegistered = false;
+    let registeredCleanup: FixtureCleanupCallback | undefined;
+    let cleanupPromise: Promise<void> | undefined;
+    const notifyTeardownStarted = () => {
+      for (const listener of instance.teardownListeners) {
+        listener();
+      }
+    };
+    const runRegisteredCleanup = (): Promise<void> | undefined => {
+      if (!registeredCleanup) {
+        return undefined;
+      }
+      if (!cleanupPromise) {
+        const cleanupIndex = scopeContext.cleanups.indexOf(registeredCleanup);
+        if (cleanupIndex !== -1) {
+          scopeContext.cleanups.splice(cleanupIndex, 1);
+        }
+        notifyTeardownStarted();
+        cleanupPromise = Promise.resolve().then(registeredCleanup);
+      }
+      return cleanupPromise;
+    };
+
+    instance.cancelSetup = () => {
+      instance.cancelled = true;
+      runRegisteredCleanup();
+    };
+
     const onCleanup = (cleanup: FixtureCleanup) => {
       if (cleanupRegistered) {
         throw new Error(
@@ -381,14 +417,58 @@ export const createFixtureResolver = (
         );
       }
       cleanupRegistered = true;
-      scopeContext.cleanups.unshift(
-        preserveWorkerFixtureConsole(fixture, async () => {
-          await cleanup();
-        }),
-      );
+      registeredCleanup = preserveWorkerFixtureConsole(fixture, async () => {
+        await cleanup();
+      });
+      if (instance.cancelled) {
+        runRegisteredCleanup();
+      } else {
+        scopeContext.cleanups.unshift(registeredCleanup);
+      }
     };
 
-    return fixture.value(fixtureContext, { onCleanup });
+    try {
+      const value = await fixture.value(fixtureContext, { onCleanup });
+      if (instance.cancelled) {
+        const cleanup = runRegisteredCleanup();
+        if (cleanup) {
+          await cleanup;
+        } else {
+          notifyTeardownStarted();
+        }
+      }
+      return value;
+    } catch (error) {
+      if (instance.cancelled && !cleanupPromise) {
+        notifyTeardownStarted();
+      }
+      throw error;
+    }
+  };
+
+  const trackPendingSetup = (
+    instance: FixtureInstance,
+    setup: Promise<void>,
+  ): void => {
+    pendingInstances.add(instance);
+    const finishTracking = () => {
+      pendingInstances.delete(instance);
+      releaseFixtureSetupReferences(instance);
+    };
+    setup.then(finishTracking, finishTracking);
+  };
+
+  const waitForFixtureSetup = async (
+    fixture: NormalizedFixture,
+    instance: FixtureInstance,
+    runScopedFixtureSetup?: ScopedFixtureSetupRunner,
+  ): Promise<void> => {
+    const startSetup = instance.startSetup!;
+    if (fixture.options.scope === 'test' || !runScopedFixtureSetup) {
+      await startSetup();
+    } else {
+      await runScopedFixtureSetup(startSetup);
+    }
   };
 
   const useFixture = async (
@@ -417,20 +497,11 @@ export const createFixtureResolver = (
       throw instance.error;
     }
     if (instance) {
-      pendingInstances.add(instance);
-      const setup = instance.setup!;
       try {
-        if (fixture.options.scope === 'test' || !runScopedFixtureSetup) {
-          await setup;
-        } else {
-          await runScopedFixtureSetup(() => setup);
-        }
+        await waitForFixtureSetup(fixture, instance, runScopedFixtureSetup);
       } catch (error) {
         failedFixtures.add(name);
         throw error;
-      } finally {
-        pendingInstances.delete(instance);
-        releaseFixtureSetupReferences(instance);
       }
       context[name] = instance.value;
       return instance;
@@ -448,62 +519,61 @@ export const createFixtureResolver = (
         ? (context as Record<string, unknown>)
         : (Object.create(null) as Record<string, unknown>);
 
-    instance.setup = (async () => {
-      for (const dependencyName of fixture.deps ?? []) {
-        const dependency = await useFixture(
-          dependencyName,
-          fixtures[dependencyName]!,
-          [...stack, name],
-          runScopedFixtureSetup,
-        );
-        fixtureContext[dependencyName] = dependency.value;
+    instance.startSetup = () => {
+      if (instance.setup) {
+        return instance.setup;
       }
+      instance.setup = (async () => {
+        for (const dependencyName of fixture.deps ?? []) {
+          const dependency = await useFixture(
+            dependencyName,
+            fixtures[dependencyName]!,
+            [...stack, name],
+            runScopedFixtureSetup,
+          );
+          fixtureContext[dependencyName] = dependency.value;
+        }
 
-      let value: unknown;
-      if (!fixture.isFn) {
-        value = fixture.value;
-      } else if (fixture.mode === 'return') {
-        value = await setupReturnFixture(
-          name,
-          fixture,
-          fixtureContext,
-          scopeContext,
-        );
-      } else {
-        value = await setupUseFixture(
-          name,
-          fixture,
-          fixtureContext,
-          scopeContext,
-          instance,
-        );
-      }
+        let value: unknown;
+        if (!fixture.isFn) {
+          value = fixture.value;
+        } else if (fixture.mode === 'return') {
+          value = await setupReturnFixture(
+            name,
+            fixture,
+            fixtureContext,
+            scopeContext,
+            instance,
+          );
+        } else {
+          value = await setupUseFixture(
+            name,
+            fixture,
+            fixtureContext,
+            scopeContext,
+            instance,
+          );
+        }
 
-      if (instance.cancelled) {
-        throw new PreviouslyFailedFixtureError(name);
-      }
-      instance.value = value;
-      instance.status = 'ready';
-    })().catch((error: unknown) => {
-      instance.status = 'failed';
-      instance.error = error;
-      throw error;
-    });
+        if (instance.cancelled) {
+          throw new PreviouslyFailedFixtureError(name);
+        }
+        instance.value = value;
+        instance.status = 'ready';
+      })().catch((error: unknown) => {
+        instance.status = 'failed';
+        instance.error = error;
+        throw error;
+      });
+      trackPendingSetup(instance, instance.setup);
+      return instance.setup;
+    };
 
-    pendingInstances.add(instance);
-    const setup = instance.setup;
     try {
-      if (fixture.options.scope === 'test' || !runScopedFixtureSetup) {
-        await setup;
-      } else {
-        await runScopedFixtureSetup(() => setup);
-      }
+      await waitForFixtureSetup(fixture, instance, runScopedFixtureSetup);
     } catch (error) {
       failedFixtures.add(name);
       throw error;
-    } finally {
-      pendingInstances.delete(instance);
-      releaseFixtureSetupReferences(instance);
     }
 
     context[name] = instance.value;

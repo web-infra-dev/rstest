@@ -78,6 +78,29 @@ describe('detect async leaks', () => {
     await expectExecSuccess();
   });
 
+  it('ignores resources owned by scoped fixtures', async ({
+    onTestFinished,
+  }) => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/scopedFixture.test',
+        '--detectAsyncLeaks',
+        '-c',
+        'fixtures/rstest.scoped-fixture.config.ts',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
   it('restores a date-only setSystemTime pin so it does not leak across files', async ({
     onTestFinished,
   }) => {

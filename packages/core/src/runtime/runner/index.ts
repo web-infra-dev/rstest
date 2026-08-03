@@ -9,6 +9,7 @@ import type {
 } from '../../types';
 import { getFileTaskId } from '../../utils/helper';
 import { fileContext, setFileContext } from '../fileContext';
+import { collectErrorMessages } from '../util';
 import type { TaskContext } from '../worker/taskContext';
 import { TestRunner } from './runner';
 import { RunnerRuntime, runtimeAPI } from './runtime';
@@ -21,13 +22,6 @@ const currentRunner = (): TestRunner => fileContext().testRunner;
 export type FileCleanupHooks = {
   onFileCleanupStart?: () => void;
   onFileCleanupEnd?: () => void;
-};
-
-const collectErrorMessages = (error: unknown): string[] => {
-  if (error instanceof AggregateError && error.errors.length > 0) {
-    return error.errors.flatMap(collectErrorMessages);
-  }
-  return [error instanceof Error ? error.message : String(error)];
 };
 
 const onTestFinished: RunnerAPI['onTestFinished'] = (...args) => {

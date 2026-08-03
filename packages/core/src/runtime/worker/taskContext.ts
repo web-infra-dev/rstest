@@ -4,5 +4,6 @@ import type { CurrentTaskInfo } from '../../types';
 export interface TaskContext {
   getCurrent(): CurrentTaskInfo | undefined;
   run<T>(task: CurrentTaskInfo, fn: () => T | Promise<T>): T | Promise<T>;
+  runWithoutTask<T>(fn: () => T | Promise<T>): T | Promise<T>;
   setFallback(task: CurrentTaskInfo | undefined): void;
 }

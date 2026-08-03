@@ -17,6 +17,15 @@ export const createBrowserTaskContext = (): TaskContext => {
         fallback = previous;
       }
     },
+    runWithoutTask: async (fn) => {
+      const previous = fallback;
+      fallback = undefined;
+      try {
+        return await fn();
+      } finally {
+        fallback = previous;
+      }
+    },
     setFallback: (task) => {
       fallback = task;
     },

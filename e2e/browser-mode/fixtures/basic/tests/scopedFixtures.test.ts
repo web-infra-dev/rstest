@@ -1,4 +1,4 @@
-import { expect, test } from '@rstest/core';
+import { expect, rstest, test } from '@rstest/core';
 
 let testSequence = 0;
 
@@ -7,6 +7,7 @@ const scopedTest = test
     console.log('browser-scope:worker:setup');
     onCleanup(() => {
       console.log('browser-scope:worker:cleanup');
+      rstest.useFakeTimers();
     });
     return 'worker';
   })
