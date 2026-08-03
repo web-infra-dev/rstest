@@ -47,16 +47,46 @@ describe('normalizeFixtures', () => {
     expect(result.a).toMatchObject({ isFn: false, value: 1 });
   });
 
-  it('does not mutate inherited fixture dependencies', () => {
+  it('recomputes inherited dependencies without mutating the parent', async () => {
     const base = normalizeFixtures({
       base: async ({ addedLater }: any, use: any) => {
         await use(addedLater);
       },
     } as any);
 
-    normalizeFixtures({ addedLater: 1 } as any, base);
+    const child = normalizeFixtures({ addedLater: 1 } as any, base);
 
     expect(base.base?.deps).toEqual([]);
+    expect(child.base).not.toBe(base.base);
+    expect(child.base?.deps).toEqual(['addedLater']);
+
+    const context: Record<string, unknown> = {};
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver(
+      { fixtures: child } as any,
+      context,
+      cleanups,
+    );
+    await resolver.resolveTestFixtures(({ base }: any) => base);
+
+    expect(context.base).toBe(1);
+    for (const cleanup of cleanups) {
+      await cleanup();
+    }
+  });
+
+  it('recomputes inherited dependencies for builder extensions', () => {
+    const base = normalizeFixtures({
+      base: async ({ addedLater }: any, use: any) => {
+        await use(addedLater);
+      },
+    } as any);
+
+    const child = normalizeBuilderFixture('addedLater', 1, undefined, base);
+
+    expect(base.base?.deps).toEqual([]);
+    expect(child.base).not.toBe(base.base);
+    expect(child.base?.deps).toEqual(['addedLater']);
   });
 });
 

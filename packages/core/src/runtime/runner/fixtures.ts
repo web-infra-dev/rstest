@@ -99,14 +99,20 @@ const finalizeFixtures = (
   return fixtures;
 };
 
+const cloneFixtures = (fixtures: NormalizedFixtures): NormalizedFixtures => {
+  const result: NormalizedFixtures = {};
+  for (const name in fixtures) {
+    result[name] = { ...fixtures[name]! };
+  }
+  return result;
+};
+
 export const normalizeFixtures = (
   fixtures: Fixtures = {},
   extendFixtures: NormalizedFixtures = {},
 ): NormalizedFixtures => {
-  const result: NormalizedFixtures = { ...extendFixtures };
-  const fixtureNames: string[] = [];
+  const result = cloneFixtures(extendFixtures);
   for (const key in fixtures) {
-    fixtureNames.push(key);
     const value: unknown = fixtures[key as keyof typeof fixtures];
     const parent = extendFixtures[key];
     let fixtureValue: unknown = value;
@@ -132,7 +138,7 @@ export const normalizeFixtures = (
     };
   }
 
-  return finalizeFixtures(result, fixtureNames);
+  return finalizeFixtures(result, Object.keys(result));
 };
 
 export const normalizeBuilderFixture = (
@@ -141,17 +147,15 @@ export const normalizeBuilderFixture = (
   options: FixtureOptions | undefined,
   extendFixtures: NormalizedFixtures = {},
 ): NormalizedFixtures => {
-  const result: NormalizedFixtures = {
-    ...extendFixtures,
-    [name]: {
-      isFn: typeof value === 'function',
-      value,
-      options: resolveFixtureOptions(name, options, extendFixtures[name]),
-      mode: 'return',
-    },
+  const result = cloneFixtures(extendFixtures);
+  result[name] = {
+    isFn: typeof value === 'function',
+    value,
+    options: resolveFixtureOptions(name, options, extendFixtures[name]),
+    mode: 'return',
   };
 
-  return finalizeFixtures(result, [name]);
+  return finalizeFixtures(result, Object.keys(result));
 };
 
 export type FixtureResolver = {
