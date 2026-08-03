@@ -78,7 +78,7 @@ describe('detect async leaks', () => {
     await expectExecSuccess();
   });
 
-  it('ignores resources owned by scoped fixtures', async ({
+  it('allows worker resources until deferred cleanup', async ({
     onTestFinished,
   }) => {
     const { expectExecSuccess } = await runRstestCli({
@@ -88,7 +88,7 @@ describe('detect async leaks', () => {
         'fixtures/scopedFixture.test',
         '--detectAsyncLeaks',
         '-c',
-        'fixtures/rstest.scoped-fixture.config.ts',
+        'fixtures/rstest.scoped-fixture.config.mts',
       ],
       onTestFinished,
       options: {
@@ -99,6 +99,26 @@ describe('detect async leaks', () => {
     });
 
     await expectExecSuccess();
+  });
+
+  it('reports scoped fixture resources left after worker cleanup', async ({
+    onTestFinished,
+  }) => {
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/scopedFixtureLeak.test', '--detectAsyncLeaks'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expectStderrLog(
+      'Detected async leak: Timeout was still active after reports worker fixture resources without cleanup finished.',
+    );
   });
 
   it('restores a date-only setSystemTime pin so it does not leak across files', async ({

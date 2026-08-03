@@ -266,7 +266,8 @@ describe('scoped fixtures', () => {
 
     await resolver.resolveTestFixtures(
       ({ testValue, workerValue }: any) => testValue && workerValue,
-      async (setup) => {
+      async (scope, setup) => {
+        expect(scope).toBe('worker');
         scopedSetups++;
         await setup();
       },
@@ -309,7 +310,7 @@ describe('scoped fixtures', () => {
     await expect(
       resolver.resolveTestFixtures(
         ({ workerValue }: any) => workerValue,
-        async (setup) => {
+        async (_scope, setup) => {
           const pendingSetup = setup();
           pendingSetup.catch(() => undefined);
           await setupStarted;

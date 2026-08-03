@@ -171,7 +171,10 @@ export type FixtureResolver = {
   ) => Promise<{ status: 'resolved' } | { status: 'skipped' }>;
 };
 
-type ScopedFixtureSetupRunner = (setup: () => Promise<void>) => Promise<void>;
+type ScopedFixtureSetupRunner = (
+  scope: Exclude<FixtureScope, 'test'>,
+  setup: () => Promise<void>,
+) => Promise<void>;
 
 class PreviouslyFailedFixtureError extends Error {}
 
@@ -467,7 +470,7 @@ export const createFixtureResolver = (
     if (fixture.options.scope === 'test' || !runScopedFixtureSetup) {
       await startSetup();
     } else {
-      await runScopedFixtureSetup(startSetup);
+      await runScopedFixtureSetup(fixture.options.scope, startSetup);
     }
   };
 

@@ -640,6 +640,7 @@ export const runInPool = async (
   );
   let runResult: TestFileResult | undefined;
   let asyncLeakDetector: ReturnType<typeof createAsyncLeakDetector> | undefined;
+  let resetRuntimeTimers: (() => void) | undefined;
 
   try {
     tracker.transition('prepare');
@@ -655,6 +656,7 @@ export const runInPool = async (
       taskContext: preparedTaskContext,
     } = await preparePool(options, tracker);
     taskContext = preparedTaskContext;
+    resetRuntimeTimers = () => api.rstest.useRealTimers();
     if (detectAsyncLeaks) {
       asyncLeakDetector = createAsyncLeakDetector(taskContext);
       asyncLeakDetector.enable();
@@ -775,11 +777,13 @@ export const runInPool = async (
       // runs the next file. This must cover BOTH full fake timers and a
       // date-only `setSystemTime()` pin (which leaves `isFakeTimers()` false);
       // `useRealTimers()` is an idempotent no-op when nothing is mocked.
-      api.rstest.useRealTimers();
-      const asyncLeakErrors = await asyncLeakDetector.collectErrors();
-      if (asyncLeakErrors.length > 0) {
-        results.status = 'fail';
-        results.errors = (results.errors || []).concat(asyncLeakErrors);
+      resetRuntimeTimers();
+      if (!isolate) {
+        const asyncLeakErrors = await asyncLeakDetector.collectErrors();
+        if (asyncLeakErrors.length > 0) {
+          results.status = 'fail';
+          results.errors = (results.errors || []).concat(asyncLeakErrors);
+        }
       }
     }
 
@@ -860,6 +864,15 @@ export const runInPool = async (
         workerCleanupError = error;
       } finally {
         lifecycleHooks.onWorkerCleanupEnd(workerCleanupError);
+      }
+    }
+
+    if (asyncLeakDetector && isolate && runResult) {
+      resetRuntimeTimers?.();
+      const asyncLeakErrors = await asyncLeakDetector.collectErrors();
+      if (asyncLeakErrors.length > 0) {
+        runResult.status = 'fail';
+        runResult.errors = (runResult.errors || []).concat(asyncLeakErrors);
       }
     }
 

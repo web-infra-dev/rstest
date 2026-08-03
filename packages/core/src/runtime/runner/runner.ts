@@ -194,8 +194,12 @@ export class TestRunner {
 
       const runScopedFixtureSetup = wrapTimeout({
         name: 'fixture setup',
-        fn: async (setup: () => Promise<void>) => {
-          if (state.runtimeConfig.detectAsyncLeaks) {
+        fn: async (scope: 'file' | 'worker', setup: () => Promise<void>) => {
+          if (
+            scope === 'worker' &&
+            state.runtimeConfig.detectAsyncLeaks &&
+            !state.runtimeConfig.isolate
+          ) {
             await this.taskContext.runWithoutTask(setup);
           } else {
             await setup();
