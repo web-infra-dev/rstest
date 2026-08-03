@@ -245,6 +245,37 @@ describe('scoped fixtures', () => {
     expect(setups).toBe(1);
   });
 
+  it('runs only scoped fixture setup through the scoped setup runner', async () => {
+    let fixtures = normalizeBuilderFixture(
+      'testValue',
+      () => 'test',
+      undefined,
+    );
+    fixtures = normalizeBuilderFixture(
+      'workerValue',
+      () => 'worker',
+      { scope: 'worker' },
+      fixtures,
+    );
+    const worker = new FixtureScopeManager('worker');
+    const resolver = createFixtureResolver({ fixtures } as any, {}, [], {
+      file: new FixtureScopeManager('file'),
+      worker,
+    });
+    let scopedSetups = 0;
+
+    await resolver.resolveTestFixtures(
+      ({ testValue, workerValue }: any) => testValue && workerValue,
+      async (setup) => {
+        scopedSetups++;
+        await setup();
+      },
+    );
+    await worker.cleanup();
+
+    expect(scopedSetups).toBe(1);
+  });
+
   it('shares file and worker fixtures at their lifecycle boundaries', async () => {
     const events: string[] = [];
     let fixtures = normalizeBuilderFixture(

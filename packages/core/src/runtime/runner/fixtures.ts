@@ -161,11 +161,16 @@ export const normalizeBuilderFixture = (
 
 export type FixtureResolver = {
   cancelPendingFixtures: () => { teardownStarted: Promise<void> } | undefined;
-  resolveTestFixtures: (fn?: (...args: any[]) => any) => Promise<void>;
+  resolveTestFixtures: (
+    fn?: (...args: any[]) => any,
+    runScopedFixtureSetup?: ScopedFixtureSetupRunner,
+  ) => Promise<void>;
   resolveHookFixtures: (
     fn: (...args: any[]) => any,
   ) => Promise<{ status: 'resolved' } | { status: 'skipped' }>;
 };
+
+type ScopedFixtureSetupRunner = (setup: () => Promise<void>) => Promise<void>;
 
 class PreviouslyFailedFixtureError extends Error {}
 
@@ -390,6 +395,7 @@ export const createFixtureResolver = (
     name: string,
     fixture: NormalizedFixture,
     stack: string[] = [],
+    runScopedFixtureSetup?: ScopedFixtureSetupRunner,
   ): Promise<FixtureInstance> => {
     if (failedFixtures.has(name)) {
       throw new PreviouslyFailedFixtureError(name);
@@ -412,8 +418,13 @@ export const createFixtureResolver = (
     }
     if (instance) {
       pendingInstances.add(instance);
+      const setup = instance.setup!;
       try {
-        await instance.setup;
+        if (fixture.options.scope === 'test' || !runScopedFixtureSetup) {
+          await setup;
+        } else {
+          await runScopedFixtureSetup(() => setup);
+        }
       } catch (error) {
         failedFixtures.add(name);
         throw error;
@@ -443,6 +454,7 @@ export const createFixtureResolver = (
           dependencyName,
           fixtures[dependencyName]!,
           [...stack, name],
+          runScopedFixtureSetup,
         );
         fixtureContext[dependencyName] = dependency.value;
       }
@@ -479,8 +491,13 @@ export const createFixtureResolver = (
     });
 
     pendingInstances.add(instance);
+    const setup = instance.setup;
     try {
-      await instance.setup;
+      if (fixture.options.scope === 'test' || !runScopedFixtureSetup) {
+        await setup;
+      } else {
+        await runScopedFixtureSetup(() => setup);
+      }
     } catch (error) {
       failedFixtures.add(name);
       throw error;
@@ -496,6 +513,7 @@ export const createFixtureResolver = (
   const resolveFixtureNames = async (
     usedKeys: string[],
     includeAuto: boolean,
+    runScopedFixtureSetup?: ScopedFixtureSetupRunner,
   ) => {
     for (const [name, params] of Object.entries(fixtures)) {
       const shouldResolve =
@@ -504,7 +522,7 @@ export const createFixtureResolver = (
         continue;
       }
 
-      await useFixture(name, params);
+      await useFixture(name, params, [], runScopedFixtureSetup);
     }
   };
 
@@ -522,9 +540,13 @@ export const createFixtureResolver = (
       });
       return { teardownStarted };
     },
-    resolveTestFixtures: (fn) =>
+    resolveTestFixtures: (fn, runScopedFixtureSetup) =>
       test.fixtures
-        ? resolveFixtureNames(fn ? getFixtureUsedProps(fn) : [], true)
+        ? resolveFixtureNames(
+            fn ? getFixtureUsedProps(fn) : [],
+            true,
+            runScopedFixtureSetup,
+          )
         : Promise.resolve(),
     resolveHookFixtures: async (fn) => {
       try {
