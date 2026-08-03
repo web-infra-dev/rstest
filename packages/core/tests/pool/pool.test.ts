@@ -47,7 +47,7 @@ const createTask = (
   type,
   options: {
     environmentKey,
-    context: { buildId },
+    context: { buildId, project: 'default' },
     ...optionOverrides,
   } as any,
   rpcMethods: stubRpcMethods(),
@@ -382,6 +382,32 @@ describe('Pool - close()', () => {
     await pool.close();
 
     expect(logs).toEqual(['worker cleanup log']);
+  });
+
+  it('should use the owning project handler for worker cleanup logs', async () => {
+    const projectALogs: string[] = [];
+    const projectBLogs: string[] = [];
+    const projectA = createTask('run', {
+      __testMode: 'cleanup-log',
+      context: { buildId: 0, project: 'project-a' },
+    });
+    projectA.rpcMethods.onConsoleLog = (log) => {
+      projectALogs.push(log.content);
+    };
+    const projectB = createTask('run', {
+      context: { buildId: 0, project: 'project-b' },
+    });
+    projectB.rpcMethods.onConsoleLog = (log) => {
+      projectBLogs.push(log.content);
+    };
+    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
+
+    await pool.runTest(projectA);
+    await pool.runTest(projectB);
+    await pool.close();
+
+    expect(projectALogs).toEqual(['worker cleanup log']);
+    expect(projectBLogs).toEqual([]);
   });
 
   it('should report in-task worker fixture cleanup errors', async () => {

@@ -97,7 +97,10 @@ export class PoolRunner {
   private startTimer: NodeJS.Timeout | undefined;
   private cleanupTimer: NodeJS.Timeout | undefined;
   private fixtureCleanupTimer: NodeJS.Timeout | undefined;
-  private cleanupLogHandler: RuntimeRPC['onConsoleLog'] | undefined;
+  private readonly cleanupLogHandlers = new Map<
+    string,
+    RuntimeRPC['onConsoleLog']
+  >();
   private workerCleanupCompleted = false;
   private workerCleanupError: WorkerFixtureCleanupError | undefined;
   private buildId: number | undefined;
@@ -349,7 +352,10 @@ export class PoolRunner {
     }
 
     this.installRpc(task.rpcMethods);
-    this.cleanupLogHandler = task.rpcMethods.onConsoleLog;
+    this.cleanupLogHandlers.set(
+      task.options.context.project,
+      task.rpcMethods.onConsoleLog,
+    );
     this.buildId = task.options.context.buildId;
     // Per-task stderr attribution: discard buffered output from a prior
     // task on the same reused worker (`isolate: false`). Otherwise
@@ -402,7 +408,7 @@ export class PoolRunner {
         }
         return;
       case 'cleanupLog':
-        this.cleanupLogHandler?.(response.log);
+        this.cleanupLogHandlers.get(response.log.project)?.(response.log);
         return;
       case 'fileCleanupStarted':
         this.startFixtureCleanupTimer(response.taskId, 'File');
@@ -475,7 +481,7 @@ export class PoolRunner {
     this.state = 'STOPPED';
 
     this.disposeRpc();
-    this.cleanupLogHandler = undefined;
+    this.cleanupLogHandlers.clear();
 
     this.rejectStart(
       new Error(

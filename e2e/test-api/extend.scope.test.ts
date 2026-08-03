@@ -79,6 +79,29 @@ for (const isolate of [true, false]) {
   });
 }
 
+it('keeps worker cleanup logs with their owning project', async () => {
+  const { cli, expectExecFailed } = await runRstestCli({
+    command: 'rstest',
+    args: [
+      'run',
+      '-c',
+      'rstest.worker-cleanup-project.config.mts',
+      '--isolate=false',
+      '--pool.maxWorkers=1',
+    ],
+    options: {
+      nodeOptions: {
+        cwd: __dirname,
+      },
+    },
+  });
+
+  await expectExecFailed();
+  const output = `${cli.stdout}\n${cli.stderr}`;
+  expect(output).toContain('worker cleanup owner A log');
+  expect(output).not.toContain('worker cleanup owner B log');
+});
+
 it('cleans worker fixtures before the isolated test environment', async () => {
   const { cli, expectExecSuccess } = await runRstestCli({
     command: 'rstest',

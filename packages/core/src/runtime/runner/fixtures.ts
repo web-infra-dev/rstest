@@ -183,6 +183,26 @@ type FixtureScopeContext = {
   cleanups: FixtureCleanupCallback[];
 };
 
+const preserveWorkerFixtureConsole = (
+  fixture: NormalizedFixture,
+  cleanup: FixtureCleanupCallback,
+): FixtureCleanupCallback => {
+  if (fixture.options.scope !== 'worker') {
+    return cleanup;
+  }
+
+  const fixtureConsole = globalThis.console;
+  return async () => {
+    const currentConsole = globalThis.console;
+    globalThis.console = fixtureConsole;
+    try {
+      await cleanup();
+    } finally {
+      globalThis.console = currentConsole;
+    }
+  };
+};
+
 const releaseFixtureSetupReferences = (instance: FixtureInstance) => {
   if (instance.status === 'pending') {
     return;
@@ -312,10 +332,12 @@ export const createFixtureResolver = (
             return;
           }
 
-          scopeContext.cleanups.unshift(async () => {
-            useDone?.();
-            await block;
-          });
+          scopeContext.cleanups.unshift(
+            preserveWorkerFixtureConsole(fixture, async () => {
+              useDone?.();
+              await block;
+            }),
+          );
           fixtureResolve(value);
           await new Promise<void>((resolve) => {
             useDone = resolve;
@@ -349,9 +371,11 @@ export const createFixtureResolver = (
         );
       }
       cleanupRegistered = true;
-      scopeContext.cleanups.unshift(async () => {
-        await cleanup();
-      });
+      scopeContext.cleanups.unshift(
+        preserveWorkerFixtureConsole(fixture, async () => {
+          await cleanup();
+        }),
+      );
     };
 
     return fixture.value(fixtureContext, { onCleanup });
