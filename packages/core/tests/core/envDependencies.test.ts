@@ -68,32 +68,24 @@ describe('ensureTestEnvironmentDependencies', () => {
     }
   });
 
-  it('does not resolve the test environment dependency from the core package', async () => {
+  it('skips install when the test environment dependency resolves from core', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rstest-core-env-'));
     const projectRoot = path.join(root, 'project');
     fs.mkdirSync(projectRoot);
 
     try {
-      let installed = false;
-      const checkedRoots: string[] = [];
-      const installer = rs.fn(async () => {
-        installed = true;
-        return true;
-      });
+      const installer = rs.fn(async () => false);
 
       await ensureTestEnvironmentDependencies(
         [createProject(projectRoot, 'jsdom')],
         root,
         {},
         installer,
-        (_packageName, resolutionRoot) => {
-          checkedRoots.push(resolutionRoot);
-          return installed && resolutionRoot === root;
-        },
+        (_packageName, resolutionRoot) =>
+          resolutionRoot !== root && resolutionRoot !== projectRoot,
       );
 
-      expect(installer).toHaveBeenCalledWith('jsdom', root, 'jsdom', {});
-      expect(new Set(checkedRoots)).toEqual(new Set([projectRoot, root]));
+      expect(installer).not.toHaveBeenCalled();
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

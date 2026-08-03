@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'pathe';
 import {
   ensurePackageInstalled,
   isPackageInstalled,
@@ -18,6 +20,8 @@ export const environmentDependencyPackages: Record<
   jsdom: 'jsdom',
   'happy-dom': 'happy-dom',
 };
+
+const coreRoot = dirname(fileURLToPath(import.meta.url));
 
 type PackageInstaller = (
   packageName: string,
@@ -68,9 +72,10 @@ type EnvironmentDependency = {
   roots: Set<string>;
 };
 
-const getPackageResolutionRoots = (projectRoot: string, root: string) => {
-  return Array.from(new Set([projectRoot, root]));
-};
+export const getTestEnvironmentResolutionRoots = (
+  projectRoot: string,
+  root: string,
+): string[] => Array.from(new Set([projectRoot, root, coreRoot]));
 
 export const ensureTestEnvironmentDependencies = async (
   projects: ProjectWithTestEnvironment[],
@@ -92,7 +97,7 @@ export const ensureTestEnvironmentDependencies = async (
       continue;
     }
 
-    const roots = getPackageResolutionRoots(project.rootPath, root);
+    const roots = getTestEnvironmentResolutionRoots(project.rootPath, root);
 
     if (
       roots.some((resolutionRoot) => isInstalled(packageName, resolutionRoot))

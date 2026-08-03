@@ -21,6 +21,7 @@ import {
 import {
   createTestEnvironmentLoadError,
   environmentDependencyPackages,
+  getTestEnvironmentResolutionRoots,
   type EnvironmentDependencyName,
 } from './envDependencies';
 import { getMockRstestPluginOptions } from './plugins/mockBuild';
@@ -46,9 +47,16 @@ const resolveTestEnvironmentModule = (
   projectRoot: string,
   root: string,
 ): string | undefined => {
-  return (
-    resolveFromRoot(specifier, projectRoot) ?? resolveFromRoot(specifier, root)
-  );
+  for (const resolutionRoot of getTestEnvironmentResolutionRoots(
+    projectRoot,
+    root,
+  )) {
+    const resolved = resolveFromRoot(specifier, resolutionRoot);
+    if (resolved) {
+      return resolved;
+    }
+  }
+  return undefined;
 };
 
 const nativeImportBanner = `import __rstestModule from "node:module";
