@@ -175,7 +175,6 @@ const resolveProviderForTestPath = ({
 // ============================================================================
 
 export type BrowserControllerOptions = BrowserTestRunOptions & {
-  providerImplementation?: BrowserProviderImplementation;
   /**
    * Watch only: core's watch-cycle driver (see `TestExecutor.onInvalidate`).
    * Its promise settles when the cycle it queued has finalized, which only an
@@ -198,11 +197,7 @@ export const runBrowserController = async (
     onTraceEvents,
     env,
     onInvalidate,
-    providerImplementation,
   } = options ?? {};
-  const resolveProviderImplementation = providerImplementation
-    ? () => providerImplementation
-    : getBrowserProviderImplementation;
   const buildStart = Date.now();
   // Watch mode changes what this controller *owns*, never who finalizes: core's
   // `finalizeRunCycle` reduces every cycle on both commands. What watch adds is
@@ -425,7 +420,6 @@ export const runBrowserController = async (
         containerDistPath,
         containerDevServer,
         skipProviderLaunch: filesOnly,
-        resolveProviderImplementation,
         appliedModifyRstestConfigEnvironments:
           options?.appliedModifyRstestConfigEnvironments,
       });
@@ -664,7 +658,7 @@ export const runBrowserController = async (
     if (!implementationByProvider.has(browserProject.provider)) {
       implementationByProvider.set(
         browserProject.provider,
-        resolveProviderImplementation(browserProject.provider),
+        getBrowserProviderImplementation(browserProject.provider),
       );
     }
   }

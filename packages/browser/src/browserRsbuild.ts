@@ -44,7 +44,6 @@ import type {
   BrowserProvider,
   BrowserProviderBrowser,
   BrowserProviderContext,
-  BrowserProviderImplementation,
   BrowserProviderPage,
 } from './providers';
 import { getBrowserProviderImplementation } from './providers';
@@ -1133,7 +1132,6 @@ export const createBrowserRuntime = async ({
   containerDevServer,
   forceHeadless,
   skipProviderLaunch,
-  resolveProviderImplementation,
   appliedModifyRstestConfigEnvironments,
 }: {
   context: RstestContext;
@@ -1153,9 +1151,6 @@ export const createBrowserRuntime = async ({
   /** Force headless mode regardless of user config (used for list command) */
   forceHeadless?: boolean;
   skipProviderLaunch?: boolean;
-  resolveProviderImplementation?: (
-    provider: BrowserProvider,
-  ) => BrowserProviderImplementation;
   appliedModifyRstestConfigEnvironments?: Set<string>;
 }): Promise<BrowserRuntime> => {
   // ---- Shared singletons (created once, wired into every project server) ----
@@ -1877,9 +1872,9 @@ export const createBrowserRuntime = async ({
 
   const browserName = browserLaunchOptions.browser ?? 'chromium';
   try {
-    const providerImplementation = (
-      resolveProviderImplementation ?? getBrowserProviderImplementation
-    )(browserLaunchOptions.provider);
+    const providerImplementation = getBrowserProviderImplementation(
+      browserLaunchOptions.provider,
+    );
     const runtime = await providerImplementation.launchRuntime({
       browserName,
       headless: forceHeadless ?? browserLaunchOptions.headless,

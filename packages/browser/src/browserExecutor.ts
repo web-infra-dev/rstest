@@ -14,7 +14,6 @@ import {
 } from '@rstest/core/internal/browser';
 import { listBrowserTests, runBrowserController } from './hostController';
 import type { BrowserWatchSession } from './schedulerSeam';
-import type { BrowserProviderImplementation } from './providers';
 import { cleanupWatchRuntime } from './watchRuntime';
 
 const emptyOutcome = (): ExecutorCycleOutcome => ({
@@ -39,9 +38,7 @@ const emptyOutcome = (): ExecutorCycleOutcome => ({
  */
 export async function createBrowserExecutor(
   context: RstestContext,
-  options: CreateBrowserExecutorOptions & {
-    providerImplementation?: BrowserProviderImplementation;
-  },
+  options: CreateBrowserExecutorOptions,
 ): Promise<BrowserTestExecutor> {
   const {
     projects,
@@ -51,7 +48,6 @@ export async function createBrowserExecutor(
     filesOnly,
     allowEmptyRun,
     appliedModifyRstestConfigEnvironments,
-    providerImplementation,
   } = options;
   const isWatchMode = context.command === 'watch';
   let deferredClose: (() => Promise<void>) | undefined;
@@ -149,7 +145,6 @@ export async function createBrowserExecutor(
         onTraceEvents: opts.onTraceEvents,
         env: opts.env,
         updateSnapshot: opts.updateSnapshot,
-        providerImplementation,
         onInvalidate: isWatchMode
           ? (hint) => invalidationCallback?.(hint)
           : undefined,
