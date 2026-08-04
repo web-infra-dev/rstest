@@ -96,6 +96,23 @@ describe('Test API', () => {
     );
   });
 
+  it('rejects invalid named fixture names', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/namedFixtureInvalidName.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: dirname(fileURLToPath(import.meta.url)),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'Invalid named fixture name "base-url"',
+    );
+  });
+
   it('bounds named fixture setup and cleanup with the test timeout', async () => {
     const start = Date.now();
     const { cli, expectExecFailed } = await runRstestCli({

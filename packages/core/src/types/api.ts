@@ -254,6 +254,63 @@ type MergeNamedFixtureContext<
   ? MergeFixtureContext<Context, Record<Name, Value>>
   : never;
 
+type AsciiLowercaseLetter =
+  | 'a'
+  | 'b'
+  | 'c'
+  | 'd'
+  | 'e'
+  | 'f'
+  | 'g'
+  | 'h'
+  | 'i'
+  | 'j'
+  | 'k'
+  | 'l'
+  | 'm'
+  | 'n'
+  | 'o'
+  | 'p'
+  | 'q'
+  | 'r'
+  | 's'
+  | 't'
+  | 'u'
+  | 'v'
+  | 'w'
+  | 'x'
+  | 'y'
+  | 'z';
+
+type IdentifierStart =
+  AsciiLowercaseLetter | Uppercase<AsciiLowercaseLetter> | '$' | '_';
+type IdentifierPart =
+  IdentifierStart | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+
+type IsIdentifierRest<Name extends string> = string extends Name
+  ? false
+  : Name extends ''
+    ? true
+    : Name extends `${infer First}${infer Rest}`
+      ? First extends IdentifierPart
+        ? IsIdentifierRest<Rest>
+        : false
+      : false;
+
+type IsIdentifier<Name extends string> = string extends Name
+  ? false
+  : Name extends `${infer First}${infer Rest}`
+    ? First extends IdentifierStart
+      ? IsIdentifierRest<Rest>
+      : false
+    : false;
+
+type NamedFixtureName<Name extends string> = Name extends keyof TestContext
+  ? never
+  : IsIdentifier<Name> extends true
+    ? Name
+    : never;
+
 type RuntimeFunction =
   | ((...args: never[]) => unknown)
   | (abstract new (...args: never[]) => unknown);
@@ -267,7 +324,7 @@ type TestExtend<ExtraContext> = {
     fixtures: Fixtures<T, ExtraContext>,
   ): TestAPIs<MergeFixtureContext<ExtraContext, T>>;
   <Name extends string, Value>(
-    name: string extends Name ? never : Name,
+    name: NamedFixtureName<Name>,
     fixture: NamedFixture<Value, Omit<TestContext & ExtraContext, Name>>,
   ): TestAPIs<MergeNamedFixtureContext<ExtraContext, Name, Value>>;
 };

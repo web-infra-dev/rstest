@@ -64,6 +64,20 @@ describe('normalizeNamedFixture', () => {
       value: 42,
     });
   });
+
+  it.each([
+    'base-url',
+    '1value',
+    'expect',
+    'onTestFailed',
+    'onTestFinished',
+    'skip',
+    'task',
+  ])('rejects unsupported named fixture name %s', (name) => {
+    expect(() => normalizeNamedFixture(name, 42)).toThrow(
+      `Invalid named fixture name "${name}"`,
+    );
+  });
 });
 
 describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
@@ -120,6 +134,22 @@ describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
 });
 
 describe('createFixtureResolver', () => {
+  it.each(['name', 'length', 'arguments', 'caller'])(
+    'supports named fixtures that overlap Function property %s',
+    async (name) => {
+      const fixtures = normalizeNamedFixture(name, () => 42);
+      const context: Record<string, any> = () => {};
+      const callback = Object.assign(() => {}, {
+        toString: () => `({ ${name}: fixtureValue }) => {}`,
+      });
+      const resolver = createFixtureResolver({ fixtures } as any, context, []);
+
+      await resolver.resolveTestFixtures(callback);
+
+      expect(context[name]).toBe(42);
+    },
+  );
+
   it('resolves named fixtures and runs their cleanup', async () => {
     const events: string[] = [];
     const base = normalizeFixtures({ base: 'base' } as any);

@@ -53,10 +53,24 @@ test.extend('service', () => Service)(
 
 const checkNamedFixtureNameTypes = (
   fixtureName: string,
+  patternName: `slot${string}`,
   unionName: 'left' | 'right',
 ) => {
   // @ts-expect-error named fixture names must be statically known
   test.extend('prefix', 'prefix').extend(fixtureName, 42);
+
+  // @ts-expect-error patterned names do not identify one context field
+  test.extend(patternName, 42);
+
+  // @ts-expect-error named fixture names must be JavaScript identifiers
+  test.extend('base-url', 'https://example.com');
+
+  // @ts-expect-error named fixture names cannot replace TestContext fields
+  test.extend('expect', 'fixture');
+
+  test.extend('name', 'fixture')('supports Function property names', (ctx) => {
+    expect(ctx.name).toBeTypeOf('string');
+  });
 
   const unionFixtureTest = test
     .extend('prefix', 'prefix')

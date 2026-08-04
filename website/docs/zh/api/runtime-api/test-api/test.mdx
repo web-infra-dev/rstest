@@ -408,7 +408,7 @@ const apiTest = test
 
 具名 fixture 函数属于 test scope：Rstest 会为每次 test attempt 执行这些函数，并在开始下一次 attempt 前执行 cleanup。普通值会在不同 attempt 之间复用；如果可变状态需要在每次 attempt 之间隔离，请使用 fixture 函数。
 
-Fixture 名称必须是静态可知的字符串字面量，TypeScript 才能暴露新的 context 字段。此 overload 不接受类型仅为 `string` 的值。
+Fixture 名称必须是静态可知的 ASCII JavaScript identifier，TypeScript 才能准确暴露一个新的 context 字段。此 overload 不接受类型为 `string` 的值、`` `slot${string}` `` 这类 template literal pattern、`base-url` 这类需要带引号解构的名称，以及 `TestContext` 的内置字段。它支持与 Function 属性重名的名称，例如 `name` 和 `length`。
 
 直接传入的函数或 class 都会被视为 fixture 函数，因为它们在 JavaScript 运行时都是函数。若要把函数或 class 本身作为 fixture 值，请通过 fixture 函数返回它，例如 `.extend('predicate', () => predicate)` 或 `.extend('Service', () => Service)`。需要请求其他 fixture 或 `TestContext` 字段时，请直接在第一个参数中使用对象解构。
 

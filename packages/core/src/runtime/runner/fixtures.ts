@@ -4,8 +4,21 @@ import type {
   NormalizedFixture,
   NormalizedFixtures,
   TestCase,
+  TestContext,
 } from '../../types';
 import { isObject } from '../../utils/helper';
+
+const namedFixtureNamePattern = /^[$A-Z_a-z][$\w]*$/;
+const reservedNamedFixtureNames = new Set<string>([
+  ...Object.keys({
+    expect: true,
+    onTestFailed: true,
+    onTestFinished: true,
+    skip: true,
+    task: true,
+  } satisfies Record<keyof TestContext, true>),
+  '_useLocalExpect',
+]);
 
 export const normalizeFixtures = (
   fixtures: Fixtures = {},
@@ -64,6 +77,14 @@ export const normalizeNamedFixture = (
   value: unknown,
   extendFixtures: NormalizedFixtures = {},
 ): NormalizedFixtures => {
+  if (
+    !namedFixtureNamePattern.test(name) ||
+    reservedNamedFixtureNames.has(name)
+  ) {
+    throw new Error(
+      `Invalid named fixture name "${name}". Use a JavaScript identifier that does not conflict with TestContext.`,
+    );
+  }
   const result: NormalizedFixtures = {
     ...extendFixtures,
     [name]: {
@@ -112,6 +133,19 @@ const fixturePropsCache = new WeakMap<
 >();
 const functionPropertyNames = new Set(Object.getOwnPropertyNames(() => {}));
 
+const setFixtureContextValue = (
+  context: Record<string, any>,
+  name: string,
+  value: unknown,
+) => {
+  Object.defineProperty(context, name, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+};
+
 export function setFixtureCallbackSource(
   callback: (...args: any[]) => any,
   source: (...args: any[]) => any,
@@ -154,7 +188,7 @@ export const createFixtureResolver = (
 
     const { isFn, deps, mode, value: fixtureValue } = fixture;
     if (!isFn) {
-      context[name] = fixtureValue;
+      setFixtureContextValue(context, name, fixtureValue);
       doneMap.add(name);
       return;
     }
@@ -243,7 +277,7 @@ export const createFixtureResolver = (
         );
         const value = await Promise.race([setup, cancellationCleanup]);
         if (!cancelledFixtures.has(name)) {
-          context[name] = value;
+          setFixtureContextValue(context, name, value);
         }
         if (cancelledFixtures.has(name)) {
           const cleanup = runRegisteredCleanup();
@@ -268,7 +302,7 @@ export const createFixtureResolver = (
                 cancelledFixtureTeardownStarts.get(name)?.();
                 return;
               }
-              context[name] = value;
+              setFixtureContextValue(context, name, value);
               cleanups.unshift(() => {
                 useDone?.();
                 return block;

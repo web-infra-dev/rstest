@@ -11,13 +11,17 @@ const namedFixtureTest = test
       events.push(`cleanup:${task.name}`);
     });
     return `${prefix}:${task.name}`;
-  });
+  })
+  .extend('name', () => 'fixture-name')
+  .extend('length', () => 42);
 
 afterEach<{ value: string }>(({ value }) => {
   events.push(`afterEach:${value}`);
 });
 
-namedFixtureTest('first', ({ value }) => {
+namedFixtureTest('first', ({ length, name, value }) => {
+  expect(name).toBe('fixture-name');
+  expect(length).toBe(42);
   expect(value).toBe('named:first');
   events.push(`test:${value}`);
 });

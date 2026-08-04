@@ -504,6 +504,7 @@ class NamedFixtureService {
 
 const checkNamedFixtureTypes = (
   fixtureName: string,
+  patternName: `slot${string}`,
   unionName: 'left' | 'right',
 ) => {
   // @ts-expect-error callable values must be returned by named fixture functions
@@ -514,6 +515,19 @@ const checkNamedFixtureTypes = (
 
   // @ts-expect-error named fixture names must be statically known
   test.extend('prefix', 'prefix').extend(fixtureName, 42);
+
+  // @ts-expect-error patterned names do not identify one context field
+  test.extend(patternName, 42);
+
+  // @ts-expect-error named fixture names must be JavaScript identifiers
+  test.extend('base-url', 'https://example.com');
+
+  // @ts-expect-error named fixture names cannot replace TestContext fields
+  test.extend('expect', 'fixture');
+
+  test.extend('name', 'fixture')('supports Function property names', (ctx) => {
+    expect(ctx.name).toBe('fixture');
+  });
 
   const unionFixtureTest = test
     .extend('prefix', 'prefix')
@@ -537,11 +551,13 @@ const namedFixtureTest = test
     return 'named fixture title';
   })
   .extend('predicate', () => predicate)
-  .extend('service', () => NamedFixtureService);
+  .extend('service', () => NamedFixtureService)
+  .extend('name', () => 'playwright fixture');
 
 namedFixtureTest(
   'supports the named fixture form',
-  ({ predicate, service, title }) => {
+  ({ name, predicate, service, title }) => {
+    expect(name).toBe('playwright fixture');
     expect(title).toBe('named fixture title');
     expect(predicate('value')).toBe(true);
     expect(new service().name).toBe('service');
