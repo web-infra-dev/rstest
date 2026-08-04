@@ -160,6 +160,20 @@ export type CoverageCollectOptions = {
 };
 
 /**
+ * Report a failure the provider recovered from: it logged the cause and kept
+ * going with a partial coverage map, but the run must still be reported as
+ * failed. Core passes this into every host-process provider call and turns it
+ * into an exit-code raise.
+ *
+ * It exists because a provider runs inside the embedding host on those calls,
+ * where `process.exitCode` belongs to the host, not to the run (see
+ * `core/exitCode.ts`) — a provider must report the failure as a value instead.
+ *
+ * @internal
+ */
+export type ReportCoverageFailure = () => void;
+
+/**
  * Core-to-provider contract for resolving raw coverage payloads.
  *
  * @internal
@@ -173,6 +187,12 @@ export type RawCoverageResolveOptions = {
   loadSourceMaps?: (
     filenames: string[],
   ) => Promise<NonNullable<CoverageCollectOptions['sourceMaps']>>;
+  /**
+   * Called for every payload or entry the provider had to skip. Required, so a
+   * new core call site cannot silently drop these failures. See
+   * {@link ReportCoverageFailure}.
+   */
+  onFailure: ReportCoverageFailure;
 };
 
 export declare class CoverageProvider {
@@ -217,7 +237,7 @@ export declare class CoverageProvider {
    */
   resolveRawCoverage?(
     payloads: unknown[],
-    options?: RawCoverageResolveOptions,
+    options: RawCoverageResolveOptions,
   ): CoverageMap | null | Promise<CoverageMap | null>;
 
   /**
@@ -231,6 +251,12 @@ export declare class CoverageProvider {
   generateCoverageForUntestedFiles(params: {
     environmentName: string;
     files: string[];
+    /**
+     * Called for every file the provider could not instrument. Required, so a
+     * new core call site cannot silently drop these failures. See
+     * {@link ReportCoverageFailure}.
+     */
+    onFailure: ReportCoverageFailure;
   }): Promise<FileCoverageData[]>;
 
   /**

@@ -6,6 +6,7 @@ import type {
   NormalizedCoverageOptions,
   CoverageProvider as RstestCoverageProvider,
   RawCoverageResolveOptions,
+  ReportCoverageFailure,
 } from '@rstest/core';
 import { type CoverageMap, type FileCoverageData } from 'istanbul-lib-coverage';
 import type { ReportBase } from 'istanbul-lib-report';
@@ -697,7 +698,7 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   resolveRawCoverage(
     payloads: unknown[],
-    options?: RawCoverageResolveOptions,
+    options: RawCoverageResolveOptions,
   ): Promise<CoverageMap | null> {
     const validPayloads: RawCoveragePayload[] = [];
 
@@ -706,7 +707,9 @@ export class CoverageProvider implements RstestCoverageProvider {
         validPayloads.push(payload);
       } else {
         console.error(describeMalformedRawCoveragePayload(payload, index));
-        process.exitCode = 1;
+        // This runs in the host process, so the failure is reported to core
+        // rather than written onto the host's exit code.
+        options.onFailure();
       }
     }
 
@@ -714,11 +717,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       return Promise.resolve(null);
     }
 
-    return this.collectRawPayloads(
-      validPayloads,
-      options?.loadAssetFiles,
-      options?.loadSourceMaps,
-    );
+    return this.collectRawPayloads(validPayloads, options);
   }
 
   async collectRaw(
@@ -833,6 +832,9 @@ export class CoverageProvider implements RstestCoverageProvider {
           await this.applyWithAst(coverageMap, entry.filePath, entry, options);
         } catch (e) {
           console.error(`Failed to process coverage for ${entry.url}:`, e);
+          // `collect` only ever runs inside a test worker, whose exit code is
+          // the pool's own signal — never the embedding host's. Host-process
+          // entry points report through `ReportCoverageFailure` instead.
           process.exitCode = 1;
         }
       },
@@ -843,9 +845,9 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private async collectRawPayloads(
     payloads: RawCoveragePayload[],
-    loadAssetFiles?: RawCoverageResolveOptions['loadAssetFiles'],
-    loadSourceMaps?: RawCoverageResolveOptions['loadSourceMaps'],
+    resolveOptions: RawCoverageResolveOptions,
   ): Promise<CoverageMap | null> {
+    const { loadAssetFiles, loadSourceMaps, onFailure } = resolveOptions;
     const coverageMap = this.createCoverageMap();
     const entriesByFilePath = new Map<
       string,
@@ -991,7 +993,7 @@ export class CoverageProvider implements RstestCoverageProvider {
                   `Failed to process coverage for ${entry.url}:`,
                   e,
                 );
-                process.exitCode = 1;
+                onFailure();
               }
             }
           } catch (e) {
@@ -999,7 +1001,7 @@ export class CoverageProvider implements RstestCoverageProvider {
               `Failed to process coverage for ${entries[0]!.url}:`,
               e,
             );
-            process.exitCode = 1;
+            onFailure();
           } finally {
             entries.length = 0;
           }
@@ -1188,9 +1190,11 @@ export class CoverageProvider implements RstestCoverageProvider {
   async generateCoverageForUntestedFiles({
     environmentName,
     files,
+    onFailure,
   }: {
     environmentName: string;
     files: string[];
+    onFailure: ReportCoverageFailure;
   }): Promise<FileCoverageData[]> {
     const { transformCoverage } = await import('./plugin');
     const results = await mapWithConcurrency(
@@ -1232,7 +1236,9 @@ export class CoverageProvider implements RstestCoverageProvider {
           console.error(
             `Can not generate coverage for untested file, file: ${file}, error: ${e}`,
           );
-          process.exitCode = 1;
+          // Host-process call: report the failure to core instead of writing
+          // the embedding host's exit code.
+          onFailure();
           return [];
         }
       },

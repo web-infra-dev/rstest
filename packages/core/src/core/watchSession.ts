@@ -550,10 +550,13 @@ export interface WatchTeardown {
 }
 
 export function createWatchTeardown({
+  context,
   executors,
   traceController,
   getTraceRun,
 }: {
+  /** The scope whose `globalSetup` teardown callbacks this session drains. */
+  context: Rstest;
   /** Closed in order; the browser side goes first, as it always has. */
   executors: TestExecutor[];
   traceController: TraceController;
@@ -589,7 +592,7 @@ export function createWatchTeardown({
       // its dev servers are gone. `NodeExecutor.close()` drains too, so this is
       // a no-op for a mixed session — but a browser-only watch has no node
       // executor to drain the browser stage's setups.
-      await step('global teardown', () => runGlobalTeardown());
+      await step('global teardown', () => runGlobalTeardown(context));
     } finally {
       try {
         await step('trace run finalize', () => getTraceRun().finalize());

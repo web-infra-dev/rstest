@@ -7,6 +7,7 @@ import type {
   CoverageMap,
   CoverageOptions,
   CoverageProvider,
+  ReportCoverageFailure,
 } from '../types/coverage';
 import { logger, noopTraceSpan, type TraceSpan } from '../utils';
 
@@ -295,6 +296,10 @@ export async function generateCoverage(
                 uncoveredFiles,
                 finalCoverageMap,
                 coverageProvider,
+                // A file the provider cannot instrument fails the run, but
+                // through the exit code — the provider runs in this process and
+                // must not touch the host's exit code.
+                () => context.exitCode.raise(1),
                 traceSpan,
               ),
             {
@@ -363,12 +368,12 @@ export async function generateCoverage(
       if (!thresholdResult.success) {
         logger.log('');
         logger.stderr(thresholdResult.message);
-        process.exitCode = 1;
+        context.exitCode.raise(1);
       }
     }
   } catch (error) {
     logger.stderr('Failed to generate coverage reports:', error);
-    process.exitCode = 1;
+    context.exitCode.raise(1);
   }
 }
 
@@ -377,6 +382,7 @@ async function generateCoverageForUntestedFiles(
   uncoveredFiles: string[],
   coverageMap: CoverageMap,
   coverageProvider: CoverageProvider,
+  onFailure: ReportCoverageFailure,
   traceSpan: TraceSpan = noopTraceSpan,
 ): Promise<void> {
   if (!coverageProvider.generateCoverageForUntestedFiles) {
@@ -403,6 +409,7 @@ async function generateCoverageForUntestedFiles(
         coverageProvider.generateCoverageForUntestedFiles!({
           environmentName,
           files,
+          onFailure,
         }),
       {
         environmentName,

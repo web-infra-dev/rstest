@@ -641,36 +641,27 @@ const resolveListenPort = (
 };
 
 /**
- * The exit code a launch that found no test files at all must leave behind.
+ * Whether a launch that found no test files at all must fail the run.
  *
  * Core's `reportNoTestFiles` owns the message and the no-test reporter
  * lifecycle for such a launch, but in watch mode its report deliberately leaves
  * the exit code alone — a rerun matching nothing is not a failure. Such a launch
  * opened no session, so no later cycle can raise the code either. That makes
- * this the host's only write to `process.exitCode`: a boot failure looks like a
- * second launch-path exception but is not one, because it rides the outcome out
- * of `failWithError` and core raises the code from there. One-shot runs keep
- * going through the cycle, and a caller that passed `allowEmptyRun` — today only
- * the config-hook discovery boot — reads the outcome instead of the process.
+ * this the host's only exit-code raise: a boot failure looks like a second
+ * launch-path exception but is not one, because it rides the outcome out of
+ * `failWithError` and core raises the code from there. One-shot runs keep going
+ * through the cycle, and a caller that passed `allowEmptyRun` — today only the
+ * config-hook discovery boot — reads the outcome instead.
  */
-const resolveEmptyLaunchExitCode = (
-  current: number | string | undefined,
-  {
-    allowEmptyRun,
-    isWatchMode,
-    passWithNoTests,
-  }: {
-    allowEmptyRun: boolean;
-    isWatchMode: boolean;
-    passWithNoTests: boolean;
-  },
-): number | string | undefined => {
-  if (allowEmptyRun || !isWatchMode || passWithNoTests) {
-    return current;
-  }
-  // Never downgrade: a code already raised by an earlier failure stands.
-  return current === undefined || current === 0 ? 1 : current;
-};
+const emptyLaunchFailsRun = ({
+  allowEmptyRun,
+  isWatchMode,
+  passWithNoTests,
+}: {
+  allowEmptyRun: boolean;
+  isWatchMode: boolean;
+  passWithNoTests: boolean;
+}): boolean => !allowEmptyRun && isWatchMode && !passWithNoTests;
 
 const createBrowserLazyCompilationConfig = (
   setupFiles: string[],
@@ -2679,11 +2670,17 @@ export const runBrowserController = async (
   };
 
   const writeEmptyLaunchExitCode = (): void => {
-    process.exitCode = resolveEmptyLaunchExitCode(process.exitCode, {
-      allowEmptyRun,
-      isWatchMode,
-      passWithNoTests: context.normalizedConfig.passWithNoTests,
-    });
+    if (
+      emptyLaunchFailsRun({
+        allowEmptyRun,
+        isWatchMode,
+        passWithNoTests: context.normalizedConfig.passWithNoTests,
+      })
+    ) {
+      // `context.exitCode` owns the never-downgrade rule, so a code an earlier
+      // failure already raised stands.
+      context.exitCode.raise(1);
+    }
   };
 
   if (totalTests === 0 && !shouldInitializeEmptyBrowserHooks) {

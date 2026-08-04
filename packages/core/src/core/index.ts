@@ -2,13 +2,19 @@ import type {
   FileFilterMode,
   ListCommandOptions,
   Project,
+  ResolvedRstest,
   RstestCommand,
   RstestConfig,
-  RstestInstance,
+  RstestWatchHandle,
 } from '../types';
 import { Rstest } from './rstest';
 
-export function createRstest(
+/**
+ * Build an internal {@link ResolvedRstest} for a single command + filter set. The
+ * public, async, instance-shaped `createRstest` (with `run`/`listTests`/
+ * `close`) lives in `@rstest/core/api` and composes this factory.
+ */
+export function createRstestContext(
   {
     config,
     projects,
@@ -27,8 +33,7 @@ export function createRstest(
     /**
      * When true, Rstest won't install `process.on('exit' | 'SIG*')` handlers
      * and config errors throw instead of calling `process.exit()`, so a
-     * programmatic run can't kill the host process. (`process.exitCode` is
-     * still written; `runRstest` restores it via try/finally.) Set by the
+     * programmatic run can't kill the host process. Set by the
      * `@rstest/core/api` adapter.
      */
     embedded?: boolean;
@@ -36,7 +41,7 @@ export function createRstest(
   command: RstestCommand,
   fileFilters: string[],
   fileFilterMode?: FileFilterMode,
-): RstestInstance {
+): ResolvedRstest {
   const context = new Rstest(
     {
       cwd,
@@ -51,9 +56,14 @@ export function createRstest(
     config,
   );
 
-  const runTests = async (): Promise<void> => {
+  const runTests = async (): Promise<void | RstestWatchHandle> => {
     const { runTests } = await import('./runTests');
-    await runTests(context);
+    return runTests(context);
+  };
+
+  const createTestRunner = async () => {
+    const { createTestRunner } = await import('./testRunner');
+    return createTestRunner(context);
   };
 
   const listTests = async (options: ListCommandOptions) => {
@@ -72,6 +82,7 @@ export function createRstest(
   return {
     context,
     runTests,
+    createTestRunner,
     listTests,
     mergeReports,
   };

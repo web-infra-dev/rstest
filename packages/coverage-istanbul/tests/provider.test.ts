@@ -58,9 +58,36 @@ describe('coverage-istanbul provider', () => {
       loggedError = true;
     };
 
+    // `collect` only runs inside a test worker, so its exit code is the pool's
+    // own signal, never the embedding host's.
     expect(provider.collect()).toBeNull();
     expect(loggedError).toBe(true);
     expect(process.exitCode).toBe(1);
+  });
+
+  it('reports an untested file it cannot instrument without touching the exit code', async () => {
+    const provider = new CoverageProvider(createOptions());
+    const errors: string[] = [];
+    let failures = 0;
+
+    console.error = (...args: unknown[]) => {
+      errors.push(args.join(' '));
+    };
+
+    const coverage = await provider.generateCoverageForUntestedFiles({
+      environmentName: 'test',
+      files: [join(tmpdir(), 'rstest-coverage-istanbul-missing', 'missing.ts')],
+      onFailure: () => {
+        failures++;
+      },
+    });
+
+    expect(coverage).toEqual([]);
+    expect(errors[0]).toContain('Can not generate coverage for untested file');
+    // Core's untested-file backfill runs in the host process, so the failure is
+    // a reported value and the host's exit code stays its own.
+    expect(failures).toBe(1);
+    expect(process.exitCode).toBe(originalExitCode);
   });
 
   it('loads custom coverage reporters from relative config paths', async () => {

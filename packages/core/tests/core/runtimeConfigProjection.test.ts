@@ -45,7 +45,7 @@ describe('projectRuntimeConfig', () => {
     const project = makeProject({ federation: true });
 
     expect(
-      projectRuntimeConfig(project, { envMode: 'inherit' }).federation,
+      projectRuntimeConfig(project, { envMode: 'inherit', env: {} }).federation,
     ).toBe(true);
     expect(
       'federation' in projectRuntimeConfig(project, { envMode: 'static' }),
@@ -107,7 +107,7 @@ describe('projectRuntimeConfig', () => {
       makeProject({
         coverage: { enabled: true, reporters: [() => {}] },
       }),
-      { envMode: 'inherit' },
+      { envMode: 'inherit', env: {} },
     );
     // reporters may be functions — stripped so the value stays serializable.
     expect(config.coverage.reporters).toEqual([]);

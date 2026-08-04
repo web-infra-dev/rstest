@@ -7,15 +7,14 @@ import type {
   InlineProjectConfig,
   NormalizedCoverageOptions,
   RawCoverageResolveOptions,
+  ReportCoverageFailure,
   RstestExposeAPI,
   ProjectConfig,
   ResolvedRstestConfig,
   RstestConfig,
 } from './types';
 
-export { initCli, runCLI, type RunCLIOptions } from './cli';
 export { loadConfig, mergeProjectConfig, mergeRstestConfig } from './config';
-export { createRstest } from './core';
 export * from './runtime/api/public';
 
 export type {
@@ -25,6 +24,7 @@ export type {
   ExpectPollConfig,
   NormalizedCoverageOptions,
   RawCoverageResolveOptions,
+  ReportCoverageFailure,
   ResolvedRstestConfig,
   RsbuildPlugin,
   RstestConfig,

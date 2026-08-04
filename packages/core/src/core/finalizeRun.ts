@@ -38,18 +38,7 @@ export const reportNoTestFiles = ({
       logger.error(color.red(message));
     }
 
-    // `process.exitCode` mutations here (and in deeper layers such as
-    // globalSetup teardown, coverage threshold checks) are restored to their
-    // pre-run value by `runRstest` in the embedded path via try/finally, so
-    // we don't need to gate them per-call site. Never-downgrade: a zero code
-    // (passWithNoTests) must not clear a prior non-zero code.
-    if (
-      code !== 0 ||
-      process.exitCode === undefined ||
-      process.exitCode === 0
-    ) {
-      process.exitCode = code;
-    }
+    context.exitCode.raise(code);
   }
 
   if (mode === 'all') {
@@ -260,6 +249,10 @@ export async function finalizeRunCycle(
         loadCoverageResources(filenames, 'loadAssetFiles'),
       loadSourceMaps: (filenames) =>
         loadCoverageResources(filenames, 'loadSourceMaps'),
+      // The provider resolves raw payloads in this process, so a payload it
+      // has to skip must reach the exit code as a value — see
+      // `ReportCoverageFailure`.
+      onFailure: () => context.exitCode.raise(1),
     },
     runCoverageStep: runLifecycleStep,
   });
@@ -293,11 +286,8 @@ export async function finalizeRunCycle(
     reportNoTestFiles({ context, mode });
   }
 
-  // Never-downgrade: a failure raises the code to 1 only when nothing has
-  // already set a non-zero code (matches the browser host's
-  // `ensureProcessExitCode`), so a pre-set exit code survives.
-  if (isFailure && (process.exitCode === undefined || process.exitCode === 0)) {
-    process.exitCode = 1;
+  if (isFailure) {
+    context.exitCode.raise(1);
   }
 
   await runLifecycleStep('reporter onTestRunEnd', () =>
@@ -314,19 +304,26 @@ export async function finalizeRunCycle(
     }),
   );
 
-  if (coverageProvider && (!isFailure || reportOnFailure)) {
-    const { generateCoverage } = await import('../coverage/generate');
-    await runLifecycleStep('coverage report generation', () =>
-      generateCoverage(
-        context,
-        mergedCoverageMap!,
-        coverageProvider,
-        traceRun.span,
-      ),
-    );
-  }
+  // Coverage raises after the reporters ran, so the cycle's code is only
+  // complete once these settle — and the cycle must be announced even when one
+  // of them throws, or a watch session's per-rerun observer misses that rerun.
+  try {
+    if (coverageProvider && (!isFailure || reportOnFailure)) {
+      const { generateCoverage } = await import('../coverage/generate');
+      await runLifecycleStep('coverage report generation', () =>
+        generateCoverage(
+          context,
+          mergedCoverageMap!,
+          coverageProvider,
+          traceRun.span,
+        ),
+      );
+    }
 
-  await runLifecycleStep('trace run finalize', () => traceRun.finalize());
+    await runLifecycleStep('trace run finalize', () => traceRun.finalize());
+  } finally {
+    context.exitCode.endCycle();
+  }
 
   if (isFailure) {
     const bail = context.normalizedConfig.bail;
@@ -338,4 +335,59 @@ export async function finalizeRunCycle(
       );
     }
   }
+}
+
+/**
+ * The single run-cycle pump: reporter run-start notification, every executor's
+ * cycle, and exactly one {@link finalizeRunCycle} exit. The one-shot run and
+ * the reusable test runner start their cycles through it so the "exactly one
+ * finalize per cycle" invariant has one implementation. The watch cycle driver
+ * pairs the same notification and finalize itself, because a session close
+ * must be able to land between a cycle settling and its finalize.
+ *
+ * Callers own everything around the cycle — executor construction, per-run
+ * state resets, teardown — and only hand over how to start the cycles.
+ */
+export async function runAndFinalizeCycle(
+  context: RstestContext,
+  {
+    startCycles,
+    mode,
+    isWatchMode,
+    coverageProvider,
+    reportOnFailure,
+    traceRun,
+  }: {
+    /**
+     * Starts one cycle per executor, after the reporters observed the run
+     * start. An empty list is valid and finalizes an empty run (nothing to
+     * execute).
+     */
+    startCycles: () => Promise<ExecutorCycleOutcome>[];
+    mode: 'all' | 'on-demand';
+    isWatchMode: boolean;
+    coverageProvider: CoverageProvider | null;
+    reportOnFailure: boolean;
+    traceRun: TraceRun;
+  },
+): Promise<void> {
+  await notifyReportersOnTestRunStart(context);
+
+  // Settle every cycle before propagating a failure: a fail-fast `Promise.all`
+  // would reach the caller's teardown while a sibling executor is still
+  // mid-cycle, truncating its tests and firing global teardown early. The
+  // re-await unwraps the already-settled promises, rejecting with the first
+  // failure in executor order.
+  const cyclePromises = startCycles();
+  await Promise.allSettled(cyclePromises);
+  const outcomes = await Promise.all(cyclePromises);
+
+  await finalizeRunCycle(context, {
+    outcomes,
+    mode,
+    isWatchMode,
+    coverageProvider,
+    reportOnFailure,
+    traceRun,
+  });
 }

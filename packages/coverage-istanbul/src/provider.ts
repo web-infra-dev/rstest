@@ -2,6 +2,7 @@ import { isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type {
   NormalizedCoverageOptions,
+  ReportCoverageFailure,
   CoverageProvider as RstestCoverageProvider,
 } from '@rstest/core';
 import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
@@ -47,9 +48,11 @@ export class CoverageProvider implements RstestCoverageProvider {
   async generateCoverageForUntestedFiles({
     environmentName,
     files,
+    onFailure,
   }: {
     environmentName: string;
     files: string[];
+    onFailure: ReportCoverageFailure;
   }): Promise<FileCoverageData[]> {
     const { transformCoverage } = await import('./plugin');
 
@@ -72,7 +75,9 @@ export class CoverageProvider implements RstestCoverageProvider {
           console.error(
             `Can not generate coverage for untested file, file: ${file}, error: ${e}`,
           );
-          process.exitCode = 1;
+          // Host-process call: report the failure to core instead of writing
+          // the embedding host's exit code.
+          onFailure();
           return undefined;
         }
       },
@@ -104,7 +109,10 @@ export class CoverageProvider implements RstestCoverageProvider {
     } catch (error) {
       // Surface collection failures the same way the v8 provider does: log to
       // stderr and mark the run as failed, so a broken coverage map never
-      // passes silently with a zero exit code.
+      // passes silently with a zero exit code. `collect` only ever runs inside
+      // a test worker, whose exit code is the pool's own signal — never the
+      // embedding host's; host-process entry points report through
+      // `ReportCoverageFailure` instead.
       console.error('Failed to collect coverage data:', error);
       process.exitCode = 1;
       return null;

@@ -10,6 +10,7 @@ import type {
   WorkerState,
 } from '../../types';
 import { globalApis, RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
+import { applyEnvChanges } from '../../utils/env';
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
@@ -117,13 +118,7 @@ const setErrorName = (error: Error, type: string): Error => {
 
 const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
   if (env) {
-    Object.entries(env).forEach(([key, value]) => {
-      if (value === undefined) {
-        Reflect.deleteProperty(process.env, key);
-      } else {
-        process.env[key] = value;
-      }
-    });
+    applyEnvChanges(process.env, env);
   }
 };
 

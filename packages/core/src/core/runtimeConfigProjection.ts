@@ -3,17 +3,17 @@ import type {
   ProjectContext,
   RuntimeConfig,
 } from '../types';
-
-type EnvSource = Record<string, string | undefined>;
+import { applyTestEnvMarkers, type EnvChanges } from '../utils';
 
 interface InheritEnvOptions {
-  /** Node: spread the full env (defaults to `process.env`). */
+  /** Node: spread the full env. */
   envMode: 'inherit';
   /**
-   * Full env base to inherit from; defaults to `process.env`, read at
-   * projection time so globalSetup mutations are already applied.
+   * Full env base a node worker inherits — required, so this projection never
+   * reads the host `process.env` itself. `composeWorkerEnv` builds it from a
+   * host snapshot plus this run's `globalSetup` change-set.
    */
-  env?: EnvSource;
+  env: NodeJS.ProcessEnv;
 }
 
 interface StaticEnvOptions {
@@ -26,7 +26,7 @@ interface StaticEnvOptions {
    * Named apart from the inherit branch's `env` so a full `process.env`
    * cannot be passed by symmetry and still typecheck.
    */
-  envOverlay?: EnvSource;
+  envOverlay?: EnvChanges;
 }
 
 /**
@@ -103,26 +103,21 @@ export function projectRuntimeConfig(
   };
 
   if (options.envMode === 'static') {
-    // Browser wire. Propagate NODE_ENV and the RSTEST flag from the host so
-    // `process.env.NODE_ENV` / `process.env.RSTEST` (rewritten to the
-    // `RSTEST_ENV_SYMBOL_KEY` symbol store) resolve in browser tests the same
-    // way they do in Node mode. The globalSetup change-set overlays the base;
-    // user-supplied `env` wins so explicit overrides still take effect.
-    // Deletions (`undefined` values) are no-ops on the wire: JSON
-    // serialization drops them, and host-only vars never existed in the
-    // browser store. See https://github.com/web-infra-dev/rstest/issues/1351
+    // Browser wire: carry only the markers plus user config env, never host env
+    // (#1351). `process.env.NODE_ENV` is a deliberate read — a browser test
+    // must see what a node worker sees, and the host holds the value both
+    // derive from. Deletions in the overlay are no-ops here: JSON drops
+    // `undefined`, and a host-only var was never in the browser store to begin
+    // with.
+    const markers: NodeJS.ProcessEnv = { NODE_ENV: process.env.NODE_ENV };
+    applyTestEnvMarkers(markers);
+
     return {
       ...shared,
-      env: {
-        NODE_ENV: process.env.NODE_ENV,
-        RSTEST: 'true',
-        ...options.envOverlay,
-        ...env,
-      },
+      // User config env wins over the setup's overlay, which wins over markers.
+      env: { ...markers, ...options.envOverlay, ...env },
     } satisfies BrowserRuntimeConfig;
   }
-
-  const envSource = options.env ?? process.env;
 
   return {
     ...shared,
@@ -133,9 +128,9 @@ export function projectRuntimeConfig(
     logHeapUsage,
     detectAsyncLeaks,
     env: {
-      // Read env at projection time so a globalSetup-modified `process.env`
-      // (or an explicit snapshot) is captured correctly.
-      ...envSource,
+      // Composed by the caller at projection time, so a `globalSetup` that ran
+      // after the worker pool was created is included.
+      ...options.env,
       ...env,
     },
   } satisfies RuntimeConfig;
