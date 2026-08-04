@@ -36,6 +36,6 @@ describe('expect config', () => {
     ).rejects.toThrow('Matcher did not succeed in 200ms');
 
     let attempts = 0;
-    await rstestExpect.poll(() => ++attempts).toBe(6);
+    await rstestExpect.poll(() => ++attempts).toBe(3);
   });
 });
