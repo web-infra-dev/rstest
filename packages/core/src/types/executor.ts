@@ -20,8 +20,28 @@ export interface ExecutorRunCycleOptions {
   mode: 'all' | 'on-demand';
   fileFilters?: string[];
   /**
-   * Read live per cycle from `context.snapshotManager.options`, never captured
-   * at executor construction, so a watch `u` (update snapshot) rerun is honored.
+   * Watch only: whether this cycle was queued by the executor's own invalidation
+   * signal rather than by a CLI shortcut or the session's initial trigger. It is
+   * how a transport recognizes the cycle its last signal asked for among the
+   * cycles core hands it — the node side publishes a finished rebuild's measured
+   * duration when the compile ends and lets only that cycle claim it, so a
+   * shortcut rerun dispatched from the queue in between reports its own build
+   * span instead of the rebuild's.
+   */
+  fromInvalidation?: boolean;
+  /**
+   * Per cycle, never captured at executor construction, so a watch `u` (update
+   * snapshot) rerun is honored. Core resolves it when the trigger queues its
+   * cycle rather than when the cycle is dispatched: `u` also flips the live
+   * `snapshotManager` flag, for the browser host's per-page reads, and a cycle
+   * queued inside that window by anything else must not rewrite the snapshots of
+   * files no `u` selected.
+   *
+   * That last guarantee reaches as far as an executor honors this field. The
+   * node pool does. The browser host reads the live flag per page load instead
+   * and its executor drops this option on a watch rerun, so a browser cycle
+   * queued inside the `u` window still runs under `'all'` — a gap to close by
+   * plumbing the option through the browser watch session, not a stance.
    */
   updateSnapshot: SnapshotUpdateState;
   /**
@@ -34,13 +54,41 @@ export interface ExecutorRunCycleOptions {
    */
   env?: Record<string, string | undefined>;
   onTraceEvents?: (events: TraceEvent[]) => void;
-  /**
-   * Cycle build-start timestamp. In watch this is the rebuild start (from the
-   * dev-compile hook) so the reported build time spans the rebuild; defaults to
-   * the executor picking `Date.now()` at cycle start otherwise.
-   */
-  buildStart?: number;
 }
+
+/**
+ * Watch invalidation subscriber. The hint carries only what the transport knows
+ * for free at signal time: `isFirstBuild` marks the session's initial build,
+ * which core runs as a full cycle rather than an on-demand one, and
+ * `fileFilters` carries the scope when the trigger already resolved it (the
+ * browser host plans its rerun set before signalling, so that resolution is not
+ * repeated — and never doubled — inside `runCycle`).
+ *
+ * The returned promise settles when the queued cycle has finalized. It is there
+ * for a trigger that must wait for its own cycle, never as back-pressure: what
+ * keeps two cycles from overlapping on the shared `stateManager` is core's
+ * queue.
+ *
+ * Waiting on it from inside a bundler's compile hook costs a blind window: the
+ * bundler keeps no file watcher attached while that hook is pending and
+ * re-attaches by re-checking what it already knew about, so a test file created
+ * or deleted in that window is never noticed at all — and under the queue the
+ * window can stretch across another executor's cycle. The browser transport
+ * therefore signals and returns. The node transport still waits, because its
+ * cycle pulls the affected-entry diff from the dev server and that pull
+ * advances the baseline it diffs against: a compile's changes are consumable
+ * exactly once, and holding the hook is what keeps a second compile from landing
+ * against the same baseline before the first one's changes are consumed. That is
+ * a tracked gap, not a stance, and the shape
+ * that closes it is the one the browser side already uses — resolve the scope
+ * synchronously inside the hook and hand it over as `fileFilters`, then signal
+ * and return. The doubling warned about above is diffing at hook time *and*
+ * again inside `runCycle`, not a single hook-time snapshot the cycle consumes.
+ */
+export type ExecutorInvalidationCallback = (hint: {
+  isFirstBuild: boolean;
+  fileFilters?: string[];
+}) => void | Promise<void>;
 
 /**
  * The result one executor (node pool or browser host) produces for a single run
@@ -97,6 +145,13 @@ export interface ExecutorCycleOutcome {
  * core implementation; only what the two runtimes genuinely fork — transport,
  * module loading, isolation unit, scheduling, provider management — lives behind
  * this interface.
+ *
+ * An optional member here says "not every runtime has this capability", and
+ * every consumer re-requires it through a narrowed type (`BrowserTestExecutor`,
+ * `NodeExecutor`) before calling — none of them optional-chains. So optional is
+ * not the place for an obligation core must *perform* in a fixed order: the node
+ * side's `ensureRunResources` stays off this interface, where dropping it is a
+ * build error at the two call sites that order it against the browser launch.
  */
 export interface TestExecutor {
   /** `'node' | 'browser'`. */
@@ -120,19 +175,37 @@ export interface TestExecutor {
   ): Promise<{ list: ListCommandResult[] }>;
   close(): Promise<void>;
   /**
-   * Reserved watch contract, not yet implemented by either executor: the node
-   * watch trigger stays on the dev-compile hooks core attaches directly, and
-   * browser watch reruns are host-driven end to end. Signal-only by design —
-   * the callback tells core "something changed"; affected-entry resolution
-   * happens inside `runCycle({ mode: 'on-demand' })`, because node resolves
-   * affected entries by pull at cycle time and doing it in the hook would
-   * consume the diff baseline (double-diff hazard). The optional hint carries
-   * only what the transport already knows for free; core treats it as advisory.
+   * Subscribe to this executor's watch trigger; the callback runs one watch
+   * cycle (core resets the cycle-scoped state, calls `runCycle`, and finalizes).
+   * Every rerun trigger a transport owns — dev rebuild, HMR, an in-page rerun
+   * button — routes through this one subscriber, so no executor ever drives a
+   * cycle of its own.
+   *
+   * Core serializes cycles behind a queue, so two watch cycles never overlap on
+   * the shared `stateManager` — the transport is free to signal and move on,
+   * and should when it signals from a hook its own file watcher waits on (see
+   * {@link ExecutorInvalidationCallback}).
+   *
+   * A trigger that resolves to no work must not fire the callback — a cycle that
+   * runs nothing still reports "no test files need re-run", which is not what a
+   * scope that simply misses this executor's files should print.
    */
-  onInvalidate?(
-    cb: (hint?: {
-      affectedTestPaths?: string[];
-      deletedTestPaths?: string[];
-    }) => void,
-  ): void;
+  onInvalidate?(cb: ExecutorInvalidationCallback): void;
+  /**
+   * Watch only: ask this executor to schedule a cycle over `testPaths` (all of
+   * its test files when omitted), the way a CLI shortcut does. Implemented by
+   * the transports whose rerun scope core cannot express as a plain
+   * `runCycle({ fileFilters })` — the browser host has to reconcile the request
+   * against its own file-set diff first. It resolves once the resulting cycle
+   * (if any) has completed, so a caller may restore state it toggled for it.
+   *
+   * A transport left with nothing to schedule on must say so rather than resolve
+   * in silence, as though the rerun happened. Core gates rerun keys until every
+   * executor has *settled* its first cycle, not succeeded at it, so arriving here
+   * without a session means that startup opened none — and the keys are still
+   * installed either way, because the run outlives it: a mixed run's other side
+   * keeps watching, and even a single-executor run stays up on the CLI's
+   * config-restart watcher.
+   */
+  requestRerun?(testPaths?: string[]): Promise<void>;
 }

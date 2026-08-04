@@ -1,138 +1,12 @@
 import { describe, expect, it } from '@rstest/core';
-import type { ProjectContext, Rstest } from '@rstest/core/internal/browser';
 import {
-  createBrowserLazyCompilationConfig,
-  createBrowserRsbuildDevConfig,
+  claimHeadedCycleScope,
   createBrowserContextExcludeRegExp,
-  resolveListenPort,
-  shouldEnableBrowserHmr,
+  runWatchRuntimeTeardown,
   toContextKey,
 } from '../src/hostController';
 
-/**
- * Create a mock context for testing browser config resolution.
- */
-const createMockContext = (options: {
-  projectBrowserConfig: Partial<ProjectContext['normalizedConfig']['browser']>;
-  rootBrowserConfig: Partial<Rstest['normalizedConfig']['browser']>;
-}): Rstest => {
-  const { projectBrowserConfig, rootBrowserConfig } = options;
-
-  const browserProject = {
-    name: 'browser',
-    environmentName: 'browser',
-    rootPath: '/project',
-    normalizedConfig: {
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'chromium',
-        headless: false,
-        strictPort: false,
-        ...projectBrowserConfig,
-      },
-    },
-  } as unknown as ProjectContext;
-
-  return {
-    projects: [browserProject],
-    normalizedConfig: {
-      browser: {
-        enabled: false,
-        provider: 'playwright',
-        browser: 'chromium',
-        headless: false,
-        strictPort: false,
-        ...rootBrowserConfig,
-      },
-    },
-  } as unknown as Rstest;
-};
-
 describe('browser config resolution', () => {
-  it('should use project-level browser config over root config', () => {
-    const context = createMockContext({
-      projectBrowserConfig: {
-        browser: 'firefox',
-        headless: true,
-        port: 5000,
-        strictPort: true,
-      },
-      rootBrowserConfig: {
-        browser: 'chromium',
-        headless: false,
-        port: 4000,
-        strictPort: false,
-      },
-    });
-
-    const browserProjects = context.projects.filter(
-      (p) => p.normalizedConfig.browser.enabled,
-    );
-    const firstProject = browserProjects[0];
-    const browserConfig =
-      firstProject?.normalizedConfig.browser ??
-      context.normalizedConfig.browser;
-
-    expect(browserConfig.browser).toBe('firefox');
-    expect(browserConfig.headless).toBe(true);
-    expect(browserConfig.port).toBe(5000);
-    expect(browserConfig.strictPort).toBe(true);
-  });
-
-  it('should fallback to root config when no browser projects', () => {
-    const context = {
-      projects: [],
-      normalizedConfig: {
-        browser: {
-          enabled: false,
-          browser: 'webkit',
-          headless: true,
-          port: 3000,
-          strictPort: true,
-        },
-      },
-    } as unknown as Rstest;
-
-    const browserProjects = context.projects.filter(
-      (p) => p.normalizedConfig.browser.enabled,
-    );
-    const firstProject = browserProjects[0];
-    const browserConfig =
-      firstProject?.normalizedConfig.browser ??
-      context.normalizedConfig.browser;
-
-    expect(browserConfig.browser).toBe('webkit');
-    expect(browserConfig.headless).toBe(true);
-    expect(browserConfig.port).toBe(3000);
-    expect(browserConfig.strictPort).toBe(true);
-  });
-
-  it('should disable HMR when enableHmr is false and keep error-only client log', () => {
-    const devConfig = createBrowserRsbuildDevConfig(false);
-
-    expect(devConfig.hmr).toBe(false);
-    expect(devConfig.client.logLevel).toBe('error');
-  });
-
-  it('should enable HMR when enableHmr is true', () => {
-    const devConfig = createBrowserRsbuildDevConfig(true);
-
-    expect(devConfig.hmr).toBe(true);
-    expect(devConfig.client.logLevel).toBe('error');
-  });
-
-  it('should only enable HMR for headed watch', () => {
-    // Headless never reuses a page, so it never consumes HMR — enabling it only
-    // exposes the #11922 factory race and the #1472 accept-chain throw. One-shot
-    // runs never rerun. So HMR (and the lazyCompilation transport it carries) is
-    // gated to headed watch alone.
-    expect(shouldEnableBrowserHmr(true, false)).toBe(true); // headed watch
-    expect(shouldEnableBrowserHmr(true, true)).toBe(false); // headless watch
-    expect(shouldEnableBrowserHmr(false, false)).toBe(false); // headed one-shot
-    expect(shouldEnableBrowserHmr(false, true)).toBe(false); // headless one-shot
-  });
-
   it('should derive the non-watch import-map key like the runtime toContextKey', () => {
     // Keys must match the browser runtime's `toContextKey` so `loadTest(key)`
     // resolves against the manifest import map.
@@ -150,25 +24,6 @@ describe('browser config resolution', () => {
     expect(toContextKey('/repo/pkg-extra/a.test.ts', '/repo/pkg')).toBe(
       '/repo/pkg-extra/a.test.ts',
     );
-  });
-
-  it('should keep setup files out of lazy compilation', () => {
-    const lazyCompilation = createBrowserLazyCompilationConfig([
-      '/project/tests/rstest.setup.ts',
-    ]);
-
-    expect(lazyCompilation.imports).toBe(true);
-    expect(lazyCompilation.entries).toBe(false);
-    expect(
-      lazyCompilation.test?.({
-        nameForCondition: () => '/project/tests/rstest.setup.ts',
-      }),
-    ).toBe(false);
-    expect(
-      lazyCompilation.test?.({
-        nameForCondition: () => '/project/tests/example.test.tsx',
-      }),
-    ).toBe(true);
   });
 
   it('should keep leading dots in browser context exclude patterns', () => {
@@ -332,38 +187,147 @@ describe('browser config resolution', () => {
     expect(exclude?.test('.dist/.fixtures/example.test.ts')).toBe(false);
     expect(exclude?.test('./src/.fixtures/example.test.ts')).toBe(false);
   });
+});
 
-  it('should normalize setup file paths before filtering lazy compilation', () => {
-    const lazyCompilation = createBrowserLazyCompilationConfig([
-      '/project/tests/rstest.setup.ts',
+describe('claimHeadedCycleScope', () => {
+  const testFile = (testPath: string) => ({
+    testPath,
+    projectName: 'browser',
+  });
+
+  it('claims only the patterns of the paths in its own scope', () => {
+    // The race the per-file map exists for: a rebuild cycle for one file is
+    // dequeued while a click on another is still waiting for the cycle it
+    // signalled. The rebuild must not run with — or swallow — that pattern.
+    const patterns = new Map([
+      ['/a.test.ts', 'sums'],
+      ['/b.test.ts', 'renders'],
     ]);
+    const currentTestFiles = [testFile('/a.test.ts'), testFile('/b.test.ts')];
 
-    expect(
-      lazyCompilation.test?.({
-        nameForCondition: () => '/project/tests/../tests/rstest.setup.ts',
-      }),
-    ).toBe(false);
+    const scope = claimHeadedCycleScope(
+      ['/a.test.ts'],
+      currentTestFiles,
+      patterns,
+    );
+
+    expect(scope).toEqual([
+      { file: currentTestFiles[0], testNamePattern: 'sums' },
+    ]);
+    expect([...patterns]).toEqual([['/b.test.ts', 'renders']]);
+  });
+
+  it('consumes a pattern once, so a later cycle runs the whole file', () => {
+    const patterns = new Map([['/a.test.ts', 'sums']]);
+    const currentTestFiles = [testFile('/a.test.ts')];
+
+    const claimed = claimHeadedCycleScope(
+      ['/a.test.ts'],
+      currentTestFiles,
+      patterns,
+    );
+    const afterwards = claimHeadedCycleScope(
+      ['/a.test.ts'],
+      currentTestFiles,
+      patterns,
+    );
+
+    expect(claimed[0]!.testNamePattern).toBe('sums');
+    expect(afterwards[0]!.testNamePattern).toBeUndefined();
+  });
+
+  it('skips a path the file set no longer has and keeps every live one', () => {
+    // A queued scope goes stale when a later trigger rebuilds the file set
+    // without one of its files. Skipping is what the headless twin does;
+    // failing the cycle would take the surviving files down with it.
+    const currentTestFiles = [testFile('/a.test.ts'), testFile('/c.test.ts')];
+
+    const scope = claimHeadedCycleScope(
+      ['/a.test.ts', '/deleted.test.ts', '/c.test.ts'],
+      currentTestFiles,
+      new Map(),
+    );
+
+    expect(scope.map(({ file }) => file.testPath)).toEqual([
+      '/a.test.ts',
+      '/c.test.ts',
+    ]);
+  });
+
+  it('leaves a skipped path’s pattern for whichever cycle runs the file', () => {
+    // The file set can be rebuilt back — the click's pattern is only spent when
+    // a cycle actually carries the file. Consuming it on the way past would turn
+    // the user's single-test click into a full-file rerun, silently.
+    const patterns = new Map([['/a.test.ts', 'sums']]);
+
+    const skipped = claimHeadedCycleScope(['/a.test.ts'], [], patterns);
+    const later = claimHeadedCycleScope(
+      ['/a.test.ts'],
+      [testFile('/a.test.ts')],
+      patterns,
+    );
+
+    expect(skipped).toEqual([]);
+    expect(later[0]!.testNamePattern).toBe('sums');
+  });
+
+  it('normalizes the scope paths before matching files and patterns', () => {
+    // The scope arrives from core's cycle options while the file set and the
+    // pattern map are keyed on normalized paths.
+    const patterns = new Map([['/a.test.ts', 'sums']]);
+    const currentTestFiles = [testFile('/a.test.ts')];
+
+    const scope = claimHeadedCycleScope(
+      ['/tests/../a.test.ts'],
+      currentTestFiles,
+      patterns,
+    );
+
+    expect(scope).toEqual([
+      { file: currentTestFiles[0], testNamePattern: 'sums' },
+    ]);
   });
 });
 
-describe('resolveListenPort', () => {
-  it('should return listenPort when it is non-zero', () => {
-    expect(resolveListenPort(4000, null)).toBe(4000);
+describe('runWatchRuntimeTeardown', () => {
+  const createState = () => ({
+    runtime: 'runtime-1' as string | null,
+    cleanupPromise: null as Promise<void> | null,
   });
 
-  it('should fall back to httpServer.address() when listenPort is 0', () => {
-    const httpServer = {
-      address: () => ({ address: '127.0.0.1', family: 'IPv4', port: 52341 }),
+  it('destroys the runtime once for concurrent callers', async () => {
+    const destroyed: string[] = [];
+    const state = createState();
+
+    await Promise.all([
+      runWatchRuntimeTeardown(state, async (runtime) => {
+        destroyed.push(runtime);
+      }),
+      runWatchRuntimeTeardown(state, async (runtime) => {
+        destroyed.push(runtime);
+      }),
+    ]);
+
+    expect(destroyed).toEqual(['runtime-1']);
+    expect(state.runtime).toBeNull();
+  });
+
+  it('tears down the runtime a config restart re-cached', async () => {
+    // The memo must not outlive the runtime it was taken for: a config-file
+    // change tears the session down, re-caches a fresh runtime, and the next
+    // teardown has to destroy that one rather than short-circuit on the
+    // previous session's resolved promise.
+    const destroyed: string[] = [];
+    const state = createState();
+    const destroy = async (runtime: string) => {
+      destroyed.push(runtime);
     };
-    expect(resolveListenPort(0, httpServer)).toBe(52341);
-  });
 
-  it('should return 0 when both listenPort and httpServer are unavailable', () => {
-    expect(resolveListenPort(0, null)).toBe(0);
-  });
+    await runWatchRuntimeTeardown(state, destroy);
+    state.runtime = 'runtime-2';
+    await runWatchRuntimeTeardown(state, destroy);
 
-  it('should return 0 when httpServer.address() returns a string', () => {
-    const httpServer = { address: () => '/tmp/sock' as unknown as null };
-    expect(resolveListenPort(0, httpServer as any)).toBe(0);
+    expect(destroyed).toEqual(['runtime-1', 'runtime-2']);
+    expect(state.runtime).toBeNull();
   });
 });

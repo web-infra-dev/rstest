@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { runBrowserCliWithCwd } from './utils';
+import { sleep } from '../scripts';
+import { runBrowserCliWithCwd, runBrowserWatchCli } from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -61,5 +62,18 @@ describe('browser mode - no tests', () => {
     const report = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
     expect(report.tool).toBe('rstest');
     expect(report.summary.tests).toBe(0);
+  });
+
+  // A watch launch with no test files opens no session, so nothing can ever
+  // trigger a rerun: core's finalize reports it (once — the host does not print
+  // its own copy) and no ready banner is offered, because nothing could answer
+  // it. The session process is left for the harness to kill.
+  it('reports a watch launch with no test files exactly once', async () => {
+    const { cli } = await runBrowserWatchCli('no-tests');
+
+    await cli.waitForStdout('No test files found');
+    await sleep(1000);
+    expect(countMarkers(cli.log, 'No test files found')).toBe(1);
+    expect(cli.log).not.toContain('Waiting for file changes...');
   });
 });

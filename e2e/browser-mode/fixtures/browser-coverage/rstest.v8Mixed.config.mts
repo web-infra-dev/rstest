@@ -8,6 +8,9 @@ export default defineConfig({
     enabled: true,
     provider: 'v8',
     include: ['src/**/*.ts'],
+    // Own reports directory: `coverage.test.ts` clears and asserts the shared
+    // `coverage/` one, and it runs concurrently with this file.
+    reportsDirectory: './coverage-v8-mixed',
   },
   projects: [
     {
@@ -16,7 +19,7 @@ export default defineConfig({
         enabled: true,
         provider: 'playwright',
         headless: true,
-        port: BROWSER_PORTS['browser-coverage-multiproject'],
+        port: BROWSER_PORTS['browser-coverage-config-warnings'],
       },
       include: ['tests/sum.test.ts'],
     },
