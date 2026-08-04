@@ -3,7 +3,7 @@ import {
   createBrowserContextExcludeRegExp,
   toContextKey,
 } from '../src/browserRsbuild';
-import { claimHeadedCycleScope } from '../src/hostController';
+import { claimHeadedCycleScope } from '../src/headedScheduler';
 import { runWatchRuntimeTeardown } from '../src/watchRuntime';
 
 describe('browser config resolution', () => {
