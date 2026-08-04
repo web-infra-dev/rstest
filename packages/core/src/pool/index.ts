@@ -25,7 +25,7 @@ import {
 } from '../utils';
 import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
-import { getNumCpus, parseWorkers, resolveWorkerCount } from '../utils/workers';
+import { getNumCpus, parseWorkers } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
 import { getEnvironmentKey } from '../core/environmentGroups';
 import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
@@ -277,11 +277,9 @@ const workerErrorToResult = (
 
 export const createPool = async ({
   context,
-  recommendWorkerCount = Number.POSITIVE_INFINITY,
   testEnvironmentModules,
 }: {
   context: RstestContext;
-  recommendWorkerCount?: number;
   testEnvironmentModules?: ReadonlyMap<string, TestEnvironmentModuleReference>;
 }): Promise<{
   runTests: (params: {
@@ -340,17 +338,10 @@ export const createPool = async ({
 
   const workerKind: PoolWorkerKind = poolOptions.type ?? 'forks';
 
-  // CPU-derived worker recommendation via the shared override/clamp policy.
-  // The node pool's own formulas: `numCpus - 1` outside watch, half the raw CPU
-  // count in watch; watch passes `recommendWorkerCount` as `Infinity` to keep
-  // warm workers across reruns.
-  const recommendCount = resolveWorkerCount({
-    command: context.command,
-    totalTasks: recommendWorkerCount,
-    recommended: Math.max(numCpus - 1, 1),
-    watchRecommended: Math.max(Math.floor(numCpus / 2), 1),
-    numCpus,
-  });
+  const recommendCount =
+    context.command === 'watch'
+      ? Math.max(Math.floor(numCpus / 2), 1)
+      : Math.max(numCpus - 1, 1);
 
   const maxWorkers = poolOptions.maxWorkers
     ? parseWorkers(poolOptions.maxWorkers, numCpus)
