@@ -3,10 +3,8 @@ import {
   createBrowserContextExcludeRegExp,
   toContextKey,
 } from '../src/browserRsbuild';
-import {
-  claimHeadedCycleScope,
-  runWatchRuntimeTeardown,
-} from '../src/hostController';
+import { claimHeadedCycleScope } from '../src/hostController';
+import { runWatchRuntimeTeardown } from '../src/watchRuntime';
 
 describe('browser config resolution', () => {
   it('should derive the non-watch import-map key like the runtime toContextKey', () => {

@@ -14,10 +14,10 @@ import {
 } from '@rstest/core/internal/browser';
 import {
   type BrowserWatchSession,
-  cleanupWatchRuntime,
   listBrowserTests,
   runBrowserController,
 } from './hostController';
+import { cleanupWatchRuntime } from './watchRuntime';
 
 const emptyOutcome = (): ExecutorCycleOutcome => ({
   results: [],
