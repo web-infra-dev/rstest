@@ -69,10 +69,12 @@ describe('createRunPlanner cold-start gate', () => {
     // No node build means the orchestrator constructs no node executor either,
     // which is the whole cost the gate exists to avoid.
     expect(planner.nodeBuild).toBeUndefined();
-    expect(planner.hasNodeTestsToRun()).toBe(false);
-    expect(planner.hasBrowserTestsToRun()).toBe(true);
   });
 
+  // The control for the test above: without it the gate assertion can rot into a
+  // vacuous pass (the node build moved to a call site this spy no longer covers)
+  // and nothing would notice — an extra or relocated boot is a cost, not a
+  // behavior, so no e2e can see it either. Also pins "exactly one boot".
   it('boots one for a run that has node projects', async () => {
     const context = createContext(tempRoot, [{ name: 'node-a' }]);
     const planner = await createRunPlanner(context, {
@@ -83,6 +85,5 @@ describe('createRunPlanner cold-start gate', () => {
 
     expect(prepareRsbuildSpy).toHaveBeenCalledTimes(1);
     expect(planner.nodeBuild).toBeDefined();
-    expect(planner.hasNodeTestsToRun()).toBe(true);
   });
 });

@@ -624,7 +624,7 @@ type BrowserLazyCompilationConfig = {
  * OS-assigned ephemeral port.  This helper falls back to
  * `httpServer.address()` to obtain the real bound port.
  */
-export const resolveListenPort = (
+const resolveListenPort = (
   listenPort: number,
   httpServer: {
     address: () => ReturnType<import('node:net').Server['address']>;
@@ -653,7 +653,7 @@ export const resolveListenPort = (
  * going through the cycle, and a caller that passed `allowEmptyRun` — today only
  * the config-hook discovery boot — reads the outcome instead of the process.
  */
-export const resolveEmptyLaunchExitCode = (
+const resolveEmptyLaunchExitCode = (
   current: number | string | undefined,
   {
     allowEmptyRun,
@@ -672,7 +672,7 @@ export const resolveEmptyLaunchExitCode = (
   return current === undefined || current === 0 ? 1 : current;
 };
 
-export const createBrowserLazyCompilationConfig = (
+const createBrowserLazyCompilationConfig = (
   setupFiles: string[],
 ): BrowserLazyCompilationConfig => {
   const eagerSetupFiles = new Set(
@@ -707,12 +707,12 @@ export const createBrowserLazyCompilationConfig = (
  * exists (#1472). Disabling HMR does not make watch rebuilds any less
  * incremental — HMR is only the client push transport.
  */
-export const shouldEnableBrowserHmr = (
+const shouldEnableBrowserHmr = (
   isWatchMode: boolean,
   isHeadless: boolean,
 ): boolean => isWatchMode && !isHeadless;
 
-export const createBrowserRsbuildDevConfig = (
+const createBrowserRsbuildDevConfig = (
   enableHmr: boolean,
 ): {
   writeToDisk: boolean;
@@ -1573,7 +1573,7 @@ export const cleanupWatchRuntime = (): Promise<void> =>
   // listeners on every one.
   runWatchRuntimeTeardown(watchContext, destroyBrowserRuntime);
 
-export const registerWatchCleanup = (embedded: boolean): void => {
+const registerWatchCleanup = (embedded: boolean): void => {
   if (watchContext.cleanupRegistered) {
     return;
   }

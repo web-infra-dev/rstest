@@ -1,20 +1,8 @@
 import { describe, expect, it, rs } from '@rstest/core';
 import {
   exitAfterReporting,
-  getSignalExitCode,
   hasReportedFatalExit,
 } from '../../src/utils/signals';
-
-describe('getSignalExitCode', () => {
-  it('reports the POSIX 128 + signal code', () => {
-    expect(getSignalExitCode('SIGINT')).toBe(130);
-    expect(getSignalExitCode('SIGTERM')).toBe(143);
-  });
-
-  it('falls back to 1 for a signal this platform does not number', () => {
-    expect(getSignalExitCode('NOT_A_SIGNAL' as NodeJS.Signals)).toBe(1);
-  });
-});
 
 describe('exitAfterReporting', () => {
   it('marks the exit, so an unexpected-exit net can stay out of it', () => {

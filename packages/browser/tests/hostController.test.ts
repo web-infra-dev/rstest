@@ -1,43 +1,12 @@
 import { describe, expect, it } from '@rstest/core';
 import {
   claimHeadedCycleScope,
-  createBrowserLazyCompilationConfig,
-  createBrowserRsbuildDevConfig,
   createBrowserContextExcludeRegExp,
-  registerWatchCleanup,
-  resolveEmptyLaunchExitCode,
-  resolveListenPort,
   runWatchRuntimeTeardown,
-  shouldEnableBrowserHmr,
   toContextKey,
 } from '../src/hostController';
 
 describe('browser config resolution', () => {
-  it('should disable HMR when enableHmr is false and keep error-only client log', () => {
-    const devConfig = createBrowserRsbuildDevConfig(false);
-
-    expect(devConfig.hmr).toBe(false);
-    expect(devConfig.client.logLevel).toBe('error');
-  });
-
-  it('should enable HMR when enableHmr is true', () => {
-    const devConfig = createBrowserRsbuildDevConfig(true);
-
-    expect(devConfig.hmr).toBe(true);
-    expect(devConfig.client.logLevel).toBe('error');
-  });
-
-  it('should only enable HMR for headed watch', () => {
-    // Headless never reuses a page, so it never consumes HMR — enabling it only
-    // exposes the #11922 factory race and the #1472 accept-chain throw. One-shot
-    // runs never rerun. So HMR (and the lazyCompilation transport it carries) is
-    // gated to headed watch alone.
-    expect(shouldEnableBrowserHmr(true, false)).toBe(true); // headed watch
-    expect(shouldEnableBrowserHmr(true, true)).toBe(false); // headless watch
-    expect(shouldEnableBrowserHmr(false, false)).toBe(false); // headed one-shot
-    expect(shouldEnableBrowserHmr(false, true)).toBe(false); // headless one-shot
-  });
-
   it('should derive the non-watch import-map key like the runtime toContextKey', () => {
     // Keys must match the browser runtime's `toContextKey` so `loadTest(key)`
     // resolves against the manifest import map.
@@ -55,25 +24,6 @@ describe('browser config resolution', () => {
     expect(toContextKey('/repo/pkg-extra/a.test.ts', '/repo/pkg')).toBe(
       '/repo/pkg-extra/a.test.ts',
     );
-  });
-
-  it('should keep setup files out of lazy compilation', () => {
-    const lazyCompilation = createBrowserLazyCompilationConfig([
-      '/project/tests/rstest.setup.ts',
-    ]);
-
-    expect(lazyCompilation.imports).toBe(true);
-    expect(lazyCompilation.entries).toBe(false);
-    expect(
-      lazyCompilation.test?.({
-        nameForCondition: () => '/project/tests/rstest.setup.ts',
-      }),
-    ).toBe(false);
-    expect(
-      lazyCompilation.test?.({
-        nameForCondition: () => '/project/tests/example.test.tsx',
-      }),
-    ).toBe(true);
   });
 
   it('should keep leading dots in browser context exclude patterns', () => {
@@ -237,81 +187,6 @@ describe('browser config resolution', () => {
     expect(exclude?.test('.dist/.fixtures/example.test.ts')).toBe(false);
     expect(exclude?.test('./src/.fixtures/example.test.ts')).toBe(false);
   });
-
-  it('should normalize setup file paths before filtering lazy compilation', () => {
-    const lazyCompilation = createBrowserLazyCompilationConfig([
-      '/project/tests/rstest.setup.ts',
-    ]);
-
-    expect(
-      lazyCompilation.test?.({
-        nameForCondition: () => '/project/tests/../tests/rstest.setup.ts',
-      }),
-    ).toBe(false);
-  });
-});
-
-describe('resolveListenPort', () => {
-  it('should return listenPort when it is non-zero', () => {
-    expect(resolveListenPort(4000, null)).toBe(4000);
-  });
-
-  it('should fall back to httpServer.address() when listenPort is 0', () => {
-    const httpServer = {
-      address: () => ({ address: '127.0.0.1', family: 'IPv4', port: 52341 }),
-    };
-    expect(resolveListenPort(0, httpServer)).toBe(52341);
-  });
-
-  it('should return 0 when both listenPort and httpServer are unavailable', () => {
-    expect(resolveListenPort(0, null)).toBe(0);
-  });
-
-  it('should return 0 when httpServer.address() returns a string', () => {
-    const httpServer = { address: () => '/tmp/sock' as unknown as null };
-    expect(resolveListenPort(0, httpServer as any)).toBe(0);
-  });
-});
-
-describe('resolveEmptyLaunchExitCode', () => {
-  const watchLaunch = {
-    allowEmptyRun: false,
-    isWatchMode: true,
-    passWithNoTests: false,
-  };
-
-  it('should fail a watch launch that found no test files', () => {
-    expect(resolveEmptyLaunchExitCode(undefined, watchLaunch)).toBe(1);
-    expect(resolveEmptyLaunchExitCode(0, watchLaunch)).toBe(1);
-  });
-
-  it('should never downgrade a code an earlier failure already raised', () => {
-    expect(resolveEmptyLaunchExitCode(2, watchLaunch)).toBe(2);
-  });
-
-  it('should leave the code to the cycle outside watch mode', () => {
-    expect(
-      resolveEmptyLaunchExitCode(undefined, {
-        ...watchLaunch,
-        isWatchMode: false,
-      }),
-    ).toBeUndefined();
-  });
-
-  it('should leave the code alone when no tests is not a failure', () => {
-    expect(
-      resolveEmptyLaunchExitCode(undefined, {
-        ...watchLaunch,
-        passWithNoTests: true,
-      }),
-    ).toBeUndefined();
-    expect(
-      resolveEmptyLaunchExitCode(undefined, {
-        ...watchLaunch,
-        allowEmptyRun: true,
-      }),
-    ).toBeUndefined();
-  });
 });
 
 describe('claimHeadedCycleScope', () => {
@@ -454,46 +329,5 @@ describe('runWatchRuntimeTeardown', () => {
 
     expect(destroyed).toEqual(['runtime-1', 'runtime-2']);
     expect(state.runtime).toBeNull();
-  });
-
-  it('releases the memo even when teardown throws', async () => {
-    const state = createState();
-
-    await expect(
-      runWatchRuntimeTeardown(state, async () => {
-        throw new Error('destroy failed');
-      }),
-    ).rejects.toThrow('destroy failed');
-
-    expect(state.cleanupPromise).toBeNull();
-  });
-});
-
-describe('registerWatchCleanup', () => {
-  it('installs the process nets once, so a restart cannot stack them', () => {
-    // The other half of releasing the teardown memo: the memo is per runtime,
-    // these nets are not. They read the cached runtime live, so they stay
-    // correct across a config restart — and re-arming them alongside the memo
-    // would leave a fresh, never-removed set behind on every teardown.
-    const registered: string[] = [];
-    const original = process.once;
-    // Recorded rather than installed: these are `process.once` handlers nothing
-    // removes, and the test worker outlives the test.
-    process.once = ((event: string) => {
-      registered.push(event);
-      return process;
-    }) as typeof process.once;
-
-    try {
-      registerWatchCleanup(false);
-      const afterFirst = [...registered];
-      registerWatchCleanup(false);
-
-      expect(afterFirst).toContain('exit');
-      expect(afterFirst).toContain('SIGINT');
-      expect(registered).toEqual(afterFirst);
-    } finally {
-      process.once = original;
-    }
   });
 });

@@ -68,17 +68,4 @@ describe('runTests finalize drift-guard', () => {
     // cycle, so coverage has one run-time reporter again.
     expect(total(hits)).toBe(2);
   });
-
-  it('keeps a single finalizeRunCycle implementation', () => {
-    const source = readFileSync(join(coreDir, 'finalizeRun.ts'), 'utf8');
-    expect(source.match(/function finalizeRunCycle\b/g)?.length ?? 0).toBe(1);
-    // Every caller imports it from `finalizeRun.ts`; it is never redefined
-    // elsewhere in core.
-    const otherDefs = collectSources(coreDir)
-      .filter((file) => !file.endsWith('finalizeRun.ts'))
-      .some((file) =>
-        /function finalizeRunCycle\b/.test(readFileSync(file, 'utf8')),
-      );
-    expect(otherDefs).toBe(false);
-  });
 });

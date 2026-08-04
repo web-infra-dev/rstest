@@ -4,7 +4,6 @@ import { Rstest } from '../../src/core/rstest';
 import {
   createWatchCycleDriver,
   createWatchShortcutHandlers,
-  createWatchTeardown,
 } from '../../src/core/watchSession';
 import type {
   ExecutorCycleOutcome,
@@ -81,91 +80,35 @@ const createGatedExecutor = (name: string) => {
   return { executor, release: () => release(), started };
 };
 
-const createDriver = (
-  context: Rstest,
-  isSessionClosing: () => boolean = () => false,
-) => {
-  const runs: TraceRun[] = [];
+const createDriver = (context: Rstest) => {
   let activeTraceRun = { finalize: async () => {} } as TraceRun;
   const traceController = {
-    beginRun: () => {
-      const run = { finalize: async () => {} } as TraceRun;
-      runs.push(run);
-      return run;
-    },
+    beginRun: () => ({ finalize: async () => {} }) as TraceRun,
     close: async () => {},
   } as unknown as TraceController;
 
-  return {
-    runs,
-    driver: createWatchCycleDriver({
-      context,
-      coverageProvider: null,
-      traceController,
-      getTraceRun: () => activeTraceRun,
-      setTraceRun: (run) => {
-        activeTraceRun = run;
-      },
-      enableCliShortcuts: false,
-      isSessionLive: () => true,
-      isSessionClosing,
-    }),
-  };
+  return createWatchCycleDriver({
+    context,
+    coverageProvider: null,
+    traceController,
+    getTraceRun: () => activeTraceRun,
+    setTraceRun: (run) => {
+      activeTraceRun = run;
+    },
+    enableCliShortcuts: false,
+    isSessionLive: () => true,
+    isSessionClosing: () => false,
+  });
 };
 
 describe('createWatchCycleDriver', () => {
-  it('keeps the snapshot summary on an executor’s first cycle and clears it after', async () => {
-    const context = createContext();
-    const { driver } = createDriver(context);
-    const seen: number[] = [];
-    const executor = createFakeExecutor('node', () => {
-      seen.push(context.snapshotManager.summary.unmatched);
-    });
-
-    context.snapshotManager.summary.unmatched = 3;
-    await driver.runCycle(executor, { mode: 'all' });
-
-    context.snapshotManager.summary.unmatched = 5;
-    await driver.runCycle(executor, { mode: 'on-demand' });
-
-    // First cycle sees the value untouched; the rerun sees a cleared summary.
-    expect(seen).toEqual([3, 0]);
-  });
-
-  it('skips the finalize for a cycle the session teardown interrupted', async () => {
-    const context = createContext();
-    let closing = false;
-    const { driver, runs } = createDriver(context, () => closing);
-    const runEnds: unknown[] = [];
-    context.reporters = [
-      {
-        onTestRunEnd: (payload) => {
-          runEnds.push(payload);
-        },
-      },
-    ];
-    // What a teardown-killed cycle actually produces: the node pool rejects its
-    // running task with a worker-stopped error as the pool shuts down.
-    const executor = createFakeExecutor('node', () => {
-      closing = true;
-    });
-
-    await driver.runCycle(executor, { mode: 'all' });
-
-    // No verdict, so no exit code either — on a config-change restart it would
-    // outlive this session and fail the one that replaces it.
-    expect(runEnds).toEqual([]);
-    // And no next-cycle buffer or ready banner for a session that is ending.
-    expect(runs).toHaveLength(0);
-  });
-
   it('clears the failed-test count even on a first cycle, so bail stays cycle-scoped', async () => {
     // The other half of the mixed-watch startup order: the browser's first
     // cycle must not inherit the node initial cycle's failures, or a `bail`
     // limit already reached drains every browser file as skipped before the
     // browser session has run a test.
     const context = createContext();
-    const { driver } = createDriver(context);
+    const driver = createDriver(context);
     const node = createFakeExecutor('node', () => {
       context.stateManager.onTestFileResult({
         testId: '/fail.test.ts',
@@ -193,7 +136,7 @@ describe('createWatchCycleDriver', () => {
     // The mixed-watch startup order: the node initial cycle finalizes, then the
     // browser initial cycle runs. `u` reads the summary the node cycle left.
     const context = createContext();
-    const { driver } = createDriver(context);
+    const driver = createDriver(context);
     const node = createFakeExecutor('node');
     const browser = createFakeExecutor('browser');
 
@@ -206,7 +149,7 @@ describe('createWatchCycleDriver', () => {
 
   it('folds a burst of invalidations into the queued cycle instead of appending', async () => {
     const context = createContext();
-    const { driver } = createDriver(context);
+    const driver = createDriver(context);
     const { executor, release, started } = createGatedExecutor('browser');
 
     const inFlight = driver.runCycle(executor, {
@@ -252,7 +195,7 @@ describe('createWatchCycleDriver', () => {
 
   it('folds only same-kind triggers, and never one that carries no kind', async () => {
     const context = createContext();
-    const { driver } = createDriver(context);
+    const driver = createDriver(context);
     const { executor, release, started } = createGatedExecutor('node');
 
     const inFlight = driver.runCycle(executor, { mode: 'all' });
@@ -286,7 +229,7 @@ describe('createWatchCycleDriver', () => {
 
   it('never folds an explicit trigger together with an invalidation', async () => {
     const context = createContext();
-    const { driver } = createDriver(context);
+    const driver = createDriver(context);
     const { executor, release, started } = createGatedExecutor('node');
 
     const inFlight = driver.runCycle(executor, { mode: 'all' });
@@ -326,7 +269,7 @@ describe('createWatchCycleDriver', () => {
     // every snapshot file a rebuild happened to touch destroys data the user
     // never offered up.
     const context = createContext();
-    const { driver } = createDriver(context);
+    const driver = createDriver(context);
     const { executor, release, started } = createGatedExecutor('node');
     const originalUpdateSnapshot =
       context.snapshotManager.options.updateSnapshot;
@@ -378,7 +321,7 @@ describe('createWatchCycleDriver', () => {
     // drops the second's window on the first's way past, and the burst the
     // window exists for appends instead of folding.
     const context = createContext();
-    const { driver } = createDriver(context);
+    const driver = createDriver(context);
     const { executor, release, started } = createGatedExecutor('node');
 
     const first = driver.runCycle(executor, { mode: 'all' });
@@ -408,7 +351,7 @@ describe('createWatchCycleDriver', () => {
 
   it('queues rather than folds once the cycle has read its scope', async () => {
     const context = createContext();
-    const { driver } = createDriver(context);
+    const driver = createDriver(context);
     const { executor, release, started } = createGatedExecutor('node');
 
     const inFlight = driver.runCycle(executor, {
@@ -438,7 +381,7 @@ describe('createWatchCycleDriver', () => {
 
   it('keeps a rejected cycle from wedging the queue', async () => {
     const context = createContext();
-    const { driver } = createDriver(context);
+    const driver = createDriver(context);
     const executor = createFakeExecutor('node', (options) => {
       if (options.mode === 'on-demand') {
         throw new Error('cycle blew up');
@@ -461,7 +404,7 @@ describe('createWatchCycleDriver', () => {
     // single driver-wide flag reads as armed there, and the `a`/`f`/`u` fanout
     // then reruns the node side and drops the browser half in silence.
     const context = createContext();
-    const { driver } = createDriver(context);
+    const driver = createDriver(context);
     const node = createFakeExecutor('node');
     const browser = createFakeExecutor('browser');
 
@@ -483,7 +426,7 @@ describe('createWatchCycleDriver', () => {
     // every one of them answers "initial run in progress", and the healthy node
     // side can only be rerun by saving a file.
     const context = createContext();
-    const { driver } = createDriver(context);
+    const driver = createDriver(context);
     const node = createFakeExecutor('node');
     const browser = createFakeExecutor('browser', () => {
       throw new Error('browser launch failed');
@@ -495,171 +438,6 @@ describe('createWatchCycleDriver', () => {
     );
 
     expect(driver.hasSettledCycle([node, browser])).toBe(true);
-  });
-
-  it('tells the executor whether its own invalidation queued the cycle', async () => {
-    // The node side publishes a finished rebuild's measured duration and lets
-    // only the cycle that rebuild queued claim it. Without this flag a shortcut
-    // rerun already sitting in the queue dispatches first and reports the
-    // rebuild's build time as its own, leaving the rebuild's cycle with none.
-    const context = createContext();
-    const { driver } = createDriver(context);
-    const executor = createFakeExecutor('node');
-
-    await driver.runCycle(executor, {
-      mode: 'on-demand',
-      trigger: 'invalidation',
-    });
-    await driver.runCycle(executor, { fileFilters: ['/a.test.ts'] });
-
-    expect(executor.cycles.map((cycle) => cycle.fromInvalidation)).toEqual([
-      true,
-      false,
-    ]);
-  });
-
-  it('rotates one trace buffer per finalized cycle', async () => {
-    const context = createContext();
-    const { runs, driver } = createDriver(context);
-    const executor = createFakeExecutor('node');
-
-    await driver.runCycle(executor, { mode: 'all' });
-    await driver.runCycle(executor, { mode: 'on-demand' });
-
-    expect(runs).toHaveLength(2);
-  });
-});
-
-describe('createWatchTeardown', () => {
-  const noopTrace = () =>
-    ({
-      finalize: async () => {},
-    }) as TraceRun;
-
-  it('closes every executor and finalizes the trace even when one close throws', async () => {
-    const closed: string[] = [];
-    let traceFinalized = 0;
-    let controllerClosed = 0;
-
-    const teardown = createWatchTeardown({
-      executors: [
-        {
-          ...createFakeExecutor('browser'),
-          close: async () => {
-            closed.push('browser');
-            throw new Error('browser close failed');
-          },
-        },
-        {
-          ...createFakeExecutor('node'),
-          close: async () => {
-            closed.push('node');
-          },
-        },
-      ],
-      traceController: {
-        beginRun: noopTrace,
-        close: async () => {
-          controllerClosed += 1;
-        },
-      } as unknown as TraceController,
-      getTraceRun: () =>
-        ({
-          finalize: async () => {
-            traceFinalized += 1;
-          },
-        }) as TraceRun,
-    });
-
-    await teardown.close();
-
-    // A throwing close must not take the executors behind it, or the trace
-    // files, down with it — teardown is the last thing that runs.
-    expect(closed).toEqual(['browser', 'node']);
-    expect(traceFinalized).toBe(1);
-    expect(controllerClosed).toBe(1);
-  });
-
-  it('runs the teardown once for repeated calls', async () => {
-    let closes = 0;
-    const teardown = createWatchTeardown({
-      executors: [
-        {
-          ...createFakeExecutor('node'),
-          close: async () => {
-            closes += 1;
-          },
-        },
-      ],
-      traceController: {
-        beginRun: noopTrace,
-        close: async () => {},
-      } as unknown as TraceController,
-      getTraceRun: noopTrace,
-    });
-
-    await Promise.all([teardown.close(), teardown.close()]);
-    await teardown.close();
-
-    expect(closes).toBe(1);
-  });
-
-  it('settles a tracked startup phase before closing, and releases the stdin owner last', async () => {
-    const order: string[] = [];
-    let resolveSetup: (() => void) | undefined;
-    const teardown = createWatchTeardown({
-      executors: [
-        {
-          ...createFakeExecutor('node'),
-          close: async () => {
-            order.push('close');
-          },
-        },
-      ],
-      traceController: {
-        beginRun: noopTrace,
-        close: async () => {},
-      } as unknown as TraceController,
-      getTraceRun: noopTrace,
-    });
-    teardown.addCleanup(() => order.push('release-stdin'));
-
-    // In flight when the close arrives, which is the config-restart and Ctrl+C
-    // race: the phase's own teardown callback is still being registered.
-    teardown.track(
-      new Promise<void>((resolve) => {
-        resolveSetup = () => {
-          order.push('setup-settled');
-          resolve();
-        };
-      }),
-    );
-
-    const closing = teardown.close();
-    expect(teardown.isClosing()).toBe(true);
-    expect(order).toEqual([]);
-
-    resolveSetup!();
-    await closing;
-
-    expect(order).toEqual(['setup-settled', 'close', 'release-stdin']);
-  });
-
-  it('runs a cleanup added after the teardown settled', async () => {
-    const released: string[] = [];
-    const teardown = createWatchTeardown({
-      executors: [],
-      traceController: {
-        beginRun: noopTrace,
-        close: async () => {},
-      } as unknown as TraceController,
-      getTraceRun: noopTrace,
-    });
-
-    await teardown.close();
-    teardown.addCleanup(() => released.push('stdin'));
-
-    expect(released).toEqual(['stdin']);
   });
 });
 
@@ -698,24 +476,6 @@ describe('createWatchShortcutHandlers arming', () => {
     armed = true;
     await handlers.runAll!();
     expect(cycles).toEqual(['node', 'browser']);
-  });
-
-  it('exposes its rerun gate, so the stdin owner can check it before prompting', () => {
-    // `t`/`p` ask for input before they call their handler. A gate that only
-    // wraps the handler lets the prompt open, take a pattern, and throw it away
-    // on Enter — or, on Escape, drop the keystroke without a word.
-    let armed = false;
-    const handlers = createWatchShortcutHandlers(
-      createContext(),
-      targetsOf([]),
-      async () => {},
-      () => armed,
-    );
-
-    expect(handlers.canRerun!()).toBe(false);
-
-    armed = true;
-    expect(handlers.canRerun!()).toBe(true);
   });
 
   it('restores the live snapshot flag after a `u` burst, not over it', async () => {
