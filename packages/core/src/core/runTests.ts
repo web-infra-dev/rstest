@@ -177,13 +177,9 @@ export async function runTests(context: Rstest): Promise<void> {
   // `--related` resolution lands — the plan globs nothing for it, so no executor
   // is ever launched and the no-test-files verdict comes from the one finalize.
   if (!hasNodeTestsToRun && !hasBrowserTestsToRun) {
-    // Loading the browser module is what validates the browser config, and this
-    // branch may reach the end without loading it — a run whose browser config
-    // is invalid would then finalize with "no test files found" instead of the
-    // config error, since the plan cannot be trusted to be about a valid run in
-    // the first place. So ask for the check directly, unless the planner already
-    // got it: the discovery boot loads the module too, and validating twice
-    // reprints every unsupported-option warning.
+    // Constructing a browser executor normally validates its config, and this
+    // branch may reach the end without one — so ask for the check directly
+    // unless the discovery boot already validated after config hooks ran.
     //
     // This reaches empty *mixed* runs, not only browser-only ones: an empty
     // mixed run whose `@rstest/browser` is missing or version-mismatched
@@ -425,11 +421,11 @@ export async function runTests(context: Rstest): Promise<void> {
   const enableCliShortcuts = isCliShortcutsEnabled();
   // Constructed (not launched) below so its invalidation subscriber, the shared
   // teardown, and the stdin owner — all three closing over it — are in place
-  // before either side's first cycle. Loading it validates its config and can
-  // exit on a version mismatch, which is why that runs ahead of the node
-  // env-dependency validation `ensureRunResources()` does further down; the
-  // ordering that matters is the launch, and the launch is the first browser
-  // cycle, deferred until those node resources are up.
+  // before either side's first cycle. Loading it can exit on a version mismatch,
+  // which is why that runs ahead of the node env-dependency validation
+  // `ensureRunResources()` does further down; the ordering that matters is the
+  // launch, and the launch is the first browser cycle, deferred until those node
+  // resources are up.
   let browserExecutor: BrowserTestExecutor | undefined;
   // Assigned once the teardown below exists; until then nothing can be closing.
   let isSessionClosing = () => false;

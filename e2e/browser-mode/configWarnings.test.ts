@@ -47,8 +47,14 @@ describe('browser mode - config validation warnings', () => {
     });
     await expectExecSuccess();
     const output = `${cli.stdout}\n${cli.stderr}`;
-    expect(output).toMatch(/Ignoring logHeapUsage in browser mode/);
-    expect(output).toMatch(/Ignoring detectAsyncLeaks in browser mode/);
-    expect(output).toMatch(/Ignoring pool\.type 'threads' in browser mode/);
+    expect(
+      output.match(/Ignoring logHeapUsage in browser mode/g) ?? [],
+    ).toHaveLength(1);
+    expect(
+      output.match(/Ignoring detectAsyncLeaks in browser mode/g) ?? [],
+    ).toHaveLength(1);
+    expect(
+      output.match(/Ignoring pool\.type 'threads' in browser mode/g) ?? [],
+    ).toHaveLength(1);
   });
 });

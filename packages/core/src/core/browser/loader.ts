@@ -29,6 +29,11 @@ export type BrowserExecutorRunOptions = Pick<
   | 'appliedModifyRstestConfigEnvironments'
 >;
 
+export interface BrowserExecutorLoadOptions extends BrowserExecutorRunOptions {
+  /** The planner's discovery boot already validated the post-hook config. */
+  configAlreadyValidated?: boolean;
+}
+
 /**
  * Options for {@link BrowserHostModule.createBrowserExecutor}. `projects` is the
  * explicit browser-project subset the plan resolved; `coverageProvider` is the
@@ -225,12 +230,26 @@ export async function runBrowserDiscovery(
   context: RstestContext,
   browserProjects: ProjectContext[],
   options: BrowserTestRunOptions,
-  validatedModule?: BrowserHostModule,
 ): Promise<BrowserTestRunResult | void> {
-  const { runBrowserTests } =
-    validatedModule ??
-    (await loadAndValidateBrowserModule(context, browserProjects));
-  return runBrowserTests(context, { ...options, projects: browserProjects });
+  const browserModule = await loadBrowserModule({
+    projectRoots: browserProjects.map((project) => project.rootPath),
+    embedded: context.embedded,
+  });
+  const result = await browserModule.runBrowserTests(context, {
+    ...options,
+    projects: browserProjects,
+  });
+
+  // A registered Rsbuild plugin may not actually register a config hook. In
+  // that case the host has no post-hook refresh at which to validate, so the
+  // discovery boot must still provide the run's validation barrier itself.
+  const configWasValidatedByHook = browserProjects.some((project) =>
+    options.appliedModifyRstestConfigEnvironments?.has(project.environmentName),
+  );
+  if (!configWasValidatedByHook) {
+    browserModule.validateBrowserConfig(context);
+  }
+  return result;
 }
 
 /**
@@ -253,19 +272,23 @@ export async function validateBrowserRunConfig(
 
 /**
  * Load `@rstest/browser` and build the browser side of the executor seam,
- * validating the browser config first. Shared by the run path (`runTests`) and
- * the list path (`listTests`) so both go through one browser entry point.
+ * validating the browser config unless the planner's discovery barrier already
+ * did. Shared by the run path (`runTests`) and the list path (`listTests`) so
+ * both go through one browser entry point.
  */
 export async function loadBrowserExecutor(
   context: RstestContext,
   browserProjects: ProjectContext[],
   coverageProvider: CoverageProvider | null,
-  runOptions?: BrowserExecutorRunOptions,
+  loadOptions?: BrowserExecutorLoadOptions,
 ): Promise<BrowserTestExecutor> {
-  const { createBrowserExecutor } = await loadAndValidateBrowserModule(
-    context,
-    browserProjects,
-  );
+  const { configAlreadyValidated = false, ...runOptions } = loadOptions ?? {};
+  const { createBrowserExecutor } = configAlreadyValidated
+    ? await loadBrowserModule({
+        projectRoots: browserProjects.map((project) => project.rootPath),
+        embedded: context.embedded,
+      })
+    : await loadAndValidateBrowserModule(context, browserProjects);
   return createBrowserExecutor(context, {
     projects: browserProjects,
     coverageProvider,

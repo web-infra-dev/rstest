@@ -4,7 +4,7 @@ import {
   isFuzzyBasenameFilter,
   type TraceEvent,
 } from '../../utils';
-import { type BrowserExecutorRunOptions, runBrowserDiscovery } from './loader';
+import { type BrowserExecutorLoadOptions, runBrowserDiscovery } from './loader';
 import { getUserRstestConfigPluginProjects } from '../modifyRstestConfig';
 import type { RunProjectPlan } from '../projectPlan';
 import type { Rstest } from '../rstest';
@@ -19,13 +19,10 @@ export interface BrowserRunPlan {
   hasBrowserTestsToRun(): boolean;
   getBrowserProjectsToRun(): ProjectContext[];
   /**
-   * Whether the discovery boot ran, which means the browser module was loaded
-   * and its config validated along with it. (The boot constructs no executor —
-   * it loads the module and does one files-only run.) The empty-run branch asks
-   * because it validates directly, being the one exit that may never load the
-   * module itself, and validating a second time reprints every
-   * unsupported-option warning (`reportUnsupportedBrowserOptions` has no
-   * cross-call guard).
+   * Whether the discovery boot completed the config-validation barrier after
+   * browser `modifyRstestConfig` hooks ran. The empty-run branch and real
+   * executor ask because validating again reprints every unsupported-option
+   * warning (`reportUnsupportedBrowserOptions` has no cross-call guard).
    */
   hasValidatedBrowserConfig(): boolean;
   /**
@@ -34,7 +31,7 @@ export interface BrowserRunPlan {
    */
   getExecutorRunOptions(
     projects: ProjectContext[],
-  ): Omit<BrowserExecutorRunOptions, 'filesOnly'>;
+  ): Omit<BrowserExecutorLoadOptions, 'filesOnly'>;
 }
 
 interface BrowserRunPlanner extends BrowserRunPlan {
@@ -181,11 +178,12 @@ export function createBrowserRunPlanner({
 
   const getExecutorRunOptions = (
     projects: ProjectContext[],
-  ): Omit<BrowserExecutorRunOptions, 'filesOnly'> => ({
+  ): Omit<BrowserExecutorLoadOptions, 'filesOnly'> => ({
     shardedEntries: getBrowserShardedEntries(projects),
     freezeShardedEntries,
     allowEmptyRun: shouldAllowEmptyBrowserFallback(),
     appliedModifyRstestConfigEnvironments,
+    configAlreadyValidated: hasRunBrowserConfigHookDiscovery,
   });
 
   return {
