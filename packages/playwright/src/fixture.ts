@@ -1430,7 +1430,7 @@ type MergeContext<ExtraContext, FixturesContext> = {
 };
 
 type PlaywrightNamedFixture<Value, Context> =
-  | Value
+  | (Value extends (...args: never[]) => unknown ? never : Value)
   | ((context: Context, lifecycle: FixtureLifecycle) => Value | Promise<Value>);
 
 type PlaywrightExtend<ExtraContext> = {

@@ -247,7 +247,7 @@ type MergeFixtureContext<Context, Added extends Record<string, any>> = {
 };
 
 type NamedFixture<Value, Context> =
-  | Value
+  | (Value extends (...args: never[]) => unknown ? never : Value)
   | ((context: Context, lifecycle: FixtureLifecycle) => MaybePromise<Value>);
 
 type TestExtend<ExtraContext> = {

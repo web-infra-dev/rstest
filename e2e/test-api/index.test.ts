@@ -114,6 +114,7 @@ describe('Test API', () => {
       'fixture setup timed out in 100ms',
     );
     expect(cli.stdout).toContain('RSTEST_NAMED_FIXTURE_SETUP_TIMEOUT_CLEANUP');
+    expect(cli.stdout).toContain('RSTEST_NAMED_FIXTURE_LATE_CLEANUP');
     expect(`${cli.stdout}\n${cli.stderr}`).toContain(
       'fixture cleanup timed out in 100ms',
     );

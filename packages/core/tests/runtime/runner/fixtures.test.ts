@@ -202,6 +202,43 @@ describe('createFixtureResolver', () => {
     ).rejects.toThrow('test fixture setup timed out');
   });
 
+  it('runs cleanup registered after named fixture setup times out', async () => {
+    let continueSetup: (() => void) | undefined;
+    let cleanupFinished: (() => void) | undefined;
+    const cleanupFinishedPromise = new Promise<void>((resolve) => {
+      cleanupFinished = resolve;
+    });
+    const fixtures = normalizeNamedFixture(
+      'value',
+      async (_context: object, { onCleanup }: any) => {
+        await new Promise<void>((resolve) => {
+          continueSetup = resolve;
+        });
+        onCleanup(() => {
+          cleanupFinished!();
+        });
+        return 'value';
+      },
+    );
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver({ fixtures } as any, {}, cleanups, {
+      runNamedFixtureSetup: async (setup, onTimeout) => {
+        void setup();
+        onTimeout();
+        throw new Error('fixture setup timed out');
+      },
+    });
+
+    await expect(
+      resolver.resolveTestFixtures(({ value }: any) => value),
+    ).rejects.toThrow('fixture setup timed out');
+    expect(cleanups).toEqual([]);
+
+    continueSetup!();
+    await cleanupFinishedPromise;
+    expect(cleanups).toEqual([]);
+  });
+
   it('does not parse callbacks when the test has no fixtures', async () => {
     const resolver = createFixtureResolver({} as any, {});
 

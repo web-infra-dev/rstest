@@ -91,6 +91,7 @@ export type FixtureResolver = {
 
 type RunNamedFixtureSetup = <Value>(
   setup: () => Promise<Value>,
+  onTimeout: () => void,
 ) => Promise<Value>;
 
 type FixtureResolverOptions = {
@@ -220,8 +221,12 @@ export const createFixtureResolver = (
           }
         };
 
-        const setup = runNamedFixtureSetup(() =>
-          Promise.resolve(fixtureValue(context, { onCleanup })),
+        const setup = runNamedFixtureSetup(
+          () => Promise.resolve(fixtureValue(context, { onCleanup })),
+          () => {
+            cancelledFixtures.add(name);
+            trackCancellationCleanup();
+          },
         );
         try {
           const value = await Promise.race([setup, cancellationCleanup]);

@@ -26,5 +26,17 @@ const lifecycle: FixtureLifecycle = {
 };
 void lifecycle;
 
+const predicate = (value: string) => value.length > 0;
+
+// @ts-expect-error callable values must be returned by named fixture functions
+test.extend('predicate', predicate);
+
+test.extend('predicate', () => predicate)(
+  'exposes callable fixture values returned by fixture functions',
+  ({ predicate }) => {
+    expect(predicate('value')).toBeTypeOf('boolean');
+  },
+);
+
 // @ts-expect-error fixture options are not part of the named fixture form
 test.extend('value', {}, 'value');

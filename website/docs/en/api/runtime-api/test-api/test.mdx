@@ -406,7 +406,9 @@ const apiTest = test
   });
 ```
 
-Named fixtures are test-scoped: Rstest creates a new value for each test attempt and runs its cleanup before starting the next attempt. Use direct object destructuring in the first parameter to request other fixtures or fields from `TestContext`.
+Named fixture functions are test-scoped: Rstest evaluates them for each test attempt and runs their cleanup before starting the next attempt. Plain values are reused across attempts. Use a fixture function when mutable state must be isolated for each attempt.
+
+A function argument is always treated as a fixture function. To use a function as the fixture value, return it from a fixture function, for example `.extend('predicate', () => predicate)`. Use direct object destructuring in the first parameter to request other fixtures or fields from `TestContext`.
 
 ### Plain value fixtures
 

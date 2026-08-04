@@ -497,17 +497,28 @@ test(
 );
 
 const namedFixtureEvents: string[] = [];
-const namedFixtureTest = test.extend('title', (_context, { onCleanup }) => {
-  expect('named fixture setup').toContain('setup');
-  onCleanup(() => {
-    expect('named fixture cleanup').toContain('cleanup');
-    namedFixtureEvents.push('cleanup');
-  });
-  return 'named fixture title';
-});
+const predicate = (value: string) => value.length > 0;
 
-namedFixtureTest('supports the named fixture form', ({ title }) => {
+const checkNamedFixtureTypes = () => {
+  // @ts-expect-error callable values must be returned by named fixture functions
+  test.extend('predicate', predicate);
+};
+void checkNamedFixtureTypes;
+
+const namedFixtureTest = test
+  .extend('title', (_context, { onCleanup }) => {
+    expect('named fixture setup').toContain('setup');
+    onCleanup(() => {
+      expect('named fixture cleanup').toContain('cleanup');
+      namedFixtureEvents.push('cleanup');
+    });
+    return 'named fixture title';
+  })
+  .extend('predicate', () => predicate);
+
+namedFixtureTest('supports the named fixture form', ({ predicate, title }) => {
   expect(title).toBe('named fixture title');
+  expect(predicate('value')).toBe(true);
   namedFixtureEvents.push('test');
 });
 

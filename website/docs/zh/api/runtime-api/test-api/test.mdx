@@ -406,7 +406,9 @@ const apiTest = test
   });
 ```
 
-具名 fixture 属于 test scope：Rstest 会为每次 test attempt 创建新值，并在开始下一次 attempt 前执行 cleanup。需要请求其他 fixture 或 `TestContext` 字段时，请直接在第一个参数中使用对象解构。
+具名 fixture 函数属于 test scope：Rstest 会为每次 test attempt 执行这些函数，并在开始下一次 attempt 前执行 cleanup。普通值会在不同 attempt 之间复用；如果可变状态需要在每次 attempt 之间隔离，请使用 fixture 函数。
+
+函数参数始终会被视为 fixture 函数。若要把函数本身作为 fixture 值，请通过 fixture 函数返回它，例如 `.extend('predicate', () => predicate)`。需要请求其他 fixture 或 `TestContext` 字段时，请直接在第一个参数中使用对象解构。
 
 ### 普通值 fixture
 
