@@ -247,7 +247,14 @@ export async function runBrowserDiscovery(
     options.appliedModifyRstestConfigEnvironments?.has(project.environmentName),
   );
   if (!configWasValidatedByHook) {
-    browserModule.validateBrowserConfig(context);
+    try {
+      browserModule.validateBrowserConfig(context);
+    } catch (error) {
+      // The boot already built its runtime; the caller only closes it on a
+      // returned result, so an invalid config must not leak the dev servers.
+      await result?.close?.();
+      throw error;
+    }
   }
   return result;
 }
