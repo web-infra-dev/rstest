@@ -40,10 +40,8 @@ import {
   collectProjectEntries,
   createBrowserRuntime,
   destroyBrowserRuntime,
-  drainPendingAffectedTestFiles,
   drainPendingBuildTime,
   getBrowserProjects,
-  mapViewportByProject,
   type BrowserProjectServer,
   type BrowserProviderProject,
   resolveContainerDist,
@@ -69,7 +67,6 @@ import {
 import {
   type BrowserProvider,
   type BrowserProviderImplementation,
-  type BrowserProviderPage,
   getBrowserProviderImplementation,
 } from './providers';
 import {
@@ -81,6 +78,7 @@ import {
   type TestFileStartPayload,
   type TestSuiteResultPayload,
   type TestSuiteStartPayload,
+  toError,
 } from './hostPayloads';
 import {
   loadSourceMapWithCache,
@@ -88,7 +86,12 @@ import {
   type SourceMapPayload,
 } from './sourceMap/sourceMapLoader';
 import { collectWatchTestFiles } from './watchRerunPlanner';
+import type {
+  BrowserWatchSession,
+  DispatchPageResolver,
+} from './schedulerSeam';
 import { registerWatchCleanup, watchContext } from './watchRuntime';
+import { createWatchSignals } from './watchSignals';
 
 /**
  * Monotonic counter for synthetic per-file Perfetto `pid` values in `--trace`
@@ -170,22 +173,6 @@ const resolveProviderForTestPath = ({
 };
 
 // ============================================================================
-
-/**
- * The watch-session control surface a watch-mode controller run hands back with
- * its initial cycle. Every rerun trigger the host owns (dev rebuild, HMR, the
- * in-page rerun button) resolves its own scope and then signals core's
- * invalidation subscriber; core resets the cycle state and calls back into
- * {@link BrowserWatchSession.runCycle} to execute it. A trigger that resolves to
- * no work never signals, so a scope matching none of this host's files produces
- * no cycle and no cycle output.
- */
-export type BrowserWatchSession = {
-  /** Execute the scope the last trigger resolved, as one cycle outcome. */
-  runCycle: (testPaths: string[]) => Promise<ExecutorCycleOutcome>;
-  /** Explicit path-scoped rerun request (a CLI shortcut's browser fanout). */
-  requestRerun: (testPaths?: string[]) => Promise<void>;
-};
 
 export type BrowserControllerOptions = BrowserTestRunOptions & {
   providerImplementation?: BrowserProviderImplementation;
@@ -308,10 +295,6 @@ export const runBrowserController = async (
     };
   };
 
-  const toError = (error: unknown): Error => {
-    return error instanceof Error ? error : new Error(String(error));
-  };
-
   const failWithError = async (
     error: unknown,
     cleanup?: () => Promise<void>,
@@ -329,16 +312,6 @@ export const runBrowserController = async (
     } finally {
       await cleanup?.();
     }
-  };
-
-  const collectDeletedTestPaths = (
-    previous: TestFileInfo[],
-    current: TestFileInfo[],
-  ): string[] => {
-    const currentPathSet = new Set(current.map((file) => file.testPath));
-    return previous
-      .map((file) => file.testPath)
-      .filter((testPath) => !currentPathSet.has(testPath));
   };
 
   const coverageConfig = browserProjects.find(
@@ -432,80 +405,7 @@ export const runBrowserController = async (
 
   let runtime = isWatchMode ? watchContext.runtime : null;
 
-  const watchSignals = (() => {
-    // The transport-owned rerun trigger, installed by whichever run branch
-    // (headless/headed) executes below: resolve this rebuild's scope, then hand
-    // it to core's invalidation subscriber. Populated after the initial cycle.
-    let dispatchRerun: (() => Promise<void>) | undefined;
-
-    /**
-     * Latest-wins interrupt, installed by the run branch whose in-flight run can
-     * be cut short (headless). Core serializes cycles, so a trigger arriving
-     * mid-cycle would otherwise wait out a run the user has already superseded.
-     */
-    let interruptInFlightRun: (() => Promise<void>) | undefined;
-
-    /**
-     * The cycle core is running for the scope last signalled. Only an explicit
-     * request awaits it, right after it dispatched: a CLI shortcut's
-     * `updateSnapshot` stays flipped only until `requestRerun` resolves, and the
-     * in-page rerun button answers its RPC when the rerun is done. A rejection is
-     * reported here rather than left to an awaiting caller, because compile-driven
-     * triggers have no caller — and a failed cycle must not end the session.
-     */
-    let signalledCycle: Promise<void> | undefined;
-
-    return {
-      setDispatchRerun(fn: () => Promise<void>): void {
-        dispatchRerun = fn;
-      },
-      async runDispatchRerun(): Promise<void> {
-        await dispatchRerun?.();
-      },
-      setInterrupt(fn: () => Promise<void>): void {
-        interruptInFlightRun = fn;
-      },
-      /**
-       * Hand the scope this trigger resolved to core, which resets the cycle state,
-       * calls back into the session's `runCycle`, and finalizes.
-       *
-       * The cycle is deliberately *not* awaited here. Rebuild triggers reach this
-       * from inside the bundler's dev-compile hook, and the bundler keeps no
-       * watcher attached while that hook is pending: anything created or deleted in
-       * that window is never seen, so it never rebuilds and never reruns. Holding
-       * the hook for a whole cycle widens that blind window to the cycle's full
-       * duration, which loses test files added or removed mid-run for good. Core
-       * serializes the cycles itself, so nothing here has to.
-       *
-       * The in-flight run is cut short here rather than at the trigger, because only
-       * this point knows a replacement cycle is actually coming: a trigger that
-       * resolves to no affected files must leave the running cycle alone, or it
-       * finalizes on results it never produced.
-       */
-      async signalInvalidation(
-        fileFilters: string[],
-        /**
-         * Run state this trigger binds to its own paths, taken in the same turn as
-         * the handover — after any interrupt, so no queued cycle can be dequeued in
-         * between and read it. The headed rerun's per-file test-name pattern is the
-         * one such state; core's cycle options cannot carry it, so the only thing
-         * that makes it the property of one cycle is claiming it here.
-         */
-        claimScope?: () => void,
-      ): Promise<void> {
-        await interruptInFlightRun?.();
-        claimScope?.();
-        signalledCycle = Promise.resolve(
-          onInvalidate?.({ isFirstBuild: false, fileFilters }),
-        ).catch((error) => {
-          logger.error(color.red('Browser Mode watch cycle failed:'), error);
-        });
-      },
-      async awaitSignalledCycle(): Promise<void> {
-        await signalledCycle;
-      },
-    };
-  })();
+  const watchSignals = createWatchSignals(onInvalidate);
 
   if (!runtime) {
     try {
@@ -697,7 +597,7 @@ export const runBrowserController = async (
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
 
-  const { browser, browserLaunchOptions, wsPort, wss } = runtime;
+  const { browser, browserLaunchOptions, wsPort } = runtime;
 
   // Collect all test files from project entries with project info
   // Normalize paths to posix format for cross-platform compatibility
@@ -769,13 +669,8 @@ export const runBrowserController = async (
     }
   }
 
-  let resolveDispatchPages: (target?: BrowserDispatchRequest['target']) => {
-    runnerPage?: BrowserProviderPage;
-    containerPage?: BrowserProviderPage;
-  } = () => ({});
-  const setDispatchPageResolver = (
-    resolver: typeof resolveDispatchPages,
-  ): void => {
+  let resolveDispatchPages: DispatchPageResolver = () => ({});
+  const setDispatchPageResolver = (resolver: DispatchPageResolver): void => {
     resolveDispatchPages = resolver;
   };
 
@@ -1116,79 +1011,73 @@ export const runBrowserController = async (
     });
   };
 
-  if (useHeadlessDirect) {
-    return createHeadlessScheduler({
-      context,
-      browser,
-      browserLaunchOptions,
-      projectServers: runtime.projectServers,
-      allTestFiles,
-      projectRuntimeConfigs,
-      hostOptions,
-      watchState,
-      isWatchMode,
-      enableCliShortcuts,
-      createDispatchRouter,
-      handlers: { handleFatal, handleTestFileComplete },
-      fatalErrorRef,
-      watchSignals,
-      setDispatchPageResolver,
-      reporterResults,
-      caseResults,
-      buildTime,
-      createWatchSession,
-      collectDeletedTestPaths,
-      collectProjectEntries: () => collectProjectEntries(context),
-      failWithError,
-      toError,
-      getBrowserSourcemap,
-      resolveBrowserSourcemap,
-      serializeForInlineScript,
-      mapViewportByProject,
-      drainPendingAffectedTestFiles,
-      logWatchReadyMessage: (shortcuts) =>
-        logWatchReadyMessage(context, shortcuts),
-      destroyRuntime: () => destroyBrowserRuntime(runtime),
-    });
-  }
-
-  return createHeadedScheduler({
+  const schedulerDeps = {
     context,
-    runtime,
-    browser,
-    browserLaunchOptions,
     allTestFiles,
     hostOptions,
-    watchState,
     isWatchMode,
-    enableCliShortcuts,
-    wss,
     createDispatchRouter,
-    handlers: {
-      handleTestFileStart,
-      handleTestCaseResult,
-      handleTestFileComplete,
-      handleLog,
-      handleFatal,
-    },
     fatalErrorRef,
     watchSignals,
     setDispatchPageResolver,
-    reporterResults,
-    caseResults,
-    buildTime,
     createWatchSession,
-    collectDeletedTestPaths,
     collectProjectEntries: () => collectProjectEntries(context),
-    drainPendingAffectedTestFiles,
-    failWithError,
-    toError,
-    getBrowserSourcemap,
-    resolveBrowserSourcemap,
-    logWatchReadyMessage: (shortcuts) =>
-      logWatchReadyMessage(context, shortcuts),
+    logWatchReady: () => logWatchReadyMessage(context, enableCliShortcuts),
     destroyRuntime: () => destroyBrowserRuntime(runtime),
-  });
+  };
+
+  const { testTime, watchSession, close } = useHeadlessDirect
+    ? await createHeadlessScheduler({
+        ...schedulerDeps,
+        browser,
+        browserLaunchOptions,
+        projectServers: runtime.projectServers,
+        projectRuntimeConfigs,
+        watchState,
+        handlers: { handleFatal, handleTestFileComplete },
+      })
+    : await createHeadedScheduler({
+        ...schedulerDeps,
+        runtime,
+        handlers: {
+          handleTestFileStart,
+          handleTestCaseResult,
+          handleTestFileComplete,
+          handleLog,
+          handleFatal,
+        },
+      });
+
+  // A fatal error the run reported outranks its results: it rides the returned
+  // outcome into core's finalize, which raises the exit code from it.
+  if (fatalErrorRef.current) {
+    return failWithError(fatalErrorRef.current, close);
+  }
+
+  context.updateReporterResultState(reporterResults, caseResults);
+
+  // Enable the compile hooks only after the initial cycle, so the first build
+  // never triggers a duplicate run.
+  watchState.hooksEnabled = isWatchMode;
+
+  return {
+    results: reporterResults,
+    testResults: caseResults,
+    duration: {
+      totalTime: buildTime + testTime,
+      buildTime,
+      testTime,
+    },
+    hasFailure: reporterResults.some(
+      (result: TestFileResult) => result.status === 'fail',
+    ),
+    getSourcemap: getBrowserSourcemap,
+    resolveSourcemap: resolveBrowserSourcemap,
+    // `close` is already `undefined` in watch mode: the watch runtime outlives
+    // the cycle and is torn down through `executor.close()`.
+    close,
+    watchSession,
+  };
 };
 // ============================================================================
 // List Browser Tests

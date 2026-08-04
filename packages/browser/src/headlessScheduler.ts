@@ -1,11 +1,15 @@
 import type {
   RstestContext,
   TestFileResult,
-  TestResult,
 } from '@rstest/core/internal/browser';
 import { color, logger } from '@rstest/core/internal/browser';
 import { normalize } from 'pathe';
-import type { BrowserRuntime } from './browserRsbuild';
+import {
+  type BrowserRuntime,
+  drainPendingAffectedTestFiles,
+  mapViewportByProject,
+  serializeForInlineScript,
+} from './browserRsbuild';
 import { getHeadlessConcurrency } from './concurrency';
 import type { HostDispatchRouterOptions } from './dispatchCapabilities';
 import type { HostDispatchRouter } from './dispatchRouter';
@@ -14,10 +18,10 @@ import {
   createDeferredPromise,
   getFileTaskId,
   type FatalPayload,
+  toError,
 } from './hostPayloads';
 import type {
   BrowserClientMessage,
-  BrowserDispatchRequest,
   BrowserHostConfig,
   BrowserProjectRuntime,
   TestFileInfo,
@@ -34,13 +38,15 @@ import {
   RunSessionLifecycle,
 } from './runSession';
 import { RunnerSessionRegistry } from './sessionRegistry';
-import { planWatchRerun } from './watchRerunPlanner';
+import { collectDeletedTestPaths, planWatchRerun } from './watchRerunPlanner';
 import type {
-  BrowserControllerResult,
   BrowserWatchSession,
-} from './hostController';
+  DispatchPageResolver,
+  SchedulerRunResult,
+} from './schedulerSeam';
+import type { WatchSignals } from './watchSignals';
 
-export type HeadlessSchedulerContext = Pick<
+type HeadlessSchedulerContext = Pick<
   RstestContext,
   'command' | 'snapshotManager' | 'stateManager' | 'updateReporterResultState'
 > & {
@@ -57,7 +63,6 @@ type HeadlessSchedulerDeps = {
   hostOptions: BrowserHostConfig;
   watchState: BrowserRuntime['watchState'];
   isWatchMode: boolean;
-  enableCliShortcuts: boolean;
   createDispatchRouter: (
     options?: HostDispatchRouterOptions,
   ) => HostDispatchRouter;
@@ -65,48 +70,18 @@ type HeadlessSchedulerDeps = {
     handleFatal: (payload: FatalPayload) => Promise<void>;
     handleTestFileComplete: (payload: TestFileResult) => Promise<void>;
   };
-  fatalErrorRef: { current: Error | null };
-  watchSignals: {
-    setDispatchRerun: (fn: () => Promise<void>) => void;
-    setInterrupt: (fn: () => Promise<void>) => void;
-    signalInvalidation: (fileFilters: string[]) => Promise<void>;
-  };
-  setDispatchPageResolver: (
-    resolver: (target?: BrowserDispatchRequest['target']) => {
-      runnerPage?: BrowserProviderPage;
-      containerPage?: BrowserProviderPage;
-    },
-  ) => void;
-  reporterResults: TestFileResult[];
-  caseResults: TestResult[];
-  buildTime: number;
+  watchSignals: Pick<
+    WatchSignals,
+    'setDispatchRerun' | 'setInterrupt' | 'signalInvalidation'
+  >;
+  setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
   createWatchSession: (
     execute: (testPaths: string[]) => Promise<void>,
   ) => BrowserWatchSession;
-  collectDeletedTestPaths: (
-    previous: TestFileInfo[],
-    current: TestFileInfo[],
-  ) => string[];
   collectProjectEntries: () => Promise<
     Parameters<typeof planWatchRerun>[0]['projectEntries']
   >;
-  failWithError: (
-    error: unknown,
-    cleanup?: () => Promise<void>,
-  ) => Promise<BrowserControllerResult>;
-  toError: (error: unknown) => Error;
-  getBrowserSourcemap: BrowserControllerResult['getSourcemap'];
-  resolveBrowserSourcemap: NonNullable<
-    BrowserControllerResult['resolveSourcemap']
-  >;
-  serializeForInlineScript: (value: unknown) => string;
-  mapViewportByProject: (
-    projects: BrowserProjectRuntime[],
-  ) => Map<string, { width: number; height: number } | null>;
-  drainPendingAffectedTestFiles: (
-    watchState: BrowserRuntime['watchState'],
-  ) => string[];
-  logWatchReadyMessage: (enableCliShortcuts: boolean) => void;
+  logWatchReady: () => void;
   destroyRuntime: () => Promise<void>;
 };
 
@@ -120,28 +95,15 @@ export const createHeadlessScheduler = async ({
   hostOptions,
   watchState,
   isWatchMode,
-  enableCliShortcuts,
   createDispatchRouter,
   handlers: { handleFatal, handleTestFileComplete },
-  fatalErrorRef,
   watchSignals,
   setDispatchPageResolver,
-  reporterResults,
-  caseResults,
-  buildTime,
   createWatchSession,
-  collectDeletedTestPaths,
   collectProjectEntries,
-  failWithError,
-  toError,
-  getBrowserSourcemap,
-  resolveBrowserSourcemap,
-  serializeForInlineScript,
-  mapViewportByProject,
-  drainPendingAffectedTestFiles,
-  logWatchReadyMessage,
+  logWatchReady,
   destroyRuntime,
-}: HeadlessSchedulerDeps): Promise<BrowserControllerResult> => {
+}: HeadlessSchedulerDeps): Promise<SchedulerRunResult> => {
   // Session-based scheduling path: lifecycle + session index + dispatch routing.
   type ActiveHeadlessRun = RunSession & {
     contexts: Set<BrowserProviderContext>;
@@ -570,7 +532,7 @@ export const createHeadlessScheduler = async ({
             'No affected browser test files detected, skipping re-run.\n',
           ),
         );
-        logWatchReadyMessage(enableCliShortcuts);
+        logWatchReady();
         return;
       }
 
@@ -594,34 +556,11 @@ export const createHeadlessScheduler = async ({
       }
     : undefined;
 
-  if (fatalErrorRef.current) {
-    return failWithError(fatalErrorRef.current, closeHeadlessRuntime);
-  }
-
-  const duration = {
-    totalTime: buildTime + testTime,
-    buildTime,
-    testTime,
-  };
-
-  context.updateReporterResultState(reporterResults, caseResults);
-
-  // Enable the compile hooks only after the initial cycle, so the first build
-  // never triggers a duplicate run.
-  watchState.hooksEnabled = isWatchMode;
-
   return {
-    results: reporterResults,
-    testResults: caseResults,
-    duration,
-    hasFailure: reporterResults.some(
-      (result: TestFileResult) => result.status === 'fail',
-    ),
-    getSourcemap: getBrowserSourcemap,
-    resolveSourcemap: resolveBrowserSourcemap,
+    testTime,
+    watchSession,
     // `closeHeadlessRuntime` is already `undefined` in watch mode: the watch
     // runtime outlives the cycle and is torn down through `executor.close()`.
     close: closeHeadlessRuntime,
-    watchSession,
   };
 };

@@ -12,11 +12,8 @@ import {
   type RstestContext,
   type TestFileResult,
 } from '@rstest/core/internal/browser';
-import {
-  type BrowserWatchSession,
-  listBrowserTests,
-  runBrowserController,
-} from './hostController';
+import { listBrowserTests, runBrowserController } from './hostController';
+import type { BrowserWatchSession } from './schedulerSeam';
 import type { BrowserProviderImplementation } from './providers';
 import { cleanupWatchRuntime } from './watchRuntime';
 

@@ -5,7 +5,10 @@ import type {
 } from '@rstest/core/internal/browser';
 import { color, logger } from '@rstest/core/internal/browser';
 import { normalize, relative } from 'pathe';
-import type { BrowserRuntime } from './browserRsbuild';
+import {
+  type BrowserRuntime,
+  drainPendingAffectedTestFiles,
+} from './browserRsbuild';
 import { ContainerRpcManager, type HostRpcMethods } from './containerRpc';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
@@ -17,24 +20,23 @@ import {
   type LogPayload,
   type ReloadTestFileAck,
   type TestFileStartPayload,
+  toError,
 } from './hostPayloads';
 import type {
   BrowserDispatchRequest,
   BrowserHostConfig,
   TestFileInfo,
 } from './protocol';
+import type { BrowserProviderContext, BrowserProviderPage } from './providers';
+import { collectDeletedTestPaths, planWatchRerun } from './watchRerunPlanner';
 import type {
-  BrowserProviderBrowser,
-  BrowserProviderContext,
-  BrowserProviderPage,
-} from './providers';
-import { planWatchRerun } from './watchRerunPlanner';
-import type {
-  BrowserControllerResult,
   BrowserWatchSession,
-} from './hostController';
+  DispatchPageResolver,
+  SchedulerRunResult,
+} from './schedulerSeam';
+import type { WatchSignals } from './watchSignals';
 
-export type HeadedSchedulerContext = Pick<
+type HeadedSchedulerContext = Pick<
   RstestContext,
   'rootPath' | 'snapshotManager' | 'updateReporterResultState'
 > & {
@@ -44,14 +46,9 @@ export type HeadedSchedulerContext = Pick<
 type HeadedSchedulerDeps = {
   context: HeadedSchedulerContext;
   runtime: BrowserRuntime;
-  browser: BrowserProviderBrowser;
-  browserLaunchOptions: BrowserRuntime['browserLaunchOptions'];
   allTestFiles: TestFileInfo[];
   hostOptions: BrowserHostConfig;
-  watchState: BrowserRuntime['watchState'];
   isWatchMode: boolean;
-  enableCliShortcuts: boolean;
-  wss: BrowserRuntime['wss'];
   createDispatchRouter: () => HostDispatchRouter;
   handlers: {
     handleTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
@@ -61,43 +58,18 @@ type HeadedSchedulerDeps = {
     handleFatal: (payload: FatalPayload) => Promise<void>;
   };
   fatalErrorRef: { current: Error | null };
-  watchSignals: {
-    setDispatchRerun: (fn: () => Promise<void>) => void;
-    signalInvalidation: (
-      fileFilters: string[],
-      claimScope?: () => void,
-    ) => Promise<void>;
-    awaitSignalledCycle: () => Promise<void>;
-  };
-  setDispatchPageResolver: (
-    resolver: () => { containerPage?: BrowserProviderPage },
-  ) => void;
-  reporterResults: TestFileResult[];
-  caseResults: TestResult[];
-  buildTime: number;
+  watchSignals: Pick<
+    WatchSignals,
+    'setDispatchRerun' | 'signalInvalidation' | 'awaitSignalledCycle'
+  >;
+  setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
   createWatchSession: (
     execute: (testPaths: string[]) => Promise<void>,
   ) => BrowserWatchSession;
-  collectDeletedTestPaths: (
-    previous: TestFileInfo[],
-    current: TestFileInfo[],
-  ) => string[];
   collectProjectEntries: () => Promise<
     Parameters<typeof planWatchRerun>[0]['projectEntries']
   >;
-  drainPendingAffectedTestFiles: (
-    watchState: BrowserRuntime['watchState'],
-  ) => string[];
-  failWithError: (
-    error: unknown,
-    cleanup?: () => Promise<void>,
-  ) => Promise<BrowserControllerResult>;
-  toError: (error: unknown) => Error;
-  getBrowserSourcemap: BrowserControllerResult['getSourcemap'];
-  resolveBrowserSourcemap: NonNullable<
-    BrowserControllerResult['resolveSourcemap']
-  >;
-  logWatchReadyMessage: (enableCliShortcuts: boolean) => void;
+  logWatchReady: () => void;
   destroyRuntime: () => Promise<void>;
 };
 
@@ -145,14 +117,9 @@ export const claimHeadedCycleScope = (
 export const createHeadedScheduler = async ({
   context,
   runtime,
-  browser,
-  browserLaunchOptions,
   allTestFiles,
   hostOptions,
-  watchState,
   isWatchMode,
-  enableCliShortcuts,
-  wss,
   createDispatchRouter,
   handlers: {
     handleTestFileStart,
@@ -164,20 +131,12 @@ export const createHeadedScheduler = async ({
   fatalErrorRef,
   watchSignals,
   setDispatchPageResolver,
-  reporterResults,
-  caseResults,
-  buildTime,
   createWatchSession,
-  collectDeletedTestPaths,
   collectProjectEntries,
-  drainPendingAffectedTestFiles,
-  failWithError,
-  toError,
-  getBrowserSourcemap,
-  resolveBrowserSourcemap,
-  logWatchReadyMessage,
+  logWatchReady,
   destroyRuntime,
-}: HeadedSchedulerDeps): Promise<BrowserControllerResult> => {
+}: HeadedSchedulerDeps): Promise<SchedulerRunResult> => {
+  const { browser, browserLaunchOptions, watchState, wss } = runtime;
   let currentTestFiles = allTestFiles;
   // Coincidentally equal to the runner-side CONFIG_WAIT_TIMEOUT_MS and
   // DEFAULT_RPC_TIMEOUT_MS (client/entry.ts, client/dispatchTransport.ts) but
@@ -635,7 +594,7 @@ export const createHeadedScheduler = async ({
           logger.log(
             color.cyan('No browser test files remain after update.\n'),
           );
-          logWatchReadyMessage(enableCliShortcuts);
+          logWatchReady();
           return;
         }
         await waitForRunnerFramesReady(
@@ -658,7 +617,7 @@ export const createHeadedScheduler = async ({
       if (!rerunPlan.filesChanged) {
         logger.log(color.cyan('Tests will be re-executed automatically\n'));
       }
-      logWatchReadyMessage(enableCliShortcuts);
+      logWatchReady();
     });
 
     runUiRequestedRerun = async (file, testNamePattern) => {
@@ -695,34 +654,11 @@ export const createHeadedScheduler = async ({
       }
     : undefined;
 
-  if (fatalErrorRef.current) {
-    return failWithError(fatalErrorRef.current, closeContainerRuntime);
-  }
-
-  const duration = {
-    totalTime: buildTime + testTime,
-    buildTime,
-    testTime,
-  };
-
-  context.updateReporterResultState(reporterResults, caseResults);
-
-  // Enable the compile hooks only after the initial cycle, so the first build
-  // never triggers a duplicate run.
-  watchState.hooksEnabled = isWatchMode;
-
   return {
-    results: reporterResults,
-    testResults: caseResults,
-    duration,
-    hasFailure: reporterResults.some(
-      (result: TestFileResult) => result.status === 'fail',
-    ),
-    getSourcemap: getBrowserSourcemap,
-    resolveSourcemap: resolveBrowserSourcemap,
+    testTime,
+    watchSession,
     // `closeContainerRuntime` is already `undefined` in watch mode: the watch
     // runtime outlives the cycle and is torn down through `executor.close()`.
     close: closeContainerRuntime,
-    watchSession,
   };
 };

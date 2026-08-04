@@ -42,6 +42,10 @@ export const getFileTaskId = (testPath: string): string => {
   return `file:${testPath}`;
 };
 
+export const toError = (error: unknown): Error => {
+  return error instanceof Error ? error : new Error(String(error));
+};
+
 export const createDeferredPromise = <T>(): DeferredPromise<T> => {
   let resolve!: DeferredPromise<T>['resolve'];
   let reject!: DeferredPromise<T>['reject'];

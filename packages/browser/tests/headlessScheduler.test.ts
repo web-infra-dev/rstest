@@ -1,6 +1,7 @@
 import { describe, expect, it, rstest } from '@rstest/core';
 import { HostDispatchRouter } from '../src/dispatchRouter';
 import { createHeadlessScheduler } from '../src/headlessScheduler';
+import { createDeferredPromise } from '../src/hostPayloads';
 import type {
   BrowserClientMessage,
   BrowserProjectRuntime,
@@ -24,18 +25,7 @@ type FileCompleteMessage = Extract<
   { type: 'file-complete' }
 >;
 
-type Deferred<T = void> = {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-};
-
-const createDeferred = <T = void>(): Deferred<T> => {
-  let resolve = (_value: T) => {};
-  const promise = new Promise<T>((res) => {
-    resolve = res;
-  });
-  return { promise, resolve };
-};
+const createDeferred = <T = void>() => createDeferredPromise<T>();
 
 type PageScript = (page: FakePage) => Promise<void> | void;
 
@@ -262,7 +252,6 @@ const createHarness = (options: HarnessOptions = {}) => {
     },
     watchState,
     isWatchMode: options.watch ?? false,
-    enableCliShortcuts: false,
     createDispatchRouter: (routerOptions) => {
       const router = new HostDispatchRouter(routerOptions);
       router.register(DISPATCH_NAMESPACE_RUNNER, async (request) => {
@@ -285,7 +274,6 @@ const createHarness = (options: HarnessOptions = {}) => {
         completed.push(payload.testPath);
       },
     },
-    fatalErrorRef: { current: null },
     watchSignals: {
       setDispatchRerun(fn) {
         dispatchRerun = fn;
@@ -298,9 +286,6 @@ const createHarness = (options: HarnessOptions = {}) => {
       },
     },
     setDispatchPageResolver() {},
-    reporterResults,
-    caseResults: [],
-    buildTime: 0,
     createWatchSession(execute) {
       runScope = execute;
       return {
@@ -319,12 +304,6 @@ const createHarness = (options: HarnessOptions = {}) => {
         ) => execute(testPaths),
       };
     },
-    collectDeletedTestPaths(previous, current) {
-      const currentPaths = new Set(current.map((entry) => entry.testPath));
-      return previous
-        .filter((entry) => !currentPaths.has(entry.testPath))
-        .map((entry) => entry.testPath);
-    },
     collectProjectEntries:
       options.projectEntries ??
       (async () => [
@@ -333,36 +312,7 @@ const createHarness = (options: HarnessOptions = {}) => {
           testFiles: files.map((f) => f.testPath),
         },
       ]),
-    async failWithError(error) {
-      throw error;
-    },
-    toError(error) {
-      return error instanceof Error ? error : new Error(String(error));
-    },
-    getBrowserSourcemap: async () => null,
-    resolveBrowserSourcemap: async () => ({ handled: false, sourcemap: null }),
-    serializeForInlineScript: JSON.stringify,
-    mapViewportByProject: (projects) => {
-      const viewports = new Map<
-        string,
-        { width: number; height: number } | null
-      >();
-      for (const project of projects) {
-        viewports.set(
-          project.name,
-          typeof project.viewport === 'object' ? project.viewport : null,
-        );
-      }
-      return viewports;
-    },
-    drainPendingAffectedTestFiles(state) {
-      const affected = Array.from(
-        state.pendingAffectedTestFiles.values(),
-      ).flatMap((paths) => Array.from(paths));
-      state.pendingAffectedTestFiles.clear();
-      return affected;
-    },
-    logWatchReadyMessage: ready,
+    logWatchReady: ready,
     async destroyRuntime() {},
   });
 
@@ -480,40 +430,21 @@ describe('headless scheduler', () => {
     expect(harness.routed).toHaveLength(routedBeforeLateMessage);
   });
 
-  it('reports an unexpected page crash and cancels the run', async () => {
-    const started = createDeferred();
-    const harness = createHarness({
-      scripts: [
-        (page) => {
-          started.resolve();
-          page.emit('crash');
-        },
-      ],
-    });
+  it.each([
+    ['crash', 'Browser page crashed while running /a.test.ts.'],
+    ['close', 'Browser page closed unexpectedly while running /a.test.ts.'],
+  ] as const)(
+    'reports an unexpected page %s and cancels the run',
+    async (event, message) => {
+      const harness = createHarness({
+        scripts: [(page) => page.emit(event)],
+      });
 
-    await started.promise;
-    await harness.result;
-    expect(harness.fatals).toEqual([
-      { message: 'Browser page crashed while running /a.test.ts.' },
-    ]);
-    expect(firstContext(harness.browser).closeCount).toBeGreaterThan(0);
-  });
-
-  it('reports an unexpected page close and cancels the run', async () => {
-    const harness = createHarness({
-      scripts: [
-        (page) => {
-          page.emit('close');
-        },
-      ],
-    });
-
-    await harness.result;
-    expect(harness.fatals).toEqual([
-      { message: 'Browser page closed unexpectedly while running /a.test.ts.' },
-    ]);
-    expect(firstContext(harness.browser).closeCount).toBeGreaterThan(0);
-  });
+      await harness.result;
+      expect(harness.fatals).toEqual([{ message }]);
+      expect(firstContext(harness.browser).closeCount).toBeGreaterThan(0);
+    },
+  );
 
   it('detaches teardown for an abandoned run', async () => {
     const started = createDeferred();
