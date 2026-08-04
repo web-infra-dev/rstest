@@ -8,7 +8,7 @@ import {
 } from 'node:fs/promises';
 import { isBuiltin, createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRsbuild, type Rspack, type RsbuildConfig } from '@rsbuild/core';
 import type { ProjectContext, TestEnvironmentModuleReference } from '../types';
@@ -69,11 +69,19 @@ import.meta.${RSTEST_REQUIRE_RESOLVE_HOOK} = (specifier, optionsOrOrigin, maybeO
   return __rstestModule.createRequire(origin || import.meta.url).resolve(specifier, options);
 };
 import.meta.${RSTEST_DYNAMIC_IMPORT_HOOK} = (specifier, attributes, origin) => {
-  const resolved = specifier.startsWith("node:") || specifier.startsWith("file:")
-    ? specifier
-    : __rstestPathToFileURL(
-        __rstestModule.createRequire(origin || import.meta.url).resolve(specifier),
-      ).href;
+  if (
+    specifier.startsWith("node:") ||
+    specifier.startsWith("file:") ||
+    __rstestModule.isBuiltin(specifier)
+  ) {
+    return import(specifier, attributes);
+  }
+  const nativeResolved = __rstestModule
+    .createRequire(origin || import.meta.url)
+    .resolve(specifier);
+  const resolved = __rstestModule.isBuiltin(nativeResolved)
+    ? nativeResolved
+    : __rstestPathToFileURL(nativeResolved).href;
   return import(resolved, attributes);
 };
 `;
@@ -105,30 +113,53 @@ const autoPrebundleMajorRanges: Record<
 
 const getPackageMajorVersion = async ({
   packageName,
-  projectRoot,
-  root,
+  resolvedPath,
 }: {
   packageName: string;
-  projectRoot: string;
-  root: string;
+  resolvedPath: string;
 }): Promise<number | undefined> => {
-  const packageJsonPath = resolveTestEnvironmentModule(
-    `${packageName}/package.json`,
-    projectRoot,
-    root,
-  );
-  if (!packageJsonPath) {
-    return;
-  }
+  let currentDirectory = dirname(resolvedPath);
 
-  try {
-    const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8')) as {
-      version?: string;
-    };
-    const major = packageJson.version?.match(/^(\d+)(?:\.|$)/)?.[1];
-    return major === undefined ? undefined : Number(major);
-  } catch {
-    return;
+  while (true) {
+    let packageJsonSource: string;
+    try {
+      packageJsonSource = await readFile(
+        join(currentDirectory, 'package.json'),
+        'utf8',
+      );
+    } catch {
+      const parentDirectory = dirname(currentDirectory);
+      if (parentDirectory === currentDirectory) {
+        return;
+      }
+      currentDirectory = parentDirectory;
+      continue;
+    }
+
+    try {
+      const packageJson = JSON.parse(packageJsonSource) as {
+        name?: string;
+        version?: string;
+      };
+      if (packageJson.name === packageName) {
+        const major = packageJson.version?.match(/^(\d+)(?:\.|$)/)?.[1];
+        return major === undefined ? undefined : Number(major);
+      }
+      // An unnamed nested package.json may only define module semantics, so
+      // keep looking for the owning package. A differently named manifest
+      // means the resolved entry does not belong to the requested dependency.
+      if (packageJson.name !== undefined) {
+        return;
+      }
+    } catch {
+      return;
+    }
+
+    const parentDirectory = dirname(currentDirectory);
+    if (parentDirectory === currentDirectory) {
+      return;
+    }
+    currentDirectory = parentDirectory;
   }
 };
 
@@ -240,6 +271,7 @@ const createTestEnvironmentBuildConfig = ({
       };
       config.optimization = {
         ...config.optimization,
+        nodeEnv: false,
         runtimeChunk: false,
         splitChunks: false,
       };
@@ -325,12 +357,12 @@ const shouldPrebundle = async ({
   name,
   packageName,
   project,
-  rootPath,
+  resolvedPath,
 }: {
   name: EnvironmentDependencyName;
   packageName: string;
   project: ProjectContext;
-  rootPath: string;
+  resolvedPath: string;
 }): Promise<boolean> => {
   const option = project.normalizedConfig.testEnvironment.prebundle ?? 'auto';
   if (option === true) {
@@ -342,8 +374,7 @@ const shouldPrebundle = async ({
 
   const major = await getPackageMajorVersion({
     packageName,
-    projectRoot: project.rootPath,
-    root: rootPath,
+    resolvedPath,
   });
   if (major !== undefined && canAutoPrebundle(name, major)) {
     return true;
@@ -410,7 +441,7 @@ export const prepareTestEnvironmentModules = async ({
           name,
           packageName,
           project,
-          rootPath,
+          resolvedPath,
         }))
       ) {
         continue;

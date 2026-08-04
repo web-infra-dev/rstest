@@ -36,10 +36,12 @@ const createPackage = (
   source: string,
   {
     name = 'jsdom',
+    packageExports,
     type = 'module',
     version = '30.0.1',
   }: {
     name?: string;
+    packageExports?: Record<string, string>;
     type?: 'commonjs' | 'module';
     version?: string;
   } = {},
@@ -53,6 +55,7 @@ const createPackage = (
       type,
       version,
       main: './index.js',
+      ...(packageExports ? { exports: packageExports } : {}),
     }),
   );
   const entryPath = path.join(packageRoot, 'index.js');
@@ -116,6 +119,110 @@ exports.canvasToken = canvas.token;
       const bundlePath = result.modules.get('jsdom')?.bundlePath;
       await result.cleanup();
       expect(bundlePath && fs.existsSync(bundlePath)).toBe(false);
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves the worker NODE_ENV at prebundle runtime', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rstest-env-node-env-'));
+    createPackage(
+      root,
+      `
+export class JSDOM {}
+export const readNodeEnv = () => process.env.NODE_ENV;
+`,
+    );
+
+    const result = await prepareTestEnvironmentModules({
+      projects: [createProject(root)],
+      rootPath: root,
+    });
+    const previousNodeEnv = process.env.NODE_ENV;
+
+    try {
+      const bundlePath = result.modules.get('jsdom')?.bundlePath;
+      expect(bundlePath).toBeTruthy();
+      if (!bundlePath) {
+        throw new Error('Expected jsdom to be bundled.');
+      }
+      const bundled = await import(pathToFileURL(bundlePath).href);
+      process.env.NODE_ENV = 'rstest-runtime-probe';
+      expect(bundled.readNodeEnv()).toBe('rstest-runtime-probe');
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+      await result.cleanup();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves bare Node builtins in non-literal dynamic imports', async () => {
+    const root = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'rstest-env-dynamic-builtin-'),
+    );
+    createPackage(
+      root,
+      `
+export class JSDOM {}
+export const loadModule = (specifier) => import(specifier);
+`,
+    );
+
+    const result = await prepareTestEnvironmentModules({
+      projects: [createProject(root)],
+      rootPath: root,
+    });
+
+    try {
+      const bundlePath = result.modules.get('jsdom')?.bundlePath;
+      expect(bundlePath).toBeTruthy();
+      if (!bundlePath) {
+        throw new Error('Expected jsdom to be bundled.');
+      }
+      const bundled = await import(pathToFileURL(bundlePath).href);
+      const nodeFs = await bundled.loadModule('fs');
+      expect(typeof nodeFs.readFile).toBe('function');
+    } finally {
+      await result.cleanup();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reads the version from the resolved environment package', async () => {
+    const root = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'rstest-env-resolved-version-'),
+    );
+    const projectRoot = path.join(root, 'project');
+    fs.mkdirSync(projectRoot);
+    createPackage(root, 'export class Window {}', {
+      name: 'happy-dom',
+      version: '20.11.1',
+    });
+    const projectHappyDomPath = createPackage(
+      projectRoot,
+      'export class Window {}',
+      {
+        name: 'happy-dom',
+        packageExports: { '.': './index.js' },
+        version: '21.0.0',
+      },
+    );
+
+    const result = await prepareTestEnvironmentModules({
+      projects: [createProject(projectRoot, { environmentName: 'happy-dom' })],
+      rootPath: root,
+    });
+
+    try {
+      expect(result.modules.get('happy-dom')).toMatchObject({
+        resolvedPath: projectHappyDomPath,
+      });
+      expect(result.modules.get('happy-dom')?.bundlePath).toBeUndefined();
+    } finally {
+      await result.cleanup();
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
