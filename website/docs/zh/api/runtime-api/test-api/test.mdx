@@ -363,9 +363,9 @@ test('plain test', ({ expect }) => {
 
 返回的 API 拥有与 `test` 相同的链式修饰符（`only`、`skip`、`each`、`concurrent` 等），并且可以继续调用 `.extend()` 进行二次扩展。
 
-### Object form fixture 的生命周期
+### fixtures 对象写法
 
-Object form fixture 函数接收两个参数：
+fixtures 对象写法中的 fixture 函数接收两个参数：
 
 1. **context** — 包含其他 fixture 以及 `TestContext`（`task`、`expect`、`onTestFinished`、`onTestFailed`）。使用对象解构来声明你需要的依赖。
 2. **use** — 调用 `await use(value)` 把 fixture 的值传递给测试。
@@ -388,11 +388,11 @@ const testWithDb = test.extend({
 });
 ```
 
-### Named builder fixture
+### 具名 fixture 写法
 
 <ApiMeta addedVersion="0.11.6" />
 
-Named builder form 直接返回 fixture 值，不需要调用 `use`。它的第二个参数提供 `onCleanup`，用于注册一个在测试及其 per-test hooks 结束后运行的 callback。Builder 和 cleanup callback 都可以是异步函数。
+具名 fixture 写法会直接返回 fixture 值，不需要调用 `use`。它的第二个参数提供 `onCleanup`，用于注册一个在测试及其 per-test hooks 结束后运行的 callback。fixture 函数和 cleanup callback 都可以是异步函数。
 
 ```ts
 import { test } from '@rstest/core';
@@ -406,7 +406,7 @@ const apiTest = test
   });
 ```
 
-Named builder 属于 test scope：Rstest 会为每次 test attempt 创建新值，并在开始下一次 attempt 前执行 cleanup。需要请求其他 fixture 或 `TestContext` 字段时，请直接在第一个参数中使用对象解构。
+具名 fixture 属于 test scope：Rstest 会为每次 test attempt 创建新值，并在开始下一次 attempt 前执行 cleanup。需要请求其他 fixture 或 `TestContext` 字段时，请直接在第一个参数中使用对象解构。
 
 ### 普通值 fixture
 

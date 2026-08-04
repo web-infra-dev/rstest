@@ -24,11 +24,11 @@ const browserTest = test
       events.push('teardown:label');
     },
   })
-  .extend('builderValue', ({ element }, { onCleanup }) => {
-    events.push('setup:builder');
+  .extend('namedValue', ({ element }, { onCleanup }) => {
+    events.push('setup:named-fixture');
     onCleanup(() => {
       expect(element.isConnected).toBe(true);
-      events.push('teardown:builder');
+      events.push('teardown:named-fixture');
     });
     return element.textContent;
   });
@@ -45,8 +45,8 @@ afterEach<HookFixtures>(({ label }) => {
 
 browserTest(
   'resolves fixtures used only by browser hooks',
-  ({ builderValue }) => {
-    expect(builderValue).toBe('fixture');
+  ({ namedValue }) => {
+    expect(namedValue).toBe('fixture');
     events.push('test');
   },
 );
@@ -54,13 +54,13 @@ browserTest(
 afterAll(() => {
   expect(events).toEqual([
     'setup:element',
-    'setup:builder',
+    'setup:named-fixture',
     'beforeEach',
     'test',
     'setup:label',
     'afterEach',
     'teardown:label',
-    'teardown:builder',
+    'teardown:named-fixture',
     'teardown:element',
   ]);
 });

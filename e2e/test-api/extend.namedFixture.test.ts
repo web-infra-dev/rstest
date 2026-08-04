@@ -2,8 +2,8 @@ import { afterAll, afterEach, expect, test } from '@rstest/core';
 
 const events: string[] = [];
 
-const builderTest = test
-  .extend('prefix', 'builder')
+const namedFixtureTest = test
+  .extend('prefix', 'named')
   .extend('value', async ({ prefix, task }, { onCleanup }) => {
     events.push(`setup:${task.name}`);
     onCleanup(async () => {
@@ -17,25 +17,25 @@ afterEach<{ value: string }>(({ value }) => {
   events.push(`afterEach:${value}`);
 });
 
-builderTest('first', ({ value }) => {
-  expect(value).toBe('builder:first');
+namedFixtureTest('first', ({ value }) => {
+  expect(value).toBe('named:first');
   events.push(`test:${value}`);
 });
 
-builderTest('second', ({ value }) => {
-  expect(value).toBe('builder:second');
+namedFixtureTest('second', ({ value }) => {
+  expect(value).toBe('named:second');
   events.push(`test:${value}`);
 });
 
 afterAll(() => {
   expect(events).toEqual([
     'setup:first',
-    'test:builder:first',
-    'afterEach:builder:first',
+    'test:named:first',
+    'afterEach:named:first',
     'cleanup:first',
     'setup:second',
-    'test:builder:second',
-    'afterEach:builder:second',
+    'test:named:second',
+    'afterEach:named:second',
     'cleanup:second',
   ]);
 });

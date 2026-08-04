@@ -58,7 +58,7 @@ import type {
 
 <ApiMeta addedVersion="0.11.6" />
 
-`FixtureCleanup` 和 `FixtureLifecycle` 从 Rstest 0.11.6 开始支持 named fixture builder。
+`FixtureCleanup` 和 `FixtureLifecycle` 从 Rstest 0.11.6 开始支持具名 fixture 写法。
 
 - `Rstest`：完整的运行时 API 形状，包括 `test`、`describe`、`expect`、hooks 和 `rs` / `rstest` 工具。
 - `RstestUtilities`：`rs` 和 `rstest` 工具对象的类型。
@@ -66,8 +66,8 @@ import type {
 - `Describe`：`describe` API 的类型。
 - `Expect`：`expect(value)` 返回的 assertion 类型。
 - `ExpectStatic`：可调用的 `expect` API 类型。
-- `FixtureCleanup`：通过 named fixture builder 注册的 cleanup callback。
-- `FixtureLifecycle`：向 named fixture builder 提供 `onCleanup` 的 lifecycle 对象。
+- `FixtureCleanup`：通过具名 fixture 注册的 cleanup callback。
+- `FixtureLifecycle`：向具名 fixture 提供 `onCleanup` 的 lifecycle 对象。
 
 ## Mock 类型
 

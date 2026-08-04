@@ -963,14 +963,14 @@ export class TestRunner {
     });
 
     return createFixtureResolver(test, context, fixtureCleanups, {
-      runBuilderSetup: (setup) =>
+      runNamedFixtureSetup: (setup) =>
         wrapTimeout({
           name: 'fixture setup',
           fn: setup,
           timeout: test.timeout,
           stackTraceError: test.stackTraceError,
         })(),
-      wrapBuilderCleanup: (cleanup) =>
+      wrapNamedFixtureCleanup: (cleanup) =>
         wrapTimeout({
           name: 'fixture cleanup',
           fn: cleanup,

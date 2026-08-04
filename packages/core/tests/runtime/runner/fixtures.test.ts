@@ -1,8 +1,8 @@
 import { describe, expect, it } from '@rstest/core';
 import {
   createFixtureResolver,
-  normalizeBuilderFixture,
   normalizeFixtures,
+  normalizeNamedFixture,
 } from '../../../src/runtime/runner/fixtures';
 
 describe('normalizeFixtures', () => {
@@ -40,23 +40,23 @@ describe('normalizeFixtures', () => {
   });
 });
 
-describe('normalizeBuilderFixture', () => {
-  it('normalizes a return-value fixture and its dependencies', () => {
+describe('normalizeNamedFixture', () => {
+  it('normalizes a named fixture and its dependencies', () => {
     const base = normalizeFixtures({ base: 'base' } as any);
-    const builder = ({ base }: any) => `${base}:builder`;
+    const namedFixture = ({ base }: any) => `${base}:named`;
 
-    const result = normalizeBuilderFixture('value', builder, base);
+    const result = normalizeNamedFixture('value', namedFixture, base);
 
     expect(result.value).toMatchObject({
       deps: ['base'],
       isFn: true,
       mode: 'return',
-      value: builder,
+      value: namedFixture,
     });
   });
 
   it('normalizes a plain return value', () => {
-    const result = normalizeBuilderFixture('value', 42);
+    const result = normalizeNamedFixture('value', 42);
 
     expect(result.value).toMatchObject({
       isFn: false,
@@ -120,10 +120,10 @@ describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
 });
 
 describe('createFixtureResolver', () => {
-  it('resolves builder fixtures and runs their cleanup', async () => {
+  it('resolves named fixtures and runs their cleanup', async () => {
     const events: string[] = [];
     const base = normalizeFixtures({ base: 'base' } as any);
-    const fixtures = normalizeBuilderFixture(
+    const fixtures = normalizeNamedFixture(
       'value',
       async ({ base, task }: any, { onCleanup }: any) => {
         events.push(`setup:${base}:${task.name}`);
@@ -135,7 +135,9 @@ describe('createFixtureResolver', () => {
       },
       base,
     );
-    const context: Record<string, any> = { task: { name: 'builder test' } };
+    const context: Record<string, any> = {
+      task: { name: 'named fixture test' },
+    };
     const cleanups: (() => Promise<void>)[] = [];
     const resolver = createFixtureResolver(
       { fixtures } as any,
@@ -146,14 +148,14 @@ describe('createFixtureResolver', () => {
     await resolver.resolveTestFixtures(({ value }: any) => value);
 
     expect(context.value).toBe('base:value');
-    expect(events).toEqual(['setup:base:builder test']);
+    expect(events).toEqual(['setup:base:named fixture test']);
     expect(cleanups).toHaveLength(1);
     await cleanups[0]!();
-    expect(events).toEqual(['setup:base:builder test', 'cleanup']);
+    expect(events).toEqual(['setup:base:named fixture test', 'cleanup']);
   });
 
-  it('rejects more than one builder cleanup', async () => {
-    const fixtures = normalizeBuilderFixture(
+  it('rejects more than one cleanup for a named fixture', async () => {
+    const fixtures = normalizeNamedFixture(
       'value',
       (_context: object, { onCleanup }: any) => {
         onCleanup(() => {});
@@ -171,10 +173,10 @@ describe('createFixtureResolver', () => {
     await cleanups[0]!();
   });
 
-  it('applies the builder setup wrapper only to test fixtures', async () => {
-    const fixtures = normalizeBuilderFixture('value', () => 'value');
+  it('applies the named fixture setup wrapper only to tests', async () => {
+    const fixtures = normalizeNamedFixture('value', () => 'value');
     const options = {
-      runBuilderSetup: async () => {
+      runNamedFixtureSetup: async () => {
         throw new Error('test fixture setup timed out');
       },
     };
@@ -502,13 +504,13 @@ describe('createFixtureResolver', () => {
     expect(cleanups).toEqual([]);
   });
 
-  it('settles builder cancellation after its cleanup finishes', async () => {
+  it('settles named fixture cancellation after cleanup finishes', async () => {
     const events: string[] = [];
     let setupStarted: (() => void) | undefined;
     const setupStartedPromise = new Promise<void>((resolve) => {
       setupStarted = resolve;
     });
-    const fixtures = normalizeBuilderFixture(
+    const fixtures = normalizeNamedFixture(
       'slow',
       async (_context: any, { onCleanup }: any) => {
         onCleanup(() => {

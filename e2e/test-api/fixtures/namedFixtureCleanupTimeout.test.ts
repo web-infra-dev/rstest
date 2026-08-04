@@ -2,11 +2,11 @@ import { test } from '@rstest/core';
 
 test.extend('value', (_context, { onCleanup }) => {
   onCleanup(() => {
-    console.log('RSTEST_BUILDER_SETUP_TIMEOUT_CLEANUP');
+    console.log('RSTEST_NAMED_FIXTURE_SETUP_TIMEOUT_CLEANUP');
   });
   return new Promise<never>(() => {});
 })(
-  'bounds builder setup',
+  'bounds named fixture setup',
   {
     timeout: 100,
   },
@@ -19,7 +19,7 @@ test.extend('value', (_context, { onCleanup }) => {
   onCleanup(() => new Promise(() => {}));
   return 'value';
 })(
-  'bounds builder cleanup',
+  'bounds named fixture cleanup',
   {
     timeout: 100,
   },

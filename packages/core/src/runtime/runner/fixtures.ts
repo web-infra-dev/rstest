@@ -59,7 +59,7 @@ export const normalizeFixtures = (
   };
 };
 
-export const normalizeBuilderFixture = (
+export const normalizeNamedFixture = (
   name: string,
   value: unknown,
   extendFixtures: NormalizedFixtures = {},
@@ -89,11 +89,15 @@ export type FixtureResolver = {
   ) => Promise<{ status: 'resolved' } | { status: 'skipped' }>;
 };
 
-type RunBuilderSetup = <Value>(setup: () => Promise<Value>) => Promise<Value>;
+type RunNamedFixtureSetup = <Value>(
+  setup: () => Promise<Value>,
+) => Promise<Value>;
 
 type FixtureResolverOptions = {
-  runBuilderSetup?: RunBuilderSetup;
-  wrapBuilderCleanup?: (cleanup: () => Promise<void>) => () => Promise<void>;
+  runNamedFixtureSetup?: RunNamedFixtureSetup;
+  wrapNamedFixtureCleanup?: (
+    cleanup: () => Promise<void>,
+  ) => () => Promise<void>;
 };
 
 class PreviouslyFailedFixtureError extends Error {}
@@ -120,9 +124,10 @@ export const createFixtureResolver = (
   cleanups: (() => Promise<void>)[] = [],
   options: FixtureResolverOptions = {},
 ): FixtureResolver => {
-  const runBuilderSetupWithoutTimeout: RunBuilderSetup = (setup) => setup();
-  const wrapBuilderCleanup =
-    options.wrapBuilderCleanup ?? ((cleanup) => cleanup);
+  const runNamedFixtureSetupWithoutTimeout: RunNamedFixtureSetup = (setup) =>
+    setup();
+  const wrapNamedFixtureCleanup =
+    options.wrapNamedFixtureCleanup ?? ((cleanup) => cleanup);
   const fixtures = test.fixtures ?? {};
   const doneMap = new Set<string>();
   const cancelledFixtures = new Set<string>();
@@ -134,7 +139,7 @@ export const createFixtureResolver = (
   const useFixture = async (
     name: string,
     fixture: NormalizedFixture,
-    runBuilderSetup: RunBuilderSetup,
+    runNamedFixtureSetup: RunNamedFixtureSetup,
   ) => {
     if (doneMap.has(name)) {
       return;
@@ -157,7 +162,7 @@ export const createFixtureResolver = (
     try {
       if (deps?.length) {
         for (const dep of deps) {
-          await useFixture(dep, fixtures[dep]!, runBuilderSetup);
+          await useFixture(dep, fixtures[dep]!, runNamedFixtureSetup);
         }
       }
 
@@ -205,7 +210,7 @@ export const createFixtureResolver = (
             );
           }
           cleanupRegistered = true;
-          registeredCleanup = wrapBuilderCleanup(async () => {
+          registeredCleanup = wrapNamedFixtureCleanup(async () => {
             await cleanup();
           });
           if (cancelledFixtures.has(name)) {
@@ -215,7 +220,7 @@ export const createFixtureResolver = (
           }
         };
 
-        const setup = runBuilderSetup(() =>
+        const setup = runNamedFixtureSetup(() =>
           Promise.resolve(fixtureValue(context, { onCleanup })),
         );
         try {
@@ -289,7 +294,7 @@ export const createFixtureResolver = (
   const resolveFixtureNames = async (
     usedKeys: string[],
     includeAuto: boolean,
-    runBuilderSetup: RunBuilderSetup = runBuilderSetupWithoutTimeout,
+    runNamedFixtureSetup: RunNamedFixtureSetup = runNamedFixtureSetupWithoutTimeout,
   ) => {
     for (const [name, params] of Object.entries(fixtures)) {
       const shouldResolve =
@@ -298,7 +303,7 @@ export const createFixtureResolver = (
         continue;
       }
 
-      await useFixture(name, params, runBuilderSetup);
+      await useFixture(name, params, runNamedFixtureSetup);
     }
   };
 
@@ -322,7 +327,7 @@ export const createFixtureResolver = (
         ? resolveFixtureNames(
             fn ? getFixtureUsedProps(fn) : [],
             true,
-            options.runBuilderSetup,
+            options.runNamedFixtureSetup,
           )
         : Promise.resolve(),
     resolveHookFixtures: async (fn) => {

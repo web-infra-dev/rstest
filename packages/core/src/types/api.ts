@@ -246,7 +246,7 @@ type MergeFixtureContext<Context, Added extends Record<string, any>> = {
       : never;
 };
 
-type BuilderFixture<Value, Context> =
+type NamedFixture<Value, Context> =
   | Value
   | ((context: Context, lifecycle: FixtureLifecycle) => MaybePromise<Value>);
 
@@ -256,7 +256,7 @@ type TestExtend<ExtraContext> = {
   ): TestAPIs<MergeFixtureContext<ExtraContext, T>>;
   <Name extends string, Value>(
     name: Name,
-    fixture: BuilderFixture<Value, Omit<TestContext & ExtraContext, Name>>,
+    fixture: NamedFixture<Value, Omit<TestContext & ExtraContext, Name>>,
   ): TestAPIs<MergeFixtureContext<ExtraContext, Record<Name, Value>>>;
 };
 

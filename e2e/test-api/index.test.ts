@@ -79,10 +79,10 @@ describe('Test API', () => {
     expect(cli.stderr).not.toContain('Circular fixture dependency');
   });
 
-  it('reports builder cleanup failures', async () => {
+  it('reports named fixture cleanup failures', async () => {
     const { cli, expectExecFailed } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'fixtures/builderCleanupFailure.test.ts'],
+      args: ['run', 'fixtures/namedFixtureCleanupFailure.test.ts'],
       options: {
         nodeOptions: {
           cwd: dirname(fileURLToPath(import.meta.url)),
@@ -91,14 +91,16 @@ describe('Test API', () => {
     });
 
     await expectExecFailed();
-    expect(`${cli.stdout}\n${cli.stderr}`).toContain('builder cleanup failed');
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'named fixture cleanup failed',
+    );
   });
 
-  it('bounds builder setup and cleanup with the test timeout', async () => {
+  it('bounds named fixture setup and cleanup with the test timeout', async () => {
     const start = Date.now();
     const { cli, expectExecFailed } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'fixtures/builderCleanupTimeout.test.ts'],
+      args: ['run', 'fixtures/namedFixtureCleanupTimeout.test.ts'],
       options: {
         nodeOptions: {
           cwd: dirname(fileURLToPath(import.meta.url)),
@@ -111,7 +113,7 @@ describe('Test API', () => {
     expect(`${cli.stdout}\n${cli.stderr}`).toContain(
       'fixture setup timed out in 100ms',
     );
-    expect(cli.stdout).toContain('RSTEST_BUILDER_SETUP_TIMEOUT_CLEANUP');
+    expect(cli.stdout).toContain('RSTEST_NAMED_FIXTURE_SETUP_TIMEOUT_CLEANUP');
     expect(`${cli.stdout}\n${cli.stderr}`).toContain(
       'fixture cleanup timed out in 100ms',
     );

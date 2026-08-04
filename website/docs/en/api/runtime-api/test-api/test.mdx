@@ -363,9 +363,9 @@ test('plain test', ({ expect }) => {
 
 The returned API has the same chainable modifiers as `test` (`only`, `skip`, `each`, `concurrent`, etc.) and can call `.extend()` again for further extension.
 
-### Object-form fixture lifecycle
+### Fixtures object form
 
-An object-form fixture function receives two parameters:
+A fixture function in the fixtures object form receives two parameters:
 
 1. **context** — contains other fixtures as well as `TestContext` (`task`, `expect`, `onTestFinished`, `onTestFailed`). Use object destructuring to declare the dependencies you need.
 2. **use** — call `await use(value)` to pass the fixture value to the test.
@@ -388,11 +388,11 @@ const testWithDb = test.extend({
 });
 ```
 
-### Named builder fixtures
+### Named fixture form
 
 <ApiMeta addedVersion="0.11.6" />
 
-The named builder form returns a fixture value directly instead of calling `use`. Its second parameter provides `onCleanup`, which registers one callback to run after the test and its per-test hooks finish. Both the builder and cleanup callback may be asynchronous.
+The named fixture form returns a fixture value directly instead of calling `use`. Its second parameter provides `onCleanup`, which registers one callback to run after the test and its per-test hooks finish. Both the fixture function and cleanup callback may be asynchronous.
 
 ```ts
 import { test } from '@rstest/core';
@@ -406,7 +406,7 @@ const apiTest = test
   });
 ```
 
-Named builders are test-scoped: Rstest creates a new value for each test attempt and runs its cleanup before starting the next attempt. Use direct object destructuring in the first parameter to request other fixtures or fields from `TestContext`.
+Named fixtures are test-scoped: Rstest creates a new value for each test attempt and runs its cleanup before starting the next attempt. Use direct object destructuring in the first parameter to request other fixtures or fields from `TestContext`.
 
 ### Plain value fixtures
 

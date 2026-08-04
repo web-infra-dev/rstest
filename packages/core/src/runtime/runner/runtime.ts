@@ -40,7 +40,7 @@ import {
   resolveTestArgs,
   TestRegisterError,
 } from '../util';
-import { normalizeBuilderFixture, normalizeFixtures } from './fixtures';
+import { normalizeFixtures, normalizeNamedFixture } from './fixtures';
 import { cloneTaskMeta, mergeTaskMeta } from './metadata';
 import { registerTestSuiteListener, wrapTimeout } from './task';
 
@@ -701,7 +701,7 @@ const buildRuntimeAPI = (): CollectionAPI => {
         if (args.length !== 2) {
           throw new Error('test.extend(name, fixture) expects two arguments.');
         }
-        normalizedFixtures = normalizeBuilderFixture(
+        normalizedFixtures = normalizeNamedFixture(
           args[0],
           args[1],
           extendFixtures,

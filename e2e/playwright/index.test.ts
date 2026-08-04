@@ -33,7 +33,7 @@ describe('@rstest/playwright', () => {
 
     await expectExecSuccess();
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_E2E_OK');
-    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_BUILDER_CLEANUP_OK');
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_NAMED_FIXTURE_CLEANUP_OK');
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_DEBUG_OFF');
     expect(cli.stdout).toContain('Test Files 2 passed');
   });

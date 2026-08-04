@@ -58,7 +58,7 @@ import type {
 
 <ApiMeta addedVersion="0.11.6" />
 
-`FixtureCleanup` and `FixtureLifecycle` support named fixture builders starting in Rstest 0.11.6.
+`FixtureCleanup` and `FixtureLifecycle` support the named fixture form starting in Rstest 0.11.6.
 
 - `Rstest`: The full runtime API shape, including `test`, `describe`, `expect`, hooks, and `rs` / `rstest` utilities.
 - `RstestUtilities`: The type of the `rs` and `rstest` utility objects.
@@ -66,8 +66,8 @@ import type {
 - `Describe`: The type of the `describe` API.
 - `Expect`: The assertion type returned by `expect(value)`.
 - `ExpectStatic`: The callable `expect` API type.
-- `FixtureCleanup`: A cleanup callback registered by a named fixture builder.
-- `FixtureLifecycle`: The lifecycle object that provides `onCleanup` to a named fixture builder.
+- `FixtureCleanup`: A cleanup callback registered by a named fixture.
+- `FixtureLifecycle`: The lifecycle object that provides `onCleanup` to a named fixture.
 
 ## Mock types
 

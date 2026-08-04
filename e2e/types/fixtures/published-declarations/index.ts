@@ -2,7 +2,7 @@ import { expect, test, type FixtureLifecycle } from '@rstest/core';
 
 expect(true).toBe(true);
 
-const builderTest = test
+const namedFixtureTest = test
   .extend({ base: 'base' })
   .extend('count', async ({ base, task }, { onCleanup }) => {
     onCleanup(() => Promise.resolve());
@@ -11,8 +11,8 @@ const builderTest = test
   })
   .extend('createLabel', () => async () => 'label');
 
-builderTest(
-  'exposes inferred builder fixture types',
+namedFixtureTest(
+  'exposes inferred named fixture types',
   async ({ count, createLabel }) => {
     expect(count).toBeTypeOf('number');
     expect(await createLabel()).toBeTypeOf('string');
@@ -26,5 +26,5 @@ const lifecycle: FixtureLifecycle = {
 };
 void lifecycle;
 
-// @ts-expect-error builder options are not part of the test-scoped API
+// @ts-expect-error fixture options are not part of the named fixture form
 test.extend('value', {}, 'value');

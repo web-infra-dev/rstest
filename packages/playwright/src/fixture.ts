@@ -1339,7 +1339,7 @@ const wrapFixtures = <T extends Record<string, any>, ExtraContext>(
   ) as PlaywrightFixtures<T, ExtraContext>;
 };
 
-const wrapBuilderFixture = <Value>(fixture: Value): Value => {
+const wrapNamedFixture = <Value>(fixture: Value): Value => {
   if (typeof fixture !== 'function') {
     return fixture;
   }
@@ -1429,7 +1429,7 @@ type MergeContext<ExtraContext, FixturesContext> = {
       : never;
 };
 
-type PlaywrightBuilderFixture<Value, Context> =
+type PlaywrightNamedFixture<Value, Context> =
   | Value
   | ((context: Context, lifecycle: FixtureLifecycle) => Value | Promise<Value>);
 
@@ -1439,7 +1439,7 @@ type PlaywrightExtend<ExtraContext> = {
   ): PlaywrightTest<MergeContext<ExtraContext, T>>;
   <Name extends string, Value>(
     name: Name,
-    fixture: PlaywrightBuilderFixture<
+    fixture: PlaywrightNamedFixture<
       Value,
       Omit<TestContext & ExtraContext, Name>
     >,
@@ -1588,7 +1588,7 @@ const createPlaywrightTest = <ExtraContext>(
           ? (...args: unknown[]) => {
               const wrappedArgs =
                 typeof args[0] === 'string' && args.length === 2
-                  ? [args[0], wrapBuilderFixture(args[1])]
+                  ? [args[0], wrapNamedFixture(args[1])]
                   : typeof args[0] !== 'string' && args.length === 1
                     ? [
                         wrapFixtures(

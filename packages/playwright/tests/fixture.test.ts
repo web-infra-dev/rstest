@@ -496,23 +496,23 @@ test(
   },
 );
 
-const builderEvents: string[] = [];
-const builderTest = test.extend('builderTitle', (_context, { onCleanup }) => {
-  expect('builder setup').toContain('setup');
+const namedFixtureEvents: string[] = [];
+const namedFixtureTest = test.extend('title', (_context, { onCleanup }) => {
+  expect('named fixture setup').toContain('setup');
   onCleanup(() => {
-    expect('builder cleanup').toContain('cleanup');
-    builderEvents.push('cleanup');
+    expect('named fixture cleanup').toContain('cleanup');
+    namedFixtureEvents.push('cleanup');
   });
-  return 'builder title';
+  return 'named fixture title';
 });
 
-builderTest('supports named builder fixtures', ({ builderTitle }) => {
-  expect(builderTitle).toBe('builder title');
-  builderEvents.push('test');
+namedFixtureTest('supports the named fixture form', ({ title }) => {
+  expect(title).toBe('named fixture title');
+  namedFixtureEvents.push('test');
 });
 
-builderTest.afterAll(() => {
-  expect(builderEvents).toEqual(['test', 'cleanup']);
+namedFixtureTest.afterAll(() => {
+  expect(namedFixtureEvents).toEqual(['test', 'cleanup']);
 });
 
 test(
