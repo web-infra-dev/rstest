@@ -22,7 +22,6 @@ import {
   projectRuntimeConfig,
   PhaseTracker,
   type ProjectContext,
-  type Reporter,
   type RunnerEventSink,
   type RstestContext,
   resolveSnapshotPathDefault,
@@ -62,7 +61,6 @@ import type {
   BrowserDispatchRequest,
   BrowserDispatchResponse,
   BrowserHostConfig,
-  BrowserLogPayload,
   BrowserProjectRuntime,
   BrowserRpcRequest,
   SnapshotRpcRequest,
@@ -81,6 +79,20 @@ import {
   type BrowserProviderPage,
   getBrowserProviderImplementation,
 } from './providers';
+import {
+  createDeferredPromise,
+  type DeferredPromise,
+  type FatalPayload,
+  getFileTaskId,
+  type HeadedTestFileCompletePayload,
+  type LogPayload,
+  type ReloadTestFileAck,
+  type TestCaseStartPayload,
+  type TestFileReadyPayload,
+  type TestFileStartPayload,
+  type TestSuiteResultPayload,
+  type TestSuiteStartPayload,
+} from './hostPayloads';
 import {
   createRunSession,
   type RunSession,
@@ -108,62 +120,6 @@ import { registerWatchCleanup, watchContext } from './watchRuntime';
 let nextBrowserFilePid = 1_000_000_000;
 
 // ============================================================================
-
-/** Payload for test file start event */
-type TestFileStartPayload = {
-  testPath: string;
-  projectName: string;
-};
-
-/** Payload for log event — single-sourced from the wire protocol. */
-type LogPayload = BrowserLogPayload;
-
-/** Payload for fatal error event */
-type FatalPayload = {
-  message: string;
-  stack?: string;
-};
-
-type ReporterHookArg<THook extends keyof Reporter> =
-  NonNullable<Reporter[THook]> extends (...args: infer TArgs) => unknown
-    ? TArgs[0]
-    : never;
-
-type TestFileReadyPayload = ReporterHookArg<'onTestFileReady'>;
-type TestSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;
-type TestSuiteResultPayload = ReporterHookArg<'onTestSuiteResult'>;
-type TestCaseStartPayload = ReporterHookArg<'onTestCaseStart'>;
-type ReloadTestFileAck = {
-  runId: string;
-};
-type HeadedTestFileCompletePayload = TestFileResult & {
-  runId?: string;
-};
-
-type DeferredPromise<T> = {
-  promise: Promise<T>;
-  resolve: (value: T | PromiseLike<T>) => void;
-  reject: (reason?: unknown) => void;
-};
-
-const getFileTaskId = (testPath: string): string => {
-  return `file:${testPath}`;
-};
-
-const createDeferredPromise = <T>(): DeferredPromise<T> => {
-  let resolve!: DeferredPromise<T>['resolve'];
-  let reject!: DeferredPromise<T>['reject'];
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-
-  return {
-    promise,
-    resolve,
-    reject,
-  };
-};
 
 /** RPC methods exposed by the host (server) to the container (client) */
 type HostRpcMethods = {
