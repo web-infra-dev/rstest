@@ -4253,7 +4253,12 @@ export const runBrowserController = async (
     // nothing yields between the two: core closes the fold window and then
     // awaits `notifyReportersOnTestRunStart` before this cycle claims, so a user
     // reporter with an async `onTestRunStart` hook is the one thing that can
-    // stretch the gap wide enough for another signal to land in it.
+    // stretch the gap wide enough for another signal to land in it. A tracked
+    // gap, not a choice: a second click on the same file inside that window
+    // overwrites the entry, so the earlier cycle claims the newer pattern and
+    // the later one finds it gone and reloads the file unfiltered. Closing it
+    // means the pattern crossing the seam inside the queued cycle's own
+    // options instead of traveling beside the scope.
     const pendingTestNamePatterns = new Map<string, string>();
 
     const runScope = async (testPaths: string[]): Promise<void> => {

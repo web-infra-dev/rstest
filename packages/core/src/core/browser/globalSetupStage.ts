@@ -56,9 +56,12 @@ export const globalSetupFailureOutcome = (
  * Setups run host-side in the same forked worker node projects use; teardown
  * callbacks queue into the shared `runGlobalTeardown` drain.
  *
- * Known restriction: browser `modifyRstestConfig` hooks apply later (inside
- * the browser run cycle), so hook-added `globalSetup` entries or hook-added
- * test files in an otherwise-empty project are invisible to this stage.
+ * Hook-added config is visible here: the planner's config-hook discovery has
+ * already fired the browser `modifyRstestConfig` hooks and re-resolved the
+ * plan by the time any run shape reaches this stage, so `globalSetup` entries
+ * a hook added — and hook-added test files in an otherwise-empty project —
+ * are honored. The public `global-setup` docs state the same guarantee; keep
+ * the two in step.
  *
  * Known limitation: browser projects share one run cycle, so any project's
  * setup failure skips the whole browser cycle (node isolates failures per
