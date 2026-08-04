@@ -488,10 +488,80 @@ export const runBrowserController = async (
 
   let runtime = isWatchMode ? watchContext.runtime : null;
 
-  // The transport-owned rerun trigger, installed by whichever run branch
-  // (headless/headed) executes below: resolve this rebuild's scope, then hand
-  // it to core's invalidation subscriber. Populated after the initial cycle.
-  let dispatchRerun: (() => Promise<void>) | undefined;
+  const watchSignals = (() => {
+    // The transport-owned rerun trigger, installed by whichever run branch
+    // (headless/headed) executes below: resolve this rebuild's scope, then hand
+    // it to core's invalidation subscriber. Populated after the initial cycle.
+    let dispatchRerun: (() => Promise<void>) | undefined;
+
+    /**
+     * Latest-wins interrupt, installed by the run branch whose in-flight run can
+     * be cut short (headless). Core serializes cycles, so a trigger arriving
+     * mid-cycle would otherwise wait out a run the user has already superseded.
+     */
+    let interruptInFlightRun: (() => Promise<void>) | undefined;
+
+    /**
+     * The cycle core is running for the scope last signalled. Only an explicit
+     * request awaits it, right after it dispatched: a CLI shortcut's
+     * `updateSnapshot` stays flipped only until `requestRerun` resolves, and the
+     * in-page rerun button answers its RPC when the rerun is done. A rejection is
+     * reported here rather than left to an awaiting caller, because compile-driven
+     * triggers have no caller — and a failed cycle must not end the session.
+     */
+    let signalledCycle: Promise<void> | undefined;
+
+    return {
+      setDispatchRerun(fn: () => Promise<void>): void {
+        dispatchRerun = fn;
+      },
+      async runDispatchRerun(): Promise<void> {
+        await dispatchRerun?.();
+      },
+      setInterrupt(fn: () => Promise<void>): void {
+        interruptInFlightRun = fn;
+      },
+      /**
+       * Hand the scope this trigger resolved to core, which resets the cycle state,
+       * calls back into the session's `runCycle`, and finalizes.
+       *
+       * The cycle is deliberately *not* awaited here. Rebuild triggers reach this
+       * from inside the bundler's dev-compile hook, and the bundler keeps no
+       * watcher attached while that hook is pending: anything created or deleted in
+       * that window is never seen, so it never rebuilds and never reruns. Holding
+       * the hook for a whole cycle widens that blind window to the cycle's full
+       * duration, which loses test files added or removed mid-run for good. Core
+       * serializes the cycles itself, so nothing here has to.
+       *
+       * The in-flight run is cut short here rather than at the trigger, because only
+       * this point knows a replacement cycle is actually coming: a trigger that
+       * resolves to no affected files must leave the running cycle alone, or it
+       * finalizes on results it never produced.
+       */
+      async signalInvalidation(
+        fileFilters: string[],
+        /**
+         * Run state this trigger binds to its own paths, taken in the same turn as
+         * the handover — after any interrupt, so no queued cycle can be dequeued in
+         * between and read it. The headed rerun's per-file test-name pattern is the
+         * one such state; core's cycle options cannot carry it, so the only thing
+         * that makes it the property of one cycle is claiming it here.
+         */
+        claimScope?: () => void,
+      ): Promise<void> {
+        await interruptInFlightRun?.();
+        claimScope?.();
+        signalledCycle = Promise.resolve(
+          onInvalidate?.({ isFirstBuild: false, fileFilters }),
+        ).catch((error) => {
+          logger.error(color.red('Browser Mode watch cycle failed:'), error);
+        });
+      },
+      async awaitSignalledCycle(): Promise<void> {
+        await signalledCycle;
+      },
+    };
+  })();
 
   if (!runtime) {
     try {
@@ -505,7 +575,7 @@ export const runBrowserController = async (
         isWatchMode,
         onTriggerRerun: isWatchMode
           ? async () => {
-              await dispatchRerun?.();
+              await watchSignals.runDispatchRerun();
             }
           : undefined,
         containerDistPath,
@@ -605,60 +675,6 @@ export const runBrowserController = async (
   };
 
   /**
-   * Latest-wins interrupt, installed by the run branch whose in-flight run can
-   * be cut short (headless). Core serializes cycles, so a trigger arriving
-   * mid-cycle would otherwise wait out a run the user has already superseded.
-   */
-  let interruptInFlightRun: (() => Promise<void>) | undefined;
-
-  /**
-   * The cycle core is running for the scope last signalled. Only an explicit
-   * request awaits it, right after it dispatched: a CLI shortcut's
-   * `updateSnapshot` stays flipped only until `requestRerun` resolves, and the
-   * in-page rerun button answers its RPC when the rerun is done. A rejection is
-   * reported here rather than left to an awaiting caller, because compile-driven
-   * triggers have no caller — and a failed cycle must not end the session.
-   */
-  let signalledCycle: Promise<void> | undefined;
-
-  /**
-   * Hand the scope this trigger resolved to core, which resets the cycle state,
-   * calls back into the session's `runCycle`, and finalizes.
-   *
-   * The cycle is deliberately *not* awaited here. Rebuild triggers reach this
-   * from inside the bundler's dev-compile hook, and the bundler keeps no
-   * watcher attached while that hook is pending: anything created or deleted in
-   * that window is never seen, so it never rebuilds and never reruns. Holding
-   * the hook for a whole cycle widens that blind window to the cycle's full
-   * duration, which loses test files added or removed mid-run for good. Core
-   * serializes the cycles itself, so nothing here has to.
-   *
-   * The in-flight run is cut short here rather than at the trigger, because only
-   * this point knows a replacement cycle is actually coming: a trigger that
-   * resolves to no affected files must leave the running cycle alone, or it
-   * finalizes on results it never produced.
-   */
-  const signalInvalidation = async (
-    fileFilters: string[],
-    /**
-     * Run state this trigger binds to its own paths, taken in the same turn as
-     * the handover — after any interrupt, so no queued cycle can be dequeued in
-     * between and read it. The headed rerun's per-file test-name pattern is the
-     * one such state; core's cycle options cannot carry it, so the only thing
-     * that makes it the property of one cycle is claiming it here.
-     */
-    claimScope?: () => void,
-  ): Promise<void> => {
-    await interruptInFlightRun?.();
-    claimScope?.();
-    signalledCycle = Promise.resolve(
-      onInvalidate?.({ isFirstBuild: false, fileFilters }),
-    ).catch((error) => {
-      logger.error(color.red('Browser Mode watch cycle failed:'), error);
-    });
-  };
-
-  /**
    * The watch session both transports hand back. Only `execute` differs — the
    * cycle's timing, its fatal-error capture window, and the error-to-outcome
    * precedence are one contract with core, so they live in one place.
@@ -702,8 +718,8 @@ export const runBrowserController = async (
       if (testPaths && seeded === 0) {
         return;
       }
-      await dispatchRerun?.();
-      await signalledCycle;
+      await watchSignals.runDispatchRerun();
+      await watchSignals.awaitSignalledCycle();
     },
   });
 
@@ -1535,16 +1551,16 @@ export const runBrowserController = async (
       // to then never ends. Signalling the cancel is enough — the run's own
       // teardown closes page and context as soon as it unwinds, and every page
       // operation it can be sitting in is bounded by the driver's own timeout.
-      interruptInFlightRun = async () => {
+      watchSignals.setInterrupt(async () => {
         const active = runLifecycle.activeSession;
         if (!active || active.cancelled) {
           return;
         }
         runLifecycle.invalidateActiveToken();
         await runLifecycle.cancel(active, { waitForDone: false });
-      };
+      });
 
-      dispatchRerun = async () => {
+      watchSignals.setDispatchRerun(async () => {
         const newProjectEntries = await collectProjectEntries(context);
         const rerunPlan = planWatchRerun({
           projectEntries: newProjectEntries,
@@ -1566,7 +1582,7 @@ export const runBrowserController = async (
               color.cyan('No browser test files remain after update.\n'),
             );
             // Still one cycle: core's finalize reports the emptied run.
-            await signalInvalidation([]);
+            await watchSignals.signalInvalidation([]);
             return;
           }
 
@@ -1575,7 +1591,7 @@ export const runBrowserController = async (
               `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
             ),
           );
-          await signalInvalidation([
+          await watchSignals.signalInvalidation([
             ...new Set(rerunPlan.currentTestFiles.map((file) => file.testPath)),
           ]);
           return;
@@ -1596,10 +1612,10 @@ export const runBrowserController = async (
             `Re-running ${rerunPlan.affectedTestFiles.length} affected test file(s)...\n`,
           ),
         );
-        await signalInvalidation([
+        await watchSignals.signalInvalidation([
           ...new Set(rerunPlan.affectedTestFiles.map((file) => file.testPath)),
         ]);
-      };
+      });
 
       watchSession = createWatchSession(runScope);
     }
@@ -2073,7 +2089,7 @@ export const runBrowserController = async (
       await rpcManager.updateHostConfig(refreshedHostOptions);
     };
 
-    dispatchRerun = async () => {
+    watchSignals.setDispatchRerun(async () => {
       // Independent: config push to the container vs. local entry collection.
       const [, newProjectEntries] = await Promise.all([
         refreshHostConfig(),
@@ -2114,7 +2130,9 @@ export const runBrowserController = async (
             `Re-running ${rerunPlan.normalizedAffectedTestFiles.length} affected test file(s)...\n`,
           ),
         );
-        await signalInvalidation(rerunPlan.normalizedAffectedTestFiles);
+        await watchSignals.signalInvalidation(
+          rerunPlan.normalizedAffectedTestFiles,
+        );
         return;
       }
 
@@ -2122,11 +2140,11 @@ export const runBrowserController = async (
         logger.log(color.cyan('Tests will be re-executed automatically\n'));
       }
       logWatchReadyMessage(context, enableCliShortcuts);
-    };
+    });
 
     runUiRequestedRerun = async (file, testNamePattern) => {
       await refreshHostConfig();
-      await signalInvalidation([file.testPath], () => {
+      await watchSignals.signalInvalidation([file.testPath], () => {
         if (testNamePattern === undefined) {
           pendingTestNamePatterns.delete(normalize(file.testPath));
         } else {
@@ -2136,7 +2154,7 @@ export const runBrowserController = async (
           );
         }
       });
-      await signalledCycle;
+      await watchSignals.awaitSignalledCycle();
     };
 
     watchSession = createWatchSession(runScope);
