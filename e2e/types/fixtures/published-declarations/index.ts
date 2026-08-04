@@ -27,12 +27,21 @@ const lifecycle: FixtureLifecycle = {
 void lifecycle;
 
 const predicate = (value: string) => value.length > 0;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+const broadlyTypedFunction: Function = predicate;
+const broadlyTypedCallable: CallableFunction = predicate;
 class Service {
   name = 'service';
 }
 
 // @ts-expect-error callable values must be returned by named fixture functions
 test.extend('predicate', predicate);
+
+// @ts-expect-error broadly typed functions are still callable at runtime
+test.extend('broadFunction', broadlyTypedFunction);
+
+// @ts-expect-error broadly typed callable values are fixture functions at runtime
+test.extend('broadCallable', broadlyTypedCallable);
 
 // @ts-expect-error constructable values must be returned by named fixture functions
 test.extend('service', Service);

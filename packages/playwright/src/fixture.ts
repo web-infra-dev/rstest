@@ -1495,9 +1495,10 @@ type NamedFixtureName<Name extends string> =
       ? Name
       : never;
 
-type RuntimeFunction =
-  | ((...args: never[]) => unknown)
-  | (abstract new (...args: never[]) => unknown);
+// This must match runtime `typeof value === 'function'`, including broadly
+// typed Function and CallableFunction values without call signatures.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+type RuntimeFunction = Function;
 
 type PlaywrightNamedFixture<Value, Context> =
   | (Value extends RuntimeFunction ? never : Value)
