@@ -408,7 +408,9 @@ const apiTest = test
 
 Named fixture functions are test-scoped: Rstest evaluates them for each test attempt and runs their cleanup before starting the next attempt. Plain values are reused across attempts. Use a fixture function when mutable state must be isolated for each attempt.
 
-A function argument is always treated as a fixture function. To use a function as the fixture value, return it from a fixture function, for example `.extend('predicate', () => predicate)`. Use direct object destructuring in the first parameter to request other fixtures or fields from `TestContext`.
+The fixture name must be a statically known string literal so TypeScript can expose the new context field. A value typed only as `string` is not accepted by this overload.
+
+A function or class passed directly is treated as a fixture function because both are JavaScript functions at runtime. To use the function or class itself as the fixture value, return it from a fixture function, for example `.extend('predicate', () => predicate)` or `.extend('Service', () => Service)`. Use direct object destructuring in the first parameter to request other fixtures or fields from `TestContext`.
 
 ### Plain value fixtures
 

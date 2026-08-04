@@ -1429,8 +1429,18 @@ type MergeContext<ExtraContext, FixturesContext> = {
       : never;
 };
 
+type MergeNamedContext<
+  Context,
+  Name extends string,
+  Value,
+> = Name extends string ? MergeContext<Context, Record<Name, Value>> : never;
+
+type RuntimeFunction =
+  | ((...args: never[]) => unknown)
+  | (abstract new (...args: never[]) => unknown);
+
 type PlaywrightNamedFixture<Value, Context> =
-  | (Value extends (...args: never[]) => unknown ? never : Value)
+  | (Value extends RuntimeFunction ? never : Value)
   | ((context: Context, lifecycle: FixtureLifecycle) => Value | Promise<Value>);
 
 type PlaywrightExtend<ExtraContext> = {
@@ -1438,12 +1448,12 @@ type PlaywrightExtend<ExtraContext> = {
     fixtures: PlaywrightFixtures<T, ExtraContext>,
   ): PlaywrightTest<MergeContext<ExtraContext, T>>;
   <Name extends string, Value>(
-    name: Name,
+    name: string extends Name ? never : Name,
     fixture: PlaywrightNamedFixture<
       Value,
       Omit<TestContext & ExtraContext, Name>
     >,
-  ): PlaywrightTest<MergeContext<ExtraContext, Record<Name, Value>>>;
+  ): PlaywrightTest<MergeNamedContext<ExtraContext, Name, Value>>;
 };
 
 export type PlaywrightTest<ExtraContext = PlaywrightFixture> =

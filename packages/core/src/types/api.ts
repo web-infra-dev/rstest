@@ -246,8 +246,20 @@ type MergeFixtureContext<Context, Added extends Record<string, any>> = {
       : never;
 };
 
+type MergeNamedFixtureContext<
+  Context,
+  Name extends string,
+  Value,
+> = Name extends string
+  ? MergeFixtureContext<Context, Record<Name, Value>>
+  : never;
+
+type RuntimeFunction =
+  | ((...args: never[]) => unknown)
+  | (abstract new (...args: never[]) => unknown);
+
 type NamedFixture<Value, Context> =
-  | (Value extends (...args: never[]) => unknown ? never : Value)
+  | (Value extends RuntimeFunction ? never : Value)
   | ((context: Context, lifecycle: FixtureLifecycle) => MaybePromise<Value>);
 
 type TestExtend<ExtraContext> = {
@@ -255,9 +267,9 @@ type TestExtend<ExtraContext> = {
     fixtures: Fixtures<T, ExtraContext>,
   ): TestAPIs<MergeFixtureContext<ExtraContext, T>>;
   <Name extends string, Value>(
-    name: Name,
+    name: string extends Name ? never : Name,
     fixture: NamedFixture<Value, Omit<TestContext & ExtraContext, Name>>,
-  ): TestAPIs<MergeFixtureContext<ExtraContext, Record<Name, Value>>>;
+  ): TestAPIs<MergeNamedFixtureContext<ExtraContext, Name, Value>>;
 };
 
 export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {

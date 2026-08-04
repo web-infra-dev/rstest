@@ -498,10 +498,32 @@ test(
 
 const namedFixtureEvents: string[] = [];
 const predicate = (value: string) => value.length > 0;
+class NamedFixtureService {
+  name = 'service';
+}
 
-const checkNamedFixtureTypes = () => {
+const checkNamedFixtureTypes = (
+  fixtureName: string,
+  unionName: 'left' | 'right',
+) => {
   // @ts-expect-error callable values must be returned by named fixture functions
   test.extend('predicate', predicate);
+
+  // @ts-expect-error constructable values must be returned by named fixture functions
+  test.extend('service', NamedFixtureService);
+
+  // @ts-expect-error named fixture names must be statically known
+  test.extend('prefix', 'prefix').extend(fixtureName, 42);
+
+  const unionFixtureTest = test
+    .extend('prefix', 'prefix')
+    .extend(unionName, 42);
+  unionFixtureTest('models union names as alternative contexts', (ctx) => {
+    const prefix: string = ctx.prefix;
+    void prefix;
+    // @ts-expect-error neither union member is guaranteed to be registered
+    void ctx.left;
+  });
 };
 void checkNamedFixtureTypes;
 
@@ -514,13 +536,18 @@ const namedFixtureTest = test
     });
     return 'named fixture title';
   })
-  .extend('predicate', () => predicate);
+  .extend('predicate', () => predicate)
+  .extend('service', () => NamedFixtureService);
 
-namedFixtureTest('supports the named fixture form', ({ predicate, title }) => {
-  expect(title).toBe('named fixture title');
-  expect(predicate('value')).toBe(true);
-  namedFixtureEvents.push('test');
-});
+namedFixtureTest(
+  'supports the named fixture form',
+  ({ predicate, service, title }) => {
+    expect(title).toBe('named fixture title');
+    expect(predicate('value')).toBe(true);
+    expect(new service().name).toBe('service');
+    namedFixtureEvents.push('test');
+  },
+);
 
 namedFixtureTest.afterAll(() => {
   expect(namedFixtureEvents).toEqual(['test', 'cleanup']);
