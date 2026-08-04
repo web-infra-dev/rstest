@@ -4,6 +4,7 @@ import { Rstest } from '../../src/core/rstest';
 import {
   createWatchCycleDriver,
   createWatchShortcutHandlers,
+  createWatchTeardown,
   registerWatchSignalExit,
 } from '../../src/core/watchSession';
 import type {
@@ -82,7 +83,10 @@ const createGatedExecutor = (name: string) => {
   return { executor, release: () => release(), started };
 };
 
-const createDriver = (context: Rstest) => {
+const createDriver = (
+  context: Rstest,
+  isSessionClosing: () => boolean = () => false,
+) => {
   let activeTraceRun = { finalize: async () => {} } as TraceRun;
   const traceController = {
     beginRun: () => ({ finalize: async () => {} }) as TraceRun,
@@ -99,7 +103,7 @@ const createDriver = (context: Rstest) => {
     },
     enableCliShortcuts: false,
     isSessionLive: () => true,
-    isSessionClosing: () => false,
+    isSessionClosing,
   });
 };
 
@@ -402,6 +406,38 @@ describe('createWatchCycleDriver', () => {
       ['/a.test.ts'],
       ['/b.test.ts'],
     ]);
+  });
+
+  it('drops a queued cycle when teardown finishes before it starts', async () => {
+    const context = createContext();
+    let runStarts = 0;
+    context.reporters = [
+      {
+        onTestRunStart: () => {
+          runStarts += 1;
+        },
+      },
+    ];
+    const { executor, release, started } = createGatedExecutor('node');
+    const teardown = createWatchTeardown({
+      executors: [executor],
+      traceController: {
+        close: async () => {},
+      } as unknown as TraceController,
+      getTraceRun: () => ({ finalize: async () => {} }) as TraceRun,
+    });
+    const driver = createDriver(context, teardown.isClosing);
+
+    const inFlight = driver.runCycle(executor, { mode: 'all' });
+    await started();
+    const queued = driver.runCycle(executor, { mode: 'all' });
+
+    await teardown.close();
+    release();
+    await Promise.all([inFlight, queued]);
+
+    expect(executor.cycles).toHaveLength(1);
+    expect(runStarts).toBe(1);
   });
 
   it('keeps a rejected cycle from wedging the queue', async () => {

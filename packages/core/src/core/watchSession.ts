@@ -190,12 +190,13 @@ export function createWatchCycleDriver({
    */
   isSessionLive: () => boolean;
   /**
-   * Whether the session teardown has started. A cycle that was in flight when
-   * it did produces results about the teardown, not about the tests: the node
-   * pool rejects its running task with a worker-stopped error as it shuts down.
-   * Finalizing that would report a failure the user never caused — and, on a
-   * config-change restart, the exit code it writes outlives the session and
-   * fails the run that replaces it.
+   * Whether the session teardown has started. A queued cycle must stop before
+   * touching shared state or a closed executor. A cycle already in flight when
+   * teardown starts produces results about the teardown, not about the tests:
+   * the node pool rejects its running task with a worker-stopped error as it
+   * shuts down. Finalizing that would report a failure the user never caused —
+   * and, on a config-change restart, the exit code it writes outlives the
+   * session and fails the run that replaces it.
    */
   isSessionClosing: () => boolean;
 }): WatchCycleDriver {
@@ -232,6 +233,9 @@ export function createWatchCycleDriver({
       options: { mode = 'all', fileFilters, trigger, updateSnapshot, env },
     }: PendingCycle,
   ): Promise<void> => {
+    if (isSessionClosing()) {
+      return;
+    }
     // One id per cycle across all executors: consumers only require it to move
     // (the node pool flushes its worker cache on a change, the browser host
     // keys run-token staleness off it), never to be contiguous per executor.
