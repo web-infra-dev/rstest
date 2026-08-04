@@ -32,6 +32,13 @@ describe('normalizeFixtures', () => {
     expect(result.a!.deps).toEqual(['b']);
   });
 
+  it('ignores inherited Object properties when computing dependencies', () => {
+    const fixtureFn = ({ constructor }: any) => constructor;
+    const result = normalizeFixtures({ value: [fixtureFn] } as any);
+
+    expect(result.value!.deps).toEqual([]);
+  });
+
   it('merges extendFixtures with local fixtures taking precedence', () => {
     const extend = { base: { isFn: false, value: 'base' } } as any;
     const result = normalizeFixtures({ a: 1 } as any, extend);
@@ -135,6 +142,21 @@ describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
 });
 
 describe('createFixtureResolver', () => {
+  it('does not resolve inherited Object properties as fixture dependencies', async () => {
+    const fixtures = normalizeNamedFixture(
+      'value',
+      ({ constructor }: any) => constructor,
+    );
+    const context: Record<string, any> = () => {};
+    const originalConstructor = context.constructor;
+    const resolver = createFixtureResolver({ fixtures } as any, context, []);
+
+    await resolver.resolveTestFixtures(({ value }: any) => value);
+
+    expect(context.constructor).toBe(originalConstructor);
+    expect(context.value).toBe(originalConstructor);
+  });
+
   it.each(['name', 'length', 'arguments', 'caller'])(
     'supports named fixtures that overlap Function property %s',
     async (name) => {

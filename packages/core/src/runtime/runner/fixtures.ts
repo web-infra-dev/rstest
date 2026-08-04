@@ -59,7 +59,9 @@ export const normalizeFixtures = (
       if (value.isFn) {
         const usedProps = getFixtureUsedProps(value.value);
         value.deps = usedProps.filter(
-          (p) => p in result || p in extendFixtures,
+          (property) =>
+            Object.hasOwn(result, property) ||
+            Object.hasOwn(extendFixtures, property),
         );
       }
       return [key, value];
@@ -95,8 +97,8 @@ export const normalizeNamedFixture = (
   };
   const fixture = result[name]!;
   if (fixture.isFn) {
-    fixture.deps = getFixtureUsedProps(fixture.value).filter(
-      (property) => property in result,
+    fixture.deps = getFixtureUsedProps(fixture.value).filter((property) =>
+      Object.hasOwn(result, property),
     );
   }
   return result;
