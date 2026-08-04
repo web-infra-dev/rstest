@@ -23,7 +23,14 @@ describe('loadTestEnvironmentModule', () => {
       const bundlePath = writeModule(
         root,
         'bundle.mjs',
-        'export class JSDOM { static source = "bundle" }',
+        `export class JSDOM {
+          static source = "bundle";
+          window = {
+            document: { documentElement: {} },
+            getComputedStyle() {},
+            close() {},
+          };
+        }`,
       );
 
       const loaded = await loadTestEnvironmentModule({
@@ -48,6 +55,48 @@ describe('loadTestEnvironmentModule', () => {
           bundlePath,
         }),
       ).toBe(loaded);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back when the jsdom bundle fails its runtime probe', async () => {
+    const root = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'rstest-env-probe-fallback-'),
+    );
+
+    try {
+      const resolvedPath = writeModule(
+        root,
+        'resolved.mjs',
+        'export class JSDOM { static source = "resolved" }',
+      );
+      const bundlePath = writeModule(
+        root,
+        'bundle.mjs',
+        `export class JSDOM {
+          static source = "bundle";
+          window = {
+            document: { documentElement: {} },
+            getComputedStyle() { throw new Error("incompatible cssstyle"); },
+            close() {},
+          };
+        }`,
+      );
+
+      const loaded = await loadTestEnvironmentModule({
+        name: 'jsdom',
+        packageName: 'jsdom',
+        resolvedPath,
+        bundlePath,
+      });
+
+      if (loaded?.name !== 'jsdom') {
+        throw new Error('Expected the jsdom dependency.');
+      }
+      expect(
+        (loaded.module.JSDOM as unknown as { source: string }).source,
+      ).toBe('resolved');
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

@@ -92,7 +92,13 @@ const autoPrebundleMajorRanges: Record<
   // Future majors stay on the native path under `auto` until their runtime
   // edge cases have been covered by the environment regression matrix. Users
   // can explicitly set `prebundle: true` to override this compatibility gate.
-  jsdom: [{ from: 15, to: 30 }],
+  // jsdom 27-28 use @acemir/cssom's undeclared optional cssstyle import.
+  // Bundling can change that phantom dependency's resolution and break
+  // getComputedStyle(), so `auto` keeps those majors on the native path.
+  jsdom: [
+    { from: 15, to: 26 },
+    { from: 29, to: 30 },
+  ],
   'happy-dom': [{ from: 20, to: 20 }],
 };
 

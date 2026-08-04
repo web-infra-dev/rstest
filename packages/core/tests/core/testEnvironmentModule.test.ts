@@ -188,6 +188,29 @@ exports.canvasInstalled = canvasInstalled;
     },
   );
 
+  it.each(['27.4.0', '28.1.0'])(
+    'keeps jsdom %s on the native path because bundling can change its optional cssstyle resolution',
+    async (version) => {
+      const root = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'rstest-env-cssstyle-resolution-'),
+      );
+      createPackage(root, 'export class JSDOM {}', { version });
+
+      const result = await prepareTestEnvironmentModules({
+        projects: [createProject(root)],
+        rootPath: root,
+      });
+
+      try {
+        expect(result.modules.get('jsdom')?.resolvedPath).toBeTruthy();
+        expect(result.modules.get('jsdom')?.bundlePath).toBeUndefined();
+      } finally {
+        await result.cleanup();
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   it('keeps unsupported happy-dom versions on the native dependency path', async () => {
     const root = fs.mkdtempSync(
       path.join(os.tmpdir(), 'rstest-env-unsupported-happy-dom-'),

@@ -58,6 +58,22 @@ const validateBuiltinDependency = (
   );
 };
 
+const probeBundledDependency = (loaded: LoadedTestEnvironmentModule): void => {
+  if (loaded.name !== 'jsdom') {
+    return;
+  }
+
+  const dom = new loaded.module.JSDOM('<!doctype html><html></html>');
+  try {
+    // A bundle can import successfully while changing CommonJS resolution or
+    // losing jsdom's runtime CSS asset. Probe that path before test setup so a
+    // broken bundle falls back to the user's native jsdom entry.
+    dom.window.getComputedStyle(dom.window.document.documentElement);
+  } finally {
+    dom.window.close();
+  }
+};
+
 const loadModule = async (
   reference: TestEnvironmentModuleReference,
 ): Promise<LoadedTestEnvironmentModule> => {
@@ -67,6 +83,7 @@ const loadModule = async (
         reference,
         await importModule(reference.bundlePath),
       );
+      probeBundledDependency(loaded);
       logger.debug(`loaded bundled test environment ${reference.packageName}`);
       return loaded;
     } catch (error) {
