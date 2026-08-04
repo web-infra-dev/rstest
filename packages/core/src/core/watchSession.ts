@@ -538,9 +538,9 @@ export interface WatchTeardown {
    */
   isClosing(): boolean;
   /**
-   * Release a process-level owner (the stdin CLI shortcuts) once teardown has
-   * settled, never before: the window between close and exit is exactly when
-   * Ctrl+C must still be answerable.
+   * Release a process-level owner once teardown has settled, never before: the
+   * stdin owner keeps the loop alive, while fatal-signal handlers must remain
+   * answerable during cleanup without leaking into the next session.
    */
   addCleanup(cleanup: () => void): void;
 }
@@ -623,14 +623,15 @@ export function createWatchTeardown({
 /**
  * Own the fatal-signal → exit path for a watch session: tear down through the
  * shared teardown, then exit with the POSIX 128+signal code. Embedded hosts own
- * the process lifecycle, so nothing is registered there.
+ * the process lifecycle, so nothing is registered there. The returned cleanup
+ * removes this session's handlers after teardown completes.
  */
 export function registerWatchSignalExit(
   context: Rstest,
   close: () => Promise<void>,
-): void {
+): () => void {
   if (context.embedded) {
-    return;
+    return () => {};
   }
   const handleSignal = async (signal: NodeJS.Signals) => {
     logger.log(color.yellow(`\nReceived ${signal}, cleaning up...`));
@@ -640,4 +641,9 @@ export function registerWatchSignalExit(
   for (const signal of FATAL_SIGNALS) {
     process.on(signal, handleSignal);
   }
+  return () => {
+    for (const signal of FATAL_SIGNALS) {
+      process.off(signal, handleSignal);
+    }
+  };
 }

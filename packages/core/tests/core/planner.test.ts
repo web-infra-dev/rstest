@@ -5,7 +5,16 @@ import { createRunPlanner } from '../../src/core/planner';
 import { prepareRsbuild } from '../../src/core/rsbuild';
 import { Rstest } from '../../src/core/rstest';
 
+const originalDebug = process.env.DEBUG;
 process.env.DEBUG = 'false';
+
+afterAll(() => {
+  if (originalDebug === undefined) {
+    delete process.env.DEBUG;
+  } else {
+    process.env.DEBUG = originalDebug;
+  }
+});
 
 // The cold-start gate is a planner condition now, not an orchestrator branch,
 // so this is where it has to be pinned: the spy is the only thing that can tell

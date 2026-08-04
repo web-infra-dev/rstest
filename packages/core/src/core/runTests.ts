@@ -499,7 +499,7 @@ export async function runTests(context: Rstest): Promise<void> {
   });
   const closeWatchSession = () => watchTeardown.close();
   isSessionClosing = () => watchTeardown.isClosing();
-  registerWatchSignalExit(context, closeWatchSession);
+  watchTeardown.addCleanup(registerWatchSignalExit(context, closeWatchSession));
 
   const { onBeforeRestart } = await import('./restart');
   onBeforeRestart(closeWatchSession);
@@ -534,16 +534,16 @@ export async function runTests(context: Rstest): Promise<void> {
   // and the host stores the change-set for the session, so a rerun's options
   // never need it (the executor drops them).
   let browserWatchEnv: Record<string, string | undefined> | undefined;
-  if (browserExecutor) {
-    // Ahead of the node dev server, for the reason the non-watch assembly runs
-    // the stage before dispatching node work: it mutates the shared host
-    // `process.env`, which the pool re-reads at dispatch, so a node cycle
-    // started first would miss the browser setups' env changes. The node
-    // dependency check comes first in turn, so a node project that cannot run
-    // rejects the session before a user setup has mutated anything — which is
-    // why `validateRunDependencies` is a seam member of its own rather than
-    // something `ensureRunResources` alone owns.
-    try {
+  try {
+    if (browserExecutor) {
+      // Ahead of the node dev server, for the reason the non-watch assembly runs
+      // the stage before dispatching node work: it mutates the shared host
+      // `process.env`, which the pool re-reads at dispatch, so a node cycle
+      // started first would miss the browser setups' env changes. The node
+      // dependency check comes first in turn, so a node project that cannot run
+      // rejects the session before a user setup has mutated anything — which is
+      // why `validateRunDependencies` is a seam member of its own rather than
+      // something `ensureRunResources` alone owns.
       if (nodeExecutorToRun) {
         await watchTeardown.track(nodeExecutorToRun.validateRunDependencies());
       }
@@ -576,49 +576,53 @@ export async function runTests(context: Rstest): Promise<void> {
         return;
       }
       browserWatchEnv = stage.env;
-    } catch (error) {
-      // A close already under way owns the exit; re-throwing its victim's
-      // rejection would replace a clean shutdown with a crash.
-      const wasClosing = watchTeardown.isClosing();
-      await closeWatchSession();
-      if (wasClosing) {
+    }
+
+    if (nodeExecutorToRun) {
+      // The node executor's rebuilds are the watch trigger; its initial compile
+      // signals too, which is what drives the first node cycle.
+      nodeExecutorToRun.onInvalidate(({ isFirstBuild }) =>
+        watchDriver.runCycle(nodeExecutorToRun, {
+          mode: isFirstBuild ? 'all' : 'on-demand',
+          trigger: 'invalidation',
+        }),
+      );
+      // Start the node dev server now that the subscriber is in place. `runCycle`
+      // (invoked from that callback) reuses these resources via the in-flight
+      // guard rather than starting a second server.
+      await nodeExecutorToRun.ensureRunResources();
+      if (watchTeardown.isClosing()) {
+        await closeWatchSession();
         return;
       }
-      throw error;
     }
-  }
 
-  if (nodeExecutorToRun) {
-    // The node executor's rebuilds are the watch trigger; its initial compile
-    // signals too, which is what drives the first node cycle.
-    nodeExecutorToRun.onInvalidate(({ isFirstBuild }) =>
-      watchDriver.runCycle(nodeExecutorToRun, {
-        mode: isFirstBuild ? 'all' : 'on-demand',
-        trigger: 'invalidation',
-      }),
-    );
-    // Start the node dev server now that the subscriber is in place. `runCycle`
-    // (invoked from that callback) reuses these resources via the in-flight
-    // guard rather than starting a second server.
-    await nodeExecutorToRun.ensureRunResources();
-  }
-
-  if (browserExecutor) {
-    // Deferred to here so node env-dependency validation failures never leave a
-    // browser host running — the same ordering the pre-seam code had.
-    const initialBrowserCycle = watchDriver.runCycle(browserExecutor, {
-      mode: 'all',
-      env: browserWatchEnv,
-    });
-    if (nodeExecutorToRun) {
-      // The node side already keeps the process alive, so the browser session
-      // boots in the background; a failed boot must still be reported.
-      initialBrowserCycle.catch((error) => {
-        logger.error(color.red('Browser Mode watch session failed:'), error);
-        process.exitCode = 1;
+    if (browserExecutor) {
+      // Deferred to here so node env-dependency validation failures never leave a
+      // browser host running — the same ordering the pre-seam code had.
+      const initialBrowserCycle = watchDriver.runCycle(browserExecutor, {
+        mode: 'all',
+        env: browserWatchEnv,
       });
-    } else {
-      await initialBrowserCycle;
+      if (nodeExecutorToRun) {
+        // The node side already keeps the process alive, so the browser session
+        // boots in the background; a failed boot must still be reported.
+        initialBrowserCycle.catch((error) => {
+          logger.error(color.red('Browser Mode watch session failed:'), error);
+          process.exitCode = 1;
+        });
+      } else {
+        await initialBrowserCycle;
+      }
     }
+  } catch (error) {
+    // A close already under way owns the exit; re-throwing its victim's
+    // rejection would replace a clean shutdown with a crash.
+    const wasClosing = watchTeardown.isClosing();
+    await closeWatchSession();
+    if (wasClosing) {
+      return;
+    }
+    throw error;
   }
 }

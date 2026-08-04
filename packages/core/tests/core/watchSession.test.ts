@@ -4,6 +4,7 @@ import { Rstest } from '../../src/core/rstest';
 import {
   createWatchCycleDriver,
   createWatchShortcutHandlers,
+  registerWatchSignalExit,
 } from '../../src/core/watchSession';
 import type {
   ExecutorCycleOutcome,
@@ -11,6 +12,7 @@ import type {
   TestExecutor,
 } from '../../src/types';
 import type { TraceController, TraceRun } from '../../src/utils';
+import { FATAL_SIGNALS } from '../../src/utils/signals';
 
 const rootPath = join(__dirname, 'fixtures/watch-session');
 
@@ -100,6 +102,29 @@ const createDriver = (context: Rstest) => {
     isSessionClosing: () => false,
   });
 };
+
+describe('registerWatchSignalExit', () => {
+  it('removes every session signal handler when disposed', () => {
+    const context = createContext();
+    context.embedded = false;
+    const listenerCounts = FATAL_SIGNALS.map((signal) =>
+      process.listenerCount(signal),
+    );
+    const remove = registerWatchSignalExit(context, async () => {});
+
+    try {
+      expect(
+        FATAL_SIGNALS.map((signal) => process.listenerCount(signal)),
+      ).toEqual(listenerCounts.map((count) => count + 1));
+    } finally {
+      remove();
+    }
+
+    expect(
+      FATAL_SIGNALS.map((signal) => process.listenerCount(signal)),
+    ).toEqual(listenerCounts);
+  });
+});
 
 describe('createWatchCycleDriver', () => {
   it('clears the failed-test count even on a first cycle, so bail stays cycle-scoped', async () => {
