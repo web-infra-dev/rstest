@@ -296,10 +296,10 @@ export type EnvironmentWithOptions = {
   /**
    * Prebundle the environment before workers load it.
    *
-   * - `'auto'` (default): prebundle supported built-in environments.
+   * - `'auto'`: prebundle supported built-in environments.
    * - `true`: always prebundle the selected built-in environment.
-   * - `false`: load the environment natively.
-   * @default 'auto'
+   * - `false` (default): load the environment natively.
+   * @default false
    */
   prebundle?: TestEnvironmentPrebundle;
 };

@@ -93,15 +93,15 @@ The `options` object is passed directly to the environment's constructor.
 
 #### Environment prebundle
 
-<ApiMeta addedVersion="0.12.0" />
+<ApiMeta addedVersion="0.11.6" />
 
-Rstest can prebundle a test environment before workers load it. This reduces repeated module resolution and initialization work when many test files use the same DOM environment.
+Rstest can prebundle a test environment before workers load it. This reduces repeated module resolution and initialization work when many test files use the same DOM environment. This optimization is disabled by default and must be explicitly enabled.
 
 The `prebundle` option accepts:
 
-- `'auto'` (default): prebundle Rstest-tested versions of the built-in `jsdom` and `happy-dom` environments. Unknown versions use native loading.
+- `'auto'`: prebundle Rstest-tested versions of the built-in `jsdom` and `happy-dom` environments. Unknown versions use native loading.
 - `true`: always prebundle the selected built-in environment.
-- `false`: disable the prebundle and load the environment natively.
+- `false` (default): disable the prebundle and load the environment natively.
 
 The current automatic compatibility matrix covers jsdom 15–26 and 29–30, and happy-dom 20. Other major versions stay on the native path unless `prebundle: true` is set explicitly.
 
@@ -111,7 +111,7 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   testEnvironment: {
     name: 'jsdom',
-    prebundle: false,
+    prebundle: 'auto',
   },
 });
 ```

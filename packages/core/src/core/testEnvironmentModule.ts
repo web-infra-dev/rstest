@@ -364,7 +364,7 @@ const shouldPrebundle = async ({
   project: ProjectContext;
   resolvedPath: string;
 }): Promise<boolean> => {
-  const option = project.normalizedConfig.testEnvironment.prebundle ?? 'auto';
+  const option = project.normalizedConfig.testEnvironment.prebundle ?? false;
   if (option === true) {
     return true;
   }

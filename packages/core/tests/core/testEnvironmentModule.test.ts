@@ -87,7 +87,7 @@ exports.canvasToken = canvas.token;
     );
 
     const result = await prepareTestEnvironmentModules({
-      projects: [createProject(projectRoot)],
+      projects: [createProject(projectRoot, { prebundle: 'auto' })],
       rootPath: root,
     });
 
@@ -134,7 +134,7 @@ export const readNodeEnv = () => process.env.NODE_ENV;
     );
 
     const result = await prepareTestEnvironmentModules({
-      projects: [createProject(root)],
+      projects: [createProject(root, { prebundle: true })],
       rootPath: root,
     });
     const previousNodeEnv = process.env.NODE_ENV;
@@ -172,7 +172,7 @@ export const loadModule = (specifier) => import(specifier);
     );
 
     const result = await prepareTestEnvironmentModules({
-      projects: [createProject(root)],
+      projects: [createProject(root, { prebundle: true })],
       rootPath: root,
     });
 
@@ -212,7 +212,12 @@ export const loadModule = (specifier) => import(specifier);
     );
 
     const result = await prepareTestEnvironmentModules({
-      projects: [createProject(projectRoot, { environmentName: 'happy-dom' })],
+      projects: [
+        createProject(projectRoot, {
+          environmentName: 'happy-dom',
+          prebundle: 'auto',
+        }),
+      ],
       rootPath: root,
     });
 
@@ -247,7 +252,7 @@ export const canvasToken = canvas.token;
     );
 
     const result = await prepareTestEnvironmentModules({
-      projects: [createProject(projectRoot)],
+      projects: [createProject(projectRoot, { prebundle: true })],
       rootPath: root,
     });
 
@@ -283,7 +288,7 @@ exports.JSDOM = class JSDOM {};
     );
 
     const result = await prepareTestEnvironmentModules({
-      projects: [createProject(root)],
+      projects: [createProject(root, { prebundle: true })],
       rootPath: root,
     });
 
@@ -317,7 +322,7 @@ exports.canvasInstalled = canvasInstalled;
     );
 
     const result = await prepareTestEnvironmentModules({
-      projects: [createProject(root)],
+      projects: [createProject(root, { prebundle: 'auto' })],
       rootPath: root,
     });
 
@@ -348,7 +353,7 @@ exports.canvasInstalled = canvasInstalled;
       createPackage(root, 'export class JSDOM {}', { version });
 
       const result = await prepareTestEnvironmentModules({
-        projects: [createProject(root)],
+        projects: [createProject(root, { prebundle: 'auto' })],
         rootPath: root,
       });
 
@@ -372,7 +377,7 @@ exports.canvasInstalled = canvasInstalled;
       createPackage(root, 'export class JSDOM {}', { version });
 
       const result = await prepareTestEnvironmentModules({
-        projects: [createProject(root)],
+        projects: [createProject(root, { prebundle: 'auto' })],
         rootPath: root,
       });
 
@@ -396,7 +401,12 @@ exports.canvasInstalled = canvasInstalled;
     });
 
     const result = await prepareTestEnvironmentModules({
-      projects: [createProject(root, { environmentName: 'happy-dom' })],
+      projects: [
+        createProject(root, {
+          environmentName: 'happy-dom',
+          prebundle: 'auto',
+        }),
+      ],
       rootPath: root,
     });
 
@@ -420,7 +430,12 @@ exports.canvasInstalled = canvasInstalled;
     });
 
     const result = await prepareTestEnvironmentModules({
-      projects: [createProject(root, { environmentName: 'happy-dom' })],
+      projects: [
+        createProject(root, {
+          environmentName: 'happy-dom',
+          prebundle: 'auto',
+        }),
+      ],
       rootPath: root,
     });
 
@@ -480,7 +495,7 @@ exports.canvasInstalled = canvasInstalled;
     createPackage(root, 'export class JSDOM {}');
 
     const result = await prepareTestEnvironmentModules({
-      projects: [createProject(root, { outputModule: false })],
+      projects: [createProject(root, { outputModule: false, prebundle: true })],
       rootPath: root,
     });
 
@@ -507,6 +522,28 @@ exports.canvasInstalled = canvasInstalled;
 
     const result = await prepareTestEnvironmentModules({
       projects: [createProject(root, { prebundle: false })],
+      rootPath: root,
+    });
+
+    try {
+      expect(result.modules.get('jsdom')).toMatchObject({
+        name: 'jsdom',
+      });
+      expect(result.modules.get('jsdom')?.bundlePath).toBeUndefined();
+    } finally {
+      await result.cleanup();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not prebundle by default', async () => {
+    const root = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'rstest-env-default-native-'),
+    );
+    createPackage(root, 'export class JSDOM {}');
+
+    const result = await prepareTestEnvironmentModules({
+      projects: [createProject(root)],
       rootPath: root,
     });
 
@@ -577,9 +614,12 @@ export class JSDOM {}`,
     });
     const environmentName = 'default-environment-1';
     const result = await prepareTestEnvironmentModules({
-      projects: [createProject(root, { environmentName: 'jsdom' })].map(
-        (project) => ({ ...project, environmentName }),
-      ),
+      projects: [
+        createProject(root, {
+          environmentName: 'jsdom',
+          prebundle: true,
+        }),
+      ].map((project) => ({ ...project, environmentName })),
       rootPath: root,
     });
     const liveModules = result.modules;
@@ -588,9 +628,12 @@ export class JSDOM {}`,
       expect(liveModules.get(environmentName)?.name).toBe('jsdom');
 
       await result.update(
-        [createProject(root, { environmentName: 'happy-dom' })].map(
-          (project) => ({ ...project, environmentName }),
-        ),
+        [
+          createProject(root, {
+            environmentName: 'happy-dom',
+            prebundle: true,
+          }),
+        ].map((project) => ({ ...project, environmentName })),
       );
 
       expect(result.modules).toBe(liveModules);

@@ -93,15 +93,15 @@ export default defineConfig({
 
 #### 环境预打包
 
-<ApiMeta addedVersion="0.12.0" />
+<ApiMeta addedVersion="0.11.6" />
 
-Rstest 可以在 worker 加载测试环境前对其进行预打包。当大量测试文件使用相同的 DOM 环境时，这可以减少重复的模块解析和初始化开销。
+Rstest 可以在 worker 加载测试环境前对其进行预打包。当大量测试文件使用相同的 DOM 环境时，这可以减少重复的模块解析和初始化开销。这项优化默认关闭，需要显式启用。
 
 `prebundle` 支持以下值：
 
-- `'auto'`（默认值）：预打包经过 Rstest 验证的内置 `jsdom` 和 `happy-dom` 版本。未知版本使用原生加载。
+- `'auto'`：预打包经过 Rstest 验证的内置 `jsdom` 和 `happy-dom` 版本。未知版本使用原生加载。
 - `true`：强制预打包选中的内置环境。
-- `false`：关闭预打包，原生加载环境。
+- `false`（默认值）：关闭预打包，原生加载环境。
 
 当前自动兼容矩阵覆盖 jsdom 15–26、29–30 和 happy-dom 20。其他大版本默认保留原生加载路径，除非显式设置 `prebundle: true`。
 
@@ -111,7 +111,7 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   testEnvironment: {
     name: 'jsdom',
-    prebundle: false,
+    prebundle: 'auto',
   },
 });
 ```
