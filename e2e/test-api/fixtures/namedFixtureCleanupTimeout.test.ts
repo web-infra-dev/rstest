@@ -30,6 +30,21 @@ test.extend('value', (_context, { onCleanup }) => {
   },
 );
 
+test.extend('value', (_context, { onCleanup }) => {
+  onCleanup(() => {
+    throw new Error('RSTEST_NAMED_FIXTURE_TIMEOUT_CLEANUP_FAILED');
+  });
+  return new Promise<never>(() => {});
+})(
+  'preserves setup timeout when cancellation cleanup fails',
+  {
+    timeout: 100,
+  },
+  ({ value }) => {
+    void value;
+  },
+);
+
 test.extend('value', async (_context, { onCleanup }) => {
   await new Promise((resolve) => setTimeout(resolve, 200));
   onCleanup(() => {

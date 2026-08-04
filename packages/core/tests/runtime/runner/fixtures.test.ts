@@ -239,6 +239,34 @@ describe('createFixtureResolver', () => {
     expect(cleanups).toEqual([]);
   });
 
+  it('preserves named fixture setup errors when timeout cleanup fails', async () => {
+    const setupError = new Error('fixture setup timed out');
+    const cleanupError = new Error('fixture cleanup failed');
+    const fixtures = normalizeNamedFixture(
+      'value',
+      (_context: object, { onCleanup }: any) => {
+        onCleanup(() => {
+          throw cleanupError;
+        });
+        return new Promise<never>(() => {});
+      },
+    );
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver({ fixtures } as any, {}, cleanups, {
+      runNamedFixtureSetup: async (setup, onTimeout) => {
+        void setup();
+        onTimeout();
+        throw setupError;
+      },
+    });
+
+    await expect(
+      resolver.resolveTestFixtures(({ value }: any) => value),
+    ).rejects.toBe(setupError);
+    expect(cleanups).toHaveLength(1);
+    await expect(cleanups[0]!()).rejects.toBe(cleanupError);
+  });
+
   it('does not parse callbacks when the test has no fixtures', async () => {
     const resolver = createFixtureResolver({} as any, {});
 

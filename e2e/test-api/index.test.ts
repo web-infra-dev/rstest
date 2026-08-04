@@ -119,4 +119,25 @@ describe('Test API', () => {
       'fixture cleanup timed out in 100ms',
     );
   });
+
+  it('preserves setup timeout when cancellation cleanup fails', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/namedFixtureCleanupTimeout.test.ts',
+        '-t=preserves setup timeout when cancellation cleanup fails',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: dirname(fileURLToPath(import.meta.url)),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('fixture setup timed out in 100ms');
+    expect(output).toContain('RSTEST_NAMED_FIXTURE_TIMEOUT_CLEANUP_FAILED');
+  });
 });

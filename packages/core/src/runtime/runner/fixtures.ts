@@ -179,20 +179,19 @@ export const createFixtureResolver = (
         const notifyTeardownStarted = () => {
           cancelledFixtureTeardownStarts.get(name)?.();
         };
-        const runRegisteredCleanup = (): Promise<void> | undefined => {
+        const runRegisteredCleanup = (
+          removeFromCleanupQueue = true,
+        ): Promise<void> | undefined => {
           if (!registeredCleanup) {
             return undefined;
           }
-          if (!cleanupPromise) {
+          if (removeFromCleanupQueue) {
             const cleanupIndex = cleanups.indexOf(registeredCleanup);
             if (cleanupIndex !== -1) {
               cleanups.splice(cleanupIndex, 1);
             }
-            notifyTeardownStarted();
-            cleanupPromise = Promise.resolve().then(registeredCleanup);
-            cleanupPromise.catch(() => undefined);
           }
-          return cleanupPromise;
+          return registeredCleanup();
         };
         const trackCancellationCleanup = () => {
           const cleanup = runRegisteredCleanup();
@@ -204,6 +203,7 @@ export const createFixtureResolver = (
         });
 
         let cleanupRegistered = false;
+        let setupTimedOut = false;
         const onCleanup = (cleanup: FixtureCleanup) => {
           if (cleanupRegistered) {
             throw new Error(
@@ -211,11 +211,23 @@ export const createFixtureResolver = (
             );
           }
           cleanupRegistered = true;
-          registeredCleanup = wrapNamedFixtureCleanup(async () => {
+          const wrappedCleanup = wrapNamedFixtureCleanup(async () => {
             await cleanup();
           });
+          registeredCleanup = () => {
+            if (!cleanupPromise) {
+              notifyTeardownStarted();
+              cleanupPromise = Promise.resolve().then(wrappedCleanup);
+              cleanupPromise.catch(() => undefined);
+            }
+            return cleanupPromise;
+          };
           if (cancelledFixtures.has(name)) {
-            trackCancellationCleanup();
+            if (setupTimedOut) {
+              runRegisteredCleanup(false);
+            } else {
+              trackCancellationCleanup();
+            }
           } else {
             cleanups.unshift(registeredCleanup);
           }
@@ -224,20 +236,14 @@ export const createFixtureResolver = (
         const setup = runNamedFixtureSetup(
           () => Promise.resolve(fixtureValue(context, { onCleanup })),
           () => {
+            setupTimedOut = true;
             cancelledFixtures.add(name);
-            trackCancellationCleanup();
+            runRegisteredCleanup(false);
           },
         );
-        try {
-          const value = await Promise.race([setup, cancellationCleanup]);
-          if (!cancelledFixtures.has(name)) {
-            context[name] = value;
-          }
-        } catch (error) {
-          if (cancelledFixtures.has(name) && cleanupPromise) {
-            await cleanupPromise;
-          }
-          throw error;
+        const value = await Promise.race([setup, cancellationCleanup]);
+        if (!cancelledFixtures.has(name)) {
+          context[name] = value;
         }
         if (cancelledFixtures.has(name)) {
           const cleanup = runRegisteredCleanup();
