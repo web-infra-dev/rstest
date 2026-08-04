@@ -3733,13 +3733,11 @@ export const runBrowserController = async (
       // path that no longer resolves is skipped rather than failing the cycle
       // beside its still-valid siblings.
       const runScope = async (testPaths: string[]): Promise<void> => {
-        const filesByPath = new Map(
-          watchState.lastTestFiles.map((file) => [file.testPath, file]),
+        const pathSet = new Set(
+          testPaths.map((testPath) => normalize(testPath)),
         );
         await runFilesWithPool(
-          testPaths
-            .map((testPath) => filesByPath.get(normalize(testPath)))
-            .filter((file): file is TestFileInfo => Boolean(file)),
+          watchState.lastTestFiles.filter((file) => pathSet.has(file.testPath)),
         );
       };
 
@@ -3795,9 +3793,9 @@ export const runBrowserController = async (
               `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
             ),
           );
-          await signalInvalidation(
-            rerunPlan.currentTestFiles.map((file) => file.testPath),
-          );
+          await signalInvalidation([
+            ...new Set(rerunPlan.currentTestFiles.map((file) => file.testPath)),
+          ]);
           return;
         }
 
@@ -3816,9 +3814,9 @@ export const runBrowserController = async (
             `Re-running ${rerunPlan.affectedTestFiles.length} affected test file(s)...\n`,
           ),
         );
-        await signalInvalidation(
-          rerunPlan.affectedTestFiles.map((file) => file.testPath),
-        );
+        await signalInvalidation([
+          ...new Set(rerunPlan.affectedTestFiles.map((file) => file.testPath)),
+        ]);
       };
 
       watchSession = createWatchSession(runScope);

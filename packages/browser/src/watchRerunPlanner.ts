@@ -59,14 +59,10 @@ export const planWatchRerun = ({
   const normalizedAffectedTestFiles = affectedTestFiles.map((testFile) =>
     normalize(testFile),
   );
-
-  const currentFileMap = new Map(
-    currentTestFiles.map((file) => [file.testPath, file] as const),
+  const affectedPathSet = new Set(normalizedAffectedTestFiles);
+  const matchedAffectedFiles = currentTestFiles.filter((file) =>
+    affectedPathSet.has(file.testPath),
   );
-
-  const matchedAffectedFiles = normalizedAffectedTestFiles
-    .map((testFile) => currentFileMap.get(testFile))
-    .filter((file): file is TestFileInfo => Boolean(file));
 
   return {
     currentTestFiles,
