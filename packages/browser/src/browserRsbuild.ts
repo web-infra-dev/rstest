@@ -31,8 +31,8 @@ import { dirname, join, normalize, relative, resolve } from 'pathe';
 import picomatch from 'picomatch';
 import sirv from 'sirv';
 import { WebSocketServer } from 'ws';
-import type { ContainerRpcManager } from './hostController';
 import { validateBrowserConfig } from './configValidation';
+import type { ContainerRpcManager } from './containerRpc';
 import type {
   BrowserDispatchHandler,
   BrowserHostConfig,
