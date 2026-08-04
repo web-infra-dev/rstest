@@ -10,13 +10,11 @@ import {
   applyWebMockRspackConfig,
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
-  type BrowserWatchHandles,
   buildBrowserCoverageMap,
-  type CoverageMapData,
   type EntryHashSnapshot,
   type ExecutorCycleOutcome,
+  type ExecutorInvalidationCallback,
   FATAL_SIGNALS,
-  finalizeRunCycle,
   type ListBrowserTestsOptions,
   color,
   createCoverageProvider,
@@ -24,7 +22,6 @@ import {
   createSilentConsoleController,
   DEFAULT_TEST_TIMEOUT,
   type FormattedError,
-  getNoTestFilesMessage,
   getPrettyConsoleName,
   getSetupFiles,
   getTestEntries,
@@ -38,7 +35,6 @@ import {
   logger,
   logWatchReadyMessage,
   pluginMockRuntime,
-  prepareWatchRerunState,
   projectRuntimeConfig,
   PhaseTracker,
   type ProjectContext,
@@ -70,7 +66,6 @@ import {
 } from './dispatchCapabilities';
 import { validateBrowserConfig } from './configValidation';
 import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
-import { createHeadlessLatestRerunScheduler } from './headlessLatestRerunScheduler';
 import { attachHeadlessRunnerTransport } from './headlessTransport';
 import type {
   BrowserClientMessage,
@@ -580,12 +575,6 @@ const mapViewportByProject = (
   return map;
 };
 
-const ensureProcessExitCode = (code: number): void => {
-  if (process.exitCode === undefined || process.exitCode === 0) {
-    process.exitCode = code;
-  }
-};
-
 const castArray = <T>(arr?: T | T[]): T[] => {
   if (arr === undefined) {
     return [];
@@ -635,7 +624,7 @@ type BrowserLazyCompilationConfig = {
  * OS-assigned ephemeral port.  This helper falls back to
  * `httpServer.address()` to obtain the real bound port.
  */
-export const resolveListenPort = (
+const resolveListenPort = (
   listenPort: number,
   httpServer: {
     address: () => ReturnType<import('node:net').Server['address']>;
@@ -651,7 +640,39 @@ export const resolveListenPort = (
   return listenPort;
 };
 
-export const createBrowserLazyCompilationConfig = (
+/**
+ * The exit code a launch that found no test files at all must leave behind.
+ *
+ * Core's `reportNoTestFiles` owns the message and the no-test reporter
+ * lifecycle for such a launch, but in watch mode its report deliberately leaves
+ * the exit code alone — a rerun matching nothing is not a failure. Such a launch
+ * opened no session, so no later cycle can raise the code either. That makes
+ * this the host's only write to `process.exitCode`: a boot failure looks like a
+ * second launch-path exception but is not one, because it rides the outcome out
+ * of `failWithError` and core raises the code from there. One-shot runs keep
+ * going through the cycle, and a caller that passed `allowEmptyRun` — today only
+ * the config-hook discovery boot — reads the outcome instead of the process.
+ */
+const resolveEmptyLaunchExitCode = (
+  current: number | string | undefined,
+  {
+    allowEmptyRun,
+    isWatchMode,
+    passWithNoTests,
+  }: {
+    allowEmptyRun: boolean;
+    isWatchMode: boolean;
+    passWithNoTests: boolean;
+  },
+): number | string | undefined => {
+  if (allowEmptyRun || !isWatchMode || passWithNoTests) {
+    return current;
+  }
+  // Never downgrade: a code already raised by an earlier failure stands.
+  return current === undefined || current === 0 ? 1 : current;
+};
+
+const createBrowserLazyCompilationConfig = (
   setupFiles: string[],
 ): BrowserLazyCompilationConfig => {
   const eagerSetupFiles = new Set(
@@ -686,12 +707,12 @@ export const createBrowserLazyCompilationConfig = (
  * exists (#1472). Disabling HMR does not make watch rebuilds any less
  * incremental — HMR is only the client push transport.
  */
-export const shouldEnableBrowserHmr = (
+const shouldEnableBrowserHmr = (
   isWatchMode: boolean,
   isHeadless: boolean,
 ): boolean => isWatchMode && !isHeadless;
 
-export const createBrowserRsbuildDevConfig = (
+const createBrowserRsbuildDevConfig = (
   enableHmr: boolean,
 ): {
   writeToDisk: boolean;
@@ -1513,27 +1534,44 @@ const destroyBrowserRuntime = async (
     .catch(() => {});
 };
 
-const cleanupWatchRuntime = (): Promise<void> => {
-  if (watchContext.cleanupPromise) {
-    return watchContext.cleanupPromise;
+/**
+ * Tear down the persistent watch runtime (dev servers, provider, browser,
+ * WebSocket server). Idempotent, and the single teardown the browser executor's
+ * `close` and the process-exit nets both go through.
+ */
+export const runWatchRuntimeTeardown = <T>(
+  state: { runtime: T | null; cleanupPromise: Promise<void> | null },
+  destroy: (runtime: T) => Promise<void>,
+): Promise<void> => {
+  if (state.cleanupPromise) {
+    return state.cleanupPromise;
   }
 
-  const runtime = watchContext.runtime;
-  if (!runtime) {
-    return Promise.resolve();
-  }
+  state.cleanupPromise = (async () => {
+    if (!state.runtime) {
+      return;
+    }
 
-  const cleanupPromise = destroyBrowserRuntime(runtime).finally(() => {
-    if (watchContext.runtime === runtime) {
-      watchContext.runtime = null;
-    }
-    if (watchContext.cleanupPromise === cleanupPromise) {
-      watchContext.cleanupPromise = null;
-    }
+    await destroy(state.runtime);
+    state.runtime = null;
+  })();
+
+  // The memo is released once this teardown settles, because the state outlives
+  // the session: a config-file change restarts the run against a fresh runtime,
+  // and a memo left resolved from the previous session would make every later
+  // teardown a no-op — leaving the session after that to reuse a runtime built
+  // from the pre-restart config. Idempotency only has to hold within a runtime.
+  return state.cleanupPromise.finally(() => {
+    state.cleanupPromise = null;
   });
-  watchContext.cleanupPromise = cleanupPromise;
-  return cleanupPromise;
 };
+
+export const cleanupWatchRuntime = (): Promise<void> =>
+  // `cleanupRegistered` is deliberately not re-armed alongside the memo: the
+  // signal nets it installs read `watchContext.runtime` live, so they stay
+  // correct across a restart, and re-registering would stack a fresh set of
+  // listeners on every one.
+  runWatchRuntimeTeardown(watchContext, destroyBrowserRuntime);
 
 const registerWatchCleanup = (embedded: boolean): void => {
   if (watchContext.cleanupRegistered) {
@@ -1542,14 +1580,14 @@ const registerWatchCleanup = (embedded: boolean): void => {
   watchContext.cleanupRegistered = true;
 
   // Embedded (programmatic) hosts own the process lifecycle; they tear the
-  // session down through the watch handles' `close` instead of signals.
+  // session down through the browser executor's `close` instead of signals.
   if (embedded) {
     return;
   }
 
-  // Cleanup-only nets: core's watch loop owns the signal → exit-code path
-  // (`registerBrowserWatchSignalExit` / the mixed watch handler) and awaits
-  // the same idempotent `cleanupWatchRuntime` promise through `watch.close`.
+  // Cleanup-only nets: core's watch loop owns the signal → exit-code path and
+  // awaits the same idempotent `cleanupWatchRuntime` promise through the
+  // browser executor's `close`.
   for (const signal of FATAL_SIGNALS) {
     process.once(signal, () => {
       void cleanupWatchRuntime();
@@ -2372,22 +2410,93 @@ async function resolveProjectEntries(
 // Main Entry Point
 // ============================================================================
 
+/**
+ * The watch-session control surface a watch-mode controller run hands back with
+ * its initial cycle. Every rerun trigger the host owns (dev rebuild, HMR, the
+ * in-page rerun button) resolves its own scope and then signals core's
+ * invalidation subscriber; core resets the cycle state and calls back into
+ * {@link BrowserWatchSession.runCycle} to execute it. A trigger that resolves to
+ * no work never signals, so a scope matching none of this host's files produces
+ * no cycle and no cycle output.
+ */
+export type BrowserWatchSession = {
+  /** Execute the scope the last trigger resolved, as one cycle outcome. */
+  runCycle: (testPaths: string[]) => Promise<ExecutorCycleOutcome>;
+  /** Explicit path-scoped rerun request (a CLI shortcut's browser fanout). */
+  requestRerun: (testPaths?: string[]) => Promise<void>;
+};
+
+export type BrowserControllerOptions = BrowserTestRunOptions & {
+  /**
+   * Watch only: core's watch-cycle driver (see `TestExecutor.onInvalidate`).
+   * Its promise settles when the cycle it queued has finalized, which only an
+   * explicit request may wait for (see `signalInvalidation`).
+   */
+  onInvalidate?: ExecutorInvalidationCallback;
+};
+
+export type BrowserControllerResult = BrowserTestRunResult & {
+  watchSession?: BrowserWatchSession;
+};
+
+/**
+ * A headed cycle's work list: the files of its scope that still exist, each
+ * paired with the test-name pattern whichever trigger put it in scope asked for.
+ *
+ * Both halves are resolved in one pass, synchronously, at the top of the cycle.
+ * A queued scope can go stale before its cycle is dequeued — a later trigger may
+ * have rebuilt the file set without one of these files — and it is skipped the
+ * way the headless twin skips it; throwing would abandon the still-valid files
+ * beside it and fail the run. The patterns are claimed here, and only for the
+ * paths in this scope, so a click landing once the cycle is under way keeps its
+ * pattern for the cycle it signalled instead of losing it to this one mid-loop.
+ *
+ * A skipped path keeps its pattern too, for the same reason: consuming it on the
+ * way past would leave the next cycle that does run the file — the file set can
+ * be rebuilt back — running it unfiltered, so the user's click would silently
+ * become a full-file rerun. The cost is one map entry per path that never comes
+ * back, which the next launch drops with the map.
+ */
+export const claimHeadedCycleScope = (
+  testPaths: string[],
+  currentTestFiles: TestFileInfo[],
+  pendingTestNamePatterns: Map<string, string>,
+): { file: TestFileInfo; testNamePattern?: string }[] => {
+  const scope: { file: TestFileInfo; testNamePattern?: string }[] = [];
+  const filesByPath = new Map(
+    currentTestFiles.map((file) => [file.testPath, file]),
+  );
+  for (const testPath of testPaths) {
+    const normalizedTestPath = normalize(testPath);
+    const file = filesByPath.get(normalizedTestPath);
+    if (file) {
+      scope.push({
+        file,
+        testNamePattern: pendingTestNamePatterns.get(normalizedTestPath),
+      });
+      pendingTestNamePatterns.delete(normalizedTestPath);
+    }
+  }
+  return scope;
+};
+
 export const runBrowserController = async (
   context: RstestContext,
-  options?: BrowserTestRunOptions,
-): Promise<BrowserTestRunResult | void> => {
+  options?: BrowserControllerOptions,
+): Promise<BrowserControllerResult | void> => {
   const {
     allowEmptyRun = false,
     filesOnly = false,
     onTraceEvents,
     env,
+    onInvalidate,
   } = options ?? {};
   const buildStart = Date.now();
-  // Non-watch vs watch is the live switch for self-finalize: in non-watch runs
-  // core owns the unified finalize (reporters, exit code, coverage) through
-  // `finalizeRunCycle`, so the host never self-finalizes and always returns a
-  // fully-populated result with `close`. Watch reruns keep their host-driven
-  // per-rerun finalize.
+  // Watch mode changes what this controller *owns*, never who finalizes: core's
+  // `finalizeRunCycle` reduces every cycle on both commands. What watch adds is
+  // a persistent runtime (reused across controller re-entry), the rerun
+  // triggers, and HMR — so the initial run returns a live watch session instead
+  // of a deferred `close`.
   const isWatchMode = context.command === 'watch';
 
   // Per-file PhaseTrackers, populated only when `--trace` is on (caller
@@ -2457,12 +2566,12 @@ export const runBrowserController = async (
    * Build an error BrowserTestRunResult and call onTestRunEnd if needed.
    * Used for early-exit error paths to ensure errors reach the summary report.
    */
-  const buildErrorResult = async (
+  const buildErrorResult = (
     error: Error,
     close?: () => Promise<void>,
-  ): Promise<BrowserTestRunResult> => {
+  ): BrowserTestRunResult => {
     const elapsed = Math.max(0, Date.now() - buildStart);
-    const errorResult = {
+    return {
       results: [],
       testResults: [],
       duration: { totalTime: elapsed, buildTime: elapsed, testTime: 0 },
@@ -2472,21 +2581,6 @@ export const runBrowserController = async (
       resolveSourcemap: resolveBrowserSourcemap,
       close,
     };
-
-    if (isWatchMode) {
-      for (const reporter of context.reporters) {
-        await (reporter as Reporter).onTestRunEnd?.({
-          results: [],
-          testResults: [],
-          duration: errorResult.duration,
-          snapshotSummary: context.snapshotManager.summary,
-          getSourcemap: getBrowserSourcemap,
-          unhandledErrors: errorResult.unhandledErrors,
-        });
-      }
-    }
-
-    return errorResult;
   };
 
   const toError = (error: unknown): Error => {
@@ -2497,13 +2591,8 @@ export const runBrowserController = async (
     error: unknown,
     cleanup?: () => Promise<void>,
   ): Promise<BrowserTestRunResult> => {
-    // Non-watch runs defer the exit code to core's `finalizeRunCycle`, which
-    // raises it from the returned outcome's `errors`. Watch reruns keep owning
-    // their own exit code.
-    if (isWatchMode) {
-      ensureProcessExitCode(1);
-    }
-
+    // The error rides the returned result into the cycle outcome, and core's
+    // `finalizeRunCycle` raises the exit code from it — on both commands.
     const normalizedError = toError(error);
 
     if (cleanup && !isWatchMode) {
@@ -2511,7 +2600,7 @@ export const runBrowserController = async (
     }
 
     try {
-      return await buildErrorResult(normalizedError);
+      return buildErrorResult(normalizedError);
     } finally {
       await cleanup?.();
     }
@@ -2527,49 +2616,12 @@ export const runBrowserController = async (
       .filter((testPath) => !currentPathSet.has(testPath));
   };
 
-  const notifyTestRunStart = async (): Promise<void> => {
-    if (!isWatchMode) {
-      return;
-    }
-
-    for (const reporter of context.reporters) {
-      await reporter.onTestRunStart?.();
-    }
-  };
-
   const coverageConfig = browserProjects.find(
     (project) => project.normalizedConfig.coverage?.enabled,
   )?.normalizedConfig.coverage;
   const coverageProvider = coverageConfig?.enabled
     ? await createCoverageProvider(coverageConfig, context.rootPath)
     : null;
-
-  const notifyTestRunEnd = async ({
-    duration,
-    coverage,
-  }: {
-    duration: {
-      totalTime: number;
-      buildTime: number;
-      testTime: number;
-    };
-    coverage?: CoverageMapData;
-  }): Promise<void> => {
-    if (!isWatchMode) {
-      return;
-    }
-
-    for (const reporter of context.reporters) {
-      await reporter.onTestRunEnd?.({
-        results: context.reporterResults.results,
-        coverage,
-        testResults: context.reporterResults.testResults,
-        duration,
-        snapshotSummary: context.snapshotManager.summary,
-        getSourcemap: getBrowserSourcemap,
-      });
-    }
-  };
 
   const containerDevServerEnv = process.env.RSTEST_CONTAINER_DEV_SERVER;
   let containerDevServer: string | undefined;
@@ -2626,48 +2678,17 @@ export const runBrowserController = async (
     };
   };
 
-  const reportEmptyTestSet = (): void => {
-    const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
-    if (isWatchMode || !allowEmptyRun) {
-      const message = getNoTestFilesMessage({
-        context,
-        code,
-        defaultMessage: `No test files found, exiting with code ${code}.`,
-      });
-      if (code === 0) {
-        logger.log(color.yellow(message));
-      } else {
-        logger.error(color.red(message));
-      }
-
-      if (context.relatedFilters?.length) {
-        logger.log(
-          color.gray('related: '),
-          context.relatedFilters.join(color.gray(', ')),
-        );
-      } else if (context.fileFilters?.length) {
-        logger.log(
-          color.gray('filter: '),
-          context.fileFilters.join(color.gray(', ')),
-        );
-      }
-    }
-
-    // In non-watch runs the host returns a void outcome and core's
-    // `reportNoTestFiles` owns the exit code and the no-test reporter lifecycle;
-    // the host must not set the code itself. Watch keeps its own exit code.
-    if (isWatchMode && code !== 0 && !allowEmptyRun) {
-      ensureProcessExitCode(code);
-    }
+  const writeEmptyLaunchExitCode = (): void => {
+    process.exitCode = resolveEmptyLaunchExitCode(process.exitCode, {
+      allowEmptyRun,
+      isWatchMode,
+      passWithNoTests: context.normalizedConfig.passWithNoTests,
+    });
   };
 
   if (totalTests === 0 && !shouldInitializeEmptyBrowserHooks) {
-    reportEmptyTestSet();
+    writeEmptyLaunchExitCode();
     return allowEmptyRun ? createEmptyRunResult() : undefined;
-  }
-
-  if (!filesOnly) {
-    await notifyTestRunStart();
   }
 
   const enableCliShortcuts = isWatchMode && isTTY('stdin');
@@ -2686,11 +2707,10 @@ export const runBrowserController = async (
 
   let runtime = isWatchMode ? watchContext.runtime : null;
 
-  // Define rerun callback for watch mode (will be populated later)
-  let triggerRerun: (() => Promise<void>) | undefined;
-  // Headless reruns complete asynchronously in the scheduler's drain loop;
-  // the watch handles await this so callers observe rerun completion.
-  let awaitHeadlessRerunIdle: (() => Promise<void>) | undefined;
+  // The transport-owned rerun trigger, installed by whichever run branch
+  // (headless/headed) executes below: resolve this rebuild's scope, then hand
+  // it to core's invalidation subscriber. Populated after the initial cycle.
+  let dispatchRerun: (() => Promise<void>) | undefined;
 
   if (!runtime) {
     try {
@@ -2704,7 +2724,7 @@ export const runBrowserController = async (
         isWatchMode,
         onTriggerRerun: isWatchMode
           ? async () => {
-              await triggerRerun?.();
+              await dispatchRerun?.();
             }
           : undefined,
         containerDistPath,
@@ -2719,7 +2739,10 @@ export const runBrowserController = async (
       });
     }
 
-    if (isWatchMode) {
+    // `filesOnly` is the config-hook discovery boot, which destroys its runtime
+    // through the returned `close`. Caching it here would leave the real watch
+    // session re-entering on a destroyed runtime.
+    if (isWatchMode && !filesOnly) {
       watchContext.runtime = runtime;
       registerWatchCleanup(context.embedded);
     }
@@ -2733,12 +2756,11 @@ export const runBrowserController = async (
     watchState.lastTestFiles = collectWatchTestFiles(projectEntries);
   }
 
-  // Mark files as pending-affected so the next `triggerRerun` reruns them
-  // through the normal plan/schedule/finalize pipeline (used by the watch
-  // handles' explicit reruns; omitted paths = all current files). Returns the
-  // number of seeded files so callers can skip the rerun when a path-scoped
-  // request matches no browser test file (mixed watch 'u' with node-only
-  // snapshot updates).
+  // Mark files as pending-affected so the next trigger reruns them through the
+  // normal plan/cycle pipeline (used by explicit rerun requests; omitted paths
+  // = all current files). Returns the number of seeded files so a path-scoped
+  // request matching no browser test file can skip the rerun entirely (mixed
+  // watch 'u' with node-only snapshot updates must produce no browser cycle).
   const seedPendingRerun = (testPaths?: string[]): number => {
     const wanted = testPaths
       ? new Set(testPaths.map((testPath) => normalize(testPath)))
@@ -2758,29 +2780,14 @@ export const runBrowserController = async (
     return seeded;
   };
 
-  const watchHandles: BrowserWatchHandles | undefined = isWatchMode
-    ? {
-        rerun: async (testPaths) => {
-          const seeded = seedPendingRerun(testPaths);
-          if (testPaths && seeded === 0) {
-            return;
-          }
-          await triggerRerun?.();
-          await awaitHeadlessRerunIdle?.();
-        },
-        close: cleanupWatchRuntime,
-      }
-    : undefined;
-
   /**
-   * Per-rerun finalize for watch mode: fold the rerun into a synthetic
-   * `ExecutorCycleOutcome` and hand it to core's `finalizeRunCycle`, so
-   * reporter payloads, exit-code never-downgrade semantics, and coverage
-   * reports match the node watch cycle. The trace buffer stays session-owned
-   * (no `traceRun` here); `buildTime` is the drained duration of the
-   * change-triggered compile(s), not a hardcoded zero.
+   * Fold one watch rerun into the `ExecutorCycleOutcome` core's
+   * `finalizeRunCycle` reduces. `context.reporterResults` is the cross-cycle
+   * accumulator, so filtering it by the rerun's paths is what makes the outcome
+   * cycle-scoped. `buildTime` is the drained duration of the change-triggered
+   * compile(s) (zero for a shortcut-driven rerun, which compiles nothing).
    */
-  const finalizeWatchRerun = async ({
+  const buildRerunOutcome = ({
     rerunTestPaths,
     testTime,
     unhandledErrors,
@@ -2788,20 +2795,16 @@ export const runBrowserController = async (
     rerunTestPaths: string[];
     testTime: number;
     unhandledErrors?: Error[];
-  }): Promise<void> => {
+  }): ExecutorCycleOutcome => {
     const rerunPathSet = new Set(rerunTestPaths);
     const rerunResults = context.reporterResults.results.filter((result) =>
       rerunPathSet.has(result.testPath),
     );
     // Watch coverage is per-cycle on both transports: only the files this
     // rerun executed are reported.
-    let rerunCoverage: CoverageMapData | undefined;
     const coverageMap = buildBrowserCoverageMap(rerunResults, coverageProvider);
-    if (coverageMap && coverageMap.files().length > 0) {
-      rerunCoverage = coverageMap.toJSON();
-    }
 
-    const outcome: ExecutorCycleOutcome = {
+    return {
       results: rerunResults,
       testResults: context.reporterResults.testResults.filter((result) =>
         rerunPathSet.has(result.testPath),
@@ -2812,18 +2815,115 @@ export const runBrowserController = async (
         buildTime: drainPendingBuildTime(watchState),
         testTime,
       },
-      coverage: rerunCoverage ? { map: rerunCoverage } : undefined,
+      coverage: coverageMap?.files().length
+        ? { map: coverageMap.toJSON() }
+        : undefined,
       resolveSourcemap: resolveBrowserSourcemap,
     };
+  };
 
-    await finalizeRunCycle(context, {
-      outcomes: [outcome],
-      mode: 'on-demand',
-      isWatchMode: true,
-      coverageProvider,
-      reportOnFailure: coverageConfig?.reportOnFailure ?? false,
+  /**
+   * Latest-wins interrupt, installed by the run branch whose in-flight run can
+   * be cut short (headless). Core serializes cycles, so a trigger arriving
+   * mid-cycle would otherwise wait out a run the user has already superseded.
+   */
+  let interruptInFlightRun: (() => Promise<void>) | undefined;
+
+  /**
+   * The cycle core is running for the scope last signalled. Only an explicit
+   * request awaits it, right after it dispatched: a CLI shortcut's
+   * `updateSnapshot` stays flipped only until `requestRerun` resolves, and the
+   * in-page rerun button answers its RPC when the rerun is done. A rejection is
+   * reported here rather than left to an awaiting caller, because compile-driven
+   * triggers have no caller — and a failed cycle must not end the session.
+   */
+  let signalledCycle: Promise<void> | undefined;
+
+  /**
+   * Hand the scope this trigger resolved to core, which resets the cycle state,
+   * calls back into the session's `runCycle`, and finalizes.
+   *
+   * The cycle is deliberately *not* awaited here. Rebuild triggers reach this
+   * from inside the bundler's dev-compile hook, and the bundler keeps no
+   * watcher attached while that hook is pending: anything created or deleted in
+   * that window is never seen, so it never rebuilds and never reruns. Holding
+   * the hook for a whole cycle widens that blind window to the cycle's full
+   * duration, which loses test files added or removed mid-run for good. Core
+   * serializes the cycles itself, so nothing here has to.
+   *
+   * The in-flight run is cut short here rather than at the trigger, because only
+   * this point knows a replacement cycle is actually coming: a trigger that
+   * resolves to no affected files must leave the running cycle alone, or it
+   * finalizes on results it never produced.
+   */
+  const signalInvalidation = async (
+    fileFilters: string[],
+    /**
+     * Run state this trigger binds to its own paths, taken in the same turn as
+     * the handover — after any interrupt, so no queued cycle can be dequeued in
+     * between and read it. The headed rerun's per-file test-name pattern is the
+     * one such state; core's cycle options cannot carry it, so the only thing
+     * that makes it the property of one cycle is claiming it here.
+     */
+    claimScope?: () => void,
+  ): Promise<void> => {
+    await interruptInFlightRun?.();
+    claimScope?.();
+    signalledCycle = Promise.resolve(
+      onInvalidate?.({ isFirstBuild: false, fileFilters }),
+    ).catch((error) => {
+      logger.error(color.red('Browser Mode watch cycle failed:'), error);
     });
   };
+
+  /**
+   * The watch session both transports hand back. Only `execute` differs — the
+   * cycle's timing, its fatal-error capture window, and the error-to-outcome
+   * precedence are one contract with core, so they live in one place.
+   *
+   * `execute`'s synchronous prefix runs before `runCycle` ever suspends, which
+   * is what lets the headed transport claim its cycle scope inside it.
+   */
+  const createWatchSession = (
+    execute: (testPaths: string[]) => Promise<void>,
+  ): BrowserWatchSession => ({
+    runCycle: async (testPaths) => {
+      const rerunStartTime = Date.now();
+      const fatalErrorBeforeRun = fatalError;
+      let rerunError: Error | undefined;
+
+      try {
+        await execute(testPaths);
+      } catch (error) {
+        // Surfaced through the outcome rather than thrown: core finalizes this
+        // cycle either way, and its results belong in the report even when the
+        // run that produced them ended badly.
+        rerunError = toError(error);
+      }
+
+      const rerunFatalError =
+        fatalError && fatalError !== fatalErrorBeforeRun
+          ? fatalError
+          : undefined;
+      return buildRerunOutcome({
+        rerunTestPaths: testPaths,
+        testTime: Math.max(0, Date.now() - rerunStartTime),
+        unhandledErrors: rerunError
+          ? [rerunError]
+          : rerunFatalError
+            ? [rerunFatalError]
+            : undefined,
+      });
+    },
+    requestRerun: async (testPaths) => {
+      const seeded = seedPendingRerun(testPaths);
+      if (testPaths && seeded === 0) {
+        return;
+      }
+      await dispatchRerun?.();
+      await signalledCycle;
+    },
+  });
 
   projectEntries = runtime.projectEntries;
   totalTests = projectEntries.reduce(
@@ -2850,7 +2950,7 @@ export const runBrowserController = async (
   }
 
   if (totalTests === 0) {
-    reportEmptyTestSet();
+    writeEmptyLaunchExitCode();
     await destroyBrowserRuntime(runtime);
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
@@ -3196,11 +3296,6 @@ export const runBrowserController = async (
     // Feeds stateManager, fans out onTestFileResult to reporters, and ingests
     // payload.snapshotResult (the snapshotManager.add moved into the sink).
     await sinkForProjectName(payload.project).onTestFileResult(payload);
-    // In non-watch runs core owns the exit code via `finalizeRunCycle` (the
-    // failing file rides the returned outcome); watch reruns set it here.
-    if (isWatchMode && payload.status === 'fail') {
-      ensureProcessExitCode(1);
-    }
   };
 
   const handleLog = async (payload: LogPayload): Promise<void> => {
@@ -3220,15 +3315,13 @@ export const runBrowserController = async (
     silentConsoleController.onConsoleLog(log);
   };
 
+  // Every failing file and every fatal error reaches core through the cycle
+  // outcome on both commands, so the exit code keeps a single writer:
+  // `finalizeRunCycle`.
   const handleFatal = async (payload: FatalPayload): Promise<void> => {
     const error = new Error(payload.message);
     error.stack = payload.stack;
     fatalError = error;
-    // Non-watch runs surface the fatal error through the returned outcome and
-    // let core's `finalizeRunCycle` set the exit code; watch reruns set it here.
-    if (isWatchMode) {
-      ensureProcessExitCode(1);
-    }
   };
 
   const runSnapshotRpc = async (
@@ -3526,18 +3619,35 @@ export const runBrowserController = async (
           await cancelRun(run, false);
         }
       } finally {
-        if (page) {
-          try {
-            await page.close();
-          } catch {
-            // ignore
+        // A superseded run can hold a renderer that will never answer again:
+        // its test file may have been deleted mid-flight, leaving the page
+        // waiting on a chunk the bundler will never produce, and closing such a
+        // page blocks for as long as the renderer stays wedged. The cycle waits
+        // on this teardown, so for an abandoned run it is detached — its
+        // results are already discarded, and the replacement cycle must not be
+        // held up by a page nobody is reading. A run that ends normally closes
+        // in band, which is what keeps the open-context count at the
+        // concurrency limit.
+        const abandoned = run.cancelled || runLifecycle.isTokenStale(run.token);
+        const teardown = async (): Promise<void> => {
+          if (page) {
+            try {
+              await page.close();
+            } catch {
+              // ignore
+            }
           }
-        }
+          await closeContextSafely(browserContext);
+        };
         if (sessionId) {
           sessionRegistry.deleteById(sessionId);
         }
         run.contexts.delete(browserContext);
-        await closeContextSafely(browserContext);
+        if (abandoned) {
+          void teardown();
+        } else {
+          await teardown();
+        }
       }
     };
 
@@ -3581,8 +3691,10 @@ export const runBrowserController = async (
           // Cross-file bail gate (parity with the node pool's pickup-time skip
           // at `runInPool.ts`): once the cycle-wide failed count reaches `bail`,
           // drain the remaining files as skipped instead of running them. The
-          // count is cycle-scoped because `stateManager` is reset at the top of
-          // every run/rerun (initial run and `prepareWatchRerunState`).
+          // count is cycle-scoped because core clears `stateManager` ahead of
+          // every cycle, a watch session's first one included — so a mixed
+          // launch cannot drain this queue on the node initial cycle's
+          // failures.
           if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
             let skipped = queue.shift();
             while (skipped) {
@@ -3610,76 +3722,47 @@ export const runBrowserController = async (
       runLifecycle.clearIfActive(run);
     };
 
-    const latestRerunScheduler = createHeadlessLatestRerunScheduler<
-      TestFileInfo,
-      ActiveHeadlessRun
-    >({
-      getActiveRun: () => runLifecycle.activeSession,
-      isRunCancelled: (run) => run.cancelled,
-      invalidateActiveRun: () => {
-        runLifecycle.invalidateActiveToken();
-      },
-      interruptActiveRun: async (run) => {
-        await cancelRun(run, false);
-      },
-      runFiles: async (files) => {
-        // Clear the previous cycle's stateManager/snapshotManager before the
-        // rerun streams new events through the shared sink — otherwise failed
-        // counts (bail) and snapshot summaries accumulate across reruns. The
-        // initial run does not reach here (it calls `runFilesWithPool`
-        // directly), so only reruns reset.
-        prepareWatchRerunState(context);
-        await notifyTestRunStart();
-
-        const rerunStartTime = Date.now();
-        const fatalErrorBeforeRun = fatalError;
-        let rerunError: Error | undefined;
-
-        try {
-          await runFilesWithPool(files);
-        } catch (error) {
-          rerunError = toError(error);
-          throw error;
-        } finally {
-          const testTime = Math.max(0, Date.now() - rerunStartTime);
-          const rerunFatalError =
-            fatalError && fatalError !== fatalErrorBeforeRun
-              ? fatalError
-              : undefined;
-          await finalizeWatchRerun({
-            rerunTestPaths: files.map((file) => file.testPath),
-            testTime,
-            unhandledErrors: rerunError
-              ? [rerunError]
-              : rerunFatalError
-                ? [rerunFatalError]
-                : undefined,
-          });
-          logWatchReadyMessage(context, enableCliShortcuts);
-        }
-      },
-      onError: async (error) => {
-        const formatted = toError(error);
-        await handleFatal({
-          message: formatted.message,
-          stack: formatted.stack,
-        });
-      },
-      onInterrupt: (run) => {
-        logger.debug(
-          `[Headless] Interrupting active run token ${run.token} before scheduling latest rerun`,
-        );
-      },
-    });
-
-    awaitHeadlessRerunIdle = () => latestRerunScheduler.whenIdle();
-
     const testStart = Date.now();
     await runFilesWithPool(allTestFiles);
     const testTime = Date.now() - testStart;
 
+    let watchSession: BrowserWatchSession | undefined;
     if (isWatchMode) {
-      triggerRerun = async () => {
+      // A queued scope can go stale before its cycle is dequeued — a later
+      // trigger may have rebuilt the file set without one of these files — so a
+      // path that no longer resolves is skipped rather than failing the cycle
+      // beside its still-valid siblings.
+      const runScope = async (testPaths: string[]): Promise<void> => {
+        const pathSet = new Set(
+          testPaths.map((testPath) => normalize(testPath)),
+        );
+        await runFilesWithPool(
+          watchState.lastTestFiles.filter((file) => pathSet.has(file.testPath)),
+        );
+      };
+
+      // Cutting the in-flight run short lets its cycle finalize with what it had
+      // and the queued replacement start immediately; invalidating the token
+      // first makes every late dispatch from it a no-op. Deliberately not
+      // awaiting `run.done` — the cancelled run's own cycle is what awaits it.
+      //
+      // Unlike every other cancel this one does not tear the run's browser
+      // contexts down, because a rebuild trigger reaches it from inside the
+      // bundler's dev-compile hook: a page still fetching from the dev server
+      // that same hook is holding up cannot be closed, and the run it belongs
+      // to then never ends. Signalling the cancel is enough — the run's own
+      // teardown closes page and context as soon as it unwinds, and every page
+      // operation it can be sitting in is bounded by the driver's own timeout.
+      interruptInFlightRun = async () => {
+        const active = runLifecycle.activeSession;
+        if (!active || active.cancelled) {
+          return;
+        }
+        runLifecycle.invalidateActiveToken();
+        await runLifecycle.cancel(active, { waitForDone: false });
+      };
+
+      dispatchRerun = async () => {
         const newProjectEntries = await collectProjectEntries(context);
         const rerunPlan = planWatchRerun({
           projectEntries: newProjectEntries,
@@ -3697,11 +3780,11 @@ export const runBrowserController = async (
           }
           watchState.lastTestFiles = rerunPlan.currentTestFiles;
           if (rerunPlan.currentTestFiles.length === 0) {
-            await latestRerunScheduler.enqueueLatest([]);
             logger.log(
               color.cyan('No browser test files remain after update.\n'),
             );
-            logWatchReadyMessage(context, enableCliShortcuts);
+            // Still one cycle: core's finalize reports the emptied run.
+            await signalInvalidation([]);
             return;
           }
 
@@ -3710,7 +3793,9 @@ export const runBrowserController = async (
               `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
             ),
           );
-          await latestRerunScheduler.enqueueLatest(rerunPlan.currentTestFiles);
+          await signalInvalidation([
+            ...new Set(rerunPlan.currentTestFiles.map((file) => file.testPath)),
+          ]);
           return;
         }
 
@@ -3729,8 +3814,12 @@ export const runBrowserController = async (
             `Re-running ${rerunPlan.affectedTestFiles.length} affected test file(s)...\n`,
           ),
         );
-        await latestRerunScheduler.enqueueLatest(rerunPlan.affectedTestFiles);
+        await signalInvalidation([
+          ...new Set(rerunPlan.affectedTestFiles.map((file) => file.testPath)),
+        ]);
       };
+
+      watchSession = createWatchSession(runScope);
     }
 
     const closeHeadlessRuntime = !isWatchMode
@@ -3752,57 +3841,24 @@ export const runBrowserController = async (
 
     context.updateReporterResultState(reporterResults, caseResults);
 
-    const isFailure = reporterResults.some(
-      (result: TestFileResult) => result.status === 'fail',
-    );
-    // Non-watch runs let core's `finalizeRunCycle` own the exit code from the
-    // returned outcome; watch reruns set it here.
-    if (isWatchMode && isFailure) {
-      ensureProcessExitCode(1);
-    }
+    // Enable the compile hooks only after the initial cycle, so the first build
+    // never triggers a duplicate run.
+    watchState.hooksEnabled = isWatchMode;
 
-    // Fold and strip the initial cycle's coverage (the same per-cycle fold
-    // reruns get in `finalizeWatchRerun`); the map rides on the result so the
-    // browser-only watch path can report it without re-merging. Non-watch runs
-    // keep `result.coverage` intact for the executor's outcome fold.
-    const cycleCoverageMap =
-      isWatchMode && coverageProvider
-        ? buildBrowserCoverageMap(reporterResults, coverageProvider)
-        : undefined;
-
-    const result = {
+    return {
       results: reporterResults,
       testResults: caseResults,
       duration,
-      hasFailure: isFailure,
+      hasFailure: reporterResults.some(
+        (result: TestFileResult) => result.status === 'fail',
+      ),
       getSourcemap: getBrowserSourcemap,
       resolveSourcemap: resolveBrowserSourcemap,
-      // `closeHeadlessRuntime` is already `undefined` in watch mode, so the
-      // non-watch caller (core) receives the deferred close and watch does not.
+      // `closeHeadlessRuntime` is already `undefined` in watch mode: the watch
+      // runtime outlives the cycle and is torn down through `executor.close()`.
       close: closeHeadlessRuntime,
-      coverage: cycleCoverageMap,
-      watch: watchHandles,
+      watchSession,
     };
-
-    if (isWatchMode) {
-      try {
-        await notifyTestRunEnd({
-          duration,
-          coverage: cycleCoverageMap?.files().length
-            ? cycleCoverageMap.toJSON()
-            : undefined,
-        });
-      } finally {
-        await closeHeadlessRuntime?.();
-      }
-    }
-
-    if (isWatchMode && triggerRerun) {
-      watchState.hooksEnabled = true;
-      logWatchReadyMessage(context, enableCliShortcuts);
-    }
-
-    return result;
   }
 
   let currentTestFiles = allTestFiles;
@@ -4044,6 +4100,17 @@ export const runBrowserController = async (
     }
   };
 
+  // The in-page rerun button is a watch trigger like any other, so once the
+  // watch session exists it routes through core's cycle instead of reloading
+  // the frame behind core's back. Until then (during the initial cycle) the
+  // direct reload is all there is.
+  let runUiRequestedRerun = async (
+    file: TestFileInfo,
+    testNamePattern?: string,
+  ): Promise<void> => {
+    await enqueueHeadedReload(file, testNamePattern);
+  };
+
   // Create RPC methods that can access test state variables
   const createRpcMethods = (): HostRpcMethods => ({
     async rerunTest(testFile: string, testNamePattern?: string) {
@@ -4055,7 +4122,7 @@ export const runBrowserController = async (
           `\nRe-running test: ${displayPath}${testNamePattern ? ` (pattern: ${testNamePattern})` : ''}\n`,
         ),
       );
-      await enqueueHeadedReload(getTestFileInfo(testFile), testNamePattern);
+      await runUiRequestedRerun(getTestFileInfo(testFile), testNamePattern);
     },
     async getTestFiles() {
       return currentTestFiles;
@@ -4163,23 +4230,57 @@ export const runBrowserController = async (
         }
       }
     } catch (error) {
+      // The fatal error rides the returned result into the cycle outcome, and
+      // core's `finalizeRunCycle` raises the exit code from it.
       fatalError = fatalError ?? toError(error);
-      // Non-watch: the fatal error rides the returned outcome and core owns the
-      // exit code; watch reruns set it here.
-      if (isWatchMode) {
-        ensureProcessExitCode(1);
-      }
     }
 
     testTime = Date.now() - testStart;
   }
 
-  // Define rerun logic for watch mode
+  let watchSession: BrowserWatchSession | undefined;
   if (isWatchMode) {
-    triggerRerun = async () => {
-      // Re-deliver the host config so runner iframes reloaded by this rerun
-      // observe live per-rerun values ('u' flips updateSnapshot between
-      // reruns); `setContainerOptions` keeps full container reloads in sync.
+    // Set by the in-page rerun trigger and consumed by the cycle that reloads
+    // that file — the pattern is a headed-UI concept core's cycle options
+    // cannot carry, so it travels beside the scope rather than inside it.
+    // Keyed by test path rather than held in one slot: core queues cycles, so
+    // an unrelated trigger can be dequeued between the click and its own cycle,
+    // and a single slot would hand the pattern to whichever cycle ran first.
+    // An entry is written with its own signal and read at a cycle's first
+    // synchronous step, so the cycle that takes it is the one that signal
+    // started — or, when the file was already in a queued scope, the one it
+    // folded into, which is the cycle that runs the file. That holds as long as
+    // nothing yields between the two: core closes the fold window and then
+    // awaits `notifyReportersOnTestRunStart` before this cycle claims, so a user
+    // reporter with an async `onTestRunStart` hook is the one thing that can
+    // stretch the gap wide enough for another signal to land in it. A tracked
+    // gap, not a choice: a second click on the same file inside that window
+    // overwrites the entry, so the earlier cycle claims the newer pattern and
+    // the later one finds it gone and reloads the file unfiltered. Closing it
+    // means the pattern crossing the seam inside the queued cycle's own
+    // options instead of traveling beside the scope.
+    const pendingTestNamePatterns = new Map<string, string>();
+
+    const runScope = async (testPaths: string[]): Promise<void> => {
+      // Claimed in this synchronous prefix, before `runCycle` suspends, so
+      // nothing this cycle does can change what it runs or which patterns it
+      // takes.
+      const cycleScope = claimHeadedCycleScope(
+        testPaths,
+        currentTestFiles,
+        pendingTestNamePatterns,
+      );
+      for (const { file, testNamePattern } of cycleScope) {
+        await enqueueHeadedReload(file, testNamePattern);
+      }
+    };
+
+    /**
+     * Re-deliver the host config so runner iframes reloaded by the next cycle
+     * observe live per-rerun values ('u' flips updateSnapshot between reruns);
+     * `setContainerOptions` keeps full container reloads in sync.
+     */
+    const refreshHostConfig = async (): Promise<void> => {
       const refreshedHostOptions: BrowserHostConfig = {
         ...hostOptions,
         snapshot: {
@@ -4187,9 +4288,13 @@ export const runBrowserController = async (
         },
       };
       runtime.setContainerOptions(refreshedHostOptions);
+      await rpcManager.updateHostConfig(refreshedHostOptions);
+    };
+
+    dispatchRerun = async () => {
       // Independent: config push to the container vs. local entry collection.
       const [, newProjectEntries] = await Promise.all([
-        rpcManager.updateHostConfig(refreshedHostOptions),
+        refreshHostConfig(),
         collectProjectEntries(context),
       ]);
       const rerunPlan = planWatchRerun({
@@ -4227,47 +4332,32 @@ export const runBrowserController = async (
             `Re-running ${rerunPlan.normalizedAffectedTestFiles.length} affected test file(s)...\n`,
           ),
         );
-        // Match the headless path: reset per-cycle state before the rerun
-        // streams new events, so bail counts and snapshot summaries do not
-        // accumulate across headed reruns.
-        prepareWatchRerunState(context);
-        await notifyTestRunStart();
-
-        const rerunStartTime = Date.now();
-        const fatalErrorBeforeRun = fatalError;
-        let rerunError: Error | undefined;
-
-        try {
-          for (const testFile of rerunPlan.normalizedAffectedTestFiles) {
-            await enqueueHeadedReload(getTestFileInfo(testFile));
-          }
-        } catch (error) {
-          rerunError = toError(error);
-          throw error;
-        } finally {
-          const testTime = Math.max(0, Date.now() - rerunStartTime);
-          const rerunFatalError =
-            fatalError && fatalError !== fatalErrorBeforeRun
-              ? fatalError
-              : undefined;
-          await finalizeWatchRerun({
-            rerunTestPaths: rerunPlan.normalizedAffectedTestFiles,
-            testTime,
-            unhandledErrors: rerunError
-              ? [rerunError]
-              : rerunFatalError
-                ? [rerunFatalError]
-                : undefined,
-          });
-          logWatchReadyMessage(context, enableCliShortcuts);
-        }
-      } else if (!rerunPlan.filesChanged) {
-        logger.log(color.cyan('Tests will be re-executed automatically\n'));
-        logWatchReadyMessage(context, enableCliShortcuts);
-      } else {
-        logWatchReadyMessage(context, enableCliShortcuts);
+        await signalInvalidation(rerunPlan.normalizedAffectedTestFiles);
+        return;
       }
+
+      if (!rerunPlan.filesChanged) {
+        logger.log(color.cyan('Tests will be re-executed automatically\n'));
+      }
+      logWatchReadyMessage(context, enableCliShortcuts);
     };
+
+    runUiRequestedRerun = async (file, testNamePattern) => {
+      await refreshHostConfig();
+      await signalInvalidation([file.testPath], () => {
+        if (testNamePattern === undefined) {
+          pendingTestNamePatterns.delete(normalize(file.testPath));
+        } else {
+          pendingTestNamePatterns.set(
+            normalize(file.testPath),
+            testNamePattern,
+          );
+        }
+      });
+      await signalledCycle;
+    };
+
+    watchSession = createWatchSession(runScope);
   }
 
   const closeContainerRuntime = !isWatchMode
@@ -4298,55 +4388,24 @@ export const runBrowserController = async (
 
   context.updateReporterResultState(reporterResults, caseResults);
 
-  const isFailure = reporterResults.some(
-    (result: TestFileResult) => result.status === 'fail',
-  );
-  // Non-watch runs let core's `finalizeRunCycle` own the exit code from the
-  // returned outcome; watch reruns set it here.
-  if (isWatchMode && isFailure) {
-    ensureProcessExitCode(1);
-  }
+  // Enable the compile hooks only after the initial cycle, so the first build
+  // never triggers a duplicate run.
+  watchState.hooksEnabled = isWatchMode;
 
-  // Same per-cycle fold-and-strip as the headless path above.
-  const cycleCoverageMap =
-    isWatchMode && coverageProvider
-      ? buildBrowserCoverageMap(reporterResults, coverageProvider)
-      : undefined;
-
-  const result = {
+  return {
     results: reporterResults,
     testResults: caseResults,
     duration,
-    hasFailure: isFailure,
+    hasFailure: reporterResults.some(
+      (result: TestFileResult) => result.status === 'fail',
+    ),
     getSourcemap: getBrowserSourcemap,
     resolveSourcemap: resolveBrowserSourcemap,
-    // `closeContainerRuntime` is already `undefined` in watch mode, so the
-    // non-watch caller (core) receives the deferred close and watch does not.
+    // `closeContainerRuntime` is already `undefined` in watch mode: the watch
+    // runtime outlives the cycle and is torn down through `executor.close()`.
     close: closeContainerRuntime,
-    coverage: cycleCoverageMap,
-    watch: watchHandles,
+    watchSession,
   };
-
-  if (isWatchMode) {
-    try {
-      await notifyTestRunEnd({
-        duration,
-        coverage: cycleCoverageMap?.files().length
-          ? cycleCoverageMap.toJSON()
-          : undefined,
-      });
-    } finally {
-      await closeContainerRuntime?.();
-    }
-  }
-
-  // Enable watch hooks AFTER initial test run to avoid duplicate runs
-  if (isWatchMode && triggerRerun) {
-    watchState.hooksEnabled = true;
-    logWatchReadyMessage(context, enableCliShortcuts);
-  }
-
-  return result;
 };
 
 // ============================================================================

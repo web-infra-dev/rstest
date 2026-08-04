@@ -24,27 +24,37 @@ describe('watch rerun planner', () => {
     ]);
   });
 
-  it('should normalize and map affected files to active test entries', () => {
+  it('should preserve all project entries for affected test paths', () => {
     const projectEntries = [
       {
         project: { name: 'project-a' },
-        testFiles: ['tests/a.test.ts', 'tests/b.test.ts'],
+        testFiles: ['tests/b.test.ts', 'tests/a.test.ts'],
+      },
+      {
+        project: { name: 'project-b' },
+        testFiles: ['tests/a.test.ts'],
       },
     ];
 
     const plan = planWatchRerun({
       projectEntries,
       previousTestFiles: collectWatchTestFiles(projectEntries),
-      affectedTestFiles: ['tests/a.test.ts', 'tests/missing.test.ts'],
+      affectedTestFiles: [
+        'tests/a.test.ts',
+        'tests/a.test.ts',
+        'tests/missing.test.ts',
+      ],
     });
 
     expect(plan.filesChanged).toBe(false);
     expect(plan.normalizedAffectedTestFiles).toEqual([
       'tests/a.test.ts',
+      'tests/a.test.ts',
       'tests/missing.test.ts',
     ]);
     expect(plan.affectedTestFiles).toEqual([
       { testPath: 'tests/a.test.ts', projectName: 'project-a' },
+      { testPath: 'tests/a.test.ts', projectName: 'project-b' },
     ]);
   });
 

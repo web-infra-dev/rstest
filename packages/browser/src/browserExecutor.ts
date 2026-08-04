@@ -2,14 +2,22 @@ import {
   type BrowserTestExecutor,
   type BrowserTestRunResult,
   buildBrowserCoverageMap,
+  color,
   type CreateBrowserExecutorOptions,
   type ExecutorCycleOutcome,
+  type ExecutorInvalidationCallback,
   type ExecutorRunCycleOptions,
   type ListCommandResult,
+  logger,
   type RstestContext,
   type TestFileResult,
 } from '@rstest/core/internal/browser';
-import { listBrowserTests, runBrowserController } from './hostController';
+import {
+  type BrowserWatchSession,
+  cleanupWatchRuntime,
+  listBrowserTests,
+  runBrowserController,
+} from './hostController';
 
 const emptyOutcome = (): ExecutorCycleOutcome => ({
   results: [],
@@ -22,12 +30,14 @@ const emptyOutcome = (): ExecutorCycleOutcome => ({
 /**
  * The browser side of the {@link TestExecutor} seam. It delegates into the
  * existing `hostController` in place (no file split this phase) and adapts the
- * host's `BrowserTestRunResult` into the shared `ExecutorCycleOutcome` — the
- * former `toBrowserOutcome` core adapter is folded in here and deleted.
+ * host's `BrowserTestRunResult` into the shared `ExecutorCycleOutcome`.
  *
- * Only used in non-watch runs (the shared executor loop); browser watch stays
- * host-driven and self-finalizing until Phase 6, so `runCycle` maps directly
- * onto one `runBrowserController` invocation and its coverage/close semantics.
+ * Watch and non-watch differ only in what one `runCycle` means. Non-watch: one
+ * `runBrowserController` invocation that returns a deferred `close`. Watch: the
+ * first cycle boots the persistent runtime and hands back a live
+ * {@link BrowserWatchSession}; every cycle after it is a rerun the host's own
+ * triggers signalled through `onInvalidate` and core scheduled. Either way core
+ * finalizes, so this adapter never touches reporters or the exit code.
  */
 export async function createBrowserExecutor(
   context: RstestContext,
@@ -42,12 +52,17 @@ export async function createBrowserExecutor(
     allowEmptyRun,
     appliedModifyRstestConfigEnvironments,
   } = options;
+  const isWatchMode = context.command === 'watch';
   let deferredClose: (() => Promise<void>) | undefined;
   // The host has no mid-launch abort, so `close()` must wait for an in-flight
   // cycle to settle before it can tear down — otherwise a close racing the
   // cycle (e.g. the signal-driven cleanup path) sees no `deferredClose` yet
   // and leaks the launching browser + servers.
   let inFlightCycle: Promise<unknown> | undefined;
+  // Registered before the first cycle: booting the runtime installs the watch
+  // triggers, and the first rebuild can signal as soon as it does.
+  let invalidationCallback: ExecutorInvalidationCallback | undefined;
+  let watchSession: BrowserWatchSession | undefined;
 
   // Merge the host's per-file `result.coverage` into one map (shared core
   // helper, stripping it from each result to avoid reporter/state cache
@@ -83,12 +98,47 @@ export async function createBrowserExecutor(
     async init(): Promise<void> {
       // Server/provider launch stays inside `runBrowserController` (delegate in
       // place). Kept as an explicit hook so the plan → init → runCycle barrier
-      // is honored structurally and Phase 5 can attach browser-side hook
-      // application here.
+      // holds structurally for both executors, and so browser-side work that
+      // must precede the first cycle has somewhere to go.
     },
     async runCycle(
       opts: ExecutorRunCycleOptions,
     ): Promise<ExecutorCycleOutcome> {
+      if (watchSession) {
+        // A watch rerun: the host's trigger already resolved the scope and
+        // handed it over as the invalidation hint, which core passes back here.
+        //
+        // `opts.updateSnapshot` is dropped, and that is a gap rather than a
+        // choice. Core resolves it per trigger so a cycle no `u` selected files
+        // for cannot rewrite their snapshots; the host instead re-reads the live
+        // `snapshotManager` flag for every page it loads, so a browser cycle
+        // queued inside the `u` hold window still runs under `'all'`. Closing it
+        // means plumbing this option through `watchSession.runCycle` to the
+        // per-page config, which is also what would make the seam doc on
+        // `ExecutorRunCycleOptions.updateSnapshot` true on this side.
+        //
+        // Whichever shape that takes has to settle a fold hazard first. Trigger
+        // kind is erased on this side of the seam: a `u` press reaches the host
+        // as `requestRerun`, routes through `dispatchRerun`/`signalInvalidation`
+        // like any rebuild, and arrives back at the driver as
+        // `trigger: 'invalidation'` with the same options — so `canFold` already
+        // unions the two, and only the drop above keeps that from mattering.
+        // Exactly one of two things must therefore be true once the option is
+        // honored: the originating trigger crosses the seam and becomes part of
+        // the fold identity, or `updateSnapshot` rides the per-cycle options the
+        // fold predicate already compares (`'all'` then differs from the session
+        // value, so the two cycles cannot fold). Sending the flag out of band —
+        // straight to the host, driver-side options unchanged — is the one shape
+        // that folds a rebuild's files into the `u` scope.
+        const cycle = watchSession.runCycle(opts.fileFilters ?? []);
+        inFlightCycle = cycle;
+        try {
+          return await cycle;
+        } finally {
+          inFlightCycle = undefined;
+        }
+      }
+
       const cycle = runBrowserController(context, {
         projects,
         shardedEntries,
@@ -98,6 +148,9 @@ export async function createBrowserExecutor(
         onTraceEvents: opts.onTraceEvents,
         env: opts.env,
         updateSnapshot: opts.updateSnapshot,
+        onInvalidate: isWatchMode
+          ? (hint) => invalidationCallback?.(hint)
+          : undefined,
       });
       inFlightCycle = cycle;
       try {
@@ -105,10 +158,34 @@ export async function createBrowserExecutor(
         // Non-watch runs return a deferred `close`; collapse teardown into the
         // shared `executors.close()` exit path.
         deferredClose = result?.close;
+        watchSession = result?.watchSession;
         return foldOutcome(result);
       } finally {
         inFlightCycle = undefined;
       }
+    },
+    onInvalidate(cb: ExecutorInvalidationCallback): void {
+      invalidationCallback = cb;
+    },
+    hasWatchSession(): boolean {
+      return watchSession !== undefined;
+    },
+    async requestRerun(testPaths?: string[]): Promise<void> {
+      if (!watchSession) {
+        // Core gates rerun keys until every executor is past its first cycle, so
+        // reaching here means no session will ever open: the launch found no test
+        // files or failed outright, and reported that itself. The keys stay
+        // installed either way — a mixed run's node side keeps watching, and even
+        // a browser-only run outlives a launch that opened nothing — so resolving
+        // in silence would let the shortcut claim a rerun that never happened.
+        logger.log(
+          color.yellow(
+            '\nBrowser Mode has no live watch session, so this rerun skipped it.',
+          ),
+        );
+        return;
+      }
+      await watchSession.requestRerun(testPaths);
     },
     async collect(opts): Promise<{ list: ListCommandResult[] }> {
       const pending = listBrowserTests(context, {
@@ -132,6 +209,13 @@ export async function createBrowserExecutor(
       if (inFlightCycle) {
         // A rejected cycle cleans up host-side; settling is all that's needed.
         await inFlightCycle.catch(() => undefined);
+      }
+      if (isWatchMode) {
+        // The watch runtime spans every cycle, so it is not a per-cycle
+        // deferred close — the executor is its owner.
+        watchSession = undefined;
+        await cleanupWatchRuntime();
+        return;
       }
       const close = deferredClose;
       deferredClose = undefined;

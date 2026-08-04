@@ -14,8 +14,8 @@ import { resolveSnapshotPathDefault } from '../utils/snapshotPath';
 
 /**
  * The single event pump for runner lifecycle events, shared by the node pool
- * RPC and (from Phase 2's browser adoption) the browser dispatch runner
- * namespace. One implementation feeds `stateManager`, fans out to reporters,
+ * RPC and the browser dispatch runner namespace. One implementation feeds
+ * `stateManager`, fans out to reporters,
  * applies the per-project `onConsoleLog` filter, ingests snapshot results, and
  * resolves snapshot paths — so the two transports can no longer drift.
  *
@@ -146,11 +146,12 @@ export function createRunnerEventSink(
       return guarded(() => fanoutConsoleLog(log));
     },
     getCountOfFailedTests() {
-      // `stateManager` is reset at the top of every run/rerun (node's
-      // top-of-cycle reset and the browser host's `prepareWatchRerunState`), so
-      // this read is already cycle-scoped — bail decisions never see counts
-      // carried over from a previous cycle. Both the node pool and the browser
-      // host's cross-file bail gate consult this.
+      // `stateManager` is cleared before every cycle (the non-watch
+      // top-of-run reset, and core's watch cycle driver ahead of each cycle
+      // including a session's first), so this read is already cycle-scoped —
+      // bail decisions never see failures a previous cycle, or a sibling
+      // executor's cycle, recorded. Both the node pool and the browser host's
+      // cross-file bail gate consult this.
       return context.stateManager.getCountOfFailedTests();
     },
     resolveSnapshotPath(testPath) {
