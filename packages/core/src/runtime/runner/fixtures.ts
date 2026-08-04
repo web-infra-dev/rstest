@@ -89,6 +89,13 @@ export type FixtureResolver = {
   ) => Promise<{ status: 'resolved' } | { status: 'skipped' }>;
 };
 
+type RunBuilderSetup = <Value>(setup: () => Promise<Value>) => Promise<Value>;
+
+type FixtureResolverOptions = {
+  runBuilderSetup?: RunBuilderSetup;
+  wrapBuilderCleanup?: (cleanup: () => Promise<void>) => () => Promise<void>;
+};
+
 class PreviouslyFailedFixtureError extends Error {}
 
 type FixtureCallback = (...args: any[]) => any;
@@ -111,10 +118,11 @@ export const createFixtureResolver = (
   test: TestCase,
   context: Record<string, any>,
   cleanups: (() => Promise<void>)[] = [],
-  wrapBuilderCleanup: (cleanup: () => Promise<void>) => () => Promise<void> = (
-    cleanup,
-  ) => cleanup,
+  options: FixtureResolverOptions = {},
 ): FixtureResolver => {
+  const runBuilderSetupWithoutTimeout: RunBuilderSetup = (setup) => setup();
+  const wrapBuilderCleanup =
+    options.wrapBuilderCleanup ?? ((cleanup) => cleanup);
   const fixtures = test.fixtures ?? {};
   const doneMap = new Set<string>();
   const cancelledFixtures = new Set<string>();
@@ -123,7 +131,11 @@ export const createFixtureResolver = (
   const cancelFixtureSetups = new Map<string, () => void>();
   const cancelledFixtureTeardownStarts = new Map<string, () => void>();
 
-  const useFixture = async (name: string, fixture: NormalizedFixture) => {
+  const useFixture = async (
+    name: string,
+    fixture: NormalizedFixture,
+    runBuilderSetup: RunBuilderSetup,
+  ) => {
     if (doneMap.has(name)) {
       return;
     }
@@ -145,7 +157,7 @@ export const createFixtureResolver = (
     try {
       if (deps?.length) {
         for (const dep of deps) {
-          await useFixture(dep, fixtures[dep]!);
+          await useFixture(dep, fixtures[dep]!, runBuilderSetup);
         }
       }
 
@@ -203,8 +215,8 @@ export const createFixtureResolver = (
           }
         };
 
-        const setup = Promise.resolve().then(() =>
-          fixtureValue(context, { onCleanup }),
+        const setup = runBuilderSetup(() =>
+          Promise.resolve(fixtureValue(context, { onCleanup })),
         );
         try {
           const value = await Promise.race([setup, cancellationCleanup]);
@@ -277,6 +289,7 @@ export const createFixtureResolver = (
   const resolveFixtureNames = async (
     usedKeys: string[],
     includeAuto: boolean,
+    runBuilderSetup: RunBuilderSetup = runBuilderSetupWithoutTimeout,
   ) => {
     for (const [name, params] of Object.entries(fixtures)) {
       const shouldResolve =
@@ -285,7 +298,7 @@ export const createFixtureResolver = (
         continue;
       }
 
-      await useFixture(name, params);
+      await useFixture(name, params, runBuilderSetup);
     }
   };
 
@@ -306,7 +319,11 @@ export const createFixtureResolver = (
     },
     resolveTestFixtures: (fn) =>
       test.fixtures
-        ? resolveFixtureNames(fn ? getFixtureUsedProps(fn) : [], true)
+        ? resolveFixtureNames(
+            fn ? getFixtureUsedProps(fn) : [],
+            true,
+            options.runBuilderSetup,
+          )
         : Promise.resolve(),
     resolveHookFixtures: async (fn) => {
       try {

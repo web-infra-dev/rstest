@@ -94,7 +94,7 @@ describe('Test API', () => {
     expect(`${cli.stdout}\n${cli.stderr}`).toContain('builder cleanup failed');
   });
 
-  it('bounds builder cleanup with the test timeout', async () => {
+  it('bounds builder setup and cleanup with the test timeout', async () => {
     const start = Date.now();
     const { cli, expectExecFailed } = await runRstestCli({
       command: 'rstest',
@@ -108,6 +108,10 @@ describe('Test API', () => {
 
     await expectExecFailed();
     expect(Date.now() - start).toBeLessThan(10_000);
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'fixture setup timed out in 100ms',
+    );
+    expect(cli.stdout).toContain('RSTEST_BUILDER_SETUP_TIMEOUT_CLEANUP');
     expect(`${cli.stdout}\n${cli.stderr}`).toContain(
       'fixture cleanup timed out in 100ms',
     );

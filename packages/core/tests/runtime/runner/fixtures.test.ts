@@ -171,6 +171,35 @@ describe('createFixtureResolver', () => {
     await cleanups[0]!();
   });
 
+  it('applies the builder setup wrapper only to test fixtures', async () => {
+    const fixtures = normalizeBuilderFixture('value', () => 'value');
+    const options = {
+      runBuilderSetup: async () => {
+        throw new Error('test fixture setup timed out');
+      },
+    };
+
+    const hookResolver = createFixtureResolver(
+      { fixtures } as any,
+      {},
+      [],
+      options,
+    );
+    await expect(
+      hookResolver.resolveHookFixtures(({ value }: any) => value),
+    ).resolves.toEqual({ status: 'resolved' });
+
+    const testResolver = createFixtureResolver(
+      { fixtures } as any,
+      {},
+      [],
+      options,
+    );
+    await expect(
+      testResolver.resolveTestFixtures(({ value }: any) => value),
+    ).rejects.toThrow('test fixture setup timed out');
+  });
+
   it('does not parse callbacks when the test has no fixtures', async () => {
     const resolver = createFixtureResolver({} as any, {});
 
