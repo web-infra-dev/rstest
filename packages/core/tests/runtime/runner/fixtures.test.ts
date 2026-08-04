@@ -68,6 +68,7 @@ describe('normalizeNamedFixture', () => {
   it.each([
     'base-url',
     '1value',
+    '_useLocalExpect',
     'expect',
     'onTestFailed',
     'onTestFinished',

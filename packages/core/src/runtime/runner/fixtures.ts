@@ -82,7 +82,7 @@ export const normalizeNamedFixture = (
     reservedNamedFixtureNames.has(name)
   ) {
     throw new Error(
-      `Invalid named fixture name "${name}". Use a JavaScript identifier that does not conflict with TestContext.`,
+      `Invalid named fixture name "${name}". Use a JavaScript identifier that does not conflict with the test context.`,
     );
   }
   const result: NormalizedFixtures = {

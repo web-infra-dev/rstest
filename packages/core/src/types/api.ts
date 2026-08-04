@@ -305,11 +305,14 @@ type IsIdentifier<Name extends string> = string extends Name
       : false
     : false;
 
-type NamedFixtureName<Name extends string> = Name extends keyof TestContext
-  ? never
-  : IsIdentifier<Name> extends true
-    ? Name
-    : never;
+type ReservedNamedFixtureName = keyof TestContext | '_useLocalExpect';
+
+type NamedFixtureName<Name extends string> =
+  Name extends ReservedNamedFixtureName
+    ? never
+    : IsIdentifier<Name> extends true
+      ? Name
+      : never;
 
 type RuntimeFunction =
   | ((...args: never[]) => unknown)

@@ -68,6 +68,9 @@ const checkNamedFixtureNameTypes = (
   // @ts-expect-error named fixture names cannot replace TestContext fields
   test.extend('expect', 'fixture');
 
+  // @ts-expect-error named fixture names cannot replace internal context fields
+  test.extend('_useLocalExpect', false);
+
   test.extend('name', 'fixture')('supports Function property names', (ctx) => {
     expect(ctx.name).toBeTypeOf('string');
   });
