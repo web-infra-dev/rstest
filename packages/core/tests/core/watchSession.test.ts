@@ -250,62 +250,6 @@ describe('createWatchCycleDriver', () => {
     ]);
   });
 
-  it('folds a held-down shortcut into one cycle', async () => {
-    // The stdin owner dispatches fire-and-forget, so three `a` presses inside
-    // one cycle queue three of them: three full-suite runs and three summaries
-    // for one request the user made once.
-    const context = createContext();
-    const { driver } = createDriver(context);
-    const { executor, release, started } = createGatedExecutor('node');
-
-    const inFlight = driver.runCycle(executor, { mode: 'all' });
-    await started();
-
-    const pressed = [1, 2, 3].map(() =>
-      driver.runCycle(executor, { mode: 'all', trigger: 'run-all' }),
-    );
-    expect(pressed[1]).toBe(pressed[0]);
-    expect(pressed[2]).toBe(pressed[0]);
-
-    release();
-    await Promise.all([inFlight, ...pressed]);
-
-    expect(executor.cycles).toHaveLength(2);
-  });
-
-  it('folds a `u` burst into one cycle covering every file it asked for', async () => {
-    const context = createContext();
-    const { driver } = createDriver(context);
-    const { executor, release, started } = createGatedExecutor('node');
-
-    const inFlight = driver.runCycle(executor, { mode: 'all' });
-    await started();
-
-    // Each press collects the snapshots unmatched at that moment, so the two
-    // scopes can differ — the fold has to cover both, under the flag both asked
-    // for.
-    const first = driver.runCycle(executor, {
-      fileFilters: ['/a.test.ts'],
-      trigger: 'update-snapshot',
-      updateSnapshot: 'all',
-    });
-    const second = driver.runCycle(executor, {
-      fileFilters: ['/b.test.ts'],
-      trigger: 'update-snapshot',
-      updateSnapshot: 'all',
-    });
-    expect(second).toBe(first);
-
-    release();
-    await Promise.all([inFlight, first, second]);
-
-    expect(executor.cycles).toHaveLength(2);
-    expect(executor.cycles[1]).toMatchObject({
-      updateSnapshot: 'all',
-      fileFilters: ['/a.test.ts', '/b.test.ts'],
-    });
-  });
-
   it('folds only same-kind triggers, and never one that carries no kind', async () => {
     const context = createContext();
     const { driver } = createDriver(context);

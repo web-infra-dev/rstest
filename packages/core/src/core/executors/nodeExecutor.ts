@@ -172,7 +172,7 @@ export type NodeExecutor = TestExecutor &
  * `globTestSourceEntries` must arrive as the planner's own objects, never copies
  * — the planner's `RunPlanner` doc records what a snapshot of either breaks.
  */
-export type CreateNodeExecutorOptions = {
+type CreateNodeExecutorOptions = {
   /** Already prepared and config-hooked by the planner. */
   rsbuildInstance: RsbuildInstance;
   setupFileState: SetupFileState;

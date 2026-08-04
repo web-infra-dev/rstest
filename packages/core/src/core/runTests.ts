@@ -32,11 +32,7 @@ import {
   globalSetupFailureOutcome,
   runBrowserGlobalSetupStage,
 } from './browser/globalSetupStage';
-import {
-  type CreateNodeExecutorOptions,
-  createNodeExecutor,
-  type NodeExecutor,
-} from './executors/nodeExecutor';
+import { createNodeExecutor } from './executors/nodeExecutor';
 import { runGlobalTeardown } from './globalSetup';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';
 import { createRunPlanner } from './planner';
@@ -49,42 +45,7 @@ import {
   type WatchSessionTargets,
 } from './watchSession';
 
-/**
- * The collaborators `runTests` orchestrates, injected rather than imported at
- * the call sites so the run loop can be driven with fake executors in unit
- * tests (the browser loader `process.exit(1)`s on a missing `@rstest/browser`,
- * and the CLI shortcuts take over the process's stdin — neither may be reached
- * from a test).
- */
-export interface RunTestsDeps {
-  createRunPlanner: typeof createRunPlanner;
-  createNodeExecutor: (
-    context: Rstest,
-    options: CreateNodeExecutorOptions,
-  ) => NodeExecutor;
-  loadBrowserExecutor: typeof loadBrowserExecutor;
-  validateBrowserRunConfig: typeof validateBrowserRunConfig;
-  runBrowserGlobalSetupStage: typeof runBrowserGlobalSetupStage;
-  isCliShortcutsEnabled: typeof isCliShortcutsEnabled;
-  setupCliShortcuts: typeof setupCliShortcuts;
-  createTraceController: typeof createTraceController;
-}
-
-const productionDeps: RunTestsDeps = {
-  createRunPlanner,
-  createNodeExecutor,
-  loadBrowserExecutor,
-  validateBrowserRunConfig,
-  runBrowserGlobalSetupStage,
-  isCliShortcutsEnabled,
-  setupCliShortcuts,
-  createTraceController,
-};
-
-export async function runTests(
-  context: Rstest,
-  deps: RunTestsDeps = productionDeps,
-): Promise<void> {
+export async function runTests(context: Rstest): Promise<void> {
   // High-level flow (post-executor-seam):
   // 1. Split browser/node projects (the single `isBrowserProject` predicate).
   // 2. Resolve the plan first (each side's `modifyRstestConfig` hooks fire and
@@ -141,7 +102,7 @@ export async function runTests(
   const { coverage } = context.normalizedConfig;
   const { rootPath, snapshotManager } = context;
 
-  const traceController = deps.createTraceController({
+  const traceController = createTraceController({
     enabled: context.trace,
     rootPath: context.rootPath,
   });
@@ -161,7 +122,7 @@ export async function runTests(
   // step, and every run shape — node-only, browser-only, mixed — comes through
   // here.
   // ===================================================================
-  const planner = await deps.createRunPlanner(context, {
+  const planner = await createRunPlanner(context, {
     browserProjects,
     nodeProjects,
     isWatchMode,
@@ -201,7 +162,7 @@ export async function runTests(
   // to "save" it is the regression the gate exists to prevent.
   const { nodeBuild } = planner;
   const nodeExecutor = nodeBuild
-    ? deps.createNodeExecutor(context, {
+    ? createNodeExecutor(context, {
         ...nodeBuild,
         getPlan: planner.getPlan,
         coverageProvider,
@@ -230,7 +191,7 @@ export async function runTests(
     // and hiding it. Deliberate — a broken install is the more useful verdict,
     // and the loader's exit no longer drags the unexpected-exit banner with it.
     if (browserProjects.length && !planner.hasValidatedBrowserConfig()) {
-      await deps.validateBrowserRunConfig(context, browserProjects);
+      await validateBrowserRunConfig(context, browserProjects);
     }
     // An empty run is still a run as far as reporters are concerned. Every
     // other shape pairs a start with its end — the non-watch run below, every
@@ -387,7 +348,7 @@ export async function runTests(
       let browserExecutor: TestExecutor | undefined;
       if (hasBrowserTestsToRun) {
         const browserProjectsToRun = planner.getBrowserProjectsToRun();
-        browserExecutor = await deps.loadBrowserExecutor(
+        browserExecutor = await loadBrowserExecutor(
           context,
           browserProjectsToRun,
           coverageProvider,
@@ -398,7 +359,7 @@ export async function runTests(
         // Core-owned pre-cycle globalSetup stage over the resolved browser
         // subset. It mutates the shared host `process.env`, so browser setups'
         // env changes are also visible to node workers dispatched below.
-        browserStage = await deps.runBrowserGlobalSetupStage(
+        browserStage = await runBrowserGlobalSetupStage(
           context,
           browserProjectsToRun,
           { entriesCache: planner.getPlan().entriesCache },
@@ -461,7 +422,7 @@ export async function runTests(
   // every signal is one queued cycle + finalize — a node rebuild landing during
   // a browser rerun waits instead of interleaving on the shared `stateManager`.
   // ===================================================================
-  const enableCliShortcuts = deps.isCliShortcutsEnabled();
+  const enableCliShortcuts = isCliShortcutsEnabled();
   // Constructed (not launched) below so its invalidation subscriber, the shared
   // teardown, and the stdin owner — all three closing over it — are in place
   // before either side's first cycle. Loading it validates its config and can
@@ -491,7 +452,7 @@ export async function runTests(
 
   if (hasBrowserTestsToRun) {
     const browserProjectsToRun = planner.getBrowserProjectsToRun();
-    browserExecutor = await deps.loadBrowserExecutor(
+    browserExecutor = await loadBrowserExecutor(
       context,
       browserProjectsToRun,
       coverageProvider,
@@ -555,7 +516,7 @@ export async function runTests(
       ...(nodeExecutorToRun ? [nodeExecutorToRun] : []),
       ...(browserExecutor ? [browserExecutor] : []),
     ];
-    const closeCliShortcuts = await deps.setupCliShortcuts(
+    const closeCliShortcuts = await setupCliShortcuts(
       createWatchShortcutHandlers(
         context,
         watchTargets,
@@ -590,11 +551,9 @@ export async function runTests(
         return;
       }
       const stage = await watchTeardown.track(
-        deps.runBrowserGlobalSetupStage(
-          context,
-          planner.getBrowserProjectsToRun(),
-          { entriesCache: planner.getPlan().entriesCache },
-        ),
+        runBrowserGlobalSetupStage(context, planner.getBrowserProjectsToRun(), {
+          entriesCache: planner.getPlan().entriesCache,
+        }),
       );
       if (stage.errors.length) {
         // Reported through the same finalize every cycle uses, so a watch
