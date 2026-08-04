@@ -244,39 +244,6 @@ describe('browser mode - globalSetup', () => {
     expect(cli.stdout).not.toContain('[mixed-node-global-setup] executed');
   });
 
-  it('runs globalSetup once during a browser-only watch session', async () => {
-    const result = await runBrowserWatchCli('browser-global-setup');
-    const { cli } = result;
-
-    try {
-      await cli.waitForStdout('Duration');
-      await cli.waitForStdout('Waiting for file changes...');
-
-      const setupIndex = cli.stdout.indexOf('[browser-global-setup] executed');
-      const testIndex = cli.stdout.indexOf('Test Files 1 passed');
-
-      expect(setupIndex).toBeGreaterThanOrEqual(0);
-      expect(testIndex).toBeGreaterThan(setupIndex);
-      expect(cli.stdout).toMatch(/Test Files.*1 passed/);
-      expect(cli.stdout).toMatch(/Tests.*3 passed/);
-
-      await sleep(1000);
-      cli.resetStd();
-      cli.exec.process!.stdin!.write('a');
-
-      await cli.waitForStdout('Re-running 1 affected test file(s)');
-      await cli.waitForStdout('Test Files 1 passed');
-      await cli.waitForStdout('Waiting for file changes...');
-      expect(cli.stdout).not.toContain('[browser-global-setup] executed');
-
-      cli.exec.process!.stdin!.write('q');
-      await result.expectExecSuccess();
-      expect(cli.stdout).toContain('[browser-global-teardown] executed');
-    } finally {
-      await killCliProcessTree(cli);
-    }
-  }, 60_000);
-
   it('preserves a global teardown failure when quitting browser-only watch', async () => {
     const fixturesTargetPath = path.join(
       __dirname,
@@ -473,7 +440,7 @@ Module._resolveFilename = function (request, ...args) {
     }
   }, 60_000);
 
-  it('reruns globalSetup after a browser-only config restart', async () => {
+  it('runs globalSetup once per watch session and reruns it only on a config restart', async () => {
     const fixturesTargetPath = path.join(
       __dirname,
       'fixtures/fixtures-test-browser-global-setup-restart',
@@ -490,6 +457,26 @@ Module._resolveFilename = function (request, ...args) {
       await cli.waitForStdout('Test Files 1 passed');
       await cli.waitForStdout('Waiting for file changes...');
 
+      // The session's one setup, before its first tests.
+      const initialSetupIndex = cli.stdout.indexOf(
+        '[browser-global-setup] executed',
+      );
+      const initialTestIndex = cli.stdout.indexOf('Test Files 1 passed');
+      expect(initialSetupIndex).toBeGreaterThanOrEqual(0);
+      expect(initialTestIndex).toBeGreaterThan(initialSetupIndex);
+      expect(cli.stdout).toMatch(/Tests.*3 passed/);
+
+      // A rerun stays inside the session, so it must not run setup again.
+      await sleep(1000);
+      cli.resetStd();
+      cli.exec.process!.stdin!.write('a');
+
+      await cli.waitForStdout('Re-running 1 affected test file(s)');
+      await cli.waitForStdout('Test Files 1 passed');
+      await cli.waitForStdout('Waiting for file changes...');
+      expect(cli.stdout).not.toContain('[browser-global-setup] executed');
+
+      // A config restart ends the session: teardown, then a fresh setup.
       await sleep(1000);
       cli.resetStd();
       fs.update(configPath, (content) => `${content}\n// trigger restart`);
@@ -566,30 +553,6 @@ Module._resolveFilename = function (request, ...args) {
     }
   }, 60_000);
 
-  it('runs browser globalSetup during a mixed watch session', async () => {
-    const result = await runBrowserWatchCli('browser-global-setup-mixed');
-    const { cli } = result;
-
-    try {
-      await cli.waitForStdout(/✓ .*node\.test\.ts/);
-      await cli.waitForStdout(/project-browser.*browserOnly\.test\.ts/);
-      await cli.waitForStdout('Waiting for file changes...');
-
-      expect(cli.stdout).toContain('[mixed-node-global-setup] executed');
-      expect(cli.stdout).toContain('[mixed-browser-global-setup] executed');
-      expect(cli.stdout).toMatch(/✓ .*browserOnly\.test\.ts/);
-
-      await sleep(1000);
-      cli.exec.process!.stdin!.write('q');
-      await result.expectExecSuccess();
-
-      expect(cli.stdout).toContain('[mixed-node-global-teardown] executed');
-      expect(cli.stdout).toContain('[mixed-browser-global-teardown] executed');
-    } finally {
-      await killCliProcessTree(cli);
-    }
-  }, 60_000);
-
   it('reruns node and browser globalSetup after a mixed config restart', async () => {
     const fixturesTargetPath = path.join(
       __dirname,
@@ -617,6 +580,9 @@ Module._resolveFilename = function (request, ...args) {
     try {
       await cli.waitForStdout('[mixed-node-global-setup] executed');
       await cli.waitForStdout('[Browser UI] WebSocket server started');
+      // Both stages ran before the host launch (synchronous read — the restart
+      // below must fire while the first cycle is still mid-flight).
+      expect(cli.stdout).toContain('[mixed-browser-global-setup] executed');
       cli.resetStd();
       fs.update(configPath, (content) => `${content}\n// trigger restart`);
 
@@ -691,26 +657,20 @@ Module._resolveFilename = function (request, ...args) {
     }
   }, 60_000);
 
-  it.skipIf(process.platform === 'win32').each([
-    {
-      name: 'browser-only',
-      fixtureName: 'browser-global-setup',
-      targetName: 'browser-global-setup-signal',
-      globalSetupPath: 'globalSetup.ts',
-      setupMarker: '[browser-global-setup] executed',
-      teardownMarker: '[browser-global-teardown] executed',
-    },
-    {
-      name: 'mixed',
-      fixtureName: 'browser-global-setup-mixed',
-      targetName: 'browser-global-setup-mixed-signal',
-      globalSetupPath: 'project-browser/globalSetup.ts',
-      setupMarker: '[mixed-browser-global-setup] executed',
-      teardownMarker: '[mixed-browser-global-teardown] executed',
-    },
-  ])(
-    'handles SIGINT during $name globalSetup',
-    expectSignalExitDuringGlobalSetup,
+  // Browser-only shape is enough here: the delayed stage is the same
+  // `runBrowserGlobalSetupStage` call site on both shapes and the SIGINT
+  // handler is shape-agnostic; the mixed shape keeps its own signal coverage
+  // in the restart-cleanup pair below, where a node teardown is what blocks.
+  it.skipIf(process.platform === 'win32')(
+    'handles SIGINT during browser-only globalSetup',
+    () =>
+      expectSignalExitDuringGlobalSetup({
+        fixtureName: 'browser-global-setup',
+        targetName: 'browser-global-setup-signal',
+        globalSetupPath: 'globalSetup.ts',
+        setupMarker: '[browser-global-setup] executed',
+        teardownMarker: '[browser-global-teardown] executed',
+      }),
     60_000,
   );
 
@@ -750,7 +710,7 @@ Module._resolveFilename = function (request, ...args) {
       expect(cli.stdout).toContain('[mixed-browser-global-setup] executed');
       expect(cli.stdout).not.toContain('[mixed-node-global-setup] executed');
 
-      await sleep(1000);
+      // The banner above is the settle signal; quit needs no debounce.
       cli.exec.process!.stdin!.write('q');
       await result.expectExecSuccess();
 

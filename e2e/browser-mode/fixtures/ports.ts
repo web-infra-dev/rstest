@@ -24,7 +24,6 @@ export const BROWSER_PORTS = {
   'setup-files': 5190,
   snapshot: 5196,
   watch: 5186,
-  'watch-stale': 5218,
   'watch-headed': 5270,
   webkit: 5198,
   viewport: 5214,
@@ -51,13 +50,11 @@ export const BROWSER_PORTS = {
   'browser-in-source': 5260,
   'browser-in-source-watch': 5262,
   'watch-shortcuts': 5194,
-  'watch-setup': 5264,
   'watch-multi-project': 5266,
   'mixed-watch-shortcuts': 5268,
-  'browser-coverage-v8-mixed': 5272,
-  'browser-coverage-v8-browser-only': 5274,
-  'browser-coverage-node-only-flags': 5276,
-  'browser-coverage-default-warnings': 5278,
+  // One key for every config `configWarnings.test.ts` launches: its tests run
+  // serially, so they may share — the rule above only splits across files.
+  'browser-coverage-config-warnings': 5272,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);

@@ -13,8 +13,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 describe('browser mode - watch', () => {
-  it('source file changes should trigger all dependent tests to re-run', async () => {
-    const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-source`;
+  it('re-runs on setup, source, and test-file-set changes in one session', async () => {
+    const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch`;
 
     const { fs } = await prepareFixtures({
       fixturesPath: `${__dirname}/fixtures/watch`,
@@ -28,6 +28,23 @@ describe('browser mode - watch', () => {
     // Both import from src/helper.ts
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Test Files 2 passed');
+    if (!cli.stdout.includes('Waiting for file changes...')) {
+      await cli.waitForStdout('Waiting for file changes...');
+    }
+
+    // ========== Edit the setup file ==========
+    // A setup change invalidates every test file of the project.
+    cli.resetStd();
+    fs.update(path.join(fixturesTargetPath, 'setup.ts'), (content) =>
+      content.replace("'one'", "'two'"),
+    );
+
+    await cli.waitForStdout(
+      '[Watch] Setup file changed, re-running all test files of the project',
+    );
+    await cli.waitForStdout('Re-running 2 affected test file(s)');
+    await cli.waitForStdout('✓ tests/index.test.ts');
+    await cli.waitForStdout('✓ tests/another.test.ts');
     if (!cli.stdout.includes('Waiting for file changes...')) {
       await cli.waitForStdout('Waiting for file changes...');
     }
@@ -72,25 +89,6 @@ describe('browser mode - watch', () => {
     );
     // At least one test should pass
     await cli.waitForStdout('✓ tests/');
-
-    await killCliProcessTree(cli);
-    await deleteFixtureTarget(fs, fixturesTargetPath);
-  });
-
-  it('test files should be ran when create / update / rename / delete', async () => {
-    const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch`;
-
-    const { fs } = await prepareFixtures({
-      fixturesPath: `${__dirname}/fixtures/watch`,
-      fixturesTargetPath,
-    });
-
-    const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath);
-
-    // ========== Initial Run ==========
-    // Initial run outputs full summary with Duration
-    await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Test Files 2 passed');
     if (!cli.stdout.includes('Waiting for file changes...')) {
       await cli.waitForStdout('Waiting for file changes...');
     }
@@ -182,7 +180,7 @@ describe('browser mode - watch', () => {
 
     await killCliProcessTree(cli);
     await deleteFixtureTarget(fs, fixturesTargetPath);
-  }, 30_000);
+  }, 60_000);
 
   // The bundler keeps no file watcher attached while its dev-compile hook is
   // pending, so a rerun trigger signalled from that hook must hand the cycle to
