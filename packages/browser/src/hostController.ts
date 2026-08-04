@@ -825,9 +825,15 @@ export const runBrowserController = async (
     }
   }
 
-  let activeContainerPage: BrowserProviderPage | null = null;
-  let getHeadlessRunnerPageBySessionId:
-    ((sessionId: string) => BrowserProviderPage | undefined) | undefined;
+  let resolveDispatchPages: (target?: BrowserDispatchRequest['target']) => {
+    runnerPage?: BrowserProviderPage;
+    containerPage?: BrowserProviderPage;
+  } = () => ({});
+  const setDispatchPageResolver = (
+    resolver: typeof resolveDispatchPages,
+  ): void => {
+    resolveDispatchPages = resolver;
+  };
 
   const dispatchBrowserRpcRequest = async ({
     request,
@@ -846,9 +852,7 @@ export const runBrowserController = async (
       throw new Error(`Browser provider implementation not found: ${provider}`);
     }
 
-    const runnerPage = target?.sessionId
-      ? getHeadlessRunnerPageBySessionId?.(target.sessionId)
-      : undefined;
+    const { runnerPage, containerPage } = resolveDispatchPages(target);
 
     if (target?.sessionId && !runnerPage) {
       throw new Error(
@@ -856,15 +860,13 @@ export const runBrowserController = async (
       );
     }
 
-    if (!runnerPage && !activeContainerPage) {
+    if (!runnerPage && !containerPage) {
       throw new Error('Browser container page is not initialized');
     }
 
     try {
       return await implementation.dispatchRpc({
-        containerPage: runnerPage
-          ? undefined
-          : (activeContainerPage ?? undefined),
+        containerPage: runnerPage ? undefined : containerPage,
         runnerPage,
         request,
         timeoutFallbackMs,
@@ -1179,9 +1181,11 @@ export const runBrowserController = async (
     const viewportByProject = mapViewportByProject(projectRuntimeConfigs);
     const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
     const sessionRegistry = new RunnerSessionRegistry();
-    getHeadlessRunnerPageBySessionId = (sessionId) => {
-      return sessionRegistry.getById(sessionId)?.page;
-    };
+    setDispatchPageResolver((target) => ({
+      runnerPage: target?.sessionId
+        ? sessionRegistry.getById(target.sessionId)?.page
+        : undefined,
+    }));
     let dispatchRequestCounter = 0;
 
     const nextDispatchRequestId = (namespace: string): string => {
@@ -1789,7 +1793,7 @@ export const runBrowserController = async (
     });
   }
 
-  activeContainerPage = containerPage;
+  setDispatchPageResolver(() => ({ containerPage }));
 
   const dispatchRouter = createDispatchRouter();
   const headedReloadQueue = createHeadedSerialTaskQueue();
