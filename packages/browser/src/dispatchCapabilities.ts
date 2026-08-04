@@ -1,5 +1,5 @@
-import type { Reporter } from '@rstest/core/internal/browser';
 import { HostDispatchRouter } from './dispatchRouter';
+import type { ReporterHookArg } from './hostPayloads';
 import {
   DISPATCH_NAMESPACE_RUNNER,
   DISPATCH_NAMESPACE_SNAPSHOT,
@@ -23,11 +23,6 @@ type RunnerPayload<TType extends BrowserClientMessage['type']> =
     payload: infer TPayload;
   }
     ? TPayload
-    : never;
-
-type ReporterHookArg<THook extends keyof Reporter> =
-  NonNullable<Reporter[THook]> extends (...args: infer TArgs) => unknown
-    ? TArgs[0]
     : never;
 
 type RunnerDispatchFileReadyPayload = ReporterHookArg<'onTestFileReady'>;

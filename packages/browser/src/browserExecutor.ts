@@ -12,12 +12,9 @@ import {
   type RstestContext,
   type TestFileResult,
 } from '@rstest/core/internal/browser';
-import {
-  type BrowserWatchSession,
-  cleanupWatchRuntime,
-  listBrowserTests,
-  runBrowserController,
-} from './hostController';
+import { listBrowserTests, runBrowserController } from './hostController';
+import type { BrowserWatchSession } from './schedulerSeam';
+import { cleanupWatchRuntime } from './watchRuntime';
 
 const emptyOutcome = (): ExecutorCycleOutcome => ({
   results: [],
