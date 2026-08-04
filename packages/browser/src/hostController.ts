@@ -671,7 +671,7 @@ export const runBrowserController = async (
   ): BrowserWatchSession => ({
     runCycle: async (testPaths) => {
       const rerunStartTime = Date.now();
-      const fatalErrorBeforeRun = fatalError;
+      const fatalErrorBeforeRun = fatalErrorRef.current;
       let rerunError: Error | undefined;
 
       try {
@@ -684,8 +684,8 @@ export const runBrowserController = async (
       }
 
       const rerunFatalError =
-        fatalError && fatalError !== fatalErrorBeforeRun
-          ? fatalError
+        fatalErrorRef.current && fatalErrorRef.current !== fatalErrorBeforeRun
+          ? fatalErrorRef.current
           : undefined;
       return buildRerunOutcome({
         rerunTestPaths: testPaths,
@@ -878,7 +878,7 @@ export const runBrowserController = async (
   // Track test results from browser runners
   const reporterResults: TestFileResult[] = [];
   const caseResults: TestResult[] = [];
-  let fatalError: Error | null = null;
+  const fatalErrorRef = { current: null as Error | null };
 
   // Runner lifecycle events flow through the shared RunnerEventSink (the same
   // pump the node pool uses), so browser mode feeds stateManager and fans out to
@@ -1103,7 +1103,7 @@ export const runBrowserController = async (
   const handleFatal = async (payload: FatalPayload): Promise<void> => {
     const error = new Error(payload.message);
     error.stack = payload.stack;
-    fatalError = error;
+    fatalErrorRef.current = error;
   };
 
   const runSnapshotRpc = async (
@@ -1611,8 +1611,8 @@ export const runBrowserController = async (
         }
       : undefined;
 
-    if (fatalError) {
-      return failWithError(fatalError, closeHeadlessRuntime);
+    if (fatalErrorRef.current) {
+      return failWithError(fatalErrorRef.current, closeHeadlessRuntime);
     }
 
     const duration = {
@@ -1990,7 +1990,7 @@ export const runBrowserController = async (
     testNamePattern?: string,
   ): Promise<void> => {
     return headedReloadQueue.enqueue(async () => {
-      if (fatalError) {
+      if (fatalErrorRef.current) {
         return;
       }
       await reloadTestFileAndWait(file, testNamePattern);
@@ -2007,14 +2007,14 @@ export const runBrowserController = async (
 
       for (const file of currentTestFiles) {
         await enqueueHeadedReload(file);
-        if (fatalError) {
+        if (fatalErrorRef.current) {
           break;
         }
       }
     } catch (error) {
       // The fatal error rides the returned result into the cycle outcome, and
       // core's `finalizeRunCycle` raises the exit code from it.
-      fatalError = fatalError ?? toError(error);
+      fatalErrorRef.current = fatalErrorRef.current ?? toError(error);
     }
 
     testTime = Date.now() - testStart;
@@ -2158,8 +2158,8 @@ export const runBrowserController = async (
       }
     : undefined;
 
-  if (fatalError) {
-    return failWithError(fatalError, closeContainerRuntime);
+  if (fatalErrorRef.current) {
+    return failWithError(fatalErrorRef.current, closeContainerRuntime);
   }
 
   const duration = {
