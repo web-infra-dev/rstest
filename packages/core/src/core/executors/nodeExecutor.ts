@@ -10,7 +10,6 @@ import type {
 import type { CoverageMap, CoverageProvider } from '../../types/coverage';
 import { color, logger, type TraceRun } from '../../utils';
 import { ensureTestEnvironmentDependencies } from '../envDependencies';
-import { isNodeProject } from '../isBrowserProject';
 import {
   claimGlobalSetupOnce,
   runGlobalSetup,
@@ -331,21 +330,7 @@ export function createNodeExecutor(
       [],
     );
 
-    const getRecommendWorkerCount = (): number => {
-      const nodeEntries = Array.from(entriesCache.entries()).filter(([key]) => {
-        const project = projects.find((p) => p.environmentName === key);
-        return !project || isNodeProject(project);
-      });
-      return nodeEntries.flatMap(
-        ([_key, entry]) => Object.values(entry.entries) || [],
-      ).length;
-    };
-
-    const recommendWorkerCount = isWatchMode
-      ? Number.POSITIVE_INFINITY
-      : getRecommendWorkerCount();
-
-    const pool = await createPool({ context, recommendWorkerCount });
+    const pool = await createPool({ context });
 
     runResources = { getRsbuildStats, closeServer, pool };
     return runResources;

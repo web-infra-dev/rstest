@@ -12,8 +12,8 @@ export interface ResolveWorkerCountOptions {
   maxWorkers?: string | number;
   /**
    * Workload upper bound (test file count). The result never exceeds it, so we
-   * never spin more workers than there are files. Pass `Infinity` to opt out
-   * (the node pool does this in watch to keep warm workers across reruns).
+   * never schedule more workers than there are files. Pass `Infinity` to opt
+   * out.
    */
   totalTasks: number;
   /** The caller's CPU-derived recommendation outside watch. */
@@ -25,11 +25,8 @@ export interface ResolveWorkerCountOptions {
 }
 
 /**
- * Shared worker-count policy for both executors — the node pool (`pool/index.ts`)
- * and the browser headless scheduler (`@rstest/browser` `concurrency.ts`).
- * Each caller supplies its own CPU-derived recommendations (the node pool halves
- * the raw CPU count in watch; the browser headless path halves its capped base);
- * what is centralized here is the shared override/clamp policy: an explicit
+ * Worker-count policy for schedulers that eagerly start a fixed number of
+ * workers. The caller supplies its CPU-derived recommendations; an explicit
  * `maxWorkers` always wins, and the result stays within `[1, totalTasks]`.
  */
 export const resolveWorkerCount = ({
