@@ -10,6 +10,13 @@ const writeModule = (root: string, name: string, source: string): string => {
   return modulePath;
 };
 
+const createJSDOMModule = (jsdomClass: string): string => `
+export class CookieJar {}
+export class ResourceLoader {}
+export class VirtualConsole {}
+${jsdomClass}
+`;
+
 describe('loadTestEnvironmentModule', () => {
   it('loads the prebundle when its exports are valid', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rstest-env-loader-'));
@@ -18,19 +25,19 @@ describe('loadTestEnvironmentModule', () => {
       const resolvedPath = writeModule(
         root,
         'resolved.mjs',
-        'export class JSDOM { static source = "resolved" }',
+        createJSDOMModule('export class JSDOM { static source = "resolved" }'),
       );
       const bundlePath = writeModule(
         root,
         'bundle.mjs',
-        `export class JSDOM {
+        createJSDOMModule(`export class JSDOM {
           static source = "bundle";
           window = {
             document: { documentElement: {} },
             getComputedStyle() {},
             close() {},
           };
-        }`,
+        }`),
       );
 
       const loaded = await loadTestEnvironmentModule({
@@ -69,7 +76,49 @@ describe('loadTestEnvironmentModule', () => {
       const resolvedPath = writeModule(
         root,
         'resolved.mjs',
-        'export class JSDOM { static source = "resolved" }',
+        createJSDOMModule('export class JSDOM { static source = "resolved" }'),
+      );
+      const bundlePath = writeModule(
+        root,
+        'bundle.mjs',
+        createJSDOMModule(`export class JSDOM {
+          static source = "bundle";
+          window = {
+            document: { documentElement: {} },
+            getComputedStyle() { throw new Error("incompatible cssstyle"); },
+            close() {},
+          };
+        }`),
+      );
+
+      const loaded = await loadTestEnvironmentModule({
+        name: 'jsdom',
+        packageName: 'jsdom',
+        resolvedPath,
+        bundlePath,
+      });
+
+      if (loaded?.name !== 'jsdom') {
+        throw new Error('Expected the jsdom dependency.');
+      }
+      expect(
+        (loaded.module.JSDOM as unknown as { source: string }).source,
+      ).toBe('resolved');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back when the jsdom prebundle omits a required export', async () => {
+    const root = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'rstest-env-export-fallback-'),
+    );
+
+    try {
+      const resolvedPath = writeModule(
+        root,
+        'resolved.mjs',
+        createJSDOMModule('export class JSDOM { static source = "resolved" }'),
       );
       const bundlePath = writeModule(
         root,
@@ -78,7 +127,7 @@ describe('loadTestEnvironmentModule', () => {
           static source = "bundle";
           window = {
             document: { documentElement: {} },
-            getComputedStyle() { throw new Error("incompatible cssstyle"); },
+            getComputedStyle() {},
             close() {},
           };
         }`,
@@ -145,7 +194,7 @@ describe('loadTestEnvironmentModule', () => {
       const resolvedPath = writeModule(
         root,
         'resolved.mjs',
-        'export class JSDOM { static source = "resolved" }',
+        createJSDOMModule('export class JSDOM { static source = "resolved" }'),
       );
       const bundlePath = writeModule(
         root,
@@ -166,6 +215,32 @@ describe('loadTestEnvironmentModule', () => {
       expect(
         (loaded.module.JSDOM as unknown as { source: string }).source,
       ).toBe('resolved');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports the native module path and expected exports', async () => {
+    const root = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'rstest-env-invalid-native-'),
+    );
+
+    try {
+      const resolvedPath = writeModule(
+        root,
+        'resolved.mjs',
+        'export class JSDOM {}',
+      );
+
+      await expect(
+        loadTestEnvironmentModule({
+          name: 'jsdom',
+          packageName: 'jsdom',
+          resolvedPath,
+        }),
+      ).rejects.toThrow(
+        `Invalid jsdom test environment dependency loaded from ${resolvedPath}. Expected exports: CookieJar, JSDOM, VirtualConsole.`,
+      );
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

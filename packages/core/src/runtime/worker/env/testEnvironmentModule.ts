@@ -17,6 +17,7 @@ export type LoadedTestEnvironmentModule =
     };
 
 const moduleCache = new Map<string, Promise<LoadedTestEnvironmentModule>>();
+const requiredJSDOMExports = ['CookieJar', 'JSDOM', 'VirtualConsole'] as const;
 
 const importModule = async (modulePath: string): Promise<unknown> => {
   return finalizeDynamicImport({
@@ -28,11 +29,15 @@ const importModule = async (modulePath: string): Promise<unknown> => {
 
 const validateBuiltinDependency = (
   reference: TestEnvironmentModuleReference,
+  modulePath: string,
   loaded: unknown,
 ): LoadedTestEnvironmentModule => {
   const module = loaded as Record<string, unknown>;
 
-  if (reference.name === 'jsdom' && typeof module.JSDOM === 'function') {
+  if (
+    reference.name === 'jsdom' &&
+    requiredJSDOMExports.every((name) => typeof module[name] === 'function')
+  ) {
     return {
       name: 'jsdom',
       // The runtime shape is checked above; the cast preserves package types
@@ -53,8 +58,12 @@ const validateBuiltinDependency = (
     };
   }
 
+  const expectedExports =
+    reference.name === 'jsdom'
+      ? requiredJSDOMExports.join(', ')
+      : 'GlobalWindow or Window';
   throw new Error(
-    `Invalid ${reference.packageName} test environment dependency exports.`,
+    `Invalid ${reference.packageName} test environment dependency loaded from ${modulePath}. Expected exports: ${expectedExports}.`,
   );
 };
 
@@ -81,6 +90,7 @@ const loadModule = async (
     try {
       const loaded = validateBuiltinDependency(
         reference,
+        reference.bundlePath,
         await importModule(reference.bundlePath),
       );
       probeBundledDependency(loaded);
@@ -95,6 +105,7 @@ const loadModule = async (
 
   return validateBuiltinDependency(
     reference,
+    reference.resolvedPath,
     await importModule(reference.resolvedPath),
   );
 };

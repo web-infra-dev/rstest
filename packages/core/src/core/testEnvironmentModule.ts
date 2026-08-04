@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRsbuild, type Rspack, type RsbuildConfig } from '@rsbuild/core';
 import type { ProjectContext, TestEnvironmentModuleReference } from '../types';
-import { logger } from '../utils';
+import { ADDITIONAL_NODE_BUILTINS, logger } from '../utils';
 import {
   importMetaHook,
   RSTEST_DYNAMIC_IMPORT_HOOK,
@@ -92,6 +92,7 @@ const autoPrebundleMajorRanges: Record<
   // Future majors stay on the native path under `auto` until their runtime
   // edge cases have been covered by the environment regression matrix. Users
   // can explicitly set `prebundle: true` to override this compatibility gate.
+  // cspell:word acemir
   // jsdom 27-28 use @acemir/cssom's undeclared optional cssstyle import.
   // Bundling can change that phantom dependency's resolution and break
   // getComputedStyle(), so `auto` keeps those majors on the native path.
@@ -152,7 +153,12 @@ const testEnvironmentExternal = (
     return;
   }
 
-  if (isBuiltin(request)) {
+  const isNodeBuiltin =
+    isBuiltin(request) ||
+    ADDITIONAL_NODE_BUILTINS.some((builtin) =>
+      typeof builtin === 'string' ? builtin === request : builtin.test(request),
+    );
+  if (isNodeBuiltin) {
     callback(
       undefined,
       request,
@@ -170,10 +176,17 @@ const testEnvironmentExternal = (
   // jsdom 13-21 guard a static `require('canvas')` with a separate
   // `require.resolve()` check. Keep the unresolved request external so the
   // optional dependency remains a runtime decision instead of a build error.
+  if (dependencyType === 'commonjs') {
+    callback(undefined, resolvedPath ?? request, 'commonjs');
+    return;
+  }
+
+  // An absolute Windows path is not a valid ESM specifier. Keep native
+  // dependencies portable when Rspack emits the external import.
   callback(
     undefined,
-    resolvedPath ?? request,
-    dependencyType === 'commonjs' ? 'commonjs' : 'module-import',
+    resolvedPath ? pathToFileURL(resolvedPath).href : request,
+    'module-import',
   );
 };
 

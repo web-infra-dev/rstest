@@ -99,7 +99,7 @@ export type BrowserRuntimeConfig = Omit<
 export type TestEnvironmentModuleReference = {
   name: Exclude<EnvironmentName, 'node'>;
   packageName: string;
-  /** Native module entry resolved from the project's installation tree. */
+  /** Native module entry resolved through Rstest's environment resolution roots. */
   resolvedPath: string;
   /** Optional ESM prebundle. Loading falls back to `resolvedPath`. */
   bundlePath?: string;

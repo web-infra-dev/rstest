@@ -342,6 +342,8 @@ export function createNodeExecutor(
     let testEnvironmentModules:
       Awaited<ReturnType<typeof prepareTestEnvironmentModules>> | undefined;
     try {
+      // Watch projects stay prepared even before they have entries: adding a
+      // matching file must reuse the existing pool with the correct dependency.
       testEnvironmentModules = await prepareTestEnvironmentModules({
         projects,
         rootPath,

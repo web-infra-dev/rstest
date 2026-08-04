@@ -120,6 +120,74 @@ exports.canvasToken = canvas.token;
     }
   });
 
+  it('emits ESM native externals as file URLs', async () => {
+    const root = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'rstest-env-esm-external-'),
+    );
+    const projectRoot = path.join(root, 'project');
+    fs.mkdirSync(projectRoot);
+    const canvasPath = createPackage(projectRoot, 'exports.token = "canvas";', {
+      name: 'canvas',
+      type: 'commonjs',
+    });
+    createPackage(
+      projectRoot,
+      `
+import canvas from 'canvas';
+export class JSDOM {}
+export const canvasToken = canvas.token;
+`,
+    );
+
+    const result = await prepareTestEnvironmentModules({
+      projects: [createProject(projectRoot)],
+      rootPath: root,
+    });
+
+    try {
+      const bundlePath = result.modules.get('jsdom')?.bundlePath;
+      expect(bundlePath).toBeTruthy();
+      if (!bundlePath) {
+        throw new Error('Expected jsdom to be bundled.');
+      }
+      const bundled = await import(pathToFileURL(bundlePath).href);
+      expect(bundled.canvasToken).toBe('canvas');
+      expect(fs.readFileSync(bundlePath, 'utf8')).toContain(
+        pathToFileURL(canvasPath).href,
+      );
+    } finally {
+      await result.cleanup();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  // cspell:word pnpapi
+  it('keeps Yarn PnP runtime access external', async () => {
+    const root = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'rstest-env-pnpapi-external-'),
+    );
+    createPackage(
+      root,
+      `
+require('pnpapi');
+exports.JSDOM = class JSDOM {};
+`,
+      { type: 'commonjs' },
+    );
+
+    const result = await prepareTestEnvironmentModules({
+      projects: [createProject(root)],
+      rootPath: root,
+    });
+
+    try {
+      expect(result.modules.get('jsdom')?.bundlePath).toBeTruthy();
+    } finally {
+      await result.cleanup();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('keeps a missing optional canvas dependency external', async () => {
     const root = fs.mkdtempSync(
       path.join(os.tmpdir(), 'rstest-env-optional-canvas-'),

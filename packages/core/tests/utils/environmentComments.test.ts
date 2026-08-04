@@ -128,6 +128,26 @@ const regexp = /"/;
     });
   });
 
+  it('preserves the project prebundle policy when a comment changes the environment', () => {
+    expect(
+      applyEnvironmentComment(
+        {
+          name: 'jsdom',
+          prebundle: false,
+          options: {
+            url: 'https://base.test/',
+          },
+        },
+        {
+          name: 'happy-dom',
+        },
+      ),
+    ).toEqual({
+      name: 'happy-dom',
+      prebundle: false,
+    });
+  });
+
   it('rejects unsupported environments', () => {
     expect(() =>
       parseEnvironmentComment(
