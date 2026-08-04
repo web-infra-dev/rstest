@@ -1,9 +1,11 @@
 import { describe, expect, it } from '@rstest/core';
 import {
-  claimHeadedCycleScope,
   createBrowserContextExcludeRegExp,
-  runWatchRuntimeTeardown,
   toContextKey,
+} from '../src/browserRsbuild';
+import {
+  claimHeadedCycleScope,
+  runWatchRuntimeTeardown,
 } from '../src/hostController';
 
 describe('browser config resolution', () => {
