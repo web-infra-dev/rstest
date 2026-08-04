@@ -189,7 +189,7 @@ const createHarness = (options: HarnessOptions = {}) => {
     steps,
   );
   const routed: BrowserClientMessage[] = [];
-  const fatals: Array<{ message: string; stack?: string }> = [];
+  const fatalErrors: Array<{ message: string; stack?: string }> = [];
   const completed: string[] = [];
   const invalidations: string[][] = [];
   const deleted: string[][] = [];
@@ -268,7 +268,7 @@ const createHarness = (options: HarnessOptions = {}) => {
     },
     handlers: {
       async handleFatal(payload) {
-        fatals.push(payload);
+        fatalErrors.push(payload);
       },
       async handleTestFileComplete(payload) {
         completed.push(payload.testPath);
@@ -321,7 +321,7 @@ const createHarness = (options: HarnessOptions = {}) => {
     completed,
     deleted,
     dispatchRerun: () => dispatchRerun(),
-    fatals,
+    fatalErrors,
     interrupt: () => interrupt(),
     invalidations,
     ready,
@@ -441,7 +441,7 @@ describe('headless scheduler', () => {
       });
 
       await harness.result;
-      expect(harness.fatals).toEqual([{ message }]);
+      expect(harness.fatalErrors).toEqual([{ message }]);
       expect(firstContext(harness.browser).closeCount).toBeGreaterThan(0);
     },
   );
