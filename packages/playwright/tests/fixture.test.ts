@@ -496,6 +496,25 @@ test(
   },
 );
 
+const builderEvents: string[] = [];
+const builderTest = test.extend('builderTitle', (_context, { onCleanup }) => {
+  expect('builder setup').toContain('setup');
+  onCleanup(() => {
+    expect('builder cleanup').toContain('cleanup');
+    builderEvents.push('cleanup');
+  });
+  return 'builder title';
+});
+
+builderTest('supports named builder fixtures', ({ builderTitle }) => {
+  expect(builderTitle).toBe('builder title');
+  builderEvents.push('test');
+});
+
+builderTest.afterAll(() => {
+  expect(builderEvents).toEqual(['test', 'cleanup']);
+});
+
 test(
   'encodes static server entry filenames in returned URLs',
   { timeout: 30_000 },

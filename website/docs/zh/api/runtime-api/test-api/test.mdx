@@ -330,7 +330,7 @@ test.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 ## test.extend
 
-- **类型：** `test.extend(fixtures: Fixtures)`
+- **类型：** `test.extend(fixtures: Fixtures) | test.extend(name, fixture)`
 
 通过自定义 fixture 扩展测试上下文，返回一个**新的** test API。原始 `test` 不会被修改，你可以同时拥有多个各自独立的扩展版本。
 
@@ -363,9 +363,9 @@ test('plain test', ({ expect }) => {
 
 返回的 API 拥有与 `test` 相同的链式修饰符（`only`、`skip`、`each`、`concurrent` 等），并且可以继续调用 `.extend()` 进行二次扩展。
 
-### Fixture 函数的生命周期
+### Object form fixture 的生命周期
 
-Fixture 函数接收两个参数：
+Object form fixture 函数接收两个参数：
 
 1. **context** — 包含其他 fixture 以及 `TestContext`（`task`、`expect`、`onTestFinished`、`onTestFailed`）。使用对象解构来声明你需要的依赖。
 2. **use** — 调用 `await use(value)` 把 fixture 的值传递给测试。
@@ -387,6 +387,26 @@ const testWithDb = test.extend({
   },
 });
 ```
+
+### Named builder fixture
+
+<ApiMeta addedVersion="0.11.6" />
+
+Named builder form 直接返回 fixture 值，不需要调用 `use`。它的第二个参数提供 `onCleanup`，用于注册一个在测试及其 per-test hooks 结束后运行的 callback。Builder 和 cleanup callback 都可以是异步函数。
+
+```ts
+import { test } from '@rstest/core';
+
+const apiTest = test
+  .extend('baseURL', 'https://api.example.com')
+  .extend('client', async ({ baseURL }, { onCleanup }) => {
+    const client = await createClient(baseURL);
+    onCleanup(() => client.close());
+    return client;
+  });
+```
+
+Named builder 属于 test scope：Rstest 会为每次 test attempt 创建新值，并在开始下一次 attempt 前执行 cleanup。需要请求其他 fixture 或 `TestContext` 字段时，请直接在第一个参数中使用对象解构。
 
 ### 普通值 fixture
 

@@ -40,7 +40,7 @@ import {
   resolveTestArgs,
   TestRegisterError,
 } from '../util';
-import { normalizeFixtures } from './fixtures';
+import { normalizeBuilderFixture, normalizeFixtures } from './fixtures';
 import { cloneTaskMeta, mergeTaskMeta } from './metadata';
 import { registerTestSuiteListener, wrapTimeout } from './task';
 
@@ -691,20 +691,38 @@ const buildRuntimeAPI = (): CollectionAPI => {
 
   const it = createTestAPI() as TestAPIs;
 
-  it.extend = ((fixtures: Fixtures): TestAPIs => {
+  it.extend = ((...initialArgs: unknown[]): TestAPIs => {
     const extend = (
-      fixtures: Fixtures,
-      extendFixtures?: NormalizedFixtures,
+      args: unknown[],
+      extendFixtures: NormalizedFixtures = {},
     ) => {
-      const normalizedFixtures = normalizeFixtures(fixtures, extendFixtures);
+      let normalizedFixtures: NormalizedFixtures;
+      if (typeof args[0] === 'string') {
+        if (args.length !== 2) {
+          throw new Error('test.extend(name, fixture) expects two arguments.');
+        }
+        normalizedFixtures = normalizeBuilderFixture(
+          args[0],
+          args[1],
+          extendFixtures,
+        );
+      } else {
+        if (args.length !== 1) {
+          throw new Error('test.extend(fixtures) expects one argument.');
+        }
+        normalizedFixtures = normalizeFixtures(
+          args[0] as Fixtures,
+          extendFixtures,
+        );
+      }
       const api = createTestAPI({ fixtures: normalizedFixtures }) as TestAPIs;
-      api.extend = ((subFixtures: Fixtures) => {
-        return extend(subFixtures, normalizedFixtures);
+      api.extend = ((...subArgs: unknown[]) => {
+        return extend(subArgs, normalizedFixtures);
       }) as TestAPIs['extend'];
       return api;
     };
 
-    return extend(fixtures);
+    return extend(initialArgs);
   }) as TestAPIs['extend'];
 
   const createDescribeAPI = (

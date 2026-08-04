@@ -31,6 +31,7 @@ import {
   test as base,
 } from '@rstest/core';
 import type {
+  FixtureLifecycle,
   Fixtures,
   TestAPIs,
   TestForFn,
@@ -1338,6 +1339,35 @@ const wrapFixtures = <T extends Record<string, any>, ExtraContext>(
   ) as PlaywrightFixtures<T, ExtraContext>;
 };
 
+const wrapBuilderFixture = <Value>(fixture: Value): Value => {
+  if (typeof fixture !== 'function') {
+    return fixture;
+  }
+
+  const callback = fixture as (...args: unknown[]) => unknown;
+  return preserveFixtureSource(callback, (async (...args: unknown[]) => {
+    const [context, lifecycle, ...rest] = args as [
+      TestContext | object,
+      FixtureLifecycle,
+      ...unknown[],
+    ];
+    if (!hasExpectContext(context)) {
+      return callback(...args);
+    }
+
+    const getExpect = () => getExpectForContext(context);
+    const wrappedLifecycle: FixtureLifecycle = {
+      onCleanup(cleanup) {
+        lifecycle.onCleanup(() => withPlaywrightExpect(getExpect, cleanup));
+      },
+    };
+
+    return withPlaywrightExpect(getExpect, () =>
+      callback(context, wrappedLifecycle, ...rest),
+    );
+  }) as typeof callback) as Value;
+};
+
 export type PlaywrightFixtures<
   FixturesContext extends Record<string, any>,
   ExtraContext,
@@ -1399,11 +1429,26 @@ type MergeContext<ExtraContext, FixturesContext> = {
       : never;
 };
 
+type PlaywrightBuilderFixture<Value, Context> =
+  | Value
+  | ((context: Context, lifecycle: FixtureLifecycle) => Value | Promise<Value>);
+
+type PlaywrightExtend<ExtraContext> = {
+  <T extends Record<string, any> = object>(
+    fixtures: PlaywrightFixtures<T, ExtraContext>,
+  ): PlaywrightTest<MergeContext<ExtraContext, T>>;
+  <Name extends string, Value>(
+    name: Name,
+    fixture: PlaywrightBuilderFixture<
+      Value,
+      Omit<TestContext & ExtraContext, Name>
+    >,
+  ): PlaywrightTest<MergeContext<ExtraContext, Record<Name, Value>>>;
+};
+
 export type PlaywrightTest<ExtraContext = PlaywrightFixture> =
   PlaywrightTestBase<ExtraContext> & {
-    extend: <T extends Record<string, any> = object>(
-      fixtures: PlaywrightFixtures<T, ExtraContext>,
-    ) => PlaywrightTest<MergeContext<ExtraContext, T>>;
+    extend: PlaywrightExtend<ExtraContext>;
     afterAll: RstestAfterAll;
     afterEach: <HookContext = ExtraContext>(
       fn: TestCallback<HookContext>,
@@ -1540,8 +1585,27 @@ const createPlaywrightTest = <ExtraContext>(
           'extend' in target ? target.extend.bind(target) : undefined;
 
         return extend
-          ? (fixtures: Parameters<PlaywrightTest<ExtraContext>['extend']>[0]) =>
-              createPlaywrightTest(extend(wrapFixtures(fixtures)))
+          ? (...args: unknown[]) => {
+              const wrappedArgs =
+                typeof args[0] === 'string' && args.length === 2
+                  ? [args[0], wrapBuilderFixture(args[1])]
+                  : typeof args[0] !== 'string' && args.length === 1
+                    ? [
+                        wrapFixtures(
+                          args[0] as PlaywrightFixtures<
+                            Record<string, unknown>,
+                            ExtraContext
+                          >,
+                        ),
+                      ]
+                    : args;
+              // A Proxy loses the overload set at runtime; the public
+              // PlaywrightExtend type validates calls before this forwarding seam.
+              const extended = (
+                extend as (...args: unknown[]) => TestAPIs<ExtraContext>
+              )(...wrappedArgs);
+              return createPlaywrightTest(extended);
+            }
           : undefined;
       }
       if (key === 'fail') {

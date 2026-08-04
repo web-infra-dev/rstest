@@ -194,6 +194,15 @@ interface FixtureOptions {
 
 export type Use<T> = (value: T) => Promise<void>;
 
+export type FixtureCleanup = () => MaybePromise<void>;
+
+export type FixtureLifecycle = {
+  /**
+   * Register a callback that runs after the current test and its hooks finish.
+   */
+  onCleanup: (cleanup: FixtureCleanup) => void;
+};
+
 type FixtureFn<T, K extends keyof T, ExtraContext> = (
   context: Omit<T, K> & ExtraContext,
   use: Use<T[K]>,
@@ -224,20 +233,35 @@ export type NormalizedFixture = {
   deps?: string[];
   value: FixtureFn<any, any, any> | any;
   options?: FixtureOptions;
+  mode?: 'return';
 };
 
 export type NormalizedFixtures = Record<string, NormalizedFixture>;
 
-export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {
-  extend: <T extends Record<string, any> = object>(
+type MergeFixtureContext<Context, Added extends Record<string, any>> = {
+  [K in keyof Context | keyof Added]: K extends keyof Added
+    ? Added[K]
+    : K extends keyof Context
+      ? Context[K]
+      : never;
+};
+
+type BuilderFixture<Value, Context> =
+  | Value
+  | ((context: Context, lifecycle: FixtureLifecycle) => MaybePromise<Value>);
+
+type TestExtend<ExtraContext> = {
+  <T extends Record<string, any> = object>(
     fixtures: Fixtures<T, ExtraContext>,
-  ) => TestAPIs<{
-    [K in keyof T | keyof ExtraContext]: K extends keyof T
-      ? T[K]
-      : K extends keyof ExtraContext
-        ? ExtraContext[K]
-        : never;
-  }>;
+  ): TestAPIs<MergeFixtureContext<ExtraContext, T>>;
+  <Name extends string, Value>(
+    name: Name,
+    fixture: BuilderFixture<Value, Omit<TestContext & ExtraContext, Name>>,
+  ): TestAPIs<MergeFixtureContext<ExtraContext, Record<Name, Value>>>;
+};
+
+export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {
+  extend: TestExtend<ExtraContext>;
 };
 
 export type OnTestFinishedHandler = (ctx: TestContext) => MaybePromise<void>;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 import {
   createFixtureResolver,
+  normalizeBuilderFixture,
   normalizeFixtures,
 } from '../../../src/runtime/runner/fixtures';
 
@@ -36,6 +37,32 @@ describe('normalizeFixtures', () => {
     const result = normalizeFixtures({ a: 1 } as any, extend);
     expect(result.base).toEqual({ isFn: false, value: 'base' });
     expect(result.a).toMatchObject({ isFn: false, value: 1 });
+  });
+});
+
+describe('normalizeBuilderFixture', () => {
+  it('normalizes a return-value fixture and its dependencies', () => {
+    const base = normalizeFixtures({ base: 'base' } as any);
+    const builder = ({ base }: any) => `${base}:builder`;
+
+    const result = normalizeBuilderFixture('value', builder, base);
+
+    expect(result.value).toMatchObject({
+      deps: ['base'],
+      isFn: true,
+      mode: 'return',
+      value: builder,
+    });
+  });
+
+  it('normalizes a plain return value', () => {
+    const result = normalizeBuilderFixture('value', 42);
+
+    expect(result.value).toMatchObject({
+      isFn: false,
+      mode: 'return',
+      value: 42,
+    });
   });
 });
 
@@ -93,6 +120,57 @@ describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
 });
 
 describe('createFixtureResolver', () => {
+  it('resolves builder fixtures and runs their cleanup', async () => {
+    const events: string[] = [];
+    const base = normalizeFixtures({ base: 'base' } as any);
+    const fixtures = normalizeBuilderFixture(
+      'value',
+      async ({ base, task }: any, { onCleanup }: any) => {
+        events.push(`setup:${base}:${task.name}`);
+        onCleanup(async () => {
+          await Promise.resolve();
+          events.push('cleanup');
+        });
+        return `${base}:value`;
+      },
+      base,
+    );
+    const context: Record<string, any> = { task: { name: 'builder test' } };
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver(
+      { fixtures } as any,
+      context,
+      cleanups,
+    );
+
+    await resolver.resolveTestFixtures(({ value }: any) => value);
+
+    expect(context.value).toBe('base:value');
+    expect(events).toEqual(['setup:base:builder test']);
+    expect(cleanups).toHaveLength(1);
+    await cleanups[0]!();
+    expect(events).toEqual(['setup:base:builder test', 'cleanup']);
+  });
+
+  it('rejects more than one builder cleanup', async () => {
+    const fixtures = normalizeBuilderFixture(
+      'value',
+      (_context: object, { onCleanup }: any) => {
+        onCleanup(() => {});
+        onCleanup(() => {});
+        return 'value';
+      },
+    );
+    const cleanups: (() => Promise<void>)[] = [];
+    const resolver = createFixtureResolver({ fixtures } as any, {}, cleanups);
+
+    await expect(
+      resolver.resolveTestFixtures(({ value }: any) => value),
+    ).rejects.toThrow('onCleanup can only be called once for fixture "value".');
+    expect(cleanups).toHaveLength(1);
+    await cleanups[0]!();
+  });
+
   it('does not parse callbacks when the test has no fixtures', async () => {
     const resolver = createFixtureResolver({} as any, {});
 
@@ -393,6 +471,40 @@ describe('createFixtureResolver', () => {
     expect(events).toEqual(['setup', 'teardown:start', 'teardown']);
     expect(context).toEqual({});
     expect(cleanups).toEqual([]);
+  });
+
+  it('settles builder cancellation after its cleanup finishes', async () => {
+    const events: string[] = [];
+    let setupStarted: (() => void) | undefined;
+    const setupStartedPromise = new Promise<void>((resolve) => {
+      setupStarted = resolve;
+    });
+    const fixtures = normalizeBuilderFixture(
+      'slow',
+      async (_context: any, { onCleanup }: any) => {
+        onCleanup(() => {
+          events.push('cleanup');
+        });
+        setupStarted!();
+        await new Promise<never>(() => {});
+      },
+    );
+    const resolver = createFixtureResolver({ fixtures } as any, {});
+
+    const resolution = resolver.resolveHookFixtures(({ slow }: any) => slow);
+    await setupStartedPromise;
+    const cancellation = resolver.cancelPendingFixtures();
+
+    await expect(cancellation?.teardownStarted).resolves.toBeUndefined();
+    const result = await Promise.race([
+      resolution,
+      new Promise<'pending'>((resolve) => {
+        setTimeout(() => resolve('pending'), 50);
+      }),
+    ]);
+
+    expect(result).toEqual({ status: 'skipped' });
+    expect(events).toEqual(['cleanup']);
   });
 
   it('settles a cancelled fixture that returns without calling use', async () => {

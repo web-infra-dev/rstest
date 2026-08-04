@@ -3,14 +3,22 @@ import { createRsbuild } from '@rsbuild/core';
 import { expect, test as base } from '@rstest/playwright';
 import type { PlaywrightOptions } from '@rstest/playwright';
 
-const test = base.extend({
-  playwright: {
-    browserName: 'chromium',
-    // This e2e test uses the CI-provided Chrome binary to avoid installing
-    // Playwright Chromium. This does not change @rstest/playwright defaults.
-    launchOptions: process.env.CI ? { channel: 'chrome' } : undefined,
-  } satisfies PlaywrightOptions,
-});
+const test = base
+  .extend({
+    playwright: {
+      browserName: 'chromium',
+      // This e2e test uses the CI-provided Chrome binary to avoid installing
+      // Playwright Chromium. This does not change @rstest/playwright defaults.
+      launchOptions: process.env.CI ? { channel: 'chrome' } : undefined,
+    } satisfies PlaywrightOptions,
+  })
+  .extend('builderLabel', ({ page }, { onCleanup }) => {
+    onCleanup(() => {
+      expect(page).toBeDefined();
+      console.log('RSTEST_PLAYWRIGHT_BUILDER_CLEANUP_OK');
+    });
+    return 'builder fixture';
+  });
 
 const cwd = import.meta.dirname;
 const distPath = 'dist-index';
@@ -19,7 +27,8 @@ const entry = join(cwd, distPath, 'index.html');
 test(
   'opens an Rsbuild page with Playwright',
   { timeout: 30_000 },
-  async ({ page, serve }) => {
+  async ({ builderLabel, page, serve }) => {
+    expect(builderLabel).toBe('builder fixture');
     const rsbuild = await createRsbuild({
       cwd,
       rsbuildConfig: {
