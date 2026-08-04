@@ -130,6 +130,43 @@ describe('registerWatchSignalExit', () => {
   });
 });
 
+describe('createWatchTeardown', () => {
+  it('defers a cleanup registered while close is in flight', async () => {
+    let releaseClose: () => void = () => {};
+    let markCloseStarted: () => void = () => {};
+    const closeStarted = new Promise<void>((resolve) => {
+      markCloseStarted = resolve;
+    });
+    const closeBlocked = new Promise<void>((resolve) => {
+      releaseClose = resolve;
+    });
+    const executor = createFakeExecutor('node');
+    executor.close = async () => {
+      markCloseStarted();
+      await closeBlocked;
+    };
+    const teardown = createWatchTeardown({
+      executors: [executor],
+      traceController: {
+        close: async () => {},
+      } as unknown as TraceController,
+      getTraceRun: () => ({ finalize: async () => {} }) as TraceRun,
+    });
+
+    const closing = teardown.close();
+    await closeStarted;
+    let cleanups = 0;
+    teardown.addCleanup(() => {
+      cleanups += 1;
+    });
+
+    expect(cleanups).toBe(0);
+    releaseClose();
+    await closing;
+    expect(cleanups).toBe(1);
+  });
+});
+
 describe('createWatchCycleDriver', () => {
   it('clears the failed-test count even on a first cycle, so bail stays cycle-scoped', async () => {
     // The other half of the mixed-watch startup order: the browser's first

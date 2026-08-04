@@ -614,9 +614,8 @@ export function createWatchTeardown({
     },
     isClosing: () => closeRequested,
     addCleanup(cleanup) {
-      // A close that already ran has no `finally` left to release this in.
-      if (closeRequested) {
-        cleanup();
+      if (closePromise) {
+        void closePromise.then(cleanup, cleanup);
       } else {
         cleanups.push(cleanup);
       }
