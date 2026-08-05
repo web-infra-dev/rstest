@@ -98,10 +98,26 @@ describe('Expect API', () => {
     contextExpect(1 + 2).toBe(3);
   });
 
-  it('uses one expect instance for sequential tests', ({
+  it('shares context assertion counts with imported expect', ({
     expect: contextExpect,
   }) => {
-    expect(contextExpect).toBe(expect);
+    contextExpect.assertions(2);
+    expect(1 + 1).toBe(2);
+    contextExpect(1 + 2).toBe(3);
+  });
+
+  it('satisfies imported hasAssertions with context expect', ({
+    expect: contextExpect,
+  }) => {
+    expect.hasAssertions();
+    contextExpect(1 + 1).toBe(2);
+  });
+
+  it('satisfies context hasAssertions with imported expect', ({
+    expect: contextExpect,
+  }) => {
+    contextExpect.hasAssertions();
+    expect(1 + 1).toBe(2);
   });
 
   it.fails(

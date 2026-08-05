@@ -337,10 +337,7 @@ export class TestRunner {
                 timeout: test.timeout,
                 stackTraceError: test.stackTraceError,
                 getAssertionCalls: () => {
-                  const expect = this.resolveTestExpect(test);
-                  const { assertionCalls } = getState(expect);
-
-                  return assertionCalls;
+                  return this.getAssertionState(test).assertionCalls;
                 },
               });
               await fn(test.context);
@@ -850,10 +847,6 @@ export class TestRunner {
 
     Object.defineProperty(context, 'expect', {
       get: () => {
-        if (!test.concurrent) {
-          return getGlobalExpect();
-        }
-
         let expect = this.localExpects.get(context);
         if (!expect) {
           expect = createExpect({
@@ -976,23 +969,58 @@ export class TestRunner {
     });
   }
 
-  private resolveTestExpect(test: TestCase): RstestExpect {
-    return this.localExpects.get(test.context) ?? getGlobalExpect();
+  private getAssertionState(test: TestCase) {
+    const globalExpect = getGlobalExpect();
+    const globalState = getState(globalExpect);
+    const localExpect = this.localExpects.get(test.context);
+    if (!localExpect) {
+      return globalState;
+    }
+
+    const localState = getState(localExpect);
+    if (test.concurrent) {
+      return localState;
+    }
+
+    const assertionCalls =
+      globalState.assertionCalls + localState.assertionCalls;
+    const hasLocalAssertionCount = localState.expectedAssertionsNumber !== null;
+    const hasLocalAssertionRequirement = localState.isExpectingAssertions;
+
+    return {
+      ...localState,
+      assertionCalls,
+      expectedAssertionsNumber: hasLocalAssertionCount
+        ? localState.expectedAssertionsNumber
+        : globalState.expectedAssertionsNumber,
+      expectedAssertionsNumberErrorGen: hasLocalAssertionCount
+        ? localState.expectedAssertionsNumberErrorGen
+        : globalState.expectedAssertionsNumberErrorGen,
+      isExpectingAssertions:
+        globalState.isExpectingAssertions || localState.isExpectingAssertions,
+      isExpectingAssertionsError: hasLocalAssertionRequirement
+        ? localState.isExpectingAssertionsError
+        : globalState.isExpectingAssertionsError,
+    };
   }
 
   private afterRunTest(test: TestCase): void {
-    const expect = this.resolveTestExpect(test);
-
     const {
       assertionCalls,
       expectedAssertionsNumber,
       expectedAssertionsNumberErrorGen,
       isExpectingAssertions,
       isExpectingAssertionsError,
-    } = getState(expect);
+    } = this.getAssertionState(test);
 
     if (test.result?.state === 'fail') {
       throw test.result.errors;
+    }
+
+    const localExpect = this.localExpects.get(test.context);
+    if (localExpect && !test.concurrent) {
+      getGlobalExpect().setState({ assertionCalls });
+      localExpect.setState({ assertionCalls });
     }
 
     if (

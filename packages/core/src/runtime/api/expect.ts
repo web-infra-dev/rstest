@@ -228,9 +228,9 @@ const getContextWorkerState = (): WorkerState => fileContext().workerState;
  * time, so any value-copied reference (`expect.poll`, `.soft`, `{ ...api }`)
  * captured in a module shared under `isolate: false` stays live — no
  * delegation needed, there is only one instance. Per-file state is RESET, not
- * rebuilt. Sequential tests use this same instance for `context.expect`, so
- * assertion bookkeeping has one owner. Concurrent tests get a pinned local
- * instance to keep their state isolated.
+ * rebuilt. The per-test local expect (`context.expect`, created by the runner)
+ * stays pinned to its test so concurrent tests and callbacks that outlive a
+ * timeout cannot write into another test's matcher state.
  */
 export const createFileExpect = (snapshotPlugin: ChaiPlugin): RstestExpect => {
   if (!fileExpect) {
