@@ -30,9 +30,10 @@ import { createRstestUtilities } from './utilities';
  *   - expect (incl. `.poll`/`.soft`) → `createFileExpect`      (./expect)
  *   - rstest / rs                    → `createRstestUtilities` (./utilities)
  *
- * The one intentional exception is the per-test local expect
- * (`context.expect`): created inside the running test, it can never be stale
- * and stays pinned to keep `test.concurrent` isolation.
+ * Sequential `context.expect` resolves the same singleton, keeping assertion
+ * bookkeeping on one owner. The one intentional exception is concurrent
+ * `context.expect`: created inside the running test, it stays pinned to keep
+ * concurrent assertion and snapshot state isolated.
  *
  * See https://github.com/web-infra-dev/rstest/issues/1376.
  */

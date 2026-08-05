@@ -1,11 +1,10 @@
-import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
+import { getState } from '@vitest/expect';
 import type { SnapshotClient, SnapshotState } from '@vitest/snapshot';
 import type {
   AfterEachListener,
   BeforeEachListener,
   CoverageProvider,
   FormattedError,
-  MatcherState,
   OnTestFailedHandler,
   OnTestFinishedHandler,
   Rstest,
@@ -29,7 +28,7 @@ import {
   getTaskNameWithPrefix,
   toNativePath,
 } from '../../utils/helper';
-import { createExpect } from '../api/expect';
+import { createExpect, getGlobalExpect, resetExpectState } from '../api/expect';
 import { formatTestError, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
 import { createFixtureResolver } from './fixtures';
@@ -66,6 +65,7 @@ export class TestRunner {
   /** current test case */
   private _test: TestCase | undefined;
   private workerState: WorkerState | undefined;
+  private readonly localExpects = new WeakMap<TestContext, RstestExpect>();
 
   constructor(private readonly taskContext: TaskContext) {}
 
@@ -337,9 +337,7 @@ export class TestRunner {
                 timeout: test.timeout,
                 stackTraceError: test.stackTraceError,
                 getAssertionCalls: () => {
-                  const expect = (test.context as any)._useLocalExpect
-                    ? test.context.expect
-                    : (globalThis as any)[GLOBAL_EXPECT];
+                  const expect = this.resolveTestExpect(test);
                   const { assertionCalls } = getState(expect);
 
                   return assertionCalls;
@@ -834,8 +832,6 @@ export class TestRunner {
       throw new Error('done() callback is deprecated, use promise instead');
     }) as unknown as TestContext;
 
-    let _expect: RstestExpect | undefined;
-
     const current = this._test;
 
     context.task = {
@@ -854,13 +850,19 @@ export class TestRunner {
 
     Object.defineProperty(context, 'expect', {
       get: () => {
-        if (!_expect) {
-          _expect = createExpect({
+        if (!test.concurrent) {
+          return getGlobalExpect();
+        }
+
+        let expect = this.localExpects.get(context);
+        if (!expect) {
+          expect = createExpect({
             getWorkerState: () => this.workerState!,
             getCurrentTest: () => current,
           });
+          this.localExpects.set(context, expect);
         }
-        return _expect;
+        return expect;
       },
     });
 
@@ -871,9 +873,7 @@ export class TestRunner {
     });
 
     Object.defineProperty(context, '_useLocalExpect', {
-      get() {
-        return _expect != null;
-      },
+      get: () => this.localExpects.has(context),
     });
 
     Object.defineProperty(context, 'onTestFinished', {
@@ -940,22 +940,14 @@ export class TestRunner {
     // @vitest/expect records soft failures on the test object; each attempt must
     // start clean because retry history is preserved separately in retryErrors.
     test.result = undefined;
-    setState<MatcherState>(
-      {
-        assertionCalls: 0,
-        isExpectingAssertions: false,
-        isExpectingAssertionsError: null,
-        expectedAssertionsNumber: null,
-        expectedAssertionsNumberErrorGen: null,
-        // `expect.getState().testPath` is user-facing; expose the OS-native
-        // path (equal to `import.meta.filename`). Internal consumers
-        // (snapshot, reporter, related) keep the POSIX `test.testPath` (#1465).
-        testPath: toNativePath(test.testPath),
-        snapshotState,
-        currentTestName: getTaskNameWithPrefix(test),
-      },
-      (globalThis as any)[GLOBAL_EXPECT],
-    );
+    resetExpectState(getGlobalExpect(), {
+      // `expect.getState().testPath` is user-facing; expose the OS-native
+      // path (equal to `import.meta.filename`). Internal consumers
+      // (snapshot, reporter, related) keep the POSIX `test.testPath` (#1465).
+      testPath: toNativePath(test.testPath),
+      snapshotState,
+      currentTestName: getTaskNameWithPrefix(test),
+    });
 
     const context = this.createTestContext(test, retryCount);
 
@@ -984,11 +976,12 @@ export class TestRunner {
     });
   }
 
+  private resolveTestExpect(test: TestCase): RstestExpect {
+    return this.localExpects.get(test.context) ?? getGlobalExpect();
+  }
+
   private afterRunTest(test: TestCase): void {
-    // @ts-expect-error
-    const expect = test.context._useLocalExpect
-      ? test.context.expect
-      : (globalThis as any)[GLOBAL_EXPECT];
+    const expect = this.resolveTestExpect(test);
 
     const {
       assertionCalls,

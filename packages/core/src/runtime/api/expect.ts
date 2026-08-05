@@ -55,19 +55,31 @@ export function setupChaiConfig(config: ChaiConfig): void {
   Object.assign(chaiConfig, config);
 }
 
-/**
- * The per-file slate of `expect` state: assertion bookkeeping cleared and
- * `testPath` (re-)established as a live getter — the runner pins `testPath` to
- * a plain value per test, so each file must restore the getter.
- */
-const freshExpectState = (
-  getWorkerState: () => WorkerState,
-): Partial<MatcherState> => ({
+const EXPECT_BOOKKEEPING_STATE = {
   assertionCalls: 0,
   isExpectingAssertions: false,
   isExpectingAssertionsError: null,
   expectedAssertionsNumber: null,
   expectedAssertionsNumberErrorGen: null,
+} satisfies Partial<MatcherState>;
+
+export const resetExpectState = (
+  expect: RstestExpect,
+  state: Partial<MatcherState>,
+): void => {
+  setState<MatcherState>(EXPECT_BOOKKEEPING_STATE, expect);
+  // Keep this separate from the bookkeeping reset: setState preserves getters
+  // such as the file-level testPath binding, while object spread would not.
+  setState<MatcherState>(state, expect);
+};
+
+/**
+ * The runner pins `testPath` to a plain value per test, so each file must
+ * restore this live getter.
+ */
+const fileExpectState = (
+  getWorkerState: () => WorkerState,
+): Partial<MatcherState> => ({
   // `testPath` is user-facing; expose the OS-native path (equal to
   // `import.meta.filename`) for every expect instance — global and the
   // public per-test `context.expect` alike. Internally it stays POSIX (#1465).
@@ -75,6 +87,13 @@ const freshExpectState = (
     return toNativePath(getWorkerState().testPath);
   },
 });
+
+type GlobalWithExpect = typeof globalThis & {
+  [GLOBAL_EXPECT]: RstestExpect;
+};
+
+export const getGlobalExpect = (): RstestExpect =>
+  (globalThis as GlobalWithExpect)[GLOBAL_EXPECT];
 
 // Vitest 4.1 types `returned(value)`, while its runtime also accepts no arguments.
 const ReturnedAlias: ChaiPlugin = (chai, utils) => {
@@ -86,6 +105,13 @@ const ReturnedAlias: ChaiPlugin = (chai, utils) => {
     };
   });
 };
+
+// These plugins mutate Chai's process-level prototype, not an expect instance.
+use(JestExtend);
+use(JestChaiExpect);
+use(ChaiStyleAssertions);
+use(ReturnedAlias);
+use(JestAsymmetricMatchers);
 
 export function createExpect({
   getCurrentTest,
@@ -102,14 +128,9 @@ export function createExpect({
   getCurrentTest: () => TestCase | undefined;
   snapshotPlugin?: ChaiPlugin;
 }): RstestExpect {
-  use(JestExtend);
-  use(JestChaiExpect);
-  use(ChaiStyleAssertions);
-  use(ReturnedAlias);
   if (snapshotPlugin) {
     use(snapshotPlugin);
   }
-  use(JestAsymmetricMatchers);
 
   const expect = ((value: any, message?: string): Assertion => {
     const { assertionCalls } = getState(expect);
@@ -131,9 +152,7 @@ export function createExpect({
   const globalState = getState((globalThis as any)[GLOBAL_EXPECT]) || {};
 
   setState<MatcherState>({ ...globalState }, expect);
-  // Separate call: `setState` merges property DESCRIPTORS, which keeps the
-  // `testPath` getter that a spread literal would have eagerly evaluated.
-  setState<MatcherState>(freshExpectState(getWorkerState), expect);
+  resetExpectState(expect, fileExpectState(getWorkerState));
 
   // @ts-expect-error chai.expect.extend untyped
   expect.extend = (matchers) => chaiExpect.extend(expect, matchers);
@@ -209,9 +228,9 @@ const getContextWorkerState = (): WorkerState => fileContext().workerState;
  * time, so any value-copied reference (`expect.poll`, `.soft`, `{ ...api }`)
  * captured in a module shared under `isolate: false` stays live — no
  * delegation needed, there is only one instance. Per-file state is RESET, not
- * rebuilt. The per-test local expect (`context.expect`, created via
- * `createExpect` in the runner) intentionally stays a pinned per-test instance
- * to keep `test.concurrent` isolation.
+ * rebuilt. Sequential tests use this same instance for `context.expect`, so
+ * assertion bookkeeping has one owner. Concurrent tests get a pinned local
+ * instance to keep their state isolated.
  */
 export const createFileExpect = (snapshotPlugin: ChaiPlugin): RstestExpect => {
   if (!fileExpect) {
@@ -231,6 +250,6 @@ export const createFileExpect = (snapshotPlugin: ChaiPlugin): RstestExpect => {
   }
   // Later files reuse the singleton on a clean slate, mirroring the previous
   // per-file rebuild (which also carried non-bookkeeping state forward).
-  setState<MatcherState>(freshExpectState(getContextWorkerState), fileExpect);
+  resetExpectState(fileExpect, fileExpectState(getContextWorkerState));
   return fileExpect;
 };
