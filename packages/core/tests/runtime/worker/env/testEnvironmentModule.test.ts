@@ -1,7 +1,7 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from '@rstest/core';
+import { withTempDir } from '../../../helpers/tempDir';
 import { loadTestEnvironmentModule } from '../../../../src/runtime/worker/env/testEnvironmentModule';
 
 const writeModule = (root: string, name: string, source: string): string => {
@@ -19,9 +19,7 @@ ${jsdomClass}
 
 describe('loadTestEnvironmentModule', () => {
   it('loads the prebundle when its exports are valid', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rstest-env-loader-'));
-
-    try {
+    await withTempDir('rstest-env-loader-', async (root) => {
       const resolvedPath = writeModule(
         root,
         'resolved.mjs',
@@ -62,17 +60,11 @@ describe('loadTestEnvironmentModule', () => {
           bundlePath,
         }),
       ).toBe(loaded);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('falls back when the jsdom bundle fails its runtime probe', async () => {
-    const root = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'rstest-env-probe-fallback-'),
-    );
-
-    try {
+    await withTempDir('rstest-env-probe-fallback-', async (root) => {
       const resolvedPath = writeModule(
         root,
         'resolved.mjs',
@@ -104,17 +96,11 @@ describe('loadTestEnvironmentModule', () => {
       expect(
         (loaded.module.JSDOM as unknown as { source: string }).source,
       ).toBe('resolved');
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('falls back when the jsdom prebundle omits a required export', async () => {
-    const root = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'rstest-env-export-fallback-'),
-    );
-
-    try {
+    await withTempDir('rstest-env-export-fallback-', async (root) => {
       const resolvedPath = writeModule(
         root,
         'resolved.mjs',
@@ -146,15 +132,11 @@ describe('loadTestEnvironmentModule', () => {
       expect(
         (loaded.module.JSDOM as unknown as { source: string }).source,
       ).toBe('resolved');
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('falls back to the resolved package entry when the prebundle is invalid', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rstest-env-fallback-'));
-
-    try {
+    await withTempDir('rstest-env-fallback-', async (root) => {
       const resolvedPath = writeModule(
         root,
         'resolved.mjs',
@@ -180,17 +162,11 @@ describe('loadTestEnvironmentModule', () => {
       expect(
         (loaded.module.GlobalWindow as unknown as { source: string }).source,
       ).toBe('resolved');
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('falls back when the prebundle cannot be imported', async () => {
-    const root = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'rstest-env-import-fallback-'),
-    );
-
-    try {
+    await withTempDir('rstest-env-import-fallback-', async (root) => {
       const resolvedPath = writeModule(
         root,
         'resolved.mjs',
@@ -215,17 +191,11 @@ describe('loadTestEnvironmentModule', () => {
       expect(
         (loaded.module.JSDOM as unknown as { source: string }).source,
       ).toBe('resolved');
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('reports the native module path and expected exports', async () => {
-    const root = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'rstest-env-invalid-native-'),
-    );
-
-    try {
+    await withTempDir('rstest-env-invalid-native-', async (root) => {
       const resolvedPath = writeModule(
         root,
         'resolved.mjs',
@@ -241,8 +211,6 @@ describe('loadTestEnvironmentModule', () => {
       ).rejects.toThrow(
         `Invalid jsdom test environment dependency loaded from ${resolvedPath}. Expected exports: CookieJar, JSDOM, VirtualConsole.`,
       );
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 });
