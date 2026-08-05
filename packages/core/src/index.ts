@@ -114,6 +114,8 @@ export type {
   ExpectStatic,
   ExtendConfig,
   ExtendConfigFn,
+  FixtureCleanup,
+  FixtureLifecycle,
   Fixtures,
   Matchers,
   ProjectConfig,

@@ -1,10 +1,24 @@
 import type {
+  FixtureCleanup,
   Fixtures,
   NormalizedFixture,
   NormalizedFixtures,
   TestCase,
+  TestContext,
 } from '../../types';
 import { isObject } from '../../utils/helper';
+
+const namedFixtureNamePattern = /^[$A-Z_a-z][$\w]*$/;
+const reservedNamedFixtureNames = new Set<string>([
+  ...Object.keys({
+    expect: true,
+    onTestFailed: true,
+    onTestFinished: true,
+    skip: true,
+    task: true,
+  } satisfies Record<keyof TestContext, true>),
+  '_useLocalExpect',
+]);
 
 export const normalizeFixtures = (
   fixtures: Fixtures = {},
@@ -45,7 +59,9 @@ export const normalizeFixtures = (
       if (value.isFn) {
         const usedProps = getFixtureUsedProps(value.value);
         value.deps = usedProps.filter(
-          (p) => p in result || p in extendFixtures,
+          (property) =>
+            Object.hasOwn(result, property) ||
+            Object.hasOwn(extendFixtures, property),
         );
       }
       return [key, value];
@@ -58,12 +74,54 @@ export const normalizeFixtures = (
   };
 };
 
+export const normalizeNamedFixture = (
+  name: string,
+  value: unknown,
+  extendFixtures: NormalizedFixtures = {},
+): NormalizedFixtures => {
+  if (
+    !namedFixtureNamePattern.test(name) ||
+    reservedNamedFixtureNames.has(name)
+  ) {
+    throw new Error(
+      `Invalid named fixture name "${name}". Use a JavaScript identifier that does not conflict with the test context.`,
+    );
+  }
+  const result: NormalizedFixtures = {
+    ...extendFixtures,
+    [name]: {
+      isFn: typeof value === 'function',
+      value,
+      mode: 'return',
+    },
+  };
+  const fixture = result[name]!;
+  if (fixture.isFn) {
+    fixture.deps = getFixtureUsedProps(fixture.value).filter((property) =>
+      Object.hasOwn(result, property),
+    );
+  }
+  return result;
+};
+
 export type FixtureResolver = {
   cancelPendingFixtures: () => { teardownStarted: Promise<void> } | undefined;
   resolveTestFixtures: (fn?: (...args: any[]) => any) => Promise<void>;
   resolveHookFixtures: (
     fn: (...args: any[]) => any,
   ) => Promise<{ status: 'resolved' } | { status: 'skipped' }>;
+};
+
+type RunNamedFixtureSetup = <Value>(
+  setup: () => Promise<Value>,
+  onTimeout: () => void,
+) => Promise<Value>;
+
+type FixtureResolverOptions = {
+  runNamedFixtureSetup?: RunNamedFixtureSetup;
+  wrapNamedFixtureCleanup?: (
+    cleanup: () => Promise<void>,
+  ) => () => Promise<void>;
 };
 
 class PreviouslyFailedFixtureError extends Error {}
@@ -77,6 +135,19 @@ const fixturePropsCache = new WeakMap<
 >();
 const functionPropertyNames = new Set(Object.getOwnPropertyNames(() => {}));
 
+const setFixtureContextValue = (
+  context: Record<string, any>,
+  name: string,
+  value: unknown,
+) => {
+  Object.defineProperty(context, name, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+};
+
 export function setFixtureCallbackSource(
   callback: (...args: any[]) => any,
   source: (...args: any[]) => any,
@@ -88,7 +159,12 @@ export const createFixtureResolver = (
   test: TestCase,
   context: Record<string, any>,
   cleanups: (() => Promise<void>)[] = [],
+  options: FixtureResolverOptions = {},
 ): FixtureResolver => {
+  const runNamedFixtureSetupWithoutTimeout: RunNamedFixtureSetup = (setup) =>
+    setup();
+  const wrapNamedFixtureCleanup =
+    options.wrapNamedFixtureCleanup ?? ((cleanup) => cleanup);
   const fixtures = test.fixtures ?? {};
   const doneMap = new Set<string>();
   const cancelledFixtures = new Set<string>();
@@ -99,7 +175,8 @@ export const createFixtureResolver = (
 
   const useFixture = async (
     name: string,
-    NormalizedFixture: NormalizedFixture,
+    fixture: NormalizedFixture,
+    runNamedFixtureSetup: RunNamedFixtureSetup,
   ) => {
     if (doneMap.has(name)) {
       return;
@@ -111,9 +188,9 @@ export const createFixtureResolver = (
       throw new Error(`Circular fixture dependency: ${name}`);
     }
 
-    const { isFn, deps, value: fixtureValue } = NormalizedFixture;
+    const { isFn, deps, mode, value: fixtureValue } = fixture;
     if (!isFn) {
-      context[name] = fixtureValue;
+      setFixtureContextValue(context, name, fixtureValue);
       doneMap.add(name);
       return;
     }
@@ -122,44 +199,173 @@ export const createFixtureResolver = (
     try {
       if (deps?.length) {
         for (const dep of deps) {
-          await useFixture(dep, fixtures[dep]!);
+          await useFixture(dep, fixtures[dep]!, runNamedFixtureSetup);
         }
       }
 
-      // This API behavior follows Vitest & Playwright
-      // but why not return cleanup function?
-      await new Promise<void>((fixtureResolve, fixtureReject) => {
-        let useDone: (() => void) | undefined;
-        let blockSettled = false;
-        cancelFixtureSetups.set(name, () => {
-          if (blockSettled) {
-            fixtureResolve();
-          }
+      if (mode === 'return') {
+        let registeredCleanup: (() => Promise<void>) | undefined;
+        let cleanupPromise: Promise<void> | undefined;
+        let resolveCancellationCleanup: (() => void) | undefined;
+        let rejectCancellationCleanup: ((error: unknown) => void) | undefined;
+        const cancellationCleanup = new Promise<void>((resolve, reject) => {
+          resolveCancellationCleanup = resolve;
+          rejectCancellationCleanup = reject;
         });
-        const block = Promise.resolve().then(() =>
-          fixtureValue(context, async (value: any) => {
-            if (cancelledFixtures.has(name)) {
-              cancelledFixtureTeardownStarts.get(name)?.();
-              return;
-            }
-            context[name] = value;
-            cleanups.unshift(() => {
-              useDone?.();
-              return block;
-            });
-            fixtureResolve();
-            return new Promise<void>((useFnResolve) => {
-              useDone = useFnResolve;
-            });
-          }),
-        );
-        block.then(() => {
-          blockSettled = true;
-          if (cancelledFixtures.has(name)) {
-            fixtureResolve();
+        const notifyTeardownStarted = () => {
+          cancelledFixtureTeardownStarts.get(name)?.();
+        };
+        const runRegisteredCleanup = (
+          removeFromCleanupQueue = true,
+        ): Promise<void> | undefined => {
+          if (!registeredCleanup) {
+            return undefined;
           }
-        }, fixtureReject);
-      });
+          if (removeFromCleanupQueue) {
+            const cleanupIndex = cleanups.indexOf(registeredCleanup);
+            if (cleanupIndex !== -1) {
+              cleanups.splice(cleanupIndex, 1);
+            }
+          }
+          return registeredCleanup();
+        };
+        const trackCancellationCleanup = () => {
+          const cleanup = runRegisteredCleanup();
+          cleanup?.then(resolveCancellationCleanup, rejectCancellationCleanup);
+        };
+
+        cancelFixtureSetups.set(name, () => {
+          trackCancellationCleanup();
+        });
+
+        let cleanupRegistered = false;
+        let setupTimedOut = false;
+        let resolveLateCleanupRegistration:
+          ((cleanup: (() => Promise<void>) | undefined) => void) | undefined;
+        const lateCleanupRegistration = new Promise<
+          (() => Promise<void>) | undefined
+        >((resolve) => {
+          resolveLateCleanupRegistration = resolve;
+        });
+        const resolveLateCleanup = (
+          cleanup: (() => Promise<void>) | undefined,
+        ) => {
+          const resolve = resolveLateCleanupRegistration;
+          resolveLateCleanupRegistration = undefined;
+          resolve?.(cleanup);
+          return Boolean(resolve);
+        };
+        const onCleanup = (cleanup: FixtureCleanup) => {
+          if (cleanupRegistered) {
+            throw new Error(
+              `onCleanup can only be called once for fixture "${name}".`,
+            );
+          }
+          cleanupRegistered = true;
+          const wrappedCleanup = wrapNamedFixtureCleanup(async () => {
+            await cleanup();
+          });
+          registeredCleanup = () => {
+            if (!cleanupPromise) {
+              notifyTeardownStarted();
+              cleanupPromise = Promise.resolve().then(wrappedCleanup);
+              cleanupPromise.catch(() => undefined);
+            }
+            return cleanupPromise;
+          };
+          if (cancelledFixtures.has(name)) {
+            if (setupTimedOut) {
+              if (!resolveLateCleanup(registeredCleanup)) {
+                runRegisteredCleanup(false);
+              }
+            } else {
+              trackCancellationCleanup();
+            }
+          } else {
+            cleanups.unshift(registeredCleanup);
+          }
+        };
+
+        const setup = runNamedFixtureSetup(
+          () => {
+            const setupOperation = Promise.resolve(
+              fixtureValue(context, { onCleanup }),
+            );
+            const resolveWithoutCleanup = () => {
+              if (!cleanupRegistered) {
+                resolveLateCleanup(undefined);
+              }
+            };
+            setupOperation.then(resolveWithoutCleanup, resolveWithoutCleanup);
+            return setupOperation;
+          },
+          () => {
+            setupTimedOut = true;
+            cancelledFixtures.add(name);
+            const cleanup = runRegisteredCleanup(false);
+            if (!cleanup) {
+              const waitForLateCleanup = wrapNamedFixtureCleanup(async () => {
+                const lateCleanup = await lateCleanupRegistration;
+                await lateCleanup?.();
+              });
+              cleanups.unshift(async () => {
+                try {
+                  await waitForLateCleanup();
+                } catch (error) {
+                  if (registeredCleanup) {
+                    throw error;
+                  }
+                }
+              });
+            }
+          },
+        );
+        const value = await Promise.race([setup, cancellationCleanup]);
+        if (!cancelledFixtures.has(name)) {
+          setFixtureContextValue(context, name, value);
+        }
+        if (cancelledFixtures.has(name)) {
+          const cleanup = runRegisteredCleanup();
+          if (cleanup) {
+            await cleanup;
+          }
+        }
+      } else {
+        // This API behavior follows Vitest & Playwright
+        // but why not return cleanup function?
+        await new Promise<void>((fixtureResolve, fixtureReject) => {
+          let useDone: (() => void) | undefined;
+          let blockSettled = false;
+          cancelFixtureSetups.set(name, () => {
+            if (blockSettled) {
+              fixtureResolve();
+            }
+          });
+          const block = Promise.resolve().then(() =>
+            fixtureValue(context, async (value: any) => {
+              if (cancelledFixtures.has(name)) {
+                cancelledFixtureTeardownStarts.get(name)?.();
+                return;
+              }
+              setFixtureContextValue(context, name, value);
+              cleanups.unshift(() => {
+                useDone?.();
+                return block;
+              });
+              fixtureResolve();
+              return new Promise<void>((useFnResolve) => {
+                useDone = useFnResolve;
+              });
+            }),
+          );
+          block.then(() => {
+            blockSettled = true;
+            if (cancelledFixtures.has(name)) {
+              fixtureResolve();
+            }
+          }, fixtureReject);
+        });
+      }
 
       if (cancelledFixtures.has(name)) {
         throw new PreviouslyFailedFixtureError(name);
@@ -178,6 +384,7 @@ export const createFixtureResolver = (
   const resolveFixtureNames = async (
     usedKeys: string[],
     includeAuto: boolean,
+    runNamedFixtureSetup: RunNamedFixtureSetup = runNamedFixtureSetupWithoutTimeout,
   ) => {
     for (const [name, params] of Object.entries(fixtures)) {
       const shouldResolve =
@@ -186,7 +393,7 @@ export const createFixtureResolver = (
         continue;
       }
 
-      await useFixture(name, params);
+      await useFixture(name, params, runNamedFixtureSetup);
     }
   };
 
@@ -207,7 +414,11 @@ export const createFixtureResolver = (
     },
     resolveTestFixtures: (fn) =>
       test.fixtures
-        ? resolveFixtureNames(fn ? getFixtureUsedProps(fn) : [], true)
+        ? resolveFixtureNames(
+            fn ? getFixtureUsedProps(fn) : [],
+            true,
+            options.runNamedFixtureSetup,
+          )
         : Promise.resolve(),
     resolveHookFixtures: async (fn) => {
       try {
