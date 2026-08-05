@@ -17,7 +17,6 @@
     "@rspack/cli": "~2.1.7",
     "@rspack/core": "~2.1.7",
     "@rspack/dev-server": "~2.1.0",
-    "@rspack/plugin-react-refresh": "~2.0.2",
     "@rstest/adapter-rspack": "workspace:*",
     "@rstest/browser": "workspace:*",
     "@rstest/browser-react": "workspace:*",
