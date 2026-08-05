@@ -7,7 +7,10 @@ export default defineConfig({
   coverage: {
     enabled: true,
     provider: 'v8',
-    include: ['src/**/*.{js,jsx,ts,tsx}'],
+    include: [
+      'src/**/*.{js,jsx,ts,tsx}',
+      'v8/include/src/**/*.{js,jsx,ts,tsx}',
+    ],
     exclude: [
       join(__dirname, '../404.ts'),
       'a.ts',
