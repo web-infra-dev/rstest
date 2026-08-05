@@ -34,11 +34,46 @@ describe('legacy persistent cache', () => {
       config: Configuration,
     ) => Configuration;
 
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: resolve('/repo/project/.cache/client'),
+      cacheDigest: undefined,
+      buildDependencies: undefined,
+    });
     expect(rspackTool({ cache: generatedCache }).cache).toEqual({
       ...generatedCache,
       storage: {
         ...generatedCache.storage,
         location: resolve('/repo/project/.cache/client'),
+      },
+    });
+  });
+
+  it('should preserve the default cache location', () => {
+    const rspackConfig = {
+      name: 'client',
+      mode: 'development',
+      context: '/repo/project',
+      cache: {
+        type: 'persistent',
+      },
+    } satisfies RspackOptions;
+    const config = toRstestConfig({ rspackConfig });
+    const rspackTool = config.tools?.rspack as (
+      config: Configuration,
+    ) => Configuration;
+
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: resolve('/repo/project/node_modules/.cache/rspack'),
+      cacheDigest: undefined,
+      buildDependencies: undefined,
+    });
+    expect(rspackTool({ cache: generatedCache }).cache).toEqual({
+      ...generatedCache,
+      storage: {
+        ...generatedCache.storage,
+        location: resolve(
+          '/repo/project/node_modules/.cache/rspack/client-development',
+        ),
       },
     });
   });

@@ -184,7 +184,33 @@ describe('toRstestConfig', () => {
     });
   });
 
-  it('should keep rstest-generated persistent cache in tools.rspack', () => {
+  it('should preserve a persistent cache name with the default directory', () => {
+    const config = toRstestConfig({
+      rspackConfig: {
+        ...baseConfig,
+        context: '/repo/project',
+        cache: {
+          type: 'persistent',
+          name: 'client',
+        },
+      },
+    });
+
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: resolve('/repo/project/node_modules/.cache/rspack'),
+      cacheDigest: undefined,
+      buildDependencies: undefined,
+    });
+    expect(applyRspackTool(config).cache).toEqual({
+      ...generatedCache,
+      storage: {
+        ...generatedCache.storage,
+        location: resolve('/repo/project/node_modules/.cache/rspack/client'),
+      },
+    });
+  });
+
+  it('should preserve the default persistent cache location', () => {
     const config = toRstestConfig({
       rspackConfig: {
         ...baseConfig,
@@ -197,7 +223,13 @@ describe('toRstestConfig', () => {
     });
 
     const result = applyRspackTool(config);
-    expect(result.cache).toEqual(generatedCache);
+    expect(result.cache).toEqual({
+      ...generatedCache,
+      storage: {
+        ...generatedCache.storage,
+        location: resolve('node_modules/.cache/rspack/base-production'),
+      },
+    });
   });
 
   it('should extract resolve config', () => {

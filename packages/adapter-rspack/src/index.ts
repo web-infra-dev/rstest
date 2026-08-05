@@ -152,28 +152,27 @@ const updateCacheConfig = ({
         new Set([...(buildDependencies || []), path.normalize(configPath)]),
       )
     : buildDependencies;
+  const configuredStorageDirectory = cache.storage?.directory;
   const storageDirectory =
-    cache.storage?.directory !== undefined
+    configuredStorageDirectory !== undefined
       ? resolveCacheDependency({
-          dependency: cache.storage.directory,
+          dependency: configuredStorageDirectory,
           root,
         })
-      : undefined;
+      : path.resolve(root ?? process.cwd(), 'node_modules/.cache/rspack');
   const cacheName =
     cache.name ??
-    (SUPPORTS_DERIVED_CACHE_LOCATION
-      ? `${rspackName ? `${rspackName}-` : ''}${rspackMode ?? 'production'}`
-      : undefined);
+    `${rspackName ? `${rspackName}-` : ''}${rspackMode ?? 'production'}`;
   const cacheLocation = SUPPORTS_DERIVED_CACHE_LOCATION
     ? cache.storage?.location !== undefined
       ? resolveCacheDependency({
           dependency: cache.storage.location,
           root,
         })
-      : storageDirectory && cacheName
-        ? path.resolve(storageDirectory, cacheName)
-        : undefined
-    : storageDirectory;
+      : path.resolve(storageDirectory, cacheName)
+    : configuredStorageDirectory !== undefined
+      ? storageDirectory
+      : path.resolve(storageDirectory, cacheName);
 
   return {
     buildCache: {
