@@ -54,7 +54,7 @@ export default defineConfig([
     expect(config).toBeDefined();
     expect(config.output).toEqual({ module: true });
     expect(config.performance?.buildCache).toEqual({
-      cacheDirectory: join(__dirname, '.cache/from-file/client-production'),
+      cacheDirectory: join(__dirname, '.cache/from-file'),
       cacheDigest: ['file-digest'],
       buildDependencies: [join(__dirname, 'cache-extra.ts'), testConfigPath],
     });

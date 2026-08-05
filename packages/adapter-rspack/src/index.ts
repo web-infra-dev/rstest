@@ -29,6 +29,10 @@ type BuildCacheOutput =
       buildDependencies?: string[];
     }
   | undefined;
+type CacheOutput = {
+  buildCache: BuildCacheOutput;
+  cacheLocation?: string;
+};
 
 const DEFAULT_CONFIG_BASENAME = 'rspack.config';
 const DEFAULT_EXTENSIONS = ['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'];
@@ -118,20 +122,20 @@ const updateCacheConfig = ({
   root?: string;
   rspackMode?: RspackOptions['mode'];
   rspackName?: RspackOptions['name'];
-}): BuildCacheOutput => {
+}): CacheOutput => {
   if (cache === undefined) {
-    return undefined;
+    return { buildCache: undefined };
   }
 
   if (
     cache === false ||
     (typeof cache === 'object' && cache?.type === 'memory')
   ) {
-    return false;
+    return { buildCache: false };
   }
 
   if (!isPersistentCacheConfig(cache)) {
-    return undefined;
+    return { buildCache: undefined };
   }
 
   // Rspack resolves cache paths relative to the build `context` (root), so only
@@ -160,20 +164,24 @@ const updateCacheConfig = ({
     (SUPPORTS_DERIVED_CACHE_LOCATION
       ? `${rspackName ? `${rspackName}-` : ''}${rspackMode ?? 'production'}`
       : undefined);
-  const cacheDirectory =
-    cache.storage?.location !== undefined
+  const cacheLocation = SUPPORTS_DERIVED_CACHE_LOCATION
+    ? cache.storage?.location !== undefined
       ? resolveCacheDependency({
           dependency: cache.storage.location,
           root,
         })
       : storageDirectory && cacheName
         ? path.resolve(storageDirectory, cacheName)
-        : storageDirectory;
+        : undefined
+    : undefined;
 
   return {
-    cacheDirectory,
-    cacheDigest: cache.version ? [cache.version] : undefined,
-    buildDependencies: nextBuildDependencies,
+    buildCache: {
+      cacheDirectory: storageDirectory,
+      cacheDigest: cache.version ? [cache.version] : undefined,
+      buildDependencies: nextBuildDependencies,
+    },
+    cacheLocation,
   };
 };
 
@@ -186,6 +194,7 @@ const updateCacheConfig = ({
  */
 const buildRspackToolConfig = (
   rspackConfig: RspackOptions,
+  cacheLocation?: string,
 ): ((config: Configuration) => Configuration) => {
   // lazyCompilation is only supported in browser mode, strip it
   const { lazyCompilation: _lazy, ...restConfig } = rspackConfig;
@@ -258,6 +267,18 @@ const buildRspackToolConfig = (
     }
 
     if (
+      isPersistentCacheConfig(restConfig.cache) &&
+      cacheLocation !== undefined &&
+      isPersistentCacheConfig(nextConfig.cache)
+    ) {
+      nextConfig.cache = {
+        ...nextConfig.cache,
+        storage: {
+          ...(nextConfig.cache.storage ?? { type: 'filesystem' }),
+          location: cacheLocation,
+        },
+      };
+    } else if (
       restConfig.cache !== undefined &&
       !isPersistentCacheConfig(restConfig.cache)
     ) {
@@ -351,7 +372,7 @@ export function toRstestConfig({
   const output =
     outputModule !== undefined ? { module: outputModule } : undefined;
 
-  const buildCache = updateCacheConfig({
+  const { buildCache, cacheLocation } = updateCacheConfig({
     cache: finalConfig.cache,
     configPath,
     root: getCacheRoot(finalConfig, cwd),
@@ -384,7 +405,7 @@ export function toRstestConfig({
       },
     ],
     tools: {
-      rspack: buildRspackToolConfig(finalConfig),
+      rspack: buildRspackToolConfig(finalConfig, cacheLocation),
     } as ExtendConfig['tools'],
     testEnvironment,
   };
