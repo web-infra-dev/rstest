@@ -373,77 +373,6 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/coverage-istanbul
 
-  e2e/projects/fixtures-shard:
-    devDependencies:
-      '@rstest/core':
-        specifier: workspace:*
-        version: link:../../../packages/core
-      '@rstest/coverage-istanbul':
-        specifier: workspace:*
-        version: link:../../../packages/coverage-istanbul
-
-  e2e/projects/fixtures-shard/packages/client:
-    dependencies:
-      react:
-        specifier: ^19.2.8
-        version: 19.2.8
-      react-dom:
-        specifier: ^19.2.8
-        version: 19.2.8(react@19.2.8)
-    devDependencies:
-      '@rsbuild/core':
-        specifier: ~2.1.10
-        version: 2.1.10(@module-federation/runtime-tools@2.8.0)
-      '@rsbuild/plugin-react':
-        specifier: ^2.1.0
-        version: 2.1.0(@rsbuild/core@2.1.10(@module-federation/runtime-tools@2.8.0))(@rspack/core@2.1.8(@module-federation/runtime-tools@2.8.0)(@swc/helpers@0.5.23))
-      '@testing-library/dom':
-        specifier: ^10.4.1
-        version: 10.4.1
-      '@testing-library/jest-dom':
-        specifier: ^6.9.1
-        version: 6.9.1
-      '@testing-library/react':
-        specifier: ^16.3.2
-        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@types/react':
-        specifier: ^19.2.18
-        version: 19.2.18
-      '@types/react-dom':
-        specifier: ^19.2.4
-        version: 19.2.4(@types/react@19.2.18)
-      jsdom:
-        specifier: ^29.1.1
-        version: 29.1.1
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  e2e/projects/fixtures-shard/packages/client-vue:
-    dependencies:
-      vue:
-        specifier: ^3.5.40
-        version: 3.5.40(typescript@6.0.3)
-    devDependencies:
-      '@rsbuild/core':
-        specifier: ~2.1.10
-        version: 2.1.10(@module-federation/runtime-tools@2.8.0)
-      '@rsbuild/plugin-vue':
-        specifier: ^2.0.1
-        version: 2.0.1(@rsbuild/core@2.1.10(@module-federation/runtime-tools@2.8.0))(@rspack/core@2.1.8(@module-federation/runtime-tools@2.8.0)(@swc/helpers@0.5.23))(@vue/compiler-sfc@3.5.40)(vue@3.5.40(typescript@6.0.3))
-      '@rstest/core':
-        specifier: workspace:*
-        version: link:../../../../../packages/core
-      '@vue/compiler-dom':
-        specifier: ^3.5.40
-        version: 3.5.40
-      '@vue/server-renderer':
-        specifier: ^3.5.40
-        version: 3.5.40
-      '@vue/test-utils':
-        specifier: ^2.4.11
-        version: 2.4.11(@vue/compiler-dom@3.5.40)(@vue/server-renderer@3.5.40)(vue@3.5.40(typescript@6.0.3))
-
   e2e/projects/fixtures/packages/client:
     dependencies:
       react:
@@ -552,24 +481,6 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
-
-  e2e/test-coverage-v8/fixtures:
-    devDependencies:
-      '@rstest/core':
-        specifier: workspace:*
-        version: link:../../../packages/core
-      '@rstest/coverage-istanbul':
-        specifier: workspace:*
-        version: link:../../../packages/coverage-istanbul
-
-  e2e/test-coverage-v8/fixtures/allow-external:
-    devDependencies:
-      '@rstest/core':
-        specifier: workspace:*
-        version: link:../../../../packages/core
-      '@rstest/coverage-istanbul':
-        specifier: workspace:*
-        version: link:../../../../packages/coverage-istanbul
 
   e2e/test-coverage/fixtures:
     devDependencies:
