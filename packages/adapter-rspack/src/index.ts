@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { RspackCLI } from '@rspack/cli';
+import { rspackVersion } from '@rspack/core';
 import type {
   Configuration,
   MultiRspackOptions,
@@ -31,6 +32,13 @@ type BuildCacheOutput =
 
 const DEFAULT_CONFIG_BASENAME = 'rspack.config';
 const DEFAULT_EXTENSIONS = ['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'];
+const [rspackMajor = 0, rspackMinor = 0, rspackPatch = 0] = rspackVersion
+  .split('.')
+  .map((part) => Number.parseInt(part, 10));
+const SUPPORTS_DERIVED_CACHE_LOCATION =
+  rspackMajor > 2 ||
+  (rspackMajor === 2 &&
+    (rspackMinor > 1 || (rspackMinor === 1 && rspackPatch >= 8)));
 
 export interface WithRspackConfigOptions {
   /**
@@ -102,10 +110,14 @@ const updateCacheConfig = ({
   cache,
   configPath,
   root,
+  rspackMode,
+  rspackName,
 }: {
   cache?: RspackOptions['cache'];
   configPath?: string;
   root?: string;
+  rspackMode?: RspackOptions['mode'];
+  rspackName?: RspackOptions['name'];
 }): BuildCacheOutput => {
   if (cache === undefined) {
     return undefined;
@@ -143,14 +155,19 @@ const updateCacheConfig = ({
           root,
         })
       : undefined;
+  const cacheName =
+    cache.name ??
+    (SUPPORTS_DERIVED_CACHE_LOCATION
+      ? `${rspackName ? `${rspackName}-` : ''}${rspackMode ?? 'production'}`
+      : undefined);
   const cacheDirectory =
     cache.storage?.location !== undefined
       ? resolveCacheDependency({
           dependency: cache.storage.location,
           root,
         })
-      : storageDirectory && cache.name
-        ? path.resolve(storageDirectory, cache.name)
+      : storageDirectory && cacheName
+        ? path.resolve(storageDirectory, cacheName)
         : storageDirectory;
 
   return {
@@ -338,6 +355,8 @@ export function toRstestConfig({
     cache: finalConfig.cache,
     configPath,
     root: getCacheRoot(finalConfig, cwd),
+    rspackMode: finalConfig.mode,
+    rspackName: finalConfig.name,
   });
 
   // Extract tsconfigPath from rspack's resolve.tsConfig

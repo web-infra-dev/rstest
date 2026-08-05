@@ -120,6 +120,30 @@ describe('toRstestConfig', () => {
     });
   });
 
+  it('should derive the default persistent cache name', () => {
+    const config = toRstestConfig({
+      rspackConfig: {
+        ...baseConfig,
+        context: '/repo/project',
+        cache: {
+          type: 'persistent',
+          storage: {
+            type: 'filesystem',
+            directory: '.cache/from-rspack',
+          },
+        },
+      },
+    });
+
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: resolve(
+        '/repo/project/.cache/from-rspack/base-production',
+      ),
+      cacheDigest: undefined,
+      buildDependencies: undefined,
+    });
+  });
+
   it('should keep rstest-generated persistent cache in tools.rspack', () => {
     const config = toRstestConfig({
       rspackConfig: {
