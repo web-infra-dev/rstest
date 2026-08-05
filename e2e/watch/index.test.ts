@@ -116,7 +116,7 @@ describe.skipIf(process.platform === 'win32')('watch', () => {
     const fixturesTargetPath = `${__dirname}/fixtures-test-dynamic${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
 
     const { fs } = await prepareFixtures({
-      fixturesPath: `${__dirname}/fixtures-dynamic`,
+      fixturesPath: path.join(__dirname, '../fixtures/fan-out-dynamic'),
       fixturesTargetPath,
     });
 
