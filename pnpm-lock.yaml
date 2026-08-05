@@ -845,6 +845,9 @@ importers:
       '@rstest/adapter-rsbuild':
         specifier: workspace:*
         version: link:../../packages/adapter-rsbuild
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@testing-library/dom':
         specifier: ^10.4.1
         version: 10.4.1
@@ -876,9 +879,6 @@ importers:
         specifier: ^19.2.8
         version: 19.2.8(react@19.2.8)
     devDependencies:
-      '@rsbuild/plugin-react':
-        specifier: ^2.1.0
-        version: 2.1.0(@rsbuild/core@2.1.9(@module-federation/runtime-tools@2.8.0))(@rspack/core@2.1.7(@module-federation/runtime-tools@2.8.0)(@swc/helpers@0.5.23))
       '@rspack/cli':
         specifier: ~2.1.7
         version: 2.1.7(@rspack/core@2.1.7(@module-federation/runtime-tools@2.8.0)(@swc/helpers@0.5.23))(@rspack/dev-server@2.1.0(@rspack/core@2.1.7(@module-federation/runtime-tools@2.8.0)(@swc/helpers@0.5.23)))
@@ -940,9 +940,6 @@ importers:
       '@rspack/dev-server':
         specifier: ~2.1.0
         version: 2.1.0(@rspack/core@2.1.7(@module-federation/runtime-tools@2.8.0)(@swc/helpers@0.5.23))
-      '@rspack/plugin-react-refresh':
-        specifier: ~2.0.2
-        version: 2.0.2(@rspack/core@2.1.7(@module-federation/runtime-tools@2.8.0)(@swc/helpers@0.5.23))(react-refresh@0.18.0)
       '@rstest/adapter-rspack':
         specifier: workspace:*
         version: link:../../packages/adapter-rspack

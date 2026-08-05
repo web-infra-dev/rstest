@@ -2,6 +2,7 @@ import { defineConfig } from '@rspack/cli';
 import { rspack, type SwcLoaderOptions } from '@rspack/core';
 
 export default defineConfig({
+  entry: './src/main.tsx',
   target: 'web',
   resolve: {
     extensions: ['...', '.ts', '.tsx', '.jsx'],

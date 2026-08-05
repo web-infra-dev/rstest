@@ -43,6 +43,10 @@ By default, the adapter uses `process.cwd()` to resolve the Rspack config. If yo
 Since Rstest uses Rsbuild internally as its bundler, some Rstest built-in behaviors may differ from Rspack's defaults. For example, Rstest has its own CSS processing pipeline. To avoid conflicts, this adapter automatically disables Rstest (Rsbuild) built-in CSS plugins so that Rspack's CSS configuration takes effect. This means that some Rsbuild-specific CSS features and configurations (e.g., `output.cssModules` configuration) will not be available when using this adapter.
 :::
 
+## Example project
+
+See the [Rspack adapter example](https://github.com/rstackjs/rstack-examples/tree/main/rstest/rspack-adapter) for a complete React project that inherits its Rspack configuration in Rstest.
+
 ## API
 
 ### `withRspackConfig(options)`
