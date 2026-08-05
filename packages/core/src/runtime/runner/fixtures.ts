@@ -240,6 +240,21 @@ export const createFixtureResolver = (
 
         let cleanupRegistered = false;
         let setupTimedOut = false;
+        let resolveLateCleanupRegistration:
+          ((cleanup: (() => Promise<void>) | undefined) => void) | undefined;
+        const lateCleanupRegistration = new Promise<
+          (() => Promise<void>) | undefined
+        >((resolve) => {
+          resolveLateCleanupRegistration = resolve;
+        });
+        const resolveLateCleanup = (
+          cleanup: (() => Promise<void>) | undefined,
+        ) => {
+          const resolve = resolveLateCleanupRegistration;
+          resolveLateCleanupRegistration = undefined;
+          resolve?.(cleanup);
+          return Boolean(resolve);
+        };
         const onCleanup = (cleanup: FixtureCleanup) => {
           if (cleanupRegistered) {
             throw new Error(
@@ -260,7 +275,9 @@ export const createFixtureResolver = (
           };
           if (cancelledFixtures.has(name)) {
             if (setupTimedOut) {
-              runRegisteredCleanup(false);
+              if (!resolveLateCleanup(registeredCleanup)) {
+                runRegisteredCleanup(false);
+              }
             } else {
               trackCancellationCleanup();
             }
@@ -270,11 +287,37 @@ export const createFixtureResolver = (
         };
 
         const setup = runNamedFixtureSetup(
-          () => Promise.resolve(fixtureValue(context, { onCleanup })),
+          () => {
+            const setupOperation = Promise.resolve(
+              fixtureValue(context, { onCleanup }),
+            );
+            const resolveWithoutCleanup = () => {
+              if (!cleanupRegistered) {
+                resolveLateCleanup(undefined);
+              }
+            };
+            setupOperation.then(resolveWithoutCleanup, resolveWithoutCleanup);
+            return setupOperation;
+          },
           () => {
             setupTimedOut = true;
             cancelledFixtures.add(name);
-            runRegisteredCleanup(false);
+            const cleanup = runRegisteredCleanup(false);
+            if (!cleanup) {
+              const waitForLateCleanup = wrapNamedFixtureCleanup(async () => {
+                const lateCleanup = await lateCleanupRegistration;
+                await lateCleanup?.();
+              });
+              cleanups.unshift(async () => {
+                try {
+                  await waitForLateCleanup();
+                } catch (error) {
+                  if (registeredCleanup) {
+                    throw error;
+                  }
+                }
+              });
+            }
           },
         );
         const value = await Promise.race([setup, cancellationCleanup]);

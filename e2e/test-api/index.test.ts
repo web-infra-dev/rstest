@@ -132,8 +132,12 @@ describe('Test API', () => {
     );
     expect(cli.stdout).toContain('RSTEST_NAMED_FIXTURE_SETUP_TIMEOUT_CLEANUP');
     expect(cli.stdout).toContain('RSTEST_NAMED_FIXTURE_LATE_CLEANUP');
+    expect(cli.stdout).toContain('RSTEST_NAMED_FIXTURE_LATE_CLEANUP_ORDER_OK');
     expect(`${cli.stdout}\n${cli.stderr}`).toContain(
       'fixture cleanup timed out in 100ms',
+    );
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'RSTEST_NAMED_FIXTURE_LATE_CLEANUP_FAILED',
     );
   });
 

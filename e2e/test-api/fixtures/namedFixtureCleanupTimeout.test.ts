@@ -1,6 +1,6 @@
 import { test } from '@rstest/core';
 
-let lateCleanupRan = false;
+const lateCleanupEvents: string[] = [];
 
 test.extend('value', (_context, { onCleanup }) => {
   onCleanup(() => {
@@ -46,9 +46,11 @@ test.extend('value', (_context, { onCleanup }) => {
 );
 
 test.extend('value', async (_context, { onCleanup }) => {
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  onCleanup(() => {
-    lateCleanupRan = true;
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  onCleanup(async () => {
+    lateCleanupEvents.push('start');
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    lateCleanupEvents.push('finish');
     console.log('RSTEST_NAMED_FIXTURE_LATE_CLEANUP');
   });
   return 'value';
@@ -62,7 +64,23 @@ test.extend('value', async (_context, { onCleanup }) => {
   },
 );
 
-test('observes cleanup registered after setup timeout', async ({ expect }) => {
-  await new Promise((resolve) => setTimeout(resolve, 150));
-  expect(lateCleanupRan).toBe(true);
+test('waits for cleanup registered after setup timeout', ({ expect }) => {
+  expect(lateCleanupEvents).toEqual(['start', 'finish']);
+  console.log('RSTEST_NAMED_FIXTURE_LATE_CLEANUP_ORDER_OK');
 });
+
+test.extend('value', async (_context, { onCleanup }) => {
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  onCleanup(() => {
+    throw new Error('RSTEST_NAMED_FIXTURE_LATE_CLEANUP_FAILED');
+  });
+  return 'value';
+})(
+  'reports cleanup registered after setup timeout',
+  {
+    timeout: 100,
+  },
+  ({ value }) => {
+    void value;
+  },
+);
