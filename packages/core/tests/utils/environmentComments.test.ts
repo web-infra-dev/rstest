@@ -106,6 +106,7 @@ const regexp = /"/;
       applyEnvironmentComment(
         {
           name: 'jsdom',
+          prebundle: false,
           options: {
             url: 'https://base.test/',
             pretendToBeVisual: true,
@@ -119,10 +120,31 @@ const regexp = /"/;
       ),
     ).toEqual({
       name: 'jsdom',
+      prebundle: false,
       options: {
         url: 'https://comment.test/',
         pretendToBeVisual: true,
       },
+    });
+  });
+
+  it('preserves the project prebundle policy when a comment changes the environment', () => {
+    expect(
+      applyEnvironmentComment(
+        {
+          name: 'jsdom',
+          prebundle: false,
+          options: {
+            url: 'https://base.test/',
+          },
+        },
+        {
+          name: 'happy-dom',
+        },
+      ),
+    ).toEqual({
+      name: 'happy-dom',
+      prebundle: false,
     });
   });
 

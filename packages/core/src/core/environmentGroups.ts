@@ -2,6 +2,7 @@ import type {
   NormalizedProjectConfig,
   ProjectContext,
   ProjectEntries,
+  TestEnvironmentModuleReference,
 } from '../types';
 import type { EnvironmentComment } from '../utils';
 import {
@@ -35,7 +36,21 @@ export const getProjectEnvironmentKey = (project: ProjectContext): string =>
 
 export const getEnvironmentKey = (
   testEnvironment: NormalizedProjectConfig['testEnvironment'],
-): string => stableJson(testEnvironment);
+  moduleReference?: TestEnvironmentModuleReference,
+): string => {
+  const configKey = stableJson(testEnvironment);
+  if (!moduleReference) {
+    return configKey;
+  }
+
+  return [
+    configKey,
+    moduleReference.name,
+    moduleReference.packageName,
+    moduleReference.resolvedPath,
+    moduleReference.bundlePath ?? '',
+  ].join('\0');
+};
 
 export const groupProjectEntriesByEnvironment = async ({
   entriesCache,

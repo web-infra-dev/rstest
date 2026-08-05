@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { join, normalize } from 'pathe';
@@ -11,6 +17,7 @@ import type {
   ResolvedRstestConfig,
   RstestContext,
   RstestExposeAPI,
+  TestEnvironmentModuleReference,
 } from '../../src/types';
 import { listTests } from '../../src/core/listTests';
 import { Rstest } from '../../src/core/rstest';
@@ -19,6 +26,11 @@ import { castArray, TEMP_RSTEST_OUTPUT_DIR } from '../../src/utils';
 process.env.DEBUG = 'false';
 
 const rootPath = join(__dirname, '../..');
+const poolTestEnvironmentModules: Array<
+  ReadonlyMap<string, TestEnvironmentModuleReference> | undefined
+> = [];
+let poolCollectError: Error | undefined;
+let poolCloseCount = 0;
 
 rs.mock('../../src/core/browser/loader', () => {
   const listBrowserTests = async (
@@ -72,22 +84,38 @@ rs.mock('../../src/core/browser/loader', () => {
 });
 
 rs.mock('../../src/pool', () => ({
-  createPool: async () => ({
-    close: async () => undefined,
-    collectTests: async ({
-      entries,
-      project,
-    }: Parameters<
-      Awaited<
-        ReturnType<typeof import('../../src/pool').createPool>
-      >['collectTests']
-    >[0]) =>
-      entries.map((entry) => ({
-        project: project.name,
-        testPath: entry.testPath,
-        tests: [],
-      })),
-  }),
+  createPool: async ({
+    testEnvironmentModules,
+  }: {
+    testEnvironmentModules?: ReadonlyMap<
+      string,
+      TestEnvironmentModuleReference
+    >;
+  }) => {
+    poolTestEnvironmentModules.push(testEnvironmentModules);
+    return {
+      close: async () => {
+        poolCloseCount += 1;
+      },
+      collectTests: async ({
+        entries,
+        project,
+      }: Parameters<
+        Awaited<
+          ReturnType<typeof import('../../src/pool').createPool>
+        >['collectTests']
+      >[0]) => {
+        if (poolCollectError) {
+          throw poolCollectError;
+        }
+        return entries.map((entry) => ({
+          project: project.name,
+          testPath: entry.testPath,
+          tests: [],
+        }));
+      },
+    };
+  },
 }));
 
 export function matchRules(
@@ -218,6 +246,130 @@ describe('prepareRsbuild', () => {
         'c-node.test.ts',
       ]);
     } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('should resolve list environment dependencies after modifyRstestConfig', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'rstest-list-environment-'));
+    const packageRoot = join(tempRoot, 'node_modules/jsdom');
+
+    try {
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({
+          name: 'jsdom',
+          type: 'module',
+          main: './index.js',
+        }),
+      );
+      writeFileSync(join(packageRoot, 'index.js'), 'export class JSDOM {}\n');
+      writeFileSync(join(tempRoot, 'example.test.ts'), 'export {};\n');
+
+      const modifyEnvironmentPlugin: RsbuildPlugin = {
+        name: 'modify-rstest-list-environment',
+        setup(api) {
+          api
+            .useExposed<RstestExposeAPI>('rstest')
+            ?.modifyRstestConfig((config) => {
+              config.testEnvironment = 'jsdom';
+              config.output = {
+                ...config.output,
+                module: false,
+              };
+            });
+        },
+      };
+
+      const context = new Rstest(
+        {
+          cwd: tempRoot,
+          command: 'list',
+          embedded: true,
+          projects: [],
+        },
+        {
+          root: tempRoot,
+          include: ['example.test.ts'],
+          plugins: [modifyEnvironmentPlugin],
+        },
+      );
+
+      poolTestEnvironmentModules.length = 0;
+      await listTests(context, { json: false });
+
+      const dependency = poolTestEnvironmentModules
+        .at(-1)
+        ?.get(context.projects[0]!.environmentName);
+      expect(dependency).toMatchObject({
+        name: 'jsdom',
+        packageName: 'jsdom',
+        resolvedPath: realpathSync(join(packageRoot, 'index.js')),
+      });
+      expect(dependency?.bundlePath).toBeUndefined();
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('should skip list environment preparation for projects without test entries', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'rstest-list-empty-env-'));
+
+    try {
+      const context = new Rstest(
+        {
+          cwd: tempRoot,
+          command: 'list',
+          embedded: true,
+          projects: [],
+        },
+        {
+          root: tempRoot,
+          include: ['missing/**/*.test.ts'],
+          testEnvironment: {
+            name: 'jsdom',
+            prebundle: true,
+          },
+        },
+      );
+
+      poolTestEnvironmentModules.length = 0;
+      await expect(listTests(context, { json: false })).resolves.toEqual([]);
+
+      expect(poolTestEnvironmentModules.at(-1)?.size).toBe(0);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('should close the list pool when collecting tests fails', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'rstest-list-cleanup-'));
+
+    try {
+      writeFileSync(join(tempRoot, 'example.test.ts'), 'export {};\n');
+      const context = new Rstest(
+        {
+          cwd: tempRoot,
+          command: 'list',
+          embedded: true,
+          projects: [],
+        },
+        {
+          root: tempRoot,
+          include: ['example.test.ts'],
+        },
+      );
+
+      poolCloseCount = 0;
+      poolCollectError = new Error('collect failed');
+
+      await expect(listTests(context, { json: false })).rejects.toThrow(
+        'collect failed',
+      );
+      expect(poolCloseCount).toBe(1);
+    } finally {
+      poolCollectError = undefined;
       rmSync(tempRoot, { recursive: true, force: true });
     }
   });

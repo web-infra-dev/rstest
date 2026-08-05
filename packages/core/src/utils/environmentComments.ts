@@ -259,7 +259,11 @@ export const applyEnvironmentComment = (
       ? { ...(baseEnvironment.options || {}), ...(comment.options || {}) }
       : comment.options;
 
-  return options && Object.keys(options).length > 0
-    ? { name, options }
-    : { name };
+  return {
+    name,
+    ...(options && Object.keys(options).length > 0 ? { options } : {}),
+    ...(baseEnvironment.prebundle === undefined
+      ? {}
+      : { prebundle: baseEnvironment.prebundle }),
+  };
 };

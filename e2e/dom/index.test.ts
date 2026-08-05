@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { describe, it } from '@rstest/core';
+import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 import { runCli } from './utils';
 
@@ -53,6 +53,32 @@ describe('jsdom', () => {
   it('should run test correctly', async () => {
     const { expectExecSuccess } = await runCli(appFilters, 'jsdom');
     await expectExecSuccess();
+  });
+
+  it('should only prebundle when explicitly enabled', async ({
+    onTestFinished,
+  }) => {
+    const cwd = fileURLToPath(new URL('./fixtures/prebundle', import.meta.url));
+    const run = (config?: string) =>
+      runRstestCli({
+        command: 'rstest',
+        args: ['run', ...(config ? ['--config', config] : [])],
+        onTestFinished,
+        options: {
+          nodeOptions: {
+            cwd,
+            env: { DEBUG: 'rstest' },
+          },
+        },
+      });
+
+    const native = await run();
+    await native.expectExecSuccess();
+    expect(native.cli.stdout).not.toContain('bundled test environment jsdom');
+
+    const prebundled = await run('rstest.prebundle.config.mts');
+    await prebundled.expectExecSuccess();
+    expect(prebundled.cli.stdout).toContain('bundled test environment jsdom');
   });
 
   it('should run test correctly with custom externals', async () => {

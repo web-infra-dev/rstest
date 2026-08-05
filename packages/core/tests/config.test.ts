@@ -54,6 +54,30 @@ describe('mergeRstestConfig', () => {
     });
   });
 
+  it('should preserve test environment prebundle configuration', () => {
+    expect(
+      withDefaultConfig({
+        testEnvironment: {
+          name: 'jsdom',
+          options: { value: true },
+          prebundle: true,
+        },
+      }).testEnvironment,
+    ).toEqual({
+      name: 'jsdom',
+      options: { value: true },
+      prebundle: true,
+    });
+
+    expect(
+      withDefaultConfig({
+        testEnvironment: 'jsdom',
+      }).testEnvironment,
+    ).toEqual({
+      name: 'jsdom',
+    });
+  });
+
   it('should override forceRerunTriggers', () => {
     expect(
       withDefaultConfig({

@@ -26,6 +26,7 @@ import {
 } from '../resultsCache';
 import type { Rstest } from '../rstest';
 import type { SetupFileState } from '../setupFileState';
+import { prepareTestEnvironmentModules } from '../testEnvironmentModule';
 import { type SequenceHints, sortTestEntries } from '../testSequencer';
 
 type RsbuildStats = Awaited<
@@ -209,6 +210,7 @@ export function createNodeExecutor(
         }) => Promise<RsbuildStats>;
         closeServer: () => Promise<void>;
         pool: Awaited<ReturnType<typeof createPool>>;
+        cleanupTestEnvironmentModules: () => Promise<void>;
       }
     | undefined;
   // In-flight guard: in watch mode the dev server's first compile fires
@@ -267,15 +269,41 @@ export function createNodeExecutor(
       rootPath,
     });
 
-    entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
-      (acc, entry) => acc.concat(Object.values(entry.entries) || []),
-      [],
-    );
+    let testEnvironmentModules:
+      Awaited<ReturnType<typeof prepareTestEnvironmentModules>> | undefined;
+    try {
+      // Watch projects stay prepared even before they have entries: adding a
+      // matching file must reuse the existing pool with the correct dependency.
+      testEnvironmentModules = await prepareTestEnvironmentModules({
+        projects,
+        rootPath,
+      });
 
-    const pool = await createPool({ context });
+      entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
+        (acc, entry) => acc.concat(Object.values(entry.entries) || []),
+        [],
+      );
 
-    runResources = { getRsbuildStats, closeServer, pool };
-    return runResources;
+      const pool = await createPool({
+        context,
+        testEnvironmentModules: testEnvironmentModules.modules,
+      });
+
+      runResources = {
+        getRsbuildStats,
+        closeServer,
+        pool,
+        cleanupTestEnvironmentModules: testEnvironmentModules.cleanup,
+      };
+      return runResources;
+    } catch (error) {
+      try {
+        await closeServer();
+      } finally {
+        await testEnvironmentModules?.cleanup();
+      }
+      throw error;
+    }
   };
 
   const runCycle = async (
@@ -571,22 +599,32 @@ export function createNodeExecutor(
       return;
     }
     didRunGlobalTeardown = true;
-    await runGlobalTeardown();
-    if (runDependencyValidationPromise) {
-      await runDependencyValidationPromise.catch(() => undefined);
-    }
-    // Settle an in-flight resource start first: a close racing startup (e.g. a
-    // config-change restart during watch boot) must tear down the server and
-    // pool that start is about to produce, not skip them.
-    if (runResourcesPromise) {
-      await runResourcesPromise.catch(() => undefined);
-    }
-    if (runResources) {
-      const resources = runResources;
-      runResources = undefined;
-      runResourcesPromise = undefined;
-      await resources.pool.close();
-      await resources.closeServer();
+    try {
+      await runGlobalTeardown();
+    } finally {
+      if (runDependencyValidationPromise) {
+        await runDependencyValidationPromise.catch(() => undefined);
+      }
+      // Settle an in-flight resource start first: a close racing startup (e.g. a
+      // config-change restart during watch boot) must tear down the server and
+      // pool that start is about to produce, not skip them.
+      if (runResourcesPromise) {
+        await runResourcesPromise.catch(() => undefined);
+      }
+      if (runResources) {
+        const resources = runResources;
+        runResources = undefined;
+        runResourcesPromise = undefined;
+        try {
+          await resources.pool.close();
+        } finally {
+          try {
+            await resources.closeServer();
+          } finally {
+            await resources.cleanupTestEnvironmentModules();
+          }
+        }
+      }
     }
   };
 

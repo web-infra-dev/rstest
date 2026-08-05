@@ -13,6 +13,7 @@ import type {
   TestFileResult,
   TestInfo,
   TestResult,
+  TestEnvironmentModuleReference,
 } from '../types';
 import {
   color,
@@ -110,6 +111,7 @@ const buildTask = async ({
   getSourceMaps,
   rpcMethods,
   traceSpan,
+  testEnvironmentModule,
   buildId = 0,
 }: {
   type: 'run' | 'collect';
@@ -127,6 +129,7 @@ const buildTask = async ({
   getSourceMaps: PoolDispatchParams['getSourceMaps'];
   rpcMethods: Omit<RuntimeRPC, 'getAssetsByEntry'>;
   traceSpan: TraceSpan;
+  testEnvironmentModule?: TestEnvironmentModuleReference;
   buildId?: number;
 }) => {
   const getAssets = () =>
@@ -149,15 +152,17 @@ const buildTask = async ({
     type,
     options: {
       entryInfo,
-      // Known limit: the key is `stableJson`, so environment option values
-      // JSON cannot express (an `html` ArrayBuffer, a `beforeParse` function,
-      // a `virtualConsole` instance) collapse to identical bytes — two
-      // projects differing only in such values share a key and, under
-      // `isolate: false`, may share a worker's environment. Accepted as too
-      // narrow to guard; if it ever matters, fall back to a project-scoped
-      // key when the config is not JSON-representable instead of trying to
-      // serialize those values.
-      environmentKey: getEnvironmentKey(runtimeConfig.testEnvironment),
+      // Known limit: the config portion is `stableJson`, so environment option
+      // values JSON cannot express (an `html` ArrayBuffer, a `beforeParse`
+      // function, a `virtualConsole` instance) collapse to identical bytes —
+      // two projects differing only in such values may share a worker's
+      // environment under `isolate: false`. Accepted as too narrow to guard;
+      // if it ever matters, fall back to a project-scoped key when the config
+      // is not JSON-representable instead of trying to serialize those values.
+      environmentKey: getEnvironmentKey(
+        runtimeConfig.testEnvironment,
+        testEnvironmentModule,
+      ),
       context: {
         outputModule: project.outputModule,
         taskId: index + 1,
@@ -166,6 +171,7 @@ const buildTask = async ({
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
         runtimeConfig,
+        testEnvironmentModule,
         trace: context.trace,
       },
       type,
@@ -273,8 +279,10 @@ const workerErrorToResult = (
 
 export const createPool = async ({
   context,
+  testEnvironmentModules,
 }: {
   context: RstestContext;
+  testEnvironmentModules?: ReadonlyMap<string, TestEnvironmentModuleReference>;
 }): Promise<{
   runTests: (params: {
     entries: EntryInfo[];
@@ -428,6 +436,9 @@ export const createPool = async ({
                   getSourceMaps,
                   rpcMethods,
                   traceSpan,
+                  testEnvironmentModule: testEnvironmentModules?.get(
+                    project.environmentName,
+                  ),
                   buildId,
                 }),
               traceArgs,
@@ -530,6 +541,9 @@ export const createPool = async ({
             rpcMethods,
             // `collect` does not participate in tracing.
             traceSpan: noopTraceSpan,
+            testEnvironmentModule: testEnvironmentModules?.get(
+              project.environmentName,
+            ),
           });
 
           return pool.collectTests(task).catch((err: FormattedError) => {
