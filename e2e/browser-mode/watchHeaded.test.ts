@@ -50,4 +50,46 @@ describe('browser mode - headed watch', () => {
       }
     },
   );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'should keep the watch session live after an initial fatal error',
+    async () => {
+      const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-headed-initial-fatal`;
+      const setupPath = path.join(fixturesTargetPath, 'setup.ts');
+      const initialFatal = "throw new Error('initial headed setup failed');\n";
+
+      const { fs } = await prepareFixtures({
+        fixturesPath: `${__dirname}/fixtures/watch`,
+        fixturesTargetPath,
+      });
+      fs.delete(path.join(fixturesTargetPath, 'tests/another.test.ts'));
+      fs.update(setupPath, (content) => initialFatal + content);
+
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: [
+          '--browser.headless',
+          'false',
+          `--browser.port=${BROWSER_PORTS['watch-headed']}`,
+        ],
+      });
+      const waitForOutput = (marker: string) =>
+        Promise.race([cli.waitForStdout(marker), cli.waitForStderr(marker)]);
+
+      try {
+        await waitForOutput('initial headed setup failed');
+        await waitForOutput('Waiting for file changes...');
+
+        fs.update(setupPath, (content) => content.replace(initialFatal, ''));
+        await cli.waitForStdout(
+          '[Watch] Setup file changed, re-running all test files of the project',
+        );
+        await cli.waitForStdout('Re-running 1 affected test file(s)');
+        await cli.waitForStdout('Test Files 1 passed');
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    60_000,
+  );
 });

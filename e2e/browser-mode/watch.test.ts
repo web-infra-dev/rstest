@@ -182,6 +182,38 @@ describe('browser mode - watch', () => {
     await deleteFixtureTarget(fs, fixturesTargetPath);
   }, 60_000);
 
+  it('recovers when the initial browser cycle fails fatally', async () => {
+    const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-initial-fatal`;
+    const setupPath = path.join(fixturesTargetPath, 'setup.ts');
+    const initialFatal = "throw new Error('initial browser setup failed');\n";
+
+    const { fs } = await prepareFixtures({
+      fixturesPath: `${__dirname}/fixtures/watch`,
+      fixturesTargetPath,
+    });
+    fs.delete(path.join(fixturesTargetPath, 'tests/another.test.ts'));
+    fs.update(setupPath, (content) => initialFatal + content);
+
+    const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath);
+
+    try {
+      await cli.waitForStderr('initial browser setup failed');
+      await cli.waitForStdout('Waiting for file changes...');
+
+      cli.resetStd();
+      fs.update(setupPath, (content) => content.replace(initialFatal, ''));
+
+      await cli.waitForStdout(
+        '[Watch] Setup file changed, re-running all test files of the project',
+      );
+      await cli.waitForStdout('Re-running 1 affected test file(s)');
+      await cli.waitForStdout('Test Files 1 passed');
+    } finally {
+      await killCliProcessTree(cli);
+      await deleteFixtureTarget(fs, fixturesTargetPath);
+    }
+  }, 60_000);
+
   // The bundler keeps no file watcher attached while its dev-compile hook is
   // pending, so a rerun trigger signalled from that hook must hand the cycle to
   // core and return. Holding the hook for the whole cycle makes every file

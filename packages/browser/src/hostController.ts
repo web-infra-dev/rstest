@@ -525,7 +525,10 @@ export const runBrowserController = async (
   ): BrowserWatchSession => ({
     runCycle: async (testPaths) => {
       const rerunStartTime = Date.now();
-      const fatalErrorBeforeRun = fatalErrorRef.current;
+      // A fatal error is one cycle's outcome, not permanent session state. The
+      // headed scheduler also uses this ref to stop the rest of a failed cycle,
+      // so carrying it forward would prevent the next cycle from reloading.
+      fatalErrorRef.current = null;
       let rerunError: Error | undefined;
 
       try {
@@ -537,10 +540,7 @@ export const runBrowserController = async (
         rerunError = toError(error);
       }
 
-      const rerunFatalError =
-        fatalErrorRef.current && fatalErrorRef.current !== fatalErrorBeforeRun
-          ? fatalErrorRef.current
-          : undefined;
+      const rerunFatalError = fatalErrorRef.current ?? undefined;
       return buildRerunOutcome({
         rerunTestPaths: testPaths,
         testTime: Math.max(0, Date.now() - rerunStartTime),
@@ -1042,17 +1042,20 @@ export const runBrowserController = async (
         },
       });
 
+  // The first build must not trigger a duplicate cycle, but a fatal test cycle
+  // does not invalidate the session the scheduler already established.
+  watchState.hooksEnabled = watchSession !== undefined;
+
   // A fatal error the run reported outranks its results: it rides the returned
   // outcome into core's finalize, which raises the exit code from it.
   if (fatalErrorRef.current) {
-    return failWithError(fatalErrorRef.current, close);
+    return {
+      ...(await failWithError(fatalErrorRef.current, close)),
+      watchSession,
+    };
   }
 
   context.updateReporterResultState(reporterResults, caseResults);
-
-  // Enable the compile hooks only after the initial cycle, so the first build
-  // never triggers a duplicate run.
-  watchState.hooksEnabled = isWatchMode;
 
   return {
     results: reporterResults,
