@@ -1,6 +1,6 @@
 {
   "name": "@rstest/adapter-rslib",
-  "version": "0.11.4",
+  "version": "0.11.6",
   "description": "Rstest adapter for rslib configuration",
   "keywords": [
     "rstest",
@@ -39,12 +39,12 @@
     "@rslib/core": "1.0.0-beta.1",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
-    "tsconfck": "3.1.6",
+    "get-tsconfig": "5.0.0-beta.5",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
     "@rslib/core": ">=0.18.6 || ^1.0.0-0",
-    "@rstest/core": "workspace:^",
+    "@rstest/core": "^0.11.0",
     "typescript": "^5.0.0 || ^6.0.0 || ^7.0.0"
   },
   "peerDependenciesMeta": {

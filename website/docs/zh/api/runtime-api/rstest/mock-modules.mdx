@@ -51,6 +51,53 @@ Rstest 提供了 `rs`（别名 `rstest`）工具函数来进行模块的 mock �
   </div>
 </div>
 
+#### Mock 虚拟模块
+
+Rstest 可以 mock 磁盘上不存在的模块，例如生成模块、原生模块，以及仅在其他运行时中可用的依赖。Node 和浏览器模式使用相同的配置：
+
+1. 声明模块，让 TypeScript 识别它的导出：
+
+```ts title="src/types/native-runtime.d.ts"
+declare module 'native-runtime' {
+  export const platform: string;
+}
+```
+
+2. 将 specifier 映射到 `false`，让构建工具将其视为已解析但忽略的模块：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      'native-runtime': false,
+    },
+  },
+});
+```
+
+3. 使用 factory 提供运行时导出：
+
+```ts title="src/native-runtime.test.ts"
+import { expect, rs, test } from '@rstest/core';
+import { platform } from 'native-runtime';
+
+rs.mock('native-runtime', () => ({
+  platform: 'test',
+}));
+
+test('uses the virtual module', () => {
+  expect(platform).toBe('test');
+});
+```
+
+Rstest 不使用 Jest 的第三个 `{ virtual: true }` 参数。请在模块声明、alias、mock 调用和 import 中保持相同的 specifier。被测源码也可以间接导入这个虚拟模块。
+
+`rs.mock` 会被提升，因此支持静态 `import`。对于稍后执行的动态 `import()`，请先调用 `rs.doMock` 再导入。对于 `require()`，请使用 `rs.mockRequire` 或 `rs.doMockRequire`。
+
+也可以通过 `__mocks__` 中匹配的手写 mock 提供实现，而不使用 factory。由于映射到 `false` 的 alias 没有真实实现，请使用 factory 或手写 mock，而不是 `{ mock: true }`、`{ spy: true }` 或 `rs.importActual`。
+
 #### 使用 `rs.fn()` 追踪调用
 
 使用 `rs.fn()` 创建可以追踪调用并配置返回值的 mock 函数：

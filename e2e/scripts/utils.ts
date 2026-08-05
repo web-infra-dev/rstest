@@ -17,3 +17,18 @@ export const sleep = (ms: number) => {
     setTimeout(resolve, ms);
   });
 };
+
+/**
+ * Extracts a `<marker>...__END__` JSON payload that a fixture reporter or
+ * script printed to stdout. Each suite prints under its own marker.
+ */
+export const parseMarkerPayload = <T>(stdout: string, marker: string): T => {
+  const start = stdout.indexOf(marker);
+  const end = start === -1 ? -1 : stdout.indexOf('__END__', start);
+  if (start === -1 || end === -1) {
+    throw new Error(
+      `${marker} payload not found in stdout. Got:\n${stdout.slice(0, 4000)}`,
+    );
+  }
+  return JSON.parse(stdout.slice(start + marker.length, end)) as T;
+};

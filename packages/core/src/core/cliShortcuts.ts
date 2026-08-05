@@ -76,6 +76,7 @@ const optionalShortcut = (
  */
 export async function setupCliShortcuts({
   closeServer,
+  canRerun = () => true,
   runAll,
   updateSnapshot,
   runFailedTests,
@@ -84,6 +85,13 @@ export async function setupCliShortcuts({
 }: {
   runFailedTests?: () => Promise<void>;
   closeServer: () => Promise<void>;
+  /**
+   * Whether a rerun key can be answered right now — the same gate the rerun
+   * handlers apply to themselves, exposed because `t`/`p` ask for input first
+   * and the prompt must not open when nothing can run. Reports the reason
+   * itself when it returns false.
+   */
+  canRerun?: () => boolean;
   runAll?: () => Promise<void>;
   updateSnapshot?: () => Promise<void>;
   runWithTestNamePattern?: (pattern: string | undefined) => Promise<void>;
@@ -196,6 +204,13 @@ export async function setupCliShortcuts({
       runWithTestNamePattern &&
         (() => {
           clearCurrentInputLine();
+          // Gated before the prompt opens, not inside the handler it calls:
+          // asking for a pattern the run cannot use yet either throws away what
+          // the user typed on Enter, or drops the keystroke without a word when
+          // they escape out of it.
+          if (!canRerun()) {
+            return;
+          }
           promptInput(
             'Enter test name pattern (empty to clear): ',
             async (pattern) => {
@@ -210,6 +225,9 @@ export async function setupCliShortcuts({
       runWithFileFilters &&
         (() => {
           clearCurrentInputLine();
+          if (!canRerun()) {
+            return;
+          }
           promptInput(
             'Enter file name pattern (empty to clear): ',
             async (input) => {
@@ -235,7 +253,7 @@ export async function setupCliShortcuts({
         try {
           await closeServer();
         } finally {
-          process.exit(0);
+          process.exit(process.exitCode ?? 0);
         }
       },
     },

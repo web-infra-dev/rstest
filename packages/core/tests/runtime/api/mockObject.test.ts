@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@rstest/core';
 import { mockObject } from '../../../src/runtime/api/mockObject';
 import { initSpy } from '../../../src/runtime/api/spy';
+import type { Mocked } from '../../../src/types';
 
 type Key = string | symbol;
 
@@ -10,8 +11,14 @@ const make = (type: 'automock' | 'autospy') => {
   const { createMockInstance, isMockFunction } = initSpy();
   return {
     isMockFunction,
-    run: <T extends Record<Key, any>>(object: T): T =>
-      mockObject({ createMockInstance, globalConstructors, type }, object, {}),
+    // `mockObject` is declared as `T -> T`, but every function on the result is
+    // a mock at runtime, which is what these tests assert against.
+    run: <T extends Record<Key, any>>(object: T): Mocked<T> =>
+      mockObject(
+        { createMockInstance, globalConstructors, type },
+        object,
+        {},
+      ) as Mocked<T>,
   };
 };
 
@@ -207,7 +214,7 @@ describe('mockObject autospy', () => {
     const result = run({ Foo });
     expect(isMockFunction(result.Foo)).toBe(true);
 
-    const instance = new result.Foo();
+    const instance = new result.Foo() as Mocked<InstanceType<typeof Foo>>;
     expect(isMockFunction(instance.greet)).toBe(true);
     expect(instance.greet()).toBe('hi');
     expect(instance.greet.mock.calls).toHaveLength(1);

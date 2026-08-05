@@ -1,7 +1,11 @@
 import { Blob as NodeBlob } from 'node:buffer';
 import { URL as NodeURL } from 'node:url';
 import type { ConstructorOptions, DOMWindow } from 'jsdom';
-import type { TestEnvironment } from '../../../types';
+import type {
+  TestEnvironment,
+  TestEnvironmentContext,
+  TestEnvironmentReturn,
+} from '../../../types';
 import { checkPkgInstalled } from '../../util';
 import {
   addDefaultErrorHandler,
@@ -21,7 +25,31 @@ type JSDOMBlobImpl = {
   _bytes?: Uint8Array;
 };
 
-function installJSDOMObjectURL(window: DOMWindow): () => void {
+type VirtualConsoleForwarder =
+  | {
+      forwardTo(console: Console): unknown;
+    }
+  | {
+      sendTo(console: Console): unknown;
+    };
+
+export const forwardVirtualConsole = (
+  virtualConsole: VirtualConsoleForwarder,
+  console: Console,
+): void => {
+  if ('forwardTo' in virtualConsole) {
+    virtualConsole.forwardTo(console);
+  } else {
+    virtualConsole.sendTo(console);
+  }
+};
+
+type JSDOMModule = typeof import('jsdom');
+
+function installJSDOMObjectURL(
+  window: DOMWindow,
+  context: TestEnvironmentContext,
+): () => void {
   const implSymbol = Object.getOwnPropertySymbols(new window.Blob())[0]!;
   const URLConstructor = window.URL as typeof URL;
   const createDescriptor = Object.getOwnPropertyDescriptor(
@@ -63,7 +91,9 @@ function installJSDOMObjectURL(window: DOMWindow): () => void {
     });
   }
 
-  const cleanupObjectURLs = installObjectURLTracker(URLConstructor);
+  // The polyfill above is behavior and always installs, unlike the tracker
+  // below, which only feeds environment teardown.
+  const cleanupObjectURLs = installObjectURLTracker(URLConstructor, context);
   return () => {
     cleanupObjectURLs();
     if (createDescriptor) {
@@ -87,71 +117,81 @@ function installJSDOMObjectURL(window: DOMWindow): () => void {
   };
 }
 
+export const setupEnvironment = async (
+  global: typeof globalThis,
+  options: Record<string, any>,
+  context: TestEnvironmentContext,
+  dependency?: JSDOMModule,
+): Promise<TestEnvironmentReturn> => {
+  if (!dependency) {
+    checkPkgInstalled('jsdom');
+  }
+  const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } =
+    dependency ?? (await import('jsdom'));
+  const nodeTimers: NodeTimerPrimitives = {
+    clearInterval: global.clearInterval ?? globalThis.clearInterval,
+    clearTimeout: global.clearTimeout ?? globalThis.clearTimeout,
+    setInterval: global.setInterval ?? globalThis.setInterval,
+    setTimeout: global.setTimeout ?? globalThis.setTimeout,
+  };
+
+  const {
+    html = '<!DOCTYPE html>',
+    userAgent,
+    url = 'http://localhost:3000',
+    contentType = 'text/html',
+    pretendToBeVisual = true,
+    includeNodeLocations = false,
+    runScripts = 'dangerously',
+    resources,
+    console = false,
+    cookieJar = false,
+    beforeParse,
+    ...restOptions
+  } = options as JSDOMOptions;
+  let cleanupObjectURLs = () => {};
+  const virtualConsole =
+    console && global.console ? new VirtualConsole() : undefined;
+  if (virtualConsole && global.console) {
+    forwardVirtualConsole(virtualConsole, global.console);
+  }
+  const dom = new JSDOM(html, {
+    pretendToBeVisual,
+    resources:
+      resources ?? (userAgent ? new ResourceLoader({ userAgent }) : undefined),
+    runScripts,
+    url,
+    virtualConsole,
+    cookieJar: cookieJar ? new CookieJar() : undefined,
+    includeNodeLocations,
+    contentType,
+    userAgent,
+    ...restOptions,
+    beforeParse(window) {
+      beforeParse?.(window);
+      cleanupObjectURLs = installJSDOMObjectURL(window, context);
+    },
+  });
+
+  const cleanupGlobal = installGlobal(global, dom.window, {
+    additionalKeys: ['URL', 'URLSearchParams'],
+  });
+  const cleanupTimers = installTimerTracking(global, nodeTimers, context);
+
+  const cleanupHandler = addDefaultErrorHandler(global as unknown as Window);
+
+  return {
+    teardown() {
+      cleanupHandler();
+      cleanupObjectURLs();
+      cleanupTimers();
+      dom.window.close();
+      cleanupGlobal();
+    },
+  };
+};
+
 export const environment: TestEnvironment<typeof globalThis> = {
   name: 'jsdom',
-  setup: async (global, options) => {
-    checkPkgInstalled('jsdom');
-    const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } =
-      await import('jsdom');
-    const nodeTimers: NodeTimerPrimitives = {
-      clearInterval: global.clearInterval ?? globalThis.clearInterval,
-      clearTimeout: global.clearTimeout ?? globalThis.clearTimeout,
-      setInterval: global.setInterval ?? globalThis.setInterval,
-      setTimeout: global.setTimeout ?? globalThis.setTimeout,
-    };
-
-    const {
-      html = '<!DOCTYPE html>',
-      userAgent,
-      url = 'http://localhost:3000',
-      contentType = 'text/html',
-      pretendToBeVisual = true,
-      includeNodeLocations = false,
-      runScripts = 'dangerously',
-      resources,
-      console = false,
-      cookieJar = false,
-      beforeParse,
-      ...restOptions
-    } = options as JSDOMOptions;
-    let cleanupObjectURLs = () => {};
-    const dom = new JSDOM(html, {
-      pretendToBeVisual,
-      resources:
-        resources ??
-        (userAgent ? new ResourceLoader({ userAgent }) : undefined),
-      runScripts,
-      url,
-      virtualConsole:
-        console && global.console
-          ? new VirtualConsole().sendTo(global.console)
-          : undefined,
-      cookieJar: cookieJar ? new CookieJar() : undefined,
-      includeNodeLocations,
-      contentType,
-      userAgent,
-      ...restOptions,
-      beforeParse(window) {
-        beforeParse?.(window);
-        cleanupObjectURLs = installJSDOMObjectURL(window);
-      },
-    });
-
-    const cleanupGlobal = installGlobal(global, dom.window, {
-      additionalKeys: ['URL', 'URLSearchParams'],
-    });
-    const cleanupTimers = installTimerTracking(global, nodeTimers);
-
-    const cleanupHandler = addDefaultErrorHandler(global as unknown as Window);
-
-    return {
-      teardown() {
-        cleanupHandler();
-        cleanupObjectURLs();
-        cleanupTimers();
-        dom.window.close();
-        cleanupGlobal();
-      },
-    };
-  },
+  setup: setupEnvironment,
 };

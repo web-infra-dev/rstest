@@ -161,6 +161,7 @@ export type TestInfo = TestCaseInfo | (TestSuiteInfo & { tests: TestInfo[] });
 export type TestFileInfo = {
   testId: string;
   testPath: TestPath;
+  project: string;
   tests: TestInfo[];
 };
 
@@ -222,5 +223,12 @@ export interface UserConsoleLog {
   taskType?: 'file' | 'suite' | 'case';
   trace?: string;
   testPath: TestPath;
+  /**
+   * Owning project. A test path alone does not identify the emitter once
+   * several projects run the same file, and consumers that attribute output to
+   * a file (the blob reporter's replay track, the browser host's sink routing)
+   * cannot recover it from the other fields.
+   */
+  project: string;
   type: ConsoleStreamType;
 }

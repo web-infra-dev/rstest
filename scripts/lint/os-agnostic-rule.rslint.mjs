@@ -9,7 +9,9 @@ import { osAgnosticTests } from '../../rslint.config.mts';
 // linted buffer.
 export default defineConfig([
   {
-    plugins: { rstest: { rules: { 'os-agnostic-tests': osAgnosticTests } } },
-    rules: { 'rstest/os-agnostic-tests': 'error' },
+    plugins: {
+      'rstest-repo': { rules: { 'os-agnostic-tests': osAgnosticTests } },
+    },
+    rules: { 'rstest-repo/os-agnostic-tests': 'error' },
   },
 ]);

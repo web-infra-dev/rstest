@@ -13,7 +13,12 @@ const SOURCE_MAP_SCAN_CONCURRENCY = 8;
 const { createCoverageMap } = istanbulLibCoverage;
 
 type BranchHits = Record<string, number[]>;
-type IstanbulFileCoverageData = FileCoverageData & {
+/**
+ * What the instrumenter actually writes onto file coverage: `all`, `bT` and
+ * `hash` exist at runtime and the merge paths below read them, but the
+ * published istanbul types declare none of the three.
+ */
+export type IstanbulFileCoverageData = FileCoverageData & {
   all?: boolean;
   bT?: BranchHits;
   hash?: string;

@@ -15,6 +15,7 @@ import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
+import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
 import { PhaseTracker } from './phaseTracker';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
@@ -60,6 +61,26 @@ const registerGlobalApi = (api: Rstest) => {
 
 const globalCleanups: (() => void)[] = [];
 let isTeardown = false;
+/**
+ * Test environment kept alive across files on a reused worker
+ * (`isolate: false`).
+ *
+ * User modules persist per worker under `isolate: false` (#1373), and a
+ * persisted module may capture environment values at evaluation time —
+ * testing-library's `screen` binds `document.body` once, at import. The
+ * environment must therefore live exactly as long as the module registry, or
+ * such captures dangle on a torn-down window from the second file on. This is
+ * the same staleness class #1376 solved for context-bound core APIs via live
+ * bindings — an option third-party modules do not have, so here the
+ * environment's lifetime moves instead.
+ *
+ * A worker only ever holds one environment: the scheduler restricts reuse to
+ * tasks whose `environmentKey` matches (`Pool.acquireRunner`). No
+ * teardown runs at worker exit — the host owns termination (see
+ * `pool/AGENTS.md`) and process death reclaims the environment, same as the
+ * kept module cache.
+ */
+let activeEnvironmentKey: string | undefined;
 /**
  * Last per-compile `buildId` this (possibly reused) worker loaded; a change
  * means a watch rebuild and triggers a full cache flush below (#1373).
@@ -132,6 +153,7 @@ const preparePool = async (
     entryInfo: { distPath, testPath },
     updateSnapshot,
     context,
+    environmentKey,
   }: RunWorkerOptions['options'],
   tracker?: PhaseTracker,
 ) => {
@@ -148,12 +170,11 @@ const preparePool = async (
   // flag, so it must be set before any bundle code is evaluated.
   const federation = context.runtimeConfig.federation === true;
   (globalThis as Record<string, unknown>).__rstest_federation__ = federation;
-  // With `isolate: false` a previous file in this worker may have installed
-  // the global dynamic-import fallback (`mockRuntimeCode.js`). Always drop it:
-  // it keeps federation strictly opt-in for non-federation files, and for
-  // federation files the runtime module reinstalls a fresh hook whose
-  // `import()` is bound to the current bundle's vm dynamic-import context
-  // rather than the previous file's.
+  // With `isolate: false` a previous file in this worker may have installed the
+  // global dynamic-import fallback (`mockRuntimeCode.js`). Hide it from
+  // non-federation files so federation stays strictly opt-in, and hand it back
+  // on federation re-entry — the installing runtime chunk is kept across files
+  // and never re-executes, so dropping it outright would be permanent.
   setFederationDynamicImportOrigin(federation, testPath);
 
   const cleanupFns: (() => MaybePromise<void>)[] = [];
@@ -179,6 +200,7 @@ const preparePool = async (
       testEnvironment,
       snapshotFormat,
       env,
+      isolate,
     },
   } = context;
 
@@ -223,6 +245,7 @@ const preparePool = async (
         silentConsoleController.onConsoleLog(log);
       },
       testPath,
+      project: context.project,
       printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
       getCurrentTask: () => taskContext.getCurrent(),
     });
@@ -281,22 +304,47 @@ const preparePool = async (
   });
 
   tracker?.transition('envSetup');
+  const hasPinnedEnvironment = activeEnvironmentKey !== undefined;
+  if (hasPinnedEnvironment && activeEnvironmentKey !== environmentKey) {
+    // Unreachable: the scheduler only reuses a worker for tasks matching its
+    // pinned environment (`Pool.acquireRunner`). The throw guards against a
+    // future regression in that affinity — swapping environments here would
+    // leave persisted modules holding captures of the previous one.
+    throw new Error(
+      `Test environment changed on a reused worker: ${activeEnvironmentKey} -> ${environmentKey}`,
+    );
+  }
   // `node` is the no-op fast path; every other environment is resolved through
   // the registry so adding one is a single entry instead of a new switch arm.
   // teardown is `MaybePromise<void>` and is awaited via `Promise.all` in
   // `cleanup`, so a single uniform wrapper preserves both the sync (jsdom) and
   // async (happy-dom) teardown shapes.
-  if (testEnvironment.name !== 'node') {
+  if (testEnvironment.name !== 'node' && !hasPinnedEnvironment) {
     const loadEnvironment = environmentLoaders[testEnvironment.name];
     if (!loadEnvironment) {
       throw new Error(`Unknown test environment: ${testEnvironment.name}`);
     }
-    const { environment } = await loadEnvironment();
-    const { teardown } = await environment.setup(
+    const scope = isolate ? 'file' : 'worker';
+    const [{ setup }, environmentModule] = await Promise.all([
+      loadEnvironment(),
+      loadTestEnvironmentModule(context.testEnvironmentModule),
+    ]);
+    const { teardown } = await setup(
       global,
       testEnvironment.options || {},
+      { scope },
+      environmentModule,
     );
-    cleanupFns.push(() => teardown(global));
+    if (scope === 'file') {
+      cleanupFns.push(() => teardown(global));
+    }
+  }
+  // Pin only after setup succeeded. A setup failure (e.g. an invalid jsdom
+  // option) surfaces as a file-level failure and leaves the worker reusable;
+  // pinning eagerly would make every later same-key task skip setup and run
+  // bare-Node against a config the user asked to be a DOM.
+  if (!isolate) {
+    activeEnvironmentKey = environmentKey;
   }
   tracker?.transition('prepare');
 
@@ -608,6 +656,7 @@ export const runInPool = async (
     rpc.onTestFileStart?.({
       testId: getFileTaskId(testPath),
       testPath,
+      project,
       tests: [],
     });
 

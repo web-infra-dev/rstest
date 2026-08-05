@@ -1,35 +1,32 @@
+import type { RsbuildInstance } from '@rsbuild/core';
 import { normalize } from 'pathe';
 import { createPool } from '../../pool';
 import type {
   EntryInfo,
   ExecutorCycleOutcome,
+  ExecutorInvalidationCallback,
   ExecutorRunCycleOptions,
-  ProjectContext,
   TestExecutor,
 } from '../../types';
 import type { CoverageMap, CoverageProvider } from '../../types/coverage';
-import { color, logger, type TraceRun } from '../../utils';
+import { clearScreen, color, logger, type TraceRun } from '../../utils';
 import { ensureTestEnvironmentDependencies } from '../envDependencies';
-import { isNodeProject } from '../isBrowserProject';
 import {
   claimGlobalSetupOnce,
   runGlobalSetup,
   runGlobalTeardown,
 } from '../globalSetup';
 import { applyOnlyFailuresSelection } from '../onlyFailures';
-import {
-  createRunProjectPlanState,
-  type RunProjectPlan,
-  syncNodeProjects,
-} from '../projectPlan';
-import { createRsbuildServer, prepareRsbuild } from '../rsbuild';
+import type { RunProjectPlan } from '../projectPlan';
+import { createRsbuildServer } from '../rsbuild';
 import {
   readResultsCache,
   sequenceKey,
   writeResultsCache,
 } from '../resultsCache';
 import type { Rstest } from '../rstest';
-import { createSetupFileState } from '../setupFileState';
+import type { SetupFileState } from '../setupFileState';
+import { prepareTestEnvironmentModules } from '../testEnvironmentModule';
 import { type SequenceHints, sortTestEntries } from '../testSequencer';
 
 type RsbuildStats = Awaited<
@@ -135,72 +132,74 @@ export const createCoverageResourceLoaders = (
 /**
  * The node side of the {@link TestExecutor} seam: the existing Rsbuild dev
  * server + worker pool, expressed as one executor the shared run loop drives.
+ * Structural, not the adapter's concrete type — `runTests` depends on this and
+ * fake executors satisfy it to drive the run loop in unit tests.
  *
- * The extra (non-interface) members — `getPlan`, `hasNodeTestsToRun`,
- * `hasBrowserTestsToRun`, `coveragePluginLoadError`, `setCoverageProvider` —
- * exist because core resolves the plan *after* `init()` fires the node
- * `modifyRstestConfig` hooks (the §3.4 barrier) and owns the single run-scoped
- * coverage provider it injects back before the first cycle.
+ * The watch loop subscribes to this executor's invalidations, so `onInvalidate`
+ * — optional on the seam, for executors with no watch trigger of their own — is
+ * guaranteed here. `ensureRunResources` is the one member beyond the seam, and
+ * it is there because *when* the node resources come up is core's ordering
+ * decision, not the executor's.
+ *
+ * Promoting it onto the seam as an optional `prepare?()` was considered and
+ * rejected: it buys the orchestrator nothing. An optional seam member is only
+ * ever *called* through a type that re-requires it — that is how `collect`,
+ * `onInvalidate`, and `requestRerun` are consumed — so `runTests` would go on
+ * holding this same narrowed node type, which it needs for `onInvalidate`
+ * anyway. What would change is that a member only one runtime implements joins
+ * the contract `@rstest/browser` is version-locked to, and that the ordering
+ * obligation invariant #7 rests on (node resources up before the browser
+ * launch) becomes optional-chainable — a node side that stopped implementing it
+ * would compile into a silent no-op instead of a build error.
  */
-export interface NodeExecutor extends TestExecutor {
-  /** The plan resolved during `init()` (browser + node runnable subsets). */
-  getPlan(): RunProjectPlan;
-  hasNodeTestsToRun(): boolean;
-  hasBrowserTestsToRun(): boolean;
-  /** A coverage-plugin load error captured while preparing Rsbuild, if any. */
-  coveragePluginLoadError(): unknown;
-  /**
-   * Re-resolve the runnable plan after browser-side `modifyRstestConfig` hooks
-   * changed project configs (the mixed-run browser discovery boot can add test
-   * files to an otherwise-empty browser project), keeping the Rsbuild project
-   * set in sync. Only meaningful after `init()`.
-   */
-  refreshPlan(): Promise<void>;
-  /** Core injects the single run-scoped provider after it reads the plan. */
-  setCoverageProvider(provider: CoverageProvider | null): void;
-  /**
-   * Start the dev server + worker pool up front (idempotent, in-flight guarded).
-   * Watch calls this after registering the dev-compile hooks so the first compile
-   * fires `onAfterDevCompile` and drives the initial run; non-watch runs let
-   * `runCycle` trigger it lazily.
-   */
-  ensureRunResources(): Promise<unknown>;
-  /** The Rsbuild instance built during `init()` (drives watch dev-compile hooks). */
-  getRsbuildInstance(): Awaited<ReturnType<typeof prepareRsbuild>>;
-  /** Re-glob every runnable node project's test entries as a flat path list. */
-  globTestEntries(): Promise<string[]>;
-}
+export type NodeExecutor = TestExecutor &
+  Required<Pick<TestExecutor, 'onInvalidate'>> & {
+    /**
+     * Start the dev server + worker pool up front (idempotent, in-flight
+     * guarded). Watch calls this after subscribing to invalidations so the first
+     * compile signals one and drives the initial run; non-watch runs let
+     * `runCycle` trigger it lazily.
+     */
+    ensureRunResources(): Promise<unknown>;
+    /**
+     * Validate dependencies without starting the dev server, so mixed watch can
+     * reject an invalid node project before browser globalSetup mutates state.
+     */
+    validateRunDependencies(): Promise<void>;
+  };
+
+/**
+ * Everything the node adapter needs from the planner. `setupFileState` and
+ * `globTestSourceEntries` must arrive as the planner's own objects, never copies
+ * — the planner's `RunPlanner` doc records what a snapshot of either breaks.
+ */
+type CreateNodeExecutorOptions = {
+  /** Already prepared and config-hooked by the planner. */
+  rsbuildInstance: RsbuildInstance;
+  setupFileState: SetupFileState;
+  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
+  getPlan: () => RunProjectPlan;
+  /** The single run-scoped provider, or null when coverage produces none. */
+  coverageProvider: CoverageProvider | null;
+  isWatchMode: boolean;
+  /** Returns the cycle's active trace buffer (reallocated by core each cycle). */
+  getTraceRun: () => TraceRun;
+};
 
 export function createNodeExecutor(
   context: Rstest,
   {
-    browserProjects,
-    nodeProjects,
+    rsbuildInstance,
+    setupFileState,
+    globTestSourceEntries,
+    getPlan,
+    coverageProvider,
     isWatchMode,
     getTraceRun,
-  }: {
-    browserProjects: ProjectContext[];
-    nodeProjects: ProjectContext[];
-    isWatchMode: boolean;
-    /** Returns the cycle's active trace buffer (reallocated by core each cycle). */
-    getTraceRun: () => TraceRun;
-  },
+  }: CreateNodeExecutorOptions,
 ): NodeExecutor {
   const { rootPath } = context;
 
-  const setupFileState = createSetupFileState();
-  const projectPlanState = createRunProjectPlanState({
-    context,
-    browserProjects,
-    isWatchMode,
-  });
-  const { globTestSourceEntries, resolveRunnableProjects } = projectPlanState;
-
-  let coveragePluginLoadError: unknown;
-  let coverageProvider: CoverageProvider | null = null;
-
-  // Set during init().
-  let rsbuildInstance: Awaited<ReturnType<typeof prepareRsbuild>> | undefined;
   // Lazily created on first runCycle (so a run with no node tests to run never
   // pays for a server + pool — the browser-only cold-start path).
   let runResources:
@@ -211,6 +210,7 @@ export function createNodeExecutor(
         }) => Promise<RsbuildStats>;
         closeServer: () => Promise<void>;
         pool: Awaited<ReturnType<typeof createPool>>;
+        cleanupTestEnvironmentModules: () => Promise<void>;
       }
     | undefined;
   // In-flight guard: in watch mode the dev server's first compile fires
@@ -220,67 +220,28 @@ export function createNodeExecutor(
   // start instead of creating a second server + pool.
   let runResourcesPromise:
     Promise<NonNullable<typeof runResources>> | undefined;
+  let runDependencyValidationPromise: Promise<void> | undefined;
   let entryFiles: string[] = [];
   let didRunGlobalTeardown = false;
-  // The Rsbuild project set assembled during init(); refreshPlan() keeps it in
-  // sync with re-resolved plans.
-  let rsbuildProjects: ProjectContext[] = [];
+  // When a dev compile starts. Paired with the compile's end into a completed
+  // span below; on its own it is not a build time, because cycles are queued
+  // and the wait for the queue is not build work.
+  let compileStart: number | undefined;
+  // A finished rebuild's measured duration, published when the compile ends and
+  // claimed by exactly one cycle: the invalidation-driven one that same compile
+  // queued. Publishing at the end rather than the start keeps a cycle running
+  // mid-compile from reporting an unfinished rebuild's elapsed time, and the
+  // claim being restricted to invalidation-driven cycles keeps a shortcut rerun
+  // that was already sitting in the queue from taking the rebuild's span with it
+  // when it dispatches first.
+  let pendingBuildTime: number | undefined;
 
-  const getPlan = (): RunProjectPlan => projectPlanState.getPlan();
-  const hasNodeTestsToRun = (): boolean =>
-    getPlan().nodeProjectsToRun.length > 0;
-  const hasBrowserTestsToRun = (): boolean =>
-    getPlan().browserProjectsToRun.length > 0;
-
-  const init = async (): Promise<void> => {
-    const plan = await resolveRunnableProjects({ silentShardMessage: true });
-    const plannedNodeSourceNames = new Set(
-      plan.nodeProjectsToRun.map(
-        (project) =>
-          project._environmentGroup?.sourceEnvironmentName ??
-          project.environmentName,
-      ),
+  const validateRunDependencies = (): Promise<void> => {
+    runDependencyValidationPromise ??= ensureTestEnvironmentDependencies(
+      getPlan().nodeProjectsToRun,
+      rootPath,
     );
-    rsbuildProjects = [
-      ...plan.nodeProjectsToRun,
-      ...nodeProjects.filter(
-        (project) => !plannedNodeSourceNames.has(project.environmentName),
-      ),
-    ];
-    context.projects = [...browserProjects, ...rsbuildProjects];
-
-    rsbuildInstance = await prepareRsbuild({
-      context,
-      globTestSourceEntries,
-      setupFileState,
-      targetProjects: rsbuildProjects,
-      onCoveragePluginLoadError: (error) => {
-        coveragePluginLoadError = error;
-      },
-      getSetupFileProjects: () => ({
-        setupProjects: projectPlanState.getPlan().nodeProjectsToRun,
-        globalSetupProjects: context.projects,
-      }),
-      onModifyRstestConfigApplied: async () => {
-        const refreshed = await resolveRunnableProjects({
-          strictEnvironmentComments: true,
-        });
-        syncNodeProjects(rsbuildProjects, refreshed.nodeProjectsToRun);
-      },
-      onRsbuildConfigResolved: projectPlanState.validateEnvironmentComments,
-    });
-
-    if (nodeProjects.length) {
-      await rsbuildInstance.initConfigs({ action: 'dev' });
-    }
-  };
-
-  const refreshPlan = async (): Promise<void> => {
-    const plan = await resolveRunnableProjects({
-      silentShardMessage: true,
-      strictEnvironmentComments: true,
-    });
-    syncNodeProjects(rsbuildProjects, plan.nodeProjectsToRun);
+    return runDependencyValidationPromise;
   };
 
   const ensureRunResources = (): Promise<NonNullable<typeof runResources>> => {
@@ -293,12 +254,8 @@ export function createNodeExecutor(
   const createRunResources = async (): Promise<
     NonNullable<typeof runResources>
   > => {
-    if (!rsbuildInstance) {
-      throw new Error('NodeExecutor.init() must run before runCycle().');
-    }
-
-    const { nodeProjectsToRun: projects, entriesCache } =
-      projectPlanState.getPlan();
+    const { nodeProjectsToRun: projects, entriesCache } = getPlan();
+    await validateRunDependencies();
     const { getRsbuildStats, closeServer } = await createRsbuildServer({
       inspectedConfig: {
         ...context.normalizedConfig,
@@ -312,52 +269,67 @@ export function createNodeExecutor(
       rootPath,
     });
 
+    let testEnvironmentModules:
+      Awaited<ReturnType<typeof prepareTestEnvironmentModules>> | undefined;
     try {
-      await ensureTestEnvironmentDependencies(projects, rootPath);
+      // Watch projects stay prepared even before they have entries: adding a
+      // matching file must reuse the existing pool with the correct dependency.
+      testEnvironmentModules = await prepareTestEnvironmentModules({
+        projects,
+        rootPath,
+      });
+
+      entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
+        (acc, entry) => acc.concat(Object.values(entry.entries) || []),
+        [],
+      );
+
+      const pool = await createPool({
+        context,
+        testEnvironmentModules: testEnvironmentModules.modules,
+      });
+
+      runResources = {
+        getRsbuildStats,
+        closeServer,
+        pool,
+        cleanupTestEnvironmentModules: testEnvironmentModules.cleanup,
+      };
+      return runResources;
     } catch (error) {
-      await closeServer();
+      try {
+        await closeServer();
+      } finally {
+        await testEnvironmentModules?.cleanup();
+      }
       throw error;
     }
-
-    entryFiles = Array.from(entriesCache.values()).reduce<string[]>(
-      (acc, entry) => acc.concat(Object.values(entry.entries) || []),
-      [],
-    );
-
-    const getRecommendWorkerCount = (): number => {
-      const nodeEntries = Array.from(entriesCache.entries()).filter(([key]) => {
-        const project = projects.find((p) => p.environmentName === key);
-        return !project || isNodeProject(project);
-      });
-      return nodeEntries.flatMap(
-        ([_key, entry]) => Object.values(entry.entries) || [],
-      ).length;
-    };
-
-    const recommendWorkerCount = isWatchMode
-      ? Number.POSITIVE_INFINITY
-      : getRecommendWorkerCount();
-
-    const pool = await createPool({ context, recommendWorkerCount });
-
-    runResources = { getRsbuildStats, closeServer, pool };
-    return runResources;
   };
 
   const runCycle = async (
     opts: ExecutorRunCycleOptions,
   ): Promise<ExecutorCycleOutcome> => {
-    const { buildId, mode, fileFilters, updateSnapshot } = opts;
-    const buildStart = opts.buildStart ?? Date.now();
+    const { buildId, mode, fileFilters, fromInvalidation, updateSnapshot } =
+      opts;
+    // Consume-once, and only by a cycle a rebuild triggered: a shortcut-driven
+    // rerun compiles nothing, so it reports its own span and leaves a published
+    // one for the cycle whose compile produced it, wherever in the queue that
+    // cycle sits.
+    let rebuildTime: number | undefined;
+    if (fromInvalidation) {
+      rebuildTime = pendingBuildTime;
+      pendingBuildTime = undefined;
+    }
+    const cycleStart = Date.now();
     const { getRsbuildStats, pool } = await ensureRunResources();
-    const { nodeProjectsToRun: projects } = projectPlanState.getPlan();
+    const { nodeProjectsToRun: projects } = getPlan();
 
     let testStart: number | undefined;
     const currentEntries: EntryInfo[] = [];
     const currentDeletedEntries: string[] = [];
 
-    // `stateManager.reset()` is owned by core (top-of-cycle for non-watch, and
-    // `prepareWatchRerunState` per watch rerun), never here.
+    // `stateManager.reset()` is owned by core (top-of-run for non-watch, and
+    // `prepareWatchCycleState` per watch cycle), never here.
     context.stateManager.testFiles = isWatchMode ? undefined : entryFiles;
 
     const resultsCache = await readResultsCache(rootPath);
@@ -531,8 +503,10 @@ export function createNodeExecutor(
       projectPlans.map((plan) => plan.execute(plan.finalEntries)),
     );
 
-    testStart ??= buildStart;
-    const buildTime = testStart - buildStart;
+    // A cycle no rebuild triggered measures its own build: the span from
+    // dispatch to the moment the first test starts.
+    testStart ??= Date.now();
+    const buildTime = rebuildTime ?? testStart - cycleStart;
     const testTime = Date.now() - testStart;
 
     const coverageResourceLoaders = createCoverageResourceLoaders(returns);
@@ -578,6 +552,46 @@ export function createNodeExecutor(
     };
   };
 
+  /**
+   * The node transport's watch signal is the dev server's compile cycle, so the
+   * hooks are wired here rather than in the orchestrator: the rebuild-start
+   * screen clear and the compile's own start have to land when the compile
+   * begins, a moment only this side observes (the callback fires after it).
+   *
+   * `onAfterDevCompile` returns the cycle rather than signalling and moving on,
+   * and unlike the browser transport it has to. The affected-entry set does not
+   * ride on the hook: the cycle pulls it, and the pull is destructive —
+   * `calcEntriesToRerun` diffs the dev server's stats against a per-environment
+   * baseline that `applyWatchInvalidation` advances in the same call, so a
+   * compile's changes can be consumed exactly once. Holding the hook is what
+   * keeps a second compile from starting before this one's changes have been
+   * consumed, since the bundler starts none while it is pending. Signal and
+   * return, and two compiles land against one baseline: a single pull takes both
+   * their changes and the other cycle diffs a baseline already past them,
+   * reporting "No test files need re-run" for an edit that was real. Which cycle
+   * consumes the changes is a separate question the hook does not answer — one
+   * queued ahead of the rebuild's can, and `canFold` in `watchSession.ts` records
+   * that as an accepted cost. So the await is not back-pressure and cannot go for
+   * the reason the browser side's went — see
+   * {@link ExecutorInvalidationCallback} for what holding it costs and the
+   * shape that would close it.
+   */
+  const onInvalidate = (cb: ExecutorInvalidationCallback): void => {
+    rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
+      compileStart = Date.now();
+      if (!isFirstCompile) {
+        clearScreen();
+      }
+    });
+    rsbuildInstance.onAfterDevCompile(({ isFirstCompile }) => {
+      if (compileStart !== undefined) {
+        pendingBuildTime = Date.now() - compileStart;
+        compileStart = undefined;
+      }
+      return cb({ isFirstBuild: isFirstCompile });
+    });
+  };
+
   // Idempotent: the single `executors.close()` exit path may race a signal
   // handler, and closing a pool/server twice throws.
   const close = async (): Promise<void> => {
@@ -585,19 +599,32 @@ export function createNodeExecutor(
       return;
     }
     didRunGlobalTeardown = true;
-    await runGlobalTeardown();
-    // Settle an in-flight resource start first: a close racing startup (e.g. a
-    // config-change restart during watch boot) must tear down the server and
-    // pool that start is about to produce, not skip them.
-    if (runResourcesPromise) {
-      await runResourcesPromise.catch(() => undefined);
-    }
-    if (runResources) {
-      const resources = runResources;
-      runResources = undefined;
-      runResourcesPromise = undefined;
-      await resources.pool.close();
-      await resources.closeServer();
+    try {
+      await runGlobalTeardown();
+    } finally {
+      if (runDependencyValidationPromise) {
+        await runDependencyValidationPromise.catch(() => undefined);
+      }
+      // Settle an in-flight resource start first: a close racing startup (e.g. a
+      // config-change restart during watch boot) must tear down the server and
+      // pool that start is about to produce, not skip them.
+      if (runResourcesPromise) {
+        await runResourcesPromise.catch(() => undefined);
+      }
+      if (runResources) {
+        const resources = runResources;
+        runResources = undefined;
+        runResourcesPromise = undefined;
+        try {
+          await resources.pool.close();
+        } finally {
+          try {
+            await resources.closeServer();
+          } finally {
+            await resources.cleanupTestEnvironmentModules();
+          }
+        }
+      }
     }
   };
 
@@ -606,36 +633,22 @@ export function createNodeExecutor(
     get projects() {
       return getPlan().nodeProjectsToRun;
     },
-    init,
+    // Nothing left to initialize: the planner fired the node
+    // `modifyRstestConfig` hooks and resolved the plan before this executor was
+    // constructed, and everything else this side owns is started by
+    // `ensureRunResources` at the moment core chooses. It stays because
+    // `TestExecutor.init` is required, and it has to stay empty: core calls it
+    // for every node build the planner returns, a run whose node side globbed
+    // no test files included, so starting the server here would boot a dev
+    // server and pool that the run then never uses.
+    init: async () => {},
     runCycle,
+    onInvalidate,
     close,
-    getPlan,
-    hasNodeTestsToRun,
-    hasBrowserTestsToRun,
-    coveragePluginLoadError: () => coveragePluginLoadError,
-    refreshPlan,
-    setCoverageProvider: (provider) => {
-      coverageProvider = provider;
-    },
     // Watch: start the dev server (and pool) up front so its first compile fires
-    // `onAfterDevCompile`, which drives the initial run. In non-watch runs
-    // `runCycle` triggers this lazily instead.
+    // the invalidation that drives the initial run. In non-watch runs `runCycle`
+    // triggers this lazily instead.
     ensureRunResources,
-    getRsbuildInstance: () => {
-      if (!rsbuildInstance) {
-        throw new Error('NodeExecutor.init() must run before watch wiring.');
-      }
-      return rsbuildInstance;
-    },
-    globTestEntries: async () => {
-      const projects = projectPlanState.getPlan().nodeProjectsToRun;
-      const perProject = await Promise.all(
-        projects.map((p) => globTestSourceEntries(p.environmentName)),
-      );
-      return perProject.reduce<string[]>(
-        (acc, entries) => acc.concat(...Object.values(entries)),
-        [],
-      );
-    },
+    validateRunDependencies,
   };
 }

@@ -1,8 +1,7 @@
 {
-  "extends": "../tsconfig.json",
+  "extends": "@rstest/tsconfig/base",
   "compilerOptions": {
-    "rootDir": ".",
     "types": ["node", "@rstest/core/globals"]
   },
-  "include": ["**/*.test.ts"]
+  "include": ["./**/*.ts"]
 }

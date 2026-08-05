@@ -28,5 +28,16 @@ describe('Expect Soft API', () => {
     expect(
       logs.find((log) => log.includes('AssertionError: expected 3 to be 4')),
     ).toBeTruthy();
+    expect(cli.stdout).toContain('✓ expect.soft retry can recover');
+    expect(
+      logs.filter((log) =>
+        log.includes('AssertionError: expected 1 to be 100'),
+      ),
+    ).toHaveLength(1);
+    expect(
+      logs.filter((log) =>
+        log.includes('AssertionError: expected 2 to be 100'),
+      ),
+    ).toHaveLength(1);
   });
 });

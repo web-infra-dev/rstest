@@ -42,10 +42,6 @@ export interface BrowserTestRunOptions {
    */
   filesOnly?: boolean;
   /**
-   * Keep watch infrastructure alive even when the initial browser test set is empty.
-   */
-  allowEmptyWatchRun?: boolean;
-  /**
    * Treat an empty browser result as a no-op instead of a run failure.
    * Used by mixed node+browser planning, where Browser Mode hooks may add
    * entries after the node-side plan initially saw an empty browser project.
@@ -71,8 +67,9 @@ export interface BrowserTestRunOptions {
   env?: Record<string, string | undefined>;
   /**
    * The cycle's snapshot update state (`ExecutorRunCycleOptions.updateSnapshot`
-   * carrier). The host falls back to reading
-   * `context.snapshotManager.options` when absent (watch startup path).
+   * carrier). Absent only on the config-hook discovery boot, which runs no
+   * tests; the host falls back to reading `context.snapshotManager.options`
+   * there.
    */
   updateSnapshot?: SnapshotUpdateState;
 }
@@ -89,6 +86,7 @@ export type ListBrowserTestsOptions = Pick<
   | 'filesOnly'
   | 'projects'
   | 'appliedModifyRstestConfigEnvironments'
+  | 'env'
 >;
 
 /**
@@ -115,23 +113,4 @@ export interface BrowserTestRunResult {
   resolveSourcemap?: ResolveBrowserSourcemap;
   /** Deferred cleanup hook for unified reporter mode */
   close?: () => Promise<void>;
-  /**
-   * Watch-session handles, present only on watch-mode results (returned after
-   * the initial run while the session keeps running). Core's CLI shortcuts
-   * drive the host's rerun transport through them — the host itself never
-   * subscribes to stdin.
-   */
-  watch?: BrowserWatchHandles;
-}
-
-/** Watch-session control surface exposed to core (CLI shortcuts, restart). */
-export interface BrowserWatchHandles {
-  /**
-   * Rerun the given test paths through the host's watch rerun pipeline
-   * (all current test files when omitted). Resolves when the rerun has
-   * completed, so callers may restore toggled state afterwards.
-   */
-  rerun: (testPaths?: string[]) => Promise<void>;
-  /** Tear down the watch session (dev servers, provider, browser). */
-  close: () => Promise<void>;
 }

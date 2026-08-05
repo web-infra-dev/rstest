@@ -89,7 +89,7 @@ jsdom 中行为异常?  ─── 是 ─▶ ✅ 浏览器模式
 | [detectAsyncLeaks](/config/test/detect-async-leaks)、[logHeapUsage](/config/test/log-heap-usage) | 被忽略——node-only 机制。                                                                                                                                                        |
 | [bail](/config/test/bail)                                                                        | headless 运行下支持：达到失败上限后，Rstest 停止调度剩余文件。已在并行执行中的文件会先跑完，所以仍可能出现少量新结果。headed 调试 UI（`headless: false`）不应用 bail。          |
 
-模块 mock（[rs.mock 系列](/api/runtime-api/rstest/mock-modules)）与 [includeSource](/config/test/include-source) 源码内测试的行为与 Node 模式一致。`rs.mockRequire` 在浏览器测试中同样可用，但它面向 CommonJS 互操作场景——编写浏览器测试时优先使用 `rs.mock` / `rs.doMock`。
+模块 mock（[rs.mock 系列](/api/runtime-api/rstest/mock-modules)），包括[通过 `resolve.alias` 配置的虚拟模块](/api/runtime-api/rstest/mock-modules#mock-虚拟模块)，与 [includeSource](/config/test/include-source) 源码内测试的行为都与 Node 模式一致。`rs.mockRequire` 在浏览器测试中同样可用，但它面向 CommonJS 互操作场景——编写浏览器测试时优先使用 `rs.mock` / `rs.doMock`。
 
 ## 下一步
 

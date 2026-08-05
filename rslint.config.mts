@@ -233,11 +233,18 @@ export default defineConfig([
   {
     languageOptions: {
       parserOptions: {
-        project: ['./e2e/tsconfig.json', './packages/*/tsconfig.json'],
+        // Unit tests need their own entry: a package tsconfig is `composite`
+        // with `rootDir: src` and cannot include a sibling directory, so
+        // without `tests/tsconfig.json` every test escapes both type-aware
+        // lint rules and tsc itself.
+        project: [
+          './e2e/tsconfig.json',
+          './packages/*/tsconfig.json',
+          './packages/*/tests/tsconfig.json',
+        ],
       },
     },
     rules: {
-      '@typescript-eslint/no-unused-vars': 'off',
       '@typescript-eslint/ban-ts-comment': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-require-imports': 'off',
@@ -251,9 +258,11 @@ export default defineConfig([
       'packages/*/src/**/*.test.ts',
       'packages/*/src/**/*.test.tsx',
     ],
-    plugins: { rstest: { rules: { 'os-agnostic-tests': osAgnosticTests } } },
+    plugins: {
+      'rstest-repo': { rules: { 'os-agnostic-tests': osAgnosticTests } },
+    },
     rules: {
-      'rstest/os-agnostic-tests': 'error',
+      'rstest-repo/os-agnostic-tests': 'error',
     },
   },
   {

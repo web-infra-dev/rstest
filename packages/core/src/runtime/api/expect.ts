@@ -145,7 +145,10 @@ export function createExpect({
     return expect(...args).withContext({ soft: true }) as Assertion;
   };
 
-  expect.poll = createExpectPoll(expect);
+  expect.poll = createExpectPoll(
+    expect,
+    () => getWorkerState().runtimeConfig.expect.poll,
+  );
 
   (expect as any).element = () => {
     throw new Error(

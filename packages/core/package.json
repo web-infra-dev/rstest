@@ -1,6 +1,6 @@
 {
   "name": "@rstest/core",
-  "version": "0.11.4",
+  "version": "0.11.6",
   "description": "The Rsbuild-based test tool.",
   "keywords": [
     "rstest",
@@ -70,7 +70,7 @@
     "test": "npx rstest --globals"
   },
   "dependencies": {
-    "@rsbuild/core": "~2.1.8",
+    "@rsbuild/core": "~2.1.9",
     "@types/chai": "^5.2.3"
   },
   "devDependencies": {
@@ -116,12 +116,12 @@
     "tinyglobby": "^0.2.17",
     "tinyspy": "^4.0.4",
     "url-extras": "^0.1.0",
-    "webpack": "^5.109.0",
+    "webpack": "^5.109.2",
     "webpack-license-plugin": "^4.5.1"
   },
   "peerDependencies": {
     "happy-dom": "^20.8.3",
-    "jsdom": "*"
+    "jsdom": ">=15.0.0"
   },
   "peerDependenciesMeta": {
     "happy-dom": {

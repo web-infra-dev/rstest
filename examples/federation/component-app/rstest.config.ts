@@ -11,7 +11,6 @@ export default defineConfig({
         './test/*.ssr.test.ts',
         './test/NodeLocalRemote.container.test.ts',
       ],
-      globalSetup: ['./scripts/rstestGlobalSetup.ts'],
       setupFiles: ['./scripts/rstest.setup.ts'],
       testEnvironment: 'node',
       plugins: [

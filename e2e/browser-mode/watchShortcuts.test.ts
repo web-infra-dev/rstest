@@ -40,6 +40,16 @@ describe('browser mode - watch CLI shortcuts', () => {
     // t/p are not plumbed through the browser rerun pipeline yet.
     expect(cli.stdout).toMatch('not yet supported in browser watch');
 
+    // ========== `f` reruns only the failed file ==========
+    // The snapshot is still stale here (before `u`), so the failed set is
+    // exactly the snapshot file, and it fails again.
+    cli.resetStd();
+    cli.exec.process!.stdin!.write('f');
+    await cli.waitForStdout('Re-running 1 affected test file(s)');
+    await cli.waitForStdout('Test Files 1 failed');
+    await cli.waitForStdout('Waiting for file changes...');
+    expect(cli.stdout).not.toContain('basic.test.ts');
+
     // ========== `u` reruns the unmatched file and updates the snapshot ==========
     cli.resetStd();
     cli.exec.process!.stdin!.write('u');
@@ -61,9 +71,11 @@ describe('browser mode - watch CLI shortcuts', () => {
     await cli.waitForStdout('✓ tests/basic.test.ts');
     await cli.waitForStdout('Waiting for file changes...');
 
-    // ========== `q` tears the session down and exits 0 ==========
+    // The initial snapshot failure keeps the process non-zero even though the
+    // update and later rerun pass.
     cli.exec.process!.stdin!.write('q');
-    await result.expectExecSuccess();
+    await result.expectExecFailed();
+    expect(cli.exec.process!.exitCode).toBe(1);
 
     await deleteFixtureTarget(fs, fixturesTargetPath);
   }, 90_000);

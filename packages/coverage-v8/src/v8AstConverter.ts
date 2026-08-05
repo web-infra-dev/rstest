@@ -43,8 +43,8 @@ import {
 } from '@jridgewell/trace-mapping';
 import type { Profiler } from 'node:inspector';
 import type { CoverageMap, FileCoverageData } from 'istanbul-lib-coverage';
-import jsTokens from 'js-tokens';
-import { walk } from 'estree-walker';
+import { walk } from 'yuku-ast';
+import type { Comment, ParseResult } from 'yuku-parser';
 
 type SourceMapLike = Omit<EncodedSourceMap | DecodedSourceMap, 'version'> & {
   version: number;
@@ -109,7 +109,7 @@ type PreparedCoverage = {
 type FileCoverageLike = FileCoverageData | { data: FileCoverageData };
 
 type ConvertOptions = {
-  ast: unknown | (() => unknown);
+  ast: ParseResult | (() => ParseResult);
   cacheKey: string;
   code: string;
   coverage: Pick<Profiler.ScriptCoverage, 'functions' | 'url'>;
@@ -131,7 +131,7 @@ const IGNORE_LINES_PATTERN =
 const EOL_PATTERN = /\r?\n/g;
 const MAX_PREPARED_CACHE_SIZE = 50;
 
-const preparedCache = new Map<string, Promise<PreparedCoverage>>();
+const preparedCache = new Map<string, Promise<PreparedCoverage | null>>();
 
 const createTraceMap = (sourceMap: SourceMapLike, sourceMapUrl?: string) =>
   new TraceMap(
@@ -181,15 +181,9 @@ export async function applyV8CoverageWithAst(
 async function getPreparedCoverage(
   options: ConvertOptions,
 ): Promise<PreparedCoverage | null> {
-  const ignoreHints = getIgnoreHints(options.code);
-
-  if (ignoreHints.length === 1 && ignoreHints[0]?.type === 'file') {
-    return null;
-  }
-
   let prepared = preparedCache.get(options.cacheKey);
   if (!prepared) {
-    prepared = prepareCoverage(options, ignoreHints);
+    prepared = prepareCoverage(options);
     preparedCache.set(options.cacheKey, prepared);
 
     if (preparedCache.size > MAX_PREPARED_CACHE_SIZE) {
@@ -205,8 +199,24 @@ async function getPreparedCoverage(
 
 async function prepareCoverage(
   options: ConvertOptions,
-  ignoreHints: IgnoreHint[],
-): Promise<PreparedCoverage> {
+): Promise<PreparedCoverage | null> {
+  const parseResult =
+    typeof options.ast === 'function' ? options.ast() : options.ast;
+  const ignoreHints = options.code.includes('ignore')
+    ? getIgnoreHints(options.code, parseResult.comments)
+    : [];
+
+  if (ignoreHints.length === 1 && ignoreHints[0]?.type === 'file') {
+    return null;
+  }
+
+  const error = parseResult.diagnostics.find(
+    (diagnostic) => diagnostic.severity === 'error',
+  );
+  if (error) {
+    throw new SyntaxError(error.message);
+  }
+
   const filename = fileURLToPath(options.coverage.url);
   const directory = dirname(filename);
   const sourceMapResult = options.sourceMap
@@ -255,9 +265,7 @@ async function prepareCoverage(
   const isSkipped = (node: AstNode | null | undefined) =>
     Boolean(node && skippedNodes.has(node));
 
-  const ast = typeof options.ast === 'function' ? options.ast() : options.ast;
-
-  walk(ast as Parameters<typeof walk>[0], {
+  walk(parseResult.program, {
     enter(node) {
       const current = node as AstNode;
       if (nextIgnore !== false) {
@@ -1260,50 +1268,28 @@ function isTernarySeparatorOnly(code: string): boolean {
   return /^[?:\s]*$/.test(code);
 }
 
-function getIgnoreHints(code: string): IgnoreHint[] {
+function getIgnoreHints(code: string, comments: Comment[]): IgnoreHint[] {
   const ignoreHints: IgnoreHint[] = [];
-  const tokens = jsTokens(code);
-  let current = 0;
-  let previousTokenWasIgnoreHint = false;
 
-  for (const token of tokens) {
-    if (
-      previousTokenWasIgnoreHint &&
-      token.type !== 'WhiteSpace' &&
-      token.type !== 'LineTerminatorSequence'
-    ) {
-      const previous = ignoreHints.at(-1);
-      if (previous) {
-        previous.loc.end = current;
-      }
-      previousTokenWasIgnoreHint = false;
+  for (const comment of comments) {
+    const value =
+      comment.type === 'Block'
+        ? comment.value.replace(/^\*/, '')
+        : comment.value;
+    const type = value.match(IGNORE_PATTERN)?.[1];
+
+    if (type === 'file') {
+      return [{ type, loc: { start: 0, end: 0 } }];
     }
 
-    if (
-      token.type === 'SingleLineComment' ||
-      token.type === 'MultiLineComment'
-    ) {
-      const loc = { start: current, end: current + token.value.length };
-      const comment = token.value
-        .replace(/^\/\*\*/, '')
-        .replace(/^\/\*/, '')
-        .replace(/\*\*\/$/, '')
-        .replace(/\*\/$/, '')
-        .replace(/^\/\//, '');
-      const groups = comment.match(IGNORE_PATTERN);
-      const type = groups?.[1];
-
-      if (type === 'file') {
-        return [{ type, loc: { start: 0, end: 0 } }];
+    if (type === 'if' || type === 'else' || type === 'next') {
+      const loc = { start: comment.start, end: comment.end };
+      const nextTokenOffset = code.slice(comment.end).search(/\S/);
+      if (nextTokenOffset !== -1) {
+        loc.end += nextTokenOffset;
       }
-
-      if (type === 'if' || type === 'else' || type === 'next') {
-        ignoreHints.push({ type, loc });
-        previousTokenWasIgnoreHint = true;
-      }
+      ignoreHints.push({ type, loc });
     }
-
-    current += token.value.length;
   }
 
   return ignoreHints;

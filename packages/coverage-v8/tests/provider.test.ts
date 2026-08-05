@@ -9,9 +9,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import type { NormalizedCoverageOptions } from '@rstest/core';
-import { Parser } from 'acorn';
 import type { FileCoverageData } from 'istanbul-lib-coverage';
+import { parse } from 'yuku-parser';
 import { CoverageProvider } from '../src/provider';
+import type { IstanbulFileCoverageData } from '../src/utils';
 import { convertV8CoverageWithAst } from '../src/v8AstConverter';
 
 const createOptions = (
@@ -82,7 +83,13 @@ const trackNativeMerge = (
   return () => mergeCalls;
 };
 
-type ProviderInternals = CoverageProvider & {
+// `Omit`, not a plain intersection: the class declares these as private
+// members, and intersecting a private member with a public one collapses the
+// whole type to `never`.
+type ProviderInternals = Omit<
+  CoverageProvider,
+  'findInDict' | 'convertWithAst' | 'takeRawCoverage'
+> & {
   findInDict: (
     dict: Record<string, string> | undefined,
     filePath: string,
@@ -92,7 +99,11 @@ type ProviderInternals = CoverageProvider & {
     entry: {
       url: string;
       scriptId: string;
-      functions: [];
+      functions: {
+        functionName: string;
+        isBlockCoverage: boolean;
+        ranges: { startOffset: number; endOffset: number; count: number }[];
+      }[];
     },
     options?: {
       assetFiles?: Record<string, string>;
@@ -111,8 +122,8 @@ function getProviderInternals(provider: CoverageProvider): ProviderInternals {
 }
 
 function parseModule(code: string) {
-  return Parser.parse(code, {
-    ecmaVersion: 'latest',
+  return parse(code, {
+    preserveParens: false,
     sourceType: 'module',
   });
 }
@@ -269,6 +280,59 @@ describe('coverage-v8 provider', () => {
     const fileCoverage = coverage[file]!;
     expect(fileCoverage.fnMap[0]?.name).toBe('a');
     expect(fileCoverage.f).toEqual({ 0: 0 });
+  });
+
+  it('uses Yuku UTF-16 spans with V8 offsets', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-yuku-unicode.js');
+    const code = 'const label = "😀";\nconst value = () => 1;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:yuku-unicode`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.fnMap[0]?.decl.start).toEqual({
+      line: 2,
+      column: 14,
+    });
+  });
+
+  it('converts Yuku ESTree destructuring defaults and logical branches', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-yuku-branches.js');
+    const code = 'const { value = 1 } = input;\nconst result = (a && b) || c;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:yuku-branches`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.branchMap[0]?.type).toBe('default-arg');
+    expect(coverage[file]?.branchMap[1]?.type).toBe('binary-expr');
+    expect(coverage[file]?.branchMap[1]?.locations).toHaveLength(3);
   });
 
   it('preserves non-file source map URLs as coverage filenames', async () => {
@@ -431,6 +495,34 @@ describe('coverage-v8 provider', () => {
     expect(coverage[file]?.b[0]).toEqual([1]);
   });
 
+  it('uses Yuku comments for ignore hints', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-yuku-comments.js');
+    const code = `const marker = "/* v8 ignore if */";
+if (first) { foo(); } else { bar(); }
+const label = "😀";
+/** v8 ignore if */ if (second) { foo(); } else { bar(); }`;
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${file}:yuku-comments`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage[file]?.branchMap[0]?.locations).toHaveLength(2);
+    expect(coverage[file]?.branchMap[1]?.locations).toHaveLength(1);
+  });
+
   it('gives implicit else branches numeric locations', async () => {
     const file = join(tmpdir(), 'rstest-coverage-v8-implicit-else-location.js');
     const code = 'if (flag) { foo(); }';
@@ -516,6 +608,29 @@ describe('coverage-v8 provider', () => {
 
     expect(coverage[file]?.branchMap[0]?.locations).toHaveLength(1);
     expect(coverage[file]?.b[0]).toEqual([1]);
+  });
+
+  it('honors ignore-file comments before reporting parser errors', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-ignore-file.js');
+    const code = '/* c8 ignore file */ const =;';
+
+    const coverage = await convertV8CoverageWithAst({
+      ast: () => parseModule(code),
+      cacheKey: `${file}:ignore-file`,
+      code,
+      coverage: {
+        url: pathToFileURL(file).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+    });
+
+    expect(coverage).toEqual({});
   });
 
   it('invalidates prepared AST coverage when an external source map changes', async () => {
@@ -891,15 +1006,14 @@ export default class CustomCoverageReporter {
     });
     const getNativeMergeCalls = trackNativeMerge(coverageMap, file);
 
-    coverageMap.merge({
-      [file]: {
-        ...createUnhashedFileCoverage(file),
-        bT: { 0: [17, 19] },
-        s: { 0: 5 },
-        f: { 0: 7 },
-        b: { 0: [11, 13] },
-      },
-    });
+    const incoming: IstanbulFileCoverageData = {
+      ...createUnhashedFileCoverage(file),
+      bT: { 0: [17, 19] },
+      s: { 0: 5 },
+      f: { 0: 7 },
+      b: { 0: [11, 13] },
+    };
+    coverageMap.merge({ [file]: incoming });
 
     expect(getNativeMergeCalls()).toBe(1);
     const fileCoverage = coverageMap.fileCoverageFor(file).toJSON();

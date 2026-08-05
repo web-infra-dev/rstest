@@ -229,9 +229,16 @@ export async function runGlobalSetup({
   });
 
   if (result.success) {
-    // Apply environment variable changes to main process
     if (result.envChanges) {
+      const previousEnv: Record<string, string | undefined> = {};
+      for (const key in result.envChanges) {
+        previousEnv[key] = process.env[key];
+      }
       applyEnvChanges(result.envChanges);
+      // Register the restore before the user teardown so the LIFO drain keeps
+      // setup env visible to teardown, then restores the host for a config
+      // restart. This callback is required even when setup returns no teardown.
+      globalTeardownCallbacks.push(() => applyEnvChanges(previousEnv));
     }
 
     if (result.hasTeardown) {
@@ -240,7 +247,7 @@ export async function runGlobalSetup({
       await worker.close();
     }
   } else {
-    await worker.close();
+    await runWorkerTeardown(worker);
   }
   return {
     success: result.success,
@@ -250,12 +257,16 @@ export async function runGlobalSetup({
 }
 
 async function runWorkerTeardown(worker: GlobalSetupWorker): Promise<void> {
-  const result = await worker.call<{ success: boolean }>({ type: 'teardown' });
-  if (!result.success) {
-    process.exitCode = 1;
+  try {
+    const result = await worker.call<{ success: boolean }>({
+      type: 'teardown',
+    });
+    if (!result.success) {
+      process.exitCode = 1;
+    }
+  } finally {
+    await worker.close();
   }
-
-  await worker.close();
 }
 
 export async function runGlobalTeardown(): Promise<void> {

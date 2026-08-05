@@ -4,7 +4,6 @@ export default defineConfig({
   exclude: ['test/sourcemapMapping.test.ts', 'allow-external/**'],
   coverage: {
     enabled: true,
-    provider: 'istanbul',
     reporters: [],
     clean: false,
     thresholds: {

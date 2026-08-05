@@ -49,6 +49,53 @@ Factory functions must be synchronous. To keep part of the original implementati
   </div>
 </div>
 
+#### Mock virtual modules
+
+Rstest can mock modules that do not exist on disk, such as generated modules, native modules, and dependencies available only in another runtime. Use the same setup in Node and Browser mode:
+
+1. Declare the module so TypeScript knows its exports:
+
+```ts title="src/types/native-runtime.d.ts"
+declare module 'native-runtime' {
+  export const platform: string;
+}
+```
+
+2. Map the specifier to `false` so the build treats it as a resolved, ignored module:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      'native-runtime': false,
+    },
+  },
+});
+```
+
+3. Provide its runtime exports with a factory:
+
+```ts title="src/native-runtime.test.ts"
+import { expect, rs, test } from '@rstest/core';
+import { platform } from 'native-runtime';
+
+rs.mock('native-runtime', () => ({
+  platform: 'test',
+}));
+
+test('uses the virtual module', () => {
+  expect(platform).toBe('test');
+});
+```
+
+Rstest does not use Jest's third `{ virtual: true }` argument. Keep the same specifier in the declaration, alias, mock call, and import. The virtual module can also be imported indirectly by the source code under test.
+
+`rs.mock` supports static `import` because the call is hoisted. For a later dynamic `import()`, call `rs.doMock` before importing. For `require()`, use `rs.mockRequire` or `rs.doMockRequire`.
+
+A matching manual mock in `__mocks__` can provide the implementation instead of a factory. Because an alias mapped to `false` has no real implementation, use a factory or manual mock rather than `{ mock: true }`, `{ spy: true }`, or `rs.importActual`.
+
 #### With `rs.fn()` for call tracking
 
 Use `rs.fn()` to create mock functions that can track calls and configure return values:

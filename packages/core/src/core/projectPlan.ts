@@ -71,11 +71,9 @@ type ResolveRunnableProjectsOptions = {
 
 export const createRunProjectPlanState = ({
   context,
-  browserProjects,
   isWatchMode,
 }: {
   context: RstestContext;
-  browserProjects: ProjectContext[];
   isWatchMode: boolean;
 }): {
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
@@ -186,11 +184,6 @@ export const createRunProjectPlanState = ({
 
       browserProjectsToRun = browserProjectsToRun.filter(hasShardedEntries);
       nodeProjectsToRun = nodeProjectsToRun.filter(hasShardedEntries);
-    }
-
-    if (isWatchMode && context.relatedResolutionEmpty) {
-      browserProjectsToRun = browserProjects;
-      nodeProjectsToRun = [];
     }
 
     environmentGroupsResolved = true;

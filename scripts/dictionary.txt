@@ -72,6 +72,7 @@ idents
 iife
 imagex
 importee
+instrumenter
 jfif
 jiti
 jridgewell
@@ -189,7 +190,6 @@ tinyspy
 transpiling
 treeshaking
 tsbuildinfo
-tsconfck
 tsdoc
 tsup
 unawaited
@@ -213,4 +213,5 @@ webm
 webp
 worktree
 worktrees
+yuku
 Zenbook

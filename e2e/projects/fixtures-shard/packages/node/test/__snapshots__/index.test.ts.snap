@@ -1,3 +1,0 @@
-// Rstest Snapshot v1
-
-exports[`should generate snapshot correctly 1`] = `"hello world"`;

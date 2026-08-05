@@ -6,6 +6,11 @@ module.exports = defineConfig({
   dev: {
     assetPrefix: 'http://localhost:3004/',
   },
+  server: {
+    cors: {
+      origin: 'http://localhost:3002',
+    },
+  },
   source: {
     entry: {
       index: {

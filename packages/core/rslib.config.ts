@@ -51,7 +51,12 @@ const readableMinifyConfig = {
 const fullyMinifiedNodeChunks =
   /(?:^|\/)(?:@babel\/code-frame|@clack\/prompts|@vitest\/pretty-format|chokidar|diff|fake-timers|magic-string\.es)~0\.js$/;
 const fullyMinifiedBrowserChunks =
-  /(?:^|\/)(?:fake-timers|magic-string\.es)~1\.js$/;
+  /(?:^|\/)(?:browser-runtime-vendor|fake-timers|magic-string\.es)~1\.js$/;
+
+// An allowlist preserves the existing lazy snapshot, fake-timers, and
+// magic-string chunk boundaries.
+const browserRuntimeVendorModules =
+  /[\\/]node_modules[\\/](?:@vitest[\\/](?:expect|pretty-format|spy|utils)|base64-js|buffer|chai|ieee754|pathe|path-browserify|process|stacktrace-parser|tinyrainbow|tinyspy|url-extras)(?:[\\/]|$)/;
 
 // API Extractor keeps this reference from bundled @vitest/expect but omits
 // the matching global augmentation that makes the declaration self-contained.
@@ -163,7 +168,9 @@ export default defineConfig({
       syntax: 'es2023',
       dts: {
         isolated: true,
-        bundle: true,
+        bundle: {
+          bundledPackages: ['@vitest/spy', 'tinyrainbow'],
+        },
       },
       banner: {
         dts: jestMatchersDtsBanner,
@@ -192,6 +199,23 @@ export default defineConfig({
       plugins: [pluginNodePolyfill()],
       tools: {
         rspack: {
+          optimization: {
+            // Split chunks register through the Rspack runtime. Leaving it in
+            // the entry chunk creates a circular ESM initialization dependency.
+            runtimeChunk: {
+              name: 'browser-runtime-runtime',
+            },
+            splitChunks: {
+              cacheGroups: {
+                browserRuntimeVendor: {
+                  chunks: 'initial',
+                  enforce: true,
+                  name: 'browser-runtime-vendor',
+                  test: browserRuntimeVendorModules,
+                },
+              },
+            },
+          },
           plugins: [
             rsdoctorCIPlugin({ reportDir: '.rsdoctor/browser' }),
           ].filter(Boolean),

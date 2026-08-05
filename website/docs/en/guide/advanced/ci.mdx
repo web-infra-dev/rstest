@@ -1,5 +1,5 @@
 ---
-description: Configure Rstest in CI, including basic workflows, coverage, Browser Mode, sharding, and report artifacts.
+description: Configure Rstest in CI, including basic workflows, coverage, browser testing, sharding, and report artifacts.
 ---
 
 # CI
@@ -76,36 +76,95 @@ Upload the generated `coverage/` directory if your CI needs to keep the HTML rep
 
 Use `if: always()` when the report is useful for failed runs too. For available providers, reporters, thresholds, and output paths, see [coverage](/config/test/coverage).
 
-## Browser mode in CI
+## Run browser tests in CI
 
-Browser Mode runs tests in a real browser, so CI must install both the Rstest browser package and the browser binaries. Install [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser) in the project, then install the Playwright browser used by your config.
+[Rstest Browser Mode](/guide/browser-testing) and [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) both use [Playwright](https://github.com/microsoft/playwright) to launch browsers. Installing the `playwright` npm package provides the automation API, but the browser executable must be provided separately.
+
+### Choose how to provide the browser
+
+The portable default is to install the Playwright browser that matches the package version:
 
 ```bash
-pnpm add @rstest/browser playwright -D
 pnpm exec playwright install --with-deps chromium
 ```
 
-In CI, `browser.headless` defaults to `true`, so the browser runs without a visible window. A GitHub Actions workflow usually adds the browser installation step before running tests:
+Choose the setup that matches the coverage and reproducibility your workflow needs:
 
-```yaml
-jobs:
-  browser-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.12.0
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm rstest --browser
+| Requirement                                          | Browser setup                                                                                                                                          |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Fast Chrome runs on a standard GitHub-hosted runner  | Skip `playwright install` and launch the preinstalled Chrome with `channel: 'chrome'`.                                                                 |
+| A Chromium version pinned to the Playwright package  | Run `playwright install --with-deps chromium`. For headless-only runs without a channel, add `--only-shell` to skip the full headed Chromium download. |
+| Firefox or WebKit coverage                           | Install the matching Playwright browser with `playwright install --with-deps firefox` or `playwright install --with-deps webkit`.                      |
+| A self-hosted runner, container job, or custom image | Install the Playwright browser, or provision Chrome in the image before selecting `channel: 'chrome'`.                                                 |
+
+The standard [GitHub-hosted runner images](https://github.com/actions/runner-images#available-images), including `ubuntu-latest`, provide Google Chrome. Selecting its `chrome` channel lets both Rstest integrations use that executable without downloading Playwright Chromium. GitHub updates runner software regularly, so this trades a pinned browser revision for faster setup. The workflow's **Set up job → Runner Image → Included Software** link shows the [exact software for a run](https://docs.github.com/en/actions/concepts/runners/github-hosted-runners#preinstalled-software-for-github-owned-images).
+
+Firefox and WebKit still require Playwright's browser downloads. Playwright relies on patched builds for those engines and cannot substitute the Firefox or Safari applications installed on the runner.
+
+### Browser mode
+
+Install [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser) and the Playwright API:
+
+```bash
+pnpm add @rstest/browser playwright -D
 ```
 
-If you test with `firefox` or `webkit`, install the same browser that `browser.browser` selects. See [Browser Mode getting started](/guide/browser-testing/getting-started) and [browser configuration](/config/test/browser) for full setup options.
+On a standard GitHub-hosted runner, pass the Chrome channel through the Browser Mode CLI and omit the browser installation step:
+
+```yaml
+- run: pnpm install --frozen-lockfile
+- run: pnpm rstest --browser --browser.providerOptions.launch.channel=chrome
+```
+
+To keep the same optimization behind an environment check in `rstest.config.ts`, configure the provider instead:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  browser: {
+    enabled: true,
+    provider: 'playwright',
+    providerOptions:
+      process.env.GITHUB_ACTIONS === 'true'
+        ? {
+            launch: {
+              channel: 'chrome',
+            },
+          }
+        : undefined,
+  },
+});
+```
+
+In CI, `browser.headless` defaults to `true`, so no additional headless configuration is needed. See [Browser Mode getting started](/guide/browser-testing/getting-started) and [browser configuration](/config/test/browser) for other browser and provider options.
+
+### @rstest/playwright
+
+Install the Rstest fixtures and the Playwright API:
+
+```bash
+pnpm add @rstest/playwright playwright -D
+```
+
+[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) configures launch options through its `playwright` fixture. Define a shared extended `test`, then import it from browser test files:
+
+```ts title="tests/fixtures.ts"
+import { expect, test as base } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+export { expect };
+
+export const test = base.extend({
+  playwright: {
+    browserName: 'chromium',
+    launchOptions:
+      process.env.GITHUB_ACTIONS === 'true' ? { channel: 'chrome' } : undefined,
+  } satisfies PlaywrightOptions,
+});
+```
+
+With this fixture, a standard GitHub-hosted workflow only needs to install npm dependencies and run Rstest; do not add a `playwright install` step. See the [@rstest/playwright guide](/guide/advanced/playwright) for fixture usage and trace artifacts.
 
 ## Split tests with shards
 
@@ -195,6 +254,8 @@ Use `junit` for CI test-result integrations, `json` for custom tooling, `md` for
 
 Start with the package-manager cache because it is safe and usually gives the biggest CI improvement. In GitHub Actions, `actions/setup-node` with `cache: pnpm` restores the pnpm store based on the lockfile.
 
+Do not cache Playwright browser binaries by default. Restoring the cache can take about as long as downloading the browser, and Linux system dependencies are not included in that cache. Prefer the preinstalled GitHub Chrome when its version policy fits your workflow; otherwise install only the required browser and use `--only-shell` for headless-only Chromium runs.
+
 ## Recommended checklist
 
 - Use Node.js `^20.19.0` or `>=22.12.0` to match Rstest's supported runtime range.
@@ -202,4 +263,4 @@ Start with the package-manager cache because it is safe and usually gives the bi
 - Install coverage and browser packages only when the workflow needs those features.
 - Upload coverage, JUnit, JSON, or blob artifacts with `if: always()` if they help debug failures.
 - Add sharding only after the single-machine workflow is stable.
-- Keep Browser Mode browser installation aligned with the browser selected in Rstest config.
+- Choose explicitly between a version-matched Playwright browser and a preinstalled system Chrome, and keep the selected browser, channel, and installation step aligned.

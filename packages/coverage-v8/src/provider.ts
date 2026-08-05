@@ -7,12 +7,12 @@ import type {
   CoverageProvider as RstestCoverageProvider,
   RawCoverageResolveOptions,
 } from '@rstest/core';
-import { Parser } from 'acorn';
 import { type CoverageMap, type FileCoverageData } from 'istanbul-lib-coverage';
 import type { ReportBase } from 'istanbul-lib-report';
 import { createContext } from 'istanbul-lib-report';
 import reports from 'istanbul-reports';
 import picomatch from 'picomatch';
+import { parse } from 'yuku-parser';
 import { createFastCoverageMap, mapWithConcurrency } from './utils';
 import {
   applyV8CoverageWithAst,
@@ -524,8 +524,8 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   private parseAst(code: string, outputModule: boolean) {
-    return Parser.parse(code, {
-      ecmaVersion: 'latest',
+    return parse(code, {
+      preserveParens: false,
       sourceType: outputModule ? 'module' : 'script',
     });
   }
@@ -1089,7 +1089,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     try {
       await this.session.post('Profiler.stopPreciseCoverage');
       await this.session.post('Profiler.disable');
-    } catch (_err) {
+    } catch {
       // Ignore teardown errors to prevent masking original errors
     }
   }

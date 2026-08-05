@@ -5,6 +5,7 @@ import {
   claimGlobalSetupOnce,
   GlobalSetupWorker,
   runGlobalSetup,
+  runGlobalTeardown,
 } from '../../src/core/globalSetup';
 
 // Self-contained fake of the globalSetup IPC child: replies to every `setup`
@@ -121,18 +122,28 @@ describe('GlobalSetupWorker', () => {
 });
 
 describe('runGlobalSetup', () => {
-  it('surfaces the worker env change-set and applies it to process.env', async () => {
-    const result = await runGlobalSetup({
-      globalSetupEntries: [],
-      assetFiles: {},
-      sourceMaps: {},
-      interopDefault: true,
-      outputModule: false,
-    });
+  it('applies the worker env change-set until global teardown', async () => {
+    process.env.RSTEST_GS_UNIT = 'before-setup';
 
-    expect(result.success).toBe(true);
-    expect(result.envChanges).toEqual({ RSTEST_GS_UNIT: 'from-worker' });
-    // The change-set is also applied to the host env (node pool reads it).
-    expect(process.env.RSTEST_GS_UNIT).toBe('from-worker');
+    try {
+      const result = await runGlobalSetup({
+        globalSetupEntries: [],
+        assetFiles: {},
+        sourceMaps: {},
+        federation: false,
+        interopDefault: true,
+        outputModule: false,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.envChanges).toEqual({ RSTEST_GS_UNIT: 'from-worker' });
+      // The change-set is applied to the host env while tests run.
+      expect(process.env.RSTEST_GS_UNIT).toBe('from-worker');
+
+      await runGlobalTeardown();
+      expect(process.env.RSTEST_GS_UNIT).toBe('before-setup');
+    } finally {
+      delete process.env.RSTEST_GS_UNIT;
+    }
   });
 });

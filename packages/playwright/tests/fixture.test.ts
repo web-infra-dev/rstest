@@ -7,9 +7,14 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { expect as coreExpect } from '@rstest/core';
 import { afterEach, beforeEach, expect, test } from '../src';
-import { getDebugOptions, resolveLaunchOptions } from '../src/fixture';
+import {
+  getDebugOptions,
+  resolveLaunchOptions,
+  shouldCaptureTrace,
+} from '../src/fixture';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type {
+  PlaywrightFixture,
   PlaywrightFixtures,
   PlaywrightOptions,
   PlaywrightTest,
@@ -210,7 +215,7 @@ agentTest('supports third-party fixture wrappers', async ({ agent, page }) => {
 });
 
 test.extend({
-  playwright: async (_, use) => {
+  playwright: async (_, use: PlaywrightUse<PlaywrightOptions>) => {
     await use({
       browserName: 'chromium',
       launchOptions: {
@@ -222,7 +227,9 @@ test.extend({
   expect(playwright.launchOptions).toEqual({ headless: true });
 });
 
-browserTest.extend<{ url: string }>({
+// Overriding a base fixture while adding a new one has to name the overridden
+// fixture in the added set, or `page` is not assignable here.
+browserTest.extend<{ url: string } & Pick<PlaywrightFixture, 'page'>>({
   url: 'about:blank',
   page: async ({ context, url }, use) => {
     const page = await context.newPage();
@@ -250,7 +257,7 @@ const thirdPartyFixtures = {
   },
 } satisfies PlaywrightFixtures<
   { customContext: BrowserContext },
-  { playwright: PlaywrightOptions }
+  PlaywrightFixture
 >;
 
 browserTest.extend(thirdPartyFixtures)(
@@ -292,6 +299,30 @@ test('enables headed debug mode from PWDEBUG', () => {
       process.env.PWDEBUG = original;
     }
   }
+});
+
+test('selects Playwright trace attempts by mode', () => {
+  const retryCounts = [0, 1, 2];
+
+  expect(retryCounts.map((count) => shouldCaptureTrace('off', count))).toEqual([
+    false,
+    false,
+    false,
+  ]);
+  expect(retryCounts.map((count) => shouldCaptureTrace('on', count))).toEqual([
+    true,
+    true,
+    true,
+  ]);
+  expect(
+    retryCounts.map((count) => shouldCaptureTrace('retain-on-failure', count)),
+  ).toEqual([true, true, true]);
+  expect(
+    retryCounts.map((count) => shouldCaptureTrace('on-first-retry', count)),
+  ).toEqual([false, true, false]);
+  expect(
+    retryCounts.map((count) => shouldCaptureTrace('on-all-retries', count)),
+  ).toEqual([false, true, true]);
 });
 
 test.extend({}).describe('extended test API', () => {
@@ -464,6 +495,91 @@ test(
     expect(await response.text()).toBe('<h1>ok</h1>');
   },
 );
+
+const namedFixtureEvents: string[] = [];
+const predicate = (value: string) => value.length > 0;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+const broadlyTypedFunction: Function = predicate;
+const broadlyTypedCallable: CallableFunction = predicate;
+class NamedFixtureService {
+  name = 'service';
+}
+
+const checkNamedFixtureTypes = (
+  fixtureName: string,
+  patternName: `slot${string}`,
+  unionName: 'left' | 'right',
+) => {
+  // @ts-expect-error callable values must be returned by named fixture functions
+  test.extend('predicate', predicate);
+
+  // @ts-expect-error broadly typed functions are still callable at runtime
+  test.extend('broadFunction', broadlyTypedFunction);
+
+  // @ts-expect-error broadly typed callable values are fixture functions at runtime
+  test.extend('broadCallable', broadlyTypedCallable);
+
+  // @ts-expect-error constructable values must be returned by named fixture functions
+  test.extend('service', NamedFixtureService);
+
+  // @ts-expect-error named fixture names must be statically known
+  test.extend('prefix', 'prefix').extend(fixtureName, 42);
+
+  // @ts-expect-error patterned names do not identify one context field
+  test.extend(patternName, 42);
+
+  // @ts-expect-error named fixture names must be JavaScript identifiers
+  test.extend('base-url', 'https://example.com');
+
+  // @ts-expect-error named fixture names cannot replace TestContext fields
+  test.extend('expect', 'fixture');
+
+  // @ts-expect-error named fixture names cannot replace internal context fields
+  test.extend('_useLocalExpect', false);
+
+  test.extend('name', 'fixture')('supports Function property names', (ctx) => {
+    expect(ctx.name).toBe('fixture');
+  });
+
+  const unionFixtureTest = test
+    .extend('prefix', 'prefix')
+    .extend(unionName, 42);
+  unionFixtureTest('models union names as alternative contexts', (ctx) => {
+    const prefix: string = ctx.prefix;
+    void prefix;
+    // @ts-expect-error neither union member is guaranteed to be registered
+    void ctx.left;
+  });
+};
+void checkNamedFixtureTypes;
+
+const namedFixtureTest = test
+  .extend('title', (_context, { onCleanup }) => {
+    expect('named fixture setup').toContain('setup');
+    onCleanup(() => {
+      expect('named fixture cleanup').toContain('cleanup');
+      namedFixtureEvents.push('cleanup');
+    });
+    return 'named fixture title';
+  })
+  .extend('predicate', () => predicate)
+  .extend('service', () => NamedFixtureService)
+  .extend('name', () => 'playwright fixture');
+
+namedFixtureTest(
+  'supports the named fixture form',
+  ({ name, predicate, service, title }) => {
+    expect(name).toBe('playwright fixture');
+    expect(title).toBe('named fixture title');
+    expect(predicate('value')).toBe(true);
+    expect(new service().name).toBe('service');
+    namedFixtureEvents.push('test');
+  },
+);
+
+namedFixtureTest.afterAll(() => {
+  expect(namedFixtureEvents).toEqual(['test', 'cleanup']);
+});
 
 test(
   'encodes static server entry filenames in returned URLs',

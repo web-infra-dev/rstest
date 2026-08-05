@@ -13,6 +13,7 @@ describe('browser mode - basic', () => {
     expect(cli.stdout).toContain('fakeTimers.test.ts');
     expect(cli.stdout).toContain('spy.test.ts');
     expect(cli.stdout).toContain('fixtures.test.ts');
+    expect(cli.stdout).toContain('retryContext.test.ts');
     expect(cli.stdout).not.toContain('/scheduler.html');
   });
 
@@ -21,6 +22,18 @@ describe('browser mode - basic', () => {
     async () => {
       const { cli } = await runBrowserCli('basic', {
         args: ['--browser.headless', 'false', 'tests/dom.test.ts'],
+      });
+
+      await cli.exec;
+      expect(cli.exec.exitCode).toBe(0);
+    },
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'should serve the Browser UI when user plugins generate an index HTML',
+    async () => {
+      const { cli } = await runBrowserCli('basic', {
+        args: ['-c', 'rstest.userHtml.config.mts'],
       });
 
       await cli.exec;

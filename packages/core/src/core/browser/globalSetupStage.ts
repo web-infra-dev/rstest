@@ -9,12 +9,12 @@ import type {
 import { isDebug, resolveShardedEntries } from '../../utils';
 import { claimGlobalSetupOnce, runGlobalSetup } from '../globalSetup';
 import { getRsbuildEnvironmentConfig } from '../modifyRstestConfig';
+import { getProjectEntries } from '../projectPlan';
 import { pluginBasic } from '../plugins/basic';
 import { pluginEntryWatch } from '../plugins/entry';
 import { pluginExternal } from '../plugins/external';
 import { pluginIgnoreResolveError } from '../plugins/ignoreResolveError';
 import { pluginMockRuntime } from '../plugins/mockRuntime';
-import { getProjectEntries } from '../projectPlan';
 import { createRsbuildServer, hostServerConfig } from '../rsbuild';
 import { createSetupFileState } from '../setupFileState';
 
@@ -56,35 +56,42 @@ export const globalSetupFailureOutcome = (
  * Setups run host-side in the same forked worker node projects use; teardown
  * callbacks queue into the shared `runGlobalTeardown` drain.
  *
- * Known restriction: browser `modifyRstestConfig` hooks apply later (inside
- * the browser run cycle), so hook-added `globalSetup` entries or hook-added
- * test files in an otherwise-empty project are invisible to this stage.
+ * Hook-added config is visible here: the planner's config-hook discovery has
+ * already fired the browser `modifyRstestConfig` hooks and re-resolved the
+ * plan by the time any run shape reaches this stage, so `globalSetup` entries
+ * a hook added — and hook-added test files in an otherwise-empty project —
+ * are honored. The public `global-setup` docs state the same guarantee; keep
+ * the two in step.
  *
  * Known limitation: browser projects share one run cycle, so any project's
  * setup failure skips the whole browser cycle (node isolates failures per
  * project). Exit code and error reporting still surface the failure.
+ *
  */
 export async function runBrowserGlobalSetupStage(
   context: RstestContext,
   browserProjects: ProjectContext[],
-  options?: {
+  {
+    entriesCache,
+  }: {
     /**
-     * Plan-resolved (already shard-narrowed) entries from the mixed path so
-     * the "no running tests -> no globalSetup" gate reuses the plan's glob
-     * instead of re-walking the fs.
+     * The plan's entries, already narrowed to the shard slice, so the "no
+     * running tests -> no globalSetup" gate reuses the plan's glob instead of
+     * re-walking the fs. When present it is authoritative — an absent project
+     * means zero entries, not "look it up". Optional because `listTests.ts`
+     * reaches this stage without a resolved plan; every run shape comes through
+     * the one assembly in `runTests.ts` and always passes it.
      */
     entriesCache?: Map<string, ProjectEntries>;
   },
 ): Promise<BrowserGlobalSetupStageResult> {
-  // Gate source, shard-aware in every run shape: the mixed path passes the
-  // plan's shard-narrowed cache; browser-only runs resolve the same sharded
-  // map the browser controller will use, so a project whose shard slice is
-  // empty never runs its globalSetup. When a map exists it is authoritative
-  // (absent project -> zero entries); only unsharded browser-only runs fall
-  // back to the per-project glob.
+  // Shard-aware in every run shape: the run path passes the plan's
+  // shard-narrowed cache; a list without one resolves the same sharded map the
+  // browser controller will use, so a project whose shard slice is empty never
+  // runs its globalSetup. Only an unsharded list falls back to a per-project
+  // glob.
   const gateEntries =
-    options?.entriesCache ??
-    (await resolveShardedEntries(context, { silent: true }));
+    entriesCache ?? (await resolveShardedEntries(context, { silent: true }));
 
   const candidates = (
     await Promise.all(

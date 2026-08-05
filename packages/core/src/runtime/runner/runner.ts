@@ -100,6 +100,7 @@ export class TestRunner {
         beforeEachListeners: BeforeEachListener[];
         afterEachListeners: AfterEachListener[];
       },
+      retryCount: number,
     ): Promise<TestResult> => {
       if (test.runMode === 'skip') {
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
@@ -157,6 +158,7 @@ export class TestRunner {
         test,
         snapshotClient.getSnapshotState(testPath),
         fixtureCleanups,
+        retryCount,
       );
 
       try {
@@ -665,7 +667,11 @@ export class TestRunner {
               // attributed errors from earlier repeats that already passed.
               const repeatRetryErrors: FormattedError[] = [];
               do {
-                const currentResult = await runTestsCase(test, parentHooks);
+                const currentResult = await runTestsCase(
+                  test,
+                  parentHooks,
+                  retryCount,
+                );
 
                 if (currentResult.status === 'fail') {
                   repeatRetryErrors.push(
@@ -823,7 +829,7 @@ export class TestRunner {
     }
   }
 
-  private createTestContext(test: TestCase): TestContext {
+  private createTestContext(test: TestCase, retryCount: number): TestContext {
     const context = (() => {
       throw new Error('done() callback is deprecated, use promise instead');
     }) as unknown as TestContext;
@@ -837,6 +843,7 @@ export class TestRunner {
       name: test.name,
       filepath: toNativePath(test.testPath),
       projectRoot: toNativePath(this.workerState!.projectRoot),
+      retryCount,
       get meta() {
         return (test.meta ??= {});
       },
@@ -928,7 +935,11 @@ export class TestRunner {
     test: TestCase,
     snapshotState: SnapshotState,
     fixtureCleanups: (() => Promise<void>)[],
+    retryCount: number,
   ): FixtureResolver {
+    // @vitest/expect records soft failures on the test object; each attempt must
+    // start clean because retry history is preserved separately in retryErrors.
+    test.result = undefined;
     setState<MatcherState>(
       {
         assertionCalls: 0,
@@ -946,7 +957,7 @@ export class TestRunner {
       (globalThis as any)[GLOBAL_EXPECT],
     );
 
-    const context = this.createTestContext(test);
+    const context = this.createTestContext(test, retryCount);
 
     // create test context
     Object.defineProperty(test, 'context', {
@@ -954,7 +965,23 @@ export class TestRunner {
       enumerable: false,
     });
 
-    return createFixtureResolver(test, context, fixtureCleanups);
+    return createFixtureResolver(test, context, fixtureCleanups, {
+      runNamedFixtureSetup: (setup, onTimeout) =>
+        wrapTimeout({
+          name: 'fixture setup',
+          fn: setup,
+          timeout: test.timeout,
+          onTimeout,
+          stackTraceError: test.stackTraceError,
+        })(),
+      wrapNamedFixtureCleanup: (cleanup) =>
+        wrapTimeout({
+          name: 'fixture cleanup',
+          fn: cleanup,
+          timeout: test.timeout,
+          stackTraceError: test.stackTraceError,
+        }),
+    });
   }
 
   private afterRunTest(test: TestCase): void {

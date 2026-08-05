@@ -11,13 +11,13 @@ Coverage spans three packages: `@rstest/core` owns the `CoverageProvider` contra
 
 ## Key invariants
 
-- Coverage stripping differs by path. Node strips at the pool before reporters or state see results. Browser results carry `result.coverage` through the sink during the run and are stripped retroactively at outcome assembly — reporters DO observe browser coverage at `onTestFileResult` time.
+- Coverage stripping differs by path. Node strips at the pool before reporters or state see results. Browser results carry `result.coverage` through the sink during the run and are stripped retroactively when the cycle map is folded (the browser executor's outcome assembly, or the host's per-rerun outcome assembly in watch) — reporters DO observe browser coverage at `onTestFileResult` time.
 - Worker provider `cleanup()` runs in `finally` per file; istanbul's cleanup deletes `globalThis.__coverage__` — skipping it double-counts hits on non-isolated reruns.
 - Report-stage failures are caught and downgraded to `process.exitCode = 1`, but the raw-resolution seam inside `finalizeRunCycle` rethrows — a resource-load rejection propagates out of finalize instead of downgrading.
 - `cleanCoverageReports` must stay on the test-run lifecycle, never an rsbuild compile hook — browser-only mode has no node rsbuild instance and `--passWithNoTests` races the hook.
 - Memory bounds in `generateCoverage` are deliberate: projects are processed sequentially and untested files in small batches. Do not parallelize.
 - The reporting provider (main process) and the worker collection providers are distinct instances — state set during collection never reaches reporting.
-- Browser-only **watch** runs bypass `finalizeRunCycle`: a bespoke coverage report runs once after the watch session exits. Non-watch browser runs go through the shared finalize like node runs.
+- Every browser cycle reports through the shared finalize, on both commands and in every watch shape — there is no bespoke report path left. Watch coverage is per-cycle on both transports: each report covers only the files that cycle ran, so the fold that produces a cycle's map must never widen past the cycle's own results.
 
 ## Coupling points (change both sides)
 

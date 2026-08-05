@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
+import { prepareFixtures, runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -80,4 +80,52 @@ describe('globalSetup', async () => {
     expectStderrLog(/Global teardown failed intentionally/);
     expectStderrLog(/globalSetup\.ts:3/);
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'tears down the current watch session on SIGINT after a config restart',
+    async () => {
+      const fixturesTargetPath = join(
+        __dirname,
+        'fixtures-test-watch-restart-signal',
+      );
+      const { fs } = await prepareFixtures({
+        fixturesPath: join(__dirname, 'fixtures/basic'),
+        fixturesTargetPath,
+      });
+      const configPath = join(fixturesTargetPath, 'rstest.config.ts');
+      const result = await runRstestCli({
+        command: 'rstest',
+        args: ['watch', '--disableConsoleIntercept'],
+        options: {
+          nodeOptions: {
+            env: { ISOLATE: undefined },
+            cwd: fixturesTargetPath,
+          },
+        },
+      });
+      const { cli } = result;
+
+      try {
+        await cli.waitForStdout('Waiting for file changes...');
+        cli.resetStd();
+        fs.update(configPath, (content) => `${content}\n// trigger restart`);
+
+        await cli.waitForStdout('restarting Rstest');
+        await cli.waitForStdout('[global-setup-default] executed');
+        await cli.waitForStdout('Waiting for file changes...');
+
+        cli.exec.process!.kill('SIGINT');
+        await result.expectExecFailed();
+
+        expect(cli.exec.process!.exitCode).toBe(130);
+        expect(
+          cli.stdout.match(/\[global-teardown-default\] executed/g),
+        ).toHaveLength(2);
+      } finally {
+        await cli.killProcessTree();
+        fs.delete(fixturesTargetPath);
+      }
+    },
+    60_000,
+  );
 });

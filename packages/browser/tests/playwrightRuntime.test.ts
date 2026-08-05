@@ -184,7 +184,7 @@ describe('launchPlaywrightBrowser', () => {
     });
     const page = await context.newPage();
 
-    expect((page as FakePage).getByRole()).toBe('locator');
+    expect((page as unknown as FakePage).getByRole()).toBe('locator');
 
     await page[Symbol.asyncDispose]();
     await context[Symbol.asyncDispose]();

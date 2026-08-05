@@ -142,6 +142,7 @@ const getFileTaskId = (testPath: string): string => {
  * Returns a restore function to revert console to original.
  */
 const interceptConsole = (
+  projectName: string,
   getCurrentTask: () => CurrentTaskInfo | undefined,
   printConsoleTrace: boolean,
 ): (() => void) => {
@@ -176,6 +177,7 @@ const interceptConsole = (
         payload: {
           level,
           content,
+          projectName,
           taskId: currentTask?.taskId,
           taskName: currentTask?.taskName,
           taskParentNames: currentTask?.taskParentNames,
@@ -605,6 +607,7 @@ const run = async () => {
     // Intercept console methods to forward logs to host
     const restoreConsole = shouldInterceptConsole
       ? interceptConsole(
+          projectRuntime.name,
           () => taskContext.getCurrent() ?? taskStack[taskStack.length - 1],
           runtimeConfig.disableConsoleIntercept
             ? false

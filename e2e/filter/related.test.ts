@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const relatedFixturePath = join(__dirname, 'fixtures-related');
-const dynamicFixturePath = join(__dirname, 'fixtures-related-dynamic');
+const dynamicFixturePath = join(__dirname, '../fixtures/fan-out-dynamic');
 const mixedFixturePath = join(__dirname, 'fixtures-related-mixed');
 
 const collectRunTestFileLogs = (stdout: string) =>
@@ -170,6 +170,40 @@ describe('related test filtering', () => {
       ]
     `);
     expect(cli.log).not.toContain('invalid');
+  });
+
+  it('should reject the `watch` command with related filters', async () => {
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['watch', '--related', 'src/index.ts'],
+      options: {
+        nodeOptions: {
+          cwd: relatedFixturePath,
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expectStderrLog(
+      /`--related`, `--findRelatedTests`, and `--changed` options are not supported in watch mode/,
+    );
+  });
+
+  it('should reject `--changed` with `--watch` on the default command', async () => {
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['--watch', '--changed'],
+      options: {
+        nodeOptions: {
+          cwd: relatedFixturePath,
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expectStderrLog(
+      /`--related`, `--findRelatedTests`, and `--changed` options are not supported in watch mode/,
+    );
   });
 
   it('should keep exact related test paths without prefix matching extra files', async () => {

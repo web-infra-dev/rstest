@@ -18,11 +18,11 @@ const makeContext = (
     failedCount?: number;
   } = {},
 ) => {
-  const calls: Record<string, unknown[]> = {
-    stateFileResult: [],
-    snapshotAdd: [],
-    reporterFileResult: [],
-    reporterConsole: [],
+  const calls = {
+    stateFileResult: [] as unknown[],
+    snapshotAdd: [] as unknown[],
+    reporterFileResult: [] as unknown[],
+    reporterConsole: [] as unknown[],
   };
   const reporter = {
     onTestFileResult: (r: unknown) => {
@@ -59,8 +59,13 @@ const makeContext = (
   return { context, projectConfig, calls };
 };
 
-const log = (content: string): UserConsoleLog =>
-  ({ content, type: 'stdout' }) as UserConsoleLog;
+const log = (content: string): UserConsoleLog => ({
+  content,
+  name: 'log',
+  testPath: '/a.test.ts',
+  project: 'test',
+  type: 'stdout',
+});
 
 describe('createRunnerEventSink', () => {
   it('exposes the compile-time drift guard against RuntimeRPC', () => {

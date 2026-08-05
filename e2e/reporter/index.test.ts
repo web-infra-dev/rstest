@@ -1,26 +1,16 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { runRstestCli } from '../scripts';
+import { parseMarkerPayload, runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const REPORTER_METADATA_RE = /__RSTEST_REPORTER_METADATA__(.*?)__END__/;
-
-const parseReporterMetadata = (stdout: string) => {
-  const match = stdout.match(REPORTER_METADATA_RE);
-  const payload = match?.[1];
-  if (!payload) {
-    throw new Error(
-      `reporter metadata payload not found in stdout. Got:\n${stdout.slice(
-        0,
-        4000,
-      )}`,
-    );
-  }
-  return JSON.parse(payload) as Record<string, any>;
-};
+const parseReporterMetadata = (stdout: string) =>
+  parseMarkerPayload<Record<string, any>>(
+    stdout,
+    '__RSTEST_REPORTER_METADATA__',
+  );
 
 describe.concurrent('reporters', () => {
   it('default - single file', async ({ onTestFinished }) => {

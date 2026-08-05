@@ -7,22 +7,31 @@ type HookFixtures = {
 
 const events: string[] = [];
 
-const browserTest = test.extend<HookFixtures>({
-  element: async (_, use) => {
-    const element = document.createElement('div');
-    element.textContent = 'fixture';
-    document.body.appendChild(element);
-    events.push('setup:element');
-    await use(element);
-    element.remove();
-    events.push('teardown:element');
-  },
-  label: async (_, use) => {
-    events.push('setup:label');
-    await use('afterEach');
-    events.push('teardown:label');
-  },
-});
+const browserTest = test
+  .extend<HookFixtures>({
+    element: async (_, use) => {
+      const element = document.createElement('div');
+      element.textContent = 'fixture';
+      document.body.appendChild(element);
+      events.push('setup:element');
+      await use(element);
+      element.remove();
+      events.push('teardown:element');
+    },
+    label: async (_, use) => {
+      events.push('setup:label');
+      await use('afterEach');
+      events.push('teardown:label');
+    },
+  })
+  .extend('namedValue', ({ element }, { onCleanup }) => {
+    events.push('setup:named-fixture');
+    onCleanup(() => {
+      expect(element.isConnected).toBe(true);
+      events.push('teardown:named-fixture');
+    });
+    return element.textContent;
+  });
 
 beforeEach<HookFixtures>(async ({ element }) => {
   await Promise.resolve();
@@ -34,18 +43,24 @@ afterEach<HookFixtures>(({ label }) => {
   events.push(label);
 });
 
-browserTest('resolves fixtures used only by browser hooks', () => {
-  events.push('test');
-});
+browserTest(
+  'resolves fixtures used only by browser hooks',
+  ({ namedValue }) => {
+    expect(namedValue).toBe('fixture');
+    events.push('test');
+  },
+);
 
 afterAll(() => {
   expect(events).toEqual([
     'setup:element',
+    'setup:named-fixture',
     'beforeEach',
     'test',
     'setup:label',
     'afterEach',
     'teardown:label',
+    'teardown:named-fixture',
     'teardown:element',
   ]);
 });

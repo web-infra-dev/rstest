@@ -1,22 +1,10 @@
-import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { fileURLToPath } from 'node:url';
-import { isDeepStrictEqual } from 'node:util';
-import type { Rspack } from '@rstest/core';
 import {
-  applyWatchInvalidation,
-  applyWebMockRspackConfig,
   type BrowserTestRunOptions,
   type BrowserTestRunResult,
-  type BrowserWatchHandles,
   buildBrowserCoverageMap,
-  type CoverageMapData,
-  type EntryHashSnapshot,
   type ExecutorCycleOutcome,
-  FATAL_SIGNALS,
-  finalizeRunCycle,
+  type ExecutorInvalidationCallback,
   type ListBrowserTestsOptions,
   color,
   createCoverageProvider,
@@ -24,103 +12,86 @@ import {
   createSilentConsoleController,
   DEFAULT_TEST_TIMEOUT,
   type FormattedError,
-  getNoTestFilesMessage,
   getPrettyConsoleName,
-  getSetupFiles,
-  getTestEntries,
   hasUserRstestConfigPlugins,
-  importMetaRstestDefine,
-  initModifyRstestConfigHooks,
   isDebug,
   isTTY,
   type ListCommandResult,
-  loadCoverageProvider,
   logger,
   logWatchReadyMessage,
-  pluginMockRuntime,
-  prepareWatchRerunState,
   projectRuntimeConfig,
   PhaseTracker,
   type ProjectContext,
-  type Reporter,
   type RunnerEventSink,
   type RstestContext,
-  resolveProjectBuildCache,
   resolveSnapshotPathDefault,
-  resolveShardedEntries,
-  RSTEST_ENV_SYMBOL_KEY,
-  rsbuild,
   serializableConfig,
   type Test,
   type TestFileResult,
   type TestResult,
   type UserConsoleLog,
-  type WatchInvalidationState,
 } from '@rstest/core/internal/browser';
-import { type BirpcReturn, createBirpc } from 'birpc';
-import openEditor from 'open-editor';
-import { dirname, join, normalize, relative, resolve } from 'pathe';
-import picomatch from 'picomatch';
-import sirv from 'sirv';
-import { type WebSocket, WebSocketServer } from 'ws';
-import { getHeadlessConcurrency } from './concurrency';
+import { dirname, join, normalize } from 'pathe';
 import {
   createHostDispatchRouter,
   type HostDispatchRouterOptions,
 } from './dispatchCapabilities';
-import { validateBrowserConfig } from './configValidation';
-import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
-import { createHeadlessLatestRerunScheduler } from './headlessLatestRerunScheduler';
-import { attachHeadlessRunnerTransport } from './headlessTransport';
+import {
+  collectProjectEntries,
+  createBrowserRuntime,
+  destroyBrowserRuntime,
+  drainPendingBuildTime,
+  getBrowserProjects,
+  type BrowserProjectServer,
+  type BrowserProviderProject,
+  resolveContainerDist,
+  resolveProjectEntries,
+  serializeForInlineScript,
+  type BrowserRuntime,
+} from './browserRsbuild';
+import { createHeadedScheduler } from './headedScheduler';
+import { createHeadlessScheduler } from './headlessScheduler';
 import type {
-  BrowserClientMessage,
-  BrowserDispatchHandler,
   BrowserDispatchRequest,
-  BrowserDispatchResponse,
   BrowserHostConfig,
-  BrowserLogPayload,
   BrowserProjectRuntime,
   BrowserRpcRequest,
-  BrowserViewport,
   SnapshotRpcRequest,
   TestFileInfo,
 } from './protocol';
 import {
   DISPATCH_MESSAGE_TYPE,
   DISPATCH_NAMESPACE_BROWSER,
-  DISPATCH_NAMESPACE_RUNNER,
   validateBrowserRpcRequest,
 } from './protocol';
 import {
   type BrowserProvider,
-  type BrowserProviderBrowser,
-  type BrowserProviderContext,
   type BrowserProviderImplementation,
-  type BrowserProviderPage,
   getBrowserProviderImplementation,
 } from './providers';
 import {
-  createRunSession,
-  type RunSession,
-  RunSessionLifecycle,
-} from './runSession';
-import { RunnerSessionRegistry } from './sessionRegistry';
+  type FatalPayload,
+  getFileTaskId,
+  type LogPayload,
+  type TestCaseStartPayload,
+  type TestFileReadyPayload,
+  type TestFileStartPayload,
+  type TestSuiteResultPayload,
+  type TestSuiteStartPayload,
+  toError,
+} from './hostPayloads';
 import {
   loadSourceMapWithCache,
   normalizeJavaScriptUrl,
   type SourceMapPayload,
 } from './sourceMap/sourceMapLoader';
-import { resolveBrowserViewportPreset } from './viewportPresets';
-import { collectWatchTestFiles, planWatchRerun } from './watchRerunPlanner';
-
-const { createRsbuild, rspack } = rsbuild;
-type RsbuildDevServer = rsbuild.RsbuildDevServer;
-type RsbuildInstance = rsbuild.RsbuildInstance;
-type RsbuildEnvironmentConfig = rsbuild.EnvironmentConfig &
-  Pick<rsbuild.RsbuildConfig, 'root'>;
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const OPTIONS_PLACEHOLDER = '__RSTEST_OPTIONS_PLACEHOLDER__';
+import { collectWatchTestFiles } from './watchRerunPlanner';
+import type {
+  BrowserWatchSession,
+  DispatchPageResolver,
+} from './schedulerSeam';
+import { registerWatchCleanup, watchContext } from './watchRuntime';
+import { createWatchSignals } from './watchSignals';
 
 /**
  * Monotonic counter for synthetic per-file Perfetto `pid` values in `--trace`
@@ -134,1025 +105,48 @@ const OPTIONS_PLACEHOLDER = '__RSTEST_OPTIONS_PLACEHOLDER__';
  */
 let nextBrowserFilePid = 1_000_000_000;
 
-/**
- * Serialize JSON for inline <script> injection.
- * Escapes '<' to prevent accidental </script> break-out.
- * Escapes U+2028/U+2029 to keep script parsing safe.
- */
-const serializeForInlineScript = (value: unknown): string => {
-  return JSON.stringify(value)
-    .replace(/</g, '\\u003c')
-    .replace(/\u2028/g, '\\u2028')
-    .replace(/\u2029/g, '\\u2029');
-};
-
-// ============================================================================
-// Type Definitions
-// ============================================================================
-
-type BrowserProjectEntries = {
-  project: ProjectContext;
-  setupFiles: string[];
-  testFiles: string[];
-};
-
-type BrowserProviderProject = {
-  rootPath: string;
-  provider: BrowserProvider;
-};
-
-type BrowserLaunchOptions = {
-  provider: BrowserProvider;
-  browser: ProjectContext['normalizedConfig']['browser']['browser'];
-  headless: ProjectContext['normalizedConfig']['browser']['headless'];
-  port: ProjectContext['normalizedConfig']['browser']['port'];
-  strictPort: ProjectContext['normalizedConfig']['browser']['strictPort'];
-  providerOptions: Record<string, unknown>;
-};
-
-const getBrowserProviderOptions = (
-  project: ProjectContext,
-): Record<string, unknown> => {
-  const browserConfig = project.normalizedConfig.browser as {
-    providerOptions?: Record<string, unknown>;
-  };
-
-  return browserConfig.providerOptions ?? {};
-};
-
-/** Payload for test file start event */
-type TestFileStartPayload = {
-  testPath: string;
-  projectName: string;
-};
-
-/** Payload for log event — single-sourced from the wire protocol. */
-type LogPayload = BrowserLogPayload;
-
-/** Payload for fatal error event */
-type FatalPayload = {
-  message: string;
-  stack?: string;
-};
-
-type ReporterHookArg<THook extends keyof Reporter> =
-  NonNullable<Reporter[THook]> extends (...args: infer TArgs) => unknown
-    ? TArgs[0]
-    : never;
-
-type TestFileReadyPayload = ReporterHookArg<'onTestFileReady'>;
-type TestSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;
-type TestSuiteResultPayload = ReporterHookArg<'onTestSuiteResult'>;
-type TestCaseStartPayload = ReporterHookArg<'onTestCaseStart'>;
-type ReloadTestFileAck = {
-  runId: string;
-};
-type HeadedTestFileCompletePayload = TestFileResult & {
-  runId?: string;
-};
-
-type DeferredPromise<T> = {
-  promise: Promise<T>;
-  resolve: (value: T | PromiseLike<T>) => void;
-  reject: (reason?: unknown) => void;
-};
-
-const getFileTaskId = (testPath: string): string => {
-  return `file:${testPath}`;
-};
-
-const createDeferredPromise = <T>(): DeferredPromise<T> => {
-  let resolve!: DeferredPromise<T>['resolve'];
-  let reject!: DeferredPromise<T>['reject'];
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-
-  return {
-    promise,
-    resolve,
-    reject,
-  };
-};
-
-/** RPC methods exposed by the host (server) to the container (client) */
-type HostRpcMethods = {
-  rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
-  getTestFiles: () => Promise<TestFileInfo[]>;
-  onRunnerFramesReady: (testFiles: string[]) => Promise<void>;
-  // Test result callbacks from container
-  onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
-  onTestCaseResult: (payload: TestResult) => Promise<void>;
-  onTestFileComplete: (payload: HeadedTestFileCompletePayload) => Promise<void>;
-  onLog: (payload: LogPayload) => Promise<void>;
-  onFatal: (payload: FatalPayload) => Promise<void>;
-  // Generic dispatch endpoint used by runner RPC requests.
-  dispatch: (
-    request: BrowserDispatchRequest,
-  ) => Promise<BrowserDispatchResponse>;
-};
-
-/** RPC methods exposed by the container (client) to the host (server) */
-type ContainerRpcMethods = {
-  onTestFileUpdate: (testFiles: TestFileInfo[]) => Promise<void>;
-  reloadTestFile: (
-    testFile: string,
-    testNamePattern?: string,
-  ) => Promise<ReloadTestFileAck>;
-  /**
-   * Replace the container's copy of the host config so runner iframes loaded
-   * from now on receive fresh values (e.g. the 'u' shortcut flipping
-   * `snapshot.updateSnapshot` between watch reruns).
-   */
-  onHostConfigUpdate: (config: BrowserHostConfig) => Promise<void>;
-};
-
-type ContainerRpc = BirpcReturn<ContainerRpcMethods, HostRpcMethods>;
-
-// ============================================================================
-// RPC Manager - Encapsulates WebSocket and birpc management
-// ============================================================================
-
-/**
- * Manages the WebSocket connection and birpc communication with the container UI.
- * Provides a clean interface for sending RPC calls and handling connections.
- */
-class ContainerRpcManager {
-  private wss: WebSocketServer;
-  private ws: WebSocket | null = null;
-  private rpc: ContainerRpc | null = null;
-  private methods: HostRpcMethods;
-  private onDisconnect?: (error: Error) => void;
-  private detachActiveSocketListeners: (() => void) | null = null;
-
-  constructor(
-    wss: WebSocketServer,
-    methods: HostRpcMethods,
-    onDisconnect?: (error: Error) => void,
-  ) {
-    this.wss = wss;
-    this.methods = methods;
-    this.onDisconnect = onDisconnect;
-    this.setupConnectionHandler();
-  }
-
-  /** Update the RPC methods (used when starting a new test run) */
-  updateMethods(
-    methods: HostRpcMethods,
-    onDisconnect?: (error: Error) => void,
-  ): void {
-    this.methods = methods;
-    this.onDisconnect = onDisconnect;
-    // Re-create birpc with new methods if already connected
-    if (this.ws && this.ws.readyState === this.ws.OPEN) {
-      this.attachWebSocket(this.ws);
-    }
-  }
-
-  private setupConnectionHandler(): void {
-    this.wss.on('connection', (ws: WebSocket) => {
-      logger.debug('[Browser UI] Container WebSocket connected');
-      logger.debug(
-        `[Browser UI] Current ws: ${this.ws ? 'exists' : 'null'}, new ws: ${ws ? 'exists' : 'null'}`,
-      );
-      this.attachWebSocket(ws);
-    });
-  }
-
-  private attachWebSocket(ws: WebSocket): void {
-    this.detachActiveSocketListeners?.();
-    if (this.rpc && !this.rpc.$closed) {
-      this.rpc.$close(new Error('Container RPC transport reattached'));
-    }
-    this.ws = ws;
-    const messageHandlers = new WeakMap<
-      (data: any) => void,
-      (message: any) => void
-    >();
-
-    this.rpc = createBirpc<ContainerRpcMethods, HostRpcMethods>(this.methods, {
-      timeout: -1,
-      post: (data) => {
-        if (ws.readyState === ws.OPEN) {
-          ws.send(JSON.stringify(data));
-        }
-      },
-      on: (fn) => {
-        const handler = (message: any) => {
-          try {
-            const data = JSON.parse(message.toString());
-            fn(data);
-          } catch {
-            // ignore invalid messages
-          }
-        };
-        messageHandlers.set(fn, handler);
-        ws.on('message', handler);
-      },
-      off: (fn) => {
-        const handler = messageHandlers.get(fn);
-        if (!handler) {
-          return;
-        }
-        ws.off('message', handler);
-        messageHandlers.delete(fn);
-      },
-    });
-
-    const handleClose = () => {
-      // Only clear if this is still the active connection
-      // This prevents a race condition when a new connection is established
-      // before the old one's close event fires
-      if (this.ws === ws) {
-        this.ws = null;
-      }
-      this.detachActiveSocketListeners?.();
-      this.detachActiveSocketListeners = null;
-      if (this.rpc && !this.rpc.$closed) {
-        const disconnectError = new Error(
-          'Browser UI WebSocket disconnected before reload completed',
-        );
-        this.rpc.$close(disconnectError);
-        this.onDisconnect?.(disconnectError);
-      }
-      this.rpc = null;
-    };
-
-    ws.on('close', handleClose);
-    this.detachActiveSocketListeners = () => {
-      ws.off('close', handleClose);
-    };
-  }
-
-  /** Check if a container is currently connected */
-  get isConnected(): boolean {
-    return this.ws !== null && this.ws.readyState === this.ws.OPEN;
-  }
-
-  /** Get the current WebSocket instance (for reuse in watch mode) */
-  get currentWebSocket(): WebSocket | null {
-    return this.ws;
-  }
-
-  /** Reattach an existing WebSocket (for watch mode reuse) */
-  reattach(ws: WebSocket): void {
-    this.attachWebSocket(ws);
-  }
-
-  /** Notify container of test file changes */
-  async notifyTestFileUpdate(files: TestFileInfo[]): Promise<void> {
-    await this.rpc?.onTestFileUpdate(files);
-  }
-
-  /** Push a refreshed host config to the container (watch reruns) */
-  async updateHostConfig(config: BrowserHostConfig): Promise<void> {
-    await this.rpc?.onHostConfigUpdate(config);
-  }
-
-  /** Request container to reload a specific test file */
-  async reloadTestFile(
-    testFile: string,
-    testNamePattern?: string,
-  ): Promise<ReloadTestFileAck> {
-    logger.debug(
-      `[Browser UI] reloadTestFile called, rpc: ${this.rpc ? 'exists' : 'null'}, ws: ${this.ws ? 'exists' : 'null'}`,
-    );
-    if (!this.rpc) {
-      throw new Error('Browser UI RPC not available for reloadTestFile');
-    }
-    logger.debug(`[Browser UI] Calling reloadTestFile: ${testFile}`);
-    return this.rpc.reloadTestFile(testFile, testNamePattern);
-  }
-}
-
-// ============================================================================
-// Browser Runtime - Core runtime state
-// ============================================================================
-
-// One isolated rsbuild instance + dev server per browser project. Physical
-// isolation (separate compiler, dev server, port, virtual manifest, runner)
-// prevents one project's build/resolve config from leaking into another's
-// compilation and avoids shared-dev-server races (chunk filenames,
-// lazyCompilation backend) between projects.
-type BrowserProjectServer = {
-  projectName: string;
-  environmentName: string;
-  rsbuildInstance: RsbuildInstance;
-  devServer: RsbuildDevServer;
-  port: number;
-  manifestPath: string;
-};
-
-// Watch diff/rerun state. Lives on the BrowserRuntime (one per set of
-// per-project compilers, surviving controller re-entry that reuses the
-// runtime) instead of module scope, so its lifetime always matches the
-// compilers whose baselines it holds.
-type BrowserWatchState = {
-  lastTestFiles: TestFileInfo[];
-  hooksEnabled: boolean;
-  // Diff baselines keyed per project: sibling projects have isolated
-  // compilers, so a shared flat baseline would let one project's compile
-  // clobber another's (missed reruns) and collide on compiler-local chunk
-  // keys.
-  invalidation: Map<string, WatchInvalidationState>;
-  // Affected files accumulated per project until a rerun drains them, so a
-  // compile finishing while another project's rerun is being planned cannot
-  // drop pending work.
-  pendingAffectedTestFiles: Map<string, Set<string>>;
-  // Per-project compile start times and the accumulated compile duration of
-  // the pending rerun, so the rerun's finalize reports the real buildTime.
-  compileStartTimes: Map<string, number>;
-  pendingBuildTimeMs: number;
-};
-
-const createBrowserWatchState = (): BrowserWatchState => ({
-  lastTestFiles: [],
-  hooksEnabled: false,
-  invalidation: new Map(),
-  pendingAffectedTestFiles: new Map(),
-  compileStartTimes: new Map(),
-  pendingBuildTimeMs: 0,
-});
-
-const drainPendingBuildTime = (watchState: BrowserWatchState): number => {
-  const buildTime = watchState.pendingBuildTimeMs;
-  watchState.pendingBuildTimeMs = 0;
-  return buildTime;
-};
-
-const drainPendingAffectedTestFiles = (
-  watchState: BrowserWatchState,
-): string[] => {
-  const affected = new Set<string>();
-  for (const files of watchState.pendingAffectedTestFiles.values()) {
-    for (const file of files) {
-      affected.add(file);
-    }
-  }
-  watchState.pendingAffectedTestFiles.clear();
-  return Array.from(affected);
-};
-
-type BrowserRuntime = {
-  // Per-project servers, keyed by project name.
-  projectServers: Map<string, BrowserProjectServer>;
-  // The server that hosts the container UI HTML (headed mode). The WebSocket
-  // server below is shared and reachable from any origin.
-  containerServer: BrowserProjectServer;
-  browser: BrowserProviderBrowser;
-  browserLaunchOptions: BrowserLaunchOptions;
-  wsPort: number;
-  tempDir: string;
-  containerPage?: BrowserProviderPage;
-  containerContext?: BrowserProviderContext;
-  setContainerOptions: (options: BrowserHostConfig) => void;
-  // Reserved extension seam for host-side dispatch capabilities.
-  dispatchHandlers: Map<string, BrowserDispatchHandler>;
-  wss: WebSocketServer;
-  rpcManager?: ContainerRpcManager;
-  projectEntries: BrowserProjectEntries[];
-  watchState: BrowserWatchState;
-};
-
-// ============================================================================
-// Watch Mode Context - Process-lifecycle watch state
-// ============================================================================
-
-// Only process-wide concerns stay module-level: the runtime handle reused
-// across controller re-entry (config-change restarts), and the signal/exit
-// cleanup that must run once per process. Diff/rerun state lives on
-// `BrowserRuntime.watchState`.
-type WatchContext = {
-  runtime: BrowserRuntime | null;
-  cleanupRegistered: boolean;
-  cleanupPromise: Promise<void> | null;
-};
-
-const watchContext: WatchContext = {
-  runtime: null,
-  cleanupRegistered: false,
-  cleanupPromise: null,
-};
-
 // ============================================================================
 // Utility Functions
 // ============================================================================
 
-const resolveViewport = (
-  viewport: BrowserViewport | undefined,
-): { width: number; height: number } | null => {
-  if (!viewport) {
-    return null;
-  }
-
-  if (typeof viewport === 'string') {
-    return resolveBrowserViewportPreset(viewport);
-  }
-
-  if (
-    typeof viewport.width === 'number' &&
-    Number.isFinite(viewport.width) &&
-    viewport.width > 0 &&
-    typeof viewport.height === 'number' &&
-    Number.isFinite(viewport.height) &&
-    viewport.height > 0
-  ) {
-    return {
-      width: viewport.width,
-      height: viewport.height,
-    };
-  }
-
-  return null;
-};
-
-const mapViewportByProject = (
-  projects: BrowserProjectRuntime[],
-): Map<string, { width: number; height: number }> => {
-  const map = new Map<string, { width: number; height: number }>();
-  for (const project of projects) {
-    const viewport = resolveViewport(project.viewport);
-    if (viewport) {
-      map.set(project.name, viewport);
-    }
-  }
-  return map;
-};
-
-const ensureProcessExitCode = (code: number): void => {
-  if (process.exitCode === undefined || process.exitCode === 0) {
-    process.exitCode = code;
-  }
-};
-
-const castArray = <T>(arr?: T | T[]): T[] => {
-  if (arr === undefined) {
-    return [];
-  }
-  return Array.isArray(arr) ? arr : [arr];
-};
-
-const applyDefaultWatchOptions = (
-  rspackConfig: Rspack.Configuration,
-  isWatchMode: boolean,
-) => {
-  rspackConfig.watchOptions ??= {};
-
-  if (!isWatchMode) {
-    rspackConfig.watchOptions.ignored = '**/**';
-    return;
-  }
-
-  rspackConfig.watchOptions.ignored = castArray(
-    rspackConfig.watchOptions.ignored || [],
-  ) as string[];
-
-  if (rspackConfig.watchOptions.ignored.length === 0) {
-    rspackConfig.watchOptions.ignored.push('**/.git', '**/node_modules');
-  }
-
-  if (rspackConfig.output?.path) {
-    rspackConfig.watchOptions.ignored.push(rspackConfig.output.path);
-  }
-};
-
-type LazyCompilationModule = {
-  nameForCondition?: () => string | null | undefined;
-};
-
-type BrowserLazyCompilationConfig = {
-  imports: true;
-  entries: false;
-  test?: (module: LazyCompilationModule) => boolean;
-};
-
 /**
- * Resolve the actual port the dev server is listening on.
+ * The exit code a launch that found no test files at all must leave behind.
  *
- * Rsbuild's `devServer.listen()` may return `0` when configured with
- * `server.port: 0` because its internal `getPort` never reads back the
- * OS-assigned ephemeral port.  This helper falls back to
- * `httpServer.address()` to obtain the real bound port.
+ * Core's `reportNoTestFiles` owns the message and the no-test reporter
+ * lifecycle for such a launch, but in watch mode its report deliberately leaves
+ * the exit code alone — a rerun matching nothing is not a failure. Such a launch
+ * opened no session, so no later cycle can raise the code either. That makes
+ * this the host's only write to `process.exitCode`: a boot failure looks like a
+ * second launch-path exception but is not one, because it rides the outcome out
+ * of `failWithError` and core raises the code from there. One-shot runs keep
+ * going through the cycle, and a caller that passed `allowEmptyRun` — today only
+ * the config-hook discovery boot — reads the outcome instead of the process.
  */
-export const resolveListenPort = (
-  listenPort: number,
-  httpServer: {
-    address: () => ReturnType<import('node:net').Server['address']>;
-  } | null,
-): number => {
-  if (listenPort) {
-    return listenPort;
+const resolveEmptyLaunchExitCode = (
+  current: number | string | undefined,
+  {
+    allowEmptyRun,
+    isWatchMode,
+    passWithNoTests,
+  }: {
+    allowEmptyRun: boolean;
+    isWatchMode: boolean;
+    passWithNoTests: boolean;
+  },
+): number | string | undefined => {
+  if (allowEmptyRun || !isWatchMode || passWithNoTests) {
+    return current;
   }
-  const addr = httpServer?.address();
-  if (addr && typeof addr === 'object') {
-    return addr.port;
-  }
-  return listenPort;
+  // Never downgrade: a code already raised by an earlier failure stands.
+  return current === undefined || current === 0 ? 1 : current;
 };
 
-export const createBrowserLazyCompilationConfig = (
-  setupFiles: string[],
-): BrowserLazyCompilationConfig => {
-  const eagerSetupFiles = new Set(
-    setupFiles.map((filePath) => normalize(filePath)),
-  );
-
-  if (eagerSetupFiles.size === 0) {
-    return {
-      imports: true,
-      entries: false,
-    };
-  }
-
-  return {
-    imports: true,
-    entries: false,
-    test(module: LazyCompilationModule) {
-      const filePath = module.nameForCondition?.();
-      return !filePath || !eagerSetupFiles.has(normalize(filePath));
-    },
-  };
-};
-
-/**
- * HMR — and the lazyCompilation transport it carries — is wired only for headed
- * watch, the sole path that reuses a persistent page and applies module updates
- * in place. Headless always loads each test file in a fresh page (pulling the
- * latest incrementally-built chunks over HTTP), and one-shot runs never rerun,
- * so pushing HMR updates there is dead weight that only races factory
- * registration for chunk-split node_modules (rspack#11922) and lets
- * lazyCompilation's accept-chain walk abort the next spec when no boundary
- * exists (#1472). Disabling HMR does not make watch rebuilds any less
- * incremental — HMR is only the client push transport.
- */
-export const shouldEnableBrowserHmr = (
-  isWatchMode: boolean,
-  isHeadless: boolean,
-): boolean => isWatchMode && !isHeadless;
-
-export const createBrowserRsbuildDevConfig = (
-  enableHmr: boolean,
-): {
-  writeToDisk: boolean;
-  hmr: boolean;
-  client: {
-    logLevel: 'error';
-  };
-} => {
-  return {
-    writeToDisk: isDebug(),
-    // `enableHmr` is gated to headed watch by `shouldEnableBrowserHmr` — the one
-    // path that reuses a page. See that helper for why fresh-page runs (headless,
-    // or any one-shot) must not receive HMR pushes.
-    hmr: enableHmr,
-    client: {
-      logLevel: 'error' as const,
-    },
-  };
-};
-
-/**
- * Convert a single glob pattern to RegExp using picomatch
- * Based on Storybook's implementation
- */
-const globToRegexp = (glob: string): RegExp => {
-  const regex = picomatch.makeRe(glob, {
-    fastpaths: false,
-    noglobstar: false,
-    bash: false,
-    dot: true,
-  });
-
-  if (!regex) {
-    throw new Error(`Invalid glob pattern: ${glob}`);
-  }
-
-  // picomatch generates regex starting with ^
-  // For patterns starting with ./, we need special handling
-  if (!glob.startsWith('./')) {
-    return regex;
-  }
-
-  // makeRe is sort of funny. If you pass it a directory starting with `./` it
-  // creates a matcher that expects files with no prefix (e.g. `src/file.js`)
-  // but if you pass it a directory that starts with `../` it expects files that
-  // start with `../`. Let's make it consistent.
-  // Globs starting `**` need special treatment due to the regex they produce
-  return new RegExp(
-    [
-      '^\\.',
-      glob.startsWith('./**') ? '' : '[\\\\/]',
-      regex.source.substring(1),
-    ].join(''),
-  );
-};
-
-/**
- * Convert rstest include glob patterns to RegExp for import.meta.webpackContext
- * Uses picomatch for robust glob-to-regexp conversion
- */
-const globPatternsToRegExp = (patterns: string[]): RegExp => {
-  const regexParts = patterns.map((pattern) => {
-    const regex = globToRegexp(pattern);
-    // Remove ^ anchor and $ anchor to allow combining patterns
-    let source = regex.source;
-    if (source.startsWith('^')) {
-      source = source.substring(1);
-    }
-    if (source.endsWith('$')) {
-      source = source.substring(0, source.length - 1);
-    }
-    return source;
-  });
-
-  return new RegExp(`(?:${regexParts.join('|')})$`);
-};
-
-const REGEXP_SPECIAL_CHARACTERS = /[|\\{}()[\]^$+*?.]/g;
-const PATH_SEPARATOR_SOURCE = String.raw`[\\/]`;
-const WINDOWS_ABSOLUTE_PATH_SOURCE = String.raw`[A-Za-z]:[\\/]`;
-
-const escapeRegExp = (value: string): string =>
-  value.replace(REGEXP_SPECIAL_CHARACTERS, '\\$&');
-
-const normalizePathForRegExp = (value: string): string =>
-  normalize(value).replaceAll('\\', '/');
-
-const normalizeExcludePatternForRegExp = (value: string): string =>
-  value.startsWith('./')
-    ? `./${normalizePathForRegExp(value.substring(2))}`
-    : normalizePathForRegExp(value);
-
-const isAbsolutePatternForRegExp = (value: string): boolean =>
-  value.startsWith('/') || /^[A-Za-z]:\//.test(value);
-
-const isEscapedRegExpCharacter = (source: string, index: number): boolean => {
-  let backslashCount = 0;
-  for (
-    let current = index - 1;
-    current >= 0 && source[current] === '\\';
-    current--
-  ) {
-    backslashCount++;
-  }
-  return backslashCount % 2 === 1;
-};
-
-const replacePathSeparatorsInRegExpSource = (source: string): string => {
-  let result = '';
-  let inCharacterClass = false;
-
-  for (let index = 0; index < source.length; index++) {
-    const character = source[index];
-    const isEscaped = isEscapedRegExpCharacter(source, index);
-
-    if (character === '[' && !isEscaped) {
-      inCharacterClass = true;
-    }
-
-    if (!inCharacterClass && character === '\\' && source[index + 1] === '/') {
-      result += PATH_SEPARATOR_SOURCE;
-      index++;
-      continue;
-    }
-
-    result += character;
-
-    if (character === ']' && !isEscaped) {
-      inCharacterClass = false;
-    }
-  }
-
-  return result;
-};
-
-type BrowserContextExcludeSource = {
-  relative: string;
-  absolute: string;
-  isAbsolute: boolean;
-};
-
-const createRelativeContextExcludeSource = (
-  source: string,
-  normalizedPattern: string,
-): string => {
-  if (normalizedPattern.startsWith('./')) {
-    return source;
-  }
-
-  return normalizedPattern.startsWith('**/')
-    ? `(?:(?:${source})|\\.(?:${source}))`
-    : `(?:(?:${source})|\\.${PATH_SEPARATOR_SOURCE}(?:${source}))`;
-};
-
-const createProjectAbsoluteExcludeSource = (
-  source: string,
-  normalizedPattern: string,
-): string =>
-  normalizedPattern.startsWith('./') || normalizedPattern.startsWith('**/')
-    ? source
-    : `${PATH_SEPARATOR_SOURCE}(?:${source})`;
-
-/**
- * Convert exclude patterns to a RegExp for import.meta.webpackContext's exclude option
- * This is used at compile time to filter out files during bundling
- *
- * Example:
- *   Input: ['**\/node_modules\/**', '**\/dist\/**']
- *   Output: a regexp matching node_modules or dist path segments.
- */
-const excludePatternsToRegExpSources = (
-  patterns: string[],
-): BrowserContextExcludeSource[] | null => {
-  const sources = patterns.map((pattern) => {
-    const normalizedPattern = normalizeExcludePatternForRegExp(pattern);
-    const regex = globToRegexp(normalizedPattern);
-    let source = regex.source;
-    if (source.startsWith('^')) {
-      source = source.substring(1);
-    }
-    if (source.endsWith('$')) {
-      source = source.substring(0, source.length - 1);
-    }
-
-    source = replacePathSeparatorsInRegExpSource(source);
-    const isAbsolute = isAbsolutePatternForRegExp(normalizedPattern);
-    const absolute = normalizedPattern.startsWith('./')
-      ? source.substring(2)
-      : source;
-
-    return {
-      relative: isAbsolute
-        ? source
-        : createRelativeContextExcludeSource(source, normalizedPattern),
-      absolute: isAbsolute
-        ? absolute
-        : createProjectAbsoluteExcludeSource(absolute, normalizedPattern),
-      isAbsolute,
-    };
-  });
-
-  if (sources.length === 0) {
-    return null;
-  }
-
-  return sources;
-};
-
-export const createBrowserContextExcludeRegExp = (
-  patterns: string[],
-  projectRoot: string,
-): RegExp | null => {
-  const excludeSources = excludePatternsToRegExpSources(patterns);
-  if (!excludeSources) {
-    return null;
-  }
-
-  const normalizedProjectRoot = normalizePathForRegExp(projectRoot).replace(
-    /[\\/]$/,
-    '',
-  );
-  const projectRootSource = normalizedProjectRoot
-    .split('/')
-    .map(escapeRegExp)
-    .join(PATH_SEPARATOR_SOURCE);
-  const relativeExcludeSources = excludeSources.filter(
-    (source) => !source.isAbsolute,
-  );
-  const absoluteExcludeSources = excludeSources.filter(
-    (source) => source.isAbsolute,
-  );
-  const sourceBranches: string[] = [];
-
-  if (relativeExcludeSources.length > 0) {
-    const relativePatternSource = `(?:${relativeExcludeSources
-      .map((source) => source.relative)
-      .join('|')})`;
-    const absolutePatternSource = `(?:${relativeExcludeSources
-      .map((source) => source.absolute)
-      .join('|')})`;
-    const relativeSource = `(?:${relativePatternSource})`;
-    const absoluteSource = normalizedProjectRoot
-      ? `${projectRootSource}(?=${PATH_SEPARATOR_SOURCE})(?:${absolutePatternSource})`
-      : `(?:${absolutePatternSource})`;
-
-    sourceBranches.push(
-      `(?!${WINDOWS_ABSOLUTE_PATH_SOURCE}|${PATH_SEPARATOR_SOURCE})${relativeSource}`,
-      absoluteSource,
-    );
-  }
-
-  if (absoluteExcludeSources.length > 0) {
-    sourceBranches.push(
-      `(?:${absoluteExcludeSources
-        .map((source) => source.relative)
-        .join('|')})`,
-    );
-  }
-
-  return new RegExp(`^(?:${sourceBranches.join('|')})$`);
-};
-
-type StatsModule = {
-  nameForCondition?: string;
-  children?: StatsModule[];
-};
-
-type StatsChunk = {
-  id?: string | number;
-  names?: string[];
-  hash?: string;
-  files?: string[];
-  modules?: StatsModule[];
-};
-
-/**
- * Find test file path from chunk modules by matching against known entry files.
- */
-const findTestFileInModules = (
-  modules: StatsModule[] | undefined,
-  entryTestFiles: Set<string>,
-): string | null => {
-  if (!modules) return null;
-
-  for (const m of modules) {
-    if (m.nameForCondition) {
-      const normalizedPath = normalize(m.nameForCondition);
-      if (entryTestFiles.has(normalizedPath)) {
-        return normalizedPath;
-      }
-    }
-    if (m.children) {
-      const found = findTestFileInModules(m.children, entryTestFiles);
-      if (found) return found;
-    }
-  }
-  return null;
-};
-
-/**
- * Get a stable identifier for a chunk.
- * Prefers chunk.id or chunk.names[0] over file paths for stability.
- */
-const getChunkKey = (chunk: StatsChunk): string | null => {
-  if (chunk.id != null) {
-    return String(chunk.id);
-  }
-  if (chunk.names && chunk.names.length > 0) {
-    return chunk.names[0]!;
-  }
-  if (chunk.files && chunk.files.length > 0) {
-    return chunk.files[0]!;
-  }
-  return null;
-};
-
-/**
- * Fold one project compile's chunks into per-entry hash snapshots and apply
- * the shared watch-invalidation policy against that project's baseline.
- * Chunks are attributed to a test/setup file by scanning their modules; the
- * chunk.id/names key is only the hash-record key, never a cross-project one.
- */
-const getAffectedTestFiles = ({
-  chunks,
-  entryTestFiles,
-  setupFiles,
-  state,
-}: {
-  chunks: StatsChunk[] | undefined;
-  entryTestFiles: Set<string>;
-  setupFiles: Set<string>;
-  state: WatchInvalidationState;
-}): string[] => {
-  const entryHashes: EntryHashSnapshot = new Map();
-  const setupHashes: EntryHashSnapshot = new Map();
-
-  const recordChunk = (
-    snapshot: EntryHashSnapshot,
-    entryPath: string,
-    chunkKey: string,
-    hash: string,
-  ) => {
-    const record = snapshot.get(entryPath) ?? {};
-    record[chunkKey] = hash;
-    snapshot.set(entryPath, record);
-  };
-
-  for (const chunk of chunks || []) {
-    if (!chunk.hash) continue;
-
-    const chunkKey = getChunkKey(chunk);
-    if (!chunkKey) continue;
-
-    const testFile = findTestFileInModules(chunk.modules, entryTestFiles);
-    if (testFile) {
-      recordChunk(entryHashes, testFile, chunkKey, chunk.hash);
-      continue;
-    }
-
-    const setupFile = findTestFileInModules(chunk.modules, setupFiles);
-    if (setupFile) {
-      recordChunk(setupHashes, setupFile, chunkKey, chunk.hash);
-    }
-  }
-
-  // Headed watch compiles chunks on demand (lazyCompilation), so an entry's
-  // first appearance in stats means "just loaded", not "just added": its first
-  // sighting establishes the baseline instead of marking a change. Genuinely
-  // new and deleted test files are owned by the test-file-set diff in
-  // `planWatchRerun` / `collectDeletedTestPaths`.
-  const seedFirstSeen = (
-    baseline: EntryHashSnapshot | undefined,
-    current: EntryHashSnapshot,
-  ) => {
-    if (!baseline) return;
-    for (const [entryPath, record] of current) {
-      if (!baseline.has(entryPath)) {
-        baseline.set(entryPath, record);
-      }
-    }
-  };
-  seedFirstSeen(state.entryHashes, entryHashes);
-  seedFirstSeen(state.setupHashes, setupHashes);
-
-  const outcome = applyWatchInvalidation(state, { entryHashes, setupHashes });
-
-  if (outcome.rerunAll) {
-    logger.debug(
-      '[Watch] Setup file changed, re-running all test files of the project',
-    );
-    return Array.from(entryTestFiles);
-  }
-
-  for (const affected of outcome.affectedPaths) {
-    logger.debug(`[Watch] Chunk hash changed for test: ${affected}`);
-  }
-
-  return outcome.affectedPaths;
-};
-
-const getBrowserProjects = (context: RstestContext): ProjectContext[] =>
-  context.projects.filter(
-    (project) => project.normalizedConfig.browser.enabled,
-  );
-
-const getBrowserRsbuildEnvironmentConfig = (
-  project: ProjectContext,
-): RsbuildEnvironmentConfig => ({
-  plugins: project.normalizedConfig.plugins,
-  root: project.rootPath,
-});
-
-// Max testTimeout across browser projects, used as the host->client RPC timeout.
 const getMaxTestTimeoutForRpc = (projects: ProjectContext[]): number =>
   Math.max(
     ...projects.map(
       (p) => p.normalizedConfig.testTimeout ?? DEFAULT_TEST_TIMEOUT,
     ),
   );
-
-const getBrowserLaunchOptions = (
-  project: ProjectContext,
-): BrowserLaunchOptions => ({
-  provider: project.normalizedConfig.browser.provider,
-  browser: project.normalizedConfig.browser.browser,
-  headless: project.normalizedConfig.browser.headless,
-  port: project.normalizedConfig.browser.port,
-  strictPort: project.normalizedConfig.browser.strictPort,
-  providerOptions: getBrowserProviderOptions(project),
-});
-
-const ensureConsistentBrowserLaunchOptions = (
-  projects: ProjectContext[],
-): BrowserLaunchOptions => {
-  if (projects.length === 0) {
-    throw new Error('No browser-enabled projects found.');
-  }
-
-  const firstProject = projects[0]!;
-  const firstOptions = getBrowserLaunchOptions(firstProject);
-
-  for (const project of projects.slice(1)) {
-    const options = getBrowserLaunchOptions(project);
-    // Each browser project now runs on its own rsbuild dev server, so ports may
-    // differ per project. Only the shared single Playwright browser forces
-    // provider/browser/headless/providerOptions to match across projects.
-    if (
-      options.provider !== firstOptions.provider ||
-      options.browser !== firstOptions.browser ||
-      options.headless !== firstOptions.headless ||
-      !isDeepStrictEqual(options.providerOptions, firstOptions.providerOptions)
-    ) {
-      throw new Error(
-        `Browser launch config mismatch between projects "${firstProject.name}" and "${project.name}". ` +
-          'All browser-enabled projects in one run must share provider/browser/headless/providerOptions.',
-      );
-    }
-  }
-
-  return firstOptions;
-};
 
 const resolveProviderForTestPath = ({
   testPath,
@@ -1178,1203 +172,51 @@ const resolveProviderForTestPath = ({
   );
 };
 
-const collectProjectEntries = async (
-  context: RstestContext,
-  // The explicit browser-project subset the executor was constructed with. Falls
-  // back to re-deriving from `context` for internal callers (e.g. the watch
-  // plugin) that do not carry the plan's project list.
-  browserProjects: ProjectContext[] = getBrowserProjects(context),
-): Promise<BrowserProjectEntries[]> => {
-  return Promise.all(
-    browserProjects.map(async (project) => {
-      const {
-        normalizedConfig: { include, exclude, includeSource, setupFiles },
-      } = project;
-
-      const tests = await getTestEntries({
-        include,
-        exclude: exclude.patterns,
-        includeSource,
-        rootPath: context.rootPath,
-        projectRoot: project.rootPath,
-        fileFilters: context.fileFilters || [],
-        fileFilterMode: context.fileFilterMode,
-      });
-
-      const setup = getSetupFiles(setupFiles, project.rootPath);
-
-      return {
-        project,
-        setupFiles: Object.values(setup),
-        testFiles: Object.values(tests),
-      };
-    }),
-  );
-};
-
-const resolveBrowserFile = (relativePath: string): string => {
-  // __dirname points to packages/browser/dist when running from built code
-  // or packages/browser/src when running from source
-  const candidates = [
-    // When running from built dist: look in ../src for source files
-    resolve(__dirname, '../src', relativePath),
-    // When running from source (dev mode)
-    resolve(__dirname, relativePath),
-  ];
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  throw new Error(`Unable to resolve browser client file: ${relativePath}`);
-};
-
-const resolveContainerDist = (): string => {
-  // When running from built dist: browser-container is in the same dist folder
-  const distPath = resolve(__dirname, 'browser-container');
-  if (existsSync(distPath)) {
-    return distPath;
-  }
-
-  throw new Error(
-    `Browser container build not found at ${distPath}. Please run "pnpm --filter @rstest/browser build".`,
-  );
-};
-
-// ============================================================================
-// Manifest Generation
 // ============================================================================
 
-/**
- * Format environment name to a valid JavaScript identifier.
- * Replaces non-alphanumeric characters with underscores.
- */
-const toSafeVarName = (name: string): string => {
-  return name.replace(/[^a-zA-Z0-9_]/g, '_');
-};
-
-// Host-side mirror of the browser runtime's `toContextKey` (client/entry.ts):
-// `./<path-relative-to-project-root>` with forward slashes. The runtime derives
-// the same key from the target test file, so the non-watch import map below must
-// key by the identical form for `loadTest(key)` to resolve.
-export const toContextKey = (
-  filePath: string,
-  projectRootPosix: string,
-): string => {
-  const posixPath = normalize(filePath);
-  // Only strip the root at a path boundary: a bare `startsWith` would mangle a
-  // sibling like `/repo/pkg-extra/a.test.ts` under root `/repo/pkg`.
-  const withinRoot =
-    posixPath === projectRootPosix ||
-    posixPath.startsWith(`${projectRootPosix}/`);
-  if (!withinRoot) {
-    // Test file outside the project root: use the absolute path as the key so
-    // the runtime `toAbsolutePath` can round-trip it. A `./`-prefixed relative
-    // key would be re-rooted under projectRoot and point at a nonexistent file.
-    return posixPath;
-  }
-  const rel = posixPath.slice(projectRootPosix.length);
-  return rel.startsWith('/') ? `.${rel}` : `./${rel}`;
-};
-
-const generateManifestModule = ({
-  manifestPath,
-  entries,
-  isWatchMode,
-}: {
-  manifestPath: string;
-  entries: BrowserProjectEntries[];
-  isWatchMode: boolean;
-}): string => {
-  const manifestDirPosix = normalize(dirname(manifestPath));
-
-  const toRelativeImport = (filePath: string): string => {
-    const posixPath = normalize(filePath);
-    let relativePath = relative(manifestDirPosix, posixPath);
-    if (!relativePath.startsWith('.')) {
-      relativePath = `./${relativePath}`;
-    }
-    return relativePath;
-  };
-
-  const lines: string[] = [];
-
-  // 1. Export all projects configuration
-  lines.push('// All projects configuration');
-  lines.push('export const projects = [');
-  for (const { project } of entries) {
-    lines.push('  {');
-    lines.push(`    name: ${JSON.stringify(project.name)},`);
-    lines.push(
-      `    environmentName: ${JSON.stringify(project.environmentName)},`,
-    );
-    lines.push(
-      `    projectRoot: ${JSON.stringify(normalize(project.rootPath))},`,
-    );
-    lines.push('  },');
-  }
-  lines.push('];');
-  lines.push('');
-
-  // 2. Setup loaders for each project
-  lines.push('// Setup loaders for each project');
-  lines.push('export const projectSetupLoaders = {');
-  for (const { project, setupFiles } of entries) {
-    lines.push(`  ${JSON.stringify(project.name)}: [`);
-    for (const filePath of setupFiles) {
-      const relativePath = toRelativeImport(filePath);
-      lines.push(`    () => import(${JSON.stringify(relativePath)}),`);
-    }
-    lines.push('  ],');
-  }
-  lines.push('};');
-  lines.push('');
-
-  // 3. Test context for each project. Both branches expose the same shape as a
-  // webpackContext (callable by key, plus `keys()`), consumed in section 4.
-  lines.push('// Test context for each project');
-  for (const { project, testFiles } of entries) {
-    const varName = `context_${toSafeVarName(project.environmentName)}`;
-    const projectRootPosix = normalize(project.rootPath);
-
-    if (isWatchMode) {
-      // Watch mode keeps the include-glob context so newly added files are
-      // picked up on rebuild via `keys()` without regenerating the manifest.
-      // `mode: 'lazy'` is plain code-splitting (async chunks over HTTP), so it
-      // works with or without lazyCompilation; headed watch additionally layers
-      // lazyCompilation on top to keep the initial build cheap.
-      const includeRegExp = globPatternsToRegExp(
-        project.normalizedConfig.include,
-      );
-      const excludeRegExp = createBrowserContextExcludeRegExp(
-        project.normalizedConfig.exclude.patterns,
-        projectRootPosix,
-      );
-      const { includeSource } = project.normalizedConfig;
-      const emitContext = (contextVarName: string, regExp: RegExp): void => {
-        lines.push(
-          `const ${contextVarName} = import.meta.webpackContext(${JSON.stringify(projectRootPosix)}, {`,
-        );
-        lines.push('  recursive: true,');
-        lines.push(`  regExp: ${regExp.toString()},`);
-        if (excludeRegExp) {
-          lines.push(`  exclude: ${excludeRegExp.toString()},`);
-        }
-        lines.push("  mode: 'lazy',");
-        lines.push('});');
-      };
-
-      if (includeSource.length === 0) {
-        emitContext(varName, includeRegExp);
-      } else {
-        // In-source test files (`includeSource`) carry an
-        // `if (import.meta.rstest)` block. The include context can't see them,
-        // so a second context over the `includeSource` globs backs
-        // host-scheduled loads, while `keys()` only unions the entry-probed
-        // in-source files (the probe does not apply inside the bundle, so raw
-        // source-context keys would execute never-probed files and fail with
-        // "No test suites found"). The probed list can go stale until a
-        // manifest refresh; scheduled-by-path loading never does.
-        emitContext(`${varName}_include`, includeRegExp);
-        emitContext(`${varName}_source`, globPatternsToRegExp(includeSource));
-        const probedKeys = testFiles.map((filePath) =>
-          toContextKey(filePath, projectRootPosix),
-        );
-        lines.push(`const ${varName}_probed = ${JSON.stringify(probedKeys)};`);
-        lines.push(
-          `const ${varName}_includeKeys = new Set(${varName}_include.keys());`,
-        );
-        lines.push(`const ${varName} = Object.assign(`);
-        lines.push(
-          `  (key) => ${varName}_includeKeys.has(key) ? ${varName}_include(key) : ${varName}_source(key),`,
-        );
-        lines.push('  {');
-        lines.push(
-          `    keys: () => Array.from(new Set([...${varName}_includeKeys, ...${varName}_probed])),`,
-        );
-        lines.push('  },');
-        lines.push(');');
-      }
-    } else {
-      // One-shot runs: the file set is fixed and already filtered, so emit an
-      // explicit lazy-import map (one chunk per literal `import()`, like the
-      // setup loaders above). The eager, non-lazyCompilation build then compiles
-      // only the run set instead of every included test file.
-      lines.push(`const ${varName}_modules = {`);
-      for (const filePath of testFiles) {
-        const key = toContextKey(filePath, projectRootPosix);
-        const importPath = toRelativeImport(filePath);
-        lines.push(
-          `  ${JSON.stringify(key)}: () => import(${JSON.stringify(importPath)}),`,
-        );
-      }
-      lines.push('};');
-      lines.push(
-        `const ${varName} = Object.assign((key) => ${varName}_modules[key](), {`,
-      );
-      lines.push(`  keys: () => Object.keys(${varName}_modules),`);
-      lines.push('});');
-    }
-    lines.push('');
-  }
-
-  // 4. Export test contexts object
-  lines.push('export const projectTestContexts = {');
-  for (const { project } of entries) {
-    const varName = `context_${toSafeVarName(project.environmentName)}`;
-    lines.push(`  ${JSON.stringify(project.name)}: {`);
-    lines.push(`    getTestKeys: () => ${varName}.keys(),`);
-    lines.push(`    loadTest: (key) => ${varName}(key),`);
-    lines.push(
-      `    projectRoot: ${JSON.stringify(normalize(project.rootPath))},`,
-    );
-    lines.push('  },');
-  }
-  lines.push('};');
-  lines.push('');
-
-  // 5. Backward compatibility exports (use first project as default)
-  lines.push('// Backward compatibility: export first project as default');
-  lines.push('export const projectConfig = projects[0];');
-  lines.push(
-    'export const setupLoaders = projectSetupLoaders[projects[0].name] || [];',
-  );
-  lines.push('const _defaultCtx = projectTestContexts[projects[0].name];');
-  lines.push(
-    'export const getTestKeys = () => _defaultCtx ? _defaultCtx.getTestKeys() : [];',
-  );
-  lines.push(
-    'export const loadTest = (key) => _defaultCtx ? _defaultCtx.loadTest(key) : Promise.reject(new Error("No project found"));',
-  );
-
-  return `${lines.join('\n')}\n`;
-};
-
-const htmlTemplate = `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Rstest Browser Runner</title>
-  </head>
-  <body>
-    <script type="module" src="/static/js/runner.js"></script>
-  </body>
-</html>
-`;
-
-// Workaround for noisy "removed ..." logs caused by VirtualModulesPlugin.
-// Rsbuild suppresses the removed-file log if all removed paths include "virtual":
-// https://github.com/web-infra-dev/rsbuild/blob/1258fa9dba5c321a4629b591a6dadbd2e26c6963/packages/core/src/createCompiler.ts#L73-L76
-const VIRTUAL_MANIFEST_FILENAME = 'virtual-manifest.ts';
-
-// ============================================================================
-// Browser Runtime Lifecycle
-// ============================================================================
-
-const closeAllProjectServers = (
-  servers: Iterable<BrowserProjectServer>,
-): Promise<unknown> =>
-  Promise.allSettled([...servers].map((server) => server.devServer.close()));
-
-// Copy a proxied fetch Response's status + headers onto the Node response,
-// dropping content-length (the body is re-sent, so the original length may not
-// match).
-const copyProxyResponseHeaders = (
-  response: Response,
-  res: ServerResponse,
-): void => {
-  res.statusCode = response.status;
-  response.headers.forEach((value, key) => {
-    if (key.toLowerCase() === 'content-length') {
-      return;
-    }
-    res.setHeader(key, value);
-  });
-};
-
-const destroyBrowserRuntime = async (
-  runtime: BrowserRuntime,
-): Promise<void> => {
-  try {
-    await runtime.browser?.close?.();
-  } catch {
-    // ignore
-  }
-  await closeAllProjectServers(runtime.projectServers.values());
-  try {
-    runtime.wss?.close();
-  } catch {
-    // ignore
-  }
-  await fs
-    .rm(runtime.tempDir, { recursive: true, force: true })
-    .catch(() => {});
-};
-
-const cleanupWatchRuntime = (): Promise<void> => {
-  if (watchContext.cleanupPromise) {
-    return watchContext.cleanupPromise;
-  }
-
-  watchContext.cleanupPromise = (async () => {
-    if (!watchContext.runtime) {
-      return;
-    }
-
-    await destroyBrowserRuntime(watchContext.runtime);
-    watchContext.runtime = null;
-  })();
-
-  return watchContext.cleanupPromise;
-};
-
-const registerWatchCleanup = (embedded: boolean): void => {
-  if (watchContext.cleanupRegistered) {
-    return;
-  }
-  watchContext.cleanupRegistered = true;
-
-  // Embedded (programmatic) hosts own the process lifecycle; they tear the
-  // session down through the watch handles' `close` instead of signals.
-  if (embedded) {
-    return;
-  }
-
-  // Cleanup-only nets: core's watch loop owns the signal → exit-code path
-  // (`registerBrowserWatchSignalExit` / the mixed watch handler) and awaits
-  // the same idempotent `cleanupWatchRuntime` promise through `watch.close`.
-  for (const signal of FATAL_SIGNALS) {
-    process.once(signal, () => {
-      void cleanupWatchRuntime();
-    });
-  }
-
-  process.once('exit', () => {
-    void cleanupWatchRuntime();
-  });
-};
-
-const createBrowserRuntime = async ({
-  context,
-  projectEntries: initialProjectEntries,
-  browserProjects,
-  shardedEntries,
-  freezeShardedEntries,
-  tempDir,
-  isWatchMode,
-  onTriggerRerun,
-  containerDistPath,
-  containerDevServer,
-  forceHeadless,
-  skipProviderLaunch,
-  appliedModifyRstestConfigEnvironments,
-}: {
-  context: RstestContext;
-  projectEntries: BrowserProjectEntries[];
+export type BrowserControllerOptions = BrowserTestRunOptions & {
   /**
-   * The explicit browser-project subset (plan output). Drives launch-option
-   * consistency and the container origin (`browserProjects[0]`).
+   * Watch only: core's watch-cycle driver (see `TestExecutor.onInvalidate`).
+   * Its promise settles when the cycle it queued has finalized, which only an
+   * explicit request may wait for (see `signalInvalidation`).
    */
-  browserProjects: ProjectContext[];
-  shardedEntries?: Map<string, { entries: Record<string, string> }>;
-  freezeShardedEntries?: boolean;
-  tempDir: string;
-  isWatchMode: boolean;
-  onTriggerRerun?: () => Promise<void>;
-  containerDistPath?: string;
-  containerDevServer?: string;
-  /** Force headless mode regardless of user config (used for list command) */
-  forceHeadless?: boolean;
-  skipProviderLaunch?: boolean;
-  appliedModifyRstestConfigEnvironments?: Set<string>;
-}): Promise<BrowserRuntime> => {
-  // ---- Shared singletons (created once, wired into every project server) ----
-  const containerHtmlTemplate = containerDistPath
-    ? await fs.readFile(join(containerDistPath, 'index.html'), 'utf-8')
-    : null;
-
-  let injectedContainerHtml: string | null = null;
-  let serializedOptions = 'null';
-  // Reserved extension seam for future browser-side capabilities.
-  const dispatchHandlers = new Map<string, BrowserDispatchHandler>();
-
-  const setContainerOptions = (options: BrowserHostConfig): void => {
-    serializedOptions = serializeForInlineScript(options);
-    if (containerHtmlTemplate) {
-      injectedContainerHtml = containerHtmlTemplate.replace(
-        OPTIONS_PLACEHOLDER,
-        serializedOptions,
-      );
-    }
-  };
-
-  let browserLaunchOptions =
-    ensureConsistentBrowserLaunchOptions(browserProjects);
-  let projectEntries = initialProjectEntries;
-  // Created with the runtime so the per-project watch plugins and the
-  // controller's rerun closures share one state whose lifetime matches the
-  // compilers holding the diffed chunks.
-  const watchState = createBrowserWatchState();
-  const manifestModules: Array<{
-    manifestPath: string;
-    project: ProjectContext;
-    modules: Record<string, string>;
-  }> = [];
-
-  const createRuntimeWithoutProvider = (): BrowserRuntime => {
-    const firstProject = browserProjects[0]!;
-    return {
-      projectServers: new Map(),
-      containerServer: {
-        projectName: firstProject.name,
-        environmentName: firstProject.environmentName,
-        rsbuildInstance: undefined as unknown as RsbuildInstance,
-        devServer: {
-          close: async () => undefined,
-        } as RsbuildDevServer,
-        port: 0,
-        manifestPath: '',
-      },
-      browser: undefined as unknown as BrowserProviderBrowser,
-      browserLaunchOptions,
-      wsPort: 0,
-      tempDir,
-      setContainerOptions,
-      dispatchHandlers,
-      wss: undefined as unknown as WebSocketServer,
-      projectEntries,
-      watchState,
-    };
-  };
-
-  const getProjectEntry = (project: ProjectContext) =>
-    projectEntries.find(
-      (item) => item.project.environmentName === project.environmentName,
-    );
-
-  const refreshManifestModule = (manifestModule: {
-    manifestPath: string;
-    project: ProjectContext;
-    modules: Record<string, string>;
-  }): void => {
-    const entry = getProjectEntry(manifestModule.project);
-    manifestModule.modules[manifestModule.manifestPath] =
-      generateManifestModule({
-        manifestPath: manifestModule.manifestPath,
-        entries: [
-          {
-            project: manifestModule.project,
-            testFiles: entry?.testFiles ?? [],
-            setupFiles: entry?.setupFiles ?? [],
-          },
-        ],
-        isWatchMode,
-      });
-  };
-
-  const refreshProjectEntries = async (): Promise<void> => {
-    validateBrowserConfig(context);
-    browserLaunchOptions =
-      ensureConsistentBrowserLaunchOptions(browserProjects);
-    const updatedShardedEntries = freezeShardedEntries
-      ? shardedEntries
-      : context.normalizedConfig.shard
-        ? await resolveShardedEntries(context, { silent: true })
-        : shardedEntries;
-    projectEntries = await resolveProjectEntries(
-      context,
-      updatedShardedEntries,
-      browserProjects,
-    );
-    for (const manifestModule of manifestModules) {
-      refreshManifestModule(manifestModule);
-    }
-  };
-
-  // Rstest internal aliases that must not be overridden by user config
-  const browserRuntimePath = fileURLToPath(
-    import.meta.resolve('@rstest/core/internal/browser-runtime'),
-  );
-
-  // Shared by every project — only the per-project `@rstest/browser-manifest`
-  // alias varies (one virtual manifest per server).
-  const staticRstestAliases = {
-    // User test code `import { describe, it } from '@rstest/core'` is NOT
-    // aliased: `applyWebMockRspackConfig` keeps the request external against
-    // `globalThis['@rstest/core']` (node parity), which also keeps the mock
-    // hoister's provider-import ordering correct for `rs.hoisted` callbacks.
-    // User test code: import { page } from '@rstest/browser'
-    '@rstest/browser': resolveBrowserFile('browser.ts'),
-    // Browser runtime APIs for entry.ts
-    // Uses dist file with extractSourceMap to preserve sourcemap chain for inline snapshots
-    '@rstest/core/internal/browser-runtime': browserRuntimePath,
-  };
-
-  // rspack `define` replaces `process.env` / `import.meta.env` with this literal
-  // expression. JSON.stringify reproduces the exact double-quoted `"rstest.env"`
-  // text, so the owned key can never drift from the runtime
-  // `Symbol.for(RSTEST_ENV_SYMBOL_KEY)` sites.
-  const rstestEnvDefine = `globalThis[Symbol.for(${JSON.stringify(
-    RSTEST_ENV_SYMBOL_KEY,
-  )})]`;
-
-  // Serve prebuilt container assets (SPA) via sirv (container origin only)
-  const serveContainer = containerDistPath
-    ? sirv(containerDistPath, {
-        dev: false,
-        single: 'index.html',
-      })
-    : null;
-
-  const containerDevBase = containerDevServer
-    ? new URL(containerDevServer)
-    : null;
-
-  const respondWithDevServerHtml = async (
-    url: URL,
-    res: ServerResponse,
-  ): Promise<boolean> => {
-    if (!containerDevBase) {
-      return false;
-    }
-
-    try {
-      const target = new URL(url.pathname + url.search, containerDevBase);
-      const response = await fetch(target);
-      if (!response.ok) {
-        return false;
-      }
-
-      let html = await response.text();
-      html = html.replace(OPTIONS_PLACEHOLDER, serializedOptions);
-
-      copyProxyResponseHeaders(response, res);
-      res.setHeader('Content-Type', 'text/html');
-      res.end(html);
-      return true;
-    } catch (error) {
-      logger.debug(
-        `[Browser UI] Failed to fetch container HTML from dev server: ${String(error)}`,
-      );
-      return false;
-    }
-  };
-
-  const proxyDevServerAsset = async (
-    req: IncomingMessage,
-    res: ServerResponse,
-  ): Promise<boolean> => {
-    if (!containerDevBase || !req.url) {
-      return false;
-    }
-
-    try {
-      const target = new URL(req.url, containerDevBase);
-      const response = await fetch(target);
-      if (!response.ok) {
-        return false;
-      }
-
-      const buffer = Buffer.from(await response.arrayBuffer());
-      copyProxyResponseHeaders(response, res);
-      res.end(buffer);
-      return true;
-    } catch (error) {
-      logger.debug(
-        `[Browser UI] Failed to proxy asset from dev server: ${String(error)}`,
-      );
-      return false;
-    }
-  };
-
-  // ---- Build one isolated rsbuild instance + dev server per project ----
-  const buildProjectServer = async (
-    project: ProjectContext,
-    isContainerServer: boolean,
-  ): Promise<BrowserProjectServer> => {
-    const manifestPath = join(
-      tempDir,
-      toSafeVarName(project.environmentName),
-      VIRTUAL_MANIFEST_FILENAME,
-    );
-    const entry = getProjectEntry(project);
-    const virtualManifestModules = {
-      [manifestPath]: generateManifestModule({
-        manifestPath,
-        entries: [
-          {
-            project,
-            testFiles: entry?.testFiles ?? [],
-            setupFiles: entry?.setupFiles ?? [],
-          },
-        ],
-        isWatchMode,
-      }),
-    };
-    const virtualManifestPlugin = new rspack.experiments.VirtualModulesPlugin(
-      virtualManifestModules,
-    );
-    manifestModules.push({
-      manifestPath,
-      project,
-      modules: virtualManifestModules,
-    });
-
-    const rstestInternalAliases = {
-      '@rstest/browser-manifest': manifestPath,
-      ...staticRstestAliases,
-    };
-
-    const isHeadless =
-      forceHeadless || project.normalizedConfig.browser.headless;
-    const enableHmr = shouldEnableBrowserHmr(isWatchMode, isHeadless);
-
-    const rsbuildInstance = await createRsbuild({
-      callerName: 'rstest',
-      rsbuildConfig: {
-        root: context.rootPath,
-        mode: 'development',
-        server: {
-          printUrls: false,
-          // Each project gets its own dev server. Honor an explicitly
-          // configured port; otherwise keep the historical 4000 default for the
-          // container server and let the OS assign free ports for the rest, so
-          // multiple projects never collide on one port.
-          port:
-            project.normalizedConfig.browser.port ??
-            (isContainerServer ? 4000 : 0),
-          strictPort: project.normalizedConfig.browser.strictPort,
-        },
-        dev: createBrowserRsbuildDevConfig(enableHmr),
-        environments: {
-          [project.environmentName]:
-            getBrowserRsbuildEnvironmentConfig(project),
-        },
-      },
-    });
-
-    initModifyRstestConfigHooks(
-      context,
-      rsbuildInstance,
-      [project],
-      [project],
-      {
-        getEnvironmentConfig: getBrowserRsbuildEnvironmentConfig,
-        onModifyRstestConfigApplied: refreshProjectEntries,
-        appliedEnvironmentNames: appliedModifyRstestConfigEnvironments,
-      },
-    );
-
-    // Add plugin to merge user Rsbuild config with rstest required config
-    rsbuildInstance.addPlugins([
-      // Same mock runtime as the node build (importActual doppelganger rule +
-      // mock webpack runtime module); order-insensitive and self-contained.
-      pluginMockRuntime,
-      {
-        name: 'rstest:browser-user-config',
-        setup(api) {
-          // Internal extension entry: register host dispatch handlers without
-          // coupling scheduling to individual capability implementations.
-          (api as { expose?: (name: string, value: unknown) => void }).expose?.(
-            'rstest:browser',
-            {
-              registerDispatchHandler: (
-                namespace: string,
-                handler: BrowserDispatchHandler,
-              ) => {
-                dispatchHandlers.set(namespace, handler);
-              },
-            },
-          );
-
-          api.modifyEnvironmentConfig({
-            handler: (config, { mergeEnvironmentConfig, name }) => {
-              if (name !== project.environmentName) {
-                return config;
-              }
-
-              const userRsbuildConfig = project.normalizedConfig;
-              const buildCache = resolveProjectBuildCache({
-                context,
-                project,
-              });
-              const setupFiles = Object.values(
-                getSetupFiles(
-                  project.normalizedConfig.setupFiles,
-                  project.rootPath,
-                ),
-              );
-              // Merge order: current config -> userConfig -> rstest required config (highest priority)
-              const merged = mergeEnvironmentConfig(
-                config,
-                {
-                  ...userRsbuildConfig,
-                  performance: buildCache
-                    ? {
-                        ...userRsbuildConfig.performance,
-                        buildCache,
-                      }
-                    : userRsbuildConfig.performance,
-                },
-                {
-                  resolve: {
-                    alias: rstestInternalAliases,
-                  },
-                  source: {
-                    define: {
-                      'process.env': rstestEnvDefine,
-                      'import.meta.env': rstestEnvDefine,
-                      // In-source `if (import.meta.rstest)` blocks read the
-                      // per-file runtime API the client entry publishes on
-                      // `globalThis` (node parity: `global['@rstest/core']`).
-                      'import.meta.rstest': importMetaRstestDefine('web'),
-                    },
-                  },
-                  output: {
-                    target: 'web',
-                    // Enable source map for inline snapshot support
-                    sourceMap: {
-                      js: 'source-map',
-                    },
-                    // Every project server compiles the same asset names
-                    // (`static/js/runner.js`, ...). With `dev.writeToDisk`
-                    // (debug mode) the middleware serves from disk, so a
-                    // shared dist dir would be last-writer-wins and one
-                    // project's server would deliver another project's
-                    // bundle — keep each project's output isolated, inside
-                    // the run's temp dir so teardown removes it.
-                    distPath: {
-                      root: join(
-                        tempDir,
-                        'server',
-                        toSafeVarName(project.environmentName),
-                      ),
-                    },
-                  },
-                  tools: {
-                    swc: (swcConfig) => {
-                      // Fixture dependency discovery reads callback parameters
-                      // through Function#toString(). Playwright's supported
-                      // browsers all support parameter destructuring, so keep
-                      // that syntax intact in the browser test bundle.
-                      swcConfig.env ??= {};
-                      swcConfig.env.exclude = Array.from(
-                        new Set([
-                          ...(swcConfig.env.exclude ?? []),
-                          'transform-parameters',
-                        ]),
-                      );
-                    },
-                    rspack: (rspackConfig) => {
-                      rspackConfig.mode = 'development';
-                      // Web parameterization of the node mock transform:
-                      // RstestPlugin (hoist + path injection), the
-                      // `@rstest/core` global external, and
-                      // `exportsPresence: 'warn'`.
-                      applyWebMockRspackConfig(rspackConfig, {
-                        rspack,
-                        rootPath: project.rootPath,
-                      });
-                      // lazyCompilation's only delivery transport is the HMR
-                      // runtime, so it follows the same gate as HMR (see
-                      // `shouldEnableBrowserHmr`): headed watch only, everything
-                      // else compiles eagerly.
-                      rspackConfig.lazyCompilation = enableHmr
-                        ? createBrowserLazyCompilationConfig(setupFiles)
-                        : false;
-                      rspackConfig.plugins = rspackConfig.plugins || [];
-                      rspackConfig.plugins.push(virtualManifestPlugin);
-
-                      applyDefaultWatchOptions(rspackConfig, isWatchMode);
-
-                      // Extract and merge sourcemaps from pre-built @rstest/core files
-                      // This preserves the sourcemap chain for inline snapshot support
-                      // See: https://rspack.rs/config/module-rules#rulesextractsourcemap
-                      const browserRuntimeDir = dirname(browserRuntimePath);
-                      rspackConfig.module = rspackConfig.module || {};
-                      rspackConfig.module.rules =
-                        rspackConfig.module.rules || [];
-                      rspackConfig.module.rules.unshift({
-                        test: /\.js$/,
-                        include: browserRuntimeDir,
-                        extractSourceMap: true,
-                      });
-
-                      if (isDebug()) {
-                        logger.log(
-                          `[rstest:browser] extractSourceMap rule added for: ${browserRuntimeDir}`,
-                        );
-                      }
-                    },
-                  },
-                },
-              );
-
-              // Completely overwrite entry to prevent Rsbuild default entry detection from taking effect.
-              // In browser mode, entry is fully controlled by rstest (not user's src/index.ts).
-              // This must be done after mergeEnvironmentConfig to ensure highest priority.
-              merged.source = merged.source || {};
-              merged.source.entry = {
-                runner: resolveBrowserFile('client/entry.ts'),
-              };
-
-              return merged;
-            },
-            // Execute after all other plugins to ensure rstest's entry config has the highest priority
-            order: 'post',
-          });
-        },
-      },
-    ]);
-
-    // Register watch plugin if in watch mode
-    if (isWatchMode && onTriggerRerun) {
-      rsbuildInstance.addPlugins([
-        {
-          name: 'rstest:browser-watch',
-          setup(api) {
-            api.onBeforeDevCompile(() => {
-              watchState.compileStartTimes.set(project.name, Date.now());
-              if (!watchState.hooksEnabled) {
-                return;
-              }
-              logger.log(color.cyan('\nFile changed, re-running tests...\n'));
-            });
-
-            api.onAfterDevCompile(async ({ stats }) => {
-              const compileStart = watchState.compileStartTimes.get(
-                project.name,
-              );
-              if (compileStart !== undefined) {
-                watchState.compileStartTimes.delete(project.name);
-                // Only change-triggered compiles feed the pending rerun's
-                // build phase (the initial build is the initial run's
-                // buildTime). Parallel project compiles overlap; the longest
-                // one bounds the rerun's build phase.
-                if (watchState.hooksEnabled) {
-                  watchState.pendingBuildTimeMs = Math.max(
-                    watchState.pendingBuildTimeMs,
-                    Date.now() - compileStart,
-                  );
-                }
-              }
-              // Collect hashes even during initial build to establish baseline
-              if (stats) {
-                // This compiler only ever holds this project's entries; the
-                // diff baseline is keyed per project accordingly.
-                const [projectEntry] = await collectProjectEntries(context, [
-                  project,
-                ]);
-                const entryTestFiles = new Set<string>(
-                  collectWatchTestFiles(projectEntry ? [projectEntry] : []).map(
-                    (file) => file.testPath,
-                  ),
-                );
-                const setupFiles = new Set<string>(
-                  (projectEntry?.setupFiles ?? []).map((file) =>
-                    normalize(file),
-                  ),
-                );
-
-                let state = watchState.invalidation.get(project.name);
-                if (!state) {
-                  state = {};
-                  watchState.invalidation.set(project.name, state);
-                }
-
-                const statsJson = stats.toJson({ all: true });
-                const affected = getAffectedTestFiles({
-                  chunks: statsJson.chunks,
-                  entryTestFiles,
-                  setupFiles,
-                  state,
-                });
-
-                if (affected.length > 0) {
-                  const pending =
-                    watchState.pendingAffectedTestFiles.get(project.name) ??
-                    new Set<string>();
-                  for (const file of affected) {
-                    pending.add(file);
-                  }
-                  watchState.pendingAffectedTestFiles.set(
-                    project.name,
-                    pending,
-                  );
-                  logger.debug(
-                    `[Watch] Affected test files: ${affected.join(', ')}`,
-                  );
-                }
-              }
-
-              if (!watchState.hooksEnabled) {
-                return;
-              }
-
-              await onTriggerRerun();
-            });
-          },
-        },
-      ]);
-    }
-
-    if (skipProviderLaunch) {
-      await rsbuildInstance.initConfigs({ action: 'dev' });
-      return {
-        projectName: project.name,
-        environmentName: project.environmentName,
-        rsbuildInstance,
-        devServer: {
-          close: async () => undefined,
-        } as RsbuildDevServer,
-        port: 0,
-        manifestPath,
-      };
-    }
-
-    // Register coverage plugin if this project enables coverage
-    const coverage = project.normalizedConfig.coverage;
-    if (coverage?.enabled && context.command !== 'list') {
-      const { pluginCoverage } = await loadCoverageProvider(
-        coverage,
-        context.rootPath,
-      );
-      rsbuildInstance.addPlugins([pluginCoverage(coverage)]);
-    }
-
-    const devServer = await rsbuildInstance.createDevServer({
-      getPortSilently: true,
-    });
-
-    if (isDebug()) {
-      await rsbuildInstance.inspectConfig({
-        writeToDisk: true,
-        // The server's own distPath is isolated per project inside the run's
-        // temp dir (removed at teardown); keep the debug artifacts at the
-        // project's stable dist root so they survive the run and stay where
-        // the docs point users to.
-        outputPath: resolve(
-          context.rootPath,
-          context.normalizedConfig.output.distPath.root,
-          '.rsbuild',
-        ),
-        extraConfigs: {
-          rstest: {
-            ...context.normalizedConfig,
-            projects: [project.normalizedConfig],
-          },
-        },
-      });
-    }
-
-    devServer.middlewares.use(
-      async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
-        if (!req.url) {
-          next();
-          return;
-        }
-        const url = new URL(req.url, 'http://localhost');
-        if (url.pathname === '/__open-in-editor') {
-          const file = url.searchParams.get('file');
-          if (!file) {
-            res.statusCode = 400;
-            res.end('Missing file');
-            return;
-          }
-          try {
-            await openEditor([{ file }]);
-            res.statusCode = 204;
-            res.end();
-          } catch (error) {
-            logger.debug(
-              `[Browser UI] Failed to open editor: ${String(error)}`,
-            );
-            res.statusCode = 500;
-            res.end('Failed to open editor');
-          }
-          return;
-        }
-        // Container UI HTML + static assets are served by the container origin
-        // only. Per-project runner servers expose just /runner.html + assets.
-        if (isContainerServer) {
-          if (url.pathname === '/') {
-            if (await respondWithDevServerHtml(url, res)) {
-              return;
-            }
-
-            const html =
-              injectedContainerHtml ||
-              containerHtmlTemplate?.replace(OPTIONS_PLACEHOLDER, 'null');
-
-            if (html) {
-              res.setHeader('Content-Type', 'text/html');
-              res.end(html);
-              return;
-            }
-
-            res.statusCode = 502;
-            res.end('Container UI is not available.');
-            return;
-          }
-          if (url.pathname.startsWith('/container-static/')) {
-            if (await proxyDevServerAsset(req, res)) {
-              return;
-            }
-
-            if (serveContainer) {
-              serveContainer(req, res, next);
-              return;
-            }
-
-            res.statusCode = 502;
-            res.end('Container assets are not available.');
-            return;
-          }
-        }
-        if (url.pathname === '/runner.html') {
-          res.setHeader('Content-Type', 'text/html');
-          res.end(htmlTemplate);
-          return;
-        }
-        next();
-      },
-    );
-
-    const { port: listenPort } = await devServer.listen();
-    const port = resolveListenPort(listenPort, devServer.httpServer);
-
-    return {
-      projectName: project.name,
-      environmentName: project.environmentName,
-      rsbuildInstance,
-      devServer,
-      port,
-      manifestPath,
-    };
-  };
-
-  // Build each project's server sequentially. Servers must bind ports one at a
-  // time: projects may share a configured port and rely on strictPort:false
-  // bumping to the next free one, which races under concurrent listen().
-  const projectServers = new Map<string, BrowserProjectServer>();
-  try {
-    for (const [index, project] of browserProjects.entries()) {
-      const server = await buildProjectServer(project, index === 0);
-      projectServers.set(server.projectName, server);
-    }
-  } catch (error) {
-    await closeAllProjectServers(projectServers.values());
-    throw error;
-  }
-
-  if (skipProviderLaunch) {
-    return createRuntimeWithoutProvider();
-  }
-
-  // browserProjects is non-empty (ensureConsistentBrowserLaunchOptions throws
-  // otherwise) and index 0 is the designated container origin.
-  const containerServer = projectServers.get(browserProjects[0]!.name)!;
-
-  // Create WebSocket server on an available port
-  // Using port: 0 lets the OS assign an available port, avoiding conflicts
-  // when the fixed port (e.g., container port + 1) is already in use
-  const wss = new WebSocketServer({ port: 0 });
-  await new Promise<void>((resolve, reject) => {
-    wss.once('listening', resolve);
-    wss.once('error', reject);
-  });
-  const wsPort = (wss.address() as AddressInfo).port;
-  logger.debug(`[Browser UI] WebSocket server started on port ${wsPort}`);
-
-  const browserName = browserLaunchOptions.browser ?? 'chromium';
-  try {
-    const providerImplementation = getBrowserProviderImplementation(
-      browserLaunchOptions.provider,
-    );
-    const runtime = await providerImplementation.launchRuntime({
-      browserName,
-      headless: forceHeadless ?? browserLaunchOptions.headless,
-      providerOptions: browserLaunchOptions.providerOptions,
-    });
-    return {
-      projectServers,
-      containerServer,
-      browser: runtime.browser,
-      browserLaunchOptions,
-      wsPort,
-      tempDir,
-      setContainerOptions,
-      dispatchHandlers,
-      wss,
-      projectEntries,
-      watchState,
-    };
-  } catch (error) {
-    wss.close();
-    await closeAllProjectServers(projectServers.values());
-    throw error;
-  }
+  onInvalidate?: ExecutorInvalidationCallback;
 };
 
-async function resolveProjectEntries(
-  context: RstestContext,
-  shardedEntries: Map<string, { entries: Record<string, string> }> | undefined,
-  browserProjects: ProjectContext[],
-): Promise<BrowserProjectEntries[]> {
-  if (shardedEntries) {
-    const projectEntries: BrowserProjectEntries[] = [];
-    for (const project of browserProjects) {
-      const entryInfo = shardedEntries.get(project.environmentName);
-      if (entryInfo && Object.keys(entryInfo.entries).length > 0) {
-        const setup = getSetupFiles(
-          project.normalizedConfig.setupFiles,
-          project.rootPath,
-        );
-        projectEntries.push({
-          project,
-          setupFiles: Object.values(setup),
-          testFiles: Object.values(entryInfo.entries),
-        });
-      }
-    }
-    return projectEntries;
-  }
-  return collectProjectEntries(context, browserProjects);
-}
-
-// ============================================================================
-// Main Entry Point
-// ============================================================================
+export type BrowserControllerResult = BrowserTestRunResult & {
+  watchSession?: BrowserWatchSession;
+};
 
 export const runBrowserController = async (
   context: RstestContext,
-  options?: BrowserTestRunOptions,
-): Promise<BrowserTestRunResult | void> => {
+  options?: BrowserControllerOptions,
+): Promise<BrowserControllerResult | void> => {
   const {
-    allowEmptyWatchRun = false,
     allowEmptyRun = false,
     filesOnly = false,
     onTraceEvents,
     env,
+    onInvalidate,
   } = options ?? {};
   const buildStart = Date.now();
-  // Non-watch vs watch is the live switch for self-finalize: in non-watch runs
-  // core owns the unified finalize (reporters, exit code, coverage) through
-  // `finalizeRunCycle`, so the host never self-finalizes and always returns a
-  // fully-populated result with `close`. Watch reruns keep their host-driven
-  // per-rerun finalize.
+  // Watch mode changes what this controller *owns*, never who finalizes: core's
+  // `finalizeRunCycle` reduces every cycle on both commands. What watch adds is
+  // a persistent runtime (reused across controller re-entry), the rerun
+  // triggers, and HMR — so the initial run returns a live watch session instead
+  // of a deferred `close`.
   const isWatchMode = context.command === 'watch';
 
   // Per-file PhaseTrackers, populated only when `--trace` is on (caller
   // passes `onTraceEvents`). The browser host shares one Node process across
   // every test file, so each tracker is assigned a synthetic per-file pid
   // (`nextBrowserFilePid`) that lets Perfetto render each file as its own
-  // process track with the file path as the title.
+  // process track with the file path as the title. Keyed by project + path so
+  // concurrent projects running the same file keep separate trackers.
   const phaseTrackers = onTraceEvents
     ? new Map<string, PhaseTracker>()
     : undefined;
+  const trackerKey = (project: string, testPath: string) =>
+    `${project}\u0000${testPath}`;
   // Explicit projects input (plan output) replaces re-deriving `browser.enabled`
   // projects from `context`, whose `projects` array is mutated during planning.
   // Falls back to re-derivation only when the caller passes no list at all —
@@ -2431,12 +273,12 @@ export const runBrowserController = async (
    * Build an error BrowserTestRunResult and call onTestRunEnd if needed.
    * Used for early-exit error paths to ensure errors reach the summary report.
    */
-  const buildErrorResult = async (
+  const buildErrorResult = (
     error: Error,
     close?: () => Promise<void>,
-  ): Promise<BrowserTestRunResult> => {
+  ): BrowserTestRunResult => {
     const elapsed = Math.max(0, Date.now() - buildStart);
-    const errorResult = {
+    return {
       results: [],
       testResults: [],
       duration: { totalTime: elapsed, buildTime: elapsed, testTime: 0 },
@@ -2446,38 +288,14 @@ export const runBrowserController = async (
       resolveSourcemap: resolveBrowserSourcemap,
       close,
     };
-
-    if (isWatchMode) {
-      for (const reporter of context.reporters) {
-        await (reporter as Reporter).onTestRunEnd?.({
-          results: [],
-          testResults: [],
-          duration: errorResult.duration,
-          snapshotSummary: context.snapshotManager.summary,
-          getSourcemap: getBrowserSourcemap,
-          unhandledErrors: errorResult.unhandledErrors,
-        });
-      }
-    }
-
-    return errorResult;
-  };
-
-  const toError = (error: unknown): Error => {
-    return error instanceof Error ? error : new Error(String(error));
   };
 
   const failWithError = async (
     error: unknown,
     cleanup?: () => Promise<void>,
   ): Promise<BrowserTestRunResult> => {
-    // Non-watch runs defer the exit code to core's `finalizeRunCycle`, which
-    // raises it from the returned outcome's `errors`. Watch reruns keep owning
-    // their own exit code.
-    if (isWatchMode) {
-      ensureProcessExitCode(1);
-    }
-
+    // The error rides the returned result into the cycle outcome, and core's
+    // `finalizeRunCycle` raises the exit code from it — on both commands.
     const normalizedError = toError(error);
 
     if (cleanup && !isWatchMode) {
@@ -2485,29 +303,9 @@ export const runBrowserController = async (
     }
 
     try {
-      return await buildErrorResult(normalizedError);
+      return buildErrorResult(normalizedError);
     } finally {
       await cleanup?.();
-    }
-  };
-
-  const collectDeletedTestPaths = (
-    previous: TestFileInfo[],
-    current: TestFileInfo[],
-  ): string[] => {
-    const currentPathSet = new Set(current.map((file) => file.testPath));
-    return previous
-      .map((file) => file.testPath)
-      .filter((testPath) => !currentPathSet.has(testPath));
-  };
-
-  const notifyTestRunStart = async (): Promise<void> => {
-    if (!isWatchMode) {
-      return;
-    }
-
-    for (const reporter of context.reporters) {
-      await reporter.onTestRunStart?.();
     }
   };
 
@@ -2517,53 +315,6 @@ export const runBrowserController = async (
   const coverageProvider = coverageConfig?.enabled
     ? await createCoverageProvider(coverageConfig, context.rootPath)
     : null;
-
-  const notifyTestRunEnd = async ({
-    duration,
-    unhandledErrors,
-    filterRerunTestPaths,
-  }: {
-    duration: {
-      totalTime: number;
-      buildTime: number;
-      testTime: number;
-    };
-    unhandledErrors?: Error[];
-    filterRerunTestPaths?: string[];
-  }): Promise<void> => {
-    if (!isWatchMode) {
-      return;
-    }
-
-    // Merge per-file coverage into a single CoverageMapData for reporters
-    let mergedCoverage: CoverageMapData | undefined;
-    if (coverageProvider) {
-      const coverageMap = coverageProvider.createCoverageMap();
-      let hasCoverage = false;
-      for (const result of context.reporterResults.results) {
-        if (result.coverage) {
-          coverageMap.merge(result.coverage);
-          hasCoverage = true;
-        }
-      }
-      if (hasCoverage) {
-        mergedCoverage = coverageMap.toJSON();
-      }
-    }
-
-    for (const reporter of context.reporters) {
-      await reporter.onTestRunEnd?.({
-        results: context.reporterResults.results,
-        coverage: mergedCoverage,
-        testResults: context.reporterResults.testResults,
-        duration,
-        snapshotSummary: context.snapshotManager.summary,
-        getSourcemap: getBrowserSourcemap,
-        unhandledErrors,
-        filterRerunTestPaths,
-      });
-    }
-  };
 
   const containerDevServerEnv = process.env.RSTEST_CONTAINER_DEV_SERVER;
   let containerDevServer: string | undefined;
@@ -2601,7 +352,6 @@ export const runBrowserController = async (
     (total, item) => total + item.testFiles.length,
     0,
   );
-  const shouldKeepWatchingWithEmptySet = isWatchMode && allowEmptyWatchRun;
   const shouldInitializeEmptyBrowserHooks =
     totalTests === 0 && hasUserRstestConfigPlugins(browserProjects);
 
@@ -2621,58 +371,17 @@ export const runBrowserController = async (
     };
   };
 
-  const reportEmptyTestSet = (): boolean => {
-    const code = context.normalizedConfig.passWithNoTests ? 0 : 1;
-    if (isWatchMode || !allowEmptyRun) {
-      const message = shouldKeepWatchingWithEmptySet
-        ? 'No test files found.'
-        : getNoTestFilesMessage({
-            context,
-            code,
-            defaultMessage: `No test files found, exiting with code ${code}.`,
-          });
-      if (code === 0) {
-        logger.log(color.yellow(message));
-      } else {
-        logger.error(color.red(message));
-      }
-
-      if (context.relatedFilters?.length) {
-        logger.log(
-          color.gray('related: '),
-          context.relatedFilters.join(color.gray(', ')),
-        );
-      } else if (context.fileFilters?.length) {
-        logger.log(
-          color.gray('filter: '),
-          context.fileFilters.join(color.gray(', ')),
-        );
-      }
-    }
-
-    // In non-watch runs the host returns a void outcome and core's
-    // `reportNoTestFiles` owns the exit code and the no-test reporter lifecycle;
-    // the host must not set the code itself. Watch keeps its own exit code.
-    if (
-      isWatchMode &&
-      code !== 0 &&
-      !shouldKeepWatchingWithEmptySet &&
-      !allowEmptyRun
-    ) {
-      ensureProcessExitCode(code);
-    }
-
-    return !shouldKeepWatchingWithEmptySet;
+  const writeEmptyLaunchExitCode = (): void => {
+    process.exitCode = resolveEmptyLaunchExitCode(process.exitCode, {
+      allowEmptyRun,
+      isWatchMode,
+      passWithNoTests: context.normalizedConfig.passWithNoTests,
+    });
   };
 
   if (totalTests === 0 && !shouldInitializeEmptyBrowserHooks) {
-    if (reportEmptyTestSet()) {
-      return allowEmptyRun ? createEmptyRunResult() : undefined;
-    }
-  }
-
-  if (!filesOnly) {
-    await notifyTestRunStart();
+    writeEmptyLaunchExitCode();
+    return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
 
   const enableCliShortcuts = isWatchMode && isTTY('stdin');
@@ -2691,11 +400,7 @@ export const runBrowserController = async (
 
   let runtime = isWatchMode ? watchContext.runtime : null;
 
-  // Define rerun callback for watch mode (will be populated later)
-  let triggerRerun: (() => Promise<void>) | undefined;
-  // Headless reruns complete asynchronously in the scheduler's drain loop;
-  // the watch handles await this so callers observe rerun completion.
-  let awaitHeadlessRerunIdle: (() => Promise<void>) | undefined;
+  const watchSignals = createWatchSignals(onInvalidate);
 
   if (!runtime) {
     try {
@@ -2709,7 +414,7 @@ export const runBrowserController = async (
         isWatchMode,
         onTriggerRerun: isWatchMode
           ? async () => {
-              await triggerRerun?.();
+              await watchSignals.runDispatchRerun();
             }
           : undefined,
         containerDistPath,
@@ -2724,7 +429,10 @@ export const runBrowserController = async (
       });
     }
 
-    if (isWatchMode) {
+    // `filesOnly` is the config-hook discovery boot, which destroys its runtime
+    // through the returned `close`. Caching it here would leave the real watch
+    // session re-entering on a destroyed runtime.
+    if (isWatchMode && !filesOnly) {
       watchContext.runtime = runtime;
       registerWatchCleanup(context.embedded);
     }
@@ -2738,12 +446,11 @@ export const runBrowserController = async (
     watchState.lastTestFiles = collectWatchTestFiles(projectEntries);
   }
 
-  // Mark files as pending-affected so the next `triggerRerun` reruns them
-  // through the normal plan/schedule/finalize pipeline (used by the watch
-  // handles' explicit reruns; omitted paths = all current files). Returns the
-  // number of seeded files so callers can skip the rerun when a path-scoped
-  // request matches no browser test file (mixed watch 'u' with node-only
-  // snapshot updates).
+  // Mark files as pending-affected so the next trigger reruns them through the
+  // normal plan/cycle pipeline (used by explicit rerun requests; omitted paths
+  // = all current files). Returns the number of seeded files so a path-scoped
+  // request matching no browser test file can skip the rerun entirely (mixed
+  // watch 'u' with node-only snapshot updates must produce no browser cycle).
   const seedPendingRerun = (testPaths?: string[]): number => {
     const wanted = testPaths
       ? new Set(testPaths.map((testPath) => normalize(testPath)))
@@ -2763,29 +470,14 @@ export const runBrowserController = async (
     return seeded;
   };
 
-  const watchHandles: BrowserWatchHandles | undefined = isWatchMode
-    ? {
-        rerun: async (testPaths) => {
-          const seeded = seedPendingRerun(testPaths);
-          if (testPaths && seeded === 0) {
-            return;
-          }
-          await triggerRerun?.();
-          await awaitHeadlessRerunIdle?.();
-        },
-        close: cleanupWatchRuntime,
-      }
-    : undefined;
-
   /**
-   * Per-rerun finalize for watch mode: fold the rerun into a synthetic
-   * `ExecutorCycleOutcome` and hand it to core's `finalizeRunCycle`, so
-   * reporter payloads, exit-code never-downgrade semantics, and coverage
-   * reports match the node watch cycle. The trace buffer stays session-owned
-   * (no `traceRun` here); `buildTime` is the drained duration of the
-   * change-triggered compile(s), not a hardcoded zero.
+   * Fold one watch rerun into the `ExecutorCycleOutcome` core's
+   * `finalizeRunCycle` reduces. `context.reporterResults` is the cross-cycle
+   * accumulator, so filtering it by the rerun's paths is what makes the outcome
+   * cycle-scoped. `buildTime` is the drained duration of the change-triggered
+   * compile(s) (zero for a shortcut-driven rerun, which compiles nothing).
    */
-  const finalizeWatchRerun = async ({
+  const buildRerunOutcome = ({
     rerunTestPaths,
     testTime,
     unhandledErrors,
@@ -2793,25 +485,17 @@ export const runBrowserController = async (
     rerunTestPaths: string[];
     testTime: number;
     unhandledErrors?: Error[];
-  }): Promise<void> => {
+  }): ExecutorCycleOutcome => {
     const rerunPathSet = new Set(rerunTestPaths);
-    // Reporter coverage spans the whole session (unaffected files keep their
-    // last coverage), matching the previous self-finalize payload. The merge
-    // must not strip `result.coverage`, or later reruns would lose it.
-    let sessionCoverage: CoverageMapData | undefined;
-    const coverageMap = buildBrowserCoverageMap(
-      context.reporterResults.results,
-      coverageProvider,
-      { keepResultCoverage: true },
+    const rerunResults = context.reporterResults.results.filter((result) =>
+      rerunPathSet.has(result.testPath),
     );
-    if (coverageMap && coverageMap.files().length > 0) {
-      sessionCoverage = coverageMap.toJSON();
-    }
+    // Watch coverage is per-cycle on both transports: only the files this
+    // rerun executed are reported.
+    const coverageMap = buildBrowserCoverageMap(rerunResults, coverageProvider);
 
-    const outcome: ExecutorCycleOutcome = {
-      results: context.reporterResults.results.filter((result) =>
-        rerunPathSet.has(result.testPath),
-      ),
+    return {
+      results: rerunResults,
       testResults: context.reporterResults.testResults.filter((result) =>
         rerunPathSet.has(result.testPath),
       ),
@@ -2821,18 +505,61 @@ export const runBrowserController = async (
         buildTime: drainPendingBuildTime(watchState),
         testTime,
       },
-      coverage: sessionCoverage ? { map: sessionCoverage } : undefined,
+      coverage: coverageMap?.files().length
+        ? { map: coverageMap.toJSON() }
+        : undefined,
       resolveSourcemap: resolveBrowserSourcemap,
     };
-
-    await finalizeRunCycle(context, {
-      outcomes: [outcome],
-      mode: 'on-demand',
-      isWatchMode: true,
-      coverageProvider,
-      reportOnFailure: coverageConfig?.reportOnFailure ?? false,
-    });
   };
+
+  /**
+   * The watch session both transports hand back. Only `execute` differs — the
+   * cycle's timing, its fatal-error capture window, and the error-to-outcome
+   * precedence are one contract with core, so they live in one place.
+   *
+   * `execute`'s synchronous prefix runs before `runCycle` ever suspends, which
+   * is what lets the headed transport claim its cycle scope inside it.
+   */
+  const createWatchSession = (
+    execute: (testPaths: string[]) => Promise<void>,
+  ): BrowserWatchSession => ({
+    runCycle: async (testPaths) => {
+      const rerunStartTime = Date.now();
+      // A fatal error is one cycle's outcome, not permanent session state. The
+      // headed scheduler also uses this ref to stop the rest of a failed cycle,
+      // so carrying it forward would prevent the next cycle from reloading.
+      fatalErrorRef.current = null;
+      let rerunError: Error | undefined;
+
+      try {
+        await execute(testPaths);
+      } catch (error) {
+        // Surfaced through the outcome rather than thrown: core finalizes this
+        // cycle either way, and its results belong in the report even when the
+        // run that produced them ended badly.
+        rerunError = toError(error);
+      }
+
+      const rerunFatalError = fatalErrorRef.current ?? undefined;
+      return buildRerunOutcome({
+        rerunTestPaths: testPaths,
+        testTime: Math.max(0, Date.now() - rerunStartTime),
+        unhandledErrors: rerunError
+          ? [rerunError]
+          : rerunFatalError
+            ? [rerunFatalError]
+            : undefined,
+      });
+    },
+    requestRerun: async (testPaths) => {
+      const seeded = seedPendingRerun(testPaths);
+      if (testPaths && seeded === 0) {
+        return;
+      }
+      await watchSignals.runDispatchRerun();
+      await watchSignals.awaitSignalledCycle();
+    },
+  });
 
   projectEntries = runtime.projectEntries;
   totalTests = projectEntries.reduce(
@@ -2858,12 +585,13 @@ export const runBrowserController = async (
     };
   }
 
-  if (totalTests === 0 && reportEmptyTestSet()) {
+  if (totalTests === 0) {
+    writeEmptyLaunchExitCode();
     await destroyBrowserRuntime(runtime);
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
 
-  const { browser, browserLaunchOptions, wsPort, wss } = runtime;
+  const { browser, browserLaunchOptions, wsPort } = runtime;
 
   // Collect all test files from project entries with project info
   // Normalize paths to posix format for cross-platform compatibility
@@ -2935,9 +663,10 @@ export const runBrowserController = async (
     }
   }
 
-  let activeContainerPage: BrowserProviderPage | null = null;
-  let getHeadlessRunnerPageBySessionId:
-    ((sessionId: string) => BrowserProviderPage | undefined) | undefined;
+  let resolveDispatchPages: DispatchPageResolver = () => ({});
+  const setDispatchPageResolver = (resolver: DispatchPageResolver): void => {
+    resolveDispatchPages = resolver;
+  };
 
   const dispatchBrowserRpcRequest = async ({
     request,
@@ -2956,9 +685,7 @@ export const runBrowserController = async (
       throw new Error(`Browser provider implementation not found: ${provider}`);
     }
 
-    const runnerPage = target?.sessionId
-      ? getHeadlessRunnerPageBySessionId?.(target.sessionId)
-      : undefined;
+    const { runnerPage, containerPage } = resolveDispatchPages(target);
 
     if (target?.sessionId && !runnerPage) {
       throw new Error(
@@ -2966,15 +693,13 @@ export const runBrowserController = async (
       );
     }
 
-    if (!runnerPage && !activeContainerPage) {
+    if (!runnerPage && !containerPage) {
       throw new Error('Browser container page is not initialized');
     }
 
     try {
       return await implementation.dispatchRpc({
-        containerPage: runnerPage
-          ? undefined
-          : (activeContainerPage ?? undefined),
+        containerPage: runnerPage ? undefined : containerPage,
         runnerPage,
         request,
         timeoutFallbackMs,
@@ -3004,7 +729,7 @@ export const runBrowserController = async (
   // Track test results from browser runners
   const reporterResults: TestFileResult[] = [];
   const caseResults: TestResult[] = [];
-  let fatalError: Error | null = null;
+  const fatalErrorRef = { current: null as Error | null };
 
   // Runner lifecycle events flow through the shared RunnerEventSink (the same
   // pump the node pool uses), so browser mode feeds stateManager and fans out to
@@ -3022,22 +747,18 @@ export const runBrowserController = async (
       createRunnerEventSink(context, project.normalizedConfig),
     ]),
   );
-  const firstBrowserSink = runnerSinks.get(browserProjects[0]!.name)!;
-
-  // testPath -> owning project name, stamped from the authoritative client
-  // file-start event (it carries the manifest-resolved projectName) before any
-  // other per-file event for that path fires — including on watch reruns, so the
-  // mapping stays correct when a rerun adds a file. Fully eliminating this map in
-  // favor of a project stamp on every wire event is deferred (it would add
-  // `project` to the shared `TestResult`/`TestFileResult` payloads).
-  const projectNameByTestPath = new Map<string, string>();
-
-  const sinkForProjectName = (projectName: string): RunnerEventSink =>
-    runnerSinks.get(projectName) ?? firstBrowserSink;
-
-  const sinkForTestPath = (testPath: string): RunnerEventSink => {
-    const projectName = projectNameByTestPath.get(testPath);
-    return projectName ? sinkForProjectName(projectName) : firstBrowserSink;
+  // Every per-file wire payload carries its owning project name, so routing
+  // never derives a project from a test path — concurrent projects can run the
+  // same file, and a path-keyed lookup would attribute events to the wrong one.
+  // The client resolves its project from the host's own manifest, so a miss is
+  // a protocol bug; fail loudly rather than route through another project's
+  // config.
+  const sinkForProjectName = (projectName: string): RunnerEventSink => {
+    const sink = runnerSinks.get(projectName);
+    if (!sink) {
+      throw new Error(`No runner event sink for project "${projectName}"`);
+    }
+    return sink;
   };
 
   // Silent-console buffering runs through the shared controller — the same
@@ -3054,7 +775,7 @@ export const runBrowserController = async (
       disableConsoleIntercept: context.normalizedConfig.disableConsoleIntercept,
     },
     emitInterceptedLog: (log) =>
-      sinkForTestPath(log.testPath).onConsoleLog(log),
+      sinkForProjectName(log.project).onConsoleLog(log),
     writeOriginalLog: () => {},
   });
 
@@ -3089,7 +810,6 @@ export const runBrowserController = async (
   const handleTestFileStart = async (
     payload: TestFileStartPayload,
   ): Promise<void> => {
-    projectNameByTestPath.set(payload.testPath, payload.projectName);
     if (phaseTrackers) {
       const tracker = new PhaseTracker({
         trace: {
@@ -3099,13 +819,17 @@ export const runBrowserController = async (
         pid: nextBrowserFilePid++,
       });
       tracker.transition('prepare');
-      phaseTrackers.set(payload.testPath, tracker);
+      phaseTrackers.set(
+        trackerKey(payload.projectName, payload.testPath),
+        tracker,
+      );
     }
     // The client sends `{ testPath, projectName }`; the sink adapter builds the
     // `TestFileInfo` the reporters and stateManager expect.
     await sinkForProjectName(payload.projectName).onTestFileStart({
       testId: getFileTaskId(payload.testPath),
       testPath: payload.testPath,
+      project: payload.projectName,
       tests: [],
     });
   };
@@ -3113,22 +837,28 @@ export const runBrowserController = async (
   const handleTestFileReady = async (
     payload: TestFileReadyPayload,
   ): Promise<void> => {
-    phaseTrackers?.get(payload.testPath)?.transition('tests');
-    await sinkForTestPath(payload.testPath).onTestFileReady(payload);
+    phaseTrackers
+      ?.get(trackerKey(payload.project, payload.testPath))
+      ?.transition('tests');
+    await sinkForProjectName(payload.project).onTestFileReady(payload);
   };
 
   const handleTestSuiteStart = async (
     payload: TestSuiteStartPayload,
   ): Promise<void> => {
-    phaseTrackers?.get(payload.testPath)?.recordSuiteStart(payload);
-    await sinkForTestPath(payload.testPath).onTestSuiteStart(payload);
+    phaseTrackers
+      ?.get(trackerKey(payload.project, payload.testPath))
+      ?.recordSuiteStart(payload);
+    await sinkForProjectName(payload.project).onTestSuiteStart(payload);
   };
 
   const handleTestSuiteResult = async (
     payload: TestSuiteResultPayload,
   ): Promise<void> => {
-    phaseTrackers?.get(payload.testPath)?.recordSuiteResult(payload);
-    await sinkForTestPath(payload.testPath).onTestSuiteResult(payload);
+    phaseTrackers
+      ?.get(trackerKey(payload.project, payload.testPath))
+      ?.recordSuiteResult(payload);
+    await sinkForProjectName(payload.project).onTestSuiteResult(payload);
 
     if (context.normalizedConfig.silent === 'passed-only') {
       silentConsoleController.flushBufferedLogsForTask({
@@ -3144,15 +874,19 @@ export const runBrowserController = async (
   const handleTestCaseStart = async (
     payload: TestCaseStartPayload,
   ): Promise<void> => {
-    phaseTrackers?.get(payload.testPath)?.recordCaseStart(payload);
+    phaseTrackers
+      ?.get(trackerKey(payload.project, payload.testPath))
+      ?.recordCaseStart(payload);
     // Fire-and-forget on both transports (the sink does not await case-start).
-    sinkForTestPath(payload.testPath).onTestCaseStart(payload);
+    sinkForProjectName(payload.project).onTestCaseStart(payload);
   };
 
   const handleTestCaseResult = async (payload: TestResult): Promise<void> => {
     caseResults.push(payload);
-    phaseTrackers?.get(payload.testPath)?.recordCaseResult(payload);
-    await sinkForTestPath(payload.testPath).onTestCaseResult(payload);
+    phaseTrackers
+      ?.get(trackerKey(payload.project, payload.testPath))
+      ?.recordCaseResult(payload);
+    await sinkForProjectName(payload.project).onTestCaseResult(payload);
 
     if (context.normalizedConfig.silent === 'passed-only') {
       silentConsoleController.flushBufferedLogsForTask({
@@ -3172,12 +906,13 @@ export const runBrowserController = async (
     context.updateReporterResultState([payload], payload.results);
 
     if (phaseTrackers) {
-      const tracker = phaseTrackers.get(payload.testPath);
+      const key = trackerKey(payload.project, payload.testPath);
+      const tracker = phaseTrackers.get(key);
       if (tracker) {
         tracker.end();
         const events = tracker.getTraceEvents();
         if (events) onTraceEvents?.(events);
-        phaseTrackers.delete(payload.testPath);
+        phaseTrackers.delete(key);
       }
     }
 
@@ -3193,12 +928,7 @@ export const runBrowserController = async (
 
     // Feeds stateManager, fans out onTestFileResult to reporters, and ingests
     // payload.snapshotResult (the snapshotManager.add moved into the sink).
-    await sinkForTestPath(payload.testPath).onTestFileResult(payload);
-    // In non-watch runs core owns the exit code via `finalizeRunCycle` (the
-    // failing file rides the returned outcome); watch reruns set it here.
-    if (isWatchMode && payload.status === 'fail') {
-      ensureProcessExitCode(1);
-    }
+    await sinkForProjectName(payload.project).onTestFileResult(payload);
   };
 
   const handleLog = async (payload: LogPayload): Promise<void> => {
@@ -3211,21 +941,20 @@ export const runBrowserController = async (
       taskParentNames: payload.taskParentNames,
       taskType: payload.taskType,
       testPath: payload.testPath,
+      project: payload.projectName,
       type: payload.type,
       trace: payload.trace,
     };
     silentConsoleController.onConsoleLog(log);
   };
 
+  // Every failing file and every fatal error reaches core through the cycle
+  // outcome on both commands, so the exit code keeps a single writer:
+  // `finalizeRunCycle`.
   const handleFatal = async (payload: FatalPayload): Promise<void> => {
     const error = new Error(payload.message);
     error.stack = payload.stack;
-    fatalError = error;
-    // Non-watch runs surface the fatal error through the returned outcome and
-    // let core's `finalizeRunCycle` set the exit code; watch reruns set it here.
-    if (isWatchMode) {
-      ensureProcessExitCode(1);
-    }
+    fatalErrorRef.current = error;
   };
 
   const runSnapshotRpc = async (
@@ -3276,1114 +1005,77 @@ export const runBrowserController = async (
     });
   };
 
-  if (useHeadlessDirect) {
-    // Session-based scheduling path: lifecycle + session index + dispatch routing.
-    type ActiveHeadlessRun = RunSession & {
-      contexts: Set<BrowserProviderContext>;
-    };
+  const schedulerDeps = {
+    context,
+    allTestFiles,
+    hostOptions,
+    isWatchMode,
+    createDispatchRouter,
+    fatalErrorRef,
+    watchSignals,
+    setDispatchPageResolver,
+    createWatchSession,
+    collectProjectEntries: () => collectProjectEntries(context),
+    logWatchReady: () => logWatchReadyMessage(context, enableCliShortcuts),
+    destroyRuntime: () => destroyBrowserRuntime(runtime),
+  };
 
-    const viewportByProject = mapViewportByProject(projectRuntimeConfigs);
-    const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
-    const sessionRegistry = new RunnerSessionRegistry();
-    getHeadlessRunnerPageBySessionId = (sessionId) => {
-      return sessionRegistry.getById(sessionId)?.page;
-    };
-    let dispatchRequestCounter = 0;
-
-    const nextDispatchRequestId = (namespace: string): string => {
-      return `${namespace}-${++dispatchRequestCounter}`;
-    };
-
-    const closeContextSafely = async (
-      browserContext: BrowserProviderContext,
-    ): Promise<void> => {
-      try {
-        await browserContext.close();
-      } catch {
-        // ignore
-      }
-    };
-
-    const cancelRun = async (
-      run: ActiveHeadlessRun,
-      waitForDone = true,
-    ): Promise<void> => {
-      await runLifecycle.cancel(run, {
-        waitForDone,
-        onCancel: async (session) => {
-          await Promise.all(
-            Array.from(session.contexts).map((browserContext) =>
-              closeContextSafely(browserContext),
-            ),
-          );
-        },
-      });
-    };
-
-    const dispatchRouter = createDispatchRouter({
-      isRunTokenStale: (runToken) => runLifecycle.isTokenStale(runToken),
-      onStale: (request) => {
-        if (request.namespace === DISPATCH_NAMESPACE_RUNNER) {
-          logger.debug(
-            `[Headless] Dropped stale message "${request.method}" for ${request.target?.testFile ?? 'unknown'}`,
-          );
-        }
-      },
-    });
-
-    const dispatchRunnerMessage = async (
-      run: ActiveHeadlessRun,
-      file: TestFileInfo,
-      sessionId: string,
-      message: BrowserClientMessage,
-    ): Promise<void> => {
-      const response = await dispatchRouter.dispatch({
-        requestId: nextDispatchRequestId(DISPATCH_NAMESPACE_RUNNER),
-        runToken: run.token,
-        namespace: DISPATCH_NAMESPACE_RUNNER,
-        method: message.type,
-        args: 'payload' in message ? message.payload : undefined,
-        target: {
-          sessionId,
-          testFile: file.testPath,
-          projectName: file.projectName,
+  const { testTime, watchSession, close } = useHeadlessDirect
+    ? await createHeadlessScheduler({
+        ...schedulerDeps,
+        browser,
+        browserLaunchOptions,
+        projectServers: runtime.projectServers,
+        projectRuntimeConfigs,
+        watchState,
+        handlers: { handleFatal, handleTestFileComplete },
+      })
+    : await createHeadedScheduler({
+        ...schedulerDeps,
+        runtime,
+        handlers: {
+          handleTestFileStart,
+          handleTestCaseResult,
+          handleTestFileComplete,
+          handleLog,
+          handleFatal,
         },
       });
 
-      if (response.stale) {
-        return;
-      }
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-    };
-
-    const runSingleFile = async (
-      run: ActiveHeadlessRun,
-      file: TestFileInfo,
-    ): Promise<void> => {
-      if (run.cancelled || runLifecycle.isTokenStale(run.token)) {
-        return;
-      }
-
-      const viewport = viewportByProject.get(file.projectName);
-      const browserContext = await browser.newContext({
-        providerOptions: browserLaunchOptions.providerOptions,
-        viewport: viewport ?? null,
-      });
-      run.contexts.add(browserContext);
-
-      let page: BrowserProviderPage | null = null;
-      let sessionId: string | null = null;
-      let settled = false;
-      let resolveDone: (() => void) | null = null;
-
-      const markDone = (): void => {
-        if (!settled) {
-          settled = true;
-          resolveDone?.();
-        }
-      };
-
-      const donePromise = new Promise<void>((resolve) => {
-        resolveDone = resolve;
-      });
-
-      // Event-driven death detection (vitest-style): a renderer crash or an
-      // unexpected page close produces no further messages, so fail the file at
-      // once. Per-test/hook timeouts are enforced inside the runner, so the host
-      // deliberately keeps no execution-duration watchdog. Our own teardown
-      // close is ignored because `settled`/`run.cancelled` are set by then.
-      const crashDeferred = createDeferredPromise<string>();
-      const onPageDead = (reason: string): void => {
-        if (
-          settled ||
-          run.cancelled ||
-          !runLifecycle.isTokenActive(run.token)
-        ) {
-          return;
-        }
-        settled = true;
-        crashDeferred.resolve(reason);
-      };
-
-      try {
-        page = await browserContext.newPage();
-        page.on('crash', () =>
-          onPageDead(`Browser page crashed while running ${file.testPath}.`),
-        );
-        page.on('close', () =>
-          onPageDead(
-            `Browser page closed unexpectedly while running ${file.testPath}.`,
-          ),
-        );
-
-        const session = sessionRegistry.register({
-          testFile: file.testPath,
-          projectName: file.projectName,
-          runToken: run.token,
-          mode: 'headless-page',
-          context: browserContext,
-          page,
-        });
-        sessionId = session.id;
-
-        await attachHeadlessRunnerTransport(page, {
-          onDispatchMessage: async (message) => {
-            try {
-              await dispatchRunnerMessage(run, file, session.id, message);
-              if (
-                message.type === 'file-complete' ||
-                message.type === 'complete'
-              ) {
-                markDone();
-              } else if (message.type === 'fatal') {
-                markDone();
-                await cancelRun(run, false);
-              }
-            } catch (error) {
-              const formatted = toError(error);
-              await handleFatal({
-                message: formatted.message,
-                stack: formatted.stack,
-              });
-              markDone();
-              await cancelRun(run, false);
-            }
-          },
-          onDispatchRpc: async (request) => {
-            return dispatchRouter.dispatch({
-              ...request,
-              runToken: run.token,
-              target: {
-                sessionId: session.id,
-                testFile: file.testPath,
-                projectName: file.projectName,
-                ...request.target,
-              },
-            });
-          },
-        });
-
-        const inlineOptions: BrowserHostConfig = {
-          ...hostOptions,
-          // Read live per page load, not from the construction-time
-          // `hostOptions` value: the 'u' shortcut flips
-          // `snapshotManager.options` between reruns.
-          snapshot: {
-            updateSnapshot: context.snapshotManager.options.updateSnapshot,
-          },
-          testFile: file.testPath,
-          runId: `${run.token}:${session.id}`,
-        };
-        const serializedOptions = serializeForInlineScript(inlineOptions);
-        await page.addInitScript(
-          `window.__RSTEST_BROWSER_OPTIONS__ = ${serializedOptions};`,
-        );
-
-        const projectServer = runtime.projectServers.get(file.projectName);
-        if (!projectServer) {
-          throw new Error(
-            `No browser dev server for project "${file.projectName}" (test file: ${file.testPath}).`,
-          );
-        }
-        await page.goto(`http://localhost:${projectServer.port}/runner.html`, {
-          waitUntil: 'load',
-        });
-
-        const state = await Promise.race([
-          donePromise.then(() => ({ type: 'done' as const })),
-          crashDeferred.promise.then((reason) => ({
-            type: 'crash' as const,
-            reason,
-          })),
-          run.cancelSignal.then(() => ({ type: 'cancelled' as const })),
-        ]);
-
-        if (state.type === 'cancelled') {
-          return;
-        }
-
-        if (
-          state.type === 'crash' &&
-          runLifecycle.isTokenActive(run.token) &&
-          !run.cancelled
-        ) {
-          await handleFatal({ message: state.reason });
-          await cancelRun(run, false);
-        }
-      } catch (error) {
-        if (runLifecycle.isTokenActive(run.token) && !run.cancelled) {
-          const formatted = toError(error);
-          await handleFatal({
-            message: formatted.message,
-            stack: formatted.stack,
-          });
-          await cancelRun(run, false);
-        }
-      } finally {
-        if (page) {
-          try {
-            await page.close();
-          } catch {
-            // ignore
-          }
-        }
-        if (sessionId) {
-          sessionRegistry.deleteById(sessionId);
-        }
-        run.contexts.delete(browserContext);
-        await closeContextSafely(browserContext);
-      }
-    };
-
-    // Bailed files never run, so they carry no case results — mirror the node
-    // pool's skip result (`runInPool.ts`) so the summary reports them as skipped
-    // rather than dropping them silently.
-    const makeSkippedFileResult = (file: TestFileInfo): TestFileResult => ({
-      testId: getFileTaskId(file.testPath),
-      status: 'skip',
-      name: '',
-      testPath: file.testPath,
-      project: file.projectName,
-      results: [],
-    });
-
-    const runFilesWithPool = async (files: TestFileInfo[]): Promise<void> => {
-      if (files.length === 0) {
-        return;
-      }
-
-      const previous = runLifecycle.activeSession;
-      if (previous) {
-        await cancelRun(previous);
-      }
-
-      const run = runLifecycle.createSession((token) => ({
-        ...createRunSession(token),
-        contexts: new Set<BrowserProviderContext>(),
-      }));
-
-      const queue = [...files];
-      const concurrency = getHeadlessConcurrency(context, queue.length);
-      const bail = context.normalizedConfig.bail;
-
-      const worker = async (): Promise<void> => {
-        while (
-          queue.length > 0 &&
-          !run.cancelled &&
-          runLifecycle.isTokenActive(run.token)
-        ) {
-          // Cross-file bail gate (parity with the node pool's pickup-time skip
-          // at `runInPool.ts`): once the cycle-wide failed count reaches `bail`,
-          // drain the remaining files as skipped instead of running them. The
-          // count is cycle-scoped because `stateManager` is reset at the top of
-          // every run/rerun (initial run and `prepareWatchRerunState`).
-          if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
-            let skipped = queue.shift();
-            while (skipped) {
-              await handleTestFileComplete(makeSkippedFileResult(skipped));
-              skipped = queue.shift();
-            }
-            return;
-          }
-          const next = queue.shift();
-          if (!next) {
-            return;
-          }
-          await runSingleFile(run, next);
-        }
-      };
-
-      run.done = Promise.all(
-        Array.from(
-          { length: Math.min(queue.length, Math.max(concurrency, 1)) },
-          () => worker(),
-        ),
-      ).then(() => {});
-
-      await run.done;
-      runLifecycle.clearIfActive(run);
-    };
-
-    const latestRerunScheduler = createHeadlessLatestRerunScheduler<
-      TestFileInfo,
-      ActiveHeadlessRun
-    >({
-      getActiveRun: () => runLifecycle.activeSession,
-      isRunCancelled: (run) => run.cancelled,
-      invalidateActiveRun: () => {
-        runLifecycle.invalidateActiveToken();
-      },
-      interruptActiveRun: async (run) => {
-        await cancelRun(run, false);
-      },
-      runFiles: async (files) => {
-        // Clear the previous cycle's stateManager/snapshotManager before the
-        // rerun streams new events through the shared sink — otherwise failed
-        // counts (bail) and snapshot summaries accumulate across reruns. The
-        // initial run does not reach here (it calls `runFilesWithPool`
-        // directly), so only reruns reset.
-        prepareWatchRerunState(context);
-        await notifyTestRunStart();
-
-        const rerunStartTime = Date.now();
-        const fatalErrorBeforeRun = fatalError;
-        let rerunError: Error | undefined;
-
-        try {
-          await runFilesWithPool(files);
-        } catch (error) {
-          rerunError = toError(error);
-          throw error;
-        } finally {
-          const testTime = Math.max(0, Date.now() - rerunStartTime);
-          const rerunFatalError =
-            fatalError && fatalError !== fatalErrorBeforeRun
-              ? fatalError
-              : undefined;
-          await finalizeWatchRerun({
-            rerunTestPaths: files.map((file) => file.testPath),
-            testTime,
-            unhandledErrors: rerunError
-              ? [rerunError]
-              : rerunFatalError
-                ? [rerunFatalError]
-                : undefined,
-          });
-          logWatchReadyMessage(context, enableCliShortcuts);
-        }
-      },
-      onError: async (error) => {
-        const formatted = toError(error);
-        await handleFatal({
-          message: formatted.message,
-          stack: formatted.stack,
-        });
-      },
-      onInterrupt: (run) => {
-        logger.debug(
-          `[Headless] Interrupting active run token ${run.token} before scheduling latest rerun`,
-        );
-      },
-    });
-
-    awaitHeadlessRerunIdle = () => latestRerunScheduler.whenIdle();
-
-    if (allTestFiles.length === 0) {
-      const duration = {
-        totalTime: buildTime,
-        buildTime,
-        testTime: 0,
-      };
-      const result = {
-        results: reporterResults,
-        testResults: caseResults,
-        duration,
-        hasFailure: false,
-        getSourcemap: getBrowserSourcemap,
-        resolveSourcemap: resolveBrowserSourcemap,
-        close: !isWatchMode
-          ? async () => {
-              sessionRegistry.clear();
-              await destroyBrowserRuntime(runtime);
-            }
-          : undefined,
-        watch: watchHandles,
-      };
-
-      if (isWatchMode) {
-        await notifyTestRunEnd({ duration });
-      }
-
-      if (isWatchMode) {
-        triggerRerun = async () => {
-          const newProjectEntries = await collectProjectEntries(context);
-          const rerunPlan = planWatchRerun({
-            projectEntries: newProjectEntries,
-            previousTestFiles: watchState.lastTestFiles,
-            affectedTestFiles: drainPendingAffectedTestFiles(watchState),
-          });
-
-          if (rerunPlan.filesChanged) {
-            watchState.lastTestFiles = rerunPlan.currentTestFiles;
-            if (rerunPlan.currentTestFiles.length === 0) {
-              logger.log(
-                color.cyan('No browser test files remain after update.\n'),
-              );
-              logWatchReadyMessage(context, enableCliShortcuts);
-              return;
-            }
-
-            logger.log(
-              color.cyan(
-                `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
-              ),
-            );
-            await latestRerunScheduler.enqueueLatest(
-              rerunPlan.currentTestFiles,
-            );
-            return;
-          }
-
-          logWatchReadyMessage(context, enableCliShortcuts);
-        };
-        watchState.hooksEnabled = true;
-        logWatchReadyMessage(context, enableCliShortcuts);
-      }
-
-      return result;
-    }
-
-    const testStart = Date.now();
-    await runFilesWithPool(allTestFiles);
-    const testTime = Date.now() - testStart;
-
-    if (isWatchMode) {
-      triggerRerun = async () => {
-        const newProjectEntries = await collectProjectEntries(context);
-        const rerunPlan = planWatchRerun({
-          projectEntries: newProjectEntries,
-          previousTestFiles: watchState.lastTestFiles,
-          affectedTestFiles: drainPendingAffectedTestFiles(watchState),
-        });
-
-        if (rerunPlan.filesChanged) {
-          const deletedTestPaths = collectDeletedTestPaths(
-            watchState.lastTestFiles,
-            rerunPlan.currentTestFiles,
-          );
-          if (deletedTestPaths.length > 0) {
-            context.updateReporterResultState([], [], deletedTestPaths);
-          }
-          watchState.lastTestFiles = rerunPlan.currentTestFiles;
-          if (rerunPlan.currentTestFiles.length === 0) {
-            await latestRerunScheduler.enqueueLatest([]);
-            logger.log(
-              color.cyan('No browser test files remain after update.\n'),
-            );
-            logWatchReadyMessage(context, enableCliShortcuts);
-            return;
-          }
-
-          logger.log(
-            color.cyan(
-              `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
-            ),
-          );
-          await latestRerunScheduler.enqueueLatest(rerunPlan.currentTestFiles);
-          return;
-        }
-
-        if (rerunPlan.affectedTestFiles.length === 0) {
-          logger.log(
-            color.cyan(
-              'No affected browser test files detected, skipping re-run.\n',
-            ),
-          );
-          logWatchReadyMessage(context, enableCliShortcuts);
-          return;
-        }
-
-        logger.log(
-          color.cyan(
-            `Re-running ${rerunPlan.affectedTestFiles.length} affected test file(s)...\n`,
-          ),
-        );
-        await latestRerunScheduler.enqueueLatest(rerunPlan.affectedTestFiles);
-      };
-    }
-
-    const closeHeadlessRuntime = !isWatchMode
-      ? async () => {
-          sessionRegistry.clear();
-          await destroyBrowserRuntime(runtime);
-        }
-      : undefined;
-
-    if (fatalError) {
-      return failWithError(fatalError, closeHeadlessRuntime);
-    }
-
-    const duration = {
-      totalTime: buildTime + testTime,
-      buildTime,
-      testTime,
-    };
-
-    context.updateReporterResultState(reporterResults, caseResults);
-
-    const isFailure = reporterResults.some(
-      (result: TestFileResult) => result.status === 'fail',
-    );
-    // Non-watch runs let core's `finalizeRunCycle` own the exit code from the
-    // returned outcome; watch reruns set it here.
-    if (isWatchMode && isFailure) {
-      ensureProcessExitCode(1);
-    }
-
-    const result = {
-      results: reporterResults,
-      testResults: caseResults,
-      duration,
-      hasFailure: isFailure,
-      getSourcemap: getBrowserSourcemap,
-      resolveSourcemap: resolveBrowserSourcemap,
-      // `closeHeadlessRuntime` is already `undefined` in watch mode, so the
-      // non-watch caller (core) receives the deferred close and watch does not.
-      close: closeHeadlessRuntime,
-      watch: watchHandles,
-    };
-
-    if (isWatchMode) {
-      try {
-        await notifyTestRunEnd({ duration });
-      } finally {
-        await closeHeadlessRuntime?.();
-      }
-    }
-
-    if (isWatchMode && triggerRerun) {
-      watchState.hooksEnabled = true;
-      logWatchReadyMessage(context, enableCliShortcuts);
-    }
-
-    return result;
-  }
-
-  let currentTestFiles = allTestFiles;
-  // Coincidentally equal to the runner-side CONFIG_WAIT_TIMEOUT_MS and
-  // DEFAULT_RPC_TIMEOUT_MS (client/entry.ts, client/dispatchTransport.ts) but
-  // semantically distinct and in a different runtime, so deliberately NOT shared
-  // with them. Invariant worth preserving: a runner must be able to receive its
-  // config (config-wait) before the host declares its frames un-ready, i.e.
-  // CONFIG_WAIT_TIMEOUT_MS <= RUNNER_FRAMES_READY_TIMEOUT_MS.
-  const RUNNER_FRAMES_READY_TIMEOUT_MS = 30_000;
-  let currentRunnerFramesSignature: string | null = null;
-  const runnerFramesWaiters = new Map<string, Set<() => void>>();
-
-  const createTestFilesSignature = (testFiles: readonly string[]): string => {
-    return JSON.stringify(testFiles.map((testFile) => normalize(testFile)));
-  };
-
-  const markRunnerFramesReady = (testFiles: string[]): void => {
-    const signature = createTestFilesSignature(testFiles);
-    currentRunnerFramesSignature = signature;
-    const waiters = runnerFramesWaiters.get(signature);
-    if (!waiters) {
-      return;
-    }
-    runnerFramesWaiters.delete(signature);
-    for (const waiter of waiters) {
-      waiter();
-    }
-  };
-
-  const waitForRunnerFramesReady = async (
-    testFiles: readonly string[],
-  ): Promise<void> => {
-    const signature = createTestFilesSignature(testFiles);
-    if (currentRunnerFramesSignature === signature) {
-      return;
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      const waiters =
-        runnerFramesWaiters.get(signature) ?? new Set<() => void>();
-
-      const cleanup = () => {
-        const currentWaiters = runnerFramesWaiters.get(signature);
-        if (!currentWaiters) {
-          return;
-        }
-        currentWaiters.delete(onReady);
-        if (currentWaiters.size === 0) {
-          runnerFramesWaiters.delete(signature);
-        }
-      };
-
-      const onReady = () => {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
-        cleanup();
-        resolve();
-      };
-
-      const timeoutId = setTimeout(() => {
-        cleanup();
-        reject(
-          new Error(
-            `Timed out waiting for headed runner frames to be ready for ${testFiles.length} file(s).`,
-          ),
-        );
-      }, RUNNER_FRAMES_READY_TIMEOUT_MS);
-
-      waiters.add(onReady);
-      runnerFramesWaiters.set(signature, waiters);
-
-      if (currentRunnerFramesSignature === signature) {
-        onReady();
-      }
-    });
-  };
-
-  const getTestFileInfo = (testFile: string): TestFileInfo => {
-    const normalizedTestFile = normalize(testFile);
-    const fileInfo = currentTestFiles.find(
-      (file) => file.testPath === normalizedTestFile,
-    );
-    if (!fileInfo) {
-      throw new Error(`Unknown browser test file: ${JSON.stringify(testFile)}`);
-    }
-    return fileInfo;
-  };
-
-  // Open a container page for user to view (reuse in watch mode)
-  let containerContext: BrowserProviderContext;
-  let containerPage: BrowserProviderPage;
-  let isNewPage = false;
-
-  if (isWatchMode && runtime.containerPage && runtime.containerContext) {
-    containerContext = runtime.containerContext;
-    containerPage = runtime.containerPage;
-    logger.log(color.gray('\n[Watch] Reusing existing container page\n'));
-  } else {
-    isNewPage = true;
-    containerContext = await browser.newContext({
-      providerOptions: browserLaunchOptions.providerOptions,
-      viewport: null,
-    });
-    containerPage = await containerContext.newPage();
-
-    // Prevent popup windows from being created
-    containerPage.on('popup', async (popup: BrowserProviderPage) => {
-      await popup.close().catch(() => {});
-    });
-
-    containerContext.on('page', async (page: BrowserProviderPage) => {
-      if (page !== containerPage) {
-        await page.close().catch(() => {});
-      }
-    });
-
-    if (isWatchMode) {
-      runtime.containerPage = containerPage;
-      runtime.containerContext = containerContext;
-    }
-
-    // Forward browser console to terminal
-    containerPage.on('console', (msg) => {
-      const text = msg.text();
-      if (text.startsWith('[Container]') || text.startsWith('[Runner]')) {
-        logger.log(color.gray(`[Browser Console] ${text}`));
-      }
-    });
-  }
-
-  activeContainerPage = containerPage;
-
-  const dispatchRouter = createDispatchRouter();
-  const headedReloadQueue = createHeadedSerialTaskQueue();
-  const pendingHeadedReloads = new Map<
-    string,
-    {
-      runId: string;
-      deferred: DeferredPromise<void>;
-    }
-  >();
-  let enqueueHeadedReload = async (
-    _file: TestFileInfo,
-    _testNamePattern?: string,
-  ): Promise<void> => {
-    throw new Error('Headed reload queue is not initialized');
-  };
-
-  const rejectPendingHeadedReload = (
-    testPath: string,
-    error: Error,
-    runId?: string,
-  ): void => {
-    const pending = pendingHeadedReloads.get(testPath);
-    if (!pending) {
-      return;
-    }
-    if (runId && pending.runId !== runId) {
-      return;
-    }
-    pendingHeadedReloads.delete(testPath);
-    pending.deferred.reject(error);
-  };
-
-  const rejectAllPendingHeadedReloads = (error: Error): void => {
-    for (const [testPath, pending] of pendingHeadedReloads) {
-      pendingHeadedReloads.delete(testPath);
-      pending.deferred.reject(error);
-    }
-  };
-
-  const registerPendingHeadedReload = (
-    testPath: string,
-    runId: string,
-  ): Promise<void> => {
-    const previousPending = pendingHeadedReloads.get(testPath);
-    if (previousPending) {
-      previousPending.deferred.reject(
-        new Error(
-          `Reload for "${testPath}" was superseded by a newer request.`,
-        ),
-      );
-      pendingHeadedReloads.delete(testPath);
-    }
-
-    const deferred = createDeferredPromise<void>();
-    pendingHeadedReloads.set(testPath, {
-      runId,
-      deferred,
-    });
-
-    return deferred.promise;
-  };
-
-  const resolvePendingHeadedReload = (
-    testPath: string,
-    runId?: string,
-  ): void => {
-    const pending = pendingHeadedReloads.get(testPath);
-    if (!pending) {
-      return;
-    }
-    if (runId && pending.runId !== runId) {
-      logger.debug(
-        `[Browser UI] Ignoring stale file-complete for ${testPath}. current=${pending.runId}, incoming=${runId}`,
-      );
-      return;
-    }
-    pendingHeadedReloads.delete(testPath);
-    pending.deferred.resolve();
-  };
-
-  // No execution-duration watchdog: per-test/hook timeouts are enforced inside
-  // the runner, and a dead container is caught event-driven by the WebSocket
-  // `close` handler, which rejects every pending reload via `onDisconnect`.
-  const reloadTestFileAndWait = async (
-    file: TestFileInfo,
-    testNamePattern?: string,
-  ): Promise<void> => {
-    let reloadAck: ReloadTestFileAck | undefined;
-
-    try {
-      reloadAck = await rpcManager.reloadTestFile(
-        file.testPath,
-        testNamePattern,
-      );
-      await registerPendingHeadedReload(file.testPath, reloadAck.runId);
-    } catch (error) {
-      if (reloadAck?.runId) {
-        rejectPendingHeadedReload(
-          file.testPath,
-          toError(error),
-          reloadAck.runId,
-        );
-      }
-      throw error;
-    }
-  };
-
-  // Create RPC methods that can access test state variables
-  const createRpcMethods = (): HostRpcMethods => ({
-    async rerunTest(testFile: string, testNamePattern?: string) {
-      const projectName = context.normalizedConfig.name || 'project';
-      const relativePath = relative(context.rootPath, testFile);
-      const displayPath = `<${projectName}>/${relativePath}`;
-      logger.log(
-        color.cyan(
-          `\nRe-running test: ${displayPath}${testNamePattern ? ` (pattern: ${testNamePattern})` : ''}\n`,
-        ),
-      );
-      await enqueueHeadedReload(getTestFileInfo(testFile), testNamePattern);
-    },
-    async getTestFiles() {
-      return currentTestFiles;
-    },
-    async onRunnerFramesReady(testFiles: string[]) {
-      markRunnerFramesReady(testFiles);
-    },
-    async onTestFileStart(payload: TestFileStartPayload) {
-      await handleTestFileStart(payload);
-    },
-    async onTestCaseResult(payload: TestResult) {
-      await handleTestCaseResult(payload);
-    },
-    async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
-      try {
-        await handleTestFileComplete(payload);
-        resolvePendingHeadedReload(payload.testPath, payload.runId);
-      } catch (error) {
-        rejectPendingHeadedReload(
-          payload.testPath,
-          toError(error),
-          payload.runId,
-        );
-        throw error;
-      }
-    },
-    async onLog(payload: LogPayload) {
-      await handleLog(payload);
-    },
-    async onFatal(payload: FatalPayload) {
-      const error = new Error(payload.message);
-      error.stack = payload.stack;
-      rejectAllPendingHeadedReloads(error);
-      await handleFatal(payload);
-    },
-    async dispatch(request: BrowserDispatchRequest) {
-      // Headed/container path now shares the same dispatch contract as headless.
-      return dispatchRouter.dispatch(request);
-    },
-  });
-
-  // Setup RPC manager
-  let rpcManager: ContainerRpcManager;
-
-  if (isWatchMode && runtime.rpcManager) {
-    rpcManager = runtime.rpcManager;
-    // Update methods with new test state (caseResults, completedTests, etc.)
-    rpcManager.updateMethods(createRpcMethods(), rejectAllPendingHeadedReloads);
-    // Reattach if we have an existing WebSocket
-    const existingWs = rpcManager.currentWebSocket;
-    if (existingWs) {
-      rpcManager.reattach(existingWs);
-    }
-  } else {
-    rpcManager = new ContainerRpcManager(
-      wss,
-      createRpcMethods(),
-      rejectAllPendingHeadedReloads,
-    );
-
-    if (isWatchMode) {
-      runtime.rpcManager = rpcManager;
-    }
-  }
-
-  // Only navigate on first creation
-  if (isNewPage) {
-    const pagePath = '/';
-    const containerPort = runtime.containerServer.port;
-    await containerPage.goto(`http://localhost:${containerPort}${pagePath}`, {
-      waitUntil: 'load',
-    });
-
-    logger.log(
-      color.cyan(
-        `\nBrowser mode opened at http://localhost:${containerPort}${pagePath}\n`,
-      ),
-    );
-  }
-
-  enqueueHeadedReload = async (
-    file: TestFileInfo,
-    testNamePattern?: string,
-  ): Promise<void> => {
-    return headedReloadQueue.enqueue(async () => {
-      if (fatalError) {
-        return;
-      }
-      await reloadTestFileAndWait(file, testNamePattern);
-    });
-  };
-
-  let testTime = 0;
-  if (currentTestFiles.length > 0) {
-    const testStart = Date.now();
-    try {
-      await waitForRunnerFramesReady(
-        currentTestFiles.map((file) => file.testPath),
-      );
-
-      for (const file of currentTestFiles) {
-        await enqueueHeadedReload(file);
-        if (fatalError) {
-          break;
-        }
-      }
-    } catch (error) {
-      fatalError = fatalError ?? toError(error);
-      // Non-watch: the fatal error rides the returned outcome and core owns the
-      // exit code; watch reruns set it here.
-      if (isWatchMode) {
-        ensureProcessExitCode(1);
-      }
-    }
-
-    testTime = Date.now() - testStart;
-  }
-
-  // Define rerun logic for watch mode
-  if (isWatchMode) {
-    triggerRerun = async () => {
-      // Re-deliver the host config so runner iframes reloaded by this rerun
-      // observe live per-rerun values ('u' flips updateSnapshot between
-      // reruns); `setContainerOptions` keeps full container reloads in sync.
-      const refreshedHostOptions: BrowserHostConfig = {
-        ...hostOptions,
-        snapshot: {
-          updateSnapshot: context.snapshotManager.options.updateSnapshot,
-        },
-      };
-      runtime.setContainerOptions(refreshedHostOptions);
-      // Independent: config push to the container vs. local entry collection.
-      const [, newProjectEntries] = await Promise.all([
-        rpcManager.updateHostConfig(refreshedHostOptions),
-        collectProjectEntries(context),
-      ]);
-      const rerunPlan = planWatchRerun({
-        projectEntries: newProjectEntries,
-        previousTestFiles: watchState.lastTestFiles,
-        affectedTestFiles: drainPendingAffectedTestFiles(watchState),
-      });
-
-      if (rerunPlan.filesChanged) {
-        const deletedTestPaths = collectDeletedTestPaths(
-          watchState.lastTestFiles,
-          rerunPlan.currentTestFiles,
-        );
-        if (deletedTestPaths.length > 0) {
-          context.updateReporterResultState([], [], deletedTestPaths);
-        }
-        watchState.lastTestFiles = rerunPlan.currentTestFiles;
-        currentTestFiles = rerunPlan.currentTestFiles;
-        await rpcManager.notifyTestFileUpdate(currentTestFiles);
-        if (currentTestFiles.length === 0) {
-          logger.log(
-            color.cyan('No browser test files remain after update.\n'),
-          );
-          logWatchReadyMessage(context, enableCliShortcuts);
-          return;
-        }
-        await waitForRunnerFramesReady(
-          currentTestFiles.map((file) => file.testPath),
-        );
-      }
-
-      if (rerunPlan.normalizedAffectedTestFiles.length > 0) {
-        logger.log(
-          color.cyan(
-            `Re-running ${rerunPlan.normalizedAffectedTestFiles.length} affected test file(s)...\n`,
-          ),
-        );
-        // Match the headless path: reset per-cycle state before the rerun
-        // streams new events, so bail counts and snapshot summaries do not
-        // accumulate across headed reruns.
-        prepareWatchRerunState(context);
-        await notifyTestRunStart();
-
-        const rerunStartTime = Date.now();
-        const fatalErrorBeforeRun = fatalError;
-        let rerunError: Error | undefined;
-
-        try {
-          for (const testFile of rerunPlan.normalizedAffectedTestFiles) {
-            await enqueueHeadedReload(getTestFileInfo(testFile));
-          }
-        } catch (error) {
-          rerunError = toError(error);
-          throw error;
-        } finally {
-          const testTime = Math.max(0, Date.now() - rerunStartTime);
-          const rerunFatalError =
-            fatalError && fatalError !== fatalErrorBeforeRun
-              ? fatalError
-              : undefined;
-          await finalizeWatchRerun({
-            rerunTestPaths: rerunPlan.normalizedAffectedTestFiles,
-            testTime,
-            unhandledErrors: rerunError
-              ? [rerunError]
-              : rerunFatalError
-                ? [rerunFatalError]
-                : undefined,
-          });
-          logWatchReadyMessage(context, enableCliShortcuts);
-        }
-      } else if (!rerunPlan.filesChanged) {
-        logger.log(color.cyan('Tests will be re-executed automatically\n'));
-        logWatchReadyMessage(context, enableCliShortcuts);
-      } else {
-        logWatchReadyMessage(context, enableCliShortcuts);
-      }
+  // The first build must not trigger a duplicate cycle, but a fatal test cycle
+  // does not invalidate the session the scheduler already established.
+  watchState.hooksEnabled = watchSession !== undefined;
+
+  // A fatal error the run reported outranks its results: it rides the returned
+  // outcome into core's finalize, which raises the exit code from it.
+  if (fatalErrorRef.current) {
+    return {
+      ...(await failWithError(fatalErrorRef.current, close)),
+      watchSession,
     };
   }
-
-  const closeContainerRuntime = !isWatchMode
-    ? async () => {
-        try {
-          await containerPage.close();
-        } catch {
-          // ignore
-        }
-        try {
-          await containerContext.close();
-        } catch {
-          // ignore
-        }
-        await destroyBrowserRuntime(runtime);
-      }
-    : undefined;
-
-  if (fatalError) {
-    return failWithError(fatalError, closeContainerRuntime);
-  }
-
-  const duration = {
-    totalTime: buildTime + testTime,
-    buildTime,
-    testTime,
-  };
 
   context.updateReporterResultState(reporterResults, caseResults);
 
-  const isFailure = reporterResults.some(
-    (result: TestFileResult) => result.status === 'fail',
-  );
-  // Non-watch runs let core's `finalizeRunCycle` own the exit code from the
-  // returned outcome; watch reruns set it here.
-  if (isWatchMode && isFailure) {
-    ensureProcessExitCode(1);
-  }
-
-  const result = {
+  return {
     results: reporterResults,
     testResults: caseResults,
-    duration,
-    hasFailure: isFailure,
+    duration: {
+      totalTime: buildTime + testTime,
+      buildTime,
+      testTime,
+    },
+    hasFailure: reporterResults.some(
+      (result: TestFileResult) => result.status === 'fail',
+    ),
     getSourcemap: getBrowserSourcemap,
     resolveSourcemap: resolveBrowserSourcemap,
-    // `closeContainerRuntime` is already `undefined` in watch mode, so the
-    // non-watch caller (core) receives the deferred close and watch does not.
-    close: closeContainerRuntime,
-    watch: watchHandles,
+    // `close` is already `undefined` in watch mode: the watch runtime outlives
+    // the cycle and is torn down through `executor.close()`.
+    close,
+    watchSession,
   };
-
-  if (isWatchMode) {
-    try {
-      await notifyTestRunEnd({ duration });
-    } finally {
-      await closeContainerRuntime?.();
-    }
-  }
-
-  // Enable watch hooks AFTER initial test run to avoid duplicate runs
-  if (isWatchMode && triggerRerun) {
-    watchState.hooksEnabled = true;
-    logWatchReadyMessage(context, enableCliShortcuts);
-  }
-
-  return result;
 };
-
 // ============================================================================
 // List Browser Tests
 // ============================================================================
@@ -4498,7 +1190,10 @@ export const listBrowserTests = async (
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
       runtimeConfig: serializableConfig(
-        projectRuntimeConfig(project, { envMode: 'static' }),
+        projectRuntimeConfig(project, {
+          envMode: 'static',
+          envOverlay: options?.env,
+        }),
       ),
       viewport: project.normalizedConfig.browser.viewport,
     }),

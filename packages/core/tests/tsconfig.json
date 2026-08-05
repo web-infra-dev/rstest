@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["./**/*.ts", "./rstestEnv.d.ts"]
+  "include": ["./**/*.ts", "./rstestEnv.d.ts", "../src/env.d.ts"]
 }

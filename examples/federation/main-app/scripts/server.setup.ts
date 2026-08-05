@@ -58,7 +58,7 @@ const isPortInUse = async (
 
 const workspaceRoot = resolve(__dirname, '..', '..');
 const componentAppDir = resolve(workspaceRoot, 'component-app');
-const remoteEntryUrl = 'http://localhost:3001/remoteEntry.js';
+const remoteEntryUrl = 'http://localhost:3001/remoteEntry.cjs';
 
 const workerEnv = {
   ...process.env,

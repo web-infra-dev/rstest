@@ -9,5 +9,6 @@ export default defineConfig({
     port: BROWSER_PORTS.watch,
   },
   include: ['tests/**/*.test.ts'],
+  setupFiles: ['./setup.ts'],
   testTimeout: BROWSER_TEST_TIMEOUT,
 });

@@ -1,11 +1,12 @@
 {
   "name": "@examples/federation-component-app",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "rsbuild build --config rsbuild.browser.config.js",
     "build:node": "rsbuild build --config rsbuild.node.config.js",
     "serve": "serve dist -p 3001",
-    "serve:node": "serve dist-node -p 3001",
+    "serve:node": "serve dist-node -p 3001 -L",
     "start": "concurrently \"npm run build\" \"npm run serve\"",
     "pretest": "pnpm -C ../node-local-remote build:node",
     "test": "rstest --reporter=verbose"
@@ -17,7 +18,7 @@
   "devDependencies": {
     "@module-federation/rsbuild-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@1152301",
     "@module-federation/rstest": "https://pkg.pr.new/module-federation/core/@module-federation/rstest@1152301",
-    "@rsbuild/core": "~2.1.8",
+    "@rsbuild/core": "~2.1.9",
     "@rsbuild/plugin-react": "^2.1.0",
     "@rstest/core": "workspace:*",
     "concurrently": "8.2.2",

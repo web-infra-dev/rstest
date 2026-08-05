@@ -8,7 +8,15 @@ import {
 import type { EnvironmentName } from '../types';
 import { color } from '../utils';
 
-const EnvironmentDependencyMap: Partial<Record<EnvironmentName, string>> = {
+export type EnvironmentDependencyName = Extract<
+  EnvironmentName,
+  'jsdom' | 'happy-dom'
+>;
+
+export const environmentDependencyPackages: Record<
+  EnvironmentDependencyName,
+  string
+> = {
   jsdom: 'jsdom',
   'happy-dom': 'happy-dom',
 };
@@ -64,9 +72,10 @@ type EnvironmentDependency = {
   roots: Set<string>;
 };
 
-const getPackageResolutionRoots = (projectRoot: string, root: string) => {
-  return Array.from(new Set([projectRoot, root, coreRoot]));
-};
+export const getTestEnvironmentResolutionRoots = (
+  projectRoot: string,
+  root: string,
+): string[] => Array.from(new Set([projectRoot, root, coreRoot]));
 
 export const ensureTestEnvironmentDependencies = async (
   projects: ProjectWithTestEnvironment[],
@@ -80,13 +89,15 @@ export const ensureTestEnvironmentDependencies = async (
   for (const project of projects) {
     const environmentName = project.normalizedConfig.testEnvironment.name;
     const packageName =
-      EnvironmentDependencyMap[environmentName as EnvironmentName];
+      environmentDependencyPackages[
+        environmentName as EnvironmentDependencyName
+      ];
 
     if (!packageName) {
       continue;
     }
 
-    const roots = getPackageResolutionRoots(project.rootPath, root);
+    const roots = getTestEnvironmentResolutionRoots(project.rootPath, root);
 
     if (
       roots.some((resolutionRoot) => isInstalled(packageName, resolutionRoot))

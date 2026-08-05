@@ -85,6 +85,8 @@ npx rstest run --findRelatedTests src/button.ts
 npx rstest list --related src/button.ts --filesOnly
 ```
 
+`--related` 和 `--findRelatedTests` 不支持在 watch 模式下使用，watch 模式本身已经会重跑受文件变更影响的测试。
+
 ### 运行变更相关测试
 
 <ApiMeta addedVersion="0.10.0" />
@@ -112,7 +114,7 @@ npx rstest run --changed=origin/main
 npx rstest list --changed --filesOnly
 ```
 
-`--changed` 不能和位置参数、`--related` / `--findRelatedTests` 一起使用，因为它已经从 Git 状态提供了源码文件过滤条件。
+`--changed` 不能和位置参数、`--related` / `--findRelatedTests` 一起使用，因为它已经从 Git 状态提供了源码文件过滤条件。它同样不支持在 watch 模式下使用。
 
 ### 运行分片 \{#sharding-tests}
 
@@ -291,7 +293,7 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 
 ### 测试命令
 
-`rstest`、`rstest run` 和 `rstest watch` 共享同一组测试运行参数：
+`rstest`、`rstest run` 和 `rstest watch` 共享同一组测试运行参数，其中 `--related`、`--findRelatedTests`、`--changed` 和 `--shard` 在 watch 模式下会被拒绝：
 
 | 参数                                | 说明                                                                                                                                                 |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -320,7 +322,6 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `--detectAsyncLeaks`                | 检测测试结束后仍然存活的异步资源，详见 [detectAsyncLeaks](/config/test/detect-async-leaks)                                                           |
 | `--disableConsoleIntercept`         | 禁用 console 拦截，详见 [disableConsoleIntercept](/config/test/disable-console-intercept)                                                            |
 | `--exclude <exclude>`               | 排除指定文件，详见 [exclude](/config/test/exclude)                                                                                                   |
-| `--federation`                      | 启用 Module Federation 兼容模式，详见 [federation](/config/test/federation)                                                                          |
 | `--findRelatedTests`                | `--related` 的 Jest 兼容别名                                                                                                                         |
 | `--globals`                         | 提供全局 API，详见 [globals](/config/test/globals)                                                                                                   |
 | `-h, --help`                        | 显示帮助信息                                                                                                                                         |

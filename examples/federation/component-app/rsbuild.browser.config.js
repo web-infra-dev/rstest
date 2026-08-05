@@ -1,11 +1,16 @@
-const { pluginModuleFederation } = require('@module-federation/rsbuild-plugin');
-const { defineConfig } = require('@rsbuild/core');
-const { pluginReact } = require('@rsbuild/plugin-react');
+import { pluginModuleFederation } from '@module-federation/rsbuild-plugin';
+import { defineConfig } from '@rsbuild/core';
+import { pluginReact } from '@rsbuild/plugin-react';
 
-module.exports = defineConfig({
+export default defineConfig({
   mode: 'development',
   dev: {
     assetPrefix: 'http://localhost:3001/',
+  },
+  server: {
+    cors: {
+      origin: 'http://localhost:3002',
+    },
   },
   source: {
     entry: {

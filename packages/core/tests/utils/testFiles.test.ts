@@ -67,7 +67,7 @@ describe('getTestEntries literal/glob handling', () => {
     });
     const values = Object.values(entries);
     expect(values).toHaveLength(1);
-    expect(pathe.normalize(values[0])).toBe(
+    expect(pathe.normalize(values[0]!)).toBe(
       pathe.join(pathe.normalize(rootPath), virtualName),
     );
   });

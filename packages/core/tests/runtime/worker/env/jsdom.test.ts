@@ -1,7 +1,10 @@
 import { promisify } from 'node:util';
 import { expect, test } from '@rstest/core';
 import type { DOMWindow } from 'jsdom';
-import { environment } from '../../../../src/runtime/worker/env/jsdom';
+import {
+  environment,
+  forwardVirtualConsole,
+} from '../../../../src/runtime/worker/env/jsdom';
 
 const createTestGlobal = (): typeof globalThis =>
   ({
@@ -14,6 +17,36 @@ const createTestGlobal = (): typeof globalThis =>
     URL: globalThis.URL,
     URLSearchParams: globalThis.URLSearchParams,
   }) as typeof globalThis;
+
+test('forwards the console with the pre-v27 jsdom API', () => {
+  const forwarded: Console[] = [];
+
+  forwardVirtualConsole(
+    {
+      sendTo(console) {
+        forwarded.push(console);
+      },
+    },
+    console,
+  );
+
+  expect(forwarded).toEqual([console]);
+});
+
+test('forwards the console with the jsdom v27+ API', () => {
+  const forwarded: Console[] = [];
+
+  forwardVirtualConsole(
+    {
+      forwardTo(console) {
+        forwarded.push(console);
+      },
+    },
+    console,
+  );
+
+  expect(forwarded).toEqual([console]);
+});
 
 test('clears pending Node timers during jsdom teardown', async () => {
   const testGlobal = createTestGlobal();
@@ -33,7 +66,11 @@ test('clears pending Node timers during jsdom teardown', async () => {
     clearedIntervals.push(timer);
     nativeTimers.clearInterval(timer);
   }) as typeof clearInterval;
-  const { teardown } = await environment.setup(testGlobal, {});
+  const { teardown } = await environment.setup(
+    testGlobal,
+    {},
+    { scope: 'file' },
+  );
   const timeout = testGlobal.setTimeout(() => {}, 60_000);
   const interval = testGlobal.setInterval(() => {}, 60_000);
   let tornDown = false;
@@ -65,14 +102,18 @@ test('clears pending Node timers during jsdom teardown', async () => {
 test('should preserve URL customizations from beforeParse', async () => {
   const testGlobal = { console, URL, URLSearchParams } as typeof globalThis;
   const originalURL = testGlobal.URL;
-  const { teardown } = await environment.setup(testGlobal, {
-    beforeParse(window: DOMWindow) {
-      const OriginalURL = window.URL as typeof URL;
-      class CustomURL extends OriginalURL {}
-      Object.defineProperty(CustomURL, 'beforeParseMarker', { value: true });
-      window.URL = CustomURL;
+  const { teardown } = await environment.setup(
+    testGlobal,
+    {
+      beforeParse(window: DOMWindow) {
+        const OriginalURL = window.URL as typeof URL;
+        class CustomURL extends OriginalURL {}
+        Object.defineProperty(CustomURL, 'beforeParseMarker', { value: true });
+        window.URL = CustomURL;
+      },
     },
-  });
+    { scope: 'file' },
+  );
 
   try {
     expect(

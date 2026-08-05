@@ -37,6 +37,47 @@ describe('mergeRstestConfig', () => {
     expect(merged.globalSetup).toEqual(['./single-global-setup.ts']);
   });
 
+  it('should merge expect.poll with its defaults', () => {
+    expect(
+      withDefaultConfig({
+        expect: {
+          poll: {
+            timeout: 200,
+          },
+        },
+      }).expect,
+    ).toEqual({
+      poll: {
+        interval: 50,
+        timeout: 200,
+      },
+    });
+  });
+
+  it('should preserve test environment prebundle configuration', () => {
+    expect(
+      withDefaultConfig({
+        testEnvironment: {
+          name: 'jsdom',
+          options: { value: true },
+          prebundle: true,
+        },
+      }).testEnvironment,
+    ).toEqual({
+      name: 'jsdom',
+      options: { value: true },
+      prebundle: true,
+    });
+
+    expect(
+      withDefaultConfig({
+        testEnvironment: 'jsdom',
+      }).testEnvironment,
+    ).toEqual({
+      name: 'jsdom',
+    });
+  });
+
   it('should override forceRerunTriggers', () => {
     expect(
       withDefaultConfig({
@@ -274,9 +315,10 @@ describe('mergeRstestConfig', () => {
     );
 
     expect(
-      rstest.projects[0]?.normalizedConfig.performance?.buildCache
-        ?.buildDependencies,
-    ).toEqual(['/repo/configs/cache-flags.ts']);
+      rstest.projects[0]?.normalizedConfig.performance?.buildCache,
+    ).toMatchObject({
+      buildDependencies: ['/repo/configs/cache-flags.ts'],
+    });
   });
 
   it('should preserve explicit default buildCache directory for projects', () => {
@@ -303,9 +345,10 @@ describe('mergeRstestConfig', () => {
     );
 
     expect(
-      rstest.projects[0]?.normalizedConfig.performance?.buildCache
-        ?.cacheDirectory,
-    ).toBe('/repo/projects/node/node_modules/.cache/rstest');
+      rstest.projects[0]?.normalizedConfig.performance?.buildCache,
+    ).toMatchObject({
+      cacheDirectory: '/repo/projects/node/node_modules/.cache/rstest',
+    });
     expect(
       resolveProjectBuildCache({
         context: rstest,
@@ -464,6 +507,7 @@ describe('mergeRstestConfig', () => {
         },
         {
           browser: {
+            provider: 'playwright',
             providerOptions: {
               launch: { channel: 'chrome' },
               context: { locale: 'en-US' },
@@ -500,6 +544,7 @@ describe('mergeRstestConfig', () => {
       },
       {
         browser: {
+          provider: 'playwright',
           providerOptions: {
             launch: {
               args: ['--headless=new'],
@@ -534,6 +579,7 @@ describe('mergeRstestConfig', () => {
       },
       {
         browser: {
+          provider: 'playwright',
           providerOptions: { launch: { channel: 'chrome' } },
         },
       },
