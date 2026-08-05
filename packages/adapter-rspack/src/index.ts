@@ -173,7 +173,7 @@ const updateCacheConfig = ({
       : storageDirectory && cacheName
         ? path.resolve(storageDirectory, cacheName)
         : undefined
-    : undefined;
+    : storageDirectory;
 
   return {
     buildCache: {
