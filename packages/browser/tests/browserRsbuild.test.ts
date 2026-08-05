@@ -1,138 +1,10 @@
 import { describe, expect, it } from '@rstest/core';
-import type { ProjectContext, Rstest } from '@rstest/core/internal/browser';
 import {
-  createBrowserLazyCompilationConfig,
-  createBrowserRsbuildDevConfig,
   createBrowserContextExcludeRegExp,
-  resolveListenPort,
-  shouldEnableBrowserHmr,
   toContextKey,
-} from '../src/hostController';
-
-/**
- * Create a mock context for testing browser config resolution.
- */
-const createMockContext = (options: {
-  projectBrowserConfig: Partial<ProjectContext['normalizedConfig']['browser']>;
-  rootBrowserConfig: Partial<Rstest['normalizedConfig']['browser']>;
-}): Rstest => {
-  const { projectBrowserConfig, rootBrowserConfig } = options;
-
-  const browserProject = {
-    name: 'browser',
-    environmentName: 'browser',
-    rootPath: '/project',
-    normalizedConfig: {
-      browser: {
-        enabled: true,
-        provider: 'playwright',
-        browser: 'chromium',
-        headless: false,
-        strictPort: false,
-        ...projectBrowserConfig,
-      },
-    },
-  } as unknown as ProjectContext;
-
-  return {
-    projects: [browserProject],
-    normalizedConfig: {
-      browser: {
-        enabled: false,
-        provider: 'playwright',
-        browser: 'chromium',
-        headless: false,
-        strictPort: false,
-        ...rootBrowserConfig,
-      },
-    },
-  } as unknown as Rstest;
-};
+} from '../src/browserRsbuild';
 
 describe('browser config resolution', () => {
-  it('should use project-level browser config over root config', () => {
-    const context = createMockContext({
-      projectBrowserConfig: {
-        browser: 'firefox',
-        headless: true,
-        port: 5000,
-        strictPort: true,
-      },
-      rootBrowserConfig: {
-        browser: 'chromium',
-        headless: false,
-        port: 4000,
-        strictPort: false,
-      },
-    });
-
-    const browserProjects = context.projects.filter(
-      (p) => p.normalizedConfig.browser.enabled,
-    );
-    const firstProject = browserProjects[0];
-    const browserConfig =
-      firstProject?.normalizedConfig.browser ??
-      context.normalizedConfig.browser;
-
-    expect(browserConfig.browser).toBe('firefox');
-    expect(browserConfig.headless).toBe(true);
-    expect(browserConfig.port).toBe(5000);
-    expect(browserConfig.strictPort).toBe(true);
-  });
-
-  it('should fallback to root config when no browser projects', () => {
-    const context = {
-      projects: [],
-      normalizedConfig: {
-        browser: {
-          enabled: false,
-          browser: 'webkit',
-          headless: true,
-          port: 3000,
-          strictPort: true,
-        },
-      },
-    } as unknown as Rstest;
-
-    const browserProjects = context.projects.filter(
-      (p) => p.normalizedConfig.browser.enabled,
-    );
-    const firstProject = browserProjects[0];
-    const browserConfig =
-      firstProject?.normalizedConfig.browser ??
-      context.normalizedConfig.browser;
-
-    expect(browserConfig.browser).toBe('webkit');
-    expect(browserConfig.headless).toBe(true);
-    expect(browserConfig.port).toBe(3000);
-    expect(browserConfig.strictPort).toBe(true);
-  });
-
-  it('should disable HMR when enableHmr is false and keep error-only client log', () => {
-    const devConfig = createBrowserRsbuildDevConfig(false);
-
-    expect(devConfig.hmr).toBe(false);
-    expect(devConfig.client.logLevel).toBe('error');
-  });
-
-  it('should enable HMR when enableHmr is true', () => {
-    const devConfig = createBrowserRsbuildDevConfig(true);
-
-    expect(devConfig.hmr).toBe(true);
-    expect(devConfig.client.logLevel).toBe('error');
-  });
-
-  it('should only enable HMR for headed watch', () => {
-    // Headless never reuses a page, so it never consumes HMR — enabling it only
-    // exposes the #11922 factory race and the #1472 accept-chain throw. One-shot
-    // runs never rerun. So HMR (and the lazyCompilation transport it carries) is
-    // gated to headed watch alone.
-    expect(shouldEnableBrowserHmr(true, false)).toBe(true); // headed watch
-    expect(shouldEnableBrowserHmr(true, true)).toBe(false); // headless watch
-    expect(shouldEnableBrowserHmr(false, false)).toBe(false); // headed one-shot
-    expect(shouldEnableBrowserHmr(false, true)).toBe(false); // headless one-shot
-  });
-
   it('should derive the non-watch import-map key like the runtime toContextKey', () => {
     // Keys must match the browser runtime's `toContextKey` so `loadTest(key)`
     // resolves against the manifest import map.
@@ -150,25 +22,6 @@ describe('browser config resolution', () => {
     expect(toContextKey('/repo/pkg-extra/a.test.ts', '/repo/pkg')).toBe(
       '/repo/pkg-extra/a.test.ts',
     );
-  });
-
-  it('should keep setup files out of lazy compilation', () => {
-    const lazyCompilation = createBrowserLazyCompilationConfig([
-      '/project/tests/rstest.setup.ts',
-    ]);
-
-    expect(lazyCompilation.imports).toBe(true);
-    expect(lazyCompilation.entries).toBe(false);
-    expect(
-      lazyCompilation.test?.({
-        nameForCondition: () => '/project/tests/rstest.setup.ts',
-      }),
-    ).toBe(false);
-    expect(
-      lazyCompilation.test?.({
-        nameForCondition: () => '/project/tests/example.test.tsx',
-      }),
-    ).toBe(true);
   });
 
   it('should keep leading dots in browser context exclude patterns', () => {
@@ -331,39 +184,5 @@ describe('browser config resolution', () => {
     );
     expect(exclude?.test('.dist/.fixtures/example.test.ts')).toBe(false);
     expect(exclude?.test('./src/.fixtures/example.test.ts')).toBe(false);
-  });
-
-  it('should normalize setup file paths before filtering lazy compilation', () => {
-    const lazyCompilation = createBrowserLazyCompilationConfig([
-      '/project/tests/rstest.setup.ts',
-    ]);
-
-    expect(
-      lazyCompilation.test?.({
-        nameForCondition: () => '/project/tests/../tests/rstest.setup.ts',
-      }),
-    ).toBe(false);
-  });
-});
-
-describe('resolveListenPort', () => {
-  it('should return listenPort when it is non-zero', () => {
-    expect(resolveListenPort(4000, null)).toBe(4000);
-  });
-
-  it('should fall back to httpServer.address() when listenPort is 0', () => {
-    const httpServer = {
-      address: () => ({ address: '127.0.0.1', family: 'IPv4', port: 52341 }),
-    };
-    expect(resolveListenPort(0, httpServer)).toBe(52341);
-  });
-
-  it('should return 0 when both listenPort and httpServer are unavailable', () => {
-    expect(resolveListenPort(0, null)).toBe(0);
-  });
-
-  it('should return 0 when httpServer.address() returns a string', () => {
-    const httpServer = { address: () => '/tmp/sock' as unknown as null };
-    expect(resolveListenPort(0, httpServer as any)).toBe(0);
   });
 });

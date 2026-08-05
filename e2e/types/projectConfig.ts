@@ -101,6 +101,14 @@ defineConfig(async () => ({ testEnvironment: 'invalid' }));
 // @ts-expect-error invalid project test environment
 defineProject(async () => ({ testEnvironment: 'invalid' }));
 
+defineConfig({
+  testEnvironment: {
+    name: 'jsdom',
+    // @ts-expect-error invalid test environment prebundle mode
+    prebundle: 'always',
+  },
+});
+
 export default defineConfig({
   projects: [
     inlineNodeProject,

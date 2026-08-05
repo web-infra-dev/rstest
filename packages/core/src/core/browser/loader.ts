@@ -9,12 +9,13 @@ import type {
 } from '../../types';
 import type { CoverageProvider } from '../../types/coverage';
 import { color, logger } from '../../utils';
+import { exitAfterReporting } from '../../utils/signals';
 
 export type { BrowserTestRunOptions, BrowserTestRunResult } from '../../types';
 
 /**
  * The subset of {@link BrowserTestRunOptions} that configures a browser
- * executor construction (as opposed to a host-driven watch session). Single
+ * executor construction (as opposed to the files-only discovery boot). Single
  * source of truth for the field list: the executor options interface, the
  * `loadBrowserExecutor` argument, and the planner's option bag all derive
  * from it.
@@ -28,6 +29,11 @@ export type BrowserExecutorRunOptions = Pick<
   | 'appliedModifyRstestConfigEnvironments'
 >;
 
+export interface BrowserExecutorLoadOptions extends BrowserExecutorRunOptions {
+  /** The planner's discovery boot already validated the post-hook config. */
+  configAlreadyValidated?: boolean;
+}
+
 /**
  * Options for {@link BrowserHostModule.createBrowserExecutor}. `projects` is the
  * explicit browser-project subset the plan resolved; `coverageProvider` is the
@@ -40,11 +46,21 @@ export interface CreateBrowserExecutorOptions extends BrowserExecutorRunOptions 
 }
 
 /**
- * A {@link TestExecutor} with `collect` guaranteed: the browser side is the one
- * implementation that lists through the seam (`rstest list` relies on it).
+ * The browser side of the seam, with the members core relies on it to implement
+ * made non-optional: `collect` (`rstest list` lists through it) and the watch
+ * pair `onInvalidate`/`requestRerun` (core drives every browser watch cycle
+ * through them).
  */
 export type BrowserTestExecutor = TestExecutor &
-  Required<Pick<TestExecutor, 'collect'>>;
+  Required<Pick<TestExecutor, 'collect' | 'onInvalidate' | 'requestRerun'>> & {
+    /**
+     * Watch only, meaningful once the initial cycle has resolved: whether the
+     * host left a live session behind. A launch that found no test files, or
+     * that failed before the runtime came up, opens none — and with no session
+     * no trigger can ever fire, so core prints no ready banner for it.
+     */
+    hasWatchSession(): boolean;
+  };
 
 /**
  * Core-owned contract for the `@rstest/browser/internal` host module.
@@ -66,6 +82,10 @@ export interface BrowserHostModule {
     context: RstestContext,
     options: CreateBrowserExecutorOptions,
   ) => Promise<BrowserTestExecutor>;
+  /**
+   * The files-only discovery boot (see {@link runBrowserDiscovery}). Runs and
+   * watch reruns go through `createBrowserExecutor`, never through here.
+   */
   runBrowserTests: (
     context: RstestContext,
     options?: BrowserTestRunOptions,
@@ -153,7 +173,7 @@ export async function loadBrowserModule(
         logger.error(
           `Please ensure both packages have the same version:\n\n  ${color.cyan(`npm install @rstest/browser@${coreVersion}`)}\n`,
         );
-        process.exit(1);
+        exitAfterReporting(1);
       }
 
       return browserModule!;
@@ -185,7 +205,7 @@ export async function loadBrowserModule(
   logger.error(
     `Or if using pnpm:\n\n  ${color.cyan(`pnpm add @rstest/browser@${coreVersion}`)}\n`,
   );
-  process.exit(1);
+  exitAfterReporting(1);
 }
 
 export async function loadAndValidateBrowserModule(
@@ -201,37 +221,81 @@ export async function loadAndValidateBrowserModule(
 }
 
 /**
- * Run browser mode tests host-driven (watch self-finalize path). Non-watch runs
- * go through {@link BrowserTestExecutor} instead; this shim stays for the
- * browser watch loop and the browser-only watch coverage path.
+ * Boot Browser Mode in files-only mode so browser `modifyRstestConfig` hooks
+ * apply and the test-file set is refreshed. The sole remaining caller is the
+ * config-hook discovery boot — every real run and rerun goes through
+ * {@link BrowserTestExecutor}.
  */
-export async function runBrowserModeTests(
+export async function runBrowserDiscovery(
   context: RstestContext,
   browserProjects: ProjectContext[],
   options: BrowserTestRunOptions,
-  validatedModule?: BrowserHostModule,
 ): Promise<BrowserTestRunResult | void> {
-  const { runBrowserTests } =
-    validatedModule ??
-    (await loadAndValidateBrowserModule(context, browserProjects));
-  return runBrowserTests(context, { ...options, projects: browserProjects });
+  const browserModule = await loadBrowserModule({
+    projectRoots: browserProjects.map((project) => project.rootPath),
+    embedded: context.embedded,
+  });
+  const result = await browserModule.runBrowserTests(context, {
+    ...options,
+    projects: browserProjects,
+  });
+
+  // A registered Rsbuild plugin may not actually register a config hook. In
+  // that case the host has no post-hook refresh at which to validate, so the
+  // discovery boot must still provide the run's validation barrier itself.
+  const configWasValidatedByHook = browserProjects.some((project) =>
+    options.appliedModifyRstestConfigEnvironments?.has(project.environmentName),
+  );
+  if (!configWasValidatedByHook) {
+    try {
+      browserModule.validateBrowserConfig(context);
+    } catch (error) {
+      // The boot already built its runtime; the caller only closes it on a
+      // returned result, so an invalid config must not leak the dev servers.
+      await result?.close?.();
+      throw error;
+    }
+  }
+  return result;
+}
+
+/**
+ * Validate the run's browser config through the version-locked seam without
+ * building anything. An invalid browser config has to fail the run whether or
+ * not the plan found a browser test file to launch with, and the launch is the
+ * only thing that would otherwise validate it — so a run that finalizes without
+ * ever loading an executor has to ask for the check itself.
+ */
+export async function validateBrowserRunConfig(
+  context: RstestContext,
+  browserProjects: ProjectContext[],
+): Promise<void> {
+  const { validateBrowserConfig } = await loadBrowserModule({
+    projectRoots: browserProjects.map((p) => p.rootPath),
+    embedded: context.embedded,
+  });
+  validateBrowserConfig(context);
 }
 
 /**
  * Load `@rstest/browser` and build the browser side of the executor seam,
- * validating the browser config first. Shared by the run path (`runTests`) and
- * the list path (`listTests`) so both go through one browser entry point.
+ * validating the browser config unless the planner's discovery barrier already
+ * did. Shared by the run path (`runTests`) and the list path (`listTests`) so
+ * both go through one browser entry point.
  */
 export async function loadBrowserExecutor(
   context: RstestContext,
   browserProjects: ProjectContext[],
   coverageProvider: CoverageProvider | null,
-  runOptions?: BrowserExecutorRunOptions,
+  loadOptions?: BrowserExecutorLoadOptions,
 ): Promise<BrowserTestExecutor> {
-  const { createBrowserExecutor } = await loadAndValidateBrowserModule(
-    context,
-    browserProjects,
-  );
+  const { configAlreadyValidated = false, ...runOptions } = loadOptions ?? {};
+  const { createBrowserExecutor } = configAlreadyValidated
+    ? await loadBrowserModule({
+        projectRoots: browserProjects.map((project) => project.rootPath),
+        embedded: context.embedded,
+      })
+    : await loadAndValidateBrowserModule(context, browserProjects);
   return createBrowserExecutor(context, {
     projects: browserProjects,
     coverageProvider,
