@@ -330,7 +330,7 @@ test.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 ## test.extend
 
-- **Type:** `test.extend(fixtures: Fixtures)`
+- **Type:** `test.extend(fixtures: Fixtures) | test.extend(name, fixture)`
 
 Extends the test context with custom fixtures and returns a **new** test API. The original `test` is not modified — you can have multiple independent extended versions at the same time.
 
@@ -363,9 +363,9 @@ test('plain test', ({ expect }) => {
 
 The returned API has the same chainable modifiers as `test` (`only`, `skip`, `each`, `concurrent`, etc.) and can call `.extend()` again for further extension.
 
-### Fixture function lifecycle
+### Fixtures object form
 
-A fixture function receives two parameters:
+A fixture function in the fixtures object form receives two parameters:
 
 1. **context** — contains other fixtures as well as `TestContext` (`task`, `expect`, `onTestFinished`, `onTestFailed`). Use object destructuring to declare the dependencies you need.
 2. **use** — call `await use(value)` to pass the fixture value to the test.
@@ -387,6 +387,30 @@ const testWithDb = test.extend({
   },
 });
 ```
+
+### Named fixture form
+
+<ApiMeta addedVersion="0.11.7" />
+
+The named fixture form returns a fixture value directly instead of calling `use`. Its second parameter provides `onCleanup`, which registers one callback to run after the test and its per-test hooks finish. Both the fixture function and cleanup callback may be asynchronous.
+
+```ts
+import { test } from '@rstest/core';
+
+const apiTest = test
+  .extend('baseURL', 'https://api.example.com')
+  .extend('client', async ({ baseURL }, { onCleanup }) => {
+    const client = await createClient(baseURL);
+    onCleanup(() => client.close());
+    return client;
+  });
+```
+
+Named fixture functions are test-scoped: Rstest evaluates them for each test attempt and runs their cleanup before starting the next attempt. Plain values are reused across attempts. Use a fixture function when mutable state must be isolated for each attempt.
+
+The fixture name must be a statically known ASCII JavaScript identifier so TypeScript can expose exactly one new context field. Values typed as `string`, patterned template literals such as `` `slot${string}` ``, names that require quoted destructuring such as `base-url`, and reserved test context fields are not accepted. Names that overlap Function properties, such as `name` and `length`, are supported.
+
+A function or class passed directly is treated as a fixture function because both are JavaScript functions at runtime. To use the function or class itself as the fixture value, return it from a fixture function, for example `.extend('predicate', () => predicate)` or `.extend('Service', () => Service)`. Use direct object destructuring in the first parameter to request other fixtures or fields from `TestContext`.
 
 ### Plain value fixtures
 

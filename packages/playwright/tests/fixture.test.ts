@@ -496,6 +496,91 @@ test(
   },
 );
 
+const namedFixtureEvents: string[] = [];
+const predicate = (value: string) => value.length > 0;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+const broadlyTypedFunction: Function = predicate;
+const broadlyTypedCallable: CallableFunction = predicate;
+class NamedFixtureService {
+  name = 'service';
+}
+
+const checkNamedFixtureTypes = (
+  fixtureName: string,
+  patternName: `slot${string}`,
+  unionName: 'left' | 'right',
+) => {
+  // @ts-expect-error callable values must be returned by named fixture functions
+  test.extend('predicate', predicate);
+
+  // @ts-expect-error broadly typed functions are still callable at runtime
+  test.extend('broadFunction', broadlyTypedFunction);
+
+  // @ts-expect-error broadly typed callable values are fixture functions at runtime
+  test.extend('broadCallable', broadlyTypedCallable);
+
+  // @ts-expect-error constructable values must be returned by named fixture functions
+  test.extend('service', NamedFixtureService);
+
+  // @ts-expect-error named fixture names must be statically known
+  test.extend('prefix', 'prefix').extend(fixtureName, 42);
+
+  // @ts-expect-error patterned names do not identify one context field
+  test.extend(patternName, 42);
+
+  // @ts-expect-error named fixture names must be JavaScript identifiers
+  test.extend('base-url', 'https://example.com');
+
+  // @ts-expect-error named fixture names cannot replace TestContext fields
+  test.extend('expect', 'fixture');
+
+  // @ts-expect-error named fixture names cannot replace internal context fields
+  test.extend('_useLocalExpect', false);
+
+  test.extend('name', 'fixture')('supports Function property names', (ctx) => {
+    expect(ctx.name).toBe('fixture');
+  });
+
+  const unionFixtureTest = test
+    .extend('prefix', 'prefix')
+    .extend(unionName, 42);
+  unionFixtureTest('models union names as alternative contexts', (ctx) => {
+    const prefix: string = ctx.prefix;
+    void prefix;
+    // @ts-expect-error neither union member is guaranteed to be registered
+    void ctx.left;
+  });
+};
+void checkNamedFixtureTypes;
+
+const namedFixtureTest = test
+  .extend('title', (_context, { onCleanup }) => {
+    expect('named fixture setup').toContain('setup');
+    onCleanup(() => {
+      expect('named fixture cleanup').toContain('cleanup');
+      namedFixtureEvents.push('cleanup');
+    });
+    return 'named fixture title';
+  })
+  .extend('predicate', () => predicate)
+  .extend('service', () => NamedFixtureService)
+  .extend('name', () => 'playwright fixture');
+
+namedFixtureTest(
+  'supports the named fixture form',
+  ({ name, predicate, service, title }) => {
+    expect(name).toBe('playwright fixture');
+    expect(title).toBe('named fixture title');
+    expect(predicate('value')).toBe(true);
+    expect(new service().name).toBe('service');
+    namedFixtureEvents.push('test');
+  },
+);
+
+namedFixtureTest.afterAll(() => {
+  expect(namedFixtureEvents).toEqual(['test', 'cleanup']);
+});
+
 test(
   'encodes static server entry filenames in returned URLs',
   { timeout: 30_000 },

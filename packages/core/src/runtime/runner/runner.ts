@@ -962,7 +962,23 @@ export class TestRunner {
       enumerable: false,
     });
 
-    return createFixtureResolver(test, context, fixtureCleanups);
+    return createFixtureResolver(test, context, fixtureCleanups, {
+      runNamedFixtureSetup: (setup, onTimeout) =>
+        wrapTimeout({
+          name: 'fixture setup',
+          fn: setup,
+          timeout: test.timeout,
+          onTimeout,
+          stackTraceError: test.stackTraceError,
+        })(),
+      wrapNamedFixtureCleanup: (cleanup) =>
+        wrapTimeout({
+          name: 'fixture cleanup',
+          fn: cleanup,
+          timeout: test.timeout,
+          stackTraceError: test.stackTraceError,
+        }),
+    });
   }
 
   private afterRunTest(test: TestCase): void {

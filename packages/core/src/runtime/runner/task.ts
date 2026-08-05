@@ -284,6 +284,7 @@ type TimeoutOptions<T extends (...args: any[]) => any> = {
   name: string;
   fn: T;
   timeout?: number;
+  onTimeout?: () => void;
   getAssertionCalls?: () => number;
   stackTraceError: Error;
 };
@@ -297,6 +298,7 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
   name,
   fn,
   timeout,
+  onTimeout,
   getAssertionCalls,
   stackTraceError,
 }: TimeoutOptions<T>): T {
@@ -315,6 +317,7 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
             : ' (no expect assertions completed)';
         const message = `${name} timed out in ${timeout}ms${getAssertionCalls ? assertionInfo : ''}`;
 
+        onTimeout?.();
         // Create timeout error with the provided stack trace from test registration
         reject(makeError(message, stackTraceError));
       }, timeout);
@@ -334,6 +337,7 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
     name,
     fn,
     timeout,
+    onTimeout,
     getAssertionCalls,
     stackTraceError,
   });
