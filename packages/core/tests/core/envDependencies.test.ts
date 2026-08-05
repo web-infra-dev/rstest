@@ -1,8 +1,8 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import { stripVTControlCharacters } from 'node:util';
 import path from 'node:path';
 import { afterEach, describe, expect, it, rs } from '@rstest/core';
+import { withTempDir } from '../helpers/tempDir';
 import { ensureTestEnvironmentDependencies } from '../../src/core/envDependencies';
 
 const originalStdinIsTTY = process.stdin.isTTY;
@@ -44,11 +44,10 @@ describe('ensureTestEnvironmentDependencies', () => {
   });
 
   it('asks whether to install jsdom for jsdom test environment', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rstest-jsdom-'));
-    const projectRoot = path.join(root, 'project');
-    fs.mkdirSync(projectRoot);
+    await withTempDir('rstest-jsdom-', async (root) => {
+      const projectRoot = path.join(root, 'project');
+      fs.mkdirSync(projectRoot);
 
-    try {
       const installer = rs.fn(async (packageName: string, cwd: string) => {
         mockPackage(cwd, packageName);
         return true;
@@ -63,17 +62,14 @@ describe('ensureTestEnvironmentDependencies', () => {
       );
 
       expect(installer).toHaveBeenCalledWith('jsdom', root, 'jsdom', {});
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('skips install when the test environment dependency resolves from core', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rstest-core-env-'));
-    const projectRoot = path.join(root, 'project');
-    fs.mkdirSync(projectRoot);
+    await withTempDir('rstest-core-env-', async (root) => {
+      const projectRoot = path.join(root, 'project');
+      fs.mkdirSync(projectRoot);
 
-    try {
       const installer = rs.fn(async () => false);
 
       await ensureTestEnvironmentDependencies(
@@ -86,17 +82,14 @@ describe('ensureTestEnvironmentDependencies', () => {
       );
 
       expect(installer).not.toHaveBeenCalled();
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('throws early when installer does not install the test environment dependency', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rstest-missing-env-'));
-    const projectRoot = path.join(root, 'project');
-    fs.mkdirSync(projectRoot);
+    await withTempDir('rstest-missing-env-', async (root) => {
+      const projectRoot = path.join(root, 'project');
+      fs.mkdirSync(projectRoot);
 
-    try {
       const installer = rs.fn(async () => false);
 
       let error: unknown;
@@ -118,17 +111,14 @@ describe('ensureTestEnvironmentDependencies', () => {
         `Failed to load testEnvironment "jsdom" dependency: jsdom in ${root}, please make sure it is installed.`,
       );
       expect(installer).toHaveBeenCalledWith('jsdom', root, 'jsdom', {});
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('asks whether to install happy-dom for happy-dom test environment', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rstest-happy-dom-'));
-    const projectRoot = path.join(root, 'project');
-    fs.mkdirSync(projectRoot);
+    await withTempDir('rstest-happy-dom-', async (root) => {
+      const projectRoot = path.join(root, 'project');
+      fs.mkdirSync(projectRoot);
 
-    try {
       const installer = rs.fn(async (packageName: string, cwd: string) => {
         mockPackage(cwd, packageName);
         return true;
@@ -148,8 +138,6 @@ describe('ensureTestEnvironmentDependencies', () => {
         'happy-dom',
         {},
       );
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 });

@@ -1,5 +1,5 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { withTempDir } from '../helpers/tempDir';
+import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { normalize } from 'pathe';
 import { groupProjectEntriesByEnvironment } from '../../src/core/environmentGroups';
@@ -169,16 +169,13 @@ const regexp = /"/;
   });
 
   it('reads comments from the file head', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const file = path.join(root, 'index.test.ts');
       writeFileSync(file, '// @rstest-environment jsdom\n');
       await expect(parseEnvironmentCommentFromFile(file)).resolves.toEqual({
         name: 'jsdom',
       });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('ignores virtual entries without physical files', async () => {
@@ -188,8 +185,7 @@ const regexp = /"/;
   });
 
   it('preserves global setup claims across synthetic environment groups', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'node.test.ts');
       const jsdomFile = path.join(root, 'jsdom.test.ts');
       writeFileSync(nodeFile, '// node test\n');
@@ -216,14 +212,11 @@ const regexp = /"/;
       expect(grouped.changed).toBe(true);
       expect(grouped.projects).toHaveLength(2);
       expect(grouped.projects.every((item) => item._globalSetups)).toBe(true);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('marks only one synthetic environment group eligible for global setup', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'node.test.ts');
       const jsdomFile = path.join(root, 'jsdom.test.ts');
       writeFileSync(nodeFile, '// node test\n');
@@ -252,14 +245,11 @@ const regexp = /"/;
         false,
         true,
       ]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('keeps the base environment group eligible for global setup regardless of file order', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'node.test.ts');
       const jsdomFile = path.join(root, 'jsdom.test.ts');
       writeFileSync(nodeFile, '// node test\n');
@@ -298,14 +288,11 @@ const regexp = /"/;
           globalSetupsClaimed: false,
         },
       ]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('preserves the base project name for files without environment comments', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'node.test.ts');
       const jsdomFile = path.join(root, 'jsdom.test.ts');
       writeFileSync(nodeFile, '// node test\n');
@@ -340,14 +327,11 @@ const regexp = /"/;
       expect(grouped.entriesCache.get('default')?.entries).toEqual({
         node: nodeFile,
       });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('creates a synthetic environment when all files override the environment', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const jsdomFile = path.join(root, 'jsdom.test.ts');
       writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
 
@@ -380,14 +364,11 @@ const regexp = /"/;
       expect(
         grouped.entriesCache.get('default-environment-1')?.entries,
       ).toEqual({ jsdom: jsdomFile });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('does not split projects when environment markers only appear in code strings', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const file = path.join(root, 'code-string.test.ts');
       writeFileSync(
         file,
@@ -420,14 +401,11 @@ const jsdom = '// @rstest-environment jsdom';
       ).toEqual({
         file,
       });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('refreshes environment partitions from the source project under shard', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'a.test.ts');
       const jsdomFile = path.join(root, 'b.test.ts');
       const newNodeFile = path.join(root, 'c.test.ts');
@@ -481,14 +459,11 @@ const jsdom = '// @rstest-environment jsdom';
       ).toEqual({
         'b~test~ts': normalize(jsdomFile),
       });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('preserves a modified base environment when refreshing partitions', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'node.test.ts');
       const jsdomFile = path.join(root, 'jsdom.test.ts');
       writeFileSync(nodeFile, '// node test\n');
@@ -541,14 +516,11 @@ const jsdom = '// @rstest-environment jsdom';
       ).toEqual({
         'jsdom~test~ts': normalize(jsdomFile),
       });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('keeps project names unique when refreshing renamed partitions', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const implicitJsdomFile = path.join(root, 'implicit-jsdom.test.ts');
       const initialNodeFile = path.join(root, 'initial-node.test.ts');
       const explicitJsdomFile = path.join(root, 'explicit-jsdom.test.ts');
@@ -629,14 +601,11 @@ const jsdom = '// @rstest-environment jsdom';
       ).toEqual({
         'explicit-node~test~ts': normalize(explicitNodeFile),
       });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('ignores invalid environment comments before config hooks can exclude them', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const invalidFile = path.join(root, 'invalid.test.ts');
       const validFile = path.join(root, 'valid.test.ts');
       writeFileSync(invalidFile, '// @rstest-environment custom\n');
@@ -677,14 +646,11 @@ const jsdom = '// @rstest-environment jsdom';
       expect(refreshed.entriesCache.get('default')?.entries).toEqual({
         'valid~test~ts': normalize(validFile),
       });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('keeps browser entries when refreshing node environment partitions', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'node.test.ts');
       const jsdomFile = path.join(root, 'jsdom.test.ts');
       const browserFile = path.join(root, 'browser.test.ts');
@@ -746,14 +712,11 @@ const jsdom = '// @rstest-environment jsdom';
       expect(refreshed.entriesCache.get('browser')?.entries).toEqual({
         'browser~test~ts': normalize(browserFile),
       });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('recreates a missing base partition when refreshed entries need it', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'node.test.ts');
       const jsdomFile = path.join(root, 'jsdom.test.ts');
       writeFileSync(nodeFile, '// node test\n');
@@ -809,14 +772,11 @@ const jsdom = '// @rstest-environment jsdom';
       ).toEqual({
         'jsdom~test~ts': normalize(jsdomFile),
       });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('preserves synthetic project discovery changes during refresh', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'node.test.ts');
       const jsdomFile = path.join(root, 'jsdom.test.ts');
       const newJsdomFile = path.join(root, 'new-jsdom.test.ts');
@@ -871,14 +831,11 @@ const jsdom = '// @rstest-environment jsdom';
       expect(refreshed.entriesCache.get('default')?.entries).toEqual({
         'node~test~ts': normalize(nodeFile),
       });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('preserves claimed global setup when refresh recreates the base partition', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'node.test.ts');
       const jsdomFile = path.join(root, 'jsdom.test.ts');
       writeFileSync(nodeFile, '// node test\n');
@@ -937,14 +894,11 @@ const jsdom = '// @rstest-environment jsdom';
           globalSetupsClaimed: true,
         },
       ]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('preserves a modified base environment for option-only partitions', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const file = path.join(root, 'options.test.ts');
       writeFileSync(
         file,
@@ -997,14 +951,11 @@ const jsdom = '// @rstest-environment jsdom';
       ).toEqual({
         'options~test~ts': normalize(file),
       });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('moves implicit entries when the base environment changes during refresh', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const implicitNodeFile = path.join(root, 'implicit-node.test.ts');
       const explicitNodeFile = path.join(root, 'explicit-node.test.ts');
       const jsdomFile = path.join(root, 'jsdom.test.ts');
@@ -1080,14 +1031,11 @@ const jsdom = '// @rstest-environment jsdom';
         'explicit-node~test~ts': normalize(explicitNodeFile),
         'jsdom~test~ts': normalize(jsdomFile),
       });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('recomputes global setup owner when refresh removes the base partition', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'node.test.ts');
       const jsdomFile = path.join(root, 'jsdom.test.ts');
       writeFileSync(nodeFile, '// node test\n');
@@ -1137,14 +1085,11 @@ const jsdom = '// @rstest-environment jsdom';
       ).toEqual({
         'jsdom~test~ts': normalize(jsdomFile),
       });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('moves global setup owner to a sharded partition with entries', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'a.test.ts');
       const jsdomFile = path.join(root, 'b.test.ts');
       writeFileSync(nodeFile, '// node test\n');
@@ -1206,14 +1151,11 @@ const jsdom = '// @rstest-environment jsdom';
           globalSetupsClaimed: false,
         },
       ]);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('refreshes sharded browser entries after list partition refresh', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'a.test.ts');
       const jsdomFile = path.join(root, 'b.test.ts');
       const browserFile = path.join(root, 'c.test.ts');
@@ -1295,14 +1237,11 @@ const jsdom = '// @rstest-environment jsdom';
           '0~test~ts': normalize(newBrowserFile),
         },
       });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('validates ignored environment comment errors on the final run plan', async () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'rstest-env-comment-'));
-    try {
+    await withTempDir('rstest-env-comment-', async (root) => {
       const file = path.join(root, 'invalid.test.ts');
       writeFileSync(file, '// @rstest-environment custom\n');
 
@@ -1335,8 +1274,6 @@ const jsdom = '// @rstest-environment jsdom';
       await expect(planState.validateEnvironmentComments()).rejects.toThrow(
         'Unsupported test environment "custom"',
       );
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    });
   });
 });
