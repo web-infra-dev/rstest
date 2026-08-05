@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const relatedFixturePath = join(__dirname, 'fixtures-related');
-const dynamicFixturePath = join(__dirname, 'fixtures-related-dynamic');
+const dynamicFixturePath = join(__dirname, '../fixtures/fan-out-dynamic');
 const mixedFixturePath = join(__dirname, 'fixtures-related-mixed');
 
 const collectRunTestFileLogs = (stdout: string) =>
