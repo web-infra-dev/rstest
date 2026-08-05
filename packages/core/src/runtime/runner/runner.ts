@@ -937,6 +937,9 @@ export class TestRunner {
     fixtureCleanups: (() => Promise<void>)[],
     retryCount: number,
   ): FixtureResolver {
+    // @vitest/expect records soft failures on the test object; each attempt must
+    // start clean because retry history is preserved separately in retryErrors.
+    test.result = undefined;
     setState<MatcherState>(
       {
         assertionCalls: 0,
