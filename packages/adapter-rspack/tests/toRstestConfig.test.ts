@@ -71,6 +71,7 @@ describe('toRstestConfig', () => {
         context: '/repo/project',
         cache: {
           type: 'persistent',
+          name: 'client',
           version: 'rspack-version',
           storage: {
             type: 'filesystem',
@@ -83,7 +84,7 @@ describe('toRstestConfig', () => {
     });
 
     expect(config.performance?.buildCache).toEqual({
-      cacheDirectory: resolve('/repo/project/.cache/from-rspack'),
+      cacheDirectory: resolve('/repo/project/.cache/from-rspack/client'),
       cacheDigest: ['rspack-version'],
       buildDependencies: [
         resolve('/repo/project/rspack-extra.ts'),
@@ -93,6 +94,30 @@ describe('toRstestConfig', () => {
     expect(config.forceRerunTriggers).toEqual([
       normalize('/repo/configs/rspack.config.ts'),
     ]);
+  });
+
+  it('should prefer the persistent cache location over directory and name', () => {
+    const config = toRstestConfig({
+      rspackConfig: {
+        ...baseConfig,
+        context: '/repo/project',
+        cache: {
+          type: 'persistent',
+          name: 'client',
+          storage: {
+            type: 'filesystem',
+            directory: '.cache/from-rspack',
+            location: '.cache/exact',
+          },
+        },
+      },
+    });
+
+    expect(config.performance?.buildCache).toEqual({
+      cacheDirectory: resolve('/repo/project/.cache/exact'),
+      cacheDigest: undefined,
+      buildDependencies: undefined,
+    });
   });
 
   it('should keep rstest-generated persistent cache in tools.rspack', () => {

@@ -136,14 +136,25 @@ const updateCacheConfig = ({
         new Set([...(buildDependencies || []), path.normalize(configPath)]),
       )
     : buildDependencies;
-
-  return {
-    cacheDirectory: cache.storage?.directory
+  const storageDirectory =
+    cache.storage?.directory !== undefined
       ? resolveCacheDependency({
           dependency: cache.storage.directory,
           root,
         })
-      : undefined,
+      : undefined;
+  const cacheDirectory =
+    cache.storage?.location !== undefined
+      ? resolveCacheDependency({
+          dependency: cache.storage.location,
+          root,
+        })
+      : storageDirectory && cache.name
+        ? path.resolve(storageDirectory, cache.name)
+        : storageDirectory;
+
+  return {
+    cacheDirectory,
     cacheDigest: cache.version ? [cache.version] : undefined,
     buildDependencies: nextBuildDependencies,
   };
