@@ -104,4 +104,31 @@ describe('rstest context', () => {
       expect(project.normalizedConfig.onConsoleLog).toBe(onConsoleLog);
     }
   });
+
+  it('preserves the silent value of each project', () => {
+    const rstestContext = new Rstest(
+      {
+        cwd: rootPath,
+        command: 'run',
+        projects: [
+          {
+            config: { root: join(rootPath, 'a'), name: 'a', silent: true },
+          },
+          {
+            config: {
+              root: join(rootPath, 'b'),
+              name: 'b',
+              silent: 'passed-only',
+            },
+          },
+          { config: { root: join(rootPath, 'c'), name: 'c' } },
+        ],
+      },
+      { silent: true },
+    );
+
+    expect(
+      rstestContext.projects.map((project) => project.normalizedConfig.silent),
+    ).toEqual([true, 'passed-only', false]);
+  });
 });

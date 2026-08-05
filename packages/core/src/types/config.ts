@@ -153,7 +153,6 @@ export type ProjectConfig = Omit<
   | 'coverage'
   | 'resolveSnapshotPath'
   | 'onConsoleLog'
-  | 'silent'
   | 'bail'
   | 'output'
 > & {
