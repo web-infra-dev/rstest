@@ -134,6 +134,8 @@ export type BrowserClientMessage =
     }
   | { type: 'case-result'; payload: TestResult }
   | { type: 'file-complete'; payload: TestFileResult }
+  | { type: 'file-cleanup-start' }
+  | { type: 'file-cleanup-finished' }
   | { type: 'log'; payload: BrowserLogPayload }
   | {
       type: 'fatal';

@@ -36,6 +36,8 @@ export type WorkerMemoryReport = {
 
 export type WorkerResponse =
   | { type: 'started'; pid: number }
+  | { type: 'fileCleanupStarted'; taskId: number }
+  | { type: 'fileCleanupFinished'; taskId: number }
   | {
       type: 'runFinished';
       taskId: number;

@@ -4,6 +4,7 @@ import { install } from 'source-map-support';
 import type {
   MaybePromise,
   Rstest,
+  RunnerHooks,
   RunWorkerOptions,
   TestFileResult,
   TestInfo,
@@ -463,6 +464,10 @@ const loadFiles = async ({
 
 export const runInPool = async (
   options: RunWorkerOptions['options'],
+  lifecycleHooks: {
+    onFileCleanupStart?: () => void;
+    onFileCleanupEnd?: () => void;
+  } = {},
 ): Promise<
   | {
       tests: TestInfo[];
@@ -688,48 +693,50 @@ export const runInPool = async (
     }
 
     tracker.transition('tests');
-    const results = await runner.runTests(
-      testPath,
-      {
-        onTestFileReady: async (test) => {
-          await rpc.onTestFileReady(test);
-        },
-        onTestSuiteStart: async (test) => {
-          tracker.recordSuiteStart(test);
-          await rpc.onTestSuiteStart(test);
-        },
-        onTestSuiteResult: async (result) => {
-          tracker.recordSuiteResult(result);
-          silentConsoleController.flushBufferedLogsForTask({
-            taskId: result.testId,
-            status: result.status,
-            taskParentNames: result.parentNames,
-            taskType: 'suite',
-            testPath: result.testPath,
-          });
-          await rpc.onTestSuiteResult(result);
-        },
-        onTestCaseStart: async (test) => {
-          tracker.recordCaseStart(test);
-          await rpc.onTestCaseStart(test);
-        },
-        onTestCaseResult: async (result) => {
-          tracker.recordCaseResult(result);
-          silentConsoleController.flushBufferedLogsForTask({
-            taskId: result.testId,
-            status: result.status,
-            taskParentNames: result.parentNames,
-            taskType: 'case',
-            testPath: result.testPath,
-          });
-          await rpc.onTestCaseResult(result);
-        },
-        getCountOfFailedTests: async () => {
-          return rpc.getCountOfFailedTests();
-        },
+    const runnerHooks: RunnerHooks & {
+      onFileCleanupStart?: () => void;
+      onFileCleanupEnd?: () => void;
+    } = {
+      onTestFileReady: async (test) => {
+        await rpc.onTestFileReady(test);
       },
-      api,
-    );
+      onTestSuiteStart: async (test) => {
+        tracker.recordSuiteStart(test);
+        await rpc.onTestSuiteStart(test);
+      },
+      onTestSuiteResult: async (result) => {
+        tracker.recordSuiteResult(result);
+        silentConsoleController.flushBufferedLogsForTask({
+          taskId: result.testId,
+          status: result.status,
+          taskParentNames: result.parentNames,
+          taskType: 'suite',
+          testPath: result.testPath,
+        });
+        await rpc.onTestSuiteResult(result);
+      },
+      onTestCaseStart: async (test) => {
+        tracker.recordCaseStart(test);
+        await rpc.onTestCaseStart(test);
+      },
+      onTestCaseResult: async (result) => {
+        tracker.recordCaseResult(result);
+        silentConsoleController.flushBufferedLogsForTask({
+          taskId: result.testId,
+          status: result.status,
+          taskParentNames: result.parentNames,
+          taskType: 'case',
+          testPath: result.testPath,
+        });
+        await rpc.onTestCaseResult(result);
+      },
+      onFileCleanupStart: lifecycleHooks.onFileCleanupStart,
+      onFileCleanupEnd: lifecycleHooks.onFileCleanupEnd,
+      getCountOfFailedTests: async () => {
+        return rpc.getCountOfFailedTests();
+      },
+    };
+    const results = await runner.runTests(testPath, runnerHooks, api);
 
     if (asyncLeakDetector) {
       // Undo any time mocking before collecting leaks and before a reused worker

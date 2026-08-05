@@ -330,7 +330,7 @@ test.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 ## test.extend
 
-- **Type:** `test.extend(fixtures: Fixtures) | test.extend(name, fixture)`
+- **Type:** `test.extend(fixtures: Fixtures) | test.extend(name, fixture) | test.extend(name, { scope: 'file' }, fixture)`
 
 Extends the test context with custom fixtures and returns a **new** test API. The original `test` is not modified — you can have multiple independent extended versions at the same time.
 
@@ -392,7 +392,7 @@ const testWithDb = test.extend({
 
 <ApiMeta addedVersion="0.11.7" />
 
-The named fixture form returns a fixture value directly instead of calling `use`. Its second parameter provides `onCleanup`, which registers one callback to run after the test and its per-test hooks finish. Both the fixture function and cleanup callback may be asynchronous.
+The named fixture form returns a fixture value directly instead of calling `use`. Its second parameter provides `onCleanup`, which registers one callback for the fixture. Both the fixture function and cleanup callback may be asynchronous.
 
 ```ts
 import { test } from '@rstest/core';
@@ -406,11 +406,35 @@ const apiTest = test
   });
 ```
 
-Named fixture functions are test-scoped: Rstest evaluates them for each test attempt and runs their cleanup before starting the next attempt. Plain values are reused across attempts. Use a fixture function when mutable state must be isolated for each attempt.
+The two-argument named fixture form is test-scoped: Rstest evaluates fixture functions for each test attempt and runs their cleanup after the test and its per-test hooks finish. Plain values are reused across attempts. Use a fixture function when mutable state must be isolated for each attempt.
 
 The fixture name must be a statically known ASCII JavaScript identifier so TypeScript can expose exactly one new context field. Values typed as `string`, patterned template literals such as `` `slot${string}` ``, names that require quoted destructuring such as `base-url`, and reserved test context fields are not accepted. Names that overlap Function properties, such as `name` and `length`, are supported.
 
 A function or class passed directly is treated as a fixture function because both are JavaScript functions at runtime. To use the function or class itself as the fixture value, return it from a fixture function, for example `.extend('predicate', () => predicate)` or `.extend('Service', () => Service)`. Use direct object destructuring in the first parameter to request other fixtures or fields from `TestContext`.
+
+### File-scoped named fixtures
+
+<ApiMeta addedVersion="0.11.7" />
+
+Pass `{ scope: 'file' }` to lazily create one fixture instance for the current test file. The instance is shared by every test, retry, repeat, and concurrent test that requests it. Its cleanup runs after all tests and `afterAll` hooks finish. Dependencies are initialized in order and cleaned up in reverse order.
+
+```ts
+import { test } from '@rstest/core';
+
+const apiTest = test
+  .extend('server', { scope: 'file' }, async (_context, { onCleanup }) => {
+    const server = await startServer();
+    onCleanup(() => server.close());
+    return server;
+  })
+  .extend('client', { scope: 'file' }, ({ server }) => {
+    return createClient(server.url);
+  });
+```
+
+File-scoped fixtures must be declared at the top level of the test file. They can depend only on file-scoped fixtures declared earlier in the chain: they do not receive test-scoped fixtures or `TestContext`. A file-scoped fixture cannot be overridden by a later `.extend()` call. Test-scoped fixtures can depend on file-scoped fixtures.
+
+Fixture setup is bounded by the timeout of the test or hook that requests it. File cleanup is guarded by the Node or browser host, so a cleanup that never settles fails the file instead of blocking the run indefinitely.
 
 ### Plain value fixtures
 

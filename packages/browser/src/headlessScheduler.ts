@@ -2,7 +2,11 @@ import type {
   RstestContext,
   TestFileResult,
 } from '@rstest/core/internal/browser';
-import { color, logger } from '@rstest/core/internal/browser';
+import {
+  color,
+  FIXTURE_CLEANUP_TIMEOUT_MS,
+  logger,
+} from '@rstest/core/internal/browser';
 import { normalize } from 'pathe';
 import {
   type BrowserRuntime,
@@ -207,6 +211,7 @@ export const createHeadlessScheduler = async ({
     let sessionId: string | null = null;
     let settled = false;
     let resolveDone: (() => void) | null = null;
+    let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
 
     const markDone = (): void => {
       if (!settled) {
@@ -257,6 +262,28 @@ export const createHeadlessScheduler = async ({
       await attachHeadlessRunnerTransport(page, {
         onDispatchMessage: async (message) => {
           try {
+            if (message.type === 'file-cleanup-start') {
+              if (cleanupTimer) {
+                clearTimeout(cleanupTimer);
+              }
+              cleanupTimer = setTimeout(() => {
+                void (async () => {
+                  await handleFatal({
+                    message: `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
+                  });
+                  markDone();
+                  await cancelRun(run, false);
+                })();
+              }, FIXTURE_CLEANUP_TIMEOUT_MS);
+              return;
+            }
+            if (message.type === 'file-cleanup-finished') {
+              if (cleanupTimer) {
+                clearTimeout(cleanupTimer);
+                cleanupTimer = undefined;
+              }
+              return;
+            }
             await dispatchRunnerMessage(run, file, session.id, message);
             if (
               message.type === 'file-complete' ||
@@ -348,6 +375,9 @@ export const createHeadlessScheduler = async ({
         await cancelRun(run, false);
       }
     } finally {
+      if (cleanupTimer) {
+        clearTimeout(cleanupTimer);
+      }
       // A superseded run can hold a renderer that will never answer again:
       // its test file may have been deleted mid-flight, leaving the page
       // waiting on a chunk the bundler will never produce, and closing such a

@@ -32,7 +32,7 @@ import {
 import { createExpect } from '../api/expect';
 import { formatTestError, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
-import { createFixtureResolver } from './fixtures';
+import { createFixtureResolver, FileFixtureManager } from './fixtures';
 import type { FixtureResolver } from './fixtures';
 import { cloneTaskMeta } from './metadata';
 import {
@@ -66,8 +66,32 @@ export class TestRunner {
   /** current test case */
   private _test: TestCase | undefined;
   private workerState: WorkerState | undefined;
+  private readonly fileFixtureManager = new FileFixtureManager();
 
   constructor(private readonly taskContext: TaskContext) {}
+
+  async cleanupFileFixtures(
+    result?: TestFileResult,
+  ): Promise<TestFileResult | undefined> {
+    const cleanupStart = RealDate.now();
+    try {
+      await this.fileFixtureManager.cleanup();
+    } catch (error) {
+      if (!result) {
+        throw error;
+      }
+      result.status = 'fail';
+      result.errors = [
+        ...(result.errors ?? []),
+        ...(await formatTestError(error)),
+      ];
+    } finally {
+      if (result?.duration !== undefined) {
+        result.duration += RealDate.now() - cleanupStart;
+      }
+    }
+    return result;
+  }
 
   async runTests({
     tests,
@@ -963,6 +987,7 @@ export class TestRunner {
     });
 
     return createFixtureResolver(test, context, fixtureCleanups, {
+      fileFixtureManager: this.fileFixtureManager,
       runNamedFixtureSetup: (setup, onTimeout) =>
         wrapTimeout({
           name: 'fixture setup',

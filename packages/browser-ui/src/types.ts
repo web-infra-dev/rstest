@@ -71,6 +71,11 @@ export type FatalPayload = Extract<
   { type: 'fatal' }
 >['payload'];
 
+export type RunnerSignalPayload = {
+  testPath: string;
+  runId?: string;
+};
+
 export type BrowserClientMessage =
   ProtocolBrowserClientMessage | { type: string; payload?: unknown };
 
@@ -81,6 +86,8 @@ export type HostRPC = {
   onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
   onTestCaseResult: (payload: BrowserClientTestResult) => Promise<void>;
   onTestFileComplete: (payload: BrowserClientFileResult) => Promise<void>;
+  onFileCleanupStart: (payload: RunnerSignalPayload) => Promise<void>;
+  onFileCleanupEnd: (payload: RunnerSignalPayload) => Promise<void>;
   onLog: (payload: LogPayload) => Promise<void>;
   onFatal: (payload: FatalPayload) => Promise<void>;
   dispatch: (
