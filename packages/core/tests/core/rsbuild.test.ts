@@ -450,7 +450,7 @@ describe('prepareRsbuild', () => {
         resolve: {},
         source: {},
         output: { module: true },
-        silent: false,
+        silent: true,
         tools: {},
         update: false,
         testEnvironment: {
@@ -503,7 +503,7 @@ describe('prepareRsbuild', () => {
       passWithNoTests: true,
       performance: undefined,
       shard: { count: 2, index: 1 },
-      silent: 'passed-only',
+      silent: false,
       update: true,
     });
     expect(getterGlobalConfig.get('from-project-b')).toEqual({
@@ -512,7 +512,7 @@ describe('prepareRsbuild', () => {
       passWithNoTests: true,
       performance: undefined,
       shard: { count: 2, index: 1 },
-      silent: 'passed-only',
+      silent: true,
       update: true,
     });
     expect(getterOutput.get('from-project-a')).toEqual({
