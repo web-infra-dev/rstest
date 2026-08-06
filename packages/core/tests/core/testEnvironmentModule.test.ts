@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import type { ProjectContext, TestEnvironmentPrebundle } from '../../src/types';
 import { prepareTestEnvironmentModules } from '../../src/core/testEnvironmentModule';
+import { logger } from '../../src/utils';
 
 const createProject = (
   rootPath: string,
@@ -548,26 +549,43 @@ exports.canvasInstalled = canvasInstalled;
 
   it('falls back to the native entry when the prebundle build fails', async () => {
     await withTempDir('rstest-env-build-fallback-', async (root) => {
+      const warn = rs.spyOn(logger, 'warn').mockImplementation(() => {});
       const resolvedPath = createPackage(
         root,
         `import './missing-dependency.js';
 export class JSDOM {}`,
       );
 
-      const result = await prepareTestEnvironmentModules({
-        projects: [createProject(root, { prebundle: true })],
-        rootPath: root,
-      });
-
       try {
-        expect(result.modules.get('jsdom')).toEqual({
-          name: 'jsdom',
-          packageName: 'jsdom',
-          resolvedPath,
-          bundlePath: undefined,
+        const result = await prepareTestEnvironmentModules({
+          projects: [
+            createProject(root, { prebundle: true }),
+            createProject(root, { prebundle: true }),
+          ],
+          rootPath: root,
         });
+
+        try {
+          expect(result.modules.get('jsdom')).toEqual({
+            name: 'jsdom',
+            packageName: 'jsdom',
+            resolvedPath,
+            bundlePath: undefined,
+          });
+          expect(warn).toHaveBeenCalledTimes(1);
+          expect(warn).toHaveBeenCalledWith(
+            expect.stringContaining(
+              'Failed to load the test environment prebundle for "jsdom"',
+            ),
+          );
+          expect(warn).toHaveBeenCalledWith(
+            expect.stringContaining('Error: Rspack build failed.'),
+          );
+        } finally {
+          await result.cleanup();
+        }
       } finally {
-        await result.cleanup();
+        warn.mockRestore();
       }
     });
   });

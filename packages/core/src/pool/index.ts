@@ -29,6 +29,7 @@ import { isMemorySufficient } from '../utils/memory';
 import { getNumCpus, parseWorkers } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
 import { getEnvironmentKey } from '../core/environmentGroups';
+import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/envDependencies';
 import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
 import {
   createRunnerEventSink,
@@ -372,7 +373,7 @@ export const createPool = async ({
     memoryGate: selectMemoryGate(workerKind),
     onTestEnvironmentFallback: ({ packageName, reason }) => {
       logger.warn(
-        `Failed to load the test environment prebundle for "${packageName}"; falling back to its native entry. The failed prebundle attempt adds startup overhead.\n${reason}`,
+        formatTestEnvironmentPrebundleFallbackWarning(packageName, reason),
       );
     },
   });
