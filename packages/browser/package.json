@@ -50,7 +50,7 @@
     "open-editor": "^6.0.0",
     "pathe": "^2.0.3",
     "sirv": "^3.0.2",
-    "ws": "^8.21.1"
+    "ws": "^8.21.2"
   },
   "devDependencies": {
     "@rslib/core": "1.0.0-beta.1",

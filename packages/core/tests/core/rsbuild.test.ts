@@ -2275,6 +2275,23 @@ describe('prepareRsbuild', () => {
         join(rootPath, 'rstest.config.ts'),
       ],
     });
+
+    const compiler = await rsbuildInstance.createCompiler();
+    const rspackCompiler =
+      'compilers' in compiler ? compiler.compilers[0]! : compiler;
+    expect(rspackCompiler.options.cache).toMatchObject({
+      type: 'persistent',
+      storage: {
+        directory: join(rootPath, 'node_modules/.cache/rstest-test'),
+        location: join(
+          rootPath,
+          'node_modules/.cache/rstest-test/test-development',
+        ),
+      },
+    });
+    await new Promise<void>((resolve, reject) => {
+      compiler.close((error) => (error ? reject(error) : resolve()));
+    });
   });
 
   it('should apply modifyRstestConfig performance.buildCache per project', async () => {

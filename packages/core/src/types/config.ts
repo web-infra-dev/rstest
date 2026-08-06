@@ -83,10 +83,11 @@ export type BundleDependencyPattern = string | RegExp;
 
 export type RstestBuildCacheConfig = {
   /**
-   * Directory used to store Rsbuild persistent cache files.
+   * Base directory used to store Rsbuild persistent cache files.
+   * Rspack stores the cache data under `<cacheDirectory>/<cache.name>`.
    *
-   * When omitted, rstest stores cache files under
-   * `node_modules/.cache/rstest-<project-name>`.
+   * When omitted, rstest uses
+   * `node_modules/.cache/rstest-<project-name>` as the base directory.
    */
   cacheDirectory?: string;
   /**

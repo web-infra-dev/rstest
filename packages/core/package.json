@@ -70,7 +70,7 @@
     "test": "npx rstest --globals"
   },
   "dependencies": {
-    "@rsbuild/core": "~2.1.9",
+    "@rsbuild/core": "~2.1.10",
     "@types/chai": "^5.2.3"
   },
   "devDependencies": {
@@ -103,7 +103,7 @@
     "deepmerge": "^4.3.1",
     "happy-dom": "^20.11.1",
     "jsdom": "^29.1.1",
-    "memfs": "^4.64.0",
+    "memfs": "^4.66.1",
     "package-manager-detector": "^1.8.0",
     "pathe": "^2.0.3",
     "picocolors": "^1.1.1",
