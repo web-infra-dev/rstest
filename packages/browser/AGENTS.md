@@ -28,9 +28,9 @@ Responses always travel back as transport replies — `dispatchRouter` handles i
 
 ## Runner runtime invariants (`src/client`)
 
-- `entry.ts` is the only bootstrap entry and decides `collect` vs `run` mode.
+- `runner.ts` is the only bootstrap entry and decides `collect` vs `run` mode.
 - Console interception is per test file and must restore the original console methods in `finally`.
-- An unhandled window error or `unhandledrejection` that escapes a test file fails the file even when every test passed. The runner deliberately yields macrotasks before finalizing each file result so late-dispatched rejections are still observed — the timing rationale is commented in `entry.ts`.
+- An unhandled window error or `unhandledrejection` that escapes a test file fails the file even when every test passed. The runner deliberately yields macrotasks before finalizing each file result so late-dispatched rejections are still observed — the timing rationale is commented in `runner.ts`.
 
 ## Provider-agnostic design
 

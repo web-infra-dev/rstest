@@ -107,14 +107,12 @@
     },
     "packages/browser": {
       "entry": [
-        // Browser-side iframe entry (loaded at runtime by hostController)
-        "src/client/entry.ts",
         // Test files
         "tests/**/*.ts",
       ],
-      "ignoreDependencies": [
-        // Virtual module resolved at build time by rspack alias in hostController.ts
-        "@rstest/browser-manifest",
+      "ignoreUnresolved": [
+        // Virtual module injected by each browser project's Rsbuild alias
+        "__rstest_virtual_browser_manifest__",
       ],
     },
     "packages/browser-ui": {
