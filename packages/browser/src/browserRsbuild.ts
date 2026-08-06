@@ -21,6 +21,7 @@ import {
   resolveProjectBuildCache,
   resolveShardedEntries,
   RSTEST_ENV_SYMBOL_KEY,
+  RSTEST_IMPORT_META_GLOBAL_KEY,
   type RstestContext,
   rsbuild,
   type WatchInvalidationState,
@@ -32,12 +33,13 @@ import sirv from 'sirv';
 import { WebSocketServer } from 'ws';
 import { validateBrowserConfig } from './configValidation';
 import type { ContainerRpcManager } from './containerRpc';
-import type {
-  BrowserDispatchHandler,
-  BrowserHostConfig,
-  BrowserProjectRuntime,
-  BrowserViewport,
-  TestFileInfo,
+import {
+  type BrowserDispatchHandler,
+  type BrowserHostConfig,
+  type BrowserProjectRuntime,
+  type BrowserViewport,
+  RSTEST_BROWSER_CACHE_CLEANERS_KEY,
+  type TestFileInfo,
 } from './protocol';
 import type {
   BrowserProvider,
@@ -75,6 +77,13 @@ type BrowserProjectEntries = {
   importMetaRstestPaths: Record<string, string>;
 };
 
+export type BrowserProjectEntrySnapshot = Pick<
+  BrowserProjectEntries,
+  'testFiles' | 'importMetaRstestPaths'
+> & {
+  project: Pick<ProjectContext, 'name'>;
+};
+
 const getImportMetaRstestPaths = async (
   testFiles: string[],
 ): Promise<Record<string, string>> =>
@@ -86,6 +95,55 @@ const getImportMetaRstestPaths = async (
       ]),
     ),
   );
+
+export const collectImportMetaRstestPaths = (
+  entries: Pick<BrowserProjectEntrySnapshot, 'importMetaRstestPaths'>[],
+): Record<string, string> =>
+  Object.assign({}, ...entries.map((entry) => entry.importMetaRstestPaths));
+
+class RstestBrowserRuntimePlugin {
+  apply(compiler: Rspack.Compiler) {
+    const { RuntimeModule } = compiler.webpack;
+    class BrowserRuntimeModule extends RuntimeModule {
+      constructor() {
+        super('rstest_browser_runtime');
+      }
+
+      override generate() {
+        return `
+globalThis[${JSON.stringify(RSTEST_IMPORT_META_GLOBAL_KEY)}] ??= () => undefined;
+
+var __rstest_browser_test_entry_ids__ = Object.create(null);
+
+__webpack_require__.rstest_register_browser_test_entry = (path, id) => {
+  __rstest_browser_test_entry_ids__[path] = id;
+};
+
+function __rstest_clean_browser_test_entry__(testEntryPath) {
+  var testEntryId = __rstest_browser_test_entry_ids__[testEntryPath];
+  if (testEntryId !== undefined) {
+    delete __webpack_module_cache__[testEntryId];
+  }
+}
+
+(globalThis[${JSON.stringify(RSTEST_BROWSER_CACHE_CLEANERS_KEY)}] ??= new Set()).add(__rstest_clean_browser_test_entry__);
+`;
+      }
+    }
+
+    compiler.hooks.thisCompilation.tap(
+      'RstestBrowserRuntimePlugin',
+      (compilation) => {
+        compilation.hooks.additionalTreeRuntimeRequirements.tap(
+          'RstestAddBrowserRuntimePlugin',
+          (chunk) => {
+            compilation.addRuntimeModule(chunk, new BrowserRuntimeModule());
+          },
+        );
+      },
+    );
+  }
+}
 
 export type BrowserProviderProject = {
   rootPath: string;
@@ -1038,14 +1096,11 @@ const generateManifestModule = ({
 
   // 4. Export test contexts object
   lines.push('export const projectTestContexts = {');
-  for (const { importMetaRstestPaths, project } of entries) {
+  for (const { project } of entries) {
     const varName = `context_${toSafeVarName(project.environmentName)}`;
     lines.push(`  ${JSON.stringify(project.name)}: {`);
     lines.push(`    getTestKeys: () => ${varName}.keys(),`);
     lines.push(`    loadTest: (key) => ${varName}(key),`);
-    lines.push(
-      `    importMetaRstestPaths: ${JSON.stringify(importMetaRstestPaths)},`,
-    );
     lines.push(
       `    projectRoot: ${JSON.stringify(normalize(project.rootPath))},`,
     );
@@ -1509,6 +1564,28 @@ export const createBrowserRuntime = async ({
       {
         name: 'rstest:browser-user-config',
         setup(api) {
+          if (context.command === 'list') {
+            let testEntryPaths: Set<string> | undefined;
+            const getTestEntryPaths = () =>
+              (testEntryPaths ??= new Set(
+                Object.values(
+                  getProjectEntry(project)?.importMetaRstestPaths ?? {},
+                ),
+              ));
+
+            api.transform(
+              {
+                test: (resourcePath) =>
+                  getTestEntryPaths().has(normalize(resourcePath)),
+              },
+              ({ code, resourcePath }) => ({
+                code: `${code}\nif (__webpack_require__.rstest_register_browser_test_entry && __webpack_module__.id != null) {
+  __webpack_require__.rstest_register_browser_test_entry(${JSON.stringify(normalize(resourcePath))}, __webpack_module__.id);
+}`,
+              }),
+            );
+          }
+
           // Internal extension entry: register host dispatch handlers without
           // coupling scheduling to individual capability implementations.
           (api as { expose?: (name: string, value: unknown) => void }).expose?.(
@@ -1615,6 +1692,9 @@ export const createBrowserRuntime = async ({
                         ? createBrowserLazyCompilationConfig(setupFiles)
                         : false;
                       rspackConfig.plugins = rspackConfig.plugins || [];
+                      rspackConfig.plugins.push(
+                        new RstestBrowserRuntimePlugin(),
+                      );
                       rspackConfig.plugins.push(virtualManifestPlugin);
 
                       applyDefaultWatchOptions(rspackConfig, isWatchMode);

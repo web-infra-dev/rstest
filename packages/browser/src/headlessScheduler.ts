@@ -5,7 +5,9 @@ import type {
 import { color, logger } from '@rstest/core/internal/browser';
 import { normalize } from 'pathe';
 import {
+  collectImportMetaRstestPaths,
   type BrowserRuntime,
+  type BrowserProjectEntrySnapshot,
   drainPendingAffectedTestFiles,
   mapViewportByProject,
   serializeForInlineScript,
@@ -78,9 +80,7 @@ type HeadlessSchedulerDeps = {
   createWatchSession: (
     execute: (testPaths: string[]) => Promise<void>,
   ) => BrowserWatchSession;
-  collectProjectEntries: () => Promise<
-    Parameters<typeof planWatchRerun>[0]['projectEntries']
-  >;
+  collectProjectEntries: () => Promise<BrowserProjectEntrySnapshot[]>;
   logWatchReady: () => void;
   destroyRuntime: () => Promise<void>;
 };
@@ -491,6 +491,8 @@ export const createHeadlessScheduler = async ({
 
     watchSignals.setDispatchRerun(async () => {
       const newProjectEntries = await collectProjectEntries();
+      hostOptions.importMetaRstestPaths =
+        collectImportMetaRstestPaths(newProjectEntries);
       const rerunPlan = planWatchRerun({
         projectEntries: newProjectEntries,
         previousTestFiles: watchState.lastTestFiles,

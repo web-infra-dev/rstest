@@ -115,6 +115,7 @@ export {
   DEFAULT_TEST_TIMEOUT,
   resolveProjectBuildCache,
   RSTEST_ENV_SYMBOL_KEY,
+  RSTEST_IMPORT_META_GLOBAL_KEY,
 } from './utils/constants';
 export type { BrowserProvider } from './utils/constants';
 export { getSetupFiles } from './utils/getSetupFiles';

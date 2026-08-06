@@ -87,6 +87,7 @@ export type BrowserLogPayload = {
 export type BrowserHostConfig = {
   rootPath: string;
   projects: BrowserProjectRuntime[];
+  importMetaRstestPaths?: Record<string, string>;
   snapshot: {
     updateSnapshot: SnapshotUpdateState;
   };
@@ -125,6 +126,9 @@ export type BrowserHostConfig = {
    */
   rpcTimeout?: number;
 };
+
+export const RSTEST_BROWSER_CACHE_CLEANERS_KEY =
+  '@rstest/browser/cache-cleaners';
 
 export type BrowserClientMessage =
   | { type: 'ready' }

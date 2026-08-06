@@ -11,7 +11,6 @@ declare module '__rstest_virtual_browser_manifest__' {
     getTestKeys: () => string[];
     loadTest: (key: string) => Promise<unknown>;
     projectRoot: string;
-    importMetaRstestPaths: Record<string, string>;
   };
 
   /** All projects configuration (multi-project support) */

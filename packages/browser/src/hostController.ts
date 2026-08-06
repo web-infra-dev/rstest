@@ -37,6 +37,7 @@ import {
   type HostDispatchRouterOptions,
 } from './dispatchCapabilities';
 import {
+  collectImportMetaRstestPaths,
   collectProjectEntries,
   createBrowserRuntime,
   destroyBrowserRuntime,
@@ -631,6 +632,7 @@ export const runBrowserController = async (
   const hostOptions: BrowserHostConfig = {
     rootPath: normalize(context.rootPath),
     projects: projectRuntimeConfigs,
+    importMetaRstestPaths: collectImportMetaRstestPaths(projectEntries),
     snapshot: {
       updateSnapshot:
         options?.updateSnapshot ??
@@ -1223,6 +1225,7 @@ export const listBrowserTests = async (
   const hostOptions: BrowserHostConfig = {
     rootPath: normalize(context.rootPath),
     projects: projectRuntimeConfigs,
+    importMetaRstestPaths: collectImportMetaRstestPaths(runtime.projectEntries),
     snapshot: {
       updateSnapshot: context.snapshotManager.options.updateSnapshot,
     },

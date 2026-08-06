@@ -174,9 +174,7 @@ type HarnessOptions = {
   bail?: number;
   maxWorkers?: number;
   failedCount?: () => number;
-  projectEntries?: () => Promise<
-    Array<{ project: { name: string }; testFiles: string[] }>
-  >;
+  projectEntries?: SchedulerOptions['collectProjectEntries'];
   affected?: string[];
 };
 
@@ -309,7 +307,11 @@ const createHarness = (options: HarnessOptions = {}) => {
       (async () => [
         {
           project: { name: 'browser' },
+          setupFiles: [],
           testFiles: files.map((f) => f.testPath),
+          importMetaRstestPaths: Object.fromEntries(
+            files.map((entry) => [entry.testPath, entry.testPath]),
+          ),
         },
       ]),
     logWatchReady: ready,
@@ -482,7 +484,12 @@ describe('headless scheduler', () => {
     const harness = createHarness({
       watch: true,
       projectEntries: async () => [
-        { project: { name: 'browser' }, testFiles: [] },
+        {
+          project: { name: 'browser' },
+          setupFiles: [],
+          testFiles: [],
+          importMetaRstestPaths: {},
+        },
       ],
     });
     await harness.result;
@@ -498,7 +505,12 @@ describe('headless scheduler', () => {
       projectEntries: async () => [
         {
           project: { name: 'browser' },
+          setupFiles: [],
           testFiles: ['/a.test.ts', '/b.test.ts'],
+          importMetaRstestPaths: {
+            '/a.test.ts': '/a.test.ts',
+            '/b.test.ts': '/b.test.ts',
+          },
         },
       ],
     });

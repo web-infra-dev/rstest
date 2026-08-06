@@ -10,6 +10,7 @@ import {
   runBrowserCli,
   runBrowserCliWithCwd,
   runBrowserWatchCli,
+  runBrowserWatchCliWithCwd,
 } from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -32,14 +33,26 @@ describe('browser mode - in-source testing', () => {
 
     expect(cli.stdout).toContain('src/sayHi.ts');
     expect(cli.stdout).toContain('runs the in-source test in the browser');
-    // Four files: the in-source src/sayHi.ts entry and three regular tests.
+    // Five files: the in-source src/sayHi.ts entry and four regular tests.
     // src/math.ts has no import.meta.rstest block, so it must not become a
     // test entry (node filters those out of includeSource discovery).
-    expect(cli.stdout).toMatch(/Test Files.*4 passed/);
-    expect(cli.stdout).toMatch(/Tests.*4 passed/);
+    expect(cli.stdout).toMatch(/Test Files.*5 passed/);
+    expect(cli.stdout).toMatch(/Tests.*5 passed/);
     expect(
       cli.stdout.match(/runs the in-source test in the browser/g),
     ).toHaveLength(1);
+  });
+
+  it('lists an in-source test after a regular test imports it', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCli(
+      'browser-in-source',
+      { command: 'list' },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain(
+      'src/sayHi.ts > runs the in-source test in the browser',
+    );
   });
 
   it('does not expose import.meta.rstest to imported modules', async () => {
@@ -72,8 +85,8 @@ describe('browser mode - in-source testing', () => {
     try {
       await cli.waitForStdout('Duration');
       expect(cli.stdout).toContain('src/sayHi.ts');
-      expect(cli.stdout).toMatch(/Test Files.*4 passed/);
-      expect(cli.stdout).toMatch(/Tests.*4 passed/);
+      expect(cli.stdout).toMatch(/Test Files.*5 passed/);
+      expect(cli.stdout).toMatch(/Tests.*5 passed/);
     } finally {
       await killCliProcessTree(cli);
     }
@@ -112,5 +125,42 @@ describe('browser mode - in-source testing', () => {
         await deleteFixtureTarget(fs, fixturesTargetPath);
       }
     },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'runs a symlinked in-source test added during watch',
+    async () => {
+      const fixturesTargetPath = join(
+        __dirname,
+        'fixtures/fixtures-test-browser-in-source-watch-symlink',
+      );
+      const { fs } = await prepareFixtures({
+        fixturesPath: join(__dirname, 'fixtures/browser-in-source'),
+        fixturesTargetPath,
+      });
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: ['--reporter=verbose'],
+      });
+
+      try {
+        await cli.waitForStdout('Waiting for file changes...');
+        cli.resetStd();
+        await symlink(
+          '../linked/symlinked.ts',
+          join(fixturesTargetPath, 'src/symlinked.ts'),
+          'file',
+        );
+
+        await cli.waitForStdout('Test file set changed, re-running 6 file(s)');
+        await cli.waitForStdout(
+          'runs a symlinked in-source test in the browser',
+        );
+        await cli.waitForStdout('Waiting for file changes...');
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    60_000,
   );
 });
