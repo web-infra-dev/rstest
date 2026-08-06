@@ -70,13 +70,11 @@ describe('browser mode - headed watch', () => {
         fixturesPath: `${__dirname}/fixtures/watch`,
         fixturesTargetPath,
       });
-      // Slow every runner boot so the reload below is still in flight when the
-      // delete lands — the window where the file-set commit unmounts the
-      // iframe of a pending reload. Without the host resolving that pending as
-      // obsolete, the cycle never settles and every later cycle queues behind
-      // it forever (the Windows headed watch hang).
+      // Stall every runner boot so a reload stays in flight long enough for the
+      // delete below to land while it is pending — the state
+      // `reconcilePendingHeadedReloads` exists to settle.
       fs.update(path.join(fixturesTargetPath, 'setup.ts'), (content) => {
-        return `const slowBootEnd = Date.now() + 1_500;\nwhile (Date.now() < slowBootEnd) {\n  // busy-wait: keep the reload in flight long enough to race the delete\n}\n${content}`;
+        return `const slowBootEnd = Date.now() + 1_500;\nwhile (Date.now() < slowBootEnd) {}\n${content}`;
       });
 
       const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
@@ -93,11 +91,10 @@ describe('browser mode - headed watch', () => {
 
         cli.resetStd();
         fs.update(anotherTestPath, (content) => `${content}\n// touch\n`);
-        await cli.waitForStdout('Re-running 1 affected test file(s)');
-
-        // Give the cycle time to issue the reload (its runner then sits in the
-        // slow boot), and delete the file while that reload is pending.
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Wait for the navigation itself rather than sleeping: if the delete
+        // beat the reload, the race would never happen and the test would pass
+        // without exercising anything.
+        await cli.waitForStdout('[Container] Setting iframe.src to:');
         fs.delete(anotherTestPath);
 
         await cli.waitForStdout('Test file set changed, re-running 1 file(s)');
