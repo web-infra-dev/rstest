@@ -96,6 +96,89 @@ describe('Test API', () => {
     );
   });
 
+  it('shares file-scoped named fixtures and cleans them up after afterAll', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/fileScopedNamedFixture.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: dirname(fileURLToPath(import.meta.url)),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    const lifecycle = [
+      'RSTEST_FILE_FIXTURE_BASE_SETUP',
+      'RSTEST_FILE_FIXTURE_DERIVED_SETUP',
+      'RSTEST_FILE_FIXTURE_AFTER_ALL',
+      'RSTEST_FILE_FIXTURE_DERIVED_CLEANUP',
+      'RSTEST_FILE_FIXTURE_BASE_CLEANUP',
+    ];
+    for (const event of lifecycle) {
+      expect(output).toContain(event);
+    }
+    for (let index = 1; index < lifecycle.length; index++) {
+      expect(output.indexOf(lifecycle[index]!)).toBeGreaterThan(
+        output.indexOf(lifecycle[index - 1]!),
+      );
+    }
+  });
+
+  it('reports file-scoped named fixture cleanup failures', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/fileScopedNamedFixtureCleanupFailure.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: dirname(fileURLToPath(import.meta.url)),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'file fixture cleanup failed',
+    );
+  });
+
+  it('cleans ready file fixtures before unrelated setup settles', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/fileScopedNamedFixtureCleanupProgress.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: dirname(fileURLToPath(import.meta.url)),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('fixture setup timed out in 50ms');
+    expect(output.indexOf('RSTEST_READY_FILE_FIXTURE_CLEANUP')).toBeLessThan(
+      output.indexOf('RSTEST_PENDING_FILE_FIXTURE_SETTLED'),
+    );
+  });
+
+  it('rejects file-scoped named fixtures declared inside a suite', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/fileScopedNamedFixtureNested.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: dirname(fileURLToPath(import.meta.url)),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'File-scoped fixtures must be defined at the top level of the test file.',
+    );
+  });
+
   it('rejects invalid named fixture names', async () => {
     const { cli, expectExecFailed } = await runRstestCli({
       command: 'rstest',

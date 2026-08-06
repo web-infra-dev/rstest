@@ -110,8 +110,16 @@ const runTask = async (
   currentTaskId = request.taskId;
 
   try {
-    const result = await runInPool(request.options, (fallback) => {
-      send({ type: 'testEnvironmentFallback', fallback });
+    const result = await runInPool(request.options, {
+      onFileCleanupStart: () => {
+        send({ type: 'fileCleanupStarted', taskId: request.taskId });
+      },
+      onFileCleanupEnd: () => {
+        send({ type: 'fileCleanupFinished', taskId: request.taskId });
+      },
+      onTestEnvironmentFallback: (fallback) => {
+        send({ type: 'testEnvironmentFallback', fallback });
+      },
     });
     send({
       type: RESPONSE_TYPE[kind],

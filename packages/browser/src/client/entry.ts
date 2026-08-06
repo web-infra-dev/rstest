@@ -656,7 +656,16 @@ const run = async () => {
 
     let failedTestsCount = 0;
 
-    const runnerHooks: RunnerHooks = {
+    const runnerHooks: RunnerHooks & {
+      onFileCleanupStart: () => void;
+      onFileCleanupEnd: () => void;
+    } = {
+      onFileCleanupStart: () => {
+        send({ type: 'file-cleanup-start' });
+      },
+      onFileCleanupEnd: () => {
+        send({ type: 'file-cleanup-finished' });
+      },
       onTestFileReady: async (test) => {
         dispatchRunnerLifecycle('file-ready', test);
       },

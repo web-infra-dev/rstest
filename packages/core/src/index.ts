@@ -116,6 +116,7 @@ export type {
   ExtendConfigFn,
   FixtureCleanup,
   FixtureLifecycle,
+  FileFixtureOptions,
   Fixtures,
   Matchers,
   ProjectConfig,

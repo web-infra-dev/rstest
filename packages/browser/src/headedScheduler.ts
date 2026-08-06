@@ -3,7 +3,11 @@ import type {
   TestFileResult,
   TestResult,
 } from '@rstest/core/internal/browser';
-import { color, logger } from '@rstest/core/internal/browser';
+import {
+  color,
+  FIXTURE_CLEANUP_TIMEOUT_MS,
+  logger,
+} from '@rstest/core/internal/browser';
 import { normalize, relative } from 'pathe';
 import {
   type BrowserRuntime,
@@ -16,9 +20,11 @@ import {
   createDeferredPromise,
   type DeferredPromise,
   type FatalPayload,
+  getFileTaskId,
   type HeadedTestFileCompletePayload,
   type LogPayload,
   type ReloadTestFileAck,
+  type RunnerSignalPayload,
   type TestFileStartPayload,
   toError,
 } from './hostPayloads';
@@ -274,10 +280,14 @@ export const createHeadedScheduler = async ({
   const pendingHeadedReloads = new Map<
     string,
     {
-      runId: string;
+      cleanupTimer?: ReturnType<typeof setTimeout>;
       deferred: DeferredPromise<void>;
+      file: TestFileInfo;
+      results: TestResult[];
+      runId: string;
     }
   >();
+  const timedOutHeadedRuns = new Set<string>();
   let enqueueHeadedReload = async (
     _file: TestFileInfo,
     _testNamePattern?: string,
@@ -297,23 +307,33 @@ export const createHeadedScheduler = async ({
     if (runId && pending.runId !== runId) {
       return;
     }
+    if (pending.cleanupTimer) {
+      clearTimeout(pending.cleanupTimer);
+    }
     pendingHeadedReloads.delete(testPath);
     pending.deferred.reject(error);
   };
 
   const rejectAllPendingHeadedReloads = (error: Error): void => {
     for (const [testPath, pending] of pendingHeadedReloads) {
+      if (pending.cleanupTimer) {
+        clearTimeout(pending.cleanupTimer);
+      }
       pendingHeadedReloads.delete(testPath);
       pending.deferred.reject(error);
     }
   };
 
   const registerPendingHeadedReload = (
-    testPath: string,
+    file: TestFileInfo,
     runId: string,
   ): Promise<void> => {
+    const { testPath } = file;
     const previousPending = pendingHeadedReloads.get(testPath);
     if (previousPending) {
+      if (previousPending.cleanupTimer) {
+        clearTimeout(previousPending.cleanupTimer);
+      }
       previousPending.deferred.reject(
         new Error(
           `Reload for "${testPath}" was superseded by a newer request.`,
@@ -324,8 +344,10 @@ export const createHeadedScheduler = async ({
 
     const deferred = createDeferredPromise<void>();
     pendingHeadedReloads.set(testPath, {
-      runId,
       deferred,
+      file,
+      results: [],
+      runId,
     });
 
     return deferred.promise;
@@ -345,8 +367,64 @@ export const createHeadedScheduler = async ({
       );
       return;
     }
+    if (pending.cleanupTimer) {
+      clearTimeout(pending.cleanupTimer);
+    }
     pendingHeadedReloads.delete(testPath);
     pending.deferred.resolve();
+  };
+
+  const startFileCleanupTimeout = (payload: RunnerSignalPayload): void => {
+    const pending = pendingHeadedReloads.get(payload.testPath);
+    if (!pending || (payload.runId && pending.runId !== payload.runId)) {
+      return;
+    }
+    if (pending.cleanupTimer) {
+      clearTimeout(pending.cleanupTimer);
+    }
+    pending.cleanupTimer = setTimeout(() => {
+      const currentPending = pendingHeadedReloads.get(payload.testPath);
+      if (!currentPending || currentPending.runId !== pending.runId) {
+        return;
+      }
+
+      currentPending.cleanupTimer = undefined;
+      pendingHeadedReloads.delete(payload.testPath);
+      // The iframe may eventually finish after the watchdog. Keep that stale
+      // completion from reporting a second result for the same run.
+      timedOutHeadedRuns.add(`${payload.testPath}\0${pending.runId}`);
+
+      void (async () => {
+        const message = `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`;
+        try {
+          // A cleanup timeout is a file failure, not a container failure. Resolve
+          // this reload after reporting it so the headed serial loop advances.
+          await handleTestFileComplete({
+            testId: getFileTaskId(payload.testPath),
+            status: 'fail',
+            name: '',
+            testPath: payload.testPath,
+            project: pending.file.projectName,
+            results: pending.results,
+            errors: [{ name: 'Error', message }],
+          });
+          pending.deferred.resolve();
+        } catch (error) {
+          pending.deferred.reject(error);
+        }
+      })();
+    }, FIXTURE_CLEANUP_TIMEOUT_MS);
+  };
+
+  const finishFileCleanup = (payload: RunnerSignalPayload): void => {
+    const pending = pendingHeadedReloads.get(payload.testPath);
+    if (!pending || (payload.runId && pending.runId !== payload.runId)) {
+      return;
+    }
+    if (pending.cleanupTimer) {
+      clearTimeout(pending.cleanupTimer);
+      pending.cleanupTimer = undefined;
+    }
   };
 
   // No execution-duration watchdog: per-test/hook timeouts are enforced inside
@@ -363,7 +441,7 @@ export const createHeadedScheduler = async ({
         file.testPath,
         testNamePattern,
       );
-      await registerPendingHeadedReload(file.testPath, reloadAck.runId);
+      await registerPendingHeadedReload(file, reloadAck.runId);
     } catch (error) {
       if (reloadAck?.runId) {
         rejectPendingHeadedReload(
@@ -410,9 +488,16 @@ export const createHeadedScheduler = async ({
       await handleTestFileStart(payload);
     },
     async onTestCaseResult(payload: TestResult) {
+      pendingHeadedReloads.get(payload.testPath)?.results.push(payload);
       await handleTestCaseResult(payload);
     },
     async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
+      if (
+        payload.runId &&
+        timedOutHeadedRuns.delete(`${payload.testPath}\0${payload.runId}`)
+      ) {
+        return;
+      }
       try {
         await handleTestFileComplete(payload);
         resolvePendingHeadedReload(payload.testPath, payload.runId);
@@ -424,6 +509,12 @@ export const createHeadedScheduler = async ({
         );
         throw error;
       }
+    },
+    async onFileCleanupStart(payload: RunnerSignalPayload) {
+      startFileCleanupTimeout(payload);
+    },
+    async onFileCleanupEnd(payload: RunnerSignalPayload) {
+      finishFileCleanup(payload);
     },
     async onLog(payload: LogPayload) {
       await handleLog(payload);

@@ -1,8 +1,13 @@
 import type {
   RstestContext,
   TestFileResult,
+  TestResult,
 } from '@rstest/core/internal/browser';
-import { color, logger } from '@rstest/core/internal/browser';
+import {
+  color,
+  FIXTURE_CLEANUP_TIMEOUT_MS,
+  logger,
+} from '@rstest/core/internal/browser';
 import { normalize } from 'pathe';
 import {
   type BrowserRuntime,
@@ -207,6 +212,8 @@ export const createHeadlessScheduler = async ({
     let sessionId: string | null = null;
     let settled = false;
     let resolveDone: (() => void) | null = null;
+    let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+    const testResults: TestResult[] = [];
 
     const markDone = (): void => {
       if (!settled) {
@@ -257,7 +264,55 @@ export const createHeadlessScheduler = async ({
       await attachHeadlessRunnerTransport(page, {
         onDispatchMessage: async (message) => {
           try {
+            if (settled) {
+              return;
+            }
+            if (message.type === 'file-cleanup-start') {
+              if (cleanupTimer) {
+                clearTimeout(cleanupTimer);
+              }
+              cleanupTimer = setTimeout(() => {
+                void (async () => {
+                  if (settled) {
+                    return;
+                  }
+                  settled = true;
+                  const message = `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`;
+                  try {
+                    await handleTestFileComplete({
+                      testId: getFileTaskId(file.testPath),
+                      status: 'fail',
+                      name: '',
+                      testPath: file.testPath,
+                      project: file.projectName,
+                      results: testResults,
+                      errors: [{ name: 'Error', message }],
+                    });
+                  } catch (error) {
+                    const formatted = toError(error);
+                    await handleFatal({
+                      message: formatted.message,
+                      stack: formatted.stack,
+                    });
+                    await cancelRun(run, false);
+                  } finally {
+                    resolveDone?.();
+                  }
+                })();
+              }, FIXTURE_CLEANUP_TIMEOUT_MS);
+              return;
+            }
+            if (message.type === 'file-cleanup-finished') {
+              if (cleanupTimer) {
+                clearTimeout(cleanupTimer);
+                cleanupTimer = undefined;
+              }
+              return;
+            }
             await dispatchRunnerMessage(run, file, session.id, message);
+            if (message.type === 'case-result') {
+              testResults.push(message.payload);
+            }
             if (
               message.type === 'file-complete' ||
               message.type === 'complete'
@@ -348,6 +403,9 @@ export const createHeadlessScheduler = async ({
         await cancelRun(run, false);
       }
     } finally {
+      if (cleanupTimer) {
+        clearTimeout(cleanupTimer);
+      }
       // A superseded run can hold a renderer that will never answer again:
       // its test file may have been deleted mid-flight, leaving the page
       // waiting on a chunk the bundler will never produce, and closing such a

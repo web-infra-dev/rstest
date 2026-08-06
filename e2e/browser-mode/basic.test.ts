@@ -13,6 +13,8 @@ describe('browser mode - basic', () => {
     expect(cli.stdout).toContain('fakeTimers.test.ts');
     expect(cli.stdout).toContain('spy.test.ts');
     expect(cli.stdout).toContain('fixtures.test.ts');
+    expect(cli.stdout).toContain('fileFixtures.test.ts');
+    expect(cli.stdout).toContain('RSTEST_BROWSER_FILE_FIXTURE_CLEANUP_OK');
     expect(cli.stdout).toContain('retryContext.test.ts');
     expect(cli.stdout).not.toContain('/scheduler.html');
   });
@@ -21,7 +23,7 @@ describe('browser mode - basic', () => {
     'should run headed mode and exit with code 0',
     async () => {
       const { cli } = await runBrowserCli('basic', {
-        args: ['--browser.headless', 'false', 'tests/dom.test.ts'],
+        args: ['--browser.headless', 'false', 'tests/fileFixtures.test.ts'],
       });
 
       await cli.exec;
