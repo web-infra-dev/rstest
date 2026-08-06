@@ -95,6 +95,14 @@ type GlobalWithExpect = typeof globalThis & {
 export const getGlobalExpect = (): RstestExpect =>
   (globalThis as GlobalWithExpect)[GLOBAL_EXPECT];
 
+type ElementExpectHandler = (locator: unknown) => unknown;
+
+let elementExpectHandler: ElementExpectHandler | undefined;
+
+export const registerElementExpect = (handler: ElementExpectHandler): void => {
+  elementExpectHandler = handler;
+};
+
 // Vitest 4.1 types `returned(value)`, while its runtime also accepts no arguments.
 const ReturnedAlias: ChaiPlugin = (chai, utils) => {
   utils.overwriteMethod(chai.Assertion.prototype, 'returned', () => {
@@ -169,12 +177,20 @@ export function createExpect({
     () => getWorkerState().runtimeConfig.expect.poll,
   );
 
-  (expect as any).element = () => {
-    throw new Error(
-      'expect.element() is only available in browser mode. ' +
-        'Enable browser mode in config and import @rstest/browser to install the browser expect adapter.',
-    );
+  const element = (locator: unknown): unknown => {
+    if (!elementExpectHandler) {
+      throw new Error(
+        'expect.element() is only available in browser mode. ' +
+          'Enable browser mode in config and import @rstest/browser to install the browser expect adapter.',
+      );
+    }
+
+    const assertion = elementExpectHandler(locator);
+    const { assertionCalls } = getState(expect);
+    setState({ assertionCalls: assertionCalls + 1 }, expect);
+    return assertion;
   };
+  Object.assign(expect, { element });
 
   expect.unreachable = (message?: string) => {
     assert.fail(`expected ${message ? `"${message}" ` : ''}not to be reached`);
