@@ -300,10 +300,9 @@ export const createHeadedScheduler = async ({
         logger.log(color.gray(`[Browser Console] ${text}`));
         return;
       }
-      // Everything else — runner boot failures, chunk 404s, uncaught errors —
-      // is invisible without this: the runner logs nothing before its config
-      // handshake, so a frame that dies during load looks identical to a frame
-      // that never navigated.
+      // The runner logs nothing before its config handshake, so a frame that
+      // dies during load is indistinguishable from one that never navigated.
+      // Keep non-protocol output reachable under `--debug`.
       logger.debug(`[Browser Console] ${text}`);
     });
   }
@@ -424,91 +423,30 @@ export const createHeadedScheduler = async ({
     pending.deferred.resolve();
   };
 
-  const recoverHeadedContainer = async (): Promise<void> => {
-    currentRunnerFramesSignature = null;
-    await containerContext.close().catch(() => {});
-    const created = await createContainerPage();
-    containerContext = created.context;
-    containerPage = created.page;
-    if (isWatchMode) {
-      runtime.containerPage = containerPage;
-      runtime.containerContext = containerContext;
-    }
-    await containerPage.goto(containerUrl, { waitUntil: 'load' });
-    await waitForRunnerFramesReady(
-      currentTestFiles.map((file) => file.testPath),
-    );
-  };
-
-  const startFileCleanupTimeout = (
-    payload: FileCleanupDispatchPayload,
-  ): void => {
-    const pending = pendingHeadedReloads.get(payload.testPath);
-    if (!pending || (payload.runId && pending.runId !== payload.runId)) {
-      return;
-    }
-    if (pending.cleanupTimer) {
-      clearTimeout(pending.cleanupTimer);
-    }
-    pending.result = payload.result;
-    pending.cleanupTimer = setTimeout(() => {
-      const currentPending = pendingHeadedReloads.get(payload.testPath);
-      if (!currentPending || currentPending.runId !== pending.runId) {
-        return;
+  /**
+   * Settle every pending reload whose file has left the set. A pending reload
+   * is otherwise only settled by an event the container sends back, and
+   * dropping a file unmounts the iframe its runner was navigating: no `load`
+   * fires, so no file-complete can follow. Keyed on set membership rather than
+   * the planner's deleted-path diff, which is a second derivation of the same
+   * fact and can drift from whatever last assigned `currentTestFiles`.
+   *
+   * Resolve rather than reject: the file is gone and its results are pruned
+   * alongside, so the reload has nothing left to produce.
+   */
+  const reconcilePendingHeadedReloads = (files: TestFileInfo[]): void => {
+    const livePaths = new Set(files.map((file) => file.testPath));
+    for (const testPath of pendingHeadedReloads.keys()) {
+      if (!livePaths.has(testPath)) {
+        resolvePendingHeadedReload(testPath);
       }
-
-      currentPending.cleanupTimer = undefined;
-      pendingHeadedReloads.delete(payload.testPath);
-      // The iframe may eventually finish after the watchdog. Keep that stale
-      // completion from reporting a second result for the same run.
-      timedOutHeadedRuns.add(`${payload.testPath}\0${pending.runId}`);
-
-      void (async () => {
-        const message = `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`;
-        try {
-          await collectCoverage(pending.file.projectName);
-          // A cleanup timeout is a file failure, not a container failure. Resolve
-          // this reload after reporting it so the headed serial loop advances.
-          await handleTestFileComplete(
-            createFileCleanupTimeoutResult({
-              message,
-              projectName: pending.file.projectName,
-              result: pending.result,
-              testPath: payload.testPath,
-            }),
-          );
-          await recoverHeadedContainer();
-          pending.deferred.resolve();
-        } catch (error) {
-          pending.deferred.reject(error);
-        }
-      })();
-    }, FIXTURE_CLEANUP_TIMEOUT_MS);
-  };
-
-  const finishFileCleanup = (payload: FileCleanupDispatchPayload): void => {
-    const pending = pendingHeadedReloads.get(payload.testPath);
-    if (!pending || (payload.runId && pending.runId !== payload.runId)) {
-      return;
-    }
-    if (pending.cleanupTimer) {
-      clearTimeout(pending.cleanupTimer);
-      pending.cleanupTimer = undefined;
     }
   };
-
-  dispatchRouter.register(DISPATCH_NAMESPACE_FILE_CLEANUP, async (request) => {
-    const payload = request.args as FileCleanupDispatchPayload;
-    if (request.method === 'start') {
-      startFileCleanupTimeout(payload);
-    } else if (request.method === 'end') {
-      finishFileCleanup(payload);
-    }
-  });
 
   // No execution-duration watchdog: per-test/hook timeouts are enforced inside
-  // the runner, and a dead container is caught event-driven by the WebSocket
-  // `close` handler, which rejects every pending reload via `onDisconnect`.
+  // the runner, a dead container is caught event-driven by the WebSocket
+  // `close` handler, and a host action that makes a completion impossible
+  // settles the pending itself (`reconcilePendingHeadedReloads`).
   const reloadTestFileAndWait = async (
     file: TestFileInfo,
     testNamePattern?: string,
@@ -658,13 +596,11 @@ export const createHeadedScheduler = async ({
       if (fatalErrorRef.current) {
         return;
       }
-      // The scope was claimed against the file set of its own cycle, but the
-      // set can change again while this reload waits in the queue (core queues
-      // cycles, and `dispatchRerun` commits between them). A file that left
-      // the set no longer has an iframe, so reloading it would either throw
-      // ("iframe not found") and fail an innocent cycle, or navigate a frame
-      // the next `onTestFileUpdate` unmounts mid-flight — a completion that
-      // never arrives and a cycle that never ends.
+      // Dequeue time is the only sound place to check membership:
+      // `claimHeadedCycleScope` checks it once per cycle, but the queue spans
+      // cycles and `dispatchRerun` commits a new set between them. Reloading a
+      // file that has no iframe left throws "iframe not found" out of an
+      // innocent cycle.
       if (
         !currentTestFiles.some(
           (currentFile) => currentFile.testPath === file.testPath,
@@ -778,19 +714,9 @@ export const createHeadedScheduler = async ({
 
       if (rerunPlan.fileSetUpdate) {
         currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
-        // A reload can already be in flight for a file this update deletes:
-        // `notifyTestFileUpdate` below unmounts that file's iframe, so its
-        // navigation dies without a `load` event and its file-complete never
-        // arrives. Nothing else settles that pending — the container stays
-        // connected and no fatal fires — and an unsettled pending wedges its
-        // cycle, and with it every cycle queued behind (the Windows headed
-        // watch rename hang). Resolve it as obsolete: the file is gone and its
-        // results were just pruned, so there is nothing left for the reload to
-        // produce.
-        for (const deletedTestPath of rerunPlan.fileSetUpdate
-          .deletedTestPaths) {
-          resolvePendingHeadedReload(deletedTestPath);
-        }
+        // Must run before the container is told: `notifyTestFileUpdate` is
+        // what unmounts the dropped iframes.
+        reconcilePendingHeadedReloads(currentTestFiles);
         await rpcManager.notifyTestFileUpdate(currentTestFiles);
         if (currentTestFiles.length > 0) {
           await waitForRunnerFramesReady(
