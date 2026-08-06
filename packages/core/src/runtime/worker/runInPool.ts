@@ -19,6 +19,7 @@ import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
+import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
 import { PhaseTracker } from './phaseTracker';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
@@ -330,12 +331,16 @@ const preparePool = async (
     if (!loadEnvironment) {
       throw new Error(`Unknown test environment: ${testEnvironment.name}`);
     }
-    const { environment } = await loadEnvironment();
     const scope = isolate ? 'file' : 'worker';
-    const { teardown } = await environment.setup(
+    const [{ setup }, environmentModule] = await Promise.all([
+      loadEnvironment(),
+      loadTestEnvironmentModule(context.testEnvironmentModule),
+    ]);
+    const { teardown } = await setup(
       global,
       testEnvironment.options || {},
       { scope },
+      environmentModule,
     );
     if (scope === 'file') {
       cleanupFns.push(() => teardown(global));

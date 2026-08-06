@@ -24,6 +24,8 @@ export interface TestContext {
     filepath?: string;
     /** Absolute path of the current project's root directory. */
     projectRoot?: string;
+    /** Current retry index, starting at 0 for the initial attempt. */
+    retryCount: number;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
     /** Mutable metadata copied to the current test result. */
@@ -192,6 +194,15 @@ interface FixtureOptions {
 
 export type Use<T> = (value: T) => Promise<void>;
 
+export type FixtureCleanup = () => MaybePromise<void>;
+
+export type FixtureLifecycle = {
+  /**
+   * Register a callback that runs after the current test and its hooks finish.
+   */
+  onCleanup: (cleanup: FixtureCleanup) => void;
+};
+
 type FixtureFn<T, K extends keyof T, ExtraContext> = (
   context: Omit<T, K> & ExtraContext,
   use: Use<T[K]>,
@@ -222,20 +233,108 @@ export type NormalizedFixture = {
   deps?: string[];
   value: FixtureFn<any, any, any> | any;
   options?: FixtureOptions;
+  mode?: 'return';
 };
 
 export type NormalizedFixtures = Record<string, NormalizedFixture>;
 
-export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {
-  extend: <T extends Record<string, any> = object>(
+type MergeFixtureContext<Context, Added extends Record<string, any>> = {
+  [K in keyof Context | keyof Added]: K extends keyof Added
+    ? Added[K]
+    : K extends keyof Context
+      ? Context[K]
+      : never;
+};
+
+type MergeNamedFixtureContext<
+  Context,
+  Name extends string,
+  Value,
+> = Name extends string
+  ? MergeFixtureContext<Context, Record<Name, Value>>
+  : never;
+
+type AsciiLowercaseLetter =
+  | 'a'
+  | 'b'
+  | 'c'
+  | 'd'
+  | 'e'
+  | 'f'
+  | 'g'
+  | 'h'
+  | 'i'
+  | 'j'
+  | 'k'
+  | 'l'
+  | 'm'
+  | 'n'
+  | 'o'
+  | 'p'
+  | 'q'
+  | 'r'
+  | 's'
+  | 't'
+  | 'u'
+  | 'v'
+  | 'w'
+  | 'x'
+  | 'y'
+  | 'z';
+
+type IdentifierStart =
+  AsciiLowercaseLetter | Uppercase<AsciiLowercaseLetter> | '$' | '_';
+type IdentifierPart =
+  IdentifierStart | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+
+type IsIdentifierRest<Name extends string> = string extends Name
+  ? false
+  : Name extends ''
+    ? true
+    : Name extends `${infer First}${infer Rest}`
+      ? First extends IdentifierPart
+        ? IsIdentifierRest<Rest>
+        : false
+      : false;
+
+type IsIdentifier<Name extends string> = string extends Name
+  ? false
+  : Name extends `${infer First}${infer Rest}`
+    ? First extends IdentifierStart
+      ? IsIdentifierRest<Rest>
+      : false
+    : false;
+
+type ReservedNamedFixtureName = keyof TestContext | '_useLocalExpect';
+
+type NamedFixtureName<Name extends string> =
+  Name extends ReservedNamedFixtureName
+    ? never
+    : IsIdentifier<Name> extends true
+      ? Name
+      : never;
+
+// This must match runtime `typeof value === 'function'`, including broadly
+// typed Function and CallableFunction values without call signatures.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+type RuntimeFunction = Function;
+
+type NamedFixture<Value, Context> =
+  | (Value extends RuntimeFunction ? never : Value)
+  | ((context: Context, lifecycle: FixtureLifecycle) => MaybePromise<Value>);
+
+type TestExtend<ExtraContext> = {
+  <T extends Record<string, any> = object>(
     fixtures: Fixtures<T, ExtraContext>,
-  ) => TestAPIs<{
-    [K in keyof T | keyof ExtraContext]: K extends keyof T
-      ? T[K]
-      : K extends keyof ExtraContext
-        ? ExtraContext[K]
-        : never;
-  }>;
+  ): TestAPIs<MergeFixtureContext<ExtraContext, T>>;
+  <Name extends string, Value>(
+    name: NamedFixtureName<Name>,
+    fixture: NamedFixture<Value, Omit<TestContext & ExtraContext, Name>>,
+  ): TestAPIs<MergeNamedFixtureContext<ExtraContext, Name, Value>>;
+};
+
+export type TestAPIs<ExtraContext = object> = TestAPI<ExtraContext> & {
+  extend: TestExtend<ExtraContext>;
 };
 
 export type OnTestFinishedHandler = (ctx: TestContext) => MaybePromise<void>;

@@ -51,6 +51,12 @@ exports[`rstest context > should generate rstest context correctly 1`] = `
       "**/dist/.rstest-temp",
     ],
   },
+  "expect": {
+    "poll": {
+      "interval": 50,
+      "timeout": 1000,
+    },
+  },
   "federation": false,
   "forceRerunTriggers": [
     "**/package.json/**",
@@ -154,6 +160,12 @@ exports[`rstest context > should generate rstest context correctly with multiple
       "**/.{idea,git,cache,output,temp}/**",
       "**/dist/.rstest-temp",
     ],
+  },
+  "expect": {
+    "poll": {
+      "interval": 50,
+      "timeout": 1000,
+    },
   },
   "federation": false,
   "forceRerunTriggers": [
@@ -263,6 +275,12 @@ exports[`rstest context > should generate rstest context correctly with multiple
       "**/.{idea,git,cache,output,temp}/**",
       "**/dist/.rstest-temp",
     ],
+  },
+  "expect": {
+    "poll": {
+      "interval": 50,
+      "timeout": 1000,
+    },
   },
   "federation": false,
   "forceRerunTriggers": [

@@ -23,4 +23,26 @@ describe('getEnvironmentKey', () => {
       getEnvironmentKey({ name: 'jsdom', options: { url: 'http://a.dev' } }),
     );
   });
+
+  it('should distinguish resolved environment modules', () => {
+    const testEnvironment = { name: 'jsdom' } as const;
+    const moduleReference = {
+      name: 'jsdom',
+      packageName: 'jsdom',
+      resolvedPath: '/project-a/node_modules/jsdom/lib/api.js',
+    } as const;
+
+    expect(getEnvironmentKey(testEnvironment, moduleReference)).not.toBe(
+      getEnvironmentKey(testEnvironment, {
+        ...moduleReference,
+        resolvedPath: '/project-b/node_modules/jsdom/lib/api.js',
+      }),
+    );
+    expect(getEnvironmentKey(testEnvironment, moduleReference)).not.toBe(
+      getEnvironmentKey(testEnvironment, {
+        ...moduleReference,
+        bundlePath: '/tmp/project-a/environment.mjs',
+      }),
+    );
+  });
 });

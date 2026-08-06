@@ -1,0 +1,566 @@
+import type {
+  RstestContext,
+  TestFileResult,
+} from '@rstest/core/internal/browser';
+import { color, logger } from '@rstest/core/internal/browser';
+import { normalize } from 'pathe';
+import {
+  type BrowserRuntime,
+  drainPendingAffectedTestFiles,
+  mapViewportByProject,
+  serializeForInlineScript,
+} from './browserRsbuild';
+import { getHeadlessConcurrency } from './concurrency';
+import type { HostDispatchRouterOptions } from './dispatchCapabilities';
+import type { HostDispatchRouter } from './dispatchRouter';
+import { attachHeadlessRunnerTransport } from './headlessTransport';
+import {
+  createDeferredPromise,
+  getFileTaskId,
+  type FatalPayload,
+  toError,
+} from './hostPayloads';
+import type {
+  BrowserClientMessage,
+  BrowserHostConfig,
+  BrowserProjectRuntime,
+  TestFileInfo,
+} from './protocol';
+import { DISPATCH_NAMESPACE_RUNNER } from './protocol';
+import type {
+  BrowserProviderBrowser,
+  BrowserProviderContext,
+  BrowserProviderPage,
+} from './providers';
+import {
+  createRunSession,
+  type RunSession,
+  RunSessionLifecycle,
+} from './runSession';
+import { RunnerSessionRegistry } from './sessionRegistry';
+import { collectDeletedTestPaths, planWatchRerun } from './watchRerunPlanner';
+import type {
+  BrowserWatchSession,
+  DispatchPageResolver,
+  SchedulerRunResult,
+} from './schedulerSeam';
+import type { WatchSignals } from './watchSignals';
+
+type HeadlessSchedulerContext = Pick<
+  RstestContext,
+  'command' | 'snapshotManager' | 'stateManager' | 'updateReporterResultState'
+> & {
+  normalizedConfig: Pick<RstestContext['normalizedConfig'], 'bail' | 'pool'>;
+};
+
+type HeadlessSchedulerDeps = {
+  context: HeadlessSchedulerContext;
+  browser: BrowserProviderBrowser;
+  browserLaunchOptions: BrowserRuntime['browserLaunchOptions'];
+  projectServers: BrowserRuntime['projectServers'];
+  allTestFiles: TestFileInfo[];
+  projectRuntimeConfigs: BrowserProjectRuntime[];
+  hostOptions: BrowserHostConfig;
+  watchState: BrowserRuntime['watchState'];
+  isWatchMode: boolean;
+  createDispatchRouter: (
+    options?: HostDispatchRouterOptions,
+  ) => HostDispatchRouter;
+  handlers: {
+    handleFatal: (payload: FatalPayload) => Promise<void>;
+    handleTestFileComplete: (payload: TestFileResult) => Promise<void>;
+  };
+  watchSignals: Pick<
+    WatchSignals,
+    'setDispatchRerun' | 'setInterrupt' | 'signalInvalidation'
+  >;
+  setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
+  createWatchSession: (
+    execute: (testPaths: string[]) => Promise<void>,
+  ) => BrowserWatchSession;
+  collectProjectEntries: () => Promise<
+    Parameters<typeof planWatchRerun>[0]['projectEntries']
+  >;
+  logWatchReady: () => void;
+  destroyRuntime: () => Promise<void>;
+};
+
+export const createHeadlessScheduler = async ({
+  context,
+  browser,
+  browserLaunchOptions,
+  projectServers,
+  allTestFiles,
+  projectRuntimeConfigs,
+  hostOptions,
+  watchState,
+  isWatchMode,
+  createDispatchRouter,
+  handlers: { handleFatal, handleTestFileComplete },
+  watchSignals,
+  setDispatchPageResolver,
+  createWatchSession,
+  collectProjectEntries,
+  logWatchReady,
+  destroyRuntime,
+}: HeadlessSchedulerDeps): Promise<SchedulerRunResult> => {
+  // Session-based scheduling path: lifecycle + session index + dispatch routing.
+  type ActiveHeadlessRun = RunSession & {
+    contexts: Set<BrowserProviderContext>;
+  };
+
+  const viewportByProject = mapViewportByProject(projectRuntimeConfigs);
+  const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
+  const sessionRegistry = new RunnerSessionRegistry();
+  setDispatchPageResolver((target) => ({
+    runnerPage: target?.sessionId
+      ? sessionRegistry.getById(target.sessionId)?.page
+      : undefined,
+  }));
+  let dispatchRequestCounter = 0;
+
+  const nextDispatchRequestId = (namespace: string): string => {
+    return `${namespace}-${++dispatchRequestCounter}`;
+  };
+
+  const closeContextSafely = async (
+    browserContext: BrowserProviderContext,
+  ): Promise<void> => {
+    try {
+      await browserContext.close();
+    } catch {
+      // ignore
+    }
+  };
+
+  const cancelRun = async (
+    run: ActiveHeadlessRun,
+    waitForDone = true,
+  ): Promise<void> => {
+    await runLifecycle.cancel(run, {
+      waitForDone,
+      onCancel: async (session) => {
+        await Promise.all(
+          Array.from(session.contexts).map((browserContext) =>
+            closeContextSafely(browserContext),
+          ),
+        );
+      },
+    });
+  };
+
+  const dispatchRouter = createDispatchRouter({
+    isRunTokenStale: (runToken) => runLifecycle.isTokenStale(runToken),
+    onStale: (request) => {
+      if (request.namespace === DISPATCH_NAMESPACE_RUNNER) {
+        logger.debug(
+          `[Headless] Dropped stale message "${request.method}" for ${request.target?.testFile ?? 'unknown'}`,
+        );
+      }
+    },
+  });
+
+  const dispatchRunnerMessage = async (
+    run: ActiveHeadlessRun,
+    file: TestFileInfo,
+    sessionId: string,
+    message: BrowserClientMessage,
+  ): Promise<void> => {
+    const response = await dispatchRouter.dispatch({
+      requestId: nextDispatchRequestId(DISPATCH_NAMESPACE_RUNNER),
+      runToken: run.token,
+      namespace: DISPATCH_NAMESPACE_RUNNER,
+      method: message.type,
+      args: 'payload' in message ? message.payload : undefined,
+      target: {
+        sessionId,
+        testFile: file.testPath,
+        projectName: file.projectName,
+      },
+    });
+
+    if (response.stale) {
+      return;
+    }
+
+    if (response.error) {
+      throw new Error(response.error);
+    }
+  };
+
+  const runSingleFile = async (
+    run: ActiveHeadlessRun,
+    file: TestFileInfo,
+  ): Promise<void> => {
+    if (run.cancelled || runLifecycle.isTokenStale(run.token)) {
+      return;
+    }
+
+    const viewport = viewportByProject.get(file.projectName);
+    const browserContext = await browser.newContext({
+      providerOptions: browserLaunchOptions.providerOptions,
+      viewport: viewport ?? null,
+    });
+    run.contexts.add(browserContext);
+
+    let page: BrowserProviderPage | null = null;
+    let sessionId: string | null = null;
+    let settled = false;
+    let resolveDone: (() => void) | null = null;
+
+    const markDone = (): void => {
+      if (!settled) {
+        settled = true;
+        resolveDone?.();
+      }
+    };
+
+    const donePromise = new Promise<void>((resolve) => {
+      resolveDone = resolve;
+    });
+
+    // Event-driven death detection (vitest-style): a renderer crash or an
+    // unexpected page close produces no further messages, so fail the file at
+    // once. Per-test/hook timeouts are enforced inside the runner, so the host
+    // deliberately keeps no execution-duration watchdog. Our own teardown
+    // close is ignored because `settled`/`run.cancelled` are set by then.
+    const crashDeferred = createDeferredPromise<string>();
+    const onPageDead = (reason: string): void => {
+      if (settled || run.cancelled || !runLifecycle.isTokenActive(run.token)) {
+        return;
+      }
+      settled = true;
+      crashDeferred.resolve(reason);
+    };
+
+    try {
+      page = await browserContext.newPage();
+      page.on('crash', () =>
+        onPageDead(`Browser page crashed while running ${file.testPath}.`),
+      );
+      page.on('close', () =>
+        onPageDead(
+          `Browser page closed unexpectedly while running ${file.testPath}.`,
+        ),
+      );
+
+      const session = sessionRegistry.register({
+        testFile: file.testPath,
+        projectName: file.projectName,
+        runToken: run.token,
+        mode: 'headless-page',
+        context: browserContext,
+        page,
+      });
+      sessionId = session.id;
+
+      await attachHeadlessRunnerTransport(page, {
+        onDispatchMessage: async (message) => {
+          try {
+            await dispatchRunnerMessage(run, file, session.id, message);
+            if (
+              message.type === 'file-complete' ||
+              message.type === 'complete'
+            ) {
+              markDone();
+            } else if (message.type === 'fatal') {
+              markDone();
+              await cancelRun(run, false);
+            }
+          } catch (error) {
+            const formatted = toError(error);
+            await handleFatal({
+              message: formatted.message,
+              stack: formatted.stack,
+            });
+            markDone();
+            await cancelRun(run, false);
+          }
+        },
+        onDispatchRpc: async (request) => {
+          return dispatchRouter.dispatch({
+            ...request,
+            runToken: run.token,
+            target: {
+              sessionId: session.id,
+              testFile: file.testPath,
+              projectName: file.projectName,
+              ...request.target,
+            },
+          });
+        },
+      });
+
+      const inlineOptions: BrowserHostConfig = {
+        ...hostOptions,
+        // Read live per page load, not from the construction-time
+        // `hostOptions` value: the 'u' shortcut flips
+        // `snapshotManager.options` between reruns.
+        snapshot: {
+          updateSnapshot: context.snapshotManager.options.updateSnapshot,
+        },
+        testFile: file.testPath,
+        runId: `${run.token}:${session.id}`,
+      };
+      const serializedOptions = serializeForInlineScript(inlineOptions);
+      await page.addInitScript(
+        `window.__RSTEST_BROWSER_OPTIONS__ = ${serializedOptions};`,
+      );
+
+      const projectServer = projectServers.get(file.projectName);
+      if (!projectServer) {
+        throw new Error(
+          `No browser dev server for project "${file.projectName}" (test file: ${file.testPath}).`,
+        );
+      }
+      await page.goto(`http://localhost:${projectServer.port}/runner.html`, {
+        waitUntil: 'load',
+      });
+
+      const state = await Promise.race([
+        donePromise.then(() => ({ type: 'done' as const })),
+        crashDeferred.promise.then((reason) => ({
+          type: 'crash' as const,
+          reason,
+        })),
+        run.cancelSignal.then(() => ({ type: 'cancelled' as const })),
+      ]);
+
+      if (state.type === 'cancelled') {
+        return;
+      }
+
+      if (
+        state.type === 'crash' &&
+        runLifecycle.isTokenActive(run.token) &&
+        !run.cancelled
+      ) {
+        await handleFatal({ message: state.reason });
+        await cancelRun(run, false);
+      }
+    } catch (error) {
+      if (runLifecycle.isTokenActive(run.token) && !run.cancelled) {
+        const formatted = toError(error);
+        await handleFatal({
+          message: formatted.message,
+          stack: formatted.stack,
+        });
+        await cancelRun(run, false);
+      }
+    } finally {
+      // A superseded run can hold a renderer that will never answer again:
+      // its test file may have been deleted mid-flight, leaving the page
+      // waiting on a chunk the bundler will never produce, and closing such a
+      // page blocks for as long as the renderer stays wedged. The cycle waits
+      // on this teardown, so for an abandoned run it is detached — its
+      // results are already discarded, and the replacement cycle must not be
+      // held up by a page nobody is reading. A run that ends normally closes
+      // in band, which is what keeps the open-context count at the
+      // concurrency limit.
+      const abandoned = run.cancelled || runLifecycle.isTokenStale(run.token);
+      const teardown = async (): Promise<void> => {
+        if (page) {
+          try {
+            await page.close();
+          } catch {
+            // ignore
+          }
+        }
+        await closeContextSafely(browserContext);
+      };
+      if (sessionId) {
+        sessionRegistry.deleteById(sessionId);
+      }
+      run.contexts.delete(browserContext);
+      if (abandoned) {
+        void teardown();
+      } else {
+        await teardown();
+      }
+    }
+  };
+
+  // Bailed files never run, so they carry no case results — mirror the node
+  // pool's skip result (`runInPool.ts`) so the summary reports them as skipped
+  // rather than dropping them silently.
+  const makeSkippedFileResult = (file: TestFileInfo): TestFileResult => ({
+    testId: getFileTaskId(file.testPath),
+    status: 'skip',
+    name: '',
+    testPath: file.testPath,
+    project: file.projectName,
+    results: [],
+  });
+
+  const runFilesWithPool = async (files: TestFileInfo[]): Promise<void> => {
+    if (files.length === 0) {
+      return;
+    }
+
+    const previous = runLifecycle.activeSession;
+    if (previous) {
+      await cancelRun(previous);
+    }
+
+    const run = runLifecycle.createSession((token) => ({
+      ...createRunSession(token),
+      contexts: new Set<BrowserProviderContext>(),
+    }));
+
+    const queue = [...files];
+    const concurrency = getHeadlessConcurrency(context, queue.length);
+    const bail = context.normalizedConfig.bail;
+
+    const worker = async (): Promise<void> => {
+      while (
+        queue.length > 0 &&
+        !run.cancelled &&
+        runLifecycle.isTokenActive(run.token)
+      ) {
+        // Cross-file bail gate (parity with the node pool's pickup-time skip
+        // at `runInPool.ts`): once the cycle-wide failed count reaches `bail`,
+        // drain the remaining files as skipped instead of running them. The
+        // count is cycle-scoped because core clears `stateManager` ahead of
+        // every cycle, a watch session's first one included — so a mixed
+        // launch cannot drain this queue on the node initial cycle's
+        // failures.
+        if (bail && context.stateManager.getCountOfFailedTests() >= bail) {
+          let skipped = queue.shift();
+          while (skipped) {
+            await handleTestFileComplete(makeSkippedFileResult(skipped));
+            skipped = queue.shift();
+          }
+          return;
+        }
+        const next = queue.shift();
+        if (!next) {
+          return;
+        }
+        await runSingleFile(run, next);
+      }
+    };
+
+    run.done = Promise.all(
+      Array.from(
+        { length: Math.min(queue.length, Math.max(concurrency, 1)) },
+        () => worker(),
+      ),
+    ).then(() => {});
+
+    await run.done;
+    runLifecycle.clearIfActive(run);
+  };
+
+  const testStart = Date.now();
+  await runFilesWithPool(allTestFiles);
+  const testTime = Date.now() - testStart;
+
+  let watchSession: BrowserWatchSession | undefined;
+  if (isWatchMode) {
+    // A queued scope can go stale before its cycle is dequeued — a later
+    // trigger may have rebuilt the file set without one of these files — so a
+    // path that no longer resolves is skipped rather than failing the cycle
+    // beside its still-valid siblings.
+    const runScope = async (testPaths: string[]): Promise<void> => {
+      const pathSet = new Set(testPaths.map((testPath) => normalize(testPath)));
+      await runFilesWithPool(
+        watchState.lastTestFiles.filter((file) => pathSet.has(file.testPath)),
+      );
+    };
+
+    // Cutting the in-flight run short lets its cycle finalize with what it had
+    // and the queued replacement start immediately; invalidating the token
+    // first makes every late dispatch from it a no-op. Deliberately not
+    // awaiting `run.done` — the cancelled run's own cycle is what awaits it.
+    //
+    // Unlike every other cancel this one does not tear the run's browser
+    // contexts down, because a rebuild trigger reaches it from inside the
+    // bundler's dev-compile hook: a page still fetching from the dev server
+    // that same hook is holding up cannot be closed, and the run it belongs
+    // to then never ends. Signalling the cancel is enough — the run's own
+    // teardown closes page and context as soon as it unwinds, and every page
+    // operation it can be sitting in is bounded by the driver's own timeout.
+    watchSignals.setInterrupt(async () => {
+      const active = runLifecycle.activeSession;
+      if (!active || active.cancelled) {
+        return;
+      }
+      runLifecycle.invalidateActiveToken();
+      await runLifecycle.cancel(active, { waitForDone: false });
+    });
+
+    watchSignals.setDispatchRerun(async () => {
+      const newProjectEntries = await collectProjectEntries();
+      const rerunPlan = planWatchRerun({
+        projectEntries: newProjectEntries,
+        previousTestFiles: watchState.lastTestFiles,
+        affectedTestFiles: drainPendingAffectedTestFiles(watchState),
+      });
+
+      if (rerunPlan.filesChanged) {
+        const deletedTestPaths = collectDeletedTestPaths(
+          watchState.lastTestFiles,
+          rerunPlan.currentTestFiles,
+        );
+        if (deletedTestPaths.length > 0) {
+          context.updateReporterResultState([], [], deletedTestPaths);
+        }
+        watchState.lastTestFiles = rerunPlan.currentTestFiles;
+        if (rerunPlan.currentTestFiles.length === 0) {
+          logger.log(
+            color.cyan('No browser test files remain after update.\n'),
+          );
+          // Still one cycle: core's finalize reports the emptied run.
+          await watchSignals.signalInvalidation([]);
+          return;
+        }
+
+        logger.log(
+          color.cyan(
+            `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
+          ),
+        );
+        await watchSignals.signalInvalidation([
+          ...new Set(rerunPlan.currentTestFiles.map((file) => file.testPath)),
+        ]);
+        return;
+      }
+
+      if (rerunPlan.affectedTestFiles.length === 0) {
+        logger.log(
+          color.cyan(
+            'No affected browser test files detected, skipping re-run.\n',
+          ),
+        );
+        logWatchReady();
+        return;
+      }
+
+      logger.log(
+        color.cyan(
+          `Re-running ${rerunPlan.affectedTestFiles.length} affected test file(s)...\n`,
+        ),
+      );
+      await watchSignals.signalInvalidation([
+        ...new Set(rerunPlan.affectedTestFiles.map((file) => file.testPath)),
+      ]);
+    });
+
+    watchSession = createWatchSession(runScope);
+  }
+
+  const closeHeadlessRuntime = !isWatchMode
+    ? async () => {
+        sessionRegistry.clear();
+        await destroyRuntime();
+      }
+    : undefined;
+
+  return {
+    testTime,
+    watchSession,
+    // `closeHeadlessRuntime` is already `undefined` in watch mode: the watch
+    // runtime outlives the cycle and is torn down through `executor.close()`.
+    close: closeHeadlessRuntime,
+  };
+};

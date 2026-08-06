@@ -1,7 +1,7 @@
 {
   "name": "rstest",
   "displayName": "Rstest",
-  "version": "0.11.5",
+  "version": "0.11.6",
   "private": true,
   "description": "VS Code extension for Rstest",
   "categories": [
@@ -264,27 +264,27 @@
     "workspaceContains:**/*rstest.{workspace,projects}*.{ts,js,mjs,cjs,cts,mts,json}"
   ],
   "devDependencies": {
-    "@rsbuild/core": "~2.1.9",
+    "@rsbuild/core": "~2.1.10",
     "@rslib/core": "1.0.0-beta.1",
     "@rstest/core": "workspace:*",
     "@types/istanbul-lib-report": "^3.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.16.5",
     "@types/picomatch": "^4.0.3",
-    "@types/semver": "^7.7.1",
+    "@types/semver": "^7.8.0",
     "@types/vscode": "1.97.0",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "3.9.2",
     "birpc": "^4.0.0",
     "core-js-pure": "^3.49.0",
-    "mocha": "^11.7.6",
-    "ovsx": "^1.0.2",
+    "mocha": "^11.8.0",
+    "ovsx": "^1.1.0",
     "picomatch": "^4.0.5",
     "semver": "^7.8.5",
     "tinyglobby": "^0.2.17",
     "typescript": "^6.0.3",
     "valibot": "^1.4.2",
-    "yuku-parser": "^0.8.1"
+    "yuku-parser": "^0.8.3"
   },
   "engines": {
     "vscode": "^1.97.0"

@@ -249,7 +249,7 @@ jobs:
         # the pre-collapse behavior where it ran after the `test` row's e2e
         # step.
         if: ${{ !cancelled() && steps.e2e_test.outcome == 'success' && matrix.node_version == '24' && (needs.prepare.outputs.is_full_run == 'true' || matrix.os == 'windows-latest') }}
-        run: pnpm run test:vscode
+        run: cd packages/vscode && pnpm test:e2e
 
   # ======== codspeed ========
   # Temporarily disabled: CodSpeed runner quota exhausted.

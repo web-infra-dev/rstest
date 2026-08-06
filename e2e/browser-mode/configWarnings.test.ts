@@ -19,6 +19,13 @@ describe('browser mode - config validation warnings', () => {
     });
     await expectExecSuccess();
     expect(cli.stdout).toContain('sum.test.ts');
+    // The ignore-warning loop runs on the list path too, and every warned-on
+    // option is at its default here (`coverage` is specially handled and never
+    // produces an "Ignoring" line) — so this same boot also pins that a default
+    // browser config draws no ignore-warnings.
+    expect(`${cli.stdout}\n${cli.stderr}`).not.toMatch(
+      /Ignoring .* in browser mode/,
+    );
   });
 
   it('warns (not errors) on coverage.provider v8 in a mixed run, node coverage still runs', async () => {
@@ -40,16 +47,14 @@ describe('browser mode - config validation warnings', () => {
     });
     await expectExecSuccess();
     const output = `${cli.stdout}\n${cli.stderr}`;
-    expect(output).toMatch(/Ignoring logHeapUsage in browser mode/);
-    expect(output).toMatch(/Ignoring detectAsyncLeaks in browser mode/);
-    expect(output).toMatch(/Ignoring pool\.type 'threads' in browser mode/);
-  });
-
-  it('emits no ignore-warnings for a default browser config', async () => {
-    const { expectExecSuccess, cli } = await runBrowserCli('browser-coverage');
-    await expectExecSuccess();
-    expect(`${cli.stdout}\n${cli.stderr}`).not.toMatch(
-      /Ignoring .* in browser mode/,
-    );
+    expect(
+      output.match(/Ignoring logHeapUsage in browser mode/g) ?? [],
+    ).toHaveLength(1);
+    expect(
+      output.match(/Ignoring detectAsyncLeaks in browser mode/g) ?? [],
+    ).toHaveLength(1);
+    expect(
+      output.match(/Ignoring pool\.type 'threads' in browser mode/g) ?? [],
+    ).toHaveLength(1);
   });
 });

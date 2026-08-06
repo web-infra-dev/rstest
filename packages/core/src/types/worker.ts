@@ -1,5 +1,6 @@
 import type { SnapshotClient, SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
+import type { EnvironmentName } from './config';
 import type { ProjectContext, RstestContext } from './core';
 import type {
   TestCaseInfo,
@@ -65,6 +66,7 @@ export type RuntimeConfig = Pick<
   | 'hookTimeout'
   | 'coverage'
   | 'snapshotFormat'
+  | 'expect'
   | 'env'
   | 'logHeapUsage'
   | 'detectAsyncLeaks'
@@ -94,6 +96,15 @@ export type BrowserRuntimeConfig = Omit<
   | 'federation'
 >;
 
+export type TestEnvironmentModuleReference = {
+  name: Exclude<EnvironmentName, 'node'>;
+  packageName: string;
+  /** Native module entry resolved through Rstest's environment resolution roots. */
+  resolvedPath: string;
+  /** Optional ESM prebundle. Loading falls back to `resolvedPath`. */
+  bundlePath?: string;
+};
+
 export type CurrentTaskInfo = Pick<
   UserConsoleLog,
   'taskId' | 'taskName' | 'taskParentNames' | 'taskType' | 'testPath'
@@ -112,6 +123,7 @@ export type WorkerContext = {
    */
   buildId: number;
   outputModule: boolean;
+  testEnvironmentModule?: TestEnvironmentModuleReference;
   /** When true, the worker emits Perfetto trace events alongside phase totals. */
   trace?: boolean;
 };

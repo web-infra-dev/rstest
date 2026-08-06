@@ -312,7 +312,7 @@ import type { PlaywrightOptions } from '@rstest/playwright';
 
 const e2e = test.extend({
   playwright: {
-    trace: process.env.CI ? 'retain-on-failure' : 'off',
+    trace: process.env.CI ? 'on-first-retry' : 'off',
   } satisfies PlaywrightOptions,
 });
 
@@ -334,7 +334,11 @@ RSTEST_PLAYWRIGHT_TRACE=retain-on-failure rstest
 RSTEST_PLAYWRIGHT_TRACE=on RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR=.rstest/playwright-traces rstest
 ```
 
-`trace` 支持 `'off'`、`'on'`、`'retain-on-failure'`，也支持传入 options 对象：
+`trace` 支持 `'off'`、`'on'`、`'retain-on-failure'`、`'on-first-retry'`、`'on-all-retries'`，也支持传入 options 对象：
+
+<ApiMeta addedVersion="0.11.6" />
+
+`on-first-retry` 只记录并保留第一次 retry 的 trace。`on-all-retries` 会记录并保留每次 retry 的 trace。两种模式在初次尝试时都不会启动 tracing，因此通过的测试不会产生 trace 启动和临时产物开销。
 
 ```ts
 const e2e = test.extend({

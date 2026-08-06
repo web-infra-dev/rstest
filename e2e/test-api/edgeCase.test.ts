@@ -52,9 +52,7 @@ describe('Test Edge Cases', () => {
     });
     await expectExecFailed();
 
-    expectStderrLog(
-      "No user error stack found, showing fullStack. Set 'DEBUG=rstest' to always show fullStack.",
-    );
+    expect(cli.stderr).not.toContain('No user error stack found');
     expect(cli.stderr).not.toContain('nativeFrame');
     expectStderrLog('at fallbackFrame (node:internal/rstest_fallback:10:5)');
     expectStderrLog('at hiddenFrame (node:internal/rstest_hidden:20:6)');

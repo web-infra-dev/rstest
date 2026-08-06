@@ -43,6 +43,10 @@ export default defineConfig({
 由于 Rstest 内部使用 Rsbuild 作为打包工具，一些 Rstest 的内置行为可能与 Rspack 的默认行为不同。例如，Rstest 有自己的 CSS 处理流程。为了避免冲突，此适配器会自动禁用 Rstest（Rsbuild） 内置的 CSS 插件，使 Rspack 的 CSS 配置生效。这意味着使用此适配器时，一些 Rsbuild 特有的 CSS 功能和配置（如 `output.cssModules` 配置）将不可用。
 :::
 
+## 示例项目
+
+你可以参考 [Rspack adapter 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/rspack-adapter)，了解如何在完整的 React 项目中让 Rstest 继承 Rspack 配置。
+
 ## API
 
 ### `withRspackConfig(options)`

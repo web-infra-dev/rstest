@@ -1,0 +1,45 @@
+---
+description: Configure the default interval and timeout for expect.poll assertions.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# expect
+
+<ApiMeta addedVersion="0.11.6" />
+
+- **Type:** `ExpectConfig`
+- **Default:** `{ poll: { interval: 50, timeout: 1000 } }`
+
+Configure the defaults used by [`expect.poll()`](/api/runtime-api/test-api/expect#expectpoll). Options passed directly to `expect.poll()` take precedence over this configuration.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  expect: {
+    poll: {
+      interval: 100,
+      timeout: 5000,
+    },
+  },
+});
+```
+
+## expect.poll
+
+Global configuration for polling assertions.
+
+### expect.poll.interval
+
+- **Type:** `number`
+- **Default:** `50`
+
+The interval between retry attempts, in milliseconds.
+
+### expect.poll.timeout
+
+- **Type:** `number`
+- **Default:** `1000`
+
+The maximum total polling time before the assertion fails, in milliseconds.

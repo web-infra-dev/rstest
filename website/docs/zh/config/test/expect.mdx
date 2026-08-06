@@ -1,0 +1,45 @@
+---
+description: 配置 expect.poll 断言的默认轮询间隔和超时时间。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# expect
+
+<ApiMeta addedVersion="0.11.6" />
+
+- **类型：** `ExpectConfig`
+- **默认值：** `{ poll: { interval: 50, timeout: 1000 } }`
+
+配置 [`expect.poll()`](/api/runtime-api/test-api/expect#expectpoll) 使用的默认值。直接传给 `expect.poll()` 的选项优先级更高。
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  expect: {
+    poll: {
+      interval: 100,
+      timeout: 5000,
+    },
+  },
+});
+```
+
+## expect.poll
+
+轮询断言的全局配置。
+
+### expect.poll.interval
+
+- **类型：** `number`
+- **默认值：** `50`
+
+每次重试之间的间隔时间，单位为毫秒。
+
+### expect.poll.timeout
+
+- **类型：** `number`
+- **默认值：** `1000`
+
+断言失败前允许的最长轮询时间，单位为毫秒。

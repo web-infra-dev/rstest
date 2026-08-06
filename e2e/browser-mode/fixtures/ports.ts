@@ -1,8 +1,11 @@
 /**
- * Keep every fixture port unique.
+ * Keep every port unique across configs that different test files launch.
  *
- * Browser-mode e2e tests can run concurrently in a single process. Reusing a port
- * across fixtures can cause flaky "EADDRINUSE" failures.
+ * Browser-mode e2e test *files* run concurrently in a single process, so two
+ * configs a single file runs one after another may share a port, but two
+ * configs reached from different files must not — that is the flaky
+ * "EADDRINUSE" failure, and one fixture directory holding several configs is
+ * exactly where it hides.
  */
 export const BROWSER_PORTS = {
   basic: 5180,
@@ -21,7 +24,6 @@ export const BROWSER_PORTS = {
   'setup-files': 5190,
   snapshot: 5196,
   watch: 5186,
-  'watch-stale': 5218,
   'watch-headed': 5270,
   webkit: 5198,
   viewport: 5214,
@@ -48,9 +50,11 @@ export const BROWSER_PORTS = {
   'browser-in-source': 5260,
   'browser-in-source-watch': 5262,
   'watch-shortcuts': 5194,
-  'watch-setup': 5264,
   'watch-multi-project': 5266,
   'mixed-watch-shortcuts': 5268,
+  // One key for every config `configWarnings.test.ts` launches: its tests run
+  // serially, so they may share — the rule above only splits across files.
+  'browser-coverage-config-warnings': 5272,
 } as const;
 
 const browserPortValues = Object.values(BROWSER_PORTS);

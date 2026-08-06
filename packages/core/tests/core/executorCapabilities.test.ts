@@ -28,6 +28,7 @@ const makeProject = (): ProjectContext =>
       isolate: true,
       coverage: { enabled: false, reporters: [] },
       snapshotFormat: {},
+      expect: { poll: { interval: 50, timeout: 1000 } },
       env: {},
       logHeapUsage: false,
       detectAsyncLeaks: false,

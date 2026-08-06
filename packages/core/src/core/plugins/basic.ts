@@ -11,6 +11,7 @@ import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
 import { runtimeChunkNameForEnvironment } from '../runtimeChunk';
 import {
   applyMockExportsPresence,
+  forceWebpackRuntimeMode,
   getMockRstestPluginOptions,
 } from './mockBuild';
 
@@ -169,13 +170,13 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
                 type: 'javascript/esm',
               });
 
+              const experiments = forceWebpackRuntimeMode(config);
               // Disable rspack's built-in `webassembly/async` handling and turn
               // every `.wasm` into a self-contained JS module via wasmLoader.mjs
               // that reads its on-disk SOURCE bytes and instantiates them, so
               // there is no `async_wasm_loading` runtime and no `readFile(`
               // string-replace. All wasm reads resolve source-relative (#1455).
-              config.experiments ??= {};
-              config.experiments.asyncWebAssembly = false;
+              experiments.asyncWebAssembly = false;
               config.module.rules.push({
                 test: /\.wasm$/,
                 type: 'javascript/auto',

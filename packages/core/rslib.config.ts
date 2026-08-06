@@ -168,7 +168,9 @@ export default defineConfig({
       syntax: 'es2023',
       dts: {
         isolated: true,
-        bundle: true,
+        bundle: {
+          bundledPackages: ['@vitest/spy', 'tinyrainbow'],
+        },
       },
       banner: {
         dts: jestMatchersDtsBanner,

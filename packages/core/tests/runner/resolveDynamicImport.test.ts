@@ -1,11 +1,5 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
+import { withTempDir } from '../helpers/tempDir';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { join } from 'pathe';
 import {
@@ -96,8 +90,7 @@ describe('finalizeDynamicImport — node: interop skip', () => {
 
 describe('federation dynamic import fallback', () => {
   it('resolves relative specifiers against the injected origin', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'rstest-federation-import-'));
-    try {
+    await withTempDir('rstest-federation-import-', async (dir) => {
       const depPath = join(dir, 'dep.mjs');
       const origin = join(dir, 'source.mjs');
       writeFileSync(depPath, 'export const marker = "from-origin";');
@@ -122,14 +115,11 @@ describe('federation dynamic import fallback', () => {
       );
 
       expect(mod?.marker).toBe('from-origin');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    });
   });
 
   it('uses the worker origin when the injected origin is unavailable', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'rstest-federation-import-'));
-    try {
+    await withTempDir('rstest-federation-import-', async (dir) => {
       const depPath = join(dir, 'dep.mjs');
       writeFileSync(depPath, 'export const marker = "from-worker-origin";');
 
@@ -154,14 +144,11 @@ describe('federation dynamic import fallback', () => {
       );
 
       expect(mod?.marker).toBe('from-worker-origin');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    });
   });
 
   it('resolves bare specifiers against the injected origin', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'rstest-federation-import-'));
-    try {
+    await withTempDir('rstest-federation-import-', async (dir) => {
       const packageDir = join(dir, 'node_modules', 'origin-only-pkg');
       mkdirSync(packageDir, { recursive: true });
       writeFileSync(
@@ -193,9 +180,7 @@ describe('federation dynamic import fallback', () => {
       );
 
       expect(mod?.marker).toBe('from-origin-package');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    });
   });
 });
 

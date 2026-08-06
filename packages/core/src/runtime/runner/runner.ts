@@ -1,11 +1,10 @@
-import { GLOBAL_EXPECT, getState, setState } from '@vitest/expect';
+import { getState } from '@vitest/expect';
 import type { SnapshotClient, SnapshotState } from '@vitest/snapshot';
 import type {
   AfterEachListener,
   BeforeEachListener,
   CoverageProvider,
   FormattedError,
-  MatcherState,
   OnTestFailedHandler,
   OnTestFinishedHandler,
   Rstest,
@@ -29,7 +28,7 @@ import {
   getTaskNameWithPrefix,
   toNativePath,
 } from '../../utils/helper';
-import { createExpect } from '../api/expect';
+import { createExpect, getGlobalExpect, resetExpectState } from '../api/expect';
 import { formatTestError, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
 import { createFixtureResolver } from './fixtures';
@@ -66,6 +65,7 @@ export class TestRunner {
   /** current test case */
   private _test: TestCase | undefined;
   private workerState: WorkerState | undefined;
+  private readonly localExpects = new WeakMap<TestContext, RstestExpect>();
 
   constructor(private readonly taskContext: TaskContext) {}
 
@@ -100,6 +100,7 @@ export class TestRunner {
         beforeEachListeners: BeforeEachListener[];
         afterEachListeners: AfterEachListener[];
       },
+      retryCount: number,
     ): Promise<TestResult> => {
       if (test.runMode === 'skip') {
         snapshotClient.skipTest(testPath, getTaskNameWithPrefix(test));
@@ -157,6 +158,7 @@ export class TestRunner {
         test,
         snapshotClient.getSnapshotState(testPath),
         fixtureCleanups,
+        retryCount,
       );
 
       try {
@@ -335,12 +337,7 @@ export class TestRunner {
                 timeout: test.timeout,
                 stackTraceError: test.stackTraceError,
                 getAssertionCalls: () => {
-                  const expect = (test.context as any)._useLocalExpect
-                    ? test.context.expect
-                    : (globalThis as any)[GLOBAL_EXPECT];
-                  const { assertionCalls } = getState(expect);
-
-                  return assertionCalls;
+                  return this.getAssertionState(test).assertionCalls;
                 },
               });
               await fn(test.context);
@@ -665,7 +662,11 @@ export class TestRunner {
               // attributed errors from earlier repeats that already passed.
               const repeatRetryErrors: FormattedError[] = [];
               do {
-                const currentResult = await runTestsCase(test, parentHooks);
+                const currentResult = await runTestsCase(
+                  test,
+                  parentHooks,
+                  retryCount,
+                );
 
                 if (currentResult.status === 'fail') {
                   repeatRetryErrors.push(
@@ -823,12 +824,10 @@ export class TestRunner {
     }
   }
 
-  private createTestContext(test: TestCase): TestContext {
+  private createTestContext(test: TestCase, retryCount: number): TestContext {
     const context = (() => {
       throw new Error('done() callback is deprecated, use promise instead');
     }) as unknown as TestContext;
-
-    let _expect: RstestExpect | undefined;
 
     const current = this._test;
 
@@ -837,6 +836,7 @@ export class TestRunner {
       name: test.name,
       filepath: toNativePath(test.testPath),
       projectRoot: toNativePath(this.workerState!.projectRoot),
+      retryCount,
       get meta() {
         return (test.meta ??= {});
       },
@@ -847,13 +847,15 @@ export class TestRunner {
 
     Object.defineProperty(context, 'expect', {
       get: () => {
-        if (!_expect) {
-          _expect = createExpect({
+        let expect = this.localExpects.get(context);
+        if (!expect) {
+          expect = createExpect({
             getWorkerState: () => this.workerState!,
             getCurrentTest: () => current,
           });
+          this.localExpects.set(context, expect);
         }
-        return _expect;
+        return expect;
       },
     });
 
@@ -864,9 +866,7 @@ export class TestRunner {
     });
 
     Object.defineProperty(context, '_useLocalExpect', {
-      get() {
-        return _expect != null;
-      },
+      get: () => this.localExpects.has(context),
     });
 
     Object.defineProperty(context, 'onTestFinished', {
@@ -928,25 +928,21 @@ export class TestRunner {
     test: TestCase,
     snapshotState: SnapshotState,
     fixtureCleanups: (() => Promise<void>)[],
+    retryCount: number,
   ): FixtureResolver {
-    setState<MatcherState>(
-      {
-        assertionCalls: 0,
-        isExpectingAssertions: false,
-        isExpectingAssertionsError: null,
-        expectedAssertionsNumber: null,
-        expectedAssertionsNumberErrorGen: null,
-        // `expect.getState().testPath` is user-facing; expose the OS-native
-        // path (equal to `import.meta.filename`). Internal consumers
-        // (snapshot, reporter, related) keep the POSIX `test.testPath` (#1465).
-        testPath: toNativePath(test.testPath),
-        snapshotState,
-        currentTestName: getTaskNameWithPrefix(test),
-      },
-      (globalThis as any)[GLOBAL_EXPECT],
-    );
+    // @vitest/expect records soft failures on the test object; each attempt must
+    // start clean because retry history is preserved separately in retryErrors.
+    test.result = undefined;
+    resetExpectState(getGlobalExpect(), {
+      // `expect.getState().testPath` is user-facing; expose the OS-native
+      // path (equal to `import.meta.filename`). Internal consumers
+      // (snapshot, reporter, related) keep the POSIX `test.testPath` (#1465).
+      testPath: toNativePath(test.testPath),
+      snapshotState,
+      currentTestName: getTaskNameWithPrefix(test),
+    });
 
-    const context = this.createTestContext(test);
+    const context = this.createTestContext(test, retryCount);
 
     // create test context
     Object.defineProperty(test, 'context', {
@@ -954,25 +950,77 @@ export class TestRunner {
       enumerable: false,
     });
 
-    return createFixtureResolver(test, context, fixtureCleanups);
+    return createFixtureResolver(test, context, fixtureCleanups, {
+      runNamedFixtureSetup: (setup, onTimeout) =>
+        wrapTimeout({
+          name: 'fixture setup',
+          fn: setup,
+          timeout: test.timeout,
+          onTimeout,
+          stackTraceError: test.stackTraceError,
+        })(),
+      wrapNamedFixtureCleanup: (cleanup) =>
+        wrapTimeout({
+          name: 'fixture cleanup',
+          fn: cleanup,
+          timeout: test.timeout,
+          stackTraceError: test.stackTraceError,
+        }),
+    });
+  }
+
+  private getAssertionState(test: TestCase) {
+    const globalExpect = getGlobalExpect();
+    const globalState = getState(globalExpect);
+    const localExpect = this.localExpects.get(test.context);
+    if (!localExpect) {
+      return globalState;
+    }
+
+    const localState = getState(localExpect);
+    if (test.concurrent) {
+      return localState;
+    }
+
+    const assertionCalls =
+      globalState.assertionCalls + localState.assertionCalls;
+    const hasLocalAssertionCount = localState.expectedAssertionsNumber !== null;
+    const hasLocalAssertionRequirement = localState.isExpectingAssertions;
+
+    return {
+      ...localState,
+      assertionCalls,
+      expectedAssertionsNumber: hasLocalAssertionCount
+        ? localState.expectedAssertionsNumber
+        : globalState.expectedAssertionsNumber,
+      expectedAssertionsNumberErrorGen: hasLocalAssertionCount
+        ? localState.expectedAssertionsNumberErrorGen
+        : globalState.expectedAssertionsNumberErrorGen,
+      isExpectingAssertions:
+        globalState.isExpectingAssertions || localState.isExpectingAssertions,
+      isExpectingAssertionsError: hasLocalAssertionRequirement
+        ? localState.isExpectingAssertionsError
+        : globalState.isExpectingAssertionsError,
+    };
   }
 
   private afterRunTest(test: TestCase): void {
-    // @ts-expect-error
-    const expect = test.context._useLocalExpect
-      ? test.context.expect
-      : (globalThis as any)[GLOBAL_EXPECT];
-
     const {
       assertionCalls,
       expectedAssertionsNumber,
       expectedAssertionsNumberErrorGen,
       isExpectingAssertions,
       isExpectingAssertionsError,
-    } = getState(expect);
+    } = this.getAssertionState(test);
 
     if (test.result?.state === 'fail') {
       throw test.result.errors;
+    }
+
+    const localExpect = this.localExpects.get(test.context);
+    if (localExpect && !test.concurrent) {
+      getGlobalExpect().setState({ assertionCalls });
+      localExpect.setState({ assertionCalls });
     }
 
     if (
