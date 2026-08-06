@@ -1,6 +1,8 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
+import path from 'pathe';
 import type { RstestContext } from '../../types';
 import { castArray, getTempRstestOutputDirGlob } from '../../utils';
+import type { TestEntryPathState } from './moduleCacheControl';
 
 class TestFileWatchPlugin {
   private readonly contextToWatch: string | null = null;
@@ -26,21 +28,12 @@ class TestFileWatchPlugin {
   }
 }
 
-const toTestEntryRequests = (
-  entries: Record<string, string>,
-): Record<string, string> =>
-  Object.fromEntries(
-    Object.entries(entries).map(([name, testPath]) => [
-      name,
-      `${testPath}${testPath.includes('?') ? '&' : '?'}__rstest_entry__`,
-    ]),
-  );
-
 export const pluginEntryWatch: (params: {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   setupFiles: Record<string, Record<string, string>>;
   globalSetupFiles: Record<string, Record<string, string>>;
+  testEntryPathState?: TestEntryPathState;
   isWatch: boolean;
   configFilePath?: string;
 }) => RsbuildPlugin = ({
@@ -49,17 +42,31 @@ export const pluginEntryWatch: (params: {
   setupFiles,
   globalSetupFiles,
   context,
+  testEntryPathState,
 }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
     const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
+    const getSourceEntries = async (environmentName: string) => {
+      const sourceEntries = await globTestSourceEntries(environmentName);
+      testEntryPathState?.set(
+        environmentName,
+        new Set(
+          Object.values(sourceEntries).map((testPath) =>
+            path.normalize(testPath),
+          ),
+        ),
+      );
+      return sourceEntries;
+    };
+
     api.modifyRspackConfig(async (config, { environment }) => {
       if (isWatch) {
         config.plugins.push(new TestFileWatchPlugin(environment.config.root));
         config.entry = async () => {
-          const sourceEntries = await globTestSourceEntries(environment.name);
+          const sourceEntries = await getSourceEntries(environment.name);
           return {
-            ...toTestEntryRequests(sourceEntries),
+            ...sourceEntries,
             ...setupFiles[environment.name],
             ...(globalSetupFiles?.[environment.name] || {}),
           };
@@ -102,11 +109,11 @@ export const pluginEntryWatch: (params: {
         config.watchOptions ??= {};
         config.watchOptions.ignored = '**/**';
 
-        const sourceEntries = await globTestSourceEntries(environment.name);
+        const sourceEntries = await getSourceEntries(environment.name);
         config.entry = {
           ...setupFiles[environment.name],
           ...(globalSetupFiles?.[environment.name] || {}),
-          ...toTestEntryRequests(sourceEntries),
+          ...sourceEntries,
         };
       }
     });
