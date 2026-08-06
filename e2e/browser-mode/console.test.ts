@@ -66,6 +66,16 @@ describe('browser mode - console forwarding', () => {
     },
   );
 
+  it('should use each project silent config', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli('silent', {
+      args: ['-c', 'rstest.projects.config.mts'],
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).not.toContain('console from browser-silent');
+    expect(cli.stdout).toContain('console from browser-loud');
+  });
+
   // `silent: 'passed-only'` buffers logs and replays only the failing tasks'
   // logs through the shared silent-console controller — the same engine the node
   // pool uses. Replayed logs now go through the owning project's `onConsoleLog`

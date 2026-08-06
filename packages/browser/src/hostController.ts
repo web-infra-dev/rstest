@@ -525,7 +525,10 @@ export const runBrowserController = async (
   ): BrowserWatchSession => ({
     runCycle: async (testPaths) => {
       const rerunStartTime = Date.now();
-      const fatalErrorBeforeRun = fatalErrorRef.current;
+      // A fatal error is one cycle's outcome, not permanent session state. The
+      // headed scheduler also uses this ref to stop the rest of a failed cycle,
+      // so carrying it forward would prevent the next cycle from reloading.
+      fatalErrorRef.current = null;
       let rerunError: Error | undefined;
 
       try {
@@ -537,10 +540,7 @@ export const runBrowserController = async (
         rerunError = toError(error);
       }
 
-      const rerunFatalError =
-        fatalErrorRef.current && fatalErrorRef.current !== fatalErrorBeforeRun
-          ? fatalErrorRef.current
-          : undefined;
+      const rerunFatalError = fatalErrorRef.current ?? undefined;
       return buildRerunOutcome({
         rerunTestPaths: testPaths,
         testTime: Math.max(0, Date.now() - rerunStartTime),
@@ -761,23 +761,40 @@ export const runBrowserController = async (
     return sink;
   };
 
-  // Silent-console buffering runs through the shared controller — the same
-  // engine the node worker uses — so `silent: 'passed-only'` buffers logs and
-  // replays only the failing tasks'. Intercepted replays route through the
-  // owning project's sink, so they honor per-project `onConsoleLog` and
-  // `disableConsoleIntercept` (the browser host previously flushed straight to
-  // reporters, bypassing both). `writeOriginalLog` is a host-side no-op: page
-  // logs have no host "original stream" — the page console and headed terminal
-  // forwarding already show them, so re-emitting here would double-print.
-  const silentConsoleController = createSilentConsoleController({
-    runtimeConfig: {
-      silent: context.normalizedConfig.silent,
-      disableConsoleIntercept: context.normalizedConfig.disableConsoleIntercept,
-    },
-    emitInterceptedLog: (log) =>
-      sinkForProjectName(log.project).onConsoleLog(log),
-    writeOriginalLog: () => {},
-  });
+  // Each project owns its silent-console buffer. Besides preserving each
+  // project's config, this keeps concurrent projects that run the same test path
+  // from sharing task-id keyed buffered logs. Controllers that are not using
+  // `passed-only` never buffer, so lifecycle handlers can flush unconditionally.
+  // `writeOriginalLog` is a host-side no-op: page logs have no host "original
+  // stream" — the page console and headed terminal forwarding already show them,
+  // so re-emitting here would double-print.
+  const silentConsoleControllers = new Map<
+    string,
+    ReturnType<typeof createSilentConsoleController>
+  >(
+    browserProjects.map((project) => [
+      project.name,
+      createSilentConsoleController({
+        runtimeConfig: {
+          silent: project.normalizedConfig.silent,
+          disableConsoleIntercept:
+            project.normalizedConfig.disableConsoleIntercept,
+        },
+        emitInterceptedLog: (log) =>
+          sinkForProjectName(log.project).onConsoleLog(log),
+        writeOriginalLog: () => {},
+      }),
+    ]),
+  );
+  const silentConsoleControllerForProjectName = (projectName: string) => {
+    const controller = silentConsoleControllers.get(projectName);
+    if (!controller) {
+      throw new Error(
+        `No silent console controller for project "${projectName}"`,
+      );
+    }
+    return controller;
+  };
 
   const snapshotRpcMethods = {
     async resolveSnapshotPath(testPath: string): Promise<string> {
@@ -860,15 +877,15 @@ export const runBrowserController = async (
       ?.recordSuiteResult(payload);
     await sinkForProjectName(payload.project).onTestSuiteResult(payload);
 
-    if (context.normalizedConfig.silent === 'passed-only') {
-      silentConsoleController.flushBufferedLogsForTask({
-        taskId: payload.testId,
-        status: payload.status,
-        taskParentNames: payload.parentNames,
-        taskType: 'suite',
-        testPath: payload.testPath,
-      });
-    }
+    silentConsoleControllerForProjectName(
+      payload.project,
+    ).flushBufferedLogsForTask({
+      taskId: payload.testId,
+      status: payload.status,
+      taskParentNames: payload.parentNames,
+      taskType: 'suite',
+      testPath: payload.testPath,
+    });
   };
 
   const handleTestCaseStart = async (
@@ -888,15 +905,15 @@ export const runBrowserController = async (
       ?.recordCaseResult(payload);
     await sinkForProjectName(payload.project).onTestCaseResult(payload);
 
-    if (context.normalizedConfig.silent === 'passed-only') {
-      silentConsoleController.flushBufferedLogsForTask({
-        taskId: payload.testId,
-        status: payload.status,
-        taskParentNames: payload.parentNames,
-        taskType: 'case',
-        testPath: payload.testPath,
-      });
-    }
+    silentConsoleControllerForProjectName(
+      payload.project,
+    ).flushBufferedLogsForTask({
+      taskId: payload.testId,
+      status: payload.status,
+      taskParentNames: payload.parentNames,
+      taskType: 'case',
+      testPath: payload.testPath,
+    });
   };
 
   const handleTestFileComplete = async (
@@ -916,15 +933,15 @@ export const runBrowserController = async (
       }
     }
 
-    if (context.normalizedConfig.silent === 'passed-only') {
-      silentConsoleController.flushBufferedLogsForTask({
-        taskId: payload.testId,
-        status: payload.status,
-        taskParentNames: payload.parentNames,
-        taskType: 'file',
-        testPath: payload.testPath,
-      });
-    }
+    silentConsoleControllerForProjectName(
+      payload.project,
+    ).flushBufferedLogsForTask({
+      taskId: payload.testId,
+      status: payload.status,
+      taskParentNames: payload.parentNames,
+      taskType: 'file',
+      testPath: payload.testPath,
+    });
 
     // Feeds stateManager, fans out onTestFileResult to reporters, and ingests
     // payload.snapshotResult (the snapshotManager.add moved into the sink).
@@ -945,7 +962,9 @@ export const runBrowserController = async (
       type: payload.type,
       trace: payload.trace,
     };
-    silentConsoleController.onConsoleLog(log);
+    silentConsoleControllerForProjectName(payload.projectName).onConsoleLog(
+      log,
+    );
   };
 
   // Every failing file and every fatal error reaches core through the cycle
@@ -1042,17 +1061,20 @@ export const runBrowserController = async (
         },
       });
 
+  // The first build must not trigger a duplicate cycle, but a fatal test cycle
+  // does not invalidate the session the scheduler already established.
+  watchState.hooksEnabled = watchSession !== undefined;
+
   // A fatal error the run reported outranks its results: it rides the returned
   // outcome into core's finalize, which raises the exit code from it.
   if (fatalErrorRef.current) {
-    return failWithError(fatalErrorRef.current, close);
+    return {
+      ...(await failWithError(fatalErrorRef.current, close)),
+      watchSession,
+    };
   }
 
   context.updateReporterResultState(reporterResults, caseResults);
-
-  // Enable the compile hooks only after the initial cycle, so the first build
-  // never triggers a duplicate run.
-  watchState.hooksEnabled = isWatchMode;
 
   return {
     results: reporterResults,

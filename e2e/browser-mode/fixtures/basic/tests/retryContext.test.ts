@@ -18,6 +18,12 @@ test(
   },
 );
 
+let softAttempts = 0;
+test('soft assertion retry can recover', { retry: 1 }, () => {
+  softAttempts += 1;
+  expect.soft(softAttempts).toBe(2);
+});
+
 afterAll(() => {
   expect(retryCounts).toEqual([0, 1]);
 });

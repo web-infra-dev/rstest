@@ -566,7 +566,6 @@ const createRstestExposeAPI = (
       coverage: context.normalizedConfig.coverage,
       resolveSnapshotPath: context.normalizedConfig.resolveSnapshotPath,
       onConsoleLog: context.normalizedConfig.onConsoleLog,
-      silent: context.normalizedConfig.silent,
       bail: context.normalizedConfig.bail,
       update: context.normalizedConfig.update,
       onlyFailures: context.normalizedConfig.onlyFailures,
