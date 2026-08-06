@@ -5,7 +5,7 @@ import type {
   BrowserHostConfig,
 } from './protocol';
 
-declare module '@rstest/browser-manifest' {
+declare module '__rstest_virtual_browser_manifest__' {
   export type ManifestProjectConfig = {
     name: string;
     environmentName: string;

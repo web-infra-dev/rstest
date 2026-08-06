@@ -21,8 +21,8 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/browser.d.ts",
-      "default": "./dist/browser.js"
+      "types": "./dist/client/client/index.d.ts",
+      "default": "./dist/client/index.js"
     },
     "./internal": {
       "types": "./dist/index.d.ts",
@@ -32,10 +32,10 @@
       "default": "./package.json"
     }
   },
-  "main": "./dist/browser.js",
+  "main": "./dist/client/index.js",
+  "types": "./dist/client/client/index.d.ts",
   "files": [
     "dist",
-    "src",
     "NOTICE",
     "LICENSE-APACHE-2.0"
   ],

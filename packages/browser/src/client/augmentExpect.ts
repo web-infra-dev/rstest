@@ -1,4 +1,4 @@
-import type { Locator } from './client/locator';
+import type { Locator } from './locator';
 
 export type BrowserElementExpect = {
   not: BrowserElementExpect;

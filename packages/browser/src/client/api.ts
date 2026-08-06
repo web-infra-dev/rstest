@@ -1,6 +1,6 @@
-import type { BrowserElementExpect } from '../augmentExpect';
 import { registerElementExpect } from '@rstest/core/internal/browser-runtime';
 import type { BrowserLocatorText, BrowserRpcRequest } from '../rpcProtocol';
+import type { BrowserElementExpect } from './augmentExpect';
 import { callBrowserRpc } from './browserRpc';
 import {
   isLocator,
