@@ -338,8 +338,12 @@ describe.concurrent('reporters', () => {
       cli.stdout.match(/\[custom reporter\] onTestCaseResult/g)?.length,
     ).toBe(3);
 
-    expect(cli.stdout).toContain('[custom reporter] onTestRunStart');
-    expect(cli.stdout).toContain('[custom reporter] onTestRunEnd');
+    expect(
+      cli.stdout.match(/\[custom reporter\] onTestRunStart/g)?.length,
+    ).toBe(1);
+    expect(cli.stdout.match(/\[custom reporter\] onTestRunEnd/g)?.length).toBe(
+      1,
+    );
   });
 
   it('exposes metadata to custom reporter hooks', async ({
