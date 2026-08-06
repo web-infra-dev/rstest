@@ -58,6 +58,60 @@ describe('browser mode - headed watch', () => {
   );
 
   it.runIf(shouldRunHeadedBrowserTests)(
+    'should keep the watch session live when a pending reload file is deleted mid-flight',
+    async () => {
+      const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-headed-pending-delete`;
+      const anotherTestPath = path.join(
+        fixturesTargetPath,
+        'tests/another.test.ts',
+      );
+
+      const { fs } = await prepareFixtures({
+        fixturesPath: `${__dirname}/fixtures/watch`,
+        fixturesTargetPath,
+      });
+      // Slow every runner boot so the reload below is still in flight when the
+      // delete lands — the window where the file-set commit unmounts the
+      // iframe of a pending reload. Without the host resolving that pending as
+      // obsolete, the cycle never settles and every later cycle queues behind
+      // it forever (the Windows headed watch hang).
+      fs.update(path.join(fixturesTargetPath, 'setup.ts'), (content) => {
+        return `const slowBootEnd = Date.now() + 1_500;\nwhile (Date.now() < slowBootEnd) {\n  // busy-wait: keep the reload in flight long enough to race the delete\n}\n${content}`;
+      });
+
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: [
+          '--browser.headless',
+          'false',
+          `--browser.port=${BROWSER_PORTS['watch-headed']}`,
+        ],
+      });
+
+      try {
+        await cli.waitForStdout('Test Files 2 passed');
+        await cli.waitForStdout('Waiting for file changes...');
+
+        cli.resetStd();
+        fs.update(anotherTestPath, (content) => `${content}\n// touch\n`);
+        await cli.waitForStdout('Re-running 1 affected test file(s)');
+
+        // Give the cycle time to issue the reload (its runner then sits in the
+        // slow boot), and delete the file while that reload is pending.
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        fs.delete(anotherTestPath);
+
+        await cli.waitForStdout('Test file set changed, re-running 1 file(s)');
+        await cli.waitForStdout('✓ tests/index.test.ts');
+        await cli.waitForStdout('Test Files 1 passed');
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    60_000,
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
     'should keep the watch session live after an initial fatal error',
     async () => {
       const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-headed-initial-fatal`;

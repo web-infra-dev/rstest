@@ -817,11 +817,16 @@ const BrowserRunner: React.FC<{
                   const onLoad = (
                     event: React.SyntheticEvent<HTMLIFrameElement>,
                   ) => {
-                    if (!runId) {
+                    const frame = event.currentTarget;
+                    // Read the runId from the frame, never from
+                    // `runIdByTestFile`: `handleReloadTestFile` navigates
+                    // imperatively but only schedules the state update, so a
+                    // `load` that beats the commit would skip the handshake and
+                    // strand the runner waiting out its config timeout.
+                    const frameRunId = readRunIdFromFrame(frame);
+                    if (!frameRunId) {
                       return;
                     }
-                    const frame = event.currentTarget;
-                    const frameRunId = readRunIdFromFrame(frame) ?? runId;
                     if (frame.contentWindow) {
                       frame.contentWindow.postMessage(
                         {
