@@ -2,7 +2,6 @@ import { resolve } from 'node:path';
 import { defineConfig } from '@rsbuild/core';
 import { pluginReact } from '@rsbuild/plugin-react';
 import { pluginSvgr } from '@rsbuild/plugin-svgr';
-import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
 const root = __dirname;
 
@@ -36,10 +35,5 @@ export default defineConfig({
   },
   html: {
     template: resolve(root, './src/index.html'),
-  },
-  tools: {
-    rspack: {
-      plugins: [rsdoctorCIPlugin()].filter(Boolean),
-    },
   },
 });
