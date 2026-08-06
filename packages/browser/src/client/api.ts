@@ -1,4 +1,5 @@
 import type { BrowserElementExpect } from '../augmentExpect';
+import { registerElementExpect } from '@rstest/core/internal/browser-runtime';
 import type { BrowserLocatorText, BrowserRpcRequest } from '../rpcProtocol';
 import { callBrowserRpc } from './browserRpc';
 import {
@@ -158,34 +159,7 @@ const element = (locator: unknown): BrowserElementExpect => {
   return createElementExpect(locator, false);
 };
 
-const markBrowserElement = (): void => {
-  Object.defineProperty(element, '__rstestBrowser', {
-    value: true,
-    configurable: false,
-    enumerable: false,
-    writable: false,
-  });
-};
-
-const installExpectElement = (): void => {
-  // In browser runtime, `@rstest/core` exports are proxies that forward property
-  // access to `globalThis.RSTEST_API`. Patch the underlying expect implementation.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const api = (globalThis as any).RSTEST_API as any;
-  const target = api?.expect;
-  if (!target) {
-    throw new Error(
-      'RSTEST_API.expect is not registered yet. This usually indicates @rstest/browser was imported too early.',
-    );
-  }
-
-  if (typeof target.element !== 'function' || !target.element.__rstestBrowser) {
-    markBrowserElement();
-    target.element = element;
-  }
-};
-
-installExpectElement();
+registerElementExpect(element);
 
 export type {
   BrowserPage,
