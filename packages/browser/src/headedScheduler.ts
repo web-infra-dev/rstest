@@ -292,6 +292,20 @@ export const createHeadedScheduler = async ({
       runtime.containerPage = containerPage;
       runtime.containerContext = containerContext;
     }
+
+    // Forward browser console to terminal
+    containerPage.on('console', (msg) => {
+      const text = msg.text();
+      if (text.startsWith('[Container]') || text.startsWith('[Runner]')) {
+        logger.log(color.gray(`[Browser Console] ${text}`));
+        return;
+      }
+      // Everything else — runner boot failures, chunk 404s, uncaught errors —
+      // is invisible without this: the runner logs nothing before its config
+      // handshake, so a frame that dies during load looks identical to a frame
+      // that never navigated.
+      logger.debug(`[Browser Console] ${text}`);
+    });
   }
 
   setDispatchPageResolver(() => ({ containerPage }));
@@ -644,6 +658,23 @@ export const createHeadedScheduler = async ({
       if (fatalErrorRef.current) {
         return;
       }
+      // The scope was claimed against the file set of its own cycle, but the
+      // set can change again while this reload waits in the queue (core queues
+      // cycles, and `dispatchRerun` commits between them). A file that left
+      // the set no longer has an iframe, so reloading it would either throw
+      // ("iframe not found") and fail an innocent cycle, or navigate a frame
+      // the next `onTestFileUpdate` unmounts mid-flight — a completion that
+      // never arrives and a cycle that never ends.
+      if (
+        !currentTestFiles.some(
+          (currentFile) => currentFile.testPath === file.testPath,
+        )
+      ) {
+        logger.debug(
+          `[Browser UI] Skipping reload for removed test file: ${file.testPath}`,
+        );
+        return;
+      }
       await reloadTestFileAndWait(file, testNamePattern);
     });
   };
@@ -747,6 +778,19 @@ export const createHeadedScheduler = async ({
 
       if (rerunPlan.fileSetUpdate) {
         currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
+        // A reload can already be in flight for a file this update deletes:
+        // `notifyTestFileUpdate` below unmounts that file's iframe, so its
+        // navigation dies without a `load` event and its file-complete never
+        // arrives. Nothing else settles that pending — the container stays
+        // connected and no fatal fires — and an unsettled pending wedges its
+        // cycle, and with it every cycle queued behind (the Windows headed
+        // watch rename hang). Resolve it as obsolete: the file is gone and its
+        // results were just pruned, so there is nothing left for the reload to
+        // produce.
+        for (const deletedTestPath of rerunPlan.fileSetUpdate
+          .deletedTestPaths) {
+          resolvePendingHeadedReload(deletedTestPath);
+        }
         await rpcManager.notifyTestFileUpdate(currentTestFiles);
         if (currentTestFiles.length > 0) {
           await waitForRunnerFramesReady(
