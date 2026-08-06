@@ -25,6 +25,8 @@ When a test run becomes noticeably slower, first determine whether the bottlenec
 
 These two categories can then be investigated separately for build versus test execution.
 
+To measure that split instead of inferring it, run the suite once with [`--trace`](#using-trace).
+
 ### Investigating build performance
 
 For projects using browser-like environments such as `jsdom` or `happy-dom`, the build stage is one of the most common bottlenecks. In these environments, rstest bundles third-party dependencies from `node_modules` by default instead of externalizing them like it does in the `node` environment.
@@ -123,9 +125,49 @@ Once the problem has been narrowed down to the test execution stage, the main qu
 
 With [verbose reporter](/guide/basic/reporters#verbose-reporter) enabled, you can directly inspect the execution time of each test file and individual test case. This is usually the first step for execution-stage troubleshooting because it helps narrow the problem down to a specific file, a group of tests, or a small set of cases.
 
-**2. Inspect detailed time distribution after narrowing the scope**
+**2. Break the run down by phase, suite, and case**
+
+Rerun the same tests with [`--trace`](#using-trace). Its summary ranks the slowest phases, files, and test cases, which usually tells you whether the cost sits in build-related phases, in setup files, or in the test bodies.
+
+**3. Inspect detailed time distribution after narrowing the scope**
 
 Once the slow tests have been identified but the actual runtime cost is still unclear, drop down to a profiler. See [Profiler](#profiler) for picking between [samply](#using-samply) and [Node.js profiling](#nodejs-profiling).
+
+## Using --trace \{#using-trace}
+
+`--trace` breaks a run into per-phase, per-suite, and per-case slices. Use it when the reporter's single `Duration` number is not enough to tell where the time is spent.
+
+```bash
+npx rstest run --trace
+```
+
+The flag is CLI-only and opt-in. Each run records per-suite and per-case slices annotated with status and retry count, a heap counter sampled at each phase boundary, and one slice per phase of every test file:
+
+- `prepare`: set up the worker runtime, the global API, and the coverage provider when coverage is enabled. It is entered twice per test file, before and after `envSetup`.
+- `envSetup`: install the test environment. Close to zero for `node`, and when a non-isolated worker is already pinned to the environment.
+- `load`: receive the built assets of the test entry. The host-side cost of producing them is reported as a host span instead.
+- `setupFiles`: evaluate the configured setup files.
+- `collect`: evaluate the top-level code of the test file. `describe` bodies are deferred and run in `tests`.
+- `tests`: build the suite and case tree, then run the cases and their hooks.
+- `coverage`: collect coverage data from the provider. Absent when coverage is disabled, or when the file bailed or threw before this point.
+- `teardown`: clean up the coverage provider and the worker state, plus the test environment when `isolate` is enabled.
+
+Browser Mode records only `prepare` and `tests`, measured on the host from the messages the page sends.
+
+Rstest writes two files to `<rootPath>/.rstest/`, and replaces them on every watch rerun:
+
+- `trace-<timestamp>.summary.md`: a markdown summary ranking the slowest phases, files, and test cases. The same content is printed to the terminal.
+- `trace-<timestamp>.json`: a Perfetto-compatible trace for the visual UI.
+
+Start with the summary. Open the trace when you also need to see how work overlapped across workers.
+
+![Perfetto UI showing the trace produced by running npx rstest --trace inside the rstest repository](https://assets.rspack.rs/rstest/assets/rstest-trace-perfetto.png)
+
+In a TTY, Rstest starts a local helper server so that the printed link opens the trace directly in the Perfetto UI. In CI, the helper server is not started. Upload the trace file as an artifact and drag it into [ui.perfetto.dev](https://ui.perfetto.dev) instead.
+
+:::tip
+To investigate a slowdown with a Coding Agent, hand it both files: the summary for the ranking, the trace for the full event data. They pair with the [rstest-debugging](#using-agent-skills) skill.
+:::
 
 ## Using Rsdoctor
 
@@ -172,7 +214,7 @@ After running the above commands, Rstest will automatically register the Rsdocto
 
 ## Profiler
 
-Choose a profiler based on what you need to analyze:
+Choose a profiler based on what you need to analyze. Check whether [`--trace`](#using-trace) already answers the question first, since it requires no external tool.
 
 - **CPU time distribution**: use [samply](#using-samply) (recommended). It profiles the rstest main process and worker forks together.
 - **Memory allocation**: use `--heap-prof`. See [Node.js profiling](#nodejs-profiling). samply does not collect memory data.
