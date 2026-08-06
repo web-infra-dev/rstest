@@ -137,6 +137,22 @@ export const cleanupRemote = async () => {
   globalThis.__RSTEST_MF_CHILDREN__ = [];
 };
 
+const startRemote = async (
+  name: string,
+  cmd: string,
+  args: string[],
+  remoteEntryUrl: string,
+) => {
+  const server = start(name, componentAppDir, cmd, args);
+  globalThis.__RSTEST_MF_CHILDREN__!.push(server);
+  try {
+    await waitForUrl(remoteEntryUrl, 30_000);
+  } catch (error) {
+    await cleanupRemote();
+    throw error;
+  }
+};
+
 export const ensureNodeRemote = async () => {
   globalThis.__RSTEST_MF_CHILDREN__ ??= [];
 
@@ -146,15 +162,14 @@ export const ensureNodeRemote = async () => {
   // run under JSDOM. Serve the *node* remoteEntry on 3001 so the MF node loader can
   // evaluate it via fetch + vm and obtain the container interface (get/init).
   await run(componentAppDir, 'pnpm', ['build:node']);
-  const server = start('component-app(node)', componentAppDir, 'pnpm', [
-    'serve:node',
-  ]);
-  globalThis.__RSTEST_MF_CHILDREN__!.push(server);
-  await waitForUrl(nodeRemoteEntryUrl, 30_000);
-
-  // Also build node-local-remote for path-based consumption.
   const nodeLocalDir = resolve(workspaceRoot, 'node-local-remote');
   await run(nodeLocalDir, 'pnpm', ['build:node']);
+  await startRemote(
+    'component-app(node)',
+    'pnpm',
+    ['serve:node'],
+    nodeRemoteEntryUrl,
+  );
 };
 
 export const ensureBrowserRemote = async () => {
@@ -162,9 +177,10 @@ export const ensureBrowserRemote = async () => {
 
   await cleanupRemote();
   await run(componentAppDir, 'pnpm', ['build']);
-  const server = start('component-app(browser)', componentAppDir, 'pnpm', [
-    'serve',
-  ]);
-  globalThis.__RSTEST_MF_CHILDREN__!.push(server);
-  await waitForUrl(browserRemoteEntryUrl, 30_000);
+  await startRemote(
+    'component-app(browser)',
+    'pnpm',
+    ['serve'],
+    browserRemoteEntryUrl,
+  );
 };

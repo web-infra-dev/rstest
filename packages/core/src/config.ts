@@ -283,6 +283,12 @@ const createDefaultConfig = (): NormalizedConfig => ({
   snapshotFormat: {
     printShadowRoot: false,
   },
+  expect: {
+    poll: {
+      interval: 50,
+      timeout: 1000,
+    },
+  },
   env: {},
   hideSkippedTests: false,
   hideSkippedTestFiles: false,

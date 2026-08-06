@@ -6,7 +6,7 @@
     "bench:memory": "pnpm --filter @rstest/benchmarks bench:memory",
     "build": "pnpm --filter \"./packages/*\" run build",
     "bump": "bumpp",
-    "check-dependency-version": "pnpx check-dependency-version-consistency --ignore-package @rstest/test-mock-re-exports . && echo",
+    "check-dependency-version": "pnpx check-dependency-version-consistency --ignore-package @rstest/test-mock-re-exports --ignore-package @rstest/e2e-environment-affinity-jsdom-26 --ignore-package @rstest/e2e-environment-affinity-jsdom-29 . && echo",
     "check-harness-docs": "node scripts/harness/check-harness-docs.mjs",
     "check-spell": "pnpx cspell && heading-case",
     "check-unused": "knip",
@@ -30,18 +30,18 @@
     "check-dependency-version-consistency": "^6.0.0",
     "cross-env": "^10.1.0",
     "cspell-ban-words": "^0.0.4",
-    "heading-case": "^1.1.3",
-    "knip": "^6.29.0",
+    "heading-case": "^1.1.4",
+    "knip": "^6.31.0",
     "lefthook": "^2.1.10",
-    "pkg-pr-new": "^0.0.82",
-    "playwright": "^1.62.0",
+    "pkg-pr-new": "^0.0.86",
+    "playwright": "^1.62.1",
     "prettier": "^3.9.6",
     "prettier-plugin-packagejson": "^3.0.2",
     "typescript": "^6.0.3"
   },
-  "packageManager": "pnpm@11.18.0",
+  "packageManager": "pnpm@11.20.0",
   "engines": {
     "node": "^20.19.0 || >=22.12.0",
-    "pnpm": ">=11.18.0"
+    "pnpm": ">=11.20.0"
   }
 }

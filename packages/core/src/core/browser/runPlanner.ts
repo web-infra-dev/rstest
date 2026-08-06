@@ -4,47 +4,64 @@ import {
   isFuzzyBasenameFilter,
   type TraceEvent,
 } from '../../utils';
-import { type BrowserExecutorRunOptions, runBrowserModeTests } from './loader';
-import type { NodeExecutor } from '../executors/nodeExecutor';
+import { type BrowserExecutorLoadOptions, runBrowserDiscovery } from './loader';
 import { getUserRstestConfigPluginProjects } from '../modifyRstestConfig';
+import type { RunProjectPlan } from '../projectPlan';
 import type { Rstest } from '../rstest';
 
 /**
- * Browser-side planning for a mixed (node + browser) run: which browser
- * projects run, whether the config-hook discovery boot is needed, and the
- * option bags the browser executor/watch session are launched with. Keeps the
- * filter-classification and discovery detail out of the `runTests` orchestrator.
+ * The browser-side questions a resolved run plan can answer: which browser
+ * projects run, and the option bags the browser executor/watch session are
+ * launched with. `RunPlanner` re-exposes exactly this, so the orchestrator asks
+ * one object and the filter-classification detail stays under `core/browser/`.
  */
-export interface BrowserRunPlanner {
-  /**
-   * Boot the browser side once in files-only mode when the plan may depend on
-   * browser `modifyRstestConfig` hooks (they only apply inside a browser
-   * runtime boot and can add test files to an otherwise-empty project), then
-   * re-resolve the node executor's plan. No-op when discovery is not needed.
-   */
-  runConfigHookDiscovery(): Promise<void>;
+export interface BrowserRunPlan {
   hasBrowserTestsToRun(): boolean;
   getBrowserProjectsToRun(): ProjectContext[];
+  /**
+   * Whether the discovery boot completed the config-validation barrier after
+   * browser `modifyRstestConfig` hooks ran. The empty-run branch and real
+   * executor ask because validating again reprints every unsupported-option
+   * warning (`reportUnsupportedBrowserOptions` has no cross-call guard).
+   */
+  hasValidatedBrowserConfig(): boolean;
   /**
    * Options for the mixed non-watch browser executor construction. `filesOnly`
    * is owned by the discovery boot, never by a real run.
    */
   getExecutorRunOptions(
     projects: ProjectContext[],
-  ): Omit<BrowserExecutorRunOptions, 'filesOnly'>;
-  /** Options for the host-driven browser watch session (background or foreground). */
-  getWatchRunOptions(projects: ProjectContext[]): BrowserTestRunOptions;
+  ): Omit<BrowserExecutorLoadOptions, 'filesOnly'>;
+}
+
+interface BrowserRunPlanner extends BrowserRunPlan {
+  /**
+   * Boot the browser side once in files-only mode when the plan may depend on
+   * browser `modifyRstestConfig` hooks (they only apply inside a browser
+   * runtime boot and can add test files to an otherwise-empty project), then
+   * re-resolve the run plan. No-op when discovery is not needed.
+   *
+   * `createRunPlanner` is the only caller and drives it while it is still
+   * building, which is what keeps the once-only state below — the applied-hook
+   * environment set and the discovery-ran flag — from ever being observed
+   * half-applied: by the time anything holds a `RunPlanner`, discovery has
+   * either finished or been declined.
+   */
+  runConfigHookDiscovery(): Promise<void>;
 }
 
 export function createBrowserRunPlanner({
   context,
-  nodeExecutor,
+  getPlan,
+  refreshPlan,
   browserProjects,
   nodeProjects,
   onTraceEvents,
 }: {
   context: Rstest;
-  nodeExecutor: NodeExecutor;
+  getPlan: () => RunProjectPlan;
+  /** Re-resolve after the discovery boot's hooks changed project configs. */
+  refreshPlan: () => Promise<void>;
   browserProjects: ProjectContext[];
   nodeProjects: ProjectContext[];
   onTraceEvents?: (events: TraceEvent[]) => void;
@@ -99,7 +116,7 @@ export function createBrowserRunPlanner({
 
   const shouldAllowEmptyBrowserFallback = () =>
     shouldRunBrowserDiscoveryFallback() &&
-    nodeExecutor.hasNodeTestsToRun() &&
+    getPlan().nodeProjectsToRun.length > 0 &&
     !context.fileFilters?.some(isBrowserProjectPathFilter);
 
   const getBrowserProjectsForDiscovery = () => {
@@ -127,7 +144,7 @@ export function createBrowserRunPlanner({
   };
 
   const getBrowserProjectsToRun = () => {
-    const currentPlan = nodeExecutor.getPlan();
+    const currentPlan = getPlan();
     if (currentPlan.browserProjectsToRun.length > 0) {
       return currentPlan.browserProjectsToRun;
     }
@@ -141,7 +158,7 @@ export function createBrowserRunPlanner({
     if (!shard) {
       return undefined;
     }
-    const currentPlan = nodeExecutor.getPlan();
+    const currentPlan = getPlan();
     const browserEntries = new Map<
       string,
       { entries: Record<string, string> }
@@ -155,26 +172,41 @@ export function createBrowserRunPlanner({
     return browserEntries;
   };
 
-  // In a sharded mixed run the node side already resolved the browser shard
-  // slice, so the host must not re-shard on a config hook refresh.
+  // In a sharded mixed run the plan already resolved the browser shard slice, so
+  // the host must not re-shard on a config hook refresh.
   const freezeShardedEntries = Boolean(shard && nodeProjects.length);
 
   const getExecutorRunOptions = (
     projects: ProjectContext[],
-  ): Omit<BrowserExecutorRunOptions, 'filesOnly'> => ({
+  ): Omit<BrowserExecutorLoadOptions, 'filesOnly'> => ({
     shardedEntries: getBrowserShardedEntries(projects),
     freezeShardedEntries,
     allowEmptyRun: shouldAllowEmptyBrowserFallback(),
     appliedModifyRstestConfigEnvironments,
+    configAlreadyValidated: hasRunBrowserConfigHookDiscovery,
   });
 
   return {
     async runConfigHookDiscovery() {
-      if (nodeProjects.length === 0 || !shouldRunBrowserDiscoveryFallback()) {
+      // Deliberately not gated on having node projects. It used to be, back when
+      // a zero-node run took a separate assembly that launched every browser
+      // project — hooks fired at launch, so discovery had nothing to add. That
+      // assembly is gone: every run now launches `getBrowserProjectsToRun()`,
+      // and in a non-watch run `skipEmptyProjects` resolves a project with no
+      // files on disk out of the plan before its hook can put any there.
+      // Discovery is the only thing that fires those hooks in time, so a
+      // zero-node non-watch run needs the boot exactly as much as a mixed one.
+      //
+      // Watch keeps `skipEmptyProjects: false`, so the project stays in the plan
+      // and its hooks would fire at launch anyway — a zero-node watch startup
+      // pays this boot for nothing. Accepted: gating it back on `isWatchMode`
+      // re-splits the shape this predicate exists to keep single, for one boot
+      // at startup.
+      if (!shouldRunBrowserDiscoveryFallback()) {
         return;
       }
       const browserProjectsForDiscovery = getBrowserProjectsForDiscovery();
-      const discoveryResult = await runBrowserModeTests(
+      const discoveryResult = await runBrowserDiscovery(
         context,
         browserProjectsForDiscovery,
         {
@@ -194,19 +226,13 @@ export function createBrowserRunPlanner({
       }
       await discoveryResult?.close?.();
       hasRunBrowserConfigHookDiscovery = true;
-      await nodeExecutor.refreshPlan();
+      await refreshPlan();
     },
     hasBrowserTestsToRun: () =>
-      nodeExecutor.hasBrowserTestsToRun() ||
+      getPlan().browserProjectsToRun.length > 0 ||
       shouldRunBrowserDiscoveryFallback(),
+    hasValidatedBrowserConfig: () => hasRunBrowserConfigHookDiscovery,
     getBrowserProjectsToRun,
     getExecutorRunOptions,
-    // The watch session takes the executor bag plus the one watch-only field:
-    // trace events are forwarded from the host instead of flowing through
-    // `runCycle`.
-    getWatchRunOptions: (projects) => ({
-      ...getExecutorRunOptions(projects),
-      onTraceEvents,
-    }),
   };
 }

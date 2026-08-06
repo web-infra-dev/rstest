@@ -2,13 +2,12 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 
-// Drift-guard for the Phase 3 unified finalize. Phase 3 collapsed three browser
-// self-finalize copies plus the node finalize into a single `finalizeRunCycle`
-// (in `finalizeRun.ts`). A future edit that quietly reintroduces a second
-// finalize path — a stray `notifyReportersOnTestRunEnd` or run-time
-// `generateCoverage` outside the shared finalizer — would raise these counts and
-// trip this test, forcing the new site to be justified (and this guard updated
-// deliberately). Salvaged from the phase 0 prior-art branch.
+// Drift-guard for the single finalize: `finalizeRunCycle` (in `finalizeRun.ts`)
+// is the one implementation node-only, browser-only, and mixed runs all reduce
+// through, on both commands. An edit that quietly reintroduces a second finalize
+// path — a stray `notifyReportersOnTestRunEnd` or run-time `generateCoverage`
+// outside that helper — raises these counts and trips this test, forcing the new
+// site to be justified and this guard updated deliberately.
 
 const coreDir = join(__dirname, '../../src/core');
 
@@ -49,33 +48,24 @@ const total = (hits: Array<{ count: number }>): number =>
 describe('runTests finalize drift-guard', () => {
   it('pins the reporter onTestRunEnd call sites in core', () => {
     const hits = countCalls('notifyReportersOnTestRunEnd');
-    // 1. `finalizeRun.ts` — the single unified finalize path.
-    // 2. `browser/onlyRun.ts` — the browser-only `relatedResolutionEmpty`
-    //    shortcut (no outcomes to reduce; it notifies directly). Related runs
-    //    are rejected in watch mode, so this shortcut is always one-shot.
-    expect(total(hits)).toBe(2);
+    // 1. `finalizeRun.ts` — the single unified finalize path, and now the only
+    //    site at all. The second one used to be the browser-only assembly's
+    //    `relatedResolutionEmpty` shortcut, which notified directly because it
+    //    had no outcomes to reduce. Folding that assembly into `runTests` gave
+    //    the shortcut somewhere to land — the shared empty-run finalize, which
+    //    reduces zero outcomes into exactly the same no-test-files verdict — so
+    //    the exception was deleted rather than relocated. A new site here means
+    //    a run shape has started reporting its own end again.
+    expect(total(hits)).toBe(1);
   });
 
   it('pins the run-time generateCoverage call sites in core', () => {
     const hits = countCalls('generateCoverage');
     // 1. `finalizeRun.ts` — inside `finalizeRunCycle` (the shared coverage report).
-    // 2. `browser/onlyRun.ts` — the browser-only WATCH bespoke report, which
-    //    covers the first cycle only; every rerun reports through the host's
-    //    per-rerun finalize and thus through the cycle.
-    // 3. `mergeReports.ts` — the separate `merge-reports` command, not a run.
-    expect(total(hits)).toBe(3);
-  });
-
-  it('keeps a single finalizeRunCycle implementation', () => {
-    const source = readFileSync(join(coreDir, 'finalizeRun.ts'), 'utf8');
-    expect(source.match(/function finalizeRunCycle\b/g)?.length ?? 0).toBe(1);
-    // Every caller imports it from `finalizeRun.ts`; it is never redefined
-    // elsewhere in core.
-    const otherDefs = collectSources(coreDir)
-      .filter((file) => !file.endsWith('finalizeRun.ts'))
-      .some((file) =>
-        /function finalizeRunCycle\b/.test(readFileSync(file, 'utf8')),
-      );
-    expect(otherDefs).toBe(false);
+    // 2. `mergeReports.ts` — the separate `merge-reports` command, not a run.
+    // The browser-only watch path's bespoke first-cycle report is gone: browser
+    // watch cycles now finalize through `finalizeRunCycle` like every other
+    // cycle, so coverage has one run-time reporter again.
+    expect(total(hits)).toBe(2);
   });
 });

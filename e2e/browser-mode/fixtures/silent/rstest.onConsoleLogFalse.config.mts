@@ -8,7 +8,7 @@ export default defineConfig({
     headless: true,
     port: BROWSER_PORTS.silent,
   },
-  include: ['tests/**/*.test.ts'],
+  include: ['tests/silent.test.ts'],
   testTimeout: BROWSER_TEST_TIMEOUT,
   onConsoleLog: () => false,
 });

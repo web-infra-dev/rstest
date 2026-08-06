@@ -47,6 +47,47 @@
         "three",
       ],
     },
+    "examples/federation/component-app": {
+      "entry": [
+        "rstest*.{js,mjs,ts,mts}",
+        "scripts/**/*.{js,mjs,ts,mts}",
+        "test/**/*.{js,jsx,ts,tsx}",
+      ],
+      // Module Federation remotes are resolved by its runtime.
+      "ignoreDependencies": ["node-local-remote"],
+    },
+    "examples/federation/main-app": {
+      "entry": [
+        "rstest*.{js,mjs,ts,mts}",
+        "scripts/**/*.{js,mjs,ts,mts}",
+        "test/**/*.{js,jsx,ts,tsx}",
+      ],
+      "ignoreDependencies": [
+        // Loaded dynamically when the config enables Browser Mode.
+        "@rstest/browser",
+        // Module Federation remotes are resolved by its runtime.
+        "component-app",
+        "node-local-remote",
+        // Resolved by @rstest/browser as its configured provider.
+        "playwright",
+      ],
+    },
+    "examples/federation/node-local-remote": {
+      // Exposed as a Module Federation remote from the Rsbuild config.
+      "entry": ["src/test.js"],
+    },
+    "examples/node": {
+      "ignoreDependencies": [
+        // Loaded dynamically when `rstest --coverage` selects the default provider.
+        "@rstest/coverage-istanbul",
+      ],
+    },
+    "examples/react": {
+      "entry": ["rstest*.config.ts", "src/index.tsx", "test/**/*.{ts,tsx}"],
+    },
+    "examples/vue": {
+      "entry": ["rstest*.ts", "src/index.js", "test/**/*.{js,jsx,ts,tsx}"],
+    },
     "packages/core": {
       "entry": [
         // Runtime files copied to dist via CopyRspackPlugin (dynamically loaded)
@@ -121,5 +162,5 @@
       ],
     },
   },
-  "ignoreWorkspaces": ["e2e/**", "examples/**", "website"],
+  "ignoreWorkspaces": ["e2e/**", "website"],
 }

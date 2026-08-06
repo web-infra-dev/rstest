@@ -90,6 +90,52 @@ describe('Expect API', () => {
     expect(1 + 3).toBe(4);
   });
 
+  it('shares assertion counts between imported and context expect', ({
+    expect: contextExpect,
+  }) => {
+    expect.assertions(2);
+    expect(1 + 1).toBe(2);
+    contextExpect(1 + 2).toBe(3);
+  });
+
+  it('shares context assertion counts with imported expect', ({
+    expect: contextExpect,
+  }) => {
+    contextExpect.assertions(2);
+    expect(1 + 1).toBe(2);
+    contextExpect(1 + 2).toBe(3);
+  });
+
+  it('satisfies imported hasAssertions with context expect', ({
+    expect: contextExpect,
+  }) => {
+    expect.hasAssertions();
+    contextExpect(1 + 1).toBe(2);
+  });
+
+  it('satisfies context hasAssertions with imported expect', ({
+    expect: contextExpect,
+  }) => {
+    contextExpect.hasAssertions();
+    expect(1 + 1).toBe(2);
+  });
+
+  it.fails(
+    'enforces imported assertion counts for context expect',
+    ({ expect: contextExpect }) => {
+      expect.assertions(2);
+      contextExpect(1 + 1).toBe(2);
+    },
+  );
+
+  it.fails(
+    'enforces imported hasAssertions for context expect',
+    ({ expect: contextExpect }) => {
+      expect.hasAssertions();
+      void contextExpect;
+    },
+  );
+
   it('passes the full test name to custom matchers', ({ expect }) => {
     expect.extend({
       toHaveCurrentTestName(_, expected) {

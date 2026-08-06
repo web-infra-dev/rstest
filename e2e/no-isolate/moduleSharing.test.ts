@@ -7,6 +7,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('module state sharing under isolate: false', () => {
+  it('keeps workers pinned to the resolved environment module', async ({
+    onTestFinished,
+  }) => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures', 'environment-module-affinity'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
   // Runs the whole `sharing` fixture dir (one worker, isolate: false) and
   // asserts every file passes. The fixtures never assume a file execution order
   // (the runner does not guarantee one); each guard holds whichever way the

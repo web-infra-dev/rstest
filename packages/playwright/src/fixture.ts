@@ -31,6 +31,7 @@ import {
   test as base,
 } from '@rstest/core';
 import type {
+  FixtureLifecycle,
   Fixtures,
   TestAPIs,
   TestForFn,
@@ -83,7 +84,8 @@ export type PlaywrightDebugOptions = {
   pauseOnFailure?: boolean;
 };
 
-export type PlaywrightTraceMode = 'off' | 'on' | 'retain-on-failure';
+export type PlaywrightTraceMode =
+  'off' | 'on' | 'retain-on-failure' | 'on-first-retry' | 'on-all-retries';
 
 export type PlaywrightTraceOptions = {
   /**
@@ -289,7 +291,11 @@ const normalizeTraceOptions = (
 const normalizeTraceMode = (
   mode: string | undefined,
 ): PlaywrightTraceMode | undefined => {
-  return mode === 'on' || mode === 'off' || mode === 'retain-on-failure'
+  return mode === 'on' ||
+    mode === 'off' ||
+    mode === 'retain-on-failure' ||
+    mode === 'on-first-retry' ||
+    mode === 'on-all-retries'
     ? mode
     : undefined;
 };
@@ -313,7 +319,7 @@ const getTraceArtifacts = (
 ) => {
   const options = normalizeTraceOptions(playwright.trace);
 
-  if (options.mode === 'off') {
+  if (!shouldCaptureTrace(options.mode, task.retryCount)) {
     return;
   }
 
@@ -333,6 +339,15 @@ const getTraceArtifacts = (
     debugPath: join(dir, 'debug.md'),
   };
 };
+
+export const shouldCaptureTrace = (
+  mode: PlaywrightTraceMode,
+  retryCount: number,
+): boolean =>
+  mode === 'on' ||
+  mode === 'retain-on-failure' ||
+  (mode === 'on-first-retry' && retryCount === 1) ||
+  (mode === 'on-all-retries' && retryCount > 0);
 
 type TraceArtifacts = NonNullable<ReturnType<typeof getTraceArtifacts>>;
 
@@ -917,7 +932,10 @@ const playwrightFixtures = {
         try {
           if (artifacts && traceStarted) {
             const shouldSaveTrace =
-              artifacts.options.mode === 'on' || task.result?.status === 'fail';
+              artifacts.options.mode === 'on' ||
+              artifacts.options.mode === 'on-first-retry' ||
+              artifacts.options.mode === 'on-all-retries' ||
+              task.result?.status === 'fail';
             const shouldStageTrace =
               artifacts.options.mode === 'retain-on-failure' &&
               task.result?.status !== 'fail';
@@ -1321,6 +1339,35 @@ const wrapFixtures = <T extends Record<string, any>, ExtraContext>(
   ) as PlaywrightFixtures<T, ExtraContext>;
 };
 
+const wrapNamedFixture = <Value>(fixture: Value): Value => {
+  if (typeof fixture !== 'function') {
+    return fixture;
+  }
+
+  const callback = fixture as (...args: unknown[]) => unknown;
+  return preserveFixtureSource(callback, (async (...args: unknown[]) => {
+    const [context, lifecycle, ...rest] = args as [
+      TestContext | object,
+      FixtureLifecycle,
+      ...unknown[],
+    ];
+    if (!hasExpectContext(context)) {
+      return callback(...args);
+    }
+
+    const getExpect = () => getExpectForContext(context);
+    const wrappedLifecycle: FixtureLifecycle = {
+      onCleanup(cleanup) {
+        lifecycle.onCleanup(() => withPlaywrightExpect(getExpect, cleanup));
+      },
+    };
+
+    return withPlaywrightExpect(getExpect, () =>
+      callback(context, wrappedLifecycle, ...rest),
+    );
+  }) as typeof callback) as Value;
+};
+
 export type PlaywrightFixtures<
   FixturesContext extends Record<string, any>,
   ExtraContext,
@@ -1382,11 +1429,97 @@ type MergeContext<ExtraContext, FixturesContext> = {
       : never;
 };
 
+type MergeNamedContext<
+  Context,
+  Name extends string,
+  Value,
+> = Name extends string ? MergeContext<Context, Record<Name, Value>> : never;
+
+type AsciiLowercaseLetter =
+  | 'a'
+  | 'b'
+  | 'c'
+  | 'd'
+  | 'e'
+  | 'f'
+  | 'g'
+  | 'h'
+  | 'i'
+  | 'j'
+  | 'k'
+  | 'l'
+  | 'm'
+  | 'n'
+  | 'o'
+  | 'p'
+  | 'q'
+  | 'r'
+  | 's'
+  | 't'
+  | 'u'
+  | 'v'
+  | 'w'
+  | 'x'
+  | 'y'
+  | 'z';
+
+type IdentifierStart =
+  AsciiLowercaseLetter | Uppercase<AsciiLowercaseLetter> | '$' | '_';
+type IdentifierPart =
+  IdentifierStart | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+
+type IsIdentifierRest<Name extends string> = string extends Name
+  ? false
+  : Name extends ''
+    ? true
+    : Name extends `${infer First}${infer Rest}`
+      ? First extends IdentifierPart
+        ? IsIdentifierRest<Rest>
+        : false
+      : false;
+
+type IsIdentifier<Name extends string> = string extends Name
+  ? false
+  : Name extends `${infer First}${infer Rest}`
+    ? First extends IdentifierStart
+      ? IsIdentifierRest<Rest>
+      : false
+    : false;
+
+type ReservedNamedFixtureName = keyof TestContext | '_useLocalExpect';
+
+type NamedFixtureName<Name extends string> =
+  Name extends ReservedNamedFixtureName
+    ? never
+    : IsIdentifier<Name> extends true
+      ? Name
+      : never;
+
+// This must match runtime `typeof value === 'function'`, including broadly
+// typed Function and CallableFunction values without call signatures.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+type RuntimeFunction = Function;
+
+type PlaywrightNamedFixture<Value, Context> =
+  | (Value extends RuntimeFunction ? never : Value)
+  | ((context: Context, lifecycle: FixtureLifecycle) => Value | Promise<Value>);
+
+type PlaywrightExtend<ExtraContext> = {
+  <T extends Record<string, any> = object>(
+    fixtures: PlaywrightFixtures<T, ExtraContext>,
+  ): PlaywrightTest<MergeContext<ExtraContext, T>>;
+  <Name extends string, Value>(
+    name: NamedFixtureName<Name>,
+    fixture: PlaywrightNamedFixture<
+      Value,
+      Omit<TestContext & ExtraContext, Name>
+    >,
+  ): PlaywrightTest<MergeNamedContext<ExtraContext, Name, Value>>;
+};
+
 export type PlaywrightTest<ExtraContext = PlaywrightFixture> =
   PlaywrightTestBase<ExtraContext> & {
-    extend: <T extends Record<string, any> = object>(
-      fixtures: PlaywrightFixtures<T, ExtraContext>,
-    ) => PlaywrightTest<MergeContext<ExtraContext, T>>;
+    extend: PlaywrightExtend<ExtraContext>;
     afterAll: RstestAfterAll;
     afterEach: <HookContext = ExtraContext>(
       fn: TestCallback<HookContext>,
@@ -1523,8 +1656,27 @@ const createPlaywrightTest = <ExtraContext>(
           'extend' in target ? target.extend.bind(target) : undefined;
 
         return extend
-          ? (fixtures: Parameters<PlaywrightTest<ExtraContext>['extend']>[0]) =>
-              createPlaywrightTest(extend(wrapFixtures(fixtures)))
+          ? (...args: unknown[]) => {
+              const wrappedArgs =
+                typeof args[0] === 'string' && args.length === 2
+                  ? [args[0], wrapNamedFixture(args[1])]
+                  : typeof args[0] !== 'string' && args.length === 1
+                    ? [
+                        wrapFixtures(
+                          args[0] as PlaywrightFixtures<
+                            Record<string, unknown>,
+                            ExtraContext
+                          >,
+                        ),
+                      ]
+                    : args;
+              // A Proxy loses the overload set at runtime; the public
+              // PlaywrightExtend type validates calls before this forwarding seam.
+              const extended = (
+                extend as (...args: unknown[]) => TestAPIs<ExtraContext>
+              )(...wrappedArgs);
+              return createPlaywrightTest(extended);
+            }
           : undefined;
       }
       if (key === 'fail') {

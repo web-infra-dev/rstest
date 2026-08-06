@@ -4,7 +4,7 @@ description: The environment that will be used for testing. Includes practical g
 
 # testEnvironment
 
-- **Type:** `'node' | 'jsdom' | 'happy-dom' | { name: EnvironmentName, options?: EnvironmentOptions }`
+- **Type:** `'node' | 'jsdom' | 'happy-dom' | { name: EnvironmentName, options?: EnvironmentOptions, prebundle?: 'auto' | boolean }`
 - **Default:** `'node'`
 - **CLI:** `--testEnvironment=node`
 
@@ -90,6 +90,37 @@ The `options` object is passed directly to the environment's constructor.
 
 - For `jsdom`, it's passed to the `JSDOM` constructor. You can find available options in the [jsdom documentation](https://github.com/jsdom/jsdom#customizing-jsdom).
 - For `happy-dom`, it's passed to the `Window` constructor. You can find available options in the [happy-dom documentation](https://github.com/capricorn86/happy-dom/wiki/Window).
+
+#### Environment prebundle
+
+<ApiMeta addedVersion="0.11.6" />
+
+Rstest can prebundle a test environment before workers load it. This reduces repeated module resolution and initialization work when many test files use the same DOM environment. This optimization is disabled by default and must be explicitly enabled.
+
+The `prebundle` option accepts:
+
+- `'auto'`: prebundle Rstest-tested versions of the built-in `jsdom` and `happy-dom` environments. Unknown versions use native loading.
+- `true`: always prebundle the selected built-in environment.
+- `false` (default): disable the prebundle and load the environment natively.
+
+The current automatic compatibility matrix covers jsdom 15–26 and 29–30, and happy-dom 20. Other major versions stay on the native path unless `prebundle: true` is set explicitly.
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: {
+    name: 'jsdom',
+    prebundle: 'auto',
+  },
+});
+```
+
+If Rstest cannot build, load, or validate a prebundle, it falls back to the environment's native entry before setting up the test environment. The environment package is resolved from the project's dependency tree first, then from the Rstest workspace root, and finally through `@rstest/core`'s native dependency resolution for backward compatibility.
+
+The prebundle is a performance optimization, not a requirement for DOM testing. Bundling a third-party Node.js package can change how it resolves runtime assets, executable helper files, and optional or native dependencies, even when the generated bundle imports successfully. For example, jsdom 27 and 28 can resolve an optional CSS implementation differently after bundling, causing `getComputedStyle()` to fail at runtime. These versions therefore use native loading in `auto` mode. When `prebundle: true` is used, Rstest probes this known path and falls back to native loading if validation fails. This probe cannot cover every API, so set `prebundle: false` if your environment behaves differently after Rstest bundles it.
+
+If jsdom or happy-dom provides an official Node.js-compatible bundled entry in the future, Rstest can prefer that entry instead of generating its own prebundle. In that case, Rstest's generated prebundle may no longer be necessary for that environment.
 
 ### Environment comments
 

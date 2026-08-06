@@ -9,6 +9,8 @@
  *   - 'stderr-crash'       → write to stderr then exit(1)
  *   - 'stderr-large'       → write >64KB of stderr then exit(1)
  *   - 'stderr-late'        → write to stderr and exit(1) immediately
+ *   - 'environment-fallback' → report an environment prebundle fallback,
+ *                                then succeed.
  *   - 'spawn-orphan'       → spawn a long-lived grandchild that inherits
  *                             stdio, then send result and exit normally.
  *                             Tests that `exit` (not `close`) drives the
@@ -150,6 +152,20 @@ const handleRun = (request) => {
     );
     // Include grandchild PID so the test can clean it up.
     finish({ _grandchildPid: grandchild.pid });
+    return;
+  }
+
+  if (mode === 'environment-fallback') {
+    send({
+      type: 'testEnvironmentFallback',
+      fallback: {
+        packageName: 'happy-dom',
+        bundlePath: '/tmp/happy-dom-bundle.mjs',
+        resolvedPath: '/project/node_modules/happy-dom/cjs/index.cjs',
+        reason: 'Error: Expected exports: GlobalWindow or Window.',
+      },
+    });
+    finish();
     return;
   }
 

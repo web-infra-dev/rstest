@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runRstestCli } from '../scripts';
+import { type prepareFixtures, runRstestCli } from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -81,6 +81,7 @@ const WINDOWS_PROCESS_CLEANUP_RETRY_COUNT = 40;
 const POSIX_PROCESS_CLEANUP_RETRY_COUNT = 20;
 
 type BrowserCli = Awaited<ReturnType<typeof runRstestCli>>['cli'];
+type BrowserFixtureFs = Awaited<ReturnType<typeof prepareFixtures>>['fs'];
 
 /**
  * Kill a spawned rstest process tree before the fixture directory is removed.
@@ -220,6 +221,74 @@ export const runBrowserWatchCliWithCwd = async (
       expectNoFrameworkWarnings(result.cli);
     },
   };
+};
+
+export const runBrowserWatchCrud = async ({
+  cli,
+  fixtureFs,
+  fixtureRoot,
+}: {
+  cli: BrowserCli;
+  fixtureFs: BrowserFixtureFs;
+  fixtureRoot: string;
+}): Promise<void> => {
+  const addedTestPath = join(fixtureRoot, 'tests/added.test.ts');
+  const renamedTestPath = join(fixtureRoot, 'tests/renamed.test.ts');
+  const waitForWatchReady = async (): Promise<void> => {
+    if (!cli.stdout.includes('Waiting for file changes...')) {
+      await cli.waitForStdout('Waiting for file changes...');
+    }
+  };
+
+  cli.resetStd();
+  fixtureFs.create(
+    addedTestPath,
+    `import { expect, test } from '@rstest/core';
+
+test('added watch test', () => {
+  expect('watch').toBe('watch');
+});`,
+  );
+  await cli.waitForStdout('Test file set changed, re-running 3 file(s)');
+  await cli.waitForStdout('✓ tests/added.test.ts');
+  await cli.waitForStdout('Test Files 3 passed');
+  await waitForWatchReady();
+
+  cli.resetStd();
+  fixtureFs.update(addedTestPath, (content) =>
+    content.replace("toBe('watch')", "toBe('changed')"),
+  );
+  await cli.waitForStdout("expected 'watch' to be 'changed'");
+  await waitForWatchReady();
+
+  cli.resetStd();
+  fixtureFs.update(addedTestPath, (content) =>
+    content.replace("toBe('changed')", "toBe('watch')"),
+  );
+  await cli.waitForStdout('✓ tests/added.test.ts');
+  await cli.waitForStdout('Test Files 3 passed');
+  await waitForWatchReady();
+
+  cli.resetStd();
+  fixtureFs.rename(addedTestPath, renamedTestPath);
+  await cli.waitForStdout('Test file set changed, re-running 3 file(s)');
+  await cli.waitForStdout('✓ tests/renamed.test.ts');
+  await cli.waitForStdout('Test Files 3 passed');
+  await waitForWatchReady();
+
+  cli.resetStd();
+  fixtureFs.delete(renamedTestPath);
+  await cli.waitForStdout('Test file set changed, re-running 2 file(s)');
+  await cli.waitForStdout('✓ tests/index.test.ts');
+  await cli.waitForStdout('✓ tests/another.test.ts');
+  await cli.waitForStdout('Test Files 2 passed');
+  await waitForWatchReady();
+
+  cli.resetStd();
+  fixtureFs.delete(join(fixtureRoot, 'tests/index.test.ts'));
+  fixtureFs.delete(join(fixtureRoot, 'tests/another.test.ts'));
+  await cli.waitForStdout('No browser test files remain after update.');
+  await cli.waitForStdout('No test files need re-run.');
 };
 
 /**

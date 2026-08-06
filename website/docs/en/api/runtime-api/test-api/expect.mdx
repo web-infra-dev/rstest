@@ -96,6 +96,8 @@ Repeatedly calls `actual` and retries the matcher until it passes or times out.
 - **Default `interval`:** `50` (ms)
 - **Default `timeout`:** `1000` (ms)
 
+You can change these defaults with the [`expect.poll` configuration](/config/test/expect#expectpoll). Options passed to an individual call take precedence.
+
 `options`:
 
 - `interval`: Time between retry attempts (in milliseconds).

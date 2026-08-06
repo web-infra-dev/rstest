@@ -53,47 +53,17 @@ describe('CLI shortcuts', () => {
     expect(cli.stdout).toMatch('Tests 1 failed | 1 passed');
     expect(cli.stdout).toMatch('Run all tests');
 
-    cli.exec.process!.stdin!.write('q');
-
+    // The `a` cycle's rebuild queues one trailing empty on-demand cycle; let
+    // it settle so the `f` waits below anchor on the `f` cycle's own output.
     await sleep(1000);
-
-    cli.exec.kill();
-  });
-
-  it('shortcut `f` should work as expected', async () => {
-    const fixturesTargetPath = `${__dirname}/fixtures-test-shortcuts-f${process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''}`;
-    await prepareFixtures({
-      fixturesPath: `${__dirname}/fixtures-shortcuts`,
-      fixturesTargetPath,
-    });
-
-    const { cli } = await runRstestCli({
-      command: 'rstest',
-      args: ['watch'],
-      options: {
-        nodeOptions: {
-          env: {
-            DEBUG: 'rstest',
-            FORCE_TTY: 'true',
-            CI: undefined,
-          },
-          cwd: fixturesTargetPath,
-        },
-      },
-    });
-
-    // initial run
-    await cli.waitForStdout('Duration');
-    expect(cli.stdout).toMatch('Tests 1 failed | 1 passed');
-    await cli.waitForStdout('press h to show help');
-    expect(cli.stdout).toMatch('Run all tests in project');
     cli.resetStd();
 
-    // rerun failed tests
+    // rerun failed tests — the failing file stays failing across the `a`
+    // cycle above, so `f` has a stable selection in the same session.
     cli.exec.process!.stdin!.write('f');
+    await cli.waitForStdout('Run filtered tests');
     await cli.waitForStdout('Duration');
     expect(cli.stdout).toMatch('Tests 1 failed');
-    expect(cli.stdout).toMatch('Run filtered tests');
 
     cli.exec.process!.stdin!.write('q');
 

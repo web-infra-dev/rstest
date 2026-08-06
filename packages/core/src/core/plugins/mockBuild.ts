@@ -7,6 +7,16 @@ export type RstestBuildTarget = 'node' | 'web';
 
 type RspackInstance = ModifyRspackConfigUtils['rspack'];
 
+export const forceWebpackRuntimeMode = (
+  config: Rspack.Configuration,
+): NonNullable<Rspack.Configuration['experiments']> => {
+  const experiments = (config.experiments ??= {});
+  // TODO: Remove this override once Rstest's custom runtime modules are
+  // compatible with Rspack's experimental runtime.
+  experiments.runtimeMode = 'webpack';
+  return experiments;
+};
+
 /**
  * The `import.meta.rstest` define text for each executor. The node form is
  * byte-identical to the historical inline literal in `pluginBasic`; the web
@@ -141,6 +151,7 @@ export const applyWebMockRspackConfig = (
   config: Rspack.Configuration,
   options: { rspack: RspackInstance; rootPath: string },
 ): void => {
+  forceWebpackRuntimeMode(config);
   config.plugins ??= [];
   config.plugins.push(
     new options.rspack.experiments.RstestPlugin(

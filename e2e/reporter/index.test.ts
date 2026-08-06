@@ -110,6 +110,27 @@ describe.concurrent('reporters', () => {
     expect(cli.stdout).not.toContain('passing case log');
   });
 
+  it('default - each project uses its own silent config', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', 'fixtures/silentProjects.config.mts'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('[silent-a]');
+    expect(cli.stdout).toContain('[loud-b]');
+    expect(cli.stdout).not.toContain('console from silent-a');
+    expect(cli.stdout).toContain('console from loud-b');
+  });
+
   it('dot - silent passed-only', async ({ onTestFinished }) => {
     const { cli } = await runRstestCli({
       command: 'rstest',

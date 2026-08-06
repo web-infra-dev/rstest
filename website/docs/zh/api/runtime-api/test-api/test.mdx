@@ -330,7 +330,7 @@ test.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 ## test.extend
 
-- **类型：** `test.extend(fixtures: Fixtures)`
+- **类型：** `test.extend(fixtures: Fixtures) | test.extend(name, fixture)`
 
 通过自定义 fixture 扩展测试上下文，返回一个**新的** test API。原始 `test` 不会被修改，你可以同时拥有多个各自独立的扩展版本。
 
@@ -363,9 +363,9 @@ test('plain test', ({ expect }) => {
 
 返回的 API 拥有与 `test` 相同的链式修饰符（`only`、`skip`、`each`、`concurrent` 等），并且可以继续调用 `.extend()` 进行二次扩展。
 
-### Fixture 函数的生命周期
+### fixtures 对象写法
 
-Fixture 函数接收两个参数：
+fixtures 对象写法中的 fixture 函数接收两个参数：
 
 1. **context** — 包含其他 fixture 以及 `TestContext`（`task`、`expect`、`onTestFinished`、`onTestFailed`）。使用对象解构来声明你需要的依赖。
 2. **use** — 调用 `await use(value)` 把 fixture 的值传递给测试。
@@ -387,6 +387,30 @@ const testWithDb = test.extend({
   },
 });
 ```
+
+### 具名 fixture 写法
+
+<ApiMeta addedVersion="0.11.7" />
+
+具名 fixture 写法会直接返回 fixture 值，不需要调用 `use`。它的第二个参数提供 `onCleanup`，用于注册一个在测试及其 per-test hooks 结束后运行的 callback。fixture 函数和 cleanup callback 都可以是异步函数。
+
+```ts
+import { test } from '@rstest/core';
+
+const apiTest = test
+  .extend('baseURL', 'https://api.example.com')
+  .extend('client', async ({ baseURL }, { onCleanup }) => {
+    const client = await createClient(baseURL);
+    onCleanup(() => client.close());
+    return client;
+  });
+```
+
+具名 fixture 函数属于 test scope：Rstest 会为每次 test attempt 执行这些函数，并在开始下一次 attempt 前执行 cleanup。普通值会在不同 attempt 之间复用；如果可变状态需要在每次 attempt 之间隔离，请使用 fixture 函数。
+
+Fixture 名称必须是静态可知的 ASCII JavaScript identifier，TypeScript 才能准确暴露一个新的 context 字段。此 overload 不接受类型为 `string` 的值、`` `slot${string}` `` 这类 template literal pattern、`base-url` 这类需要带引号解构的名称，以及 test context 的保留字段。它支持与 Function 属性重名的名称，例如 `name` 和 `length`。
+
+直接传入的函数或 class 都会被视为 fixture 函数，因为它们在 JavaScript 运行时都是函数。若要把函数或 class 本身作为 fixture 值，请通过 fixture 函数返回它，例如 `.extend('predicate', () => predicate)` 或 `.extend('Service', () => Service)`。需要请求其他 fixture 或 `TestContext` 字段时，请直接在第一个参数中使用对象解构。
 
 ### 普通值 fixture
 
@@ -556,6 +580,8 @@ export interface TestContext {
     filepath?: string;
     /** Absolute path of the current project's root directory when provided by the runner. Added in 0.11.1. */
     projectRoot?: string;
+    /** Current retry index, starting at 0 for the initial attempt. Added in 0.11.6. */
+    retryCount: number;
     /** Result of the current test, undefined if the test is not run yet */
     result?: TestResult;
     /** Mutable metadata copied to the current test result. Added in 0.11.1. */
@@ -571,6 +597,10 @@ export interface TestContext {
   onTestFailed: OnTestFailed;
 }
 ```
+
+<ApiMeta addedVersion="0.11.6" />
+
+你可以通过 `context.task.retryCount` 在测试、Hook 和 fixture 中读取当前的 retry index。初次尝试时该值为 `0`，第一次 retry 时为 `1`；配置 `repeats` 后，每次 repeat 都会从 `0` 重新计数。
 
 你可以使用 `context.task.meta` 给当前测试结果附加可 JSON 序列化的元数据。既可以修改该对象，也可以整体替换为一个新的 metadata 对象。自定义 Reporter 和 programmatic API 可以从 `TestResult.meta` 读取这些数据：
 

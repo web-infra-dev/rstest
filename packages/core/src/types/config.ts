@@ -48,6 +48,26 @@ export type ChaiConfig = Partial<
   Pick<typeof config, 'showDiff' | 'truncateThreshold'>
 >;
 
+export type ExpectPollConfig = {
+  /**
+   * Polling interval in milliseconds.
+   * @default 50
+   */
+  interval?: number;
+  /**
+   * Polling timeout in milliseconds.
+   * @default 1000
+   */
+  timeout?: number;
+};
+
+export type ExpectConfig = {
+  /**
+   * Default options for `expect.poll()`.
+   */
+  poll?: ExpectPollConfig;
+};
+
 export type RstestPoolType = 'forks' | 'threads';
 
 export type RstestPoolOptions = {
@@ -63,10 +83,11 @@ export type BundleDependencyPattern = string | RegExp;
 
 export type RstestBuildCacheConfig = {
   /**
-   * Directory used to store Rsbuild persistent cache files.
+   * Base directory used to store Rsbuild persistent cache files.
+   * Rspack stores the cache data under `<cacheDirectory>/<cache.name>`.
    *
-   * When omitted, rstest stores cache files under
-   * `node_modules/.cache/rstest-<project-name>`.
+   * When omitted, rstest uses
+   * `node_modules/.cache/rstest-<project-name>` as the base directory.
    */
   cacheDirectory?: string;
   /**
@@ -133,7 +154,6 @@ export type ProjectConfig = Omit<
   | 'coverage'
   | 'resolveSnapshotPath'
   | 'onConsoleLog'
-  | 'silent'
   | 'bail'
   | 'output'
 > & {
@@ -268,9 +288,20 @@ export type ExtendConfigFn = (
 
 export type EnvironmentName = 'node' | 'jsdom' | 'happy-dom';
 
+export type TestEnvironmentPrebundle = 'auto' | boolean;
+
 export type EnvironmentWithOptions = {
   name: EnvironmentName;
   options?: Record<string, any>;
+  /**
+   * Prebundle the environment before workers load it.
+   *
+   * - `'auto'`: prebundle supported built-in environments.
+   * - `true`: always prebundle the selected built-in environment.
+   * - `false` (default): load the environment natively.
+   * @default false
+   */
+  prebundle?: TestEnvironmentPrebundle;
 };
 
 export interface RstestConfig {
@@ -566,6 +597,11 @@ export interface RstestConfig {
   performance?: RstestPerformanceConfig;
 
   /**
+   * Configuration options for `expect`.
+   */
+  expect?: ExpectConfig;
+
+  /**
    * chai configuration options
    */
   chaiConfig?: ChaiConfig;
@@ -655,6 +691,7 @@ export type NormalizedConfig = Required<
     | 'exclude'
     | 'testEnvironment'
     | 'browser'
+    | 'expect'
     | 'output'
   >
 > &
@@ -664,6 +701,9 @@ export type NormalizedConfig = Required<
     testEnvironment: EnvironmentWithOptions;
     coverage: NormalizedCoverageOptions;
     browser: NormalizedBrowserModeConfig;
+    expect: {
+      poll: Required<ExpectPollConfig>;
+    };
     setupFiles: string[];
     globalSetup: string[];
     exclude: {

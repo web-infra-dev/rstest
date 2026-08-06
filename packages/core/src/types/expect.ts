@@ -23,6 +23,7 @@ import type {
   MatcherState as VitestMatcherState,
 } from '@vitest/expect';
 import type { addSerializer, SnapshotState } from '@vitest/snapshot';
+import type { ExpectPollConfig } from './config';
 import type { MockInstance } from './mock';
 
 interface SnapshotMatcher<T> {
@@ -42,15 +43,7 @@ interface InlineSnapshotMatcher<T> {
   (message?: string): void;
 }
 
-interface ExpectPollOptions {
-  /**
-   * @default 50
-   */
-  interval?: number;
-  /**
-   * @default 1000
-   */
-  timeout?: number;
+interface ExpectPollOptions extends ExpectPollConfig {
   message?: string;
 }
 

@@ -52,6 +52,7 @@ export const executorCapabilities: Record<
   // Browser coverage is host-wired, not client-read.
   coverage: { node: 'supported', browser: 'stripped' },
   snapshotFormat: { node: 'supported', browser: 'supported' },
+  expect: { node: 'supported', browser: 'supported' },
   env: { node: 'supported', browser: 'supported' },
   // Node process mechanisms.
   logHeapUsage: { node: 'supported', browser: 'stripped' },

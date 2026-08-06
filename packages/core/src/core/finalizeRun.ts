@@ -202,11 +202,10 @@ export async function finalizeRunCycle(
     coverageProvider: CoverageProvider | null;
     reportOnFailure: boolean;
     /**
-     * Omitted by browser watch reruns, where the trace buffer stays
-     * session-owned (core finalizes it once at session end) instead of
-     * rotating per rerun like the node watch cycle.
+     * The cycle's trace buffer — the one the run loop rotated in for it, so a
+     * cycle's spans and the events an executor emitted during it land together.
      */
-    traceRun?: TraceRun;
+    traceRun: TraceRun;
   },
 ): Promise<void> {
   // Combined route-aware source map resolver: try each executor's resolver in
@@ -322,14 +321,12 @@ export async function finalizeRunCycle(
         context,
         mergedCoverageMap!,
         coverageProvider,
-        traceRun?.span,
+        traceRun.span,
       ),
     );
   }
 
-  if (traceRun) {
-    await runLifecycleStep('trace run finalize', () => traceRun.finalize());
-  }
+  await runLifecycleStep('trace run finalize', () => traceRun.finalize());
 
   if (isFailure) {
     const bail = context.normalizedConfig.bail;

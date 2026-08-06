@@ -18,6 +18,7 @@ describe('browser mode - basic', () => {
     expect(cli.stdout).toContain('fakeTimers.test.ts');
     expect(cli.stdout).toContain('spy.test.ts');
     expect(cli.stdout).toContain('fixtures.test.ts');
+    expect(cli.stdout).toContain('retryContext.test.ts');
     expect(cli.stdout).not.toContain('/scheduler.html');
   });
 

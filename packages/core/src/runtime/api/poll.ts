@@ -18,7 +18,7 @@
  */
 import type { Assertion } from '@vitest/expect';
 import { Assertion as ChaiAssertion, util } from 'chai';
-import type { RstestExpect, TestCase } from '../../types';
+import type { RstestExpect, RuntimeConfig, TestCase } from '../../types';
 import { SYNTHETIC_STACK_ERROR_MESSAGE } from '../../utils/constants';
 import { getRealTimers } from '../util';
 
@@ -44,9 +44,17 @@ const unsupported = [
   // resolves
 ];
 
-export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
+export function createExpectPoll(
+  expect: RstestExpect,
+  getPollConfig: () => RuntimeConfig['expect']['poll'],
+): RstestExpect['poll'] {
   return function poll(fn, options = {}) {
-    const { interval = 50, timeout = 1000, message } = options;
+    const defaults = getPollConfig();
+    const {
+      interval = defaults.interval,
+      timeout = defaults.timeout,
+      message,
+    } = options;
     // @ts-expect-error private poll access
     const assertion = expect(null, message).withContext({
       poll: true,
@@ -123,10 +131,7 @@ export function createExpectPoll(expect: RstestExpect): RstestExpect['poll'] {
           test.onFinished.push(() => {
             if (!awaited) {
               const negated = util.flag(assertion, 'negate') ? 'not.' : '';
-              const name = util.flag(assertion, '_poll.element')
-                ? 'element(locator)'
-                : 'poll(assertion)';
-              const assertionString = `expect.${name}.${negated}${String(key)}()`;
+              const assertionString = `expect.poll(assertion).${negated}${String(key)}()`;
               const error = new Error(
                 `${assertionString} was not awaited. This assertion is asynchronous and must be awaited; otherwise, it is not executed to avoid unhandled rejections:\n\nawait ${assertionString}\n`,
               );

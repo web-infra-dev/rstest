@@ -52,6 +52,12 @@ export default defineConfig({
   },
   include: ['./*.test.ts', './git/*.test.ts'],
   testTimeout: BROWSER_TEST_TIMEOUT,
+  expect: {
+    poll: {
+      interval: 10,
+      timeout: 200,
+    },
+  },
   globals: true,
   plugins: [modifyBrowserRstestConfigPlugin()],
   source: {

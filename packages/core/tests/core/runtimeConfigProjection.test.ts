@@ -22,6 +22,7 @@ const baseNormalizedConfig = {
   isolate: true,
   coverage: { enabled: false, reporters: [] as unknown[] },
   snapshotFormat: {},
+  expect: { poll: { interval: 50, timeout: 1000 } },
   env: {} as Record<string, string | undefined>,
   logHeapUsage: false,
   detectAsyncLeaks: false,

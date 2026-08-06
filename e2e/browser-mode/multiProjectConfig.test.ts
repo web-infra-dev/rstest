@@ -79,6 +79,32 @@ describe.sequential('browser mode - multi project config isolation', () => {
     expect(cli.stdout).toMatch(/Tests.*2 passed/);
   });
 
+  // No node project in the selection, which is what makes this distinct from the
+  // case above: `project-hooked-browser` has no files under its configured
+  // `include` until its hook adds some, so it is resolved out of the plan, while
+  // `project-plain-browser` globs files and keeps the plan non-empty. Only the
+  // config-hook discovery boot can put the first project's tests back, and it
+  // used to be skipped whenever the node set was empty — running the second
+  // project alone and reporting nothing wrong.
+  it('runs browser-only projects whose tests come from a modifyRstestConfig hook', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli(
+      'modify-rstest-mixed',
+      {
+        args: [
+          '--project',
+          'project-hooked-browser',
+          '--project',
+          'project-plain-browser',
+        ],
+      },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('hooked-browser.test.ts');
+    expect(cli.stdout).toContain('plain-browser.test.ts');
+    expect(cli.stdout).toMatch(/Tests.*2 passed/);
+  });
+
   it('runs ordinary mixed browser projects without config discovery', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli(
       'modify-rstest-mixed',
