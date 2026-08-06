@@ -53,18 +53,35 @@ describe('In-Source testing', () => {
           join(fixturesTargetPath, 'src/symlinked.ts'),
           'file',
         );
+        fs.create(
+          join(fixturesTargetPath, 'tests/import-symlink-target.test.ts'),
+          `import { expect, it } from '@rstest/core';
+import { linkedValue } from '../linked/symlinked';
+
+it('imports the real target before its symlinked entry runs', () => {
+  expect(linkedValue).toBe('linked');
+});`,
+        );
         const { cli, expectExecSuccess } = await runRstestCli({
           command: 'rstest',
-          args: ['run', 'src/symlinked.ts', '--reporter=verbose'],
+          args: [
+            'run',
+            'tests/import-symlink-target.test.ts',
+            'src/symlinked.ts',
+            '--reporter=verbose',
+          ],
           options: { nodeOptions: { cwd: fixturesTargetPath } },
         });
 
         await expectExecSuccess();
         expect(cli.stdout).toContain(
+          'imports the real target before its symlinked entry runs',
+        );
+        expect(cli.stdout).toContain(
           'runs an in-source test discovered through a symlink',
         );
-        expect(cli.stdout).toContain('Test Files 1 passed');
-        expect(cli.stdout).toContain('Tests 1 passed');
+        expect(cli.stdout).toContain('Test Files 2 passed');
+        expect(cli.stdout).toContain('Tests 2 passed');
       } finally {
         fs.delete(fixturesTargetPath);
       }

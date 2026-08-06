@@ -13,28 +13,34 @@ class RstestCacheControlPlugin {
 
       override generate() {
         return `
-// Per-chunk module ids that must re-evaluate for every test file. Chunk-local so
-// a reused worker holding several projects' runtime chunks under \`isolate: false\`
-// keeps each project's ids separate. These modules register through this
-// chunk's own \`__webpack_require__\`.
-var __rstest_reload_ids__ = [];
+// Chunk-local so a reused worker holding several projects' runtime chunks under
+// \`isolate: false\` keeps each project's module ids separate.
+var __rstest_setup_ids__ = [];
+var __rstest_test_entry_ids__ = Object.create(null);
 
-__webpack_require__.rstest_register_reload_id = (id) => {
-  __rstest_reload_ids__.push(id);
+__webpack_require__.rstest_register_setup_id = (id) => {
+  __rstest_setup_ids__.push(id);
 };
 
-function __rstest_clean_module_cache__() {
+__webpack_require__.rstest_register_test_entry_id = (path, id) => {
+  __rstest_test_entry_ids__[path] = id;
+};
+
+function __rstest_clean_module_cache__(testEntryPath) {
   if (typeof __webpack_require__ === 'undefined') {
     return;
   }
   delete __webpack_module_cache__['@rstest/core'];
 
-  __rstest_reload_ids__.forEach((id) => {
+  __rstest_setup_ids__.forEach((id) => {
     delete __webpack_module_cache__[id];
   });
-  // Modules re-register on their next per-file load, so reset to keep the list
-  // from growing across every file this kept chunk serves.
-  __rstest_reload_ids__.length = 0;
+  __rstest_setup_ids__.length = 0;
+
+  var testEntryId = __rstest_test_entry_ids__[testEntryPath];
+  if (testEntryId !== undefined) {
+    delete __webpack_module_cache__[testEntryId];
+  }
 }
 
 // Register this chunk's self-scoped cleaner instead of overwriting a single
@@ -64,10 +70,11 @@ function __rstest_clean_module_cache__() {
 }
 
 /**
- * Clean setup, test entry, and Rstest module caches manually.
+ * Clean setup, current test entry, and Rstest module caches manually.
  *
- * This ensures setup files and test entries are re-executed for every test file
- * when a worker is reused with `isolate: false`.
+ * Setup files are re-executed for every test file. A test entry is invalidated
+ * only when it is about to run as the current entry, so an in-source module
+ * imported by regular tests otherwise preserves its once-per-worker state.
  *
  * By default, modules are isolated between different tests (each test runs in
  * a fresh worker process spawned by rstest's pool).
@@ -86,36 +93,41 @@ export const pluginCacheControl: (
       return setupFileSet;
     };
 
+    const isTestEntryPath = (resourcePath: string) => {
+      for (const testEntryPaths of testEntryPathState.values()) {
+        if (testEntryPaths.has(resourcePath)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     // Rstest paths are posix-style (pathe), but rspack matches `test`
     // against the native resource path, which uses `\` on Windows — a raw
-    // string/array `test` would never match there, so the reload registration
-    // below would not be injected and these modules would stop re-running per
-    // file under `isolate: false`. Compare paths normalized to posix instead.
+    // string/array `test` would never match there, so the cache registration
+    // below would not be injected. Compare paths normalized to posix instead.
     api.transform(
       {
         test: (resourcePath) => {
           const normalizedPath = path.normalize(resourcePath);
-          if (getSetupFileSet().has(normalizedPath)) {
-            return true;
-          }
-          for (const testEntryPaths of testEntryPathState.values()) {
-            if (testEntryPaths.has(normalizedPath)) {
-              return true;
-            }
-          }
-          return false;
+          return (
+            getSetupFileSet().has(normalizedPath) ||
+            isTestEntryPath(normalizedPath)
+          );
         },
       },
-      ({ code }) => {
-        // Register via this chunk's own `__webpack_require__` (not a shared
-        // global list) so each project's reload ids stay isolated under
-        // `isolate: false`.
+      ({ code, resourcePath }) => {
+        const normalizedPath = path.normalize(resourcePath);
+        const registration = getSetupFileSet().has(normalizedPath)
+          ? `if (__webpack_require__.rstest_register_setup_id && __webpack_module__.id != null) {
+  __webpack_require__.rstest_register_setup_id(__webpack_module__.id);
+}`
+          : `if (__webpack_require__.rstest_register_test_entry_id && __webpack_module__.id != null) {
+  __webpack_require__.rstest_register_test_entry_id(${JSON.stringify(normalizedPath)}, __webpack_module__.id);
+}`;
+
         return {
-          code: `${code}
-if (__webpack_require__.rstest_register_reload_id && __webpack_module__.id) {
-  __webpack_require__.rstest_register_reload_id(__webpack_module__.id);
-}
-        `,
+          code: `${code}\n${registration}`,
         };
       },
     );

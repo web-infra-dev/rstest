@@ -182,7 +182,9 @@ export const clearSyntheticModuleCache = (): void => {
  */
 export const clearCacheCleaners = (): void => {
   (
-    globalThis as { __rstest_cache_cleaners__?: Set<() => void> }
+    globalThis as {
+      __rstest_cache_cleaners__?: Set<(testEntryPath: string) => void>;
+    }
   ).__rstest_cache_cleaners__?.clear();
 };
 
