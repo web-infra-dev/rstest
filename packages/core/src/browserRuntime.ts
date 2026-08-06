@@ -4,7 +4,7 @@
  * without any Node.js or build tool dependencies.
  *
  * Used by:
- * - packages/browser/src/client/entry.ts (runtime APIs)
+ * - packages/browser/src/client/runner.ts (runtime APIs)
  *
  * User test code importing '@rstest/core' is not aliased here; the browser
  * build keeps that request external against `globalThis['@rstest/core']`
