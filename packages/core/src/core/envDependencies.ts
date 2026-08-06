@@ -44,6 +44,12 @@ export const createTestEnvironmentLoadError = (
   return error;
 };
 
+export const formatTestEnvironmentPrebundleFallbackWarning = (
+  packageName: string,
+  reason: unknown,
+): string =>
+  `Failed to load the test environment prebundle for "${packageName}"; falling back to its native entry. The failed prebundle attempt adds startup overhead.\n${String(reason)}`;
+
 export const installTestEnvironmentDependency = (
   packageName: string,
   root: string,

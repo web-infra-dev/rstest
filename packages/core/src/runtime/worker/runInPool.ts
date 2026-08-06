@@ -9,6 +9,7 @@ import type {
   TestInfo,
   WorkerState,
 } from '../../types';
+import type { TestEnvironmentModuleFallback } from '../../pool/protocol';
 import { globalApis, RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
@@ -156,6 +157,7 @@ const preparePool = async (
     environmentKey,
   }: RunWorkerOptions['options'],
   tracker?: PhaseTracker,
+  onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void,
 ) => {
   // Reset globalCleanups only when preparePool is called again (running without isolation)
   globalCleanups.forEach((fn) => {
@@ -327,7 +329,10 @@ const preparePool = async (
     const scope = isolate ? 'file' : 'worker';
     const [{ setup }, environmentModule] = await Promise.all([
       loadEnvironment(),
-      loadTestEnvironmentModule(context.testEnvironmentModule),
+      loadTestEnvironmentModule(
+        context.testEnvironmentModule,
+        onTestEnvironmentFallback,
+      ),
     ]);
     const { teardown } = await setup(
       global,
@@ -463,6 +468,7 @@ const loadFiles = async ({
 
 export const runInPool = async (
   options: RunWorkerOptions['options'],
+  onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void,
 ): Promise<
   | {
       tests: TestInfo[];
@@ -551,7 +557,7 @@ export const runInPool = async (
         cleanup,
         unhandledErrors,
         interopDefault,
-      } = await preparePool(options);
+      } = await preparePool(options, undefined, onTestEnvironmentFallback);
       const { assetFiles, sourceMaps: sourceMapsFromAssets } =
         assets || (await rpc.getAssetsByEntry());
       sourceMaps = sourceMapsFromAssets;
@@ -616,7 +622,7 @@ export const runInPool = async (
       unhandledErrors,
       interopDefault,
       taskContext: preparedTaskContext,
-    } = await preparePool(options, tracker);
+    } = await preparePool(options, tracker, onTestEnvironmentFallback);
     taskContext = preparedTaskContext;
     if (detectAsyncLeaks) {
       asyncLeakDetector = createAsyncLeakDetector(taskContext);

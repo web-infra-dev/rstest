@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url';
+import type { TestEnvironmentModuleFallback } from '../../../pool/protocol';
 import type { TestEnvironmentModuleReference } from '../../../types';
 import { logger } from '../../../utils';
 import { finalizeDynamicImport } from '../resolveDynamicImport';
@@ -85,6 +86,7 @@ const probeBundledDependency = (loaded: LoadedTestEnvironmentModule): void => {
 
 const loadModule = async (
   reference: TestEnvironmentModuleReference,
+  onFallback?: (fallback: TestEnvironmentModuleFallback) => void,
 ): Promise<LoadedTestEnvironmentModule> => {
   if (reference.bundlePath) {
     try {
@@ -97,9 +99,16 @@ const loadModule = async (
       logger.debug(`loaded bundled test environment ${reference.packageName}`);
       return loaded;
     } catch (error) {
+      const reason = String(error);
       logger.debug(
-        `Failed to load bundled test environment ${reference.packageName}; falling back to its native entry: ${String(error)}`,
+        `Failed to load bundled test environment ${reference.packageName}; falling back to its native entry: ${reason}`,
       );
+      onFallback?.({
+        packageName: reference.packageName,
+        bundlePath: reference.bundlePath,
+        resolvedPath: reference.resolvedPath,
+        reason,
+      });
     }
   }
 
@@ -112,6 +121,7 @@ const loadModule = async (
 
 export const loadTestEnvironmentModule = (
   reference: TestEnvironmentModuleReference | undefined,
+  onFallback?: (fallback: TestEnvironmentModuleFallback) => void,
 ): Promise<LoadedTestEnvironmentModule | undefined> => {
   if (!reference) {
     return Promise.resolve(undefined);
@@ -124,7 +134,7 @@ export const loadTestEnvironmentModule = (
   ].join('\0');
   let loaded = moduleCache.get(cacheKey);
   if (!loaded) {
-    loaded = loadModule(reference);
+    loaded = loadModule(reference, onFallback);
     moduleCache.set(cacheKey, loaded);
   }
   return loaded;
