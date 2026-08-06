@@ -8,6 +8,7 @@ import {
   deserializeError,
   isRpcEnvelope,
   isWorkerResponseEnvelope,
+  type TestEnvironmentModuleFallback,
   type WorkerResponse,
   wrapRpc,
 } from './protocol';
@@ -61,6 +62,7 @@ let nextTaskSeq = 0;
 type PoolRunnerOptions = {
   workerId: number;
   environmentKey: string;
+  onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void;
 };
 
 /**
@@ -97,10 +99,14 @@ export class PoolRunner {
    * never recycles a poisoned runner. See review for rstest#1142.
    */
   private crashed = false;
+  private readonly onTestEnvironmentFallback?: (
+    fallback: TestEnvironmentModuleFallback,
+  ) => void;
 
   constructor(worker: PoolWorker, options: PoolRunnerOptions) {
     this.workerId = options.workerId;
     this.environmentKey = options.environmentKey;
+    this.onTestEnvironmentFallback = options.onTestEnvironmentFallback;
     this.worker = worker;
 
     this.handleMessage = this.handleMessage.bind(this);
@@ -337,6 +343,9 @@ export class PoolRunner {
         return;
       case 'collectFinished':
         this.resolveTask('collect', response.taskId, response.result);
+        return;
+      case 'testEnvironmentFallback':
+        this.onTestEnvironmentFallback?.(response.fallback);
         return;
       case 'fatal_error': {
         const error = deserializeError(response.error);

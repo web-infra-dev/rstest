@@ -43,7 +43,7 @@ import {
   RunSessionLifecycle,
 } from './runSession';
 import { RunnerSessionRegistry } from './sessionRegistry';
-import { collectDeletedTestPaths, planWatchRerun } from './watchRerunPlanner';
+import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import type {
   BrowserWatchSession,
   DispatchPageResolver,
@@ -555,53 +555,22 @@ export const createHeadlessScheduler = async ({
         affectedTestFiles: drainPendingAffectedTestFiles(watchState),
       });
 
-      if (rerunPlan.filesChanged) {
-        const deletedTestPaths = collectDeletedTestPaths(
-          watchState.lastTestFiles,
-          rerunPlan.currentTestFiles,
-        );
-        if (deletedTestPaths.length > 0) {
-          context.updateReporterResultState([], [], deletedTestPaths);
-        }
-        watchState.lastTestFiles = rerunPlan.currentTestFiles;
-        if (rerunPlan.currentTestFiles.length === 0) {
-          logger.log(
-            color.cyan('No browser test files remain after update.\n'),
-          );
-          // Still one cycle: core's finalize reports the emptied run.
-          await watchSignals.signalInvalidation([]);
-          return;
-        }
+      commitWatchFileSetUpdate(
+        rerunPlan.fileSetUpdate,
+        watchState,
+        (deletedTestPaths) =>
+          context.updateReporterResultState([], [], deletedTestPaths),
+      );
 
-        logger.log(
-          color.cyan(
-            `Test file set changed, re-running ${rerunPlan.currentTestFiles.length} file(s)...\n`,
-          ),
-        );
-        await watchSignals.signalInvalidation([
-          ...new Set(rerunPlan.currentTestFiles.map((file) => file.testPath)),
-        ]);
-        return;
-      }
-
-      if (rerunPlan.affectedTestFiles.length === 0) {
-        logger.log(
-          color.cyan(
-            'No affected browser test files detected, skipping re-run.\n',
-          ),
-        );
+      logger.log(color.cyan(rerunPlan.decision.message));
+      if (rerunPlan.decision.kind === 'idle') {
         logWatchReady();
         return;
       }
 
-      logger.log(
-        color.cyan(
-          `Re-running ${rerunPlan.affectedTestFiles.length} affected test file(s)...\n`,
-        ),
+      await watchSignals.signalInvalidation(
+        rerunPlan.decision.kind === 'empty' ? [] : rerunPlan.decision.testPaths,
       );
-      await watchSignals.signalInvalidation([
-        ...new Set(rerunPlan.affectedTestFiles.map((file) => file.testPath)),
-      ]);
     });
 
     watchSession = createWatchSession(runScope);

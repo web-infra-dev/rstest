@@ -20,6 +20,7 @@ import {
   getFileTaskId,
   getForceColorEnv,
   isDeno,
+  logger,
   needFlagExperimentalDetectModule,
   toError,
 } from '../utils';
@@ -28,6 +29,7 @@ import { isMemorySufficient } from '../utils/memory';
 import { getNumCpus, parseWorkers } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
 import { getEnvironmentKey } from '../core/environmentGroups';
+import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/envDependencies';
 import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
 import {
   createRunnerEventSink,
@@ -369,6 +371,11 @@ export const createPool = async ({
       ...process.env,
     } as Record<string, string>,
     memoryGate: selectMemoryGate(workerKind),
+    onTestEnvironmentFallback: ({ packageName, reason }) => {
+      logger.warn(
+        formatTestEnvironmentPrebundleFallbackWarning(packageName, reason),
+      );
+    },
   });
 
   const createProjectSink = (project: ProjectContext): RunnerEventSink =>

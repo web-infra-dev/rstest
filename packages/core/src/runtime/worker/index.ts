@@ -117,6 +117,9 @@ const runTask = async (
       onFileCleanupEnd: () => {
         send({ type: 'fileCleanupFinished', taskId: request.taskId });
       },
+      onTestEnvironmentFallback: (fallback) => {
+        send({ type: 'testEnvironmentFallback', fallback });
+      },
     });
     send({
       type: RESPONSE_TYPE[kind],

@@ -34,6 +34,14 @@ export type WorkerMemoryReport = {
   rss: number;
 };
 
+/** Worker-to-host notification that a test environment prebundle was rejected. */
+export type TestEnvironmentModuleFallback = {
+  packageName: string;
+  bundlePath: string;
+  resolvedPath: string;
+  reason: string;
+};
+
 export type WorkerResponse =
   | { type: 'started'; pid: number }
   | { type: 'fileCleanupStarted'; taskId: number }
@@ -49,6 +57,10 @@ export type WorkerResponse =
       taskId: number;
       result: CollectTaskResult;
       memory?: WorkerMemoryReport;
+    }
+  | {
+      type: 'testEnvironmentFallback';
+      fallback: TestEnvironmentModuleFallback;
     }
   | {
       type: 'fatal_error';

@@ -76,6 +76,33 @@ describe('Pool - basic', () => {
   });
 });
 
+describe('Pool - environment prebundle fallback', () => {
+  it('reports the same fallback only once across isolated workers', async () => {
+    const onTestEnvironmentFallback = rs.fn();
+    const pool = new Pool(
+      createPoolOptions({ onTestEnvironmentFallback, maxWorkers: 1 }),
+    );
+    try {
+      await pool.runTest(
+        createTask('run', { __testMode: 'environment-fallback' }),
+      );
+      await pool.runTest(
+        createTask('run', { __testMode: 'environment-fallback' }),
+      );
+
+      expect(onTestEnvironmentFallback).toHaveBeenCalledTimes(1);
+      expect(onTestEnvironmentFallback).toHaveBeenCalledWith({
+        packageName: 'happy-dom',
+        bundlePath: '/tmp/happy-dom-bundle.mjs',
+        resolvedPath: '/project/node_modules/happy-dom/cjs/index.cjs',
+        reason: 'Error: Expected exports: GlobalWindow or Window.',
+      });
+    } finally {
+      await pool.close();
+    }
+  });
+});
+
 // ── fatal_error attribution ─────────────────────────────────────────────────
 
 describe('Pool - fatal error', () => {
@@ -398,10 +425,12 @@ describe('Pool - capacity', () => {
       expect(iv.end).toBeTypeOf('number');
     }
 
-    // Upper bound: at no point were more than maxWorkers tasks running.
+    // Concurrency can only increase when a task starts, so sampling every
+    // start proves the upper bound without combining overlaps from
+    // different moments in the sampled task's lifetime.
     for (const point of intervals) {
       const concurrent = intervals.filter(
-        (iv) => iv.start < point.end && iv.end > point.start,
+        (iv) => iv.start <= point.start && iv.end > point.start,
       ).length;
       expect(concurrent).toBeLessThanOrEqual(maxWorkers);
     }
