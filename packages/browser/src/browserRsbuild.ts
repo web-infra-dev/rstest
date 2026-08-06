@@ -72,7 +72,20 @@ type BrowserProjectEntries = {
   project: ProjectContext;
   setupFiles: string[];
   testFiles: string[];
+  importMetaRstestPaths: Record<string, string>;
 };
+
+const getImportMetaRstestPaths = async (
+  testFiles: string[],
+): Promise<Record<string, string>> =>
+  Object.fromEntries(
+    await Promise.all(
+      testFiles.map(async (testPath) => [
+        normalize(testPath),
+        normalize(await fs.realpath(testPath).catch(() => testPath)),
+      ]),
+    ),
+  );
 
 export type BrowserProviderProject = {
   rootPath: string;
@@ -808,10 +821,13 @@ export const collectProjectEntries = async (
 
       const setup = getSetupFiles(setupFiles, project.rootPath);
 
+      const testFiles = Object.values(tests);
+
       return {
         project,
         setupFiles: Object.values(setup),
-        testFiles: Object.values(tests),
+        testFiles,
+        importMetaRstestPaths: await getImportMetaRstestPaths(testFiles),
       };
     }),
   );
@@ -1027,11 +1043,14 @@ const generateManifestModule = ({
 
   // 4. Export test contexts object
   lines.push('export const projectTestContexts = {');
-  for (const { project } of entries) {
+  for (const { importMetaRstestPaths, project } of entries) {
     const varName = `context_${toSafeVarName(project.environmentName)}`;
     lines.push(`  ${JSON.stringify(project.name)}: {`);
     lines.push(`    getTestKeys: () => ${varName}.keys(),`);
     lines.push(`    loadTest: (key) => ${varName}(key),`);
+    lines.push(
+      `    importMetaRstestPaths: ${JSON.stringify(importMetaRstestPaths)},`,
+    );
     lines.push(
       `    projectRoot: ${JSON.stringify(normalize(project.rootPath))},`,
     );
@@ -1230,6 +1249,7 @@ export const createBrowserRuntime = async ({
             project: manifestModule.project,
             testFiles: entry?.testFiles ?? [],
             setupFiles: entry?.setupFiles ?? [],
+            importMetaRstestPaths: entry?.importMetaRstestPaths ?? {},
           },
         ],
         isWatchMode,
@@ -1419,6 +1439,7 @@ export const createBrowserRuntime = async ({
             project,
             testFiles: entry?.testFiles ?? [],
             setupFiles: entry?.setupFiles ?? [],
+            importMetaRstestPaths: entry?.importMetaRstestPaths ?? {},
           },
         ],
         isWatchMode,
@@ -1909,10 +1930,12 @@ export async function resolveProjectEntries(
           project.normalizedConfig.setupFiles,
           project.rootPath,
         );
+        const testFiles = Object.values(entryInfo.entries);
         projectEntries.push({
           project,
           setupFiles: Object.values(setup),
-          testFiles: Object.values(entryInfo.entries),
+          testFiles,
+          importMetaRstestPaths: await getImportMetaRstestPaths(testFiles),
         });
       }
     }

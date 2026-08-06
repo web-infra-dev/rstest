@@ -16,6 +16,7 @@ declare module '@rstest/browser-manifest' {
     getTestKeys: () => string[];
     loadTest: (key: string) => Promise<unknown>;
     projectRoot: string;
+    importMetaRstestPaths: Record<string, string>;
   };
 
   export const projects: ManifestProjectConfig[];

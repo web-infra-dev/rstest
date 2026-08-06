@@ -1,4 +1,5 @@
 import type { FileCoverageData } from 'istanbul-lib-coverage';
+import { existsSync, realpathSync } from 'node:fs';
 import { isMainThread, threadId } from 'node:worker_threads';
 import { install } from 'source-map-support';
 import type {
@@ -269,6 +270,9 @@ const preparePool = async (
     },
     distPath,
     testPath,
+    importMetaRstestPath: existsSync(testPath)
+      ? realpathSync.native(testPath)
+      : testPath,
     environment: 'node',
   };
 

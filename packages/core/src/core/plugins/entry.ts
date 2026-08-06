@@ -26,6 +26,16 @@ class TestFileWatchPlugin {
   }
 }
 
+const toTestEntryRequests = (
+  entries: Record<string, string>,
+): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(entries).map(([name, testPath]) => [
+      name,
+      `${testPath}${testPath.includes('?') ? '&' : '?'}__rstest_entry__`,
+    ]),
+  );
+
 export const pluginEntryWatch: (params: {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
@@ -49,7 +59,7 @@ export const pluginEntryWatch: (params: {
         config.entry = async () => {
           const sourceEntries = await globTestSourceEntries(environment.name);
           return {
-            ...sourceEntries,
+            ...toTestEntryRequests(sourceEntries),
             ...setupFiles[environment.name],
             ...(globalSetupFiles?.[environment.name] || {}),
           };
@@ -96,7 +106,7 @@ export const pluginEntryWatch: (params: {
         config.entry = {
           ...setupFiles[environment.name],
           ...(globalSetupFiles?.[environment.name] || {}),
-          ...sourceEntries,
+          ...toTestEntryRequests(sourceEntries),
         };
       }
     });

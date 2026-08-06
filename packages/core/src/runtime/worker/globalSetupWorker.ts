@@ -1,5 +1,6 @@
 import { install } from 'source-map-support';
 import type { FormattedError } from '../../types';
+import { RSTEST_IMPORT_META_GLOBAL_KEY } from '../../utils/constants';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
@@ -81,6 +82,8 @@ const runGlobalSetup = async (data: {
     // worker-wide flag, so it must be set before any setup code is evaluated.
     (globalThis as Record<string, unknown>).__rstest_federation__ =
       data.federation === true;
+    (globalThis as Record<string, unknown>)[RSTEST_IMPORT_META_GLOBAL_KEY] =
+      () => undefined;
 
     for (const entry of data.entries) {
       const { distPath, runtimeDistPath, testPath } = entry;

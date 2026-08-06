@@ -513,6 +513,8 @@ const run = async () => {
         outputModule: false,
         environment: 'browser',
         testPath,
+        importMetaRstestPath:
+          currentTestContext.importMetaRstestPaths[testPath],
         distPath: testPath,
         snapshotOptions: {
           updateSnapshot: options.snapshot.updateSnapshot,
@@ -630,6 +632,7 @@ const run = async () => {
       environment: 'browser',
       currentTask: taskStack[0],
       testPath,
+      importMetaRstestPath: currentTestContext.importMetaRstestPaths[testPath],
       distPath: testPath,
       snapshotOptions: {
         updateSnapshot: options.snapshot.updateSnapshot,
