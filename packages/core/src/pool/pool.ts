@@ -1,6 +1,9 @@
 import type { TestFileResult } from '../types';
 import { PoolRunner } from './poolRunner';
-import type { CollectTaskResult } from './protocol';
+import type {
+  CollectTaskResult,
+  TestEnvironmentModuleFallback,
+} from './protocol';
 import type { PoolOptions, PoolTask } from './types';
 import { createPoolWorker } from './workers';
 
@@ -33,12 +36,24 @@ export class Pool {
    * motivated restoring this.
    */
   private readonly slotInUse = new Set<number>();
+  private readonly reportedEnvironmentFallbacks = new Set<string>();
   private isClosing = false;
   private isClosed = false;
 
   constructor(options: PoolOptions) {
     this.options = options;
   }
+
+  private readonly handleTestEnvironmentFallback = (
+    fallback: TestEnvironmentModuleFallback,
+  ): void => {
+    const key = `${fallback.bundlePath}\0${fallback.resolvedPath}`;
+    if (this.reportedEnvironmentFallbacks.has(key)) {
+      return;
+    }
+    this.reportedEnvironmentFallbacks.add(key);
+    this.options.onTestEnvironmentFallback?.(fallback);
+  };
 
   async runTest(task: PoolTask): Promise<TestFileResult> {
     return this.dispatch(task, 'run') as Promise<TestFileResult>;
@@ -136,7 +151,11 @@ export class Pool {
       const workerId = this.acquireWorkerId();
       const worker = createPoolWorker(task, this.options, workerId);
       gate?.attachWorker(worker);
-      const runner = new PoolRunner(worker, { workerId, environmentKey });
+      const runner = new PoolRunner(worker, {
+        workerId,
+        environmentKey,
+        onTestEnvironmentFallback: this.handleTestEnvironmentFallback,
+      });
       this.activeRunners.add(runner);
       try {
         await runner.start();

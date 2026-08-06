@@ -21,6 +21,7 @@ import {
 import {
   createTestEnvironmentLoadError,
   environmentDependencyPackages,
+  formatTestEnvironmentPrebundleFallbackWarning,
   getTestEnvironmentResolutionRoots,
   type EnvironmentDependencyName,
 } from './envDependencies';
@@ -457,8 +458,8 @@ export const prepareTestEnvironmentModules = async ({
           reference,
           tempRoot,
         }).catch((error: unknown) => {
-          logger.debug(
-            `Failed to prebundle test environment ${packageName}; falling back to its native entry: ${String(error)}`,
+          logger.warn(
+            formatTestEnvironmentPrebundleFallbackWarning(packageName, error),
           );
           return undefined;
         });

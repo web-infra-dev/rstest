@@ -131,10 +131,7 @@ export function createExpectPoll(
           test.onFinished.push(() => {
             if (!awaited) {
               const negated = util.flag(assertion, 'negate') ? 'not.' : '';
-              const name = util.flag(assertion, '_poll.element')
-                ? 'element(locator)'
-                : 'poll(assertion)';
-              const assertionString = `expect.${name}.${negated}${String(key)}()`;
+              const assertionString = `expect.poll(assertion).${negated}${String(key)}()`;
               const error = new Error(
                 `${assertionString} was not awaited. This assertion is asynchronous and must be awaited; otherwise, it is not executed to avoid unhandled rejections:\n\nawait ${assertionString}\n`,
               );

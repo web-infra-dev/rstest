@@ -137,6 +137,7 @@ describe('loadTestEnvironmentModule', () => {
 
   it('falls back to the resolved package entry when the prebundle is invalid', async () => {
     await withTempDir('rstest-env-fallback-', async (root) => {
+      const onFallback = rs.fn();
       const resolvedPath = writeModule(
         root,
         'resolved.mjs',
@@ -148,12 +149,15 @@ describe('loadTestEnvironmentModule', () => {
         'export const unrelated = true;',
       );
 
-      const loaded = await loadTestEnvironmentModule({
-        name: 'happy-dom',
-        packageName: 'happy-dom',
-        resolvedPath,
-        bundlePath,
-      });
+      const loaded = await loadTestEnvironmentModule(
+        {
+          name: 'happy-dom',
+          packageName: 'happy-dom',
+          resolvedPath,
+          bundlePath,
+        },
+        onFallback,
+      );
 
       expect(loaded?.name).toBe('happy-dom');
       if (loaded?.name !== 'happy-dom') {
@@ -162,6 +166,15 @@ describe('loadTestEnvironmentModule', () => {
       expect(
         (loaded.module.GlobalWindow as unknown as { source: string }).source,
       ).toBe('resolved');
+      expect(onFallback).toHaveBeenCalledTimes(1);
+      expect(onFallback).toHaveBeenCalledWith({
+        packageName: 'happy-dom',
+        bundlePath,
+        resolvedPath,
+        reason: expect.stringContaining(
+          'Expected exports: GlobalWindow or Window.',
+        ),
+      });
     });
   });
 

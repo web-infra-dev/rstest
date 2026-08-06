@@ -13,6 +13,7 @@
 
 // Runtime API for creating test runtime in browser
 export { createRstestRuntime } from './runtime/api';
+export { registerElementExpect } from './runtime/api/expect';
 // Public test APIs (describe, it, expect, etc.)
 export * from './runtime/api/public';
 export { setRealTimers } from './runtime/util';

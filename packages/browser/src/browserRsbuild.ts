@@ -708,8 +708,7 @@ const getAffectedTestFiles = ({
   // Headed watch compiles chunks on demand (lazyCompilation), so an entry's
   // first appearance in stats means "just loaded", not "just added": its first
   // sighting establishes the baseline instead of marking a change. Genuinely
-  // new and deleted test files are owned by the test-file-set diff in
-  // `planWatchRerun` / `collectDeletedTestPaths`.
+  // new and deleted test files are owned by `planWatchRerun`'s file-set diff.
   const seedFirstSeen = (
     baseline: EntryHashSnapshot | undefined,
     current: EntryHashSnapshot,

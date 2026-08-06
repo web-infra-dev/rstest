@@ -28,7 +28,7 @@ import type {
   TestFileInfo,
 } from './protocol';
 import type { BrowserProviderContext, BrowserProviderPage } from './providers';
-import { collectDeletedTestPaths, planWatchRerun } from './watchRerunPlanner';
+import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import type {
   BrowserWatchSession,
   DispatchPageResolver,
@@ -579,45 +579,32 @@ export const createHeadedScheduler = async ({
         affectedTestFiles: drainPendingAffectedTestFiles(watchState),
       });
 
-      if (rerunPlan.filesChanged) {
-        const deletedTestPaths = collectDeletedTestPaths(
-          watchState.lastTestFiles,
-          rerunPlan.currentTestFiles,
-        );
-        if (deletedTestPaths.length > 0) {
-          context.updateReporterResultState([], [], deletedTestPaths);
-        }
-        watchState.lastTestFiles = rerunPlan.currentTestFiles;
-        currentTestFiles = rerunPlan.currentTestFiles;
+      commitWatchFileSetUpdate(
+        rerunPlan.fileSetUpdate,
+        watchState,
+        (deletedTestPaths) =>
+          context.updateReporterResultState([], [], deletedTestPaths),
+      );
+
+      if (rerunPlan.fileSetUpdate) {
+        currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
         await rpcManager.notifyTestFileUpdate(currentTestFiles);
-        if (currentTestFiles.length === 0) {
-          logger.log(
-            color.cyan('No browser test files remain after update.\n'),
+        if (currentTestFiles.length > 0) {
+          await waitForRunnerFramesReady(
+            currentTestFiles.map((file) => file.testPath),
           );
-          logWatchReady();
-          return;
         }
-        await waitForRunnerFramesReady(
-          currentTestFiles.map((file) => file.testPath),
-        );
       }
 
-      if (rerunPlan.normalizedAffectedTestFiles.length > 0) {
-        logger.log(
-          color.cyan(
-            `Re-running ${rerunPlan.normalizedAffectedTestFiles.length} affected test file(s)...\n`,
-          ),
-        );
-        await watchSignals.signalInvalidation(
-          rerunPlan.normalizedAffectedTestFiles,
-        );
+      logger.log(color.cyan(rerunPlan.decision.message));
+      if (rerunPlan.decision.kind === 'idle') {
+        logWatchReady();
         return;
       }
 
-      if (!rerunPlan.filesChanged) {
-        logger.log(color.cyan('Tests will be re-executed automatically\n'));
-      }
-      logWatchReady();
+      await watchSignals.signalInvalidation(
+        rerunPlan.decision.kind === 'empty' ? [] : rerunPlan.decision.testPaths,
+      );
     });
 
     runUiRequestedRerun = async (file, testNamePattern) => {

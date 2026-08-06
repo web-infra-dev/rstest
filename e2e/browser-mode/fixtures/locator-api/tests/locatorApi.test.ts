@@ -127,3 +127,30 @@ test('locator + expect.element proxy works', async () => {
     .element(page.getByPlaceholder('Name').or(page.getByPlaceholder('Email')))
     .toHaveCount(2);
 });
+
+test('counts a retried element assertion once', async () => {
+  expect.assertions(1);
+
+  const delayed = document.createElement('div');
+  delayed.id = 'delayed-assertion-count';
+  setTimeout(() => document.body.appendChild(delayed), 50);
+
+  await expect.element(page.locator('#delayed-assertion-count')).toBeAttached();
+  delayed.remove();
+});
+
+test.concurrent(
+  'supports element assertions on context expect',
+  async ({ expect: contextExpect }) => {
+    contextExpect.hasAssertions();
+
+    const target = document.createElement('div');
+    target.textContent = 'Context element assertion';
+    document.body.appendChild(target);
+
+    await contextExpect
+      .element(page.getByText('Context element assertion'))
+      .toBeVisible();
+    target.remove();
+  },
+);
