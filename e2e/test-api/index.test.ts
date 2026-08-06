@@ -143,6 +143,25 @@ describe('Test API', () => {
     );
   });
 
+  it('cleans ready file fixtures before unrelated setup settles', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/fileScopedNamedFixtureCleanupProgress.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: dirname(fileURLToPath(import.meta.url)),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('fixture setup timed out in 50ms');
+    expect(output.indexOf('RSTEST_READY_FILE_FIXTURE_CLEANUP')).toBeLessThan(
+      output.indexOf('RSTEST_PENDING_FILE_FIXTURE_SETTLED'),
+    );
+  });
+
   it('rejects file-scoped named fixtures declared inside a suite', async () => {
     const { cli, expectExecFailed } = await runRstestCli({
       command: 'rstest',

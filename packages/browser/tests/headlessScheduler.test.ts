@@ -1,4 +1,5 @@
-import { describe, expect, it, rstest } from '@rstest/core';
+import { FIXTURE_CLEANUP_TIMEOUT_MS } from '@rstest/core/internal/browser';
+import { describe, expect, it, rs, rstest } from '@rstest/core';
 import { HostDispatchRouter } from '../src/dispatchRouter';
 import { createHeadlessScheduler } from '../src/headlessScheduler';
 import { createDeferredPromise } from '../src/hostPayloads';
@@ -191,6 +192,7 @@ const createHarness = (options: HarnessOptions = {}) => {
   const routed: BrowserClientMessage[] = [];
   const fatalErrors: Array<{ message: string; stack?: string }> = [];
   const completed: string[] = [];
+  const completedResults: FileCompleteMessage['payload'][] = [];
   const invalidations: string[][] = [];
   const deleted: string[][] = [];
   const ready = rstest.fn();
@@ -272,6 +274,7 @@ const createHarness = (options: HarnessOptions = {}) => {
       },
       async handleTestFileComplete(payload) {
         completed.push(payload.testPath);
+        completedResults.push(payload);
       },
     },
     watchSignals: {
@@ -319,6 +322,7 @@ const createHarness = (options: HarnessOptions = {}) => {
   return {
     browser,
     completed,
+    completedResults,
     deleted,
     dispatchRerun: () => dispatchRerun(),
     fatalErrors,
@@ -445,6 +449,45 @@ describe('headless scheduler', () => {
       expect(firstContext(harness.browser).closeCount).toBeGreaterThan(0);
     },
   );
+
+  it('fails only the file whose fixture cleanup times out', async () => {
+    rs.useFakeTimers();
+    try {
+      const cleanupStarted = createDeferred();
+      const harness = createHarness({
+        files: [file('/a.test.ts'), file('/b.test.ts')],
+        maxWorkers: 1,
+        scripts: [
+          async (page) => {
+            await page.send({ type: 'file-cleanup-start' });
+            cleanupStarted.resolve();
+          },
+          async (page) => page.send(complete('/b.test.ts')),
+        ],
+      });
+
+      await cleanupStarted.promise;
+      await rs.advanceTimersByTimeAsync(FIXTURE_CLEANUP_TIMEOUT_MS);
+      await harness.result;
+
+      expect(harness.browser.contexts).toHaveLength(2);
+      expect(harness.completedResults).toEqual([
+        expect.objectContaining({
+          status: 'fail',
+          testPath: '/a.test.ts',
+          errors: [
+            expect.objectContaining({
+              message: `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
+            }),
+          ],
+        }),
+      ]);
+      expect(harness.routed).toContainEqual(complete('/b.test.ts'));
+      expect(harness.fatalErrors).toEqual([]);
+    } finally {
+      rs.useRealTimers();
+    }
+  });
 
   it('detaches teardown for an abandoned run', async () => {
     const started = createDeferred();

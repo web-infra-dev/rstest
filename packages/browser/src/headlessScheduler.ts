@@ -1,6 +1,7 @@
 import type {
   RstestContext,
   TestFileResult,
+  TestResult,
 } from '@rstest/core/internal/browser';
 import {
   color,
@@ -212,6 +213,7 @@ export const createHeadlessScheduler = async ({
     let settled = false;
     let resolveDone: (() => void) | null = null;
     let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+    const testResults: TestResult[] = [];
 
     const markDone = (): void => {
       if (!settled) {
@@ -262,17 +264,40 @@ export const createHeadlessScheduler = async ({
       await attachHeadlessRunnerTransport(page, {
         onDispatchMessage: async (message) => {
           try {
+            if (settled) {
+              return;
+            }
             if (message.type === 'file-cleanup-start') {
               if (cleanupTimer) {
                 clearTimeout(cleanupTimer);
               }
               cleanupTimer = setTimeout(() => {
                 void (async () => {
-                  await handleFatal({
-                    message: `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
-                  });
-                  markDone();
-                  await cancelRun(run, false);
+                  if (settled) {
+                    return;
+                  }
+                  settled = true;
+                  const message = `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`;
+                  try {
+                    await handleTestFileComplete({
+                      testId: getFileTaskId(file.testPath),
+                      status: 'fail',
+                      name: '',
+                      testPath: file.testPath,
+                      project: file.projectName,
+                      results: testResults,
+                      errors: [{ name: 'Error', message }],
+                    });
+                  } catch (error) {
+                    const formatted = toError(error);
+                    await handleFatal({
+                      message: formatted.message,
+                      stack: formatted.stack,
+                    });
+                    await cancelRun(run, false);
+                  } finally {
+                    resolveDone?.();
+                  }
                 })();
               }, FIXTURE_CLEANUP_TIMEOUT_MS);
               return;
@@ -285,6 +310,9 @@ export const createHeadlessScheduler = async ({
               return;
             }
             await dispatchRunnerMessage(run, file, session.id, message);
+            if (message.type === 'case-result') {
+              testResults.push(message.payload);
+            }
             if (
               message.type === 'file-complete' ||
               message.type === 'complete'

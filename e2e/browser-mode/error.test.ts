@@ -74,4 +74,24 @@ describe('browser mode - error handling', () => {
     expect(output).toContain('Hook has unknown fixture "browserValue"');
     expect(output).not.toContain('browser hook received a missing fixture');
   });
+
+  it('continues after one file fixture cleanup times out', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('error', {
+      args: [
+        'tests/aFileFixtureCleanupTimeout.test.ts',
+        'tests/bAfterFileFixtureCleanupTimeout.test.ts',
+        '--pool.maxWorkers=1',
+      ],
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain(
+      'File fixture cleanup did not finish within 10000ms',
+    );
+    expect(output).toContain(
+      'RSTEST_BROWSER_CONTINUED_AFTER_FILE_CLEANUP_TIMEOUT',
+    );
+    expect(output).toMatch(/Test Files.*1 failed.*1 passed/);
+  });
 });

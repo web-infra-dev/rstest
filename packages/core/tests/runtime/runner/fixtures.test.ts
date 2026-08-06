@@ -296,6 +296,107 @@ describe('createFixtureResolver', () => {
     expect(events).toEqual(['cleanup']);
   });
 
+  it('cancels a hook waiting for shared file fixture setup', async () => {
+    let finishSetup: (() => void) | undefined;
+    const setupCanFinish = new Promise<void>((resolve) => {
+      finishSetup = resolve;
+    });
+    const events: string[] = [];
+    const fixtures = normalizeNamedFixture(
+      'value',
+      async (_context: object, { onCleanup }: any) => {
+        onCleanup(() => {
+          events.push('cleanup');
+        });
+        await setupCanFinish;
+        events.push('setup');
+        return 'value';
+      },
+      {},
+      'file',
+    );
+    const fileFixtureManager = new FileFixtureManager();
+    const context: Record<string, unknown> = {};
+    const resolver = createFixtureResolver({ fixtures } as any, context, [], {
+      fileFixtureManager,
+    });
+
+    const resolution = resolver.resolveHookFixtures(({ value }: any) => value);
+    await Promise.resolve();
+    const cancellation = resolver.cancelPendingFixtures();
+
+    expect(cancellation).toBeDefined();
+    await expect(cancellation?.teardownStarted).resolves.toBeUndefined();
+    await expect(resolution).resolves.toEqual({ status: 'skipped' });
+    expect(context).toEqual({});
+
+    finishSetup!();
+    await fileFixtureManager.cleanup();
+    expect(events).toEqual(['setup', 'cleanup']);
+  });
+
+  it('cleans ready file fixtures while unrelated setup is pending', async () => {
+    let finishSetup: (() => void) | undefined;
+    const setupCanFinish = new Promise<void>((resolve) => {
+      finishSetup = resolve;
+    });
+    let notifyReadyCleanup: (() => void) | undefined;
+    const readyCleanup = new Promise<void>((resolve) => {
+      notifyReadyCleanup = resolve;
+    });
+    const events: string[] = [];
+    const readyFixtures = normalizeNamedFixture(
+      'ready',
+      (_context: object, { onCleanup }: any) => {
+        onCleanup(() => {
+          events.push('ready:cleanup');
+          notifyReadyCleanup!();
+        });
+        return 'ready';
+      },
+      {},
+      'file',
+    );
+    const fixtures = normalizeNamedFixture(
+      'pending',
+      async () => {
+        await setupCanFinish;
+        events.push('pending:setup');
+        return 'pending';
+      },
+      readyFixtures,
+      'file',
+    );
+    const fileFixtureManager = new FileFixtureManager();
+    const readyResolver = createFixtureResolver({ fixtures } as any, {}, [], {
+      fileFixtureManager,
+    });
+    const pendingResolver = createFixtureResolver({ fixtures } as any, {}, [], {
+      fileFixtureManager,
+    });
+
+    await readyResolver.resolveTestFixtures(({ ready }: any) => ready);
+    const pendingResolution = pendingResolver.resolveTestFixtures(
+      ({ pending }: any) => pending,
+    );
+    await Promise.resolve();
+
+    const cleanup = fileFixtureManager.cleanup();
+    const cleanedBeforePending = await Promise.race([
+      readyCleanup.then(() => true),
+      new Promise<false>((resolve) => {
+        setImmediate(() => resolve(false));
+      }),
+    ]);
+    expect(cleanedBeforePending).toBe(true);
+    expect(events).toEqual(['ready:cleanup']);
+
+    finishSetup!();
+    await pendingResolution;
+    await cleanup;
+    expect(events).toEqual(['ready:cleanup', 'pending:setup']);
+  });
+
   it('does not resolve inherited Object properties as fixture dependencies', async () => {
     const fixtures = normalizeNamedFixture(
       'value',

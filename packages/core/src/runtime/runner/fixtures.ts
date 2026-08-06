@@ -158,7 +158,9 @@ type FixtureResolverOptions = {
 type FixtureCleanupCallback = () => Promise<void>;
 
 type FileFixtureInstance = {
+  cleanup?: FixtureCleanupCallback;
   cleanupRegistered: boolean;
+  dependents: Set<FileFixtureInstance>;
   error?: unknown;
   setup: Promise<unknown>;
   status: 'pending' | 'ready' | 'failed';
@@ -171,7 +173,6 @@ export class FileFixtureManager {
     NormalizedFixture,
     FileFixtureInstance
   >();
-  private readonly cleanups: FixtureCleanupCallback[] = [];
   private cleaning = false;
 
   private startFixture(
@@ -187,6 +188,7 @@ export class FileFixtureManager {
     let notifyTeardownReady: (() => void) | undefined;
     const instance: FileFixtureInstance = {
       cleanupRegistered: false,
+      dependents: new Set(),
       setup: Promise.resolve(),
       status: 'pending',
       teardownReady: new Promise<void>((resolve) => {
@@ -203,6 +205,7 @@ export class FileFixtureManager {
           fixtures[dependencyName]!,
           fixtures,
         );
+        dependency.dependents.add(instance);
         await dependency.setup;
         if (dependency.status === 'failed') {
           throw dependency.error;
@@ -226,7 +229,7 @@ export class FileFixtureManager {
           cleanupPromise ??= Promise.resolve().then(cleanup);
           return cleanupPromise;
         };
-        this.cleanups.unshift(runCleanup);
+        instance.cleanup = runCleanup;
         notifyTeardownReady?.();
         notifyTeardownReady = undefined;
       };
@@ -274,21 +277,30 @@ export class FileFixtureManager {
 
   async cleanup(): Promise<void> {
     this.cleaning = true;
-    await Promise.all(
-      [...this.instances.values()]
-        .filter((instance) => instance.status === 'pending')
-        .map((instance) => instance.teardownReady),
-    );
-
     const errors: unknown[] = [];
-    while (this.cleanups.length > 0) {
-      const cleanup = this.cleanups.shift()!;
-      try {
-        await cleanup();
-      } catch (error) {
-        errors.push(error);
+    const cleanupPromises = new Map<FileFixtureInstance, Promise<void>>();
+    const cleanupInstance = (instance: FileFixtureInstance): Promise<void> => {
+      const existing = cleanupPromises.get(instance);
+      if (existing) {
+        return existing;
       }
-    }
+      const cleanup = Promise.resolve().then(async () => {
+        await Promise.all([...instance.dependents].map(cleanupInstance));
+        await instance.teardownReady;
+        if (!instance.cleanup) {
+          return;
+        }
+        try {
+          await instance.cleanup();
+        } catch (error) {
+          errors.push(error);
+        }
+      });
+      cleanupPromises.set(instance, cleanup);
+      return cleanup;
+    };
+
+    await Promise.all([...this.instances.values()].map(cleanupInstance));
     this.instances.clear();
 
     if (errors.length === 1) {
@@ -379,14 +391,33 @@ export const createFixtureResolver = (
       if (!fileFixtureManager) {
         throw new Error('File fixture manager is not available.');
       }
-      const value = await fileFixtureManager.resolve(
-        name,
-        fixture,
-        fixtures,
-        runNamedFixtureSetup,
-      );
-      setFixtureContextValue(context, name, value);
-      doneMap.add(name);
+      pendingMap.add(name);
+      let cancelWait: (() => void) | undefined;
+      const cancelled = new Promise<{ status: 'cancelled' }>((resolve) => {
+        cancelWait = () => resolve({ status: 'cancelled' });
+      });
+      cancelFixtureSetups.set(name, () => {
+        cancelledFixtureTeardownStarts.get(name)?.();
+        cancelWait?.();
+      });
+      try {
+        const resolved = fileFixtureManager
+          .resolve(name, fixture, fixtures, runNamedFixtureSetup)
+          .then((value) => ({ status: 'resolved' as const, value }));
+        const resolution = await Promise.race([resolved, cancelled]);
+        if (resolution.status === 'cancelled') {
+          throw new PreviouslyFailedFixtureError(name);
+        }
+        setFixtureContextValue(context, name, resolution.value);
+        doneMap.add(name);
+      } catch (error) {
+        failedFixtures.add(name);
+        throw error;
+      } finally {
+        pendingMap.delete(name);
+        cancelFixtureSetups.delete(name);
+        cancelledFixtureTeardownStarts.delete(name);
+      }
       return;
     }
 
