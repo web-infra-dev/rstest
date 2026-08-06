@@ -110,7 +110,9 @@ const runTask = async (
   currentTaskId = request.taskId;
 
   try {
-    const result = await runInPool(request.options);
+    const result = await runInPool(request.options, (fallback) => {
+      send({ type: 'testEnvironmentFallback', fallback });
+    });
     send({
       type: RESPONSE_TYPE[kind],
       taskId: request.taskId,

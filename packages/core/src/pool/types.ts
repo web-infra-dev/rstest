@@ -1,5 +1,6 @@
 import type { RuntimeRPC, RunWorkerOptions } from '../types';
 import type { MemoryGate } from './memoryGate';
+import type { TestEnvironmentModuleFallback } from './protocol';
 
 export type PoolWorkerKind = 'forks' | 'threads';
 
@@ -30,4 +31,6 @@ export type PoolOptions = {
    * a fresh `MemoryGate` by default.
    */
   memoryGate?: MemoryGate;
+  /** Receives each distinct environment prebundle fallback once. */
+  onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void;
 };

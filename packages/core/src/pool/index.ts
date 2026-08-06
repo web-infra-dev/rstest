@@ -20,6 +20,7 @@ import {
   getFileTaskId,
   getForceColorEnv,
   isDeno,
+  logger,
   needFlagExperimentalDetectModule,
   toError,
 } from '../utils';
@@ -369,6 +370,11 @@ export const createPool = async ({
       ...process.env,
     } as Record<string, string>,
     memoryGate: selectMemoryGate(workerKind),
+    onTestEnvironmentFallback: ({ packageName, reason }) => {
+      logger.warn(
+        `Failed to load the test environment prebundle for "${packageName}"; falling back to its native entry. The failed prebundle attempt adds startup overhead.\n${reason}`,
+      );
+    },
   });
 
   const createProjectSink = (project: ProjectContext): RunnerEventSink =>
