@@ -20,6 +20,7 @@ import {
   createDeferredPromise,
   type DeferredPromise,
   type FatalPayload,
+  getFileTaskId,
   type HeadedTestFileCompletePayload,
   type LogPayload,
   type ReloadTestFileAck,
@@ -280,10 +281,13 @@ export const createHeadedScheduler = async ({
     string,
     {
       cleanupTimer?: ReturnType<typeof setTimeout>;
-      runId: string;
       deferred: DeferredPromise<void>;
+      file: TestFileInfo;
+      results: TestResult[];
+      runId: string;
     }
   >();
+  const timedOutHeadedRuns = new Set<string>();
   let enqueueHeadedReload = async (
     _file: TestFileInfo,
     _testNamePattern?: string,
@@ -321,9 +325,10 @@ export const createHeadedScheduler = async ({
   };
 
   const registerPendingHeadedReload = (
-    testPath: string,
+    file: TestFileInfo,
     runId: string,
   ): Promise<void> => {
+    const { testPath } = file;
     const previousPending = pendingHeadedReloads.get(testPath);
     if (previousPending) {
       if (previousPending.cleanupTimer) {
@@ -339,8 +344,10 @@ export const createHeadedScheduler = async ({
 
     const deferred = createDeferredPromise<void>();
     pendingHeadedReloads.set(testPath, {
-      runId,
       deferred,
+      file,
+      results: [],
+      runId,
     });
 
     return deferred.promise;
@@ -376,13 +383,36 @@ export const createHeadedScheduler = async ({
       clearTimeout(pending.cleanupTimer);
     }
     pending.cleanupTimer = setTimeout(() => {
-      rejectPendingHeadedReload(
-        payload.testPath,
-        new Error(
-          `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
-        ),
-        payload.runId,
-      );
+      const currentPending = pendingHeadedReloads.get(payload.testPath);
+      if (!currentPending || currentPending.runId !== pending.runId) {
+        return;
+      }
+
+      currentPending.cleanupTimer = undefined;
+      pendingHeadedReloads.delete(payload.testPath);
+      // The iframe may eventually finish after the watchdog. Keep that stale
+      // completion from reporting a second result for the same run.
+      timedOutHeadedRuns.add(`${payload.testPath}\0${pending.runId}`);
+
+      void (async () => {
+        const message = `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`;
+        try {
+          // A cleanup timeout is a file failure, not a container failure. Resolve
+          // this reload after reporting it so the headed serial loop advances.
+          await handleTestFileComplete({
+            testId: getFileTaskId(payload.testPath),
+            status: 'fail',
+            name: '',
+            testPath: payload.testPath,
+            project: pending.file.projectName,
+            results: pending.results,
+            errors: [{ name: 'Error', message }],
+          });
+          pending.deferred.resolve();
+        } catch (error) {
+          pending.deferred.reject(error);
+        }
+      })();
     }, FIXTURE_CLEANUP_TIMEOUT_MS);
   };
 
@@ -411,7 +441,7 @@ export const createHeadedScheduler = async ({
         file.testPath,
         testNamePattern,
       );
-      await registerPendingHeadedReload(file.testPath, reloadAck.runId);
+      await registerPendingHeadedReload(file, reloadAck.runId);
     } catch (error) {
       if (reloadAck?.runId) {
         rejectPendingHeadedReload(
@@ -458,9 +488,16 @@ export const createHeadedScheduler = async ({
       await handleTestFileStart(payload);
     },
     async onTestCaseResult(payload: TestResult) {
+      pendingHeadedReloads.get(payload.testPath)?.results.push(payload);
       await handleTestCaseResult(payload);
     },
     async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
+      if (
+        payload.runId &&
+        timedOutHeadedRuns.delete(`${payload.testPath}\0${payload.runId}`)
+      ) {
+        return;
+      }
       try {
         await handleTestFileComplete(payload);
         resolvePendingHeadedReload(payload.testPath, payload.runId);

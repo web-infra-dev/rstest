@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import { runBrowserCli } from './utils';
+import { runBrowserCli, shouldRunHeadedBrowserTests } from './utils';
 
 describe('browser mode - error handling', () => {
   it('should handle runtime, assertion, and timeout errors', async () => {
@@ -94,4 +94,28 @@ describe('browser mode - error handling', () => {
     );
     expect(output).toMatch(/Test Files.*1 failed.*1 passed/);
   });
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'continues headed execution after one file fixture cleanup times out',
+    async () => {
+      const { cli, expectExecFailed } = await runBrowserCli('error', {
+        args: [
+          '--browser.headless',
+          'false',
+          'tests/aFileFixtureCleanupTimeout.test.ts',
+          'tests/bAfterFileFixtureCleanupTimeout.test.ts',
+        ],
+      });
+
+      await expectExecFailed();
+      const output = `${cli.stdout}\n${cli.stderr}`;
+      expect(output).toContain(
+        'File fixture cleanup did not finish within 10000ms',
+      );
+      expect(output).toContain(
+        'RSTEST_BROWSER_CONTINUED_AFTER_FILE_CLEANUP_TIMEOUT',
+      );
+      expect(output).toMatch(/Test Files.*1 failed.*1 passed/);
+    },
+  );
 });
