@@ -79,8 +79,7 @@ export const pluginEntryWatch: (params: {
         );
 
         config.experiments ??= {};
-        config.experiments.nativeWatcher = true;
-
+        config.experiments.nativeWatcher ??= true;
         const configFilePath = context.projects.find(
           (project) => project.environmentName === environment.name,
         )?.configFilePath;
