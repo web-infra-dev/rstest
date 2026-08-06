@@ -245,10 +245,12 @@ describe('ThreadsPool - capacity', () => {
         end: (r as any)._finishedAt as number,
       }));
 
-      // Upper bound: at no point were more than maxWorkers tasks running.
+      // Concurrency can only increase when a task starts, so sampling every
+      // start proves the upper bound without combining overlaps from
+      // different moments in the sampled task's lifetime.
       for (const point of intervals) {
         const concurrent = intervals.filter(
-          (iv) => iv.start < point.end && iv.end > point.start,
+          (iv) => iv.start <= point.start && iv.end > point.start,
         ).length;
         expect(concurrent).toBeLessThanOrEqual(maxWorkers);
       }
