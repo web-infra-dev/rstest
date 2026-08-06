@@ -7,6 +7,7 @@ import {
   killCliProcessTree,
   runBrowserWatchCli,
   runBrowserWatchCliWithCwd,
+  runBrowserWatchCrud,
 } from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -93,90 +94,11 @@ describe('browser mode - watch', () => {
       await cli.waitForStdout('Waiting for file changes...');
     }
 
-    const newTestPath = path.join(fixturesTargetPath, 'tests/new.test.ts');
-    const renamedTestPath = path.join(
-      fixturesTargetPath,
-      'tests/renamed.test.ts',
-    );
-    const waitForRerunSignal = async () => {
-      const marker = 'File changed, re-running tests...';
-      if (!cli.stdout.includes(marker)) {
-        await cli.waitForStdout(marker);
-      }
-      expect(cli.stdout).toContain(marker);
-    };
-    const waitForOutput = async (marker: string | RegExp) => {
-      if (typeof marker === 'string') {
-        if (cli.stdout.includes(marker)) {
-          return;
-        }
-      } else if (cli.stdout.match(marker)) {
-        return;
-      }
-      await cli.waitForStdout(marker);
-    };
-
-    const waitForRerunResult = async (marker: string | RegExp) => {
-      const state = await Promise.race([
-        waitForOutput(marker).then(() => 'expected' as const),
-        waitForOutput('Build error:').then(() => 'build-error' as const),
-        waitForOutput('error   build failed').then(
-          () => 'build-failed' as const,
-        ),
-      ]);
-
-      if (state !== 'expected') {
-        throw new Error(
-          `Unexpected build error during browser watch cycle:\n${cli.stdout}`,
-        );
-      }
-    };
-    // ========== Create: Add new test file ==========
-    cli.resetStd();
-    fs.create(
-      newTestPath,
-      `import { describe, expect, it } from '@rstest/core';
-    describe('new test', () => {
-  it('should pass', () => {
-    expect('new').toBe('new');
-  });
-});`,
-    );
-    await waitForRerunSignal();
-    await waitForRerunResult('✓ tests/new.test.ts');
-    expect(cli.stdout).toContain('✓ tests/new.test.ts');
-
-    // ========== Update (break): Modify new test file to fail ==========
-    cli.resetStd();
-    fs.update(newTestPath, (content) => {
-      return content.replace("toBe('new')", "toBe('modified')");
+    await runBrowserWatchCrud({
+      cli,
+      fixtureFs: fs,
+      fixtureRoot: fixturesTargetPath,
     });
-    await waitForRerunSignal();
-    await waitForRerunResult("expected 'new' to be 'modified'");
-    expect(cli.stdout).toContain("expected 'new' to be 'modified'");
-
-    // ========== Update (fix): Fix the test file ==========
-    cli.resetStd();
-    fs.update(newTestPath, (content) => {
-      return content.replace("toBe('modified')", "toBe('new')");
-    });
-    await waitForRerunSignal();
-    await waitForRerunResult('✓ tests/new.test.ts');
-    expect(cli.stdout).toContain('✓ tests/new.test.ts');
-
-    // ========== Rename: Rename new.test.ts to renamed.test.ts ==========
-    cli.resetStd();
-    fs.rename(newTestPath, renamedTestPath);
-    await waitForRerunSignal();
-    await waitForRerunResult('✓ tests/renamed.test.ts');
-    expect(cli.stdout).toContain('✓ tests/renamed.test.ts');
-
-    // ========== Delete: Remove the renamed test file ==========
-    cli.resetStd();
-    fs.delete(renamedTestPath);
-    await waitForRerunSignal();
-    await waitForRerunResult('✓ tests/index.test.ts');
-    expect(cli.stdout).toContain('✓ tests/index.test.ts');
 
     await killCliProcessTree(cli);
     await deleteFixtureTarget(fs, fixturesTargetPath);
