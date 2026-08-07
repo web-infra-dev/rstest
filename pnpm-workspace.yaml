@@ -22,7 +22,7 @@ autoInstallPeers: false
 blockExoticSubdeps: false
 
 # for vsce
-hoistPattern: ['@secretlint/*']
+hoistPattern: [ '@secretlint/*' ]
 
 # Reduce the risk of installing compromised packages
 minimumReleaseAge: 1440
@@ -39,6 +39,8 @@ minimumReleaseAgeExclude:
   - rsbuild-plugin-dts
   # Renovate security update: svelte@5.55.7
   - svelte@5.55.7
+  # Renovate security update: react-router@7.18.0
+  - react-router@7.18.0
 
 packageExtensions:
   '@vue/test-utils':
