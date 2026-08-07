@@ -31,10 +31,38 @@ describe('globalSetup', async () => {
         "[global-setup-named] executed",
         "[rstest] Running basic tests",
         "[rstest] Running basic tests",
+        "[rstest-dev-server] closed",
         "[global-teardown-named] executed",
         "[global-teardown-default] executed",
       ]
     `);
+  });
+
+  it('should close list resources before global teardown', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['list'],
+      options: {
+        nodeOptions: {
+          env: { ISOLATE: undefined },
+          cwd: join(__dirname, 'fixtures/basic'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const cleanupLogs = cli.stdout
+      .split('\n')
+      .filter(
+        (log) =>
+          log.includes('[rstest-dev-server]') ||
+          log.includes('[global-teardown-default]'),
+      );
+    expect(cleanupLogs).toEqual([
+      '[rstest-dev-server] closed',
+      '[global-teardown-default] executed',
+    ]);
   });
 
   it('should fail when global setup throws an error', async () => {
@@ -121,6 +149,20 @@ describe('globalSetup', async () => {
         expect(
           cli.stdout.match(/\[global-teardown-default\] executed/g),
         ).toHaveLength(2);
+        expect(
+          cli.stdout
+            .split('\n')
+            .filter(
+              (log) =>
+                log.includes('[rstest-dev-server]') ||
+                log.includes('[global-teardown-default]'),
+            ),
+        ).toEqual([
+          '[rstest-dev-server] closed',
+          '[global-teardown-default] executed',
+          '[rstest-dev-server] closed',
+          '[global-teardown-default] executed',
+        ]);
       } finally {
         await cli.killProcessTree();
         fs.delete(fixturesTargetPath);
