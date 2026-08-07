@@ -149,6 +149,8 @@ You can keep these comments as-is or rename them to `@rstest-environment` / `@rs
 
 Rstest uses `swc` for code transformation by default, which is different from Jest's `babel-jest`. Most of the time, you don't need to change anything. And you can configure your swc options through [tools.swc](/config/build/tools#toolsswc).
 
+Jest itself gets module resolution and transformation from `moduleNameMapper` and `transform`, rather than from `tsconfig.json`. If you use `ts-jest`, do not assume that its TypeScript transform settings carry over: Rstest automatically applies `compilerOptions.paths` for resolution, but you must configure settings such as `target` and decorator syntax explicitly. See [source.tsconfigPath](/config/build/source#sourcetsconfigpath).
+
 Rstest transforms files that are part of its bundle graph. If your project previously relied on `ts-jest` runtime transforms, see [Code outside the bundle graph uses native Node.js behavior](/guide/debug/troubleshooting#code-outside-the-bundle-graph-uses-native-nodejs-behavior).
 
 ```diff

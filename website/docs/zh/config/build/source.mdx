@@ -89,3 +89,26 @@ export default defineConfig({
 - **CLI：** `--source.tsconfigPath <path>`
 
 配置自定义的 `tsconfig.json` 文件路径，可以是相对路径或绝对路径。
+
+未配置该选项时，Rstest 会在每个项目的 root 目录探测 `tsconfig.json`。其中的 `compilerOptions.paths` 映射会用于模块解析。
+
+Rstest 不会用其他 `compilerOptions` 配置代码转换。请通过 [`tools.swc`](/config/build/tools#toolsswc) 配置输出 target，并通过 [`source.decorators`](#sourcedecorators) 显式配置装饰器语法。例如，使用 legacy 装饰器转换和 ES2020 输出的项目可以这样配置：
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  source: {
+    decorators: {
+      version: 'legacy',
+    },
+  },
+  tools: {
+    swc: {
+      jsc: {
+        target: 'es2020',
+      },
+    },
+  },
+});
+```
