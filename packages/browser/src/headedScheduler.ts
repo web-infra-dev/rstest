@@ -391,6 +391,16 @@ export const createHeadedScheduler = async ({
       await handleTestCaseResult(payload);
     },
     async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
+      // A completion for a run settled as obsolete was already in transport
+      // when its file left the set: its results were pruned with the file, so
+      // processing it would reinsert them — and fire `onTestFileResult` after
+      // a cycle that has already ended.
+      if (headedReloads.isObsolete(payload.testPath, payload.runId)) {
+        logger.debug(
+          `[Browser UI] Dropping late file-complete for removed test file: ${payload.testPath}`,
+        );
+        return;
+      }
       // Claim before the first await: the handler below settles this pending
       // either way, so from here nothing else may.
       headedReloads.claimCompletion(payload.testPath, payload.runId);

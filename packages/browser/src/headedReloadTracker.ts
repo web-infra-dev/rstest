@@ -21,6 +21,7 @@ export type HeadedReloadTracker = {
   rejectAll: (error: Error) => void;
   claimCompletion: (testPath: string, runId?: string) => void;
   reconcile: () => void;
+  isObsolete: (testPath: string, runId?: string) => boolean;
 };
 
 /**
@@ -51,11 +52,27 @@ export type HeadedReloadTracker = {
  *
  * Every path-scoped operation takes an optional `runId` guard: a mismatch
  * belongs to a superseded run, whose events settle (and claim) nothing.
+ *
+ * Settling a run as obsolete leaves a tombstone, because its completion can
+ * already be in transport: the iframe posted file-complete, the host just has
+ * not dispatched it yet, so there is nothing to claim. Without the tombstone
+ * that arrival would be processed as live — reinserting the just-pruned
+ * result and firing `onTestFileResult` after the cycle's `onTestRunEnd`.
+ * {@link HeadedReloadTracker.isObsolete} is how the completion callback tells
+ * such an arrival from a real one; tombstones are per (path, runId) and never
+ * expire, since an even later arrival is just as dead.
  */
 export const createHeadedReloadTracker = (
   isLive: (testPath: string) => boolean,
 ): HeadedReloadTracker => {
   const pendingReloads = new Map<string, PendingHeadedReload>();
+  const obsoleteRunIds = new Map<string, Set<string>>();
+
+  const markObsolete = (testPath: string, runId: string): void => {
+    const runIds = obsoleteRunIds.get(testPath) ?? new Set<string>();
+    runIds.add(runId);
+    obsoleteRunIds.set(testPath, runIds);
+  };
 
   const getMatchingPending = (
     testPath: string,
@@ -74,6 +91,9 @@ export const createHeadedReloadTracker = (
   return {
     register(testPath, runId) {
       if (!isLive(testPath)) {
+        // The reload was already sent (the ack carried this runId), so its
+        // completion may still arrive — tombstone it like a reconciled one.
+        markObsolete(testPath, runId);
         logger.debug(
           `[Browser UI] Dropping reload registration for removed test file: ${testPath}`,
         );
@@ -135,10 +155,19 @@ export const createHeadedReloadTracker = (
     reconcile() {
       for (const [testPath, pending] of pendingReloads) {
         if (!isLive(testPath) && !pending.completionClaimed) {
+          markObsolete(testPath, pending.runId);
           pendingReloads.delete(testPath);
           pending.deferred.resolve();
         }
       }
+    },
+    isObsolete(testPath, runId) {
+      // An arrival without a runId cannot be matched to a settled run; treat
+      // it as live rather than swallow a real completion.
+      if (!runId) {
+        return false;
+      }
+      return obsoleteRunIds.get(testPath)?.has(runId) ?? false;
     },
   };
 };
