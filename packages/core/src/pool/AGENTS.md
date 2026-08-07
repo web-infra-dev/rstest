@@ -25,11 +25,11 @@
 - `WorkerRequest`/`WorkerResponse` in `protocol.ts` ↔ worker-side dispatch in `../runtime/worker/index.ts` and host-side handling in `poolRunner.ts`.
 - A new `PoolWorkerKind` → `createPoolWorker`'s switch (exhaustiveness-checked) and `selectMemoryGate`.
 - The `--require` path for `rstestSuppressWarnings.cjs` in `index.ts` ↔ the `.cjs` copy list in `../../rslib.config.ts` — the path resolves relative to dist, so renaming/moving the `.cjs` needs both sides.
-- Assets have two delivery paths that must both stay alive: eager on the task when host memory suffices, else lazily pulled by the worker via `rpc.getAssetsByEntry`.
+- Assets have two delivery paths that must both stay alive: eager on the task when host memory suffices, else lazily pulled by the worker via `rpc.getAssetsByEntry`. Both pass Rspack output bytes through `prepareAssetFilesForIPC`; worker consumers must use `getAssetText` or `getAssetBuffer` rather than assuming a transport-specific value shape.
 
 ## Gotchas
 
-- Bun forces `json` IPC serialization for forks — values that only survive structured clone will not round-trip there.
+- Bun forces `json` IPC serialization for forks, so `prepareAssetFilesForIPC` sends valid UTF-8 assets as strings and other bytes as tagged base64. Node forks keep `Buffer`; worker threads receive `Uint8Array` through structured clone.
 - stderr attribution: the buffer resets per task on reused workers, task rejection is deferred briefly so stderr can settle, and attached stderr is truncated head+tail.
 - Fork stop escalates SIGTERM → SIGKILL after a grace period; thread stop is a bare `terminate()` and `force` is a no-op.
 - `minWorkers` is internal-only — a floor for retained idle runners, not a reuse cap; a pending slot waiter always wins reuse.

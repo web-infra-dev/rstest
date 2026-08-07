@@ -31,6 +31,7 @@ import { selectMemoryGate } from './memoryGate';
 import { getEnvironmentKey } from '../core/environmentGroups';
 import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/envDependencies';
 import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
+import { prepareAssetFilesForIPC } from '../utils/assetFiles';
 import {
   createRunnerEventSink,
   type RunnerEventSink,
@@ -47,7 +48,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig =>
 
 const filterAssetsByEntry = async (
   entryInfo: EntryInfo,
-  getAssetFiles: (names: string[]) => Promise<Record<string, string>>,
+  getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>,
   getSourceMaps: (names: string[]) => Promise<Record<string, string>>,
   setupAssets: string[],
   allAssetNames: string[] | undefined,
@@ -84,7 +85,7 @@ const getNodeExecArgv = () => {
 type PoolDispatchParams = {
   entries: EntryInfo[];
   assetNames: string[];
-  getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
+  getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
   getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
   setupEntries: EntryInfo[];
   updateSnapshot: SnapshotUpdateState;
@@ -134,8 +135,8 @@ const buildTask = async ({
   testEnvironmentModule?: TestEnvironmentModuleReference;
   buildId?: number;
 }) => {
-  const getAssets = () =>
-    filterAssetsByEntry(
+  const getAssets = async () => {
+    const assets = await filterAssetsByEntry(
       entryInfo,
       getAssetFiles,
       getSourceMaps,
@@ -143,6 +144,11 @@ const buildTask = async ({
       assetNames,
       project.normalizedConfig.federation,
     );
+    return {
+      ...assets,
+      assetFiles: prepareAssetFilesForIPC(assets.assetFiles, workerKind),
+    };
+  };
   const traceArgs = {
     project: project.name,
     testPath: entryInfo.testPath,
@@ -289,7 +295,7 @@ export const createPool = async ({
   runTests: (params: {
     entries: EntryInfo[];
     assetNames: string[];
-    getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
+    getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
     getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
     setupEntries: EntryInfo[];
     updateSnapshot: SnapshotUpdateState;
