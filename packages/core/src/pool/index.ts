@@ -32,12 +32,16 @@ import { getEnvironmentKey } from '../core/environmentGroups';
 import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/envDependencies';
 import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
 import {
+  type BundleCoverageResult,
+  isBundleCoverageDebugEnabled,
+} from '../core/bundleCoverage';
+import {
   createRunnerEventSink,
   type RunnerEventSink,
   sinkToRuntimeRpc,
 } from '../core/runnerEventSink';
 import { Pool } from './pool';
-import type { PoolWorkerKind } from './types';
+import type { PoolTask, PoolWorkerKind } from './types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -115,6 +119,7 @@ const buildTask = async ({
   traceSpan,
   testEnvironmentModule,
   buildId = 0,
+  captureBundleCoverage = false,
 }: {
   type: 'run' | 'collect';
   workerKind: PoolWorkerKind;
@@ -133,9 +138,15 @@ const buildTask = async ({
   traceSpan: TraceSpan;
   testEnvironmentModule?: TestEnvironmentModuleReference;
   buildId?: number;
-}) => {
-  const getAssets = () =>
-    filterAssetsByEntry(
+  captureBundleCoverage?: boolean;
+}): Promise<{
+  task: PoolTask;
+  bundleCoverageAssets?: Record<string, number>;
+}> => {
+  const bundleCoverageAssets: Record<string, number> | undefined =
+    captureBundleCoverage ? {} : undefined;
+  const getAssets = async () => {
+    const assets = await filterAssetsByEntry(
       entryInfo,
       getAssetFiles,
       getSourceMaps,
@@ -143,6 +154,13 @@ const buildTask = async ({
       assetNames,
       project.normalizedConfig.federation,
     );
+    if (bundleCoverageAssets) {
+      for (const [name, content] of Object.entries(assets.assetFiles)) {
+        bundleCoverageAssets[name] = Buffer.byteLength(content);
+      }
+    }
+    return assets;
+  };
   const traceArgs = {
     project: project.name,
     testPath: entryInfo.testPath,
@@ -150,55 +168,58 @@ const buildTask = async ({
   };
 
   return {
-    worker: workerKind,
-    type,
-    options: {
-      entryInfo,
-      // Known limit: the config portion is `stableJson`, so environment option
-      // values JSON cannot express (an `html` ArrayBuffer, a `beforeParse`
-      // function, a `virtualConsole` instance) collapse to identical bytes —
-      // two projects differing only in such values may share a worker's
-      // environment under `isolate: false`. Accepted as too narrow to guard;
-      // if it ever matters, fall back to a project-scoped key when the config
-      // is not JSON-representable instead of trying to serialize those values.
-      environmentKey: getEnvironmentKey(
-        runtimeConfig.testEnvironment,
-        testEnvironmentModule,
-      ),
-      context: {
-        outputModule: project.outputModule,
-        taskId: index + 1,
-        buildId,
-        project: project.name,
-        rootPath: context.rootPath,
-        projectRoot: project.rootPath,
-        runtimeConfig,
-        testEnvironmentModule,
-        trace: context.trace,
-      },
+    task: {
+      worker: workerKind,
       type,
-      setupEntries,
-      updateSnapshot,
-      // Federation entries need the complete compilation asset map. Fetch it
-      // when a worker starts the task so concurrent task preparation cannot
-      // retain one full copy per test entry.
-      assets:
-        isMemorySufficient() && !project.normalizedConfig.federation
-          ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
-              ...traceArgs,
-              mode: 'eager',
-            })
-          : undefined,
+      options: {
+        entryInfo,
+        // Known limit: the config portion is `stableJson`, so environment option
+        // values JSON cannot express (an `html` ArrayBuffer, a `beforeParse`
+        // function, a `virtualConsole` instance) collapse to identical bytes —
+        // two projects differing only in such values may share a worker's
+        // environment under `isolate: false`. Accepted as too narrow to guard;
+        // if it ever matters, fall back to a project-scoped key when the config
+        // is not JSON-representable instead of trying to serialize those values.
+        environmentKey: getEnvironmentKey(
+          runtimeConfig.testEnvironment,
+          testEnvironmentModule,
+        ),
+        context: {
+          outputModule: project.outputModule,
+          taskId: index + 1,
+          buildId,
+          project: project.name,
+          rootPath: context.rootPath,
+          projectRoot: project.rootPath,
+          runtimeConfig,
+          testEnvironmentModule,
+          trace: context.trace,
+        },
+        type,
+        setupEntries,
+        updateSnapshot,
+        // Federation entries need the complete compilation asset map. Fetch it
+        // when a worker starts the task so concurrent task preparation cannot
+        // retain one full copy per test entry.
+        assets:
+          isMemorySufficient() && !project.normalizedConfig.federation
+            ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
+                ...traceArgs,
+                mode: 'eager',
+              })
+            : undefined,
+      },
+      rpcMethods: {
+        ...rpcMethods,
+        // getAssetsByEntry is only used when memory is not sufficient since it may be slow
+        getAssetsByEntry: () =>
+          traceSpan('host:get-assets-by-entry', 'host', getAssets, {
+            ...traceArgs,
+            mode: 'rpc',
+          }),
+      },
     },
-    rpcMethods: {
-      ...rpcMethods,
-      // getAssetsByEntry is only used when memory is not sufficient since it may be slow
-      getAssetsByEntry: () =>
-        traceSpan('host:get-assets-by-entry', 'host', getAssets, {
-          ...traceArgs,
-          mode: 'rpc',
-        }),
-    },
+    bundleCoverageAssets,
   };
 };
 
@@ -306,6 +327,7 @@ export const createPool = async ({
   }) => Promise<{
     results: TestFileResult[];
     testResults: TestResult[];
+    bundleCoverage: BundleCoverageResult[];
   }>;
   collectTests: (params: PoolDispatchParams) => Promise<
     {
@@ -380,6 +402,7 @@ export const createPool = async ({
 
   const createProjectSink = (project: ProjectContext): RunnerEventSink =>
     createRunnerEventSink(context, project.normalizedConfig);
+  const captureBundleCoverage = isBundleCoverageDebugEnabled();
 
   return {
     runTests: async ({
@@ -423,7 +446,7 @@ export const createPool = async ({
               project: projectName,
               testPath: entryInfo.testPath,
             };
-            const task = await traceSpan(
+            const { task, bundleCoverageAssets } = await traceSpan(
               'host:build-task',
               'host',
               () =>
@@ -447,6 +470,7 @@ export const createPool = async ({
                     project.environmentName,
                   ),
                   buildId,
+                  captureBundleCoverage,
                 }),
               traceArgs,
             );
@@ -491,6 +515,15 @@ export const createPool = async ({
               onCoverageResult?.(result.coverage);
               delete result.coverage;
             }
+            const bundleCoverage: BundleCoverageResult | undefined =
+              bundleCoverageAssets
+                ? {
+                    project: projectName,
+                    testPath: entryInfo.testPath,
+                    assets: bundleCoverageAssets,
+                    rawV8: result.coverageRaw ?? null,
+                  }
+                : undefined;
             if (result.coverageRaw != null) {
               onRawCoverageResult?.(result.coverageRaw);
               delete result.coverageRaw;
@@ -500,7 +533,7 @@ export const createPool = async ({
               delete result.traceEvents;
             }
             await sink.onTestFileResult(result);
-            return result;
+            return { result, bundleCoverage };
           } finally {
             // Unblock the next entry even if `buildTask` threw before the
             // dispatch above ran — otherwise the whole chain would deadlock.
@@ -511,9 +544,17 @@ export const createPool = async ({
         }),
       );
 
-      const testResults = results.flatMap((r) => r.results);
+      const fileResults = results.map(({ result }) => result);
+      const testResults = fileResults.flatMap((r) => r.results);
 
-      return { results, testResults, project };
+      return {
+        results: fileResults,
+        testResults,
+        project,
+        bundleCoverage: results.flatMap(({ bundleCoverage }) =>
+          bundleCoverage ? [bundleCoverage] : [],
+        ),
+      };
     },
     collectTests: async ({
       entries,
@@ -531,7 +572,7 @@ export const createPool = async ({
 
       return Promise.all(
         entries.map(async (entryInfo, index) => {
-          const task = await buildTask({
+          const { task } = await buildTask({
             type: 'collect',
             workerKind,
             entryInfo,

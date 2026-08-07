@@ -10,6 +10,7 @@ import type {
 } from '../../types';
 import type { CoverageMap, CoverageProvider } from '../../types/coverage';
 import { clearScreen, color, logger, type TraceRun } from '../../utils';
+import { writeBundleCoverageResults } from '../bundleCoverage';
 import { ensureTestEnvironmentDependencies } from '../envDependencies';
 import {
   claimGlobalSetupOnce,
@@ -437,6 +438,7 @@ export function createNodeExecutor(
               return {
                 results: [],
                 testResults: [],
+                bundleCoverage: [],
                 errors,
                 assetNames,
                 getAssetFiles,
@@ -452,7 +454,7 @@ export function createNodeExecutor(
           );
 
           currentEntries.push(...sortedEntries);
-          const { results, testResults } = await pool.runTests({
+          const { results, testResults, bundleCoverage } = await pool.runTests({
             entries: sortedEntries,
             assetNames,
             getSourceMaps,
@@ -471,6 +473,7 @@ export function createNodeExecutor(
           return {
             results,
             testResults,
+            bundleCoverage,
             assetNames,
             getAssetFiles,
             getSourceMaps,
@@ -501,6 +504,11 @@ export function createNodeExecutor(
 
     const returns = await Promise.all(
       projectPlans.map((plan) => plan.execute(plan.finalEntries)),
+    );
+
+    await writeBundleCoverageResults(
+      rootPath,
+      returns.flatMap((result) => result.bundleCoverage),
     );
 
     // A cycle no rebuild triggered measures its own build: the span from
