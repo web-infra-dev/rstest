@@ -147,7 +147,7 @@ Vitest 配置文件中使用的 helper 可以对应到 `@rstest/core` 导出的�
 
 Rstest 使用 Rsbuild 作为默认测试编译工具，而不是 Vite。你可以在 [Build Configurations](/config/#build-configurations) 查看全部编译配置项。
 
-Vite 在转换 TypeScript 时会读取 `tsconfig.json` 中选定的 compiler option。Rstest 会自动使用 `compilerOptions.paths` 进行模块解析，但不会用 `target`、`experimentalDecorators` 或其他 compiler option 配置转换。请将这些设置迁移到 `tools.swc` 和 `source.decorators`，详见 [source.tsconfigPath](/config/build/source#sourcetsconfigpath)。如果你的 Vitest 配置启用了 Vite 的 TypeScript paths 支持，或使用了 `vite-tsconfig-paths` 插件，请在确认 Rstest 项目使用了预期的 `tsconfig.json` 后移除这些 Vite 专用配置。
+Vite 在转换 TypeScript 时会读取 `tsconfig.json` 中选定的 compiler option。直接配置 Rstest 时，它会自动使用 `compilerOptions.paths` 进行模块解析，但不会用 `target`、`experimentalDecorators` 或其他 compiler option 配置转换。请将这些设置迁移到 `tools.swc` 和 `source.decorators`；adapter 可能会继承或推断额外设置，请参考所用 [adapter 的文档](/guide/integration/adapters)。详见 [source.tsconfigPath](/config/build/source#sourcetsconfigpath)。如果你的 Vitest 配置启用了 Vite 的 TypeScript paths 支持，或使用了 `vite-tsconfig-paths` 插件，请在确认 Rstest 项目使用了预期的 `tsconfig.json` 后移除这些 Vite 专用配置。
 
 Rstest 采用基于 bundle 的执行模型来运行测试。没有进入 bundle graph 的代码会保留 Node.js 原生 loader 行为，这可能和 Vitest 不同。如果你在运行时动态加载文件，请参考 [bundle graph 之外的代码使用 Node.js 原生行为](/guide/debug/troubleshooting#bundle-graph-之外的代码使用-nodejs-原生行为)。
 

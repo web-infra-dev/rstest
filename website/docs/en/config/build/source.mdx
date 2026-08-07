@@ -93,7 +93,7 @@ Configure a custom `tsconfig.json` file path to use, can be a relative or absolu
 
 When this option is not set, Rstest detects `tsconfig.json` in each project's root. Its `compilerOptions.paths` mappings are used for module resolution.
 
-Rstest does not use other `compilerOptions` to configure code transformation. Configure the output target with [`tools.swc`](/config/build/tools#toolsswc), and configure decorator syntax explicitly with [`source.decorators`](#sourcedecorators). For example, a project that uses a legacy decorator transform and ES2020 output can use:
+When configuring Rstest directly, it does not use other `compilerOptions` to configure code transformation. Configure the output target with [`tools.swc`](/config/build/tools#toolsswc), and configure decorator syntax explicitly with [`source.decorators`](#sourcedecorators). An adapter may map or infer additional build options; refer to the documentation for the [adapter you use](/guide/integration/adapters). For example, a directly configured project that uses a legacy decorator transform and ES2020 output can use:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

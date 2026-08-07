@@ -92,7 +92,7 @@ export default defineConfig({
 
 未配置该选项时，Rstest 会在每个项目的 root 目录探测 `tsconfig.json`。其中的 `compilerOptions.paths` 映射会用于模块解析。
 
-Rstest 不会用其他 `compilerOptions` 配置代码转换。请通过 [`tools.swc`](/config/build/tools#toolsswc) 配置输出 target，并通过 [`source.decorators`](#sourcedecorators) 显式配置装饰器语法。例如，使用 legacy 装饰器转换和 ES2020 输出的项目可以这样配置：
+直接配置 Rstest 时，它不会用其他 `compilerOptions` 配置代码转换。请通过 [`tools.swc`](/config/build/tools#toolsswc) 配置输出 target，并通过 [`source.decorators`](#sourcedecorators) 显式配置装饰器语法。adapter 可能会映射或推断额外的构建选项，请参考所用 [adapter 的文档](/guide/integration/adapters)。例如，直接配置且使用 legacy 装饰器转换和 ES2020 输出的项目可以这样配置：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
