@@ -163,7 +163,7 @@ Rstest 会向 `<rootPath>/.rstest/` 写入两个文件，并在 watch 模式每�
 
 ![Perfetto UI 中显示在 rstest 仓库执行 npx rstest --trace 产出的 trace](https://assets.rspack.rs/rstest/assets/rstest-trace-perfetto.png)
 
-在 TTY 下，Rstest 会启动一个本地 helper server，使打印出的链接直接在 Perfetto UI 中打开 trace。此时进程会保持运行，按 Ctrl+C 停止该 server 后才会退出。在 CI 下不会启动该 server，此时可以将 trace 文件作为 artifact 上传，再拖入 [ui.perfetto.dev](https://ui.perfetto.dev) 查看。
+在 TTY 下，Rstest 会启动一个本地 helper server，使打印出的链接直接在 Perfetto UI 中打开 trace。在 CI 下不会启动该 server，此时可以将 trace 文件作为 artifact 上传，再拖入 [ui.perfetto.dev](https://ui.perfetto.dev) 查看。
 
 :::tip
 借助 Coding Agent 排查性能问题时，把两个文件都交给它：摘要给出排序结果，trace 包含完整事件数据。可配合 [rstest-debugging](#使用-agent-skills) 技能使用。

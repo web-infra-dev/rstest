@@ -163,7 +163,7 @@ Start with the summary. Open the trace when you also need to see how work overla
 
 ![Perfetto UI showing the trace produced by running npx rstest --trace inside the rstest repository](https://assets.rspack.rs/rstest/assets/rstest-trace-perfetto.png)
 
-In a TTY, Rstest starts a local helper server so that the printed link opens the trace directly in the Perfetto UI. The run then stays alive until you press Ctrl+C to stop that server. In CI, the helper server is not started. Upload the trace file as an artifact and drag it into [ui.perfetto.dev](https://ui.perfetto.dev) instead.
+In a TTY, Rstest starts a local helper server so that the printed link opens the trace directly in the Perfetto UI. In CI, the helper server is not started. Upload the trace file as an artifact and drag it into [ui.perfetto.dev](https://ui.perfetto.dev) instead.
 
 :::tip
 To investigate a slowdown with a Coding Agent, hand it both files: the summary for the ranking, the trace for the full event data. They pair with the [rstest-debugging](#using-agent-skills) skill.
