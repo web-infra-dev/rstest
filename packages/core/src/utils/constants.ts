@@ -40,6 +40,15 @@ export const RSTEST_ENV_SYMBOL_KEY = 'rstest.env';
 export const RSTEST_API_GLOBAL_KEY = '@rstest/core';
 
 /**
+ * Key under which each executor publishes the per-file resolver used by the
+ * native `import.meta.rstest` rewrite. It is separate from
+ * {@link RSTEST_API_GLOBAL_KEY}: real `@rstest/core` imports stay available
+ * throughout execution, while in-source APIs are exposed only to the module
+ * currently loaded as the test entry.
+ */
+export const RSTEST_IMPORT_META_GLOBAL_KEY = '@rstest/core/import-meta';
+
+/**
  * Single source of truth for the built-in browser provider identifiers.
  *
  * Core owns this list because the peer-dependency direction is one-way

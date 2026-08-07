@@ -20,6 +20,7 @@ import {
   globalApis,
   RSTEST_API_GLOBAL_KEY,
   RSTEST_ENV_SYMBOL_KEY,
+  RSTEST_IMPORT_META_GLOBAL_KEY,
   setRealTimers,
   unwrapRegex,
 } from '@rstest/core/internal/browser-runtime';
@@ -29,7 +30,11 @@ import type {
   BrowserProjectRuntime,
   RunnerLifecycleMethod,
 } from '../protocol';
-import { DISPATCH_MESSAGE_TYPE, RSTEST_CONFIG_MESSAGE_TYPE } from '../protocol';
+import {
+  DISPATCH_MESSAGE_TYPE,
+  RSTEST_BROWSER_CACHE_CLEANERS_KEY,
+  RSTEST_CONFIG_MESSAGE_TYPE,
+} from '../protocol';
 import {
   createRunnerLifecycleRequest,
   sendRunnerLifecycle,
@@ -61,20 +66,33 @@ type RuntimeEnvStore = Record<string, string | undefined>;
 const RSTEST_ENV_SYMBOL = Symbol.for(RSTEST_ENV_SYMBOL_KEY);
 
 /**
- * Publish the runtime API on the globals test modules read: the
- * `@rstest/core` external and the `import.meta.rstest` define (node parity:
- * `global['@rstest/core']` in runInPool), plus the `globals: true` API names.
+ * Publish the runtime API and per-file `import.meta.rstest` resolver on the
+ * globals test modules read, plus the `globals: true` API names.
  */
 const installRuntimeGlobals = (
   runtime: Awaited<ReturnType<typeof createRstestRuntime>>,
   runtimeConfig: RuntimeConfig,
 ): void => {
-  (globalThis as Record<string, unknown>)[RSTEST_API_GLOBAL_KEY] = runtime.api;
+  Object.assign(globalThis, {
+    [RSTEST_API_GLOBAL_KEY]: runtime.api,
+    [RSTEST_IMPORT_META_GLOBAL_KEY]: runtime.resolveImportMetaRstest,
+  });
   if (runtimeConfig.globals) {
     for (const apiKey of globalApis) {
       (globalThis as any)[apiKey] = (runtime.api as any)[apiKey];
     }
   }
+};
+
+const clearBrowserTestEntryCache = (testEntryPath: string): void => {
+  const cleaners = (
+    globalThis as typeof globalThis &
+      Record<
+        typeof RSTEST_BROWSER_CACHE_CLEANERS_KEY,
+        Set<(testEntryPath: string) => void> | undefined
+      >
+  )[RSTEST_BROWSER_CACHE_CLEANERS_KEY];
+  cleaners?.forEach((clean) => clean(testEntryPath));
 };
 
 type GlobalWithRuntimeEnv = typeof globalThis &
@@ -526,6 +544,8 @@ const run = async () => {
       try {
         // Load setup files for this project after runtime is ready.
         await loadSetupFiles();
+
+        clearBrowserTestEntryCache(testPath);
 
         // Load the test file dynamically (registers tests without running)
         await currentTestContext.loadTest(key);

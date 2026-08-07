@@ -1,9 +1,12 @@
+import { globalSetupSourceValue } from '../src/sourceWithInSourceGuard';
+
 export default async function globalSetup() {
   console.log('[global-setup-default] executed');
 
   // Set environment variables to verify execution
   process.env.GLOBAL_SETUP_EXECUTED = 'true';
   process.env.GLOBAL_SETUP_MESSAGE = 'Global setup completed';
+  process.env.GLOBAL_SETUP_SOURCE = globalSetupSourceValue;
   // @ts-expect-error
   global.SETUP = 'true';
 

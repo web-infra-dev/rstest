@@ -7,6 +7,7 @@ import { color, logger } from '@rstest/core/internal/browser';
 import { normalize, relative } from 'pathe';
 import {
   type BrowserRuntime,
+  type BrowserProjectEntrySnapshot,
   drainPendingAffectedTestFiles,
 } from './browserRsbuild';
 import { ContainerRpcManager, type HostRpcMethods } from './containerRpc';
@@ -66,9 +67,7 @@ type HeadedSchedulerDeps = {
   createWatchSession: (
     execute: (testPaths: string[]) => Promise<void>,
   ) => BrowserWatchSession;
-  collectProjectEntries: () => Promise<
-    Parameters<typeof planWatchRerun>[0]['projectEntries']
-  >;
+  collectProjectEntries: () => Promise<BrowserProjectEntrySnapshot[]>;
   logWatchReady: () => void;
   destroyRuntime: () => Promise<void>;
 };
@@ -568,11 +567,8 @@ export const createHeadedScheduler = async ({
     };
 
     watchSignals.setDispatchRerun(async () => {
-      // Independent: config push to the container vs. local entry collection.
-      const [, newProjectEntries] = await Promise.all([
-        refreshHostConfig(),
-        collectProjectEntries(),
-      ]);
+      const newProjectEntries = await collectProjectEntries();
+      await refreshHostConfig();
       const rerunPlan = planWatchRerun({
         projectEntries: newProjectEntries,
         previousTestFiles: watchState.lastTestFiles,

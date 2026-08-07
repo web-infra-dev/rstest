@@ -23,7 +23,10 @@ import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
 import { isNodeProject } from './isBrowserProject';
 import { pluginMockRuntime } from './plugins/mockRuntime';
-import { pluginCacheControl } from './plugins/moduleCacheControl';
+import {
+  pluginCacheControl,
+  type TestEntryPathState,
+} from './plugins/moduleCacheControl';
 import {
   getRsbuildEnvironmentConfig,
   initModifyRstestConfigHooks,
@@ -181,6 +184,7 @@ export const prepareRsbuild = async ({
     normalizedConfig: { coverage, dev = {}, isolate, pool },
   } = context;
   const { setupFiles, globalSetupFiles, getSetupPaths } = setupFileState;
+  const testEntryPathState: TestEntryPathState = new Map();
 
   // Default execution still excludes browser projects. Callers can opt in to a
   // broader project set when they only need graph information.
@@ -227,10 +231,11 @@ export const prepareRsbuild = async ({
           setupFiles,
           globalSetupFiles,
           context,
+          testEntryPathState: isolate ? undefined : testEntryPathState,
           isWatch: command === 'watch',
         }),
         pluginExternal(context),
-        !isolate ? pluginCacheControl(getSetupPaths) : null,
+        !isolate ? pluginCacheControl(getSetupPaths, testEntryPathState) : null,
         pluginInspect({ poolExecArgv: pool.execArgv }),
         ...extraPlugins,
       ].filter(Boolean) as RsbuildPlugin[],

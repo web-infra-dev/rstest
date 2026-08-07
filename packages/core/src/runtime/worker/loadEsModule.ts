@@ -290,10 +290,11 @@ export const loadModule = async ({
  * Under `isolate: false`, `keep` is the shared runtime chunk id that owns the
  * only `__webpack_module_cache__`; preserving it keeps the module-scope state
  * of every already-evaluated non-entry module across files (evaluated once per
- * worker, not per file). Test-entry and setup modules are still evicted so
- * their bodies re-run per file. A reused worker can serve more than one project
- * (the pool has no environment affinity), so every project's runtime chunk is
- * accumulated and kept — see `keptRuntimeChunks`.
+ * worker, not per file). The runtime cache cleaner evicts setup modules and the
+ * current test entry immediately before the next file loads. A reused worker
+ * can serve more than one project (the pool has no environment affinity), so
+ * every project's runtime chunk is accumulated and kept — see
+ * `keptRuntimeChunks`.
  * See https://github.com/web-infra-dev/rstest/issues/1373.
  */
 export const clearModuleCache = (keep?: string): void => {

@@ -1,5 +1,6 @@
 import type { FileCoverageData } from 'istanbul-lib-coverage';
 import { isMainThread, threadId } from 'node:worker_threads';
+import { normalize } from 'pathe';
 import { install } from 'source-map-support';
 import type {
   MaybePromise,
@@ -10,7 +11,11 @@ import type {
   WorkerState,
 } from '../../types';
 import type { TestEnvironmentModuleFallback } from '../../pool/protocol';
-import { globalApis, RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
+import {
+  globalApis,
+  RSTEST_API_GLOBAL_KEY,
+  RSTEST_IMPORT_META_GLOBAL_KEY,
+} from '../../utils/constants';
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
@@ -301,9 +306,12 @@ const preparePool = async (
     process.off('unhandledRejection', unhandledRejection);
   });
 
-  const { api, runner } = await createRstestRuntime(workerState, {
-    taskContext,
-  });
+  const { api, resolveImportMetaRstest, runner } = await createRstestRuntime(
+    workerState,
+    {
+      taskContext,
+    },
+  );
 
   tracker?.transition('envSetup');
   const hasPinnedEnvironment = activeEnvironmentKey !== undefined;
@@ -363,8 +371,10 @@ const preparePool = async (
     Error,
   };
 
-  // @ts-expect-error
-  rstestContext.global[RSTEST_API_GLOBAL_KEY] = api;
+  Object.assign(rstestContext.global, {
+    [RSTEST_API_GLOBAL_KEY]: api,
+    [RSTEST_IMPORT_META_GLOBAL_KEY]: resolveImportMetaRstest,
+  });
 
   return {
     interopDefault,
@@ -411,16 +421,13 @@ const loadFiles = async ({
     : await import('./loadModule');
   const virtualFsAssetFiles = federation ? assetFiles : undefined;
 
-  // Clean each kept runtime chunk's webpack module cache before re-running setup
-  // + entry. A reused worker can hold several projects' runtime chunks at once
-  // (isolate: false), so invoke EVERY registered cleaner — each is self-scoped to
-  // its own chunk's cache, so over-calling is a harmless no-op. See
-  // `moduleCacheControl.ts` for why this is a per-chunk registry, not a single
-  // `global.__rstest_clean_core_cache__` slot.
+  // A reused worker can hold several projects' runtime chunks at once, so pass
+  // the current entry path to every self-scoped cleaner. Only its
+  // owning chunk can map that path to a cached module id.
   if (!isolate) {
     await loadModule({
       codeContent: `if (global && global.__rstest_cache_cleaners__) {
-  global.__rstest_cache_cleaners__.forEach((fn) => fn());
+  global.__rstest_cache_cleaners__.forEach((fn) => fn(${JSON.stringify(normalize(testPath))}));
   }`,
       distPath: '',
       testPath,
@@ -536,7 +543,8 @@ export const runInPool = async (
     if (!isolate) {
       const { clearModuleCache } = await importLoader();
       // Keep the shared runtime chunk so imported module state survives across
-      // files; test-entry and setup modules are still evicted (see clearModuleCache).
+      // files. Its cache-control runtime invalidates setup and the next current
+      // entry immediately before that file loads.
       clearModuleCache(runtimeDistPath);
     }
 

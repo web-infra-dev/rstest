@@ -1,6 +1,8 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import path from 'pathe';
 
+export type TestEntryPathState = Map<string, Set<string>>;
+
 class RstestCacheControlPlugin {
   apply(compiler: Rspack.Compiler) {
     const { RuntimeModule } = compiler.webpack;
@@ -11,17 +13,20 @@ class RstestCacheControlPlugin {
 
       override generate() {
         return `
-// Per-chunk setup module ids. Chunk-local (not a shared \`global.setupIds\`) so a
-// reused worker holding several projects' runtime chunks under \`isolate: false\`
-// keeps each project's ids separate — a sibling chunk's evaluation can no longer
-// reset them. Setup modules register through this chunk's own \`__webpack_require__\`.
+// Chunk-local so a reused worker holding several projects' runtime chunks under
+// \`isolate: false\` keeps each project's module ids separate.
 var __rstest_setup_ids__ = [];
+var __rstest_test_entry_ids__ = Object.create(null);
 
 __webpack_require__.rstest_register_setup_id = (id) => {
   __rstest_setup_ids__.push(id);
 };
 
-function __rstest_clean_core_cache__() {
+__webpack_require__.rstest_register_test_entry_id = (path, id) => {
+  __rstest_test_entry_ids__[path] = id;
+};
+
+function __rstest_clean_module_cache__(testEntryPath) {
   if (typeof __webpack_require__ === 'undefined') {
     return;
   }
@@ -30,9 +35,12 @@ function __rstest_clean_core_cache__() {
   __rstest_setup_ids__.forEach((id) => {
     delete __webpack_module_cache__[id];
   });
-  // Setup modules re-register on their next per-file load, so reset to keep the
-  // list from growing across every file this kept chunk serves.
   __rstest_setup_ids__.length = 0;
+
+  var testEntryId = __rstest_test_entry_ids__[testEntryPath];
+  if (testEntryId !== undefined) {
+    delete __webpack_module_cache__[testEntryId];
+  }
 }
 
 // Register this chunk's self-scoped cleaner instead of overwriting a single
@@ -42,7 +50,7 @@ function __rstest_clean_core_cache__() {
 // would clean the last-evaluated project's cache before every file. Each cleaner
 // only touches its own \`__webpack_module_cache__\`, so the worker can safely
 // invoke them all per file.
-(global.__rstest_cache_cleaners__ ??= new Set()).add(__rstest_clean_core_cache__);
+(global.__rstest_cache_cleaners__ ??= new Set()).add(__rstest_clean_module_cache__);
 `;
       }
     }
@@ -62,16 +70,19 @@ function __rstest_clean_core_cache__() {
 }
 
 /**
- * clean setup and rstest module cache manually
+ * Clean setup, current test entry, and Rstest module caches manually.
  *
- * This is used to ensure that the setup files and rstest core are re-executed in each test run
+ * Setup files are re-executed for every test file. A test entry is invalidated
+ * only when it is about to run as the current entry, so an in-source module
+ * imported by regular tests otherwise preserves its once-per-worker state.
  *
  * By default, modules are isolated between different tests (each test runs in
  * a fresh worker process spawned by rstest's pool).
  */
 export const pluginCacheControl: (
   getSetupFiles: () => string[],
-) => RsbuildPlugin = (getSetupFiles) => ({
+  testEntryPathState: TestEntryPathState,
+) => RsbuildPlugin = (getSetupFiles, testEntryPathState) => ({
   name: 'rstest:cache-control',
   setup: (api) => {
     let setupFileSet: Set<string> | undefined;
@@ -82,26 +93,41 @@ export const pluginCacheControl: (
       return setupFileSet;
     };
 
-    // `setupFiles` are posix-style paths (pathe), but rspack matches `test`
+    const isTestEntryPath = (resourcePath: string) => {
+      for (const testEntryPaths of testEntryPathState.values()) {
+        if (testEntryPaths.has(resourcePath)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // Rstest paths are posix-style (pathe), but rspack matches `test`
     // against the native resource path, which uses `\` on Windows — a raw
-    // string/array `test` would never match there, so the setup-id registration
-    // below would not be injected and setup files would stop re-running per
-    // file under `isolate: false`. Compare paths normalized to posix instead.
+    // string/array `test` would never match there, so the cache registration
+    // below would not be injected. Compare paths normalized to posix instead.
     api.transform(
       {
-        test: (resourcePath) =>
-          getSetupFileSet().has(path.normalize(resourcePath)),
+        test: (resourcePath) => {
+          const normalizedPath = path.normalize(resourcePath);
+          return (
+            getSetupFileSet().has(normalizedPath) ||
+            isTestEntryPath(normalizedPath)
+          );
+        },
       },
-      ({ code }) => {
-        // Register via this chunk's own `__webpack_require__` (not a shared
-        // `global.setupIds`) so each project's setup ids stay isolated under
-        // `isolate: false`.
-        return {
-          code: `${code}
-if (__webpack_require__.rstest_register_setup_id && __webpack_module__.id) {
+      ({ code, resourcePath }) => {
+        const normalizedPath = path.normalize(resourcePath);
+        const registration = getSetupFileSet().has(normalizedPath)
+          ? `if (__webpack_require__.rstest_register_setup_id && __webpack_module__.id != null) {
   __webpack_require__.rstest_register_setup_id(__webpack_module__.id);
-}
-        `,
+}`
+          : `if (__webpack_require__.rstest_register_test_entry_id && __webpack_module__.id != null) {
+  __webpack_require__.rstest_register_test_entry_id(${JSON.stringify(normalizedPath)}, __webpack_module__.id);
+}`;
+
+        return {
+          code: `${code}\n${registration}`,
         };
       },
     );
