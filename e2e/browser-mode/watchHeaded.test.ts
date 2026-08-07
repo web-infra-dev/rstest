@@ -70,11 +70,15 @@ describe('browser mode - headed watch', () => {
         fixturesPath: `${__dirname}/fixtures/watch`,
         fixturesTargetPath,
       });
-      // Stall every runner boot so a reload stays in flight long enough for the
-      // delete below to land while it is pending — the state
-      // `reconcilePendingHeadedReloads` exists to settle.
+      // Hold every runner short of completing, so a reload is still pending
+      // when the delete below lands — the state
+      // `reconcilePendingHeadedReloads` exists to settle. The barrier has to
+      // yield: a runner iframe shares its renderer thread with the container,
+      // so spinning here would also stop the container from processing the
+      // file-set update that unmounts the iframe, and the race would never
+      // happen.
       fs.update(path.join(fixturesTargetPath, 'setup.ts'), (content) => {
-        return `const slowBootEnd = Date.now() + 1_500;\nwhile (Date.now() < slowBootEnd) {}\n${content}`;
+        return `import { beforeAll } from '@rstest/core';\nbeforeAll(() => new Promise((resolve) => setTimeout(resolve, 1_500)));\n${content}`;
       });
 
       const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
