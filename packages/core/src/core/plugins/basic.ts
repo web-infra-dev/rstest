@@ -56,6 +56,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
           tools,
           dev,
           testEnvironment,
+          federation,
         },
         outputModule,
         rootPath,
@@ -125,6 +126,18 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               config.mode = isProd ? 'production' : 'development';
               config.output ??= {};
               config.output.iife = false;
+              if (federation) {
+                // Module Federation's Node preset sets `target: 'async-node'`,
+                // whose default chunk loading is fs-based (`readFileVm`) — but
+                // the bundle's assets only exist in the in-memory `assetFiles`
+                // map, never on disk. `require`-based loading routes chunks
+                // through the vm-injected `require`, which resolves them from
+                // that map. Setting the field explicitly wins over the target
+                // default regardless of hook order; the federation plugins set
+                // the target, never this field. `chunkFormat` stays on the
+                // target-derived `'commonjs'`.
+                config.output.chunkLoading = 'require';
+              }
               // polyfill interop
               // TODO: if we ever expose `output.importFunctionName` as a user
               // option, rspack#13849's rewrite still reads it directly to pick

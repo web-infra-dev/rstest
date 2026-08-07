@@ -409,7 +409,6 @@ const loadFiles = async ({
   const { loadModule } = outputModule
     ? await import('./loadEsModule')
     : await import('./loadModule');
-  const virtualFsAssetFiles = federation ? assetFiles : undefined;
 
   // Clean each kept runtime chunk's webpack module cache before re-running setup
   // + entry. A reused worker can hold several projects' runtime chunks at once
@@ -427,7 +426,6 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
-      virtualFsAssetFiles,
     });
   }
 
@@ -448,7 +446,6 @@ const loadFiles = async ({
       rstestContext,
       assetFiles,
       interopDefault,
-      virtualFsAssetFiles,
     });
   }
 
@@ -462,7 +459,6 @@ const loadFiles = async ({
     rstestContext,
     assetFiles,
     interopDefault,
-    virtualFsAssetFiles,
   });
 };
 

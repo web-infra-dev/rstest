@@ -90,8 +90,6 @@ const runGlobalSetup = async (data: {
         ? await import('./loadEsModule')
         : await import('./loadModule');
 
-      const virtualFsAssetFiles = data.federation ? data.assetFiles : undefined;
-
       const module = await loadModule({
         codeContent: setupCodeContent,
         distPath,
@@ -104,7 +102,6 @@ const runGlobalSetup = async (data: {
         },
         assetFiles: data.assetFiles,
         interopDefault: data.interopDefault,
-        virtualFsAssetFiles,
       });
 
       let teardownCallback: (() => Promise<void> | void) | undefined;

@@ -769,6 +769,72 @@ describe('prepareRsbuild', () => {
     expect(project.outputModule).toBe(false);
   });
 
+  it('should force require-based chunk loading for federation projects', async () => {
+    // Stand-in for the Module Federation plugin's node preset: it sets
+    // `target: 'async-node'` (whose default chunk loading is the fs-based
+    // `readFileVm`) from a post-ordered hook, but never writes
+    // `output.chunkLoading` itself. rstest's explicit value must survive.
+    const asyncNodeTargetPlugin: RsbuildPlugin = {
+      name: 'federation-like-async-node-target',
+      setup(api) {
+        api.modifyRspackConfig({
+          order: 'post',
+          handler: (config) => {
+            config.target = 'async-node';
+          },
+        });
+      },
+    };
+
+    const project = {
+      name: 'test',
+      rootPath,
+      environmentName: 'test',
+      outputModule: false,
+      normalizedConfig: {
+        federation: true,
+        plugins: [asyncNodeTargetPlugin],
+        resolve: {},
+        source: {},
+        output: {},
+        tools: {},
+        testEnvironment: {
+          name: 'node',
+        },
+        browser: { enabled: false },
+      },
+    };
+
+    const rsbuildInstance = await prepareRsbuild({
+      context: {
+        rootPath,
+        command: 'run',
+        normalizedConfig: {
+          root: rootPath,
+          name: 'test',
+          output: {
+            distPath: {
+              root: TEMP_RSTEST_OUTPUT_DIR,
+            },
+          },
+          pool: { type: 'forks' },
+        },
+        projects: [project],
+      } as unknown as RstestContext,
+      globTestSourceEntries: async () => ({}),
+      setupFileState: createSetupFileState(),
+    });
+
+    const configs = await rsbuildInstance.initConfigs();
+
+    expect(configs[0]!.target).toBe('async-node');
+    expect(configs[0]!.output?.chunkLoading).toBe('require');
+    // `chunkFormat` is deliberately left to rspack's target derivation
+    // (`'commonjs'` for node targets); the federation e2e suite is the
+    // behavioral pin for the emitted chunk format.
+    expect(configs[0]!.output?.chunkFormat).toBeUndefined();
+  });
+
   it('should not allow modifyRstestConfig to switch browser mode', async () => {
     const modifyBrowserModePlugin: RsbuildPlugin = {
       name: 'modify-rstest-browser-mode',
