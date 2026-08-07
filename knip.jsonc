@@ -62,8 +62,15 @@
         "scripts/**/*.{js,mjs,ts,mts}",
         "test/**/*.{js,jsx,ts,tsx}",
       ],
-      // Module Federation remotes are resolved by its runtime.
-      "ignoreDependencies": ["component-app", "node-local-remote"],
+      "ignoreDependencies": [
+        // Loaded dynamically when the config enables Browser Mode.
+        "@rstest/browser",
+        // Module Federation remotes are resolved by its runtime.
+        "component-app",
+        "node-local-remote",
+        // Resolved by @rstest/browser as its configured provider.
+        "playwright",
+      ],
     },
     "examples/federation/node-local-remote": {
       // Exposed as a Module Federation remote from the Rsbuild config.
@@ -100,14 +107,12 @@
     },
     "packages/browser": {
       "entry": [
-        // Browser-side iframe entry (loaded at runtime by hostController)
-        "src/client/entry.ts",
         // Test files
         "tests/**/*.ts",
       ],
-      "ignoreDependencies": [
-        // Virtual module resolved at build time by rspack alias in hostController.ts
-        "@rstest/browser-manifest",
+      "ignoreUnresolved": [
+        // Virtual module injected by each browser project's Rsbuild alias
+        "__rstest_virtual_browser_manifest__",
       ],
     },
     "packages/browser-ui": {

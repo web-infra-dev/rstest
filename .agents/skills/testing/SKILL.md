@@ -85,6 +85,13 @@ Important:
 - Use watch-mode tests only for file-change/rerun/invalidation behavior.
 - Assert stable events/final output, clean up watchers/processes, and inspect open handles before changing production code for hangs.
 
+## Test behavior, not source shape
+
+Protect runtime invariants at the narrowest existing interface that exposes their observable result. Use integration or E2E coverage for cross-module orchestration. Do not add a production seam or abstraction solely to make an isolated unit test possible; use fakes or spies only when the code already has a natural interface for them.
+
+- Treat first-party implementation source text as private. Do not add tests that read it and use regexes, strings, snapshots, or counts to pin helper names, call sites, imports, or control-flow shape; comments, formatting, and behavior-preserving refactors make those assertions lie.
+- Reading source is appropriate when that source is itself the runtime input under test, such as a raw injected module or a transform fixture. Inspecting emitted bundles and generated files as product outputs is also appropriate.
+
 ## Unit tests are OS-agnostic
 
 CI runs unit tests (the `ut` job) on ubuntu only; OS-specific coverage lives in the e2e job's macOS/Windows rows. Enforced by the `rstest/os-agnostic-tests` rule in `rslint.config.mts` as part of `pnpm lint`; the rule itself is unit-tested by `scripts/lint/os-agnostic-rule.test.ts` (in the `lint` project).

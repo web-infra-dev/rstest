@@ -5,6 +5,11 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   globalSetup: ['./scripts/rstestGlobalSetup.ts'],
   setupFiles: ['./scripts/rstest.setup.ts'],
+  include: [
+    './test/*.rtl.test.jsx',
+    './test/*.dynamic.test.tsx',
+    './test/*.static.test.tsx',
+  ],
   testTimeout: 30_000,
   testEnvironment: 'jsdom',
   plugins: [

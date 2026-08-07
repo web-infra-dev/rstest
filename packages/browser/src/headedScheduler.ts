@@ -139,7 +139,7 @@ export const createHeadedScheduler = async ({
   const { browser, browserLaunchOptions, watchState, wss } = runtime;
   let currentTestFiles = allTestFiles;
   // Coincidentally equal to the runner-side CONFIG_WAIT_TIMEOUT_MS and
-  // DEFAULT_RPC_TIMEOUT_MS (client/entry.ts, client/dispatchTransport.ts) but
+  // DEFAULT_RPC_TIMEOUT_MS (client/runner.ts, client/dispatchTransport.ts) but
   // semantically distinct and in a different runtime, so deliberately NOT shared
   // with them. Invariant worth preserving: a runner must be able to receive its
   // config (config-wait) before the host declares its frames un-ready, i.e.
