@@ -9,6 +9,7 @@ import {
   getWorkerSerialization,
   killAndWait,
 } from '../utils';
+import { prepareAssetFilesForIPC } from '../utils/assetFiles';
 
 /**
  * Single owner of the once-per-project global-setup gate.
@@ -194,7 +195,7 @@ export async function runGlobalSetup({
   federation,
 }: {
   globalSetupEntries: EntryInfo[];
-  assetFiles: Record<string, string>;
+  assetFiles: Record<string, Buffer>;
   sourceMaps: Record<string, string>;
   interopDefault: boolean;
   outputModule: boolean;
@@ -220,7 +221,7 @@ export async function runGlobalSetup({
     type: 'setup',
     payload: {
       entries: globalSetupEntries,
-      assetFiles,
+      assetFiles: prepareAssetFilesForIPC(assetFiles, 'forks'),
       interopDefault,
       outputModule,
       federation,
