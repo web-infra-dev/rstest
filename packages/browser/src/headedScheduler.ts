@@ -313,10 +313,26 @@ export const createHeadedScheduler = async ({
     }
   };
 
+  const isCurrentTestFile = (testPath: string): boolean =>
+    currentTestFiles.some((file) => file.testPath === testPath);
+
   const registerPendingHeadedReload = (
     testPath: string,
     runId: string,
   ): Promise<void> => {
+    // Registration is the last point the set can be consulted without a race,
+    // because everything from here to the map write is synchronous. The reload
+    // ack's round trip is an await, so a file-set commit can land inside it:
+    // `reconcilePendingHeadedReloads` then finds nothing to settle, and this
+    // would register a pending whose iframe is already unmounted — one no
+    // file-complete can ever reach. Nothing to wait for, so resolve.
+    if (!isCurrentTestFile(testPath)) {
+      logger.debug(
+        `[Browser UI] Dropping reload registration for removed test file: ${testPath}`,
+      );
+      return Promise.resolve();
+    }
+
     const previousPending = pendingHeadedReloads.get(testPath);
     if (previousPending) {
       previousPending.deferred.reject(
@@ -513,16 +529,12 @@ export const createHeadedScheduler = async ({
       if (fatalErrorRef.current) {
         return;
       }
-      // Dequeue time is the only sound place to check membership:
-      // `claimHeadedCycleScope` checks it once per cycle, but the queue spans
-      // cycles and `dispatchRerun` commits a new set between them. Reloading a
-      // file that has no iframe left throws "iframe not found" out of an
-      // innocent cycle.
-      if (
-        !currentTestFiles.some(
-          (currentFile) => currentFile.testPath === file.testPath,
-        )
-      ) {
+      // `claimHeadedCycleScope` checks membership once per cycle, but the queue
+      // spans cycles and `dispatchRerun` commits a new set between them.
+      // Reloading a file that has no iframe left throws "iframe not found" out
+      // of an innocent cycle. (The set can change again during the reload
+      // itself; `registerPendingHeadedReload` covers that.)
+      if (!isCurrentTestFile(file.testPath)) {
         logger.debug(
           `[Browser UI] Skipping reload for removed test file: ${file.testPath}`,
         );
