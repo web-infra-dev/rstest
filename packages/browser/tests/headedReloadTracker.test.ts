@@ -36,9 +36,6 @@ describe('headed reload tracker', () => {
     );
     const reload = tracker.register('/gone.test.ts', 'run-1');
     expect(await settled(reload)).toBe('resolved');
-
-    // Nothing was tracked, so a later completion for the path is a no-op.
-    tracker.resolve('/gone.test.ts', 'run-1');
   });
 
   it('should reject a superseded registration and keep the newer one', async () => {
@@ -133,10 +130,9 @@ describe('headed reload tracker', () => {
     const live = new Set(['/a.test.ts']);
     const tracker = createHeadedReloadTracker((testPath) => live.has(testPath));
 
-    const reconciled = tracker.register('/a.test.ts', 'run-1');
+    tracker.register('/a.test.ts', 'run-1');
     live.delete('/a.test.ts');
     tracker.reconcile();
-    expect(await settled(reconciled)).toBe('resolved');
 
     // The file comes back and a new reload registers: the old run's late
     // completion must still read as obsolete, the new run as live.

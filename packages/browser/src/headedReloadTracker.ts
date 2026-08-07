@@ -26,9 +26,8 @@ export type HeadedReloadTracker = {
 
 /**
  * Owns the lifecycle of pending headed reloads — the promises a headed cycle
- * is made of. A headed cycle ends only once every reload it issued has
- * settled, so an unsettled pending wedges its cycle and every cycle core has
- * queued behind it, with no error and no disconnect to show for it.
+ * is made of, and with them the settlement contract `packages/browser/AGENTS.md`
+ * states: every pending must be settled by exactly one owner.
  *
  * Each settlement normally arrives as an event from the container
  * (file-complete → {@link HeadedReloadTracker.resolve}, fatal/disconnect →
@@ -120,13 +119,14 @@ export const createHeadedReloadTracker = (
       return deferred.promise;
     },
     resolve(testPath, runId) {
-      const pending = getMatchingPending(testPath, runId);
+      const pending = pendingReloads.get(testPath);
       if (!pending) {
-        if (pendingReloads.has(testPath)) {
-          logger.debug(
-            `[Browser UI] Ignoring stale file-complete for ${testPath}. current=${pendingReloads.get(testPath)?.runId}, incoming=${runId}`,
-          );
-        }
+        return;
+      }
+      if (runId && pending.runId !== runId) {
+        logger.debug(
+          `[Browser UI] Ignoring stale file-complete for ${testPath}. current=${pending.runId}, incoming=${runId}`,
+        );
         return;
       }
       pendingReloads.delete(testPath);

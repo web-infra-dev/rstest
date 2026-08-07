@@ -226,11 +226,15 @@ export const createHeadedScheduler = async ({
     });
   };
 
-  const getTestFileInfo = (testFile: string): TestFileInfo => {
+  const findTestFileInfo = (testFile: string): TestFileInfo | undefined => {
     const normalizedTestFile = normalize(testFile);
-    const fileInfo = currentTestFiles.find(
+    return currentTestFiles.find(
       (file) => file.testPath === normalizedTestFile,
     );
+  };
+
+  const getTestFileInfo = (testFile: string): TestFileInfo => {
+    const fileInfo = findTestFileInfo(testFile);
     if (!fileInfo) {
       throw new Error(`Unknown browser test file: ${JSON.stringify(testFile)}`);
     }
@@ -318,7 +322,7 @@ export const createHeadedScheduler = async ({
   };
 
   const isCurrentTestFile = (testPath: string): boolean =>
-    currentTestFiles.some((file) => file.testPath === testPath);
+    findTestFileInfo(testPath) !== undefined;
 
   // The settlement contract — every pending must be settled by exactly one
   // owner — lives in the tracker, not here. New host actions that can strand
@@ -391,10 +395,8 @@ export const createHeadedScheduler = async ({
       await handleTestCaseResult(payload);
     },
     async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
-      // A completion for a run settled as obsolete was already in transport
-      // when its file left the set: its results were pruned with the file, so
-      // processing it would reinsert them — and fire `onTestFileResult` after
-      // a cycle that has already ended.
+      // Already settled as obsolete when its file left the set — see the
+      // tombstone contract in `headedReloadTracker`.
       if (headedReloads.isObsolete(payload.testPath, payload.runId)) {
         logger.debug(
           `[Browser UI] Dropping late file-complete for removed test file: ${payload.testPath}`,
