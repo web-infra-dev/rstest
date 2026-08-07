@@ -17,9 +17,8 @@ import {
 import { ContainerRpcManager, type HostRpcMethods } from './containerRpc';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
+import { createHeadedReloadTracker } from './headedReloadTracker';
 import {
-  createDeferredPromise,
-  type DeferredPromise,
   type FatalPayload,
   type HeadedTestFileCompletePayload,
   type LogPayload,
@@ -311,36 +310,6 @@ export const createHeadedScheduler = async ({
 
   const dispatchRouter = createDispatchRouter();
   const headedReloadQueue = createHeadedSerialTaskQueue();
-  const pendingHeadedReloads = new Map<
-    string,
-    {
-      cleanupTimer?: ReturnType<typeof setTimeout>;
-      deferred: DeferredPromise<void>;
-      /**
-       * Set the moment this reload's file-complete arrives, before its handler
-       * is awaited: from then on the handler owns the settlement, and
-       * `reconcilePendingHeadedReloads` must keep its hands off.
-       */
-      completionClaimed: boolean;
-    }
-  >();
-  let rawCoverage: unknown[] = [];
-  let coverageStarted = false;
-  const collectCoverage = async (projectName?: string): Promise<void> => {
-    if (!coverageStarted || !v8Coverage) {
-      return;
-    }
-    coverageStarted = false;
-    const coverage = await v8Coverage.take(
-      containerPage,
-      projectRoots.get(projectName ?? '') ?? context.rootPath,
-      projectName,
-    );
-    if (coverage) {
-      rawCoverage.push(coverage);
-    }
-  };
-  const timedOutHeadedRuns = new Set<string>();
   let enqueueHeadedReload = async (
     _file: TestFileInfo,
     _testNamePattern?: string,
@@ -348,147 +317,18 @@ export const createHeadedScheduler = async ({
     throw new Error('Headed reload queue is not initialized');
   };
 
-  const rejectPendingHeadedReload = (
-    testPath: string,
-    error: Error,
-    runId?: string,
-  ): void => {
-    const pending = pendingHeadedReloads.get(testPath);
-    if (!pending) {
-      return;
-    }
-    if (runId && pending.runId !== runId) {
-      return;
-    }
-    if (pending.cleanupTimer) {
-      clearTimeout(pending.cleanupTimer);
-    }
-    pendingHeadedReloads.delete(testPath);
-    pending.deferred.reject(error);
-  };
-
-  const rejectAllPendingHeadedReloads = (error: Error): void => {
-    for (const [testPath, pending] of pendingHeadedReloads) {
-      if (pending.cleanupTimer) {
-        clearTimeout(pending.cleanupTimer);
-      }
-      pendingHeadedReloads.delete(testPath);
-      pending.deferred.reject(error);
-    }
-  };
-
   const isCurrentTestFile = (testPath: string): boolean =>
     currentTestFiles.some((file) => file.testPath === testPath);
 
-  const registerPendingHeadedReload = (
-    file: TestFileInfo,
-    runId: string,
-  ): Promise<void> => {
-    // Registration is the last point the set can be consulted without a race,
-    // because everything from here to the map write is synchronous. The reload
-    // ack's round trip is an await, so a file-set commit can land inside it:
-    // `reconcilePendingHeadedReloads` then finds nothing to settle, and this
-    // would register a pending whose iframe is already unmounted — one no
-    // file-complete can ever reach. Nothing to wait for, so resolve.
-    if (!isCurrentTestFile(testPath)) {
-      logger.debug(
-        `[Browser UI] Dropping reload registration for removed test file: ${testPath}`,
-      );
-      return Promise.resolve();
-    }
-
-    const previousPending = pendingHeadedReloads.get(testPath);
-    if (previousPending) {
-      if (previousPending.cleanupTimer) {
-        clearTimeout(previousPending.cleanupTimer);
-      }
-      previousPending.deferred.reject(
-        new Error(
-          `Reload for "${testPath}" was superseded by a newer request.`,
-        ),
-      );
-      pendingHeadedReloads.delete(testPath);
-    }
-
-    const deferred = createDeferredPromise<void>();
-    pendingHeadedReloads.set(testPath, {
-      deferred,
-      completionClaimed: false,
-    });
-
-    return deferred.promise;
-  };
-
-  /**
-   * Mirrors `resolvePendingHeadedReload`'s guard: claim exactly the pending
-   * that call would settle. A mismatched runId belongs to a superseded run and
-   * settles nothing, so that pending must stay reconcilable.
-   */
-  const claimHeadedReloadCompletion = (
-    testPath: string,
-    runId?: string,
-  ): void => {
-    const pending = pendingHeadedReloads.get(testPath);
-    if (!pending) {
-      return;
-    }
-    if (runId && pending.runId !== runId) {
-      return;
-    }
-    pending.completionClaimed = true;
-  };
-
-  const resolvePendingHeadedReload = (
-    testPath: string,
-    runId?: string,
-  ): void => {
-    const pending = pendingHeadedReloads.get(testPath);
-    if (!pending) {
-      return;
-    }
-    if (runId && pending.runId !== runId) {
-      logger.debug(
-        `[Browser UI] Ignoring stale file-complete for ${testPath}. current=${pending.runId}, incoming=${runId}`,
-      );
-      return;
-    }
-    if (pending.cleanupTimer) {
-      clearTimeout(pending.cleanupTimer);
-    }
-    pendingHeadedReloads.delete(testPath);
-    pending.deferred.resolve();
-  };
-
-  /**
-   * Settle every pending reload whose file has left the set. A pending reload
-   * is otherwise only settled by an event the container sends back, and
-   * dropping a file unmounts the iframe its runner was navigating: no `load`
-   * fires, so no file-complete can follow. Keyed on set membership rather than
-   * the planner's deleted-path diff, which is a second derivation of the same
-   * fact and can drift from whatever last assigned `currentTestFiles`.
-   *
-   * Resolve rather than reject: the file is gone and its results are pruned
-   * alongside, so the reload has nothing left to produce.
-   *
-   * Only reloads nothing else will settle. A claimed completion is already
-   * running its handler and settles the pending on the way out; resolving it
-   * here would release the cycle while reporters are still consuming the
-   * result, letting core reach `onTestRunEnd` before `onTestFileResult`
-   * returns.
-   */
-  const reconcilePendingHeadedReloads = (files: TestFileInfo[]): void => {
-    const livePaths = new Set(files.map((file) => file.testPath));
-    for (const [testPath, pending] of pendingHeadedReloads) {
-      if (!livePaths.has(testPath) && !pending.completionClaimed) {
-        resolvePendingHeadedReload(testPath);
-      }
-    }
-  };
+  // The settlement contract — every pending must be settled by exactly one
+  // owner — lives in the tracker, not here. New host actions that can strand
+  // a runner belong there.
+  const headedReloads = createHeadedReloadTracker(isCurrentTestFile);
 
   // No execution-duration watchdog: per-test/hook timeouts are enforced inside
   // the runner, a dead container is caught event-driven by the WebSocket
   // `close` handler, and a host action that makes a completion impossible
-  // settles the pending itself (`reconcilePendingHeadedReloads`).
+  // settles the pending itself (`headedReloads.reconcile`).
   const reloadTestFileAndWait = async (
     file: TestFileInfo,
     testNamePattern?: string,
@@ -502,14 +342,10 @@ export const createHeadedScheduler = async ({
         file.testPath,
         testNamePattern,
       );
-      await registerPendingHeadedReload(file, reloadAck.runId);
+      await headedReloads.register(file.testPath, reloadAck.runId);
     } catch (error) {
       if (reloadAck?.runId) {
-        rejectPendingHeadedReload(
-          file.testPath,
-          toError(error),
-          reloadAck.runId,
-        );
+        headedReloads.reject(file.testPath, toError(error), reloadAck.runId);
       }
       if (coverageStarted) {
         await collectCoverage(file.projectName);
@@ -557,19 +393,15 @@ export const createHeadedScheduler = async ({
     async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
       // Claim before the first await: the handler below settles this pending
       // either way, so from here nothing else may.
-      claimHeadedReloadCompletion(payload.testPath, payload.runId);
+      headedReloads.claimCompletion(payload.testPath, payload.runId);
       try {
         const projectName = pendingHeadedReloads.get(payload.testPath)?.file
           .projectName;
         await collectCoverage(projectName);
         await handleTestFileComplete(payload);
-        resolvePendingHeadedReload(payload.testPath, payload.runId);
+        headedReloads.resolve(payload.testPath, payload.runId);
       } catch (error) {
-        rejectPendingHeadedReload(
-          payload.testPath,
-          toError(error),
-          payload.runId,
-        );
+        headedReloads.reject(payload.testPath, toError(error), payload.runId);
         throw error;
       }
     },
@@ -579,14 +411,8 @@ export const createHeadedScheduler = async ({
     async onFatal(payload: FatalPayload) {
       const error = new Error(payload.message);
       error.stack = payload.stack;
-      const pending = pendingHeadedReloads.values().next().value;
-      const projectName = pending?.file.projectName;
-      try {
-        await collectCoverage(projectName);
-      } finally {
-        rejectAllPendingHeadedReloads(error);
-        await handleFatal(payload);
-      }
+      headedReloads.rejectAll(error);
+      await handleFatal(payload);
     },
     async dispatch(request: BrowserDispatchRequest) {
       // Headed/container path now shares the same dispatch contract as headless.
@@ -600,7 +426,7 @@ export const createHeadedScheduler = async ({
   if (isWatchMode && runtime.rpcManager) {
     rpcManager = runtime.rpcManager;
     // Update methods with new test state (caseResults, completedTests, etc.)
-    rpcManager.updateMethods(createRpcMethods(), rejectAllPendingHeadedReloads);
+    rpcManager.updateMethods(createRpcMethods(), headedReloads.rejectAll);
     // Reattach if we have an existing WebSocket
     const existingWs = rpcManager.currentWebSocket;
     if (existingWs) {
@@ -610,7 +436,7 @@ export const createHeadedScheduler = async ({
     rpcManager = new ContainerRpcManager(
       wss,
       createRpcMethods(),
-      rejectAllPendingHeadedReloads,
+      headedReloads.rejectAll,
     );
 
     if (isWatchMode) {
@@ -639,7 +465,7 @@ export const createHeadedScheduler = async ({
       // spans cycles and `dispatchRerun` commits a new set between them.
       // Reloading a file that has no iframe left throws "iframe not found" out
       // of an innocent cycle. (The set can change again during the reload
-      // itself; `registerPendingHeadedReload` covers that.)
+      // itself; `headedReloads.register` covers that.)
       if (!isCurrentTestFile(file.testPath)) {
         logger.debug(
           `[Browser UI] Skipping reload for removed test file: ${file.testPath}`,
@@ -751,7 +577,7 @@ export const createHeadedScheduler = async ({
         currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
         // Must run before the container is told: `notifyTestFileUpdate` is
         // what unmounts the dropped iframes.
-        reconcilePendingHeadedReloads(currentTestFiles);
+        headedReloads.reconcile();
         await rpcManager.notifyTestFileUpdate(currentTestFiles);
         if (currentTestFiles.length > 0) {
           await waitForRunnerFramesReady(
