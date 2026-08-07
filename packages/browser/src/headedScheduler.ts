@@ -12,9 +12,8 @@ import {
 import { ContainerRpcManager, type HostRpcMethods } from './containerRpc';
 import type { HostDispatchRouter } from './dispatchRouter';
 import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
+import { createHeadedReloadTracker } from './headedReloadTracker';
 import {
-  createDeferredPromise,
-  type DeferredPromise,
   type FatalPayload,
   type HeadedTestFileCompletePayload,
   type LogPayload,
@@ -214,11 +213,15 @@ export const createHeadedScheduler = async ({
     });
   };
 
-  const getTestFileInfo = (testFile: string): TestFileInfo => {
+  const findTestFileInfo = (testFile: string): TestFileInfo | undefined => {
     const normalizedTestFile = normalize(testFile);
-    const fileInfo = currentTestFiles.find(
+    return currentTestFiles.find(
       (file) => file.testPath === normalizedTestFile,
     );
+  };
+
+  const getTestFileInfo = (testFile: string): TestFileInfo => {
+    const fileInfo = findTestFileInfo(testFile);
     if (!fileInfo) {
       throw new Error(`Unknown browser test file: ${JSON.stringify(testFile)}`);
     }
@@ -263,7 +266,12 @@ export const createHeadedScheduler = async ({
       const text = msg.text();
       if (text.startsWith('[Container]') || text.startsWith('[Runner]')) {
         logger.log(color.gray(`[Browser Console] ${text}`));
+        return;
       }
+      // The runner logs nothing before its config handshake, so a frame that
+      // dies during load is indistinguishable from one that never navigated.
+      // Keep non-protocol output reachable under `--debug`.
+      logger.debug(`[Browser Console] ${text}`);
     });
   }
 
@@ -271,13 +279,6 @@ export const createHeadedScheduler = async ({
 
   const dispatchRouter = createDispatchRouter();
   const headedReloadQueue = createHeadedSerialTaskQueue();
-  const pendingHeadedReloads = new Map<
-    string,
-    {
-      runId: string;
-      deferred: DeferredPromise<void>;
-    }
-  >();
   let enqueueHeadedReload = async (
     _file: TestFileInfo,
     _testNamePattern?: string,
@@ -285,73 +286,18 @@ export const createHeadedScheduler = async ({
     throw new Error('Headed reload queue is not initialized');
   };
 
-  const rejectPendingHeadedReload = (
-    testPath: string,
-    error: Error,
-    runId?: string,
-  ): void => {
-    const pending = pendingHeadedReloads.get(testPath);
-    if (!pending) {
-      return;
-    }
-    if (runId && pending.runId !== runId) {
-      return;
-    }
-    pendingHeadedReloads.delete(testPath);
-    pending.deferred.reject(error);
-  };
+  const isCurrentTestFile = (testPath: string): boolean =>
+    findTestFileInfo(testPath) !== undefined;
 
-  const rejectAllPendingHeadedReloads = (error: Error): void => {
-    for (const [testPath, pending] of pendingHeadedReloads) {
-      pendingHeadedReloads.delete(testPath);
-      pending.deferred.reject(error);
-    }
-  };
-
-  const registerPendingHeadedReload = (
-    testPath: string,
-    runId: string,
-  ): Promise<void> => {
-    const previousPending = pendingHeadedReloads.get(testPath);
-    if (previousPending) {
-      previousPending.deferred.reject(
-        new Error(
-          `Reload for "${testPath}" was superseded by a newer request.`,
-        ),
-      );
-      pendingHeadedReloads.delete(testPath);
-    }
-
-    const deferred = createDeferredPromise<void>();
-    pendingHeadedReloads.set(testPath, {
-      runId,
-      deferred,
-    });
-
-    return deferred.promise;
-  };
-
-  const resolvePendingHeadedReload = (
-    testPath: string,
-    runId?: string,
-  ): void => {
-    const pending = pendingHeadedReloads.get(testPath);
-    if (!pending) {
-      return;
-    }
-    if (runId && pending.runId !== runId) {
-      logger.debug(
-        `[Browser UI] Ignoring stale file-complete for ${testPath}. current=${pending.runId}, incoming=${runId}`,
-      );
-      return;
-    }
-    pendingHeadedReloads.delete(testPath);
-    pending.deferred.resolve();
-  };
+  // The settlement contract — every pending must be settled by exactly one
+  // owner — lives in the tracker, not here. New host actions that can strand
+  // a runner belong there.
+  const headedReloads = createHeadedReloadTracker(isCurrentTestFile);
 
   // No execution-duration watchdog: per-test/hook timeouts are enforced inside
-  // the runner, and a dead container is caught event-driven by the WebSocket
-  // `close` handler, which rejects every pending reload via `onDisconnect`.
+  // the runner, a dead container is caught event-driven by the WebSocket
+  // `close` handler, and a host action that makes a completion impossible
+  // settles the pending itself (`headedReloads.reconcile`).
   const reloadTestFileAndWait = async (
     file: TestFileInfo,
     testNamePattern?: string,
@@ -363,14 +309,10 @@ export const createHeadedScheduler = async ({
         file.testPath,
         testNamePattern,
       );
-      await registerPendingHeadedReload(file.testPath, reloadAck.runId);
+      await headedReloads.register(file.testPath, reloadAck.runId);
     } catch (error) {
       if (reloadAck?.runId) {
-        rejectPendingHeadedReload(
-          file.testPath,
-          toError(error),
-          reloadAck.runId,
-        );
+        headedReloads.reject(file.testPath, toError(error), reloadAck.runId);
       }
       throw error;
     }
@@ -413,15 +355,22 @@ export const createHeadedScheduler = async ({
       await handleTestCaseResult(payload);
     },
     async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
+      // Already settled as obsolete when its file left the set — see the
+      // tombstone contract in `headedReloadTracker`.
+      if (headedReloads.isObsolete(payload.testPath, payload.runId)) {
+        logger.debug(
+          `[Browser UI] Dropping late file-complete for removed test file: ${payload.testPath}`,
+        );
+        return;
+      }
+      // Claim before the first await: the handler below settles this pending
+      // either way, so from here nothing else may.
+      headedReloads.claimCompletion(payload.testPath, payload.runId);
       try {
         await handleTestFileComplete(payload);
-        resolvePendingHeadedReload(payload.testPath, payload.runId);
+        headedReloads.resolve(payload.testPath, payload.runId);
       } catch (error) {
-        rejectPendingHeadedReload(
-          payload.testPath,
-          toError(error),
-          payload.runId,
-        );
+        headedReloads.reject(payload.testPath, toError(error), payload.runId);
         throw error;
       }
     },
@@ -431,7 +380,7 @@ export const createHeadedScheduler = async ({
     async onFatal(payload: FatalPayload) {
       const error = new Error(payload.message);
       error.stack = payload.stack;
-      rejectAllPendingHeadedReloads(error);
+      headedReloads.rejectAll(error);
       await handleFatal(payload);
     },
     async dispatch(request: BrowserDispatchRequest) {
@@ -446,7 +395,7 @@ export const createHeadedScheduler = async ({
   if (isWatchMode && runtime.rpcManager) {
     rpcManager = runtime.rpcManager;
     // Update methods with new test state (caseResults, completedTests, etc.)
-    rpcManager.updateMethods(createRpcMethods(), rejectAllPendingHeadedReloads);
+    rpcManager.updateMethods(createRpcMethods(), headedReloads.rejectAll);
     // Reattach if we have an existing WebSocket
     const existingWs = rpcManager.currentWebSocket;
     if (existingWs) {
@@ -456,7 +405,7 @@ export const createHeadedScheduler = async ({
     rpcManager = new ContainerRpcManager(
       wss,
       createRpcMethods(),
-      rejectAllPendingHeadedReloads,
+      headedReloads.rejectAll,
     );
 
     if (isWatchMode) {
@@ -485,6 +434,17 @@ export const createHeadedScheduler = async ({
   ): Promise<void> => {
     return headedReloadQueue.enqueue(async () => {
       if (fatalErrorRef.current) {
+        return;
+      }
+      // `claimHeadedCycleScope` checks membership once per cycle, but the queue
+      // spans cycles and `dispatchRerun` commits a new set between them.
+      // Reloading a file that has no iframe left throws "iframe not found" out
+      // of an innocent cycle. (The set can change again during the reload
+      // itself; `headedReloads.register` covers that.)
+      if (!isCurrentTestFile(file.testPath)) {
+        logger.debug(
+          `[Browser UI] Skipping reload for removed test file: ${file.testPath}`,
+        );
         return;
       }
       await reloadTestFileAndWait(file, testNamePattern);
@@ -588,6 +548,9 @@ export const createHeadedScheduler = async ({
 
       if (rerunPlan.fileSetUpdate) {
         currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
+        // Must run before the container is told: `notifyTestFileUpdate` is
+        // what unmounts the dropped iframes.
+        headedReloads.reconcile();
         await rpcManager.notifyTestFileUpdate(currentTestFiles);
         if (currentTestFiles.length > 0) {
           await waitForRunnerFramesReady(

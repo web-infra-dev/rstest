@@ -765,7 +765,10 @@ const run = async () => {
 
       send({
         type: 'file-complete',
-        payload: result,
+        // The runner is the one holder of its own runId that cannot be
+        // unmounted before this message is processed — echo it rather than
+        // letting the container re-derive it from a frame that may be gone.
+        payload: { ...result, runId: options.runId },
       });
     } catch (_error) {
       const error =

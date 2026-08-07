@@ -133,7 +133,10 @@ export type BrowserClientMessage =
       payload: { testPath: string; projectName: string };
     }
   | { type: 'case-result'; payload: TestResult }
-  | { type: 'file-complete'; payload: TestFileResult }
+  // `runId` rides the event itself: the container's frame/state fallbacks can
+  // already be pruned when a queued completion is processed, and an identity
+  // re-derived from them arrives as `undefined` — unattributable to a run.
+  | { type: 'file-complete'; payload: TestFileResult & { runId?: string } }
   | { type: 'log'; payload: BrowserLogPayload }
   | {
       type: 'fatal';
