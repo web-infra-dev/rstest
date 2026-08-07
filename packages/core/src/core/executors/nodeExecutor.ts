@@ -11,11 +11,7 @@ import type {
 import type { CoverageMap, CoverageProvider } from '../../types/coverage';
 import { clearScreen, color, logger, type TraceRun } from '../../utils';
 import { ensureTestEnvironmentDependencies } from '../envDependencies';
-import {
-  claimGlobalSetupOnce,
-  runGlobalSetup,
-  runGlobalTeardown,
-} from '../globalSetup';
+import { claimGlobalSetupOnce, runGlobalSetup } from '../globalSetup';
 import { applyOnlyFailuresSelection } from '../onlyFailures';
 import type { RunProjectPlan } from '../projectPlan';
 import { createRsbuildServer } from '../rsbuild';
@@ -222,7 +218,7 @@ export function createNodeExecutor(
     Promise<NonNullable<typeof runResources>> | undefined;
   let runDependencyValidationPromise: Promise<void> | undefined;
   let entryFiles: string[] = [];
-  let didRunGlobalTeardown = false;
+  let didClose = false;
   // When a dev compile starts. Paired with the compile's end into a completed
   // span below; on its own it is not a build time, because cycles are queued
   // and the wait for the queue is not build work.
@@ -595,34 +591,30 @@ export function createNodeExecutor(
   // Idempotent: the single `executors.close()` exit path may race a signal
   // handler, and closing a pool/server twice throws.
   const close = async (): Promise<void> => {
-    if (didRunGlobalTeardown) {
+    if (didClose) {
       return;
     }
-    didRunGlobalTeardown = true;
-    try {
-      await runGlobalTeardown();
-    } finally {
-      if (runDependencyValidationPromise) {
-        await runDependencyValidationPromise.catch(() => undefined);
-      }
-      // Settle an in-flight resource start first: a close racing startup (e.g. a
-      // config-change restart during watch boot) must tear down the server and
-      // pool that start is about to produce, not skip them.
-      if (runResourcesPromise) {
-        await runResourcesPromise.catch(() => undefined);
-      }
-      if (runResources) {
-        const resources = runResources;
-        runResources = undefined;
-        runResourcesPromise = undefined;
+    didClose = true;
+    if (runDependencyValidationPromise) {
+      await runDependencyValidationPromise.catch(() => undefined);
+    }
+    // Settle an in-flight resource start first: a close racing startup (e.g. a
+    // config-change restart during watch boot) must tear down the server and
+    // pool that start is about to produce, not skip them.
+    if (runResourcesPromise) {
+      await runResourcesPromise.catch(() => undefined);
+    }
+    if (runResources) {
+      const resources = runResources;
+      runResources = undefined;
+      runResourcesPromise = undefined;
+      try {
+        await resources.pool.close();
+      } finally {
         try {
-          await resources.pool.close();
+          await resources.closeServer();
         } finally {
-          try {
-            await resources.closeServer();
-          } finally {
-            await resources.cleanupTestEnvironmentModules();
-          }
+          await resources.cleanupTestEnvironmentModules();
         }
       }
     }

@@ -584,11 +584,8 @@ export function createWatchTeardown({
       for (const executor of executors) {
         await step('executor cleanup', () => executor.close());
       }
-      // Same order and the same reason as the non-watch net in `runTests.ts`:
-      // a user `globalSetup` teardown callback runs after the browser host and
-      // its dev servers are gone. `NodeExecutor.close()` drains too, so this is
-      // a no-op for a mixed session — but a browser-only watch has no node
-      // executor to drain the browser stage's setups.
+      // The watch session owns the shared queue and drains it only after every
+      // executor has closed.
       await step('global teardown', () => runGlobalTeardown());
     } finally {
       try {
