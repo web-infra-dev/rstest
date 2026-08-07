@@ -87,7 +87,6 @@ export type BrowserLogPayload = {
 export type BrowserHostConfig = {
   rootPath: string;
   projects: BrowserProjectRuntime[];
-  importMetaRstestPaths?: Record<string, string>;
   snapshot: {
     updateSnapshot: SnapshotUpdateState;
   };

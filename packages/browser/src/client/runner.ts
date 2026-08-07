@@ -27,7 +27,6 @@ import {
 import { normalize } from 'pathe';
 import type {
   BrowserClientMessage,
-  BrowserHostConfig,
   BrowserProjectRuntime,
   RunnerLifecycleMethod,
 } from '../protocol';
@@ -84,11 +83,6 @@ const installRuntimeGlobals = (
     }
   }
 };
-
-const getImportMetaRstestPath = (
-  options: BrowserHostConfig,
-  testPath: string,
-): string => options.importMetaRstestPaths?.[testPath] ?? testPath;
 
 const clearBrowserTestEntryCache = (testEntryPath: string): void => {
   const cleaners = (
@@ -519,7 +513,6 @@ const run = async () => {
   if (executionMode === 'collect') {
     for (const key of testKeysToRun) {
       const testPath = toAbsolutePath(key, currentProject.projectRoot);
-      const importMetaRstestPath = getImportMetaRstestPath(options, testPath);
 
       const workerState: WorkerState = {
         project: projectRuntime.name,
@@ -534,7 +527,6 @@ const run = async () => {
         outputModule: false,
         environment: 'browser',
         testPath,
-        importMetaRstestPath,
         distPath: testPath,
         snapshotOptions: {
           updateSnapshot: options.snapshot.updateSnapshot,
@@ -553,7 +545,7 @@ const run = async () => {
         // Load setup files for this project after runtime is ready.
         await loadSetupFiles();
 
-        clearBrowserTestEntryCache(importMetaRstestPath);
+        clearBrowserTestEntryCache(testPath);
 
         // Load the test file dynamically (registers tests without running)
         await currentTestContext.loadTest(key);
@@ -614,7 +606,6 @@ const run = async () => {
   // 2. Run tests for each file
   for (const key of testKeysToRun) {
     const testPath = toAbsolutePath(key, currentProject.projectRoot);
-    const importMetaRstestPath = getImportMetaRstestPath(options, testPath);
     const taskStack: CurrentTaskInfo[] = [
       {
         taskId: getFileTaskId(testPath),
@@ -655,7 +646,6 @@ const run = async () => {
       environment: 'browser',
       currentTask: taskStack[0],
       testPath,
-      importMetaRstestPath,
       distPath: testPath,
       snapshotOptions: {
         updateSnapshot: options.snapshot.updateSnapshot,

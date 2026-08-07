@@ -8,7 +8,6 @@ import { normalize, relative } from 'pathe';
 import {
   type BrowserRuntime,
   type BrowserProjectEntrySnapshot,
-  collectImportMetaRstestPaths,
   drainPendingAffectedTestFiles,
 } from './browserRsbuild';
 import { ContainerRpcManager, type HostRpcMethods } from './containerRpc';
@@ -569,8 +568,6 @@ export const createHeadedScheduler = async ({
 
     watchSignals.setDispatchRerun(async () => {
       const newProjectEntries = await collectProjectEntries();
-      hostOptions.importMetaRstestPaths =
-        collectImportMetaRstestPaths(newProjectEntries);
       await refreshHostConfig();
       const rerunPlan = planWatchRerun({
         projectEntries: newProjectEntries,

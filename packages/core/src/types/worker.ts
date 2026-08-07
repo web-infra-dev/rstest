@@ -151,8 +151,6 @@ export type RunWorkerOptions = {
 export type WorkerState = WorkerContext & {
   environment: string;
   testPath: TestPath;
-  /** Canonical filesystem identity used only for import.meta.rstest matching. */
-  importMetaRstestPath?: TestPath;
   distPath: DistPath;
   currentTask?: CurrentTaskInfo;
   snapshotClient?: SnapshotClient;

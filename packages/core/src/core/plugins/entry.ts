@@ -1,5 +1,4 @@
 import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
-import { realpath } from 'node:fs/promises';
 import path from 'pathe';
 import type { RstestContext } from '../../types';
 import { castArray, getTempRstestOutputDirGlob } from '../../utils';
@@ -53,13 +52,7 @@ export const pluginEntryWatch: (params: {
       if (testEntryPathState) {
         testEntryPathState.set(
           environmentName,
-          new Set(
-            await Promise.all(
-              Object.values(sourceEntries).map(async (testPath) =>
-                path.normalize(await realpath(testPath).catch(() => testPath)),
-              ),
-            ),
-          ),
+          new Set(Object.values(sourceEntries).map(path.normalize)),
         );
       }
       return sourceEntries;

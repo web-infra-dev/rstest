@@ -1,7 +1,6 @@
 import type { FileCoverageData } from 'istanbul-lib-coverage';
-import { existsSync, realpathSync } from 'node:fs';
 import { isMainThread, threadId } from 'node:worker_threads';
-import path from 'pathe';
+import { normalize } from 'pathe';
 import { install } from 'source-map-support';
 import type {
   MaybePromise,
@@ -261,9 +260,6 @@ const preparePool = async (
 
   const interopDefault = true;
 
-  const importMetaRstestPath = path.normalize(
-    existsSync(testPath) ? realpathSync.native(testPath) : testPath,
-  );
   const workerState: WorkerState = {
     ...context,
     snapshotOptions: {
@@ -276,7 +272,6 @@ const preparePool = async (
     },
     distPath,
     testPath,
-    importMetaRstestPath,
     environment: 'node',
   };
 
@@ -388,7 +383,6 @@ const preparePool = async (
     rpc,
     silentConsoleController,
     api,
-    importMetaRstestPath,
     taskContext,
     unhandledErrors,
     cleanup: async () => {
@@ -404,7 +398,6 @@ const loadFiles = async ({
   distPath,
   runtimeDistPath,
   testPath,
-  importMetaRstestPath,
   interopDefault,
   isolate,
   outputModule,
@@ -417,7 +410,6 @@ const loadFiles = async ({
   distPath: string;
   runtimeDistPath?: string;
   testPath: string;
-  importMetaRstestPath: string;
   interopDefault: boolean;
   isolate: boolean;
   outputModule: boolean;
@@ -430,12 +422,12 @@ const loadFiles = async ({
   const virtualFsAssetFiles = federation ? assetFiles : undefined;
 
   // A reused worker can hold several projects' runtime chunks at once, so pass
-  // the current canonical entry path to every self-scoped cleaner. Only its
+  // the current entry path to every self-scoped cleaner. Only its
   // owning chunk can map that path to a cached module id.
   if (!isolate) {
     await loadModule({
       codeContent: `if (global && global.__rstest_cache_cleaners__) {
-  global.__rstest_cache_cleaners__.forEach((fn) => fn(${JSON.stringify(importMetaRstestPath)}));
+  global.__rstest_cache_cleaners__.forEach((fn) => fn(${JSON.stringify(normalize(testPath))}));
   }`,
       distPath: '',
       testPath,
@@ -573,7 +565,6 @@ export const runInPool = async (
         cleanup,
         unhandledErrors,
         interopDefault,
-        importMetaRstestPath,
       } = await preparePool(options, undefined, onTestEnvironmentFallback);
       const { assetFiles, sourceMaps: sourceMapsFromAssets } =
         assets || (await rpc.getAssetsByEntry());
@@ -586,7 +577,6 @@ export const runInPool = async (
         distPath,
         runtimeDistPath,
         testPath,
-        importMetaRstestPath,
         assetFiles,
         setupEntries,
         interopDefault,
@@ -639,7 +629,6 @@ export const runInPool = async (
       cleanup,
       unhandledErrors,
       interopDefault,
-      importMetaRstestPath,
       taskContext: preparedTaskContext,
     } = await preparePool(options, tracker, onTestEnvironmentFallback);
     taskContext = preparedTaskContext;
@@ -700,7 +689,6 @@ export const runInPool = async (
         distPath,
         runtimeDistPath,
         testPath,
-        importMetaRstestPath,
         assetFiles,
         setupEntries,
         interopDefault,

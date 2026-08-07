@@ -5,7 +5,6 @@ import type {
 import { color, logger } from '@rstest/core/internal/browser';
 import { normalize } from 'pathe';
 import {
-  collectImportMetaRstestPaths,
   type BrowserRuntime,
   type BrowserProjectEntrySnapshot,
   drainPendingAffectedTestFiles,
@@ -491,8 +490,6 @@ export const createHeadlessScheduler = async ({
 
     watchSignals.setDispatchRerun(async () => {
       const newProjectEntries = await collectProjectEntries();
-      hostOptions.importMetaRstestPaths =
-        collectImportMetaRstestPaths(newProjectEntries);
       const rerunPlan = planWatchRerun({
         projectEntries: newProjectEntries,
         previousTestFiles: watchState.lastTestFiles,

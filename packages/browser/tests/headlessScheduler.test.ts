@@ -309,9 +309,6 @@ const createHarness = (options: HarnessOptions = {}) => {
           project: { name: 'browser' },
           setupFiles: [],
           testFiles: files.map((f) => f.testPath),
-          importMetaRstestPaths: Object.fromEntries(
-            files.map((entry) => [entry.testPath, entry.testPath]),
-          ),
         },
       ]),
     logWatchReady: ready,
@@ -488,7 +485,6 @@ describe('headless scheduler', () => {
           project: { name: 'browser' },
           setupFiles: [],
           testFiles: [],
-          importMetaRstestPaths: {},
         },
       ],
     });
@@ -507,10 +503,6 @@ describe('headless scheduler', () => {
           project: { name: 'browser' },
           setupFiles: [],
           testFiles: ['/a.test.ts', '/b.test.ts'],
-          importMetaRstestPaths: {
-            '/a.test.ts': '/a.test.ts',
-            '/b.test.ts': '/b.test.ts',
-          },
         },
       ],
     });

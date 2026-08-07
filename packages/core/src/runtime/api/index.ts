@@ -87,9 +87,7 @@ export const createRstestRuntime = async (
   // Published live for real-module importers (`public.ts` reads `RSTEST_API`).
   globalThis.RSTEST_API = runtime.api;
 
-  const testPath = normalize(
-    workerState.importMetaRstestPath ?? workerState.testPath,
-  );
+  const testPath = normalize(workerState.testPath);
 
   return {
     ...runtime,

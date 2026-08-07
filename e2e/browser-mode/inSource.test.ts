@@ -1,20 +1,6 @@
-import { symlink } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { prepareFixtures } from '../scripts';
 import { BROWSER_PORTS } from './fixtures/ports';
-import {
-  deleteFixtureTarget,
-  killCliProcessTree,
-  runBrowserCli,
-  runBrowserCliWithCwd,
-  runBrowserWatchCli,
-  runBrowserWatchCliWithCwd,
-} from './utils';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { killCliProcessTree, runBrowserCli, runBrowserWatchCli } from './utils';
 
 // `includeSource` files carry their tests in an `if (import.meta.rstest)`
 // block. The browser project discovers those source files as test entries and
@@ -91,76 +77,4 @@ describe('browser mode - in-source testing', () => {
       await killCliProcessTree(cli);
     }
   });
-
-  it.skipIf(process.platform === 'win32')(
-    'runs an in-source test discovered through a symlink',
-    async () => {
-      const fixturesTargetPath = join(
-        __dirname,
-        'fixtures/fixtures-test-browser-in-source-symlink',
-      );
-      const { fs } = await prepareFixtures({
-        fixturesPath: join(__dirname, 'fixtures/browser-in-source'),
-        fixturesTargetPath,
-      });
-
-      try {
-        await symlink(
-          '../linked/symlinked.ts',
-          join(fixturesTargetPath, 'src/symlinked.ts'),
-          'file',
-        );
-        const { cli, expectExecSuccess } = await runBrowserCliWithCwd(
-          fixturesTargetPath,
-          { args: ['src/symlinked.ts', '--reporter=verbose'] },
-        );
-
-        await expectExecSuccess();
-        expect(cli.stdout).toContain(
-          'runs a symlinked in-source test in the browser',
-        );
-        expect(cli.stdout).toMatch(/Test Files.*1 passed/);
-        expect(cli.stdout).toMatch(/Tests.*1 passed/);
-      } finally {
-        await deleteFixtureTarget(fs, fixturesTargetPath);
-      }
-    },
-  );
-
-  it.skipIf(process.platform === 'win32')(
-    'runs a symlinked in-source test added during watch',
-    async () => {
-      const fixturesTargetPath = join(
-        __dirname,
-        'fixtures/fixtures-test-browser-in-source-watch-symlink',
-      );
-      const { fs } = await prepareFixtures({
-        fixturesPath: join(__dirname, 'fixtures/browser-in-source'),
-        fixturesTargetPath,
-      });
-      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
-        args: ['--reporter=verbose'],
-      });
-
-      try {
-        await cli.waitForStdout('Waiting for file changes...');
-        cli.resetStd();
-        await symlink(
-          '../linked/symlinked.ts',
-          join(fixturesTargetPath, 'src/symlinked.ts'),
-          'file',
-        );
-
-        await cli.waitForStdout('Test file set changed, re-running 6 file(s)');
-        await cli.waitForStdout(
-          'runs a symlinked in-source test in the browser',
-        );
-        await cli.waitForStdout('Waiting for file changes...');
-      } finally {
-        await killCliProcessTree(cli);
-        await deleteFixtureTarget(fs, fixturesTargetPath);
-      }
-    },
-    60_000,
-  );
 });

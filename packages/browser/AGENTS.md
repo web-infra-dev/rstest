@@ -29,7 +29,7 @@ Responses always travel back as transport replies — `dispatchRouter` handles i
 ## Runner runtime invariants (`src/client`)
 
 - `runner.ts` is the only bootstrap entry and decides `collect` vs `run` mode.
-- Every Rspack runtime realm starts with an undefined-returning `import.meta.rstest` resolver; the runner realm replaces it with the current-file resolver. Canonical entry identities travel in host config and refresh with the watch file set rather than living in the build-time manifest. Collection may reuse one page, so it must evict only the entry about to be collected before loading it.
+- Every Rspack runtime realm starts with an undefined-returning `import.meta.rstest` resolver; the runner realm replaces it with the current-file resolver. Collection may reuse one page, so it must evict only the entry about to be collected before loading it.
 - Console interception is per test file and must restore the original console methods in `finally`.
 - An unhandled window error or `unhandledrejection` that escapes a test file fails the file even when every test passed. The runner deliberately yields macrotasks before finalizing each file result so late-dispatched rejections are still observed — the timing rationale is commented in `runner.ts`.
 
