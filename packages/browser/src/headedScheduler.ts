@@ -281,6 +281,12 @@ export const createHeadedScheduler = async ({
     {
       runId: string;
       deferred: DeferredPromise<void>;
+      /**
+       * Set the moment this reload's file-complete arrives, before its handler
+       * is awaited: from then on the handler owns the settlement, and
+       * `reconcilePendingHeadedReloads` must keep its hands off.
+       */
+      completionClaimed: boolean;
     }
   >();
   let enqueueHeadedReload = async (
@@ -347,9 +353,29 @@ export const createHeadedScheduler = async ({
     pendingHeadedReloads.set(testPath, {
       runId,
       deferred,
+      completionClaimed: false,
     });
 
     return deferred.promise;
+  };
+
+  /**
+   * Mirrors `resolvePendingHeadedReload`'s guard: claim exactly the pending
+   * that call would settle. A mismatched runId belongs to a superseded run and
+   * settles nothing, so that pending must stay reconcilable.
+   */
+  const claimHeadedReloadCompletion = (
+    testPath: string,
+    runId?: string,
+  ): void => {
+    const pending = pendingHeadedReloads.get(testPath);
+    if (!pending) {
+      return;
+    }
+    if (runId && pending.runId !== runId) {
+      return;
+    }
+    pending.completionClaimed = true;
   };
 
   const resolvePendingHeadedReload = (
@@ -380,11 +406,17 @@ export const createHeadedScheduler = async ({
    *
    * Resolve rather than reject: the file is gone and its results are pruned
    * alongside, so the reload has nothing left to produce.
+   *
+   * Only reloads nothing else will settle. A claimed completion is already
+   * running its handler and settles the pending on the way out; resolving it
+   * here would release the cycle while reporters are still consuming the
+   * result, letting core reach `onTestRunEnd` before `onTestFileResult`
+   * returns.
    */
   const reconcilePendingHeadedReloads = (files: TestFileInfo[]): void => {
     const livePaths = new Set(files.map((file) => file.testPath));
-    for (const testPath of pendingHeadedReloads.keys()) {
-      if (!livePaths.has(testPath)) {
+    for (const [testPath, pending] of pendingHeadedReloads) {
+      if (!livePaths.has(testPath) && !pending.completionClaimed) {
         resolvePendingHeadedReload(testPath);
       }
     }
@@ -455,6 +487,9 @@ export const createHeadedScheduler = async ({
       await handleTestCaseResult(payload);
     },
     async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
+      // Claim before the first await: the handler below settles this pending
+      // either way, so from here nothing else may.
+      claimHeadedReloadCompletion(payload.testPath, payload.runId);
       try {
         await handleTestFileComplete(payload);
         resolvePendingHeadedReload(payload.testPath, payload.runId);
