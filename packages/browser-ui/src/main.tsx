@@ -475,11 +475,19 @@ const BrowserRunner: React.FC<{
         const payload = message.payload as BrowserClientFileResult;
         const testPath = payload.testPath;
         if (typeof testPath === 'string') {
+          // The frame's current navigation stays the primary identity: an old
+          // frame full-reloaded by the HMR fallback reruns the latest chunks
+          // under its stale label, and its completion must still settle the
+          // reload the frame was navigated for. The payload's own runId is the
+          // last resort — the only identity left once the iframe was unmounted
+          // (and the state entry pruned) with this completion still queued,
+          // which is exactly when the host needs it to spot an obsolete run.
           const frame = findRunnerFrameBySource(event.source);
           const fallbackFrame = frame ?? findRunnerFrameByTestPath(testPath);
           const runId =
             (fallbackFrame ? readRunIdFromFrame(fallbackFrame) : undefined) ??
-            runIdByTestFile[testPath];
+            runIdByTestFile[testPath] ??
+            payload.runId;
           const passed = payload.status === 'pass' || payload.status === 'skip';
           setStatusMap((prev) => ({
             ...prev,
