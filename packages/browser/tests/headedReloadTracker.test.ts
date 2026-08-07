@@ -107,4 +107,45 @@ describe('headed reload tracker', () => {
 
     expect(await settled(reload)).toBe('resolved');
   });
+
+  it('should tombstone runs settled as obsolete, at registration and at reconcile', async () => {
+    const live = new Set(['/a.test.ts']);
+    const tracker = createHeadedReloadTracker((testPath) => live.has(testPath));
+
+    const reconciled = tracker.register('/a.test.ts', 'run-1');
+    live.delete('/a.test.ts');
+    tracker.reconcile();
+    expect(await settled(reconciled)).toBe('resolved');
+    expect(tracker.isObsolete('/a.test.ts', 'run-1')).toBe(true);
+
+    // The drop-at-registration path tombstones too: that reload's ack already
+    // carried a runId, so its completion can also still be in transport.
+    const dropped = tracker.register('/a.test.ts', 'run-2');
+    expect(await settled(dropped)).toBe('resolved');
+    expect(tracker.isObsolete('/a.test.ts', 'run-2')).toBe(true);
+
+    // Unmatched run or missing runId stays live — never swallow those.
+    expect(tracker.isObsolete('/a.test.ts', 'run-3')).toBe(false);
+    expect(tracker.isObsolete('/a.test.ts')).toBe(false);
+  });
+
+  it('should keep tombstones across a re-registration of the same path', async () => {
+    const live = new Set(['/a.test.ts']);
+    const tracker = createHeadedReloadTracker((testPath) => live.has(testPath));
+
+    const reconciled = tracker.register('/a.test.ts', 'run-1');
+    live.delete('/a.test.ts');
+    tracker.reconcile();
+    expect(await settled(reconciled)).toBe('resolved');
+
+    // The file comes back and a new reload registers: the old run's late
+    // completion must still read as obsolete, the new run as live.
+    live.add('/a.test.ts');
+    const reload = tracker.register('/a.test.ts', 'run-2');
+    expect(tracker.isObsolete('/a.test.ts', 'run-1')).toBe(true);
+    expect(tracker.isObsolete('/a.test.ts', 'run-2')).toBe(false);
+
+    tracker.resolve('/a.test.ts', 'run-2');
+    expect(await settled(reload)).toBe('resolved');
+  });
 });
