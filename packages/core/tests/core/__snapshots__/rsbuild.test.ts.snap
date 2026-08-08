@@ -2058,6 +2058,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   "entry": [Function],
   "experiments": {
     "asyncWebAssembly": false,
+    "nativeWatcher": true,
     "runtimeMode": "webpack",
     "sourceImport": true,
   },
@@ -2717,7 +2718,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
   },
   "target": "node",
   "watchOptions": {
-    "aggregateTimeout": 5,
+    "aggregateTimeout": 100,
     "ignored": [
       "**/.git",
       "**/node_modules",
