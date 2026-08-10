@@ -753,6 +753,7 @@ const BrowserRunner: React.FC<{
                   // mutation calls `bumpLeases`, so this render is never behind
                   // the table.
                   const lease = leasesRef.current.get(fileInfo.testPath);
+                  const renderedBoot = lease?.boot ?? 0;
                   const selection =
                     viewportByProject[fileInfo.projectName] ??
                     selectionFromConfig(
@@ -771,6 +772,15 @@ const BrowserRunner: React.FC<{
                       fileInfo.testPath,
                     );
                     if (!currentLease) {
+                      return;
+                    }
+                    // A grant bumps `boot` and re-keys the iframe, but the ref
+                    // write and the re-key commit are not atomic: a load event
+                    // queued by the SUPERSEDED browsing context can run in
+                    // between. Only the context whose key encodes the current
+                    // boot may adopt the lease — the doomed one stays silent
+                    // and is unmounted at commit.
+                    if (currentLease.boot !== renderedBoot) {
                       return;
                     }
                     event.currentTarget.contentWindow?.postMessage(

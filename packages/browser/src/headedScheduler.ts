@@ -295,12 +295,16 @@ export const createHeadedScheduler = async ({
     // process: no file-set commit or inbound message can land between "the
     // run exists on the wire" and "the registry owns it".
     const { runId, settled } = runs.mint(file.testPath);
-    try {
-      await rpcManager.reloadTestFile(file.testPath, runId, testNamePattern);
-    } catch (error) {
-      runs.reject(runId, error);
-      throw error;
-    }
+    // The wait is on `settled` ALONE, never serially on the RPC: the host
+    // birpc has no timeout, so a reload delivery that silently hangs (socket
+    // looks open, no close event, no replacement) would otherwise block this
+    // cycle past every deadline the registry enforces. The RPC's only job is
+    // delivery — its failure settles the run like any other settler, and if
+    // the run was already settled (boot deadline, transport epoch) the late
+    // rejection is a no-op.
+    rpcManager
+      .reloadTestFile(file.testPath, runId, testNamePattern)
+      .catch((error) => runs.reject(runId, error));
     await settled;
   };
 
