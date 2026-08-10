@@ -87,6 +87,8 @@ export async function createBrowserExecutor(
           ? {
               map: map?.toJSON(),
               raw: result.rawCoverage,
+              loadAssetFiles: result.loadAssetFiles,
+              loadSourceMaps: result.loadSourceMaps,
             }
           : undefined,
       resolveSourcemap: result.resolveSourcemap,

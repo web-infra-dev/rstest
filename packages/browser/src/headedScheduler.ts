@@ -315,6 +315,19 @@ export const createHeadedScheduler = async ({
   >();
   let rawCoverage: unknown[] = [];
   let coverageStarted = false;
+  const collectCoverage = async (projectName?: string): Promise<void> => {
+    if (!coverageStarted || !v8Coverage) {
+      return;
+    }
+    coverageStarted = false;
+    const coverage = await v8Coverage.take(
+      containerPage,
+      projectRoots.get(projectName ?? '') ?? context.rootPath,
+    );
+    if (coverage) {
+      rawCoverage.push(coverage);
+    }
+  };
   const timedOutHeadedRuns = new Set<string>();
   let enqueueHeadedReload = async (
     _file: TestFileInfo,
@@ -443,6 +456,7 @@ export const createHeadedScheduler = async ({
       void (async () => {
         const message = `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`;
         try {
+          await collectCoverage(pending.file.projectName);
           // A cleanup timeout is a file failure, not a container failure. Resolve
           // this reload after reporting it so the headed serial loop advances.
           await handleTestFileComplete(
@@ -508,14 +522,7 @@ export const createHeadedScheduler = async ({
         );
       }
       if (coverageStarted) {
-        coverageStarted = false;
-        const coverage = await v8Coverage?.take(
-          containerPage,
-          projectRoots.get(file.projectName) ?? context.rootPath,
-        );
-        if (coverage) {
-          rawCoverage.push(coverage);
-        }
+        await collectCoverage(file.projectName);
       }
       throw error;
     }
@@ -565,18 +572,9 @@ export const createHeadedScheduler = async ({
         return;
       }
       try {
-        if (coverageStarted) {
-          coverageStarted = false;
-          const projectName = pendingHeadedReloads.get(payload.testPath)?.file
-            .projectName;
-          const coverage = await v8Coverage?.take(
-            containerPage,
-            projectRoots.get(projectName ?? '') ?? context.rootPath,
-          );
-          if (coverage) {
-            rawCoverage.push(coverage);
-          }
-        }
+        const projectName = pendingHeadedReloads.get(payload.testPath)?.file
+          .projectName;
+        await collectCoverage(projectName);
         await handleTestFileComplete(payload);
         resolvePendingHeadedReload(payload.testPath, payload.runId);
       } catch (error) {
@@ -594,6 +592,9 @@ export const createHeadedScheduler = async ({
     async onFatal(payload: FatalPayload) {
       const error = new Error(payload.message);
       error.stack = payload.stack;
+      const pending = pendingHeadedReloads.values().next().value;
+      const projectName = pending?.file.projectName;
+      await collectCoverage(projectName);
       rejectAllPendingHeadedReloads(error);
       await handleFatal(payload);
     },

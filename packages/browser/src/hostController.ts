@@ -49,6 +49,10 @@ import {
   serializeForInlineScript,
   type BrowserRuntime,
 } from './browserRsbuild';
+import {
+  takeBrowserV8Coverage,
+  type BrowserV8CoverageResourceStore,
+} from './browserV8Coverage';
 import { createHeadedScheduler } from './headedScheduler';
 import { createHeadlessScheduler } from './headlessScheduler';
 import type {
@@ -71,7 +75,6 @@ import {
   type BrowserV8CoverageCollector,
   getBrowserProviderImplementation,
 } from './providers';
-import { takeBrowserV8Coverage } from './browserV8Coverage';
 import {
   type FatalPayload,
   getFileTaskId,
@@ -230,6 +233,30 @@ export const runBrowserController = async (
   );
 
   const browserSourceMapCache = new Map<string, SourceMapPayload | null>();
+  const browserCoverageResources: BrowserV8CoverageResourceStore = {
+    assetFiles: new Map(),
+    sourceMaps: new Map(),
+  };
+
+  const loadBrowserCoverageResources = async (
+    filenames: string[],
+    resource: keyof BrowserV8CoverageResourceStore,
+  ): Promise<Record<string, string>> => {
+    const store = browserCoverageResources[resource];
+    const loaded: Record<string, string> = {};
+    for (const filename of filenames) {
+      const value = store.get(filename);
+      if (value !== undefined) {
+        loaded[filename] = value;
+      }
+    }
+    return loaded;
+  };
+
+  const loadBrowserCoverageAssetFiles = (filenames: string[]) =>
+    loadBrowserCoverageResources(filenames, 'assetFiles');
+  const loadBrowserCoverageSourceMaps = (filenames: string[]) =>
+    loadBrowserCoverageResources(filenames, 'sourceMaps');
 
   const isHttpLikeFile = (file: string): boolean => /^https?:\/\//.test(file);
 
@@ -321,6 +348,7 @@ export const runBrowserController = async (
   const configuredBrowserName =
     browserProjects[0]?.normalizedConfig.browser.browser ?? 'chromium';
   if (
+    context.command !== 'list' &&
     coverageConfig?.provider === 'v8' &&
     configuredBrowserName === 'chromium' &&
     coverageProvider?.supportsBrowserCoverage !== true
@@ -526,7 +554,12 @@ export const runBrowserController = async (
       },
       coverage:
         coverageMap?.files().length || rawCoverage.length
-          ? { map: coverageMap?.toJSON(), raw: rawCoverage }
+          ? {
+              map: coverageMap?.toJSON(),
+              raw: rawCoverage,
+              loadAssetFiles: loadBrowserCoverageAssetFiles,
+              loadSourceMaps: loadBrowserCoverageSourceMaps,
+            }
           : undefined,
       resolveSourcemap: resolveBrowserSourcemap,
     };
@@ -701,6 +734,7 @@ export const runBrowserController = async (
             page,
             rootPath: normalize(projectRoot),
             sourceMapCache: browserSourceMapCache,
+            resourceStore: browserCoverageResources,
           }),
       }
     : undefined;
@@ -1138,6 +1172,8 @@ export const runBrowserController = async (
       (result: TestFileResult) => result.status === 'fail',
     ),
     rawCoverage,
+    loadAssetFiles: loadBrowserCoverageAssetFiles,
+    loadSourceMaps: loadBrowserCoverageSourceMaps,
     getSourcemap: getBrowserSourcemap,
     resolveSourcemap: resolveBrowserSourcemap,
     // `close` is already `undefined` in watch mode: the watch runtime outlives

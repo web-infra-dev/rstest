@@ -285,6 +285,20 @@ export const createHeadlessScheduler = async ({
       crashDeferred.resolve(reason);
     };
 
+    const collectCoverage = async (): Promise<void> => {
+      if (coverageCollected || !page || !v8Coverage) {
+        return;
+      }
+      coverageCollected = true;
+      const coverage = await v8Coverage.take(
+        page,
+        projectRootByName.get(file.projectName) ?? context.rootPath,
+      );
+      if (coverage) {
+        rawCoverage.push(coverage);
+      }
+    };
+
     try {
       page = await browserContext.newPage();
       await v8Coverage?.start(page);
@@ -333,6 +347,7 @@ export const createHeadlessScheduler = async ({
               settled = true;
               const message = `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`;
               try {
+                await collectCoverage();
                 await handleTestFileComplete(
                   createFileCleanupTimeoutResult({
                     message,
@@ -362,15 +377,8 @@ export const createHeadlessScheduler = async ({
             if (settled) {
               return;
             }
-            if (!coverageCollected && message.type === 'file-complete') {
-              coverageCollected = true;
-              const coverage = await v8Coverage?.take(
-                page!,
-                projectRootByName.get(file.projectName) ?? context.rootPath,
-              );
-              if (coverage) {
-                rawCoverage.push(coverage);
-              }
+            if (message.type === 'file-complete' || message.type === 'fatal') {
+              await collectCoverage();
             }
             await dispatchRunnerMessage(run, file, session.id, message);
             if (message.type === 'file-complete') {
@@ -447,11 +455,13 @@ export const createHeadlessScheduler = async ({
         runLifecycle.isTokenActive(run.token) &&
         !run.cancelled
       ) {
+        await collectCoverage();
         await handleFatal({ message: state.reason });
         await cancelRun(run, false);
       }
     } catch (error) {
       if (runLifecycle.isTokenActive(run.token) && !run.cancelled) {
+        await collectCoverage();
         const formatted = toError(error);
         await handleFatal({
           message: formatted.message,

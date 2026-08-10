@@ -9,6 +9,11 @@ import {
   type SourceMapPayload,
 } from './sourceMap/sourceMapLoader';
 
+export type BrowserV8CoverageResourceStore = {
+  assetFiles: Map<string, string>;
+  sourceMaps: Map<string, string>;
+};
+
 const normalizeSourceMap = (
   sourceMap: SourceMapPayload,
   rootPath: string,
@@ -25,7 +30,10 @@ const normalizeSourceMap = (
       }
 
       const sourceUrl = new URL(source);
-      return resolve(rootPath, sourceUrl.pathname.replace(/^\/+/, ''));
+      const sourcePath = sourceUrl.pathname.replace(/^\/+/, '');
+      return sourcePath.startsWith('webpack/runtime/')
+        ? source
+        : resolve(rootPath, sourcePath);
     }),
   });
 };
@@ -35,11 +43,13 @@ export const takeBrowserV8Coverage = async ({
   page,
   rootPath,
   sourceMapCache,
+  resourceStore,
 }: {
   collector: BrowserV8CoverageCollector;
   page: BrowserProviderPage;
   rootPath: string;
   sourceMapCache: Map<string, SourceMapPayload | null>;
+  resourceStore?: BrowserV8CoverageResourceStore;
 }): Promise<unknown | null> => {
   const rawEntries = await collector.take(page);
   const entries: {
@@ -64,7 +74,10 @@ export const takeBrowserV8Coverage = async ({
         filePath: url,
         functions: entry.functions,
       });
-      assetFiles[url] = entry.source;
+      if (resourceStore?.assetFiles.get(url) !== entry.source) {
+        assetFiles[url] = entry.source;
+        resourceStore?.assetFiles.set(url, entry.source);
+      }
 
       const sourceMap = await loadSourceMapWithCache({
         jsUrl: url,
@@ -75,7 +88,13 @@ export const takeBrowserV8Coverage = async ({
         force: true,
       });
       if (sourceMap) {
-        sourceMaps[url] = normalizeSourceMap(sourceMap, rootPath);
+        const normalizedSourceMap = normalizeSourceMap(sourceMap, rootPath);
+        if (resourceStore?.sourceMaps.get(url) !== normalizedSourceMap) {
+          sourceMaps[url] = normalizedSourceMap;
+          resourceStore?.sourceMaps.set(url, normalizedSourceMap);
+        }
+      } else {
+        resourceStore?.sourceMaps.delete(url);
       }
     }),
   );
@@ -86,10 +105,9 @@ export const takeBrowserV8Coverage = async ({
 
   return {
     entries,
-    options: {
-      assetFiles,
-      sourceMaps,
-    },
+    ...(Object.keys(assetFiles).length || Object.keys(sourceMaps).length
+      ? { options: { assetFiles, sourceMaps } }
+      : {}),
     root: rootPath,
   };
 };
