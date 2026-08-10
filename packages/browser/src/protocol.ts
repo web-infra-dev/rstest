@@ -25,6 +25,7 @@ export const RSTEST_CONFIG_MESSAGE_TYPE = 'RSTEST_CONFIG';
 
 export const DISPATCH_NAMESPACE_RUNNER = 'runner';
 export const DISPATCH_NAMESPACE_BROWSER = 'browser';
+export const DISPATCH_NAMESPACE_FILE_CLEANUP = 'file-cleanup';
 export const DISPATCH_NAMESPACE_SNAPSHOT = 'snapshot';
 export const DISPATCH_METHOD_RPC = 'rpc';
 
@@ -50,6 +51,15 @@ export type BrowserProjectRuntime = {
 export type TestFileInfo = {
   testPath: string;
   projectName: string;
+};
+
+export type FileCleanupDispatchMethod = 'start' | 'end';
+
+export type FileCleanupDispatchPayload = {
+  projectName: string;
+  result?: TestFileResult;
+  runId?: string;
+  testPath: string;
 };
 
 /**

@@ -336,5 +336,6 @@ export const SYNTHETIC_STACK_ERROR_MESSAGE = 'STACK_TRACE_ERROR';
 /** Default per-test timeout (ms). Single source for the config default and any
  * downstream fallback. */
 export const DEFAULT_TEST_TIMEOUT = 5_000;
+export const FIXTURE_CLEANUP_TIMEOUT_MS = 10_000;
 
 export const TS_CONFIG_FILE = 'tsconfig.json';

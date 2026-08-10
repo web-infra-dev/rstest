@@ -19,5 +19,5 @@ it('includes hook fixture setup in the hook timeout', async () => {
   expectStderrLog(/Error: afterEach hook timed out in 20ms/);
   expectStderrLog(/Error: beforeEach hook timed out in 30ms/);
   expectStderrLog(/Error: late fixture teardown failed/);
-  expectLog(/Tests 4 failed \| 1 passed/);
+  expectLog(/Tests 5 failed \| 2 passed/);
 });

@@ -26,6 +26,33 @@ const lifecycle: FixtureLifecycle = {
 };
 void lifecycle;
 
+const fileFixtureTest = test
+  .extend('fileBase', { scope: 'file' }, (_context, { onCleanup }) => {
+    onCleanup(() => Promise.resolve());
+    // @ts-expect-error file fixtures do not receive TestContext
+    void _context.task;
+    return { value: 42 };
+  })
+  .extend('fileValue', { scope: 'file' }, ({ fileBase }) => fileBase.value)
+  .extend('testValue', ({ fileValue, task }) => `${task.name}:${fileValue}`);
+
+fileFixtureTest('exposes inferred file fixture types', ({ fileValue }) => {
+  expect(fileValue).toBeTypeOf('number');
+});
+
+// @ts-expect-error file-scoped fixtures cannot be overridden
+fileFixtureTest.extend('fileValue', () => 1);
+
+// @ts-expect-error object fixtures cannot override file-scoped fixtures
+fileFixtureTest.extend({ fileBase: { value: 1 } });
+
+fileFixtureTest.extend(
+  'invalidFile',
+  { scope: 'file' },
+  // @ts-expect-error file-scoped fixtures cannot depend on test-scoped fixtures
+  ({ testValue }) => testValue.length,
+);
+
 const predicate = (value: string) => value.length > 0;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 const broadlyTypedFunction: Function = predicate;
@@ -96,5 +123,5 @@ const checkNamedFixtureNameTypes = (
 };
 void checkNamedFixtureNameTypes;
 
-// @ts-expect-error fixture options are not part of the named fixture form
+// @ts-expect-error named fixture options must select file scope
 test.extend('value', {}, 'value');
