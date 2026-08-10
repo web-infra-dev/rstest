@@ -42,7 +42,7 @@ import {
   createRunnerLifecycleRequest,
   dispatchRpc,
   getRpcTimeout,
-  sendRunnerLifecycle,
+  sendDispatchRequest,
 } from './dispatchTransport';
 import { BrowserSnapshotEnvironment } from './snapshot';
 import {
@@ -233,7 +233,7 @@ const dispatchRunnerLifecycle = (
   method: RunnerLifecycleMethod,
   payload: unknown,
 ): void => {
-  sendRunnerLifecycle(
+  sendDispatchRequest(
     createRunnerLifecycleRequest(method, payload),
     (error: unknown) => {
       debugLog('[Runner] Failed to dispatch lifecycle method:', method, error);
@@ -668,21 +668,29 @@ const run = async () => {
     const dispatchFileCleanup = async (
       method: FileCleanupDispatchMethod,
       result?: FileCleanupDispatchPayload['result'],
+      waitForAcknowledgement = true,
     ): Promise<void> => {
       const requestId = createRequestId(`file-cleanup-${method}`);
+      const request = {
+        requestId,
+        namespace: DISPATCH_NAMESPACE_FILE_CLEANUP,
+        method,
+        args: {
+          projectName: projectRuntime.name,
+          result,
+          runId: options.runId,
+          testPath,
+        } satisfies FileCleanupDispatchPayload,
+      };
+
+      if (!waitForAcknowledgement) {
+        sendDispatchRequest(request);
+        return;
+      }
+
       await dispatchRpc<void>({
         requestId,
-        request: {
-          requestId,
-          namespace: DISPATCH_NAMESPACE_FILE_CLEANUP,
-          method,
-          args: {
-            projectName: projectRuntime.name,
-            result,
-            runId: options.runId,
-            testPath,
-          } satisfies FileCleanupDispatchPayload,
-        },
+        request,
         timeoutMs: getRpcTimeout(),
         timeoutMessage: `File cleanup ${method} acknowledgement timed out for ${testPath}.`,
         staleMessage: `File cleanup ${method} became stale for ${testPath}.`,
@@ -694,9 +702,10 @@ const run = async () => {
         if (result && globalThis.__coverage__) {
           result.coverage = globalThis.__coverage__ as CoverageMapData;
         }
-        await dispatchFileCleanup('start', result);
+        await dispatchFileCleanup('start', result, window.parent !== window);
       },
-      onFileCleanupEnd: () => dispatchFileCleanup('end'),
+      onFileCleanupEnd: () =>
+        dispatchFileCleanup('end', undefined, window.parent !== window),
       onTestFileReady: async (test) => {
         dispatchRunnerLifecycle('file-ready', test);
       },
