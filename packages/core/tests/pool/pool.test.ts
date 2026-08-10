@@ -74,6 +74,25 @@ describe('Pool - basic', () => {
       await pool.close();
     }
   });
+
+  it('preserves Buffer assets over advanced IPC', async () => {
+    const pool = new Pool(createPoolOptions());
+    try {
+      const result = await pool.runTest(
+        createTask('run', {
+          __testMode: 'asset-transport',
+          assets: {
+            assetFiles: { '/asset.bin': Buffer.from([0, 0xff, 0x80, 0x41]) },
+            sourceMaps: {},
+          },
+        }),
+      );
+      expect((result as any)._assetConstructor).toBe('Buffer');
+      expect((result as any)._assetBytes).toEqual([0, 0xff, 0x80, 0x41]);
+    } finally {
+      await pool.close();
+    }
+  });
 });
 
 describe('Pool - environment prebundle fallback', () => {

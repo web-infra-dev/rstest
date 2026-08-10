@@ -178,7 +178,7 @@ export async function runBrowserGlobalSetupStage(
     project: ProjectContext;
     entryCount: number;
     globalSetupEntries: EntryInfo[];
-    assetFiles: Record<string, string>;
+    assetFiles: Record<string, Buffer>;
     sourceMaps: Record<string, string>;
   }[];
   try {

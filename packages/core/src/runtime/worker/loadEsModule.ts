@@ -3,6 +3,8 @@ import { createRequire as createNativeRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm, { type SourceTextModule } from 'node:vm';
 import path from 'pathe';
+import type { AssetFiles } from '../../types/worker';
+import { getAssetText } from '../../utils/assetFiles';
 import { logger } from '../../utils/logger';
 import { clearCacheCleaners, clearSyntheticModuleCache } from './interop';
 import {
@@ -54,7 +56,7 @@ const defineRstestRequireResolve =
   }: {
     testPath: string;
     distPath: string;
-    assetFiles: Record<string, string>;
+    assetFiles: AssetFiles;
   }) =>
   (
     specifier: string,
@@ -75,7 +77,7 @@ const defineRstestRequireResolve =
       joinedPath.startsWith('file://') ? fileURLToPath(joinedPath) : joinedPath,
     );
 
-    if (assetFiles[normalizedPath]) {
+    if (assetFiles[normalizedPath] !== undefined) {
       return normalizedPath;
     }
 
@@ -93,7 +95,7 @@ const defineRstestDynamicImport =
     runtimeDistPath,
   }: {
     esmMode: EsmMode;
-    assetFiles: Record<string, string>;
+    assetFiles: AssetFiles;
     returnModule?: boolean;
     distPath: string;
     runtimeDistPath?: string;
@@ -114,8 +116,6 @@ const defineRstestDynamicImport =
       joinedPath.startsWith('file://') ? fileURLToPath(joinedPath) : joinedPath,
     );
 
-    const content = assetFiles[normalizedPath];
-
     // `.wasm` always resolves to an on-disk source file (wasmLoader.mjs rewrites
     // direct imports; `new URL(...)` resolves source-relative, #1455). Resolve
     // against the source origin — like the CJS loader and the dynamic
@@ -135,10 +135,10 @@ const defineRstestDynamicImport =
       }
     }
 
-    if (content) {
+    if (assetFiles[normalizedPath] !== undefined) {
       try {
         return await loadModule({
-          codeContent: content,
+          codeContent: getAssetText(assetFiles, normalizedPath),
           testPath,
           distPath: joinedPath,
           runtimeDistPath,
@@ -172,7 +172,7 @@ const esmCache = new Map<string, SourceTextModule>();
 // Paths are globally unique per build, so merging never collides; the map is
 // reset only on a full `clearModuleCache`.
 // See https://github.com/web-infra-dev/rstest/issues/1373.
-const accumulatedAssetFiles: Record<string, string> = {};
+const accumulatedAssetFiles: AssetFiles = {};
 
 // Every shared runtime chunk this (possibly reused) worker has loaded under
 // `isolate: false`. The pool has no environment affinity — with multiple node
@@ -200,7 +200,7 @@ export const loadModule = async ({
   runtimeDistPath?: string;
   testPath: string;
   rstestContext: Record<string, any>;
-  assetFiles: Record<string, string>;
+  assetFiles: AssetFiles;
 }): Promise<any> => {
   // Fold this file's assets into the persistent map. Recursive loads (dynamic
   // imports) re-pass that same map, so skip the no-op self-merge.
