@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import fs from 'fs-extra';
-import { runRstestCli } from '../scripts';
+import { getCoverageSummaryEntry, runRstestCli } from '../scripts';
 import { coverageProviders } from './providers';
 
 const configByProvider = {
@@ -67,7 +67,10 @@ for (const provider of coverageProviders) {
         Record<string, { total: number; covered: number }>
       > = fs.readJsonSync(join(reportPath, 'coverage-summary.json'));
       expect(
-        coverageSummary[join(__dirname, 'fixtures/src/untested.jsx')],
+        getCoverageSummaryEntry(
+          coverageSummary,
+          join(__dirname, 'fixtures/src/untested.jsx'),
+        ),
       ).toMatchObject({
         lines: { covered: 0 },
         statements: { covered: 0 },
@@ -79,7 +82,10 @@ for (const provider of coverageProviders) {
         const sourcePath = join(__dirname, 'fixtures/v8/include/src');
 
         expect(
-          coverageSummary[join(sourcePath, 'types-only.ts')],
+          getCoverageSummaryEntry(
+            coverageSummary,
+            join(sourcePath, 'types-only.ts'),
+          ),
         ).toMatchObject({
           lines: { total: 0, covered: 0 },
           statements: { total: 0, covered: 0 },
@@ -87,7 +93,10 @@ for (const provider of coverageProviders) {
           branches: { total: 0, covered: 0 },
         });
         expect(
-          coverageSummary[join(sourcePath, 'uncovered-mixed.ts')],
+          getCoverageSummaryEntry(
+            coverageSummary,
+            join(sourcePath, 'uncovered-mixed.ts'),
+          ),
         ).toMatchObject({
           lines: { total: 1, covered: 0 },
           statements: { total: 1, covered: 0 },
@@ -95,7 +104,10 @@ for (const provider of coverageProviders) {
           branches: { total: 0, covered: 0 },
         });
         expect(
-          coverageSummary[join(sourcePath, 'type-assertion.ts')],
+          getCoverageSummaryEntry(
+            coverageSummary,
+            join(sourcePath, 'type-assertion.ts'),
+          ),
         ).toMatchObject({
           lines: { total: 1, covered: 0 },
           statements: { total: 1, covered: 0 },

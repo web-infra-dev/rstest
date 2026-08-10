@@ -3,7 +3,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import fs from 'fs-extra';
-import { parseMarkerPayload, runRstestCli } from '../scripts';
+import {
+  getCoverageSummaryEntry,
+  parseMarkerPayload,
+  runRstestCli,
+} from '../scripts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -230,9 +234,12 @@ describe('merge-reports', () => {
     const coverageSummary = fs.readJsonSync(
       join(coverageDir, 'coverage-summary.json'),
     ) as Record<string, Record<string, { total: number; covered: number }>>;
-    for (const file of ['untested.ts', 'untested.jsx']) {
+    for (const file of ['decorators.js', 'untested.ts', 'untested.jsx']) {
       expect(
-        coverageSummary[join(fixturesDir, 'istanbul-src', file)],
+        getCoverageSummaryEntry(
+          coverageSummary,
+          join(fixturesDir, 'istanbul-src', file),
+        ),
       ).toMatchObject({
         lines: { covered: 0 },
         statements: { covered: 0 },
@@ -290,7 +297,10 @@ describe('merge-reports', () => {
       join(coverageDir, 'coverage-summary.json'),
     ) as Record<string, Record<string, { total: number; covered: number }>>;
     expect(
-      coverageSummary[join(fixturesDir, 'v8-src/types-only.ts')],
+      getCoverageSummaryEntry(
+        coverageSummary,
+        join(fixturesDir, 'v8-src/types-only.ts'),
+      ),
     ).toMatchObject({
       lines: { total: 0, covered: 0 },
       statements: { total: 0, covered: 0 },
@@ -298,12 +308,26 @@ describe('merge-reports', () => {
       branches: { total: 0, covered: 0 },
     });
     expect(
-      coverageSummary[join(fixturesDir, 'v8-src/untested.ts')],
+      getCoverageSummaryEntry(
+        coverageSummary,
+        join(fixturesDir, 'v8-src/untested.ts'),
+      ),
     ).toMatchObject({
       lines: { total: 1, covered: 0 },
-      statements: { total: 1, covered: 0 },
+      statements: { total: 2, covered: 0 },
       functions: { total: 1, covered: 0 },
       branches: { total: 0, covered: 0 },
+    });
+    expect(
+      getCoverageSummaryEntry(
+        coverageSummary,
+        join(fixturesDir, 'v8-src/decorators.js'),
+      ),
+    ).toMatchObject({
+      lines: { covered: 0 },
+      statements: { covered: 0 },
+      functions: { covered: 0 },
+      branches: { covered: 0 },
     });
 
     fs.removeSync(coverageDir);

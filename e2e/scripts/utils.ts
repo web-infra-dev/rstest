@@ -1,4 +1,15 @@
 import fs from 'node:fs';
+import { normalize } from 'pathe';
+
+export const getCoverageSummaryEntry = <T>(
+  summary: Record<string, T>,
+  filePath: string,
+): T | undefined => {
+  const normalizedFilePath = normalize(filePath);
+  return Object.entries(summary).find(
+    ([reportedPath]) => normalize(reportedPath) === normalizedFilePath,
+  )?.[1];
+};
 
 export const getTestName = (log: string, prefix: string) =>
   log.slice(0, log.lastIndexOf('(')).split(prefix)[1]!.trim();
