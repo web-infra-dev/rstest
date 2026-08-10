@@ -1,14 +1,5 @@
-import type {
-  RstestContext,
-  TestFileResult,
-  TestResult,
-} from '@rstest/core/internal/browser';
-import {
-  color,
-  createFileCleanupTimeoutResult,
-  FIXTURE_CLEANUP_TIMEOUT_MS,
-  logger,
-} from '@rstest/core/internal/browser';
+import type { RstestContext } from '@rstest/core/internal/browser';
+import { color, logger } from '@rstest/core/internal/browser';
 import { normalize, relative } from 'pathe';
 import {
   type BrowserRuntime,
@@ -16,23 +7,17 @@ import {
 } from './browserRsbuild';
 import { ContainerRpcManager, type HostRpcMethods } from './containerRpc';
 import type { HostDispatchRouter } from './dispatchRouter';
+import { createHeadedRunRegistry } from './headedRunRegistry';
 import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
-import { createHeadedReloadTracker } from './headedReloadTracker';
-import {
-  type FatalPayload,
-  type HeadedTestFileCompletePayload,
-  type LogPayload,
-  type ReloadTestFileAck,
-  type TestFileStartPayload,
-  toError,
-} from './hostPayloads';
+import { type FatalPayload, toError } from './hostPayloads';
 import type {
   BrowserDispatchRequest,
+  BrowserDispatchResponse,
   BrowserHostConfig,
   FileCleanupDispatchPayload,
   TestFileInfo,
 } from './protocol';
-import { DISPATCH_NAMESPACE_FILE_CLEANUP } from './protocol';
+import { DISPATCH_NAMESPACE_RUNNER } from './protocol';
 import type { BrowserProviderContext, BrowserProviderPage } from './providers';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import type {
@@ -59,18 +44,8 @@ type HeadedSchedulerDeps = {
   projectRoots: Map<string, string>;
   isWatchMode: boolean;
   createDispatchRouter: () => HostDispatchRouter;
-  handlers: {
-    handleTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
-    handleTestCaseResult: (payload: TestResult) => Promise<void>;
-    handleTestFileComplete: (payload: TestFileResult) => Promise<void>;
-    handleLog: (payload: LogPayload) => Promise<void>;
-    handleFatal: (payload: FatalPayload) => Promise<void>;
-  };
   fatalErrorRef: { current: Error | null };
-  watchSignals: Pick<
-    WatchSignals,
-    'setDispatchRerun' | 'signalInvalidation' | 'awaitSignalledCycle'
-  >;
+  watchSignals: Pick<WatchSignals, 'setDispatchRerun' | 'signalInvalidation'>;
   setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
   createWatchSession: (
     execute: (testPaths: string[]) => Promise<unknown[]>,
@@ -132,13 +107,6 @@ export const createHeadedScheduler = async ({
   projectRoots,
   isWatchMode,
   createDispatchRouter,
-  handlers: {
-    handleTestFileStart,
-    handleTestCaseResult,
-    handleTestFileComplete,
-    handleLog,
-    handleFatal,
-  },
   fatalErrorRef,
   watchSignals,
   setDispatchPageResolver,
@@ -157,72 +125,57 @@ export const createHeadedScheduler = async ({
   // config (config-wait) before the host declares its frames un-ready, i.e.
   // CONFIG_WAIT_TIMEOUT_MS <= RUNNER_FRAMES_READY_TIMEOUT_MS.
   const RUNNER_FRAMES_READY_TIMEOUT_MS = 30_000;
-  let currentRunnerFramesSignature: string | null = null;
-  const runnerFramesWaiters = new Map<string, Set<() => void>>();
 
-  const createTestFilesSignature = (testFiles: readonly string[]): string => {
-    return JSON.stringify(testFiles.map((testFile) => normalize(testFile)));
+  // The committed file set's monotonic version, acked by the container once
+  // its frame set for that version is in the DOM. A counter only increases,
+  // so a stale ack can never satisfy a newer wait (the content signature it
+  // replaces could ABA back to a previously-acked value).
+  let fileSetVersion = 1;
+  let ackedFrameSetVersion = 0;
+  type FrameSetWaiter = {
+    version: number;
+    resolve: () => void;
+    timeoutId: NodeJS.Timeout;
   };
+  const frameSetWaiters = new Set<FrameSetWaiter>();
 
-  const markRunnerFramesReady = (testFiles: string[]): void => {
-    const signature = createTestFilesSignature(testFiles);
-    currentRunnerFramesSignature = signature;
-    const waiters = runnerFramesWaiters.get(signature);
-    if (!waiters) {
+  const markFrameSetReady = (version: number): void => {
+    // An ack above anything this scheduler ever sent can only be a previous
+    // session's late echo on the reused socket — accepting it would let every
+    // future wait short-circuit.
+    if (version > fileSetVersion) {
       return;
     }
-    runnerFramesWaiters.delete(signature);
-    for (const waiter of waiters) {
-      waiter();
+    if (version > ackedFrameSetVersion) {
+      ackedFrameSetVersion = version;
     }
-  };
-
-  const waitForRunnerFramesReady = async (
-    testFiles: readonly string[],
-  ): Promise<void> => {
-    const signature = createTestFilesSignature(testFiles);
-    if (currentRunnerFramesSignature === signature) {
-      return;
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      const waiters =
-        runnerFramesWaiters.get(signature) ?? new Set<() => void>();
-
-      const cleanup = () => {
-        const currentWaiters = runnerFramesWaiters.get(signature);
-        if (!currentWaiters) {
-          return;
-        }
-        currentWaiters.delete(onReady);
-        if (currentWaiters.size === 0) {
-          runnerFramesWaiters.delete(signature);
-        }
-      };
-
-      const onReady = () => {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
-        cleanup();
-        resolve();
-      };
-
-      const timeoutId = setTimeout(() => {
-        cleanup();
-        reject(
-          new Error(
-            `Timed out waiting for headed runner frames to be ready for ${testFiles.length} file(s).`,
-          ),
-        );
-      }, RUNNER_FRAMES_READY_TIMEOUT_MS);
-
-      waiters.add(onReady);
-      runnerFramesWaiters.set(signature, waiters);
-
-      if (currentRunnerFramesSignature === signature) {
-        onReady();
+    for (const waiter of frameSetWaiters) {
+      if (waiter.version <= ackedFrameSetVersion) {
+        clearTimeout(waiter.timeoutId);
+        frameSetWaiters.delete(waiter);
+        waiter.resolve();
       }
+    }
+  };
+
+  const waitForFrameSet = async (version: number): Promise<void> => {
+    if (ackedFrameSetVersion >= version) {
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      const waiter: FrameSetWaiter = {
+        version,
+        resolve,
+        timeoutId: setTimeout(() => {
+          frameSetWaiters.delete(waiter);
+          reject(
+            new Error(
+              `Timed out waiting for headed runner frames to be ready (file-set version ${version}).`,
+            ),
+          );
+        }, RUNNER_FRAMES_READY_TIMEOUT_MS),
+      };
+      frameSetWaiters.add(waiter);
     });
   };
 
@@ -324,38 +277,31 @@ export const createHeadedScheduler = async ({
   const isCurrentTestFile = (testPath: string): boolean =>
     findTestFileInfo(testPath) !== undefined;
 
-  // The settlement contract — every pending must be settled by exactly one
-  // owner — lives in the tracker, not here. New host actions that can strand
-  // a runner belong there.
-  const headedReloads = createHeadedReloadTracker(isCurrentTestFile);
+  // The settlement contract — every run settles exactly once, and any host
+  // action that makes a completion impossible settles it — lives in the
+  // registry. It survives controller re-entry on the runtime's watch state,
+  // so a re-entering scheduler cannot orphan the previous entry's runs.
+  const runs = (watchState.headedRuns ??= createHeadedRunRegistry());
 
   // No execution-duration watchdog: per-test/hook timeouts are enforced inside
   // the runner, a dead container is caught event-driven by the WebSocket
-  // `close` handler, and a host action that makes a completion impossible
-  // settles the pending itself (`headedReloads.reconcile`).
+  // `close` handler / transport epoch, and a host action that makes a
+  // completion impossible settles the run itself (`runs.retainPaths`).
   const reloadTestFileAndWait = async (
     file: TestFileInfo,
     testNamePattern?: string,
   ): Promise<void> => {
-    let reloadAck: ReloadTestFileAck | undefined;
-
+    // Mint + register are one synchronous step BEFORE the RPC leaves the
+    // process: no file-set commit or inbound message can land between "the
+    // run exists on the wire" and "the registry owns it".
+    const { runId, settled } = runs.mint(file.testPath);
     try {
-      await v8Coverage?.start(containerPage);
-      coverageStarted = Boolean(v8Coverage);
-      reloadAck = await rpcManager.reloadTestFile(
-        file.testPath,
-        testNamePattern,
-      );
-      await headedReloads.register(file.testPath, reloadAck.runId);
+      await rpcManager.reloadTestFile(file.testPath, runId, testNamePattern);
     } catch (error) {
-      if (reloadAck?.runId) {
-        headedReloads.reject(file.testPath, toError(error), reloadAck.runId);
-      }
-      if (coverageStarted) {
-        await collectCoverage(file.projectName);
-      }
+      runs.reject(runId, error);
       throw error;
     }
+    await settled;
   };
 
   // The in-page rerun button is a watch trigger like any other, so once the
@@ -368,6 +314,14 @@ export const createHeadedScheduler = async ({
   ): Promise<void> => {
     await enqueueHeadedReload(file, testNamePattern);
   };
+
+  const staleDispatchResponse = (
+    request: BrowserDispatchRequest,
+  ): BrowserDispatchResponse => ({
+    requestId: request.requestId,
+    runId: request.runId,
+    stale: true,
+  });
 
   // Create RPC methods that can access test state variables
   const createRpcMethods = (): HostRpcMethods => ({
@@ -383,52 +337,72 @@ export const createHeadedScheduler = async ({
       await runUiRequestedRerun(getTestFileInfo(testFile), testNamePattern);
     },
     async getTestFiles() {
-      return currentTestFiles;
+      return { files: currentTestFiles, version: fileSetVersion };
     },
-    async onRunnerFramesReady(testFiles: string[]) {
-      markRunnerFramesReady(testFiles);
+    async onFrameSetReady(version: number) {
+      markFrameSetReady(version);
     },
-    async onTestFileStart(payload: TestFileStartPayload) {
-      await handleTestFileStart(payload);
+    async onRunAbandoned(testFile: string, runId: string, reason: string) {
+      logger.debug(
+        `[Browser UI] Run ${runId} for ${testFile} abandoned: ${reason}`,
+      );
+      runs.reject(
+        runId,
+        new Error(`Headed run for ${testFile} was abandoned: ${reason}`),
+      );
     },
-    async onTestCaseResult(payload: TestResult) {
-      await handleTestCaseResult(payload);
-    },
-    async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
-      // Already settled as obsolete when its file left the set — see the
-      // tombstone contract in `headedReloadTracker`.
-      if (headedReloads.isObsolete(payload.testPath, payload.runId)) {
-        logger.debug(
-          `[Browser UI] Dropping late file-complete for removed test file: ${payload.testPath}`,
-        );
-        return;
-      }
-      // Claim before the first await: the handler below settles this pending
-      // either way, so from here nothing else may.
-      headedReloads.claimCompletion(payload.testPath, payload.runId);
-      try {
-        const projectName = pendingHeadedReloads.get(payload.testPath)?.file
-          .projectName;
-        await collectCoverage(projectName);
-        await handleTestFileComplete(payload);
-        headedReloads.resolve(payload.testPath, payload.runId);
-      } catch (error) {
-        headedReloads.reject(payload.testPath, toError(error), payload.runId);
-        throw error;
-      }
-    },
-    async onLog(payload: LogPayload) {
-      await handleLog(payload);
-    },
-    async onFatal(payload: FatalPayload) {
-      const error = new Error(payload.message);
-      error.stack = payload.stack;
-      headedReloads.rejectAll(error);
-      await handleFatal(payload);
-    },
+    /**
+     * The ONE inbound gate for everything a runner document produces. A
+     * message is accepted iff its stamped runId names a live run — path
+     * lookups, frame lookups and fallback identities do not exist here, so a
+     * completion already in transport when its run was closed simply finds
+     * its runId gone and drops.
+     *
+     * The terminal methods ("file-complete", "fatal") also settle the run:
+     * the claim happens synchronously before the handler's first await, so a
+     * file-set commit racing the handler cannot settle it a second time. A
+     * handler failure rejects the run — `dispatchRouter.dispatch` catches
+     * handler errors into `response.error` rather than throwing, and a
+     * reporter/snapshot-ingest failure must ride the cycle outcome, not
+     * vanish into a response the runner discards.
+     */
     async dispatch(request: BrowserDispatchRequest) {
-      // Headed/container path now shares the same dispatch contract as headless.
-      return dispatchRouter.dispatch(request);
+      const { method, runId } = request;
+      if (request.namespace !== DISPATCH_NAMESPACE_RUNNER) {
+        // browser/snapshot RPCs carry the same document identity; a request
+        // from a run that is no longer live gets a stale response instead of
+        // touching host state.
+        if (!runId || !runs.has(runId)) {
+          return staleDispatchResponse(request);
+        }
+        return dispatchRouter.dispatch(request);
+      }
+      const isTerminal = method === 'file-complete' || method === 'fatal';
+      if (!runId || (isTerminal ? !runs.claim(runId) : !runs.has(runId))) {
+        logger.debug(
+          `[Headed] Dropped stale "${method}" from run ${runId ?? '(none)'}`,
+        );
+        return staleDispatchResponse(request);
+      }
+      const response = await dispatchRouter.dispatch(request);
+      if (method === 'file-complete') {
+        if (response.error) {
+          runs.reject(runId, new Error(response.error));
+        } else {
+          runs.resolve(runId);
+        }
+      } else if (method === 'fatal') {
+        // A fatal settles its OWN run; sibling runs and the watch session
+        // survive. The cycle still fails through `fatalErrorRef`, which the
+        // routed handler just set.
+        const payload = request.args as FatalPayload | undefined;
+        const error = new Error(payload?.message ?? 'Fatal browser error');
+        if (payload?.stack) {
+          error.stack = payload.stack;
+        }
+        runs.reject(runId, error);
+      }
+      return response;
     },
   });
 
@@ -438,7 +412,11 @@ export const createHeadedScheduler = async ({
   if (isWatchMode && runtime.rpcManager) {
     rpcManager = runtime.rpcManager;
     // Update methods with new test state (caseResults, completedTests, etc.)
-    rpcManager.updateMethods(createRpcMethods(), headedReloads.rejectAll);
+    rpcManager.updateMethods(
+      createRpcMethods(),
+      runs.rejectAll,
+      runs.setTransportEpoch,
+    );
     // Reattach if we have an existing WebSocket
     const existingWs = rpcManager.currentWebSocket;
     if (existingWs) {
@@ -448,7 +426,8 @@ export const createHeadedScheduler = async ({
     rpcManager = new ContainerRpcManager(
       wss,
       createRpcMethods(),
-      headedReloads.rejectAll,
+      runs.rejectAll,
+      runs.setTransportEpoch,
     );
 
     if (isWatchMode) {
@@ -474,10 +453,10 @@ export const createHeadedScheduler = async ({
         return;
       }
       // `claimHeadedCycleScope` checks membership once per cycle, but the queue
-      // spans cycles and `dispatchRerun` commits a new set between them.
-      // Reloading a file that has no iframe left throws "iframe not found" out
-      // of an innocent cycle. (The set can change again during the reload
-      // itself; `headedReloads.register` covers that.)
+      // spans cycles and `dispatchRerun` commits a new set between them —
+      // granting a run to a file whose frame is gone would only burn the boot
+      // deadline. (The set can change again during the reload itself;
+      // `runs.retainPaths` settles that run at the commit.)
       if (!isCurrentTestFile(file.testPath)) {
         logger.debug(
           `[Browser UI] Skipping reload for removed test file: ${file.testPath}`,
@@ -492,9 +471,13 @@ export const createHeadedScheduler = async ({
   if (currentTestFiles.length > 0) {
     const testStart = Date.now();
     try {
-      await waitForRunnerFramesReady(
-        currentTestFiles.map((file) => file.testPath),
-      );
+      // A container connected before this scheduler existed (controller
+      // re-entry on the persistent runtime) never re-pulls `getTestFiles`, so
+      // push the set — the commit effect acks the version either way.
+      if (rpcManager.isConnected) {
+        await rpcManager.notifyTestFileUpdate(currentTestFiles, fileSetVersion);
+      }
+      await waitForFrameSet(fileSetVersion);
 
       for (const file of currentTestFiles) {
         await enqueueHeadedReload(file);
@@ -566,62 +549,97 @@ export const createHeadedScheduler = async ({
       await rpcManager.updateHostConfig(refreshedHostOptions);
     };
 
-    watchSignals.setDispatchRerun(async () => {
-      // Independent: config push to the container vs. local entry collection.
-      const [, newProjectEntries] = await Promise.all([
-        refreshHostConfig(),
-        collectProjectEntries(),
-      ]);
-      const rerunPlan = planWatchRerun({
-        projectEntries: newProjectEntries,
-        previousTestFiles: watchState.lastTestFiles,
-        affectedTestFiles: drainPendingAffectedTestFiles(watchState),
-      });
+    const runDispatchRerunOnce = async (): Promise<void> => {
+      // Exactly one of `signalInvalidation` / `logWatchReady` must run on
+      // every exit path: a rejection escaping after the file-set commit (for
+      // example the frame-set wait timing out) would otherwise leave watch
+      // committed but never signalled — silently dead, with no error and no
+      // disconnect to show for it.
+      let outcomeSettled = false;
+      try {
+        // Independent: config push to the container vs. local entry collection.
+        const [, newProjectEntries] = await Promise.all([
+          refreshHostConfig(),
+          collectProjectEntries(),
+        ]);
+        const rerunPlan = planWatchRerun({
+          projectEntries: newProjectEntries,
+          previousTestFiles: watchState.lastTestFiles,
+          affectedTestFiles: drainPendingAffectedTestFiles(watchState),
+        });
 
-      commitWatchFileSetUpdate(
-        rerunPlan.fileSetUpdate,
-        watchState,
-        (deletedTestPaths) =>
-          context.updateReporterResultState([], [], deletedTestPaths),
-      );
+        commitWatchFileSetUpdate(
+          rerunPlan.fileSetUpdate,
+          watchState,
+          (deletedTestPaths) =>
+            context.updateReporterResultState([], [], deletedTestPaths),
+        );
 
-      if (rerunPlan.fileSetUpdate) {
-        currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
-        // Must run before the container is told: `notifyTestFileUpdate` is
-        // what unmounts the dropped iframes.
-        headedReloads.reconcile();
-        await rpcManager.notifyTestFileUpdate(currentTestFiles);
-        if (currentTestFiles.length > 0) {
-          await waitForRunnerFramesReady(
-            currentTestFiles.map((file) => file.testPath),
+        if (rerunPlan.fileSetUpdate) {
+          currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
+          fileSetVersion += 1;
+          // Must run before the container is told: `notifyTestFileUpdate` is
+          // what unmounts the dropped iframes, and their runs must already be
+          // settled (and out of the registry) when that happens.
+          runs.retainPaths(currentTestFiles.map((file) => file.testPath));
+          await rpcManager.notifyTestFileUpdate(
+            currentTestFiles,
+            fileSetVersion,
           );
+          if (currentTestFiles.length > 0) {
+            await waitForFrameSet(fileSetVersion);
+          }
+        }
+
+        logger.log(color.cyan(rerunPlan.decision.message));
+        if (rerunPlan.decision.kind === 'idle') {
+          logWatchReady();
+          outcomeSettled = true;
+          return;
+        }
+
+        await watchSignals.signalInvalidation(
+          rerunPlan.decision.kind === 'empty'
+            ? []
+            : rerunPlan.decision.testPaths,
+        );
+        outcomeSettled = true;
+      } finally {
+        if (!outcomeSettled) {
+          logWatchReady();
         }
       }
+    };
 
-      logger.log(color.cyan(rerunPlan.decision.message));
-      if (rerunPlan.decision.kind === 'idle') {
-        logWatchReady();
-        return;
-      }
-
-      await watchSignals.signalInvalidation(
-        rerunPlan.decision.kind === 'empty' ? [] : rerunPlan.decision.testPaths,
-      );
+    // Serialized against itself: each per-project compiler fires its own
+    // `onAfterDevCompile`, and two interleaved planning passes would race on
+    // the drain-once affected set and the file-set commit.
+    let dispatchRerunChain: Promise<void> = Promise.resolve();
+    watchSignals.setDispatchRerun(() => {
+      const task = dispatchRerunChain.then(runDispatchRerunOnce);
+      dispatchRerunChain = task.catch(() => {});
+      return task;
     });
 
     runUiRequestedRerun = async (file, testNamePattern) => {
       await refreshHostConfig();
-      await watchSignals.signalInvalidation([file.testPath], () => {
-        if (testNamePattern === undefined) {
-          pendingTestNamePatterns.delete(normalize(file.testPath));
-        } else {
-          pendingTestNamePatterns.set(
-            normalize(file.testPath),
-            testNamePattern,
-          );
-        }
-      });
-      await watchSignals.awaitSignalledCycle();
+      const { cycle } = await watchSignals.signalInvalidation(
+        [file.testPath],
+        () => {
+          if (testNamePattern === undefined) {
+            pendingTestNamePatterns.delete(normalize(file.testPath));
+          } else {
+            pendingTestNamePatterns.set(
+              normalize(file.testPath),
+              testNamePattern,
+            );
+          }
+        },
+      );
+      // Await the cycle THIS signal started — not whichever signal last wrote
+      // the shared slot, which a concurrent rebuild trigger can overwrite
+      // between the signal and the wait.
+      await cycle;
     };
 
     watchSession = createWatchSession(runScope);

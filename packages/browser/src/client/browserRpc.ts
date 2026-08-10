@@ -6,6 +6,7 @@ import {
   dispatchRpc,
   getRpcTimeout,
 } from './dispatchTransport';
+import { getRunIdentity } from './runIdentity';
 
 const getUrlSearchParam = (name: string): string | undefined => {
   try {
@@ -30,12 +31,14 @@ const getCurrentTestPath = (): string => {
 };
 
 const getCurrentRunId = (): string => {
-  const runId =
-    window.__RSTEST_BROWSER_OPTIONS__?.runId ?? getUrlSearchParam('runId');
+  // The handshake-adopted identity, with the raw config value as the pre-adopt
+  // fallback — both name the same run. Never the URL: after an HMR full reload
+  // the URL still names the run this frame was originally navigated for.
+  const runId = getRunIdentity() ?? window.__RSTEST_BROWSER_OPTIONS__?.runId;
   if (!runId) {
     throw new Error(
       'Browser RPC requires runId in __RSTEST_BROWSER_OPTIONS__. ' +
-        'This usually indicates the runner iframe URL/config is stale or incomplete.',
+        'This usually indicates the runner iframe config is stale or incomplete.',
     );
   }
   return runId;

@@ -1,6 +1,7 @@
 import type {
   BrowserDispatchRequest,
   BrowserDispatchResponse,
+  RunnerEnvelope,
 } from '../protocol';
 import {
   DISPATCH_MESSAGE_TYPE,
@@ -9,6 +10,7 @@ import {
   DISPATCH_RPC_BRIDGE_NAME,
   DISPATCH_RPC_REQUEST_TYPE,
 } from '../protocol';
+import { getRunIdentity } from './runIdentity';
 
 // Coincidentally equal to the host-side RUNNER_FRAMES_READY_TIMEOUT_MS and the
 // runner's CONFIG_WAIT_TIMEOUT_MS (runner.ts), but a semantically distinct
@@ -69,10 +71,40 @@ export const createRunnerLifecycleRequest = (
  * only through the optional `onError` hook (debug logging at the call site),
  * keeping the hot test loop non-blocking.
  */
-export const sendDispatchRequest = (
+/**
+ * Stamp the document's run identity on an outbound dispatch request. Applied
+ * at the transport boundary so every namespace (runner lifecycle, browser,
+ * snapshot) carries it uniformly — the headed host accepts a request iff this
+ * names a live run. Headless routing ignores it (identity there is the
+ * host-injected `runToken`).
+ */
+const stampRunIdentity = (
+  request: BrowserDispatchRequest,
+): BrowserDispatchRequest => {
+  return { ...request, runId: request.runId ?? getRunIdentity() };
+};
+
+/** Wrap a dispatch request in the identity envelope for the container relay. */
+const toEnvelopeMessage = (
+  request: BrowserDispatchRequest,
+): { type: typeof DISPATCH_MESSAGE_TYPE; payload: RunnerEnvelope } => {
+  return {
+    type: DISPATCH_MESSAGE_TYPE,
+    payload: {
+      runId: getRunIdentity(),
+      message: {
+        type: DISPATCH_RPC_REQUEST_TYPE,
+        payload: request,
+      },
+    },
+  };
+};
+
+export const sendRunnerLifecycle = (
   request: BrowserDispatchRequest,
   onError?: (error: unknown) => void,
 ): void => {
+  const stamped = stampRunIdentity(request);
   if (window.parent === window) {
     const dispatchBridge = window[DISPATCH_RPC_BRIDGE_NAME];
     if (!dispatchBridge) {
@@ -81,22 +113,13 @@ export const sendDispatchRequest = (
       );
       return;
     }
-    void Promise.resolve(dispatchBridge(request)).catch((error: unknown) => {
+    void Promise.resolve(dispatchBridge(stamped)).catch((error: unknown) => {
       onError?.(error);
     });
     return;
   }
 
-  window.parent.postMessage(
-    {
-      type: DISPATCH_MESSAGE_TYPE,
-      payload: {
-        type: DISPATCH_RPC_REQUEST_TYPE,
-        payload: request,
-      },
-    },
-    '*',
-  );
+  window.parent.postMessage(toEnvelopeMessage(stamped), '*');
 };
 
 const isDispatchResponse = (
@@ -177,6 +200,7 @@ export const dispatchRpc = <T>({
   timeoutMessage: string;
   staleMessage: string;
 }): Promise<T> => {
+  const stamped = stampRunIdentity(request);
   if (window.parent === window) {
     const dispatchBridge = window[DISPATCH_RPC_BRIDGE_NAME];
     if (!dispatchBridge) {
@@ -190,7 +214,7 @@ export const dispatchRpc = <T>({
         reject(new Error(timeoutMessage));
       }, timeoutMs);
 
-      const call = Promise.resolve(dispatchBridge(request)).then((result) =>
+      const call = Promise.resolve(dispatchBridge(stamped)).then((result) =>
         unwrapDispatchBridgeResult<T>(requestId, result, staleMessage),
       );
 
@@ -226,15 +250,6 @@ export const dispatchRpc = <T>({
       },
     });
 
-    window.parent.postMessage(
-      {
-        type: DISPATCH_MESSAGE_TYPE,
-        payload: {
-          type: DISPATCH_RPC_REQUEST_TYPE,
-          payload: request,
-        },
-      },
-      '*',
-    );
+    window.parent.postMessage(toEnvelopeMessage(stamped), '*');
   });
 };

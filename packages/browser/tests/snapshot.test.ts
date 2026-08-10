@@ -92,7 +92,7 @@ describe('BrowserSnapshotEnvironment', () => {
     // Get the request ID from the postMessage call
     expect(mockPostMessage).toHaveBeenCalled();
     const call = mockPostMessage.mock.calls[0];
-    const requestId = call[0].payload.payload.requestId;
+    const requestId = call[0].payload.message.payload.requestId;
 
     // Simulate response
     simulateRpcResponse(requestId, '/test/file.snap');
@@ -108,10 +108,10 @@ describe('BrowserSnapshotEnvironment', () => {
 
     expect(mockPostMessage).toHaveBeenCalled();
     const call = mockPostMessage.mock.calls[0];
-    const requestId = call[0].payload.payload.requestId;
-    const payload = call[0].payload.payload;
+    const requestId = call[0].payload.message.payload.requestId;
+    const payload = call[0].payload.message.payload;
 
-    expect(call[0].payload.type).toBe(DISPATCH_RPC_REQUEST_TYPE);
+    expect(call[0].payload.message.type).toBe(DISPATCH_RPC_REQUEST_TYPE);
     expect(payload.namespace).toBe(DISPATCH_NAMESPACE_SNAPSHOT);
     expect(payload.method).toBe('saveSnapshotFile');
     expect(payload.args).toEqual({
@@ -130,10 +130,10 @@ describe('BrowserSnapshotEnvironment', () => {
 
     expect(mockPostMessage).toHaveBeenCalled();
     const call = mockPostMessage.mock.calls[0];
-    const requestId = call[0].payload.payload.requestId;
-    const payload = call[0].payload.payload;
+    const requestId = call[0].payload.message.payload.requestId;
+    const payload = call[0].payload.message.payload;
 
-    expect(call[0].payload.type).toBe(DISPATCH_RPC_REQUEST_TYPE);
+    expect(call[0].payload.message.type).toBe(DISPATCH_RPC_REQUEST_TYPE);
     expect(payload.namespace).toBe(DISPATCH_NAMESPACE_SNAPSHOT);
     expect(payload.method).toBe('readSnapshotFile');
     expect(payload.args).toEqual({ filepath: '/test/snapshot.snap' });
@@ -150,7 +150,7 @@ describe('BrowserSnapshotEnvironment', () => {
     const readPromise = env.readSnapshotFile('/non-existent');
 
     const call = mockPostMessage.mock.calls[0];
-    const requestId = call[0].payload.payload.requestId;
+    const requestId = call[0].payload.message.payload.requestId;
 
     simulateRpcResponse(requestId, null);
 
@@ -165,10 +165,10 @@ describe('BrowserSnapshotEnvironment', () => {
 
     expect(mockPostMessage).toHaveBeenCalled();
     const call = mockPostMessage.mock.calls[0];
-    const requestId = call[0].payload.payload.requestId;
-    const payload = call[0].payload.payload;
+    const requestId = call[0].payload.message.payload.requestId;
+    const payload = call[0].payload.message.payload;
 
-    expect(call[0].payload.type).toBe(DISPATCH_RPC_REQUEST_TYPE);
+    expect(call[0].payload.message.type).toBe(DISPATCH_RPC_REQUEST_TYPE);
     expect(payload.namespace).toBe(DISPATCH_NAMESPACE_SNAPSHOT);
     expect(payload.method).toBe('removeSnapshotFile');
     expect(payload.args).toEqual({ filepath: '/test/snapshot.snap' });

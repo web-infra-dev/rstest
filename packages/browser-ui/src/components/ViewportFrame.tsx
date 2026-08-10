@@ -67,14 +67,19 @@ export const ViewportFrame: React.FC<ViewportFrameProps> = ({
     return () => ro.disconnect();
   }, [active, selection, onResponsiveResize]);
 
+  // Both branches keep the children at the SAME depth (outer wrapper + inner
+  // sized div): a depth change across a viewport-mode switch would remount
+  // the runner iframe, silently destroying a possibly-running document.
   if (!size) {
     return (
-      <div
-        className="h-full w-full"
-        style={{ background: token.colorBgContainer }}
-        {...dataAttrs}
-      >
-        {children}
+      <div className="h-full w-full">
+        <div
+          className="h-full w-full"
+          style={{ background: token.colorBgContainer }}
+          {...dataAttrs}
+        >
+          {children}
+        </div>
       </div>
     );
   }

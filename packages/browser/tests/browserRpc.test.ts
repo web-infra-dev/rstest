@@ -77,15 +77,17 @@ describe('browserRpc client', () => {
     expect(mockPostMessage).toHaveBeenCalledTimes(1);
     const postedPayload = mockPostMessage.mock.calls[0]?.[0] as {
       payload?: {
-        payload?: {
-          requestId?: string;
-          namespace?: string;
-          method?: string;
-          args?: { id?: string; testPath?: string; runId?: string };
+        message?: {
+          payload?: {
+            requestId?: string;
+            namespace?: string;
+            method?: string;
+            args?: { id?: string; testPath?: string; runId?: string };
+          };
         };
       };
     };
-    const dispatchRequest = postedPayload.payload?.payload;
+    const dispatchRequest = postedPayload.payload?.message?.payload;
     const request = dispatchRequest?.args;
 
     expect(request?.id).toBe('rpc-id-1');

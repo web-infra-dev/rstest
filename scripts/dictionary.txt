@@ -1,4 +1,6 @@
 # Custom Dictionary Words
+acked
+acks
 ACMRTUXB
 antd
 apng
@@ -47,7 +49,6 @@ docgen
 dogfooding
 dorny
 ELDHISTOGRAM
-FILEHANDLE
 elifecycle
 endgroup
 envinfo
@@ -57,6 +58,7 @@ facti
 fanout
 fastpaths
 fi3ework
+FILEHANDLE
 filenaming
 flac
 flamegraph
@@ -65,8 +67,8 @@ flexbugs
 fnames
 frontends
 fullhash
-gzipped
 Grotesk
+gzipped
 icss
 idents
 iife
@@ -94,10 +96,10 @@ mattcompiles
 memfs
 menlo
 metafile
-microtask
-microtasks
 microfrontend
 microfrontends
+microtask
+microtasks
 misattributed
 mjsx
 modu
@@ -192,6 +194,7 @@ treeshaking
 tsbuildinfo
 tsdoc
 tsup
+unattributably
 unawaited
 unencapsulated
 unhandledrejection
@@ -200,6 +203,7 @@ unocss
 unpatch
 unplugin
 unpredictibly
+unrepresentable
 unrouted
 unsharded
 unshift

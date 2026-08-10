@@ -5,8 +5,8 @@ import type {
   BrowserHostConfig,
   ContainerRPC,
   HostRPC,
-  ReloadTestFileAck,
   TestFileInfo,
+  VersionedTestFileSet,
 } from '../types';
 import type { ContainerWindow } from '../utils/constants';
 import { logger } from '../utils/logger';
@@ -22,12 +22,13 @@ type RpcState = {
 // ============================================================================
 
 export const useRpc = (
-  setTestFiles: (files: TestFileInfo[]) => void,
+  setFileSet: (fileSet: VersionedTestFileSet) => void,
   wsPort: number | undefined,
   onReloadTestFile?: (
     testFile: string,
+    runId: string,
     testNamePattern?: string,
-  ) => Promise<ReloadTestFileAck>,
+  ) => Promise<void>,
 ): RpcState => {
   const [rpc, setRpc] = useState<BirpcReturn<HostRPC, ContainerRPC> | null>(
     null,
@@ -36,14 +37,15 @@ export const useRpc = (
   const [connected, setConnected] = useState(false);
 
   // Use refs to avoid triggering reconnect on callback changes
-  const setTestFilesRef = useRef<(files: TestFileInfo[]) => void>(setTestFiles);
+  const setFileSetRef =
+    useRef<(fileSet: VersionedTestFileSet) => void>(setFileSet);
   const onReloadTestFileRef = useRef(onReloadTestFile);
   // Track the current active WebSocket to handle StrictMode double-mount
   const activeWsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    setTestFilesRef.current = setTestFiles;
-  }, [setTestFiles]);
+    setFileSetRef.current = setFileSet;
+  }, [setFileSet]);
 
   useEffect(() => {
     onReloadTestFileRef.current = onReloadTestFile;
@@ -72,20 +74,29 @@ export const useRpc = (
       >();
 
       const methods: ContainerRPC = {
-        onTestFileUpdate(files: TestFileInfo[]) {
-          logger.debug('[Container RPC] onTestFileUpdate called:', files);
-          setTestFilesRef.current(files);
+        onTestFileUpdate(files: TestFileInfo[], version: number) {
+          logger.debug(
+            '[Container RPC] onTestFileUpdate called:',
+            version,
+            files,
+          );
+          setFileSetRef.current({ files, version });
         },
-        async reloadTestFile(testFile: string, testNamePattern?: string) {
+        async reloadTestFile(
+          testFile: string,
+          runId: string,
+          testNamePattern?: string,
+        ) {
           logger.debug(
             '[Container RPC] reloadTestFile called:',
             testFile,
+            runId,
             testNamePattern,
           );
           if (!onReloadTestFileRef.current) {
             throw new Error('reloadTestFile handler is not available');
           }
-          return onReloadTestFileRef.current(testFile, testNamePattern);
+          return onReloadTestFileRef.current(testFile, runId, testNamePattern);
         },
         onHostConfigUpdate(config: BrowserHostConfig) {
           logger.debug('[Container RPC] onHostConfigUpdate called');
@@ -141,9 +152,9 @@ export const useRpc = (
         // Fetch test files once connected
         birpc
           .getTestFiles()
-          .then((files) => {
+          .then((fileSet) => {
             if (isMounted) {
-              setTestFilesRef.current(files);
+              setFileSetRef.current(fileSet);
               setLoading(false);
             }
           })

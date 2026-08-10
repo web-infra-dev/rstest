@@ -386,7 +386,8 @@ export const createHeadlessScheduler = async ({
       });
 
       await attachHeadlessRunnerTransport(page, {
-        onDispatchMessage: async (message) => {
+        onDispatchMessage: async (envelope) => {
+          const message = envelope.message;
           try {
             if (settled) {
               return;

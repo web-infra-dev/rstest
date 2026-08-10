@@ -1,12 +1,5 @@
 export const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16_000, 30_000];
 
-export const createRunId = (): string => {
-  if (typeof globalThis.crypto?.randomUUID === 'function') {
-    return globalThis.crypto.randomUUID();
-  }
-  return `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-};
-
 export const createWebSocketUrl = (wsPort: number): string => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${window.location.hostname}:${wsPort}`;
@@ -31,24 +24,23 @@ export const resolveRunnerBase = (
   return options.runnerUrl;
 };
 
+/**
+ * The runner URL deliberately carries NO run identity: identity is conferred
+ * over the config handshake at document boot, and a URL-borne runId would be
+ * one HMR full reload away from naming a dead run. Fresh navigation per run is
+ * guaranteed by the iframe's React key (the lease's `boot` counter), not by
+ * URL differences.
+ */
 export const createRunnerUrl = (
   testFile: string,
   runnerBase?: string,
   testNamePattern?: string,
-  cacheBust = false,
-  runId?: string,
 ): string => {
   const base = runnerBase || window.location.origin;
   const url = new URL('/runner.html', base);
   url.searchParams.set('testFile', testFile);
   if (testNamePattern) {
     url.searchParams.set('testNamePattern', testNamePattern);
-  }
-  if (runId) {
-    url.searchParams.set('runId', runId);
-  }
-  if (cacheBust) {
-    url.searchParams.set('t', Date.now().toString());
   }
   return url.toString();
 };

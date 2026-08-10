@@ -84,7 +84,9 @@ class FakePage implements BrowserProviderPage {
   }
 
   async send(message: BrowserClientMessage): Promise<void> {
-    await this.exposed.get(DISPATCH_MESSAGE_TYPE)?.(message);
+    // The wire shape is the identity envelope; headless routing ignores the
+    // runId (identity there is the host-injected runToken).
+    await this.exposed.get(DISPATCH_MESSAGE_TYPE)?.({ message });
   }
 
   async dispatch(
@@ -299,6 +301,7 @@ const createHarness = (options: HarnessOptions = {}) => {
       },
       async signalInvalidation(paths) {
         invalidations.push(paths);
+        return { cycle: Promise.resolve() };
       },
     },
     setDispatchPageResolver() {},

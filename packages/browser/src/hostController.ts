@@ -453,11 +453,6 @@ export const runBrowserController = async (
         freezeShardedEntries: options?.freezeShardedEntries,
         tempDir,
         isWatchMode,
-        onTriggerRerun: isWatchMode
-          ? async () => {
-              await watchSignals.runDispatchRerun();
-            }
-          : undefined,
         containerDistPath,
         containerDevServer,
         skipProviderLaunch:
@@ -486,6 +481,11 @@ export const runBrowserController = async (
   // collected entries, before adopting the runtime's entry snapshot below).
   if (isWatchMode) {
     watchState.lastTestFiles = collectWatchTestFiles(projectEntries);
+    // Bind the runtime's long-lived watch plugins to THIS entry's trigger —
+    // the runtime survives config-change restarts, this closure does not.
+    watchState.triggerRerun = async () => {
+      await watchSignals.runDispatchRerun();
+    };
   }
 
   // Mark files as pending-affected so the next trigger reruns them through the
@@ -1143,14 +1143,6 @@ export const runBrowserController = async (
     : await createHeadedScheduler({
         ...schedulerDeps,
         runtime,
-        v8Coverage,
-        handlers: {
-          handleTestFileStart,
-          handleTestCaseResult,
-          handleTestFileComplete,
-          handleLog,
-          handleFatal,
-        },
       });
 
   // The first build must not trigger a duplicate cycle, but a fatal test cycle

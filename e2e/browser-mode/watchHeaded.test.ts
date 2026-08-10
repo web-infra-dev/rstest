@@ -70,8 +70,8 @@ describe('browser mode - headed watch', () => {
         fixturesPath: `${__dirname}/fixtures/watch`,
         fixturesTargetPath,
       });
-      // Hold every runner short of completing, so a reload is still pending
-      // when the delete below lands — the state `HeadedReloadTracker.reconcile`
+      // Hold every runner short of completing, so a run is still open when
+      // the delete below lands — the state `HeadedRunRegistry.retainPaths`
       // exists to settle. The barrier has to yield: a runner iframe shares its
       // renderer thread with the container, so spinning here would also stop
       // the container from processing the file-set update that unmounts the
@@ -94,10 +94,10 @@ describe('browser mode - headed watch', () => {
 
         cli.resetStd();
         fs.update(anotherTestPath, (content) => `${content}\n// touch\n`);
-        // Wait for the navigation itself rather than sleeping: if the delete
-        // beat the reload, the race would never happen and the test would pass
+        // Wait for the grant itself rather than sleeping: if the delete beat
+        // the reload, the race would never happen and the test would pass
         // without exercising anything.
-        await cli.waitForStdout('[Container] Setting iframe.src to:');
+        await cli.waitForStdout('[Container] Granting run');
         fs.delete(anotherTestPath);
 
         await cli.waitForStdout('Test file set changed, re-running 1 file(s)');

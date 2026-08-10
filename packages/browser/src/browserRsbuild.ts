@@ -33,6 +33,7 @@ import sirv from 'sirv';
 import { WebSocketServer } from 'ws';
 import { validateBrowserConfig } from './configValidation';
 import type { ContainerRpcManager } from './containerRpc';
+import type { HeadedRunRegistry } from './headedRunRegistry';
 import type {
   BrowserDispatchHandler,
   BrowserHostConfig,
@@ -115,6 +116,20 @@ export type BrowserProjectServer = {
 type BrowserWatchState = {
   lastTestFiles: TestFileInfo[];
   hooksEnabled: boolean;
+  /**
+   * The rerun trigger of the CURRENT controller entry. The watch plugins below
+   * live as long as the compilers (one runtime, many controller entries after
+   * config-change restarts), so they must not capture any one entry's trigger:
+   * a closure bound at runtime creation would keep driving the first entry's
+   * dead scheduler forever, and watch would silently stop rerunning.
+   */
+  triggerRerun?: () => Promise<void>;
+  /**
+   * The headed run registry (identity + settlement owner). Lives here so a
+   * re-entering controller adopts the previous entry's still-open runs
+   * instead of orphaning them in a discarded closure.
+   */
+  headedRuns?: HeadedRunRegistry;
   // Diff baselines keyed per project: sibling projects have isolated
   // compilers, so a shared flat baseline would let one project's compile
   // clobber another's (missed reruns) and collide on compiler-local chunk
@@ -1122,7 +1137,6 @@ export const createBrowserRuntime = async ({
   freezeShardedEntries,
   tempDir,
   isWatchMode,
-  onTriggerRerun,
   containerDistPath,
   containerDevServer,
   forceHeadless,
@@ -1140,7 +1154,6 @@ export const createBrowserRuntime = async ({
   freezeShardedEntries?: boolean;
   tempDir: string;
   isWatchMode: boolean;
-  onTriggerRerun?: () => Promise<void>;
   containerDistPath?: string;
   containerDevServer?: string;
   /** Force headless mode regardless of user config (used for list command) */
@@ -1644,7 +1657,7 @@ export const createBrowserRuntime = async ({
     ]);
 
     // Register watch plugin if in watch mode
-    if (isWatchMode && onTriggerRerun) {
+    if (isWatchMode) {
       rsbuildInstance.addPlugins([
         {
           name: 'rstest:browser-watch',
@@ -1727,7 +1740,11 @@ export const createBrowserRuntime = async ({
                 return;
               }
 
-              await onTriggerRerun();
+              // Late-bound through the watch state: this plugin outlives the
+              // controller entry that created it (config-change restarts reuse
+              // the runtime), so it must drive the CURRENT entry's trigger,
+              // never one captured at runtime creation.
+              await watchState.triggerRerun?.();
             });
           },
         },
