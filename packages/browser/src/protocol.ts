@@ -206,8 +206,9 @@ export type RunnerLifecycleMethod =
 /**
  * {@link BrowserClientMessage} types that are forwarded to the `runner`
  * namespace (by message `type`) rather than handled at the transport layer.
- * `Extract` keeps this a checked subset of the message union — renaming a
- * message type drops it here, surfacing as a missing handler downstream.
+ * `Extract` keeps this a checked subset of the message union. `ready` and
+ * `complete` are deliberately absent: they still arrive, but their only job
+ * is done at the dispatch gate and the router ignores them silently.
  */
 type RunnerMessageMethod = Extract<
   BrowserClientMessage['type'],

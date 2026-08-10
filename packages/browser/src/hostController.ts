@@ -26,7 +26,6 @@ import {
   type RstestContext,
   resolveSnapshotPathDefault,
   serializableConfig,
-  type Test,
   type TestFileResult,
   type TestResult,
   type UserConsoleLog,
@@ -1362,11 +1361,7 @@ export const listBrowserTests = async (
         const message = envelope.message;
         switch (message.type) {
           case 'collect-result': {
-            const payload = message.payload as {
-              testPath: string;
-              project: string;
-              tests: Test[];
-            };
+            const payload = message.payload;
             results.push({
               testPath: payload.testPath,
               project: payload.project,
@@ -1379,10 +1374,7 @@ export const listBrowserTests = async (
             resolveCollect?.();
             break;
           case 'fatal': {
-            const payload = message.payload as {
-              message: string;
-              stack?: string;
-            };
+            const payload = message.payload;
             error = new Error(payload.message);
             error.stack = payload.stack;
             resolveCollect?.();

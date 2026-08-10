@@ -12,7 +12,6 @@ import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
 import { type FatalPayload, toError } from './hostPayloads';
 import type {
   BrowserDispatchRequest,
-  BrowserDispatchResponse,
   BrowserHostConfig,
   FileCleanupDispatchPayload,
   TestFileInfo,
@@ -319,13 +318,6 @@ export const createHeadedScheduler = async ({
     await enqueueHeadedReload(file, testNamePattern);
   };
 
-  const staleDispatchResponse = (
-    request: BrowserDispatchRequest,
-  ): BrowserDispatchResponse => ({
-    requestId: request.requestId,
-    stale: true,
-  });
-
   // Create RPC methods that can access test state variables
   const createRpcMethods = (): HostRpcMethods => ({
     async rerunTest(testFile: string, testNamePattern?: string) {
@@ -373,7 +365,7 @@ export const createHeadedScheduler = async ({
         logger.debug(
           `[Headed] Dropped stale "${method}" from run ${runId ?? '(none)'}`,
         );
-        return staleDispatchResponse(request);
+        return { requestId: request.requestId, stale: true };
       }
       const response = await dispatchRouter.dispatch(request);
       if (!isTerminal) {

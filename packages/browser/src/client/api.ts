@@ -30,7 +30,7 @@ const createElementExpect = (
       args,
       isNot,
       timeout,
-    } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath' | 'runId'>);
+    } satisfies Omit<BrowserRpcRequest, 'id' | 'testPath'>);
   };
 
   const api: Omit<BrowserElementExpect, 'not'> = {

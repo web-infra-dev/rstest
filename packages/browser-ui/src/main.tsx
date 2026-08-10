@@ -828,7 +828,7 @@ const BrowserRunner: React.FC<{
                           // browsing context per grant: no document from a
                           // previous run can survive into this one, so "two
                           // documents, one run" is unrepresentable.
-                          key={`${fileInfo.testPath}#${lease?.boot ?? 0}`}
+                          key={`${fileInfo.testPath}#${renderedBoot}`}
                           data-test-file={fileInfo.testPath}
                           data-test-project={fileInfo.projectName}
                           title={`Test runner for ${getDisplayName(fileInfo.testPath)}`}
