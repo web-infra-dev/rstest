@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, renameSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -226,6 +226,82 @@ describe('merge-reports', () => {
     expect(existsSync(join(reportsDir, 'coverage-summary.json'))).toBe(true);
 
     fs.removeSync(reportsDir);
+  });
+
+  it('cleans co-located reports without deleting inputs or final output', async () => {
+    const blobDir = join(fixturesDir, '.rstest-reports');
+    const nestedReportsDir = join(blobDir, 'coverage');
+    fs.removeSync(blobDir);
+
+    for (const shard of ['1/2', '2/2']) {
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '--shard',
+          shard,
+          '--reporters=blob',
+          '-c',
+          'rstest.coverage.config.mts',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: fixturesDir,
+          },
+        },
+      });
+      await expectExecSuccess();
+    }
+
+    writeFileSync(join(blobDir, 'stale-report.txt'), 'stale');
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'merge-reports',
+        '--coverage.reportsDirectory=.rstest-reports',
+        '--coverage.reporters=json-summary',
+        '-c',
+        'rstest.coverage.config.mts',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: fixturesDir,
+        },
+      },
+    });
+    await expectExecSuccess();
+
+    expect(existsSync(join(blobDir, 'blob-1-2.json'))).toBe(true);
+    expect(existsSync(join(blobDir, 'blob-2-2.json'))).toBe(true);
+    expect(existsSync(join(blobDir, 'stale-report.txt'))).toBe(false);
+    expect(existsSync(join(blobDir, 'coverage-summary.json'))).toBe(true);
+
+    const { expectExecSuccess: cleanupSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'merge-reports',
+        '--cleanup',
+        '--coverage.reportsDirectory=.rstest-reports/coverage',
+        '--coverage.reporters=json-summary',
+        '-c',
+        'rstest.coverage.config.mts',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: fixturesDir,
+        },
+      },
+    });
+    await cleanupSuccess();
+
+    expect(existsSync(join(blobDir, 'blob-1-2.json'))).toBe(false);
+    expect(existsSync(join(blobDir, 'blob-2-2.json'))).toBe(false);
+    expect(existsSync(join(nestedReportsDir, 'coverage-summary.json'))).toBe(
+      true,
+    );
+
+    fs.removeSync(blobDir);
   });
 
   it('finalizes Istanbul coverage only when merging blob reports', async () => {

@@ -56,7 +56,7 @@ export const loadCoverageProvider = async (
  */
 export function cleanCoverageReports(
   options: NormalizedCoverageOptions,
-  preservedPath?: string,
+  preservedPaths?: string[],
 ): void {
   if (!options.enabled || !options.clean) {
     return;
@@ -66,37 +66,43 @@ export function cleanCoverageReports(
     return;
   }
 
-  if (preservedPath) {
-    const preservedRelativePath = relative(reportsDirectory, preservedPath);
-    const isPreservedPathInsideReports =
-      !preservedRelativePath.startsWith('..') &&
-      !isAbsolute(preservedRelativePath);
+  const pathsToPreserve = preservedPaths?.filter((path) => {
+    const preservedRelativePath = relative(reportsDirectory, path);
+    return (
+      preservedRelativePath !== '..' &&
+      !preservedRelativePath.startsWith('../') &&
+      !isAbsolute(preservedRelativePath)
+    );
+  });
 
-    if (isPreservedPathInsideReports) {
-      if (!preservedRelativePath) {
-        return;
-      }
+  if (pathsToPreserve?.length) {
+    for (const entry of fs.readdirSync(reportsDirectory)) {
+      const entryPath = join(reportsDirectory, entry);
+      const preservedPathsInEntry = pathsToPreserve.filter((path) => {
+        const preservedRelativePath = relative(entryPath, path);
+        return (
+          preservedRelativePath !== '..' &&
+          !preservedRelativePath.startsWith('../') &&
+          !isAbsolute(preservedRelativePath)
+        );
+      });
 
-      const preservedChild = preservedRelativePath.split('/')[0];
-      if (preservedChild) {
-        for (const entry of fs.readdirSync(reportsDirectory)) {
-          if (entry !== preservedChild) {
-            fs.rmSync(join(reportsDirectory, entry), {
-              recursive: true,
-              force: true,
-            });
-          }
+      if (preservedPathsInEntry.length) {
+        if (preservedPathsInEntry.some((path) => path === entryPath)) {
+          continue;
         }
         cleanCoverageReports(
           {
             ...options,
-            reportsDirectory: join(reportsDirectory, preservedChild),
+            reportsDirectory: entryPath,
           },
-          preservedPath,
+          preservedPathsInEntry,
         );
-        return;
+      } else {
+        fs.rmSync(entryPath, { recursive: true, force: true });
       }
     }
+    return;
   }
 
   fs.rmSync(reportsDirectory, { recursive: true });

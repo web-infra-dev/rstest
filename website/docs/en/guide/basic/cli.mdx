@@ -257,15 +257,15 @@ npx rstest merge-reports ./custom-reports-dir
 
 The merge command will:
 
-- Combine test results from all shards
+- Combine test results from all blobs
 - Run configured reporters (e.g., `default`, `junit`) with the merged data
-- Merge the coverage collected by all shards (if coverage is enabled)
-- Apply `coverage.include` once to add files that no shard tested
+- Merge the coverage collected by all blob-producing runs (if coverage is enabled)
+- Apply `coverage.include` once to add files that none of those runs tested
 - Generate coverage reports and check thresholds against the unified result
 
-With coverage providers that support deferred finalization, shard runs using the blob reporter deliberately skip coverage report generation and threshold checks. Older providers retain their existing per-shard finalization behavior. Enable coverage for `merge-reports` through your configuration or the `--coverage` flag so the merge job can finalize coverage. The merge command accepts the same `--coverage.*` options as `rstest run`. Coverage options passed only to a shard are not stored in its blob, so define finalization options such as `coverage.include`, `coverage.reporters`, and `coverage.reportsDirectory` in the configuration file or repeat them on `merge-reports`.
+With coverage providers that support deferred finalization, runs using the blob reporter deliberately skip coverage report generation and threshold checks. Runs without the blob reporter finalize coverage normally, including sharded runs. Older providers retain their existing per-run finalization behavior. Enable coverage for `merge-reports` through your configuration or the `--coverage` flag so the merge job can finalize coverage. The merge command accepts the same `--coverage.*` options as `rstest run`. Coverage options passed only to a blob-producing run are not stored in its blob, so define finalization options such as `coverage.include`, `coverage.reporters`, and `coverage.reportsDirectory` in the configuration file or repeat them on `merge-reports`.
 
-Use `--cleanup` to remove the blob reports directory after merging:
+Use `--cleanup` to remove the blob report inputs after merging. The directory is also removed when it becomes empty. If `coverage.reportsDirectory` is the blob directory or one of its subdirectories, generated coverage reports and their containing directory are retained:
 
 ```bash
 npx rstest merge-reports --cleanup
@@ -391,7 +391,7 @@ Rstest CLI options are registered per command instead of being shared by every c
 | `-r, --root <root>`        | Specify the project root directory, see [root](/config/test/root)                                                                                                     |
 | `--coverage`               | Enable coverage generation after merging, see [coverage](/config/test/coverage)                                                                                       |
 | `--reporters <name>`       | Specify which reporter(s) run on merged results, see [reporters](/config/test/reporters)                                                                              |
-| `--cleanup`                | Remove the blob reports directory after merging                                                                                                                       |
+| `--cleanup`                | Remove blob report inputs after merging                                                                                                                               |
 | `-h, --help`               | Display help for command                                                                                                                                              |
 
 ### rstest init

@@ -257,15 +257,15 @@ npx rstest merge-reports ./custom-reports-dir
 
 合并命令将：
 
-- 合并所有分片的测试结果
+- 合并所有 blob 中的测试结果
 - 使用配置的报告器（如 `default`、`junit`）输出合并后的数据
-- 合并所有分片实际采集的覆盖率（如果启用了覆盖率）
-- 统一应用一次 `coverage.include`，补齐所有分片都未测试的文件
+- 合并所有生成 blob 的运行实际采集的覆盖率（如果启用了覆盖率）
+- 统一应用一次 `coverage.include`，补齐这些运行都未测试的文件
 - 基于统一结果生成覆盖率报告并检查阈值
 
-支持延迟最终处理的 coverage provider 会让使用 blob 报告器的分片运行有意跳过覆盖率报告生成和阈值检查。旧版 provider 保持原有的分片内最终处理行为。请通过配置或 `--coverage` 参数为 `merge-reports` 启用覆盖率，让合并 job 完成覆盖率最终处理。合并命令支持与 `rstest run` 相同的 `--coverage.*` 参数。只传给分片的覆盖率参数不会写入 blob，因此请在配置文件中定义 `coverage.include`、`coverage.reporters` 和 `coverage.reportsDirectory` 等最终处理参数，或在执行 `merge-reports` 时再次传入。
+支持延迟最终处理的 coverage provider 会让使用 blob 报告器的运行有意跳过覆盖率报告生成和阈值检查。未使用 blob 报告器的运行会正常完成覆盖率最终处理，包括分片运行。旧版 provider 保持原有的单次运行最终处理行为。请通过配置或 `--coverage` 参数为 `merge-reports` 启用覆盖率，让合并 job 完成覆盖率最终处理。合并命令支持与 `rstest run` 相同的 `--coverage.*` 参数。只传给生成 blob 的运行的覆盖率参数不会写入 blob，因此请在配置文件中定义 `coverage.include`、`coverage.reporters` 和 `coverage.reportsDirectory` 等最终处理参数，或在执行 `merge-reports` 时再次传入。
 
-使用 `--cleanup` 在合并完成后删除 blob 报告目录：
+使用 `--cleanup` 在合并完成后删除 blob 报告输入。目录为空时也会一并删除。如果 `coverage.reportsDirectory` 是 blob 目录或其子目录，则会保留生成的覆盖率报告及其所在目录：
 
 ```bash
 npx rstest merge-reports --cleanup
@@ -391,7 +391,7 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 | `-r, --root <root>`        | 指定项目根目录，详见 [root](/config/test/root)                                                                                                       |
 | `--coverage`               | 合并完成后生成覆盖率报告，详见 [coverage](/config/test/coverage)                                                                                     |
 | `--reporters <name>`       | 指定在合并结果上运行的一个或多个报告器，详见 [reporters](/config/test/reporters)                                                                     |
-| `--cleanup`                | 合并完成后删除 blob 报告目录                                                                                                                         |
+| `--cleanup`                | 合并完成后删除 blob 报告输入                                                                                                                         |
 | `-h, --help`               | 显示帮助信息                                                                                                                                         |
 
 ### rstest init

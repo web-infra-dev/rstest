@@ -209,7 +209,7 @@ const mergeReportsOptionDefinitions: OptionDefinition[] = [
   ['--coverage', 'Enable code coverage collection'],
   ...coverageOptionDefinitions,
   ['--reporters, --reporter <name>', 'Specify the reporter(s) to use'],
-  ['--cleanup', 'Remove blob reports directory after merging'],
+  ['--cleanup', 'Remove blob report inputs after merging'],
 ];
 
 const hiddenPassthroughOptionDefinitions: OptionDefinition[] = [

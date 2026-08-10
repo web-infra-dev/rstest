@@ -519,7 +519,7 @@ export default defineConfig({
 });
 ```
 
-Blob files are saved to `.rstest-reports/` by default. When coverage is enabled, each blob stores only the coverage collected while that shard ran. With coverage providers that support deferred finalization, shard runs do not generate coverage reports, add untested files from `coverage.include`, or check coverage thresholds. Older providers retain their existing per-shard finalization behavior. After all shards complete, use [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) with coverage enabled to perform those steps once against the unified result. Coverage options passed only on a shard command are not stored in the blob; keep finalization options in the configuration file or repeat them on `merge-reports`.
+Blob files are saved to `.rstest-reports/` by default. When coverage is enabled, each blob stores only the coverage collected during that run. With coverage providers that support deferred finalization, runs using the blob reporter do not generate coverage reports, add untested files from `coverage.include`, or check coverage thresholds. Runs without the blob reporter finalize coverage normally, including sharded runs. Older providers retain their existing per-run finalization behavior. After all blob-producing runs complete, use [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) with coverage enabled to perform those steps once against the unified result. Coverage options passed only on a blob-producing run are not stored in the blob; keep finalization options in the configuration file or repeat them on `merge-reports`.
 
 See [splitting tests with shards](/guide/advanced/ci#split-tests-with-shards) for a complete CI workflow example.
 

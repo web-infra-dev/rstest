@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import { join, relative } from 'pathe';
+import { isAbsolute, join, relative } from 'pathe';
 import {
   cleanCoverageReports,
   createCoverageProvider,
@@ -27,7 +27,10 @@ import { createRunnerEventSink, type RunnerEventSink } from './runnerEventSink';
 
 const DEFAULT_BLOB_DIR = '.rstest-reports';
 
-function loadBlobFiles(blobDir: string): BlobData[] {
+function loadBlobFiles(blobDir: string): {
+  blobs: BlobData[];
+  paths: string[];
+} {
   if (!existsSync(blobDir)) {
     throw new Error(
       `Blob reports directory not found: ${color.cyan(blobDir)}\n` +
@@ -44,9 +47,41 @@ function loadBlobFiles(blobDir: string): BlobData[] {
     );
   }
 
-  return files.map((file) =>
-    parseBlobFile(readFileSync(join(blobDir, file), 'utf-8'), file),
-  );
+  return {
+    blobs: files.map((file) =>
+      parseBlobFile(readFileSync(join(blobDir, file), 'utf-8'), file),
+    ),
+    paths: files.map((file) => join(blobDir, file)),
+  };
+}
+
+function cleanBlobReports(blobDir: string, reportsDirectory: string): void {
+  const reportsRelativePath = relative(blobDir, reportsDirectory);
+  const reportsAreInsideBlobDirectory =
+    reportsRelativePath !== '..' &&
+    !reportsRelativePath.startsWith('../') &&
+    !isAbsolute(reportsRelativePath);
+
+  if (!reportsAreInsideBlobDirectory) {
+    rmSync(blobDir, { recursive: true });
+    return;
+  }
+
+  if (!reportsRelativePath) {
+    for (const entry of readdirSync(blobDir)) {
+      if (isBlobFile(entry)) {
+        rmSync(join(blobDir, entry));
+      }
+    }
+    return;
+  }
+
+  const [reportsChild] = reportsRelativePath.split('/');
+  for (const entry of readdirSync(blobDir)) {
+    if (entry !== reportsChild) {
+      rmSync(join(blobDir, entry), { recursive: true });
+    }
+  }
 }
 
 function mergeSnapshots(summaries: SnapshotSummary[]): SnapshotSummary {
@@ -184,7 +219,7 @@ export async function mergeReports(
     ? join(context.rootPath, path)
     : join(context.rootPath, DEFAULT_BLOB_DIR);
 
-  const blobs = loadBlobFiles(blobDir);
+  const { blobs, paths: blobPaths } = loadBlobFiles(blobDir);
   let coverageOptions = context.normalizedConfig.coverage;
   if (coverageOptions.enabled) {
     await ensureCoverageProviderInstalled(coverageOptions, context.rootPath);
@@ -201,7 +236,7 @@ export async function mergeReports(
   }
 
   if (coverageOptions.enabled) {
-    cleanCoverageReports(coverageOptions, blobDir);
+    cleanCoverageReports(coverageOptions, blobPaths);
   }
   const coverageProvider = coverageOptions.enabled
     ? await createCoverageProvider(coverageOptions, context.rootPath)
@@ -336,19 +371,23 @@ export async function mergeReports(
     }
   }
 
-  if (
+  const shouldGenerateCoverage =
     coverageProvider &&
     mergedCoverageMap &&
-    (!hasFailure || coverageOptions.reportOnFailure)
-  ) {
+    (!hasFailure || coverageOptions.reportOnFailure);
+  if (shouldGenerateCoverage) {
     const { generateCoverage } = await import('../coverage/generate');
     await generateCoverage(context, mergedCoverageMap, coverageProvider);
   }
 
   if (cleanup && existsSync(blobDir)) {
-    rmSync(blobDir, { recursive: true });
+    if (shouldGenerateCoverage) {
+      cleanBlobReports(blobDir, coverageOptions.reportsDirectory);
+    } else {
+      rmSync(blobDir, { recursive: true });
+    }
     logger.log(
-      color.gray(`Cleaned up blob reports directory: ${relativeBlobDir}\n`),
+      color.gray(`Cleaned up blob reports from: ${relativeBlobDir}\n`),
     );
   }
 }
