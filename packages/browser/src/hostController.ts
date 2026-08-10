@@ -94,7 +94,9 @@ import {
 import { collectWatchTestFiles } from './watchRerunPlanner';
 import type {
   BrowserWatchSession,
+  CreateBrowserWatchSession,
   DispatchPageResolver,
+  SchedulerCycleResult,
 } from './schedulerSeam';
 import { registerWatchCleanup, watchContext } from './watchRuntime';
 import { createWatchSignals } from './watchSignals';
@@ -573,34 +575,31 @@ export const runBrowserController = async (
    * `execute`'s synchronous prefix runs before `runCycle` ever suspends, which
    * is what lets the headed transport claim its cycle scope inside it.
    */
-  const createWatchSession = (
-    execute: (testPaths: string[]) => Promise<unknown[]>,
-  ): BrowserWatchSession => ({
+  const createWatchSession: CreateBrowserWatchSession = (execute) => ({
     runCycle: async (testPaths) => {
       const rerunStartTime = Date.now();
       // A fatal error is one cycle's outcome, not permanent session state. The
       // headed scheduler also uses this ref to stop the rest of a failed cycle,
       // so carrying it forward would prevent the next cycle from reloading.
       fatalErrorRef.current = null;
-      let rerunError: Error | undefined;
-      let rawCoverage: unknown[] = [];
+      let execution: SchedulerCycleResult = { rawCoverage: [] };
 
       try {
-        rawCoverage = await execute(testPaths);
+        execution = await execute(testPaths);
       } catch (error) {
         // Surfaced through the outcome rather than thrown: core finalizes this
         // cycle either way, and its results belong in the report even when the
         // run that produced them ended badly.
-        rerunError = toError(error);
+        execution.error = toError(error);
       }
 
       const rerunFatalError = fatalErrorRef.current ?? undefined;
       return buildRerunOutcome({
         rerunTestPaths: testPaths,
         testTime: Math.max(0, Date.now() - rerunStartTime),
-        rawCoverage,
-        unhandledErrors: rerunError
-          ? [rerunError]
+        rawCoverage: execution.rawCoverage,
+        unhandledErrors: execution.error
+          ? [execution.error]
           : rerunFatalError
             ? [rerunFatalError]
             : undefined,

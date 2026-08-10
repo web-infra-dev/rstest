@@ -50,6 +50,7 @@ import { RunnerSessionRegistry } from './sessionRegistry';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import type {
   BrowserWatchSession,
+  CreateBrowserWatchSession,
   DispatchPageResolver,
   SchedulerRunResult,
 } from './schedulerSeam';
@@ -95,9 +96,7 @@ type HeadlessSchedulerDeps = {
     'setDispatchRerun' | 'setInterrupt' | 'signalInvalidation'
   >;
   setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
-  createWatchSession: (
-    execute: (testPaths: string[]) => Promise<unknown[]>,
-  ) => BrowserWatchSession;
+  createWatchSession: CreateBrowserWatchSession;
   collectProjectEntries: () => Promise<
     Parameters<typeof planWatchRerun>[0]['projectEntries']
   >;
@@ -522,8 +521,8 @@ export const createHeadlessScheduler = async ({
 
   const runFilesWithPool = async (
     files: TestFileInfo[],
+    rawCoverage: unknown[] = [],
   ): Promise<unknown[]> => {
-    const rawCoverage: unknown[] = [];
     if (files.length === 0) {
       return rawCoverage;
     }
@@ -593,11 +592,20 @@ export const createHeadlessScheduler = async ({
     // trigger may have rebuilt the file set without one of these files — so a
     // path that no longer resolves is skipped rather than failing the cycle
     // beside its still-valid siblings.
-    const runScope = async (testPaths: string[]): Promise<unknown[]> => {
+    const runScope: Parameters<CreateBrowserWatchSession>[0] = async (
+      testPaths,
+    ) => {
       const pathSet = new Set(testPaths.map((testPath) => normalize(testPath)));
-      return runFilesWithPool(
-        watchState.lastTestFiles.filter((file) => pathSet.has(file.testPath)),
-      );
+      const rawCoverage: unknown[] = [];
+      try {
+        await runFilesWithPool(
+          watchState.lastTestFiles.filter((file) => pathSet.has(file.testPath)),
+          rawCoverage,
+        );
+        return { rawCoverage };
+      } catch (error) {
+        return { rawCoverage, error: toError(error) };
+      }
     };
 
     // Cutting the in-flight run short lets its cycle finalize with what it had

@@ -1,3 +1,4 @@
+import nodeFs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -13,6 +14,22 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+type JsonFileCoverage = {
+  s: Record<string, number>;
+};
+
+const readHelperCoverage = (
+  reportPath: string,
+): JsonFileCoverage | undefined => {
+  const report = JSON.parse(nodeFs.readFileSync(reportPath, 'utf8')) as Record<
+    string,
+    JsonFileCoverage
+  >;
+  return Object.entries(report).find(([file]) =>
+    file.replaceAll('\\', '/').endsWith('/src/helper.ts'),
+  )?.[1];
+};
 
 describe('browser mode - headed watch', () => {
   // Headed watch is the only mode that builds the HMR runtime (see
@@ -91,6 +108,65 @@ describe('browser mode - headed watch', () => {
         );
         await cli.waitForStdout('Re-running 1 affected test file(s)');
         await cli.waitForStdout('Test Files 1 passed');
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    60_000,
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'should report partial V8 coverage after a fatal watch rerun',
+    async () => {
+      const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-headed-fatal-coverage`;
+      const testPath = path.join(fixturesTargetPath, 'tests/index.test.ts');
+      const reportsDirectory = path.join(
+        fixturesTargetPath,
+        'coverage-v8-watch',
+      );
+      const reportPath = path.join(reportsDirectory, 'coverage-final.json');
+
+      const { fs } = await prepareFixtures({
+        fixturesPath: `${__dirname}/fixtures/watch`,
+        fixturesTargetPath,
+      });
+      fs.delete(path.join(fixturesTargetPath, 'tests/another.test.ts'));
+
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: [
+          '-c',
+          'rstest.v8.config.mts',
+          '--browser.headless',
+          'false',
+          `--browser.port=${BROWSER_PORTS['watch-headed']}`,
+        ],
+      });
+      const waitForOutput = (marker: string) =>
+        Promise.race([cli.waitForStdout(marker), cli.waitForStderr(marker)]);
+
+      try {
+        await waitForOutput('Waiting for file changes...');
+        nodeFs.rmSync(reportsDirectory, { recursive: true, force: true });
+        cli.resetStd();
+
+        fs.update(testPath, (content) =>
+          content.replace(
+            "describe('watch mode test'",
+            `getMessage();
+throw new Error('headed watch coverage fatal');
+
+describe('watch mode test'`,
+          ),
+        );
+
+        await waitForOutput('headed watch coverage fatal');
+        await waitForOutput('Waiting for file changes...');
+
+        expect(nodeFs.existsSync(reportPath)).toBe(true);
+        const helperCoverage = readHelperCoverage(reportPath);
+        expect(helperCoverage).toBeDefined();
+        expect(Object.values(helperCoverage?.s ?? {})).toContain(1);
       } finally {
         await killCliProcessTree(cli);
         await deleteFixtureTarget(fs, fixturesTargetPath);

@@ -31,13 +31,60 @@ export const normalizeJavaScriptUrl = (
   }
 };
 
-const resolveInlineSourceMap = (code: string): SourceMapPayload | null => {
+export const resolveInlineSourceMap = (
+  code: string,
+): SourceMapPayload | null => {
   const converter = convert.fromSource(code);
   if (!converter) {
     return null;
   }
 
   return converter.toObject() as SourceMapPayload;
+};
+
+export const loadSourceMapForSource = async ({
+  jsUrl,
+  source,
+  fetcher = fetch,
+}: {
+  jsUrl: string;
+  source: string;
+  fetcher?: Fetcher;
+}): Promise<
+  | { status: 'matched'; sourceMap: SourceMapPayload | null }
+  | { status: 'mismatched' | 'unavailable' }
+> => {
+  const normalizedUrl = normalizeJavaScriptUrl(jsUrl);
+  if (!normalizedUrl) {
+    return { status: 'unavailable' };
+  }
+
+  try {
+    const jsResponse = await fetcher(normalizedUrl);
+    if (!jsResponse.ok) {
+      return { status: 'unavailable' };
+    }
+
+    const currentSource = await jsResponse.text();
+    if (currentSource !== source) {
+      return { status: 'mismatched' };
+    }
+
+    const inlineMap = resolveInlineSourceMap(currentSource);
+    if (inlineMap) {
+      return { status: 'matched', sourceMap: inlineMap };
+    }
+
+    const mapResponse = await fetcher(`${normalizedUrl}.map`);
+    return {
+      status: 'matched',
+      sourceMap: mapResponse.ok
+        ? ((await mapResponse.json()) as SourceMapPayload)
+        : null,
+    };
+  } catch {
+    return { status: 'unavailable' };
+  }
 };
 
 const fetchSourceMap = async (

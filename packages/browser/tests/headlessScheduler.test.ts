@@ -23,6 +23,7 @@ import type {
   BrowserProviderContext,
   BrowserProviderPage,
 } from '../src/providers';
+import type { CreateBrowserWatchSession } from '../src/schedulerSeam';
 
 type SchedulerOptions = Parameters<typeof createHeadlessScheduler>[0];
 type BrowserWatchState = SchedulerOptions['watchState'];
@@ -209,7 +210,9 @@ const createHarness = (options: HarnessOptions = {}) => {
   const ready = rstest.fn();
   let interrupt = async () => {};
   let dispatchRerun = async () => {};
-  let runScope = async (_paths: string[]): Promise<unknown[]> => [];
+  let runScope: Parameters<CreateBrowserWatchSession>[0] = async () => ({
+    rawCoverage: [],
+  });
   const watchState: BrowserWatchState = {
     hooksEnabled: false,
     invalidation: new Map(),

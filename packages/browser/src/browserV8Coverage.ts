@@ -4,8 +4,9 @@ import type {
   BrowserV8CoverageCollector,
 } from './providers';
 import {
-  loadSourceMapWithCache,
+  loadSourceMapForSource,
   normalizeJavaScriptUrl,
+  resolveInlineSourceMap,
   type SourceMapPayload,
 } from './sourceMap/sourceMapLoader';
 
@@ -71,6 +72,17 @@ export const takeBrowserV8Coverage = async ({
         return;
       }
 
+      const inlineSourceMap = resolveInlineSourceMap(entry.source);
+      const sourceMapResult = inlineSourceMap
+        ? { status: 'matched' as const, sourceMap: inlineSourceMap }
+        : await loadSourceMapForSource({ jsUrl: url, source: entry.source });
+      // A headed watch rebuild can replace a stable bundle URL while the old
+      // script is still executing. Its ranges must not be paired with the new
+      // build's map; the next stable rerun will collect that version instead.
+      if (sourceMapResult.status !== 'matched') {
+        return;
+      }
+
       entries.push({
         url,
         scriptId: entry.scriptId,
@@ -82,14 +94,8 @@ export const takeBrowserV8Coverage = async ({
         resourceStore?.assetFiles.set(url, entry.source);
       }
 
-      const sourceMap = await loadSourceMapWithCache({
-        jsUrl: url,
-        cache: sourceMapCache,
-        // Browser bundles can be rebuilt in place during watch. The URL is
-        // stable after normalization, so a cached map may describe an older
-        // version of the JavaScript whose offsets we just collected.
-        force: true,
-      });
+      const sourceMap = sourceMapResult.sourceMap;
+      sourceMapCache.set(url, sourceMap);
       if (sourceMap) {
         const normalizedSourceMap = normalizeSourceMap(sourceMap, rootPath);
         if (resourceStore?.sourceMaps.get(url) !== normalizedSourceMap) {
