@@ -65,6 +65,7 @@ export class CoverageProvider implements RstestCoverageProvider {
             environmentName,
             content,
             file,
+            this.options,
           );
           registerSourceMapURL(file, code, this.sourcemapUrlCache);
           return readInitialCoverage(code);

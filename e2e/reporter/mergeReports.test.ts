@@ -106,6 +106,8 @@ describe('merge-reports', () => {
     });
     await shard1Success();
 
+    expect(existsSync(coverageDir)).toBe(false);
+
     const shard1Blob = JSON.parse(
       readFileSync(join(blobDir, 'blob-1-2.json'), 'utf-8'),
     ) as { coverage?: Record<string, unknown>; coverageResults?: unknown[] };
@@ -130,6 +132,8 @@ describe('merge-reports', () => {
       },
     });
     await shard2Success();
+
+    expect(existsSync(coverageDir)).toBe(false);
 
     // Run merge-reports with coverage enabled
     const { cli: mergeCli, expectExecSuccess: mergeSuccess } =
@@ -162,6 +166,75 @@ describe('merge-reports', () => {
     expect(existsSync(coverageDir)).toBe(true);
 
     // Clean up
+    fs.removeSync(coverageDir);
+  });
+
+  it('finalizes Istanbul coverage only when merging blob reports', async () => {
+    const coverageDir = join(fixturesDir, 'coverage');
+    const blobDir = join(fixturesDir, '.rstest-reports');
+    fs.removeSync(coverageDir);
+    fs.removeSync(blobDir);
+
+    for (const shard of ['1/2', '2/2']) {
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '--shard',
+          shard,
+          '--reporters=blob',
+          '-c',
+          'rstest.coverage-istanbul.config.mts',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: fixturesDir,
+          },
+        },
+      });
+      await expectExecSuccess();
+      expect(existsSync(coverageDir)).toBe(false);
+    }
+
+    const shardCoverage = fs.readJsonSync(join(blobDir, 'blob-1-2.json'))
+      .coverage as Record<string, unknown>;
+    expect(Object.keys(shardCoverage)).not.toContain(
+      join(fixturesDir, 'istanbul-src/untested.ts'),
+    );
+    expect(Object.keys(shardCoverage)).not.toContain(
+      join(fixturesDir, 'istanbul-src/untested.jsx'),
+    );
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'merge-reports',
+        '--cleanup',
+        '-c',
+        'rstest.coverage-istanbul.config.mts',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: fixturesDir,
+        },
+      },
+    });
+    await expectExecSuccess();
+
+    const coverageSummary = fs.readJsonSync(
+      join(coverageDir, 'coverage-summary.json'),
+    ) as Record<string, Record<string, { total: number; covered: number }>>;
+    for (const file of ['untested.ts', 'untested.jsx']) {
+      expect(
+        coverageSummary[join(fixturesDir, 'istanbul-src', file)],
+      ).toMatchObject({
+        lines: { covered: 0 },
+        statements: { covered: 0 },
+        functions: { covered: 0 },
+        branches: { covered: 0 },
+      });
+    }
+
     fs.removeSync(coverageDir);
   });
 

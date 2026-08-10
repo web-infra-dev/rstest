@@ -517,7 +517,7 @@ export default defineConfig({
 });
 ```
 
-Blob 文件默认保存到 `.rstest-reports/` 目录。所有分片完成后，使用 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) 将它们合并为统一的报告。
+Blob 文件默认保存到 `.rstest-reports/` 目录。启用覆盖率时，每个 blob 只保存该分片运行期间实际采集的覆盖率。分片运行不会生成覆盖率报告、根据 `coverage.include` 补齐未测试文件或检查覆盖率阈值。所有分片完成后，使用启用了覆盖率的 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) 基于统一结果集中执行这些步骤。
 
 完整的 CI 工作流示例请参考[使用分片拆分测试](/guide/advanced/ci#split-tests-with-shards)。
 

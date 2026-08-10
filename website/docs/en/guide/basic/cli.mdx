@@ -259,7 +259,11 @@ The merge command will:
 
 - Combine test results from all shards
 - Run configured reporters (e.g., `default`, `junit`) with the merged data
-- Merge and generate coverage reports (if coverage is enabled)
+- Merge the coverage collected by all shards (if coverage is enabled)
+- Apply `coverage.include` once to add files that no shard tested
+- Generate coverage reports and check thresholds against the unified result
+
+Shard runs using the blob reporter deliberately skip coverage report generation and threshold checks. Enable coverage for `merge-reports` through your configuration or the `--coverage` flag so the merge job can finalize coverage.
 
 Use `--cleanup` to remove the blob reports directory after merging:
 

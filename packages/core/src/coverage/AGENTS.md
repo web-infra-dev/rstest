@@ -6,7 +6,7 @@ Coverage spans three packages: `@rstest/core` owns the `CoverageProvider` contra
 
 - **Node**: each worker builds its own provider instance and prefers `collectRaw` when the provider also implements `resolveRawCoverage` (deferring conversion to the host); a null `collectRaw` return falls back to full in-worker `collect`. The pool strips `result.coverage`/`result.coverageRaw` off results before they reach reporters and forwards them to executor callbacks instead.
 - **Browser**: istanbul-only — `@rstest/browser` config validation (not the provider) throws for v8 on a browser-only run and warns on mixed runs; the guard deliberately skips the `list` command, which never collects coverage. The runner copies `globalThis.__coverage__` onto each file result; `buildBrowserCoverageMap` folds them into one map at outcome assembly.
-- **Finalize**: `finalizeRunCycle` merges outcome maps, resolves raw v8 batches host-side (`resolveAndMergeRawCoverage`), then reports through `generateCoverage`: filter → untested-file backfill → `generateReports` → thresholds (negative threshold values mean max-uncovered-count).
+- **Finalize**: `finalizeRunCycle` merges outcome maps and resolves raw v8 batches host-side (`resolveAndMergeRawCoverage`). Normal runs then report through `generateCoverage`: filter → untested-file backfill → `generateReports` → thresholds (negative threshold values mean max-uncovered-count). Blob runs persist the collected map and defer that entire report stage to `merge-reports`.
 - **Providers**: istanbul instruments at compile time by pushing `swc-plugin-coverage-instrument` into the SWC rule; v8 does not instrument — it profiles via the inspector and converts payloads host-side with acorn AST + source maps.
 
 ## Key invariants
@@ -16,6 +16,7 @@ Coverage spans three packages: `@rstest/core` owns the `CoverageProvider` contra
 - Report-stage failures are caught and downgraded to `process.exitCode = 1`, but the raw-resolution seam inside `finalizeRunCycle` rethrows — a resource-load rejection propagates out of finalize instead of downgrading.
 - `cleanCoverageReports` must stay on the test-run lifecycle, never an rsbuild compile hook — browser-only mode has no node rsbuild instance and `--passWithNoTests` races the hook.
 - Memory bounds in `generateCoverage` are deliberate: projects are processed sequentially and untested files in small batches. Do not parallelize.
+- Blob coverage is deliberately pre-finalization: shards never scan the same untested files or check thresholds independently. `merge-reports` is the sole owner of filtering, backfill, reports, and thresholds for the unified blob workflow.
 - The reporting provider (main process) and the worker collection providers are distinct instances — state set during collection never reaches reporting.
 - Every browser cycle reports through the shared finalize, on both commands and in every watch shape — there is no bespoke report path left. Watch coverage is per-cycle on both transports: each report covers only the files that cycle ran, so the fold that produces a cycle's map must never widen past the cycle's own results.
 

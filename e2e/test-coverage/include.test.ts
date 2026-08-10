@@ -62,11 +62,20 @@ for (const provider of coverageProviders) {
         logs.find((log) => log.includes('c.ts') && log.includes('|')),
       ).toBeFalsy();
 
+      const coverageSummary: Record<
+        string,
+        Record<string, { total: number; covered: number }>
+      > = fs.readJsonSync(join(reportPath, 'coverage-summary.json'));
+      expect(
+        coverageSummary[join(__dirname, 'fixtures/src/untested.jsx')],
+      ).toMatchObject({
+        lines: { covered: 0 },
+        statements: { covered: 0 },
+        functions: { covered: 0 },
+        branches: { covered: 0 },
+      });
+
       if (provider === 'v8') {
-        const coverageSummary: Record<
-          string,
-          Record<string, { total: number; covered: number }>
-        > = fs.readJsonSync(join(reportPath, 'coverage-summary.json'));
         const sourcePath = join(__dirname, 'fixtures/v8/include/src');
 
         expect(

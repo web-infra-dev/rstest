@@ -519,7 +519,7 @@ export default defineConfig({
 });
 ```
 
-Blob files are saved to `.rstest-reports/` by default. After all shards complete, use [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) to combine them into a unified report.
+Blob files are saved to `.rstest-reports/` by default. When coverage is enabled, each blob stores only the coverage collected while that shard ran. Shard runs do not generate coverage reports, add untested files from `coverage.include`, or check coverage thresholds. After all shards complete, use [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) with coverage enabled to perform those steps once against the unified result.
 
 See [splitting tests with shards](/guide/advanced/ci#split-tests-with-shards) for a complete CI workflow example.
 
