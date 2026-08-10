@@ -18,8 +18,6 @@ export type FrameLease = {
   testNamePattern?: string;
 };
 
-export type FrameLeaseTable = ReturnType<typeof createFrameLeaseTable>;
-
 export const createFrameLeaseTable = () => {
   const leases = new Map<string, FrameLease>();
   let bootCounter = 0;

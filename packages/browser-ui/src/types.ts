@@ -3,7 +3,6 @@ import type {
   BrowserDispatchResponse,
   BrowserHostConfig,
   BrowserProjectRuntime,
-  BrowserClientMessage as ProtocolBrowserClientMessage,
   RunnerEnvelope,
   TestFileInfo,
 } from '@rstest/browser/protocol';
@@ -48,30 +47,12 @@ export type BrowserClientFileResult = {
   results: BrowserClientTestResult[];
 };
 
-export type TestFileStartPayload = Extract<
-  ProtocolBrowserClientMessage,
-  { type: 'file-start' }
->['payload'];
-
 export type TestFileReadyPayload = {
   testPath: string;
   tests: TestInfo[];
 };
 
 export type TestCaseStartPayload = Extract<TestInfo, { type: 'case' }>;
-
-export type LogPayload = Extract<
-  ProtocolBrowserClientMessage,
-  { type: 'log' }
->['payload'];
-
-export type FatalPayload = Extract<
-  ProtocolBrowserClientMessage,
-  { type: 'fatal' }
->['payload'];
-
-export type BrowserClientMessage =
-  ProtocolBrowserClientMessage | { type: string; payload?: unknown };
 
 /** The committed test-file set plus its monotonic frame-set version. */
 export type VersionedTestFileSet = {
