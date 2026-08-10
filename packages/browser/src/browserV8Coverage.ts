@@ -30,7 +30,10 @@ const normalizeSourceMap = (
       }
 
       const sourceUrl = new URL(source);
-      const sourcePath = sourceUrl.pathname.replace(/^\/+/, '');
+      const sourcePath = decodeURIComponent(sourceUrl.pathname).replace(
+        /^\/+/,
+        '',
+      );
       return sourcePath.startsWith('webpack/runtime/')
         ? source
         : resolve(rootPath, sourcePath);

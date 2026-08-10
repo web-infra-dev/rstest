@@ -1152,8 +1152,12 @@ export const runBrowserController = async (
   // A fatal error the run reported outranks its results: it rides the returned
   // outcome into core's finalize, which raises the exit code from it.
   if (fatalErrorRef.current) {
+    const errorResult = await failWithError(fatalErrorRef.current, close);
     return {
-      ...(await failWithError(fatalErrorRef.current, close)),
+      ...errorResult,
+      rawCoverage,
+      loadAssetFiles: loadBrowserCoverageAssetFiles,
+      loadSourceMaps: loadBrowserCoverageSourceMaps,
       watchSession,
     };
   }
