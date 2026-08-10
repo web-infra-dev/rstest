@@ -2,13 +2,10 @@ import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   tools: {
-    swc: {
-      jsc: {
-        parser: {
-          syntax: 'ecmascript',
-          decorators: true,
-        },
-      },
+    swc: (config) => {
+      if (config.jsc?.parser) {
+        config.jsc.parser.decorators = true;
+      }
     },
   },
   source: {

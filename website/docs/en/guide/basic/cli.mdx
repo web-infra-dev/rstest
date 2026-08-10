@@ -263,7 +263,7 @@ The merge command will:
 - Apply `coverage.include` once to add files that no shard tested
 - Generate coverage reports and check thresholds against the unified result
 
-Shard runs using the blob reporter deliberately skip coverage report generation and threshold checks. Enable coverage for `merge-reports` through your configuration or the `--coverage` flag so the merge job can finalize coverage. The merge command accepts the same `--coverage.*` options as `rstest run`. Coverage options passed only to a shard are not stored in its blob, so define finalization options such as `coverage.include`, `coverage.reporters`, and `coverage.reportsDirectory` in the configuration file or repeat them on `merge-reports`.
+With coverage providers that support deferred finalization, shard runs using the blob reporter deliberately skip coverage report generation and threshold checks. Older providers retain their existing per-shard finalization behavior. Enable coverage for `merge-reports` through your configuration or the `--coverage` flag so the merge job can finalize coverage. The merge command accepts the same `--coverage.*` options as `rstest run`. Coverage options passed only to a shard are not stored in its blob, so define finalization options such as `coverage.include`, `coverage.reporters`, and `coverage.reportsDirectory` in the configuration file or repeat them on `merge-reports`.
 
 Use `--cleanup` to remove the blob reports directory after merging:
 
