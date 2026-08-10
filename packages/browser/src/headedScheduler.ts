@@ -1,5 +1,13 @@
-import type { RstestContext } from '@rstest/core/internal/browser';
-import { color, logger } from '@rstest/core/internal/browser';
+import type {
+  RstestContext,
+  TestFileResult,
+} from '@rstest/core/internal/browser';
+import {
+  color,
+  createFileCleanupTimeoutResult,
+  FIXTURE_CLEANUP_TIMEOUT_MS,
+  logger,
+} from '@rstest/core/internal/browser';
 import { normalize, relative } from 'pathe';
 import {
   type BrowserRuntime,
@@ -16,7 +24,10 @@ import type {
   FileCleanupDispatchPayload,
   TestFileInfo,
 } from './protocol';
-import { DISPATCH_NAMESPACE_RUNNER } from './protocol';
+import {
+  DISPATCH_NAMESPACE_FILE_CLEANUP,
+  DISPATCH_NAMESPACE_RUNNER,
+} from './protocol';
 import type { BrowserProviderContext, BrowserProviderPage } from './providers';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import type {
@@ -43,6 +54,12 @@ type HeadedSchedulerDeps = {
   projectRoots: Map<string, string>;
   isWatchMode: boolean;
   createDispatchRouter: () => HostDispatchRouter;
+  handlers: {
+    // For the one result the host authors itself (the cleanup-timeout
+    // failure); every runner-authored result flows through the dispatch
+    // router instead.
+    handleTestFileComplete: (payload: TestFileResult) => Promise<void>;
+  };
   fatalErrorRef: { current: Error | null };
   watchSignals: Pick<WatchSignals, 'setDispatchRerun' | 'signalInvalidation'>;
   setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
@@ -106,6 +123,7 @@ export const createHeadedScheduler = async ({
   projectRoots,
   isWatchMode,
   createDispatchRouter,
+  handlers: { handleTestFileComplete },
   fatalErrorRef,
   watchSignals,
   setDispatchPageResolver,
@@ -216,7 +234,12 @@ export const createHeadedScheduler = async ({
       const text = msg.text();
       if (text.startsWith('[Container]') || text.startsWith('[Runner]')) {
         logger.log(color.gray(`[Browser Console] ${text}`));
+        return;
       }
+      // The runner logs nothing before its config handshake, so a frame that
+      // dies during load is indistinguishable from one that never navigated.
+      // Keep non-protocol output reachable under `--debug`.
+      logger.debug(`[Browser Console] ${text}`);
     });
   };
 
@@ -247,19 +270,6 @@ export const createHeadedScheduler = async ({
       runtime.containerPage = containerPage;
       runtime.containerContext = containerContext;
     }
-
-    // Forward browser console to terminal
-    containerPage.on('console', (msg) => {
-      const text = msg.text();
-      if (text.startsWith('[Container]') || text.startsWith('[Runner]')) {
-        logger.log(color.gray(`[Browser Console] ${text}`));
-        return;
-      }
-      // The runner logs nothing before its config handshake, so a frame that
-      // dies during load is indistinguishable from one that never navigated.
-      // Keep non-protocol output reachable under `--debug`.
-      logger.debug(`[Browser Console] ${text}`);
-    });
   }
 
   setDispatchPageResolver(() => ({ containerPage }));
@@ -281,6 +291,67 @@ export const createHeadedScheduler = async ({
   // registry. It survives controller re-entry on the runtime's watch state,
   // so a re-entering scheduler cannot orphan the previous entry's runs.
   const runs = (watchState.headedRuns ??= createHeadedRunRegistry());
+
+  // A wedged cleanup does not stay its own problem: every runner iframe and
+  // the container are same-site, so they share one renderer process, and a
+  // synchronous busy-loop in one document freezes the whole tab — no sibling
+  // frame can boot until the page itself is replaced. Recovery therefore
+  // tears down the container context and boots a fresh one; the frame-set
+  // ack is reset because the old ack belongs to the destroyed page.
+  const recoverHeadedContainer = async (): Promise<void> => {
+    ackedFrameSetVersion = 0;
+    await containerContext.close().catch(() => {});
+    const created = await createContainerPage();
+    containerContext = created.context;
+    containerPage = created.page;
+    if (isWatchMode) {
+      runtime.containerPage = containerPage;
+      runtime.containerContext = containerContext;
+    }
+    await containerPage.goto(containerUrl, { waitUntil: 'load' });
+    await waitForFrameSet(watchState.headedFileSetVersion);
+  };
+
+  // The runner announces its fixture-cleanup window over the `file-cleanup`
+  // namespace (already past the dispatch gate, so the run is live). The
+  // deadline itself lives in the registry beside the boot deadline, and its
+  // expiry claims the run before this handler starts: the recovery below
+  // kills the container transport, and an unclaimed run would be swept by
+  // that very disconnect. Settling waits until the new container is ready —
+  // it is what releases the serial loop, and the next reload must find a
+  // living page. The wedged document's late messages find their run claimed
+  // (terminal) or gone and drop at the gate — no tombstone needed.
+  dispatchRouter.register(DISPATCH_NAMESPACE_FILE_CLEANUP, async (request) => {
+    const { runId } = request;
+    if (!runId) {
+      return;
+    }
+    if (request.method === 'start') {
+      const payload = request.args as FileCleanupDispatchPayload;
+      runs.armCleanupDeadline(runId, FIXTURE_CLEANUP_TIMEOUT_MS, () => {
+        void (async () => {
+          try {
+            // A cleanup timeout is a file failure, not a container failure:
+            // report it, recover, then settle so the serial loop advances.
+            await handleTestFileComplete(
+              createFileCleanupTimeoutResult({
+                message: `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
+                projectName: payload.projectName,
+                result: payload.result,
+                testPath: payload.testPath,
+              }),
+            );
+            await recoverHeadedContainer();
+            runs.resolve(runId);
+          } catch (error) {
+            runs.reject(runId, toError(error));
+          }
+        })();
+      });
+    } else if (request.method === 'end') {
+      runs.disarmCleanupDeadline(runId);
+    }
+  });
 
   // No execution-duration watchdog: per-test/hook timeouts are enforced inside
   // the runner, a dead container is caught event-driven by the WebSocket

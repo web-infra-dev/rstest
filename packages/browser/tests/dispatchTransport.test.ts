@@ -90,7 +90,7 @@ describe('dispatch transport', () => {
 
     const { adoptRunIdentity } = await import('../src/client/runIdentity');
     adoptRunIdentity('run-9');
-    const { createRunnerLifecycleRequest, sendRunnerLifecycle } =
+    const { createRunnerLifecycleRequest, sendDispatchRequest } =
       await loadModule();
     const req = createRunnerLifecycleRequest('suite-start', { s: 1 });
     sendDispatchRequest(req);

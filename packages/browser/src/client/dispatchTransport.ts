@@ -64,14 +64,6 @@ export const createRunnerLifecycleRequest = (
 });
 
 /**
- * Deliver a dispatch request fire-and-forget.
- *
- * Unlike {@link dispatchRpc}, this never awaits, unwraps, id-matches, or times
- * out: the host echoes a response but the runner ignores it. Failures surface
- * only through the optional `onError` hook (debug logging at the call site),
- * keeping the hot test loop non-blocking.
- */
-/**
  * Stamp the document's run identity on an outbound dispatch request. Applied
  * at the transport boundary so every namespace (runner lifecycle, browser,
  * snapshot) carries it uniformly — the headed host accepts a request iff this
@@ -99,7 +91,15 @@ const toEnvelopeMessage = (
   };
 };
 
-export const sendRunnerLifecycle = (
+/**
+ * Deliver a dispatch request fire-and-forget.
+ *
+ * Unlike {@link dispatchRpc}, this never awaits, unwraps, id-matches, or times
+ * out: the host echoes a response but the runner ignores it. Failures surface
+ * only through the optional `onError` hook (debug logging at the call site),
+ * keeping the hot test loop non-blocking.
+ */
+export const sendDispatchRequest = (
   request: BrowserDispatchRequest,
   onError?: (error: unknown) => void,
 ): void => {

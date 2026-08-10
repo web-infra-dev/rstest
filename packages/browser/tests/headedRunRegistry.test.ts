@@ -144,6 +144,50 @@ describe('headed run registry', () => {
     }
   });
 
+  it('should fire the cleanup deadline only for a run still open, and let settle disarm it', async () => {
+    rstest.useFakeTimers();
+    try {
+      const runs = createHeadedRunRegistry();
+
+      // Expires: an armed run that never disarms gets its onExpire exactly once.
+      const wedged = runs.mint('/wedged.test.ts');
+      let expired = 0;
+      runs.armCleanupDeadline(wedged.runId, 10_000, () => {
+        expired += 1;
+        runs.resolve(wedged.runId);
+      });
+
+      // Disarmed by the runner's `end` signal: never expires.
+      const finished = runs.mint('/finished.test.ts');
+      runs.armCleanupDeadline(finished.runId, 10_000, () => {
+        throw new Error('must not expire after disarm');
+      });
+      runs.disarmCleanupDeadline(finished.runId);
+
+      // Settled elsewhere first: the guarded delete kills the deadline too.
+      const swept = runs.mint('/swept.test.ts');
+      runs.armCleanupDeadline(swept.runId, 10_000, () => {
+        throw new Error('must not expire after settle');
+      });
+      // Attached before the rejection lands so the settled promise is never
+      // observably unhandled.
+      const sweptRejects = expect(swept.settled).rejects.toThrow(
+        'transport died',
+      );
+      runs.reject(swept.runId, new Error('transport died'));
+
+      rstest.advanceTimersByTime(30_000);
+      expect(expired).toBe(1);
+
+      rstest.useRealTimers();
+      expect(await settled(wedged.settled)).toBe('resolved');
+      expect(await settled(finished.settled)).toBe('pending');
+      await sweptRejects;
+    } finally {
+      rstest.useRealTimers();
+    }
+  });
+
   it('should settle every run exactly once, first transition wins', async () => {
     // A2 as a property of the machine: for each pair of settlers, applying
     // both in either order settles once with the FIRST one's outcome.

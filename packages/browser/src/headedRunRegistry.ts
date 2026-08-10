@@ -48,6 +48,7 @@ type RunRecord = {
   phase: RunPhase;
   deferred: DeferredPromise<void>;
   bootTimer: ReturnType<typeof setTimeout>;
+  cleanupTimer?: ReturnType<typeof setTimeout>;
 };
 
 export type HeadedRunRegistry = ReturnType<typeof createHeadedRunRegistry>;
@@ -63,6 +64,7 @@ export const createHeadedRunRegistry = () => {
       return;
     }
     clearTimeout(record.bootTimer);
+    clearTimeout(record.cleanupTimer);
     if (error) {
       record.deferred.reject(error);
     } else {
@@ -149,6 +151,45 @@ export const createHeadedRunRegistry = () => {
       }
       record.phase = 'claimed';
       return true;
+    },
+
+    /**
+     * A run whose fixture cleanup never finishes will never send its
+     * terminal message — a way to go silent that no other deadline covers,
+     * so it is a settlement obligation and lives here: the deadline dies
+     * with the record in the one guarded delete, which is what makes "run
+     * settled elsewhere, timer fires anyway" unrepresentable. Expiry fires
+     * only while the run is still open and CLAIMS it in the same synchronous
+     * step, exactly like a terminal message's admit: `onExpire`'s handler
+     * now owns the settlement, and the recovery it performs (tearing down
+     * the container transport) can no longer sweep this run out from under
+     * itself. Re-arming replaces the previous deadline.
+     */
+    armCleanupDeadline(runId: string, ms: number, onExpire: () => void): void {
+      const record = runsById.get(runId);
+      if (!record || record.phase !== 'open') {
+        return;
+      }
+      clearTimeout(record.cleanupTimer);
+      const cleanupTimer = setTimeout(() => {
+        const current = runsById.get(runId);
+        if (!current || current.phase !== 'open') {
+          return;
+        }
+        current.cleanupTimer = undefined;
+        current.phase = 'claimed';
+        onExpire();
+      }, ms);
+      cleanupTimer.unref?.();
+      record.cleanupTimer = cleanupTimer;
+    },
+
+    disarmCleanupDeadline(runId: string): void {
+      const record = runsById.get(runId);
+      if (record) {
+        clearTimeout(record.cleanupTimer);
+        record.cleanupTimer = undefined;
+      }
     },
 
     resolve(runId: string): void {

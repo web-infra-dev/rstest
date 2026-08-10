@@ -28,6 +28,8 @@ import { normalize } from 'pathe';
 import type {
   BrowserClientMessage,
   BrowserProjectRuntime,
+  FileCleanupDispatchMethod,
+  FileCleanupDispatchPayload,
   RunnerEnvelope,
   RunnerLifecycleMethod,
 } from '../protocol';
@@ -685,7 +687,9 @@ const run = async () => {
         args: {
           projectName: projectRuntime.name,
           result,
-          runId: options.runId,
+          // The adopted identity, same as the transport stamp — never the
+          // config value read back, which a document must adopt only once.
+          runId: getRunIdentity(),
           testPath,
         } satisfies FileCleanupDispatchPayload,
       };

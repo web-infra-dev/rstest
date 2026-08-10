@@ -1143,6 +1143,7 @@ export const runBrowserController = async (
     : await createHeadedScheduler({
         ...schedulerDeps,
         runtime,
+        handlers: { handleTestFileComplete },
       });
 
   // The first build must not trigger a duplicate cycle, but a fatal test cycle
