@@ -8,7 +8,11 @@ import type {
   ExecutorRunCycleOptions,
   TestExecutor,
 } from '../../types';
-import type { CoverageMap, CoverageProvider } from '../../types/coverage';
+import type {
+  CoverageMap,
+  CoverageProvider,
+  RawCoverageResolveOptions,
+} from '../../types/coverage';
 import { clearScreen, color, logger, type TraceRun } from '../../utils';
 import { writeBundleCoverageResults } from '../bundleCoverage';
 import { ensureTestEnvironmentDependencies } from '../envDependencies';
@@ -38,10 +42,7 @@ type NodeAssetResource = Pick<
   RsbuildStats,
   'assetNames' | 'getAssetFiles' | 'getSourceMaps'
 >;
-type CoverageResourceLoaders = {
-  loadAssetFiles: NodeAssetResource['getAssetFiles'];
-  loadSourceMaps: NodeAssetResource['getSourceMaps'];
-};
+type CoverageResourceLoaders = Required<RawCoverageResolveOptions>;
 
 export const createCoverageResourceLoaders = (
   items: NodeAssetResource[],
@@ -114,9 +115,11 @@ export const createCoverageResourceLoaders = (
         );
         for (const [assetName, requestedNames] of requests) {
           const content = loaded[assetName];
-          if (typeof content !== 'string') continue;
+          if (content == null) continue;
+          const text =
+            typeof content === 'string' ? content : content.toString('utf8');
           for (const requestedName of requestedNames) {
-            resources[requestedName] = content;
+            resources[requestedName] = text;
           }
         }
       }),

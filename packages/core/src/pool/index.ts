@@ -31,6 +31,7 @@ import { selectMemoryGate } from './memoryGate';
 import { getEnvironmentKey } from '../core/environmentGroups';
 import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/envDependencies';
 import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
+import { prepareAssetFilesForIPC } from '../utils/assetFiles';
 import {
   type BundleCoverageResult,
   isBundleCoverageDebugEnabled,
@@ -51,7 +52,7 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig =>
 
 const filterAssetsByEntry = async (
   entryInfo: EntryInfo,
-  getAssetFiles: (names: string[]) => Promise<Record<string, string>>,
+  getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>,
   getSourceMaps: (names: string[]) => Promise<Record<string, string>>,
   setupAssets: string[],
   allAssetNames: string[] | undefined,
@@ -88,7 +89,7 @@ const getNodeExecArgv = () => {
 type PoolDispatchParams = {
   entries: EntryInfo[];
   assetNames: string[];
-  getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
+  getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
   getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
   setupEntries: EntryInfo[];
   updateSnapshot: SnapshotUpdateState;
@@ -156,10 +157,13 @@ const buildTask = async ({
     );
     if (bundleCoverageAssets) {
       for (const [name, content] of Object.entries(assets.assetFiles)) {
-        bundleCoverageAssets[name] = Buffer.byteLength(content);
+        bundleCoverageAssets[name] = content.byteLength;
       }
     }
-    return assets;
+    return {
+      ...assets,
+      assetFiles: prepareAssetFilesForIPC(assets.assetFiles, workerKind),
+    };
   };
   const traceArgs = {
     project: project.name,
@@ -310,7 +314,7 @@ export const createPool = async ({
   runTests: (params: {
     entries: EntryInfo[];
     assetNames: string[];
-    getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
+    getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
     getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
     setupEntries: EntryInfo[];
     updateSnapshot: SnapshotUpdateState;

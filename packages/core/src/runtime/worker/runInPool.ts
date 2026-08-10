@@ -2,6 +2,7 @@ import type { FileCoverageData } from 'istanbul-lib-coverage';
 import { isMainThread, threadId } from 'node:worker_threads';
 import { install } from 'source-map-support';
 import type {
+  AssetFiles,
   MaybePromise,
   Rstest,
   RunWorkerOptions,
@@ -10,6 +11,7 @@ import type {
   WorkerState,
 } from '../../types';
 import type { TestEnvironmentModuleFallback } from '../../pool/protocol';
+import { getAssetText } from '../../utils/assetFiles';
 import { globalApis, RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
@@ -395,7 +397,7 @@ const loadFiles = async ({
   tracker,
 }: {
   setupEntries: RunWorkerOptions['options']['setupEntries'];
-  assetFiles: Record<string, string>;
+  assetFiles: AssetFiles;
   rstestContext: Record<string, any>;
   distPath: string;
   runtimeDistPath?: string;
@@ -437,11 +439,10 @@ const loadFiles = async ({
     distPath: setupDistPath,
     testPath: setupTestPath,
   } of setupEntries) {
-    const setupCodeContent = assetFiles[setupDistPath]!;
     setFederationDynamicImportOrigin(federation, setupTestPath);
 
     await loadModule({
-      codeContent: setupCodeContent,
+      codeContent: getAssetText(assetFiles, setupDistPath),
       distPath: setupDistPath,
       runtimeDistPath,
       testPath: setupTestPath,
@@ -455,7 +456,7 @@ const loadFiles = async ({
   tracker?.transition('collect');
   setFederationDynamicImportOrigin(federation, testPath);
   await loadModule({
-    codeContent: assetFiles[distPath]!,
+    codeContent: getAssetText(assetFiles, distPath),
     distPath,
     runtimeDistPath,
     testPath,
@@ -770,7 +771,11 @@ export const runInPool = async (
       const provider = coverageProvider;
       tracker.transition('coverage');
       const collectOptions = {
-        assetFiles,
+        assetFiles: Object.fromEntries(
+          Object.keys(assetFiles)
+            .filter((name) => /\.[cm]?js$/.test(name))
+            .map((name) => [name, getAssetText(assetFiles, name)]),
+        ),
         sourceMaps,
         outputModule: options.context.outputModule,
       };
