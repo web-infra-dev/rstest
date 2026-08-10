@@ -16,7 +16,7 @@ This package owns transport bridging and UI state projection only — host sched
 
 - `src/core/channel.ts` is the validation boundary for messages forwarded between the runner iframe and the host.
 - `src/core/treeNodeKey.ts` is the single owner of the test-tree node-key grammar — never re-encode it elsewhere (the byte-for-byte producer/consumer contract is documented in its header).
-- The container adjudicates no run identity. It holds host-minted run leases per frame (`src/core/frames.ts`), confers the lease over the config handshake to whatever document boots into the frame, and relays runner messages with the identity the runner stamped — it never decides whether a message is stale (that is the host's dispatch gate) and never derives identity from a frame URL or React state. Each grant re-keys the runner iframe (a fresh boot counter), so one browsing context can never serve two runs, and a leaseless frame's document gets no config and stays silent by design.
+- The container adjudicates nothing about a run — not staleness, not liveness. It holds host-minted run leases per frame (`src/core/frames.ts`), confers the lease over the config handshake to whatever document boots into the frame, and relays runner messages with the identity the runner stamped; every judgement about that identity happens at the host's dispatch gate. Never derive identity from a frame URL or React state, and never add container-side per-run bookkeeping (timers, liveness maps): the host sees the same evidence and owns the settlement. Each grant re-keys the runner iframe (a fresh boot counter), so one browsing context can never serve two runs, and a leaseless frame's document gets no config and stays silent by design.
 
 ## Commands
 

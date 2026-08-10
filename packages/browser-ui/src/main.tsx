@@ -8,6 +8,7 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
 } from 'react';
@@ -62,17 +63,6 @@ const getDisplayName = (testFile: string): string => {
   return parts[parts.length - 1] || testFile;
 };
 
-/**
- * How long a granted run may go without its document sending a single
- * envelope before the container reports it abandoned. Counted from the GRANT,
- * not from the iframe's `load`, so a navigation that never produces a
- * document (server error, frame never mounted) is bounded too. Must exceed
- * the runner's CONFIG_WAIT_TIMEOUT_MS (30s, client/runner.ts): the runner
- * gives up on its handshake first, so an abandoned run is genuinely dead
- * rather than merely slow.
- */
-const RUN_BOOT_DEADLINE_MS = 45_000;
-
 // ============================================================================
 // App Component
 // ============================================================================
@@ -99,29 +89,13 @@ const BrowserRunner: React.FC<{
   const [openFiles, setOpenFiles] = useState<string[]>([]);
   const [filterText, setFilterText] = useState<string>('');
 
-  // Run identity lives in a ref, never in React state: `identityForBoot` must
-  // be current at the instant a `load` event fires, and a grant is a
-  // synchronous write inside `handleReloadTestFile` — before any render, any
-  // navigation, or the birpc reply. `leaseEpoch` only schedules the re-render
-  // that lets the grant reach the DOM.
+  // Leases live in a ref, never in React state: the lease must be current at
+  // the instant a `load` event fires, and a grant is a synchronous write
+  // inside `handleReloadTestFile` — before any render, any navigation, or the
+  // birpc reply. `bumpLeases` only schedules the re-render that lets the grant
+  // reach the DOM.
   const leasesRef = useRef(createFrameLeaseTable());
-  const [leaseEpoch, setLeaseEpoch] = useState(0);
-  // Boot deadlines keyed by runId; cleared by the first envelope that run's
-  // document sends.
-  const bootDeadlinesRef = useRef(
-    new Map<string, ReturnType<typeof setTimeout>>(),
-  );
-
-  const clearBootDeadline = useCallback((runId: string | undefined): void => {
-    if (!runId) {
-      return;
-    }
-    const timer = bootDeadlinesRef.current.get(runId);
-    if (timer !== undefined) {
-      clearTimeout(timer);
-      bootDeadlinesRef.current.delete(runId);
-    }
-  }, []);
+  const [, bumpLeases] = useReducer((epoch: number) => epoch + 1, 0);
 
   const viewportStorageKey = useCallback(
     (projectName: string) => {
@@ -215,9 +189,6 @@ const BrowserRunner: React.FC<{
     });
   }, [options.projects, readStoredViewport]);
 
-  // Latest rpc for callbacks that outlive a render (boot-deadline timers).
-  const rpcRef = useRef<ReturnType<typeof useRpc>['rpc']>(null);
-
   const handleReloadTestFile = useCallback(
     async (testFile: string, runId: string, testNamePattern?: string) => {
       logger.debug(
@@ -233,36 +204,8 @@ const BrowserRunner: React.FC<{
       // `load` firing at any later instant (the granted navigation, an HMR
       // full reload, a stray in-flight one) reads this lease and confers the
       // current identity on whatever document booted.
-      const previous = leasesRef.current.get(testFile);
-      clearBootDeadline(previous?.runId);
       leasesRef.current.grant(testFile, runId, testNamePattern);
-      bootDeadlinesRef.current.set(
-        runId,
-        setTimeout(() => {
-          bootDeadlinesRef.current.delete(runId);
-          // Only the still-current lease is ours to abandon.
-          if (leasesRef.current.get(testFile)?.runId !== runId) {
-            return;
-          }
-          logger.debug(
-            '[Container] Run never booted, abandoning:',
-            testFile,
-            runId,
-          );
-          leasesRef.current.release(testFile);
-          setLeaseEpoch((epoch) => epoch + 1);
-          void rpcRef.current
-            ?.onRunAbandoned(
-              testFile,
-              runId,
-              'runner did not adopt its run within the boot deadline',
-            )
-            .catch((error) => {
-              logger.debug('[Container] Failed to report abandon:', error);
-            });
-        }, RUN_BOOT_DEADLINE_MS),
-      );
-      setLeaseEpoch((epoch) => epoch + 1);
+      bumpLeases();
 
       setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
       setCaseMap((prev) => {
@@ -274,7 +217,7 @@ const BrowserRunner: React.FC<{
         return { ...prev, [testFile]: updatedCases };
       });
     },
-    [clearBootDeadline],
+    [],
   );
 
   const { rpc, loading, connected } = useRpc(
@@ -282,10 +225,6 @@ const BrowserRunner: React.FC<{
     options?.wsPort,
     handleReloadTestFile,
   );
-
-  useEffect(() => {
-    rpcRef.current = rpc;
-  }, [rpc]);
 
   // Consolidated effect for handling testFiles changes
   // Handles statusMap, caseMap, openFiles initialization and cleanup
@@ -312,13 +251,8 @@ const BrowserRunner: React.FC<{
     // runs (`retainPaths` runs before the container is told), so this is pure
     // container-side cleanup.
     const testPaths = testFiles.map((f) => f.testPath);
-    const releasedLeases = leasesRef.current.retain(testPaths);
-    if (releasedLeases.length > 0) {
-      for (const lease of releasedLeases) {
-        clearBootDeadline(lease.runId);
-      }
-      setLeaseEpoch((epoch) => epoch + 1);
-    }
+    leasesRef.current.retain(testPaths);
+    bumpLeases();
     setOpenFiles((prev) => prev.filter((file) => testPaths.includes(file)));
 
     // Auto-select first file if none selected
@@ -332,7 +266,7 @@ const BrowserRunner: React.FC<{
       }
       return prev;
     });
-  }, [testFiles, clearBootDeadline]);
+  }, [testFiles]);
 
   useEffect(() => {
     if (!rpc || !connected || fileSet.version === 0) {
@@ -485,8 +419,6 @@ const BrowserRunner: React.FC<{
       if (!envelope) {
         return;
       }
-      // Any envelope from a granted run proves its document booted.
-      clearBootDeadline(envelope.runId);
       const message = envelope.message;
 
       if (message.type === DISPATCH_RPC_REQUEST_TYPE) {
@@ -518,14 +450,7 @@ const BrowserRunner: React.FC<{
           }
         }
 
-        void forwardDispatchRpcRequest(
-          rpc,
-          {
-            ...dispatchRequest,
-            runId: dispatchRequest.runId ?? envelope.runId,
-          },
-          event.source,
-        );
+        void forwardDispatchRpcRequest(rpc, dispatchRequest, event.source);
         return;
       }
 
@@ -598,7 +523,6 @@ const BrowserRunner: React.FC<{
     upsertCase,
     mapCaseStatus,
     rpc,
-    clearBootDeadline,
     forwardRunnerMessage,
     syncCollectedCases,
     syncStartedCase,
@@ -818,9 +742,6 @@ const BrowserRunner: React.FC<{
             <div
               className="relative min-h-0 flex-1 overflow-auto"
               style={{ background: token.colorBgLayout }}
-              // Reading `leaseEpoch` ties this subtree's renders to lease
-              // mutations (the table itself lives in a ref).
-              data-lease-epoch={leaseEpoch}
             >
               {!active && (
                 <EmptyPreviewOverlay message="Select a test file on the left to view its run output" />
@@ -829,8 +750,8 @@ const BrowserRunner: React.FC<{
                 (() => {
                   const isActive = fileInfo.testPath === active;
                   // Reading the ref during render is safe here: every lease
-                  // mutation bumps `leaseEpoch`, so this render is never
-                  // behind the table.
+                  // mutation calls `bumpLeases`, so this render is never behind
+                  // the table.
                   const lease = leasesRef.current.get(fileInfo.testPath);
                   const selection =
                     viewportByProject[fileInfo.projectName] ??
@@ -900,9 +821,6 @@ const BrowserRunner: React.FC<{
                           key={`${fileInfo.testPath}#${lease?.boot ?? 0}`}
                           data-test-file={fileInfo.testPath}
                           data-test-project={fileInfo.projectName}
-                          // Debugging affordance only — nothing reads this
-                          // back (identity is conferred via the handshake).
-                          data-run-id={lease?.runId}
                           title={`Test runner for ${getDisplayName(fileInfo.testPath)}`}
                           src={
                             lease

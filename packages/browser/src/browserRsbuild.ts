@@ -130,6 +130,15 @@ type BrowserWatchState = {
    * instead of orphaning them in a discarded closure.
    */
   headedRuns?: HeadedRunRegistry;
+  /**
+   * The committed file set's monotonic version. Lives here for the same reason
+   * the registry does: the frame set it versions is the container's, and the
+   * container outlives any one controller entry. A per-entry counter would
+   * restart at 1 and become indistinguishable from the previous entry's
+   * in-flight acks — the exact ABA the version replaced a content signature to
+   * avoid.
+   */
+  headedFileSetVersion: number;
   // Diff baselines keyed per project: sibling projects have isolated
   // compilers, so a shared flat baseline would let one project's compile
   // clobber another's (missed reruns) and collide on compiler-local chunk
@@ -148,6 +157,7 @@ type BrowserWatchState = {
 const createBrowserWatchState = (): BrowserWatchState => ({
   lastTestFiles: [],
   hooksEnabled: false,
+  headedFileSetVersion: 1,
   invalidation: new Map(),
   pendingAffectedTestFiles: new Map(),
   compileStartTimes: new Map(),

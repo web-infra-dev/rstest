@@ -126,11 +126,11 @@ export const createHeadedScheduler = async ({
   // CONFIG_WAIT_TIMEOUT_MS <= RUNNER_FRAMES_READY_TIMEOUT_MS.
   const RUNNER_FRAMES_READY_TIMEOUT_MS = 30_000;
 
-  // The committed file set's monotonic version, acked by the container once
-  // its frame set for that version is in the DOM. A counter only increases,
-  // so a stale ack can never satisfy a newer wait (the content signature it
-  // replaces could ABA back to a previously-acked value).
-  let fileSetVersion = 1;
+  // `watchState.headedFileSetVersion` is the committed file set's monotonic
+  // version, acked by the container once its frame set for that version is in
+  // the DOM. A counter only increases, so a stale ack can never satisfy a
+  // newer wait (the content signature it replaces could ABA back to a
+  // previously-acked value).
   let ackedFrameSetVersion = 0;
   type FrameSetWaiter = {
     version: number;
@@ -140,10 +140,10 @@ export const createHeadedScheduler = async ({
   const frameSetWaiters = new Set<FrameSetWaiter>();
 
   const markFrameSetReady = (version: number): void => {
-    // An ack above anything this scheduler ever sent can only be a previous
-    // session's late echo on the reused socket — accepting it would let every
-    // future wait short-circuit.
-    if (version > fileSetVersion) {
+    // An ack above anything ever sent can only be a previous session's late
+    // echo on the reused socket — accepting it would let every future wait
+    // short-circuit.
+    if (version > watchState.headedFileSetVersion) {
       return;
     }
     if (version > ackedFrameSetVersion) {
@@ -319,7 +319,6 @@ export const createHeadedScheduler = async ({
     request: BrowserDispatchRequest,
   ): BrowserDispatchResponse => ({
     requestId: request.requestId,
-    runId: request.runId,
     stale: true,
   });
 
@@ -337,61 +336,52 @@ export const createHeadedScheduler = async ({
       await runUiRequestedRerun(getTestFileInfo(testFile), testNamePattern);
     },
     async getTestFiles() {
-      return { files: currentTestFiles, version: fileSetVersion };
+      return {
+        files: currentTestFiles,
+        version: watchState.headedFileSetVersion,
+      };
     },
     async onFrameSetReady(version: number) {
       markFrameSetReady(version);
     },
-    async onRunAbandoned(testFile: string, runId: string, reason: string) {
-      logger.debug(
-        `[Browser UI] Run ${runId} for ${testFile} abandoned: ${reason}`,
-      );
-      runs.reject(
-        runId,
-        new Error(`Headed run for ${testFile} was abandoned: ${reason}`),
-      );
-    },
     /**
-     * The ONE inbound gate for everything a runner document produces. A
-     * message is accepted iff its stamped runId names a live run — path
-     * lookups, frame lookups and fallback identities do not exist here, so a
-     * completion already in transport when its run was closed simply finds
-     * its runId gone and drops.
+     * The ONE inbound gate for everything a runner document produces —
+     * lifecycle messages and browser/snapshot RPCs alike. A message is
+     * accepted iff its stamped runId names a live run; path lookups, frame
+     * lookups and fallback identities do not exist here, so a completion
+     * already in transport when its run was closed simply finds its runId
+     * gone and drops.
      *
      * The terminal methods ("file-complete", "fatal") also settle the run:
-     * the claim happens synchronously before the handler's first await, so a
-     * file-set commit racing the handler cannot settle it a second time. A
-     * handler failure rejects the run — `dispatchRouter.dispatch` catches
-     * handler errors into `response.error` rather than throwing, and a
-     * reporter/snapshot-ingest failure must ride the cycle outcome, not
+     * `admit` claims settlement synchronously, before the handler's first
+     * await, so a file-set commit racing the handler cannot settle it a
+     * second time. A handler failure rejects the run — `dispatchRouter`
+     * catches handler errors into `response.error` rather than throwing, and
+     * a reporter/snapshot-ingest failure must ride the cycle outcome, not
      * vanish into a response the runner discards.
      */
     async dispatch(request: BrowserDispatchRequest) {
       const { method, runId } = request;
-      if (request.namespace !== DISPATCH_NAMESPACE_RUNNER) {
-        // browser/snapshot RPCs carry the same document identity; a request
-        // from a run that is no longer live gets a stale response instead of
-        // touching host state.
-        if (!runId || !runs.has(runId)) {
-          return staleDispatchResponse(request);
-        }
-        return dispatchRouter.dispatch(request);
-      }
-      const isTerminal = method === 'file-complete' || method === 'fatal';
-      if (!runId || (isTerminal ? !runs.claim(runId) : !runs.has(runId))) {
+      const isTerminal =
+        request.namespace === DISPATCH_NAMESPACE_RUNNER &&
+        (method === 'file-complete' || method === 'fatal');
+      if (!runId || !runs.admit(runId, isTerminal)) {
         logger.debug(
           `[Headed] Dropped stale "${method}" from run ${runId ?? '(none)'}`,
         );
         return staleDispatchResponse(request);
       }
       const response = await dispatchRouter.dispatch(request);
+      if (!isTerminal) {
+        return response;
+      }
       if (method === 'file-complete') {
         if (response.error) {
           runs.reject(runId, new Error(response.error));
         } else {
           runs.resolve(runId);
         }
-      } else if (method === 'fatal') {
+      } else {
         // A fatal settles its OWN run; sibling runs and the watch session
         // survive. The cycle still fails through `fatalErrorRef`, which the
         // routed handler just set.
@@ -475,9 +465,12 @@ export const createHeadedScheduler = async ({
       // re-entry on the persistent runtime) never re-pulls `getTestFiles`, so
       // push the set — the commit effect acks the version either way.
       if (rpcManager.isConnected) {
-        await rpcManager.notifyTestFileUpdate(currentTestFiles, fileSetVersion);
+        await rpcManager.notifyTestFileUpdate(
+          currentTestFiles,
+          watchState.headedFileSetVersion,
+        );
       }
-      await waitForFrameSet(fileSetVersion);
+      await waitForFrameSet(watchState.headedFileSetVersion);
 
       for (const file of currentTestFiles) {
         await enqueueHeadedReload(file);
@@ -555,7 +548,6 @@ export const createHeadedScheduler = async ({
       // example the frame-set wait timing out) would otherwise leave watch
       // committed but never signalled — silently dead, with no error and no
       // disconnect to show for it.
-      let outcomeSettled = false;
       try {
         // Independent: config push to the container vs. local entry collection.
         const [, newProjectEntries] = await Promise.all([
@@ -577,24 +569,20 @@ export const createHeadedScheduler = async ({
 
         if (rerunPlan.fileSetUpdate) {
           currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
-          fileSetVersion += 1;
+          const version = (watchState.headedFileSetVersion += 1);
           // Must run before the container is told: `notifyTestFileUpdate` is
           // what unmounts the dropped iframes, and their runs must already be
           // settled (and out of the registry) when that happens.
           runs.retainPaths(currentTestFiles.map((file) => file.testPath));
-          await rpcManager.notifyTestFileUpdate(
-            currentTestFiles,
-            fileSetVersion,
-          );
+          await rpcManager.notifyTestFileUpdate(currentTestFiles, version);
           if (currentTestFiles.length > 0) {
-            await waitForFrameSet(fileSetVersion);
+            await waitForFrameSet(version);
           }
         }
 
         logger.log(color.cyan(rerunPlan.decision.message));
         if (rerunPlan.decision.kind === 'idle') {
           logWatchReady();
-          outcomeSettled = true;
           return;
         }
 
@@ -603,23 +591,19 @@ export const createHeadedScheduler = async ({
             ? []
             : rerunPlan.decision.testPaths,
         );
-        outcomeSettled = true;
-      } finally {
-        if (!outcomeSettled) {
-          logWatchReady();
-        }
+      } catch (error) {
+        logWatchReady();
+        throw error;
       }
     };
 
     // Serialized against itself: each per-project compiler fires its own
     // `onAfterDevCompile`, and two interleaved planning passes would race on
     // the drain-once affected set and the file-set commit.
-    let dispatchRerunChain: Promise<void> = Promise.resolve();
-    watchSignals.setDispatchRerun(() => {
-      const task = dispatchRerunChain.then(runDispatchRerunOnce);
-      dispatchRerunChain = task.catch(() => {});
-      return task;
-    });
+    const dispatchRerunQueue = createHeadedSerialTaskQueue();
+    watchSignals.setDispatchRerun(() =>
+      dispatchRerunQueue.enqueue(runDispatchRerunOnce),
+    );
 
     runUiRequestedRerun = async (file, testNamePattern) => {
       await refreshHostConfig();

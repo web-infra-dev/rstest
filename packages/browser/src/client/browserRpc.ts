@@ -6,7 +6,6 @@ import {
   dispatchRpc,
   getRpcTimeout,
 } from './dispatchTransport';
-import { getRunIdentity } from './runIdentity';
 
 const getUrlSearchParam = (name: string): string | undefined => {
   try {
@@ -30,20 +29,6 @@ const getCurrentTestPath = (): string => {
   return testPath;
 };
 
-const getCurrentRunId = (): string => {
-  // The handshake-adopted identity, with the raw config value as the pre-adopt
-  // fallback — both name the same run. Never the URL: after an HMR full reload
-  // the URL still names the run this frame was originally navigated for.
-  const runId = getRunIdentity() ?? window.__RSTEST_BROWSER_OPTIONS__?.runId;
-  if (!runId) {
-    throw new Error(
-      'Browser RPC requires runId in __RSTEST_BROWSER_OPTIONS__. ' +
-        'This usually indicates the runner iframe config is stale or incomplete.',
-    );
-  }
-  return runId;
-};
-
 const createBrowserDispatchRequest = (
   requestId: string,
   request: BrowserRpcRequest,
@@ -60,7 +45,7 @@ const createBrowserDispatchRequest = (
 };
 
 export const callBrowserRpc = async <T>(
-  payload: Omit<BrowserRpcRequest, 'id' | 'testPath' | 'runId'>,
+  payload: Omit<BrowserRpcRequest, 'id' | 'testPath'>,
 ): Promise<T> => {
   if (
     payload.kind === 'config' &&
@@ -74,7 +59,6 @@ export const callBrowserRpc = async <T>(
   const request: BrowserRpcRequest = {
     id,
     testPath: getCurrentTestPath(),
-    runId: getCurrentRunId(),
     ...payload,
   };
   const dispatchRequest = createBrowserDispatchRequest(id, request);

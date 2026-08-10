@@ -6,13 +6,8 @@ import type {
   BrowserDispatchResponse,
   BrowserHostConfig,
   TestFileInfo,
+  VersionedTestFileSet,
 } from './protocol';
-
-/** The committed test-file set plus its monotonic version (see `onFrameSetReady`). */
-export type VersionedTestFileSet = {
-  files: TestFileInfo[];
-  version: number;
-};
 
 /**
  * RPC methods exposed by the host (server) to the container (client).
@@ -31,16 +26,6 @@ export type HostRpcMethods = {
    * previously-acked value; a counter cannot).
    */
   onFrameSetReady: (version: number) => Promise<void>;
-  /**
-   * The container granted this run a lease but no document ever adopted it
-   * (navigation failed, config message lost, boot deadline elapsed). The run
-   * can never complete; the host settles it now.
-   */
-  onRunAbandoned: (
-    testFile: string,
-    runId: string,
-    reason: string,
-  ) => Promise<void>;
   dispatch: (
     request: BrowserDispatchRequest,
   ) => Promise<BrowserDispatchResponse>;

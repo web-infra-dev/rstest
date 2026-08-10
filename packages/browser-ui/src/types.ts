@@ -5,6 +5,7 @@ import type {
   BrowserProjectRuntime,
   RunnerEnvelope,
   TestFileInfo,
+  VersionedTestFileSet,
 } from '@rstest/browser/protocol';
 
 import type {
@@ -54,12 +55,6 @@ export type TestFileReadyPayload = {
 
 export type TestCaseStartPayload = Extract<TestInfo, { type: 'case' }>;
 
-/** The committed test-file set plus its monotonic frame-set version. */
-export type VersionedTestFileSet = {
-  files: TestFileInfo[];
-  version: number;
-};
-
 /**
  * Host RPC surface. Runner lifecycle events have no dedicated methods: the
  * container relays every runner message as a `dispatch` request on the
@@ -70,11 +65,6 @@ export type HostRPC = {
   rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
   getTestFiles: () => Promise<VersionedTestFileSet>;
   onFrameSetReady: (version: number) => Promise<void>;
-  onRunAbandoned: (
-    testFile: string,
-    runId: string,
-    reason: string,
-  ) => Promise<void>;
   dispatch: (
     request: BrowserDispatchRequest,
   ) => Promise<BrowserDispatchResponse>;
@@ -106,4 +96,5 @@ export type {
   BrowserProjectRuntime,
   RunnerEnvelope,
   TestFileInfo,
+  VersionedTestFileSet,
 };

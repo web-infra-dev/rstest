@@ -21,23 +21,13 @@ describe('frame lease table', () => {
     expect(leases.get('/a.test.ts')?.runId).toBe('run-1');
   });
 
-  it('should leave a released frame leaseless — a booting document stays silent', () => {
-    const leases = createFrameLeaseTable();
-    leases.grant('/a.test.ts', 'run-1');
-
-    const released = leases.release('/a.test.ts');
-    expect(released?.runId).toBe('run-1');
-    expect(leases.get('/a.test.ts')).toBeUndefined();
-  });
-
-  it('should retain only the committed set and report what was released', () => {
+  it('should leave a dropped frame leaseless — a booting document stays silent', () => {
     const leases = createFrameLeaseTable();
     leases.grant('/kept.test.ts', 'run-1');
     leases.grant('/gone.test.ts', 'run-2');
 
-    const released = leases.retain(['/kept.test.ts']);
+    leases.retain(['/kept.test.ts']);
 
-    expect(released.map((lease) => lease.runId)).toEqual(['run-2']);
     expect(leases.get('/kept.test.ts')?.runId).toBe('run-1');
     expect(leases.get('/gone.test.ts')).toBeUndefined();
   });

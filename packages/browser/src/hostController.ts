@@ -60,6 +60,7 @@ import type {
   BrowserHostConfig,
   BrowserProjectRuntime,
   BrowserRpcRequest,
+  RunnerEnvelope,
   SnapshotRpcRequest,
   TestFileInfo,
 } from './protocol';
@@ -1351,10 +1352,14 @@ export const listBrowserTests = async (
 
     const page = await browserContext.newPage();
 
-    // Expose dispatch function for browser client to send messages
+    // Expose dispatch function for browser client to send messages. The runner
+    // stamps its run identity beside every message; collection ignores it (a
+    // collect page is navigated directly, so there is no lease to check) and
+    // reads the message the envelope carries.
     await page.exposeFunction(
       DISPATCH_MESSAGE_TYPE,
-      (message: { type: string; payload?: unknown }) => {
+      (envelope: RunnerEnvelope) => {
+        const message = envelope.message;
         switch (message.type) {
           case 'collect-result': {
             const payload = message.payload as {

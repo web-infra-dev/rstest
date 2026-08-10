@@ -39,27 +39,17 @@ export const createFrameLeaseTable = () => {
       return leases.get(testPath);
     },
 
-    release(testPath: string): FrameLease | undefined {
-      const lease = leases.get(testPath);
-      leases.delete(testPath);
-      return lease;
-    },
-
     /**
-     * Drop leases whose path left the committed file set; returns the released
-     * leases so callers can clean up per-run state (boot deadlines). A re-added
-     * path starts leaseless — no revival, no ABA.
+     * Drop leases whose path left the committed file set. A re-added path
+     * starts leaseless — no revival, no ABA.
      */
-    retain(paths: readonly string[]): FrameLease[] {
+    retain(paths: readonly string[]): void {
       const retained = new Set(paths);
-      const released: FrameLease[] = [];
-      for (const [testPath, lease] of leases) {
+      for (const testPath of leases.keys()) {
         if (!retained.has(testPath)) {
           leases.delete(testPath);
-          released.push(lease);
         }
       }
-      return released;
     },
   };
 };

@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, rstest } from '@rstest/core';
 import { createHeadedRunRegistry } from '../src/headedRunRegistry';
 
 const settled = async (
@@ -19,25 +19,25 @@ const settled = async (
 };
 
 describe('headed run registry', () => {
-  it('should resolve a run through claim + resolve and drop the identity', async () => {
+  it('should resolve a run through admit + resolve and drop the identity', async () => {
     const runs = createHeadedRunRegistry();
     const { runId, settled: run } = runs.mint('/a.test.ts');
 
-    expect(runs.has(runId)).toBe(true);
-    expect(runs.claim(runId)).toBe(true);
+    expect(runs.admit(runId, false)).toBe(true);
+    expect(runs.admit(runId, true)).toBe(true);
     runs.resolve(runId);
 
     expect(await settled(run)).toBe('resolved');
-    expect(runs.has(runId)).toBe(false);
+    expect(runs.admit(runId, false)).toBe(false);
   });
 
-  it('should refuse a second claim — a duplicate terminal message is stale', async () => {
+  it('should refuse a second terminal admit — a duplicate terminal message is stale', async () => {
     const runs = createHeadedRunRegistry();
     const { runId } = runs.mint('/a.test.ts');
 
-    expect(runs.claim(runId)).toBe(true);
-    expect(runs.claim(runId)).toBe(false);
-    expect(runs.claim('unknown-run')).toBe(false);
+    expect(runs.admit(runId, true)).toBe(true);
+    expect(runs.admit(runId, true)).toBe(false);
+    expect(runs.admit('unknown-run', true)).toBe(false);
   });
 
   it('should close open runs whose path left the set and spare the rest', async () => {
@@ -51,14 +51,14 @@ describe('headed run registry', () => {
     expect(await settled(kept.settled)).toBe('pending');
     // The closed run's identity is gone: a completion already in transport
     // finds no run to attach to and drops by rule.
-    expect(runs.has(dropped.runId)).toBe(false);
+    expect(runs.admit(dropped.runId, false)).toBe(false);
   });
 
   it('should leave a claimed run to its handler across retainPaths', async () => {
     const runs = createHeadedRunRegistry();
     const { runId, settled: run } = runs.mint('/a.test.ts');
 
-    runs.claim(runId);
+    runs.admit(runId, true);
     runs.retainPaths([]);
     expect(await settled(run)).toBe('pending');
 
@@ -76,9 +76,9 @@ describe('headed run registry', () => {
     // though the path is live again (the ABA the path-keyed guard missed).
     const second = runs.mint('/a.test.ts');
     expect(first.runId).not.toBe(second.runId);
-    expect(runs.has(first.runId)).toBe(false);
-    expect(runs.claim(first.runId)).toBe(false);
-    expect(runs.claim(second.runId)).toBe(true);
+    expect(runs.admit(first.runId, false)).toBe(false);
+    expect(runs.admit(first.runId, true)).toBe(false);
+    expect(runs.admit(second.runId, true)).toBe(true);
   });
 
   it('should close an open predecessor when the same path is minted again', async () => {
@@ -90,7 +90,7 @@ describe('headed run registry', () => {
     expect(await settled(second.settled)).toBe('pending');
 
     // A claimed predecessor is the handler's; a new mint must not settle it.
-    runs.claim(second.runId);
+    runs.admit(second.runId, true);
     const third = runs.mint('/a.test.ts');
     expect(await settled(second.settled)).toBe('pending');
     runs.resolve(second.runId);
@@ -102,7 +102,7 @@ describe('headed run registry', () => {
     const runs = createHeadedRunRegistry();
     const open = runs.mint('/open.test.ts');
     const claimed = runs.mint('/claimed.test.ts');
-    runs.claim(claimed.runId);
+    runs.admit(claimed.runId, true);
 
     runs.rejectAll(new Error('disconnected'));
 
@@ -123,6 +123,25 @@ describe('headed run registry', () => {
     const after = runs.mint('/a.test.ts');
     runs.setTransportEpoch(2);
     expect(await settled(after.settled)).toBe('pending');
+  });
+
+  it('should settle a run whose document never speaks, and only that one', async () => {
+    rstest.useFakeTimers();
+    try {
+      const runs = createHeadedRunRegistry();
+      const silent = runs.mint('/silent.test.ts');
+      const alive = runs.mint('/alive.test.ts');
+      // Any admitted message proves the document booted, terminal or not.
+      runs.admit(alive.runId, false);
+
+      rstest.advanceTimersByTime(60_000);
+
+      rstest.useRealTimers();
+      await expect(silent.settled).rejects.toThrow('never booted');
+      expect(await settled(alive.settled)).toBe('pending');
+    } finally {
+      rstest.useRealTimers();
+    }
   });
 
   it('should settle every run exactly once, first transition wins', async () => {

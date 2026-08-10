@@ -81,10 +81,9 @@ export const createRunnerLifecycleRequest = (
 const stampRunIdentity = (
   request: BrowserDispatchRequest,
 ): BrowserDispatchRequest => {
-  return { ...request, runId: request.runId ?? getRunIdentity() };
+  return { ...request, runId: getRunIdentity() };
 };
 
-/** Wrap a dispatch request in the identity envelope for the container relay. */
 const toEnvelopeMessage = (
   request: BrowserDispatchRequest,
 ): { type: typeof DISPATCH_MESSAGE_TYPE; payload: RunnerEnvelope } => {

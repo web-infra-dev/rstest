@@ -139,10 +139,6 @@ export const createHostDispatchRouter = ({
       ),
     log: (args) => runnerCallbacks.onLog(args as RunnerPayload<'log'>),
     fatal: (args) => runnerCallbacks.onFatal(args as RunnerPayload<'fatal'>),
-    // Routed so they are not silently dropped (`ready` is what proves a
-    // granted run's document booted); no host state hangs off them.
-    ready: async () => {},
-    complete: async () => {},
   };
 
   router.register(

@@ -6,6 +6,14 @@ import {
 } from './hostPayloads';
 
 /**
+ * How long a minted run may go without a single message before it is settled
+ * as never-booted. Must exceed the runner's CONFIG_WAIT_TIMEOUT_MS (30s,
+ * client/runner.ts) so the runner gives up on its handshake first: a run that
+ * trips this deadline is genuinely dead rather than merely slow.
+ */
+const RUN_BOOT_DEADLINE_MS = 45_000;
+
+/**
  * The single owner of every headed run's identity and settlement.
  *
  * Ownership model (see packages/browser/AGENTS.md): the host MINTS a run's
@@ -24,9 +32,9 @@ import {
  *   processed.
  * - Settling is exactly-once by construction: every settler funnels through
  *   one guarded map-delete, so `retainPaths`, `reject`, `rejectAll`,
- *   `setTransportEpoch` and the completion path can all fire for one run and
- *   only the first has effect.
- * - `claim` marks a run whose terminal message ("file-complete" / "fatal") is
+ *   `setTransportEpoch`, the boot deadline and the completion path can all
+ *   fire for one run and only the first has effect.
+ * - `admit` marks a run whose terminal message ("file-complete" / "fatal") is
  *   being handled: from that point the handler owns settlement, and the
  *   sweepers (`retainPaths`, `rejectAll`, `setTransportEpoch`) leave the run
  *   alone — its outcome is the handler's truthful one, not a guess.
@@ -39,6 +47,7 @@ type RunRecord = {
   epoch: number;
   phase: RunPhase;
   deferred: DeferredPromise<void>;
+  bootTimer: ReturnType<typeof setTimeout>;
 };
 
 export type HeadedRunRegistry = ReturnType<typeof createHeadedRunRegistry>;
@@ -53,10 +62,26 @@ export const createHeadedRunRegistry = () => {
     if (!runsById.delete(record.runId)) {
       return;
     }
+    clearTimeout(record.bootTimer);
     if (error) {
       record.deferred.reject(error);
     } else {
       record.deferred.resolve();
+    }
+  };
+
+  /**
+   * Every sweep shares one rule: only OPEN runs are swept. A claimed run's
+   * terminal message already arrived and its handler owns the outcome.
+   */
+  const sweepOpen = (
+    match: (record: RunRecord) => boolean,
+    error?: Error,
+  ): void => {
+    for (const record of runsById.values()) {
+      if (record.phase === 'open' && match(record)) {
+        settle(record, error);
+      }
     }
   };
 
@@ -71,44 +96,61 @@ export const createHeadedRunRegistry = () => {
       // A predecessor for the same path can only still be open if its cycle
       // was torn out from under it; close it as obsolete rather than leaking
       // it. A claimed predecessor is left to its handler.
-      for (const record of runsById.values()) {
-        if (record.testPath === testPath && record.phase === 'open') {
-          settle(record);
-        }
-      }
+      sweepOpen((record) => record.testPath === testPath);
+
       const runId = randomUUID();
+      const bootTimer = setTimeout(() => {
+        const record = runsById.get(runId);
+        if (record) {
+          settle(
+            record,
+            new Error(
+              `Headed run for ${testPath} produced no message within ${RUN_BOOT_DEADLINE_MS / 1000}s; its document never booted`,
+            ),
+          );
+        }
+      }, RUN_BOOT_DEADLINE_MS);
+      bootTimer.unref?.();
+
       const record: RunRecord = {
         runId,
         testPath,
         epoch: transportEpoch,
         phase: 'open',
         deferred: createDeferredPromise<void>(),
+        bootTimer,
       };
       runsById.set(runId, record);
       return { runId, settled: record.deferred.promise };
     },
 
-    /** Is this identity a live (open or claimed) run? */
-    has(runId: string): boolean {
-      return runsById.has(runId);
-    },
-
     /**
-     * Take ownership of a run's settlement for its terminal message handler.
-     * Must be called synchronously before the handler's first await. Returns
-     * false when the run is absent or already claimed — the message is stale
-     * (or a duplicate terminal) and must be dropped.
+     * The one liveness question, asked once per inbound message: may this
+     * identity be processed? Any answer of `true` also proves the run's
+     * document booted, which disarms the boot deadline.
+     *
+     * `terminal` marks a message that ends the run ("file-complete" /
+     * "fatal"). It claims settlement for the caller's handler and must be
+     * asked synchronously, before the handler's first await, so a file-set
+     * commit racing the handler cannot settle the run a second time. A second
+     * terminal for the same run is answered `false` — it is a duplicate.
      */
-    claim(runId: string): boolean {
+    admit(runId: string, terminal: boolean): boolean {
       const record = runsById.get(runId);
-      if (!record || record.phase !== 'open') {
+      if (!record) {
+        return false;
+      }
+      clearTimeout(record.bootTimer);
+      if (!terminal) {
+        return true;
+      }
+      if (record.phase !== 'open') {
         return false;
       }
       record.phase = 'claimed';
       return true;
     },
 
-    /** Settle a run as completed. */
     resolve(runId: string): void {
       const record = runsById.get(runId);
       if (record) {
@@ -116,7 +158,6 @@ export const createHeadedRunRegistry = () => {
       }
     },
 
-    /** Settle a run as failed. */
     reject(runId: string, error: unknown): void {
       const record = runsById.get(runId);
       if (record) {
@@ -125,31 +166,19 @@ export const createHeadedRunRegistry = () => {
     },
 
     /**
-     * The file-set commit's settlement obligation: close every OPEN run whose
+     * The file-set commit's settlement obligation: close every open run whose
      * path left the committed set — the container is about to unmount those
      * frames, so their completions can never arrive (and if one is already in
-     * transport, its runId is gone from the table and drops by rule). Claimed
-     * runs are spared: their completion DID arrive and its handler owns them.
+     * transport, its runId is gone from the table and drops by rule).
      */
     retainPaths(paths: readonly string[]): void {
       const retained = new Set(paths);
-      for (const record of runsById.values()) {
-        if (record.phase === 'open' && !retained.has(record.testPath)) {
-          settle(record);
-        }
-      }
+      sweepOpen((record) => !retained.has(record.testPath));
     },
 
-    /**
-     * Transport death: no completion can arrive for any open run. Claimed
-     * runs are spared — their handlers run host-side and settle truthfully.
-     */
+    /** Transport death: no completion can arrive for any open run. */
     rejectAll(error: Error): void {
-      for (const record of runsById.values()) {
-        if (record.phase === 'open') {
-          settle(record, error);
-        }
-      }
+      sweepOpen(() => true, error);
     },
 
     /**
@@ -160,16 +189,10 @@ export const createHeadedRunRegistry = () => {
      */
     setTransportEpoch(epoch: number): void {
       transportEpoch = epoch;
-      for (const record of runsById.values()) {
-        if (record.phase === 'open' && record.epoch < epoch) {
-          settle(
-            record,
-            new Error(
-              'Container transport was replaced before the run completed',
-            ),
-          );
-        }
-      }
+      sweepOpen(
+        (record) => record.epoch < epoch,
+        new Error('Container transport was replaced before the run completed'),
+      );
     },
   };
 };

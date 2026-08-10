@@ -63,6 +63,16 @@ export type FileCleanupDispatchPayload = {
 };
 
 /**
+ * The committed test-file set plus its monotonic version. The version is what
+ * the container acks once every iframe for that set exists in the DOM, so both
+ * halves must travel together — a set without its version cannot be acked.
+ */
+export type VersionedTestFileSet = {
+  files: TestFileInfo[];
+  version: number;
+};
+
+/**
  * Execution mode for browser tests.
  * - 'run': Execute tests and report results (default)
  * - 'collect': Only collect test metadata without running
@@ -198,19 +208,10 @@ export type RunnerLifecycleMethod =
  * namespace (by message `type`) rather than handled at the transport layer.
  * `Extract` keeps this a checked subset of the message union — renaming a
  * message type drops it here, surfacing as a missing handler downstream.
- * `ready` and `complete` are routed too (as no-op handlers): an unrouted
- * method would be silently dropped, and `ready` is what proves a granted
- * run's document actually booted.
  */
 type RunnerMessageMethod = Extract<
   BrowserClientMessage['type'],
-  | 'file-start'
-  | 'case-result'
-  | 'file-complete'
-  | 'log'
-  | 'fatal'
-  | 'ready'
-  | 'complete'
+  'file-start' | 'case-result' | 'file-complete' | 'log' | 'fatal'
 >;
 
 /**
@@ -261,7 +262,6 @@ export type BrowserDispatchRequest = {
 export type BrowserDispatchResponse = {
   requestId: string;
   runToken?: number;
-  runId?: string;
   result?: unknown;
   error?: string;
   stale?: boolean;
