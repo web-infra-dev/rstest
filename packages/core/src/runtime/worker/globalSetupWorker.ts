@@ -1,5 +1,6 @@
 import { install } from 'source-map-support';
-import type { FormattedError } from '../../types';
+import type { AssetFiles, FormattedError } from '../../types';
+import { getAssetText } from '../../utils/assetFiles';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
@@ -43,7 +44,7 @@ const runGlobalSetup = async (data: {
     runtimeDistPath?: string;
     testPath: string;
   }[];
-  assetFiles: Record<string, string>;
+  assetFiles: AssetFiles;
   sourceMaps: Record<string, string>;
   interopDefault: boolean;
   outputModule: boolean;
@@ -84,7 +85,6 @@ const runGlobalSetup = async (data: {
 
     for (const entry of data.entries) {
       const { distPath, runtimeDistPath, testPath } = entry;
-      const setupCodeContent = data.assetFiles[distPath]!;
       setFederationDynamicImportOrigin(data.federation, testPath);
       const { loadModule } = data.outputModule
         ? await import('./loadEsModule')
@@ -93,7 +93,7 @@ const runGlobalSetup = async (data: {
       const virtualFsAssetFiles = data.federation ? data.assetFiles : undefined;
 
       const module = await loadModule({
-        codeContent: setupCodeContent,
+        codeContent: getAssetText(data.assetFiles, distPath),
         distPath,
         runtimeDistPath,
         testPath,

@@ -65,9 +65,15 @@ describe('executorCapabilities', () => {
     }
   });
 
-  it('stripped fields are a subset of the warn-worthy (ignored) fields', () => {
+  it('unsupported stripped fields are warn-worthy', () => {
     for (const key of browserStrippedRuntimeConfigKeys) {
       expect(browserIgnoredRuntimeConfigKeys).toContain(key);
     }
+  });
+
+  it('supports federation in browser mode', () => {
+    expect(executorCapabilities.federation.browser).toBe('supported');
+    expect(browserStrippedRuntimeConfigKeys).not.toContain('federation');
+    expect(browserIgnoredRuntimeConfigKeys).not.toContain('federation');
   });
 });

@@ -3,6 +3,8 @@ import { createRequire as createNativeRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import path from 'pathe';
+import type { AssetFiles } from '../../types/worker';
+import { getAssetBuffer, getAssetText } from '../../utils/assetFiles';
 import { logger } from '../../utils/logger';
 import { clearCacheCleaners, clearSyntheticModuleCache } from './interop';
 import {
@@ -17,21 +19,27 @@ import {
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
 
-const getAssetContent = (
-  assetFiles: Record<string, string>,
+const getAssetName = (
+  assetFiles: AssetFiles,
   filePath: unknown,
 ): string | undefined => {
   if (typeof filePath === 'string') {
-    return assetFiles[path.normalize(filePath)];
+    const name = path.normalize(filePath);
+    return assetFiles[name] === undefined ? undefined : name;
   }
   if (filePath instanceof URL && filePath.protocol === 'file:') {
-    return assetFiles[path.normalize(fileURLToPath(filePath))];
+    const name = path.normalize(fileURLToPath(filePath));
+    return assetFiles[name] === undefined ? undefined : name;
   }
   return undefined;
 };
 
-const formatAssetContent = (content: string, options?: unknown) => {
-  const buffer = Buffer.from(content);
+const formatAssetContent = (
+  assetFiles: AssetFiles,
+  name: string,
+  options?: unknown,
+) => {
+  const buffer = getAssetBuffer(assetFiles, name);
   const encoding =
     typeof options === 'string'
       ? options
@@ -45,13 +53,13 @@ const formatAssetContent = (content: string, options?: unknown) => {
 
 const createVirtualFsAssetProxy = (
   fsModule: typeof import('node:fs'),
-  assetFiles: Record<string, string>,
+  assetFiles: AssetFiles,
 ): typeof import('node:fs') =>
   new Proxy(fsModule, {
     get(target, property, receiver) {
       if (property === 'existsSync') {
         return (filePath: unknown) =>
-          getAssetContent(assetFiles, filePath) !== undefined ||
+          getAssetName(assetFiles, filePath) !== undefined ||
           target.existsSync(
             filePath as Parameters<typeof target.existsSync>[0],
           );
@@ -67,11 +75,14 @@ const createVirtualFsAssetProxy = (
             typeof optionsOrCallback === 'function'
               ? optionsOrCallback
               : maybeCallback;
-          const content = getAssetContent(assetFiles, filePath);
+          const name = getAssetName(assetFiles, filePath);
 
-          if (content !== undefined && typeof callback === 'function') {
+          if (name !== undefined && typeof callback === 'function') {
             queueMicrotask(() =>
-              callback(null, formatAssetContent(content, optionsOrCallback)),
+              callback(
+                null,
+                formatAssetContent(assetFiles, name, optionsOrCallback),
+              ),
             );
             return;
           }
@@ -88,9 +99,9 @@ const createVirtualFsAssetProxy = (
 
       if (property === 'readFileSync') {
         return (filePath: unknown, options?: unknown) => {
-          const content = getAssetContent(assetFiles, filePath);
-          if (content !== undefined) {
-            return formatAssetContent(content, options);
+          const name = getAssetName(assetFiles, filePath);
+          if (name !== undefined) {
+            return formatAssetContent(assetFiles, name, options);
           }
           return target.readFileSync(
             filePath as Parameters<typeof target.readFileSync>[0],
@@ -104,13 +115,15 @@ const createVirtualFsAssetProxy = (
           get(promisesTarget, promisesProperty, promisesReceiver) {
             if (promisesProperty === 'readFile') {
               return (filePath: unknown, options?: unknown) => {
-                const content = getAssetContent(assetFiles, filePath);
-                return content === undefined
+                const name = getAssetName(assetFiles, filePath);
+                return name === undefined
                   ? Reflect.apply(promisesTarget.readFile, promisesTarget, [
                       filePath,
                       options,
                     ])
-                  : Promise.resolve(formatAssetContent(content, options));
+                  : Promise.resolve(
+                      formatAssetContent(assetFiles, name, options),
+                    );
               };
             }
             return Reflect.get(
@@ -134,7 +147,7 @@ const defineRstestRequireResolve =
   }: {
     testPath: string;
     distPath: string;
-    assetFiles: Record<string, string>;
+    assetFiles: AssetFiles;
   }) =>
   (
     specifier: string,
@@ -157,7 +170,7 @@ const defineRstestRequireResolve =
       : specifier;
     const normalizedPath = path.normalize(joinedPath);
 
-    if (assetFiles[normalizedPath]) {
+    if (assetFiles[normalizedPath] !== undefined) {
       return normalizedPath;
     }
 
@@ -168,9 +181,9 @@ const createRequire = (
   filename: string,
   distPath: string,
   rstestContext: Record<string, any>,
-  assetFiles: Record<string, string>,
+  assetFiles: AssetFiles,
   interopDefault: boolean,
-  virtualFsAssetFiles?: Record<string, string>,
+  virtualFsAssetFiles?: AssetFiles,
 ): NodeJS.Require => {
   const _require = (() => {
     try {
@@ -195,12 +208,12 @@ const createRequire = (
       ? path.join(currentDirectory, id)
       : id;
 
-    const content = getAssetContent(assetFiles, joinedPath);
+    const assetName = getAssetName(assetFiles, joinedPath);
 
-    if (content) {
+    if (assetName !== undefined) {
       try {
         return cacheableLoadModule({
-          codeContent: content,
+          codeContent: getAssetText(assetFiles, assetName),
           testPath: joinedPath,
           distPath: joinedPath,
           rstestContext,
@@ -272,7 +285,7 @@ const defineRstestDynamicImport =
 // Persistent asset map for the kept runtime chunk under `isolate: false` (the
 // per-module hooks closed over this reference). Mirrors the ESM loader — see
 // `loadEsModule.ts` for the full rationale.
-const accumulatedAssetFiles: Record<string, string> = {};
+const accumulatedAssetFiles: AssetFiles = {};
 
 // Every shared runtime chunk this (possibly reused) worker has loaded under
 // `isolate: false`. Mirrors the ESM loader — a reused worker can serve multiple
@@ -296,8 +309,8 @@ export const loadModule = ({
   distPath: string;
   testPath: string;
   rstestContext: Record<string, any>;
-  assetFiles: Record<string, string>;
-  virtualFsAssetFiles?: Record<string, string>;
+  assetFiles: AssetFiles;
+  virtualFsAssetFiles?: AssetFiles;
 }): any => {
   // Fold this file's assets into the persistent map. Recursive loads (require /
   // dynamic imports) re-pass that same map, so skip the no-op self-merge.
@@ -379,8 +392,8 @@ export const cacheableLoadModule = ({
   distPath: string;
   testPath: string;
   rstestContext: Record<string, any>;
-  assetFiles: Record<string, string>;
-  virtualFsAssetFiles?: Record<string, string>;
+  assetFiles: AssetFiles;
+  virtualFsAssetFiles?: AssetFiles;
 }): any => {
   if (moduleCache.has(testPath)) {
     return moduleCache.get(testPath);

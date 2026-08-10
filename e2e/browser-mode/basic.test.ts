@@ -1,5 +1,10 @@
 import { describe, expect, it } from '@rstest/core';
-import { runBrowserCli, shouldRunHeadedBrowserTests } from './utils';
+import { sleep } from '../scripts';
+import {
+  runBrowserCli,
+  runBrowserWatchCli,
+  shouldRunHeadedBrowserTests,
+} from './utils';
 
 describe('browser mode - basic', () => {
   it('should run DOM, event, and async tests correctly', async () => {
@@ -41,5 +46,25 @@ describe('browser mode - basic', () => {
       await cli.exec;
       expect(cli.exec.exitCode).toBe(0);
     },
+  );
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'should collect federation tests in headed watch mode',
+    async () => {
+      const result = await runBrowserWatchCli('basic', {
+        args: ['-c', 'rstest.federationWatch.config.mts', 'tests/dom.test.ts'],
+      });
+      const { cli } = result;
+
+      await cli.waitForStdout('Test Files 1 passed');
+      expect(cli.stdout).toContain('dom.test.ts');
+      if (!cli.stdout.includes('Waiting for file changes...')) {
+        await cli.waitForStdout('Waiting for file changes...');
+      }
+
+      await sleep(1000);
+      cli.exec.process!.stdin!.write('q');
+      await result.expectExecSuccess();
+    },
+    30_000,
   );
 });

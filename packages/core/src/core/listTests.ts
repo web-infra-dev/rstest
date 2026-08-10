@@ -335,11 +335,7 @@ const collectNodeTests = async ({
         return (await resource?.getSourceMaps([name]))?.[name];
       },
       close: async () => {
-        try {
-          await runGlobalTeardown();
-        } finally {
-          await closeResources();
-        }
+        await closeResources();
       },
     };
   } catch (error) {
@@ -393,11 +389,7 @@ const collectBrowserTests = async ({
     }));
 
   const close = async () => {
-    try {
-      await runGlobalTeardown();
-    } finally {
-      await executor.close();
-    }
+    await executor.close();
   };
 
   try {
@@ -557,7 +549,9 @@ const collectAllTests = async ({
       list: [...nodeResult.list, ...browserResult.list],
       getSourceMap: nodeResult.getSourceMap,
       close: async () => {
-        await Promise.all([nodeResult.close(), browserResult.close()]);
+        const closePromises = [nodeResult.close(), browserResult.close()];
+        await Promise.allSettled(closePromises);
+        await Promise.all(closePromises);
       },
     };
   }
@@ -601,7 +595,9 @@ const collectAllTests = async ({
     list: [...nodeResult.list, ...browserResult.list],
     getSourceMap: nodeResult.getSourceMap,
     close: async () => {
-      await Promise.all([nodeResult.close(), browserResult.close()]);
+      const closePromises = [nodeResult.close(), browserResult.close()];
+      await Promise.allSettled(closePromises);
+      await Promise.all(closePromises);
     },
   };
 };
@@ -810,6 +806,13 @@ export async function listTests(
     throw error;
   }
   const { list, close, getSourceMap, errors = [] } = collected;
+  const closeCollection = async () => {
+    try {
+      await close();
+    } finally {
+      await runGlobalTeardown();
+    }
+  };
 
   const tests: ListedTest[] = [];
 
@@ -876,7 +879,7 @@ export async function listTests(
       }
     }
 
-    await close();
+    await closeCollection();
     return list;
   }
 
@@ -948,7 +951,7 @@ export async function listTests(
     }
   }
 
-  await close();
+  await closeCollection();
 
   return list;
 }

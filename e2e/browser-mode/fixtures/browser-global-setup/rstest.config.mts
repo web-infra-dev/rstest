@@ -18,6 +18,16 @@ export default defineConfig({
   include: ['tests/**/*.test.ts'],
   testTimeout: BROWSER_TEST_TIMEOUT,
   globalSetup: ['./globalSetup.ts'],
+  plugins: [
+    {
+      name: 'test-global-teardown-order',
+      setup(api) {
+        api.onCloseDevServer(() => {
+          console.log('[browser-dev-server] closed');
+        });
+      },
+    },
+  ],
   env: {
     RSTEST_E2E_GS_OVERRIDE: 'from-config',
   },

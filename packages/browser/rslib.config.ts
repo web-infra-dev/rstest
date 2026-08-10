@@ -33,7 +33,6 @@ export default defineConfig({
         tsconfigPath: './tsconfig.json',
         entry: {
           index: './src/index.ts',
-          browser: './src/browser.ts',
         },
       },
       tools: {
@@ -54,6 +53,34 @@ export default defineConfig({
             }),
             rsdoctorCIPlugin(),
           ].filter(Boolean),
+        },
+      },
+    },
+    {
+      id: 'rstest-browser-client',
+      syntax: 'es2023',
+      dts: {
+        isolated: true,
+        bundle: false,
+      },
+      output: {
+        target: 'web',
+        distPath: 'dist/client',
+        // Resolved by each browser project's Rsbuild alias.
+        externals: ['__rstest_virtual_browser_manifest__'],
+      },
+      source: {
+        tsconfigPath: './tsconfig.json',
+        entry: {
+          index: './src/client/index.ts',
+          runner: './src/client/runner.ts',
+        },
+      },
+      tools: {
+        rspack: {
+          plugins: [rsdoctorCIPlugin({ reportDir: '.rsdoctor/client' })].filter(
+            Boolean,
+          ),
         },
       },
     },

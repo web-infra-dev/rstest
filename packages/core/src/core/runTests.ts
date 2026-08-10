@@ -240,14 +240,10 @@ export async function runTests(context: Rstest): Promise<void> {
     // executor pushed inside the try below is covered — including when its own
     // load/init fails with the node resources above already up.
     //
-    // Three things about this net are deliberate on every run shape, zero-node
-    // included, and none is free to drift: executors close first and
-    // `runGlobalTeardown()` drains in the `finally`, so a user `globalSetup`
-    // teardown callback runs after the browser host and its dev servers are
-    // gone; the signal path uses that same order; and the exit handler is
-    // registered unconditionally, so a mid-run unexpected exit prints and sets
-    // a failing code rather than ending quietly. A teardown callback that needs
-    // a live server is the one reason to revisit the first of those.
+    // The run owns the shared globalSetup queue: every executor must close
+    // before user teardown starts, including on the signal path. The exit
+    // handler is registered unconditionally so a mid-run unexpected exit
+    // prints and sets a failing code rather than ending quietly.
     let didCloseExecutors = false;
     const closeExecutors = async () => {
       if (didCloseExecutors) {
@@ -255,16 +251,13 @@ export async function runTests(context: Rstest): Promise<void> {
       }
       didCloseExecutors = true;
       try {
-        await Promise.all(
-          executors.map((executor) =>
-            runLifecycleStep('executor cleanup', () => executor.close()),
-          ),
+        const closePromises = executors.map((executor) =>
+          runLifecycleStep('executor cleanup', () => executor.close()),
         );
+        await Promise.allSettled(closePromises);
+        await Promise.all(closePromises);
       } finally {
-        // `executors` excludes the node executor when only browser tests run,
-        // so `NodeExecutor.close()` alone cannot drain the browser stage's
-        // setups. A second drain is a no-op, and it must run even when an
-        // executor close throws.
+        // User teardown must still run when an executor close throws.
         await runLifecycleStep('global teardown', () => runGlobalTeardown());
       }
     };

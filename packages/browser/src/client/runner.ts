@@ -5,7 +5,7 @@ import {
   // Multi-project APIs
   projects,
   projectTestContexts,
-} from '@rstest/browser-manifest';
+} from '__rstest_virtual_browser_manifest__';
 import type {
   CoverageMapData,
   CurrentTaskInfo,
@@ -418,9 +418,8 @@ const run = async () => {
 
   setRealTimers();
 
-  // Preload runner.js sourcemap for inline snapshot support.
-  // The snapshot code runs in runner.js, so we need its sourcemap
-  // to map stack traces back to original source files.
+  // Snapshot code runs in runner.js, so preload its sourcemap to map stack
+  // traces back to original source files.
   await preloadRunnerSourceMap();
 
   // Find the project for this test file
