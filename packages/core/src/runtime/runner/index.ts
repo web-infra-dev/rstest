@@ -1,4 +1,5 @@
 import type {
+  MaybePromise,
   Rstest,
   RunnerAPI,
   RunnerHooks,
@@ -17,6 +18,11 @@ import { traverseUpdateTest } from './task';
 // The running file's execution-phase runner (see the live-binding contract in
 // `../api`; `createRunner` publishes the context per file).
 const currentRunner = (): TestRunner => fileContext().testRunner;
+
+export type FileCleanupHooks = {
+  onFileCleanupStart?: (result?: TestFileResult) => MaybePromise<void>;
+  onFileCleanupEnd?: () => MaybePromise<void>;
+};
 
 const onTestFinished: RunnerAPI['onTestFinished'] = (...args) => {
   const runner = currentRunner();
@@ -49,7 +55,7 @@ export function createRunner({
   runner: {
     runTests: (
       testFilePath: string,
-      hooks: RunnerHooks,
+      hooks: RunnerHooks & FileCleanupHooks,
       api: Rstest,
     ) => Promise<TestFileResult>;
     collectTests: () => Promise<TestInfo[]>;
@@ -73,7 +79,11 @@ export function createRunner({
 
   return {
     runner: {
-      runTests: async (testPath: string, hooks: RunnerHooks, api: Rstest) => {
+      runTests: async (
+        testPath: string,
+        hooks: RunnerHooks & FileCleanupHooks,
+        api: Rstest,
+      ) => {
         const snapshotClient = workerState.snapshotClient!;
 
         await snapshotClient.setup(testPath, workerState.snapshotOptions);
@@ -88,16 +98,42 @@ export function createRunner({
         });
         runtimeInstance.updateStatus('running');
 
-        const results = await testRunner.runTests({
-          tests,
-          testPath,
-          state: workerState,
-          hooks,
-          api,
-          snapshotClient,
-        });
+        try {
+          const results = await testRunner.runTests({
+            tests,
+            testPath,
+            state: workerState,
+            hooks,
+            api,
+            snapshotClient,
+          });
 
-        return results;
+          await hooks.onFileCleanupStart?.(results);
+          try {
+            return (await testRunner.cleanupFileFixtures(results))!;
+          } finally {
+            await hooks.onFileCleanupEnd?.();
+          }
+        } catch (error) {
+          try {
+            await hooks.onFileCleanupStart?.();
+            try {
+              await testRunner.cleanupFileFixtures();
+            } finally {
+              await hooks.onFileCleanupEnd?.();
+            }
+          } catch (cleanupError) {
+            throw new AggregateError(
+              [error, cleanupError],
+              [
+                'Test execution and file fixture cleanup both failed.',
+                `Test execution failed: ${error instanceof Error ? error.message : String(error)}`,
+                `File fixture cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+              ].join('\n'),
+            );
+          }
+          throw error;
+        }
       },
       collectTests: async () => {
         const tests = await runtimeInstance.getTests();

@@ -7,6 +7,51 @@ const fixturePath = join(__dirname, 'fixtures');
 const enableConfig = 'rstest.enable.v8.config.ts';
 
 describe('coverage v8-specific behavior', () => {
+  it('writes bundle assets alongside raw V8 coverage for debugging', async ({
+    onTestFinished,
+  }) => {
+    const debugDirectory = join(fixturePath, '.rstest');
+    const removeDebugOutput = () => fs.removeSync(debugDirectory);
+    removeDebugOutput();
+    onTestFinished(removeDebugOutput);
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '-c', enableConfig, '--coverage.reporters', 'text-summary'],
+      options: {
+        nodeOptions: {
+          cwd: fixturePath,
+          env: { DEBUG: 'rstest:bundle-coverage' },
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const files = fs
+      .readdirSync(debugDirectory)
+      .filter((file) => file.startsWith('bundle-coverage-'));
+    expect(files).toHaveLength(1);
+
+    const output = fs.readJsonSync(join(debugDirectory, files[0]!)) as {
+      version: number;
+      tests: {
+        assets: Record<string, number>;
+        rawV8: { entries: { filePath: string }[] };
+      }[];
+    };
+    expect(output.version).toBe(1);
+    expect(output.tests.length).toBeGreaterThan(0);
+
+    for (const test of output.tests) {
+      expect(Object.keys(test.assets).length).toBeGreaterThan(0);
+      expect(test.rawV8.entries.length).toBeGreaterThan(0);
+      expect(
+        test.rawV8.entries.every((entry) => entry.filePath in test.assets),
+      ).toBeTruthy();
+    }
+  });
+
   it('preserves the configured provider with --coverage', async ({
     onTestFinished,
   }) => {

@@ -8,14 +8,15 @@ import type {
   ExecutorRunCycleOptions,
   TestExecutor,
 } from '../../types';
-import type { CoverageMap, CoverageProvider } from '../../types/coverage';
+import type {
+  CoverageMap,
+  CoverageProvider,
+  RawCoverageResolveOptions,
+} from '../../types/coverage';
 import { clearScreen, color, logger, type TraceRun } from '../../utils';
+import { writeBundleCoverageResults } from '../bundleCoverage';
 import { ensureTestEnvironmentDependencies } from '../envDependencies';
-import {
-  claimGlobalSetupOnce,
-  runGlobalSetup,
-  runGlobalTeardown,
-} from '../globalSetup';
+import { claimGlobalSetupOnce, runGlobalSetup } from '../globalSetup';
 import { applyOnlyFailuresSelection } from '../onlyFailures';
 import type { RunProjectPlan } from '../projectPlan';
 import { createRsbuildServer } from '../rsbuild';
@@ -37,10 +38,7 @@ type NodeAssetResource = Pick<
   RsbuildStats,
   'assetNames' | 'getAssetFiles' | 'getSourceMaps'
 >;
-type CoverageResourceLoaders = {
-  loadAssetFiles: NodeAssetResource['getAssetFiles'];
-  loadSourceMaps: NodeAssetResource['getSourceMaps'];
-};
+type CoverageResourceLoaders = Required<RawCoverageResolveOptions>;
 
 export const createCoverageResourceLoaders = (
   items: NodeAssetResource[],
@@ -113,9 +111,11 @@ export const createCoverageResourceLoaders = (
         );
         for (const [assetName, requestedNames] of requests) {
           const content = loaded[assetName];
-          if (typeof content !== 'string') continue;
+          if (content == null) continue;
+          const text =
+            typeof content === 'string' ? content : content.toString('utf8');
           for (const requestedName of requestedNames) {
-            resources[requestedName] = content;
+            resources[requestedName] = text;
           }
         }
       }),
@@ -222,7 +222,7 @@ export function createNodeExecutor(
     Promise<NonNullable<typeof runResources>> | undefined;
   let runDependencyValidationPromise: Promise<void> | undefined;
   let entryFiles: string[] = [];
-  let didRunGlobalTeardown = false;
+  let didClose = false;
   // When a dev compile starts. Paired with the compile's end into a completed
   // span below; on its own it is not a build time, because cycles are queued
   // and the wait for the queue is not build work.
@@ -437,6 +437,7 @@ export function createNodeExecutor(
               return {
                 results: [],
                 testResults: [],
+                bundleCoverage: [],
                 errors,
                 assetNames,
                 getAssetFiles,
@@ -452,7 +453,7 @@ export function createNodeExecutor(
           );
 
           currentEntries.push(...sortedEntries);
-          const { results, testResults } = await pool.runTests({
+          const { results, testResults, bundleCoverage } = await pool.runTests({
             entries: sortedEntries,
             assetNames,
             getSourceMaps,
@@ -471,6 +472,7 @@ export function createNodeExecutor(
           return {
             results,
             testResults,
+            bundleCoverage,
             assetNames,
             getAssetFiles,
             getSourceMaps,
@@ -501,6 +503,11 @@ export function createNodeExecutor(
 
     const returns = await Promise.all(
       projectPlans.map((plan) => plan.execute(plan.finalEntries)),
+    );
+
+    await writeBundleCoverageResults(
+      rootPath,
+      returns.flatMap((result) => result.bundleCoverage),
     );
 
     // A cycle no rebuild triggered measures its own build: the span from
@@ -595,34 +602,30 @@ export function createNodeExecutor(
   // Idempotent: the single `executors.close()` exit path may race a signal
   // handler, and closing a pool/server twice throws.
   const close = async (): Promise<void> => {
-    if (didRunGlobalTeardown) {
+    if (didClose) {
       return;
     }
-    didRunGlobalTeardown = true;
-    try {
-      await runGlobalTeardown();
-    } finally {
-      if (runDependencyValidationPromise) {
-        await runDependencyValidationPromise.catch(() => undefined);
-      }
-      // Settle an in-flight resource start first: a close racing startup (e.g. a
-      // config-change restart during watch boot) must tear down the server and
-      // pool that start is about to produce, not skip them.
-      if (runResourcesPromise) {
-        await runResourcesPromise.catch(() => undefined);
-      }
-      if (runResources) {
-        const resources = runResources;
-        runResources = undefined;
-        runResourcesPromise = undefined;
+    didClose = true;
+    if (runDependencyValidationPromise) {
+      await runDependencyValidationPromise.catch(() => undefined);
+    }
+    // Settle an in-flight resource start first: a close racing startup (e.g. a
+    // config-change restart during watch boot) must tear down the server and
+    // pool that start is about to produce, not skip them.
+    if (runResourcesPromise) {
+      await runResourcesPromise.catch(() => undefined);
+    }
+    if (runResources) {
+      const resources = runResources;
+      runResources = undefined;
+      runResourcesPromise = undefined;
+      try {
+        await resources.pool.close();
+      } finally {
         try {
-          await resources.pool.close();
+          await resources.closeServer();
         } finally {
-          try {
-            await resources.closeServer();
-          } finally {
-            await resources.cleanupTestEnvironmentModules();
-          }
+          await resources.cleanupTestEnvironmentModules();
         }
       }
     }

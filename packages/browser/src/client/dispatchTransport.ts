@@ -11,7 +11,7 @@ import {
 } from '../protocol';
 
 // Coincidentally equal to the host-side RUNNER_FRAMES_READY_TIMEOUT_MS and the
-// runner's CONFIG_WAIT_TIMEOUT_MS (entry.ts), but a semantically distinct
+// runner's CONFIG_WAIT_TIMEOUT_MS (runner.ts), but a semantically distinct
 // default in a different runtime, so deliberately not shared with them.
 const DEFAULT_RPC_TIMEOUT_MS = 30_000;
 

@@ -2,7 +2,12 @@ import type {
   RstestContext,
   TestFileResult,
 } from '@rstest/core/internal/browser';
-import { color, logger } from '@rstest/core/internal/browser';
+import {
+  color,
+  createFileCleanupTimeoutResult,
+  FIXTURE_CLEANUP_TIMEOUT_MS,
+  logger,
+} from '@rstest/core/internal/browser';
 import { normalize } from 'pathe';
 import {
   type BrowserRuntime,
@@ -24,9 +29,13 @@ import type {
   BrowserClientMessage,
   BrowserHostConfig,
   BrowserProjectRuntime,
+  FileCleanupDispatchPayload,
   TestFileInfo,
 } from './protocol';
-import { DISPATCH_NAMESPACE_RUNNER } from './protocol';
+import {
+  DISPATCH_NAMESPACE_FILE_CLEANUP,
+  DISPATCH_NAMESPACE_RUNNER,
+} from './protocol';
 import type {
   BrowserProviderBrowser,
   BrowserProviderContext,
@@ -164,6 +173,29 @@ export const createHeadlessScheduler = async ({
       }
     },
   });
+  const fileCleanupHandlers = new Map<
+    string,
+    {
+      end: () => void;
+      start: (result?: TestFileResult) => void;
+    }
+  >();
+  dispatchRouter.register(DISPATCH_NAMESPACE_FILE_CLEANUP, async (request) => {
+    const sessionId = request.target?.sessionId;
+    if (!sessionId) {
+      throw new Error('File cleanup dispatch is missing a browser session.');
+    }
+    const handler = fileCleanupHandlers.get(sessionId);
+    if (!handler) {
+      return;
+    }
+    const payload = request.args as FileCleanupDispatchPayload;
+    if (request.method === 'start') {
+      handler.start(payload.result);
+    } else if (request.method === 'end') {
+      handler.end();
+    }
+  });
 
   const dispatchRunnerMessage = async (
     run: ActiveHeadlessRun,
@@ -214,6 +246,8 @@ export const createHeadlessScheduler = async ({
     let coverageCollected = false;
     let settled = false;
     let resolveDone: (() => void) | null = null;
+    let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+    let provisionalResult: TestFileResult | undefined;
 
     const markDone = (): void => {
       if (!settled) {
@@ -262,9 +296,54 @@ export const createHeadlessScheduler = async ({
       });
       sessionId = session.id;
 
+      const finishFileCleanup = (): void => {
+        if (cleanupTimer) {
+          clearTimeout(cleanupTimer);
+          cleanupTimer = undefined;
+        }
+      };
+      fileCleanupHandlers.set(session.id, {
+        end: finishFileCleanup,
+        start: (result) => {
+          provisionalResult = result;
+          finishFileCleanup();
+          cleanupTimer = setTimeout(() => {
+            void (async () => {
+              if (settled) {
+                return;
+              }
+              settled = true;
+              const message = `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`;
+              try {
+                await handleTestFileComplete(
+                  createFileCleanupTimeoutResult({
+                    message,
+                    projectName: file.projectName,
+                    result: provisionalResult,
+                    testPath: file.testPath,
+                  }),
+                );
+              } catch (error) {
+                const formatted = toError(error);
+                await handleFatal({
+                  message: formatted.message,
+                  stack: formatted.stack,
+                });
+                await cancelRun(run, false);
+              } finally {
+                resolveDone?.();
+              }
+            })();
+          }, FIXTURE_CLEANUP_TIMEOUT_MS);
+        },
+      });
+
       await attachHeadlessRunnerTransport(page, {
         onDispatchMessage: async (message) => {
           try {
+            if (settled) {
+              return;
+            }
             if (!coverageCollected && message.type === 'file-complete') {
               coverageCollected = true;
               const coverage = await v8Coverage?.take(page!);
@@ -360,6 +439,12 @@ export const createHeadlessScheduler = async ({
         await cancelRun(run, false);
       }
     } finally {
+      if (cleanupTimer) {
+        clearTimeout(cleanupTimer);
+      }
+      if (sessionId) {
+        fileCleanupHandlers.delete(sessionId);
+      }
       // A superseded run can hold a renderer that will never answer again:
       // its test file may have been deleted mid-flight, leaving the page
       // waiting on a chunk the bundler will never produce, and closing such a

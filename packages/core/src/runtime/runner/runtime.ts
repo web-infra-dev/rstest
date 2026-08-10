@@ -31,7 +31,11 @@ import {
   ROOT_SUITE_NAME,
   SYNTHETIC_STACK_ERROR_MESSAGE,
 } from '../../utils/constants';
-import { castArray, generateFilePathHash } from '../../utils/helper';
+import {
+  castArray,
+  generateFilePathHash,
+  isPlainObject,
+} from '../../utils/helper';
 import { fileContext } from '../fileContext';
 import {
   formatName,
@@ -78,6 +82,7 @@ export class RunnerRuntime {
    */
   private collectStatus: CollectStatus = 'lazy';
   private currentCollectList: (() => MaybePromise<void>)[] = [];
+  private suiteCollectionDepth = 0;
   private readonly runtimeConfig;
   private readonly project: string;
   private readonly fileHash: string;
@@ -252,12 +257,17 @@ export class RunnerRuntime {
 
     this.currentCollectList.push(async () => {
       this.addTest(currentSuite);
-      const result = fn();
-      if (result instanceof Promise) {
-        await result;
+      this.suiteCollectionDepth++;
+      try {
+        const result = fn();
+        if (result instanceof Promise) {
+          await result;
+        }
+        // call current collect immediately
+        await this.collectCurrentTest();
+      } finally {
+        this.suiteCollectionDepth--;
       }
-      // call current collect immediately
-      await this.collectCurrentTest();
       this.resetCurrentTest();
     });
   }
@@ -599,6 +609,10 @@ export class RunnerRuntime {
 
     throw new Error('Expect to find a suite, but got undefined');
   }
+
+  isTopLevelCollection(): boolean {
+    return this.suiteCollectionDepth === 0;
+  }
 }
 
 // The running file's collection-phase registrar (see the live-binding
@@ -698,14 +712,39 @@ const buildRuntimeAPI = (): CollectionAPI => {
     ) => {
       let normalizedFixtures: NormalizedFixtures;
       if (typeof args[0] === 'string') {
-        if (args.length !== 2) {
-          throw new Error('test.extend(name, fixture) expects two arguments.');
+        if (args.length === 2) {
+          normalizedFixtures = normalizeNamedFixture(
+            args[0],
+            args[1],
+            extendFixtures,
+            'test',
+          );
+        } else if (args.length === 3) {
+          if (
+            !isPlainObject(args[1]) ||
+            args[1].scope !== 'file' ||
+            Object.keys(args[1]).some((key) => key !== 'scope')
+          ) {
+            throw new Error(
+              "test.extend(name, options, fixture) expects { scope: 'file' } as options.",
+            );
+          }
+          if (!currentRuntime().isTopLevelCollection()) {
+            throw new Error(
+              'File-scoped fixtures must be defined at the top level of the test file.',
+            );
+          }
+          normalizedFixtures = normalizeNamedFixture(
+            args[0],
+            args[2],
+            extendFixtures,
+            'file',
+          );
+        } else {
+          throw new Error(
+            'test.extend(name, fixture) or test.extend(name, options, fixture) expects two or three arguments.',
+          );
         }
-        normalizedFixtures = normalizeNamedFixture(
-          args[0],
-          args[1],
-          extendFixtures,
-        );
       } else {
         if (args.length !== 1) {
           throw new Error('test.extend(fixtures) expects one argument.');

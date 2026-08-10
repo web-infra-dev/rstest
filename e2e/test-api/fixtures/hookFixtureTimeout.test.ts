@@ -4,6 +4,12 @@ const never = () => new Promise<never>(() => {});
 const wait = (duration: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, duration));
 
+let fileHookCallbackRan = false;
+const fileTimeoutTest = test.extend('slowFile', { scope: 'file' }, async () => {
+  await wait(70);
+  return 'slow';
+});
+
 describe('beforeEach fixture timeout', () => {
   const timeoutTest = test.extend<{ slowFixture: string }>({
     slowFixture: async () => never(),
@@ -64,6 +70,25 @@ describe('late fixture teardown', () => {
   timeoutTest('times out before fixture setup completes', () => {});
 });
 
+describe('file fixture hook timeout', () => {
+  beforeEach<{ slowFile: string }>(({ slowFile }) => {
+    void slowFile;
+    fileHookCallbackRan = true;
+  }, 20);
+
+  fileTimeoutTest(
+    'times out before shared file fixture setup completes',
+    () => {
+      throw new Error('test body should not run');
+    },
+  );
+});
+
 test('waits for late fixture teardown before continuing', () => {
   expect(lateTeardownFinished).toBe(true);
+});
+
+test('does not run a timed-out hook after file fixture setup completes', async () => {
+  await wait(100);
+  expect(fileHookCallbackRan).toBe(false);
 });

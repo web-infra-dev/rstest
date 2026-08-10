@@ -74,6 +74,25 @@ describe('Pool - basic', () => {
       await pool.close();
     }
   });
+
+  it('preserves Buffer assets over advanced IPC', async () => {
+    const pool = new Pool(createPoolOptions());
+    try {
+      const result = await pool.runTest(
+        createTask('run', {
+          __testMode: 'asset-transport',
+          assets: {
+            assetFiles: { '/asset.bin': Buffer.from([0, 0xff, 0x80, 0x41]) },
+            sourceMaps: {},
+          },
+        }),
+      );
+      expect((result as any)._assetConstructor).toBe('Buffer');
+      expect((result as any)._assetBytes).toEqual([0, 0xff, 0x80, 0x41]);
+    } finally {
+      await pool.close();
+    }
+  });
 });
 
 describe('Pool - environment prebundle fallback', () => {
@@ -425,10 +444,12 @@ describe('Pool - capacity', () => {
       expect(iv.end).toBeTypeOf('number');
     }
 
-    // Upper bound: at no point were more than maxWorkers tasks running.
+    // Concurrency can only increase when a task starts, so sampling every
+    // start proves the upper bound without combining overlaps from
+    // different moments in the sampled task's lifetime.
     for (const point of intervals) {
       const concurrent = intervals.filter(
-        (iv) => iv.start < point.end && iv.end > point.start,
+        (iv) => iv.start <= point.start && iv.end > point.start,
       ).length;
       expect(concurrent).toBeLessThanOrEqual(maxWorkers);
     }

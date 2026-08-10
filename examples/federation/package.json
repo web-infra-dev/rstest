@@ -4,6 +4,6 @@
   "scripts": {
     "build": "pnpm --filter @examples/federation-main-app --filter @examples/federation-component-app --filter @examples/federation-node-local-remote --parallel build",
     "start": "pnpm --filter @examples/federation-main-app --filter @examples/federation-component-app --parallel start",
-    "test": "pnpm --filter @examples/federation-main-app test && pnpm --filter @examples/federation-component-app test"
+    "test": "pnpm --filter @examples/federation-main-app test && pnpm --filter @examples/federation-main-app test:browser && pnpm --filter @examples/federation-component-app test"
   }
 }

@@ -5,10 +5,11 @@ import {
   // Multi-project APIs
   projects,
   projectTestContexts,
-} from '@rstest/browser-manifest';
+} from '__rstest_virtual_browser_manifest__';
 import type {
   CoverageMapData,
   CurrentTaskInfo,
+  FileCleanupHooks,
   RunnerHooks,
   RuntimeConfig,
   WorkerState,
@@ -27,11 +28,20 @@ import { normalize } from 'pathe';
 import type {
   BrowserClientMessage,
   BrowserProjectRuntime,
+  FileCleanupDispatchMethod,
+  FileCleanupDispatchPayload,
   RunnerLifecycleMethod,
 } from '../protocol';
-import { DISPATCH_MESSAGE_TYPE, RSTEST_CONFIG_MESSAGE_TYPE } from '../protocol';
 import {
+  DISPATCH_MESSAGE_TYPE,
+  DISPATCH_NAMESPACE_FILE_CLEANUP,
+  RSTEST_CONFIG_MESSAGE_TYPE,
+} from '../protocol';
+import {
+  createRequestId,
   createRunnerLifecycleRequest,
+  dispatchRpc,
+  getRpcTimeout,
   sendRunnerLifecycle,
 } from './dispatchTransport';
 import { BrowserSnapshotEnvironment } from './snapshot';
@@ -408,9 +418,8 @@ const run = async () => {
 
   setRealTimers();
 
-  // Preload runner.js sourcemap for inline snapshot support.
-  // The snapshot code runs in runner.js, so we need its sourcemap
-  // to map stack traces back to original source files.
+  // Snapshot code runs in runner.js, so preload its sourcemap to map stack
+  // traces back to original source files.
   await preloadRunnerSourceMap();
 
   // Find the project for this test file
@@ -656,7 +665,38 @@ const run = async () => {
 
     let failedTestsCount = 0;
 
-    const runnerHooks: RunnerHooks = {
+    const dispatchFileCleanup = async (
+      method: FileCleanupDispatchMethod,
+      result?: FileCleanupDispatchPayload['result'],
+    ): Promise<void> => {
+      const requestId = createRequestId(`file-cleanup-${method}`);
+      await dispatchRpc<void>({
+        requestId,
+        request: {
+          requestId,
+          namespace: DISPATCH_NAMESPACE_FILE_CLEANUP,
+          method,
+          args: {
+            projectName: projectRuntime.name,
+            result,
+            runId: options.runId,
+            testPath,
+          } satisfies FileCleanupDispatchPayload,
+        },
+        timeoutMs: getRpcTimeout(),
+        timeoutMessage: `File cleanup ${method} acknowledgement timed out for ${testPath}.`,
+        staleMessage: `File cleanup ${method} became stale for ${testPath}.`,
+      });
+    };
+
+    const runnerHooks: RunnerHooks & FileCleanupHooks = {
+      onFileCleanupStart: async (result) => {
+        if (result && globalThis.__coverage__) {
+          result.coverage = globalThis.__coverage__ as CoverageMapData;
+        }
+        await dispatchFileCleanup('start', result);
+      },
+      onFileCleanupEnd: () => dispatchFileCleanup('end'),
       onTestFileReady: async (test) => {
         dispatchRunnerLifecycle('file-ready', test);
       },
@@ -757,11 +797,6 @@ const run = async () => {
             stack: error.stack,
           })),
         ];
-      }
-
-      // Collect coverage data from global __coverage__ object
-      if (globalThis.__coverage__) {
-        result.coverage = globalThis.__coverage__ as CoverageMapData;
       }
 
       send({

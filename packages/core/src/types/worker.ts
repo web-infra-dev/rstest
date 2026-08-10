@@ -25,6 +25,16 @@ export type EntryInfo = {
   size?: number;
 };
 
+export type Base64AssetFile = {
+  encoding: 'base64';
+  data: string;
+};
+
+/** Asset representation accepted by every node worker transport. */
+export type AssetFileContent = string | Uint8Array | Base64AssetFile;
+
+export type AssetFiles = Record<string, AssetFileContent>;
+
 /** Server to Runtime */
 export type ServerRPC = object;
 
@@ -33,7 +43,7 @@ export type RuntimeRPC = {
   onTestFileStart: (test: TestFileInfo) => Promise<void>;
   onTestFileReady: (test: TestFileInfo) => Promise<void>;
   getAssetsByEntry: () => Promise<{
-    assetFiles: Record<string, string>;
+    assetFiles: AssetFiles;
     sourceMaps: Record<string, string>;
   }>;
   onTestSuiteStart: (test: TestSuiteInfo) => Promise<void>;
@@ -89,11 +99,7 @@ export type RuntimeConfig = Pick<
  */
 export type BrowserRuntimeConfig = Omit<
   RuntimeConfig,
-  | 'testEnvironment'
-  | 'detectAsyncLeaks'
-  | 'logHeapUsage'
-  | 'coverage'
-  | 'federation'
+  'testEnvironment' | 'detectAsyncLeaks' | 'logHeapUsage' | 'coverage'
 >;
 
 export type TestEnvironmentModuleReference = {
@@ -145,7 +151,7 @@ export type RunWorkerOptions = {
     type: 'run' | 'collect';
     /** assets is only defined when memory is sufficient, otherwise we should get them via rpc getAssetsByEntry method */
     assets?: {
-      assetFiles: Record<string, string>;
+      assetFiles: AssetFiles;
       sourceMaps: Record<string, string>;
     };
   };

@@ -12,12 +12,18 @@ const test = base
       launchOptions: process.env.CI ? { channel: 'chrome' } : undefined,
     } satisfies PlaywrightOptions,
   })
-  .extend('namedLabel', ({ page }, { onCleanup }) => {
+  .extend('fileLabel', { scope: 'file' }, (_context, { onCleanup }) => {
+    onCleanup(() => {
+      console.log('RSTEST_PLAYWRIGHT_FILE_FIXTURE_CLEANUP_OK');
+    });
+    return 'file fixture';
+  })
+  .extend('namedLabel', ({ fileLabel, page }, { onCleanup }) => {
     onCleanup(() => {
       expect(page).toBeDefined();
       console.log('RSTEST_PLAYWRIGHT_NAMED_FIXTURE_CLEANUP_OK');
     });
-    return 'named fixture';
+    return `${fileLabel}:named fixture`;
   });
 
 const cwd = import.meta.dirname;
@@ -28,7 +34,7 @@ test(
   'opens an Rsbuild page with Playwright',
   { timeout: 30_000 },
   async ({ namedLabel, page, serve }) => {
-    expect(namedLabel).toBe('named fixture');
+    expect(namedLabel).toBe('file fixture:named fixture');
     const rsbuild = await createRsbuild({
       cwd,
       rsbuildConfig: {

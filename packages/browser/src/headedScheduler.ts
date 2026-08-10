@@ -3,7 +3,12 @@ import type {
   TestFileResult,
   TestResult,
 } from '@rstest/core/internal/browser';
-import { color, logger } from '@rstest/core/internal/browser';
+import {
+  color,
+  createFileCleanupTimeoutResult,
+  FIXTURE_CLEANUP_TIMEOUT_MS,
+  logger,
+} from '@rstest/core/internal/browser';
 import { normalize, relative } from 'pathe';
 import {
   type BrowserRuntime,
@@ -25,8 +30,10 @@ import {
 import type {
   BrowserDispatchRequest,
   BrowserHostConfig,
+  FileCleanupDispatchPayload,
   TestFileInfo,
 } from './protocol';
+import { DISPATCH_NAMESPACE_FILE_CLEANUP } from './protocol';
 import type { BrowserProviderContext, BrowserProviderPage } from './providers';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import type {
@@ -142,9 +149,10 @@ export const createHeadedScheduler = async ({
   destroyRuntime,
 }: HeadedSchedulerDeps): Promise<SchedulerRunResult> => {
   const { browser, browserLaunchOptions, watchState, wss } = runtime;
+  const containerUrl = `http://localhost:${runtime.containerServer.port}/`;
   let currentTestFiles = allTestFiles;
   // Coincidentally equal to the runner-side CONFIG_WAIT_TIMEOUT_MS and
-  // DEFAULT_RPC_TIMEOUT_MS (client/entry.ts, client/dispatchTransport.ts) but
+  // DEFAULT_RPC_TIMEOUT_MS (client/runner.ts, client/dispatchTransport.ts) but
   // semantically distinct and in a different runtime, so deliberately NOT shared
   // with them. Invariant worth preserving: a runner must be able to receive its
   // config (config-wait) before the host declares its frames un-ready, i.e.
@@ -235,41 +243,55 @@ export const createHeadedScheduler = async ({
   let containerPage: BrowserProviderPage;
   let isNewPage = false;
 
+  const attachContainerPageHandlers = (
+    activeContext: BrowserProviderContext,
+    activePage: BrowserProviderPage,
+  ): void => {
+    activePage.on('popup', async (popup: BrowserProviderPage) => {
+      await popup.close().catch(() => {});
+    });
+
+    activeContext.on('page', async (page: BrowserProviderPage) => {
+      if (page !== activePage) {
+        await page.close().catch(() => {});
+      }
+    });
+
+    activePage.on('console', (msg) => {
+      const text = msg.text();
+      if (text.startsWith('[Container]') || text.startsWith('[Runner]')) {
+        logger.log(color.gray(`[Browser Console] ${text}`));
+      }
+    });
+  };
+
+  const createContainerPage = async (): Promise<{
+    context: BrowserProviderContext;
+    page: BrowserProviderPage;
+  }> => {
+    const nextContext = await browser.newContext({
+      providerOptions: browserLaunchOptions.providerOptions,
+      viewport: null,
+    });
+    const nextPage = await nextContext.newPage();
+    attachContainerPageHandlers(nextContext, nextPage);
+    return { context: nextContext, page: nextPage };
+  };
+
   if (isWatchMode && runtime.containerPage && runtime.containerContext) {
     containerContext = runtime.containerContext;
     containerPage = runtime.containerPage;
     logger.log(color.gray('\n[Watch] Reusing existing container page\n'));
   } else {
     isNewPage = true;
-    containerContext = await browser.newContext({
-      providerOptions: browserLaunchOptions.providerOptions,
-      viewport: null,
-    });
-    containerPage = await containerContext.newPage();
-
-    // Prevent popup windows from being created
-    containerPage.on('popup', async (popup: BrowserProviderPage) => {
-      await popup.close().catch(() => {});
-    });
-
-    containerContext.on('page', async (page: BrowserProviderPage) => {
-      if (page !== containerPage) {
-        await page.close().catch(() => {});
-      }
-    });
+    const created = await createContainerPage();
+    containerContext = created.context;
+    containerPage = created.page;
 
     if (isWatchMode) {
       runtime.containerPage = containerPage;
       runtime.containerContext = containerContext;
     }
-
-    // Forward browser console to terminal
-    containerPage.on('console', (msg) => {
-      const text = msg.text();
-      if (text.startsWith('[Container]') || text.startsWith('[Runner]')) {
-        logger.log(color.gray(`[Browser Console] ${text}`));
-      }
-    });
   }
 
   setDispatchPageResolver(() => ({ containerPage }));
@@ -279,12 +301,16 @@ export const createHeadedScheduler = async ({
   const pendingHeadedReloads = new Map<
     string,
     {
-      runId: string;
+      cleanupTimer?: ReturnType<typeof setTimeout>;
       deferred: DeferredPromise<void>;
+      file: TestFileInfo;
+      result?: TestFileResult;
+      runId: string;
     }
   >();
   let rawCoverage: unknown[] = [];
   let coverageStarted = false;
+  const timedOutHeadedRuns = new Set<string>();
   let enqueueHeadedReload = async (
     _file: TestFileInfo,
     _testNamePattern?: string,
@@ -304,23 +330,33 @@ export const createHeadedScheduler = async ({
     if (runId && pending.runId !== runId) {
       return;
     }
+    if (pending.cleanupTimer) {
+      clearTimeout(pending.cleanupTimer);
+    }
     pendingHeadedReloads.delete(testPath);
     pending.deferred.reject(error);
   };
 
   const rejectAllPendingHeadedReloads = (error: Error): void => {
     for (const [testPath, pending] of pendingHeadedReloads) {
+      if (pending.cleanupTimer) {
+        clearTimeout(pending.cleanupTimer);
+      }
       pendingHeadedReloads.delete(testPath);
       pending.deferred.reject(error);
     }
   };
 
   const registerPendingHeadedReload = (
-    testPath: string,
+    file: TestFileInfo,
     runId: string,
   ): Promise<void> => {
+    const { testPath } = file;
     const previousPending = pendingHeadedReloads.get(testPath);
     if (previousPending) {
+      if (previousPending.cleanupTimer) {
+        clearTimeout(previousPending.cleanupTimer);
+      }
       previousPending.deferred.reject(
         new Error(
           `Reload for "${testPath}" was superseded by a newer request.`,
@@ -331,8 +367,9 @@ export const createHeadedScheduler = async ({
 
     const deferred = createDeferredPromise<void>();
     pendingHeadedReloads.set(testPath, {
-      runId,
       deferred,
+      file,
+      runId,
     });
 
     return deferred.promise;
@@ -352,9 +389,93 @@ export const createHeadedScheduler = async ({
       );
       return;
     }
+    if (pending.cleanupTimer) {
+      clearTimeout(pending.cleanupTimer);
+    }
     pendingHeadedReloads.delete(testPath);
     pending.deferred.resolve();
   };
+
+  const recoverHeadedContainer = async (): Promise<void> => {
+    currentRunnerFramesSignature = null;
+    await containerContext.close().catch(() => {});
+    const created = await createContainerPage();
+    containerContext = created.context;
+    containerPage = created.page;
+    if (isWatchMode) {
+      runtime.containerPage = containerPage;
+      runtime.containerContext = containerContext;
+    }
+    await containerPage.goto(containerUrl, { waitUntil: 'load' });
+    await waitForRunnerFramesReady(
+      currentTestFiles.map((file) => file.testPath),
+    );
+  };
+
+  const startFileCleanupTimeout = (
+    payload: FileCleanupDispatchPayload,
+  ): void => {
+    const pending = pendingHeadedReloads.get(payload.testPath);
+    if (!pending || (payload.runId && pending.runId !== payload.runId)) {
+      return;
+    }
+    if (pending.cleanupTimer) {
+      clearTimeout(pending.cleanupTimer);
+    }
+    pending.result = payload.result;
+    pending.cleanupTimer = setTimeout(() => {
+      const currentPending = pendingHeadedReloads.get(payload.testPath);
+      if (!currentPending || currentPending.runId !== pending.runId) {
+        return;
+      }
+
+      currentPending.cleanupTimer = undefined;
+      pendingHeadedReloads.delete(payload.testPath);
+      // The iframe may eventually finish after the watchdog. Keep that stale
+      // completion from reporting a second result for the same run.
+      timedOutHeadedRuns.add(`${payload.testPath}\0${pending.runId}`);
+
+      void (async () => {
+        const message = `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`;
+        try {
+          // A cleanup timeout is a file failure, not a container failure. Resolve
+          // this reload after reporting it so the headed serial loop advances.
+          await handleTestFileComplete(
+            createFileCleanupTimeoutResult({
+              message,
+              projectName: pending.file.projectName,
+              result: pending.result,
+              testPath: payload.testPath,
+            }),
+          );
+          await recoverHeadedContainer();
+          pending.deferred.resolve();
+        } catch (error) {
+          pending.deferred.reject(error);
+        }
+      })();
+    }, FIXTURE_CLEANUP_TIMEOUT_MS);
+  };
+
+  const finishFileCleanup = (payload: FileCleanupDispatchPayload): void => {
+    const pending = pendingHeadedReloads.get(payload.testPath);
+    if (!pending || (payload.runId && pending.runId !== payload.runId)) {
+      return;
+    }
+    if (pending.cleanupTimer) {
+      clearTimeout(pending.cleanupTimer);
+      pending.cleanupTimer = undefined;
+    }
+  };
+
+  dispatchRouter.register(DISPATCH_NAMESPACE_FILE_CLEANUP, async (request) => {
+    const payload = request.args as FileCleanupDispatchPayload;
+    if (request.method === 'start') {
+      startFileCleanupTimeout(payload);
+    } else if (request.method === 'end') {
+      finishFileCleanup(payload);
+    }
+  });
 
   // No execution-duration watchdog: per-test/hook timeouts are enforced inside
   // the runner, and a dead container is caught event-driven by the WebSocket
@@ -372,7 +493,7 @@ export const createHeadedScheduler = async ({
         file.testPath,
         testNamePattern,
       );
-      await registerPendingHeadedReload(file.testPath, reloadAck.runId);
+      await registerPendingHeadedReload(file, reloadAck.runId);
     } catch (error) {
       if (reloadAck?.runId) {
         rejectPendingHeadedReload(
@@ -429,6 +550,12 @@ export const createHeadedScheduler = async ({
       await handleTestCaseResult(payload);
     },
     async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
+      if (
+        payload.runId &&
+        timedOutHeadedRuns.delete(`${payload.testPath}\0${payload.runId}`)
+      ) {
+        return;
+      }
       try {
         if (coverageStarted) {
           coverageStarted = false;
@@ -489,17 +616,11 @@ export const createHeadedScheduler = async ({
 
   // Only navigate on first creation
   if (isNewPage) {
-    const pagePath = '/';
-    const containerPort = runtime.containerServer.port;
-    await containerPage.goto(`http://localhost:${containerPort}${pagePath}`, {
+    await containerPage.goto(containerUrl, {
       waitUntil: 'load',
     });
 
-    logger.log(
-      color.cyan(
-        `\nBrowser mode opened at http://localhost:${containerPort}${pagePath}\n`,
-      ),
-    );
+    logger.log(color.cyan(`\nBrowser mode opened at ${containerUrl}\n`));
   }
 
   enqueueHeadedReload = async (

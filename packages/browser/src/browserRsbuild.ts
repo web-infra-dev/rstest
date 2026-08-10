@@ -817,14 +817,10 @@ export const collectProjectEntries = async (
   );
 };
 
-const resolveBrowserFile = (relativePath: string): string => {
-  // __dirname points to packages/browser/dist when running from built code
-  // or packages/browser/src when running from source
+const resolveBrowserDistFile = (relativePath: string): string => {
   const candidates = [
-    // When running from built dist: look in ../src for source files
-    resolve(__dirname, '../src', relativePath),
-    // When running from source (dev mode)
     resolve(__dirname, relativePath),
+    resolve(__dirname, '../dist', relativePath),
   ];
 
   for (const candidate of candidates) {
@@ -833,7 +829,7 @@ const resolveBrowserFile = (relativePath: string): string => {
     }
   }
 
-  throw new Error(`Unable to resolve browser client file: ${relativePath}`);
+  throw new Error(`Unable to resolve browser dist file: ${relativePath}`);
 };
 
 export const resolveContainerDist = (): string => {
@@ -860,7 +856,7 @@ const toSafeVarName = (name: string): string => {
   return name.replace(/[^a-zA-Z0-9_]/g, '_');
 };
 
-// Host-side mirror of the browser runtime's `toContextKey` (client/entry.ts):
+// Host-side mirror of the browser runtime's `toContextKey` (client/runner.ts):
 // `./<path-relative-to-project-root>` with forward slashes. The runtime derives
 // the same key from the target test file, so the non-watch import map below must
 // key by the identical form for `loadTest(key)` to resolve.
@@ -1260,7 +1256,7 @@ export const createBrowserRuntime = async ({
     import.meta.resolve('@rstest/core/internal/browser-runtime'),
   );
 
-  // Shared by every project — only the per-project `@rstest/browser-manifest`
+  // Shared by every project — only the per-project virtual manifest
   // alias varies (one virtual manifest per server).
   const staticRstestAliases = {
     // User test code `import { describe, it } from '@rstest/core'` is NOT
@@ -1268,8 +1264,8 @@ export const createBrowserRuntime = async ({
     // `globalThis['@rstest/core']` (node parity), which also keeps the mock
     // hoister's provider-import ordering correct for `rs.hoisted` callbacks.
     // User test code: import { page } from '@rstest/browser'
-    '@rstest/browser': resolveBrowserFile('browser.ts'),
-    // Browser runtime APIs for entry.ts
+    '@rstest/browser': resolveBrowserDistFile('client/index.js'),
+    // Browser runner runtime APIs
     // Uses dist file with extractSourceMap to preserve sourcemap chain for inline snapshots
     '@rstest/core/internal/browser-runtime': browserRuntimePath,
   };
@@ -1434,7 +1430,7 @@ export const createBrowserRuntime = async ({
     });
 
     const rstestInternalAliases = {
-      '@rstest/browser-manifest': manifestPath,
+      __rstest_virtual_browser_manifest__: manifestPath,
       ...staticRstestAliases,
     };
 
@@ -1635,7 +1631,7 @@ export const createBrowserRuntime = async ({
               // This must be done after mergeEnvironmentConfig to ensure highest priority.
               merged.source = merged.source || {};
               merged.source.entry = {
-                runner: resolveBrowserFile('client/entry.ts'),
+                runner: resolveBrowserDistFile('client/runner.js'),
               };
 
               return merged;

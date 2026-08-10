@@ -11,6 +11,7 @@
  *   - 'stderr-late'        → write to stderr and exit(1) immediately
  *   - 'environment-fallback' → report an environment prebundle fallback,
  *                                then succeed.
+ *   - 'asset-transport'     → echo the received asset byte shape.
  *   - 'spawn-orphan'       → spawn a long-lived grandchild that inherits
  *                             stdio, then send result and exit normally.
  *                             Tests that `exit` (not `close`) drives the
@@ -166,6 +167,15 @@ const handleRun = (request) => {
       },
     });
     finish();
+    return;
+  }
+
+  if (mode === 'asset-transport') {
+    const content = request.options.assets.assetFiles['/asset.bin'];
+    finish({
+      _assetBytes: Array.from(content),
+      _assetConstructor: content.constructor.name,
+    });
     return;
   }
 

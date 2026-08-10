@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it } from '@rstest/core';
+import { describe, expect, it } from '@rstest/core';
 import { prepareFixtures } from '../scripts';
 import {
   deleteFixtureTarget,
@@ -71,6 +71,10 @@ describe('browser mode - watch reporter lifecycle', () => {
         await cli.waitForStdout('Waiting for file changes...');
       }
 
+      const initialReportLog = fs.read(reportLogPath);
+      expect(getHookCountFromLog(initialReportLog, 'onTestRunStart')).toBe(1);
+      expect(getHookCountFromLog(initialReportLog, 'onTestRunEnd')).toBe(1);
+
       const testFilePath = path.join(fixturesTargetPath, 'tests/index.test.ts');
 
       cli.resetStd();
@@ -78,6 +82,14 @@ describe('browser mode - watch reporter lifecycle', () => {
 
       await cli.waitForStdout('Re-running 1 affected test file(s)');
       await waitForHookCounts(2, 2);
+
+      if (!cli.stdout.includes('Waiting for file changes...')) {
+        await cli.waitForStdout('Waiting for file changes...');
+      }
+
+      const rerunReportLog = fs.read(reportLogPath);
+      expect(getHookCountFromLog(rerunReportLog, 'onTestRunStart')).toBe(2);
+      expect(getHookCountFromLog(rerunReportLog, 'onTestRunEnd')).toBe(2);
     } finally {
       await killCliProcessTree(cli);
       await deleteFixtureTarget(fs, fixturesTargetPath);

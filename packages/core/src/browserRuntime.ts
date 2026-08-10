@@ -4,7 +4,7 @@
  * without any Node.js or build tool dependencies.
  *
  * Used by:
- * - packages/browser/src/client/entry.ts (runtime APIs)
+ * - packages/browser/src/client/runner.ts (runtime APIs)
  *
  * User test code importing '@rstest/core' is not aliased here; the browser
  * build keeps that request external against `globalThis['@rstest/core']`
@@ -19,6 +19,7 @@ export * from './runtime/api/public';
 export { setRealTimers } from './runtime/util';
 export { createBrowserTaskContext } from './runtime/worker/taskContext.browser';
 export type { TaskContext } from './runtime/worker/taskContext';
+export type { FileCleanupHooks } from './runtime/runner';
 // Types for browser runtime
 export type {
   BrowserRuntimeConfig,

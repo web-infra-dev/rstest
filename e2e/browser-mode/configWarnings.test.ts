@@ -63,4 +63,14 @@ describe('browser mode - config validation warnings', () => {
       output.match(/Ignoring pool\.type 'threads' in browser mode/g) ?? [],
     ).toHaveLength(1);
   });
+
+  it('allows Module Federation in browser mode without an ignore warning', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli('basic', {
+      args: ['-c', 'rstest.federation.config.mts'],
+    });
+    await expectExecSuccess();
+    expect(`${cli.stdout}\n${cli.stderr}`).not.toMatch(
+      /Ignoring federation in browser mode/,
+    );
+  });
 });
