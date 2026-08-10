@@ -14,6 +14,6 @@ export default defineConfig({
     enabled: true,
     provider: 'v8',
     include: ['src/**/*.ts'],
-    reportsDirectory: './coverage-v8-browser',
+    reportsDirectory: './coverage-v8-browser-only',
   },
 });

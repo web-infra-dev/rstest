@@ -57,7 +57,11 @@ import type { WatchSignals } from './watchSignals';
 
 type HeadlessSchedulerContext = Pick<
   RstestContext,
-  'command' | 'snapshotManager' | 'stateManager' | 'updateReporterResultState'
+  | 'command'
+  | 'rootPath'
+  | 'snapshotManager'
+  | 'stateManager'
+  | 'updateReporterResultState'
 > & {
   normalizedConfig: Pick<RstestContext['normalizedConfig'], 'bail' | 'pool'>;
 };
@@ -69,7 +73,10 @@ type HeadlessSchedulerDeps = {
   projectServers: BrowserRuntime['projectServers'];
   v8Coverage?: {
     start: (page: BrowserProviderPage) => Promise<void>;
-    take: (page: BrowserProviderPage) => Promise<unknown | null>;
+    take: (
+      page: BrowserProviderPage,
+      projectRoot: string,
+    ) => Promise<unknown | null>;
   };
   allTestFiles: TestFileInfo[];
   projectRuntimeConfigs: BrowserProjectRuntime[];
@@ -124,6 +131,9 @@ export const createHeadlessScheduler = async ({
   };
 
   const viewportByProject = mapViewportByProject(projectRuntimeConfigs);
+  const projectRootByName = new Map(
+    projectRuntimeConfigs.map((project) => [project.name, project.projectRoot]),
+  );
   const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
   const sessionRegistry = new RunnerSessionRegistry();
   setDispatchPageResolver((target) => ({
@@ -346,7 +356,10 @@ export const createHeadlessScheduler = async ({
             }
             if (!coverageCollected && message.type === 'file-complete') {
               coverageCollected = true;
-              const coverage = await v8Coverage?.take(page!);
+              const coverage = await v8Coverage?.take(
+                page!,
+                projectRootByName.get(file.projectName) ?? context.rootPath,
+              );
               if (coverage) {
                 rawCoverage.push(coverage);
               }

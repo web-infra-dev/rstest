@@ -318,6 +318,20 @@ export const runBrowserController = async (
   const coverageProvider = coverageConfig?.enabled
     ? await createCoverageProvider(coverageConfig, context.rootPath)
     : null;
+  const configuredBrowserName =
+    browserProjects[0]?.normalizedConfig.browser.browser ?? 'chromium';
+  if (
+    coverageConfig?.provider === 'v8' &&
+    configuredBrowserName === 'chromium' &&
+    coverageProvider?.supportsBrowserCoverage !== true
+  ) {
+    return failWithError(
+      new Error(
+        'The installed @rstest/coverage-v8 provider does not support Chromium Browser Mode coverage. ' +
+          "Upgrade @rstest/coverage-v8 to the version matching @rstest/core, or use coverage.provider: 'istanbul'.",
+      ),
+    );
+  }
 
   const containerDevServerEnv = process.env.RSTEST_CONTAINER_DEV_SERVER;
   let containerDevServer: string | undefined;
@@ -681,11 +695,11 @@ export const runBrowserController = async (
   const v8Coverage = v8CoverageCollector
     ? {
         start: v8CoverageCollector.start,
-        take: (page: BrowserProviderPage) =>
+        take: (page: BrowserProviderPage, projectRoot: string) =>
           takeBrowserV8Coverage({
             collector: v8CoverageCollector,
             page,
-            rootPath: normalize(context.rootPath),
+            rootPath: normalize(projectRoot),
             sourceMapCache: browserSourceMapCache,
           }),
       }
@@ -1056,6 +1070,12 @@ export const runBrowserController = async (
     context,
     allTestFiles,
     hostOptions,
+    projectRoots: new Map(
+      projectRuntimeConfigs.map((project) => [
+        project.name,
+        project.projectRoot,
+      ]),
+    ),
     isWatchMode,
     createDispatchRouter,
     fatalErrorRef,

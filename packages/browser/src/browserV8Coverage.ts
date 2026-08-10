@@ -69,6 +69,10 @@ export const takeBrowserV8Coverage = async ({
       const sourceMap = await loadSourceMapWithCache({
         jsUrl: url,
         cache: sourceMapCache,
+        // Browser bundles can be rebuilt in place during watch. The URL is
+        // stable after normalization, so a cached map may describe an older
+        // version of the JavaScript whose offsets we just collected.
+        force: true,
       });
       if (sourceMap) {
         sourceMaps[url] = normalizeSourceMap(sourceMap, rootPath);

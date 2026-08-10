@@ -57,8 +57,12 @@ type HeadedSchedulerDeps = {
   hostOptions: BrowserHostConfig;
   v8Coverage?: {
     start: (page: BrowserProviderPage) => Promise<void>;
-    take: (page: BrowserProviderPage) => Promise<unknown | null>;
+    take: (
+      page: BrowserProviderPage,
+      projectRoot: string,
+    ) => Promise<unknown | null>;
   };
+  projectRoots: Map<string, string>;
   isWatchMode: boolean;
   createDispatchRouter: () => HostDispatchRouter;
   handlers: {
@@ -131,6 +135,7 @@ export const createHeadedScheduler = async ({
   allTestFiles,
   hostOptions,
   v8Coverage,
+  projectRoots,
   isWatchMode,
   createDispatchRouter,
   handlers: {
@@ -504,7 +509,10 @@ export const createHeadedScheduler = async ({
       }
       if (coverageStarted) {
         coverageStarted = false;
-        const coverage = await v8Coverage?.take(containerPage);
+        const coverage = await v8Coverage?.take(
+          containerPage,
+          projectRoots.get(file.projectName) ?? context.rootPath,
+        );
         if (coverage) {
           rawCoverage.push(coverage);
         }
@@ -559,7 +567,12 @@ export const createHeadedScheduler = async ({
       try {
         if (coverageStarted) {
           coverageStarted = false;
-          const coverage = await v8Coverage?.take(containerPage);
+          const projectName = pendingHeadedReloads.get(payload.testPath)?.file
+            .projectName;
+          const coverage = await v8Coverage?.take(
+            containerPage,
+            projectRoots.get(projectName ?? '') ?? context.rootPath,
+          );
           if (coverage) {
             rawCoverage.push(coverage);
           }

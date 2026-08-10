@@ -177,6 +177,8 @@ export type RawCoverageResolveOptions = {
 
 export declare class CoverageProvider {
   constructor(options: NormalizedCoverageOptions, root?: string);
+  /** Whether this provider can resolve raw coverage URLs emitted by Chromium. */
+  supportsBrowserCoverage?: boolean;
   /**
    * Initialize coverage collection
    */
