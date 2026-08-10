@@ -257,6 +257,7 @@ export const createHeadlessScheduler = async ({
     let settled = false;
     let resolveDone: (() => void) | null = null;
     let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+    let fileCleanupFinished = false;
     let provisionalResult: TestFileResult | undefined;
 
     const markDone = (): void => {
@@ -306,17 +307,24 @@ export const createHeadlessScheduler = async ({
       });
       sessionId = session.id;
 
-      const finishFileCleanup = (): void => {
+      const clearFileCleanupTimeout = (): void => {
         if (cleanupTimer) {
           clearTimeout(cleanupTimer);
           cleanupTimer = undefined;
         }
       };
+      const finishFileCleanup = (): void => {
+        fileCleanupFinished = true;
+        clearFileCleanupTimeout();
+      };
       fileCleanupHandlers.set(session.id, {
         end: finishFileCleanup,
         start: (result) => {
+          if (fileCleanupFinished) {
+            return;
+          }
           provisionalResult = result;
-          finishFileCleanup();
+          clearFileCleanupTimeout();
           cleanupTimer = setTimeout(() => {
             void (async () => {
               if (settled) {
