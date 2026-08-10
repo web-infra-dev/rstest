@@ -34,20 +34,22 @@ export const normalizeJavaScriptUrl = (
 export const resolveInlineSourceMap = (
   code: string,
 ): SourceMapPayload | null => {
-  const converter = convert.fromSource(code);
-  if (!converter) {
+  try {
+    const converter = convert.fromSource(code);
+    return converter ? (converter.toObject() as SourceMapPayload) : null;
+  } catch {
     return null;
   }
-
-  return converter.toObject() as SourceMapPayload;
 };
 
 export const loadSourceMapForSource = async ({
   jsUrl,
+  signal,
   source,
   fetcher = fetch,
 }: {
   jsUrl: string;
+  signal: AbortSignal;
   source: string;
   fetcher?: Fetcher;
 }): Promise<
@@ -60,7 +62,7 @@ export const loadSourceMapForSource = async ({
   }
 
   try {
-    const jsResponse = await fetcher(normalizedUrl);
+    const jsResponse = await fetcher(normalizedUrl, { signal });
     if (!jsResponse.ok) {
       return { status: 'unavailable' };
     }
@@ -75,7 +77,7 @@ export const loadSourceMapForSource = async ({
       return { status: 'matched', sourceMap: inlineMap };
     }
 
-    const mapResponse = await fetcher(`${normalizedUrl}.map`);
+    const mapResponse = await fetcher(`${normalizedUrl}.map`, { signal });
     return {
       status: 'matched',
       sourceMap: mapResponse.ok

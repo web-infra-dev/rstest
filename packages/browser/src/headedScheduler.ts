@@ -37,6 +37,7 @@ import { DISPATCH_NAMESPACE_FILE_CLEANUP } from './protocol';
 import type { BrowserProviderContext, BrowserProviderPage } from './providers';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import type {
+  BrowserV8CoverageRuntime,
   BrowserWatchSession,
   CreateBrowserWatchSession,
   DispatchPageResolver,
@@ -56,13 +57,7 @@ type HeadedSchedulerDeps = {
   runtime: BrowserRuntime;
   allTestFiles: TestFileInfo[];
   hostOptions: BrowserHostConfig;
-  v8Coverage?: {
-    start: (page: BrowserProviderPage) => Promise<void>;
-    take: (
-      page: BrowserProviderPage,
-      projectRoot: string,
-    ) => Promise<unknown | null>;
-  };
+  v8Coverage?: BrowserV8CoverageRuntime;
   projectRoots: Map<string, string>;
   isWatchMode: boolean;
   createDispatchRouter: () => HostDispatchRouter;
@@ -322,6 +317,7 @@ export const createHeadedScheduler = async ({
     const coverage = await v8Coverage.take(
       containerPage,
       projectRoots.get(projectName ?? '') ?? context.rootPath,
+      projectName,
     );
     if (coverage) {
       rawCoverage.push(coverage);
@@ -697,6 +693,7 @@ export const createHeadedScheduler = async ({
     const runScope: Parameters<CreateBrowserWatchSession>[0] = async (
       testPaths,
     ) => {
+      v8Coverage?.resetResources();
       rawCoverage = [];
       // Claimed in this synchronous prefix, before `runCycle` suspends, so
       // nothing this cycle does can change what it runs or which patterns it

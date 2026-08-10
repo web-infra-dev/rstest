@@ -681,6 +681,7 @@ export const runBrowserController = async (
       `http://localhost:${server.port}`,
     ]),
   );
+  const containerRunnerUrl = `http://localhost:${runtime.containerServer.port}`;
 
   const hostOptions: BrowserHostConfig = {
     rootPath: normalize(context.rootPath),
@@ -691,7 +692,7 @@ export const runBrowserController = async (
         context.snapshotManager.options.updateSnapshot,
     },
     // Container origin (fallback). Per-project runner origins below.
-    runnerUrl: `http://localhost:${runtime.containerServer.port}`,
+    runnerUrl: containerRunnerUrl,
     projectRunnerUrls,
     wsPort,
     debug: isDebug(),
@@ -726,11 +727,24 @@ export const runBrowserController = async (
       : null;
   const v8Coverage = v8CoverageCollector
     ? {
+        resetResources: () => {
+          browserCoverageResources.assetFiles.clear();
+          browserCoverageResources.sourceMaps.clear();
+          browserSourceMapCache.clear();
+        },
         start: v8CoverageCollector.start,
-        take: (page: BrowserProviderPage, projectRoot: string) =>
+        take: (
+          page: BrowserProviderPage,
+          projectRoot: string,
+          projectName?: string,
+        ) =>
           takeBrowserV8Coverage({
+            allowExternal: coverageConfig?.allowExternal ?? false,
             collector: v8CoverageCollector,
+            fetchTimeout: maxTestTimeoutForRpc,
             page,
+            projectUrl:
+              projectRunnerUrls[projectName ?? ''] ?? containerRunnerUrl,
             rootPath: normalize(projectRoot),
             sourceMapCache: browserSourceMapCache,
             resourceStore: browserCoverageResources,

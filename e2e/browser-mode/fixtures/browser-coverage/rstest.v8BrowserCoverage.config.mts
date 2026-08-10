@@ -8,7 +8,7 @@ export default defineConfig({
     headless: true,
     port: BROWSER_PORTS['browser-coverage-v8'],
   },
-  include: ['tests/sum.test.ts'],
+  include: ['tests/sum.test.ts', 'tests/malformed-source-map.test.ts'],
   coverage: {
     enabled: true,
     provider: 'v8',

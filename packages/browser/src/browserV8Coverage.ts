@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { resolve } from 'pathe';
 import type {
   BrowserProviderPage,
@@ -45,17 +46,24 @@ const normalizeSourceMap = (
 export const takeBrowserV8Coverage = async ({
   collector,
   page,
+  projectUrl,
   rootPath,
+  allowExternal,
+  fetchTimeout,
   sourceMapCache,
   resourceStore,
 }: {
   collector: BrowserV8CoverageCollector;
   page: BrowserProviderPage;
+  projectUrl: string;
   rootPath: string;
+  allowExternal: boolean;
+  fetchTimeout: number;
   sourceMapCache: Map<string, SourceMapPayload | null>;
   resourceStore?: BrowserV8CoverageResourceStore;
 }): Promise<unknown | null> => {
   const rawEntries = await collector.take(page);
+  const projectOrigin = new URL(projectUrl).origin;
   const entries: {
     url: string;
     scriptId: string;
@@ -71,11 +79,18 @@ export const takeBrowserV8Coverage = async ({
       if (!url || !entry.source) {
         return;
       }
+      if (!allowExternal && new URL(url).origin !== projectOrigin) {
+        return;
+      }
 
       const inlineSourceMap = resolveInlineSourceMap(entry.source);
       const sourceMapResult = inlineSourceMap
         ? { status: 'matched' as const, sourceMap: inlineSourceMap }
-        : await loadSourceMapForSource({ jsUrl: url, source: entry.source });
+        : await loadSourceMapForSource({
+            jsUrl: url,
+            signal: AbortSignal.timeout(fetchTimeout),
+            source: entry.source,
+          });
       // A headed watch rebuild can replace a stable bundle URL while the old
       // script is still executing. Its ranges must not be paired with the new
       // build's map; the next stable rerun will collect that version instead.
@@ -83,27 +98,37 @@ export const takeBrowserV8Coverage = async ({
         return;
       }
 
+      const sourceMap = sourceMapResult.sourceMap;
+      const normalizedSourceMap = sourceMap
+        ? normalizeSourceMap(sourceMap, rootPath)
+        : undefined;
+      const resourceVersion = createHash('sha256')
+        .update(entry.source)
+        .update('\0')
+        .update(normalizedSourceMap ?? '')
+        .digest('hex')
+        .slice(0, 16);
+      const filePath = `${url}#rstest-v8=${resourceVersion}`;
+
       entries.push({
         url,
         scriptId: entry.scriptId,
-        filePath: url,
+        filePath,
         functions: entry.functions,
       });
-      if (resourceStore?.assetFiles.get(url) !== entry.source) {
-        assetFiles[url] = entry.source;
-        resourceStore?.assetFiles.set(url, entry.source);
+      if (resourceStore?.assetFiles.get(filePath) !== entry.source) {
+        assetFiles[filePath] = entry.source;
+        resourceStore?.assetFiles.set(filePath, entry.source);
       }
 
-      const sourceMap = sourceMapResult.sourceMap;
       sourceMapCache.set(url, sourceMap);
-      if (sourceMap) {
-        const normalizedSourceMap = normalizeSourceMap(sourceMap, rootPath);
-        if (resourceStore?.sourceMaps.get(url) !== normalizedSourceMap) {
-          sourceMaps[url] = normalizedSourceMap;
-          resourceStore?.sourceMaps.set(url, normalizedSourceMap);
+      if (normalizedSourceMap) {
+        if (resourceStore?.sourceMaps.get(filePath) !== normalizedSourceMap) {
+          sourceMaps[filePath] = normalizedSourceMap;
+          resourceStore?.sourceMaps.set(filePath, normalizedSourceMap);
         }
       } else {
-        resourceStore?.sourceMaps.delete(url);
+        resourceStore?.sourceMaps.delete(filePath);
       }
     }),
   );

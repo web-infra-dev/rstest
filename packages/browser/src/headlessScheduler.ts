@@ -49,6 +49,7 @@ import {
 import { RunnerSessionRegistry } from './sessionRegistry';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import type {
+  BrowserV8CoverageRuntime,
   BrowserWatchSession,
   CreateBrowserWatchSession,
   DispatchPageResolver,
@@ -72,13 +73,7 @@ type HeadlessSchedulerDeps = {
   browser: BrowserProviderBrowser;
   browserLaunchOptions: BrowserRuntime['browserLaunchOptions'];
   projectServers: BrowserRuntime['projectServers'];
-  v8Coverage?: {
-    start: (page: BrowserProviderPage) => Promise<void>;
-    take: (
-      page: BrowserProviderPage,
-      projectRoot: string,
-    ) => Promise<unknown | null>;
-  };
+  v8Coverage?: BrowserV8CoverageRuntime;
   allTestFiles: TestFileInfo[];
   projectRuntimeConfigs: BrowserProjectRuntime[];
   hostOptions: BrowserHostConfig;
@@ -292,6 +287,7 @@ export const createHeadlessScheduler = async ({
       const coverage = await v8Coverage.take(
         page,
         projectRootByName.get(file.projectName) ?? context.rootPath,
+        file.projectName,
       );
       if (coverage) {
         rawCoverage.push(coverage);
@@ -595,6 +591,7 @@ export const createHeadlessScheduler = async ({
     const runScope: Parameters<CreateBrowserWatchSession>[0] = async (
       testPaths,
     ) => {
+      v8Coverage?.resetResources();
       const pathSet = new Set(testPaths.map((testPath) => normalize(testPath)));
       const rawCoverage: unknown[] = [];
       try {
