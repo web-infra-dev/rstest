@@ -201,7 +201,7 @@ export async function mergeReports(
   }
 
   if (coverageOptions.enabled) {
-    cleanCoverageReports(coverageOptions);
+    cleanCoverageReports(coverageOptions, blobDir);
   }
   const coverageProvider = coverageOptions.enabled
     ? await createCoverageProvider(coverageOptions, context.rootPath)

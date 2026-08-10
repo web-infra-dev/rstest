@@ -218,7 +218,7 @@ jobs:
       - run: pnpm rstest merge-reports --coverage --cleanup
 ```
 
-Each shard writes `.rstest-reports/blob-{index}-{count}.json` with its test results and collected coverage. Shards do not generate coverage reports or check thresholds. The merge job collects those files into one `.rstest-reports/` directory, then `rstest merge-reports` adds untested files, runs the configured reporters, and checks coverage thresholds against the unified result. Put coverage finalization options in the shared configuration, or pass the same `--coverage.*` options to the merge command because shard-only CLI options are not stored in blobs. See [sharding](/guide/basic/cli#sharding-tests) and [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) for details.
+Each shard writes `.rstest-reports/blob-{index}-{count}.json` with its test results and collected coverage. With coverage providers that support deferred finalization, shards do not generate coverage reports or check thresholds. Older providers retain their existing per-shard finalization behavior. The merge job collects those files into one `.rstest-reports/` directory, then `rstest merge-reports` adds untested files, runs the configured reporters, and checks coverage thresholds against the unified result. Put coverage finalization options in the shared configuration, or pass the same `--coverage.*` options to the merge command because shard-only CLI options are not stored in blobs. See [sharding](/guide/basic/cli#sharding-tests) and [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) for details.
 
 ## Publish machine-readable reports
 

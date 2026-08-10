@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -171,6 +171,61 @@ describe('merge-reports', () => {
 
     // Clean up
     fs.removeSync(coverageDir);
+  });
+
+  it('preserves blob inputs when coverage reports contain them', async () => {
+    const blobDir = join(fixturesDir, '.rstest-reports');
+    const reportsDir = join(fixturesDir, 'coverage-merge-input');
+    fs.removeSync(blobDir);
+    fs.removeSync(reportsDir);
+
+    for (const shard of ['1/2', '2/2']) {
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '--shard',
+          shard,
+          '--reporters=blob',
+          '-c',
+          'rstest.coverage.config.mts',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: fixturesDir,
+          },
+        },
+      });
+      await expectExecSuccess();
+    }
+
+    const mergedBlobDir = join(reportsDir, 'blobs');
+    fs.ensureDirSync(reportsDir);
+    renameSync(blobDir, mergedBlobDir);
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'merge-reports',
+        'coverage-merge-input/blobs',
+        '--coverage.reportsDirectory=coverage-merge-input',
+        '--coverage.reporters=json-summary',
+        '-c',
+        'rstest.coverage.config.mts',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: fixturesDir,
+        },
+      },
+    });
+    await expectExecSuccess();
+
+    expect(existsSync(join(mergedBlobDir, 'blob-1-2.json'))).toBe(true);
+    expect(existsSync(join(mergedBlobDir, 'blob-2-2.json'))).toBe(true);
+    expect(existsSync(join(reportsDir, 'coverage-summary.json'))).toBe(true);
+
+    fs.removeSync(reportsDir);
   });
 
   it('finalizes Istanbul coverage only when merging blob reports', async () => {
