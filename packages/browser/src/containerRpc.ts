@@ -12,7 +12,6 @@ import type {
   HeadedTestFileCompletePayload,
   LogPayload,
   ReloadTestFileAck,
-  RunnerSignalPayload,
   TestFileStartPayload,
 } from './hostPayloads';
 
@@ -25,8 +24,6 @@ export type HostRpcMethods = {
   onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
   onTestCaseResult: (payload: TestResult) => Promise<void>;
   onTestFileComplete: (payload: HeadedTestFileCompletePayload) => Promise<void>;
-  onFileCleanupStart: (payload: RunnerSignalPayload) => Promise<void>;
-  onFileCleanupEnd: (payload: RunnerSignalPayload) => Promise<void>;
   onLog: (payload: LogPayload) => Promise<void>;
   onFatal: (payload: FatalPayload) => Promise<void>;
   // Generic dispatch endpoint used by runner RPC requests.

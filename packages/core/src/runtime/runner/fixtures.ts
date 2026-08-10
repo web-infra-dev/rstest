@@ -112,23 +112,28 @@ export const normalizeNamedFixture = (
   const fixture = result[name]!;
   if (fixture.isFn) {
     const usedProps = getFixtureUsedProps(fixture.value);
-    fixture.deps = usedProps.filter((property) =>
-      Object.hasOwn(result, property),
-    );
     if (scope === 'file') {
       for (const property of usedProps) {
-        const dependency = result[property];
-        if (!dependency) {
+        if (property === name) {
+          throw new Error(`Circular fixture dependency: ${name}`);
+        }
+        if (!Object.hasOwn(extendFixtures, property)) {
           throw new Error(
             `The file-scoped fixture "${name}" cannot depend on test context "${property}".`,
           );
         }
+        const dependency = extendFixtures[property]!;
         if (dependency.scope !== 'file') {
           throw new Error(
             `The file-scoped fixture "${name}" cannot depend on the test-scoped fixture "${property}".`,
           );
         }
       }
+      fixture.deps = usedProps;
+    } else {
+      fixture.deps = usedProps.filter((property) =>
+        Object.hasOwn(result, property),
+      );
     }
   }
   return result;
@@ -162,8 +167,9 @@ type FileFixtureInstance = {
   cleanupRegistered: boolean;
   dependents: Set<FileFixtureInstance>;
   error?: unknown;
-  setup: Promise<unknown>;
-  status: 'pending' | 'ready' | 'failed';
+  setup?: Promise<unknown>;
+  start: () => Promise<unknown>;
+  status: 'idle' | 'pending' | 'ready' | 'failed';
   teardownReady: Promise<void>;
   value?: unknown;
 };
@@ -175,7 +181,7 @@ export class FileFixtureManager {
   >();
   private cleaning = false;
 
-  private startFixture(
+  private getFixture(
     name: string,
     fixture: NormalizedFixture,
     fixtures: NormalizedFixtures,
@@ -189,67 +195,74 @@ export class FileFixtureManager {
     const instance: FileFixtureInstance = {
       cleanupRegistered: false,
       dependents: new Set(),
-      setup: Promise.resolve(),
-      status: 'pending',
+      start: () => start(),
+      status: 'idle',
       teardownReady: new Promise<void>((resolve) => {
         notifyTeardownReady = resolve;
       }),
     };
     this.instances.set(fixture, instance);
 
-    instance.setup = (async () => {
-      const fixtureContext = Object.create(null) as Record<string, unknown>;
-      for (const dependencyName of fixture.deps ?? []) {
-        const dependency = this.startFixture(
-          dependencyName,
-          fixtures[dependencyName]!,
-          fixtures,
-        );
-        dependency.dependents.add(instance);
-        await dependency.setup;
-        if (dependency.status === 'failed') {
-          throw dependency.error;
-        }
-        fixtureContext[dependencyName] = dependency.value;
+    const start = (): Promise<unknown> => {
+      if (instance.setup) {
+        return instance.setup;
       }
-
-      if (!fixture.isFn) {
-        return fixture.value;
-      }
-
-      const onCleanup = (cleanup: FixtureCleanup) => {
-        if (instance.cleanupRegistered) {
-          throw new Error(
-            `onCleanup can only be called once for fixture "${name}".`,
+      instance.status = 'pending';
+      instance.setup = Promise.resolve().then(async () => {
+        const fixtureContext = Object.create(null) as Record<string, unknown>;
+        for (const dependencyName of fixture.deps ?? []) {
+          const dependency = this.getFixture(
+            dependencyName,
+            fixtures[dependencyName]!,
+            fixtures,
           );
+          dependency.dependents.add(instance);
+          await dependency.start();
+          if (dependency.status === 'failed') {
+            throw dependency.error;
+          }
+          fixtureContext[dependencyName] = dependency.value;
         }
-        instance.cleanupRegistered = true;
-        let cleanupPromise: Promise<void> | undefined;
-        const runCleanup = () => {
-          cleanupPromise ??= Promise.resolve().then(cleanup);
-          return cleanupPromise;
-        };
-        instance.cleanup = runCleanup;
-        notifyTeardownReady?.();
-        notifyTeardownReady = undefined;
-      };
 
-      return fixture.value(fixtureContext, { onCleanup });
-    })();
-    instance.setup.then(
-      (value) => {
-        instance.status = 'ready';
-        instance.value = value;
-        notifyTeardownReady?.();
-        notifyTeardownReady = undefined;
-      },
-      (error: unknown) => {
-        instance.status = 'failed';
-        instance.error = error;
-        notifyTeardownReady?.();
-        notifyTeardownReady = undefined;
-      },
-    );
+        if (!fixture.isFn) {
+          return fixture.value;
+        }
+
+        const onCleanup = (cleanup: FixtureCleanup) => {
+          if (instance.cleanupRegistered) {
+            throw new Error(
+              `onCleanup can only be called once for fixture "${name}".`,
+            );
+          }
+          instance.cleanupRegistered = true;
+          let cleanupPromise: Promise<void> | undefined;
+          const runCleanup = () => {
+            cleanupPromise ??= Promise.resolve().then(cleanup);
+            return cleanupPromise;
+          };
+          instance.cleanup = runCleanup;
+          notifyTeardownReady?.();
+          notifyTeardownReady = undefined;
+        };
+
+        return fixture.value(fixtureContext, { onCleanup });
+      });
+      instance.setup.then(
+        (value) => {
+          instance.status = 'ready';
+          instance.value = value;
+          notifyTeardownReady?.();
+          notifyTeardownReady = undefined;
+        },
+        (error: unknown) => {
+          instance.status = 'failed';
+          instance.error = error;
+          notifyTeardownReady?.();
+          notifyTeardownReady = undefined;
+        },
+      );
+      return instance.setup;
+    };
     return instance;
   }
 
@@ -264,9 +277,9 @@ export class FileFixtureManager {
         `Cannot set up file-scoped fixture "${name}" during cleanup.`,
       );
     }
-    const instance = this.startFixture(name, fixture, fixtures);
+    const instance = this.getFixture(name, fixture, fixtures);
     await runSetup(
-      () => instance.setup,
+      () => instance.start(),
       () => {},
     );
     if (instance.status === 'failed') {
@@ -285,6 +298,9 @@ export class FileFixtureManager {
         return existing;
       }
       const cleanup = Promise.resolve().then(async () => {
+        if (instance.status === 'idle') {
+          return;
+        }
         await Promise.all([...instance.dependents].map(cleanupInstance));
         await instance.teardownReady;
         if (!instance.cleanup) {

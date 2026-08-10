@@ -96,6 +96,12 @@ describe('normalizeNamedFixture', () => {
     );
   });
 
+  it('rejects self-dependent file fixtures', () => {
+    expect(() =>
+      normalizeNamedFixture('value', ({ value }: any) => value, {}, 'file'),
+    ).toThrow('Circular fixture dependency: value');
+  });
+
   it('rejects overriding file-scoped fixtures', () => {
     const fixtures = normalizeNamedFixture('value', 1, {}, 'file');
 
@@ -177,6 +183,31 @@ describe('normalizeFixtures param parsing (getFixtureUsedProps)', () => {
 });
 
 describe('createFixtureResolver', () => {
+  it('starts file fixture setup inside the requesting setup wrapper', async () => {
+    let setupStarted = false;
+    const fixtures = normalizeNamedFixture(
+      'value',
+      () => {
+        setupStarted = true;
+        return 'value';
+      },
+      {},
+      'file',
+    );
+    const fileFixtureManager = new FileFixtureManager();
+    const resolver = createFixtureResolver({ fixtures } as any, {}, [], {
+      fileFixtureManager,
+      runNamedFixtureSetup: async (setup) => {
+        expect(setupStarted).toBe(false);
+        return setup();
+      },
+    });
+
+    await resolver.resolveTestFixtures(({ value }: any) => value);
+
+    expect(setupStarted).toBe(true);
+  });
+
   it('shares file-scoped fixture setup and cleans it up after all tests', async () => {
     const events: string[] = [];
     let finishSetup: (() => void) | undefined;

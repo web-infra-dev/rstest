@@ -31,11 +31,6 @@ export type ReloadTestFileAck = {
 export type HeadedTestFileCompletePayload = TestFileResult & {
   runId?: string;
 };
-export type RunnerSignalPayload = {
-  testPath: string;
-  runId?: string;
-};
-
 export type DeferredPromise<T> = {
   promise: Promise<T>;
   resolve: (value: T | PromiseLike<T>) => void;

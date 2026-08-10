@@ -111,8 +111,8 @@ const runTask = async (
 
   try {
     const result = await runInPool(request.options, {
-      onFileCleanupStart: () => {
-        send({ type: 'fileCleanupStarted', taskId: request.taskId });
+      onFileCleanupStart: (result) => {
+        send({ type: 'fileCleanupStarted', taskId: request.taskId, result });
       },
       onFileCleanupEnd: () => {
         send({ type: 'fileCleanupFinished', taskId: request.taskId });

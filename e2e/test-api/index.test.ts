@@ -162,6 +162,50 @@ describe('Test API', () => {
     );
   });
 
+  it('rejects self-dependent file-scoped named fixtures', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/fileScopedNamedFixtureSelfDependency.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: dirname(fileURLToPath(import.meta.url)),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
+      'Circular fixture dependency: value',
+    );
+  });
+
+  it('continues after one file-scoped named fixture cleanup times out', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'fixtures/aFileScopedNamedFixtureCleanupTimeout.test.ts',
+        'fixtures/bAfterFileScopedNamedFixtureCleanupTimeout.test.ts',
+        '--pool.maxWorkers=1',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: dirname(fileURLToPath(import.meta.url)),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain(
+      'File fixture cleanup did not finish within 10000ms',
+    );
+    expect(output).toContain(
+      'RSTEST_NODE_CONTINUED_AFTER_FILE_CLEANUP_TIMEOUT',
+    );
+    expect(output).toMatch(/Test Files.*1 failed.*1 passed/);
+  });
+
   it('rejects file-scoped named fixtures declared inside a suite', async () => {
     const { cli, expectExecFailed } = await runRstestCli({
       command: 'rstest',

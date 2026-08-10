@@ -1,5 +1,6 @@
 import { type BirpcReturn, createBirpc } from 'birpc';
 import type { RuntimeRPC, ServerRPC, TestFileResult } from '../types';
+import { createFileCleanupTimeoutResult } from '../runtime/runner/fileCleanup';
 import { toError } from '../utils';
 import { FIXTURE_CLEANUP_TIMEOUT_MS } from '../utils/constants';
 import type { PoolWorker } from './poolWorker';
@@ -37,6 +38,7 @@ type TaskKind = 'run' | 'collect';
 type PendingTask = {
   kind: TaskKind;
   taskId: number;
+  provisionalResult?: TestFileResult;
   resolve: (result: TestFileResult | CollectTaskResult) => void;
   reject: (err: Error) => void;
 };
@@ -331,6 +333,9 @@ export class PoolRunner {
         this.startDeferred = undefined;
         return;
       case 'fileCleanupStarted':
+        if (this.currentTask?.taskId === response.taskId) {
+          this.currentTask.provisionalResult = response.result;
+        }
         this.startFixtureCleanupTimer(response.taskId);
         return;
       case 'fileCleanupFinished':
@@ -476,11 +481,25 @@ export class PoolRunner {
         return;
       }
       this.crashed = true;
-      this.rejectCurrentTaskWithStderr(
-        new Error(
-          `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
-        ),
+      const error = new Error(
+        `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
       );
+      const task = this.currentTask;
+      if (task.kind === 'run' && task.provisionalResult) {
+        this.currentTask = undefined;
+        this.clearFixtureCleanupTimer();
+        this.attachStderrToError(error);
+        task.resolve(
+          createFileCleanupTimeoutResult({
+            message: error.message,
+            projectName: task.provisionalResult.project,
+            result: task.provisionalResult,
+            testPath: task.provisionalResult.testPath,
+          }),
+        );
+        return;
+      }
+      this.rejectCurrentTaskWithStderr(error);
     }, FIXTURE_CLEANUP_TIMEOUT_MS);
     this.fixtureCleanupTimer.unref();
   }

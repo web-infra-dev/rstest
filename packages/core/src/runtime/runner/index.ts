@@ -1,4 +1,5 @@
 import type {
+  MaybePromise,
   Rstest,
   RunnerAPI,
   RunnerHooks,
@@ -19,8 +20,8 @@ import { traverseUpdateTest } from './task';
 const currentRunner = (): TestRunner => fileContext().testRunner;
 
 export type FileCleanupHooks = {
-  onFileCleanupStart?: () => void;
-  onFileCleanupEnd?: () => void;
+  onFileCleanupStart?: (result?: TestFileResult) => MaybePromise<void>;
+  onFileCleanupEnd?: () => MaybePromise<void>;
 };
 
 const onTestFinished: RunnerAPI['onTestFinished'] = (...args) => {
@@ -107,19 +108,19 @@ export function createRunner({
             snapshotClient,
           });
 
-          hooks.onFileCleanupStart?.();
+          await hooks.onFileCleanupStart?.(results);
           try {
             return (await testRunner.cleanupFileFixtures(results))!;
           } finally {
-            hooks.onFileCleanupEnd?.();
+            await hooks.onFileCleanupEnd?.();
           }
         } catch (error) {
           try {
-            hooks.onFileCleanupStart?.();
+            await hooks.onFileCleanupStart?.();
             try {
               await testRunner.cleanupFileFixtures();
             } finally {
-              hooks.onFileCleanupEnd?.();
+              await hooks.onFileCleanupEnd?.();
             }
           } catch (cleanupError) {
             throw new AggregateError(

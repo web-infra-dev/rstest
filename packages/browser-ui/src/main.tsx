@@ -40,7 +40,6 @@ import type {
   BrowserHostConfig,
   FatalPayload,
   LogPayload,
-  RunnerSignalPayload,
   TestCaseStartPayload,
   TestFileInfo,
   TestFileReadyPayload,
@@ -506,23 +505,6 @@ const BrowserRunner: React.FC<{
             ...payload,
             runId,
           });
-        }
-      } else if (
-        message.type === 'file-cleanup-start' ||
-        message.type === 'file-cleanup-finished'
-      ) {
-        const frame = findRunnerFrameBySource(event.source);
-        const testPath = frame?.dataset.testFile;
-        if (testPath) {
-          const payload: RunnerSignalPayload = {
-            testPath,
-            runId: readRunIdFromFrame(frame) ?? runIdByTestFile[testPath],
-          };
-          if (message.type === 'file-cleanup-start') {
-            rpc?.onFileCleanupStart(payload);
-          } else {
-            rpc?.onFileCleanupEnd(payload);
-          }
         }
       } else if (message.type === 'fatal') {
         const payload = message.payload as FatalPayload;

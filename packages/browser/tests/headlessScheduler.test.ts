@@ -5,12 +5,17 @@ import { createHeadlessScheduler } from '../src/headlessScheduler';
 import { createDeferredPromise } from '../src/hostPayloads';
 import type {
   BrowserClientMessage,
+  BrowserDispatchRequest,
+  BrowserDispatchResponse,
+  FileCleanupDispatchPayload,
   BrowserProjectRuntime,
   TestFileInfo,
 } from '../src/protocol';
 import {
   DISPATCH_MESSAGE_TYPE,
+  DISPATCH_NAMESPACE_FILE_CLEANUP,
   DISPATCH_NAMESPACE_RUNNER,
+  DISPATCH_RPC_BRIDGE_NAME,
 } from '../src/protocol';
 import type {
   BrowserConsoleMessage,
@@ -80,6 +85,12 @@ class FakePage implements BrowserProviderPage {
 
   async send(message: BrowserClientMessage): Promise<void> {
     await this.exposed.get(DISPATCH_MESSAGE_TYPE)?.(message);
+  }
+
+  async dispatch(
+    request: BrowserDispatchRequest,
+  ): Promise<BrowserDispatchResponse> {
+    return this.exposed.get(DISPATCH_RPC_BRIDGE_NAME)?.(request);
   }
 
   async close(): Promise<void> {
@@ -459,7 +470,31 @@ describe('headless scheduler', () => {
         maxWorkers: 1,
         scripts: [
           async (page) => {
-            await page.send({ type: 'file-cleanup-start' });
+            const result = {
+              ...complete('/a.test.ts').payload,
+              coverageRaw: { preserved: true },
+              meta: { preserved: true },
+              snapshotResult: {
+                added: 1,
+                fileDeleted: false,
+                filepath: '/a.test.ts.snap',
+                matched: 0,
+                unchecked: 0,
+                uncheckedKeys: [],
+                unmatched: 0,
+                updated: 0,
+              },
+            };
+            await page.dispatch({
+              requestId: 'cleanup-start',
+              namespace: DISPATCH_NAMESPACE_FILE_CLEANUP,
+              method: 'start',
+              args: {
+                projectName: 'browser',
+                result,
+                testPath: '/a.test.ts',
+              } satisfies FileCleanupDispatchPayload,
+            });
             cleanupStarted.resolve();
           },
           async (page) => page.send(complete('/b.test.ts')),
@@ -475,6 +510,9 @@ describe('headless scheduler', () => {
         expect.objectContaining({
           status: 'fail',
           testPath: '/a.test.ts',
+          coverageRaw: { preserved: true },
+          meta: { preserved: true },
+          snapshotResult: expect.objectContaining({ added: 1 }),
           errors: [
             expect.objectContaining({
               message: `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
