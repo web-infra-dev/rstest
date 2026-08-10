@@ -7,7 +7,7 @@ import {
 
 const loadModule = () => import('../src/client/dispatchTransport');
 
-describe('runner-lifecycle dispatch transport', () => {
+describe('dispatch transport', () => {
   afterEach(() => {
     rstest.unstubAllGlobals();
     rstest.resetModules();
@@ -34,11 +34,11 @@ describe('runner-lifecycle dispatch transport', () => {
     win.parent = win;
     rstest.stubGlobal('window', win);
 
-    const { createRunnerLifecycleRequest, sendRunnerLifecycle } =
+    const { createRunnerLifecycleRequest, sendDispatchRequest } =
       await loadModule();
     const req = createRunnerLifecycleRequest('file-ready', { f: 1 });
     const onError = rstest.fn();
-    sendRunnerLifecycle(req, onError);
+    sendDispatchRequest(req, onError);
 
     expect(bridge).toHaveBeenCalledTimes(1);
     expect(bridge).toHaveBeenCalledWith(req);
@@ -52,11 +52,11 @@ describe('runner-lifecycle dispatch transport', () => {
     win.parent = win;
     rstest.stubGlobal('window', win);
 
-    const { createRunnerLifecycleRequest, sendRunnerLifecycle } =
+    const { createRunnerLifecycleRequest, sendDispatchRequest } =
       await loadModule();
     const onError = rstest.fn();
     expect(() =>
-      sendRunnerLifecycle(
+      sendDispatchRequest(
         createRunnerLifecycleRequest('case-start', null),
         onError,
       ),
@@ -73,10 +73,10 @@ describe('runner-lifecycle dispatch transport', () => {
     win.parent = win;
     rstest.stubGlobal('window', win);
 
-    const { createRunnerLifecycleRequest, sendRunnerLifecycle } =
+    const { createRunnerLifecycleRequest, sendDispatchRequest } =
       await loadModule();
     const onError = rstest.fn();
-    sendRunnerLifecycle(
+    sendDispatchRequest(
       createRunnerLifecycleRequest('suite-result', null),
       onError,
     );
@@ -88,10 +88,10 @@ describe('runner-lifecycle dispatch transport', () => {
     const postMessage = rstest.fn();
     rstest.stubGlobal('window', { parent: { postMessage } });
 
-    const { createRunnerLifecycleRequest, sendRunnerLifecycle } =
+    const { createRunnerLifecycleRequest, sendDispatchRequest } =
       await loadModule();
     const req = createRunnerLifecycleRequest('suite-start', { s: 1 });
-    sendRunnerLifecycle(req);
+    sendDispatchRequest(req);
 
     expect(postMessage).toHaveBeenCalledTimes(1);
     expect(postMessage).toHaveBeenCalledWith(

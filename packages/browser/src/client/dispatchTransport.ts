@@ -47,7 +47,7 @@ export const createRequestId = (prefix: string): string => {
  *
  * Lifecycle events (`file-ready`, `suite-start`, `suite-result`, `case-start`)
  * share the dispatch-rpc envelope but are delivered fire-and-forget via
- * {@link sendRunnerLifecycle}, so the request id only needs to be unique — it is
+ * {@link sendDispatchRequest}, so the request id only needs to be unique — it is
  * produced by the shared {@link createRequestId} factory rather than a bespoke
  * per-runner counter.
  */
@@ -62,14 +62,14 @@ export const createRunnerLifecycleRequest = (
 });
 
 /**
- * Deliver a runner-lifecycle request fire-and-forget.
+ * Deliver a dispatch request fire-and-forget.
  *
  * Unlike {@link dispatchRpc}, this never awaits, unwraps, id-matches, or times
  * out: the host echoes a response but the runner ignores it. Failures surface
  * only through the optional `onError` hook (debug logging at the call site),
  * keeping the hot test loop non-blocking.
  */
-export const sendRunnerLifecycle = (
+export const sendDispatchRequest = (
   request: BrowserDispatchRequest,
   onError?: (error: unknown) => void,
 ): void => {
