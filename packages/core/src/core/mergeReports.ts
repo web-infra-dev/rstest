@@ -186,6 +186,9 @@ export async function mergeReports(
 
   const blobs = loadBlobFiles(blobDir);
   let coverageOptions = context.normalizedConfig.coverage;
+  if (coverageOptions.enabled) {
+    await ensureCoverageProviderInstalled(coverageOptions, context.rootPath);
+  }
   if (coverageOptions.enabled && coverageOptions.include?.length) {
     const { prepareRsbuild } = await import('./rsbuild');
     const rsbuildInstance = await prepareRsbuild({
@@ -198,7 +201,6 @@ export async function mergeReports(
   }
 
   if (coverageOptions.enabled) {
-    await ensureCoverageProviderInstalled(coverageOptions, context.rootPath);
     cleanCoverageReports(coverageOptions);
   }
   const coverageProvider = coverageOptions.enabled
