@@ -5,6 +5,7 @@ import type {
 } from '../index';
 import { dispatchPlaywrightBrowserRpc } from './dispatchBrowserRpc';
 import { launchPlaywrightBrowser } from './runtime';
+import { createPlaywrightV8CoverageCollector } from './v8Coverage';
 
 export const playwrightProviderImplementation: BrowserProviderImplementation = {
   name: 'playwright',
@@ -18,6 +19,11 @@ export const playwrightProviderImplementation: BrowserProviderImplementation = {
       headless,
       providerOptions,
     });
+  },
+  createV8CoverageCollector({ browserName }) {
+    return browserName === 'chromium'
+      ? createPlaywrightV8CoverageCollector()
+      : null;
   },
   async dispatchRpc({
     containerPage,

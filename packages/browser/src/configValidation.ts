@@ -66,8 +66,8 @@ const ignoredKeyWarnings: Partial<
 /**
  * Browser-ignored keys handled outside the generic warn loop: `coverage` is
  * 'stripped' but gets the dedicated provider check in
- * {@link reportUnsupportedBrowserOptions} (a v8 hard error on browser-only
- * runs, a warning in mixed runs), not a plain "set → warn".
+ * {@link reportUnsupportedBrowserOptions} (a V8 hard error for browser-only
+ * non-Chromium runs, a warning in mixed runs), not a plain "set → warn".
  */
 const speciallyHandledIgnoredKeys: (keyof RuntimeConfig)[] = ['coverage'];
 
@@ -149,7 +149,7 @@ const validateViewport = (viewport: unknown): void => {
  * RuntimeConfig field) keep bespoke handling below.
  *
  * Scoping rules: `coverage` and `isolate` are global-only config copied onto
- * every project, so a v8 hard-error / isolate warning is gated to browser-only
+ * every project, so a V8 hard error / isolate warning is scoped to browser-only
  * runs — a mixed repo legitimately sets them for its node projects and must not
  * get unsilenceable noise on a correct configuration.
  */
@@ -173,20 +173,27 @@ const reportUnsupportedBrowserOptions = (context: RstestContext): void => {
     coverage.enabled &&
     coverage.provider === 'v8'
   ) {
-    if (isBrowserOnlyRun) {
+    const unsupportedProject = browserProjects.find(
+      (project) => project.normalizedConfig.browser.browser !== 'chromium',
+    );
+    if (!unsupportedProject) {
+      // Chromium exposes V8 precise coverage through the Playwright provider.
+    } else if (isBrowserOnlyRun) {
       throw new Error(
-        "Coverage provider 'v8' is not supported in browser mode: browser " +
-          'projects produce no v8 coverage. Use the default istanbul provider ' +
-          "(coverage.provider: 'istanbul') for browser coverage.",
+        "Coverage provider 'v8' in browser mode requires Chromium. " +
+          `Project ${JSON.stringify(unsupportedProject.name)} uses ${JSON.stringify(
+            unsupportedProject.normalizedConfig.browser.browser,
+          )}. Use Chromium or coverage.provider: 'istanbul'.`,
+      );
+    } else {
+      logger.warn(
+        color.yellow(
+          "Coverage provider 'v8' requires Chromium for browser project " +
+            `${JSON.stringify(unsupportedProject.name)}. Its files will not ` +
+            'produce coverage; node projects will still use v8.',
+        ),
       );
     }
-    logger.warn(
-      color.yellow(
-        "Coverage provider 'v8' produces no coverage for browser project " +
-          "files; use the 'istanbul' provider to collect browser coverage. " +
-          'Node projects will still use v8.',
-      ),
-    );
   }
 
   // Node-only options silently ignored under browser.enabled. Collected into a

@@ -105,6 +105,8 @@ export interface BrowserTestRunResult {
   };
   /** Whether the test run had failures */
   hasFailure: boolean;
+  /** Raw coverage batches collected by a browser provider. */
+  rawCoverage?: unknown[];
   /** Errors that occurred before/outside test execution (e.g., browser launch failure) */
   unhandledErrors?: Error[];
   /** Source map resolver used when reporter output is unified in core */

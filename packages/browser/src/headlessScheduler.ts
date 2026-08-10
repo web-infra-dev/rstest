@@ -58,6 +58,10 @@ type HeadlessSchedulerDeps = {
   browser: BrowserProviderBrowser;
   browserLaunchOptions: BrowserRuntime['browserLaunchOptions'];
   projectServers: BrowserRuntime['projectServers'];
+  v8Coverage?: {
+    start: (page: BrowserProviderPage) => Promise<void>;
+    take: (page: BrowserProviderPage) => Promise<unknown | null>;
+  };
   allTestFiles: TestFileInfo[];
   projectRuntimeConfigs: BrowserProjectRuntime[];
   hostOptions: BrowserHostConfig;
@@ -76,7 +80,7 @@ type HeadlessSchedulerDeps = {
   >;
   setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
   createWatchSession: (
-    execute: (testPaths: string[]) => Promise<void>,
+    execute: (testPaths: string[]) => Promise<unknown[]>,
   ) => BrowserWatchSession;
   collectProjectEntries: () => Promise<
     Parameters<typeof planWatchRerun>[0]['projectEntries']
@@ -90,6 +94,7 @@ export const createHeadlessScheduler = async ({
   browser,
   browserLaunchOptions,
   projectServers,
+  v8Coverage,
   allTestFiles,
   projectRuntimeConfigs,
   hostOptions,
@@ -191,6 +196,7 @@ export const createHeadlessScheduler = async ({
   const runSingleFile = async (
     run: ActiveHeadlessRun,
     file: TestFileInfo,
+    rawCoverage: unknown[],
   ): Promise<void> => {
     if (run.cancelled || runLifecycle.isTokenStale(run.token)) {
       return;
@@ -205,6 +211,7 @@ export const createHeadlessScheduler = async ({
 
     let page: BrowserProviderPage | null = null;
     let sessionId: string | null = null;
+    let coverageCollected = false;
     let settled = false;
     let resolveDone: (() => void) | null = null;
 
@@ -235,6 +242,7 @@ export const createHeadlessScheduler = async ({
 
     try {
       page = await browserContext.newPage();
+      await v8Coverage?.start(page);
       page.on('crash', () =>
         onPageDead(`Browser page crashed while running ${file.testPath}.`),
       );
@@ -257,11 +265,15 @@ export const createHeadlessScheduler = async ({
       await attachHeadlessRunnerTransport(page, {
         onDispatchMessage: async (message) => {
           try {
+            if (!coverageCollected && message.type === 'file-complete') {
+              coverageCollected = true;
+              const coverage = await v8Coverage?.take(page!);
+              if (coverage) {
+                rawCoverage.push(coverage);
+              }
+            }
             await dispatchRunnerMessage(run, file, session.id, message);
-            if (
-              message.type === 'file-complete' ||
-              message.type === 'complete'
-            ) {
+            if (message.type === 'file-complete') {
               markDone();
             } else if (message.type === 'fatal') {
               markDone();
@@ -392,9 +404,12 @@ export const createHeadlessScheduler = async ({
     results: [],
   });
 
-  const runFilesWithPool = async (files: TestFileInfo[]): Promise<void> => {
+  const runFilesWithPool = async (
+    files: TestFileInfo[],
+  ): Promise<unknown[]> => {
+    const rawCoverage: unknown[] = [];
     if (files.length === 0) {
-      return;
+      return rawCoverage;
     }
 
     const previous = runLifecycle.activeSession;
@@ -436,7 +451,7 @@ export const createHeadlessScheduler = async ({
         if (!next) {
           return;
         }
-        await runSingleFile(run, next);
+        await runSingleFile(run, next, rawCoverage);
       }
     };
 
@@ -449,10 +464,11 @@ export const createHeadlessScheduler = async ({
 
     await run.done;
     runLifecycle.clearIfActive(run);
+    return rawCoverage;
   };
 
   const testStart = Date.now();
-  await runFilesWithPool(allTestFiles);
+  const rawCoverage = await runFilesWithPool(allTestFiles);
   const testTime = Date.now() - testStart;
 
   let watchSession: BrowserWatchSession | undefined;
@@ -461,9 +477,9 @@ export const createHeadlessScheduler = async ({
     // trigger may have rebuilt the file set without one of these files — so a
     // path that no longer resolves is skipped rather than failing the cycle
     // beside its still-valid siblings.
-    const runScope = async (testPaths: string[]): Promise<void> => {
+    const runScope = async (testPaths: string[]): Promise<unknown[]> => {
       const pathSet = new Set(testPaths.map((testPath) => normalize(testPath)));
-      await runFilesWithPool(
+      return runFilesWithPool(
         watchState.lastTestFiles.filter((file) => pathSet.has(file.testPath)),
       );
     };
@@ -527,6 +543,7 @@ export const createHeadlessScheduler = async ({
 
   return {
     testTime,
+    rawCoverage,
     watchSession,
     // `closeHeadlessRuntime` is already `undefined` in watch mode: the watch
     // runtime outlives the cycle and is torn down through `executor.close()`.

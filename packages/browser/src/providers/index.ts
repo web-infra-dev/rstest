@@ -57,6 +57,26 @@ export type BrowserProviderPage = {
   [Symbol.asyncDispose]: () => Promise<void>;
 };
 
+export type BrowserV8CoverageEntry = {
+  url: string;
+  scriptId: string;
+  source?: string;
+  functions: {
+    functionName: string;
+    isBlockCoverage: boolean;
+    ranges: {
+      startOffset: number;
+      endOffset: number;
+      count: number;
+    }[];
+  }[];
+};
+
+export type BrowserV8CoverageCollector = {
+  start: (page: BrowserProviderPage) => Promise<void>;
+  take: (page: BrowserProviderPage) => Promise<BrowserV8CoverageEntry[]>;
+};
+
 /** Minimal browser context API surface required by hostController. */
 export type BrowserProviderContext = {
   newPage: () => Promise<BrowserProviderPage>;
@@ -105,6 +125,9 @@ export type DispatchBrowserRpcInput = {
 export type BrowserProviderImplementation = {
   name: BrowserProvider;
   launchRuntime: (input: LaunchBrowserInput) => Promise<BrowserProviderRuntime>;
+  createV8CoverageCollector?: (input: {
+    browserName: LaunchBrowserInput['browserName'];
+  }) => BrowserV8CoverageCollector | null;
   dispatchRpc: (input: DispatchBrowserRpcInput) => Promise<unknown>;
 };
 

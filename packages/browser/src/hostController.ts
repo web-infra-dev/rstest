@@ -67,8 +67,11 @@ import {
 import {
   type BrowserProvider,
   type BrowserProviderImplementation,
+  type BrowserProviderPage,
+  type BrowserV8CoverageCollector,
   getBrowserProviderImplementation,
 } from './providers';
+import { takeBrowserV8Coverage } from './browserV8Coverage';
 import {
   type FatalPayload,
   getFileTaskId,
@@ -480,10 +483,12 @@ export const runBrowserController = async (
   const buildRerunOutcome = ({
     rerunTestPaths,
     testTime,
+    rawCoverage,
     unhandledErrors,
   }: {
     rerunTestPaths: string[];
     testTime: number;
+    rawCoverage: unknown[];
     unhandledErrors?: Error[];
   }): ExecutorCycleOutcome => {
     const rerunPathSet = new Set(rerunTestPaths);
@@ -505,9 +510,10 @@ export const runBrowserController = async (
         buildTime: drainPendingBuildTime(watchState),
         testTime,
       },
-      coverage: coverageMap?.files().length
-        ? { map: coverageMap.toJSON() }
-        : undefined,
+      coverage:
+        coverageMap?.files().length || rawCoverage.length
+          ? { map: coverageMap?.toJSON(), raw: rawCoverage }
+          : undefined,
       resolveSourcemap: resolveBrowserSourcemap,
     };
   };
@@ -521,7 +527,7 @@ export const runBrowserController = async (
    * is what lets the headed transport claim its cycle scope inside it.
    */
   const createWatchSession = (
-    execute: (testPaths: string[]) => Promise<void>,
+    execute: (testPaths: string[]) => Promise<unknown[]>,
   ): BrowserWatchSession => ({
     runCycle: async (testPaths) => {
       const rerunStartTime = Date.now();
@@ -530,9 +536,10 @@ export const runBrowserController = async (
       // so carrying it forward would prevent the next cycle from reloading.
       fatalErrorRef.current = null;
       let rerunError: Error | undefined;
+      let rawCoverage: unknown[] = [];
 
       try {
-        await execute(testPaths);
+        rawCoverage = await execute(testPaths);
       } catch (error) {
         // Surfaced through the outcome rather than thrown: core finalizes this
         // cycle either way, and its results belong in the report even when the
@@ -544,6 +551,7 @@ export const runBrowserController = async (
       return buildRerunOutcome({
         rerunTestPaths: testPaths,
         testTime: Math.max(0, Date.now() - rerunStartTime),
+        rawCoverage,
         unhandledErrors: rerunError
           ? [rerunError]
           : rerunFatalError
@@ -662,6 +670,26 @@ export const runBrowserController = async (
       );
     }
   }
+
+  const browserName = browserLaunchOptions.browser ?? 'chromium';
+  const v8CoverageCollector: BrowserV8CoverageCollector | null =
+    coverageConfig?.provider === 'v8'
+      ? (implementationByProvider
+          .get(browserLaunchOptions.provider)
+          ?.createV8CoverageCollector?.({ browserName }) ?? null)
+      : null;
+  const v8Coverage = v8CoverageCollector
+    ? {
+        start: v8CoverageCollector.start,
+        take: (page: BrowserProviderPage) =>
+          takeBrowserV8Coverage({
+            collector: v8CoverageCollector,
+            page,
+            rootPath: normalize(context.rootPath),
+            sourceMapCache: browserSourceMapCache,
+          }),
+      }
+    : undefined;
 
   let resolveDispatchPages: DispatchPageResolver = () => ({});
   const setDispatchPageResolver = (resolver: DispatchPageResolver): void => {
@@ -1039,12 +1067,13 @@ export const runBrowserController = async (
     destroyRuntime: () => destroyBrowserRuntime(runtime),
   };
 
-  const { testTime, watchSession, close } = useHeadlessDirect
+  const { testTime, rawCoverage, watchSession, close } = useHeadlessDirect
     ? await createHeadlessScheduler({
         ...schedulerDeps,
         browser,
         browserLaunchOptions,
         projectServers: runtime.projectServers,
+        v8Coverage,
         projectRuntimeConfigs,
         watchState,
         handlers: { handleFatal, handleTestFileComplete },
@@ -1052,6 +1081,7 @@ export const runBrowserController = async (
     : await createHeadedScheduler({
         ...schedulerDeps,
         runtime,
+        v8Coverage,
         handlers: {
           handleTestFileStart,
           handleTestCaseResult,
@@ -1087,6 +1117,7 @@ export const runBrowserController = async (
     hasFailure: reporterResults.some(
       (result: TestFileResult) => result.status === 'fail',
     ),
+    rawCoverage,
     getSourcemap: getBrowserSourcemap,
     resolveSourcemap: resolveBrowserSourcemap,
     // `close` is already `undefined` in watch mode: the watch runtime outlives

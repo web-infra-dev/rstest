@@ -370,6 +370,38 @@ describe('coverage-v8 provider', () => {
     expect(Object.keys(coverage)).toEqual([sourceUrl]);
   });
 
+  it('remaps browser coverage URLs to absolute source map paths', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-browser-source-map');
+    const originalFile = join(root, 'src', 'original.ts');
+    const code = 'const value = 1;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${root}:browser-source-map`,
+      code,
+      coverage: {
+        url: 'http://localhost:3000/static/js/tests.js',
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+      sourceMap: {
+        version: 3,
+        sources: [originalFile],
+        sourcesContent: [code],
+        names: [],
+        mappings: 'AAAA',
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([originalFile]);
+  });
+
   it('resolves external source map sources relative to the map file', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-nested-external-map');
     const generatedFile = join(root, 'dist', 'bundle.js');

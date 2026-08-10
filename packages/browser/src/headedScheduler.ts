@@ -48,6 +48,10 @@ type HeadedSchedulerDeps = {
   runtime: BrowserRuntime;
   allTestFiles: TestFileInfo[];
   hostOptions: BrowserHostConfig;
+  v8Coverage?: {
+    start: (page: BrowserProviderPage) => Promise<void>;
+    take: (page: BrowserProviderPage) => Promise<unknown | null>;
+  };
   isWatchMode: boolean;
   createDispatchRouter: () => HostDispatchRouter;
   handlers: {
@@ -64,7 +68,7 @@ type HeadedSchedulerDeps = {
   >;
   setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
   createWatchSession: (
-    execute: (testPaths: string[]) => Promise<void>,
+    execute: (testPaths: string[]) => Promise<unknown[]>,
   ) => BrowserWatchSession;
   collectProjectEntries: () => Promise<
     Parameters<typeof planWatchRerun>[0]['projectEntries']
@@ -119,6 +123,7 @@ export const createHeadedScheduler = async ({
   runtime,
   allTestFiles,
   hostOptions,
+  v8Coverage,
   isWatchMode,
   createDispatchRouter,
   handlers: {
@@ -278,6 +283,8 @@ export const createHeadedScheduler = async ({
       deferred: DeferredPromise<void>;
     }
   >();
+  let rawCoverage: unknown[] = [];
+  let coverageStarted = false;
   let enqueueHeadedReload = async (
     _file: TestFileInfo,
     _testNamePattern?: string,
@@ -359,6 +366,8 @@ export const createHeadedScheduler = async ({
     let reloadAck: ReloadTestFileAck | undefined;
 
     try {
+      await v8Coverage?.start(containerPage);
+      coverageStarted = Boolean(v8Coverage);
       reloadAck = await rpcManager.reloadTestFile(
         file.testPath,
         testNamePattern,
@@ -371,6 +380,13 @@ export const createHeadedScheduler = async ({
           toError(error),
           reloadAck.runId,
         );
+      }
+      if (coverageStarted) {
+        coverageStarted = false;
+        const coverage = await v8Coverage?.take(containerPage);
+        if (coverage) {
+          rawCoverage.push(coverage);
+        }
       }
       throw error;
     }
@@ -414,6 +430,13 @@ export const createHeadedScheduler = async ({
     },
     async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
       try {
+        if (coverageStarted) {
+          coverageStarted = false;
+          const coverage = await v8Coverage?.take(containerPage);
+          if (coverage) {
+            rawCoverage.push(coverage);
+          }
+        }
         await handleTestFileComplete(payload);
         resolvePendingHeadedReload(payload.testPath, payload.runId);
       } catch (error) {
@@ -537,7 +560,8 @@ export const createHeadedScheduler = async ({
     // options instead of traveling beside the scope.
     const pendingTestNamePatterns = new Map<string, string>();
 
-    const runScope = async (testPaths: string[]): Promise<void> => {
+    const runScope = async (testPaths: string[]): Promise<unknown[]> => {
+      rawCoverage = [];
       // Claimed in this synchronous prefix, before `runCycle` suspends, so
       // nothing this cycle does can change what it runs or which patterns it
       // takes.
@@ -549,6 +573,7 @@ export const createHeadedScheduler = async ({
       for (const { file, testNamePattern } of cycleScope) {
         await enqueueHeadedReload(file, testNamePattern);
       }
+      return rawCoverage;
     };
 
     /**
@@ -643,6 +668,7 @@ export const createHeadedScheduler = async ({
 
   return {
     testTime,
+    rawCoverage,
     watchSession,
     // `closeContainerRuntime` is already `undefined` in watch mode: the watch
     // runtime outlives the cycle and is torn down through `executor.close()`.

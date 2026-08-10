@@ -32,6 +32,7 @@ export type BrowserWatchSession = {
  */
 export type SchedulerRunResult = {
   testTime: number;
+  rawCoverage?: unknown[];
   watchSession?: BrowserWatchSession;
   close?: () => Promise<void>;
 };

@@ -59,4 +59,28 @@ describe('browser mode - coverage', () => {
     // sum.ts should have 100% coverage (tested)
     expect(cli.stdout.replaceAll(' ', '')).toContain('sum.ts|100|100|100|100');
   });
+
+  it('should collect native V8 coverage from Chromium browser tests', async () => {
+    const fixtureDir = join(__dirname, 'fixtures/browser-coverage');
+    const reportPath = join(
+      fixtureDir,
+      'coverage-v8-browser/coverage-final.json',
+    );
+
+    fs.rmSync(join(fixtureDir, 'coverage-v8-browser'), {
+      recursive: true,
+      force: true,
+    });
+
+    const { expectExecSuccess, cli } = await runBrowserCli('browser-coverage', {
+      args: ['-c', 'rstest.v8BrowserCoverage.config.mts'],
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).toMatch(/Coverage enabled with v8/);
+    expect(fs.existsSync(reportPath)).toBe(true);
+    expect(cli.stdout.replaceAll(' ', '')).toContain('sum.ts|100|100|100|100');
+    expect(cli.stdout.replaceAll(' ', '')).toContain('multiply.ts|0|100|0|0');
+  });
 });

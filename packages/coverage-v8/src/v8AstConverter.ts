@@ -217,11 +217,15 @@ async function prepareCoverage(
     throw new SyntaxError(error.message);
   }
 
-  const filename = fileURLToPath(options.coverage.url);
+  const filename = options.coverage.url.startsWith('file://')
+    ? fileURLToPath(options.coverage.url)
+    : options.coverage.url;
   const directory = dirname(filename);
   const sourceMapResult = options.sourceMap
     ? { sourceMap: options.sourceMap, sourceMapUrl: options.sourceMapUrl }
-    : await getSourceMap(filename, options.code);
+    : options.coverage.url.startsWith('file://')
+      ? await getSourceMap(filename, options.code)
+      : null;
   const sourceMap = sourceMapResult?.sourceMap
     ? createTraceMap(sourceMapResult.sourceMap, sourceMapResult.sourceMapUrl)
     : null;

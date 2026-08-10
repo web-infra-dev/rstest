@@ -196,7 +196,7 @@ const createHarness = (options: HarnessOptions = {}) => {
   const ready = rstest.fn();
   let interrupt = async () => {};
   let dispatchRerun = async () => {};
-  let runScope = async (_paths: string[]) => {};
+  let runScope = async (_paths: string[]): Promise<unknown[]> => [];
   const watchState: BrowserWatchState = {
     hooksEnabled: false,
     invalidation: new Map(),
@@ -301,7 +301,9 @@ const createHarness = (options: HarnessOptions = {}) => {
         },
         requestRerun: async (
           testPaths = files.map((entry) => entry.testPath),
-        ) => execute(testPaths),
+        ) => {
+          await execute(testPaths);
+        },
       };
     },
     collectProjectEntries:
