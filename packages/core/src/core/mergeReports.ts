@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join, relative } from 'pathe';
 import {
+  cleanCoverageReports,
   createCoverageProvider,
   ensureCoverageProviderInstalled,
 } from '../coverage';
@@ -187,6 +188,7 @@ export async function mergeReports(
   const coverageOptions = context.normalizedConfig.coverage;
   if (coverageOptions.enabled) {
     await ensureCoverageProviderInstalled(coverageOptions, context.rootPath);
+    cleanCoverageReports(coverageOptions);
   }
   const coverageProvider = coverageOptions.enabled
     ? await createCoverageProvider(coverageOptions, context.rootPath)

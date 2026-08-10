@@ -170,7 +170,7 @@ describe('merge-reports', () => {
   });
 
   it('finalizes Istanbul coverage only when merging blob reports', async () => {
-    const coverageDir = join(fixturesDir, 'coverage');
+    const coverageDir = join(fixturesDir, 'coverage-istanbul-cli');
     const blobDir = join(fixturesDir, '.rstest-reports');
     fs.removeSync(coverageDir);
     fs.removeSync(blobDir);
@@ -183,6 +183,8 @@ describe('merge-reports', () => {
           '--shard',
           shard,
           '--reporters=blob',
+          '--coverage.include=src/**',
+          '--coverage.include=istanbul-src/**',
           '-c',
           'rstest.coverage-istanbul.config.mts',
         ],
@@ -210,6 +212,10 @@ describe('merge-reports', () => {
       args: [
         'merge-reports',
         '--cleanup',
+        '--coverage.include=src/**',
+        '--coverage.include=istanbul-src/**',
+        '--coverage.reporters=json-summary',
+        '--coverage.reportsDirectory=coverage-istanbul-cli',
         '-c',
         'rstest.coverage-istanbul.config.mts',
       ],

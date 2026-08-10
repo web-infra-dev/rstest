@@ -315,9 +315,9 @@ export async function finalizeRunCycle(
     }),
   );
 
-  const defersCoverageReport = context.reporters.some(
-    (reporter) => reporter instanceof BlobReporter,
-  );
+  const defersCoverageReport =
+    coverageProvider?.supportsDeferredCoverageFinalization === true &&
+    context.reporters.some((reporter) => reporter instanceof BlobReporter);
 
   // Blob output is a merge input, so final filtering, untested-file backfill,
   // reports, and thresholds belong to the merge-reports process that sees the

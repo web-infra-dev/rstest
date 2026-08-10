@@ -263,7 +263,7 @@ npx rstest merge-reports ./custom-reports-dir
 - 统一应用一次 `coverage.include`，补齐所有分片都未测试的文件
 - 基于统一结果生成覆盖率报告并检查阈值
 
-使用 blob 报告器的分片运行会有意跳过覆盖率报告生成和阈值检查。请通过配置或 `--coverage` 参数为 `merge-reports` 启用覆盖率，让合并 job 完成覆盖率最终处理。
+使用 blob 报告器的分片运行会有意跳过覆盖率报告生成和阈值检查。请通过配置或 `--coverage` 参数为 `merge-reports` 启用覆盖率，让合并 job 完成覆盖率最终处理。合并命令支持与 `rstest run` 相同的 `--coverage.*` 参数。只传给分片的覆盖率参数不会写入 blob，因此请在配置文件中定义 `coverage.include`、`coverage.reporters` 和 `coverage.reportsDirectory` 等最终处理参数，或在执行 `merge-reports` 时再次传入。
 
 使用 `--cleanup` 在合并完成后删除 blob 报告目录：
 

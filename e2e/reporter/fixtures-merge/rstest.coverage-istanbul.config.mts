@@ -12,7 +12,5 @@ export default defineConfig({
   coverage: {
     enabled: true,
     provider: 'istanbul',
-    include: ['src/**', 'istanbul-src/**'],
-    reporters: ['json-summary'],
   },
 });

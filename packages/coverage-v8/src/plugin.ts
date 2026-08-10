@@ -36,14 +36,14 @@ const transformWithSwc = (
       ...swcOptions.jsc,
       parser: isTypeScript
         ? {
-            ...swcOptions.jsc?.parser,
             syntax: 'typescript',
             tsx: isJsx,
+            ...swcOptions.jsc?.parser,
           }
         : {
-            ...swcOptions.jsc?.parser,
             syntax: 'ecmascript',
             jsx: isJsx,
+            ...swcOptions.jsc?.parser,
           },
     },
     filename,

@@ -1,6 +1,7 @@
+import { createRsbuild } from '@rsbuild/core';
 import type { NormalizedCoverageOptions } from '@rstest/core';
 import { describe, expect, it } from '@rstest/core';
-import { transformCoverage } from '../src/plugin';
+import { pluginCoverage, transformCoverage } from '../src/plugin';
 import { readInitialCoverage } from '../src/utils';
 
 const options: NormalizedCoverageOptions = {
@@ -31,5 +32,38 @@ describe('transformCoverage', () => {
     for (const result of results) {
       expect(readInitialCoverage(result.code)).toBeTruthy();
     }
+  });
+
+  it('preserves explicit JSX parser settings for JavaScript files', async () => {
+    const environmentName = 'explicit-jsx';
+    const rsbuild = await createRsbuild({
+      config: {
+        environments: {
+          [environmentName]: {
+            tools: {
+              swc: {
+                jsc: {
+                  parser: {
+                    syntax: 'ecmascript',
+                    jsx: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        plugins: [pluginCoverage(options)],
+      },
+    });
+    await rsbuild.initConfigs();
+
+    const result = await transformCoverage(
+      environmentName,
+      'export const element = <div />;',
+      'fixture.js',
+      options,
+    );
+
+    expect(readInitialCoverage(result.code)).toBeTruthy();
   });
 });
