@@ -133,11 +133,14 @@ describe('browser mode - globalSetup', () => {
     const teardownIndex = cli.stdout.indexOf(
       '[browser-global-teardown] executed',
     );
+    const serverCloseIndex = cli.stdout.lastIndexOf(
+      '[browser-dev-server] closed',
+    );
 
-    // Setup runs before any browser test output, teardown after all of it.
     expect(setupIndex).toBeGreaterThanOrEqual(0);
     expect(testIndex).toBeGreaterThan(setupIndex);
-    expect(teardownIndex).toBeGreaterThan(testIndex);
+    expect(serverCloseIndex).toBeGreaterThan(testIndex);
+    expect(teardownIndex).toBeGreaterThan(serverCloseIndex);
   });
 
   it('runs globalSetup and teardown around browser test collection', async () => {
@@ -155,10 +158,14 @@ describe('browser mode - globalSetup', () => {
     const teardownIndex = cli.stdout.indexOf(
       '[browser-global-teardown] executed',
     );
+    const serverCloseIndex = cli.stdout.lastIndexOf(
+      '[browser-dev-server] closed',
+    );
 
     expect(setupIndex).toBeGreaterThanOrEqual(0);
     expect(testIndex).toBeGreaterThan(setupIndex);
-    expect(teardownIndex).toBeGreaterThan(testIndex);
+    expect(serverCloseIndex).toBeGreaterThan(testIndex);
+    expect(teardownIndex).toBeGreaterThan(serverCloseIndex);
   });
 
   it('skips globalSetup when the shard slice has no files for the project', async () => {
@@ -201,6 +208,21 @@ describe('browser mode - globalSetup', () => {
     expect(cli.stdout).toContain('[mixed-node-global-teardown] executed');
     expect(cli.stdout).toContain('[mixed-browser-global-teardown] executed');
     expect(cli.stdout).toMatch(/Tests.*2 passed/);
+
+    const firstTeardownIndex = Math.min(
+      cli.stdout.indexOf('[mixed-node-global-teardown] executed'),
+      cli.stdout.indexOf('[mixed-browser-global-teardown] executed'),
+    );
+    const nodeServerCloseIndex = cli.stdout.lastIndexOf(
+      '[mixed-node-dev-server] closed',
+    );
+    const browserServerCloseIndex = cli.stdout.lastIndexOf(
+      '[mixed-browser-dev-server] closed',
+    );
+    expect(nodeServerCloseIndex).toBeGreaterThanOrEqual(0);
+    expect(browserServerCloseIndex).toBeGreaterThanOrEqual(0);
+    expect(nodeServerCloseIndex).toBeLessThan(firstTeardownIndex);
+    expect(browserServerCloseIndex).toBeLessThan(firstTeardownIndex);
   });
 
   for (const [name, args] of [
