@@ -182,6 +182,24 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  e2e/adapter-rspack/fixtures:
+    devDependencies:
+      '@rspack/cli':
+        specifier: ~2.1.8
+        version: 2.1.8(@rspack/core@2.1.8(@module-federation/runtime-tools@2.8.1)(@swc/helpers@0.5.23))(@rspack/dev-server@2.2.0(@rspack/core@2.1.8(@module-federation/runtime-tools@2.8.1)(@swc/helpers@0.5.23)))
+      '@rspack/core':
+        specifier: ~2.1.8
+        version: 2.1.8(@module-federation/runtime-tools@2.8.1)(@swc/helpers@0.5.23)
+      '@rstest/adapter-rspack':
+        specifier: workspace:*
+        version: link:../../../packages/adapter-rspack
+      '@rstest/core':
+        specifier: workspace:*
+        version: link:../../../packages/core
+      strip-ansi:
+        specifier: ^7.2.0
+        version: 7.2.0
+
   e2e/adapterTransformImport/fixtures: {}
 
   e2e/browser-mode/fixtures/browser-coverage:
