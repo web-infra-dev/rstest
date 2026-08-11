@@ -25,6 +25,34 @@ type OptionDefinition = readonly [
   config?: OptionConfig,
 ];
 
+const coverageOptionDefinitions: OptionDefinition[] = [
+  ['--coverage.enabled', 'Enable code coverage collection'],
+  [
+    '--coverage.provider <provider>',
+    'Coverage provider to use (istanbul | v8)',
+  ],
+  [
+    '--coverage.reporters <reporter>',
+    'Coverage reporter to use (repeat the flag for multiple reporters)',
+  ],
+  [
+    '--coverage.changed [commit]',
+    'Collect coverage only for changed files, optionally since a commit',
+  ],
+  ['--coverage.include <pattern>', 'Include files for coverage collection'],
+  ['--coverage.exclude <pattern>', 'Exclude files from coverage collection'],
+  ['--coverage.reportsDirectory <dir>', 'Directory to store coverage reports'],
+  [
+    '--coverage.reportOnFailure',
+    'Generate coverage reports even when tests fail',
+  ],
+  ['--coverage.clean', 'Clean the coverage directory before writing reports'],
+  [
+    '--coverage.allowExternal',
+    'Collect coverage for files outside the project root directory',
+  ],
+];
+
 const runtimeOptionDefinitions: OptionDefinition[] = [
   [
     '-c, --config <config>',
@@ -54,31 +82,7 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
   ['--exclude <exclude>', 'Exclude files from test'],
   ['-u, --update', 'Update snapshot files'],
   ['--coverage', 'Enable code coverage collection'],
-  ['--coverage.enabled', 'Enable code coverage collection'],
-  [
-    '--coverage.provider <provider>',
-    'Coverage provider to use (istanbul | v8)',
-  ],
-  [
-    '--coverage.reporters <reporter>',
-    'Coverage reporter to use (repeat the flag for multiple reporters)',
-  ],
-  [
-    '--coverage.changed [commit]',
-    'Collect coverage only for changed files, optionally since a commit',
-  ],
-  ['--coverage.include <pattern>', 'Include files for coverage collection'],
-  ['--coverage.exclude <pattern>', 'Exclude files from coverage collection'],
-  ['--coverage.reportsDirectory <dir>', 'Directory to store coverage reports'],
-  [
-    '--coverage.reportOnFailure',
-    'Generate coverage reports even when tests fail',
-  ],
-  ['--coverage.clean', 'Clean the coverage directory before running tests'],
-  [
-    '--coverage.allowExternal',
-    'Collect coverage for files outside the project root directory',
-  ],
+  ...coverageOptionDefinitions,
   [
     '--project <name>',
     'Run only projects that match the name, can be a full name or wildcards pattern',
@@ -203,8 +207,9 @@ const mergeReportsOptionDefinitions: OptionDefinition[] = [
     'Specify the project root directory, can be an absolute path or a path relative to cwd',
   ],
   ['--coverage', 'Enable code coverage collection'],
+  ...coverageOptionDefinitions,
   ['--reporters, --reporter <name>', 'Specify the reporter(s) to use'],
-  ['--cleanup', 'Remove blob reports directory after merging'],
+  ['--cleanup', 'Remove blob report inputs after merging'],
 ];
 
 const hiddenPassthroughOptionDefinitions: OptionDefinition[] = [
@@ -380,7 +385,7 @@ const getCliCommand = (argv: string[]): string | undefined => {
 
 const normalizeCoverageCliArgs = (argv: string[]): string[] => {
   const command = getCliCommand(argv);
-  if (command === 'init' || command === 'merge-reports') {
+  if (command === 'init') {
     return argv;
   }
 
@@ -1104,6 +1109,8 @@ export function createCli(): CAC {
           'merge-reports',
           [],
         );
+        rstest.context.changedCoverageFilters =
+          await resolveCoverageChangedFilters(rstest);
 
         await rstest.mergeReports({ path, cleanup: options.cleanup });
       } catch (err) {

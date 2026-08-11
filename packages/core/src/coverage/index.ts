@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { RsbuildPlugin } from '@rsbuild/core';
+import { isAbsolute, join, relative } from 'pathe';
 import { color, logger } from '../utils';
 import type {
   CoverageOptions,
@@ -53,13 +54,62 @@ export const loadCoverageProvider = async (
  * rsbuild instance, and `--passWithNoTests` with no matching files races the
  * hook against generateCoverage. See https://github.com/web-infra-dev/rstest/issues/1212.
  */
-export function cleanCoverageReports(options: NormalizedCoverageOptions): void {
+export function cleanCoverageReports(
+  options: NormalizedCoverageOptions,
+  preservedPaths?: string[],
+): void {
   if (!options.enabled || !options.clean) {
     return;
   }
-  if (fs.existsSync(options.reportsDirectory)) {
-    fs.rmSync(options.reportsDirectory, { recursive: true });
+  const { reportsDirectory } = options;
+  if (!fs.existsSync(reportsDirectory)) {
+    return;
   }
+
+  const pathsToPreserve = preservedPaths?.filter((path) => {
+    const preservedRelativePath = relative(reportsDirectory, path);
+    return (
+      preservedRelativePath !== '..' &&
+      !preservedRelativePath.startsWith('../') &&
+      !isAbsolute(preservedRelativePath)
+    );
+  });
+
+  if (pathsToPreserve?.length) {
+    if (fs.lstatSync(reportsDirectory).isSymbolicLink()) {
+      return;
+    }
+
+    for (const entry of fs.readdirSync(reportsDirectory)) {
+      const entryPath = join(reportsDirectory, entry);
+      const preservedPathsInEntry = pathsToPreserve.filter((path) => {
+        const preservedRelativePath = relative(entryPath, path);
+        return (
+          preservedRelativePath !== '..' &&
+          !preservedRelativePath.startsWith('../') &&
+          !isAbsolute(preservedRelativePath)
+        );
+      });
+
+      if (preservedPathsInEntry.length) {
+        if (preservedPathsInEntry.some((path) => path === entryPath)) {
+          continue;
+        }
+        cleanCoverageReports(
+          {
+            ...options,
+            reportsDirectory: entryPath,
+          },
+          preservedPathsInEntry,
+        );
+      } else {
+        fs.rmSync(entryPath, { recursive: true, force: true });
+      }
+    }
+    return;
+  }
+
+  fs.rmSync(reportsDirectory, { recursive: true });
 }
 
 export async function createCoverageProvider(

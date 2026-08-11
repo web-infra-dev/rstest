@@ -8,10 +8,16 @@ export default defineConfig({
       }
     },
   },
+  source: {
+    transformImport: [
+      {
+        libraryName: 'demo-lib',
+        libraryDirectory: '.',
+      },
+    ],
+  },
   coverage: {
     enabled: true,
-    provider: 'v8',
-    include: ['v8-src/**'],
-    reporters: ['json-summary'],
+    provider: 'istanbul',
   },
 });

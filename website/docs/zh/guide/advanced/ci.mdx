@@ -218,7 +218,7 @@ jobs:
       - run: pnpm rstest merge-reports --coverage --cleanup
 ```
 
-每个分片会写入 `.rstest-reports/blob-{index}-{count}.json`。合并 job 会把这些文件收集到同一个 `.rstest-reports/` 目录，然后 `rstest merge-reports` 会基于统一结果运行已配置的 reporter，并合并覆盖率数据。更多细节请查看 [测试分片](/guide/basic/cli#sharding-tests) 和 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports)。
+每个分片会将测试结果和实际采集的覆盖率写入 `.rstest-reports/blob-{index}-{count}.json`。支持延迟最终处理的 coverage provider 会让这些使用 blob 报告器的分片不生成覆盖率报告，也不检查阈值；未使用 blob 报告器的分片仍会正常完成覆盖率最终处理。旧版 provider 保持原有的单次运行最终处理行为。合并 job 会把这些文件收集到同一个 `.rstest-reports/` 目录，然后 `rstest merge-reports` 会基于统一结果补齐未测试文件、运行已配置的 reporter 并检查覆盖率阈值。请把覆盖率最终处理参数放在共享配置中，或将相同的 `--coverage.*` 参数传给合并命令，因为只传给分片的 CLI 参数不会写入 blob。更多细节请查看[测试分片](/guide/basic/cli#sharding-tests)和 [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports)。
 
 ## 发布机器可读报告
 

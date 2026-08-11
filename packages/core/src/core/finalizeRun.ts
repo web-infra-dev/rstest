@@ -1,4 +1,5 @@
 import { resolveAndMergeRawCoverage } from '../coverage';
+import { BlobReporter } from '../reporter/blob';
 import type { Duration, ExecutorCycleOutcome, SourceMapInput } from '../types';
 import type { CoverageMap, CoverageProvider } from '../types/coverage';
 import {
@@ -314,7 +315,18 @@ export async function finalizeRunCycle(
     }),
   );
 
-  if (coverageProvider && (!isFailure || reportOnFailure)) {
+  const defersCoverageReport =
+    coverageProvider?.supportsDeferredCoverageFinalization === true &&
+    context.reporters.some((reporter) => reporter instanceof BlobReporter);
+
+  // Blob output is a merge input, so final filtering, untested-file backfill,
+  // reports, and thresholds belong to the merge-reports process that sees the
+  // complete coverage map rather than to every partial shard.
+  if (
+    coverageProvider &&
+    !defersCoverageReport &&
+    (!isFailure || reportOnFailure)
+  ) {
     const { generateCoverage } = await import('../coverage/generate');
     await runLifecycleStep('coverage report generation', () =>
       generateCoverage(

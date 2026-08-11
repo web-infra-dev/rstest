@@ -177,6 +177,16 @@ export type RawCoverageResolveOptions = {
 
 export declare class CoverageProvider {
   constructor(options: NormalizedCoverageOptions, root?: string);
+
+  /**
+   * Whether blob runs may leave report generation and untested-file backfill
+   * to `merge-reports`. Providers that do not declare this capability are
+   * finalized before the blob is written for backward compatibility.
+   *
+   * @internal
+   */
+  readonly supportsDeferredCoverageFinalization?: boolean;
+
   /**
    * Initialize coverage collection
    */

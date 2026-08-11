@@ -374,6 +374,47 @@ describe('generateCoverage', () => {
     }
   });
 
+  it('reports no files when the changed coverage set is empty', async () => {
+    const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
+    const sourceFile = path.join(rootPath, 'src', 'index.ts');
+    mkdirSync(path.dirname(sourceFile), { recursive: true });
+    writeFileSync(sourceFile, 'export const value = 1;\n');
+
+    const defaultCoverage = withDefaultConfig({}).coverage;
+    const provider = {
+      init: () => {},
+      collect: () => null,
+      cleanup: () => {},
+      createCoverageMap: () => createCoverageMap(),
+      generateCoverageForUntestedFiles: async () => [],
+      async generateReports(coverageMap) {
+        expect(coverageMap.files()).toEqual([]);
+      },
+    } satisfies CoverageProvider;
+
+    const coverageMap = createCoverageMap();
+    coverageMap.addFileCoverage(createFileCoverage(sourceFile));
+    const context = {
+      rootPath,
+      normalizedConfig: {
+        coverage: defaultCoverage,
+      },
+      changedCoverageFilters: [] as string[],
+      projects: [
+        {
+          rootPath,
+          environmentName: 'node',
+        },
+      ],
+    } as RstestContext;
+
+    try {
+      await generateCoverage(context, coverageMap, provider);
+    } finally {
+      rmSync(rootPath, { recursive: true, force: true });
+    }
+  });
+
   it('traces coverage generation pipeline steps', async () => {
     const rootPath = mkdtempSync(path.join(tmpdir(), 'rstest-coverage-'));
     const srcDir = path.join(rootPath, 'src');
