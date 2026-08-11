@@ -817,11 +817,11 @@ const BrowserRunner: React.FC<{
                   const onLoad = (
                     event: React.SyntheticEvent<HTMLIFrameElement>,
                   ) => {
-                    if (!runId) {
-                      return;
-                    }
                     const frame = event.currentTarget;
                     const frameRunId = readRunIdFromFrame(frame) ?? runId;
+                    if (!frameRunId) {
+                      return;
+                    }
                     if (frame.contentWindow) {
                       frame.contentWindow.postMessage(
                         {
