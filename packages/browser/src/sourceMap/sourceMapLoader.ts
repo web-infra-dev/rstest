@@ -1,10 +1,14 @@
-import type {
-  DecodedSourceMapXInput,
-  EncodedSourceMapXInput,
+import {
+  AnyMap,
+  encodedMap,
+  type DecodedSourceMapXInput,
+  type EncodedSourceMapXInput,
+  type SectionedSourceMapXInput,
 } from '@jridgewell/trace-mapping';
 import convert from 'convert-source-map';
 
 export type SourceMapPayload = EncodedSourceMapXInput | DecodedSourceMapXInput;
+type SourceMapPayloadInput = SourceMapPayload | SectionedSourceMapXInput;
 
 export type LoadedSourceMap = {
   sourceMap: SourceMapPayload;
@@ -12,6 +16,11 @@ export type LoadedSourceMap = {
 };
 
 type Fetcher = typeof fetch;
+
+const flattenSourceMap = (
+  sourceMap: SourceMapPayloadInput,
+  sourceMapUrl?: string,
+): SourceMapPayload => encodedMap(new AnyMap(sourceMap, sourceMapUrl));
 
 export const normalizeJavaScriptUrl = (
   value: string,
@@ -37,10 +46,16 @@ export const normalizeJavaScriptUrl = (
 
 export const resolveInlineSourceMap = (
   code: string,
+  sourceMapUrl?: string,
 ): SourceMapPayload | null => {
   try {
     const converter = convert.fromSource(code);
-    return converter ? (converter.toObject() as SourceMapPayload) : null;
+    return converter
+      ? flattenSourceMap(
+          converter.toObject() as SourceMapPayloadInput,
+          sourceMapUrl,
+        )
+      : null;
   } catch {
     return null;
   }
@@ -84,7 +99,10 @@ export const loadSourceMapForSource = async ({
     );
     return mapResponse.ok
       ? {
-          sourceMap: (await mapResponse.json()) as SourceMapPayload,
+          sourceMap: flattenSourceMap(
+            (await mapResponse.json()) as SourceMapPayloadInput,
+            resolvedSourceMapUrl.href,
+          ),
           sourceMapUrl: resolvedSourceMapUrl.href,
         }
       : null;
@@ -103,7 +121,7 @@ const fetchSourceMap = async (
   }
 
   const code = await jsResponse.text();
-  const inlineMap = resolveInlineSourceMap(code);
+  const inlineMap = resolveInlineSourceMap(code, jsUrl);
   if (inlineMap) {
     return inlineMap;
   }
@@ -113,7 +131,10 @@ const fetchSourceMap = async (
     return null;
   }
 
-  return (await mapResponse.json()) as SourceMapPayload;
+  return flattenSourceMap(
+    (await mapResponse.json()) as SourceMapPayloadInput,
+    `${jsUrl}.map`,
+  );
 };
 
 export const loadSourceMapWithCache = async ({

@@ -93,6 +93,76 @@ describe('browser V8 coverage', () => {
     });
   });
 
+  it('flattens indexed source maps before storing coverage resources', async () => {
+    const sourceMap = {
+      version: 3 as const,
+      sections: [
+        {
+          offset: { line: 0, column: 0 },
+          map: {
+            version: 3 as const,
+            names: [],
+            sourceRoot: 'webpack:///',
+            sources: ['./src/indexed-a.ts'],
+            sourcesContent: ['export const indexedA = 1;'],
+            mappings: 'AAAA',
+          },
+        },
+        {
+          offset: { line: 1, column: 0 },
+          map: {
+            version: 3 as const,
+            names: [],
+            sourceRoot: 'webpack:///',
+            sources: ['./src/indexed-b.ts'],
+            sourcesContent: ['export const indexedB = 2;'],
+            mappings: 'AAAA',
+          },
+        },
+      ],
+    };
+    const source = [
+      'var indexedA = 1;',
+      'var indexedB = 2;',
+      `//# sourceMappingURL=data:application/json;base64,${Buffer.from(
+        JSON.stringify(sourceMap),
+      ).toString('base64')}`,
+    ].join('\n');
+    const url = 'http://localhost:4000/static/js/indexed.js';
+    const resourceStore = createResourceStore();
+
+    await takeBrowserV8Coverage({
+      collector: {
+        start: async () => {},
+        take: async () => [
+          {
+            url,
+            scriptId: '1',
+            source,
+            functions: [],
+          },
+        ],
+      },
+      fetchTimeout: 1000,
+      page: {} as BrowserProviderPage,
+      projectUrl: 'http://localhost:4000',
+      rootPath: '/project',
+      sourceMapCache: new Map(),
+      resourceStore,
+    });
+
+    const storedSourceMap = JSON.parse(resourceStore.sourceMaps.get(url)!);
+    expect(storedSourceMap.sections).toBeUndefined();
+    expect(storedSourceMap.sources).toEqual([
+      '/project/src/indexed-a.ts',
+      '/project/src/indexed-b.ts',
+    ]);
+    expect(storedSourceMap.sourcesContent).toEqual([
+      'export const indexedA = 1;',
+      'export const indexedB = 2;',
+    ]);
+  });
+
   it('loads the external source map URL declared by the script', async () => {
     const sourceMap = {
       version: 3 as const,

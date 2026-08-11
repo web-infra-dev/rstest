@@ -590,9 +590,12 @@ export const createHeadedScheduler = async ({
       error.stack = payload.stack;
       const pending = pendingHeadedReloads.values().next().value;
       const projectName = pending?.file.projectName;
-      await collectCoverage(projectName);
-      rejectAllPendingHeadedReloads(error);
-      await handleFatal(payload);
+      try {
+        await collectCoverage(projectName);
+      } finally {
+        rejectAllPendingHeadedReloads(error);
+        await handleFatal(payload);
+      }
     },
     async dispatch(request: BrowserDispatchRequest) {
       // Headed/container path now shares the same dispatch contract as headless.

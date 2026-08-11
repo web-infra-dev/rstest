@@ -2,6 +2,7 @@ import { expect, it } from '@rstest/core';
 
 const appendMappedScript = ({
   code,
+  indexed,
   source,
   sourceContent,
   url,
@@ -10,14 +11,26 @@ const appendMappedScript = ({
   source: string;
   sourceContent: string;
   url: string;
+  indexed?: boolean;
 }): HTMLScriptElement => {
-  const sourceMap = {
+  const flatSourceMap = {
     version: 3,
     names: [],
     sources: [`webpack:///./src/${source}`],
     sourcesContent: [sourceContent],
     mappings: 'AAAA',
   };
+  const sourceMap = indexed
+    ? {
+        version: 3,
+        sections: [
+          {
+            offset: { line: 0, column: 0 },
+            map: flatSourceMap,
+          },
+        ],
+      }
+    : flatSourceMap;
   const script = document.createElement('script');
   script.textContent = [
     code,
@@ -71,5 +84,22 @@ it('collects a classic HTTP script', () => {
   } finally {
     script.remove();
     Reflect.deleteProperty(globalThis, '__RSTEST_CLASSIC__');
+  }
+});
+
+it('collects a script with an indexed source map', () => {
+  const script = appendMappedScript({
+    code: "Reflect.set(globalThis, '__RSTEST_INDEXED__', 42);",
+    indexed: true,
+    source: 'indexed.ts',
+    sourceContent: 'export const indexed = 42;',
+    url: `${location.origin}/indexed.js`,
+  });
+
+  try {
+    expect(Reflect.get(globalThis, '__RSTEST_INDEXED__')).toBe(42);
+  } finally {
+    script.remove();
+    Reflect.deleteProperty(globalThis, '__RSTEST_INDEXED__');
   }
 });

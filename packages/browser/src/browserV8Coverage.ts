@@ -61,10 +61,6 @@ const normalizeSourceMap = (
   scriptOrigin: string,
   projectOrigin: string,
 ): SourceMapPayload => {
-  if (!Array.isArray(sourceMap.sources)) {
-    return sourceMap;
-  }
-
   const webpackSourceRoot =
     typeof sourceMap.sourceRoot === 'string' &&
     sourceMap.sourceRoot.startsWith('webpack:')
@@ -171,7 +167,7 @@ export const takeBrowserV8Coverage = async ({
       if (!url || !cacheUrl || !entry.source) {
         return;
       }
-      const inlineSourceMap = resolveInlineSourceMap(entry.source);
+      const inlineSourceMap = resolveInlineSourceMap(entry.source, url);
       const loadedSourceMap = inlineSourceMap
         ? null
         : await loadSourceMapForSource({

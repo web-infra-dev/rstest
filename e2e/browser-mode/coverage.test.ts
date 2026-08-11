@@ -89,6 +89,9 @@ describe('browser mode - coverage', () => {
       'classic.ts|100|100|100|100',
     );
     expect(cli.stdout.replaceAll(' ', '')).toContain(
+      'indexed.ts|100|100|100|100',
+    );
+    expect(cli.stdout.replaceAll(' ', '')).toContain(
       'query-a.ts|100|100|100|100',
     );
     expect(cli.stdout.replaceAll(' ', '')).toContain(

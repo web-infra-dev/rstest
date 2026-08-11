@@ -436,6 +436,40 @@ describe('coverage-v8 provider', () => {
     expect(Object.keys(coverage)).toEqual([originalFile]);
   });
 
+  it('filters source map paths after resolving relative sources', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-relative-filter');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const code = 'const value = 1;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:relative-filter`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+      sourceFilter: (filePath) => filePath.startsWith(root),
+      sourceMap: {
+        version: 3,
+        sources: ['../src/original.ts'],
+        sourcesContent: [code],
+        names: [],
+        mappings: 'AAAA',
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([originalFile]);
+  });
+
   it('does not remap unmapped wrapper statements to the next source', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-unmapped-wrapper');
     const generatedFile = join(root, 'dist', 'bundle.js');

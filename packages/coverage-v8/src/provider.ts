@@ -578,6 +578,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       ast: () => this.parseAst(code, outputModule),
       cacheKey: converterCacheKey,
       code,
+      rawSourceFilter: (source) => !this.shouldIgnoreOriginalSource(source),
       sourceFilter: (sourcePath) =>
         this.shouldKeepOriginalSource(sourcePath, root),
       sourceMap,
@@ -633,6 +634,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       ast: () => this.parseAst(code, outputModule),
       cacheKey: converterCacheKey,
       code,
+      rawSourceFilter: (source) => !this.shouldIgnoreOriginalSource(source),
       sourceFilter: (sourcePath) =>
         this.shouldKeepOriginalSource(sourcePath, root),
       sourceMap,

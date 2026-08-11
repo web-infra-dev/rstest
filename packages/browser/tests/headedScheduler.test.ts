@@ -1,5 +1,16 @@
-import { describe, expect, it } from '@rstest/core';
-import { claimHeadedCycleScope } from '../src/headedScheduler';
+import { describe, expect, it, rstest } from '@rstest/core';
+import { SnapshotManager } from '@vitest/snapshot/manager';
+import type { BrowserRuntime } from '../src/browserRsbuild';
+import type { HostRpcMethods } from '../src/containerRpc';
+import { HostDispatchRouter } from '../src/dispatchRouter';
+import {
+  claimHeadedCycleScope,
+  createHeadedScheduler,
+} from '../src/headedScheduler';
+import type {
+  BrowserProviderContext,
+  BrowserProviderPage,
+} from '../src/providers';
 
 describe('claimHeadedCycleScope', () => {
   const testFile = (testPath: string) => ({
@@ -98,5 +109,113 @@ describe('claimHeadedCycleScope', () => {
     expect(scope).toEqual([
       { file: currentTestFiles[0], testNamePattern: 'sums' },
     ]);
+  });
+});
+
+describe('createHeadedScheduler', () => {
+  it('finishes fatal handling when coverage collection rejects', async () => {
+    const testFile = {
+      testPath: '/fatal.test.ts',
+      projectName: 'browser',
+    };
+    let hostMethods: HostRpcMethods | undefined;
+    let resolveReload: ((value: { runId: string }) => void) | undefined;
+    const reloadRequested = Promise.withResolvers<void>();
+    const reloadResult = new Promise<{ runId: string }>((resolve) => {
+      resolveReload = resolve;
+    });
+    const page = {} as BrowserProviderPage;
+    const context = {} as BrowserProviderContext;
+    const handleFatal = rstest.fn(async () => {});
+    const coverageError = new Error('coverage collection failed');
+    const fatalErrorRef: { current: Error | null } = { current: null };
+    const snapshotManager = new SnapshotManager({ updateSnapshot: 'none' });
+    const runtime = {
+      browser: {},
+      browserLaunchOptions: { providerOptions: {} },
+      containerContext: context,
+      containerPage: page,
+      containerServer: { port: 3000 },
+      rpcManager: {
+        currentWebSocket: null,
+        reloadTestFile: () => {
+          reloadRequested.resolve();
+          return reloadResult;
+        },
+        updateMethods: (methods: HostRpcMethods) => {
+          hostMethods = methods;
+          void methods.onRunnerFramesReady([testFile.testPath]);
+        },
+      },
+      watchState: { lastTestFiles: [] },
+    } as unknown as BrowserRuntime;
+
+    const schedulerResult = createHeadedScheduler({
+      context: {
+        rootPath: '/project',
+        normalizedConfig: { name: 'browser' },
+        snapshotManager,
+        updateReporterResultState: () => {},
+      },
+      runtime,
+      allTestFiles: [testFile],
+      hostOptions: {
+        rootPath: '/project',
+        projects: [],
+        snapshot: { updateSnapshot: 'none' },
+      },
+      v8Coverage: {
+        start: async () => {},
+        take: async () => {
+          throw coverageError;
+        },
+      },
+      projectRoots: new Map([['browser', '/project']]),
+      isWatchMode: true,
+      createDispatchRouter: () => new HostDispatchRouter(),
+      handlers: {
+        handleTestFileStart: async () => {},
+        handleTestCaseResult: async () => {},
+        handleTestFileComplete: async () => {},
+        handleLog: async () => {},
+        handleFatal,
+      },
+      fatalErrorRef,
+      watchSignals: {
+        setDispatchRerun: () => {},
+        signalInvalidation: async () => {},
+        awaitSignalledCycle: async () => {},
+      },
+      setDispatchPageResolver: () => {},
+      createWatchSession: () => ({
+        runCycle: async () => ({
+          results: [],
+          testResults: [],
+          errors: [],
+          testPaths: [],
+          duration: { buildTime: 0, testTime: 0 },
+        }),
+        requestRerun: async () => {},
+      }),
+      collectProjectEntries: async () => [],
+      logWatchReady: () => {},
+      destroyRuntime: async () => {},
+    });
+
+    await reloadRequested.promise;
+    resolveReload?.({ runId: 'fatal-run' });
+    await Promise.resolve();
+    await Promise.resolve();
+    if (!hostMethods) {
+      throw new Error('Expected headed RPC methods to be registered');
+    }
+
+    await expect(
+      hostMethods.onFatal({ message: 'fatal test failure' }),
+    ).rejects.toBe(coverageError);
+    expect(handleFatal).toHaveBeenCalledWith({
+      message: 'fatal test failure',
+    });
+    await expect(schedulerResult).resolves.toMatchObject({ rawCoverage: [] });
   });
 });

@@ -115,6 +115,7 @@ type ConvertOptions = {
   coverage: Pick<Profiler.ScriptCoverage, 'functions' | 'url'>;
   sourceMap?: SourceMapLike;
   sourceMapUrl?: string;
+  rawSourceFilter?: (source: string) => boolean;
   sourceFilter?: (filePath: string) => boolean;
 };
 
@@ -236,6 +237,7 @@ async function prepareCoverage(
     filename,
     locator,
     directory,
+    options.rawSourceFilter,
     options.sourceFilter,
   );
   const skippedNodes = new WeakSet<AstNode>();
@@ -530,6 +532,7 @@ class CoverageBuilder {
     filename: string,
     private locator: CoverageLocator,
     private directory: string,
+    rawSourceFilter?: (source: string) => boolean,
     sourceFilter?: (filePath: string) => boolean,
   ) {
     const generatedDirectory = dirname(filename);
@@ -538,7 +541,7 @@ class CoverageBuilder {
       let filePath = filename;
 
       if (source) {
-        if (sourceFilter && !sourceFilter(source)) {
+        if (rawSourceFilter && !rawSourceFilter(source)) {
           continue;
         }
         filePath = resolveSourceFilename(source, generatedDirectory);
