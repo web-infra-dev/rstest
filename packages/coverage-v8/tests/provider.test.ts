@@ -1316,6 +1316,58 @@ export default class CustomCoverageReporter {
     }
   });
 
+  it('filters external original sources from browser raw coverage', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-browser-external-source');
+    const generatedFile = 'https://cdn.example.com/bundle.js';
+    const localSource = join(root, 'src', 'local.ts');
+    const externalSource = 'https://cdn.example.com/src/external.ts';
+    const code = 'const local = 1;\nconst external = 2;';
+    const createPayload = () => ({
+      entries: [
+        {
+          url: generatedFile,
+          filePath: generatedFile,
+          scriptId: '1',
+          functions: [
+            {
+              functionName: '',
+              isBlockCoverage: true,
+              ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+            },
+          ],
+        },
+      ],
+      options: {
+        assetFiles: { [generatedFile]: code },
+        sourceMaps: {
+          [generatedFile]: JSON.stringify({
+            version: 3,
+            names: [],
+            sources: [localSource, externalSource],
+            sourcesContent: ['const local = 1;', 'const external = 2;'],
+            mappings: 'AAAA;ACAA',
+          }),
+        },
+      },
+      root,
+    });
+
+    const provider = new CoverageProvider(createOptions(), root);
+    const coverageMap = await provider.resolveRawCoverage([createPayload()]);
+
+    expect(coverageMap?.files()).toEqual([localSource]);
+
+    const externalProvider = new CoverageProvider(
+      createOptions({ allowExternal: true }),
+      root,
+    );
+    const externalCoverageMap = await externalProvider.resolveRawCoverage([
+      createPayload(),
+    ]);
+
+    expect(externalCoverageMap?.files()).toEqual([localSource, externalSource]);
+  });
+
   it('filters raw assets by source map before loading compiled sources', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-sourcemap-first');
     const includedAsset = join(root, 'dist', 'included.js');

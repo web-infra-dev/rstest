@@ -176,7 +176,11 @@ export const takeBrowserV8Coverage = async ({
         resourceStore?.assetFiles.set(filePath, entry.source);
       }
 
-      sourceMapCache.set(url, sourceMap ?? null);
+      if (sourceMap) {
+        sourceMapCache.set(url, sourceMap);
+      } else {
+        sourceMapCache.delete(url);
+      }
       if (normalizedSourceMap) {
         if (resourceStore?.sourceMaps.get(filePath) !== normalizedSourceMap) {
           sourceMaps[filePath] = normalizedSourceMap;

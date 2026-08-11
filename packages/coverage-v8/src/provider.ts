@@ -362,6 +362,9 @@ export class CoverageProvider implements RstestCoverageProvider {
     }
 
     if (!this.options.allowExternal && normalizedRoot) {
+      if (/^https?:\/\//.test(normalizedFilePath)) {
+        return false;
+      }
       const relativeFilePath = this.toProjectRelativePath(
         normalizedFilePath,
         normalizedRoot,
@@ -404,7 +407,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   ): boolean {
     const normalizedKey = filePath.replace(/\\/g, '/');
 
-    if (this.shouldIgnoreTransformedFile(normalizedKey)) {
+    if (!this.shouldProcessEntry(normalizedKey, root)) {
       return false;
     }
 

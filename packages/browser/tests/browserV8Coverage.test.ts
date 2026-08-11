@@ -347,4 +347,34 @@ describe('browser V8 coverage', () => {
     expect(result).not.toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it('does not cache a missing source map from the collected script', async () => {
+    const entry = {
+      url: 'http://localhost:4000/static/js/test.js',
+      scriptId: '1',
+      source: 'var value = 1;',
+      functions: [],
+    };
+    const collector: BrowserV8CoverageCollector = {
+      start: async () => {},
+      take: async () => [entry],
+    };
+    const sourceMapCache = new Map([
+      [
+        entry.url,
+        { version: 3 as const, names: [], sources: [], mappings: '' },
+      ],
+    ]);
+
+    await takeBrowserV8Coverage({
+      collector,
+      fetchTimeout: 1000,
+      page: {} as BrowserProviderPage,
+      projectUrl: 'http://localhost:4000',
+      rootPath: '/project',
+      sourceMapCache,
+    });
+
+    expect(sourceMapCache.has(entry.url)).toBe(false);
+  });
 });
