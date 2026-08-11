@@ -550,6 +550,25 @@ const checkNamedFixtureTypes = (
     // @ts-expect-error neither union member is guaranteed to be registered
     void ctx.left;
   });
+
+  const fileFixtureTest = test
+    .extend('fileValue', { scope: 'file' }, (_context, { onCleanup }) => {
+      onCleanup(() => Promise.resolve());
+      // @ts-expect-error file fixtures cannot use Playwright test fixtures
+      void _context.page;
+      return 42;
+    })
+    .extend('testValue', ({ fileValue, page }) => `${fileValue}:${page.url()}`);
+
+  fileFixtureTest.extend(
+    'invalidFile',
+    { scope: 'file' },
+    // @ts-expect-error file fixtures cannot depend on test-scoped fixtures
+    ({ testValue }) => testValue.length,
+  );
+
+  // @ts-expect-error file-scoped fixtures cannot be overridden
+  fileFixtureTest.extend('fileValue', () => 1);
 };
 void checkNamedFixtureTypes;
 

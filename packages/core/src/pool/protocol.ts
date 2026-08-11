@@ -45,6 +45,12 @@ export type TestEnvironmentModuleFallback = {
 export type WorkerResponse =
   | { type: 'started'; pid: number }
   | {
+      type: 'fileCleanupStarted';
+      taskId: number;
+      result?: TestFileResult;
+    }
+  | { type: 'fileCleanupFinished'; taskId: number }
+  | {
       type: 'runFinished';
       taskId: number;
       result: TestFileResult;
