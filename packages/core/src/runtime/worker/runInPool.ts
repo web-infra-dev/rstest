@@ -4,7 +4,6 @@ import { install } from 'source-map-support';
 import type {
   AssetFiles,
   MaybePromise,
-  Rstest,
   RunnerHooks,
   RunWorkerOptions,
   TestFileResult,
@@ -13,7 +12,7 @@ import type {
 } from '../../types';
 import type { TestEnvironmentModuleFallback } from '../../pool/protocol';
 import { getAssetText } from '../../utils/assetFiles';
-import { globalApis, RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
+import { RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
@@ -21,6 +20,7 @@ import type { FileCleanupHooks } from '../runner';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
+import { installGlobalApis, installGlobalProperty } from './globalProperty';
 import { PhaseTracker } from './phaseTracker';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
@@ -54,16 +54,12 @@ install({
   },
 });
 
-const registerGlobalApi = (api: Rstest) => {
-  return globalApis.reduce<{
-    [key in keyof Rstest]?: Rstest[key];
-  }>((apis, key) => {
-    // @ts-expect-error register to global
-    globalThis[key] = api[key] as any;
-    return apis;
-  }, {});
-};
-
+/**
+ * Restores task-scoped global mutations at the next task boundary, rather than
+ * file teardown, so late callbacks keep the console and RPC they captured.
+ * Console interception and optional global APIs register their inverses here
+ * before a reused worker can serve another project.
+ */
 const globalCleanups: (() => void)[] = [];
 let isTeardown = false;
 /**
@@ -246,7 +242,7 @@ const preparePool = async (
     // worker first and later replayed to the original worker streams according
     // to the silent policy, instead of being reported to the host.
 
-    global.console = createCustomConsole({
+    const customConsole = createCustomConsole({
       onConsoleLog: (log) => {
         silentConsoleController.onConsoleLog(log);
       },
@@ -255,6 +251,9 @@ const preparePool = async (
       printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
       getCurrentTask: () => taskContext.getCurrent(),
     });
+    globalCleanups.push(
+      installGlobalProperty(global, 'console', customConsole),
+    );
   }
 
   const interopDefault = true;
@@ -358,7 +357,7 @@ const preparePool = async (
   tracker?.transition('prepare');
 
   if (globals) {
-    registerGlobalApi(api);
+    globalCleanups.push(installGlobalApis(api));
   }
 
   const rstestContext = {
