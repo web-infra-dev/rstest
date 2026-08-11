@@ -1345,6 +1345,7 @@ export default class CustomCoverageReporter {
             names: [],
             sources: [localSource, externalSource],
             sourcesContent: ['const local = 1;', 'const external = 2;'],
+            // cspell:disable-next-line
             mappings: 'AAAA;ACAA',
           }),
         },
