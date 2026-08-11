@@ -1161,6 +1161,22 @@ type TestForCallback<ExtraContext> = (
 type RstestTestAPI<ExtraContext> =
   RstestTest<ExtraContext> | TestAPIs<ExtraContext>;
 
+type TestPropertyPolicy = 'chain' | 'condition' | 'each' | 'extend' | 'for';
+
+const TEST_PROPERTY_POLICIES: Partial<Record<string, TestPropertyPolicy>> = {
+  concurrent: 'chain',
+  each: 'each',
+  extend: 'extend',
+  fails: 'chain',
+  for: 'for',
+  only: 'chain',
+  runIf: 'condition',
+  sequential: 'chain',
+  skip: 'chain',
+  skipIf: 'condition',
+  todo: 'chain',
+} satisfies Record<keyof TestAPIs, TestPropertyPolicy>;
+
 type CallableTest = (
   description: string,
   arg2?: unknown,
@@ -1673,7 +1689,10 @@ const createPlaywrightTest = <ExtraContext>(
       if (key === 'describe') {
         return rstestDescribe;
       }
-      if (key === 'extend') {
+      const propertyPolicy =
+        typeof key === 'string' ? TEST_PROPERTY_POLICIES[key] : undefined;
+
+      if (propertyPolicy === 'extend') {
         const extend =
           'extend' in target ? target.extend.bind(target) : undefined;
 
@@ -1713,20 +1732,13 @@ const createPlaywrightTest = <ExtraContext>(
             )
           : fails;
       }
-      if (
-        key === 'fails' ||
-        key === 'only' ||
-        key === 'skip' ||
-        key === 'todo' ||
-        key === 'concurrent' ||
-        key === 'sequential'
-      ) {
+      if (propertyPolicy === 'chain') {
         const value = Reflect.get(target, key, receiver);
         return typeof value === 'function'
           ? createPlaywrightTest(value as RstestTestAPI<ExtraContext>)
           : value;
       }
-      if (key === 'runIf' || key === 'skipIf') {
+      if (propertyPolicy === 'condition') {
         const value = Reflect.get(target, key, receiver);
         return typeof value === 'function'
           ? (condition: boolean) =>
@@ -1735,14 +1747,14 @@ const createPlaywrightTest = <ExtraContext>(
               )
           : value;
       }
-      if (key === 'each') {
+      if (propertyPolicy === 'each') {
         const value = Reflect.get(target, key, receiver);
         return typeof value === 'function'
           ? (...args: Parameters<RstestTest<ExtraContext>['each']>) =>
               wrapEachTestCall(value(...args))
           : value;
       }
-      if (key === 'for') {
+      if (propertyPolicy === 'for') {
         const value = Reflect.get(target, key, receiver);
         return typeof value === 'function'
           ? (...args: Parameters<TestForFn<ExtraContext>>) =>
