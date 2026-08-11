@@ -669,4 +669,38 @@ export default defineConfig({
       'No changed files found, exiting with code 0.',
     );
   });
+
+  it('should report no coverage files when coverage.changed finds no files', async () => {
+    const { fixturesTargetPath } = await prepareChangedFixture(
+      'coverage-changed-empty',
+    );
+
+    await writeFile(
+      join(fixturesTargetPath, 'rstest.config.ts'),
+      `import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  coverage: {
+    enabled: true,
+    include: ['src/**/*.ts'],
+    reporters: ['json'],
+  },
+});
+`,
+    );
+    await initGitFixture(fixturesTargetPath);
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--coverage.changed'],
+      options: {
+        nodeOptions: {
+          cwd: fixturesTargetPath,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    await expect(readCoverageFiles(fixturesTargetPath)).resolves.toEqual([]);
+  });
 });

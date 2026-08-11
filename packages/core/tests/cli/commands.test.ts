@@ -138,6 +138,9 @@ describe('CLI help output', () => {
 
     expect(help).toContain('--cleanup');
     expect(help).toContain('--coverage');
+    expect(help).toContain('--coverage.include');
+    expect(help).toContain('--coverage.reporters');
+    expect(help).toContain('--coverage.reportsDirectory');
     expect(help).toContain('--reporter');
     expect(help).toContain('--config-loader');
     expect(help).not.toContain('--browser');
@@ -213,16 +216,16 @@ describe('CLI help output', () => {
     });
   });
 
-  it('keeps --coverage intact for merge-reports command', () => {
+  it('normalizes --coverage for merge-reports command', () => {
     const parsed = createCli().parse(
       ['node', 'rstest', 'merge-reports', '--coverage'],
       { run: false },
     );
 
-    expect(parsed.options.coverage).toBe(true);
+    expect(parsed.options.coverage).toEqual({ enabled: true });
   });
 
-  it('keeps --coverage intact for merge-reports command after global options', () => {
+  it('normalizes --coverage for merge-reports command after global options', () => {
     const parsed = createCli().parse(
       [
         'node',
@@ -236,7 +239,33 @@ describe('CLI help output', () => {
     );
 
     expect(parsed.options.config).toBe('rstest.config.ts');
-    expect(parsed.options.coverage).toBe(true);
+    expect(parsed.options.coverage).toEqual({ enabled: true });
+  });
+
+  it('accepts coverage finalization options for merge-reports', () => {
+    const parsed = createCli().parse(
+      [
+        'node',
+        'rstest',
+        'merge-reports',
+        '--coverage',
+        '--coverage.include',
+        'src/**',
+        '--coverage.include=test/**',
+        '--coverage.reporters=json-summary',
+        '--coverage.reporters=text',
+        '--coverage.reportsDirectory',
+        'custom-coverage',
+      ],
+      { run: false },
+    );
+
+    expect(parsed.options.coverage).toEqual({
+      enabled: true,
+      include: ['src/**', 'test/**'],
+      reporters: ['json-summary', 'text'],
+      reportsDirectory: 'custom-coverage',
+    });
   });
 
   it('allows --pool shorthand to be mixed with nested pool options', () => {

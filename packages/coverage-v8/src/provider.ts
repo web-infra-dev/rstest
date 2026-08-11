@@ -224,6 +224,7 @@ const isRawCoveragePayload = (value: unknown): value is RawCoveragePayload =>
 
 export class CoverageProvider implements RstestCoverageProvider {
   supportsBrowserCoverage = true;
+  readonly supportsDeferredCoverageFinalization = true;
   private session: inspector.Session | null = null;
   private isMatch: (filePath: string) => boolean;
   private isIncluded: (filePath: string) => boolean;

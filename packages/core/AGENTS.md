@@ -83,6 +83,7 @@ Contracts between modules or processes — not readable from any single file.
 - The md output format is a spec'd contract snapshot-tested in `e2e/reporter/md.test.ts` — behavior changes require snapshot updates there.
 - The blob filename grammar has a single owner; `mergeReports` must keep using `isBlobFile` rather than re-encoding the pattern. Likewise both sides must key `BlobData.files` through `blobFileKey`, never by test path alone — a path is ambiguous once several projects run the same file.
 - `BlobData` is a same-version wire format between `BlobReporter` and `mergeReports`: a `version` mismatch is rejected outright, never partially merged. The merge replays the reporter lifecycle from each file's recorded event track, where every event stores the payload the reporter received verbatim and replay is pure playback — never reconstruct a payload from other blob data (completeness is compile-guarded on both sides). Like sharding, the blob reporter is rejected in watch mode at reporter construction — blobs feed the one-shot merge workflow only, so a track never spans two run cycles.
+- A blob stores collected coverage before report-stage filtering or untested-file backfill. Providers without deferred finalization support still serialize that collected map before running their shard-local reports and thresholds; capable providers defer reports and thresholds to `merge-reports`, which owns finalization against the unified map.
 
 ## Commands
 
