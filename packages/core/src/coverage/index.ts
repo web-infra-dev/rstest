@@ -76,6 +76,10 @@ export function cleanCoverageReports(
   });
 
   if (pathsToPreserve?.length) {
+    if (fs.lstatSync(reportsDirectory).isSymbolicLink()) {
+      return;
+    }
+
     for (const entry of fs.readdirSync(reportsDirectory)) {
       const entryPath = join(reportsDirectory, entry);
       const preservedPathsInEntry = pathsToPreserve.filter((path) => {

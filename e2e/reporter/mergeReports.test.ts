@@ -1,4 +1,10 @@
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  renameSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -302,6 +308,62 @@ describe('merge-reports', () => {
     );
 
     fs.removeSync(blobDir);
+  });
+
+  it('does not follow a symlinked coverage directory while preserving blobs', async () => {
+    const blobDir = join(fixturesDir, '.rstest-reports');
+    const artifactDir = join(fixturesDir, 'coverage-artifact-target');
+    fs.removeSync(blobDir);
+    fs.removeSync(artifactDir);
+
+    for (const shard of ['1/2', '2/2']) {
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: [
+          'run',
+          '--shard',
+          shard,
+          '--reporters=blob',
+          '-c',
+          'rstest.coverage.config.mts',
+        ],
+        options: {
+          nodeOptions: {
+            cwd: fixturesDir,
+          },
+        },
+      });
+      await expectExecSuccess();
+    }
+
+    renameSync(blobDir, artifactDir);
+    symlinkSync(artifactDir, blobDir, 'junction');
+    writeFileSync(join(artifactDir, 'keep.txt'), 'keep');
+
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'merge-reports',
+        '--coverage.reportsDirectory=.rstest-reports',
+        '--coverage.reporters=json-summary',
+        '-c',
+        'rstest.coverage.config.mts',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: fixturesDir,
+        },
+      },
+    });
+    await expectExecSuccess();
+
+    expect(existsSync(join(artifactDir, 'keep.txt'))).toBe(true);
+    expect(existsSync(join(artifactDir, 'blob-1-2.json'))).toBe(true);
+    expect(existsSync(join(artifactDir, 'blob-2-2.json'))).toBe(true);
+    expect(existsSync(join(artifactDir, 'coverage-summary.json'))).toBe(true);
+
+    fs.removeSync(blobDir);
+    fs.removeSync(artifactDir);
   });
 
   it('finalizes Istanbul coverage only when merging blob reports', async () => {
