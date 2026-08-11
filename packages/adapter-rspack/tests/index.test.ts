@@ -5,6 +5,7 @@ import { withRspackConfig } from '../src';
 
 describe('withRspackConfig', () => {
   const testConfigPath = join(__dirname, 'test-temp-rspack.config.ts');
+  const baseConfigPath = join(__dirname, 'test-temp-rspack.base.ts');
   const testConfigContent = `
 import { defineConfig } from '@rspack/cli';
 
@@ -44,6 +45,9 @@ export default defineConfig([
     if (existsSync(testConfigPath)) {
       unlinkSync(testConfigPath);
     }
+    if (existsSync(baseConfigPath)) {
+      unlinkSync(baseConfigPath);
+    }
   });
 
   it('should load and convert rspack config to rstest config', async () => {
@@ -60,6 +64,24 @@ export default defineConfig([
     });
     expect(config.forceRerunTriggers).toEqual([testConfigPath]);
     expect(config.testEnvironment).toBe('happy-dom');
+  });
+
+  it('should load config extended through Rspack CLI', async () => {
+    writeFileSync(
+      baseConfigPath,
+      `export default { resolve: { alias: { '@base': '/base' } } };`,
+    );
+    writeFileSync(
+      testConfigPath,
+      `export default { extends: './test-temp-rspack.base.ts', target: 'node' };`,
+    );
+
+    const config = await withRspackConfig({
+      configPath: testConfigPath,
+    })({});
+
+    expect(config.resolve?.alias).toEqual({ '@base': '/base' });
+    expect(config.testEnvironment).toBe('node');
   });
 
   it('should allow modification of rspack config', async () => {
