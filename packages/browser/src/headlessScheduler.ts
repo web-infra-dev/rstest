@@ -302,6 +302,7 @@ export const createHeadlessScheduler = async ({
           const coverage = await v8Coverage.take(
             page,
             projectRootByName.get(file.projectName) ?? context.rootPath,
+            file.projectName,
           );
           if (coverage) {
             rawCoverage.push(coverage);

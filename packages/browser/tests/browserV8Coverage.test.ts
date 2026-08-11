@@ -55,6 +55,7 @@ describe('browser V8 coverage', () => {
       collector,
       fetchTimeout: 1000,
       page,
+      projectUrl: 'http://localhost:4000',
       rootPath: '/project',
       sourceMapCache: new Map(),
       resourceStore,
@@ -95,8 +96,11 @@ describe('browser V8 coverage', () => {
     const sourceMap = {
       version: 3 as const,
       names: [],
-      sources: ['webpack:///./src/value.ts'],
-      sourcesContent: ['export const value = 1;'],
+      sources: ['/dependency/outside.ts', '../../src/value.ts'],
+      sourcesContent: [
+        'export const outside = true;',
+        'export const value = 1;',
+      ],
       mappings: 'AAAA',
     };
     const entry = {
@@ -126,8 +130,9 @@ describe('browser V8 coverage', () => {
 
     await takeBrowserV8Coverage({
       collector,
-      fetchTimeout: 1000,
+      fetchTimeout: 0,
       page,
+      projectUrl: 'http://localhost:4000',
       rootPath: '/project',
       sourceMapCache: new Map(),
       resourceStore,
@@ -137,11 +142,11 @@ describe('browser V8 coverage', () => {
     expect(fetchSpy.mock.calls[0]?.[0]).toBe(
       'http://localhost:4000/static/maps/value.js.map?version=1',
     );
-    expect(fetchSpy.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(fetchSpy.mock.calls[0]?.[1]?.signal).toBeUndefined();
     expect(resourceStore.sourceMaps.get(entry.url)).toBe(
       JSON.stringify({
         ...sourceMap,
-        sources: ['/project/src/value.ts'],
+        sources: ['/dependency/outside.ts', '/project/src/value.ts'],
       }),
     );
   });
@@ -178,6 +183,7 @@ describe('browser V8 coverage', () => {
       collector,
       fetchTimeout: 1000,
       page,
+      projectUrl: 'http://localhost:4000',
       rootPath: '/project',
       sourceMapCache: new Map(),
       resourceStore,
@@ -228,6 +234,7 @@ describe('browser V8 coverage', () => {
       collector,
       fetchTimeout: 1000,
       page,
+      projectUrl: 'http://localhost:4000',
       rootPath: '/project',
       sourceMapCache: new Map(),
       resourceStore,
@@ -249,7 +256,7 @@ describe('browser V8 coverage', () => {
     );
   });
 
-  it('retains cross-origin scripts for filtering after source-map resolution', async () => {
+  it('preserves external identity for cross-origin webpack sources', async () => {
     const sourceMap = {
       version: 3 as const,
       names: [],
@@ -279,6 +286,7 @@ describe('browser V8 coverage', () => {
       collector,
       fetchTimeout: 1000,
       page,
+      projectUrl: 'http://localhost:4000',
       rootPath: '/project',
       sourceMapCache: new Map(),
     });
@@ -297,7 +305,7 @@ describe('browser V8 coverage', () => {
         sourceMaps: {
           [entry.url]: JSON.stringify({
             ...sourceMap,
-            sources: ['/project/src/dependency.ts'],
+            sources: ['https://cdn.example.com/src/dependency.ts'],
           }),
         },
       },
@@ -331,6 +339,7 @@ describe('browser V8 coverage', () => {
       collector,
       fetchTimeout: 1000,
       page,
+      projectUrl: 'http://localhost:4000',
       rootPath: '/project',
       sourceMapCache: new Map(),
     });

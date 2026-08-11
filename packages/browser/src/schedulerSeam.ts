@@ -29,6 +29,7 @@ export type BrowserV8CoverageRuntime = {
   take: (
     page: BrowserProviderPage,
     projectRoot: string,
+    projectName?: string,
   ) => Promise<unknown | null>;
 };
 

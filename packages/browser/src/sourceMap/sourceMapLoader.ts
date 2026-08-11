@@ -6,6 +6,11 @@ import convert from 'convert-source-map';
 
 export type SourceMapPayload = EncodedSourceMapXInput | DecodedSourceMapXInput;
 
+export type LoadedSourceMap = {
+  sourceMap: SourceMapPayload;
+  sourceMapUrl: string;
+};
+
 type Fetcher = typeof fetch;
 
 export const normalizeJavaScriptUrl = (
@@ -49,10 +54,10 @@ export const loadSourceMapForSource = async ({
   fetcher = fetch,
 }: {
   jsUrl: string;
-  signal: AbortSignal;
+  signal?: AbortSignal;
   source: string;
   fetcher?: Fetcher;
-}): Promise<SourceMapPayload | null> => {
+}): Promise<LoadedSourceMap | null> => {
   const normalizedUrl = normalizeJavaScriptUrl(jsUrl);
   if (!normalizedUrl) {
     return null;
@@ -74,9 +79,15 @@ export const loadSourceMapForSource = async ({
       return null;
     }
 
-    const mapResponse = await fetcher(resolvedSourceMapUrl.href, { signal });
+    const mapResponse = await fetcher(
+      resolvedSourceMapUrl.href,
+      signal ? { signal } : undefined,
+    );
     return mapResponse.ok
-      ? ((await mapResponse.json()) as SourceMapPayload)
+      ? {
+          sourceMap: (await mapResponse.json()) as SourceMapPayload,
+          sourceMapUrl: resolvedSourceMapUrl.href,
+        }
       : null;
   } catch {
     return null;

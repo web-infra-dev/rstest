@@ -1,5 +1,5 @@
 import { TraceMap } from '@jridgewell/trace-mapping';
-import { resolve } from 'pathe';
+import { isAbsolute, resolve } from 'pathe';
 import type {
   BrowserProviderPage,
   BrowserV8CoverageCollector,
@@ -16,9 +16,39 @@ export type BrowserV8CoverageResourceStore = {
   sourceMaps: Map<string, string>;
 };
 
+const resolveProjectHttpSource = (
+  source: string,
+  rootPath: string,
+  projectOrigin: string,
+): string => {
+  let sourceUrl: URL;
+  try {
+    sourceUrl = new URL(source);
+  } catch {
+    return source;
+  }
+  if (
+    (sourceUrl.protocol !== 'http:' && sourceUrl.protocol !== 'https:') ||
+    sourceUrl.origin !== projectOrigin
+  ) {
+    return source;
+  }
+
+  let sourcePath = sourceUrl.pathname;
+  try {
+    sourcePath = decodeURIComponent(sourcePath);
+  } catch {
+    // A literal percent sign is a valid filename character.
+  }
+  return resolve(rootPath, sourcePath.replace(/^\/+/, ''));
+};
+
 const normalizeSourceMap = (
   sourceMap: SourceMapPayload,
   rootPath: string,
+  sourceMapUrl: string,
+  scriptOrigin: string,
+  projectOrigin: string,
 ): string => {
   if (!Array.isArray(sourceMap.sources)) {
     return JSON.stringify(sourceMap);
@@ -29,16 +59,7 @@ const normalizeSourceMap = (
     sourceMap.sourceRoot.startsWith('webpack:')
       ? sourceMap.sourceRoot
       : undefined;
-  const hasWebpackSources =
-    webpackSourceRoot !== undefined ||
-    sourceMap.sources.some(
-      (source) => typeof source === 'string' && source.startsWith('webpack:'),
-    );
-  if (!hasWebpackSources) {
-    return JSON.stringify(sourceMap);
-  }
-
-  const resolvedSources = new TraceMap(sourceMap).resolvedSources;
+  const resolvedSources = new TraceMap(sourceMap, sourceMapUrl).resolvedSources;
   const { sourceRoot: _, ...sourceMapWithoutRoot } = sourceMap;
   return JSON.stringify({
     ...sourceMapWithoutRoot,
@@ -46,9 +67,8 @@ const normalizeSourceMap = (
       if (typeof source !== 'string') {
         return source;
       }
-
-      if (!webpackSourceRoot && !source.startsWith('webpack:')) {
-        return resolvedSources[index] ?? source;
+      if (isAbsolute(source)) {
+        return source;
       }
 
       let sourceUrl: URL;
@@ -57,10 +77,20 @@ const normalizeSourceMap = (
           ? new URL(source, webpackSourceRoot)
           : new URL(source);
       } catch {
-        return source;
+        const resolvedSource = resolvedSources[index] ?? source;
+        return resolveProjectHttpSource(
+          resolvedSource,
+          rootPath,
+          projectOrigin,
+        );
       }
       if (sourceUrl.protocol !== 'webpack:') {
-        return source;
+        const resolvedSource = resolvedSources[index] ?? source;
+        return resolveProjectHttpSource(
+          resolvedSource,
+          rootPath,
+          projectOrigin,
+        );
       }
 
       let sourcePath = sourceUrl.pathname;
@@ -70,9 +100,12 @@ const normalizeSourceMap = (
         // A literal percent sign is a valid filename character.
       }
       sourcePath = sourcePath.replace(/^\/+/, '');
-      return sourcePath.startsWith('webpack/runtime/')
-        ? source
-        : resolve(rootPath, sourcePath);
+      if (sourcePath.startsWith('webpack/runtime/')) {
+        return source;
+      }
+      return scriptOrigin === projectOrigin
+        ? resolve(rootPath, sourcePath)
+        : new URL(sourcePath, `${scriptOrigin}/`).href;
     }),
   });
 };
@@ -80,6 +113,7 @@ const normalizeSourceMap = (
 export const takeBrowserV8Coverage = async ({
   collector,
   page,
+  projectUrl,
   rootPath,
   fetchTimeout,
   sourceMapCache,
@@ -87,12 +121,14 @@ export const takeBrowserV8Coverage = async ({
 }: {
   collector: BrowserV8CoverageCollector;
   page: BrowserProviderPage;
+  projectUrl: string;
   rootPath: string;
   fetchTimeout: number;
   sourceMapCache: Map<string, SourceMapPayload | null>;
   resourceStore?: BrowserV8CoverageResourceStore;
 }): Promise<unknown | null> => {
   const rawEntries = await collector.take(page);
+  const projectOrigin = new URL(projectUrl).origin;
   const entries: {
     url: string;
     scriptId: string;
@@ -108,15 +144,24 @@ export const takeBrowserV8Coverage = async ({
       if (!url || !entry.source) {
         return;
       }
-      const sourceMap =
-        resolveInlineSourceMap(entry.source) ??
-        (await loadSourceMapForSource({
-          jsUrl: url,
-          signal: AbortSignal.timeout(fetchTimeout),
-          source: entry.source,
-        }));
+      const inlineSourceMap = resolveInlineSourceMap(entry.source);
+      const loadedSourceMap = inlineSourceMap
+        ? null
+        : await loadSourceMapForSource({
+            jsUrl: url,
+            signal:
+              fetchTimeout > 0 ? AbortSignal.timeout(fetchTimeout) : undefined,
+            source: entry.source,
+          });
+      const sourceMap = inlineSourceMap ?? loadedSourceMap?.sourceMap;
       const normalizedSourceMap = sourceMap
-        ? normalizeSourceMap(sourceMap, rootPath)
+        ? normalizeSourceMap(
+            sourceMap,
+            rootPath,
+            loadedSourceMap?.sourceMapUrl ?? url,
+            new URL(url).origin,
+            projectOrigin,
+          )
         : undefined;
       const filePath = url;
 
@@ -131,7 +176,7 @@ export const takeBrowserV8Coverage = async ({
         resourceStore?.assetFiles.set(filePath, entry.source);
       }
 
-      sourceMapCache.set(url, sourceMap);
+      sourceMapCache.set(url, sourceMap ?? null);
       if (normalizedSourceMap) {
         if (resourceStore?.sourceMaps.get(filePath) !== normalizedSourceMap) {
           sourceMaps[filePath] = normalizedSourceMap;

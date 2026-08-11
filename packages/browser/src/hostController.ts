@@ -345,21 +345,18 @@ export const runBrowserController = async (
   const coverageProvider = coverageConfig?.enabled
     ? await createCoverageProvider(coverageConfig, context.rootPath)
     : null;
-  const configuredBrowserName =
-    browserProjects[0]?.normalizedConfig.browser.browser ?? 'chromium';
-  if (
+  const browserCoverageCapabilityError =
+    !filesOnly &&
     context.command !== 'list' &&
     coverageConfig?.provider === 'v8' &&
-    configuredBrowserName === 'chromium' &&
+    (browserProjects[0]?.normalizedConfig.browser.browser ?? 'chromium') ===
+      'chromium' &&
     coverageProvider?.supportsBrowserCoverage !== true
-  ) {
-    return failWithError(
-      new Error(
-        'The installed @rstest/coverage-v8 provider does not support Chromium Browser Mode coverage. ' +
-          "Upgrade @rstest/coverage-v8 to the version matching @rstest/core, or use coverage.provider: 'istanbul'.",
-      ),
-    );
-  }
+      ? new Error(
+          'The installed @rstest/coverage-v8 provider does not support Chromium Browser Mode coverage. ' +
+            "Upgrade @rstest/coverage-v8 to the version matching @rstest/core, or use coverage.provider: 'istanbul'.",
+        )
+      : undefined;
 
   const containerDevServerEnv = process.env.RSTEST_CONTAINER_DEV_SERVER;
   let containerDevServer: string | undefined;
@@ -428,7 +425,6 @@ export const runBrowserController = async (
     writeEmptyLaunchExitCode();
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
-
   const enableCliShortcuts = isWatchMode && isTTY('stdin');
   const browserTempOutputRoot = context.normalizedConfig.output.distPath.root;
   const tempDir =
@@ -464,7 +460,8 @@ export const runBrowserController = async (
           : undefined,
         containerDistPath,
         containerDevServer,
-        skipProviderLaunch: filesOnly,
+        skipProviderLaunch:
+          filesOnly || Boolean(browserCoverageCapabilityError),
         appliedModifyRstestConfigEnvironments:
           options?.appliedModifyRstestConfigEnvironments,
       });
@@ -477,7 +474,7 @@ export const runBrowserController = async (
     // `filesOnly` is the config-hook discovery boot, which destroys its runtime
     // through the returned `close`. Caching it here would leave the real watch
     // session re-entering on a destroyed runtime.
-    if (isWatchMode && !filesOnly) {
+    if (isWatchMode && !filesOnly && !browserCoverageCapabilityError) {
       watchContext.runtime = runtime;
       registerWatchCleanup(context.embedded);
     }
@@ -645,6 +642,10 @@ export const runBrowserController = async (
     await destroyBrowserRuntime(runtime);
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
+  if (browserCoverageCapabilityError) {
+    await destroyBrowserRuntime(runtime);
+    return failWithError(browserCoverageCapabilityError);
+  }
 
   const { browser, browserLaunchOptions, wsPort } = runtime;
 
@@ -682,6 +683,7 @@ export const runBrowserController = async (
       `http://localhost:${server.port}`,
     ]),
   );
+  const containerRunnerUrl = `http://localhost:${runtime.containerServer.port}`;
   const hostOptions: BrowserHostConfig = {
     rootPath: normalize(context.rootPath),
     projects: projectRuntimeConfigs,
@@ -691,7 +693,7 @@ export const runBrowserController = async (
         context.snapshotManager.options.updateSnapshot,
     },
     // Container origin (fallback). Per-project runner origins below.
-    runnerUrl: `http://localhost:${runtime.containerServer.port}`,
+    runnerUrl: containerRunnerUrl,
     projectRunnerUrls,
     wsPort,
     debug: isDebug(),
@@ -727,11 +729,17 @@ export const runBrowserController = async (
   const v8Coverage = v8CoverageCollector
     ? {
         start: v8CoverageCollector.start,
-        take: (page: BrowserProviderPage, projectRoot: string) =>
+        take: (
+          page: BrowserProviderPage,
+          projectRoot: string,
+          projectName?: string,
+        ) =>
           takeBrowserV8Coverage({
             collector: v8CoverageCollector,
             fetchTimeout: maxTestTimeoutForRpc,
             page,
+            projectUrl:
+              projectRunnerUrls[projectName ?? ''] ?? containerRunnerUrl,
             rootPath: normalize(projectRoot),
             sourceMapCache: browserSourceMapCache,
             resourceStore: browserCoverageResources,

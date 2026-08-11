@@ -2,4 +2,4 @@ Object.defineProperty(globalThis, '__RSTEST_CROSS_ORIGIN_COVERAGE__', {
   value: 42,
   configurable: true,
 });
-//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6W10sInNvdXJjZXMiOlsid2VicGFjazovLy8uL3NyYy9jcm9zcy1vcmlnaW4udHMiXSwic291cmNlc0NvbnRlbnQiOlsiT2JqZWN0LmRlZmluZVByb3BlcnR5KGdsb2JhbFRoaXMsICdfX1JTVEVTVF9DUk9TU19PUklHSU5fQ09WRVJBR0VfXycsIHsgdmFsdWU6IDQyLCBjb25maWd1cmFibGU6IHRydWUgfSk7XG4iXSwibWFwcGluZ3MiOiJBQUFBIn0=
+//# sourceMappingURL=maps/cross-origin.js.map
