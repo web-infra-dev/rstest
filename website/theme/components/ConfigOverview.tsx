@@ -1,4 +1,5 @@
 import { type Group, OverviewGroup } from '@rspress/core/theme';
+import testConfigPages from '@en/config/test/_meta.json';
 import { useI18nUrl } from './utils';
 
 export interface GroupItem {
@@ -10,6 +11,9 @@ export interface BasicGroup {
   name: string;
   items?: string[];
 }
+
+const isProduction = process.env.NODE_ENV === 'production';
+const UNRELEASED_TEST_CONFIG_PAGES = ['federation'];
 
 const OVERVIEW_GROUPS: BasicGroup[] = [
   {
@@ -25,6 +29,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'passWithNoTests',
       'onlyFailures',
       'includeSource',
+      'forceRerunTriggers',
       'testNamePattern',
       'extends',
     ],
@@ -39,6 +44,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'testTimeout',
       'hookTimeout',
       'maxConcurrency',
+      'expect',
     ],
   },
   {
@@ -60,7 +66,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       // Unreleased: its page is excluded from the production route table by
       // `unreleasedRoutes` in rspress.config.ts, so linking it in a production
       // build would be a dead link.
-      ...(process.env.NODE_ENV === 'production' ? [] : ['federation']),
+      ...(isProduction ? [] : UNRELEASED_TEST_CONFIG_PAGES),
     ],
   },
   {
@@ -85,6 +91,7 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
       'reporters',
       'includeTaskLocation',
       'logHeapUsage',
+      'detectAsyncLeaks',
       'hideSkippedTests',
       'hideSkippedTestFiles',
       'slowTestThreshold',
@@ -104,6 +111,23 @@ const OVERVIEW_GROUPS: BasicGroup[] = [
 
 function camelToKebab(str: string) {
   return str.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+}
+
+const overviewTestConfigPages = new Set(
+  OVERVIEW_GROUPS.flatMap((group) =>
+    (group.items ?? []).map((item) => camelToKebab(item.split('.')[0] ?? item)),
+  ),
+);
+const missingTestConfigPages = testConfigPages.filter(
+  (page) =>
+    !(isProduction && UNRELEASED_TEST_CONFIG_PAGES.includes(page)) &&
+    !overviewTestConfigPages.has(page),
+);
+
+if (missingTestConfigPages.length > 0) {
+  throw new Error(
+    `Test config pages are missing from the overview: ${missingTestConfigPages.join(', ')}`,
+  );
 }
 
 export default function Overview() {
