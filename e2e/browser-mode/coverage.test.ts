@@ -138,6 +138,9 @@ describe('browser mode - coverage', () => {
     expect(`${cli.stdout}\n${cli.stderr}`.replaceAll('\\', '/')).toContain(
       'maps/sources/mapped-error.ts',
     );
+    expect(`${cli.stdout}\n${cli.stderr}`.replaceAll('\\', '/')).toContain(
+      'maps/sources/query-mapped-error.ts',
+    );
 
     const report = JSON.parse(fs.readFileSync(reportPath, 'utf8')) as Record<
       string,

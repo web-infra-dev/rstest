@@ -126,14 +126,16 @@ const fetchSourceMap = async (
     return inlineMap;
   }
 
-  const mapResponse = await fetcher(`${jsUrl}.map`);
+  const mapUrl = new URL(jsUrl);
+  mapUrl.pathname += '.map';
+  const mapResponse = await fetcher(mapUrl.href);
   if (!mapResponse.ok) {
     return null;
   }
 
   return flattenSourceMap(
     (await mapResponse.json()) as SourceMapPayloadInput,
-    `${jsUrl}.map`,
+    mapUrl.href,
   );
 };
 
