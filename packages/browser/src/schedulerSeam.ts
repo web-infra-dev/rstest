@@ -24,17 +24,7 @@ export type BrowserWatchSession = {
   requestRerun: (testPaths?: string[]) => Promise<void>;
 };
 
-export type SchedulerCycleResult = {
-  rawCoverage: unknown[];
-  error?: Error;
-};
-
-export type CreateBrowserWatchSession = (
-  execute: (testPaths: string[]) => Promise<SchedulerCycleResult>,
-) => BrowserWatchSession;
-
 export type BrowserV8CoverageRuntime = {
-  resetResources: () => void;
   start: (page: BrowserProviderPage) => Promise<void>;
   take: (
     page: BrowserProviderPage,

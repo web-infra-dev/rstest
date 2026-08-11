@@ -817,13 +817,11 @@ const BrowserRunner: React.FC<{
                   const onLoad = (
                     event: React.SyntheticEvent<HTMLIFrameElement>,
                   ) => {
-                    const frame = event.currentTarget;
-                    // A newly added iframe can load before React commits the
-                    // run-id state; the navigated URL already owns that run.
-                    const frameRunId = readRunIdFromFrame(frame) ?? runId;
-                    if (!frameRunId) {
+                    if (!runId) {
                       return;
                     }
+                    const frame = event.currentTarget;
+                    const frameRunId = readRunIdFromFrame(frame) ?? runId;
                     if (frame.contentWindow) {
                       frame.contentWindow.postMessage(
                         {

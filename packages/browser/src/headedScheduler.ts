@@ -39,7 +39,6 @@ import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import type {
   BrowserV8CoverageRuntime,
   BrowserWatchSession,
-  CreateBrowserWatchSession,
   DispatchPageResolver,
   SchedulerRunResult,
 } from './schedulerSeam';
@@ -74,7 +73,9 @@ type HeadedSchedulerDeps = {
     'setDispatchRerun' | 'signalInvalidation' | 'awaitSignalledCycle'
   >;
   setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
-  createWatchSession: CreateBrowserWatchSession;
+  createWatchSession: (
+    execute: (testPaths: string[]) => Promise<unknown[]>,
+  ) => BrowserWatchSession;
   collectProjectEntries: () => Promise<
     Parameters<typeof planWatchRerun>[0]['projectEntries']
   >;
@@ -690,10 +691,7 @@ export const createHeadedScheduler = async ({
     // options instead of traveling beside the scope.
     const pendingTestNamePatterns = new Map<string, string>();
 
-    const runScope: Parameters<CreateBrowserWatchSession>[0] = async (
-      testPaths,
-    ) => {
-      v8Coverage?.resetResources();
+    const runScope = async (testPaths: string[]): Promise<unknown[]> => {
       rawCoverage = [];
       // Claimed in this synchronous prefix, before `runCycle` suspends, so
       // nothing this cycle does can change what it runs or which patterns it
@@ -703,14 +701,10 @@ export const createHeadedScheduler = async ({
         currentTestFiles,
         pendingTestNamePatterns,
       );
-      try {
-        for (const { file, testNamePattern } of cycleScope) {
-          await enqueueHeadedReload(file, testNamePattern);
-        }
-        return { rawCoverage };
-      } catch (error) {
-        return { rawCoverage, error: toError(error) };
+      for (const { file, testNamePattern } of cycleScope) {
+        await enqueueHeadedReload(file, testNamePattern);
       }
+      return rawCoverage;
     };
 
     /**

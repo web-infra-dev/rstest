@@ -167,10 +167,10 @@ This can happen when a function is serialized with `fn.toString()` or executed t
 To avoid the failure, prefer one of these approaches:
 
 - exclude the source file with `coverage.exclude`;
-- switch to `coverage.provider: 'v8'` for Node or Chromium Browser Mode tests;
+- switch to `coverage.provider: 'v8'` for Node or headless, non-watch Chromium Browser Mode tests;
 - avoid serializing Istanbul-instrumented functions.
 
-In Chromium Browser Mode, the `v8` provider avoids injected counters as well. Firefox and WebKit Browser Mode tests should use `coverage.exclude` or avoid serializing instrumented functions.
+In headless, non-watch Chromium Browser Mode runs, the `v8` provider avoids injected counters as well. Firefox and WebKit Browser Mode tests should use `coverage.exclude` or avoid serializing instrumented functions.
 
 #### V8 provider
 
@@ -220,7 +220,9 @@ const generatedLookup = createGeneratedLookup();
 
 `ignore file` is also recognized, but it applies to the generated coverage entry before source-map remapping. In normal Rstest output, one generated chunk can contain multiple source files, so prefer `coverage.exclude` when a source file or generated file group should be excluded.
 
-The `v8` provider works in `node`, `jsdom`, and `happy-dom` test environments, and in Browser Mode when using Chromium with the Playwright provider. Chromium coverage is collected from the executed browser bundle and remapped through source maps, without instrumenting application code. Firefox and WebKit do not expose the required coverage API, so use the default `istanbul` provider for those browsers.
+The `v8` provider works in `node`, `jsdom`, and `happy-dom` test environments. Stable Browser Mode support is limited to headless, non-watch Chromium runs with the Playwright provider. Chromium coverage is collected from the executed browser bundle and remapped through source maps, without instrumenting application code.
+
+Headed and watch Browser Mode coverage is experimental. Reports may include execution from the container or inactive runner frames, and watch rebuilds may not preserve exact script/source-map pairing. Use the default `istanbul` provider when those modes require stable coverage semantics. Firefox and WebKit do not expose the required native coverage API and must also use `istanbul`.
 
 ### include
 

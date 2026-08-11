@@ -81,6 +81,7 @@ describe('browser mode - coverage', () => {
     expect(cli.stdout).toMatch(/Coverage enabled with v8/);
     expect(cli.stdout).toContain('malformed-source-map.test.ts');
     expect(fs.existsSync(reportPath)).toBe(true);
+    expect(cli.stdout.replaceAll(' ', '')).toContain('100%.ts|100|100|100|100');
     expect(cli.stdout.replaceAll(' ', '')).toContain('sum.ts|100|100|100|100');
     expect(cli.stdout.replaceAll(' ', '')).toContain('multiply.ts|0|100|0|0');
   });

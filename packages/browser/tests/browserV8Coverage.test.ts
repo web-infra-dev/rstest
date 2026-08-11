@@ -19,7 +19,8 @@ describe('browser V8 coverage', () => {
     const sourceMap = {
       version: 3 as const,
       names: [],
-      sources: ['webpack:///./src/old.ts'],
+      sourceRoot: 'webpack:///',
+      sources: ['./src/old.ts'],
       sourcesContent: ['export const value = 1;'],
       mappings: 'AAAA',
     };
@@ -62,13 +63,11 @@ describe('browser V8 coverage', () => {
     });
     const [filePath] = resourceStore.assetFiles.keys();
     if (!filePath) {
-      throw new Error('Expected a versioned browser coverage resource');
+      throw new Error('Expected a browser coverage resource');
     }
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(filePath).toMatch(
-      /^http:\/\/localhost:4000\/static\/js\/test\.js#rstest-v8=[a-f0-9]{16}$/,
-    );
+    expect(filePath).toBe(entry.url);
     expect(result).toEqual({
       entries: [
         {
@@ -82,8 +81,11 @@ describe('browser V8 coverage', () => {
         assetFiles: { [filePath]: source },
         sourceMaps: {
           [filePath]: JSON.stringify({
-            ...sourceMap,
+            version: sourceMap.version,
+            names: sourceMap.names,
             sources: ['/project/src/old.ts'],
+            sourcesContent: sourceMap.sourcesContent,
+            mappings: sourceMap.mappings,
           }),
         },
       },
@@ -91,16 +93,24 @@ describe('browser V8 coverage', () => {
     });
   });
 
-  it('drops coverage when a watch rebuild replaced the script URL', async () => {
+  it('loads the external source map URL declared by the script', async () => {
+    const sourceMap = {
+      version: 3 as const,
+      names: [],
+      sources: ['webpack:///./src/value.ts'],
+      sourcesContent: ['export const value = 1;'],
+      mappings: 'AAAA',
+    };
     const entry = {
       url: 'http://localhost:4000/static/js/test.js',
       scriptId: '1',
-      source: 'var oldValue = 1;\n//# sourceMappingURL=test.js.map',
+      source:
+        'var value = 1;\n//# sourceMappingURL=../maps/value.js.map?version=1',
       functions: [
         {
           functionName: '',
           isBlockCoverage: true,
-          ranges: [{ startOffset: 0, endOffset: 17, count: 1 }],
+          ranges: [{ startOffset: 0, endOffset: 14, count: 1 }],
         },
       ],
     };
@@ -108,13 +118,15 @@ describe('browser V8 coverage', () => {
       start: async () => {},
       take: async () => [entry],
     };
-    rstest
+    const fetchSpy = rstest
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('var newValue = 2;'));
+      .mockResolvedValue(new Response(JSON.stringify(sourceMap)));
     // The collector fake does not inspect the provider page.
     const page = {} as BrowserProviderPage;
 
-    const result = await takeBrowserV8Coverage({
+    const resourceStore = createResourceStore();
+
+    await takeBrowserV8Coverage({
       allowExternal: false,
       collector,
       fetchTimeout: 1000,
@@ -122,30 +134,36 @@ describe('browser V8 coverage', () => {
       projectUrl: 'http://localhost:4000',
       rootPath: '/project',
       sourceMapCache: new Map(),
+      resourceStore,
     });
 
-    expect(result).toBeNull();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe(
+      'http://localhost:4000/static/maps/value.js.map?version=1',
+    );
+    expect(fetchSpy.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(resourceStore.sourceMaps.get(entry.url)).toBe(
+      JSON.stringify({
+        ...sourceMap,
+        sources: ['/project/src/value.ts'],
+      }),
+    );
   });
 
-  it('pins deduplicated resources to the collected script version', async () => {
-    const createSource = (originalLine: string) => {
-      const sourceMap = {
-        version: 3 as const,
-        names: [],
-        sources: ['webpack:///./src/value.ts'],
-        sourcesContent: [originalLine],
-        mappings: 'AAAA',
-      };
-      return [
-        originalLine,
-        `//# sourceMappingURL=data:application/json;base64,${Buffer.from(
-          JSON.stringify(sourceMap),
-        ).toString('base64')}`,
-      ].join('\n');
+  it('preserves literal percent signs in webpack source paths', async () => {
+    const sourceMap = {
+      version: 3 as const,
+      names: [],
+      sources: ['webpack:///./src/100%.ts'],
+      sourcesContent: ['export const value = 100;'],
+      mappings: 'AAAA',
     };
-    const sourceA = createSource('var value = "A";');
-    const sourceB = createSource('var value = "B";');
-    let source = sourceA;
+    const source = [
+      'var value = 100;',
+      `//# sourceMappingURL=data:application/json;base64,${Buffer.from(
+        JSON.stringify(sourceMap),
+      ).toString('base64')}`,
+    ].join('\n');
     const collector: BrowserV8CoverageCollector = {
       start: async () => {},
       take: async () => [
@@ -160,7 +178,7 @@ describe('browser V8 coverage', () => {
     const resourceStore = createResourceStore();
     // The collector fake does not inspect the provider page.
     const page = {} as BrowserProviderPage;
-    const input = {
+    await takeBrowserV8Coverage({
       allowExternal: false,
       collector,
       fetchTimeout: 1000,
@@ -169,19 +187,14 @@ describe('browser V8 coverage', () => {
       rootPath: '/project',
       sourceMapCache: new Map(),
       resourceStore,
-    };
+    });
 
-    await takeBrowserV8Coverage(input);
-    const repeatedA = await takeBrowserV8Coverage(input);
-    source = sourceB;
-    await takeBrowserV8Coverage(input);
-
-    expect(repeatedA).not.toHaveProperty('options');
-    expect(resourceStore.assetFiles.size).toBe(2);
-    expect([...resourceStore.assetFiles.values()]).toEqual(
-      expect.arrayContaining([sourceA, sourceB]),
-    );
-    expect(resourceStore.sourceMaps.size).toBe(2);
+    expect([...resourceStore.sourceMaps.values()]).toEqual([
+      JSON.stringify({
+        ...sourceMap,
+        sources: ['/project/src/100%.ts'],
+      }),
+    ]);
   });
 
   it('does not refetch cross-origin scripts by default', async () => {
@@ -215,7 +228,7 @@ describe('browser V8 coverage', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('isolates malformed inline source maps and bounds fallback fetches', async () => {
+  it('isolates malformed inline source maps', async () => {
     const source = [
       'var value = 1;',
       `//# sourceMappingURL=data:application/json;base64,${Buffer.from(
@@ -233,10 +246,7 @@ describe('browser V8 coverage', () => {
         },
       ],
     };
-    const fetchSpy = rstest
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(new Response(source))
-      .mockResolvedValueOnce(new Response('', { status: 404 }));
+    const fetchSpy = rstest.spyOn(globalThis, 'fetch');
     // The collector fake does not inspect the provider page.
     const page = {} as BrowserProviderPage;
 
@@ -251,10 +261,6 @@ describe('browser V8 coverage', () => {
     });
 
     expect(result).not.toBeNull();
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(fetchSpy.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
-    expect(fetchSpy.mock.calls[1]?.[1]?.signal).toBe(
-      fetchSpy.mock.calls[0]?.[1]?.signal,
-    );
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

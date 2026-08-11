@@ -52,40 +52,34 @@ export const loadSourceMapForSource = async ({
   signal: AbortSignal;
   source: string;
   fetcher?: Fetcher;
-}): Promise<
-  | { status: 'matched'; sourceMap: SourceMapPayload | null }
-  | { status: 'mismatched' | 'unavailable' }
-> => {
+}): Promise<SourceMapPayload | null> => {
   const normalizedUrl = normalizeJavaScriptUrl(jsUrl);
   if (!normalizedUrl) {
-    return { status: 'unavailable' };
+    return null;
   }
 
   try {
-    const jsResponse = await fetcher(normalizedUrl, { signal });
-    if (!jsResponse.ok) {
-      return { status: 'unavailable' };
+    const matches = [...source.matchAll(convert.mapFileCommentRegex)];
+    const finalMatch = matches.at(-1);
+    const sourceMapUrl = finalMatch?.[1] ?? finalMatch?.[2]?.trim();
+    if (!sourceMapUrl || sourceMapUrl.startsWith('data:')) {
+      return null;
     }
 
-    const currentSource = await jsResponse.text();
-    if (currentSource !== source) {
-      return { status: 'mismatched' };
+    const resolvedSourceMapUrl = new URL(sourceMapUrl, normalizedUrl);
+    if (
+      resolvedSourceMapUrl.protocol !== 'http:' &&
+      resolvedSourceMapUrl.protocol !== 'https:'
+    ) {
+      return null;
     }
 
-    const inlineMap = resolveInlineSourceMap(currentSource);
-    if (inlineMap) {
-      return { status: 'matched', sourceMap: inlineMap };
-    }
-
-    const mapResponse = await fetcher(`${normalizedUrl}.map`, { signal });
-    return {
-      status: 'matched',
-      sourceMap: mapResponse.ok
-        ? ((await mapResponse.json()) as SourceMapPayload)
-        : null,
-    };
+    const mapResponse = await fetcher(resolvedSourceMapUrl.href, { signal });
+    return mapResponse.ok
+      ? ((await mapResponse.json()) as SourceMapPayload)
+      : null;
   } catch {
-    return { status: 'unavailable' };
+    return null;
   }
 };
 

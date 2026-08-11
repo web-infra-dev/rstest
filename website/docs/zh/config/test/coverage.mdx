@@ -167,10 +167,10 @@ Istanbul 会向插桩后的文件注入 `cov_*` 覆盖率计数器调用。这�
 要避免该错误，优先使用以下方式之一：
 
 - 通过 `coverage.exclude` 排除对应源文件；
-- 在 Node 测试或 Chromium Browser Mode 测试中切换到 `coverage.provider: 'v8'`；
+- 在 Node 测试或 headless、非 watch 的 Chromium Browser Mode 测试中切换到 `coverage.provider: 'v8'`；
 - 避免序列化经过 Istanbul 插桩的函数。
 
-在 Chromium Browser Mode 中，`v8` provider 同样不会注入计数器。Firefox 和 WebKit Browser Mode 测试应使用 `coverage.exclude`，或避免序列化经过插桩的函数。
+在 headless、非 watch 的 Chromium Browser Mode 运行中，`v8` provider 同样不会注入计数器。Firefox 和 WebKit Browser Mode 测试应使用 `coverage.exclude`，或避免序列化经过插桩的函数。
 
 #### V8 provider
 
@@ -220,7 +220,9 @@ const generatedLookup = createGeneratedLookup();
 
 `ignore file` 也会被识别，但它会在 source map 重映射前作用于生成后的 coverage entry。正常的 Rstest 输出中，一个生成 chunk 可能包含多个源文件，因此如果需要排除某个源文件或一组生成文件，请优先使用 `coverage.exclude`。
 
-`v8` provider 适用于 `node`、`jsdom` 和 `happy-dom` 测试环境，也适用于使用 Playwright provider 的 Chromium Browser Mode。Chromium coverage 从实际执行的浏览器产物收集，并通过 source map 重映射，无需对应用代码插桩。Firefox 和 WebKit 未暴露所需的 coverage API，请对它们使用默认的 `istanbul` provider。
+`v8` provider 适用于 `node`、`jsdom` 和 `happy-dom` 测试环境。Browser Mode 的稳定支持范围仅限使用 Playwright provider 的 headless、非 watch Chromium 运行。Chromium coverage 从实际执行的浏览器产物收集，并通过 source map 重映射，无需对应用代码插桩。
+
+headed 和 watch Browser Mode coverage 仍为实验性能力。报告可能包含 container 或非活跃 runner frame 的执行数据，watch rebuild 也可能无法严格保持 script 与 source map 的版本配对。如果这些模式需要稳定的 coverage 语义，请使用默认的 `istanbul` provider。Firefox 和 WebKit 未暴露所需的原生 coverage API，也必须使用 `istanbul`。
 
 ### include
 

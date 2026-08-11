@@ -94,9 +94,7 @@ import {
 import { collectWatchTestFiles } from './watchRerunPlanner';
 import type {
   BrowserWatchSession,
-  CreateBrowserWatchSession,
   DispatchPageResolver,
-  SchedulerCycleResult,
 } from './schedulerSeam';
 import { registerWatchCleanup, watchContext } from './watchRuntime';
 import { createWatchSignals } from './watchSignals';
@@ -575,31 +573,34 @@ export const runBrowserController = async (
    * `execute`'s synchronous prefix runs before `runCycle` ever suspends, which
    * is what lets the headed transport claim its cycle scope inside it.
    */
-  const createWatchSession: CreateBrowserWatchSession = (execute) => ({
+  const createWatchSession = (
+    execute: (testPaths: string[]) => Promise<unknown[]>,
+  ): BrowserWatchSession => ({
     runCycle: async (testPaths) => {
       const rerunStartTime = Date.now();
       // A fatal error is one cycle's outcome, not permanent session state. The
       // headed scheduler also uses this ref to stop the rest of a failed cycle,
       // so carrying it forward would prevent the next cycle from reloading.
       fatalErrorRef.current = null;
-      let execution: SchedulerCycleResult = { rawCoverage: [] };
+      let rerunError: Error | undefined;
+      let rawCoverage: unknown[] = [];
 
       try {
-        execution = await execute(testPaths);
+        rawCoverage = await execute(testPaths);
       } catch (error) {
         // Surfaced through the outcome rather than thrown: core finalizes this
         // cycle either way, and its results belong in the report even when the
         // run that produced them ended badly.
-        execution.error = toError(error);
+        rerunError = toError(error);
       }
 
       const rerunFatalError = fatalErrorRef.current ?? undefined;
       return buildRerunOutcome({
         rerunTestPaths: testPaths,
         testTime: Math.max(0, Date.now() - rerunStartTime),
-        rawCoverage: execution.rawCoverage,
-        unhandledErrors: execution.error
-          ? [execution.error]
+        rawCoverage,
+        unhandledErrors: rerunError
+          ? [rerunError]
           : rerunFatalError
             ? [rerunFatalError]
             : undefined,
@@ -727,11 +728,6 @@ export const runBrowserController = async (
       : null;
   const v8Coverage = v8CoverageCollector
     ? {
-        resetResources: () => {
-          browserCoverageResources.assetFiles.clear();
-          browserCoverageResources.sourceMaps.clear();
-          browserSourceMapCache.clear();
-        },
         start: v8CoverageCollector.start,
         take: (
           page: BrowserProviderPage,

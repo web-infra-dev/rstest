@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { resolve } from 'pathe';
 import type {
   BrowserProviderPage,
@@ -24,18 +23,47 @@ const normalizeSourceMap = (
     return JSON.stringify(sourceMap);
   }
 
+  const webpackSourceRoot =
+    typeof sourceMap.sourceRoot === 'string' &&
+    sourceMap.sourceRoot.startsWith('webpack:')
+      ? sourceMap.sourceRoot
+      : undefined;
+  const hasWebpackSources =
+    webpackSourceRoot !== undefined ||
+    sourceMap.sources.some(
+      (source) => typeof source === 'string' && source.startsWith('webpack:'),
+    );
+  if (!hasWebpackSources) {
+    return JSON.stringify(sourceMap);
+  }
+
+  const { sourceRoot: _, ...sourceMapWithoutRoot } = sourceMap;
   return JSON.stringify({
-    ...sourceMap,
+    ...sourceMapWithoutRoot,
     sources: sourceMap.sources.map((source) => {
-      if (typeof source !== 'string' || !source.startsWith('webpack:')) {
+      if (typeof source !== 'string') {
         return source;
       }
 
-      const sourceUrl = new URL(source);
-      const sourcePath = decodeURIComponent(sourceUrl.pathname).replace(
-        /^\/+/,
-        '',
-      );
+      let sourceUrl: URL;
+      try {
+        sourceUrl = webpackSourceRoot
+          ? new URL(source, webpackSourceRoot)
+          : new URL(source);
+      } catch {
+        return source;
+      }
+      if (sourceUrl.protocol !== 'webpack:') {
+        return source;
+      }
+
+      let sourcePath = sourceUrl.pathname;
+      try {
+        sourcePath = decodeURIComponent(sourcePath);
+      } catch {
+        // A literal percent sign is a valid filename character.
+      }
+      sourcePath = sourcePath.replace(/^\/+/, '');
       return sourcePath.startsWith('webpack/runtime/')
         ? source
         : resolve(rootPath, sourcePath);
@@ -83,32 +111,17 @@ export const takeBrowserV8Coverage = async ({
         return;
       }
 
-      const inlineSourceMap = resolveInlineSourceMap(entry.source);
-      const sourceMapResult = inlineSourceMap
-        ? { status: 'matched' as const, sourceMap: inlineSourceMap }
-        : await loadSourceMapForSource({
-            jsUrl: url,
-            signal: AbortSignal.timeout(fetchTimeout),
-            source: entry.source,
-          });
-      // A headed watch rebuild can replace a stable bundle URL while the old
-      // script is still executing. Its ranges must not be paired with the new
-      // build's map; the next stable rerun will collect that version instead.
-      if (sourceMapResult.status !== 'matched') {
-        return;
-      }
-
-      const sourceMap = sourceMapResult.sourceMap;
+      const sourceMap =
+        resolveInlineSourceMap(entry.source) ??
+        (await loadSourceMapForSource({
+          jsUrl: url,
+          signal: AbortSignal.timeout(fetchTimeout),
+          source: entry.source,
+        }));
       const normalizedSourceMap = sourceMap
         ? normalizeSourceMap(sourceMap, rootPath)
         : undefined;
-      const resourceVersion = createHash('sha256')
-        .update(entry.source)
-        .update('\0')
-        .update(normalizedSourceMap ?? '')
-        .digest('hex')
-        .slice(0, 16);
-      const filePath = `${url}#rstest-v8=${resourceVersion}`;
+      const filePath = url;
 
       entries.push({
         url,
