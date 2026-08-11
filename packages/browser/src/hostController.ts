@@ -49,6 +49,10 @@ import {
   serializeForInlineScript,
   type BrowserRuntime,
 } from './browserRsbuild';
+import {
+  takeBrowserV8Coverage,
+  type BrowserV8CoverageResourceStore,
+} from './browserV8Coverage';
 import { createHeadedScheduler } from './headedScheduler';
 import { createHeadlessScheduler } from './headlessScheduler';
 import type {
@@ -67,6 +71,8 @@ import {
 import {
   type BrowserProvider,
   type BrowserProviderImplementation,
+  type BrowserProviderPage,
+  type BrowserV8CoverageCollector,
   getBrowserProviderImplementation,
 } from './providers';
 import {
@@ -227,6 +233,30 @@ export const runBrowserController = async (
   );
 
   const browserSourceMapCache = new Map<string, SourceMapPayload | null>();
+  const browserCoverageResources: BrowserV8CoverageResourceStore = {
+    assetFiles: new Map(),
+    sourceMaps: new Map(),
+  };
+
+  const loadBrowserCoverageResources = async (
+    filenames: string[],
+    resource: keyof BrowserV8CoverageResourceStore,
+  ): Promise<Record<string, string>> => {
+    const store = browserCoverageResources[resource];
+    const loaded: Record<string, string> = {};
+    for (const filename of filenames) {
+      const value = store.get(filename);
+      if (value !== undefined) {
+        loaded[filename] = value;
+      }
+    }
+    return loaded;
+  };
+
+  const loadBrowserCoverageAssetFiles = (filenames: string[]) =>
+    loadBrowserCoverageResources(filenames, 'assetFiles');
+  const loadBrowserCoverageSourceMaps = (filenames: string[]) =>
+    loadBrowserCoverageResources(filenames, 'sourceMaps');
 
   const isHttpLikeFile = (file: string): boolean => /^https?:\/\//.test(file);
 
@@ -315,6 +345,18 @@ export const runBrowserController = async (
   const coverageProvider = coverageConfig?.enabled
     ? await createCoverageProvider(coverageConfig, context.rootPath)
     : null;
+  const browserCoverageCapabilityError =
+    !filesOnly &&
+    context.command !== 'list' &&
+    coverageConfig?.provider === 'v8' &&
+    (browserProjects[0]?.normalizedConfig.browser.browser ?? 'chromium') ===
+      'chromium' &&
+    coverageProvider?.supportsBrowserCoverage !== true
+      ? new Error(
+          'The installed @rstest/coverage-v8 provider does not support Chromium Browser Mode coverage. ' +
+            "Upgrade @rstest/coverage-v8 to the version matching @rstest/core, or use coverage.provider: 'istanbul'.",
+        )
+      : undefined;
 
   const containerDevServerEnv = process.env.RSTEST_CONTAINER_DEV_SERVER;
   let containerDevServer: string | undefined;
@@ -383,7 +425,6 @@ export const runBrowserController = async (
     writeEmptyLaunchExitCode();
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
-
   const enableCliShortcuts = isWatchMode && isTTY('stdin');
   const browserTempOutputRoot = context.normalizedConfig.output.distPath.root;
   const tempDir =
@@ -419,7 +460,8 @@ export const runBrowserController = async (
           : undefined,
         containerDistPath,
         containerDevServer,
-        skipProviderLaunch: filesOnly,
+        skipProviderLaunch:
+          filesOnly || Boolean(browserCoverageCapabilityError),
         appliedModifyRstestConfigEnvironments:
           options?.appliedModifyRstestConfigEnvironments,
       });
@@ -432,7 +474,7 @@ export const runBrowserController = async (
     // `filesOnly` is the config-hook discovery boot, which destroys its runtime
     // through the returned `close`. Caching it here would leave the real watch
     // session re-entering on a destroyed runtime.
-    if (isWatchMode && !filesOnly) {
+    if (isWatchMode && !filesOnly && !browserCoverageCapabilityError) {
       watchContext.runtime = runtime;
       registerWatchCleanup(context.embedded);
     }
@@ -480,10 +522,12 @@ export const runBrowserController = async (
   const buildRerunOutcome = ({
     rerunTestPaths,
     testTime,
+    rawCoverage,
     unhandledErrors,
   }: {
     rerunTestPaths: string[];
     testTime: number;
+    rawCoverage: unknown[];
     unhandledErrors?: Error[];
   }): ExecutorCycleOutcome => {
     const rerunPathSet = new Set(rerunTestPaths);
@@ -505,9 +549,15 @@ export const runBrowserController = async (
         buildTime: drainPendingBuildTime(watchState),
         testTime,
       },
-      coverage: coverageMap?.files().length
-        ? { map: coverageMap.toJSON() }
-        : undefined,
+      coverage:
+        coverageMap?.files().length || rawCoverage.length
+          ? {
+              map: coverageMap?.toJSON(),
+              raw: rawCoverage,
+              loadAssetFiles: loadBrowserCoverageAssetFiles,
+              loadSourceMaps: loadBrowserCoverageSourceMaps,
+            }
+          : undefined,
       resolveSourcemap: resolveBrowserSourcemap,
     };
   };
@@ -521,7 +571,7 @@ export const runBrowserController = async (
    * is what lets the headed transport claim its cycle scope inside it.
    */
   const createWatchSession = (
-    execute: (testPaths: string[]) => Promise<void>,
+    execute: (testPaths: string[]) => Promise<unknown[]>,
   ): BrowserWatchSession => ({
     runCycle: async (testPaths) => {
       const rerunStartTime = Date.now();
@@ -530,9 +580,10 @@ export const runBrowserController = async (
       // so carrying it forward would prevent the next cycle from reloading.
       fatalErrorRef.current = null;
       let rerunError: Error | undefined;
+      let rawCoverage: unknown[] = [];
 
       try {
-        await execute(testPaths);
+        rawCoverage = await execute(testPaths);
       } catch (error) {
         // Surfaced through the outcome rather than thrown: core finalizes this
         // cycle either way, and its results belong in the report even when the
@@ -544,6 +595,7 @@ export const runBrowserController = async (
       return buildRerunOutcome({
         rerunTestPaths: testPaths,
         testTime: Math.max(0, Date.now() - rerunStartTime),
+        rawCoverage,
         unhandledErrors: rerunError
           ? [rerunError]
           : rerunFatalError
@@ -590,6 +642,10 @@ export const runBrowserController = async (
     await destroyBrowserRuntime(runtime);
     return allowEmptyRun ? createEmptyRunResult() : undefined;
   }
+  if (browserCoverageCapabilityError) {
+    await destroyBrowserRuntime(runtime);
+    return failWithError(browserCoverageCapabilityError);
+  }
 
   const { browser, browserLaunchOptions, wsPort } = runtime;
 
@@ -627,7 +683,7 @@ export const runBrowserController = async (
       `http://localhost:${server.port}`,
     ]),
   );
-
+  const containerRunnerUrl = `http://localhost:${runtime.containerServer.port}`;
   const hostOptions: BrowserHostConfig = {
     rootPath: normalize(context.rootPath),
     projects: projectRuntimeConfigs,
@@ -637,7 +693,7 @@ export const runBrowserController = async (
         context.snapshotManager.options.updateSnapshot,
     },
     // Container origin (fallback). Per-project runner origins below.
-    runnerUrl: `http://localhost:${runtime.containerServer.port}`,
+    runnerUrl: containerRunnerUrl,
     projectRunnerUrls,
     wsPort,
     debug: isDebug(),
@@ -662,6 +718,34 @@ export const runBrowserController = async (
       );
     }
   }
+
+  const browserName = browserLaunchOptions.browser ?? 'chromium';
+  const v8CoverageCollector: BrowserV8CoverageCollector | null =
+    coverageConfig?.provider === 'v8'
+      ? (implementationByProvider
+          .get(browserLaunchOptions.provider)
+          ?.createV8CoverageCollector?.({ browserName }) ?? null)
+      : null;
+  const v8Coverage = v8CoverageCollector
+    ? {
+        start: v8CoverageCollector.start,
+        take: (
+          page: BrowserProviderPage,
+          projectRoot: string,
+          projectName?: string,
+        ) =>
+          takeBrowserV8Coverage({
+            collector: v8CoverageCollector,
+            fetchTimeout: maxTestTimeoutForRpc,
+            page,
+            projectUrl:
+              projectRunnerUrls[projectName ?? ''] ?? containerRunnerUrl,
+            rootPath: normalize(projectRoot),
+            sourceMapCache: browserSourceMapCache,
+            resourceStore: browserCoverageResources,
+          }),
+      }
+    : undefined;
 
   let resolveDispatchPages: DispatchPageResolver = () => ({});
   const setDispatchPageResolver = (resolver: DispatchPageResolver): void => {
@@ -1028,6 +1112,12 @@ export const runBrowserController = async (
     context,
     allTestFiles,
     hostOptions,
+    projectRoots: new Map(
+      projectRuntimeConfigs.map((project) => [
+        project.name,
+        project.projectRoot,
+      ]),
+    ),
     isWatchMode,
     createDispatchRouter,
     fatalErrorRef,
@@ -1039,12 +1129,13 @@ export const runBrowserController = async (
     destroyRuntime: () => destroyBrowserRuntime(runtime),
   };
 
-  const { testTime, watchSession, close } = useHeadlessDirect
+  const { testTime, rawCoverage, watchSession, close } = useHeadlessDirect
     ? await createHeadlessScheduler({
         ...schedulerDeps,
         browser,
         browserLaunchOptions,
         projectServers: runtime.projectServers,
+        v8Coverage,
         projectRuntimeConfigs,
         watchState,
         handlers: { handleFatal, handleTestFileComplete },
@@ -1052,6 +1143,7 @@ export const runBrowserController = async (
     : await createHeadedScheduler({
         ...schedulerDeps,
         runtime,
+        v8Coverage,
         handlers: {
           handleTestFileStart,
           handleTestCaseResult,
@@ -1068,8 +1160,12 @@ export const runBrowserController = async (
   // A fatal error the run reported outranks its results: it rides the returned
   // outcome into core's finalize, which raises the exit code from it.
   if (fatalErrorRef.current) {
+    const errorResult = await failWithError(fatalErrorRef.current, close);
     return {
-      ...(await failWithError(fatalErrorRef.current, close)),
+      ...errorResult,
+      rawCoverage,
+      loadAssetFiles: loadBrowserCoverageAssetFiles,
+      loadSourceMaps: loadBrowserCoverageSourceMaps,
       watchSession,
     };
   }
@@ -1087,6 +1183,9 @@ export const runBrowserController = async (
     hasFailure: reporterResults.some(
       (result: TestFileResult) => result.status === 'fail',
     ),
+    rawCoverage,
+    loadAssetFiles: loadBrowserCoverageAssetFiles,
+    loadSourceMaps: loadBrowserCoverageSourceMaps,
     getSourcemap: getBrowserSourcemap,
     resolveSourcemap: resolveBrowserSourcemap,
     // `close` is already `undefined` in watch mode: the watch runtime outlives

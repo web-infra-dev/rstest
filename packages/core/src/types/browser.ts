@@ -1,6 +1,7 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { ProjectContext } from './core';
+import type { RawCoverageResolveOptions } from './coverage';
 import type { GetSourcemap } from './reporter';
 import type { TestFileResult, TestResult } from './testSuite';
 import type { TraceEvent } from '../utils/trace';
@@ -105,6 +106,11 @@ export interface BrowserTestRunResult {
   };
   /** Whether the test run had failures */
   hasFailure: boolean;
+  /** Raw coverage batches collected by a browser provider. */
+  rawCoverage?: unknown[];
+  /** Resources shared by browser raw coverage batches. */
+  loadAssetFiles?: RawCoverageResolveOptions['loadAssetFiles'];
+  loadSourceMaps?: RawCoverageResolveOptions['loadSourceMaps'];
   /** Errors that occurred before/outside test execution (e.g., browser launch failure) */
   unhandledErrors?: Error[];
   /** Source map resolver used when reporter output is unified in core */

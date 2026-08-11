@@ -4,6 +4,7 @@
   "private": true,
   "devDependencies": {
     "@rstest/core": "workspace:*",
-    "@rstest/coverage-istanbul": "workspace:*"
+    "@rstest/coverage-istanbul": "workspace:*",
+    "@rstest/coverage-v8": "workspace:*"
   }
 }

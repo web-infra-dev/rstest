@@ -177,6 +177,8 @@ export type RawCoverageResolveOptions = {
 
 export declare class CoverageProvider {
   constructor(options: NormalizedCoverageOptions, root?: string);
+  /** Whether this provider can resolve raw coverage URLs emitted by Chromium. */
+  supportsBrowserCoverage?: boolean;
 
   /**
    * Whether blob runs may leave report generation and untested-file backfill
@@ -186,7 +188,6 @@ export declare class CoverageProvider {
    * @internal
    */
   readonly supportsDeferredCoverageFinalization?: boolean;
-
   /**
    * Initialize coverage collection
    */

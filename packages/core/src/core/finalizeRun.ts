@@ -252,10 +252,11 @@ export async function finalizeRunCycle(
     return loadedResources;
   };
 
+  const rawCoverageResults = outcomes.flatMap((o) => o.coverage?.raw ?? []);
   await resolveAndMergeRawCoverage({
     coverageProvider,
     mergedCoverageMap,
-    rawCoverageResults: outcomes.flatMap((o) => o.coverage?.raw ?? []),
+    rawCoverageResults,
     resolveOptions: {
       loadAssetFiles: (filenames) =>
         loadCoverageResources(filenames, 'loadAssetFiles'),

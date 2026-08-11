@@ -55,7 +55,7 @@ Other CI systems can use the same commands. The important part is to run `pnpm i
 Coverage collection is opt-in. Install the provider you want to use before enabling `--coverage`:
 
 - [@rstest/coverage-istanbul](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-istanbul): the default Istanbul provider, works in Node mode and Browser Mode.
-- [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8): V8-based provider for Node mode only.
+- [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8): V8-based provider for Node mode and headless, non-watch Chromium Browser Mode runs.
 
 ```bash
 pnpm add @rstest/coverage-istanbul -D

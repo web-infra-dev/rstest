@@ -167,22 +167,22 @@ Istanbul 会向插桩后的文件注入 `cov_*` 覆盖率计数器调用。这�
 要避免该错误，优先使用以下方式之一：
 
 - 通过 `coverage.exclude` 排除对应源文件；
-- 在非 Browser Mode 测试中切换到 `coverage.provider: 'v8'`；
+- 在 Node 测试或 headless、非 watch 的 Chromium Browser Mode 测试中切换到 `coverage.provider: 'v8'`；
 - 避免序列化经过 Istanbul 插桩的函数。
 
-`v8` provider 在 Browser Mode 中不可用，因此浏览器测试应使用 `coverage.exclude`，或避免序列化经过插桩的函数。
+在 headless、非 watch 的 Chromium Browser Mode 运行中，`v8` provider 同样不会注入计数器。Firefox 和 WebKit Browser Mode 测试应使用 `coverage.exclude`，或避免序列化经过插桩的函数。
 
 #### V8 provider
 
 <ApiMeta addedVersion="0.10.2" />
 
-`v8` provider 基于 Node.js inspector precise coverage 收集数据，并重映射为 Istanbul 格式。相比 Istanbul 插桩，V8 coverage 通常有更低的运行时内存占用，因为执行模块中不需要额外的覆盖率计数器。它更适合大型非 Browser Mode 测试套件中 coverage 内存压力明显的场景。
+`v8` provider 基于 Node.js inspector 或 Chromium 原生 coverage API 收集数据，并重映射为 Istanbul 格式。相比 Istanbul 插桩，V8 coverage 通常有更低的运行时内存占用，因为执行模块中不需要额外的覆盖率计数器。它更适合 coverage 内存压力明显的大型测试套件。
 
 要启用 V8 覆盖率，需要先安装 [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8)。
 
 <PackageManagerTabs command="add @rstest/coverage-v8 -D" />
 
-由于底层覆盖率数据来自 Node.js / V8 本身，重映射后的 branch 覆盖率和未覆盖行信息在不同 Node.js 或 V8 版本之间可能存在轻微差异。
+由于底层覆盖率数据来自 Node.js / Chromium V8 本身，重映射后的 branch 覆盖率和未覆盖行信息在不同引擎版本之间可能存在轻微差异。
 
 ##### Ignore hints
 
@@ -220,7 +220,11 @@ const generatedLookup = createGeneratedLookup();
 
 `ignore file` 也会被识别，但它会在 source map 重映射前作用于生成后的 coverage entry。正常的 Rstest 输出中，一个生成 chunk 可能包含多个源文件，因此如果需要排除某个源文件或一组生成文件，请优先使用 `coverage.exclude`。
 
-`v8` provider 仅适用于非 Browser Mode 测试执行，包括 `node`、`jsdom` 和 `happy-dom` 测试环境。Browser Mode 不使用 inspector coverage，因此浏览器 coverage 应使用默认的 `istanbul` provider。
+`v8` provider 适用于 `node`、`jsdom` 和 `happy-dom` 测试环境。Browser Mode 的稳定支持范围仅限使用 Playwright provider 的 headless、非 watch Chromium 运行。Chromium coverage 从 page renderer 中实际执行且通过 HTTP(S) URL 标识的脚本收集，并通过 source map 重映射，无需对应用代码插桩。带 query 的脚本 URL、classic script 和 module script 均受支持。
+
+headed 和 watch Browser Mode coverage 仍为实验性能力。报告可能包含 container 或非活跃 runner frame 的执行数据，watch rebuild 也可能无法严格保持 script 与 source map 的版本配对。如果这些模式需要稳定的 coverage 语义，请使用默认的 `istanbul` provider。Firefox 和 WebKit 未暴露所需的原生 coverage API，也必须使用 `istanbul`。
+
+浏览器原生 V8 coverage 不会收集仅通过 `blob:`、`data:`、其他非 HTTP source URL 标识或没有 URL 的脚本，包括 anonymous `eval` 和 `new Function` 调用；也不会收集仅在独立 `Worker` 或 `SharedWorker` target 中运行的代码。如果这些脚本也必须计入 coverage，请使用 `istanbul`。
 
 ### include
 

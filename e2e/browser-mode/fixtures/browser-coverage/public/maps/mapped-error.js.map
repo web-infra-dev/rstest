@@ -1,0 +1,9 @@
+{
+  "version": 3,
+  "names": [],
+  "sources": ["./sources/mapped-error.ts"],
+  "sourcesContent": [
+    "export const throwMappedError = () => { throw new Error('mapped browser failure'); };\n"
+  ],
+  "mappings": ";;AAAA"
+}

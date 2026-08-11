@@ -37,6 +37,7 @@ import { DISPATCH_NAMESPACE_FILE_CLEANUP } from './protocol';
 import type { BrowserProviderContext, BrowserProviderPage } from './providers';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import type {
+  BrowserV8CoverageRuntime,
   BrowserWatchSession,
   DispatchPageResolver,
   SchedulerRunResult,
@@ -55,6 +56,8 @@ type HeadedSchedulerDeps = {
   runtime: BrowserRuntime;
   allTestFiles: TestFileInfo[];
   hostOptions: BrowserHostConfig;
+  v8Coverage?: BrowserV8CoverageRuntime;
+  projectRoots: Map<string, string>;
   isWatchMode: boolean;
   createDispatchRouter: () => HostDispatchRouter;
   handlers: {
@@ -71,7 +74,7 @@ type HeadedSchedulerDeps = {
   >;
   setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
   createWatchSession: (
-    execute: (testPaths: string[]) => Promise<void>,
+    execute: (testPaths: string[]) => Promise<unknown[]>,
   ) => BrowserWatchSession;
   collectProjectEntries: () => Promise<
     Parameters<typeof planWatchRerun>[0]['projectEntries']
@@ -126,6 +129,8 @@ export const createHeadedScheduler = async ({
   runtime,
   allTestFiles,
   hostOptions,
+  v8Coverage,
+  projectRoots,
   isWatchMode,
   createDispatchRouter,
   handlers: {
@@ -303,6 +308,22 @@ export const createHeadedScheduler = async ({
       runId: string;
     }
   >();
+  let rawCoverage: unknown[] = [];
+  let coverageStarted = false;
+  const collectCoverage = async (projectName?: string): Promise<void> => {
+    if (!coverageStarted || !v8Coverage) {
+      return;
+    }
+    coverageStarted = false;
+    const coverage = await v8Coverage.take(
+      containerPage,
+      projectRoots.get(projectName ?? '') ?? context.rootPath,
+      projectName,
+    );
+    if (coverage) {
+      rawCoverage.push(coverage);
+    }
+  };
   const timedOutHeadedRuns = new Set<string>();
   let enqueueHeadedReload = async (
     _file: TestFileInfo,
@@ -431,6 +452,7 @@ export const createHeadedScheduler = async ({
       void (async () => {
         const message = `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`;
         try {
+          await collectCoverage(pending.file.projectName);
           // A cleanup timeout is a file failure, not a container failure. Resolve
           // this reload after reporting it so the headed serial loop advances.
           await handleTestFileComplete(
@@ -480,6 +502,8 @@ export const createHeadedScheduler = async ({
     let reloadAck: ReloadTestFileAck | undefined;
 
     try {
+      await v8Coverage?.start(containerPage);
+      coverageStarted = Boolean(v8Coverage);
       reloadAck = await rpcManager.reloadTestFile(
         file.testPath,
         testNamePattern,
@@ -492,6 +516,9 @@ export const createHeadedScheduler = async ({
           toError(error),
           reloadAck.runId,
         );
+      }
+      if (coverageStarted) {
+        await collectCoverage(file.projectName);
       }
       throw error;
     }
@@ -541,6 +568,9 @@ export const createHeadedScheduler = async ({
         return;
       }
       try {
+        const projectName = pendingHeadedReloads.get(payload.testPath)?.file
+          .projectName;
+        await collectCoverage(projectName);
         await handleTestFileComplete(payload);
         resolvePendingHeadedReload(payload.testPath, payload.runId);
       } catch (error) {
@@ -558,8 +588,14 @@ export const createHeadedScheduler = async ({
     async onFatal(payload: FatalPayload) {
       const error = new Error(payload.message);
       error.stack = payload.stack;
-      rejectAllPendingHeadedReloads(error);
-      await handleFatal(payload);
+      const pending = pendingHeadedReloads.values().next().value;
+      const projectName = pending?.file.projectName;
+      try {
+        await collectCoverage(projectName);
+      } finally {
+        rejectAllPendingHeadedReloads(error);
+        await handleFatal(payload);
+      }
     },
     async dispatch(request: BrowserDispatchRequest) {
       // Headed/container path now shares the same dispatch contract as headless.
@@ -658,7 +694,8 @@ export const createHeadedScheduler = async ({
     // options instead of traveling beside the scope.
     const pendingTestNamePatterns = new Map<string, string>();
 
-    const runScope = async (testPaths: string[]): Promise<void> => {
+    const runScope = async (testPaths: string[]): Promise<unknown[]> => {
+      rawCoverage = [];
       // Claimed in this synchronous prefix, before `runCycle` suspends, so
       // nothing this cycle does can change what it runs or which patterns it
       // takes.
@@ -670,6 +707,7 @@ export const createHeadedScheduler = async ({
       for (const { file, testNamePattern } of cycleScope) {
         await enqueueHeadedReload(file, testNamePattern);
       }
+      return rawCoverage;
     };
 
     /**
@@ -764,6 +802,7 @@ export const createHeadedScheduler = async ({
 
   return {
     testTime,
+    rawCoverage,
     watchSession,
     // `closeContainerRuntime` is already `undefined` in watch mode: the watch
     // runtime outlives the cycle and is torn down through `executor.close()`.

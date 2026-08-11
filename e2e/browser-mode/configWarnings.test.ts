@@ -2,13 +2,21 @@ import { describe, expect, it } from '@rstest/core';
 import { runBrowserCli } from './utils';
 
 describe('browser mode - config validation warnings', () => {
-  it('hard-errors on coverage.provider v8 in a browser-only run', async () => {
-    const { expectExecFailed, cli } = await runBrowserCli('browser-coverage', {
+  it('allows coverage.provider v8 in a Chromium browser-only run', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli('browser-coverage', {
       args: ['-c', 'rstest.v8BrowserOnly.config.mts'],
+    });
+    await expectExecSuccess();
+    expect(`${cli.stdout}\n${cli.stderr}`).toMatch(/Coverage enabled with v8/);
+  });
+
+  it('rejects coverage.provider v8 in a non-Chromium browser-only run', async () => {
+    const { expectExecFailed, cli } = await runBrowserCli('browser-coverage', {
+      args: ['-c', 'rstest.v8Webkit.config.mts'],
     });
     await expectExecFailed();
     expect(`${cli.stdout}\n${cli.stderr}`).toMatch(
-      /Coverage provider 'v8' is not supported in browser mode/,
+      /Coverage provider 'v8' in browser mode requires Chromium/,
     );
   });
 
@@ -28,17 +36,15 @@ describe('browser mode - config validation warnings', () => {
     );
   });
 
-  it('warns (not errors) on coverage.provider v8 in a mixed run, node coverage still runs', async () => {
+  it('collects V8 coverage in a mixed Chromium browser and node run', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli('browser-coverage', {
       args: ['-c', 'rstest.v8Mixed.config.mts'],
     });
     await expectExecSuccess();
     const output = `${cli.stdout}\n${cli.stderr}`;
-    expect(output).toMatch(
-      /Coverage provider 'v8' produces no coverage for browser project/,
-    );
-    // The node project still executes.
-    expect(output).toMatch(/multiply/);
+    expect(output).not.toMatch(/Coverage provider 'v8'/);
+    expect(output.replaceAll(' ', '')).toContain('sum.ts|100|100|100|100');
+    expect(output.replaceAll(' ', '')).toContain('multiply.ts|100|100|100|100');
   });
 
   it('warns once on node-only options set for browser projects', async () => {

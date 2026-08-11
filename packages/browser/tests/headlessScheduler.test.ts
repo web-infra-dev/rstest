@@ -190,6 +190,7 @@ type HarnessOptions = {
     Array<{ project: { name: string }; testFiles: string[] }>
   >;
   affected?: string[];
+  v8Coverage?: SchedulerOptions['v8Coverage'];
 };
 
 const createHarness = (options: HarnessOptions = {}) => {
@@ -209,7 +210,7 @@ const createHarness = (options: HarnessOptions = {}) => {
   const ready = rstest.fn();
   let interrupt = async () => {};
   let dispatchRerun = async () => {};
-  let runScope = async (_paths: string[]) => {};
+  let runScope = async (_paths: string[]): Promise<unknown[]> => [];
   const watchState: BrowserWatchState = {
     hooksEnabled: false,
     invalidation: new Map(),
@@ -254,6 +255,7 @@ const createHarness = (options: HarnessOptions = {}) => {
     projectServers: new Map([
       ['browser', { port: 3000 }],
     ]) as SchedulerOptions['projectServers'],
+    v8Coverage: options.v8Coverage,
     allTestFiles: files,
     projectRuntimeConfigs: [
       { name: 'browser', viewport: { width: 800, height: 600 } },
@@ -315,7 +317,9 @@ const createHarness = (options: HarnessOptions = {}) => {
         },
         requestRerun: async (
           testPaths = files.map((entry) => entry.testPath),
-        ) => execute(testPaths),
+        ) => {
+          await execute(testPaths);
+        },
       };
     },
     collectProjectEntries:
@@ -460,6 +464,38 @@ describe('headless scheduler', () => {
       expect(firstContext(harness.browser).closeCount).toBeGreaterThan(0);
     },
   );
+
+  it('collects coverage from concurrent pages before a fatal cancellation', async () => {
+    const siblingStarted = createDeferred();
+    const collectedPages: number[] = [];
+    const harness = createHarness({
+      files: [file('/fatal.test.ts'), file('/sibling.test.ts')],
+      maxWorkers: 2,
+      scripts: [
+        async (page) => {
+          await siblingStarted.promise;
+          await page.send({
+            type: 'fatal',
+            payload: { message: 'fatal test failure' },
+          });
+        },
+        () => {
+          siblingStarted.resolve();
+        },
+      ],
+      v8Coverage: {
+        start: async () => {},
+        take: async (page) => {
+          collectedPages.push((page as FakePage).id);
+          return { entries: [] };
+        },
+      },
+    });
+
+    await harness.result;
+
+    expect(collectedPages.sort()).toEqual([0, 1]);
+  });
 
   it('fails only the file whose fixture cleanup times out', async () => {
     rs.useFakeTimers();

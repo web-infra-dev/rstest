@@ -55,6 +55,9 @@ export const BROWSER_PORTS = {
   // One key for every config `configWarnings.test.ts` launches: its tests run
   // serially, so they may share — the rule above only splits across files.
   'browser-coverage-config-warnings': 5272,
+  'browser-coverage-v8': 5280,
+  'browser-coverage-v8-webkit': 5282,
+  'watch-setup': 5278,
   'basic-federation': 5274,
   'basic-federation-watch': 5276,
 } as const;

@@ -61,10 +61,8 @@ export async function createBrowserExecutor(
   let invalidationCallback: ExecutorInvalidationCallback | undefined;
   let watchSession: BrowserWatchSession | undefined;
 
-  // Merge the host's per-file `result.coverage` into one map (shared core
-  // helper, stripping it from each result to avoid reporter/state cache
-  // bloat), then hand the shared finalize a coverage `map` (no `raw` — browser
-  // coverage is istanbul-only).
+  // Merge the host's per-file Istanbul coverage, then preserve browser V8 raw
+  // batches for the shared core finalizer to remap on the host.
   const foldOutcome = (
     result: BrowserTestRunResult | void,
   ): ExecutorCycleOutcome => {
@@ -84,7 +82,15 @@ export async function createBrowserExecutor(
         buildTime: result.duration.buildTime,
         testTime: result.duration.testTime,
       },
-      coverage: { map: map?.toJSON() },
+      coverage:
+        map?.files().length || result.rawCoverage?.length
+          ? {
+              map: map?.toJSON(),
+              raw: result.rawCoverage,
+              loadAssetFiles: result.loadAssetFiles,
+              loadSourceMaps: result.loadSourceMaps,
+            }
+          : undefined,
       resolveSourcemap: result.resolveSourcemap,
     };
   };

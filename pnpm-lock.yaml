@@ -210,6 +210,9 @@ importers:
       '@rstest/coverage-istanbul':
         specifier: workspace:*
         version: link:../../../../packages/coverage-istanbul
+      '@rstest/coverage-v8':
+        specifier: workspace:*
+        version: link:../../../../packages/coverage-v8
 
   e2e/build/fixtures/runtimeRequire: {}
 

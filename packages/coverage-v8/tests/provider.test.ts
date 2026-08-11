@@ -370,6 +370,38 @@ describe('coverage-v8 provider', () => {
     expect(Object.keys(coverage)).toEqual([sourceUrl]);
   });
 
+  it('remaps browser coverage URLs to absolute source map paths', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-browser-source-map');
+    const originalFile = join(root, 'src', 'original.ts');
+    const code = 'const value = 1;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${root}:browser-source-map`,
+      code,
+      coverage: {
+        url: 'http://localhost:3000/static/js/tests.js',
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+      sourceMap: {
+        version: 3,
+        sources: [originalFile],
+        sourcesContent: [code],
+        names: [],
+        mappings: 'AAAA',
+      },
+    });
+
+    expect(Object.keys(coverage)).toEqual([originalFile]);
+  });
+
   it('resolves external source map sources relative to the map file', async () => {
     const root = join(tmpdir(), 'rstest-coverage-v8-nested-external-map');
     const generatedFile = join(root, 'dist', 'bundle.js');
@@ -399,6 +431,40 @@ describe('coverage-v8 provider', () => {
         mappings: 'AAAA',
       },
       sourceMapUrl: join(root, 'dist', 'maps', 'bundle.js.map'),
+    });
+
+    expect(Object.keys(coverage)).toEqual([originalFile]);
+  });
+
+  it('filters source map paths after resolving relative sources', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-relative-filter');
+    const generatedFile = join(root, 'dist', 'bundle.js');
+    const originalFile = join(root, 'src', 'original.ts');
+    const code = 'const value = 1;';
+    const ast = parseModule(code);
+
+    const coverage = await convertV8CoverageWithAst({
+      ast,
+      cacheKey: `${generatedFile}:relative-filter`,
+      code,
+      coverage: {
+        url: pathToFileURL(generatedFile).href,
+        functions: [
+          {
+            functionName: '',
+            isBlockCoverage: true,
+            ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+          },
+        ],
+      },
+      sourceFilter: (filePath) => filePath.startsWith(root),
+      sourceMap: {
+        version: 3,
+        sources: ['../src/original.ts'],
+        sourcesContent: [code],
+        names: [],
+        mappings: 'AAAA',
+      },
     });
 
     expect(Object.keys(coverage)).toEqual([originalFile]);
@@ -1282,6 +1348,102 @@ export default class CustomCoverageReporter {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  it('filters external original sources from browser raw coverage', async () => {
+    const root = join(tmpdir(), 'rstest-coverage-v8-browser-external-source');
+    const generatedFile = 'https://cdn.example.com/bundle.js';
+    const localSource = join(root, 'src', 'local.ts');
+    const externalSource = 'https://cdn.example.com/src/external.ts';
+    const runtimeSource =
+      'webpack://app/webpack/runtime/define_property_getters';
+    const dataSource = 'data:text/javascript,export default true';
+    const resolvedRstestRuntimeSource = join(
+      root,
+      'static',
+      'js',
+      'rstest runtime',
+    );
+    const resolvedDataSource = join(
+      root,
+      'data:text',
+      'data:text/javascript,export default true',
+    );
+    const resolvedBlobSource = join(
+      root,
+      'blob:http',
+      'blob:http/localhost/script-id',
+    );
+    const code = [
+      'const local = 1;',
+      'const external = 2;',
+      'const runtime = 3;',
+      'const data = 4;',
+      'const resolvedRstestRuntime = 5;',
+      'const resolvedData = 6;',
+      'const resolvedBlob = 7;',
+    ].join('\n');
+    const createPayload = () => ({
+      entries: [
+        {
+          url: generatedFile,
+          filePath: generatedFile,
+          scriptId: '1',
+          functions: [
+            {
+              functionName: '',
+              isBlockCoverage: true,
+              ranges: [{ startOffset: 0, endOffset: code.length, count: 1 }],
+            },
+          ],
+        },
+      ],
+      options: {
+        assetFiles: { [generatedFile]: code },
+        sourceMaps: {
+          [generatedFile]: JSON.stringify({
+            version: 3,
+            names: [],
+            sources: [
+              localSource,
+              externalSource,
+              runtimeSource,
+              dataSource,
+              resolvedRstestRuntimeSource,
+              resolvedDataSource,
+              resolvedBlobSource,
+            ],
+            sourcesContent: [
+              'const local = 1;',
+              'const external = 2;',
+              'const runtime = 3;',
+              'const data = 4;',
+              'const resolvedRstestRuntime = 5;',
+              'const resolvedData = 6;',
+              'const resolvedBlob = 7;',
+            ],
+            // cspell:disable-next-line
+            mappings: 'AAAA;ACAA;ACAA;ACAA;ACAA;ACAA;ACAA',
+          }),
+        },
+      },
+      root,
+    });
+
+    const provider = new CoverageProvider(createOptions(), root);
+    const coverageMap = await provider.resolveRawCoverage([createPayload()]);
+
+    expect(coverageMap?.files()).toEqual([localSource]);
+
+    const externalProvider = new CoverageProvider(
+      createOptions({ allowExternal: true }),
+      root,
+    );
+    const externalCoverageMap = await externalProvider.resolveRawCoverage([
+      createPayload(),
+    ]);
+
+    expect(externalCoverageMap?.files()).toEqual([localSource, externalSource]);
   });
 
   it('filters raw assets by source map before loading compiled sources', async () => {
