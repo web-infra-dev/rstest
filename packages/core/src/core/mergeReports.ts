@@ -1,4 +1,11 @@
-import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  unlinkSync,
+} from 'node:fs';
 import { isAbsolute, join, relative } from 'pathe';
 import {
   cleanCoverageReports,
@@ -56,6 +63,11 @@ function loadBlobFiles(blobDir: string): {
 }
 
 function cleanBlobReports(blobDir: string, reportsDirectory: string): void {
+  if (lstatSync(blobDir).isSymbolicLink()) {
+    unlinkSync(blobDir);
+    return;
+  }
+
   const reportsRelativePath = relative(blobDir, reportsDirectory);
   const reportsAreInsideBlobDirectory =
     reportsRelativePath !== '..' &&

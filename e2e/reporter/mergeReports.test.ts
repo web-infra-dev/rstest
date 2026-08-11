@@ -310,7 +310,7 @@ describe('merge-reports', () => {
     fs.removeSync(blobDir);
   });
 
-  it('does not follow a symlinked coverage directory while preserving blobs', async () => {
+  it('does not follow a symlinked blob directory during coverage cleanup', async () => {
     const blobDir = join(fixturesDir, '.rstest-reports');
     const artifactDir = join(fixturesDir, 'coverage-artifact-target');
     fs.removeSync(blobDir);
@@ -361,6 +361,32 @@ describe('merge-reports', () => {
     expect(existsSync(join(artifactDir, 'blob-1-2.json'))).toBe(true);
     expect(existsSync(join(artifactDir, 'blob-2-2.json'))).toBe(true);
     expect(existsSync(join(artifactDir, 'coverage-summary.json'))).toBe(true);
+
+    const { expectExecSuccess: cleanupSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'merge-reports',
+        '--cleanup',
+        '--coverage.reportsDirectory=.rstest-reports/coverage',
+        '--coverage.reporters=json-summary',
+        '-c',
+        'rstest.coverage.config.mts',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: fixturesDir,
+        },
+      },
+    });
+    await cleanupSuccess();
+
+    expect(existsSync(blobDir)).toBe(false);
+    expect(existsSync(join(artifactDir, 'keep.txt'))).toBe(true);
+    expect(existsSync(join(artifactDir, 'blob-1-2.json'))).toBe(true);
+    expect(existsSync(join(artifactDir, 'blob-2-2.json'))).toBe(true);
+    expect(
+      existsSync(join(artifactDir, 'coverage', 'coverage-summary.json')),
+    ).toBe(true);
 
     fs.removeSync(blobDir);
     fs.removeSync(artifactDir);
