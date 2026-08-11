@@ -28,7 +28,6 @@ export const normalizeJavaScriptUrl = (
       return null;
     }
 
-    url.search = '';
     url.hash = '';
     return url.toString();
   } catch {

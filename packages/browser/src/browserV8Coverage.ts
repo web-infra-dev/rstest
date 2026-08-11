@@ -60,9 +60,9 @@ const normalizeSourceMap = (
   sourceMapUrl: string,
   scriptOrigin: string,
   projectOrigin: string,
-): string => {
+): SourceMapPayload => {
   if (!Array.isArray(sourceMap.sources)) {
-    return JSON.stringify(sourceMap);
+    return sourceMap;
   }
 
   const webpackSourceRoot =
@@ -72,10 +72,18 @@ const normalizeSourceMap = (
       : undefined;
   const resolvedSources = new TraceMap(sourceMap, sourceMapUrl).resolvedSources;
   const { sourceRoot: _, ...sourceMapWithoutRoot } = sourceMap;
-  return JSON.stringify({
+  return {
     ...sourceMapWithoutRoot,
     sources: sourceMap.sources.map((source, index) => {
       if (typeof source !== 'string') {
+        return source;
+      }
+      if (
+        source === 'rstest runtime' ||
+        source.startsWith('webpack/runtime/') ||
+        source.startsWith('data:') ||
+        source.startsWith('blob:')
+      ) {
         return source;
       }
       if (isAbsolute(source)) {
@@ -111,6 +119,13 @@ const normalizeSourceMap = (
         // A literal percent sign is a valid filename character.
       }
       sourcePath = sourcePath.replace(/^\/+/, '');
+      if (
+        sourcePath === 'rstest runtime' ||
+        sourcePath.startsWith('data:') ||
+        sourcePath.startsWith('blob:')
+      ) {
+        return sourcePath;
+      }
       if (sourcePath.startsWith('webpack/runtime/')) {
         return source;
       }
@@ -118,7 +133,7 @@ const normalizeSourceMap = (
         ? resolve(rootPath, sourcePath)
         : new URL(sourcePath, `${scriptOrigin}/`).href;
     }),
-  });
+  };
 };
 
 export const takeBrowserV8Coverage = async ({
@@ -152,8 +167,8 @@ export const takeBrowserV8Coverage = async ({
   await Promise.all(
     rawEntries.map(async (entry) => {
       const url = resolveCoverageResourceUrl(entry.url);
-      const fetchUrl = normalizeJavaScriptUrl(entry.url);
-      if (!url || !fetchUrl || !entry.source) {
+      const cacheUrl = normalizeJavaScriptUrl(entry.url);
+      if (!url || !cacheUrl || !entry.source) {
         return;
       }
       const inlineSourceMap = resolveInlineSourceMap(entry.source);
@@ -188,17 +203,15 @@ export const takeBrowserV8Coverage = async ({
         resourceStore?.assetFiles.set(filePath, entry.source);
       }
 
-      if (sourceMap) {
-        sourceMapCache.set(fetchUrl, sourceMap);
-      } else {
-        sourceMapCache.delete(fetchUrl);
-      }
       if (normalizedSourceMap) {
-        if (resourceStore?.sourceMaps.get(filePath) !== normalizedSourceMap) {
-          sourceMaps[filePath] = normalizedSourceMap;
-          resourceStore?.sourceMaps.set(filePath, normalizedSourceMap);
+        sourceMapCache.set(cacheUrl, normalizedSourceMap);
+        const serializedSourceMap = JSON.stringify(normalizedSourceMap);
+        if (resourceStore?.sourceMaps.get(filePath) !== serializedSourceMap) {
+          sourceMaps[filePath] = serializedSourceMap;
+          resourceStore?.sourceMaps.set(filePath, serializedSourceMap);
         }
       } else {
+        sourceMapCache.delete(cacheUrl);
         resourceStore?.sourceMaps.delete(filePath);
       }
     }),

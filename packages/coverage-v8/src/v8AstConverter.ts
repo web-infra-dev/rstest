@@ -538,6 +538,9 @@ class CoverageBuilder {
       let filePath = filename;
 
       if (source) {
+        if (sourceFilter && !sourceFilter(source)) {
+          continue;
+        }
         filePath = resolveSourceFilename(source, generatedDirectory);
       }
 

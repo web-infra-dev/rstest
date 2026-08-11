@@ -382,10 +382,21 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private shouldIgnoreOriginalSource(source: string): boolean {
     const normalizedSource = this.normalizeForMatching(source);
-
+    const normalizedWebpackSource = normalizedSource.startsWith('webpack:')
+      ? normalizedSource
+          .replace(/^webpack:(?:\/\/[^/]*\/+|\/+)?/, '')
+          .replace(/^(?:\.\/)+/, '')
+      : normalizedSource;
+    const isResolvedVirtualSource =
+      normalizedSource.endsWith('/rstest runtime') ||
+      normalizedSource.includes('/data:text/data:text') ||
+      normalizedSource.includes('/blob:http/blob:http');
     return (
       normalizedSource === 'rstest runtime' ||
-      normalizedSource.startsWith('webpack/runtime/') ||
+      normalizedSource.startsWith('data:') ||
+      normalizedSource.startsWith('blob:') ||
+      normalizedWebpackSource.startsWith('webpack/runtime/') ||
+      isResolvedVirtualSource ||
       this.isNodeModulesPath(normalizedSource) ||
       this.isRstestInternalModulePath(normalizedSource)
     );
@@ -407,7 +418,10 @@ export class CoverageProvider implements RstestCoverageProvider {
   ): boolean {
     const normalizedKey = filePath.replace(/\\/g, '/');
 
-    if (!this.shouldProcessEntry(normalizedKey, root)) {
+    if (
+      this.shouldIgnoreOriginalSource(normalizedKey) ||
+      !this.shouldProcessEntry(normalizedKey, root)
+    ) {
       return false;
     }
 

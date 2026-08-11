@@ -1321,7 +1321,34 @@ export default class CustomCoverageReporter {
     const generatedFile = 'https://cdn.example.com/bundle.js';
     const localSource = join(root, 'src', 'local.ts');
     const externalSource = 'https://cdn.example.com/src/external.ts';
-    const code = 'const local = 1;\nconst external = 2;';
+    const runtimeSource =
+      'webpack://app/webpack/runtime/define_property_getters';
+    const dataSource = 'data:text/javascript,export default true';
+    const resolvedRstestRuntimeSource = join(
+      root,
+      'static',
+      'js',
+      'rstest runtime',
+    );
+    const resolvedDataSource = join(
+      root,
+      'data:text',
+      'data:text/javascript,export default true',
+    );
+    const resolvedBlobSource = join(
+      root,
+      'blob:http',
+      'blob:http/localhost/script-id',
+    );
+    const code = [
+      'const local = 1;',
+      'const external = 2;',
+      'const runtime = 3;',
+      'const data = 4;',
+      'const resolvedRstestRuntime = 5;',
+      'const resolvedData = 6;',
+      'const resolvedBlob = 7;',
+    ].join('\n');
     const createPayload = () => ({
       entries: [
         {
@@ -1343,10 +1370,26 @@ export default class CustomCoverageReporter {
           [generatedFile]: JSON.stringify({
             version: 3,
             names: [],
-            sources: [localSource, externalSource],
-            sourcesContent: ['const local = 1;', 'const external = 2;'],
+            sources: [
+              localSource,
+              externalSource,
+              runtimeSource,
+              dataSource,
+              resolvedRstestRuntimeSource,
+              resolvedDataSource,
+              resolvedBlobSource,
+            ],
+            sourcesContent: [
+              'const local = 1;',
+              'const external = 2;',
+              'const runtime = 3;',
+              'const data = 4;',
+              'const resolvedRstestRuntime = 5;',
+              'const resolvedData = 6;',
+              'const resolvedBlob = 7;',
+            ],
             // cspell:disable-next-line
-            mappings: 'AAAA;ACAA',
+            mappings: 'AAAA;ACAA;ACAA;ACAA;ACAA;ACAA;ACAA',
           }),
         },
       },

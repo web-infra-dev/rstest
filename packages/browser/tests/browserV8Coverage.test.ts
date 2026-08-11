@@ -4,6 +4,7 @@ import type {
   BrowserProviderPage,
   BrowserV8CoverageCollector,
 } from '../src/providers';
+import type { SourceMapPayload } from '../src/sourceMap/sourceMapLoader';
 
 const createResourceStore = () => ({
   assetFiles: new Map<string, string>(),
@@ -127,6 +128,7 @@ describe('browser V8 coverage', () => {
     const page = {} as BrowserProviderPage;
 
     const resourceStore = createResourceStore();
+    const sourceMapCache = new Map<string, SourceMapPayload | null>();
 
     await takeBrowserV8Coverage({
       collector,
@@ -134,7 +136,7 @@ describe('browser V8 coverage', () => {
       page,
       projectUrl: 'http://localhost:4000',
       rootPath: '/project',
-      sourceMapCache: new Map(),
+      sourceMapCache,
       resourceStore,
     });
 
@@ -149,6 +151,66 @@ describe('browser V8 coverage', () => {
         sources: ['/dependency/outside.ts', '/project/src/value.ts'],
       }),
     );
+    expect(sourceMapCache.get(entry.url)).toEqual({
+      ...sourceMap,
+      sources: ['/dependency/outside.ts', '/project/src/value.ts'],
+    });
+  });
+
+  it('preserves virtual source identifiers for provider filtering', async () => {
+    const sourceMap = {
+      version: 3 as const,
+      names: [],
+      sources: [
+        'webpack://app/webpack/runtime/define_property_getters',
+        'rstest runtime',
+        'data:text/javascript,export default true',
+        'blob:http://localhost:4000/script-id',
+        'webpack:///./src/value.ts',
+      ],
+      sourcesContent: ['', '', '', '', 'export const value = 1;'],
+      mappings: 'AAAA',
+    };
+    const source = [
+      'var value = 1;',
+      `//# sourceMappingURL=data:application/json;base64,${Buffer.from(
+        JSON.stringify(sourceMap),
+      ).toString('base64')}`,
+    ].join('\n');
+    const resourceStore = createResourceStore();
+
+    await takeBrowserV8Coverage({
+      collector: {
+        start: async () => {},
+        take: async () => [
+          {
+            url: 'http://localhost:4000/static/js/test.js',
+            scriptId: '1',
+            source,
+            functions: [],
+          },
+        ],
+      },
+      fetchTimeout: 1000,
+      page: {} as BrowserProviderPage,
+      projectUrl: 'http://localhost:4000',
+      rootPath: '/project',
+      sourceMapCache: new Map(),
+      resourceStore,
+    });
+
+    expect([...resourceStore.sourceMaps.values()]).toEqual([
+      JSON.stringify({
+        ...sourceMap,
+        sources: [
+          'webpack://app/webpack/runtime/define_property_getters',
+          'rstest runtime',
+          'data:text/javascript,export default true',
+          'blob:http://localhost:4000/script-id',
+          '/project/src/value.ts',
+        ],
+      }),
+    ]);
   });
 
   it('preserves literal percent signs in webpack source paths', async () => {
@@ -379,21 +441,28 @@ describe('browser V8 coverage', () => {
   });
 
   it('preserves query strings in coverage resource identities', async () => {
-    const entries = [
-      {
-        url: 'http://localhost:4000/query-variant.js?variant=a',
-        scriptId: '1',
-        source: "Reflect.set(globalThis, '__QUERY_VARIANT__', 'a');",
+    const entries = ['a', 'b'].map((variant, index) => {
+      const sourceMap = {
+        version: 3 as const,
+        names: [],
+        sources: [`webpack:///./src/query-${variant}.ts`],
+        sourcesContent: [`export const query = '${variant}';`],
+        mappings: 'AAAA',
+      };
+      return {
+        url: `http://localhost:4000/query-variant.js?variant=${variant}`,
+        scriptId: String(index + 1),
+        source: [
+          `Reflect.set(globalThis, '__QUERY_VARIANT__', '${variant}');`,
+          `//# sourceMappingURL=data:application/json;base64,${Buffer.from(
+            JSON.stringify(sourceMap),
+          ).toString('base64')}`,
+        ].join('\n'),
         functions: [],
-      },
-      {
-        url: 'http://localhost:4000/query-variant.js?variant=b',
-        scriptId: '2',
-        source: "Reflect.set(globalThis, '__QUERY_VARIANT__', 'b');",
-        functions: [],
-      },
-    ];
+      };
+    });
     const resourceStore = createResourceStore();
+    const sourceMapCache = new Map<string, SourceMapPayload | null>();
 
     const result = await takeBrowserV8Coverage({
       collector: {
@@ -404,7 +473,7 @@ describe('browser V8 coverage', () => {
       page: {} as BrowserProviderPage,
       projectUrl: 'http://localhost:4000',
       rootPath: '/project',
-      sourceMapCache: new Map(),
+      sourceMapCache,
       resourceStore,
     });
 
@@ -419,6 +488,10 @@ describe('browser V8 coverage', () => {
     expect([...resourceStore.assetFiles]).toEqual(
       entries.map(({ url, source }) => [url, source]),
     );
+    expect([...sourceMapCache.keys()]).toEqual(entries.map(({ url }) => url));
+    expect(
+      [...sourceMapCache.values()].map((sourceMap) => sourceMap?.sources),
+    ).toEqual([['/project/src/query-a.ts'], ['/project/src/query-b.ts']]);
   });
 
   it('excludes non-HTTP coverage resource identities', async () => {

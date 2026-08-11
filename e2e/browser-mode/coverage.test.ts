@@ -120,4 +120,39 @@ describe('browser mode - coverage', () => {
     expect(concurrentCoverage).toBeDefined();
     expect(Object.values(concurrentCoverage?.s ?? {})).toContain(1);
   });
+
+  it('uses normalized V8 source maps for failure stacks and reports', async () => {
+    const fixtureDir = join(__dirname, 'fixtures/browser-coverage');
+    const reportsDirectory = join(fixtureDir, 'coverage-v8-mapped-error');
+    const reportPath = join(reportsDirectory, 'coverage-final.json');
+    fs.rmSync(reportsDirectory, { recursive: true, force: true });
+
+    const { expectExecFailed, cli } = await runBrowserCli('browser-coverage', {
+      args: ['-c', 'rstest.v8MappedError.config.mts'],
+    });
+
+    await expectExecFailed();
+    expect(`${cli.stdout}\n${cli.stderr}`.replaceAll('\\', '/')).toContain(
+      'maps/sources/mapped-error.ts',
+    );
+
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    const reportedFiles = Object.keys(report).map((file) =>
+      file.replaceAll('\\', '/'),
+    );
+    for (const virtualSource of [
+      'webpack/runtime',
+      'webpack://',
+      'rstest runtime',
+      'data:text',
+      'blob:http',
+    ]) {
+      expect(reportedFiles.some((file) => file.includes(virtualSource))).toBe(
+        false,
+      );
+    }
+  });
 });
