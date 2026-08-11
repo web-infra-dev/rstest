@@ -1,3 +1,4 @@
+import { TraceMap } from '@jridgewell/trace-mapping';
 import { resolve } from 'pathe';
 import type {
   BrowserProviderPage,
@@ -37,12 +38,17 @@ const normalizeSourceMap = (
     return JSON.stringify(sourceMap);
   }
 
+  const resolvedSources = new TraceMap(sourceMap).resolvedSources;
   const { sourceRoot: _, ...sourceMapWithoutRoot } = sourceMap;
   return JSON.stringify({
     ...sourceMapWithoutRoot,
-    sources: sourceMap.sources.map((source) => {
+    sources: sourceMap.sources.map((source, index) => {
       if (typeof source !== 'string') {
         return source;
+      }
+
+      if (!webpackSourceRoot && !source.startsWith('webpack:')) {
+        return resolvedSources[index] ?? source;
       }
 
       let sourceUrl: URL;
@@ -74,24 +80,19 @@ const normalizeSourceMap = (
 export const takeBrowserV8Coverage = async ({
   collector,
   page,
-  projectUrl,
   rootPath,
-  allowExternal,
   fetchTimeout,
   sourceMapCache,
   resourceStore,
 }: {
   collector: BrowserV8CoverageCollector;
   page: BrowserProviderPage;
-  projectUrl: string;
   rootPath: string;
-  allowExternal: boolean;
   fetchTimeout: number;
   sourceMapCache: Map<string, SourceMapPayload | null>;
   resourceStore?: BrowserV8CoverageResourceStore;
 }): Promise<unknown | null> => {
   const rawEntries = await collector.take(page);
-  const projectOrigin = new URL(projectUrl).origin;
   const entries: {
     url: string;
     scriptId: string;
@@ -107,10 +108,6 @@ export const takeBrowserV8Coverage = async ({
       if (!url || !entry.source) {
         return;
       }
-      if (!allowExternal && new URL(url).origin !== projectOrigin) {
-        return;
-      }
-
       const sourceMap =
         resolveInlineSourceMap(entry.source) ??
         (await loadSourceMapForSource({

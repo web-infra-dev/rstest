@@ -318,7 +318,6 @@ export const createHeadedScheduler = async ({
     const coverage = await v8Coverage.take(
       containerPage,
       projectRoots.get(projectName ?? '') ?? context.rootPath,
-      projectName,
     );
     if (coverage) {
       rawCoverage.push(coverage);

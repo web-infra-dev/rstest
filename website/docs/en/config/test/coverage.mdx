@@ -224,6 +224,8 @@ The `v8` provider works in `node`, `jsdom`, and `happy-dom` test environments. S
 
 Headed and watch Browser Mode coverage is experimental. Reports may include execution from the container or inactive runner frames, and watch rebuilds may not preserve exact script/source-map pairing. Use the default `istanbul` provider when those modes require stable coverage semantics. Firefox and WebKit do not expose the required native coverage API and must also use `istanbul`.
 
+Native browser V8 coverage currently profiles scripts in the page renderer target only. It does not collect code that runs exclusively in dedicated `Worker` or `SharedWorker` targets. Use `istanbul` when worker-only code must contribute coverage.
+
 ### include
 
 - **Type:** `string[]`

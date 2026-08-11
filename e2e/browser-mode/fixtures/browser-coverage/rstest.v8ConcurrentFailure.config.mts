@@ -9,14 +9,18 @@ export default defineConfig({
     port: BROWSER_PORTS['browser-coverage-v8'],
   },
   include: [
-    'tests/sum.test.ts',
-    'tests/malformed-source-map.test.ts',
-    'tests/cross-origin.fixture.ts',
+    'tests/concurrent-fatal.fixture.ts',
+    'tests/concurrent-sibling.fixture.ts',
   ],
+  pool: {
+    maxWorkers: 2,
+  },
   coverage: {
     enabled: true,
     provider: 'v8',
-    include: ['src/**/*.ts'],
-    reportsDirectory: './coverage-v8-browser',
+    include: ['src/concurrent.ts'],
+    reporters: ['json'],
+    reportsDirectory: './coverage-v8-concurrent-failure',
+    reportOnFailure: true,
   },
 });

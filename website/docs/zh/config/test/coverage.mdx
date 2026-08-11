@@ -224,6 +224,8 @@ const generatedLookup = createGeneratedLookup();
 
 headed 和 watch Browser Mode coverage 仍为实验性能力。报告可能包含 container 或非活跃 runner frame 的执行数据，watch rebuild 也可能无法严格保持 script 与 source map 的版本配对。如果这些模式需要稳定的 coverage 语义，请使用默认的 `istanbul` provider。Firefox 和 WebKit 未暴露所需的原生 coverage API，也必须使用 `istanbul`。
 
+浏览器原生 V8 coverage 目前只分析 page renderer target 中的脚本，不会收集仅在独立 `Worker` 或 `SharedWorker` target 中运行的代码。如果 worker-only 代码也必须计入 coverage，请使用 `istanbul`。
+
 ### include
 
 - **类型：** `string[]`

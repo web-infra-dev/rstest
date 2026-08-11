@@ -52,11 +52,9 @@ describe('browser V8 coverage', () => {
     const resourceStore = createResourceStore();
 
     const result = await takeBrowserV8Coverage({
-      allowExternal: false,
       collector,
       fetchTimeout: 1000,
       page,
-      projectUrl: 'http://localhost:4000',
       rootPath: '/project',
       sourceMapCache: new Map(),
       resourceStore,
@@ -127,11 +125,9 @@ describe('browser V8 coverage', () => {
     const resourceStore = createResourceStore();
 
     await takeBrowserV8Coverage({
-      allowExternal: false,
       collector,
       fetchTimeout: 1000,
       page,
-      projectUrl: 'http://localhost:4000',
       rootPath: '/project',
       sourceMapCache: new Map(),
       resourceStore,
@@ -179,11 +175,9 @@ describe('browser V8 coverage', () => {
     // The collector fake does not inspect the provider page.
     const page = {} as BrowserProviderPage;
     await takeBrowserV8Coverage({
-      allowExternal: false,
       collector,
       fetchTimeout: 1000,
       page,
-      projectUrl: 'http://localhost:4000',
       rootPath: '/project',
       sourceMapCache: new Map(),
       resourceStore,
@@ -197,35 +191,118 @@ describe('browser V8 coverage', () => {
     ]);
   });
 
-  it('does not refetch cross-origin scripts by default', async () => {
+  it('resolves non-webpack sources before removing a mixed sourceRoot', async () => {
+    const sourceMap = {
+      version: 3 as const,
+      names: [],
+      sourceRoot: 'https://cdn.example.com/sources/',
+      sources: ['dependency.ts', 'webpack:///./src/value.ts'],
+      sourcesContent: [
+        'export const dependency = true;',
+        'export const value = 1;',
+      ],
+      mappings: 'AAAA',
+    };
+    const source = [
+      'var value = 1;',
+      `//# sourceMappingURL=data:application/json;base64,${Buffer.from(
+        JSON.stringify(sourceMap),
+      ).toString('base64')}`,
+    ].join('\n');
     const collector: BrowserV8CoverageCollector = {
       start: async () => {},
       take: async () => [
         {
-          url: 'https://cdn.example.com/dependency.js',
+          url: 'http://localhost:4000/static/js/test.js',
           scriptId: '1',
-          source:
-            'var dependency = true;\n//# sourceMappingURL=dependency.js.map',
+          source,
           functions: [],
         },
       ],
     };
-    const fetchSpy = rstest.spyOn(globalThis, 'fetch');
     // The collector fake does not inspect the provider page.
     const page = {} as BrowserProviderPage;
+    const resourceStore = createResourceStore();
 
-    const result = await takeBrowserV8Coverage({
-      allowExternal: false,
+    await takeBrowserV8Coverage({
       collector,
       fetchTimeout: 1000,
       page,
-      projectUrl: 'http://localhost:4000',
+      rootPath: '/project',
+      sourceMapCache: new Map(),
+      resourceStore,
+    });
+
+    expect(
+      resourceStore.sourceMaps.get('http://localhost:4000/static/js/test.js'),
+    ).toBe(
+      JSON.stringify({
+        version: sourceMap.version,
+        names: sourceMap.names,
+        sources: [
+          'https://cdn.example.com/sources/dependency.ts',
+          '/project/src/value.ts',
+        ],
+        sourcesContent: sourceMap.sourcesContent,
+        mappings: sourceMap.mappings,
+      }),
+    );
+  });
+
+  it('retains cross-origin scripts for filtering after source-map resolution', async () => {
+    const sourceMap = {
+      version: 3 as const,
+      names: [],
+      sources: ['webpack:///./src/dependency.ts'],
+      sourcesContent: ['export const dependency = true;'],
+      mappings: 'AAAA',
+    };
+    const source = [
+      'var dependency = true;',
+      `//# sourceMappingURL=data:application/json;base64,${Buffer.from(
+        JSON.stringify(sourceMap),
+      ).toString('base64')}`,
+    ].join('\n');
+    const entry = {
+      url: 'https://cdn.example.com/dependency.js',
+      scriptId: '1',
+      source,
+      functions: [],
+    };
+    const collector: BrowserV8CoverageCollector = {
+      start: async () => {},
+      take: async () => [entry],
+    };
+    const page = {} as BrowserProviderPage;
+
+    const result = await takeBrowserV8Coverage({
+      collector,
+      fetchTimeout: 1000,
+      page,
       rootPath: '/project',
       sourceMapCache: new Map(),
     });
 
-    expect(result).toBeNull();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      entries: [
+        {
+          url: entry.url,
+          scriptId: entry.scriptId,
+          filePath: entry.url,
+          functions: entry.functions,
+        },
+      ],
+      options: {
+        assetFiles: { [entry.url]: source },
+        sourceMaps: {
+          [entry.url]: JSON.stringify({
+            ...sourceMap,
+            sources: ['/project/src/dependency.ts'],
+          }),
+        },
+      },
+      root: '/project',
+    });
   });
 
   it('isolates malformed inline source maps', async () => {
@@ -251,11 +328,9 @@ describe('browser V8 coverage', () => {
     const page = {} as BrowserProviderPage;
 
     const result = await takeBrowserV8Coverage({
-      allowExternal: false,
       collector,
       fetchTimeout: 1000,
       page,
-      projectUrl: 'http://localhost:4000',
       rootPath: '/project',
       sourceMapCache: new Map(),
     });

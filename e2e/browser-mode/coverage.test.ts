@@ -82,7 +82,33 @@ describe('browser mode - coverage', () => {
     expect(cli.stdout).toContain('malformed-source-map.test.ts');
     expect(fs.existsSync(reportPath)).toBe(true);
     expect(cli.stdout.replaceAll(' ', '')).toContain('100%.ts|100|100|100|100');
+    expect(cli.stdout.replaceAll(' ', '')).toContain(
+      'cross-origin.ts|100|100|100|100',
+    );
     expect(cli.stdout.replaceAll(' ', '')).toContain('sum.ts|100|100|100|100');
     expect(cli.stdout.replaceAll(' ', '')).toContain('multiply.ts|0|100|0|0');
+  });
+
+  it('preserves V8 coverage from concurrent pages when one fails fatally', async () => {
+    const fixtureDir = join(__dirname, 'fixtures/browser-coverage');
+    const reportsDirectory = join(fixtureDir, 'coverage-v8-concurrent-failure');
+    const reportPath = join(reportsDirectory, 'coverage-final.json');
+    fs.rmSync(reportsDirectory, { recursive: true, force: true });
+
+    const { expectExecFailed } = await runBrowserCli('browser-coverage', {
+      args: ['-c', 'rstest.v8ConcurrentFailure.config.mts'],
+    });
+
+    await expectExecFailed();
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8')) as Record<
+      string,
+      { s: Record<string, number> }
+    >;
+    const concurrentCoverage = Object.entries(report).find(([file]) =>
+      file.replaceAll('\\', '/').endsWith('/src/concurrent.ts'),
+    )?.[1];
+
+    expect(concurrentCoverage).toBeDefined();
+    expect(Object.values(concurrentCoverage?.s ?? {})).toContain(1);
   });
 });

@@ -123,6 +123,7 @@ export const createHeadlessScheduler = async ({
   // Session-based scheduling path: lifecycle + session index + dispatch routing.
   type ActiveHeadlessRun = RunSession & {
     contexts: Set<BrowserProviderContext>;
+    coverageCollectors: Set<() => Promise<void>>;
   };
 
   const viewportByProject = mapViewportByProject(projectRuntimeConfigs);
@@ -166,6 +167,18 @@ export const createHeadlessScheduler = async ({
         );
       },
     });
+  };
+
+  const collectRunCoverage = async (run: ActiveHeadlessRun): Promise<void> => {
+    const results = await Promise.allSettled(
+      Array.from(run.coverageCollectors, (collect) => collect()),
+    );
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        const error = toError(result.reason);
+        await handleFatal({ message: error.message, stack: error.stack });
+      }
+    }
   };
 
   const dispatchRouter = createDispatchRouter({
@@ -248,7 +261,7 @@ export const createHeadlessScheduler = async ({
 
     let page: BrowserProviderPage | null = null;
     let sessionId: string | null = null;
-    let coverageCollected = false;
+    let coverageCollection: Promise<void> | undefined;
     let settled = false;
     let resolveDone: (() => void) | null = null;
     let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
@@ -281,23 +294,26 @@ export const createHeadlessScheduler = async ({
     };
 
     const collectCoverage = async (): Promise<void> => {
-      if (coverageCollected || !page || !v8Coverage) {
+      if (!page || !v8Coverage) {
         return;
       }
-      coverageCollected = true;
-      const coverage = await v8Coverage.take(
-        page,
-        projectRootByName.get(file.projectName) ?? context.rootPath,
-        file.projectName,
-      );
-      if (coverage) {
-        rawCoverage.push(coverage);
+      if (!coverageCollection) {
+        coverageCollection = (async () => {
+          const coverage = await v8Coverage.take(
+            page,
+            projectRootByName.get(file.projectName) ?? context.rootPath,
+          );
+          if (coverage) {
+            rawCoverage.push(coverage);
+          }
+        })();
       }
+      await coverageCollection;
     };
-
     try {
       page = await browserContext.newPage();
       await v8Coverage?.start(page);
+      run.coverageCollectors.add(collectCoverage);
       page.on('crash', () =>
         onPageDead(`Browser page crashed while running ${file.testPath}.`),
       );
@@ -358,6 +374,7 @@ export const createHeadlessScheduler = async ({
                   message: formatted.message,
                   stack: formatted.stack,
                 });
+                await collectRunCoverage(run);
                 await cancelRun(run, false);
               } finally {
                 resolveDone?.();
@@ -381,6 +398,7 @@ export const createHeadlessScheduler = async ({
               markDone();
             } else if (message.type === 'fatal') {
               markDone();
+              await collectRunCoverage(run);
               await cancelRun(run, false);
             }
           } catch (error) {
@@ -390,6 +408,7 @@ export const createHeadlessScheduler = async ({
               stack: formatted.stack,
             });
             markDone();
+            await collectRunCoverage(run);
             await cancelRun(run, false);
           }
         },
@@ -451,13 +470,13 @@ export const createHeadlessScheduler = async ({
         runLifecycle.isTokenActive(run.token) &&
         !run.cancelled
       ) {
-        await collectCoverage();
+        await collectRunCoverage(run);
         await handleFatal({ message: state.reason });
         await cancelRun(run, false);
       }
     } catch (error) {
       if (runLifecycle.isTokenActive(run.token) && !run.cancelled) {
-        await collectCoverage();
+        await collectRunCoverage(run);
         const formatted = toError(error);
         await handleFatal({
           message: formatted.message,
@@ -472,6 +491,7 @@ export const createHeadlessScheduler = async ({
       if (sessionId) {
         fileCleanupHandlers.delete(sessionId);
       }
+      run.coverageCollectors.delete(collectCoverage);
       // A superseded run can hold a renderer that will never answer again:
       // its test file may have been deleted mid-flight, leaving the page
       // waiting on a chunk the bundler will never produce, and closing such a
@@ -532,6 +552,7 @@ export const createHeadlessScheduler = async ({
     const run = runLifecycle.createSession((token) => ({
       ...createRunSession(token),
       contexts: new Set<BrowserProviderContext>(),
+      coverageCollectors: new Set<() => Promise<void>>(),
     }));
 
     const queue = [...files];
