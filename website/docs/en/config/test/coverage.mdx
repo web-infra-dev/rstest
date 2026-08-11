@@ -220,11 +220,11 @@ const generatedLookup = createGeneratedLookup();
 
 `ignore file` is also recognized, but it applies to the generated coverage entry before source-map remapping. In normal Rstest output, one generated chunk can contain multiple source files, so prefer `coverage.exclude` when a source file or generated file group should be excluded.
 
-The `v8` provider works in `node`, `jsdom`, and `happy-dom` test environments. Stable Browser Mode support is limited to headless, non-watch Chromium runs with the Playwright provider. Chromium coverage is collected from the executed browser bundle and remapped through source maps, without instrumenting application code.
+The `v8` provider works in `node`, `jsdom`, and `happy-dom` test environments. Stable Browser Mode support is limited to headless, non-watch Chromium runs with the Playwright provider. Chromium coverage is collected from executed scripts with HTTP(S) identities in the page renderer and remapped through source maps, without instrumenting application code. Query-bearing script URLs and both classic and module scripts are supported.
 
 Headed and watch Browser Mode coverage is experimental. Reports may include execution from the container or inactive runner frames, and watch rebuilds may not preserve exact script/source-map pairing. Use the default `istanbul` provider when those modes require stable coverage semantics. Firefox and WebKit do not expose the required native coverage API and must also use `istanbul`.
 
-Native browser V8 coverage currently profiles scripts in the page renderer target only. It does not collect code that runs exclusively in dedicated `Worker` or `SharedWorker` targets. Use `istanbul` when worker-only code must contribute coverage.
+Native browser V8 coverage does not collect scripts identified only by `blob:`, `data:`, another non-HTTP source URL, or no URL, including anonymous `eval` and `new Function` calls. It also does not collect code that runs exclusively in dedicated `Worker` or `SharedWorker` targets. Use `istanbul` when these scripts must contribute coverage.
 
 ### include
 

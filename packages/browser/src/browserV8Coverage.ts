@@ -16,6 +16,17 @@ export type BrowserV8CoverageResourceStore = {
   sourceMaps: Map<string, string>;
 };
 
+const resolveCoverageResourceUrl = (value: string): string | null => {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+};
+
 const resolveProjectHttpSource = (
   source: string,
   rootPath: string,
@@ -140,8 +151,9 @@ export const takeBrowserV8Coverage = async ({
 
   await Promise.all(
     rawEntries.map(async (entry) => {
-      const url = normalizeJavaScriptUrl(entry.url);
-      if (!url || !entry.source) {
+      const url = resolveCoverageResourceUrl(entry.url);
+      const fetchUrl = normalizeJavaScriptUrl(entry.url);
+      if (!url || !fetchUrl || !entry.source) {
         return;
       }
       const inlineSourceMap = resolveInlineSourceMap(entry.source);
@@ -177,9 +189,9 @@ export const takeBrowserV8Coverage = async ({
       }
 
       if (sourceMap) {
-        sourceMapCache.set(url, sourceMap);
+        sourceMapCache.set(fetchUrl, sourceMap);
       } else {
-        sourceMapCache.delete(url);
+        sourceMapCache.delete(fetchUrl);
       }
       if (normalizedSourceMap) {
         if (resourceStore?.sourceMaps.get(filePath) !== normalizedSourceMap) {

@@ -377,4 +377,76 @@ describe('browser V8 coverage', () => {
 
     expect(sourceMapCache.has(entry.url)).toBe(false);
   });
+
+  it('preserves query strings in coverage resource identities', async () => {
+    const entries = [
+      {
+        url: 'http://localhost:4000/query-variant.js?variant=a',
+        scriptId: '1',
+        source: "Reflect.set(globalThis, '__QUERY_VARIANT__', 'a');",
+        functions: [],
+      },
+      {
+        url: 'http://localhost:4000/query-variant.js?variant=b',
+        scriptId: '2',
+        source: "Reflect.set(globalThis, '__QUERY_VARIANT__', 'b');",
+        functions: [],
+      },
+    ];
+    const resourceStore = createResourceStore();
+
+    const result = await takeBrowserV8Coverage({
+      collector: {
+        start: async () => {},
+        take: async () => entries,
+      },
+      fetchTimeout: 1000,
+      page: {} as BrowserProviderPage,
+      projectUrl: 'http://localhost:4000',
+      rootPath: '/project',
+      sourceMapCache: new Map(),
+      resourceStore,
+    });
+
+    expect(result).toMatchObject({
+      entries: entries.map(({ url, scriptId, functions }) => ({
+        url,
+        scriptId,
+        filePath: url,
+        functions,
+      })),
+    });
+    expect([...resourceStore.assetFiles]).toEqual(
+      entries.map(({ url, source }) => [url, source]),
+    );
+  });
+
+  it('excludes non-HTTP coverage resource identities', async () => {
+    const result = await takeBrowserV8Coverage({
+      collector: {
+        start: async () => {},
+        take: async () => [
+          {
+            url: 'blob:http://localhost:4000/script-id',
+            scriptId: '1',
+            source: 'globalThis.value = 1;',
+            functions: [],
+          },
+          {
+            url: 'data:text/javascript,globalThis.value=2',
+            scriptId: '2',
+            source: 'globalThis.value = 2;',
+            functions: [],
+          },
+        ],
+      },
+      fetchTimeout: 1000,
+      page: {} as BrowserProviderPage,
+      projectUrl: 'http://localhost:4000',
+      rootPath: '/project',
+      sourceMapCache: new Map(),
+    });
+
+    expect(result).toBeNull();
+  });
 });

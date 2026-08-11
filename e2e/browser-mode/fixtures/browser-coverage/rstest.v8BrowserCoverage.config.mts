@@ -12,6 +12,7 @@ export default defineConfig({
     'tests/sum.test.ts',
     'tests/malformed-source-map.test.ts',
     'tests/cross-origin.fixture.ts',
+    'tests/native-v8-scripts.fixture.ts',
   ],
   coverage: {
     enabled: true,

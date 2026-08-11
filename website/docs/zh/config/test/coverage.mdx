@@ -220,11 +220,11 @@ const generatedLookup = createGeneratedLookup();
 
 `ignore file` 也会被识别，但它会在 source map 重映射前作用于生成后的 coverage entry。正常的 Rstest 输出中，一个生成 chunk 可能包含多个源文件，因此如果需要排除某个源文件或一组生成文件，请优先使用 `coverage.exclude`。
 
-`v8` provider 适用于 `node`、`jsdom` 和 `happy-dom` 测试环境。Browser Mode 的稳定支持范围仅限使用 Playwright provider 的 headless、非 watch Chromium 运行。Chromium coverage 从实际执行的浏览器产物收集，并通过 source map 重映射，无需对应用代码插桩。
+`v8` provider 适用于 `node`、`jsdom` 和 `happy-dom` 测试环境。Browser Mode 的稳定支持范围仅限使用 Playwright provider 的 headless、非 watch Chromium 运行。Chromium coverage 从 page renderer 中实际执行且通过 HTTP(S) URL 标识的脚本收集，并通过 source map 重映射，无需对应用代码插桩。带 query 的脚本 URL、classic script 和 module script 均受支持。
 
 headed 和 watch Browser Mode coverage 仍为实验性能力。报告可能包含 container 或非活跃 runner frame 的执行数据，watch rebuild 也可能无法严格保持 script 与 source map 的版本配对。如果这些模式需要稳定的 coverage 语义，请使用默认的 `istanbul` provider。Firefox 和 WebKit 未暴露所需的原生 coverage API，也必须使用 `istanbul`。
 
-浏览器原生 V8 coverage 目前只分析 page renderer target 中的脚本，不会收集仅在独立 `Worker` 或 `SharedWorker` target 中运行的代码。如果 worker-only 代码也必须计入 coverage，请使用 `istanbul`。
+浏览器原生 V8 coverage 不会收集仅通过 `blob:`、`data:`、其他非 HTTP source URL 标识或没有 URL 的脚本，包括 anonymous `eval` 和 `new Function` 调用；也不会收集仅在独立 `Worker` 或 `SharedWorker` target 中运行的代码。如果这些脚本也必须计入 coverage，请使用 `istanbul`。
 
 ### include
 

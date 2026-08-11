@@ -85,6 +85,15 @@ describe('browser mode - coverage', () => {
     expect(cli.stdout.replaceAll(' ', '')).toContain(
       'cross-origin.ts|100|100|100|100',
     );
+    expect(cli.stdout.replaceAll(' ', '')).toContain(
+      'classic.ts|100|100|100|100',
+    );
+    expect(cli.stdout.replaceAll(' ', '')).toContain(
+      'query-a.ts|100|100|100|100',
+    );
+    expect(cli.stdout.replaceAll(' ', '')).toContain(
+      'query-b.ts|100|100|100|100',
+    );
     expect(cli.stdout.replaceAll(' ', '')).toContain('sum.ts|100|100|100|100');
     expect(cli.stdout.replaceAll(' ', '')).toContain('multiply.ts|0|100|0|0');
   });
