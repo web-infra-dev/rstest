@@ -433,9 +433,9 @@ export const createHeadlessScheduler = async ({
           }, FIXTURE_CLEANUP_TIMEOUT_MS);
           fileCleanupStates.set(payload.testPath, state);
           // The client waits for this acknowledgement before it can finish
-          // the file and load the next file on a reused page. This makes the
-          // V8 take/start pair a real inter-file barrier.
-          await collectCoverage();
+          // the file. Coverage is collected from the acknowledged
+          // file-complete message instead, after file/worker fixture cleanup
+          // has run, so cleanup-only execution is included in the report.
         },
       });
 
