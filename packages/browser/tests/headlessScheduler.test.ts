@@ -186,6 +186,7 @@ type HarnessOptions = {
   bail?: number;
   maxWorkers?: number;
   isolate?: boolean;
+  hasSetupFiles?: boolean;
   failedCount?: () => number;
   projectEntries?: () => Promise<
     Array<{ project: { name: string }; testFiles: string[] }>
@@ -263,6 +264,7 @@ const createHarness = (options: HarnessOptions = {}) => {
         name: 'browser',
         viewport: { width: 800, height: 600 },
         runtimeConfig: { isolate: options.isolate },
+        hasSetupFiles: options.hasSetupFiles,
       },
     ] as BrowserProjectRuntime[],
     hostOptions: {
@@ -382,6 +384,58 @@ describe('headless scheduler', () => {
         )
         .map((message) => message.payload.testPath),
     ).toEqual(['/a.test.ts', '/b.test.ts']);
+  });
+
+  it('restarts V8 coverage between files in a non-isolated worker', async () => {
+    const starts: number[] = [];
+    const takes: number[] = [];
+    const harness = createHarness({
+      files: [file('/a.test.ts'), file('/b.test.ts')],
+      isolate: false,
+      scripts: [
+        async (page) => {
+          await page.send(complete('/a.test.ts'));
+          await page.send(complete('/b.test.ts'));
+          await page.send({ type: 'complete' });
+        },
+      ],
+      v8Coverage: {
+        start: async (page) => {
+          starts.push((page as FakePage).id);
+        },
+        take: async (page) => {
+          takes.push((page as FakePage).id);
+          return { entries: [] };
+        },
+      },
+    });
+
+    await harness.result;
+
+    expect(starts).toEqual([0, 0, 0]);
+    expect(takes).toEqual([0, 0]);
+  });
+
+  it('keeps setup-file projects isolated even when isolate is false', async () => {
+    const harness = createHarness({
+      files: [file('/a.test.ts'), file('/b.test.ts')],
+      isolate: false,
+      hasSetupFiles: true,
+      scripts: [
+        async (page) => {
+          await page.send(complete('/a.test.ts'));
+          await page.send({ type: 'complete' });
+        },
+        async (page) => {
+          await page.send(complete('/b.test.ts'));
+          await page.send({ type: 'complete' });
+        },
+      ],
+    });
+
+    await harness.result;
+
+    expect(harness.browser.contexts).toHaveLength(2);
   });
 
   it('fans files out to the worker pool', async () => {
@@ -534,6 +588,7 @@ describe('headless scheduler', () => {
       const cleanupStarted = createDeferred();
       const harness = createHarness({
         files: [file('/a.test.ts'), file('/b.test.ts')],
+        isolate: false,
         maxWorkers: 1,
         scripts: [
           async (page) => {
@@ -572,7 +627,7 @@ describe('headless scheduler', () => {
       await rs.advanceTimersByTimeAsync(FIXTURE_CLEANUP_TIMEOUT_MS);
       await harness.result;
 
-      expect(harness.browser.contexts).toHaveLength(2);
+      expect(harness.browser.contexts).toHaveLength(1);
       expect(harness.completedResults).toEqual([
         expect.objectContaining({
           status: 'fail',
@@ -586,8 +641,17 @@ describe('headless scheduler', () => {
             }),
           ],
         }),
+        expect.objectContaining({
+          status: 'fail',
+          testPath: '/b.test.ts',
+          errors: [
+            expect.objectContaining({
+              message: `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms; file was not run because the previous file cleanup timed out`,
+            }),
+          ],
+        }),
       ]);
-      expect(harness.routed).toContainEqual(complete('/b.test.ts'));
+      expect(harness.routed).not.toContainEqual(complete('/b.test.ts'));
       expect(harness.fatalErrors).toEqual([]);
     } finally {
       rs.useRealTimers();

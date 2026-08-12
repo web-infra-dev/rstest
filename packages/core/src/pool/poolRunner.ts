@@ -95,7 +95,6 @@ export class PoolRunner {
   private cleanupTimer: NodeJS.Timeout | undefined;
   private fixtureCleanupTimer: NodeJS.Timeout | undefined;
   private workerCleanupCompleted = false;
-  private buildId: number | undefined;
   private lastFatalError: Error | undefined;
   /**
    * Set when the worker reports `fatal_error` or a transport error. The
@@ -126,10 +125,6 @@ export class PoolRunner {
 
   isUsable(): boolean {
     return this.state === 'STARTED' && !this.crashed;
-  }
-
-  canReuseForBuild(buildId: number | undefined): boolean {
-    return this.buildId === undefined || this.buildId === buildId;
   }
 
   start(): Promise<void> {
@@ -339,7 +334,6 @@ export class PoolRunner {
     }
 
     this.installRpc(task.rpcMethods);
-    this.buildId = task.options.context?.buildId;
     // Per-task stderr attribution: discard buffered output from a prior
     // task on the same reused worker (`isolate: false`). Otherwise
     // `attachStderrToError` would mix the previous file's stderr into the

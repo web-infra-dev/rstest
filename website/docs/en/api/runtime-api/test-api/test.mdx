@@ -456,7 +456,7 @@ const apiTest = test.extend(
 );
 ```
 
-Worker-scoped fixtures must be declared at the top level of the test file. They cannot be overridden by a later `.extend()` call. Their setup is bounded by the timeout of the test that first requests them; cleanup is bounded by the worker host. A terminated worker cannot run user cleanup callbacks. In browser mode, `isolate: false` keeps the fixture alive across files assigned to the same headless browser worker; with the default isolation, its lifetime is equivalent to one file.
+Worker-scoped fixtures must be declared at the top level of the test file. They cannot be overridden by a later `.extend()` call. Their setup is bounded by the timeout of the test that first requests them; cleanup is bounded by the worker host. A terminated worker cannot run user cleanup callbacks. In browser mode, `isolate: false` keeps the fixture alive across files assigned to the same headless browser worker; projects with `setupFiles` remain file-isolated so setup modules run for every file; with the default isolation, its lifetime is equivalent to one file.
 
 ### Plain value fixtures
 

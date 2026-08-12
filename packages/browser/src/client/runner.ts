@@ -12,7 +12,6 @@ import type {
   FileCleanupHooks,
   RunnerHooks,
   RuntimeConfig,
-  TestSuiteListenersSnapshot,
   WorkerState,
 } from '@rstest/core/internal/browser-runtime';
 import {
@@ -70,6 +69,46 @@ const debugLog = (...args: unknown[]): void => {
     console.log(...args);
   }
 };
+
+const cloneCoverage = (coverage: CoverageMapData): CoverageMapData =>
+  JSON.parse(JSON.stringify(coverage)) as CoverageMapData;
+
+const subtractCounters = (
+  current: Record<string, number>,
+  previous?: Record<string, number>,
+): Record<string, number> =>
+  Object.fromEntries(
+    Object.entries(current).map(([key, value]) => [
+      key,
+      value - (previous?.[key] ?? 0),
+    ]),
+  );
+
+const getCoverageDelta = (
+  current: CoverageMapData,
+  previous?: CoverageMapData,
+): CoverageMapData =>
+  Object.fromEntries(
+    Object.entries(current).map(([path, file]) => {
+      const previousFile = previous?.[path];
+      return [
+        path,
+        {
+          ...file,
+          s: subtractCounters(file.s, previousFile?.s),
+          f: subtractCounters(file.f, previousFile?.f),
+          b: Object.fromEntries(
+            Object.entries(file.b).map(([key, values]) => [
+              key,
+              values.map(
+                (value, index) => value - (previousFile?.b[key]?.[index] ?? 0),
+              ),
+            ]),
+          ),
+        },
+      ];
+    }),
+  );
 
 const cleanupWorkerFixturesWithTimeout = async (): Promise<void> => {
   const realTimers = getRealTimers();
@@ -630,40 +669,9 @@ const run = async () => {
   // isolated execution tears it down after each file.
   const keepWorkerFixtures = runtimeConfig.isolate === false;
   let restoreWorkerConsole: (() => void) | undefined;
-  let setupListeners: TestSuiteListenersSnapshot | undefined;
   let workerCleanupFailed = false;
+  let previousIstanbulCoverage: CoverageMapData | undefined;
   try {
-    if (currentSetupLoaders.length > 0 && testKeysToRun.length > 0) {
-      const setupTestPath = toAbsolutePath(
-        testKeysToRun[0]!,
-        currentProject.projectRoot,
-      );
-      const setupRuntime = await createRstestRuntime(
-        {
-          project: projectRuntime.name,
-          projectRoot: projectRuntime.projectRoot,
-          rootPath: options.rootPath,
-          runtimeConfig,
-          taskId: 0,
-          buildId: 0,
-          outputModule: false,
-          environment: 'browser',
-          testPath: setupTestPath,
-          distPath: setupTestPath,
-          snapshotOptions: {
-            updateSnapshot: options.snapshot.updateSnapshot,
-            snapshotEnvironment: new BrowserSnapshotEnvironment(),
-            snapshotFormat: runtimeConfig.snapshotFormat,
-          },
-        },
-        { taskContext: createBrowserTaskContext() },
-      );
-      installRuntimeGlobals(setupRuntime, runtimeConfig);
-      await loadSetupFiles();
-      await setupRuntime.runner.collectTests();
-      setupListeners = setupRuntime.runner.getRootSuiteListeners();
-    }
-
     for (let fileIndex = 0; fileIndex < testKeysToRun.length; fileIndex++) {
       const key = testKeysToRun[fileIndex]!;
       const testPath = toAbsolutePath(key, currentProject.projectRoot);
@@ -743,7 +751,6 @@ const run = async () => {
       try {
         runtime = await createRstestRuntime(workerState, {
           taskContext,
-          setupListeners,
         });
         installRuntimeGlobals(runtime, runtimeConfig);
       } catch (error) {
@@ -788,7 +795,12 @@ const run = async () => {
       const runnerHooks: RunnerHooks & FileCleanupHooks = {
         onFileCleanupStart: async (result) => {
           if (result && globalThis.__coverage__) {
-            result.coverage = globalThis.__coverage__ as CoverageMapData;
+            const currentCoverage = globalThis.__coverage__ as CoverageMapData;
+            result.coverage = getCoverageDelta(
+              currentCoverage,
+              previousIstanbulCoverage,
+            );
+            previousIstanbulCoverage = cloneCoverage(currentCoverage);
           }
           await dispatchFileCleanup('start', result, window.parent !== window);
         },
@@ -849,6 +861,11 @@ const run = async () => {
       let workerCleanupAttempted = false;
 
       try {
+        // Setup files run once for every browser page. The host keeps batches
+        // with setup files file-isolated so module side effects are not shared
+        // across files.
+        await loadSetupFiles();
+
         // Record script URLs before loading the test file
         const beforeScripts = getScriptUrls();
 
@@ -870,7 +887,24 @@ const run = async () => {
 
         if (!keepWorkerFixtures) {
           workerCleanupAttempted = true;
-          await cleanupWorkerFixturesWithTimeout();
+          try {
+            await cleanupWorkerFixturesWithTimeout();
+          } catch (cleanupError) {
+            const formattedCleanupError =
+              cleanupError instanceof Error
+                ? cleanupError
+                : new Error(String(cleanupError));
+            result.status = 'fail';
+            result.errors = [
+              ...(result.errors ?? []),
+              {
+                fullStack: true,
+                message: `Worker fixture cleanup failed: ${formattedCleanupError.message}`,
+                name: formattedCleanupError.name,
+                stack: formattedCleanupError.stack,
+              },
+            ];
+          }
         }
 
         // The browser dispatches `unhandledrejection` in a task queued at the
@@ -907,7 +941,6 @@ const run = async () => {
         let error =
           _error instanceof Error ? _error : new Error(String(_error));
         if (!keepWorkerFixtures && !workerCleanupAttempted) {
-          workerCleanupAttempted = true;
           try {
             await cleanupWorkerFixturesWithTimeout();
           } catch (cleanupError) {

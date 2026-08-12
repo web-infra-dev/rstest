@@ -41,6 +41,8 @@ export type BrowserProjectRuntime = {
   environmentName: string;
   projectRoot: string;
   runtimeConfig: SerializedRuntimeConfig;
+  /** Setup modules are run in a fresh page per file and cannot be batched. */
+  hasSetupFiles?: boolean;
   viewport?: BrowserViewport;
 };
 

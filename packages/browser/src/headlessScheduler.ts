@@ -136,6 +136,12 @@ export const createHeadlessScheduler = async ({
       project.runtimeConfig?.isolate !== false,
     ]),
   );
+  const projectHasSetupFiles = new Map(
+    projectRuntimeConfigs.map((project) => [
+      project.name,
+      project.hasSetupFiles === true,
+    ]),
+  );
   const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
   const sessionRegistry = new RunnerSessionRegistry();
   setDispatchPageResolver((target) => ({
@@ -280,6 +286,7 @@ export const createHeadlessScheduler = async ({
     let settled = false;
     let resolveDone: (() => void) | null = null;
     let workerCleanupTimer: ReturnType<typeof setTimeout> | undefined;
+    let dispatchQueue = Promise.resolve();
     const completedFiles = new Set<string>();
     const keepWorkerFixtures = projectIsolation.get(file.projectName) === false;
     const fileCleanupStates = new Map<
@@ -329,6 +336,12 @@ export const createHeadlessScheduler = async ({
           );
           if (coverage) {
             rawCoverage.push(coverage);
+          }
+          // Playwright's take() stops JavaScript coverage collection. A
+          // non-isolated page runs multiple files, so restart collection
+          // before the next file is loaded.
+          if (keepWorkerFixtures) {
+            await v8Coverage.start(page);
           }
         })();
       }
@@ -389,6 +402,7 @@ export const createHeadlessScheduler = async ({
               const message = `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`;
               try {
                 await collectCoverage();
+                completedFiles.add(payload.testPath);
                 await handleTestFileComplete(
                   createFileCleanupTimeoutResult({
                     message,
@@ -397,6 +411,19 @@ export const createHeadlessScheduler = async ({
                     testPath: payload.testPath,
                   }),
                 );
+                for (const pendingFile of files) {
+                  if (completedFiles.has(pendingFile.testPath)) {
+                    continue;
+                  }
+                  completedFiles.add(pendingFile.testPath);
+                  await handleTestFileComplete(
+                    createFileCleanupTimeoutResult({
+                      message: `${message}; file was not run because the previous file cleanup timed out`,
+                      projectName: pendingFile.projectName,
+                      testPath: pendingFile.testPath,
+                    }),
+                  );
+                }
               } catch (error) {
                 const formatted = toError(error);
                 await handleFatal({
@@ -415,64 +442,74 @@ export const createHeadlessScheduler = async ({
       });
 
       await attachHeadlessRunnerTransport(page, {
-        onDispatchMessage: async (message) => {
-          try {
-            if (settled) {
-              return;
-            }
-            if (message.type === 'file-complete' || message.type === 'fatal') {
-              await collectCoverage();
+        onDispatchMessage: (message) => {
+          const queued = dispatchQueue.then(async () => {
+            try {
+              if (settled) {
+                return;
+              }
+              if (
+                message.type === 'file-complete' ||
+                message.type === 'fatal'
+              ) {
+                await collectCoverage();
+                if (message.type === 'file-complete') {
+                  coverageCollection = undefined;
+                }
+              }
+              await dispatchRunnerMessage(run, files, session.id, message);
               if (message.type === 'file-complete') {
-                coverageCollection = undefined;
+                const completedPath = message.payload.testPath;
+                completedFiles.add(completedPath);
+                if (
+                  keepWorkerFixtures &&
+                  completedFiles.size === files.length
+                ) {
+                  workerCleanupTimer = setTimeout(() => {
+                    if (settled) {
+                      return;
+                    }
+                    settled = true;
+                    void (async () => {
+                      await handleFatal({
+                        message: `Worker fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
+                      });
+                      await collectRunCoverage(run);
+                      await cancelRun(run, false);
+                      resolveDone?.();
+                    })();
+                  }, FIXTURE_CLEANUP_TIMEOUT_MS);
+                }
               }
-            }
-            await dispatchRunnerMessage(run, files, session.id, message);
-            if (message.type === 'file-complete') {
-              const completedPath = message.payload.testPath;
-              completedFiles.add(completedPath);
-              if (keepWorkerFixtures && completedFiles.size === files.length) {
-                workerCleanupTimer = setTimeout(() => {
-                  if (settled) {
-                    return;
-                  }
-                  settled = true;
-                  void (async () => {
-                    await handleFatal({
-                      message: `Worker fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
-                    });
-                    await collectRunCoverage(run);
-                    await cancelRun(run, false);
-                    resolveDone?.();
-                  })();
-                }, FIXTURE_CLEANUP_TIMEOUT_MS);
+              if (
+                message.type === 'complete' ||
+                (message.type === 'file-complete' &&
+                  files.length === 1 &&
+                  !keepWorkerFixtures)
+              ) {
+                if (workerCleanupTimer) {
+                  clearTimeout(workerCleanupTimer);
+                  workerCleanupTimer = undefined;
+                }
+                markDone();
+              } else if (message.type === 'fatal') {
+                markDone();
+                await collectRunCoverage(run);
+                await cancelRun(run, false);
               }
-            }
-            if (
-              message.type === 'complete' ||
-              (message.type === 'file-complete' &&
-                files.length === 1 &&
-                !keepWorkerFixtures)
-            ) {
-              if (workerCleanupTimer) {
-                clearTimeout(workerCleanupTimer);
-                workerCleanupTimer = undefined;
-              }
-              markDone();
-            } else if (message.type === 'fatal') {
+            } catch (error) {
+              const formatted = toError(error);
+              await handleFatal({
+                message: formatted.message,
+                stack: formatted.stack,
+              });
               markDone();
               await collectRunCoverage(run);
               await cancelRun(run, false);
             }
-          } catch (error) {
-            const formatted = toError(error);
-            await handleFatal({
-              message: formatted.message,
-              stack: formatted.stack,
-            });
-            markDone();
-            await collectRunCoverage(run);
-            await cancelRun(run, false);
-          }
+          });
+          dispatchQueue = queued.catch(() => {});
+          return queued;
         },
         onDispatchRpc: async (request) => {
           return dispatchRouter.dispatch({
@@ -657,7 +694,10 @@ export const createHeadlessScheduler = async ({
           return;
         }
         const batch = [next];
-        if (projectIsolation.get(next.projectName) === false) {
+        if (
+          projectIsolation.get(next.projectName) === false &&
+          !projectHasSetupFiles.get(next.projectName)
+        ) {
           while (
             batch.length < nonIsolatedBatchSize &&
             queue[0]?.projectName === next.projectName

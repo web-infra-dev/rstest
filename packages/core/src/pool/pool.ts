@@ -107,10 +107,7 @@ export class Pool {
       );
       if (reuseIndex !== -1) {
         const reuse = this.idleRunners.splice(reuseIndex, 1)[0]!;
-        if (
-          reuse.isUsable() &&
-          reuse.canReuseForBuild(task.options.context?.buildId)
-        ) {
+        if (reuse.isUsable()) {
           this.activeRunners.add(reuse);
           return reuse;
         }

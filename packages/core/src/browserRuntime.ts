@@ -21,7 +21,6 @@ export { createBrowserTaskContext } from './runtime/worker/taskContext.browser';
 export { cleanupWorkerFixtures } from './runtime/runner/fixtures';
 export type { TaskContext } from './runtime/worker/taskContext';
 export type { FileCleanupHooks } from './runtime/runner';
-export type { TestSuiteListenersSnapshot } from './runtime/runner/runtime';
 // Types for browser runtime
 export type {
   BrowserRuntimeConfig,

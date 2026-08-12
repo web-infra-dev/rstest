@@ -456,7 +456,7 @@ const apiTest = test.extend(
 );
 ```
 
-Worker scope fixture 必须在测试文件顶层声明，后续 `.extend()` 不能覆盖它。它的 setup 受首次请求它的测试 timeout 限制，cleanup 由 worker host 提供超时保护；如果 worker 被终止，则无法执行用户 cleanup。在 browser mode 中，`isolate: false` 会让分配到同一个 headless browser worker 的多个文件复用该 fixture；默认隔离模式下，它的生命周期等同于单个文件。
+Worker scope fixture 必须在测试文件顶层声明，后续 `.extend()` 不能覆盖它。它的 setup 受首次请求它的测试 timeout 限制，cleanup 由 worker host 提供超时保护；如果 worker 被终止，则无法执行用户 cleanup。在 browser mode 中，`isolate: false` 会让分配到同一个 headless browser worker 的多个文件复用该 fixture；包含 `setupFiles` 的 project 会保持按文件隔离，以确保 setup module 在每个文件执行；默认隔离模式下，它的生命周期等同于单个文件。
 
 ### 普通值 fixture
 
