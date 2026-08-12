@@ -51,7 +51,8 @@ expect.element(locator: Locator): BrowserElementExpect
 
 1. **Per-assertion timeout**：直接传给 matcher 的 `timeout` 参数，优先级最高
 2. **全局 `testTimeout` 配置**：来自 `rstest.config.ts` 中的 `testTimeout`（默认 5000ms）
-3. **RPC 兜底超时**：30000ms（仅作为通信层保底，通常不会触及）
+
+断言超时与 Browser RPC transport timeout 独立。测试执行期间，browser 和 snapshot RPC 请求不会额外增加超时；framework setup 和文件清理 RPC 使用独立的 30 秒 watchdog。
 
 ```ts
 // 使用全局 testTimeout（默认 5000ms）
