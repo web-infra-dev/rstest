@@ -11,6 +11,7 @@ import { createRunner, runnerAPI } from '../runner';
 import type { TaskContext } from '../worker/taskContext';
 import { assert, createFileExpect, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
+import type { RootSuiteListeners } from '../runner/runtime';
 
 /**
  * Live per-file API binding under `isolate: false` (the canonical contract).
@@ -53,6 +54,8 @@ export const createRstestRuntime = async (
     ) => Promise<TestFileResult>;
     collectTests: () => Promise<TestInfo[]>;
     getCurrentTest: () => TestCase | undefined;
+    getRootSuiteListeners: () => RootSuiteListeners;
+    setRootSuiteListeners: (listeners: RootSuiteListeners) => void;
   };
   api: Rstest;
 }> => {

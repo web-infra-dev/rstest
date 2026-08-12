@@ -7,6 +7,8 @@ import {
   claimHeadedCycleScope,
   createHeadedScheduler,
 } from '../src/headedScheduler';
+import type { FatalPayload } from '../src/hostPayloads';
+import { DISPATCH_NAMESPACE_RUNNER } from '../src/protocol';
 import type {
   BrowserProviderContext,
   BrowserProviderPage,
@@ -113,20 +115,16 @@ describe('claimHeadedCycleScope', () => {
 });
 
 describe('createHeadedScheduler', () => {
-  it('finishes fatal handling when coverage collection rejects', async () => {
+  it('settles the run and still routes the fatal when coverage take rejects', async () => {
     const testFile = {
       testPath: '/fatal.test.ts',
       projectName: 'browser',
     };
     let hostMethods: HostRpcMethods | undefined;
-    let resolveReload: ((value: { runId: string }) => void) | undefined;
-    const reloadRequested = Promise.withResolvers<void>();
-    const reloadResult = new Promise<{ runId: string }>((resolve) => {
-      resolveReload = resolve;
-    });
+    const reloadRequested = Promise.withResolvers<string>();
     const page = {} as BrowserProviderPage;
     const context = {} as BrowserProviderContext;
-    const handleFatal = rstest.fn(async () => {});
+    const handleFatal = rstest.fn(async (_payload: FatalPayload) => {});
     const coverageError = new Error('coverage collection failed');
     const fatalErrorRef: { current: Error | null } = { current: null };
     const snapshotManager = new SnapshotManager({ updateSnapshot: 'none' });
@@ -138,17 +136,30 @@ describe('createHeadedScheduler', () => {
       containerServer: { port: 3000 },
       rpcManager: {
         currentWebSocket: null,
-        reloadTestFile: () => {
-          reloadRequested.resolve();
-          return reloadResult;
+        isConnected: false,
+        reloadTestFile: async (_testFile: string, runId: string) => {
+          reloadRequested.resolve(runId);
         },
         updateMethods: (methods: HostRpcMethods) => {
           hostMethods = methods;
-          void methods.onRunnerFramesReady([testFile.testPath]);
         },
       },
-      watchState: { lastTestFiles: [] },
+      watchState: { lastTestFiles: [], headedFileSetVersion: 0 },
     } as unknown as BrowserRuntime;
+
+    // The runner-namespace routing the controller normally installs: the gate
+    // must reach the fatal handler even though the coverage take just threw.
+    const createDispatchRouter = () => {
+      const router = new HostDispatchRouter();
+      router.register(DISPATCH_NAMESPACE_RUNNER, async (request) => {
+        if (request.method === 'fatal') {
+          const payload = request.args as FatalPayload;
+          fatalErrorRef.current = new Error(payload.message);
+          await handleFatal(payload);
+        }
+      });
+      return router;
+    };
 
     const schedulerResult = createHeadedScheduler({
       context: {
@@ -172,19 +183,12 @@ describe('createHeadedScheduler', () => {
       },
       projectRoots: new Map([['browser', '/project']]),
       isWatchMode: true,
-      createDispatchRouter: () => new HostDispatchRouter(),
-      handlers: {
-        handleTestFileStart: async () => {},
-        handleTestCaseResult: async () => {},
-        handleTestFileComplete: async () => {},
-        handleLog: async () => {},
-        handleFatal,
-      },
+      createDispatchRouter,
+      handlers: { handleTestFileComplete: async () => {} },
       fatalErrorRef,
       watchSignals: {
         setDispatchRerun: () => {},
-        signalInvalidation: async () => {},
-        awaitSignalledCycle: async () => {},
+        signalInvalidation: async () => ({ cycle: Promise.resolve() }),
       },
       setDispatchPageResolver: () => {},
       createWatchSession: () => ({
@@ -202,20 +206,26 @@ describe('createHeadedScheduler', () => {
       destroyRuntime: async () => {},
     });
 
-    await reloadRequested.promise;
-    resolveReload?.({ runId: 'fatal-run' });
-    await Promise.resolve();
-    await Promise.resolve();
+    // The identity the fatal must speak under is the one the host minted for
+    // this reload — the fake transport hands it back like the wire would.
+    const runId = await reloadRequested.promise;
     if (!hostMethods) {
       throw new Error('Expected headed RPC methods to be registered');
     }
 
-    await expect(
-      hostMethods.onFatal({ message: 'fatal test failure' }),
-    ).rejects.toBe(coverageError);
-    expect(handleFatal).toHaveBeenCalledWith({
-      message: 'fatal test failure',
+    const response = await hostMethods.dispatch({
+      namespace: DISPATCH_NAMESPACE_RUNNER,
+      method: 'fatal',
+      requestId: 'req-fatal',
+      runId,
+      args: { message: 'fatal test failure' },
     });
+
+    expect(response).not.toMatchObject({ stale: true });
+    expect(handleFatal).toHaveBeenCalledWith({ message: 'fatal test failure' });
+    // The run settled (the scheduler's serial loop got released) and the take
+    // failure neither wedged it nor displaced the fatal as the cycle outcome.
     await expect(schedulerResult).resolves.toMatchObject({ rawCoverage: [] });
+    expect(fatalErrorRef.current?.message).toBe('fatal test failure');
   });
 });

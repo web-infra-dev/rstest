@@ -26,7 +26,6 @@ import {
   type RstestContext,
   resolveSnapshotPathDefault,
   serializableConfig,
-  type Test,
   type TestFileResult,
   type TestResult,
   type UserConsoleLog,
@@ -60,6 +59,7 @@ import type {
   BrowserHostConfig,
   BrowserProjectRuntime,
   BrowserRpcRequest,
+  RunnerEnvelope,
   SnapshotRpcRequest,
   TestFileInfo,
 } from './protocol';
@@ -342,9 +342,10 @@ export const runBrowserController = async (
   const coverageConfig = browserProjects.find(
     (project) => project.normalizedConfig.coverage?.enabled,
   )?.normalizedConfig.coverage;
-  const coverageProvider = coverageConfig?.enabled
-    ? await createCoverageProvider(coverageConfig, context.rootPath)
-    : null;
+  const coverageProvider =
+    !filesOnly && context.command !== 'list' && coverageConfig?.enabled
+      ? await createCoverageProvider(coverageConfig, context.rootPath)
+      : null;
   const browserCoverageCapabilityError =
     !filesOnly &&
     context.command !== 'list' &&
@@ -453,11 +454,6 @@ export const runBrowserController = async (
         freezeShardedEntries: options?.freezeShardedEntries,
         tempDir,
         isWatchMode,
-        onTriggerRerun: isWatchMode
-          ? async () => {
-              await watchSignals.runDispatchRerun();
-            }
-          : undefined,
         containerDistPath,
         containerDevServer,
         skipProviderLaunch:
@@ -486,6 +482,11 @@ export const runBrowserController = async (
   // collected entries, before adopting the runtime's entry snapshot below).
   if (isWatchMode) {
     watchState.lastTestFiles = collectWatchTestFiles(projectEntries);
+    // Bind the runtime's long-lived watch plugins to THIS entry's trigger —
+    // the runtime survives config-change restarts, this closure does not.
+    watchState.triggerRerun = async () => {
+      await watchSignals.runDispatchRerun();
+    };
   }
 
   // Mark files as pending-affected so the next trigger reruns them through the
@@ -665,7 +666,6 @@ export const runBrowserController = async (
       name: project.name,
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
-      hasSetupFiles: project.normalizedConfig.setupFiles.length > 0,
       runtimeConfig: serializableConfig(
         // `env` is the post-globalSetup change-set from the core pre-cycle
         // stage; the projection layers it between the static base and the
@@ -1145,13 +1145,7 @@ export const runBrowserController = async (
         ...schedulerDeps,
         runtime,
         v8Coverage,
-        handlers: {
-          handleTestFileStart,
-          handleTestCaseResult,
-          handleTestFileComplete,
-          handleLog,
-          handleFatal,
-        },
+        handlers: { handleTestFileComplete },
       });
 
   // The first build must not trigger a duplicate cycle, but a fatal test cycle
@@ -1308,7 +1302,6 @@ export const listBrowserTests = async (
       name: project.name,
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
-      hasSetupFiles: project.normalizedConfig.setupFiles.length > 0,
       runtimeConfig: serializableConfig(
         projectRuntimeConfig(project, {
           envMode: 'static',
@@ -1361,17 +1354,17 @@ export const listBrowserTests = async (
 
     const page = await browserContext.newPage();
 
-    // Expose dispatch function for browser client to send messages
+    // Expose dispatch function for browser client to send messages. The runner
+    // stamps its run identity beside every message; collection ignores it (a
+    // collect page is navigated directly, so there is no lease to check) and
+    // reads the message the envelope carries.
     await page.exposeFunction(
       DISPATCH_MESSAGE_TYPE,
-      (message: { type: string; payload?: unknown }) => {
+      (envelope: RunnerEnvelope) => {
+        const message = envelope.message;
         switch (message.type) {
           case 'collect-result': {
-            const payload = message.payload as {
-              testPath: string;
-              project: string;
-              tests: Test[];
-            };
+            const payload = message.payload;
             results.push({
               testPath: payload.testPath,
               project: payload.project,
@@ -1384,10 +1377,7 @@ export const listBrowserTests = async (
             resolveCollect?.();
             break;
           case 'fatal': {
-            const payload = message.payload as {
-              message: string;
-              stack?: string;
-            };
+            const payload = message.payload;
             error = new Error(payload.message);
             error.stack = payload.stack;
             resolveCollect?.();

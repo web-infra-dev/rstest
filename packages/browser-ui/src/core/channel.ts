@@ -3,10 +3,10 @@ import {
   DISPATCH_RESPONSE_TYPE,
 } from '@rstest/browser/protocol';
 import type {
-  BrowserClientMessage,
   BrowserDispatchRequest,
   BrowserDispatchResponse,
   HostRPC,
+  RunnerEnvelope,
 } from '../types';
 
 type DispatchRpcHandler = Pick<HostRPC, 'dispatch'>;
@@ -20,13 +20,28 @@ const canPostMessage = (
   );
 };
 
-export const readDispatchMessage = (
+/**
+ * Read a runner envelope off a postMessage event. Identity rides on the
+ * envelope, beside the message — the container relays it and never derives
+ * one of its own.
+ */
+export const readRunnerEnvelope = (
   event: MessageEvent,
-): BrowserClientMessage | null => {
+): RunnerEnvelope | null => {
   if (event.data?.type !== DISPATCH_MESSAGE_TYPE) {
     return null;
   }
-  return event.data.payload as BrowserClientMessage;
+  const payload = event.data.payload as Partial<RunnerEnvelope> | undefined;
+  if (
+    typeof payload !== 'object' ||
+    payload === null ||
+    typeof payload.message !== 'object' ||
+    payload.message === null ||
+    typeof payload.message.type !== 'string'
+  ) {
+    return null;
+  }
+  return payload as RunnerEnvelope;
 };
 
 const toDispatchErrorResponse = (

@@ -50,6 +50,13 @@ import { registerTestSuiteListener, wrapTimeout } from './task';
 
 type CollectStatus = 'lazy' | 'running';
 
+export type RootSuiteListeners = {
+  beforeAllListeners: BeforeAllListener[];
+  afterAllListeners: AfterAllListener[];
+  beforeEachListeners: BeforeEachListener[];
+  afterEachListeners: AfterEachListener[];
+};
+
 /**
  * Run-mode / concurrency modifiers shared by the `test` and `describe` APIs.
  * Both factories install these as chainable getters (`test.skip`,
@@ -362,6 +369,32 @@ export class RunnerRuntime {
     }
 
     return this.tests;
+  }
+
+  /**
+   * Capture hooks registered by a setup file so a browser worker can replay
+   * them on each per-file runtime while keeping the setup module cached.
+   */
+  getRootSuiteListeners(): RootSuiteListeners {
+    const root = this.tests.find(
+      (test): test is TestSuite =>
+        test.type === 'suite' && test.name === ROOT_SUITE_NAME,
+    );
+    return {
+      beforeAllListeners: [...(root?.beforeAllListeners ?? [])],
+      afterAllListeners: [...(root?.afterAllListeners ?? [])],
+      beforeEachListeners: [...(root?.beforeEachListeners ?? [])],
+      afterEachListeners: [...(root?.afterEachListeners ?? [])],
+    };
+  }
+
+  /** Replay setup-file hooks on a fresh file runtime. */
+  setRootSuiteListeners(listeners: RootSuiteListeners): void {
+    const root = this.getCurrentSuite();
+    root.beforeAllListeners = [...listeners.beforeAllListeners];
+    root.afterAllListeners = [...listeners.afterAllListeners];
+    root.beforeEachListeners = [...listeners.beforeEachListeners];
+    root.afterEachListeners = [...listeners.afterEachListeners];
   }
 
   addTestCase(test: Omit<TestCase, 'testPath' | 'context' | 'testId'>): void {

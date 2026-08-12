@@ -41,8 +41,6 @@ export type BrowserProjectRuntime = {
   environmentName: string;
   projectRoot: string;
   runtimeConfig: SerializedRuntimeConfig;
-  /** Setup modules are run in a fresh page per file and cannot be batched. */
-  hasSetupFiles?: boolean;
   viewport?: BrowserViewport;
 };
 
@@ -62,6 +60,16 @@ export type FileCleanupDispatchPayload = {
   result?: TestFileResult;
   runId?: string;
   testPath: string;
+};
+
+/**
+ * The committed test-file set plus its monotonic version. The version is what
+ * the container acks once every iframe for that set exists in the DOM, so both
+ * halves must travel together — a set without its version cannot be acked.
+ */
+export type VersionedTestFileSet = {
+  files: TestFileInfo[];
+  version: number;
 };
 
 /**
@@ -106,8 +114,12 @@ export type BrowserHostConfig = {
   /** Test files assigned to one browser worker session. */
   testFiles?: string[];
   /**
-   * Per-run identifier assigned by the container.
-   * Used by browser RPC calls to prevent stale requests from previous reruns.
+   * The run identity this document executes under — the runner's SOLE identity
+   * source, adopted once at boot and stamped on every outbound message. Headed:
+   * the container confers its frame's current lease over the config handshake
+   * (so even an HMR full reload boots with the run the host is awaiting NOW).
+   * Headless: injected host-side as `${run.token}:${session.id}`. Never
+   * derivable from the URL.
    */
   runId?: string;
   /**
@@ -138,6 +150,21 @@ export type BrowserHostConfig = {
    * Derived from testTimeout config.
    */
   rpcTimeout?: number;
+};
+
+/**
+ * The wrapper every runner document posts over `postMessage` / the headless
+ * bridge. Identity rides BESIDE the payload, never inside it: `message`
+ * payloads reach core reporting (`RunnerEventSink`, `BlobReporter`) as-is, so a
+ * transport identity spread into them would leak a nondeterministic UUID into
+ * reporter output. `runId` is the identity the document was granted at boot
+ * (headed: the container's config handshake; headless: the injected inline
+ * options) — never re-derived from the URL or the frame. Absent only for a
+ * document that was never granted one; the headed host drops such messages.
+ */
+export type RunnerEnvelope = {
+  runId?: string;
+  message: BrowserClientMessage;
 };
 
 export type BrowserClientMessage =
@@ -181,8 +208,9 @@ export type RunnerLifecycleMethod =
 /**
  * {@link BrowserClientMessage} types that are forwarded to the `runner`
  * namespace (by message `type`) rather than handled at the transport layer.
- * `Extract` keeps this a checked subset of the message union — renaming a
- * message type drops it here, surfacing as a missing handler downstream.
+ * `Extract` keeps this a checked subset of the message union. `ready` and
+ * `complete` are deliberately absent: they still arrive, but their only job
+ * is done at the dispatch gate and the router ignores them silently.
  */
 type RunnerMessageMethod = Extract<
   BrowserClientMessage['type'],
@@ -207,6 +235,14 @@ export type BrowserDispatchRequest = {
   // Optional so headed/container paths can adopt the same envelope even when
   // run-token isolation is only enforced in headless scheduling today.
   runToken?: number;
+  /**
+   * Headed run identity, stamped by the runner's dispatch transport from the
+   * identity its document adopted at boot. The headed host accepts a request
+   * iff this names a live run; headless keeps using the host-injected
+   * `runToken` instead (`runToken` is the CYCLE generation, `runId` is the
+   * RUN identity — they are not interchangeable).
+   */
+  runId?: string;
   namespace: string;
   method: string;
   args?: unknown;

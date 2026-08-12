@@ -136,12 +136,6 @@ export const createHeadlessScheduler = async ({
       project.runtimeConfig?.isolate !== false,
     ]),
   );
-  const projectHasSetupFiles = new Map(
-    projectRuntimeConfigs.map((project) => [
-      project.name,
-      project.hasSetupFiles === true,
-    ]),
-  );
   const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
   const sessionRegistry = new RunnerSessionRegistry();
   setDispatchPageResolver((target) => ({
@@ -446,9 +440,10 @@ export const createHeadlessScheduler = async ({
       });
 
       await attachHeadlessRunnerTransport(page, {
-        onDispatchMessage: (message) => {
+        onDispatchMessage: (envelope) => {
           const queued = dispatchQueue.then(async () => {
             try {
+              const message = envelope.message;
               if (settled) {
                 return;
               }
@@ -698,10 +693,7 @@ export const createHeadlessScheduler = async ({
           return;
         }
         const batch = [next];
-        if (
-          projectIsolation.get(next.projectName) === false &&
-          !projectHasSetupFiles.get(next.projectName)
-        ) {
+        if (projectIsolation.get(next.projectName) === false) {
           while (
             batch.length < nonIsolatedBatchSize &&
             queue[0]?.projectName === next.projectName

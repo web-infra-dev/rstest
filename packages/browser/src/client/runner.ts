@@ -33,6 +33,7 @@ import type {
   BrowserProjectRuntime,
   FileCleanupDispatchMethod,
   FileCleanupDispatchPayload,
+  RunnerEnvelope,
   RunnerLifecycleMethod,
 } from '../protocol';
 import {
@@ -47,6 +48,7 @@ import {
   getRpcTimeout,
   sendDispatchRequest,
 } from './dispatchTransport';
+import { adoptRunIdentity, getRunIdentity } from './runIdentity';
 import { BrowserSnapshotEnvironment } from './snapshot';
 import {
   findNewScriptUrl,
@@ -282,17 +284,18 @@ const interceptConsole = (
 };
 
 const send = (message: BrowserClientMessage): void => {
+  const envelope: RunnerEnvelope = { runId: getRunIdentity(), message };
   // If in iframe, send to parent window (container) which will forward to host via RPC
   if (window.parent !== window) {
     window.parent.postMessage(
-      { type: DISPATCH_MESSAGE_TYPE, payload: message },
+      { type: DISPATCH_MESSAGE_TYPE, payload: envelope },
       '*',
     );
     return;
   }
   // Fallback: direct call if running outside iframe (not typical)
   // Note: This binding may not exist if not using Playwright
-  window[DISPATCH_MESSAGE_TYPE]?.(message);
+  window[DISPATCH_MESSAGE_TYPE]?.(envelope);
 };
 
 const dispatchRunnerLifecycle = (
@@ -433,6 +436,10 @@ const run = async () => {
   // Wait for configuration if in iframe
   await waitForConfig();
   let options = window.__RSTEST_BROWSER_OPTIONS__;
+
+  if (options?.runId) {
+    adoptRunIdentity(options.runId);
+  }
 
   // Support reading testFile and testNamePattern from URL parameters
   const urlParams = new URLSearchParams(window.location.search);
@@ -671,6 +678,13 @@ const run = async () => {
   let restoreWorkerConsole: (() => void) | undefined;
   let workerCleanupFailed = false;
   let workerCleanupAttempted = false;
+  let setupListeners:
+    | ReturnType<
+        Awaited<
+          ReturnType<typeof createRstestRuntime>
+        >['runner']['getRootSuiteListeners']
+      >
+    | undefined;
   let previousIstanbulCoverage: CoverageMapData | undefined;
   try {
     for (let fileIndex = 0; fileIndex < testKeysToRun.length; fileIndex++) {
@@ -774,7 +788,7 @@ const run = async () => {
           args: {
             projectName: projectRuntime.name,
             result,
-            runId: options?.runId,
+            runId: getRunIdentity(),
             testPath,
           } satisfies FileCleanupDispatchPayload,
         };
@@ -862,10 +876,14 @@ const run = async () => {
       activeUnhandledErrors = unhandledErrors;
 
       try {
-        // Setup files run once for every browser page. The host keeps batches
-        // with setup files file-isolated so module side effects are not shared
-        // across files.
+        // Setup modules are cached when a non-isolated browser worker runs
+        // multiple files. Replay their root hooks on each fresh runtime so
+        // setup hooks retain per-file semantics without recreating the worker.
+        if (setupListeners) {
+          runtime.runner.setRootSuiteListeners(setupListeners);
+        }
         await loadSetupFiles();
+        setupListeners ??= runtime.runner.getRootSuiteListeners();
 
         // Record script URLs before loading the test file
         const beforeScripts = getScriptUrls();

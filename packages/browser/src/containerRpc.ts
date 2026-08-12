@@ -1,4 +1,4 @@
-import { logger, type TestResult } from '@rstest/core/internal/browser';
+import { logger } from '@rstest/core/internal/browser';
 import { type BirpcReturn, createBirpc } from 'birpc';
 import { type WebSocket, WebSocketServer } from 'ws';
 import type {
@@ -6,27 +6,26 @@ import type {
   BrowserDispatchResponse,
   BrowserHostConfig,
   TestFileInfo,
+  VersionedTestFileSet,
 } from './protocol';
-import type {
-  FatalPayload,
-  HeadedTestFileCompletePayload,
-  LogPayload,
-  ReloadTestFileAck,
-  TestFileStartPayload,
-} from './hostPayloads';
 
-/** RPC methods exposed by the host (server) to the container (client) */
+/**
+ * RPC methods exposed by the host (server) to the container (client).
+ * Runner lifecycle events (file-start, case-result, file-complete, log,
+ * fatal, ...) do NOT get dedicated methods: the container relays every runner
+ * message as a `dispatch` request on the `runner` namespace, stamped with the
+ * envelope's run identity, so the host has exactly one inbound gate.
+ */
 export type HostRpcMethods = {
   rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
-  getTestFiles: () => Promise<TestFileInfo[]>;
-  onRunnerFramesReady: (testFiles: string[]) => Promise<void>;
-  // Test result callbacks from container
-  onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
-  onTestCaseResult: (payload: TestResult) => Promise<void>;
-  onTestFileComplete: (payload: HeadedTestFileCompletePayload) => Promise<void>;
-  onLog: (payload: LogPayload) => Promise<void>;
-  onFatal: (payload: FatalPayload) => Promise<void>;
-  // Generic dispatch endpoint used by runner RPC requests.
+  getTestFiles: () => Promise<VersionedTestFileSet>;
+  /**
+   * The container committed the frame set for this version — every iframe for
+   * the set exists in the DOM. Versions are monotonic, so a stale ack can
+   * never satisfy a newer wait (a content signature could ABA back to a
+   * previously-acked value; a counter cannot).
+   */
+  onFrameSetReady: (version: number) => Promise<void>;
   dispatch: (
     request: BrowserDispatchRequest,
   ) => Promise<BrowserDispatchResponse>;
@@ -34,11 +33,20 @@ export type HostRpcMethods = {
 
 /** RPC methods exposed by the container (client) to the host (server) */
 export type ContainerRpcMethods = {
-  onTestFileUpdate: (testFiles: TestFileInfo[]) => Promise<void>;
+  onTestFileUpdate: (
+    testFiles: TestFileInfo[],
+    version: number,
+  ) => Promise<void>;
+  /**
+   * Grant `runId` (host-minted, already registered host-side) to this file's
+   * frame and navigate it. Identity travels IN — the container never mints or
+   * echoes identity back.
+   */
   reloadTestFile: (
     testFile: string,
+    runId: string,
     testNamePattern?: string,
-  ) => Promise<ReloadTestFileAck>;
+  ) => Promise<void>;
   /**
    * Replace the container's copy of the host config so runner iframes loaded
    * from now on receive fresh values (e.g. the 'u' shortcut flipping
@@ -63,16 +71,20 @@ export class ContainerRpcManager {
   private rpc: ContainerRpc | null = null;
   private methods: HostRpcMethods;
   private onDisconnect?: (error: Error) => void;
+  private onAttach?: (transportEpoch: number) => void;
   private detachActiveSocketListeners: (() => void) | null = null;
+  private transportEpoch = 0;
 
   constructor(
     wss: WebSocketServer,
     methods: HostRpcMethods,
     onDisconnect?: (error: Error) => void,
+    onAttach?: (transportEpoch: number) => void,
   ) {
     this.wss = wss;
     this.methods = methods;
     this.onDisconnect = onDisconnect;
+    this.onAttach = onAttach;
     this.setupConnectionHandler();
   }
 
@@ -80,9 +92,11 @@ export class ContainerRpcManager {
   updateMethods(
     methods: HostRpcMethods,
     onDisconnect?: (error: Error) => void,
+    onAttach?: (transportEpoch: number) => void,
   ): void {
     this.methods = methods;
     this.onDisconnect = onDisconnect;
+    this.onAttach = onAttach;
     // Re-create birpc with new methods if already connected
     if (this.ws && this.ws.readyState === this.ws.OPEN) {
       this.attachWebSocket(this.ws);
@@ -104,6 +118,12 @@ export class ContainerRpcManager {
     if (this.rpc && !this.rpc.$closed) {
       this.rpc.$close(new Error('Container RPC transport reattached'));
     }
+    // Bumped BEFORE the new transport can carry anything, and independent of
+    // the previous socket's `close` event — which may never fire for the host,
+    // because the line above just detached its listener. Runs leased under the
+    // previous epoch can no longer complete; the epoch observer settles them.
+    this.transportEpoch += 1;
+    this.onAttach?.(this.transportEpoch);
     this.ws = ws;
     const messageHandlers = new WeakMap<
       (data: any) => void,
@@ -180,8 +200,11 @@ export class ContainerRpcManager {
   }
 
   /** Notify container of test file changes */
-  async notifyTestFileUpdate(files: TestFileInfo[]): Promise<void> {
-    await this.rpc?.onTestFileUpdate(files);
+  async notifyTestFileUpdate(
+    files: TestFileInfo[],
+    version: number,
+  ): Promise<void> {
+    await this.rpc?.onTestFileUpdate(files, version);
   }
 
   /** Push a refreshed host config to the container (watch reruns) */
@@ -189,18 +212,21 @@ export class ContainerRpcManager {
     await this.rpc?.onHostConfigUpdate(config);
   }
 
-  /** Request container to reload a specific test file */
+  /** Grant a run to a test file's frame and navigate it */
   async reloadTestFile(
     testFile: string,
+    runId: string,
     testNamePattern?: string,
-  ): Promise<ReloadTestFileAck> {
+  ): Promise<void> {
     logger.debug(
       `[Browser UI] reloadTestFile called, rpc: ${this.rpc ? 'exists' : 'null'}, ws: ${this.ws ? 'exists' : 'null'}`,
     );
     if (!this.rpc) {
       throw new Error('Browser UI RPC not available for reloadTestFile');
     }
-    logger.debug(`[Browser UI] Calling reloadTestFile: ${testFile}`);
-    return this.rpc.reloadTestFile(testFile, testNamePattern);
+    logger.debug(
+      `[Browser UI] Calling reloadTestFile: ${testFile} (run ${runId})`,
+    );
+    await this.rpc.reloadTestFile(testFile, runId, testNamePattern);
   }
 }

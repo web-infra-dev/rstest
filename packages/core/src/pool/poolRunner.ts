@@ -419,8 +419,13 @@ export class PoolRunner {
         if (this.currentTask?.taskId === response.taskId) {
           this.clearFixtureCleanupTimer();
           if (response.error) {
+            // `runInPool` reports cleanup before its final run result. Do not
+            // reject the task here: that would discard the provisional result
+            // (coverage, trace events, metadata, and test results) and force
+            // `workerErrorToResult` to reconstruct a much smaller failure.
+            // The worker appends this error to `runResult` before sending
+            // `runFinished`; marking the runner crashed prevents reuse.
             this.crashed = true;
-            this.rejectCurrentTaskWithStderr(deserializeError(response.error));
           }
         }
         return;
