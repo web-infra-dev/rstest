@@ -135,6 +135,7 @@ export class RstestApi {
       if (configuredPackagePath) {
         throw new Error(
           formatConfiguredCoreNotFoundMessage(configuredPackagePath),
+          { cause: e },
         );
       }
       logger.error(formatCoreNotFoundMessage(this.cwd));

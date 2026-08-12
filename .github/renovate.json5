@@ -55,6 +55,11 @@
       matchPackageNames: ['**'],
       matchUpdateTypes: ['patch', 'minor'],
     },
+    {
+      groupName: 'rslint',
+      matchPackageNames: ['@rslint/**'],
+      groupSlug: 'rslint',
+    },
     // manually update peer dependencies
     {
       matchDepTypes: ['peerDependencies'],

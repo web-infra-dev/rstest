@@ -15,6 +15,7 @@ export const expectRejection = async (
     }
     throw new Error(
       `Expected the pool run to reject with an Error, got: ${String(error)}`,
+      { cause: error },
     );
   }
   throw new Error('Expected the pool run to reject, but it resolved.');

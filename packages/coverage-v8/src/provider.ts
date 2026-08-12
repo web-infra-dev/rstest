@@ -892,7 +892,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       fileEntries,
       COVERAGE_PROCESSING_CONCURRENCY,
       async ([filePath, rawEntries]) => {
-        let loadedSourceMaps = await loadSourceMaps?.([filePath]);
+        const loadedSourceMaps = await loadSourceMaps?.([filePath]);
         const parsedSourceMaps = new Map<string, SourceMapLike>();
         const retainedEntries: {
           entry: CoverageEntry;
@@ -939,7 +939,7 @@ export class CoverageProvider implements RstestCoverageProvider {
           return;
         }
 
-        let loadedAssetFiles = await loadAssetFiles?.([filePath]);
+        const loadedAssetFiles = await loadAssetFiles?.([filePath]);
         const loadedOptions = {
           assetFiles: loadedAssetFiles,
           sourceMaps: loadedSourceMaps,
@@ -971,8 +971,6 @@ export class CoverageProvider implements RstestCoverageProvider {
         sourceIdentityIds.clear();
         loadedOptions.assetFiles = undefined;
         loadedOptions.sourceMaps = undefined;
-        loadedAssetFiles = undefined;
-        loadedSourceMaps = undefined;
 
         for (const { entries, options, root } of groups.values()) {
           try {
