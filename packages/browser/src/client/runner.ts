@@ -719,6 +719,18 @@ const run = async () => {
       },
       onFileCleanupEnd: () =>
         dispatchFileCleanup('end', undefined, window.parent !== window),
+      onSnapshotSetupStart: async () => {
+        setRpcPhase('framework');
+      },
+      onSnapshotSetupEnd: async () => {
+        setRpcPhase('test');
+      },
+      onSnapshotFinishStart: async () => {
+        setRpcPhase('framework');
+      },
+      onSnapshotFinishEnd: async () => {
+        setRpcPhase('test');
+      },
       onTestFileReady: async (test) => {
         dispatchRunnerLifecycle('file-ready', test);
       },
@@ -791,7 +803,6 @@ const run = async () => {
         await preloadTestFileSourceMap(chunkUrl);
       }
 
-      setRpcPhase('test');
       const result = await runtime.runner.runTests(
         testPath,
         runnerHooks,
