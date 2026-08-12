@@ -1143,6 +1143,7 @@ export const runBrowserController = async (
     : await createHeadedScheduler({
         ...schedulerDeps,
         runtime,
+        v8Coverage,
         handlers: { handleTestFileComplete },
       });
 

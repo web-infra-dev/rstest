@@ -276,6 +276,35 @@ export const createHeadedScheduler = async ({
 
   const dispatchRouter = createDispatchRouter();
   const headedReloadQueue = createHeadedSerialTaskQueue();
+  let rawCoverage: unknown[] = [];
+  // The session's project is recorded at start rather than re-derived at each
+  // take site: headed reloads are strictly serial, so at most one coverage
+  // session exists, and it belongs to the run that started it — not to
+  // whatever payload happens to be in hand when it is taken.
+  let coverageProject: string | undefined;
+  let coverageStarted = false;
+  const startCoverage = async (projectName?: string): Promise<void> => {
+    if (!v8Coverage) {
+      return;
+    }
+    await v8Coverage.start(containerPage);
+    coverageStarted = true;
+    coverageProject = projectName;
+  };
+  const collectCoverage = async (): Promise<void> => {
+    if (!coverageStarted || !v8Coverage) {
+      return;
+    }
+    coverageStarted = false;
+    const coverage = await v8Coverage.take(
+      containerPage,
+      projectRoots.get(coverageProject ?? '') ?? context.rootPath,
+      coverageProject,
+    );
+    if (coverage) {
+      rawCoverage.push(coverage);
+    }
+  };
   let enqueueHeadedReload = async (
     _file: TestFileInfo,
     _testNamePattern?: string,
@@ -331,6 +360,8 @@ export const createHeadedScheduler = async ({
       runs.armCleanupDeadline(runId, FIXTURE_CLEANUP_TIMEOUT_MS, () => {
         void (async () => {
           try {
+            // Taken before recovery closes the page the session lives on.
+            await collectCoverage();
             // A cleanup timeout is a file failure, not a container failure:
             // report it, recover, then settle so the serial loop advances.
             await handleTestFileComplete(
@@ -361,6 +392,10 @@ export const createHeadedScheduler = async ({
     file: TestFileInfo,
     testNamePattern?: string,
   ): Promise<void> => {
+    // The coverage session opens before the run exists: a start failure must
+    // surface as a cycle error, and a minted run it could never serve would
+    // only burn the boot deadline.
+    await startCoverage(file.projectName);
     // Mint + register are one synchronous step BEFORE the RPC leaves the
     // process: no file-set commit or inbound message can land between "the
     // run exists on the wire" and "the registry owns it".
@@ -375,7 +410,19 @@ export const createHeadedScheduler = async ({
     rpcManager
       .reloadTestFile(file.testPath, runId, testNamePattern)
       .catch((error) => runs.reject(runId, error));
-    await settled;
+    try {
+      await settled;
+    } finally {
+      // A settlement that skipped the terminal gate (file-set commit, boot
+      // deadline, transport death) leaves the session running; flush it so
+      // the next file's start opens on a clean session. A no-op when the
+      // gate already took it, and best-effort by design: the settlement
+      // outcome — success or the error propagating past this block — is the
+      // truth about the run, and a take failure here must not replace it.
+      await collectCoverage().catch((error) => {
+        logger.debug(`[Headed] Failed to flush coverage: ${error}`);
+      });
+    }
   };
 
   // The in-page rerun button is a watch trigger like any other, so once the
@@ -438,17 +485,38 @@ export const createHeadedScheduler = async ({
         );
         return { requestId: request.requestId, stale: true };
       }
+      // The coverage session ends with the run that started it, taken while
+      // the admitted run still holds the page. A take failure must not wedge
+      // the claimed run: it settles below exactly like a handler failure.
+      let coverageError: Error | undefined;
+      if (isTerminal) {
+        try {
+          await collectCoverage();
+        } catch (error) {
+          coverageError = toError(error);
+        }
+      }
       const response = await dispatchRouter.dispatch(request);
       if (!isTerminal) {
         return response;
       }
       if (method === 'file-complete') {
-        if (response.error) {
-          runs.reject(runId, new Error(response.error));
+        const failure =
+          coverageError ??
+          (response.error ? new Error(response.error) : undefined);
+        if (failure) {
+          runs.reject(runId, failure);
         } else {
           runs.resolve(runId);
         }
       } else {
+        if (coverageError) {
+          // The fatal outranks it for the cycle outcome; anything but a log
+          // line would displace the error that actually killed the run.
+          logger.error(
+            `[Headed] Failed to take coverage during fatal handling: ${coverageError.message}`,
+          );
+        }
         // A fatal settles its OWN run; sibling runs and the watch session
         // survive. The cycle still fails through `fatalErrorRef`, which the
         // routed handler just set.
