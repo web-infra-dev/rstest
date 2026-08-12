@@ -892,85 +892,87 @@ export class CoverageProvider implements RstestCoverageProvider {
       fileEntries,
       COVERAGE_PROCESSING_CONCURRENCY,
       async ([filePath, rawEntries]) => {
-        const loadedSourceMaps = await loadSourceMaps?.([filePath]);
         const parsedSourceMaps = new Map<string, SourceMapLike>();
-        const retainedEntries: {
-          entry: CoverageEntry;
-          payload: RawCoveragePayload;
-        }[] = [];
+        const groups = new Map<string, CoverageEntryGroup>();
 
-        for (const { entry, payload } of rawEntries) {
-          const sourceMapStr =
-            this.findInDict(payload.options?.sourceMaps, filePath) ??
-            this.findInDict(loadedSourceMaps, filePath);
+        {
+          const loadedSourceMaps = await loadSourceMaps?.([filePath]);
+          const retainedEntries: {
+            entry: CoverageEntry;
+            payload: RawCoveragePayload;
+          }[] = [];
 
-          if (sourceMapStr) {
-            try {
-              const sourceMapKey = this.getSourceMapKey(sourceMapStr);
-              let sourceMap = parsedSourceMaps.get(sourceMapKey);
-              if (!sourceMap) {
-                sourceMap = {
-                  names: [],
-                  ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
-                } as SourceMapLike;
-                parsedSourceMaps.set(sourceMapKey, sourceMap);
+          for (const { entry, payload } of rawEntries) {
+            const sourceMapStr =
+              this.findInDict(payload.options?.sourceMaps, filePath) ??
+              this.findInDict(loadedSourceMaps, filePath);
+
+            if (sourceMapStr) {
+              try {
+                const sourceMapKey = this.getSourceMapKey(sourceMapStr);
+                let sourceMap = parsedSourceMaps.get(sourceMapKey);
+                if (!sourceMap) {
+                  sourceMap = {
+                    names: [],
+                    ...(JSON.parse(sourceMapStr) as Partial<SourceMapLike>),
+                  } as SourceMapLike;
+                  parsedSourceMaps.set(sourceMapKey, sourceMap);
+                }
+
+                if (
+                  !this.shouldKeepSourceMapEntry(
+                    filePath,
+                    sourceMap,
+                    payload.root,
+                  )
+                ) {
+                  continue;
+                }
+              } catch {
+                // Preserve per-entry conversion errors for malformed source maps.
               }
-
-              if (
-                !this.shouldKeepSourceMapEntry(
-                  filePath,
-                  sourceMap,
-                  payload.root,
-                )
-              ) {
-                continue;
-              }
-            } catch {
-              // Preserve per-entry conversion errors for malformed source maps.
             }
+
+            retainedEntries.push({ entry, payload });
           }
 
-          retainedEntries.push({ entry, payload });
-        }
-        rawEntries.length = 0;
+          rawEntries.length = 0;
 
-        if (!retainedEntries.length) {
-          parsedSourceMaps.clear();
-          return;
-        }
+          if (!retainedEntries.length) {
+            parsedSourceMaps.clear();
+            return;
+          }
 
-        const loadedAssetFiles = await loadAssetFiles?.([filePath]);
-        const loadedOptions = {
-          assetFiles: loadedAssetFiles,
-          sourceMaps: loadedSourceMaps,
-        };
-        const groups = new Map<string, CoverageEntryGroup>();
-        const sourceIdentityIds = new Map<string, number>();
+          const loadedAssetFiles = await loadAssetFiles?.([filePath]);
+          const loadedOptions = {
+            assetFiles: loadedAssetFiles,
+            sourceMaps: loadedSourceMaps,
+          };
+          const sourceIdentityIds = new Map<string, number>();
 
-        for (const { entry, payload } of retainedEntries) {
-          const options = this.resolveRawCoverageEntryOptions(
-            entry,
-            payload.options,
-            loadedOptions,
-          );
-          const key = this.getRawCoverageGroupKey(
-            payload,
-            entry,
-            sourceIdentityIds,
-            options,
-          );
-          this.mergeIntoCoverageEntries(
-            groups,
-            key,
-            entry,
-            options,
-            payload.root,
-          );
+          for (const { entry, payload } of retainedEntries) {
+            const options = this.resolveRawCoverageEntryOptions(
+              entry,
+              payload.options,
+              loadedOptions,
+            );
+            const key = this.getRawCoverageGroupKey(
+              payload,
+              entry,
+              sourceIdentityIds,
+              options,
+            );
+            this.mergeIntoCoverageEntries(
+              groups,
+              key,
+              entry,
+              options,
+              payload.root,
+            );
+          }
+          retainedEntries.length = 0;
+          sourceIdentityIds.clear();
         }
-        retainedEntries.length = 0;
-        sourceIdentityIds.clear();
-        loadedOptions.assetFiles = undefined;
-        loadedOptions.sourceMaps = undefined;
 
         for (const { entries, options, root } of groups.values()) {
           try {
