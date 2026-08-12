@@ -10,7 +10,7 @@
     "test:watch": "rstest --watch"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.1.10",
+    "@rsbuild/core": "~2.1.11",
     "@rstest/core": "workspace:*",
     "@rstest/playwright": "workspace:*",
     "playwright": "^1.62.1",
