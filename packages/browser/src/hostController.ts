@@ -342,9 +342,10 @@ export const runBrowserController = async (
   const coverageConfig = browserProjects.find(
     (project) => project.normalizedConfig.coverage?.enabled,
   )?.normalizedConfig.coverage;
-  const coverageProvider = coverageConfig?.enabled
-    ? await createCoverageProvider(coverageConfig, context.rootPath)
-    : null;
+  const coverageProvider =
+    !filesOnly && context.command !== 'list' && coverageConfig?.enabled
+      ? await createCoverageProvider(coverageConfig, context.rootPath)
+      : null;
   const browserCoverageCapabilityError =
     !filesOnly &&
     context.command !== 'list' &&
