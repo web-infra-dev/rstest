@@ -330,7 +330,7 @@ test.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 ## test.extend
 
-- **Type:** `test.extend(fixtures: Fixtures) | test.extend(name, fixture) | test.extend(name, { scope: 'file' }, fixture)`
+- **Type:** `test.extend(fixtures: Fixtures) | test.extend(name, fixture) | test.extend(name, { scope: 'file' | 'worker' }, fixture)`
 
 Extends the test context with custom fixtures and returns a **new** test API. The original `test` is not modified — you can have multiple independent extended versions at the same time.
 
@@ -435,6 +435,28 @@ const apiTest = test
 File-scoped fixtures must be declared at the top level of the test file. They can depend only on file-scoped fixtures declared earlier in the chain: they do not receive test-scoped fixtures or `TestContext`. A file-scoped fixture cannot be overridden by a later `.extend()` call. Test-scoped fixtures can depend on file-scoped fixtures.
 
 Fixture setup is bounded by the timeout of the test or hook that requests it. File cleanup is guarded by the Node or browser host, so a cleanup that never settles fails the file instead of blocking the run indefinitely.
+
+### Worker-scoped named fixtures
+
+<ApiMeta addedVersion="0.11.7" />
+
+Pass `{ scope: 'worker' }` to lazily create one fixture instance for the current test worker. The instance is shared by files that run on the same worker and is cleaned up when that worker is retired. Worker-scoped fixtures can depend only on worker-scoped fixtures declared earlier in the chain; they cannot access `TestContext` or file-scoped fixtures. A file-scoped fixture may depend on a worker-scoped fixture.
+
+```ts
+import { test } from '@rstest/core';
+
+const apiTest = test.extend(
+  'server',
+  { scope: 'worker' },
+  async (_context, { onCleanup }) => {
+    const server = await startServer();
+    onCleanup(() => server.close());
+    return server;
+  },
+);
+```
+
+Worker-scoped fixtures must be declared at the top level of the test file. They cannot be overridden by a later `.extend()` call. Their setup is bounded by the timeout of the test that first requests them; cleanup is bounded by the worker host. A terminated worker cannot run user cleanup callbacks. In browser mode, `isolate: false` keeps the fixture alive across files assigned to the same headless browser worker; with the default isolation, its lifetime is equivalent to one file.
 
 ### Plain value fixtures
 

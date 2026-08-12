@@ -26,6 +26,7 @@ import type {
   TestOptions,
   TestRunMode,
   TestSuite,
+  TestSuiteListeners,
 } from '../../types';
 import {
   ROOT_SUITE_NAME,
@@ -613,7 +614,50 @@ export class RunnerRuntime {
   isTopLevelCollection(): boolean {
     return this.suiteCollectionDepth === 0;
   }
+
+  getRootSuiteListeners(): TestSuiteListenersSnapshot {
+    const root = this.tests.find(
+      (test): test is TestSuite =>
+        test.type === 'suite' && test.name === ROOT_SUITE_NAME,
+    );
+    return {
+      afterAllListeners: root?.afterAllListeners
+        ? [...root.afterAllListeners]
+        : undefined,
+      beforeAllListeners: root?.beforeAllListeners
+        ? [...root.beforeAllListeners]
+        : undefined,
+      afterEachListeners: root?.afterEachListeners
+        ? [...root.afterEachListeners]
+        : undefined,
+      beforeEachListeners: root?.beforeEachListeners
+        ? [...root.beforeEachListeners]
+        : undefined,
+    };
+  }
+
+  setRootSuiteListeners(listeners: TestSuiteListenersSnapshot): void {
+    this.ensureRootSuite();
+    const root = this.tests.find(
+      (test): test is TestSuite =>
+        test.type === 'suite' && test.name === ROOT_SUITE_NAME,
+    )!;
+    root.afterAllListeners = listeners.afterAllListeners
+      ? [...listeners.afterAllListeners]
+      : undefined;
+    root.beforeAllListeners = listeners.beforeAllListeners
+      ? [...listeners.beforeAllListeners]
+      : undefined;
+    root.afterEachListeners = listeners.afterEachListeners
+      ? [...listeners.afterEachListeners]
+      : undefined;
+    root.beforeEachListeners = listeners.beforeEachListeners
+      ? [...listeners.beforeEachListeners]
+      : undefined;
+  }
 }
+
+export type TestSuiteListenersSnapshot = Pick<TestSuite, TestSuiteListeners>;
 
 // The running file's collection-phase registrar (see the live-binding
 // contract in `../api`; `createRunner` publishes the context per file).
@@ -722,23 +766,23 @@ const buildRuntimeAPI = (): CollectionAPI => {
         } else if (args.length === 3) {
           if (
             !isPlainObject(args[1]) ||
-            args[1].scope !== 'file' ||
+            !['file', 'worker'].includes(args[1].scope as string) ||
             Object.keys(args[1]).some((key) => key !== 'scope')
           ) {
             throw new Error(
-              "test.extend(name, options, fixture) expects { scope: 'file' } as options.",
+              "test.extend(name, options, fixture) expects { scope: 'file' | 'worker' } as options.",
             );
           }
           if (!currentRuntime().isTopLevelCollection()) {
             throw new Error(
-              'File-scoped fixtures must be defined at the top level of the test file.',
+              `${args[1].scope === 'worker' ? 'worker' : 'File'}-scoped fixtures must be defined at the top level of the test file.`,
             );
           }
           normalizedFixtures = normalizeNamedFixture(
             args[0],
             args[2],
             extendFixtures,
-            'file',
+            args[1].scope as 'file' | 'worker',
           );
         } else {
           throw new Error(

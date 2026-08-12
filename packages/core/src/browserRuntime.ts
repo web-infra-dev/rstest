@@ -16,10 +16,12 @@ export { createRstestRuntime } from './runtime/api';
 export { registerElementExpect } from './runtime/api/expect';
 // Public test APIs (describe, it, expect, etc.)
 export * from './runtime/api/public';
-export { setRealTimers } from './runtime/util';
+export { getRealTimers, setRealTimers } from './runtime/util';
 export { createBrowserTaskContext } from './runtime/worker/taskContext.browser';
+export { cleanupWorkerFixtures } from './runtime/runner/fixtures';
 export type { TaskContext } from './runtime/worker/taskContext';
 export type { FileCleanupHooks } from './runtime/runner';
+export type { TestSuiteListenersSnapshot } from './runtime/runner/runtime';
 // Types for browser runtime
 export type {
   BrowserRuntimeConfig,
@@ -35,6 +37,7 @@ export type {
 } from './types';
 // Constants needed by browser client
 export {
+  FIXTURE_CLEANUP_TIMEOUT_MS,
   globalApis,
   RSTEST_API_GLOBAL_KEY,
   RSTEST_ENV_SYMBOL_KEY,

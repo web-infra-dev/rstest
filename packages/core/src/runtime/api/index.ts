@@ -8,6 +8,7 @@ import type {
   WorkerState,
 } from '../../types';
 import { createRunner, runnerAPI } from '../runner';
+import type { TestSuiteListenersSnapshot } from '../runner/runtime';
 import type { TaskContext } from '../worker/taskContext';
 import { assert, createFileExpect, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
@@ -39,7 +40,13 @@ import { createRstestUtilities } from './utilities';
 
 export const createRstestRuntime = async (
   workerState: WorkerState,
-  { taskContext }: { taskContext: TaskContext },
+  {
+    taskContext,
+    setupListeners,
+  }: {
+    taskContext: TaskContext;
+    setupListeners?: TestSuiteListenersSnapshot;
+  },
 ): Promise<{
   runner: {
     runTests: (
@@ -49,12 +56,15 @@ export const createRstestRuntime = async (
     ) => Promise<TestFileResult>;
     collectTests: () => Promise<TestInfo[]>;
     getCurrentTest: () => TestCase | undefined;
+    getRootSuiteListeners: () => TestSuiteListenersSnapshot;
   };
   api: Rstest;
 }> => {
   const [{ runner }, { SnapshotPlugin, ensureSnapshotClient }] =
     await Promise.all([
-      Promise.resolve(createRunner({ workerState, taskContext })),
+      Promise.resolve(
+        createRunner({ workerState, taskContext, setupListeners }),
+      ),
       import(/* webpackChunkName: "snapshot" */ './snapshot'),
     ]);
 

@@ -24,6 +24,22 @@ describe('browser mode - basic', () => {
     expect(cli.stdout).not.toContain('/scheduler.html');
   });
 
+  it('keeps worker fixtures alive across non-isolated browser files', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCli('basic', {
+      args: [
+        '--isolate=false',
+        '--pool.maxWorkers=1',
+        'tests/workerScopeA.test.ts',
+        'tests/workerScopeB.test.ts',
+      ],
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('RSTEST_BROWSER_WORKER_SETUP_1');
+    expect(cli.stdout).toContain('RSTEST_BROWSER_WORKER_CLEANUP_1');
+    expect(cli.stdout).not.toContain('RSTEST_BROWSER_WORKER_SETUP_2');
+  });
+
   it.runIf(shouldRunHeadedBrowserTests)(
     'should run headed mode and exit with code 0',
     async () => {

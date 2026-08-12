@@ -185,6 +185,7 @@ type HarnessOptions = {
   watch?: boolean;
   bail?: number;
   maxWorkers?: number;
+  isolate?: boolean;
   failedCount?: () => number;
   projectEntries?: () => Promise<
     Array<{ project: { name: string }; testFiles: string[] }>
@@ -258,7 +259,11 @@ const createHarness = (options: HarnessOptions = {}) => {
     v8Coverage: options.v8Coverage,
     allTestFiles: files,
     projectRuntimeConfigs: [
-      { name: 'browser', viewport: { width: 800, height: 600 } },
+      {
+        name: 'browser',
+        viewport: { width: 800, height: 600 },
+        runtimeConfig: { isolate: options.isolate },
+      },
     ] as BrowserProjectRuntime[],
     hostOptions: {
       rootPath: '/',
@@ -353,6 +358,32 @@ const createHarness = (options: HarnessOptions = {}) => {
 };
 
 describe('headless scheduler', () => {
+  it('reuses one browser worker for non-isolated files', async () => {
+    const harness = createHarness({
+      files: [file('/a.test.ts'), file('/b.test.ts')],
+      isolate: false,
+      maxWorkers: 1,
+      scripts: [
+        async (page) => {
+          await page.send(complete('/a.test.ts'));
+          await page.send(complete('/b.test.ts'));
+          await page.send({ type: 'complete' });
+        },
+      ],
+    });
+
+    await harness.result;
+    expect(harness.browser.contexts).toHaveLength(1);
+    expect(
+      harness.routed
+        .filter(
+          (message): message is FileCompleteMessage =>
+            message.type === 'file-complete',
+        )
+        .map((message) => message.payload.testPath),
+    ).toEqual(['/a.test.ts', '/b.test.ts']);
+  });
+
   it('fans files out to the worker pool', async () => {
     const firstGate = createDeferred();
     const secondGate = createDeferred();

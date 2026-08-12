@@ -89,9 +89,13 @@ export class PoolRunner {
   private currentRpcDispatch:
     ((data: unknown, ...extras: unknown[]) => void) | undefined;
   private startDeferred: Deferred | undefined;
+  private cleanupDeferred: Deferred | undefined;
   private stopDeferred: Deferred | undefined;
   private startTimer: NodeJS.Timeout | undefined;
+  private cleanupTimer: NodeJS.Timeout | undefined;
   private fixtureCleanupTimer: NodeJS.Timeout | undefined;
+  private workerCleanupCompleted = false;
+  private buildId: number | undefined;
   private lastFatalError: Error | undefined;
   /**
    * Set when the worker reports `fatal_error` or a transport error. The
@@ -122,6 +126,10 @@ export class PoolRunner {
 
   isUsable(): boolean {
     return this.state === 'STARTED' && !this.crashed;
+  }
+
+  canReuseForBuild(buildId: number | undefined): boolean {
+    return this.buildId === undefined || this.buildId === buildId;
   }
 
   start(): Promise<void> {
@@ -227,12 +235,53 @@ export class PoolRunner {
         return;
       }
 
+      let cleanupError: Error | undefined;
+      if (
+        !options?.force &&
+        !this.currentTask &&
+        !this.crashed &&
+        !this.workerCleanupCompleted
+      ) {
+        try {
+          await this.requestWorkerCleanup();
+        } catch (error) {
+          cleanupError = toError(error);
+          this.crashed = true;
+        }
+      }
+      if (!this.worker.hasLiveChild()) {
+        this.state = 'STOPPED';
+        if (cleanupError) throw cleanupError;
+        return;
+      }
+
       this.state = 'STOPPING';
-      this.stopDeferred = createDeferred();
+      const stopDeferred = createDeferred();
+      this.stopDeferred = stopDeferred;
 
       await this.worker.stop({ force: options?.force ?? false });
-      await this.stopDeferred.promise;
+      await stopDeferred.promise;
+      if (cleanupError) throw cleanupError;
     });
+  }
+
+  private requestWorkerCleanup(): Promise<void> {
+    const deferred = createDeferred();
+    this.cleanupDeferred = deferred;
+    this.cleanupTimer = setTimeout(() => {
+      this.rejectCleanup(
+        new Error(
+          `Worker fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
+        ),
+      );
+    }, FIXTURE_CLEANUP_TIMEOUT_MS);
+    this.cleanupTimer.unref();
+    try {
+      this.worker.send({ type: 'cleanup' });
+    } catch (error) {
+      this.rejectCleanup(toError(error));
+    }
+    return deferred.promise;
   }
 
   private async runOperation<T>(op: () => Promise<T>): Promise<T> {
@@ -290,6 +339,7 @@ export class PoolRunner {
     }
 
     this.installRpc(task.rpcMethods);
+    this.buildId = task.options.context?.buildId;
     // Per-task stderr attribution: discard buffered output from a prior
     // task on the same reused worker (`isolate: false`). Otherwise
     // `attachStderrToError` would mix the previous file's stderr into the
@@ -332,6 +382,14 @@ export class PoolRunner {
         this.startDeferred?.resolve();
         this.startDeferred = undefined;
         return;
+      case 'cleanupFinished':
+        if (response.error) {
+          this.rejectCleanup(deserializeError(response.error));
+        } else {
+          this.workerCleanupCompleted = true;
+          this.resolveCleanup();
+        }
+        return;
       case 'fileCleanupStarted':
         if (this.currentTask?.taskId === response.taskId) {
           this.currentTask.provisionalResult = response.result;
@@ -341,6 +399,18 @@ export class PoolRunner {
       case 'fileCleanupFinished':
         if (this.currentTask?.taskId === response.taskId) {
           this.clearFixtureCleanupTimer();
+        }
+        return;
+      case 'workerCleanupStarted':
+        this.startFixtureCleanupTimer(response.taskId, 'Worker');
+        return;
+      case 'workerCleanupFinished':
+        if (this.currentTask?.taskId === response.taskId) {
+          this.clearFixtureCleanupTimer();
+          if (response.error) {
+            this.crashed = true;
+            this.rejectCurrentTaskWithStderr(deserializeError(response.error));
+          }
         }
         return;
       case 'runFinished':
@@ -384,6 +454,11 @@ export class PoolRunner {
   private handleExit(code: number | null, signal: NodeJS.Signals | null): void {
     this.clearStartTimer();
     this.clearFixtureCleanupTimer();
+    this.rejectCleanup(
+      new Error(
+        `Worker exited during fixture cleanup (code=${code}, signal=${signal})`,
+      ),
+    );
 
     const wasStopping = this.state === 'STOPPING';
     this.state = 'STOPPED';
@@ -427,6 +502,7 @@ export class PoolRunner {
     // returns false and `Pool.releaseRunner` disposes instead of recycling.
     this.crashed = true;
     this.clearFixtureCleanupTimer();
+    this.rejectCleanup(err);
     this.rejectStart(err);
     if (this.currentTask) {
       this.rejectCurrentTaskWithStderr(err);
@@ -471,7 +547,10 @@ export class PoolRunner {
     this.startTimer = undefined;
   }
 
-  private startFixtureCleanupTimer(taskId: number): void {
+  private startFixtureCleanupTimer(
+    taskId: number,
+    scope: 'File' | 'Worker' = 'File',
+  ): void {
     if (this.currentTask?.taskId !== taskId) {
       return;
     }
@@ -482,7 +561,7 @@ export class PoolRunner {
       }
       this.crashed = true;
       const error = new Error(
-        `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
+        `${scope} fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
       );
       const task = this.currentTask;
       if (task.kind === 'run' && task.provisionalResult) {
@@ -508,5 +587,27 @@ export class PoolRunner {
     if (!this.fixtureCleanupTimer) return;
     clearTimeout(this.fixtureCleanupTimer);
     this.fixtureCleanupTimer = undefined;
+  }
+
+  private resolveCleanup(): void {
+    const deferred = this.cleanupDeferred;
+    if (!deferred) return;
+    this.cleanupDeferred = undefined;
+    this.clearCleanupTimer();
+    deferred.resolve();
+  }
+
+  private rejectCleanup(error: Error): void {
+    const deferred = this.cleanupDeferred;
+    if (!deferred) return;
+    this.cleanupDeferred = undefined;
+    this.clearCleanupTimer();
+    deferred.reject(error);
+  }
+
+  private clearCleanupTimer(): void {
+    if (!this.cleanupTimer) return;
+    clearTimeout(this.cleanupTimer);
+    this.cleanupTimer = undefined;
   }
 }

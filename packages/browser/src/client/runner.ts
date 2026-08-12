@@ -12,13 +12,17 @@ import type {
   FileCleanupHooks,
   RunnerHooks,
   RuntimeConfig,
+  TestSuiteListenersSnapshot,
   WorkerState,
 } from '@rstest/core/internal/browser-runtime';
 import {
   createBrowserTaskContext,
   createRstestRuntime,
+  cleanupWorkerFixtures,
+  FIXTURE_CLEANUP_TIMEOUT_MS,
   formatConsoleArgs,
   globalApis,
+  getRealTimers,
   RSTEST_API_GLOBAL_KEY,
   RSTEST_ENV_SYMBOL_KEY,
   setRealTimers,
@@ -64,6 +68,29 @@ declare global {
 const debugLog = (...args: unknown[]): void => {
   if (window.__RSTEST_BROWSER_OPTIONS__?.debug) {
     console.log(...args);
+  }
+};
+
+const cleanupWorkerFixturesWithTimeout = async (): Promise<void> => {
+  const realTimers = getRealTimers();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      cleanupWorkerFixtures(),
+      new Promise<never>((_, reject) => {
+        timer = realTimers.setTimeout?.(() => {
+          reject(
+            new Error(
+              `Worker fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
+            ),
+          );
+        }, FIXTURE_CLEANUP_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      realTimers.clearTimeout?.(timer);
+    }
   }
 };
 
@@ -424,6 +451,11 @@ const run = async () => {
 
   // Find the project for this test file
   const targetTestFile = options.testFile;
+  const targetTestFiles = options.testFiles?.length
+    ? options.testFiles
+    : targetTestFile
+      ? [targetTestFile]
+      : undefined;
   const currentProject = targetTestFile
     ? findProjectForTestFile(
         targetTestFile,
@@ -489,10 +521,10 @@ const run = async () => {
   // 1. Determine which test files to run
   let testKeysToRun: string[];
 
-  if (targetTestFile) {
-    // Single file mode: convert absolute path to context key
-    const key = toContextKey(targetTestFile, currentProject.projectRoot);
-    testKeysToRun = [key];
+  if (targetTestFiles) {
+    testKeysToRun = targetTestFiles.map((testFile) =>
+      toContextKey(testFile, currentProject.projectRoot),
+    );
   } else {
     // Full run mode: get all test keys from context
     testKeysToRun = currentTestContext.getTestKeys();
@@ -593,246 +625,347 @@ const run = async () => {
   window.addEventListener('error', onWindowError);
   window.addEventListener('unhandledrejection', onUnhandledRejection);
 
-  // 2. Run tests for each file
-  for (const key of testKeysToRun) {
-    const testPath = toAbsolutePath(key, currentProject.projectRoot);
-    const taskStack: CurrentTaskInfo[] = [
-      {
-        taskId: getFileTaskId(testPath),
-        taskType: 'file',
-        testPath,
-      },
-    ];
-
-    // Per-file TaskContext; taskStack supplies the concurrent attribution
-    // that the single-slot fallback can't.
-    const taskContext = createBrowserTaskContext();
-
-    const shouldInterceptConsole =
-      !runtimeConfig.disableConsoleIntercept ||
-      runtimeConfig.silent === true ||
-      runtimeConfig.silent === 'passed-only';
-
-    // Intercept console methods to forward logs to host
-    const restoreConsole = shouldInterceptConsole
-      ? interceptConsole(
-          projectRuntime.name,
-          () => taskContext.getCurrent() ?? taskStack[taskStack.length - 1],
-          runtimeConfig.disableConsoleIntercept
-            ? false
-            : (runtimeConfig.printConsoleTrace ?? false),
-        )
-      : () => {};
-
-    const workerState: WorkerState = {
-      project: projectRuntime.name,
-      projectRoot: projectRuntime.projectRoot,
-      rootPath: options.rootPath,
-      runtimeConfig,
-      taskId: 0,
-      // See the `buildId` note above: inert in browser mode.
-      buildId: 0,
-      outputModule: false,
-      environment: 'browser',
-      currentTask: taskStack[0],
-      testPath,
-      distPath: testPath,
-      snapshotOptions: {
-        updateSnapshot: options.snapshot.updateSnapshot,
-        snapshotEnvironment: new BrowserSnapshotEnvironment(),
-        snapshotFormat: runtimeConfig.snapshotFormat,
-      },
-    };
-
-    const syncCurrentTask = (): void => {
-      workerState.currentTask = taskStack[taskStack.length - 1];
-    };
-
-    const removeTaskFromStack = (taskId: string): void => {
-      const taskIndex = taskStack.findLastIndex(
-        (task) => task.taskId === taskId,
+  // 2. Run tests for each file. A non-isolated browser worker keeps the
+  // worker fixture context alive while this page processes its assigned files;
+  // isolated execution tears it down after each file.
+  const keepWorkerFixtures = runtimeConfig.isolate === false;
+  let restoreWorkerConsole: (() => void) | undefined;
+  let setupListeners: TestSuiteListenersSnapshot | undefined;
+  let workerCleanupFailed = false;
+  try {
+    if (currentSetupLoaders.length > 0 && testKeysToRun.length > 0) {
+      const setupTestPath = toAbsolutePath(
+        testKeysToRun[0]!,
+        currentProject.projectRoot,
       );
-      if (taskIndex < 0) {
-        return;
-      }
-      taskStack.splice(taskIndex, 1);
-      syncCurrentTask();
-    };
+      const setupRuntime = await createRstestRuntime(
+        {
+          project: projectRuntime.name,
+          projectRoot: projectRuntime.projectRoot,
+          rootPath: options.rootPath,
+          runtimeConfig,
+          taskId: 0,
+          buildId: 0,
+          outputModule: false,
+          environment: 'browser',
+          testPath: setupTestPath,
+          distPath: setupTestPath,
+          snapshotOptions: {
+            updateSnapshot: options.snapshot.updateSnapshot,
+            snapshotEnvironment: new BrowserSnapshotEnvironment(),
+            snapshotFormat: runtimeConfig.snapshotFormat,
+          },
+        },
+        { taskContext: createBrowserTaskContext() },
+      );
+      installRuntimeGlobals(setupRuntime, runtimeConfig);
+      await loadSetupFiles();
+      await setupRuntime.runner.collectTests();
+      setupListeners = setupRuntime.runner.getRootSuiteListeners();
+    }
 
-    const runtime = await createRstestRuntime(workerState, { taskContext });
-
-    installRuntimeGlobals(runtime, runtimeConfig);
-
-    let failedTestsCount = 0;
-
-    const dispatchFileCleanup = async (
-      method: FileCleanupDispatchMethod,
-      result?: FileCleanupDispatchPayload['result'],
-      waitForAcknowledgement = true,
-    ): Promise<void> => {
-      const requestId = createRequestId(`file-cleanup-${method}`);
-      const request = {
-        requestId,
-        namespace: DISPATCH_NAMESPACE_FILE_CLEANUP,
-        method,
-        args: {
-          projectName: projectRuntime.name,
-          result,
-          runId: options.runId,
+    for (let fileIndex = 0; fileIndex < testKeysToRun.length; fileIndex++) {
+      const key = testKeysToRun[fileIndex]!;
+      const testPath = toAbsolutePath(key, currentProject.projectRoot);
+      options = { ...options, testFile: testPath };
+      window.__RSTEST_BROWSER_OPTIONS__ = options;
+      const taskStack: CurrentTaskInfo[] = [
+        {
+          taskId: getFileTaskId(testPath),
+          taskType: 'file',
           testPath,
-        } satisfies FileCleanupDispatchPayload,
+        },
+      ];
+
+      // Per-file TaskContext; taskStack supplies the concurrent attribution
+      // that the single-slot fallback can't.
+      const taskContext = createBrowserTaskContext();
+
+      const shouldInterceptConsole =
+        !runtimeConfig.disableConsoleIntercept ||
+        runtimeConfig.silent === true ||
+        runtimeConfig.silent === 'passed-only';
+
+      // Intercept console methods to forward logs to host
+      const restoreConsole = shouldInterceptConsole
+        ? interceptConsole(
+            projectRuntime.name,
+            () => taskContext.getCurrent() ?? taskStack[taskStack.length - 1],
+            runtimeConfig.disableConsoleIntercept
+              ? false
+              : (runtimeConfig.printConsoleTrace ?? false),
+          )
+        : () => {};
+
+      // Keep a restoration handle in the outer finally before any runtime
+      // setup can throw. This covers failures during runtime construction or
+      // global installation, which happen before the per-file try/finally.
+      if (keepWorkerFixtures) {
+        restoreWorkerConsole = restoreConsole;
+      }
+
+      const workerState: WorkerState = {
+        project: projectRuntime.name,
+        projectRoot: projectRuntime.projectRoot,
+        rootPath: options.rootPath,
+        runtimeConfig,
+        taskId: 0,
+        // See the `buildId` note above: inert in browser mode.
+        buildId: 0,
+        outputModule: false,
+        environment: 'browser',
+        currentTask: taskStack[0],
+        testPath,
+        distPath: testPath,
+        snapshotOptions: {
+          updateSnapshot: options.snapshot.updateSnapshot,
+          snapshotEnvironment: new BrowserSnapshotEnvironment(),
+          snapshotFormat: runtimeConfig.snapshotFormat,
+        },
       };
 
-      if (!waitForAcknowledgement) {
-        sendDispatchRequest(request);
-        return;
-      }
+      const syncCurrentTask = (): void => {
+        workerState.currentTask = taskStack[taskStack.length - 1];
+      };
 
-      await dispatchRpc<void>({
-        requestId,
-        request,
-        timeoutMs: getRpcTimeout(),
-        timeoutMessage: `File cleanup ${method} acknowledgement timed out for ${testPath}.`,
-        staleMessage: `File cleanup ${method} became stale for ${testPath}.`,
-      });
-    };
-
-    const runnerHooks: RunnerHooks & FileCleanupHooks = {
-      onFileCleanupStart: async (result) => {
-        if (result && globalThis.__coverage__) {
-          result.coverage = globalThis.__coverage__ as CoverageMapData;
+      const removeTaskFromStack = (taskId: string): void => {
+        const taskIndex = taskStack.findLastIndex(
+          (task) => task.taskId === taskId,
+        );
+        if (taskIndex < 0) {
+          return;
         }
-        await dispatchFileCleanup('start', result, window.parent !== window);
-      },
-      onFileCleanupEnd: () =>
-        dispatchFileCleanup('end', undefined, window.parent !== window),
-      onTestFileReady: async (test) => {
-        dispatchRunnerLifecycle('file-ready', test);
-      },
-      onTestSuiteStart: async (test) => {
-        taskStack.push({
-          taskId: test.testId,
-          taskName: test.name,
-          taskParentNames: test.parentNames,
-          taskType: 'suite',
-          testPath: test.testPath,
-        });
+        taskStack.splice(taskIndex, 1);
         syncCurrentTask();
-        dispatchRunnerLifecycle('suite-start', test);
-      },
-      onTestSuiteResult: async (result) => {
-        removeTaskFromStack(result.testId);
-        dispatchRunnerLifecycle('suite-result', result);
-      },
-      onTestCaseStart: async (test) => {
-        taskStack.push({
-          taskId: test.testId,
-          taskName: test.name,
-          taskParentNames: test.parentNames,
-          taskType: 'case',
-          testPath: test.testPath,
+      };
+
+      let runtime: Awaited<ReturnType<typeof createRstestRuntime>>;
+      try {
+        runtime = await createRstestRuntime(workerState, {
+          taskContext,
+          setupListeners,
         });
-        syncCurrentTask();
-        dispatchRunnerLifecycle('case-start', test);
-      },
-      onTestCaseResult: async (result) => {
-        removeTaskFromStack(result.testId);
-        if (result.status === 'fail') {
-          failedTestsCount++;
+        installRuntimeGlobals(runtime, runtimeConfig);
+      } catch (error) {
+        restoreConsole();
+        throw error;
+      }
+
+      let failedTestsCount = 0;
+
+      const dispatchFileCleanup = async (
+        method: FileCleanupDispatchMethod,
+        result?: FileCleanupDispatchPayload['result'],
+        waitForAcknowledgement = true,
+      ): Promise<void> => {
+        const requestId = createRequestId(`file-cleanup-${method}`);
+        const request = {
+          requestId,
+          namespace: DISPATCH_NAMESPACE_FILE_CLEANUP,
+          method,
+          args: {
+            projectName: projectRuntime.name,
+            result,
+            runId: options?.runId,
+            testPath,
+          } satisfies FileCleanupDispatchPayload,
+        };
+
+        if (!waitForAcknowledgement) {
+          sendDispatchRequest(request);
+          return;
         }
-        send({
-          type: 'case-result',
-          payload: result,
+
+        await dispatchRpc<void>({
+          requestId,
+          request,
+          timeoutMs: getRpcTimeout(),
+          timeoutMessage: `File cleanup ${method} acknowledgement timed out for ${testPath}.`,
+          staleMessage: `File cleanup ${method} became stale for ${testPath}.`,
         });
-      },
-      getCountOfFailedTests: async () => failedTestsCount,
-    };
+      };
 
-    send({
-      type: 'file-start',
-      payload: {
-        testPath,
-        projectName: projectRuntime.name,
-      },
-    });
-
-    const unhandledErrors: Error[] = [];
-    activeUnhandledErrors = unhandledErrors;
-
-    try {
-      // Load setup files for this project after runtime is ready.
-      await loadSetupFiles();
-
-      // Record script URLs before loading the test file
-      const beforeScripts = getScriptUrls();
-
-      // Load the test file dynamically using this project's context
-      await currentTestContext.loadTest(key);
-
-      // Find the newly loaded chunk and preload its source map (for inline snapshots)
-      const afterScripts = getScriptUrls();
-      const chunkUrl = findNewScriptUrl(beforeScripts, afterScripts);
-      if (chunkUrl) {
-        await preloadTestFileSourceMap(chunkUrl);
-      }
-
-      const result = await runtime.runner.runTests(
-        testPath,
-        runnerHooks,
-        runtime.api,
-      );
-
-      // The browser dispatches `unhandledrejection` in a task queued at the
-      // current task's microtask checkpoint, so a rejection leaked by a
-      // synchronous test is not observable yet when `runTests()` resolves.
-      // Yield two macrotasks: the first reaches the checkpoint that queues
-      // the event task, the second runs after that task regardless of how
-      // the browser orders the timer and event task sources.
-      for (let i = 0; i < 2; i++) {
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 0);
-        });
-      }
-
-      // An unhandled error/rejection that escaped the run fails the file even
-      // when every test passed.
-      if (unhandledErrors.length > 0) {
-        result.status = 'fail';
-        result.errors = [
-          ...(result.errors ?? []),
-          ...unhandledErrors.map((error) => ({
-            name: error.name,
-            message: error.message,
-            stack: error.stack,
-          })),
-        ];
-      }
+      const runnerHooks: RunnerHooks & FileCleanupHooks = {
+        onFileCleanupStart: async (result) => {
+          if (result && globalThis.__coverage__) {
+            result.coverage = globalThis.__coverage__ as CoverageMapData;
+          }
+          await dispatchFileCleanup('start', result, window.parent !== window);
+        },
+        onFileCleanupEnd: () =>
+          dispatchFileCleanup('end', undefined, window.parent !== window),
+        onTestFileReady: async (test) => {
+          dispatchRunnerLifecycle('file-ready', test);
+        },
+        onTestSuiteStart: async (test) => {
+          taskStack.push({
+            taskId: test.testId,
+            taskName: test.name,
+            taskParentNames: test.parentNames,
+            taskType: 'suite',
+            testPath: test.testPath,
+          });
+          syncCurrentTask();
+          dispatchRunnerLifecycle('suite-start', test);
+        },
+        onTestSuiteResult: async (result) => {
+          removeTaskFromStack(result.testId);
+          dispatchRunnerLifecycle('suite-result', result);
+        },
+        onTestCaseStart: async (test) => {
+          taskStack.push({
+            taskId: test.testId,
+            taskName: test.name,
+            taskParentNames: test.parentNames,
+            taskType: 'case',
+            testPath: test.testPath,
+          });
+          syncCurrentTask();
+          dispatchRunnerLifecycle('case-start', test);
+        },
+        onTestCaseResult: async (result) => {
+          removeTaskFromStack(result.testId);
+          if (result.status === 'fail') {
+            failedTestsCount++;
+          }
+          send({
+            type: 'case-result',
+            payload: result,
+          });
+        },
+        getCountOfFailedTests: async () => failedTestsCount,
+      };
 
       send({
-        type: 'file-complete',
-        payload: result,
-      });
-    } catch (_error) {
-      const error =
-        _error instanceof Error ? _error : new Error(String(_error));
-      send({
-        type: 'fatal',
+        type: 'file-start',
         payload: {
-          message: error.message,
-          stack: error.stack,
+          testPath,
+          projectName: projectRuntime.name,
         },
       });
-      window.__RSTEST_DONE__ = true;
-      return;
-    } finally {
-      // Restore original console methods
-      restoreConsole();
-      activeUnhandledErrors = undefined;
+
+      const unhandledErrors: Error[] = [];
+      activeUnhandledErrors = unhandledErrors;
+      let workerCleanupAttempted = false;
+
+      try {
+        // Record script URLs before loading the test file
+        const beforeScripts = getScriptUrls();
+
+        // Load the test file dynamically using this project's context
+        await currentTestContext.loadTest(key);
+
+        // Find the newly loaded chunk and preload its source map (for inline snapshots)
+        const afterScripts = getScriptUrls();
+        const chunkUrl = findNewScriptUrl(beforeScripts, afterScripts);
+        if (chunkUrl) {
+          await preloadTestFileSourceMap(chunkUrl);
+        }
+
+        const result = await runtime.runner.runTests(
+          testPath,
+          runnerHooks,
+          runtime.api,
+        );
+
+        if (!keepWorkerFixtures) {
+          workerCleanupAttempted = true;
+          await cleanupWorkerFixturesWithTimeout();
+        }
+
+        // The browser dispatches `unhandledrejection` in a task queued at the
+        // current task's microtask checkpoint, so a rejection leaked by a
+        // synchronous test is not observable yet when `runTests()` resolves.
+        // Yield two macrotasks: the first reaches the checkpoint that queues
+        // the event task, the second runs after that task regardless of how
+        // the browser orders the timer and event task sources.
+        for (let i = 0; i < 2; i++) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 0);
+          });
+        }
+
+        // An unhandled error/rejection that escaped the run fails the file even
+        // when every test passed.
+        if (unhandledErrors.length > 0) {
+          result.status = 'fail';
+          result.errors = [
+            ...(result.errors ?? []),
+            ...unhandledErrors.map((error) => ({
+              name: error.name,
+              message: error.message,
+              stack: error.stack,
+            })),
+          ];
+        }
+
+        send({
+          type: 'file-complete',
+          payload: result,
+        });
+      } catch (_error) {
+        let error =
+          _error instanceof Error ? _error : new Error(String(_error));
+        if (!keepWorkerFixtures && !workerCleanupAttempted) {
+          workerCleanupAttempted = true;
+          try {
+            await cleanupWorkerFixturesWithTimeout();
+          } catch (cleanupError) {
+            const formattedCleanupError =
+              cleanupError instanceof Error
+                ? cleanupError
+                : new Error(String(cleanupError));
+            error = new Error(
+              `${error.message}\nWorker fixture cleanup failed: ${formattedCleanupError.message}`,
+              { cause: error },
+            );
+          }
+        }
+        send({
+          type: 'fatal',
+          payload: {
+            message: error.message,
+            stack: error.stack,
+          },
+        });
+        window.__RSTEST_DONE__ = true;
+        return;
+      } finally {
+        if (keepWorkerFixtures && fileIndex === testKeysToRun.length - 1) {
+          restoreWorkerConsole = restoreConsole;
+        } else {
+          restoreConsole();
+        }
+        activeUnhandledErrors = undefined;
+      }
     }
+  } finally {
+    if (keepWorkerFixtures) {
+      try {
+        await cleanupWorkerFixturesWithTimeout();
+      } catch (error) {
+        workerCleanupFailed = true;
+        const cleanupError =
+          error instanceof Error ? error : new Error(String(error));
+        send({
+          type: 'fatal',
+          payload: {
+            message: cleanupError.message,
+            stack: cleanupError.stack,
+          },
+        });
+      }
+    }
+    restoreWorkerConsole?.();
   }
 
   window.removeEventListener('error', onWindowError);
   window.removeEventListener('unhandledrejection', onUnhandledRejection);
+
+  if (workerCleanupFailed) {
+    window.__RSTEST_DONE__ = true;
+    return;
+  }
 
   send({ type: 'complete' });
   window.__RSTEST_DONE__ = true;

@@ -330,7 +330,7 @@ test.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 ## test.extend
 
-- **类型：** `test.extend(fixtures: Fixtures) | test.extend(name, fixture) | test.extend(name, { scope: 'file' }, fixture)`
+- **类型：** `test.extend(fixtures: Fixtures) | test.extend(name, fixture) | test.extend(name, { scope: 'file' | 'worker' }, fixture)`
 
 通过自定义 fixture 扩展测试上下文，返回一个**新的** test API。原始 `test` 不会被修改，你可以同时拥有多个各自独立的扩展版本。
 
@@ -435,6 +435,28 @@ const apiTest = test
 File scope fixture 必须在测试文件顶层声明。它只能依赖链中更早声明的 file scope fixture，无法访问 test scope fixture 或 `TestContext`。后续 `.extend()` 不能覆盖 file scope fixture。Test scope fixture 可以依赖 file scope fixture。
 
 Fixture setup 受首次请求它的测试或 hook timeout 限制。File cleanup 由 Node 或 browser host 提供保护，因此永不结束的 cleanup 会让文件失败，而不会无限阻塞整个测试运行。
+
+### Worker scope 具名 fixtures
+
+<ApiMeta addedVersion="0.11.7" />
+
+传入 `{ scope: 'worker' }` 可以为当前测试 worker 惰性创建一个 fixture 实例。同一个 worker 执行的多个文件会共享该实例；worker 被回收时执行 cleanup。Worker scope fixture 只能依赖链中更早声明的 worker scope fixture，不能访问 `TestContext` 或 file scope fixture；file scope fixture 可以依赖 worker scope fixture。
+
+```ts
+import { test } from '@rstest/core';
+
+const apiTest = test.extend(
+  'server',
+  { scope: 'worker' },
+  async (_context, { onCleanup }) => {
+    const server = await startServer();
+    onCleanup(() => server.close());
+    return server;
+  },
+);
+```
+
+Worker scope fixture 必须在测试文件顶层声明，后续 `.extend()` 不能覆盖它。它的 setup 受首次请求它的测试 timeout 限制，cleanup 由 worker host 提供超时保护；如果 worker 被终止，则无法执行用户 cleanup。在 browser mode 中，`isolate: false` 会让分配到同一个 headless browser worker 的多个文件复用该 fixture；默认隔离模式下，它的生命周期等同于单个文件。
 
 ### 普通值 fixture
 

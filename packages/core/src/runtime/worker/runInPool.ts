@@ -17,6 +17,7 @@ import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import type { FileCleanupHooks } from '../runner';
+import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
@@ -471,6 +472,8 @@ const loadFiles = async ({
 export const runInPool = async (
   options: RunWorkerOptions['options'],
   lifecycleHooks: FileCleanupHooks & {
+    onWorkerCleanupStart?: () => MaybePromise<void>;
+    onWorkerCleanupEnd?: (error?: unknown) => MaybePromise<void>;
     onTestEnvironmentFallback?: (
       fallback: TestEnvironmentModuleFallback,
     ) => void;
@@ -495,6 +498,19 @@ export const runInPool = async (
     },
   } = options;
 
+  const cleanupWorkerFixtureScope = async (): Promise<unknown> => {
+    await lifecycleHooks.onWorkerCleanupStart?.();
+    let cleanupError: unknown;
+    try {
+      await cleanupWorkerFixtures();
+    } catch (error) {
+      cleanupError = error;
+    } finally {
+      await lifecycleHooks.onWorkerCleanupEnd?.(cleanupError);
+    }
+    return cleanupError;
+  };
+
   const importLoader = () =>
     options.context.outputModule
       ? import('./loadEsModule')
@@ -506,6 +522,13 @@ export const runInPool = async (
   // loading (see `flushAllLoaderCaches` for why both loaders, not just this
   // task's).
   if (!isolate && lastBuildId !== undefined && lastBuildId !== buildId) {
+    // A rebuild replaces fixture definitions too. Retire instances created by
+    // the previous module graph before loading the new graph, otherwise both
+    // generations can hold external resources in one reused worker.
+    const cleanupError = await cleanupWorkerFixtureScope();
+    if (cleanupError) {
+      throw cleanupError;
+    }
     const { flushAllLoaderCaches } = await import('./interop');
     await flushAllLoaderCaches();
   }
@@ -845,6 +868,16 @@ export const runInPool = async (
 
     taskContext?.setFallback(undefined);
     asyncLeakDetector?.disable();
+    if (isolate) {
+      const workerCleanupError = await cleanupWorkerFixtureScope();
+      if (workerCleanupError && runResult) {
+        runResult.status = 'fail';
+        runResult.errors = [
+          ...(runResult.errors ?? []),
+          ...(await formatTestError(workerCleanupError)),
+        ];
+      }
+    }
     await teardown();
     tracker.end();
     if (runResult) {

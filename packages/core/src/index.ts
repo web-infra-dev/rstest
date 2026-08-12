@@ -117,6 +117,7 @@ export type {
   FixtureCleanup,
   FixtureLifecycle,
   FileFixtureOptions,
+  WorkerFixtureOptions,
   Fixtures,
   Matchers,
   ProjectConfig,

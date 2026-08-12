@@ -199,6 +199,13 @@ export type FileFixtureOptions = {
   scope: 'file';
 };
 
+export type WorkerFixtureOptions = {
+  /**
+   * Keep one fixture instance for the duration of the current worker.
+   */
+  scope: 'worker';
+};
+
 export type Use<T> = (value: T) => Promise<void>;
 
 export type FixtureCleanup = () => MaybePromise<void>;
@@ -241,7 +248,7 @@ export type NormalizedFixture = {
   value: FixtureFn<any, any, any> | any;
   options?: FixtureOptions;
   mode?: 'return';
-  scope?: 'file';
+  scope?: 'worker' | 'file';
 };
 
 export type NormalizedFixtures = Record<string, NormalizedFixture>;
@@ -334,45 +341,66 @@ type NamedFixture<Value, Context> =
 type TestFixtureName<
   Name extends string,
   FileFixtures,
-> = Name extends keyof FileFixtures ? never : NamedFixtureName<Name>;
-
-type FileFixtureName<
-  Name extends string,
-  TestFixtures,
-  FileFixtures,
-> = Name extends keyof TestFixtures | keyof FileFixtures
+  WorkerFixtures,
+> = Name extends keyof FileFixtures | keyof WorkerFixtures
   ? never
   : NamedFixtureName<Name>;
 
-type TestExtend<TestFixtures, FileFixtures> = {
+type ScopedFixtureName<
+  Name extends string,
+  TestFixtures,
+  FileFixtures,
+  WorkerFixtures,
+> = Name extends keyof TestFixtures | keyof FileFixtures | keyof WorkerFixtures
+  ? never
+  : NamedFixtureName<Name>;
+
+type TestExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
   <T extends Record<string, any> = object>(
-    fixtures: Fixtures<T, TestFixtures & FileFixtures> &
-      Partial<Record<keyof FileFixtures, never>>,
-  ): TestAPIs<MergeFixtureContext<TestFixtures, T>, FileFixtures>;
+    fixtures: Fixtures<T, TestFixtures & FileFixtures & WorkerFixtures> &
+      Partial<Record<keyof FileFixtures | keyof WorkerFixtures, never>>,
+  ): TestAPIs<
+    MergeFixtureContext<TestFixtures, T>,
+    FileFixtures,
+    WorkerFixtures
+  >;
   <Name extends string, Value>(
-    name: TestFixtureName<Name, FileFixtures>,
+    name: TestFixtureName<Name, FileFixtures, WorkerFixtures>,
     fixture: NamedFixture<
       Value,
-      Omit<TestContext & TestFixtures & FileFixtures, Name>
+      Omit<TestContext & TestFixtures & FileFixtures & WorkerFixtures, Name>
     >,
   ): TestAPIs<
     MergeNamedFixtureContext<TestFixtures, Name, Value>,
-    FileFixtures
+    FileFixtures,
+    WorkerFixtures
   >;
   <Name extends string, Value>(
-    name: FileFixtureName<Name, TestFixtures, FileFixtures>,
-    options: FileFixtureOptions,
-    fixture: NamedFixture<Value, Omit<FileFixtures, Name>>,
+    name: ScopedFixtureName<Name, TestFixtures, FileFixtures, WorkerFixtures>,
+    options: WorkerFixtureOptions,
+    fixture: NamedFixture<Value, Omit<WorkerFixtures, Name>>,
   ): TestAPIs<
     TestFixtures,
-    MergeNamedFixtureContext<FileFixtures, Name, Value>
+    FileFixtures,
+    MergeNamedFixtureContext<WorkerFixtures, Name, Value>
+  >;
+  <Name extends string, Value>(
+    name: ScopedFixtureName<Name, TestFixtures, FileFixtures, WorkerFixtures>,
+    options: FileFixtureOptions,
+    fixture: NamedFixture<Value, Omit<FileFixtures & WorkerFixtures, Name>>,
+  ): TestAPIs<
+    TestFixtures,
+    MergeNamedFixtureContext<FileFixtures, Name, Value>,
+    WorkerFixtures
   >;
 };
 
-export type TestAPIs<TestFixtures = object, FileFixtures = object> = TestAPI<
-  TestFixtures & FileFixtures
-> & {
-  extend: TestExtend<TestFixtures, FileFixtures>;
+export type TestAPIs<
+  TestFixtures = object,
+  FileFixtures = object,
+  WorkerFixtures = object,
+> = TestAPI<TestFixtures & FileFixtures & WorkerFixtures> & {
+  extend: TestExtend<TestFixtures, FileFixtures, WorkerFixtures>;
 };
 
 export type OnTestFinishedHandler = (ctx: TestContext) => MaybePromise<void>;

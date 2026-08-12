@@ -12,7 +12,11 @@ import { getFileTaskId } from '../../utils/helper';
 import { fileContext, setFileContext } from '../fileContext';
 import type { TaskContext } from '../worker/taskContext';
 import { TestRunner } from './runner';
-import { RunnerRuntime, runtimeAPI } from './runtime';
+import {
+  RunnerRuntime,
+  runtimeAPI,
+  type TestSuiteListenersSnapshot,
+} from './runtime';
 import { traverseUpdateTest } from './task';
 
 // The running file's execution-phase runner (see the live-binding contract in
@@ -48,9 +52,11 @@ export const runnerAPI: RunnerAPI = {
 export function createRunner({
   workerState,
   taskContext,
+  setupListeners,
 }: {
   workerState: WorkerState;
   taskContext: TaskContext;
+  setupListeners?: TestSuiteListenersSnapshot;
 }): {
   runner: {
     runTests: (
@@ -60,6 +66,7 @@ export function createRunner({
     ) => Promise<TestFileResult>;
     collectTests: () => Promise<TestInfo[]>;
     getCurrentTest: TestRunner['getCurrentTest'];
+    getRootSuiteListeners: () => TestSuiteListenersSnapshot;
   };
 } {
   const {
@@ -72,6 +79,9 @@ export function createRunner({
     testPath,
     runtimeConfig: workerState.runtimeConfig,
   });
+  if (setupListeners) {
+    runtimeInstance.setRootSuiteListeners(setupListeners);
+  }
   const testRunner: TestRunner = new TestRunner(taskContext);
   // Publish this file's context as one unit; every stable forwarder (runner
   // surface, `expect`, `rstest` config methods) resolves it at call time.
@@ -142,6 +152,7 @@ export function createRunner({
         return tests.map(toTestInfo);
       },
       getCurrentTest: () => testRunner.getCurrentTest(),
+      getRootSuiteListeners: () => runtimeInstance.getRootSuiteListeners(),
     },
   };
 }

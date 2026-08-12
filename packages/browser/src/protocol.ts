@@ -101,6 +101,8 @@ export type BrowserHostConfig = {
     updateSnapshot: SnapshotUpdateState;
   };
   testFile?: string; // Optional: if provided, only run this specific test file
+  /** Test files assigned to one browser worker session. */
+  testFiles?: string[];
   /**
    * Per-run identifier assigned by the container.
    * Used by browser RPC calls to prevent stale requests from previous reruns.

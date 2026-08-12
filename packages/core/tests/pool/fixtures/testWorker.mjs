@@ -214,6 +214,9 @@ onHostMessage((message) => {
       assignedWorkerId = request.workerId;
       send({ type: 'started', pid: workerIdentity });
       break;
+    case 'cleanup':
+      send({ type: 'cleanupFinished' });
+      break;
     case 'run':
       handleRun(request);
       break;
