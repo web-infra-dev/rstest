@@ -161,15 +161,26 @@ describe('RunnerRuntime', () => {
       expect(testCase.meta).toEqual({ custom: 'value', count: 42 });
     });
 
-    it('ignores an options object passed as the third argument', async () => {
-      const instance = createApi(123);
-      // The legacy third-arg object form is no longer supported: it is a type
-      // error and must not leak retry/repeats onto the case at runtime.
-      runtimeAPI.it('case', () => {}, { timeout: 250, retry: 2 } as any);
+    it('rejects a non-numeric third argument for tests and suites', () => {
+      createApi();
+      const invalidOptions = { timeout: 250, retry: 2 } as never;
+      const expectedError =
+        'The third argument must be a number when the second argument is a function. Use (name, fn, timeout) or (name, options, fn).';
+      const declarations = [
+        () => runtimeAPI.it('case', () => {}, invalidOptions),
+        () => runtimeAPI.test('case', () => {}, invalidOptions),
+        () => runtimeAPI.it.each([1])('case %s', () => {}, invalidOptions),
+        () => runtimeAPI.it.for([1])('case %s', () => {}, invalidOptions),
+        () => runtimeAPI.describe('suite', () => {}, invalidOptions),
+        () =>
+          runtimeAPI.describe.each([1])('suite %s', () => {}, invalidOptions),
+        () =>
+          runtimeAPI.describe.for([1])('suite %s', () => {}, invalidOptions),
+      ];
 
-      const testCase = (await instance.getTests())[0] as TestCase;
-      expect(testCase.timeout).toBe(123);
-      expect(testCase.retry).toBeUndefined();
+      for (const declare of declarations) {
+        expect(declare).toThrowError(expectedError);
+      }
     });
 
     it('falls back to config.testTimeout when timeout omitted', async () => {
