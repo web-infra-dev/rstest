@@ -17,10 +17,12 @@ import {
 type CallBrowserRpc = typeof import('../src/client/browserRpc').callBrowserRpc;
 type GetRpcTimeout =
   typeof import('../src/client/dispatchTransport').getRpcTimeout;
+type SetRpcPhase = typeof import('../src/client/dispatchTransport').setRpcPhase;
 
 describe('browserRpc client', () => {
   let callBrowserRpc: CallBrowserRpc;
   let getRpcTimeout: GetRpcTimeout;
+  let setRpcPhase: SetRpcPhase;
   let mockPostMessage: ReturnType<typeof rstest.fn>;
   let messageHandler: ((event: MessageEvent) => void) | null = null;
 
@@ -66,6 +68,7 @@ describe('browserRpc client', () => {
       await import('../src/client/dispatchTransport');
     callBrowserRpc = browserRpcModule.callBrowserRpc;
     getRpcTimeout = dispatchTransportModule.getRpcTimeout;
+    setRpcPhase = dispatchTransportModule.setRpcPhase;
   });
 
   afterEach(() => {
@@ -139,8 +142,37 @@ describe('browserRpc client', () => {
     expect(mockPostMessage).not.toHaveBeenCalled();
   });
 
-  it('should disable the RPC timeout when rpcTimeout is disabled', () => {
+  it('should use the bootstrap watchdog before test execution', () => {
     window.__RSTEST_BROWSER_OPTIONS__!.rpcTimeout = 0;
+
+    expect(getRpcTimeout()).toBe(30_000);
+  });
+
+  it('should reject an unanswered bootstrap RPC', async () => {
+    rstest.useFakeTimers();
+    try {
+      window.__RSTEST_BROWSER_OPTIONS__!.rpcTimeout = 0;
+      const requestPromise = callBrowserRpc<void>({
+        kind: 'config',
+        locator: { steps: [] },
+        method: 'setTestIdAttribute',
+        args: ['data-testid'],
+      });
+      const rejection = expect(requestPromise).rejects.toThrow(
+        'Browser RPC timeout after 30s: config.setTestIdAttribute',
+      );
+
+      await rstest.advanceTimersByTimeAsync(30_000);
+
+      await rejection;
+    } finally {
+      rstest.useRealTimers();
+    }
+  });
+
+  it('should disable the RPC timeout during test execution', () => {
+    window.__RSTEST_BROWSER_OPTIONS__!.rpcTimeout = 0;
+    setRpcPhase('test');
 
     expect(getRpcTimeout()).toBe(NO_RPC_TIMEOUT);
   });

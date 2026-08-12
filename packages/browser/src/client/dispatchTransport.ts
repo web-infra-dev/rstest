@@ -11,11 +11,22 @@ import {
   NO_RPC_TIMEOUT,
 } from '../protocol';
 
+const BOOTSTRAP_RPC_TIMEOUT_MS = 30_000;
+
+type RpcPhase = 'bootstrap' | 'test';
+
+let rpcPhase: RpcPhase = 'bootstrap';
+
+export const setRpcPhase = (phase: RpcPhase): void => {
+  rpcPhase = phase;
+};
+
 export const getRpcTimeout = (): number => {
   const configuredTimeout = window.__RSTEST_BROWSER_OPTIONS__?.rpcTimeout;
-  return configuredTimeout !== undefined && configuredTimeout > 0
-    ? configuredTimeout
-    : NO_RPC_TIMEOUT;
+  if (configuredTimeout !== undefined && configuredTimeout > 0) {
+    return configuredTimeout;
+  }
+  return rpcPhase === 'bootstrap' ? BOOTSTRAP_RPC_TIMEOUT_MS : NO_RPC_TIMEOUT;
 };
 
 type PendingRequest = {

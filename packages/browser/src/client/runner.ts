@@ -43,6 +43,7 @@ import {
   dispatchRpc,
   disposeDispatchTransport,
   getRpcTimeout,
+  setRpcPhase,
   sendDispatchRequest,
 } from './dispatchTransport';
 import { BrowserSnapshotEnvironment } from './snapshot';
@@ -533,6 +534,8 @@ const run = async () => {
       installRuntimeGlobals(runtime, runtimeConfig);
 
       try {
+        setRpcPhase('bootstrap');
+
         // Load setup files for this project after runtime is ready.
         await loadSetupFiles();
 
@@ -759,6 +762,8 @@ const run = async () => {
     activeUnhandledErrors = unhandledErrors;
 
     try {
+      setRpcPhase('bootstrap');
+
       // Load setup files for this project after runtime is ready.
       await loadSetupFiles();
 
@@ -775,6 +780,7 @@ const run = async () => {
         await preloadTestFileSourceMap(chunkUrl);
       }
 
+      setRpcPhase('test');
       const result = await runtime.runner.runTests(
         testPath,
         runnerHooks,
