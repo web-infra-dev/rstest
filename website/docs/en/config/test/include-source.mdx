@@ -77,7 +77,19 @@ export default defineConfig({
 
 ### TypeScript
 
-To get TypeScript support for `import.meta.rstest`, you can create a `src/rstestEnv.d.ts` file to reference:
+To get TypeScript support for `import.meta.rstest`, we recommend adding `@rstest/core/importMeta` to `compilerOptions.types` in the `tsconfig.json` for your test files:
+
+```json title=tsconfig.json
+{
+  "compilerOptions": {
+    "types": ["@rstest/core/importMeta"]
+  }
+}
+```
+
+> If your `tsconfig.json` already configures `compilerOptions.types`, append this type to the existing list.
+
+Alternatively, reference the type in `src/rstestEnv.d.ts`:
 
 ```ts title=rstestEnv.d.ts
 /// <reference types="@rstest/core/importMeta" />
