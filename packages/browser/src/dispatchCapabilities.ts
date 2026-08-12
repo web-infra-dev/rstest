@@ -144,9 +144,12 @@ export const createHostDispatchRouter = ({
   router.register(
     DISPATCH_NAMESPACE_RUNNER,
     async (request: BrowserDispatchRequest) => {
-      // `request.method` is untrusted wire data, so the lookup may miss. Unknown
-      // methods are ignored for forward-compatibility with newer runners,
-      // matching the previous `default: break`.
+      // `request.method` is untrusted wire data, so the lookup may miss. The
+      // silent-ignore path is load-bearing for two CURRENT message types, not
+      // just future ones: `ready` and `complete` arrive here in headed mode,
+      // and their only job — proving the document spoke — was already done at
+      // the dispatch gate. Turning unknown methods into errors would fail
+      // every headed boot.
       await runnerMethodHandlers[request.method as RunnerDispatchMethod]?.(
         request.args,
       );

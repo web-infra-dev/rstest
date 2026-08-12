@@ -30,6 +30,7 @@ import type {
   BrowserProjectRuntime,
   FileCleanupDispatchMethod,
   FileCleanupDispatchPayload,
+  RunnerEnvelope,
   RunnerLifecycleMethod,
 } from '../protocol';
 import {
@@ -46,6 +47,7 @@ import {
   setRpcPhase,
   sendDispatchRequest,
 } from './dispatchTransport';
+import { adoptRunIdentity, getRunIdentity } from './runIdentity';
 import { BrowserSnapshotEnvironment } from './snapshot';
 import {
   findNewScriptUrl,
@@ -218,17 +220,18 @@ const interceptConsole = (
 };
 
 const send = (message: BrowserClientMessage): void => {
+  const envelope: RunnerEnvelope = { runId: getRunIdentity(), message };
   // If in iframe, send to parent window (container) which will forward to host via RPC
   if (window.parent !== window) {
     window.parent.postMessage(
-      { type: DISPATCH_MESSAGE_TYPE, payload: message },
+      { type: DISPATCH_MESSAGE_TYPE, payload: envelope },
       '*',
     );
     return;
   }
   // Fallback: direct call if running outside iframe (not typical)
   // Note: This binding may not exist if not using Playwright
-  window[DISPATCH_MESSAGE_TYPE]?.(message);
+  window[DISPATCH_MESSAGE_TYPE]?.(envelope);
 };
 
 const dispatchRunnerLifecycle = (
@@ -255,6 +258,9 @@ const CONFIG_WAIT_TIMEOUT_MS = 30_000;
 /**
  * Wait for configuration from container if running in iframe.
  * This is a prerequisite for test execution - without config, tests cannot run.
+ * The config is also this document's run-lease grant: a config without a
+ * `runId` confers no identity, so it is ignored and the wait continues — an
+ * identity-less document must stay silent rather than execute unattributably.
  */
 const waitForConfig = (): Promise<void> => {
   // If not in iframe or already has config, resolve immediately
@@ -264,7 +270,10 @@ const waitForConfig = (): Promise<void> => {
 
   return new Promise((resolve, reject) => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === RSTEST_CONFIG_MESSAGE_TYPE) {
+      if (
+        event.data?.type === RSTEST_CONFIG_MESSAGE_TYPE &&
+        typeof event.data.payload?.runId === 'string'
+      ) {
         window.__RSTEST_BROWSER_OPTIONS__ = event.data.payload;
         debugLog(
           '[Runner] Received config from container:',
@@ -368,10 +377,17 @@ const run = async () => {
   await waitForConfig();
   let options = window.__RSTEST_BROWSER_OPTIONS__;
 
+  // Adopt this document's identity exactly once, from the handshake/injected
+  // config. Deliberately NOT from the URL: after an HMR full reload the URL
+  // still names the run this frame was originally navigated for, while the
+  // handshake names the run the container wants now.
+  if (options?.runId) {
+    adoptRunIdentity(options.runId);
+  }
+
   // Support reading testFile and testNamePattern from URL parameters
   const urlParams = new URLSearchParams(window.location.search);
   const urlTestFile = urlParams.get('testFile');
-  const urlRunId = urlParams.get('runId');
   const urlTestNamePattern = urlParams.get('testNamePattern');
 
   if (urlTestFile && options) {
@@ -379,13 +395,6 @@ const run = async () => {
     options = {
       ...options,
       testFile: urlTestFile,
-    };
-  }
-
-  if (urlRunId && options) {
-    options = {
-      ...options,
-      runId: urlRunId,
     };
   }
 
@@ -534,7 +543,7 @@ const run = async () => {
       installRuntimeGlobals(runtime, runtimeConfig);
 
       try {
-        setRpcPhase('bootstrap');
+        setRpcPhase('framework');
 
         // Load setup files for this project after runtime is ready.
         await loadSetupFiles();
@@ -680,7 +689,9 @@ const run = async () => {
         args: {
           projectName: projectRuntime.name,
           result,
-          runId: options.runId,
+          // The adopted identity, same as the transport stamp — never the
+          // config value read back, which a document must adopt only once.
+          runId: getRunIdentity(),
           testPath,
         } satisfies FileCleanupDispatchPayload,
       };
@@ -693,7 +704,7 @@ const run = async () => {
       await dispatchRpc<void>({
         requestId,
         request,
-        timeoutMs: getRpcTimeout(),
+        timeoutMs: getRpcTimeout('framework'),
         timeoutMessage: `File cleanup ${method} acknowledgement timed out for ${testPath}.`,
         staleMessage: `File cleanup ${method} became stale for ${testPath}.`,
       });
@@ -762,7 +773,7 @@ const run = async () => {
     activeUnhandledErrors = unhandledErrors;
 
     try {
-      setRpcPhase('bootstrap');
+      setRpcPhase('framework');
 
       // Load setup files for this project after runtime is ready.
       await loadSetupFiles();

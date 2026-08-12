@@ -1,6 +1,7 @@
 import type {
   BrowserDispatchRequest,
   BrowserDispatchResponse,
+  RunnerEnvelope,
 } from '../protocol';
 import {
   DISPATCH_MESSAGE_TYPE,
@@ -10,23 +11,24 @@ import {
   DISPATCH_RPC_REQUEST_TYPE,
   NO_RPC_TIMEOUT,
 } from '../protocol';
+import { getRunIdentity } from './runIdentity';
 
-const BOOTSTRAP_RPC_TIMEOUT_MS = 30_000;
+const FRAMEWORK_RPC_TIMEOUT_MS = 30_000;
 
-type RpcPhase = 'bootstrap' | 'test';
+type RpcPhase = 'framework' | 'test';
 
-let rpcPhase: RpcPhase = 'bootstrap';
+let rpcPhase: RpcPhase = 'framework';
 
 export const setRpcPhase = (phase: RpcPhase): void => {
   rpcPhase = phase;
 };
 
-export const getRpcTimeout = (): number => {
+export const getRpcTimeout = (phase: RpcPhase = rpcPhase): number => {
   const configuredTimeout = window.__RSTEST_BROWSER_OPTIONS__?.rpcTimeout;
   if (configuredTimeout !== undefined && configuredTimeout > 0) {
     return configuredTimeout;
   }
-  return rpcPhase === 'bootstrap' ? BOOTSTRAP_RPC_TIMEOUT_MS : NO_RPC_TIMEOUT;
+  return phase === 'framework' ? FRAMEWORK_RPC_TIMEOUT_MS : NO_RPC_TIMEOUT;
 };
 
 type PendingRequest = {
@@ -71,6 +73,34 @@ export const createRunnerLifecycleRequest = (
 });
 
 /**
+ * Stamp the document's run identity on an outbound dispatch request. Applied
+ * at the transport boundary so every namespace (runner lifecycle, browser,
+ * snapshot) carries it uniformly — the headed host accepts a request iff this
+ * names a live run. Headless routing ignores it (identity there is the
+ * host-injected `runToken`).
+ */
+const stampRunIdentity = (
+  request: BrowserDispatchRequest,
+): BrowserDispatchRequest => {
+  return { ...request, runId: getRunIdentity() };
+};
+
+const toEnvelopeMessage = (
+  request: BrowserDispatchRequest,
+): { type: typeof DISPATCH_MESSAGE_TYPE; payload: RunnerEnvelope } => {
+  return {
+    type: DISPATCH_MESSAGE_TYPE,
+    payload: {
+      runId: getRunIdentity(),
+      message: {
+        type: DISPATCH_RPC_REQUEST_TYPE,
+        payload: request,
+      },
+    },
+  };
+};
+
+/**
  * Deliver a dispatch request fire-and-forget.
  *
  * Unlike {@link dispatchRpc}, this never awaits, unwraps, id-matches, or times
@@ -82,6 +112,7 @@ export const sendDispatchRequest = (
   request: BrowserDispatchRequest,
   onError?: (error: unknown) => void,
 ): void => {
+  const stamped = stampRunIdentity(request);
   if (window.parent === window) {
     const dispatchBridge = window[DISPATCH_RPC_BRIDGE_NAME];
     if (!dispatchBridge) {
@@ -90,22 +121,13 @@ export const sendDispatchRequest = (
       );
       return;
     }
-    void Promise.resolve(dispatchBridge(request)).catch((error: unknown) => {
+    void Promise.resolve(dispatchBridge(stamped)).catch((error: unknown) => {
       onError?.(error);
     });
     return;
   }
 
-  window.parent.postMessage(
-    {
-      type: DISPATCH_MESSAGE_TYPE,
-      payload: {
-        type: DISPATCH_RPC_REQUEST_TYPE,
-        payload: request,
-      },
-    },
-    '*',
-  );
+  window.parent.postMessage(toEnvelopeMessage(stamped), '*');
 };
 
 const isDispatchResponse = (
@@ -217,6 +239,7 @@ export const dispatchRpc = <T>({
   timeoutMessage: string;
   staleMessage: string;
 }): Promise<T> => {
+  const stamped = stampRunIdentity(request);
   if (window.parent === window) {
     const dispatchBridge = window[DISPATCH_RPC_BRIDGE_NAME];
     if (!dispatchBridge) {
@@ -239,7 +262,7 @@ export const dispatchRpc = <T>({
       }
 
       const call = Promise.resolve()
-        .then(() => dispatchBridge(request))
+        .then(() => dispatchBridge(stamped))
         .then((result) =>
           unwrapDispatchBridgeResult<T>(requestId, result, staleMessage),
         );
@@ -277,16 +300,7 @@ export const dispatchRpc = <T>({
     }
 
     try {
-      window.parent.postMessage(
-        {
-          type: DISPATCH_MESSAGE_TYPE,
-          payload: {
-            type: DISPATCH_RPC_REQUEST_TYPE,
-            payload: request,
-          },
-        },
-        '*',
-      );
+      window.parent.postMessage(toEnvelopeMessage(stamped), '*');
     } catch (error) {
       rejectPendingRequest(
         requestId,

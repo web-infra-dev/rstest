@@ -3,9 +3,9 @@ import type {
   BrowserDispatchResponse,
   BrowserHostConfig,
   BrowserProjectRuntime,
-  BrowserRpcRequest,
-  BrowserClientMessage as ProtocolBrowserClientMessage,
+  RunnerEnvelope,
   TestFileInfo,
+  VersionedTestFileSet,
 } from '@rstest/browser/protocol';
 
 import type {
@@ -39,7 +39,6 @@ export type BrowserClientFileResult = {
   status: TestFileResult['status'];
   name: TestFileResult['name'];
   testPath: TestFileResult['testPath'];
-  runId?: string;
   parentNames?: TestFileResult['parentNames'];
   location?: {
     line: number;
@@ -49,11 +48,6 @@ export type BrowserClientFileResult = {
   results: BrowserClientTestResult[];
 };
 
-export type TestFileStartPayload = Extract<
-  ProtocolBrowserClientMessage,
-  { type: 'file-start' }
->['payload'];
-
 export type TestFileReadyPayload = {
   testPath: string;
   tests: TestInfo[];
@@ -61,43 +55,32 @@ export type TestFileReadyPayload = {
 
 export type TestCaseStartPayload = Extract<TestInfo, { type: 'case' }>;
 
-export type LogPayload = Extract<
-  ProtocolBrowserClientMessage,
-  { type: 'log' }
->['payload'];
-
-export type FatalPayload = Extract<
-  ProtocolBrowserClientMessage,
-  { type: 'fatal' }
->['payload'];
-
-export type BrowserClientMessage =
-  ProtocolBrowserClientMessage | { type: string; payload?: unknown };
-
+/**
+ * Host RPC surface. Runner lifecycle events have no dedicated methods: the
+ * container relays every runner message as a `dispatch` request on the
+ * `runner` namespace, stamped with the envelope's run identity, so the host
+ * has exactly one inbound gate.
+ */
 export type HostRPC = {
   rerunTest: (testFile: string, testNamePattern?: string) => Promise<void>;
-  getTestFiles: () => Promise<TestFileInfo[]>;
-  onRunnerFramesReady: (testFiles: string[]) => Promise<void>;
-  onTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
-  onTestCaseResult: (payload: BrowserClientTestResult) => Promise<void>;
-  onTestFileComplete: (payload: BrowserClientFileResult) => Promise<void>;
-  onLog: (payload: LogPayload) => Promise<void>;
-  onFatal: (payload: FatalPayload) => Promise<void>;
+  getTestFiles: () => Promise<VersionedTestFileSet>;
+  onFrameSetReady: (version: number) => Promise<void>;
   dispatch: (
     request: BrowserDispatchRequest,
   ) => Promise<BrowserDispatchResponse>;
 };
 
-export type ReloadTestFileAck = {
-  runId: string;
-};
-
 export type ContainerRPC = {
-  onTestFileUpdate: (testFiles: TestFileInfo[]) => void;
+  onTestFileUpdate: (testFiles: TestFileInfo[], version: number) => void;
+  /**
+   * Grant the host-minted `runId` to this file's frame and navigate it.
+   * Identity travels in; the container never mints or echoes one back.
+   */
   reloadTestFile: (
     testFile: string,
+    runId: string,
     testNamePattern?: string,
-  ) => Promise<ReloadTestFileAck>;
+  ) => Promise<void>;
   /**
    * Watch reruns push a refreshed host config (e.g. a flipped
    * `snapshot.updateSnapshot`) so runner iframes loaded from now on receive
@@ -111,6 +94,7 @@ export type {
   BrowserDispatchResponse,
   BrowserHostConfig,
   BrowserProjectRuntime,
-  BrowserRpcRequest,
+  RunnerEnvelope,
   TestFileInfo,
+  VersionedTestFileSet,
 };

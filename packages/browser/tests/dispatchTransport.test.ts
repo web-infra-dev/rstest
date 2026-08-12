@@ -85,10 +85,12 @@ describe('dispatch transport', () => {
     expect(onError.mock.calls[0]![0]).toBeInstanceOf(Error);
   });
 
-  it('posts the request to the parent window in the iframe path', async () => {
+  it('posts an identity envelope to the parent window in the iframe path', async () => {
     const postMessage = rstest.fn();
     rstest.stubGlobal('window', { parent: { postMessage } });
 
+    const { adoptRunIdentity } = await import('../src/client/runIdentity');
+    adoptRunIdentity('run-9');
     const { createRunnerLifecycleRequest, sendDispatchRequest } =
       await loadModule();
     const req = createRunnerLifecycleRequest('suite-start', { s: 1 });
@@ -98,7 +100,13 @@ describe('dispatch transport', () => {
     expect(postMessage).toHaveBeenCalledWith(
       {
         type: DISPATCH_MESSAGE_TYPE,
-        payload: { type: DISPATCH_RPC_REQUEST_TYPE, payload: req },
+        payload: {
+          runId: 'run-9',
+          message: {
+            type: DISPATCH_RPC_REQUEST_TYPE,
+            payload: { ...req, runId: 'run-9' },
+          },
+        },
       },
       '*',
     );
@@ -149,5 +157,21 @@ describe('dispatch transport', () => {
     } finally {
       rstest.useRealTimers();
     }
+  });
+
+  it('keeps framework RPCs on a finite watchdog outside test execution', async () => {
+    rstest.stubGlobal('window', {
+      __RSTEST_BROWSER_OPTIONS__: { rpcTimeout: NO_RPC_TIMEOUT },
+      parent: {},
+    });
+    const { getRpcTimeout, setRpcPhase } = await loadModule();
+
+    setRpcPhase('framework');
+    expect(getRpcTimeout()).toBe(30_000);
+    expect(getRpcTimeout('framework')).toBe(30_000);
+
+    setRpcPhase('test');
+    expect(getRpcTimeout()).toBe(NO_RPC_TIMEOUT);
+    expect(getRpcTimeout('framework')).toBe(30_000);
   });
 });
