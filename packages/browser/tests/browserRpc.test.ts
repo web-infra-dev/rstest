@@ -11,6 +11,7 @@ import {
   DISPATCH_METHOD_RPC,
   DISPATCH_NAMESPACE_BROWSER,
   DISPATCH_RESPONSE_TYPE,
+  NO_RPC_TIMEOUT,
 } from '../src/protocol';
 
 type CallBrowserRpc = typeof import('../src/client/browserRpc').callBrowserRpc;
@@ -138,9 +139,9 @@ describe('browserRpc client', () => {
     expect(mockPostMessage).not.toHaveBeenCalled();
   });
 
-  it('should use the default timeout when rpcTimeout is disabled', () => {
+  it('should disable the RPC timeout when rpcTimeout is disabled', () => {
     window.__RSTEST_BROWSER_OPTIONS__!.rpcTimeout = 0;
 
-    expect(getRpcTimeout()).toBe(30_000);
+    expect(getRpcTimeout()).toBe(NO_RPC_TIMEOUT);
   });
 });

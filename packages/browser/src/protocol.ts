@@ -22,6 +22,7 @@ export const DISPATCH_RESPONSE_TYPE = '__rstest_dispatch_response__';
 export const DISPATCH_RPC_BRIDGE_NAME = '__rstest_dispatch_rpc__';
 export const DISPATCH_RPC_REQUEST_TYPE = 'dispatch-rpc-request';
 export const RSTEST_CONFIG_MESSAGE_TYPE = 'RSTEST_CONFIG';
+export const NO_RPC_TIMEOUT = -1;
 
 export const DISPATCH_NAMESPACE_RUNNER = 'runner';
 export const DISPATCH_NAMESPACE_BROWSER = 'browser';
@@ -129,10 +130,7 @@ export type BrowserHostConfig = {
    * Debug mode. When true, enables verbose logging in browser.
    */
   debug?: boolean;
-  /**
-   * Timeout for RPC operations in milliseconds (e.g., snapshot file operations).
-   * Derived from testTimeout config.
-   */
+  /** Timeout for RPC operations in milliseconds; negative values disable it. */
   rpcTimeout?: number;
 };
 
