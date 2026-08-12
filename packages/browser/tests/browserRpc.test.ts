@@ -14,9 +14,12 @@ import {
 } from '../src/protocol';
 
 type CallBrowserRpc = typeof import('../src/client/browserRpc').callBrowserRpc;
+type GetRpcTimeout =
+  typeof import('../src/client/dispatchTransport').getRpcTimeout;
 
 describe('browserRpc client', () => {
   let callBrowserRpc: CallBrowserRpc;
+  let getRpcTimeout: GetRpcTimeout;
   let mockPostMessage: ReturnType<typeof rstest.fn>;
   let messageHandler: ((event: MessageEvent) => void) | null = null;
 
@@ -57,8 +60,11 @@ describe('browserRpc client', () => {
       },
     });
 
-    const module = await import('../src/client/browserRpc');
-    callBrowserRpc = module.callBrowserRpc;
+    const browserRpcModule = await import('../src/client/browserRpc');
+    const dispatchTransportModule =
+      await import('../src/client/dispatchTransport');
+    callBrowserRpc = browserRpcModule.callBrowserRpc;
+    getRpcTimeout = dispatchTransportModule.getRpcTimeout;
   });
 
   afterEach(() => {
@@ -130,5 +136,11 @@ describe('browserRpc client', () => {
     ).resolves.toBeUndefined();
 
     expect(mockPostMessage).not.toHaveBeenCalled();
+  });
+
+  it('should use the default timeout when rpcTimeout is disabled', () => {
+    window.__RSTEST_BROWSER_OPTIONS__!.rpcTimeout = 0;
+
+    expect(getRpcTimeout()).toBe(30_000);
   });
 });

@@ -16,9 +16,8 @@ import {
 const DEFAULT_RPC_TIMEOUT_MS = 30_000;
 
 export const getRpcTimeout = (): number => {
-  return (
-    window.__RSTEST_BROWSER_OPTIONS__?.rpcTimeout ?? DEFAULT_RPC_TIMEOUT_MS
-  );
+  const configuredTimeout = window.__RSTEST_BROWSER_OPTIONS__?.rpcTimeout ?? 0;
+  return configuredTimeout > 0 ? configuredTimeout : DEFAULT_RPC_TIMEOUT_MS;
 };
 
 const pendingRequests = new Map<
