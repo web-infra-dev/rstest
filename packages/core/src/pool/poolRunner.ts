@@ -279,6 +279,23 @@ export class PoolRunner {
     return deferred.promise;
   }
 
+  async cleanupWorkerFixtures(): Promise<void> {
+    if (
+      this.currentTask ||
+      this.workerCleanupCompleted ||
+      this.crashed ||
+      !this.worker.hasLiveChild()
+    ) {
+      return;
+    }
+    try {
+      await this.requestWorkerCleanup();
+    } catch (error) {
+      this.crashed = true;
+      throw error;
+    }
+  }
+
   private async runOperation<T>(op: () => Promise<T>): Promise<T> {
     const next = this.operationChain.then(op, op);
     this.operationChain = next.catch(() => undefined);

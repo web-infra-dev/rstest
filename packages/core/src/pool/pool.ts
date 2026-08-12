@@ -60,6 +60,33 @@ export class Pool {
     return this.dispatch(task, 'run') as Promise<TestFileResult>;
   }
 
+  async cleanupWorkerFixtures(): Promise<Error[]> {
+    if (this.options.isolate) {
+      return [];
+    }
+
+    // A reusable runner can already be stopping when the idle floor sheds an
+    // environment-mismatched worker. Its stop path owns worker fixture
+    // cleanup, so drain those promises before finalizing the run and preserve
+    // any errors they reported.
+    await Promise.all([...this.stoppingPromises]);
+    const errors = this.workerStopErrors.splice(0);
+    const idleErrors = await Promise.all(
+      this.idleRunners.map(async (runner) => {
+        try {
+          await runner.cleanupWorkerFixtures();
+          return undefined;
+        } catch (error) {
+          return error instanceof Error ? error : new Error(String(error));
+        }
+      }),
+    );
+    errors.push(
+      ...idleErrors.filter((error): error is Error => error !== undefined),
+    );
+    return errors;
+  }
+
   async collectTests(task: PoolTask): Promise<CollectTaskResult> {
     return this.dispatch(task, 'collect') as Promise<CollectTaskResult>;
   }

@@ -207,7 +207,7 @@ export const createHeadlessScheduler = async ({
     string,
     {
       end: (payload: FileCleanupDispatchPayload) => void;
-      start: (payload: FileCleanupDispatchPayload) => void;
+      start: (payload: FileCleanupDispatchPayload) => Promise<void> | void;
     }
   >();
   dispatchRouter.register(DISPATCH_NAMESPACE_FILE_CLEANUP, async (request) => {
@@ -221,7 +221,7 @@ export const createHeadlessScheduler = async ({
     }
     const payload = request.args as FileCleanupDispatchPayload;
     if (request.method === 'start') {
-      handler.start(payload);
+      await handler.start(payload);
     } else if (request.method === 'end') {
       handler.end(payload);
     }
@@ -382,7 +382,7 @@ export const createHeadlessScheduler = async ({
             state.timer = undefined;
           }
         },
-        start: (payload) => {
+        start: async (payload) => {
           const state = fileCleanupStates.get(payload.testPath) ?? {
             finished: false,
           };
@@ -438,6 +438,10 @@ export const createHeadlessScheduler = async ({
             })();
           }, FIXTURE_CLEANUP_TIMEOUT_MS);
           fileCleanupStates.set(payload.testPath, state);
+          // The client waits for this acknowledgement before it can finish
+          // the file and load the next file on a reused page. This makes the
+          // V8 take/start pair a real inter-file barrier.
+          await collectCoverage();
         },
       });
 

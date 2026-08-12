@@ -670,6 +670,7 @@ const run = async () => {
   const keepWorkerFixtures = runtimeConfig.isolate === false;
   let restoreWorkerConsole: (() => void) | undefined;
   let workerCleanupFailed = false;
+  let workerCleanupAttempted = false;
   let previousIstanbulCoverage: CoverageMapData | undefined;
   try {
     for (let fileIndex = 0; fileIndex < testKeysToRun.length; fileIndex++) {
@@ -802,10 +803,11 @@ const run = async () => {
             );
             previousIstanbulCoverage = cloneCoverage(currentCoverage);
           }
-          await dispatchFileCleanup('start', result, window.parent !== window);
+          // The host must finish V8 coverage take/restart before the next file
+          // can be loaded on a reused page.
+          await dispatchFileCleanup('start', result, true);
         },
-        onFileCleanupEnd: () =>
-          dispatchFileCleanup('end', undefined, window.parent !== window),
+        onFileCleanupEnd: () => dispatchFileCleanup('end', undefined, true),
         onTestFileReady: async (test) => {
           dispatchRunnerLifecycle('file-ready', test);
         },
@@ -858,7 +860,6 @@ const run = async () => {
 
       const unhandledErrors: Error[] = [];
       activeUnhandledErrors = unhandledErrors;
-      let workerCleanupAttempted = false;
 
       try {
         // Setup files run once for every browser page. The host keeps batches
@@ -885,7 +886,14 @@ const run = async () => {
           runtime.api,
         );
 
-        if (!keepWorkerFixtures) {
+        // Headed execution and single-file batches are file-like even when the
+        // config keeps worker fixtures. Finish that cleanup before publishing
+        // file-complete so the host cannot reload the next iframe while the
+        // worker scope is still tearing down. A multi-file headless batch must
+        // defer worker cleanup until its final file.
+        const cleanupBeforeFileComplete =
+          !keepWorkerFixtures || testKeysToRun.length === 1;
+        if (cleanupBeforeFileComplete) {
           workerCleanupAttempted = true;
           try {
             await cleanupWorkerFixturesWithTimeout();
@@ -973,7 +981,7 @@ const run = async () => {
       }
     }
   } finally {
-    if (keepWorkerFixtures) {
+    if (keepWorkerFixtures && !workerCleanupAttempted) {
       try {
         await cleanupWorkerFixturesWithTimeout();
       } catch (error) {
