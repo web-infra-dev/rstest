@@ -73,6 +73,21 @@ export const useRpc = (
         (event: MessageEvent<string>) => void
       >();
 
+      // The file set never moves backward within a connection: the initial
+      // `getTestFiles()` response and the host's update pushes ride the same
+      // socket, and whichever lands later must not overwrite a newer version
+      // the other already applied. Scoped to the connection — not global —
+      // because a relaunched host restarts its version space, and a baseline
+      // carried across the reconnect would deadlock the resync.
+      let lastAppliedVersion = -1;
+      const applyFileSet = (fileSet: VersionedTestFileSet): void => {
+        if (fileSet.version <= lastAppliedVersion) {
+          return;
+        }
+        lastAppliedVersion = fileSet.version;
+        setFileSetRef.current(fileSet);
+      };
+
       const methods: ContainerRPC = {
         onTestFileUpdate(files: TestFileInfo[], version: number) {
           logger.debug(
@@ -80,7 +95,7 @@ export const useRpc = (
             version,
             files,
           );
-          setFileSetRef.current({ files, version });
+          applyFileSet({ files, version });
         },
         async reloadTestFile(
           testFile: string,
@@ -154,7 +169,7 @@ export const useRpc = (
           .getTestFiles()
           .then((fileSet) => {
             if (isMounted) {
-              setFileSetRef.current(fileSet);
+              applyFileSet(fileSet);
               setLoading(false);
             }
           })
