@@ -92,7 +92,7 @@ describe('RunnerRuntime', () => {
     );
   });
 
-  it('keeps unstringifiable error causes serializable', () => {
+  it('keeps error causes with failing string conversion serializable', () => {
     const error = new Error('worker error');
     Object.defineProperty(error, 'cause', { value: Object.create(null) });
 
