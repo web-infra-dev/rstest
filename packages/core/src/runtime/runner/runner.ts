@@ -1,5 +1,9 @@
 import { getState } from '@vitest/expect';
-import type { SnapshotClient, SnapshotState } from '@vitest/snapshot';
+import type {
+  SnapshotClient,
+  SnapshotResult,
+  SnapshotState,
+} from '@vitest/snapshot';
 import type {
   AfterEachListener,
   BeforeEachListener,
@@ -783,7 +787,13 @@ export class TestRunner {
     )?.meta;
 
     // saves files and returns SnapshotResult
-    const snapshotResult = await snapshotClient.finish(testPath);
+    await hooks.onSnapshotFinishStart?.();
+    let snapshotResult: SnapshotResult;
+    try {
+      snapshotResult = await snapshotClient.finish(testPath);
+    } finally {
+      await hooks.onSnapshotFinishEnd?.();
+    }
 
     this.taskContext.setFallback({
       taskId: getFileTaskId(testPath),

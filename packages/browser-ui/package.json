@@ -27,14 +27,14 @@
     "lint": "rslint ."
   },
   "dependencies": {
-    "antd": "^6.5.3",
-    "birpc": "^4.0.0",
-    "lucide-react": "^1.28.0",
+    "antd": "^6.6.0",
+    "birpc": "^4.1.0",
+    "lucide-react": "^1.31.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@rsbuild/core": "~2.1.10",
+    "@rsbuild/core": "~2.1.11",
     "@rsbuild/plugin-react": "^2.1.0",
     "@rsbuild/plugin-svgr": "^2.0.5",
     "@tailwindcss/postcss": "^4.3.3",

@@ -88,7 +88,12 @@ export function createRunner({
       ) => {
         const snapshotClient = workerState.snapshotClient!;
 
-        await snapshotClient.setup(testPath, workerState.snapshotOptions);
+        await hooks.onSnapshotSetupStart?.();
+        try {
+          await snapshotClient.setup(testPath, workerState.snapshotOptions);
+        } finally {
+          await hooks.onSnapshotSetupEnd?.();
+        }
 
         const tests = await runtimeInstance.getTests();
         traverseUpdateTest(tests, testNamePattern);

@@ -83,7 +83,7 @@ export type BrowserRpcRequest = {
    * Only meaningful for kind === 'expect'.
    */
   isNot?: boolean;
-  /** Optional timeout override (ms). Falls back to browser rpcTimeout. */
+  /** Optional assertion timeout override (ms). Falls back to the host-provided assertion timeout. */
   timeout?: number;
 };
 

@@ -3,6 +3,7 @@ import {
   DISPATCH_MESSAGE_TYPE,
   DISPATCH_NAMESPACE_RUNNER,
   DISPATCH_RPC_REQUEST_TYPE,
+  NO_RPC_TIMEOUT,
 } from '../src/protocol';
 
 const loadModule = () => import('../src/client/dispatchTransport');
@@ -109,5 +110,68 @@ describe('dispatch transport', () => {
       },
       '*',
     );
+  });
+
+  it('does not time out disabled RPCs and rejects them when disposed', async () => {
+    rstest.useFakeTimers();
+    try {
+      const listeners = new Map<string, (event: MessageEvent) => void>();
+      const removeEventListener = rstest.fn((type: string) => {
+        listeners.delete(type);
+      });
+      const win = {
+        addEventListener: (
+          type: string,
+          handler: (event: MessageEvent) => void,
+        ) => {
+          listeners.set(type, handler);
+        },
+        removeEventListener,
+        parent: { postMessage: rstest.fn() },
+      };
+      rstest.stubGlobal('window', win);
+
+      const { dispatchRpc, disposeDispatchTransport } = await loadModule();
+      const requestPromise = dispatchRpc<void>({
+        requestId: 'rpc-1',
+        request: {
+          requestId: 'rpc-1',
+          namespace: DISPATCH_NAMESPACE_RUNNER,
+          method: 'file-ready',
+          args: undefined,
+        },
+        timeoutMs: NO_RPC_TIMEOUT,
+        timeoutMessage: 'should not time out',
+        staleMessage: 'should not be stale',
+      });
+
+      await rstest.advanceTimersByTimeAsync(60_000);
+      const disposed = new Error('transport closed');
+      disposeDispatchTransport(disposed);
+
+      await expect(requestPromise).rejects.toBe(disposed);
+      expect(removeEventListener).toHaveBeenCalledWith(
+        'message',
+        expect.any(Function),
+      );
+    } finally {
+      rstest.useRealTimers();
+    }
+  });
+
+  it('keeps framework RPCs on a finite watchdog outside test execution', async () => {
+    rstest.stubGlobal('window', {
+      __RSTEST_BROWSER_OPTIONS__: { rpcTimeout: NO_RPC_TIMEOUT },
+      parent: {},
+    });
+    const { getRpcTimeout, setRpcPhase } = await loadModule();
+
+    setRpcPhase('framework');
+    expect(getRpcTimeout()).toBe(30_000);
+    expect(getRpcTimeout('framework')).toBe(30_000);
+
+    setRpcPhase('test');
+    expect(getRpcTimeout()).toBe(NO_RPC_TIMEOUT);
+    expect(getRpcTimeout('framework')).toBe(30_000);
   });
 });

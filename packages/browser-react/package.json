@@ -1,6 +1,6 @@
 {
   "name": "@rstest/browser-react",
-  "version": "0.11.6",
+  "version": "0.11.8",
   "description": "React component testing support for Rstest browser mode",
   "keywords": [
     "rstest",
@@ -44,7 +44,7 @@
     "test": "rstest"
   },
   "devDependencies": {
-    "@rslib/core": "1.0.0-beta.1",
+    "@rslib/core": "1.0.0-beta.2",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/react": "^19.2.18",

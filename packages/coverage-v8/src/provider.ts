@@ -971,8 +971,6 @@ export class CoverageProvider implements RstestCoverageProvider {
         sourceIdentityIds.clear();
         loadedOptions.assetFiles = undefined;
         loadedOptions.sourceMaps = undefined;
-        loadedAssetFiles = undefined;
-        loadedSourceMaps = undefined;
 
         for (const { entries, options, root } of groups.values()) {
           try {

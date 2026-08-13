@@ -40,7 +40,7 @@ describe('browser mode - watch reporter lifecycle', () => {
         const startTime = Date.now();
 
         while (Date.now() - startTime < WATCH_REPORTER_HOOK_TIMEOUT_MS) {
-          let reportLog = '';
+          let reportLog: string;
           try {
             reportLog = fs.read(reportLogPath);
           } catch {

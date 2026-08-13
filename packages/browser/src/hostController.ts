@@ -66,6 +66,7 @@ import type {
 import {
   DISPATCH_MESSAGE_TYPE,
   DISPATCH_NAMESPACE_BROWSER,
+  NO_RPC_TIMEOUT,
   validateBrowserRpcRequest,
 } from './protocol';
 import {
@@ -699,7 +700,7 @@ export const runBrowserController = async (
     projectRunnerUrls,
     wsPort,
     debug: isDebug(),
-    rpcTimeout: maxTestTimeoutForRpc,
+    rpcTimeout: NO_RPC_TIMEOUT,
   };
 
   const browserProviderProjects: BrowserProviderProject[] = browserProjects.map(
@@ -1314,8 +1315,6 @@ export const listBrowserTests = async (
     }),
   );
 
-  const maxTestTimeoutForRpc = getMaxTestTimeoutForRpc(browserProjects);
-
   const hostOptions: BrowserHostConfig = {
     rootPath: normalize(context.rootPath),
     projects: projectRuntimeConfigs,
@@ -1324,7 +1323,7 @@ export const listBrowserTests = async (
     },
     mode: 'collect', // Use collect mode
     debug: isDebug(),
-    rpcTimeout: maxTestTimeoutForRpc,
+    rpcTimeout: NO_RPC_TIMEOUT,
   };
 
   runtime.setContainerOptions(hostOptions);

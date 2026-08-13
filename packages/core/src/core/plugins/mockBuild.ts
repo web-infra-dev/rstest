@@ -3,8 +3,6 @@ import pathe from 'pathe';
 import { castArray, logger } from '../../utils';
 import { RSTEST_API_GLOBAL_KEY } from '../../utils/constants';
 
-export type RstestBuildTarget = 'node' | 'web';
-
 type RspackInstance = ModifyRspackConfigUtils['rspack'];
 
 export const forceWebpackRuntimeMode = (
@@ -16,21 +14,6 @@ export const forceWebpackRuntimeMode = (
   experiments.runtimeMode = 'webpack';
   return experiments;
 };
-
-/**
- * The `import.meta.rstest` define text for each executor. The node form is
- * byte-identical to the historical inline literal in `pluginBasic`; the web
- * form reads the same key off `globalThis`, which the browser client entry
- * assigns per test file before test modules evaluate.
- *
- * Define replacement only matches plain member access: an optional-chained
- * `import.meta.rstest?.x` is left to the bundler's `import.meta` folding and
- * evaluates to `undefined`.
- */
-export const importMetaRstestDefine = (target: RstestBuildTarget): string =>
-  target === 'node'
-    ? `global['${RSTEST_API_GLOBAL_KEY}']`
-    : `globalThis['${RSTEST_API_GLOBAL_KEY}']`;
 
 /**
  * The native `RstestPlugin` guards the node chunk-install runtime so a late
@@ -90,6 +73,7 @@ class WebMockChunkInstallGuardPlugin {
 
 export interface MockRstestPluginOptions {
   injectModulePathName: true;
+  injectImportMetaRstestOrigin: true;
   importMetaPathName: true;
   hoistMockModule: true;
   manualMockRoot: string;
@@ -105,6 +89,7 @@ export const getMockRstestPluginOptions = (options: {
   rootPath: string;
 }): MockRstestPluginOptions => ({
   injectModulePathName: true,
+  injectImportMetaRstestOrigin: true,
   importMetaPathName: true,
   hoistMockModule: true,
   manualMockRoot: pathe.resolve(options.rootPath, '__mocks__'),

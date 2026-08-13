@@ -24,6 +24,7 @@ import {
   getRealTimers,
   RSTEST_API_GLOBAL_KEY,
   RSTEST_ENV_SYMBOL_KEY,
+  RSTEST_IMPORT_META_GLOBAL_KEY,
   setRealTimers,
   unwrapRegex,
 } from '@rstest/core/internal/browser-runtime';
@@ -39,13 +40,16 @@ import type {
 import {
   DISPATCH_MESSAGE_TYPE,
   DISPATCH_NAMESPACE_FILE_CLEANUP,
+  RSTEST_BROWSER_CACHE_CLEANERS_KEY,
   RSTEST_CONFIG_MESSAGE_TYPE,
 } from '../protocol';
 import {
   createRequestId,
   createRunnerLifecycleRequest,
   dispatchRpc,
+  disposeDispatchTransport,
   getRpcTimeout,
+  setRpcPhase,
   sendDispatchRequest,
 } from './dispatchTransport';
 import { adoptRunIdentity, getRunIdentity } from './runIdentity';
@@ -147,12 +151,26 @@ const installRuntimeGlobals = (
   runtime: Awaited<ReturnType<typeof createRstestRuntime>>,
   runtimeConfig: RuntimeConfig,
 ): void => {
-  (globalThis as Record<string, unknown>)[RSTEST_API_GLOBAL_KEY] = runtime.api;
+  Object.assign(globalThis, {
+    [RSTEST_API_GLOBAL_KEY]: runtime.api,
+    [RSTEST_IMPORT_META_GLOBAL_KEY]: runtime.resolveImportMetaRstest,
+  });
   if (runtimeConfig.globals) {
     for (const apiKey of globalApis) {
       (globalThis as any)[apiKey] = (runtime.api as any)[apiKey];
     }
   }
+};
+
+const clearBrowserTestEntryCache = (testEntryPath: string): void => {
+  const cleaners = (
+    globalThis as typeof globalThis &
+      Record<
+        typeof RSTEST_BROWSER_CACHE_CLEANERS_KEY,
+        Set<(testEntryPath: string) => void> | undefined
+      >
+  )[RSTEST_BROWSER_CACHE_CLEANERS_KEY];
+  cleaners?.forEach((clean) => clean(testEntryPath));
 };
 
 type GlobalWithRuntimeEnv = typeof globalThis &
@@ -608,8 +626,12 @@ const run = async () => {
       installRuntimeGlobals(runtime, runtimeConfig);
 
       try {
+        setRpcPhase('framework');
+
         // Load setup files for this project after runtime is ready.
         await loadSetupFiles();
+
+        clearBrowserTestEntryCache(testPath);
 
         // Load the test file dynamically (registers tests without running)
         await currentTestContext.loadTest(key);
@@ -798,7 +820,7 @@ const run = async () => {
         await dispatchRpc<void>({
           requestId,
           request,
-          timeoutMs: getRpcTimeout(),
+          timeoutMs: getRpcTimeout('framework'),
           timeoutMessage: `File cleanup ${method} acknowledgement timed out for ${testPath}.`,
           staleMessage: `File cleanup ${method} became stale for ${testPath}.`,
         });
@@ -831,9 +853,25 @@ const run = async () => {
 
       const runnerHooks: RunnerHooks & FileCleanupHooks = {
         onFileCleanupStart: async (result) => {
-          await dispatchFileCleanup('start', result, true);
+          if (result && globalThis.__coverage__) {
+            result.coverage = globalThis.__coverage__ as CoverageMapData;
+          }
+          await dispatchFileCleanup('start', result, window.parent !== window);
         },
-        onFileCleanupEnd: () => dispatchFileCleanup('end', undefined, true),
+        onFileCleanupEnd: () =>
+          dispatchFileCleanup('end', undefined, window.parent !== window),
+        onSnapshotSetupStart: async () => {
+          setRpcPhase('framework');
+        },
+        onSnapshotSetupEnd: async () => {
+          setRpcPhase('test');
+        },
+        onSnapshotFinishStart: async () => {
+          setRpcPhase('framework');
+        },
+        onSnapshotFinishEnd: async () => {
+          setRpcPhase('test');
+        },
         onTestFileReady: async (test) => {
           dispatchRunnerLifecycle('file-ready', test);
         },
@@ -888,6 +926,8 @@ const run = async () => {
       activeUnhandledErrors = unhandledErrors;
 
       try {
+        setRpcPhase('framework');
+
         // Setup modules are cached when a non-isolated browser worker runs
         // multiple files. Replay their root hooks on each fresh runtime so
         // setup hooks retain per-file semantics without recreating the worker.
@@ -1045,14 +1085,18 @@ const run = async () => {
   window.__RSTEST_DONE__ = true;
 };
 
-void run().catch((error) => {
-  const err = error instanceof Error ? error : new Error(String(error));
-  send({
-    type: 'fatal',
-    payload: {
-      message: err.message,
-      stack: err.stack,
-    },
+void run()
+  .catch((error) => {
+    const err = error instanceof Error ? error : new Error(String(error));
+    send({
+      type: 'fatal',
+      payload: {
+        message: err.message,
+        stack: err.stack,
+      },
+    });
+    window.__RSTEST_DONE__ = true;
+  })
+  .finally(() => {
+    disposeDispatchTransport();
   });
-  window.__RSTEST_DONE__ = true;
-});

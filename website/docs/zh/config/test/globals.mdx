@@ -68,15 +68,17 @@ describe('Index', () => {
 
 ### 类型支持
 
-为了让 TypeScript 正确识别全局 API，在 `tsconfig.json` 中添加 `@rstest/core/globals` 类型声明：
+为了让 TypeScript 正确识别全局 API，推荐在测试文件对应的 `tsconfig.json` 中，将 `@rstest/core/globals` 添加到 `compilerOptions.types`：
 
-```ts title=tsconfig.json
+```json title=tsconfig.json
 {
   "compilerOptions": {
     "types": ["@rstest/core/globals"]
   }
 }
 ```
+
+> 如果已有 `compilerOptions.types` 配置，请将该类型追加到现有列表中。
 
 或者创建一个 `src/rstestEnv.d.ts` 文件来引用类型定义：
 

@@ -19,11 +19,45 @@ describe('browser mode - in-source testing', () => {
 
     expect(cli.stdout).toContain('src/sayHi.ts');
     expect(cli.stdout).toContain('runs the in-source test in the browser');
-    // Two files: the in-source src/sayHi.ts entry and tests/math.test.ts.
+    // Five files: the in-source src/sayHi.ts entry and four regular tests.
     // src/math.ts has no import.meta.rstest block, so it must not become a
     // test entry (node filters those out of includeSource discovery).
-    expect(cli.stdout).toMatch(/Test Files.*2 passed/);
-    expect(cli.stdout).toMatch(/Tests.*2 passed/);
+    expect(cli.stdout).toMatch(/Test Files.*5 passed/);
+    expect(cli.stdout).toMatch(/Tests.*5 passed/);
+    expect(
+      cli.stdout.match(/runs the in-source test in the browser/g),
+    ).toHaveLength(1);
+  });
+
+  it('lists an in-source test after a regular test imports it', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCli(
+      'browser-in-source',
+      { command: 'list' },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain(
+      'src/sayHi.ts > runs the in-source test in the browser',
+    );
+  });
+
+  it('does not expose import.meta.rstest to imported modules', async () => {
+    for (const testPath of ['tests/static.test.ts', 'tests/dynamic.test.ts']) {
+      const { cli, expectExecSuccess } = await runBrowserCli(
+        'browser-in-source',
+        {
+          args: [testPath, '--reporter=verbose'],
+        },
+      );
+
+      await expectExecSuccess();
+
+      expect(cli.stdout).toMatch(/Test Files.*1 passed/);
+      expect(cli.stdout).toMatch(/Tests.*1 passed/);
+      expect(cli.stdout).not.toContain(
+        'runs the in-source test in the browser',
+      );
+    }
   });
 
   it('runs in-source tests on the initial watch pass', async () => {
@@ -37,8 +71,8 @@ describe('browser mode - in-source testing', () => {
     try {
       await cli.waitForStdout('Duration');
       expect(cli.stdout).toContain('src/sayHi.ts');
-      expect(cli.stdout).toMatch(/Test Files.*2 passed/);
-      expect(cli.stdout).toMatch(/Tests.*2 passed/);
+      expect(cli.stdout).toMatch(/Test Files.*5 passed/);
+      expect(cli.stdout).toMatch(/Tests.*5 passed/);
     } finally {
       await killCliProcessTree(cli);
     }
