@@ -360,10 +360,11 @@ export const createHeadedScheduler = async ({
       runs.armCleanupDeadline(runId, FIXTURE_CLEANUP_TIMEOUT_MS, () => {
         void (async () => {
           try {
-            // Taken before recovery closes the page the session lives on.
-            await collectCoverage();
-            // A cleanup timeout is a file failure, not a container failure:
-            // report it, recover, then settle so the serial loop advances.
+            // The page may be synchronously blocked by the cleanup callback.
+            // Coverage collection talks to that same renderer and can never
+            // return in that state, so recover first and intentionally omit
+            // the incomplete coverage sample for this file.
+            await recoverHeadedContainer();
             await handleTestFileComplete(
               createFileCleanupTimeoutResult({
                 message: `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
@@ -372,7 +373,6 @@ export const createHeadedScheduler = async ({
                 testPath: payload.testPath,
               }),
             );
-            await recoverHeadedContainer();
             runs.resolve(runId);
           } catch (error) {
             runs.reject(runId, toError(error));

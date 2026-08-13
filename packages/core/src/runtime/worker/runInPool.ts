@@ -783,6 +783,7 @@ export const runInPool = async (
       tracker.transition('tests');
     };
 
+    let fileCleanupResult: TestFileResult | undefined;
     const runnerHooks: RunnerHooks & FileCleanupHooks = {
       onTestFileReady: async (test) => {
         await rpc.onTestFileReady(test);
@@ -818,12 +819,15 @@ export const runInPool = async (
         await rpc.onTestCaseResult(result);
       },
       onFileCleanupStart: async (result) => {
-        if (result) {
-          await collectCoverage(result);
-        }
+        fileCleanupResult = result;
         await lifecycleHooks.onFileCleanupStart?.(result);
       },
-      onFileCleanupEnd: lifecycleHooks.onFileCleanupEnd,
+      onFileCleanupEnd: async () => {
+        await lifecycleHooks.onFileCleanupEnd?.();
+        if (fileCleanupResult) {
+          await collectCoverage(fileCleanupResult);
+        }
+      },
       getCountOfFailedTests: async () => {
         return rpc.getCountOfFailedTests();
       },
@@ -873,10 +877,6 @@ export const runInPool = async (
     return runResult;
   } finally {
     tracker.transition('teardown');
-    if (coverageProvider) {
-      coverageProvider.cleanup();
-    }
-
     taskContext?.setFallback(undefined);
     asyncLeakDetector?.disable();
     if (isolate) {
@@ -888,6 +888,9 @@ export const runInPool = async (
           ...(await formatTestError(workerCleanupError)),
         ];
       }
+    }
+    if (coverageProvider) {
+      coverageProvider.cleanup();
     }
     await teardown();
     tracker.end();

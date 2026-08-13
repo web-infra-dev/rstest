@@ -33,6 +33,7 @@ describe('browser protocol types', () => {
         name: 'default',
         environmentName: 'browser',
         projectRoot: '/root',
+        hasSetupFiles: false,
         runtimeConfig: {} as BrowserProjectRuntime['runtimeConfig'],
       };
 

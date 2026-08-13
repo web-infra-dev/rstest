@@ -9,7 +9,7 @@ describe('browser mode - setup files', () => {
     expect(cli.stdout).toMatch(/Tests.*passed/);
   });
 
-  it('should keep setup hooks in later non-isolated files', async () => {
+  it('should isolate setup files in later non-isolated files', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli('setup-files', {
       args: [
         '--isolate=false',
@@ -20,6 +20,8 @@ describe('browser mode - setup files', () => {
     });
 
     await expectExecSuccess();
-    expect(cli.stdout).toContain('RSTEST_SETUP_BEFORE_EACH_4');
+    expect((cli.stdout.match(/RSTEST_SETUP_BEFORE_EACH_1/g) ?? []).length).toBe(
+      2,
+    );
   });
 });

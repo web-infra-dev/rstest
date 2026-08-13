@@ -17,7 +17,7 @@ import type {
 import {
   createBrowserTaskContext,
   createRstestRuntime,
-  cleanupWorkerFixtures,
+  cleanupWorkerFixtures as cleanupWorkerFixtureInstances,
   FIXTURE_CLEANUP_TIMEOUT_MS,
   formatConsoleArgs,
   globalApis,
@@ -117,7 +117,7 @@ const cleanupWorkerFixturesWithTimeout = async (): Promise<void> => {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
-      cleanupWorkerFixtures(),
+      cleanupWorkerFixtureInstances(),
       new Promise<never>((_, reject) => {
         timer = realTimers.setTimeout?.(() => {
           reject(
@@ -670,7 +670,8 @@ const run = async () => {
   // 2. Run tests for each file. A non-isolated browser worker keeps the
   // worker fixture context alive while this page processes its assigned files;
   // isolated execution tears it down after each file.
-  const keepWorkerFixtures = runtimeConfig.isolate === false;
+  const keepWorkerFixtures =
+    runtimeConfig.isolate === false && projectRuntime.hasSetupFiles !== true;
   let restoreWorkerConsole: (() => void) | undefined;
   let workerCleanupFailed = false;
   let workerCleanupAttempted = false;

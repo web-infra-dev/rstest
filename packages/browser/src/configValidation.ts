@@ -228,6 +228,18 @@ const reportUnsupportedBrowserOptions = (context: RstestContext): void => {
     );
   }
 
+  if (
+    isBrowserOnlyRun &&
+    browserProjects.some(
+      ({ normalizedConfig: config }) =>
+        config.isolate === false && (config.setupFiles?.length ?? 0) > 0,
+    )
+  ) {
+    warnings.add(
+      'Browser projects with setupFiles stay file-isolated, even when isolate is false, so setup modules can run for every file.',
+    );
+  }
+
   for (const message of warnings) {
     logger.warn(color.yellow(message));
   }

@@ -133,7 +133,7 @@ export const createHeadlessScheduler = async ({
   const projectIsolation = new Map(
     projectRuntimeConfigs.map((project) => [
       project.name,
-      project.runtimeConfig?.isolate !== false,
+      project.hasSetupFiles || project.runtimeConfig?.isolate !== false,
     ]),
   );
   const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
@@ -304,11 +304,13 @@ export const createHeadlessScheduler = async ({
       }
       settled = true;
       void (async () => {
+        await closeContextSafely(browserContext);
+        // The page may be synchronously blocked by the cleanup callback.
+        // Coverage collection uses the same renderer and is intentionally
+        // skipped after this timeout so it cannot prevent settlement.
         await handleFatal({
           message: `Worker fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
         });
-        await collectRunCoverage(run);
-        await cancelRun(run, false);
         resolveDone?.();
       })();
     };
@@ -444,7 +446,6 @@ export const createHeadlessScheduler = async ({
               settled = true;
               const message = `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`;
               try {
-                await collectCoverage();
                 completedFiles.add(payload.testPath);
                 await handleTestFileComplete(
                   createFileCleanupTimeoutResult({
@@ -469,12 +470,11 @@ export const createHeadlessScheduler = async ({
                 }
               } catch (error) {
                 const formatted = toError(error);
+                await closeContextSafely(browserContext);
                 await handleFatal({
                   message: formatted.message,
                   stack: formatted.stack,
                 });
-                await collectRunCoverage(run);
-                await cancelRun(run, false);
               } finally {
                 resolveDone?.();
               }
