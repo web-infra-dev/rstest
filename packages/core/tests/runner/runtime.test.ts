@@ -59,7 +59,12 @@ describe('RunnerRuntime', () => {
       setFallback: () => {},
     };
     const { runner } = createRunner({ workerState, taskContext });
-    const cleanupError = () => {};
+    const cleanupError = new Error('file fixture cleanup failed');
+    Object.defineProperty(cleanupError, Symbol.toPrimitive, {
+      value: () => {
+        throw new Error('cleanup error cannot be stringified');
+      },
+    });
     runtimeAPI.it('test case', () => {});
 
     const error = await runner
@@ -80,11 +85,21 @@ describe('RunnerRuntime', () => {
 
     expect(error).toBeInstanceOf(AggregateError);
     const serializedError = serializeError(error);
-    expect(serializedError.cause).toEqual('()=>{}');
+    expect(serializedError.cause).toEqual('<unserializable cause>');
     expect(() => structuredClone(serializedError)).not.toThrow();
     expect((error as Error).message).toContain(
-      'File fixture cleanup failed: ()=>{}',
+      'File fixture cleanup failed: file fixture cleanup failed',
     );
+  });
+
+  it('keeps unstringifiable error causes serializable', () => {
+    const error = new Error('worker error');
+    Object.defineProperty(error, 'cause', { value: Object.create(null) });
+
+    const serializedError = serializeError(error);
+
+    expect(serializedError.cause).toBe('<unserializable cause>');
+    expect(() => structuredClone(serializedError)).not.toThrow();
   });
 
   it('should add test correctly', async () => {

@@ -132,6 +132,14 @@ export const isRpcEnvelope = (message: unknown): message is RpcEnvelope => {
   return isRecord(message) && message[RPC_TAG] === true;
 };
 
+const stringifyErrorValue = (value: unknown, fallback: string): string => {
+  try {
+    return String(value);
+  } catch {
+    return fallback;
+  }
+};
+
 export const serializeError = (error: unknown): SerializedError => {
   if (error instanceof Error) {
     const cause = (error as Error & { cause?: unknown }).cause;
@@ -139,13 +147,16 @@ export const serializeError = (error: unknown): SerializedError => {
       name: error.name,
       message: error.message,
       stack: error.stack,
-      cause: cause === undefined ? undefined : String(cause),
+      cause:
+        cause === undefined
+          ? undefined
+          : stringifyErrorValue(cause, '<unserializable cause>'),
     };
   }
   if (typeof error === 'string') {
     return { message: error };
   }
-  return { message: String(error) };
+  return { message: stringifyErrorValue(error, '<unserializable error>') };
 };
 
 export const deserializeError = (data: SerializedError): Error => {
