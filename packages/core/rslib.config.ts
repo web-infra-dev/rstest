@@ -1,6 +1,7 @@
 import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill';
 import { defineConfig, rspack, type Rsbuild } from '@rslib/core';
 import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
+import { rslibRspackConfig } from '../../scripts/rslibConfig';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 import {
   peerDependencies,
@@ -234,6 +235,7 @@ export default defineConfig({
   },
   tools: {
     rspack: {
+      ...rslibRspackConfig,
       watchOptions: {
         ignored: /\.git/,
       },

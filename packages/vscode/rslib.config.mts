@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import { defineConfig, rspack } from '@rslib/core';
+import { rslibRspackConfig } from '../../scripts/rslibConfig';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
 const require = createRequire(import.meta.url);
@@ -76,4 +77,7 @@ export default defineConfig({
       },
     },
   ],
+  tools: {
+    rspack: rslibRspackConfig,
+  },
 });
