@@ -764,7 +764,8 @@ const getBrowserRsbuildEnvironmentConfig = (
   root: project.rootPath,
 });
 
-// Max testTimeout across browser projects, used as the host->client RPC timeout.
+// Max testTimeout across browser projects, used for provider assertion fallback
+// and browser server fetch timeout.
 
 const getBrowserLaunchOptions = (
   project: ProjectContext,

@@ -42,7 +42,9 @@ import {
   createRequestId,
   createRunnerLifecycleRequest,
   dispatchRpc,
+  disposeDispatchTransport,
   getRpcTimeout,
+  setRpcPhase,
   sendDispatchRequest,
 } from './dispatchTransport';
 import { adoptRunIdentity, getRunIdentity } from './runIdentity';
@@ -247,11 +249,9 @@ const dispatchRunnerLifecycle = (
 /**
  * Timeout for waiting for browser config from container (30 seconds).
  *
- * Coincidentally equal to the RPC default (client/dispatchTransport.ts) and the
- * host's RUNNER_FRAMES_READY_TIMEOUT_MS (hostController.ts), but semantically
- * distinct and in a different runtime, so deliberately not shared. Implicit
- * invariant: this must not exceed the host's frames-ready timeout, or the host
- * declares the runner un-ready before it can even receive its config.
+ * This is deliberately independent from RPC transport behavior. The host's
+ * frames-ready timeout must remain at least as long as this deadline, or the
+ * host can declare the runner un-ready before it receives its config.
  */
 const CONFIG_WAIT_TIMEOUT_MS = 30_000;
 
@@ -543,6 +543,8 @@ const run = async () => {
       installRuntimeGlobals(runtime, runtimeConfig);
 
       try {
+        setRpcPhase('framework');
+
         // Load setup files for this project after runtime is ready.
         await loadSetupFiles();
 
@@ -702,7 +704,7 @@ const run = async () => {
       await dispatchRpc<void>({
         requestId,
         request,
-        timeoutMs: getRpcTimeout(),
+        timeoutMs: getRpcTimeout('framework'),
         timeoutMessage: `File cleanup ${method} acknowledgement timed out for ${testPath}.`,
         staleMessage: `File cleanup ${method} became stale for ${testPath}.`,
       });
@@ -717,6 +719,18 @@ const run = async () => {
       },
       onFileCleanupEnd: () =>
         dispatchFileCleanup('end', undefined, window.parent !== window),
+      onSnapshotSetupStart: async () => {
+        setRpcPhase('framework');
+      },
+      onSnapshotSetupEnd: async () => {
+        setRpcPhase('test');
+      },
+      onSnapshotFinishStart: async () => {
+        setRpcPhase('framework');
+      },
+      onSnapshotFinishEnd: async () => {
+        setRpcPhase('test');
+      },
       onTestFileReady: async (test) => {
         dispatchRunnerLifecycle('file-ready', test);
       },
@@ -771,6 +785,8 @@ const run = async () => {
     activeUnhandledErrors = unhandledErrors;
 
     try {
+      setRpcPhase('framework');
+
       // Load setup files for this project after runtime is ready.
       await loadSetupFiles();
 
@@ -849,14 +865,18 @@ const run = async () => {
   window.__RSTEST_DONE__ = true;
 };
 
-void run().catch((error) => {
-  const err = error instanceof Error ? error : new Error(String(error));
-  send({
-    type: 'fatal',
-    payload: {
-      message: err.message,
-      stack: err.stack,
-    },
+void run()
+  .catch((error) => {
+    const err = error instanceof Error ? error : new Error(String(error));
+    send({
+      type: 'fatal',
+      payload: {
+        message: err.message,
+        stack: err.stack,
+      },
+    });
+    window.__RSTEST_DONE__ = true;
+  })
+  .finally(() => {
+    disposeDispatchTransport();
   });
-  window.__RSTEST_DONE__ = true;
-});
