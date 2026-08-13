@@ -130,6 +130,16 @@ export function createRunner({
                 `Test execution failed: ${error instanceof Error ? error.message : String(error)}`,
                 `File fixture cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
               ].join('\n'),
+              {
+                cause:
+                  cleanupError instanceof Error
+                    ? {
+                        name: cleanupError.name,
+                        message: cleanupError.message,
+                        stack: cleanupError.stack,
+                      }
+                    : String(cleanupError),
+              },
             );
           }
           throw error;

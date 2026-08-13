@@ -79,7 +79,9 @@ describe('RunnerRuntime', () => {
       .catch((error: unknown) => error);
 
     expect(error).toBeInstanceOf(AggregateError);
-    expect(serializeError(error).cause).toBeUndefined();
+    const serializedError = serializeError(error);
+    expect(serializedError.cause).toEqual('()=>{}');
+    expect(() => structuredClone(serializedError)).not.toThrow();
     expect((error as Error).message).toContain(
       'File fixture cleanup failed: ()=>{}',
     );
