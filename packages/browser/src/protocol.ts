@@ -148,6 +148,9 @@ export type BrowserHostConfig = {
   rpcTimeout?: number;
 };
 
+export const RSTEST_BROWSER_CACHE_CLEANERS_KEY =
+  '@rstest/browser/cache-cleaners';
+
 /**
  * The wrapper every runner document posts over `postMessage` / the headless
  * bridge. Identity rides BESIDE the payload, never inside it: `message`

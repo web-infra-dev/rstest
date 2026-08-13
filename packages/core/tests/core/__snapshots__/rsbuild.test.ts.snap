@@ -587,7 +587,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
         },
@@ -623,6 +622,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (esm output) 1
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
             "functionName": "import.meta.__rstest_require_resolve__",
@@ -1284,7 +1284,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
         },
@@ -1320,6 +1319,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (jsdom) 1`] = 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
             "functionName": "__rstest_require_resolve__",
@@ -1956,7 +1956,6 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
         },
@@ -1991,6 +1990,7 @@ exports[`prepareRsbuild > should generate rspack config correctly (node) 1`] = `
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
             "functionName": "__rstest_require_resolve__",
@@ -2626,7 +2626,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
         },
@@ -2664,6 +2663,7 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
             "functionName": "__rstest_require_resolve__",
@@ -3654,7 +3654,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
         },
@@ -3690,6 +3689,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
             "functionName": "__rstest_require_resolve__",
@@ -4338,7 +4338,6 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
       "_args": [
         {
           "import.meta.env": "process.env",
-          "import.meta.rstest": "global['@rstest/core']",
           "process.env.ASSET_PREFIX": """",
           "process.env.BASE_URL": ""/"",
         },
@@ -4374,6 +4373,7 @@ exports[`prepareRsbuild > should generate rspack config correctly with projects 
           "hoistMockModule": true,
           "importMetaPathName": true,
           "injectDynamicImportOrigin": true,
+          "injectImportMetaRstestOrigin": true,
           "injectModulePathName": true,
           "injectRequireResolveOrigin": {
             "functionName": "__rstest_require_resolve__",
