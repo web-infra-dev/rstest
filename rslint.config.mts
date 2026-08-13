@@ -248,6 +248,8 @@ export default defineConfig([
       '@typescript-eslint/ban-ts-comment': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-require-imports': 'off',
+      'prefer-const': 'off',
+      'preserve-caught-error': 'off',
     },
   },
   {

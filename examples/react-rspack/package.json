@@ -14,8 +14,8 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@rspack/cli": "~2.1.8",
-    "@rspack/core": "~2.1.8",
+    "@rspack/cli": "~2.1.9",
+    "@rspack/core": "~2.1.9",
     "@rspack/dev-server": "~2.2.0",
     "@rspack/plugin-react-refresh": "~2.0.2",
     "@rstest/adapter-rspack": "workspace:*",
@@ -25,7 +25,7 @@
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "happy-dom": "^20.11.1",
+    "happy-dom": "^20.11.2",
     "react-refresh": "^0.18.0",
     "typescript": "^6.0.3"
   }
