@@ -629,7 +629,7 @@ export const createRsbuildServer = async ({
         return cachedSourceMaps.get(name)!;
       }
 
-      let content: string | null;
+      let content = null;
 
       if (inlineSourceMap) {
         const file = (await readFile(sourceMapPath)).toString('utf8');

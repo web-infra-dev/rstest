@@ -210,7 +210,6 @@ export const parseEnvironmentComment = (
     } catch (error) {
       throw new Error(
         `Failed to parse test environment options in ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error },
       );
     }
   }

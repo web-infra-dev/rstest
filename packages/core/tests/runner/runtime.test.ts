@@ -2,18 +2,8 @@ import {
   type FileContext,
   setFileContext,
 } from '../../src/runtime/fileContext';
-import type { SnapshotClient } from '@vitest/snapshot';
-import { createRunner } from '../../src/runtime/runner';
 import { RunnerRuntime, runtimeAPI } from '../../src/runtime/runner/runtime';
-import type { TaskContext } from '../../src/runtime/worker/taskContext';
-import { serializeError } from '../../src/pool/protocol';
-import type {
-  Rstest,
-  RuntimeConfig,
-  TestCase,
-  TestSuite,
-  WorkerState,
-} from '../../src/types';
+import type { RuntimeConfig, TestCase, TestSuite } from '../../src/types';
 import { generateFilePathHash } from '../../src/utils/helper';
 
 // Constructing a `RunnerRuntime` is a pure factory; production code publishes
@@ -34,73 +24,6 @@ describe('RunnerRuntime', () => {
       runtimeConfig: { testTimeout } as RuntimeConfig,
       project: 'rstest',
     });
-
-  it('keeps non-cloneable cleanup errors out of the worker error cause', async () => {
-    const snapshotClient = {
-      setup: async () => {},
-    } as unknown as SnapshotClient;
-    const workerState = {
-      project: 'rstest',
-      testPath: __filename,
-      runtimeConfig: {
-        bail: 0,
-        logHeapUsage: false,
-        maxConcurrency: 1,
-        passWithNoTests: false,
-        retry: 0,
-        testNamePattern: undefined,
-      } as RuntimeConfig,
-      snapshotClient,
-      snapshotOptions: {},
-    } as WorkerState;
-    const taskContext: TaskContext = {
-      getCurrent: () => undefined,
-      run: (_task, fn) => fn(),
-      setFallback: () => {},
-    };
-    const { runner } = createRunner({ workerState, taskContext });
-    const cleanupError = new Error('file fixture cleanup failed');
-    Object.defineProperty(cleanupError, Symbol.toPrimitive, {
-      value: () => {
-        throw new Error('cleanup error cannot be stringified');
-      },
-    });
-    runtimeAPI.it('test case', () => {});
-
-    const error = await runner
-      .runTests(
-        __filename,
-        {
-          getCountOfFailedTests: async () => 0,
-          onTestCaseStart: () => {
-            throw new Error('test execution failed');
-          },
-          onFileCleanupStart: async () => {
-            throw cleanupError;
-          },
-        },
-        {} as Rstest,
-      )
-      .catch((error: unknown) => error);
-
-    expect(error).toBeInstanceOf(AggregateError);
-    const serializedError = serializeError(error);
-    expect(serializedError.cause).toEqual('<unserializable cause>');
-    expect(() => structuredClone(serializedError)).not.toThrow();
-    expect((error as Error).message).toContain(
-      'File fixture cleanup failed: file fixture cleanup failed',
-    );
-  });
-
-  it('keeps error causes with failing string conversion serializable', () => {
-    const error = new Error('worker error');
-    Object.defineProperty(error, 'cause', { value: Object.create(null) });
-
-    const serializedError = serializeError(error);
-
-    expect(serializedError.cause).toBe('<unserializable cause>');
-    expect(() => structuredClone(serializedError)).not.toThrow();
-  });
 
   it('should add test correctly', async () => {
     const instance = createPublishedRuntimeAPI({

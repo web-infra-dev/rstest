@@ -321,7 +321,7 @@ export async function prepareFixtures({
     content: string | ((raw: string) => string),
   ) => {
     const targetFilepath = path.resolve(root, relativePath);
-    let newContent: string;
+    let newContent = content;
     if (typeof content === 'function') {
       const oldContent = fs.readFileSync(targetFilepath, 'utf-8');
       newContent = content(oldContent);
