@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { runTests } from '@vscode/test-electron';
@@ -18,9 +18,7 @@ import { runTests } from '@vscode/test-electron';
  */
 function runDir(extensionPath: string): string {
   const key = createHash('sha256').update(extensionPath).digest('hex');
-  const dir = path.join(tmpdir(), `rstest-vscode-${key.slice(0, 8)}`);
-  mkdirSync(dir, { recursive: true });
-  return dir;
+  return mkdtempSync(path.join(tmpdir(), `rstest-vscode-${key.slice(0, 8)}-`));
 }
 
 /**
@@ -46,19 +44,19 @@ function writeWorkspaceFile(dir: string, fixturesRoot: string): string {
 }
 
 async function main() {
+  // The folder containing the Extension Manifest package.json
+  // Passed to `--extensionDevelopmentPath`
+  const extensionDevelopmentPath = path.resolve(__dirname, '../');
+
+  // The path to the extension test script
+  // Passed to --extensionTestsPath
+  const extensionTestsPath = path.resolve(__dirname, './suite/index');
+
+  // Note: __dirname points to tests-dist at runtime, so resolve back to tests/
+  const fixturesRoot = path.resolve(__dirname, '../tests/fixtures');
+  const scratchDir = runDir(extensionDevelopmentPath);
+
   try {
-    // The folder containing the Extension Manifest package.json
-    // Passed to `--extensionDevelopmentPath`
-    const extensionDevelopmentPath = path.resolve(__dirname, '../');
-
-    // The path to the extension test script
-    // Passed to --extensionTestsPath
-    const extensionTestsPath = path.resolve(__dirname, './suite/index');
-
-    // Note: __dirname points to tests-dist at runtime, so resolve back to tests/
-    const fixturesRoot = path.resolve(__dirname, '../tests/fixtures');
-    const scratchDir = runDir(extensionDevelopmentPath);
-
     // Download VS Code, unzip it and run the integration test
     await runTests({
       extensionDevelopmentPath,
@@ -68,13 +66,15 @@ async function main() {
         writeWorkspaceFile(scratchDir, fixturesRoot),
         // This disables all extensions except the one being testing
         '--disable-extensions',
-        '--user-data-dir',
-        scratchDir,
+        `--user-data-dir=${scratchDir}`,
+        `--extensions-dir=${path.join(scratchDir, 'extensions')}`,
       ],
     });
   } catch {
     console.error('Failed to run tests');
-    process.exit(1);
+    process.exitCode = 1;
+  } finally {
+    rmSync(scratchDir, { recursive: true, force: true });
   }
 }
 
