@@ -355,7 +355,7 @@ export const createHeadedScheduler = async ({
     if (!runId) {
       return;
     }
-    if (request.method === 'start') {
+    if (request.method === 'start' || request.method === 'worker-start') {
       const payload = request.args as FileCleanupDispatchPayload;
       runs.armCleanupDeadline(runId, FIXTURE_CLEANUP_TIMEOUT_MS, () => {
         void (async () => {
@@ -379,7 +379,7 @@ export const createHeadedScheduler = async ({
           }
         })();
       });
-    } else if (request.method === 'end') {
+    } else if (request.method === 'end' || request.method === 'worker-end') {
       runs.disarmCleanupDeadline(runId);
     }
   });

@@ -95,6 +95,7 @@ class WorkerCleanupErrorWorker implements PoolWorker {
   readonly name = 'worker-cleanup-error-worker';
   private readonly events = new EventEmitter();
   private live = true;
+  cleanupRequests = 0;
 
   async start(): Promise<void> {}
 
@@ -109,6 +110,16 @@ class WorkerCleanupErrorWorker implements PoolWorker {
         this.events.emit(
           'message',
           wrapWorkerResponse({ type: 'started', pid: 1 }),
+        );
+      });
+      return;
+    }
+    if (request.type === 'cleanup') {
+      this.cleanupRequests++;
+      queueMicrotask(() => {
+        this.events.emit(
+          'message',
+          wrapWorkerResponse({ type: 'cleanupFinished' }),
         );
       });
       return;
@@ -244,5 +255,20 @@ describe('PoolRunner worker fixture cleanup', () => {
     );
     expect(runner.isUsable()).toBe(false);
     await runner.stop();
+  });
+
+  it('coalesces concurrent worker cleanup requests', async () => {
+    const worker = new WorkerCleanupErrorWorker();
+    const runner = new PoolRunner(worker, {
+      environmentKey: 'node',
+      workerId: 1,
+    });
+
+    await runner.start();
+    const cleanupPromise = runner.cleanupWorkerFixtures();
+    const stopPromise = runner.stop();
+    await Promise.all([cleanupPromise, stopPromise]);
+
+    expect(worker.cleanupRequests).toBe(1);
   });
 });

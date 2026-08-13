@@ -53,7 +53,8 @@ export type TestFileInfo = {
   projectName: string;
 };
 
-export type FileCleanupDispatchMethod = 'start' | 'end';
+export type FileCleanupDispatchMethod =
+  'start' | 'end' | 'worker-start' | 'worker-end';
 
 export type FileCleanupDispatchPayload = {
   projectName: string;

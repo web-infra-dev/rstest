@@ -200,7 +200,8 @@ export const createHeadlessScheduler = async ({
   const fileCleanupHandlers = new Map<
     string,
     {
-      end: (payload: FileCleanupDispatchPayload) => void;
+      end: (payload: FileCleanupDispatchPayload) => Promise<void> | void;
+      workerEnd: () => Promise<void> | void;
       start: (payload: FileCleanupDispatchPayload) => Promise<void> | void;
     }
   >();
@@ -217,7 +218,9 @@ export const createHeadlessScheduler = async ({
     if (request.method === 'start') {
       await handler.start(payload);
     } else if (request.method === 'end') {
-      handler.end(payload);
+      await handler.end(payload);
+    } else if (request.method === 'worker-end') {
+      await handler.workerEnd();
     }
   });
 
@@ -375,7 +378,14 @@ export const createHeadlessScheduler = async ({
             clearTimeout(state.timer);
             state.timer = undefined;
           }
+          return collectCoverage().finally(() => {
+            coverageCollection = undefined;
+          });
         },
+        workerEnd: () =>
+          collectCoverage().finally(() => {
+            coverageCollection = undefined;
+          }),
         start: async (payload) => {
           const state = fileCleanupStates.get(payload.testPath) ?? {
             finished: false,
@@ -447,14 +457,8 @@ export const createHeadlessScheduler = async ({
               if (settled) {
                 return;
               }
-              if (
-                message.type === 'file-complete' ||
-                message.type === 'fatal'
-              ) {
+              if (message.type === 'fatal') {
                 await collectCoverage();
-                if (message.type === 'file-complete') {
-                  coverageCollection = undefined;
-                }
               }
               await dispatchRunnerMessage(run, files, session.id, message);
               if (message.type === 'file-complete') {

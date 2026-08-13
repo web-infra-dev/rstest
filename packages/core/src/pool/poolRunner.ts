@@ -90,6 +90,7 @@ export class PoolRunner {
     ((data: unknown, ...extras: unknown[]) => void) | undefined;
   private startDeferred: Deferred | undefined;
   private cleanupDeferred: Deferred | undefined;
+  private workerCleanupPromise: Promise<void> | undefined;
   private stopDeferred: Deferred | undefined;
   private startTimer: NodeJS.Timeout | undefined;
   private cleanupTimer: NodeJS.Timeout | undefined;
@@ -261,6 +262,9 @@ export class PoolRunner {
   }
 
   private requestWorkerCleanup(): Promise<void> {
+    if (this.workerCleanupPromise) {
+      return this.workerCleanupPromise;
+    }
     const deferred = createDeferred();
     this.cleanupDeferred = deferred;
     this.cleanupTimer = setTimeout(() => {
@@ -276,7 +280,13 @@ export class PoolRunner {
     } catch (error) {
       this.rejectCleanup(toError(error));
     }
-    return deferred.promise;
+    const cleanupPromise = deferred.promise.finally(() => {
+      if (this.workerCleanupPromise === cleanupPromise) {
+        this.workerCleanupPromise = undefined;
+      }
+    });
+    this.workerCleanupPromise = cleanupPromise;
+    return cleanupPromise;
   }
 
   async cleanupWorkerFixtures(): Promise<void> {

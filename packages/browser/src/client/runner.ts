@@ -333,8 +333,12 @@ const waitForConfig = (): Promise<void> => {
 
   return new Promise((resolve, reject) => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === RSTEST_CONFIG_MESSAGE_TYPE) {
-        window.__RSTEST_BROWSER_OPTIONS__ = event.data.payload;
+      const payload = event.data?.payload;
+      if (
+        event.data?.type === RSTEST_CONFIG_MESSAGE_TYPE &&
+        typeof payload?.runId === 'string'
+      ) {
+        window.__RSTEST_BROWSER_OPTIONS__ = payload;
         debugLog(
           '[Runner] Received config from container:',
           event.data.payload,
@@ -444,7 +448,6 @@ const run = async () => {
   // Support reading testFile and testNamePattern from URL parameters
   const urlParams = new URLSearchParams(window.location.search);
   const urlTestFile = urlParams.get('testFile');
-  const urlRunId = urlParams.get('runId');
   const urlTestNamePattern = urlParams.get('testNamePattern');
 
   if (urlTestFile && options) {
@@ -452,13 +455,6 @@ const run = async () => {
     options = {
       ...options,
       testFile: urlTestFile,
-    };
-  }
-
-  if (urlRunId && options) {
-    options = {
-      ...options,
-      runId: urlRunId,
     };
   }
 
@@ -807,18 +803,33 @@ const run = async () => {
         });
       };
 
+      const cleanupWorkerFixtures = async (
+        result?: FileCleanupDispatchPayload['result'],
+      ): Promise<void> => {
+        await dispatchFileCleanup('worker-start', result);
+        try {
+          await cleanupWorkerFixturesWithTimeout();
+        } finally {
+          await dispatchFileCleanup('worker-end');
+        }
+      };
+
+      const updateIstanbulCoverage = (
+        result: Awaited<ReturnType<typeof runtime.runner.runTests>>,
+      ): void => {
+        if (!globalThis.__coverage__) {
+          return;
+        }
+        const currentCoverage = globalThis.__coverage__ as CoverageMapData;
+        result.coverage = getCoverageDelta(
+          currentCoverage,
+          previousIstanbulCoverage,
+        );
+        previousIstanbulCoverage = cloneCoverage(currentCoverage);
+      };
+
       const runnerHooks: RunnerHooks & FileCleanupHooks = {
         onFileCleanupStart: async (result) => {
-          if (result && globalThis.__coverage__) {
-            const currentCoverage = globalThis.__coverage__ as CoverageMapData;
-            result.coverage = getCoverageDelta(
-              currentCoverage,
-              previousIstanbulCoverage,
-            );
-            previousIstanbulCoverage = cloneCoverage(currentCoverage);
-          }
-          // The host must finish V8 coverage take/restart before the next file
-          // can be loaded on a reused page.
           await dispatchFileCleanup('start', result, true);
         },
         onFileCleanupEnd: () => dispatchFileCleanup('end', undefined, true),
@@ -910,11 +921,11 @@ const run = async () => {
         // worker scope is still tearing down. A multi-file headless batch must
         // defer worker cleanup until its final file.
         const cleanupBeforeFileComplete =
-          !keepWorkerFixtures || testKeysToRun.length === 1;
+          !keepWorkerFixtures || fileIndex === testKeysToRun.length - 1;
         if (cleanupBeforeFileComplete) {
           workerCleanupAttempted = true;
           try {
-            await cleanupWorkerFixturesWithTimeout();
+            await cleanupWorkerFixtures(result);
           } catch (cleanupError) {
             const formattedCleanupError =
               cleanupError instanceof Error
@@ -932,6 +943,8 @@ const run = async () => {
             ];
           }
         }
+
+        updateIstanbulCoverage(result);
 
         // The browser dispatches `unhandledrejection` in a task queued at the
         // current task's microtask checkpoint, so a rejection leaked by a
@@ -966,9 +979,10 @@ const run = async () => {
       } catch (_error) {
         let error =
           _error instanceof Error ? _error : new Error(String(_error));
-        if (!keepWorkerFixtures && !workerCleanupAttempted) {
+        if (!workerCleanupAttempted) {
           try {
-            await cleanupWorkerFixturesWithTimeout();
+            workerCleanupAttempted = true;
+            await cleanupWorkerFixtures();
           } catch (cleanupError) {
             const formattedCleanupError =
               cleanupError instanceof Error
