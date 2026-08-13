@@ -432,7 +432,7 @@ const apiTest = test
   });
 ```
 
-File scope fixture 必须在测试文件顶层声明。它只能依赖链中更早声明的 file scope fixture，无法访问 test scope fixture 或 `TestContext`。后续 `.extend()` 不能覆盖 file scope fixture。Test scope fixture 可以依赖 file scope fixture。
+File scope fixture 必须在测试文件顶层声明。它可以依赖链中更早声明的 worker scope 或 file scope fixture，无法访问 test scope fixture 或 `TestContext`。后续 `.extend()` 不能覆盖 file scope fixture。Test scope fixture 可以依赖 file scope fixture。
 
 Fixture setup 受首次请求它的测试或 hook timeout 限制。File cleanup 由 Node 或 browser host 提供保护，因此永不结束的 cleanup 会让文件失败，而不会无限阻塞整个测试运行。
 

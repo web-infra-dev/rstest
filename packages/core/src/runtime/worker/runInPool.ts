@@ -167,6 +167,7 @@ const preparePool = async (
   globalCleanups.length = 0;
 
   const taskContext = createNodeTaskContext();
+  const writeOriginalLog = createOriginalLogWriter();
   setRealTimers();
 
   // `mockRuntimeCode.js` gates its Module Federation shims on this worker-wide
@@ -230,9 +231,19 @@ const preparePool = async (
       // `onConsoleLog` policy, matching `isolate: true` where late logs are lost
       // as the worker is torn down.
       // See https://github.com/web-infra-dev/rstest/issues/1367.
-      void rpc.onConsoleLog(log).catch(() => {});
+      void rpc.onConsoleLog(log).catch(() => {
+        // Worker-scoped cleanup runs after the host has disposed the final
+        // task RPC. Preserve diagnostics from that cleanup by falling back to
+        // the worker's original stream when the reporting channel is closed.
+        if (silent !== true) {
+          writeOriginalLog({
+            content: `${log.content}\n`,
+            type: log.type,
+          });
+        }
+      });
     },
-    writeOriginalLog: createOriginalLogWriter(),
+    writeOriginalLog,
   });
 
   if (shouldInterceptConsole) {

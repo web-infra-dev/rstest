@@ -432,7 +432,7 @@ const apiTest = test
   });
 ```
 
-File-scoped fixtures must be declared at the top level of the test file. They can depend only on file-scoped fixtures declared earlier in the chain: they do not receive test-scoped fixtures or `TestContext`. A file-scoped fixture cannot be overridden by a later `.extend()` call. Test-scoped fixtures can depend on file-scoped fixtures.
+File-scoped fixtures must be declared at the top level of the test file. They can depend on worker- or file-scoped fixtures declared earlier in the chain: they do not receive test-scoped fixtures or `TestContext`. A file-scoped fixture cannot be overridden by a later `.extend()` call. Test-scoped fixtures can depend on file-scoped fixtures.
 
 Fixture setup is bounded by the timeout of the test or hook that requests it. File cleanup is guarded by the Node or browser host, so a cleanup that never settles fails the file instead of blocking the run indefinitely.
 

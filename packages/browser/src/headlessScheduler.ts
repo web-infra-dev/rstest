@@ -201,6 +201,7 @@ export const createHeadlessScheduler = async ({
     string,
     {
       end: (payload: FileCleanupDispatchPayload) => Promise<void> | void;
+      workerStart: () => Promise<void> | void;
       workerEnd: () => Promise<void> | void;
       start: (payload: FileCleanupDispatchPayload) => Promise<void> | void;
     }
@@ -217,6 +218,8 @@ export const createHeadlessScheduler = async ({
     const payload = request.args as FileCleanupDispatchPayload;
     if (request.method === 'start') {
       await handler.start(payload);
+    } else if (request.method === 'worker-start') {
+      await handler.workerStart();
     } else if (request.method === 'end') {
       await handler.end(payload);
     } else if (request.method === 'worker-end') {
@@ -295,6 +298,39 @@ export const createHeadlessScheduler = async ({
       }
     >();
 
+    const handleWorkerCleanupTimeout = (): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      void (async () => {
+        await handleFatal({
+          message: `Worker fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
+        });
+        await collectRunCoverage(run);
+        await cancelRun(run, false);
+        resolveDone?.();
+      })();
+    };
+
+    const armWorkerCleanupDeadline = (): void => {
+      if (workerCleanupTimer) {
+        clearTimeout(workerCleanupTimer);
+      }
+      workerCleanupTimer = setTimeout(
+        handleWorkerCleanupTimeout,
+        FIXTURE_CLEANUP_TIMEOUT_MS,
+      );
+    };
+
+    const disarmWorkerCleanupDeadline = (): void => {
+      if (!workerCleanupTimer) {
+        return;
+      }
+      clearTimeout(workerCleanupTimer);
+      workerCleanupTimer = undefined;
+    };
+
     const markDone = (): void => {
       if (!settled) {
         settled = true;
@@ -368,6 +404,7 @@ export const createHeadlessScheduler = async ({
       sessionId = session.id;
 
       fileCleanupHandlers.set(session.id, {
+        workerStart: armWorkerCleanupDeadline,
         end: (payload) => {
           const state = fileCleanupStates.get(payload.testPath);
           if (!state) {
@@ -382,10 +419,12 @@ export const createHeadlessScheduler = async ({
             coverageCollection = undefined;
           });
         },
-        workerEnd: () =>
-          collectCoverage().finally(() => {
+        workerEnd: () => {
+          disarmWorkerCleanupDeadline();
+          return collectCoverage().finally(() => {
             coverageCollection = undefined;
-          }),
+          });
+        },
         start: async (payload) => {
           const state = fileCleanupStates.get(payload.testPath) ?? {
             finished: false,
@@ -464,25 +503,6 @@ export const createHeadlessScheduler = async ({
               if (message.type === 'file-complete') {
                 const completedPath = message.payload.testPath;
                 completedFiles.add(completedPath);
-                if (
-                  keepWorkerFixtures &&
-                  completedFiles.size === files.length
-                ) {
-                  workerCleanupTimer = setTimeout(() => {
-                    if (settled) {
-                      return;
-                    }
-                    settled = true;
-                    void (async () => {
-                      await handleFatal({
-                        message: `Worker fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
-                      });
-                      await collectRunCoverage(run);
-                      await cancelRun(run, false);
-                      resolveDone?.();
-                    })();
-                  }, FIXTURE_CLEANUP_TIMEOUT_MS);
-                }
               }
               if (
                 message.type === 'complete' ||
@@ -490,10 +510,7 @@ export const createHeadlessScheduler = async ({
                   files.length === 1 &&
                   !keepWorkerFixtures)
               ) {
-                if (workerCleanupTimer) {
-                  clearTimeout(workerCleanupTimer);
-                  workerCleanupTimer = undefined;
-                }
+                disarmWorkerCleanupDeadline();
                 markDone();
               } else if (message.type === 'fatal') {
                 markDone();
