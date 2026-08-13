@@ -75,16 +75,26 @@ export const createWatchSignals = (
        * between and read it. The headed rerun's per-file test-name pattern is the
        * one such state; core's cycle options cannot carry it, so the only thing
        * that makes it the property of one cycle is claiming it here.
+       *
+       * Returns a handle to the cycle THIS signal started (still not awaited
+       * here — see above). A caller with state to restore must await the
+       * returned `cycle` rather than `awaitSignalledCycle`: the shared slot
+       * can be overwritten by a concurrent trigger between signal and wait.
        */
       claimScope?: () => void,
-    ): Promise<void> {
+    ): Promise<{ cycle: Promise<void> }> {
       await interruptInFlightRun?.();
       claimScope?.();
-      signalledCycle = Promise.resolve(
+      const cycle = Promise.resolve(
         onInvalidate?.({ isFirstBuild: false, fileFilters }),
-      ).catch((error) => {
-        logger.error(color.red('Browser Mode watch cycle failed:'), error);
-      });
+      ).then(
+        () => {},
+        (error) => {
+          logger.error(color.red('Browser Mode watch cycle failed:'), error);
+        },
+      );
+      signalledCycle = cycle;
+      return { cycle };
     },
     async awaitSignalledCycle(): Promise<void> {
       await signalledCycle;

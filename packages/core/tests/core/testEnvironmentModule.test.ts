@@ -128,6 +128,54 @@ exports.canvasToken = canvas.token;
     });
   });
 
+  it('does not inherit project tsconfig paths for the prebundle', async () => {
+    await withTempDir('rstest-env-tsconfig-paths-', async (root) => {
+      fs.writeFileSync(
+        path.join(root, 'tsconfig.json'),
+        JSON.stringify({
+          compilerOptions: {
+            baseUrl: '.',
+            paths: {
+              'environment-alias': ['./aliased.js'],
+            },
+          },
+        }),
+      );
+      fs.writeFileSync(
+        path.join(root, 'aliased.js'),
+        'export const token = "tsconfig";',
+      );
+      createPackage(root, 'export const token = "node_modules";', {
+        name: 'environment-alias',
+      });
+      createPackage(
+        root,
+        `
+import { token } from 'environment-alias';
+export class JSDOM {}
+export const aliasToken = token;
+`,
+      );
+
+      const result = await prepareTestEnvironmentModules({
+        projects: [createProject(root, { prebundle: true })],
+        rootPath: root,
+      });
+
+      try {
+        const bundlePath = result.modules.get('jsdom')?.bundlePath;
+        expect(bundlePath).toBeTruthy();
+        if (!bundlePath) {
+          throw new Error('Expected jsdom to be bundled.');
+        }
+        const bundled = await import(pathToFileURL(bundlePath).href);
+        expect(bundled.aliasToken).toBe('node_modules');
+      } finally {
+        await result.cleanup();
+      }
+    });
+  });
+
   it('preserves the worker NODE_ENV at prebundle runtime', async () => {
     await withTempDir('rstest-env-node-env-', async (root) => {
       createPackage(

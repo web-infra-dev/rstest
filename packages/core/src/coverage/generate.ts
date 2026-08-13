@@ -156,7 +156,7 @@ export const filterChangedFiles = (
   changedCoverageFilters: string[] | undefined,
   rootPath: string,
 ): string[] => {
-  if (!changedCoverageFilters?.length) {
+  if (changedCoverageFilters === undefined) {
     return files;
   }
 
@@ -276,7 +276,7 @@ export async function generateCoverage(
             ),
           {
             project: p.environmentName,
-            changedOnly: Boolean(context.changedCoverageFilters?.length),
+            changedOnly: context.changedCoverageFilters !== undefined,
           },
         );
         allFiles.push(...includedFiles);
@@ -321,7 +321,7 @@ export async function generateCoverage(
         },
         { fileCount: allFilesSet.size },
       );
-    } else if (context.changedCoverageFilters?.length) {
+    } else if (context.changedCoverageFilters !== undefined) {
       await traceSpan(
         'coverage:filter-changed-files',
         'coverage',

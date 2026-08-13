@@ -78,6 +78,7 @@ export {
 // Trace primitives — the browser host instantiates PhaseTracker per test file
 // and forwards its events via `BrowserTestRunOptions.onTraceEvents`.
 export { PhaseTracker } from './runtime/worker/phaseTracker';
+export { createFileCleanupTimeoutResult } from './runtime/runner/fileCleanup';
 // Types
 export type {
   BrowserRuntimeConfig,
@@ -113,6 +114,7 @@ export type { ResolveWorkerCountOptions } from './utils/workers';
 export {
   BROWSER_PROVIDERS,
   DEFAULT_TEST_TIMEOUT,
+  FIXTURE_CLEANUP_TIMEOUT_MS,
   resolveProjectBuildCache,
   RSTEST_ENV_SYMBOL_KEY,
   RSTEST_IMPORT_META_GLOBAL_KEY,

@@ -9,6 +9,7 @@ import {
 import type {
   CoverageMapData,
   CurrentTaskInfo,
+  FileCleanupHooks,
   RunnerHooks,
   RuntimeConfig,
   WorkerState,
@@ -28,17 +29,27 @@ import { normalize } from 'pathe';
 import type {
   BrowserClientMessage,
   BrowserProjectRuntime,
+  FileCleanupDispatchMethod,
+  FileCleanupDispatchPayload,
+  RunnerEnvelope,
   RunnerLifecycleMethod,
 } from '../protocol';
 import {
   DISPATCH_MESSAGE_TYPE,
+  DISPATCH_NAMESPACE_FILE_CLEANUP,
   RSTEST_BROWSER_CACHE_CLEANERS_KEY,
   RSTEST_CONFIG_MESSAGE_TYPE,
 } from '../protocol';
 import {
+  createRequestId,
   createRunnerLifecycleRequest,
-  sendRunnerLifecycle,
+  dispatchRpc,
+  disposeDispatchTransport,
+  getRpcTimeout,
+  setRpcPhase,
+  sendDispatchRequest,
 } from './dispatchTransport';
+import { adoptRunIdentity, getRunIdentity } from './runIdentity';
 import { BrowserSnapshotEnvironment } from './snapshot';
 import {
   findNewScriptUrl,
@@ -224,24 +235,25 @@ const interceptConsole = (
 };
 
 const send = (message: BrowserClientMessage): void => {
+  const envelope: RunnerEnvelope = { runId: getRunIdentity(), message };
   // If in iframe, send to parent window (container) which will forward to host via RPC
   if (window.parent !== window) {
     window.parent.postMessage(
-      { type: DISPATCH_MESSAGE_TYPE, payload: message },
+      { type: DISPATCH_MESSAGE_TYPE, payload: envelope },
       '*',
     );
     return;
   }
   // Fallback: direct call if running outside iframe (not typical)
   // Note: This binding may not exist if not using Playwright
-  window[DISPATCH_MESSAGE_TYPE]?.(message);
+  window[DISPATCH_MESSAGE_TYPE]?.(envelope);
 };
 
 const dispatchRunnerLifecycle = (
   method: RunnerLifecycleMethod,
   payload: unknown,
 ): void => {
-  sendRunnerLifecycle(
+  sendDispatchRequest(
     createRunnerLifecycleRequest(method, payload),
     (error: unknown) => {
       debugLog('[Runner] Failed to dispatch lifecycle method:', method, error);
@@ -252,17 +264,18 @@ const dispatchRunnerLifecycle = (
 /**
  * Timeout for waiting for browser config from container (30 seconds).
  *
- * Coincidentally equal to the RPC default (client/dispatchTransport.ts) and the
- * host's RUNNER_FRAMES_READY_TIMEOUT_MS (hostController.ts), but semantically
- * distinct and in a different runtime, so deliberately not shared. Implicit
- * invariant: this must not exceed the host's frames-ready timeout, or the host
- * declares the runner un-ready before it can even receive its config.
+ * This is deliberately independent from RPC transport behavior. The host's
+ * frames-ready timeout must remain at least as long as this deadline, or the
+ * host can declare the runner un-ready before it receives its config.
  */
 const CONFIG_WAIT_TIMEOUT_MS = 30_000;
 
 /**
  * Wait for configuration from container if running in iframe.
  * This is a prerequisite for test execution - without config, tests cannot run.
+ * The config is also this document's run-lease grant: a config without a
+ * `runId` confers no identity, so it is ignored and the wait continues — an
+ * identity-less document must stay silent rather than execute unattributably.
  */
 const waitForConfig = (): Promise<void> => {
   // If not in iframe or already has config, resolve immediately
@@ -272,7 +285,10 @@ const waitForConfig = (): Promise<void> => {
 
   return new Promise((resolve, reject) => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === RSTEST_CONFIG_MESSAGE_TYPE) {
+      if (
+        event.data?.type === RSTEST_CONFIG_MESSAGE_TYPE &&
+        typeof event.data.payload?.runId === 'string'
+      ) {
         window.__RSTEST_BROWSER_OPTIONS__ = event.data.payload;
         debugLog(
           '[Runner] Received config from container:',
@@ -376,10 +392,17 @@ const run = async () => {
   await waitForConfig();
   let options = window.__RSTEST_BROWSER_OPTIONS__;
 
+  // Adopt this document's identity exactly once, from the handshake/injected
+  // config. Deliberately NOT from the URL: after an HMR full reload the URL
+  // still names the run this frame was originally navigated for, while the
+  // handshake names the run the container wants now.
+  if (options?.runId) {
+    adoptRunIdentity(options.runId);
+  }
+
   // Support reading testFile and testNamePattern from URL parameters
   const urlParams = new URLSearchParams(window.location.search);
   const urlTestFile = urlParams.get('testFile');
-  const urlRunId = urlParams.get('runId');
   const urlTestNamePattern = urlParams.get('testNamePattern');
 
   if (urlTestFile && options) {
@@ -387,13 +410,6 @@ const run = async () => {
     options = {
       ...options,
       testFile: urlTestFile,
-    };
-  }
-
-  if (urlRunId && options) {
-    options = {
-      ...options,
-      runId: urlRunId,
     };
   }
 
@@ -542,6 +558,8 @@ const run = async () => {
       installRuntimeGlobals(runtime, runtimeConfig);
 
       try {
+        setRpcPhase('framework');
+
         // Load setup files for this project after runtime is ready.
         await loadSetupFiles();
 
@@ -675,7 +693,61 @@ const run = async () => {
 
     let failedTestsCount = 0;
 
-    const runnerHooks: RunnerHooks = {
+    const dispatchFileCleanup = async (
+      method: FileCleanupDispatchMethod,
+      result?: FileCleanupDispatchPayload['result'],
+      waitForAcknowledgement = true,
+    ): Promise<void> => {
+      const requestId = createRequestId(`file-cleanup-${method}`);
+      const request = {
+        requestId,
+        namespace: DISPATCH_NAMESPACE_FILE_CLEANUP,
+        method,
+        args: {
+          projectName: projectRuntime.name,
+          result,
+          // The adopted identity, same as the transport stamp — never the
+          // config value read back, which a document must adopt only once.
+          runId: getRunIdentity(),
+          testPath,
+        } satisfies FileCleanupDispatchPayload,
+      };
+
+      if (!waitForAcknowledgement) {
+        sendDispatchRequest(request);
+        return;
+      }
+
+      await dispatchRpc<void>({
+        requestId,
+        request,
+        timeoutMs: getRpcTimeout('framework'),
+        timeoutMessage: `File cleanup ${method} acknowledgement timed out for ${testPath}.`,
+        staleMessage: `File cleanup ${method} became stale for ${testPath}.`,
+      });
+    };
+
+    const runnerHooks: RunnerHooks & FileCleanupHooks = {
+      onFileCleanupStart: async (result) => {
+        if (result && globalThis.__coverage__) {
+          result.coverage = globalThis.__coverage__ as CoverageMapData;
+        }
+        await dispatchFileCleanup('start', result, window.parent !== window);
+      },
+      onFileCleanupEnd: () =>
+        dispatchFileCleanup('end', undefined, window.parent !== window),
+      onSnapshotSetupStart: async () => {
+        setRpcPhase('framework');
+      },
+      onSnapshotSetupEnd: async () => {
+        setRpcPhase('test');
+      },
+      onSnapshotFinishStart: async () => {
+        setRpcPhase('framework');
+      },
+      onSnapshotFinishEnd: async () => {
+        setRpcPhase('test');
+      },
       onTestFileReady: async (test) => {
         dispatchRunnerLifecycle('file-ready', test);
       },
@@ -730,6 +802,8 @@ const run = async () => {
     activeUnhandledErrors = unhandledErrors;
 
     try {
+      setRpcPhase('framework');
+
       // Load setup files for this project after runtime is ready.
       await loadSetupFiles();
 
@@ -778,11 +852,6 @@ const run = async () => {
         ];
       }
 
-      // Collect coverage data from global __coverage__ object
-      if (globalThis.__coverage__) {
-        result.coverage = globalThis.__coverage__ as CoverageMapData;
-      }
-
       send({
         type: 'file-complete',
         payload: result,
@@ -813,14 +882,18 @@ const run = async () => {
   window.__RSTEST_DONE__ = true;
 };
 
-void run().catch((error) => {
-  const err = error instanceof Error ? error : new Error(String(error));
-  send({
-    type: 'fatal',
-    payload: {
-      message: err.message,
-      stack: err.stack,
-    },
+void run()
+  .catch((error) => {
+    const err = error instanceof Error ? error : new Error(String(error));
+    send({
+      type: 'fatal',
+      payload: {
+        message: err.message,
+        stack: err.stack,
+      },
+    });
+    window.__RSTEST_DONE__ = true;
+  })
+  .finally(() => {
+    disposeDispatchTransport();
   });
-  window.__RSTEST_DONE__ = true;
-});

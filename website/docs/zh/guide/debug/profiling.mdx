@@ -25,6 +25,8 @@ npx skills add rstackjs/agent-skills --skill rstest-debugging
 
 围绕这两类瓶颈，可以分别从构建阶段和测试执行阶段进行排查。
 
+如果希望直接测量这一划分，而不是靠现象推断，可以使用 [`--trace`](#using-trace) 运行一次测试。
+
 ### 构建性能排查
 
 对于使用 `jsdom`、`happy-dom` 等类浏览器测试环境的项目，构建阶段通常是最常见的性能瓶颈之一。原因在于这类环境下，rstest 默认会将 `node_modules` 中的第三方依赖一并打包，而不是像 `node` 环境那样默认 externalize。
@@ -123,9 +125,50 @@ export default defineConfig({
 
 启用 [`verbose reporter`](/guide/basic/reporters#详细报告器) 后，可以直接看到测试文件和单个测试用例的执行时间。这通常是定位执行阶段瓶颈的第一步，因为它可以先帮助你缩小范围，判断问题集中在某个测试文件、某组测试，还是少量特定用例上。
 
-**2. 在范围缩小后查看更细的耗时分布**
+**2. 按 phase、suite、case 拆解本次运行**
+
+对同一批测试使用 [`--trace`](#using-trace) 重新运行一次。它的摘要会对最慢的 phase、文件和测试用例排序，通常足以判断耗时落在构建相关阶段、setup 文件，还是测试体本身。
+
+**3. 在范围缩小后查看更细的耗时分布**
 
 当已经知道慢点集中在哪些测试文件或测试用例上，但仍不清楚具体耗时来自哪一段运行时代码时，需要切换到 profiler。在 [Samply](#使用-samply) 和 [Node.js profiling](#nodejs-profiling) 之间如何选，参考下文 [Profiler](#profiler)。
+
+## 使用 --trace \{#using-trace}
+
+`--trace` 会把一次运行按 phase、suite、case 拆分成 slices。当 reporter 末尾的 `Duration` 单值不足以判断时间分布时，可以使用它定位瓶颈。
+
+```bash
+npx rstest run --trace
+```
+
+`--trace` 是 CLI-only 的可选开关。开启后每次运行会记录带 status 和 retry count 标注的 suite 与 case slices，在每个 phase 边界采样一次 heap 计数，并为每个测试文件的各个 phase 生成一个 slice：
+
+- `prepare`：初始化 worker 运行时、全局 API，以及启用覆盖率时的 coverage provider。每个测试文件会进入两次，分别位于 `envSetup` 前后。
+- `envSetup`：初始化 test environment。`node` 环境下，以及非 isolate 的 worker 已锁定该环境时，耗时接近 0。
+- `load`：接收该测试入口的构建产物。host 侧生成产物的耗时会记录为 host span。
+- `setupFiles`：执行配置的 setup 文件。
+- `collect`：执行测试文件的顶层代码。`describe` 的函数体会被延迟到 `tests` 中执行。
+- `tests`：构建 suite 与 case 树，然后运行用例及其 hooks。
+- `coverage`：从 provider 收集覆盖率数据。未启用覆盖率，或该文件在此之前 bail 或抛错时，不会出现。
+- `teardown`：清理 coverage provider 和 worker 状态；启用 `isolate` 时还会清理 test environment。
+
+浏览器模式只记录 `prepare` 和 `tests` 两个 phase，由 host 根据页面发来的消息计时。
+
+Rstest 会向 `<rootPath>/.rstest/` 写入两个文件，并在 watch 模式每次重新运行时替换它们：
+
+- `trace-<timestamp>.summary.md`：对最慢的 phase、文件和测试用例排序的 markdown 摘要，相同内容会同时打印到终端。
+- `trace-<timestamp>.json`：Perfetto-compatible 的 trace，用于可视化 UI。
+
+建议先看摘要。当你还需要观察多个 worker 之间的工作如何重叠时，再打开 trace。
+
+![Perfetto UI 中显示在 rstest 仓库执行 npx rstest --trace 产出的 trace](https://assets.rspack.rs/rstest/assets/rstest-trace-perfetto.png)
+
+在 TTY 下，Rstest 会启动一个本地 helper server，使打印出的链接直接在 Perfetto UI 中打开 trace。在 CI 下不会启动该 server，此时可以将 trace 文件作为 artifact 上传，再拖入 [ui.perfetto.dev](https://ui.perfetto.dev) 查看。
+
+:::tip
+借助 Coding Agent 排查性能问题时，把两个文件都交给它：摘要给出排序结果，trace 包含完整事件数据。可配合 [rstest-debugging](#使用-agent-skills) 技能使用。
+
+:::
 
 ## 使用 Rsdoctor
 
@@ -172,7 +215,7 @@ import { PackageManagerTabs } from '@theme';
 
 ## Profiler
 
-根据需要分析的目标选择合适的 profiler：
+根据需要分析的目标选择合适的 profiler。可以先确认 [`--trace`](#using-trace) 是否已经能回答你的问题，它不需要任何外部工具。
 
 - **CPU 耗时分布**：推荐使用 [Samply](#使用-samply)，可同时分析 rstest 主进程和 worker fork 进程。
 - **内存分配**：使用 `--heap-prof`，参见 [Node.js profiling](#nodejs-profiling)。Samply 不采集内存数据。

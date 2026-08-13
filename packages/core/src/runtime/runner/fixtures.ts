@@ -26,6 +26,9 @@ export const normalizeFixtures = (
 ): NormalizedFixtures => {
   const result: NormalizedFixtures = {};
   for (const key in fixtures) {
+    if (extendFixtures[key]?.scope === 'file') {
+      throw new Error(`The file-scoped fixture "${key}" cannot be overridden.`);
+    }
     const fixtureOptionKeys = ['auto'];
     // @ts-expect-error
     const value = fixtures[key]!;
@@ -78,6 +81,7 @@ export const normalizeNamedFixture = (
   name: string,
   value: unknown,
   extendFixtures: NormalizedFixtures = {},
+  scope: 'file' | 'test' = 'test',
 ): NormalizedFixtures => {
   if (
     !namedFixtureNamePattern.test(name) ||
@@ -87,19 +91,50 @@ export const normalizeNamedFixture = (
       `Invalid named fixture name "${name}". Use a JavaScript identifier that does not conflict with the test context.`,
     );
   }
+  const parent = extendFixtures[name];
+  if (parent?.scope === 'file') {
+    throw new Error(`The file-scoped fixture "${name}" cannot be overridden.`);
+  }
+  if (scope === 'file' && parent) {
+    throw new Error(
+      `The file-scoped fixture "${name}" cannot override an existing fixture.`,
+    );
+  }
   const result: NormalizedFixtures = {
     ...extendFixtures,
     [name]: {
       isFn: typeof value === 'function',
       value,
       mode: 'return',
+      scope: scope === 'file' ? 'file' : undefined,
     },
   };
   const fixture = result[name]!;
   if (fixture.isFn) {
-    fixture.deps = getFixtureUsedProps(fixture.value).filter((property) =>
-      Object.hasOwn(result, property),
-    );
+    const usedProps = getFixtureUsedProps(fixture.value);
+    if (scope === 'file') {
+      for (const property of usedProps) {
+        if (property === name) {
+          throw new Error(`Circular fixture dependency: ${name}`);
+        }
+        if (!Object.hasOwn(extendFixtures, property)) {
+          throw new Error(
+            `The file-scoped fixture "${name}" cannot depend on test context "${property}".`,
+          );
+        }
+        const dependency = extendFixtures[property]!;
+        if (dependency.scope !== 'file') {
+          throw new Error(
+            `The file-scoped fixture "${name}" cannot depend on the test-scoped fixture "${property}".`,
+          );
+        }
+      }
+      fixture.deps = usedProps;
+    } else {
+      fixture.deps = usedProps.filter((property) =>
+        Object.hasOwn(result, property),
+      );
+    }
   }
   return result;
 };
@@ -118,11 +153,190 @@ type RunNamedFixtureSetup = <Value>(
 ) => Promise<Value>;
 
 type FixtureResolverOptions = {
+  fileFixtureManager?: FileFixtureManager;
   runNamedFixtureSetup?: RunNamedFixtureSetup;
   wrapNamedFixtureCleanup?: (
     cleanup: () => Promise<void>,
   ) => () => Promise<void>;
 };
+
+type FixtureCleanupCallback = () => Promise<void>;
+
+type FileFixtureInstance = {
+  cleanup?: FixtureCleanupCallback;
+  cleanupRegistered: boolean;
+  dependents: Set<FileFixtureInstance>;
+  error?: unknown;
+  setup?: Promise<unknown>;
+  start: () => Promise<unknown>;
+  status: 'idle' | 'pending' | 'ready' | 'failed';
+  teardownReady: Promise<void>;
+  value?: unknown;
+};
+
+export class FileFixtureManager {
+  private readonly instances = new Map<
+    NormalizedFixture,
+    FileFixtureInstance
+  >();
+  private cleaning = false;
+
+  private getFixture(
+    name: string,
+    fixture: NormalizedFixture,
+    fixtures: NormalizedFixtures,
+  ): FileFixtureInstance {
+    const existing = this.instances.get(fixture);
+    if (existing) {
+      return existing;
+    }
+
+    let notifyTeardownReady: (() => void) | undefined;
+    const instance: FileFixtureInstance = {
+      cleanupRegistered: false,
+      dependents: new Set(),
+      start: () => start(),
+      status: 'idle',
+      teardownReady: new Promise<void>((resolve) => {
+        notifyTeardownReady = resolve;
+      }),
+    };
+    this.instances.set(fixture, instance);
+
+    const start = (): Promise<unknown> => {
+      if (instance.setup) {
+        return instance.setup;
+      }
+      instance.status = 'pending';
+      instance.setup = Promise.resolve().then(async () => {
+        const fixtureContext = Object.create(null) as Record<string, unknown>;
+        for (const dependencyName of fixture.deps ?? []) {
+          const dependency = this.getFixture(
+            dependencyName,
+            fixtures[dependencyName]!,
+            fixtures,
+          );
+          dependency.dependents.add(instance);
+          await dependency.start();
+          if (dependency.status === 'failed') {
+            throw dependency.error;
+          }
+          fixtureContext[dependencyName] = dependency.value;
+        }
+
+        if (!fixture.isFn) {
+          return fixture.value;
+        }
+
+        const onCleanup = (cleanup: FixtureCleanup) => {
+          if (instance.cleanupRegistered) {
+            throw new Error(
+              `onCleanup can only be called once for fixture "${name}".`,
+            );
+          }
+          instance.cleanupRegistered = true;
+          let cleanupPromise: Promise<void> | undefined;
+          const runCleanup = () => {
+            cleanupPromise ??= Promise.resolve().then(cleanup);
+            return cleanupPromise;
+          };
+          instance.cleanup = runCleanup;
+          notifyTeardownReady?.();
+          notifyTeardownReady = undefined;
+        };
+
+        return fixture.value(fixtureContext, { onCleanup });
+      });
+      instance.setup.then(
+        (value) => {
+          instance.status = 'ready';
+          instance.value = value;
+          notifyTeardownReady?.();
+          notifyTeardownReady = undefined;
+        },
+        (error: unknown) => {
+          instance.status = 'failed';
+          instance.error = error;
+          notifyTeardownReady?.();
+          notifyTeardownReady = undefined;
+        },
+      );
+      return instance.setup;
+    };
+    return instance;
+  }
+
+  async resolve(
+    name: string,
+    fixture: NormalizedFixture,
+    fixtures: NormalizedFixtures,
+    runSetup: RunNamedFixtureSetup,
+  ): Promise<unknown> {
+    if (this.cleaning) {
+      throw new Error(
+        `Cannot set up file-scoped fixture "${name}" during cleanup.`,
+      );
+    }
+    const instance = this.getFixture(name, fixture, fixtures);
+    await runSetup(
+      () => instance.start(),
+      () => {},
+    );
+    if (instance.status === 'failed') {
+      throw instance.error;
+    }
+    return instance.value;
+  }
+
+  async cleanup(): Promise<void> {
+    this.cleaning = true;
+    const errors: unknown[] = [];
+    const cleanupPromises = new Map<FileFixtureInstance, Promise<void>>();
+    const cleanupInstance = (instance: FileFixtureInstance): Promise<void> => {
+      const existing = cleanupPromises.get(instance);
+      if (existing) {
+        return existing;
+      }
+      const cleanup = Promise.resolve().then(async () => {
+        if (instance.status === 'idle') {
+          return;
+        }
+        await Promise.all([...instance.dependents].map(cleanupInstance));
+        await instance.teardownReady;
+        if (!instance.cleanup) {
+          return;
+        }
+        try {
+          await instance.cleanup();
+        } catch (error) {
+          errors.push(error);
+        }
+      });
+      cleanupPromises.set(instance, cleanup);
+      return cleanup;
+    };
+
+    await Promise.all([...this.instances.values()].map(cleanupInstance));
+    this.instances.clear();
+
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(
+        errors,
+        [
+          'Failed to clean up file-scoped fixtures.',
+          ...errors
+            .map((error) =>
+              error instanceof Error ? error.message : String(error),
+            )
+            .map((message) => `Fixture cleanup failed: ${message}`),
+        ].join('\n'),
+      );
+    }
+  }
+}
 
 class PreviouslyFailedFixtureError extends Error {}
 
@@ -186,6 +400,41 @@ export const createFixtureResolver = (
     }
     if (pendingMap.has(name)) {
       throw new Error(`Circular fixture dependency: ${name}`);
+    }
+
+    if (fixture.scope === 'file') {
+      const fileFixtureManager = options.fileFixtureManager;
+      if (!fileFixtureManager) {
+        throw new Error('File fixture manager is not available.');
+      }
+      pendingMap.add(name);
+      let cancelWait: (() => void) | undefined;
+      const cancelled = new Promise<{ status: 'cancelled' }>((resolve) => {
+        cancelWait = () => resolve({ status: 'cancelled' });
+      });
+      cancelFixtureSetups.set(name, () => {
+        cancelledFixtureTeardownStarts.get(name)?.();
+        cancelWait?.();
+      });
+      try {
+        const resolved = fileFixtureManager
+          .resolve(name, fixture, fixtures, runNamedFixtureSetup)
+          .then((value) => ({ status: 'resolved' as const, value }));
+        const resolution = await Promise.race([resolved, cancelled]);
+        if (resolution.status === 'cancelled') {
+          throw new PreviouslyFailedFixtureError(name);
+        }
+        setFixtureContextValue(context, name, resolution.value);
+        doneMap.add(name);
+      } catch (error) {
+        failedFixtures.add(name);
+        throw error;
+      } finally {
+        pendingMap.delete(name);
+        cancelFixtureSetups.delete(name);
+        cancelledFixtureTeardownStarts.delete(name);
+      }
+      return;
     }
 
     const { isFn, deps, mode, value: fixtureValue } = fixture;

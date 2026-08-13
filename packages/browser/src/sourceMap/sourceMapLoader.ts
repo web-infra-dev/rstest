@@ -1,12 +1,26 @@
-import type {
-  DecodedSourceMapXInput,
-  EncodedSourceMapXInput,
+import {
+  AnyMap,
+  encodedMap,
+  type DecodedSourceMapXInput,
+  type EncodedSourceMapXInput,
+  type SectionedSourceMapXInput,
 } from '@jridgewell/trace-mapping';
 import convert from 'convert-source-map';
 
 export type SourceMapPayload = EncodedSourceMapXInput | DecodedSourceMapXInput;
+type SourceMapPayloadInput = SourceMapPayload | SectionedSourceMapXInput;
+
+export type LoadedSourceMap = {
+  sourceMap: SourceMapPayload;
+  sourceMapUrl: string;
+};
 
 type Fetcher = typeof fetch;
+
+const flattenSourceMap = (
+  sourceMap: SourceMapPayloadInput,
+  sourceMapUrl?: string,
+): SourceMapPayload => encodedMap(new AnyMap(sourceMap, sourceMapUrl));
 
 export const normalizeJavaScriptUrl = (
   value: string,
@@ -23,7 +37,6 @@ export const normalizeJavaScriptUrl = (
       return null;
     }
 
-    url.search = '';
     url.hash = '';
     return url.toString();
   } catch {
@@ -31,13 +44,71 @@ export const normalizeJavaScriptUrl = (
   }
 };
 
-const resolveInlineSourceMap = (code: string): SourceMapPayload | null => {
-  const converter = convert.fromSource(code);
-  if (!converter) {
+export const resolveInlineSourceMap = (
+  code: string,
+  sourceMapUrl?: string,
+): SourceMapPayload | null => {
+  try {
+    const converter = convert.fromSource(code);
+    return converter
+      ? flattenSourceMap(
+          converter.toObject() as SourceMapPayloadInput,
+          sourceMapUrl,
+        )
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+export const loadSourceMapForSource = async ({
+  jsUrl,
+  signal,
+  source,
+  fetcher = fetch,
+}: {
+  jsUrl: string;
+  signal?: AbortSignal;
+  source: string;
+  fetcher?: Fetcher;
+}): Promise<LoadedSourceMap | null> => {
+  const normalizedUrl = normalizeJavaScriptUrl(jsUrl);
+  if (!normalizedUrl) {
     return null;
   }
 
-  return converter.toObject() as SourceMapPayload;
+  try {
+    const matches = [...source.matchAll(convert.mapFileCommentRegex)];
+    const finalMatch = matches.at(-1);
+    const sourceMapUrl = finalMatch?.[1] ?? finalMatch?.[2]?.trim();
+    if (!sourceMapUrl || sourceMapUrl.startsWith('data:')) {
+      return null;
+    }
+
+    const resolvedSourceMapUrl = new URL(sourceMapUrl, normalizedUrl);
+    if (
+      resolvedSourceMapUrl.protocol !== 'http:' &&
+      resolvedSourceMapUrl.protocol !== 'https:'
+    ) {
+      return null;
+    }
+
+    const mapResponse = await fetcher(
+      resolvedSourceMapUrl.href,
+      signal ? { signal } : undefined,
+    );
+    return mapResponse.ok
+      ? {
+          sourceMap: flattenSourceMap(
+            (await mapResponse.json()) as SourceMapPayloadInput,
+            resolvedSourceMapUrl.href,
+          ),
+          sourceMapUrl: resolvedSourceMapUrl.href,
+        }
+      : null;
+  } catch {
+    return null;
+  }
 };
 
 const fetchSourceMap = async (
@@ -50,17 +121,22 @@ const fetchSourceMap = async (
   }
 
   const code = await jsResponse.text();
-  const inlineMap = resolveInlineSourceMap(code);
+  const inlineMap = resolveInlineSourceMap(code, jsUrl);
   if (inlineMap) {
     return inlineMap;
   }
 
-  const mapResponse = await fetcher(`${jsUrl}.map`);
+  const mapUrl = new URL(jsUrl);
+  mapUrl.pathname += '.map';
+  const mapResponse = await fetcher(mapUrl.href);
   if (!mapResponse.ok) {
     return null;
   }
 
-  return (await mapResponse.json()) as SourceMapPayload;
+  return flattenSourceMap(
+    (await mapResponse.json()) as SourceMapPayloadInput,
+    mapUrl.href,
+  );
 };
 
 export const loadSourceMapWithCache = async ({

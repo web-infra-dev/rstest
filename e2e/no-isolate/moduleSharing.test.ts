@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it } from '@rstest/core';
-import { runRstestCli } from '../scripts/';
+import { describe, expect, it } from '@rstest/core';
+import { prepareFixtures, runRstestCli } from '../scripts/';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -22,6 +22,36 @@ describe('module state sharing under isolate: false', () => {
     });
 
     await expectExecSuccess();
+  });
+
+  it('restores project-scoped globals before reusing a worker', async ({
+    onTestFinished,
+  }) => {
+    const fixturesTargetPath = join(
+      __dirname,
+      `fixtures-test-project-state-cleanup${
+        process.env.RSTEST_OUTPUT_MODULE !== 'false' ? '-module' : ''
+      }`,
+    );
+    await prepareFixtures({
+      fixturesPath: join(__dirname, 'fixtures', 'project-state-cleanup'),
+      fixturesTargetPath,
+    });
+
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: fixturesTargetPath,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).not.toContain('PROJECT_A_INTERCEPTED_LOG');
+    expect(cli.stdout).toContain('PROJECT_B_RAW_LOG');
   });
 
   // Runs the whole `sharing` fixture dir (one worker, isolate: false) and

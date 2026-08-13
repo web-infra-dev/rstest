@@ -24,6 +24,15 @@ export type BrowserWatchSession = {
   requestRerun: (testPaths?: string[]) => Promise<void>;
 };
 
+export type BrowserV8CoverageRuntime = {
+  start: (page: BrowserProviderPage) => Promise<void>;
+  take: (
+    page: BrowserProviderPage,
+    projectRoot: string,
+    projectName?: string,
+  ) => Promise<unknown | null>;
+};
+
 /**
  * What a run branch produces. Results and errors accumulate in the sinks the
  * controller owns, so a scheduler reports only what it alone knows: how long
@@ -32,6 +41,7 @@ export type BrowserWatchSession = {
  */
 export type SchedulerRunResult = {
   testTime: number;
+  rawCoverage?: unknown[];
   watchSession?: BrowserWatchSession;
   close?: () => Promise<void>;
 };

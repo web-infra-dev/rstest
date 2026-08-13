@@ -254,6 +254,11 @@ const createTestEnvironmentBuildConfig = ({
     rspack: (config, { rspack }) => {
       config.context = projectRoot;
       config.mode = 'development';
+      config.resolve ??= {};
+      // Published test environments do not rely on the consuming project's
+      // TypeScript paths. Avoid traversing its extends/references graph while
+      // building the isolated environment bundle.
+      delete config.resolve.tsConfig;
       config.externals = [testEnvironmentExternal];
       config.externalsPresets ??= {};
       config.externalsPresets.node = false;

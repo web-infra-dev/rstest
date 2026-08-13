@@ -1,8 +1,7 @@
 import { defineConfig } from '@rstest/core';
 import { BROWSER_PORTS } from '../ports';
 
-// Mixed node + browser run with the v8 coverage provider: warns (browser files
-// get no coverage) but does not error; the node project still uses v8.
+// Mixed node + Chromium browser run with the V8 coverage provider.
 export default defineConfig({
   coverage: {
     enabled: true,

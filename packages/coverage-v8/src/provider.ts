@@ -223,6 +223,8 @@ const isRawCoveragePayload = (value: unknown): value is RawCoveragePayload =>
   (value.root === undefined || typeof value.root === 'string');
 
 export class CoverageProvider implements RstestCoverageProvider {
+  supportsBrowserCoverage = true;
+  readonly supportsDeferredCoverageFinalization = true;
   private session: inspector.Session | null = null;
   private isMatch: (filePath: string) => boolean;
   private isIncluded: (filePath: string) => boolean;
@@ -360,6 +362,9 @@ export class CoverageProvider implements RstestCoverageProvider {
     }
 
     if (!this.options.allowExternal && normalizedRoot) {
+      if (/^https?:\/\//.test(normalizedFilePath)) {
+        return false;
+      }
       const relativeFilePath = this.toProjectRelativePath(
         normalizedFilePath,
         normalizedRoot,
@@ -377,10 +382,21 @@ export class CoverageProvider implements RstestCoverageProvider {
 
   private shouldIgnoreOriginalSource(source: string): boolean {
     const normalizedSource = this.normalizeForMatching(source);
-
+    const normalizedWebpackSource = normalizedSource.startsWith('webpack:')
+      ? normalizedSource
+          .replace(/^webpack:(?:\/\/[^/]*\/+|\/+)?/, '')
+          .replace(/^(?:\.\/)+/, '')
+      : normalizedSource;
+    const isResolvedVirtualSource =
+      normalizedSource.endsWith('/rstest runtime') ||
+      normalizedSource.includes('/data:text/data:text') ||
+      normalizedSource.includes('/blob:http/blob:http');
     return (
       normalizedSource === 'rstest runtime' ||
-      normalizedSource.startsWith('webpack/runtime/') ||
+      normalizedSource.startsWith('data:') ||
+      normalizedSource.startsWith('blob:') ||
+      normalizedWebpackSource.startsWith('webpack/runtime/') ||
+      isResolvedVirtualSource ||
       this.isNodeModulesPath(normalizedSource) ||
       this.isRstestInternalModulePath(normalizedSource)
     );
@@ -402,7 +418,10 @@ export class CoverageProvider implements RstestCoverageProvider {
   ): boolean {
     const normalizedKey = filePath.replace(/\\/g, '/');
 
-    if (this.shouldIgnoreTransformedFile(normalizedKey)) {
+    if (
+      this.shouldIgnoreOriginalSource(normalizedKey) ||
+      !this.shouldProcessEntry(normalizedKey, root)
+    ) {
       return false;
     }
 
@@ -559,6 +578,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       ast: () => this.parseAst(code, outputModule),
       cacheKey: converterCacheKey,
       code,
+      rawSourceFilter: (source) => !this.shouldIgnoreOriginalSource(source),
       sourceFilter: (sourcePath) =>
         this.shouldKeepOriginalSource(sourcePath, root),
       sourceMap,
@@ -614,6 +634,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       ast: () => this.parseAst(code, outputModule),
       cacheKey: converterCacheKey,
       code,
+      rawSourceFilter: (source) => !this.shouldIgnoreOriginalSource(source),
       sourceFilter: (sourcePath) =>
         this.shouldKeepOriginalSource(sourcePath, root),
       sourceMap,
@@ -950,8 +971,6 @@ export class CoverageProvider implements RstestCoverageProvider {
         sourceIdentityIds.clear();
         loadedOptions.assetFiles = undefined;
         loadedOptions.sourceMaps = undefined;
-        loadedAssetFiles = undefined;
-        loadedSourceMaps = undefined;
 
         for (const { entries, options, root } of groups.values()) {
           try {

@@ -354,8 +354,8 @@ const calcEntriesToRerun = (
   return { affectedEntries, deletedEntries: deletedPaths };
 };
 
-class AssetsMemorySafeMap extends Map<string, string> {
-  override set(key: string, value: string): this {
+class AssetsMemorySafeMap<T = string> extends Map<string, T> {
+  override set(key: string, value: T): this {
     if (this.has(key)) {
       return this;
     }
@@ -394,7 +394,7 @@ export const createRsbuildServer = async ({
     setupEntries: EntryInfo[];
     globalSetupEntries: EntryInfo[];
     assetNames: string[];
-    getAssetFiles: (names: string[]) => Promise<Record<string, string>>;
+    getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>;
     getSourceMaps: (names: string[]) => Promise<Record<string, string>>;
     /** affected test entries only available in watch mode */
     affectedEntries: EntryInfo[];
@@ -441,19 +441,17 @@ export const createRsbuildServer = async ({
   }
 
   // Ensure that when readFile is called in parallel, the file content will not be read into memory repeatedly
-  const cachedReadFilePromises = new Map<string, Promise<string>>();
+  const cachedReadFilePromises = new Map<string, Promise<Buffer>>();
   const readFile = async (fileName: string) => {
     if (cachedReadFilePromises.has(fileName))
       return cachedReadFilePromises.get(fileName)!;
-    const promise = new Promise<string>((resolve, reject) => {
+    const promise = new Promise<Buffer>((resolve, reject) => {
       outputFileSystem.readFile(fileName, (err, data) => {
         if (err) {
           reject(err);
+          return;
         }
-        const content =
-          typeof data === 'string' ? data : data!.toString('utf-8');
-
-        resolve(content);
+        resolve(typeof data === 'string' ? Buffer.from(data) : data!);
       });
     });
     cachedReadFilePromises.set(fileName, promise);
@@ -612,7 +610,7 @@ export const createRsbuildServer = async ({
         )
       : { affectedEntries: [], deletedEntries: [] };
 
-    const cachedAssetFiles = new AssetsMemorySafeMap();
+    const cachedAssetFiles = new AssetsMemorySafeMap<Buffer>();
     const cachedSourceMaps = new AssetsMemorySafeMap();
 
     const readFileWithCache = async (name: string) => {
@@ -636,13 +634,13 @@ export const createRsbuildServer = async ({
         return cachedSourceMaps.get(name)!;
       }
 
-      let content = null;
+      let content: string | null;
 
       if (inlineSourceMap) {
-        const file = await readFile(sourceMapPath);
+        const file = (await readFile(sourceMapPath)).toString('utf8');
         content = parseInlineSourceMapStr(file);
       } else {
-        const sourceMap = await readFile(sourceMapPath);
+        const sourceMap = (await readFile(sourceMapPath)).toString('utf8');
         content = sourceMap;
       }
 

@@ -16,6 +16,32 @@ const generatedCache = {
   },
 } satisfies NonNullable<Configuration['cache']>;
 
+const applyRspackTool = (
+  config: ReturnType<typeof toRstestConfig>,
+): Configuration => {
+  const rspackTool = config.tools?.rspack as (
+    config: Configuration,
+    utils: {
+      mergeConfig: (
+        first: Configuration | Configuration[],
+        ...configs: Configuration[]
+      ) => Configuration;
+    },
+  ) => Configuration;
+
+  return rspackTool(
+    { cache: generatedCache },
+    {
+      mergeConfig: (first, ...configs) =>
+        Object.assign(
+          {},
+          ...(Array.isArray(first) ? first : [first]),
+          ...configs,
+        ),
+    },
+  );
+};
+
 describe('legacy persistent cache', () => {
   it('should preserve storage.directory as the exact cache location', () => {
     const rspackConfig = {
@@ -30,16 +56,13 @@ describe('legacy persistent cache', () => {
       },
     } satisfies RspackOptions;
     const config = toRstestConfig({ rspackConfig });
-    const rspackTool = config.tools?.rspack as (
-      config: Configuration,
-    ) => Configuration;
 
     expect(config.performance?.buildCache).toEqual({
       cacheDirectory: resolve('/repo/project/.cache/client'),
       cacheDigest: undefined,
       buildDependencies: undefined,
     });
-    expect(rspackTool({ cache: generatedCache }).cache).toEqual({
+    expect(applyRspackTool(config).cache).toEqual({
       ...generatedCache,
       storage: {
         ...generatedCache.storage,
@@ -58,16 +81,13 @@ describe('legacy persistent cache', () => {
       },
     } satisfies RspackOptions;
     const config = toRstestConfig({ rspackConfig });
-    const rspackTool = config.tools?.rspack as (
-      config: Configuration,
-    ) => Configuration;
 
     expect(config.performance?.buildCache).toEqual({
       cacheDirectory: resolve('/repo/project/node_modules/.cache/rspack'),
       cacheDigest: undefined,
       buildDependencies: undefined,
     });
-    expect(rspackTool({ cache: generatedCache }).cache).toEqual({
+    expect(applyRspackTool(config).cache).toEqual({
       ...generatedCache,
       storage: {
         ...generatedCache.storage,

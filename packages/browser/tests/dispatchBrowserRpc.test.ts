@@ -62,7 +62,6 @@ const createRequest = (
   return {
     id: 'rpc-1',
     testPath: '/tests/example.test.ts',
-    runId: 'run-1',
     kind: 'locator',
     locator: { steps: [{ type: 'locator', selector: '#root' }] },
     method: 'click',

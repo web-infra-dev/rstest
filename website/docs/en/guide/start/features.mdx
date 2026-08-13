@@ -68,7 +68,7 @@ Learn more about [Playwright](/guide/advanced/playwright).
 
 Rstest supports both [istanbul](https://istanbul.js.org/) and `v8` coverage providers. Enable coverage by setting `coverage.enabled` to `true`, then choose the provider that matches your workflow.
 
-Use `istanbul` when you want SWC-based instrumentation with stable Istanbul semantics, or `v8` when coverage memory usage is the main bottleneck. Browser Mode does not support `v8` coverage.
+Use `istanbul` when you want SWC-based instrumentation with stable Istanbul semantics, or `v8` when coverage memory usage is the main bottleneck. In headless, non-watch Chromium Browser Mode runs, `v8` collects native coverage without instrumenting application code. Headed and watch coverage is experimental; Firefox and WebKit use `istanbul`.
 
 Learn more about [Code coverage](/config/test/coverage).
 

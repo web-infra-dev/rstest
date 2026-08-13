@@ -22,9 +22,11 @@ export const DISPATCH_RESPONSE_TYPE = '__rstest_dispatch_response__';
 export const DISPATCH_RPC_BRIDGE_NAME = '__rstest_dispatch_rpc__';
 export const DISPATCH_RPC_REQUEST_TYPE = 'dispatch-rpc-request';
 export const RSTEST_CONFIG_MESSAGE_TYPE = 'RSTEST_CONFIG';
+export const NO_RPC_TIMEOUT = -1;
 
 export const DISPATCH_NAMESPACE_RUNNER = 'runner';
 export const DISPATCH_NAMESPACE_BROWSER = 'browser';
+export const DISPATCH_NAMESPACE_FILE_CLEANUP = 'file-cleanup';
 export const DISPATCH_NAMESPACE_SNAPSHOT = 'snapshot';
 export const DISPATCH_METHOD_RPC = 'rpc';
 
@@ -50,6 +52,25 @@ export type BrowserProjectRuntime = {
 export type TestFileInfo = {
   testPath: string;
   projectName: string;
+};
+
+export type FileCleanupDispatchMethod = 'start' | 'end';
+
+export type FileCleanupDispatchPayload = {
+  projectName: string;
+  result?: TestFileResult;
+  runId?: string;
+  testPath: string;
+};
+
+/**
+ * The committed test-file set plus its monotonic version. The version is what
+ * the container acks once every iframe for that set exists in the DOM, so both
+ * halves must travel together — a set without its version cannot be acked.
+ */
+export type VersionedTestFileSet = {
+  files: TestFileInfo[];
+  version: number;
 };
 
 /**
@@ -92,8 +113,12 @@ export type BrowserHostConfig = {
   };
   testFile?: string; // Optional: if provided, only run this specific test file
   /**
-   * Per-run identifier assigned by the container.
-   * Used by browser RPC calls to prevent stale requests from previous reruns.
+   * The run identity this document executes under — the runner's SOLE identity
+   * source, adopted once at boot and stamped on every outbound message. Headed:
+   * the container confers its frame's current lease over the config handshake
+   * (so even an HMR full reload boots with the run the host is awaiting NOW).
+   * Headless: injected host-side as `${run.token}:${session.id}`. Never
+   * derivable from the URL.
    */
   runId?: string;
   /**
@@ -119,15 +144,27 @@ export type BrowserHostConfig = {
    * Debug mode. When true, enables verbose logging in browser.
    */
   debug?: boolean;
-  /**
-   * Timeout for RPC operations in milliseconds (e.g., snapshot file operations).
-   * Derived from testTimeout config.
-   */
+  /** Timeout for RPC operations in milliseconds; negative values disable it. */
   rpcTimeout?: number;
 };
 
 export const RSTEST_BROWSER_CACHE_CLEANERS_KEY =
   '@rstest/browser/cache-cleaners';
+
+/**
+ * The wrapper every runner document posts over `postMessage` / the headless
+ * bridge. Identity rides BESIDE the payload, never inside it: `message`
+ * payloads reach core reporting (`RunnerEventSink`, `BlobReporter`) as-is, so a
+ * transport identity spread into them would leak a nondeterministic UUID into
+ * reporter output. `runId` is the identity the document was granted at boot
+ * (headed: the container's config handshake; headless: the injected inline
+ * options) — never re-derived from the URL or the frame. Absent only for a
+ * document that was never granted one; the headed host drops such messages.
+ */
+export type RunnerEnvelope = {
+  runId?: string;
+  message: BrowserClientMessage;
+};
 
 export type BrowserClientMessage =
   | { type: 'ready' }
@@ -170,8 +207,9 @@ export type RunnerLifecycleMethod =
 /**
  * {@link BrowserClientMessage} types that are forwarded to the `runner`
  * namespace (by message `type`) rather than handled at the transport layer.
- * `Extract` keeps this a checked subset of the message union — renaming a
- * message type drops it here, surfacing as a missing handler downstream.
+ * `Extract` keeps this a checked subset of the message union. `ready` and
+ * `complete` are deliberately absent: they still arrive, but their only job
+ * is done at the dispatch gate and the router ignores them silently.
  */
 type RunnerMessageMethod = Extract<
   BrowserClientMessage['type'],
@@ -196,6 +234,14 @@ export type BrowserDispatchRequest = {
   // Optional so headed/container paths can adopt the same envelope even when
   // run-token isolation is only enforced in headless scheduling today.
   runToken?: number;
+  /**
+   * Headed run identity, stamped by the runner's dispatch transport from the
+   * identity its document adopted at boot. The headed host accepts a request
+   * iff this names a live run; headless keeps using the host-injected
+   * `runToken` instead (`runToken` is the CYCLE generation, `runId` is the
+   * RUN identity — they are not interchangeable).
+   */
+  runId?: string;
   namespace: string;
   method: string;
   args?: unknown;

@@ -3,25 +3,28 @@ import { isMainThread, threadId } from 'node:worker_threads';
 import { normalize } from 'pathe';
 import { install } from 'source-map-support';
 import type {
+  AssetFiles,
   MaybePromise,
-  Rstest,
+  RunnerHooks,
   RunWorkerOptions,
   TestFileResult,
   TestInfo,
   WorkerState,
 } from '../../types';
 import type { TestEnvironmentModuleFallback } from '../../pool/protocol';
+import { getAssetText } from '../../utils/assetFiles';
 import {
-  globalApis,
   RSTEST_API_GLOBAL_KEY,
   RSTEST_IMPORT_META_GLOBAL_KEY,
 } from '../../utils/constants';
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
+import type { FileCleanupHooks } from '../runner';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
+import { installGlobalApis, installGlobalProperty } from './globalProperty';
 import { PhaseTracker } from './phaseTracker';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
@@ -55,16 +58,12 @@ install({
   },
 });
 
-const registerGlobalApi = (api: Rstest) => {
-  return globalApis.reduce<{
-    [key in keyof Rstest]?: Rstest[key];
-  }>((apis, key) => {
-    // @ts-expect-error register to global
-    globalThis[key] = api[key] as any;
-    return apis;
-  }, {});
-};
-
+/**
+ * Restores task-scoped global mutations at the next task boundary, rather than
+ * file teardown, so late callbacks keep the console and RPC they captured.
+ * Console interception and optional global APIs register their inverses here
+ * before a reused worker can serve another project.
+ */
 const globalCleanups: (() => void)[] = [];
 let isTeardown = false;
 /**
@@ -247,7 +246,7 @@ const preparePool = async (
     // worker first and later replayed to the original worker streams according
     // to the silent policy, instead of being reported to the host.
 
-    global.console = createCustomConsole({
+    const customConsole = createCustomConsole({
       onConsoleLog: (log) => {
         silentConsoleController.onConsoleLog(log);
       },
@@ -256,6 +255,9 @@ const preparePool = async (
       printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
       getCurrentTask: () => taskContext.getCurrent(),
     });
+    globalCleanups.push(
+      installGlobalProperty(global, 'console', customConsole),
+    );
   }
 
   const interopDefault = true;
@@ -362,7 +364,7 @@ const preparePool = async (
   tracker?.transition('prepare');
 
   if (globals) {
-    registerGlobalApi(api);
+    globalCleanups.push(installGlobalApis(api));
   }
 
   const rstestContext = {
@@ -405,7 +407,7 @@ const loadFiles = async ({
   tracker,
 }: {
   setupEntries: RunWorkerOptions['options']['setupEntries'];
-  assetFiles: Record<string, string>;
+  assetFiles: AssetFiles;
   rstestContext: Record<string, any>;
   distPath: string;
   runtimeDistPath?: string;
@@ -444,11 +446,10 @@ const loadFiles = async ({
     distPath: setupDistPath,
     testPath: setupTestPath,
   } of setupEntries) {
-    const setupCodeContent = assetFiles[setupDistPath]!;
     setFederationDynamicImportOrigin(federation, setupTestPath);
 
     await loadModule({
-      codeContent: setupCodeContent,
+      codeContent: getAssetText(assetFiles, setupDistPath),
       distPath: setupDistPath,
       runtimeDistPath,
       testPath: setupTestPath,
@@ -462,7 +463,7 @@ const loadFiles = async ({
   tracker?.transition('collect');
   setFederationDynamicImportOrigin(federation, testPath);
   await loadModule({
-    codeContent: assetFiles[distPath]!,
+    codeContent: getAssetText(assetFiles, distPath),
     distPath,
     runtimeDistPath,
     testPath,
@@ -475,7 +476,11 @@ const loadFiles = async ({
 
 export const runInPool = async (
   options: RunWorkerOptions['options'],
-  onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void,
+  lifecycleHooks: FileCleanupHooks & {
+    onTestEnvironmentFallback?: (
+      fallback: TestEnvironmentModuleFallback,
+    ) => void;
+  } = {},
 ): Promise<
   | {
       tests: TestInfo[];
@@ -565,7 +570,11 @@ export const runInPool = async (
         cleanup,
         unhandledErrors,
         interopDefault,
-      } = await preparePool(options, undefined, onTestEnvironmentFallback);
+      } = await preparePool(
+        options,
+        undefined,
+        lifecycleHooks.onTestEnvironmentFallback,
+      );
       const { assetFiles, sourceMaps: sourceMapsFromAssets } =
         assets || (await rpc.getAssetsByEntry());
       sourceMaps = sourceMapsFromAssets;
@@ -630,7 +639,11 @@ export const runInPool = async (
       unhandledErrors,
       interopDefault,
       taskContext: preparedTaskContext,
-    } = await preparePool(options, tracker, onTestEnvironmentFallback);
+    } = await preparePool(
+      options,
+      tracker,
+      lifecycleHooks.onTestEnvironmentFallback,
+    );
     taskContext = preparedTaskContext;
     if (detectAsyncLeaks) {
       asyncLeakDetector = createAsyncLeakDetector(taskContext);
@@ -702,48 +715,93 @@ export const runInPool = async (
     }
 
     tracker.transition('tests');
-    const results = await runner.runTests(
-      testPath,
-      {
-        onTestFileReady: async (test) => {
-          await rpc.onTestFileReady(test);
-        },
-        onTestSuiteStart: async (test) => {
-          tracker.recordSuiteStart(test);
-          await rpc.onTestSuiteStart(test);
-        },
-        onTestSuiteResult: async (result) => {
-          tracker.recordSuiteResult(result);
-          silentConsoleController.flushBufferedLogsForTask({
-            taskId: result.testId,
-            status: result.status,
-            taskParentNames: result.parentNames,
-            taskType: 'suite',
-            testPath: result.testPath,
+    const collectCoverage = async (result: TestFileResult): Promise<void> => {
+      if (!coverageProvider) {
+        return;
+      }
+      const provider = coverageProvider;
+      tracker.transition('coverage');
+      const collectOptions = {
+        assetFiles: Object.fromEntries(
+          Object.keys(assetFiles)
+            .filter((name) => /\.[cm]?js$/.test(name))
+            .map((name) => [name, getAssetText(assetFiles, name)]),
+        ),
+        sourceMaps,
+        outputModule: options.context.outputModule,
+      };
+
+      const collect = async () => {
+        const coverageMap = await provider.collect(collectOptions);
+        if (coverageMap) {
+          result.coverage = {};
+          Object.entries(coverageMap.toJSON()).forEach(([key, value]) => {
+            if ('toJSON' in value)
+              result.coverage![key] = value.toJSON() as FileCoverageData;
+            else result.coverage![key] = value;
           });
-          await rpc.onTestSuiteResult(result);
-        },
-        onTestCaseStart: async (test) => {
-          tracker.recordCaseStart(test);
-          await rpc.onTestCaseStart(test);
-        },
-        onTestCaseResult: async (result) => {
-          tracker.recordCaseResult(result);
-          silentConsoleController.flushBufferedLogsForTask({
-            taskId: result.testId,
-            status: result.status,
-            taskParentNames: result.parentNames,
-            taskType: 'case',
-            testPath: result.testPath,
-          });
-          await rpc.onTestCaseResult(result);
-        },
-        getCountOfFailedTests: async () => {
-          return rpc.getCountOfFailedTests();
-        },
+        }
+      };
+
+      if (provider.collectRaw && provider.resolveRawCoverage) {
+        const rawCoverage = await provider.collectRaw(collectOptions);
+        if (rawCoverage != null) {
+          result.coverageRaw = rawCoverage;
+        } else {
+          await collect();
+        }
+      } else {
+        await collect();
+      }
+      tracker.transition('tests');
+    };
+
+    const runnerHooks: RunnerHooks & FileCleanupHooks = {
+      onTestFileReady: async (test) => {
+        await rpc.onTestFileReady(test);
       },
-      api,
-    );
+      onTestSuiteStart: async (test) => {
+        tracker.recordSuiteStart(test);
+        await rpc.onTestSuiteStart(test);
+      },
+      onTestSuiteResult: async (result) => {
+        tracker.recordSuiteResult(result);
+        silentConsoleController.flushBufferedLogsForTask({
+          taskId: result.testId,
+          status: result.status,
+          taskParentNames: result.parentNames,
+          taskType: 'suite',
+          testPath: result.testPath,
+        });
+        await rpc.onTestSuiteResult(result);
+      },
+      onTestCaseStart: async (test) => {
+        tracker.recordCaseStart(test);
+        await rpc.onTestCaseStart(test);
+      },
+      onTestCaseResult: async (result) => {
+        tracker.recordCaseResult(result);
+        silentConsoleController.flushBufferedLogsForTask({
+          taskId: result.testId,
+          status: result.status,
+          taskParentNames: result.parentNames,
+          taskType: 'case',
+          testPath: result.testPath,
+        });
+        await rpc.onTestCaseResult(result);
+      },
+      onFileCleanupStart: async (result) => {
+        if (result) {
+          await collectCoverage(result);
+        }
+        await lifecycleHooks.onFileCleanupStart?.(result);
+      },
+      onFileCleanupEnd: lifecycleHooks.onFileCleanupEnd,
+      getCountOfFailedTests: async () => {
+        return rpc.getCountOfFailedTests();
+      },
+    };
+    const results = await runner.runTests(testPath, runnerHooks, api);
 
     if (asyncLeakDetector) {
       // Undo any time mocking before collecting leaks and before a reused worker
@@ -772,40 +830,6 @@ export const runInPool = async (
       taskType: 'file',
       testPath: results.testPath,
     });
-
-    // Collect coverage data after test file completes
-    if (coverageProvider) {
-      const provider = coverageProvider;
-      tracker.transition('coverage');
-      const collectOptions = {
-        assetFiles,
-        sourceMaps,
-        outputModule: options.context.outputModule,
-      };
-
-      const collectCoverage = async () => {
-        const coverageMap = await provider.collect(collectOptions);
-        if (coverageMap) {
-          results.coverage = {};
-          Object.entries(coverageMap.toJSON()).forEach(([key, value]) => {
-            if ('toJSON' in value)
-              results.coverage![key] = value.toJSON() as FileCoverageData;
-            else results.coverage![key] = value;
-          });
-        }
-      };
-
-      if (provider.collectRaw && provider.resolveRawCoverage) {
-        const rawCoverage = await provider.collectRaw(collectOptions);
-        if (rawCoverage != null) {
-          results.coverageRaw = rawCoverage;
-        } else {
-          await collectCoverage();
-        }
-      } else {
-        await collectCoverage();
-      }
-    }
 
     runResult = results;
     return runResult;

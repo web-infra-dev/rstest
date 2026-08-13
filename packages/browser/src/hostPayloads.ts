@@ -1,4 +1,4 @@
-import type { Reporter, TestFileResult } from '@rstest/core/internal/browser';
+import type { Reporter } from '@rstest/core/internal/browser';
 import type { BrowserLogPayload } from './protocol';
 
 /** Payload for test file start event */
@@ -25,12 +25,6 @@ export type TestFileReadyPayload = ReporterHookArg<'onTestFileReady'>;
 export type TestSuiteStartPayload = ReporterHookArg<'onTestSuiteStart'>;
 export type TestSuiteResultPayload = ReporterHookArg<'onTestSuiteResult'>;
 export type TestCaseStartPayload = ReporterHookArg<'onTestCaseStart'>;
-export type ReloadTestFileAck = {
-  runId: string;
-};
-export type HeadedTestFileCompletePayload = TestFileResult & {
-  runId?: string;
-};
 
 export type DeferredPromise<T> = {
   promise: Promise<T>;

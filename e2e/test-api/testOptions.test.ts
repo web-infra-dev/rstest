@@ -150,6 +150,23 @@ describe('TestOptions', () => {
     expectStderrLog(/test timed out in 50ms/);
   }, 10000);
 
+  it('rejects TestOptions in the third position at runtime', async () => {
+    const { expectExecFailed, expectStderrLog } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/testOptionsThirdArgument.test.js'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expectStderrLog(
+      'The third argument must be a number when the second argument is a function. Use (name, fn, timeout) or (name, options, fn).',
+    );
+  });
+
   it('describe options propagate retry to inner tests, per-test wins', async () => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',

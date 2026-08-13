@@ -1,6 +1,7 @@
 import type {
   BrowserDispatchRequest,
   BrowserDispatchResponse,
+  RunnerEnvelope,
 } from '../protocol';
 import {
   DISPATCH_MESSAGE_TYPE,
@@ -8,30 +9,40 @@ import {
   DISPATCH_RESPONSE_TYPE,
   DISPATCH_RPC_BRIDGE_NAME,
   DISPATCH_RPC_REQUEST_TYPE,
+  NO_RPC_TIMEOUT,
 } from '../protocol';
+import { getRunIdentity } from './runIdentity';
 
-// Coincidentally equal to the host-side RUNNER_FRAMES_READY_TIMEOUT_MS and the
-// runner's CONFIG_WAIT_TIMEOUT_MS (runner.ts), but a semantically distinct
-// default in a different runtime, so deliberately not shared with them.
-const DEFAULT_RPC_TIMEOUT_MS = 30_000;
+const FRAMEWORK_RPC_TIMEOUT_MS = 30_000;
 
-export const getRpcTimeout = (): number => {
-  return (
-    window.__RSTEST_BROWSER_OPTIONS__?.rpcTimeout ?? DEFAULT_RPC_TIMEOUT_MS
-  );
+type RpcPhase = 'framework' | 'test';
+
+let rpcPhase: RpcPhase = 'framework';
+
+export const setRpcPhase = (phase: RpcPhase): void => {
+  rpcPhase = phase;
 };
 
-const pendingRequests = new Map<
-  string,
-  {
-    resolve: (value: unknown) => void;
-    reject: (error: Error) => void;
-    staleMessage: string;
+export const getRpcTimeout = (phase: RpcPhase = rpcPhase): number => {
+  const configuredTimeout = window.__RSTEST_BROWSER_OPTIONS__?.rpcTimeout;
+  if (configuredTimeout !== undefined && configuredTimeout > 0) {
+    return configuredTimeout;
   }
->();
+  return phase === 'framework' ? FRAMEWORK_RPC_TIMEOUT_MS : NO_RPC_TIMEOUT;
+};
+
+type PendingRequest = {
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+  staleMessage: string;
+  timeoutId?: ReturnType<typeof setTimeout>;
+};
+
+const pendingRequests = new Map<string, PendingRequest>();
 
 let requestIdCounter = 0;
 let messageListenerInitialized = false;
+let messageListener: ((event: MessageEvent) => void) | undefined;
 
 export const createRequestId = (prefix: string): string => {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
@@ -47,7 +58,7 @@ export const createRequestId = (prefix: string): string => {
  *
  * Lifecycle events (`file-ready`, `suite-start`, `suite-result`, `case-start`)
  * share the dispatch-rpc envelope but are delivered fire-and-forget via
- * {@link sendRunnerLifecycle}, so the request id only needs to be unique — it is
+ * {@link sendDispatchRequest}, so the request id only needs to be unique — it is
  * produced by the shared {@link createRequestId} factory rather than a bespoke
  * per-runner counter.
  */
@@ -62,17 +73,46 @@ export const createRunnerLifecycleRequest = (
 });
 
 /**
- * Deliver a runner-lifecycle request fire-and-forget.
+ * Stamp the document's run identity on an outbound dispatch request. Applied
+ * at the transport boundary so every namespace (runner lifecycle, browser,
+ * snapshot) carries it uniformly — the headed host accepts a request iff this
+ * names a live run. Headless routing ignores it (identity there is the
+ * host-injected `runToken`).
+ */
+const stampRunIdentity = (
+  request: BrowserDispatchRequest,
+): BrowserDispatchRequest => {
+  return { ...request, runId: getRunIdentity() };
+};
+
+const toEnvelopeMessage = (
+  request: BrowserDispatchRequest,
+): { type: typeof DISPATCH_MESSAGE_TYPE; payload: RunnerEnvelope } => {
+  return {
+    type: DISPATCH_MESSAGE_TYPE,
+    payload: {
+      runId: getRunIdentity(),
+      message: {
+        type: DISPATCH_RPC_REQUEST_TYPE,
+        payload: request,
+      },
+    },
+  };
+};
+
+/**
+ * Deliver a dispatch request fire-and-forget.
  *
  * Unlike {@link dispatchRpc}, this never awaits, unwraps, id-matches, or times
  * out: the host echoes a response but the runner ignores it. Failures surface
  * only through the optional `onError` hook (debug logging at the call site),
  * keeping the hot test loop non-blocking.
  */
-export const sendRunnerLifecycle = (
+export const sendDispatchRequest = (
   request: BrowserDispatchRequest,
   onError?: (error: unknown) => void,
 ): void => {
+  const stamped = stampRunIdentity(request);
   if (window.parent === window) {
     const dispatchBridge = window[DISPATCH_RPC_BRIDGE_NAME];
     if (!dispatchBridge) {
@@ -81,22 +121,13 @@ export const sendRunnerLifecycle = (
       );
       return;
     }
-    void Promise.resolve(dispatchBridge(request)).catch((error: unknown) => {
+    void Promise.resolve(dispatchBridge(stamped)).catch((error: unknown) => {
       onError?.(error);
     });
     return;
   }
 
-  window.parent.postMessage(
-    {
-      type: DISPATCH_MESSAGE_TYPE,
-      payload: {
-        type: DISPATCH_RPC_REQUEST_TYPE,
-        payload: request,
-      },
-    },
-    '*',
-  );
+  window.parent.postMessage(toEnvelopeMessage(stamped), '*');
 };
 
 const isDispatchResponse = (
@@ -110,13 +141,29 @@ const isDispatchResponse = (
   );
 };
 
+const takePendingRequest = (requestId: string): PendingRequest | undefined => {
+  const pending = pendingRequests.get(requestId);
+  if (!pending) {
+    return undefined;
+  }
+
+  pendingRequests.delete(requestId);
+  if (pending.timeoutId !== undefined) {
+    clearTimeout(pending.timeoutId);
+  }
+  return pending;
+};
+
+const rejectPendingRequest = (requestId: string, error: Error): void => {
+  takePendingRequest(requestId)?.reject(error);
+};
+
 const settlePendingRequest = (response: BrowserDispatchResponse): void => {
-  const pending = pendingRequests.get(response.requestId);
+  const pending = takePendingRequest(response.requestId);
   if (!pending) {
     return;
   }
 
-  pendingRequests.delete(response.requestId);
   if (response.stale) {
     pending.reject(new Error(pending.staleMessage));
     return;
@@ -128,17 +175,32 @@ const settlePendingRequest = (response: BrowserDispatchResponse): void => {
   pending.resolve(response.result);
 };
 
+export const disposeDispatchTransport = (
+  error: Error = new Error('Browser RPC transport disposed.'),
+): void => {
+  for (const requestId of pendingRequests.keys()) {
+    rejectPendingRequest(requestId, error);
+  }
+
+  if (messageListenerInitialized && messageListener) {
+    window.removeEventListener('message', messageListener);
+  }
+  messageListener = undefined;
+  messageListenerInitialized = false;
+};
+
 const initMessageListener = (): void => {
   if (messageListenerInitialized) {
     return;
   }
   messageListenerInitialized = true;
 
-  window.addEventListener('message', (event: MessageEvent) => {
+  messageListener = (event: MessageEvent) => {
     if (event.data?.type === DISPATCH_RESPONSE_TYPE) {
       settlePendingRequest(event.data.payload as BrowserDispatchResponse);
     }
-  });
+  };
+  window.addEventListener('message', messageListener);
 };
 
 const unwrapDispatchBridgeResult = <T>(
@@ -177,6 +239,7 @@ export const dispatchRpc = <T>({
   timeoutMessage: string;
   staleMessage: string;
 }): Promise<T> => {
+  const stamped = stampRunIdentity(request);
   if (window.parent === window) {
     const dispatchBridge = window[DISPATCH_RPC_BRIDGE_NAME];
     if (!dispatchBridge) {
@@ -186,22 +249,33 @@ export const dispatchRpc = <T>({
     }
 
     return new Promise<T>((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        reject(new Error(timeoutMessage));
-      }, timeoutMs);
+      const pending: PendingRequest = {
+        staleMessage,
+        resolve: (value) => resolve(value as T),
+        reject,
+      };
+      pendingRequests.set(requestId, pending);
+      if (timeoutMs >= 0) {
+        pending.timeoutId = setTimeout(() => {
+          rejectPendingRequest(requestId, new Error(timeoutMessage));
+        }, timeoutMs);
+      }
 
-      const call = Promise.resolve(dispatchBridge(request)).then((result) =>
-        unwrapDispatchBridgeResult<T>(requestId, result, staleMessage),
-      );
+      const call = Promise.resolve()
+        .then(() => dispatchBridge(stamped))
+        .then((result) =>
+          unwrapDispatchBridgeResult<T>(requestId, result, staleMessage),
+        );
 
       call
         .then((result) => {
-          clearTimeout(timeoutId);
-          resolve(result);
+          takePendingRequest(requestId)?.resolve(result);
         })
         .catch((error) => {
-          clearTimeout(timeoutId);
-          reject(error instanceof Error ? error : new Error(String(error)));
+          rejectPendingRequest(
+            requestId,
+            error instanceof Error ? error : new Error(String(error)),
+          );
         });
     });
   }
@@ -209,32 +283,29 @@ export const dispatchRpc = <T>({
   initMessageListener();
 
   return new Promise<T>((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      pendingRequests.delete(requestId);
-      reject(new Error(timeoutMessage));
-    }, timeoutMs);
-
-    pendingRequests.set(requestId, {
+    const pending: PendingRequest = {
       staleMessage,
       resolve: (value) => {
-        clearTimeout(timeoutId);
         resolve(value as T);
       },
       reject: (error) => {
-        clearTimeout(timeoutId);
         reject(error);
       },
-    });
+    };
+    pendingRequests.set(requestId, pending);
+    if (timeoutMs >= 0) {
+      pending.timeoutId = setTimeout(() => {
+        rejectPendingRequest(requestId, new Error(timeoutMessage));
+      }, timeoutMs);
+    }
 
-    window.parent.postMessage(
-      {
-        type: DISPATCH_MESSAGE_TYPE,
-        payload: {
-          type: DISPATCH_RPC_REQUEST_TYPE,
-          payload: request,
-        },
-      },
-      '*',
-    );
+    try {
+      window.parent.postMessage(toEnvelopeMessage(stamped), '*');
+    } catch (error) {
+      rejectPendingRequest(
+        requestId,
+        error instanceof Error ? error : new Error(String(error)),
+      );
+    }
   });
 };

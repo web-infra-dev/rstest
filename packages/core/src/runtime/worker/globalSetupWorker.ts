@@ -1,6 +1,6 @@
 import { install } from 'source-map-support';
-import type { FormattedError } from '../../types';
-import { RSTEST_IMPORT_META_GLOBAL_KEY } from '../../utils/constants';
+import type { AssetFiles, FormattedError } from '../../types';
+import { getAssetText } from '../../utils/assetFiles';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
@@ -44,7 +44,7 @@ const runGlobalSetup = async (data: {
     runtimeDistPath?: string;
     testPath: string;
   }[];
-  assetFiles: Record<string, string>;
+  assetFiles: AssetFiles;
   sourceMaps: Record<string, string>;
   interopDefault: boolean;
   outputModule: boolean;
@@ -82,12 +82,9 @@ const runGlobalSetup = async (data: {
     // worker-wide flag, so it must be set before any setup code is evaluated.
     (globalThis as Record<string, unknown>).__rstest_federation__ =
       data.federation === true;
-    (globalThis as Record<string, unknown>)[RSTEST_IMPORT_META_GLOBAL_KEY] =
-      () => undefined;
 
     for (const entry of data.entries) {
       const { distPath, runtimeDistPath, testPath } = entry;
-      const setupCodeContent = data.assetFiles[distPath]!;
       setFederationDynamicImportOrigin(data.federation, testPath);
       const { loadModule } = data.outputModule
         ? await import('./loadEsModule')
@@ -96,7 +93,7 @@ const runGlobalSetup = async (data: {
       const virtualFsAssetFiles = data.federation ? data.assetFiles : undefined;
 
       const module = await loadModule({
-        codeContent: setupCodeContent,
+        codeContent: getAssetText(data.assetFiles, distPath),
         distPath,
         runtimeDistPath,
         testPath,

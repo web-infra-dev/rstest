@@ -1,36 +1,37 @@
 import type {
   RstestContext,
   TestFileResult,
-  TestResult,
 } from '@rstest/core/internal/browser';
-import { color, logger } from '@rstest/core/internal/browser';
+import {
+  color,
+  createFileCleanupTimeoutResult,
+  FIXTURE_CLEANUP_TIMEOUT_MS,
+  logger,
+} from '@rstest/core/internal/browser';
 import { normalize, relative } from 'pathe';
 import {
   type BrowserRuntime,
-  type BrowserProjectEntrySnapshot,
   drainPendingAffectedTestFiles,
 } from './browserRsbuild';
 import { ContainerRpcManager, type HostRpcMethods } from './containerRpc';
 import type { HostDispatchRouter } from './dispatchRouter';
+import { createHeadedRunRegistry } from './headedRunRegistry';
 import { createHeadedSerialTaskQueue } from './headedSerialTaskQueue';
-import {
-  createDeferredPromise,
-  type DeferredPromise,
-  type FatalPayload,
-  type HeadedTestFileCompletePayload,
-  type LogPayload,
-  type ReloadTestFileAck,
-  type TestFileStartPayload,
-  toError,
-} from './hostPayloads';
+import { type FatalPayload, toError } from './hostPayloads';
 import type {
   BrowserDispatchRequest,
   BrowserHostConfig,
+  FileCleanupDispatchPayload,
   TestFileInfo,
+} from './protocol';
+import {
+  DISPATCH_NAMESPACE_FILE_CLEANUP,
+  DISPATCH_NAMESPACE_RUNNER,
 } from './protocol';
 import type { BrowserProviderContext, BrowserProviderPage } from './providers';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import type {
+  BrowserV8CoverageRuntime,
   BrowserWatchSession,
   DispatchPageResolver,
   SchedulerRunResult,
@@ -49,25 +50,25 @@ type HeadedSchedulerDeps = {
   runtime: BrowserRuntime;
   allTestFiles: TestFileInfo[];
   hostOptions: BrowserHostConfig;
+  v8Coverage?: BrowserV8CoverageRuntime;
+  projectRoots: Map<string, string>;
   isWatchMode: boolean;
   createDispatchRouter: () => HostDispatchRouter;
   handlers: {
-    handleTestFileStart: (payload: TestFileStartPayload) => Promise<void>;
-    handleTestCaseResult: (payload: TestResult) => Promise<void>;
+    // For the one result the host authors itself (the cleanup-timeout
+    // failure); every runner-authored result flows through the dispatch
+    // router instead.
     handleTestFileComplete: (payload: TestFileResult) => Promise<void>;
-    handleLog: (payload: LogPayload) => Promise<void>;
-    handleFatal: (payload: FatalPayload) => Promise<void>;
   };
   fatalErrorRef: { current: Error | null };
-  watchSignals: Pick<
-    WatchSignals,
-    'setDispatchRerun' | 'signalInvalidation' | 'awaitSignalledCycle'
-  >;
+  watchSignals: Pick<WatchSignals, 'setDispatchRerun' | 'signalInvalidation'>;
   setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
   createWatchSession: (
-    execute: (testPaths: string[]) => Promise<void>,
+    execute: (testPaths: string[]) => Promise<unknown[]>,
   ) => BrowserWatchSession;
-  collectProjectEntries: () => Promise<BrowserProjectEntrySnapshot[]>;
+  collectProjectEntries: () => Promise<
+    Parameters<typeof planWatchRerun>[0]['projectEntries']
+  >;
   logWatchReady: () => void;
   destroyRuntime: () => Promise<void>;
 };
@@ -118,15 +119,11 @@ export const createHeadedScheduler = async ({
   runtime,
   allTestFiles,
   hostOptions,
+  v8Coverage,
+  projectRoots,
   isWatchMode,
   createDispatchRouter,
-  handlers: {
-    handleTestFileStart,
-    handleTestCaseResult,
-    handleTestFileComplete,
-    handleLog,
-    handleFatal,
-  },
+  handlers: { handleTestFileComplete },
   fatalErrorRef,
   watchSignals,
   setDispatchPageResolver,
@@ -136,6 +133,7 @@ export const createHeadedScheduler = async ({
   destroyRuntime,
 }: HeadedSchedulerDeps): Promise<SchedulerRunResult> => {
   const { browser, browserLaunchOptions, watchState, wss } = runtime;
+  const containerUrl = `http://localhost:${runtime.containerServer.port}/`;
   let currentTestFiles = allTestFiles;
   // Coincidentally equal to the runner-side CONFIG_WAIT_TIMEOUT_MS and
   // DEFAULT_RPC_TIMEOUT_MS (client/runner.ts, client/dispatchTransport.ts) but
@@ -144,80 +142,69 @@ export const createHeadedScheduler = async ({
   // config (config-wait) before the host declares its frames un-ready, i.e.
   // CONFIG_WAIT_TIMEOUT_MS <= RUNNER_FRAMES_READY_TIMEOUT_MS.
   const RUNNER_FRAMES_READY_TIMEOUT_MS = 30_000;
-  let currentRunnerFramesSignature: string | null = null;
-  const runnerFramesWaiters = new Map<string, Set<() => void>>();
 
-  const createTestFilesSignature = (testFiles: readonly string[]): string => {
-    return JSON.stringify(testFiles.map((testFile) => normalize(testFile)));
+  // `watchState.headedFileSetVersion` is the committed file set's monotonic
+  // version, acked by the container once its frame set for that version is in
+  // the DOM. A counter only increases, so a stale ack can never satisfy a
+  // newer wait (the content signature it replaces could ABA back to a
+  // previously-acked value).
+  let ackedFrameSetVersion = 0;
+  type FrameSetWaiter = {
+    version: number;
+    resolve: () => void;
+    timeoutId: NodeJS.Timeout;
   };
+  const frameSetWaiters = new Set<FrameSetWaiter>();
 
-  const markRunnerFramesReady = (testFiles: string[]): void => {
-    const signature = createTestFilesSignature(testFiles);
-    currentRunnerFramesSignature = signature;
-    const waiters = runnerFramesWaiters.get(signature);
-    if (!waiters) {
+  const markFrameSetReady = (version: number): void => {
+    // An ack above anything ever sent can only be a previous session's late
+    // echo on the reused socket — accepting it would let every future wait
+    // short-circuit.
+    if (version > watchState.headedFileSetVersion) {
       return;
     }
-    runnerFramesWaiters.delete(signature);
-    for (const waiter of waiters) {
-      waiter();
+    if (version > ackedFrameSetVersion) {
+      ackedFrameSetVersion = version;
     }
-  };
-
-  const waitForRunnerFramesReady = async (
-    testFiles: readonly string[],
-  ): Promise<void> => {
-    const signature = createTestFilesSignature(testFiles);
-    if (currentRunnerFramesSignature === signature) {
-      return;
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      const waiters =
-        runnerFramesWaiters.get(signature) ?? new Set<() => void>();
-
-      const cleanup = () => {
-        const currentWaiters = runnerFramesWaiters.get(signature);
-        if (!currentWaiters) {
-          return;
-        }
-        currentWaiters.delete(onReady);
-        if (currentWaiters.size === 0) {
-          runnerFramesWaiters.delete(signature);
-        }
-      };
-
-      const onReady = () => {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
-        cleanup();
-        resolve();
-      };
-
-      const timeoutId = setTimeout(() => {
-        cleanup();
-        reject(
-          new Error(
-            `Timed out waiting for headed runner frames to be ready for ${testFiles.length} file(s).`,
-          ),
-        );
-      }, RUNNER_FRAMES_READY_TIMEOUT_MS);
-
-      waiters.add(onReady);
-      runnerFramesWaiters.set(signature, waiters);
-
-      if (currentRunnerFramesSignature === signature) {
-        onReady();
+    for (const waiter of frameSetWaiters) {
+      if (waiter.version <= ackedFrameSetVersion) {
+        clearTimeout(waiter.timeoutId);
+        frameSetWaiters.delete(waiter);
+        waiter.resolve();
       }
+    }
+  };
+
+  const waitForFrameSet = async (version: number): Promise<void> => {
+    if (ackedFrameSetVersion >= version) {
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      const waiter: FrameSetWaiter = {
+        version,
+        resolve,
+        timeoutId: setTimeout(() => {
+          frameSetWaiters.delete(waiter);
+          reject(
+            new Error(
+              `Timed out waiting for headed runner frames to be ready (file-set version ${version}).`,
+            ),
+          );
+        }, RUNNER_FRAMES_READY_TIMEOUT_MS),
+      };
+      frameSetWaiters.add(waiter);
     });
   };
 
-  const getTestFileInfo = (testFile: string): TestFileInfo => {
+  const findTestFileInfo = (testFile: string): TestFileInfo | undefined => {
     const normalizedTestFile = normalize(testFile);
-    const fileInfo = currentTestFiles.find(
+    return currentTestFiles.find(
       (file) => file.testPath === normalizedTestFile,
     );
+  };
+
+  const getTestFileInfo = (testFile: string): TestFileInfo => {
+    const fileInfo = findTestFileInfo(testFile);
     if (!fileInfo) {
       throw new Error(`Unknown browser test file: ${JSON.stringify(testFile)}`);
     }
@@ -229,54 +216,95 @@ export const createHeadedScheduler = async ({
   let containerPage: BrowserProviderPage;
   let isNewPage = false;
 
+  const attachContainerPageHandlers = (
+    activeContext: BrowserProviderContext,
+    activePage: BrowserProviderPage,
+  ): void => {
+    activePage.on('popup', async (popup: BrowserProviderPage) => {
+      await popup.close().catch(() => {});
+    });
+
+    activeContext.on('page', async (page: BrowserProviderPage) => {
+      if (page !== activePage) {
+        await page.close().catch(() => {});
+      }
+    });
+
+    activePage.on('console', (msg) => {
+      const text = msg.text();
+      if (text.startsWith('[Container]') || text.startsWith('[Runner]')) {
+        logger.log(color.gray(`[Browser Console] ${text}`));
+        return;
+      }
+      // The runner logs nothing before its config handshake, so a frame that
+      // dies during load is indistinguishable from one that never navigated.
+      // Keep non-protocol output reachable under `--debug`.
+      logger.debug(`[Browser Console] ${text}`);
+    });
+  };
+
+  const createContainerPage = async (): Promise<{
+    context: BrowserProviderContext;
+    page: BrowserProviderPage;
+  }> => {
+    const nextContext = await browser.newContext({
+      providerOptions: browserLaunchOptions.providerOptions,
+      viewport: null,
+    });
+    const nextPage = await nextContext.newPage();
+    attachContainerPageHandlers(nextContext, nextPage);
+    return { context: nextContext, page: nextPage };
+  };
+
   if (isWatchMode && runtime.containerPage && runtime.containerContext) {
     containerContext = runtime.containerContext;
     containerPage = runtime.containerPage;
     logger.log(color.gray('\n[Watch] Reusing existing container page\n'));
   } else {
     isNewPage = true;
-    containerContext = await browser.newContext({
-      providerOptions: browserLaunchOptions.providerOptions,
-      viewport: null,
-    });
-    containerPage = await containerContext.newPage();
-
-    // Prevent popup windows from being created
-    containerPage.on('popup', async (popup: BrowserProviderPage) => {
-      await popup.close().catch(() => {});
-    });
-
-    containerContext.on('page', async (page: BrowserProviderPage) => {
-      if (page !== containerPage) {
-        await page.close().catch(() => {});
-      }
-    });
+    const created = await createContainerPage();
+    containerContext = created.context;
+    containerPage = created.page;
 
     if (isWatchMode) {
       runtime.containerPage = containerPage;
       runtime.containerContext = containerContext;
     }
-
-    // Forward browser console to terminal
-    containerPage.on('console', (msg) => {
-      const text = msg.text();
-      if (text.startsWith('[Container]') || text.startsWith('[Runner]')) {
-        logger.log(color.gray(`[Browser Console] ${text}`));
-      }
-    });
   }
 
   setDispatchPageResolver(() => ({ containerPage }));
 
   const dispatchRouter = createDispatchRouter();
   const headedReloadQueue = createHeadedSerialTaskQueue();
-  const pendingHeadedReloads = new Map<
-    string,
-    {
-      runId: string;
-      deferred: DeferredPromise<void>;
+  let rawCoverage: unknown[] = [];
+  // The session's project is recorded at start rather than re-derived at each
+  // take site: headed reloads are strictly serial, so at most one coverage
+  // session exists, and it belongs to the run that started it — not to
+  // whatever payload happens to be in hand when it is taken.
+  let coverageProject: string | undefined;
+  let coverageStarted = false;
+  const startCoverage = async (projectName?: string): Promise<void> => {
+    if (!v8Coverage) {
+      return;
     }
-  >();
+    await v8Coverage.start(containerPage);
+    coverageStarted = true;
+    coverageProject = projectName;
+  };
+  const collectCoverage = async (): Promise<void> => {
+    if (!coverageStarted || !v8Coverage) {
+      return;
+    }
+    coverageStarted = false;
+    const coverage = await v8Coverage.take(
+      containerPage,
+      projectRoots.get(coverageProject ?? '') ?? context.rootPath,
+      coverageProject,
+    );
+    if (coverage) {
+      rawCoverage.push(coverage);
+    }
+  };
   let enqueueHeadedReload = async (
     _file: TestFileInfo,
     _testNamePattern?: string,
@@ -284,94 +312,116 @@ export const createHeadedScheduler = async ({
     throw new Error('Headed reload queue is not initialized');
   };
 
-  const rejectPendingHeadedReload = (
-    testPath: string,
-    error: Error,
-    runId?: string,
-  ): void => {
-    const pending = pendingHeadedReloads.get(testPath);
-    if (!pending) {
-      return;
+  const isCurrentTestFile = (testPath: string): boolean =>
+    findTestFileInfo(testPath) !== undefined;
+
+  // The settlement contract — every run settles exactly once, and any host
+  // action that makes a completion impossible settles it — lives in the
+  // registry. It survives controller re-entry on the runtime's watch state,
+  // so a re-entering scheduler cannot orphan the previous entry's runs.
+  const runs = (watchState.headedRuns ??= createHeadedRunRegistry());
+
+  // A wedged cleanup does not stay its own problem: every runner iframe and
+  // the container are same-site, so they share one renderer process, and a
+  // synchronous busy-loop in one document freezes the whole tab — no sibling
+  // frame can boot until the page itself is replaced. Recovery therefore
+  // tears down the container context and boots a fresh one; the frame-set
+  // ack is reset because the old ack belongs to the destroyed page.
+  const recoverHeadedContainer = async (): Promise<void> => {
+    ackedFrameSetVersion = 0;
+    await containerContext.close().catch(() => {});
+    const created = await createContainerPage();
+    containerContext = created.context;
+    containerPage = created.page;
+    if (isWatchMode) {
+      runtime.containerPage = containerPage;
+      runtime.containerContext = containerContext;
     }
-    if (runId && pending.runId !== runId) {
-      return;
-    }
-    pendingHeadedReloads.delete(testPath);
-    pending.deferred.reject(error);
+    await containerPage.goto(containerUrl, { waitUntil: 'load' });
+    await waitForFrameSet(watchState.headedFileSetVersion);
   };
 
-  const rejectAllPendingHeadedReloads = (error: Error): void => {
-    for (const [testPath, pending] of pendingHeadedReloads) {
-      pendingHeadedReloads.delete(testPath);
-      pending.deferred.reject(error);
-    }
-  };
-
-  const registerPendingHeadedReload = (
-    testPath: string,
-    runId: string,
-  ): Promise<void> => {
-    const previousPending = pendingHeadedReloads.get(testPath);
-    if (previousPending) {
-      previousPending.deferred.reject(
-        new Error(
-          `Reload for "${testPath}" was superseded by a newer request.`,
-        ),
-      );
-      pendingHeadedReloads.delete(testPath);
-    }
-
-    const deferred = createDeferredPromise<void>();
-    pendingHeadedReloads.set(testPath, {
-      runId,
-      deferred,
-    });
-
-    return deferred.promise;
-  };
-
-  const resolvePendingHeadedReload = (
-    testPath: string,
-    runId?: string,
-  ): void => {
-    const pending = pendingHeadedReloads.get(testPath);
-    if (!pending) {
+  // The runner announces its fixture-cleanup window over the `file-cleanup`
+  // namespace (already past the dispatch gate, so the run is live). The
+  // deadline itself lives in the registry beside the boot deadline, and its
+  // expiry claims the run before this handler starts: the recovery below
+  // kills the container transport, and an unclaimed run would be swept by
+  // that very disconnect. Settling waits until the new container is ready —
+  // it is what releases the serial loop, and the next reload must find a
+  // living page. The wedged document's late messages find their run claimed
+  // (terminal) or gone and drop at the gate — no tombstone needed.
+  dispatchRouter.register(DISPATCH_NAMESPACE_FILE_CLEANUP, async (request) => {
+    const { runId } = request;
+    if (!runId) {
       return;
     }
-    if (runId && pending.runId !== runId) {
-      logger.debug(
-        `[Browser UI] Ignoring stale file-complete for ${testPath}. current=${pending.runId}, incoming=${runId}`,
-      );
-      return;
+    if (request.method === 'start') {
+      const payload = request.args as FileCleanupDispatchPayload;
+      runs.armCleanupDeadline(runId, FIXTURE_CLEANUP_TIMEOUT_MS, () => {
+        void (async () => {
+          try {
+            // Taken before recovery closes the page the session lives on.
+            await collectCoverage();
+            // A cleanup timeout is a file failure, not a container failure:
+            // report it, recover, then settle so the serial loop advances.
+            await handleTestFileComplete(
+              createFileCleanupTimeoutResult({
+                message: `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`,
+                projectName: payload.projectName,
+                result: payload.result,
+                testPath: payload.testPath,
+              }),
+            );
+            await recoverHeadedContainer();
+            runs.resolve(runId);
+          } catch (error) {
+            runs.reject(runId, toError(error));
+          }
+        })();
+      });
+    } else if (request.method === 'end') {
+      runs.disarmCleanupDeadline(runId);
     }
-    pendingHeadedReloads.delete(testPath);
-    pending.deferred.resolve();
-  };
+  });
 
   // No execution-duration watchdog: per-test/hook timeouts are enforced inside
-  // the runner, and a dead container is caught event-driven by the WebSocket
-  // `close` handler, which rejects every pending reload via `onDisconnect`.
+  // the runner, a dead container is caught event-driven by the WebSocket
+  // `close` handler / transport epoch, and a host action that makes a
+  // completion impossible settles the run itself (`runs.retainPaths`).
   const reloadTestFileAndWait = async (
     file: TestFileInfo,
     testNamePattern?: string,
   ): Promise<void> => {
-    let reloadAck: ReloadTestFileAck | undefined;
-
+    // The coverage session opens before the run exists: a start failure must
+    // surface as a cycle error, and a minted run it could never serve would
+    // only burn the boot deadline.
+    await startCoverage(file.projectName);
+    // Mint + register are one synchronous step BEFORE the RPC leaves the
+    // process: no file-set commit or inbound message can land between "the
+    // run exists on the wire" and "the registry owns it".
+    const { runId, settled } = runs.mint(file.testPath);
+    // The wait is on `settled` ALONE, never serially on the RPC: the host
+    // birpc has no timeout, so a reload delivery that silently hangs (socket
+    // looks open, no close event, no replacement) would otherwise block this
+    // cycle past every deadline the registry enforces. The RPC's only job is
+    // delivery — its failure settles the run like any other settler, and if
+    // the run was already settled (boot deadline, transport epoch) the late
+    // rejection is a no-op.
+    rpcManager
+      .reloadTestFile(file.testPath, runId, testNamePattern)
+      .catch((error) => runs.reject(runId, error));
     try {
-      reloadAck = await rpcManager.reloadTestFile(
-        file.testPath,
-        testNamePattern,
-      );
-      await registerPendingHeadedReload(file.testPath, reloadAck.runId);
-    } catch (error) {
-      if (reloadAck?.runId) {
-        rejectPendingHeadedReload(
-          file.testPath,
-          toError(error),
-          reloadAck.runId,
-        );
-      }
-      throw error;
+      await settled;
+    } finally {
+      // A settlement that skipped the terminal gate (file-set commit, boot
+      // deadline, transport death) leaves the session running; flush it so
+      // the next file's start opens on a clean session. A no-op when the
+      // gate already took it, and best-effort by design: the settlement
+      // outcome — success or the error propagating past this block — is the
+      // truth about the run, and a take failure here must not replace it.
+      await collectCoverage().catch((error) => {
+        logger.debug(`[Headed] Failed to flush coverage: ${error}`);
+      });
     }
   };
 
@@ -400,42 +450,84 @@ export const createHeadedScheduler = async ({
       await runUiRequestedRerun(getTestFileInfo(testFile), testNamePattern);
     },
     async getTestFiles() {
-      return currentTestFiles;
+      return {
+        files: currentTestFiles,
+        version: watchState.headedFileSetVersion,
+      };
     },
-    async onRunnerFramesReady(testFiles: string[]) {
-      markRunnerFramesReady(testFiles);
+    async onFrameSetReady(version: number) {
+      markFrameSetReady(version);
     },
-    async onTestFileStart(payload: TestFileStartPayload) {
-      await handleTestFileStart(payload);
-    },
-    async onTestCaseResult(payload: TestResult) {
-      await handleTestCaseResult(payload);
-    },
-    async onTestFileComplete(payload: HeadedTestFileCompletePayload) {
-      try {
-        await handleTestFileComplete(payload);
-        resolvePendingHeadedReload(payload.testPath, payload.runId);
-      } catch (error) {
-        rejectPendingHeadedReload(
-          payload.testPath,
-          toError(error),
-          payload.runId,
-        );
-        throw error;
-      }
-    },
-    async onLog(payload: LogPayload) {
-      await handleLog(payload);
-    },
-    async onFatal(payload: FatalPayload) {
-      const error = new Error(payload.message);
-      error.stack = payload.stack;
-      rejectAllPendingHeadedReloads(error);
-      await handleFatal(payload);
-    },
+    /**
+     * The ONE inbound gate for everything a runner document produces —
+     * lifecycle messages and browser/snapshot RPCs alike. A message is
+     * accepted iff its stamped runId names a live run; path lookups, frame
+     * lookups and fallback identities do not exist here, so a completion
+     * already in transport when its run was closed simply finds its runId
+     * gone and drops.
+     *
+     * The terminal methods ("file-complete", "fatal") also settle the run:
+     * `admit` claims settlement synchronously, before the handler's first
+     * await, so a file-set commit racing the handler cannot settle it a
+     * second time. A handler failure rejects the run — `dispatchRouter`
+     * catches handler errors into `response.error` rather than throwing, and
+     * a reporter/snapshot-ingest failure must ride the cycle outcome, not
+     * vanish into a response the runner discards.
+     */
     async dispatch(request: BrowserDispatchRequest) {
-      // Headed/container path now shares the same dispatch contract as headless.
-      return dispatchRouter.dispatch(request);
+      const { method, runId } = request;
+      const isTerminal =
+        request.namespace === DISPATCH_NAMESPACE_RUNNER &&
+        (method === 'file-complete' || method === 'fatal');
+      if (!runId || !runs.admit(runId, isTerminal)) {
+        logger.debug(
+          `[Headed] Dropped stale "${method}" from run ${runId ?? '(none)'}`,
+        );
+        return { requestId: request.requestId, stale: true };
+      }
+      // The coverage session ends with the run that started it, taken while
+      // the admitted run still holds the page. A take failure must not wedge
+      // the claimed run: it settles below exactly like a handler failure.
+      let coverageError: Error | undefined;
+      if (isTerminal) {
+        try {
+          await collectCoverage();
+        } catch (error) {
+          coverageError = toError(error);
+        }
+      }
+      const response = await dispatchRouter.dispatch(request);
+      if (!isTerminal) {
+        return response;
+      }
+      if (method === 'file-complete') {
+        const failure =
+          coverageError ??
+          (response.error ? new Error(response.error) : undefined);
+        if (failure) {
+          runs.reject(runId, failure);
+        } else {
+          runs.resolve(runId);
+        }
+      } else {
+        if (coverageError) {
+          // The fatal outranks it for the cycle outcome; anything but a log
+          // line would displace the error that actually killed the run.
+          logger.error(
+            `[Headed] Failed to take coverage during fatal handling: ${coverageError.message}`,
+          );
+        }
+        // A fatal settles its OWN run; sibling runs and the watch session
+        // survive. The cycle still fails through `fatalErrorRef`, which the
+        // routed handler just set.
+        const payload = request.args as FatalPayload | undefined;
+        const error = new Error(payload?.message ?? 'Fatal browser error');
+        if (payload?.stack) {
+          error.stack = payload.stack;
+        }
+        runs.reject(runId, error);
+      }
+      return response;
     },
   });
 
@@ -445,7 +537,11 @@ export const createHeadedScheduler = async ({
   if (isWatchMode && runtime.rpcManager) {
     rpcManager = runtime.rpcManager;
     // Update methods with new test state (caseResults, completedTests, etc.)
-    rpcManager.updateMethods(createRpcMethods(), rejectAllPendingHeadedReloads);
+    rpcManager.updateMethods(
+      createRpcMethods(),
+      runs.rejectAll,
+      runs.setTransportEpoch,
+    );
     // Reattach if we have an existing WebSocket
     const existingWs = rpcManager.currentWebSocket;
     if (existingWs) {
@@ -455,7 +551,8 @@ export const createHeadedScheduler = async ({
     rpcManager = new ContainerRpcManager(
       wss,
       createRpcMethods(),
-      rejectAllPendingHeadedReloads,
+      runs.rejectAll,
+      runs.setTransportEpoch,
     );
 
     if (isWatchMode) {
@@ -465,17 +562,11 @@ export const createHeadedScheduler = async ({
 
   // Only navigate on first creation
   if (isNewPage) {
-    const pagePath = '/';
-    const containerPort = runtime.containerServer.port;
-    await containerPage.goto(`http://localhost:${containerPort}${pagePath}`, {
+    await containerPage.goto(containerUrl, {
       waitUntil: 'load',
     });
 
-    logger.log(
-      color.cyan(
-        `\nBrowser mode opened at http://localhost:${containerPort}${pagePath}\n`,
-      ),
-    );
+    logger.log(color.cyan(`\nBrowser mode opened at ${containerUrl}\n`));
   }
 
   enqueueHeadedReload = async (
@@ -486,6 +577,17 @@ export const createHeadedScheduler = async ({
       if (fatalErrorRef.current) {
         return;
       }
+      // `claimHeadedCycleScope` checks membership once per cycle, but the queue
+      // spans cycles and `dispatchRerun` commits a new set between them —
+      // granting a run to a file whose frame is gone would only burn the boot
+      // deadline. (The set can change again during the reload itself;
+      // `runs.retainPaths` settles that run at the commit.)
+      if (!isCurrentTestFile(file.testPath)) {
+        logger.debug(
+          `[Browser UI] Skipping reload for removed test file: ${file.testPath}`,
+        );
+        return;
+      }
       await reloadTestFileAndWait(file, testNamePattern);
     });
   };
@@ -494,9 +596,16 @@ export const createHeadedScheduler = async ({
   if (currentTestFiles.length > 0) {
     const testStart = Date.now();
     try {
-      await waitForRunnerFramesReady(
-        currentTestFiles.map((file) => file.testPath),
-      );
+      // A container connected before this scheduler existed (controller
+      // re-entry on the persistent runtime) never re-pulls `getTestFiles`, so
+      // push the set — the commit effect acks the version either way.
+      if (rpcManager.isConnected) {
+        await rpcManager.notifyTestFileUpdate(
+          currentTestFiles,
+          watchState.headedFileSetVersion,
+        );
+      }
+      await waitForFrameSet(watchState.headedFileSetVersion);
 
       for (const file of currentTestFiles) {
         await enqueueHeadedReload(file);
@@ -536,7 +645,8 @@ export const createHeadedScheduler = async ({
     // options instead of traveling beside the scope.
     const pendingTestNamePatterns = new Map<string, string>();
 
-    const runScope = async (testPaths: string[]): Promise<void> => {
+    const runScope = async (testPaths: string[]): Promise<unknown[]> => {
+      rawCoverage = [];
       // Claimed in this synchronous prefix, before `runCycle` suspends, so
       // nothing this cycle does can change what it runs or which patterns it
       // takes.
@@ -548,6 +658,7 @@ export const createHeadedScheduler = async ({
       for (const { file, testNamePattern } of cycleScope) {
         await enqueueHeadedReload(file, testNamePattern);
       }
+      return rawCoverage;
     };
 
     /**
@@ -566,56 +677,88 @@ export const createHeadedScheduler = async ({
       await rpcManager.updateHostConfig(refreshedHostOptions);
     };
 
-    watchSignals.setDispatchRerun(async () => {
-      const newProjectEntries = await collectProjectEntries();
-      await refreshHostConfig();
-      const rerunPlan = planWatchRerun({
-        projectEntries: newProjectEntries,
-        previousTestFiles: watchState.lastTestFiles,
-        affectedTestFiles: drainPendingAffectedTestFiles(watchState),
-      });
+    const runDispatchRerunOnce = async (): Promise<void> => {
+      // Exactly one of `signalInvalidation` / `logWatchReady` must run on
+      // every exit path: a rejection escaping after the file-set commit (for
+      // example the frame-set wait timing out) would otherwise leave watch
+      // committed but never signalled — silently dead, with no error and no
+      // disconnect to show for it.
+      try {
+        // Independent: config push to the container vs. local entry collection.
+        const [, newProjectEntries] = await Promise.all([
+          refreshHostConfig(),
+          collectProjectEntries(),
+        ]);
+        const rerunPlan = planWatchRerun({
+          projectEntries: newProjectEntries,
+          previousTestFiles: watchState.lastTestFiles,
+          affectedTestFiles: drainPendingAffectedTestFiles(watchState),
+        });
 
-      commitWatchFileSetUpdate(
-        rerunPlan.fileSetUpdate,
-        watchState,
-        (deletedTestPaths) =>
-          context.updateReporterResultState([], [], deletedTestPaths),
-      );
+        commitWatchFileSetUpdate(
+          rerunPlan.fileSetUpdate,
+          watchState,
+          (deletedTestPaths) =>
+            context.updateReporterResultState([], [], deletedTestPaths),
+        );
 
-      if (rerunPlan.fileSetUpdate) {
-        currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
-        await rpcManager.notifyTestFileUpdate(currentTestFiles);
-        if (currentTestFiles.length > 0) {
-          await waitForRunnerFramesReady(
-            currentTestFiles.map((file) => file.testPath),
-          );
+        if (rerunPlan.fileSetUpdate) {
+          currentTestFiles = rerunPlan.fileSetUpdate.currentTestFiles;
+          const version = (watchState.headedFileSetVersion += 1);
+          // Must run before the container is told: `notifyTestFileUpdate` is
+          // what unmounts the dropped iframes, and their runs must already be
+          // settled (and out of the registry) when that happens.
+          runs.retainPaths(currentTestFiles.map((file) => file.testPath));
+          await rpcManager.notifyTestFileUpdate(currentTestFiles, version);
+          if (currentTestFiles.length > 0) {
+            await waitForFrameSet(version);
+          }
         }
-      }
 
-      logger.log(color.cyan(rerunPlan.decision.message));
-      if (rerunPlan.decision.kind === 'idle') {
+        logger.log(color.cyan(rerunPlan.decision.message));
+        if (rerunPlan.decision.kind === 'idle') {
+          logWatchReady();
+          return;
+        }
+
+        await watchSignals.signalInvalidation(
+          rerunPlan.decision.kind === 'empty'
+            ? []
+            : rerunPlan.decision.testPaths,
+        );
+      } catch (error) {
         logWatchReady();
-        return;
+        throw error;
       }
+    };
 
-      await watchSignals.signalInvalidation(
-        rerunPlan.decision.kind === 'empty' ? [] : rerunPlan.decision.testPaths,
-      );
-    });
+    // Serialized against itself: each per-project compiler fires its own
+    // `onAfterDevCompile`, and two interleaved planning passes would race on
+    // the drain-once affected set and the file-set commit.
+    const dispatchRerunQueue = createHeadedSerialTaskQueue();
+    watchSignals.setDispatchRerun(() =>
+      dispatchRerunQueue.enqueue(runDispatchRerunOnce),
+    );
 
     runUiRequestedRerun = async (file, testNamePattern) => {
       await refreshHostConfig();
-      await watchSignals.signalInvalidation([file.testPath], () => {
-        if (testNamePattern === undefined) {
-          pendingTestNamePatterns.delete(normalize(file.testPath));
-        } else {
-          pendingTestNamePatterns.set(
-            normalize(file.testPath),
-            testNamePattern,
-          );
-        }
-      });
-      await watchSignals.awaitSignalledCycle();
+      const { cycle } = await watchSignals.signalInvalidation(
+        [file.testPath],
+        () => {
+          if (testNamePattern === undefined) {
+            pendingTestNamePatterns.delete(normalize(file.testPath));
+          } else {
+            pendingTestNamePatterns.set(
+              normalize(file.testPath),
+              testNamePattern,
+            );
+          }
+        },
+      );
+      // Await the cycle THIS signal started — not whichever signal last wrote
+      // the shared slot, which a concurrent rebuild trigger can overwrite
+      // between the signal and the wait.
+      await cycle;
     };
 
     watchSession = createWatchSession(runScope);
@@ -639,6 +782,7 @@ export const createHeadedScheduler = async ({
 
   return {
     testTime,
+    rawCoverage,
     watchSession,
     // `closeContainerRuntime` is already `undefined` in watch mode: the watch
     // runtime outlives the cycle and is torn down through `executor.close()`.

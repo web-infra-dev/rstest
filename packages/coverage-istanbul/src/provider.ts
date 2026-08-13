@@ -28,6 +28,8 @@ declare global {
 }
 
 export class CoverageProvider implements RstestCoverageProvider {
+  readonly supportsDeferredCoverageFinalization = true;
+
   private coverageMap: CoverageMap | null = null;
   // Cache to avoid redundant readFile calls in generateCoverageForUntestedFiles and generateReports.
   private sourcemapUrlCache = new Map<string, string | undefined>();
@@ -65,6 +67,7 @@ export class CoverageProvider implements RstestCoverageProvider {
             environmentName,
             content,
             file,
+            this.options,
           );
           registerSourceMapURL(file, code, this.sourcemapUrlCache);
           return readInitialCoverage(code);

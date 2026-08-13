@@ -1,7 +1,7 @@
 import { defineConfig } from '@rstest/core';
 import { BROWSER_PORTS } from '../ports';
 
-// Browser-only run with the v8 coverage provider: unsupported, must hard-error.
+// Browser-only Chromium run with native V8 coverage.
 export default defineConfig({
   browser: {
     enabled: true,
@@ -10,11 +10,10 @@ export default defineConfig({
     port: BROWSER_PORTS['browser-coverage-config-warnings'],
   },
   include: ['tests/sum.test.ts'],
-  // No reportsDirectory: the run path hard-errors before coverage starts and
-  // the list path never collects, so nothing is ever written.
   coverage: {
     enabled: true,
     provider: 'v8',
     include: ['src/**/*.ts'],
+    reportsDirectory: './coverage-v8-browser-only',
   },
 });

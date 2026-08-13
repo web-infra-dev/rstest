@@ -2,11 +2,15 @@ import type {
   RstestContext,
   TestFileResult,
 } from '@rstest/core/internal/browser';
-import { color, logger } from '@rstest/core/internal/browser';
+import {
+  color,
+  createFileCleanupTimeoutResult,
+  FIXTURE_CLEANUP_TIMEOUT_MS,
+  logger,
+} from '@rstest/core/internal/browser';
 import { normalize } from 'pathe';
 import {
   type BrowserRuntime,
-  type BrowserProjectEntrySnapshot,
   drainPendingAffectedTestFiles,
   mapViewportByProject,
   serializeForInlineScript,
@@ -25,9 +29,13 @@ import type {
   BrowserClientMessage,
   BrowserHostConfig,
   BrowserProjectRuntime,
+  FileCleanupDispatchPayload,
   TestFileInfo,
 } from './protocol';
-import { DISPATCH_NAMESPACE_RUNNER } from './protocol';
+import {
+  DISPATCH_NAMESPACE_FILE_CLEANUP,
+  DISPATCH_NAMESPACE_RUNNER,
+} from './protocol';
 import type {
   BrowserProviderBrowser,
   BrowserProviderContext,
@@ -41,6 +49,7 @@ import {
 import { RunnerSessionRegistry } from './sessionRegistry';
 import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import type {
+  BrowserV8CoverageRuntime,
   BrowserWatchSession,
   DispatchPageResolver,
   SchedulerRunResult,
@@ -49,7 +58,11 @@ import type { WatchSignals } from './watchSignals';
 
 type HeadlessSchedulerContext = Pick<
   RstestContext,
-  'command' | 'snapshotManager' | 'stateManager' | 'updateReporterResultState'
+  | 'command'
+  | 'rootPath'
+  | 'snapshotManager'
+  | 'stateManager'
+  | 'updateReporterResultState'
 > & {
   normalizedConfig: Pick<RstestContext['normalizedConfig'], 'bail' | 'pool'>;
 };
@@ -59,6 +72,7 @@ type HeadlessSchedulerDeps = {
   browser: BrowserProviderBrowser;
   browserLaunchOptions: BrowserRuntime['browserLaunchOptions'];
   projectServers: BrowserRuntime['projectServers'];
+  v8Coverage?: BrowserV8CoverageRuntime;
   allTestFiles: TestFileInfo[];
   projectRuntimeConfigs: BrowserProjectRuntime[];
   hostOptions: BrowserHostConfig;
@@ -77,9 +91,11 @@ type HeadlessSchedulerDeps = {
   >;
   setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
   createWatchSession: (
-    execute: (testPaths: string[]) => Promise<void>,
+    execute: (testPaths: string[]) => Promise<unknown[]>,
   ) => BrowserWatchSession;
-  collectProjectEntries: () => Promise<BrowserProjectEntrySnapshot[]>;
+  collectProjectEntries: () => Promise<
+    Parameters<typeof planWatchRerun>[0]['projectEntries']
+  >;
   logWatchReady: () => void;
   destroyRuntime: () => Promise<void>;
 };
@@ -89,6 +105,7 @@ export const createHeadlessScheduler = async ({
   browser,
   browserLaunchOptions,
   projectServers,
+  v8Coverage,
   allTestFiles,
   projectRuntimeConfigs,
   hostOptions,
@@ -106,9 +123,13 @@ export const createHeadlessScheduler = async ({
   // Session-based scheduling path: lifecycle + session index + dispatch routing.
   type ActiveHeadlessRun = RunSession & {
     contexts: Set<BrowserProviderContext>;
+    coverageCollectors: Set<() => Promise<void>>;
   };
 
   const viewportByProject = mapViewportByProject(projectRuntimeConfigs);
+  const projectRootByName = new Map(
+    projectRuntimeConfigs.map((project) => [project.name, project.projectRoot]),
+  );
   const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
   const sessionRegistry = new RunnerSessionRegistry();
   setDispatchPageResolver((target) => ({
@@ -148,6 +169,18 @@ export const createHeadlessScheduler = async ({
     });
   };
 
+  const collectRunCoverage = async (run: ActiveHeadlessRun): Promise<void> => {
+    const results = await Promise.allSettled(
+      Array.from(run.coverageCollectors, (collect) => collect()),
+    );
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        const error = toError(result.reason);
+        await handleFatal({ message: error.message, stack: error.stack });
+      }
+    }
+  };
+
   const dispatchRouter = createDispatchRouter({
     isRunTokenStale: (runToken) => runLifecycle.isTokenStale(runToken),
     onStale: (request) => {
@@ -157,6 +190,29 @@ export const createHeadlessScheduler = async ({
         );
       }
     },
+  });
+  const fileCleanupHandlers = new Map<
+    string,
+    {
+      end: () => void;
+      start: (result?: TestFileResult) => void;
+    }
+  >();
+  dispatchRouter.register(DISPATCH_NAMESPACE_FILE_CLEANUP, async (request) => {
+    const sessionId = request.target?.sessionId;
+    if (!sessionId) {
+      throw new Error('File cleanup dispatch is missing a browser session.');
+    }
+    const handler = fileCleanupHandlers.get(sessionId);
+    if (!handler) {
+      return;
+    }
+    const payload = request.args as FileCleanupDispatchPayload;
+    if (request.method === 'start') {
+      handler.start(payload.result);
+    } else if (request.method === 'end') {
+      handler.end();
+    }
   });
 
   const dispatchRunnerMessage = async (
@@ -190,6 +246,7 @@ export const createHeadlessScheduler = async ({
   const runSingleFile = async (
     run: ActiveHeadlessRun,
     file: TestFileInfo,
+    rawCoverage: unknown[],
   ): Promise<void> => {
     if (run.cancelled || runLifecycle.isTokenStale(run.token)) {
       return;
@@ -204,8 +261,12 @@ export const createHeadlessScheduler = async ({
 
     let page: BrowserProviderPage | null = null;
     let sessionId: string | null = null;
+    let coverageCollection: Promise<void> | undefined;
     let settled = false;
     let resolveDone: (() => void) | null = null;
+    let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+    let fileCleanupFinished = false;
+    let provisionalResult: TestFileResult | undefined;
 
     const markDone = (): void => {
       if (!settled) {
@@ -232,8 +293,28 @@ export const createHeadlessScheduler = async ({
       crashDeferred.resolve(reason);
     };
 
+    const collectCoverage = async (): Promise<void> => {
+      if (!page || !v8Coverage) {
+        return;
+      }
+      if (!coverageCollection) {
+        coverageCollection = (async () => {
+          const coverage = await v8Coverage.take(
+            page,
+            projectRootByName.get(file.projectName) ?? context.rootPath,
+            file.projectName,
+          );
+          if (coverage) {
+            rawCoverage.push(coverage);
+          }
+        })();
+      }
+      await coverageCollection;
+    };
     try {
       page = await browserContext.newPage();
+      await v8Coverage?.start(page);
+      run.coverageCollectors.add(collectCoverage);
       page.on('crash', () =>
         onPageDead(`Browser page crashed while running ${file.testPath}.`),
       );
@@ -253,17 +334,73 @@ export const createHeadlessScheduler = async ({
       });
       sessionId = session.id;
 
+      const clearFileCleanupTimeout = (): void => {
+        if (cleanupTimer) {
+          clearTimeout(cleanupTimer);
+          cleanupTimer = undefined;
+        }
+      };
+      const finishFileCleanup = (): void => {
+        fileCleanupFinished = true;
+        clearFileCleanupTimeout();
+      };
+      fileCleanupHandlers.set(session.id, {
+        end: finishFileCleanup,
+        start: (result) => {
+          if (fileCleanupFinished) {
+            return;
+          }
+          provisionalResult = result;
+          clearFileCleanupTimeout();
+          cleanupTimer = setTimeout(() => {
+            void (async () => {
+              if (settled) {
+                return;
+              }
+              settled = true;
+              const message = `File fixture cleanup did not finish within ${FIXTURE_CLEANUP_TIMEOUT_MS}ms`;
+              try {
+                await collectCoverage();
+                await handleTestFileComplete(
+                  createFileCleanupTimeoutResult({
+                    message,
+                    projectName: file.projectName,
+                    result: provisionalResult,
+                    testPath: file.testPath,
+                  }),
+                );
+              } catch (error) {
+                const formatted = toError(error);
+                await handleFatal({
+                  message: formatted.message,
+                  stack: formatted.stack,
+                });
+                await collectRunCoverage(run);
+                await cancelRun(run, false);
+              } finally {
+                resolveDone?.();
+              }
+            })();
+          }, FIXTURE_CLEANUP_TIMEOUT_MS);
+        },
+      });
+
       await attachHeadlessRunnerTransport(page, {
-        onDispatchMessage: async (message) => {
+        onDispatchMessage: async (envelope) => {
+          const message = envelope.message;
           try {
+            if (settled) {
+              return;
+            }
+            if (message.type === 'file-complete' || message.type === 'fatal') {
+              await collectCoverage();
+            }
             await dispatchRunnerMessage(run, file, session.id, message);
-            if (
-              message.type === 'file-complete' ||
-              message.type === 'complete'
-            ) {
+            if (message.type === 'file-complete') {
               markDone();
             } else if (message.type === 'fatal') {
               markDone();
+              await collectRunCoverage(run);
               await cancelRun(run, false);
             }
           } catch (error) {
@@ -273,6 +410,7 @@ export const createHeadlessScheduler = async ({
               stack: formatted.stack,
             });
             markDone();
+            await collectRunCoverage(run);
             await cancelRun(run, false);
           }
         },
@@ -334,11 +472,13 @@ export const createHeadlessScheduler = async ({
         runLifecycle.isTokenActive(run.token) &&
         !run.cancelled
       ) {
+        await collectRunCoverage(run);
         await handleFatal({ message: state.reason });
         await cancelRun(run, false);
       }
     } catch (error) {
       if (runLifecycle.isTokenActive(run.token) && !run.cancelled) {
+        await collectRunCoverage(run);
         const formatted = toError(error);
         await handleFatal({
           message: formatted.message,
@@ -347,6 +487,13 @@ export const createHeadlessScheduler = async ({
         await cancelRun(run, false);
       }
     } finally {
+      if (cleanupTimer) {
+        clearTimeout(cleanupTimer);
+      }
+      if (sessionId) {
+        fileCleanupHandlers.delete(sessionId);
+      }
+      run.coverageCollectors.delete(collectCoverage);
       // A superseded run can hold a renderer that will never answer again:
       // its test file may have been deleted mid-flight, leaving the page
       // waiting on a chunk the bundler will never produce, and closing such a
@@ -391,9 +538,12 @@ export const createHeadlessScheduler = async ({
     results: [],
   });
 
-  const runFilesWithPool = async (files: TestFileInfo[]): Promise<void> => {
+  const runFilesWithPool = async (
+    files: TestFileInfo[],
+  ): Promise<unknown[]> => {
+    const rawCoverage: unknown[] = [];
     if (files.length === 0) {
-      return;
+      return rawCoverage;
     }
 
     const previous = runLifecycle.activeSession;
@@ -404,6 +554,7 @@ export const createHeadlessScheduler = async ({
     const run = runLifecycle.createSession((token) => ({
       ...createRunSession(token),
       contexts: new Set<BrowserProviderContext>(),
+      coverageCollectors: new Set<() => Promise<void>>(),
     }));
 
     const queue = [...files];
@@ -435,7 +586,7 @@ export const createHeadlessScheduler = async ({
         if (!next) {
           return;
         }
-        await runSingleFile(run, next);
+        await runSingleFile(run, next, rawCoverage);
       }
     };
 
@@ -448,10 +599,11 @@ export const createHeadlessScheduler = async ({
 
     await run.done;
     runLifecycle.clearIfActive(run);
+    return rawCoverage;
   };
 
   const testStart = Date.now();
-  await runFilesWithPool(allTestFiles);
+  const rawCoverage = await runFilesWithPool(allTestFiles);
   const testTime = Date.now() - testStart;
 
   let watchSession: BrowserWatchSession | undefined;
@@ -460,9 +612,9 @@ export const createHeadlessScheduler = async ({
     // trigger may have rebuilt the file set without one of these files — so a
     // path that no longer resolves is skipped rather than failing the cycle
     // beside its still-valid siblings.
-    const runScope = async (testPaths: string[]): Promise<void> => {
+    const runScope = async (testPaths: string[]): Promise<unknown[]> => {
       const pathSet = new Set(testPaths.map((testPath) => normalize(testPath)));
-      await runFilesWithPool(
+      return runFilesWithPool(
         watchState.lastTestFiles.filter((file) => pathSet.has(file.testPath)),
       );
     };
@@ -526,6 +678,7 @@ export const createHeadlessScheduler = async ({
 
   return {
     testTime,
+    rawCoverage,
     watchSession,
     // `closeHeadlessRuntime` is already `undefined` in watch mode: the watch
     // runtime outlives the cycle and is torn down through `executor.close()`.

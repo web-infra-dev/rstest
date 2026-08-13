@@ -26,6 +26,38 @@ describe('transformCoverage', () => {
     expect(tsxResult.map).toBeTruthy();
     expect(jsxResult.map).toBeTruthy();
   });
+
+  it('preserves explicit JSX parser settings for JavaScript files', async () => {
+    const environmentName = 'explicit-jsx';
+    const rsbuild = await createRsbuild({
+      config: {
+        environments: {
+          [environmentName]: {
+            tools: {
+              swc: {
+                jsc: {
+                  parser: {
+                    syntax: 'ecmascript',
+                    jsx: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        plugins: [pluginCoverage()],
+      },
+    });
+    await rsbuild.initConfigs();
+
+    const result = await transformCoverage(
+      environmentName,
+      'export const element = <div />;',
+      'fixture.js',
+    );
+
+    expect(result.map).toBeTruthy();
+  });
 });
 
 describe('coverage-v8 plugin', () => {

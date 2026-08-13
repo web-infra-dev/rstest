@@ -32,6 +32,7 @@ import {
 } from '@rstest/core';
 import type {
   FixtureLifecycle,
+  FileFixtureOptions,
   Fixtures,
   TestAPIs,
   TestForFn,
@@ -1160,6 +1161,22 @@ type TestForCallback<ExtraContext> = (
 type RstestTestAPI<ExtraContext> =
   RstestTest<ExtraContext> | TestAPIs<ExtraContext>;
 
+type TestPropertyPolicy = 'chain' | 'condition' | 'each' | 'extend' | 'for';
+
+const TEST_PROPERTY_POLICIES: Partial<Record<string, TestPropertyPolicy>> = {
+  concurrent: 'chain',
+  each: 'each',
+  extend: 'extend',
+  fails: 'chain',
+  for: 'for',
+  only: 'chain',
+  runIf: 'condition',
+  sequential: 'chain',
+  skip: 'chain',
+  skipIf: 'condition',
+  todo: 'chain',
+} satisfies Record<keyof TestAPIs, TestPropertyPolicy>;
+
 type CallableTest = (
   description: string,
   arg2?: unknown,
@@ -1504,35 +1521,56 @@ type PlaywrightNamedFixture<Value, Context> =
   | (Value extends RuntimeFunction ? never : Value)
   | ((context: Context, lifecycle: FixtureLifecycle) => Value | Promise<Value>);
 
-type PlaywrightExtend<ExtraContext> = {
+type PlaywrightTestFixtureName<
+  Name extends string,
+  FileFixtures,
+> = Name extends keyof FileFixtures ? never : NamedFixtureName<Name>;
+
+type PlaywrightFileFixtureName<
+  Name extends string,
+  TestFixtures,
+  FileFixtures,
+> = Name extends keyof TestFixtures | keyof FileFixtures
+  ? never
+  : NamedFixtureName<Name>;
+
+type PlaywrightExtend<TestFixtures, FileFixtures> = {
   <T extends Record<string, any> = object>(
-    fixtures: PlaywrightFixtures<T, ExtraContext>,
-  ): PlaywrightTest<MergeContext<ExtraContext, T>>;
+    fixtures: PlaywrightFixtures<T, TestFixtures & FileFixtures> &
+      Partial<Record<keyof FileFixtures, never>>,
+  ): PlaywrightTest<MergeContext<TestFixtures, T>, FileFixtures>;
   <Name extends string, Value>(
-    name: NamedFixtureName<Name>,
+    name: PlaywrightTestFixtureName<Name, FileFixtures>,
     fixture: PlaywrightNamedFixture<
       Value,
-      Omit<TestContext & ExtraContext, Name>
+      Omit<TestContext & TestFixtures & FileFixtures, Name>
     >,
-  ): PlaywrightTest<MergeNamedContext<ExtraContext, Name, Value>>;
+  ): PlaywrightTest<MergeNamedContext<TestFixtures, Name, Value>, FileFixtures>;
+  <Name extends string, Value>(
+    name: PlaywrightFileFixtureName<Name, TestFixtures, FileFixtures>,
+    options: FileFixtureOptions,
+    fixture: PlaywrightNamedFixture<Value, Omit<FileFixtures, Name>>,
+  ): PlaywrightTest<TestFixtures, MergeNamedContext<FileFixtures, Name, Value>>;
 };
 
-export type PlaywrightTest<ExtraContext = PlaywrightFixture> =
-  PlaywrightTestBase<ExtraContext> & {
-    extend: PlaywrightExtend<ExtraContext>;
-    afterAll: RstestAfterAll;
-    afterEach: <HookContext = ExtraContext>(
-      fn: TestCallback<HookContext>,
-      timeout?: number,
-    ) => void;
-    beforeAll: RstestBeforeAll;
-    beforeEach: <HookContext = ExtraContext>(
-      fn: BeforeEachCallback<HookContext>,
-      timeout?: number,
-    ) => void;
-    describe: typeof rstestDescribe;
-    fail: PlaywrightTestBase<ExtraContext>;
-  };
+export type PlaywrightTest<
+  TestFixtures = PlaywrightFixture,
+  FileFixtures = object,
+> = PlaywrightTestBase<TestFixtures & FileFixtures> & {
+  extend: PlaywrightExtend<TestFixtures, FileFixtures>;
+  afterAll: RstestAfterAll;
+  afterEach: <HookContext = TestFixtures & FileFixtures>(
+    fn: TestCallback<HookContext>,
+    timeout?: number,
+  ) => void;
+  beforeAll: RstestBeforeAll;
+  beforeEach: <HookContext = TestFixtures & FileFixtures>(
+    fn: BeforeEachCallback<HookContext>,
+    timeout?: number,
+  ) => void;
+  describe: typeof rstestDescribe;
+  fail: PlaywrightTestBase<TestFixtures & FileFixtures>;
+};
 
 const createPlaywrightTest = <ExtraContext>(
   rstestTest: RstestTestAPI<ExtraContext>,
@@ -1651,15 +1689,22 @@ const createPlaywrightTest = <ExtraContext>(
       if (key === 'describe') {
         return rstestDescribe;
       }
-      if (key === 'extend') {
+      const propertyPolicy =
+        typeof key === 'string' ? TEST_PROPERTY_POLICIES[key] : undefined;
+
+      if (propertyPolicy === 'extend') {
         const extend =
           'extend' in target ? target.extend.bind(target) : undefined;
 
         return extend
           ? (...args: unknown[]) => {
               const wrappedArgs =
-                typeof args[0] === 'string' && args.length === 2
-                  ? [args[0], wrapNamedFixture(args[1])]
+                typeof args[0] === 'string' &&
+                (args.length === 2 || args.length === 3)
+                  ? [
+                      ...args.slice(0, -1),
+                      wrapNamedFixture(args[args.length - 1]),
+                    ]
                   : typeof args[0] !== 'string' && args.length === 1
                     ? [
                         wrapFixtures(
@@ -1687,20 +1732,13 @@ const createPlaywrightTest = <ExtraContext>(
             )
           : fails;
       }
-      if (
-        key === 'fails' ||
-        key === 'only' ||
-        key === 'skip' ||
-        key === 'todo' ||
-        key === 'concurrent' ||
-        key === 'sequential'
-      ) {
+      if (propertyPolicy === 'chain') {
         const value = Reflect.get(target, key, receiver);
         return typeof value === 'function'
           ? createPlaywrightTest(value as RstestTestAPI<ExtraContext>)
           : value;
       }
-      if (key === 'runIf' || key === 'skipIf') {
+      if (propertyPolicy === 'condition') {
         const value = Reflect.get(target, key, receiver);
         return typeof value === 'function'
           ? (condition: boolean) =>
@@ -1709,14 +1747,14 @@ const createPlaywrightTest = <ExtraContext>(
               )
           : value;
       }
-      if (key === 'each') {
+      if (propertyPolicy === 'each') {
         const value = Reflect.get(target, key, receiver);
         return typeof value === 'function'
           ? (...args: Parameters<RstestTest<ExtraContext>['each']>) =>
               wrapEachTestCall(value(...args))
           : value;
       }
-      if (key === 'for') {
+      if (propertyPolicy === 'for') {
         const value = Reflect.get(target, key, receiver);
         return typeof value === 'function'
           ? (...args: Parameters<TestForFn<ExtraContext>>) =>

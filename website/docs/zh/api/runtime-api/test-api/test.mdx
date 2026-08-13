@@ -330,7 +330,7 @@ test.skipIf(process.platform === 'win32')('skip on Windows', () => {
 
 ## test.extend
 
-- **类型：** `test.extend(fixtures: Fixtures) | test.extend(name, fixture)`
+- **类型：** `test.extend(fixtures: Fixtures) | test.extend(name, fixture) | test.extend(name, { scope: 'file' }, fixture)`
 
 通过自定义 fixture 扩展测试上下文，返回一个**新的** test API。原始 `test` 不会被修改，你可以同时拥有多个各自独立的扩展版本。
 
@@ -392,7 +392,7 @@ const testWithDb = test.extend({
 
 <ApiMeta addedVersion="0.11.7" />
 
-具名 fixture 写法会直接返回 fixture 值，不需要调用 `use`。它的第二个参数提供 `onCleanup`，用于注册一个在测试及其 per-test hooks 结束后运行的 callback。fixture 函数和 cleanup callback 都可以是异步函数。
+具名 fixture 写法会直接返回 fixture 值，不需要调用 `use`。它的第二个参数提供 `onCleanup`，用于为 fixture 注册一个 cleanup callback。fixture 函数和 cleanup callback 都可以是异步函数。
 
 ```ts
 import { test } from '@rstest/core';
@@ -406,11 +406,35 @@ const apiTest = test
   });
 ```
 
-具名 fixture 函数属于 test scope：Rstest 会为每次 test attempt 执行这些函数，并在开始下一次 attempt 前执行 cleanup。普通值会在不同 attempt 之间复用；如果可变状态需要在每次 attempt 之间隔离，请使用 fixture 函数。
+双参数的具名 fixture 写法属于 test scope：Rstest 会为每次 test attempt 执行 fixture 函数，并在测试及其 per-test hooks 结束后执行 cleanup。普通值会在不同 attempt 之间复用；如果可变状态需要在每次 attempt 之间隔离，请使用 fixture 函数。
 
 Fixture 名称必须是静态可知的 ASCII JavaScript identifier，TypeScript 才能准确暴露一个新的 context 字段。此 overload 不接受类型为 `string` 的值、`` `slot${string}` `` 这类 template literal pattern、`base-url` 这类需要带引号解构的名称，以及 test context 的保留字段。它支持与 Function 属性重名的名称，例如 `name` 和 `length`。
 
 直接传入的函数或 class 都会被视为 fixture 函数，因为它们在 JavaScript 运行时都是函数。若要把函数或 class 本身作为 fixture 值，请通过 fixture 函数返回它，例如 `.extend('predicate', () => predicate)` 或 `.extend('Service', () => Service)`。需要请求其他 fixture 或 `TestContext` 字段时，请直接在第一个参数中使用对象解构。
+
+### File scope 具名 fixtures
+
+<ApiMeta addedVersion="0.11.7" />
+
+传入 `{ scope: 'file' }` 可以为当前测试文件惰性创建一个 fixture 实例。所有请求它的测试、retry、repeat 和并发测试都会共享该实例。它的 cleanup 会在所有测试和 `afterAll` hooks 结束后执行。依赖项按依赖顺序初始化，并按反序 cleanup。
+
+```ts
+import { test } from '@rstest/core';
+
+const apiTest = test
+  .extend('server', { scope: 'file' }, async (_context, { onCleanup }) => {
+    const server = await startServer();
+    onCleanup(() => server.close());
+    return server;
+  })
+  .extend('client', { scope: 'file' }, ({ server }) => {
+    return createClient(server.url);
+  });
+```
+
+File scope fixture 必须在测试文件顶层声明。它只能依赖链中更早声明的 file scope fixture，无法访问 test scope fixture 或 `TestContext`。后续 `.extend()` 不能覆盖 file scope fixture。Test scope fixture 可以依赖 file scope fixture。
+
+Fixture setup 受首次请求它的测试或 hook timeout 限制。File cleanup 由 Node 或 browser host 提供保护，因此永不结束的 cleanup 会让文件失败，而不会无限阻塞整个测试运行。
 
 ### 普通值 fixture
 

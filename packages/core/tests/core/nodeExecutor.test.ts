@@ -9,7 +9,9 @@ describe('createCoverageResourceLoaders', () => {
     const windowsAlias = 'c:\\repo\\dist\\other.js';
     const requestedAssets = [privateAlias, windowsAlias];
     const getAssetFiles = rs.fn(async (names: string[]) =>
-      Object.fromEntries(names.map((name) => [name, `source:${name}`])),
+      Object.fromEntries(
+        names.map((name) => [name, Buffer.from(`source:${name}`)]),
+      ),
     );
     const getSourceMaps = rs.fn(async (names: string[]) =>
       Object.fromEntries(names.map((name) => [name, `map:${name}`])),

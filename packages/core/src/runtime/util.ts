@@ -6,14 +6,18 @@ import type { FormattedError, Test, TestOptions } from '../types';
  * - `(name, fn, timeout?)` — `arg2` is the test fn, `arg3` an optional numeric timeout.
  * - `(name, options, fn?)` — `arg2` is a `TestOptions` object, `arg3` the test fn.
  *
- * In the function-first shape `arg3` is only honored as a numeric timeout; an options
- * object is no longer accepted there (it is a type error and ignored at runtime).
+ * In the function-first shape `arg3` is only accepted as a numeric timeout.
  */
 export const resolveTestArgs = <Fn extends (...args: any[]) => any>(
   arg2?: Fn | TestOptions,
   arg3?: Fn | number,
 ): { fn?: Fn; options: TestOptions } => {
   if (typeof arg2 === 'function') {
+    if (arg3 !== undefined && typeof arg3 !== 'number') {
+      throw new Error(
+        'The third argument must be a number when the second argument is a function. Use (name, fn, timeout) or (name, options, fn).',
+      );
+    }
     return {
       fn: arg2,
       options: typeof arg3 === 'number' ? { timeout: arg3 } : {},

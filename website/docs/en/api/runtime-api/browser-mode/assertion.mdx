@@ -51,7 +51,8 @@ The assertion timeout is determined by the following priority:
 
 1. **Per-assertion timeout**: The `timeout` parameter passed directly to the matcher, highest priority
 2. **Global `testTimeout` configuration**: From `testTimeout` in `rstest.config.ts` (default 5000ms)
-3. **RPC fallback timeout**: 30000ms (serves only as a communication-layer safety net, usually not reached)
+
+Assertion timeout is independent from the browser RPC transport timeout. During test execution, browser and snapshot RPC requests do not add another timeout. Framework setup and file-cleanup RPCs use a separate 30-second watchdog.
 
 ```ts
 // Uses global testTimeout (default 5000ms)
