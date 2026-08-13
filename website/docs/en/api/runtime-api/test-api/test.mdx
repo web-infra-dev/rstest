@@ -438,7 +438,7 @@ Fixture setup is bounded by the timeout of the test or hook that requests it. Fi
 
 ### Worker-scoped named fixtures
 
-<ApiMeta addedVersion="0.11.8" />
+<ApiMeta addedVersion="0.11.9" />
 
 Pass `{ scope: 'worker' }` to lazily create one fixture instance for the current test worker. The instance is shared by files that run on the same worker and reuse the same extended test API/fixture definition, and is cleaned up when that worker is retired. Worker-scoped fixtures can depend only on worker-scoped fixtures declared earlier in the chain; they cannot access `TestContext` or file-scoped fixtures. A file-scoped fixture may depend on a worker-scoped fixture.
 
