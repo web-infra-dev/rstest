@@ -346,6 +346,8 @@ export const createPool = async ({
    * Watch mode keeps workers alive across cycles and owns this at shutdown.
    */
   cleanupWorkerFixtures: () => Promise<Error[]>;
+  /** Drain errors from reusable workers retired during a watch cycle. */
+  drainWorkerStopErrors: () => Promise<Error[]>;
   close: () => Promise<void>;
 }> => {
   // Propagate parent execArgv to workers, except flags known to cause issues
@@ -616,6 +618,7 @@ export const createPool = async ({
       );
     },
     cleanupWorkerFixtures: () => pool.cleanupWorkerFixtures(),
+    drainWorkerStopErrors: () => pool.drainWorkerStopErrors(),
     close: () => pool.close(),
   };
 };

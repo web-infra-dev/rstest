@@ -16,6 +16,7 @@
  *                             stdio, then send result and exit normally.
  *                             Tests that `exit` (not `close`) drives the
  *                             pool lifecycle.
+ *   - 'cleanup-error'      → fail worker-scoped cleanup after the run.
  *
  * Auto-detects whether it's running under `child_process.fork` (forks pool)
  * or `worker_threads.Worker` (threads pool) and routes messages over the
@@ -64,6 +65,7 @@ const workerIdentity = isThreadWorker ? threadId : process.pid;
 let assignedWorkerId = null;
 
 let runCount = 0;
+let cleanupShouldFail = false;
 
 // This worker entry runs as a real .mjs and cannot import core .ts source, so
 // it keeps a literal copy. MUST match getFileTaskId in
@@ -88,6 +90,7 @@ const makeRunResult = (request, extra) => ({
 
 const handleRun = (request) => {
   const mode = request.options?.__testMode;
+  cleanupShouldFail = mode === 'cleanup-error';
 
   const finish = (extra) => {
     send({
@@ -215,7 +218,14 @@ onHostMessage((message) => {
       send({ type: 'started', pid: workerIdentity });
       break;
     case 'cleanup':
-      send({ type: 'cleanupFinished' });
+      send(
+        cleanupShouldFail
+          ? {
+              type: 'cleanupFinished',
+              error: { message: 'intentional worker cleanup failure' },
+            }
+          : { type: 'cleanupFinished' },
+      );
       break;
     case 'run':
       handleRun(request);

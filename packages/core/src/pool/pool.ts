@@ -69,8 +69,7 @@ export class Pool {
     // environment-mismatched worker. Its stop path owns worker fixture
     // cleanup, so drain those promises before finalizing the run and preserve
     // any errors they reported.
-    await Promise.all([...this.stoppingPromises]);
-    const errors = this.workerStopErrors.splice(0);
+    const errors = await this.drainWorkerStopErrors();
     const idleErrors = await Promise.all(
       this.idleRunners.map(async (runner) => {
         try {
@@ -85,6 +84,11 @@ export class Pool {
       ...idleErrors.filter((error): error is Error => error !== undefined),
     );
     return errors;
+  }
+
+  async drainWorkerStopErrors(): Promise<Error[]> {
+    await Promise.all([...this.stoppingPromises]);
+    return this.workerStopErrors.splice(0);
   }
 
   async collectTests(task: PoolTask): Promise<CollectTaskResult> {

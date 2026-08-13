@@ -507,7 +507,9 @@ export function createNodeExecutor(
 
     const workerCleanupErrors = !isWatchMode
       ? await pool.cleanupWorkerFixtures()
-      : [];
+      : context.normalizedConfig.isolate === false
+        ? await pool.drainWorkerStopErrors()
+        : [];
 
     await writeBundleCoverageResults(
       rootPath,

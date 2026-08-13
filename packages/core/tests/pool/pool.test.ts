@@ -268,6 +268,20 @@ describe('Pool - isolate', () => {
       await pool.close();
     }
   });
+
+  it('should drain cleanup errors from retired reusable workers', async () => {
+    const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 0 }));
+    try {
+      await pool.runTest(createTask('run', { __testMode: 'cleanup-error' }));
+      await expect(pool.drainWorkerStopErrors()).resolves.toEqual([
+        expect.objectContaining({
+          message: 'intentional worker cleanup failure',
+        }),
+      ]);
+    } finally {
+      await pool.close();
+    }
+  });
 });
 
 // ── memory gate integration ────────────────────────────────────────────────
