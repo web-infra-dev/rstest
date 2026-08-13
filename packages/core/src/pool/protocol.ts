@@ -134,11 +134,12 @@ export const isRpcEnvelope = (message: unknown): message is RpcEnvelope => {
 
 export const serializeError = (error: unknown): SerializedError => {
   if (error instanceof Error) {
+    const cause = (error as Error & { cause?: unknown }).cause;
     return {
       name: error.name,
       message: error.message,
       stack: error.stack,
-      cause: (error as Error & { cause?: unknown }).cause,
+      cause: cause === undefined ? undefined : String(cause),
     };
   }
   if (typeof error === 'string') {
