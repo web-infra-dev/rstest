@@ -1,5 +1,6 @@
 import { defineConfig } from '@rslib/core';
 import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
+import { rslibRspackConfig } from '../../scripts/rslibConfig';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
 export default defineConfig({
@@ -24,6 +25,7 @@ export default defineConfig({
   ],
   tools: {
     rspack: {
+      ...rslibRspackConfig,
       plugins: [rsdoctorCIPlugin()].filter(Boolean),
     },
   },
