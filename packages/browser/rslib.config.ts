@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { defineConfig, rspack } from '@rslib/core';
 import { dirname, resolve } from 'pathe';
 import { publishCheckPlugins } from '../../scripts/publishCheckPlugins';
+import { rslibRspackConfig } from '../../scripts/rslibConfig';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
 const require = createRequire(import.meta.url);
@@ -89,5 +90,8 @@ export default defineConfig({
     define: {
       RSTEST_VERSION: JSON.stringify(require('./package.json').version),
     },
+  },
+  tools: {
+    rspack: rslibRspackConfig,
   },
 });
