@@ -273,6 +273,7 @@ export const createHeadlessScheduler = async ({
     }
 
     const file = files[0]!;
+    let activeFile = file;
     const viewport = viewportByProject.get(file.projectName);
     const browserContext = await browser.newContext({
       providerOptions: browserLaunchOptions.providerOptions,
@@ -387,11 +388,13 @@ export const createHeadlessScheduler = async ({
       await v8Coverage?.start(page);
       run.coverageCollectors.add(collectCoverage);
       page.on('crash', () =>
-        onPageDead(`Browser page crashed while running ${file.testPath}.`),
+        onPageDead(
+          `Browser page crashed while running ${activeFile.testPath}.`,
+        ),
       );
       page.on('close', () =>
         onPageDead(
-          `Browser page closed unexpectedly while running ${file.testPath}.`,
+          `Browser page closed unexpectedly while running ${activeFile.testPath}.`,
         ),
       );
 
@@ -495,6 +498,13 @@ export const createHeadlessScheduler = async ({
               const message = envelope.message;
               if (settled) {
                 return;
+              }
+              if (message.type === 'file-start') {
+                const startedPath = normalize(message.payload.testPath);
+                activeFile =
+                  files.find(
+                    (candidate) => candidate.testPath === startedPath,
+                  ) ?? activeFile;
               }
               if (message.type === 'fatal') {
                 await collectCoverage();
