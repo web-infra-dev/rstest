@@ -1,6 +1,6 @@
 {
   "name": "@rstest/core",
-  "version": "0.11.9",
+  "version": "0.11.8",
   "description": "The Rsbuild-based test tool.",
   "keywords": [
     "rstest",
