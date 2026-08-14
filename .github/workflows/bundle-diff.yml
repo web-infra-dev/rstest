@@ -8,7 +8,7 @@ on:
       - '**/*.mdx'
 
   push:
-    branches: [main]
+    branches: [main, agent/repro-1718-base]
     paths-ignore:
       - '**/*.md'
       - '**/*.mdx'
@@ -62,5 +62,5 @@ jobs:
           AI_TOKEN: ${{ secrets.AI_TOKEN }}
         with:
           file_path: 'packages/*/.rsdoctor/**/rsdoctor-data.json'
-          target_branch: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || 'main' }}
+          target_branch: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || github.ref_name }}
           enable_ai_analysis: true
