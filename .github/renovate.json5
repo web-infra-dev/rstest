@@ -21,19 +21,6 @@
       groupSlug: 'babel',
     },
     {
-      groupName: 'rsbuild',
-      matchPackageNames: ['@rsbuild/**'],
-      groupSlug: 'rsbuild',
-      extends: ['schedule:daily'],
-      allowedVersions: '!/-canary-/',
-    },
-    {
-      groupName: 'rslib',
-      matchPackageNames: ['@rslib/**'],
-      groupSlug: 'rslib',
-      extends: ['schedule:daily'],
-    },
-    {
       groupName: 'rspress',
       matchPackageNames: ['@rspress/**'],
       groupSlug: 'rspress',
@@ -54,6 +41,22 @@
       groupSlug: 'all-non-major',
       matchPackageNames: ['**'],
       matchUpdateTypes: ['patch', 'minor'],
+    },
+    {
+      groupName: 'rslib',
+      matchPackageNames: ['@rslib/**'],
+      groupSlug: 'rslib',
+      extends: ['schedule:daily'],
+    },
+    {
+      groupName: 'rsbuild and rspack',
+      matchPackageNames: ['@rsbuild/**', '@rspack/**'],
+      groupSlug: 'rsbuild-rspack',
+      extends: ['schedule:daily'],
+    },
+    {
+      matchPackageNames: ['@rsbuild/**'],
+      allowedVersions: '!/-canary-/',
     },
     {
       groupName: 'rslint',
