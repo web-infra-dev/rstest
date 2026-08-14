@@ -9,7 +9,7 @@
   },
   "devDependencies": {
     "@module-federation/rsbuild-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@1152301",
-    "@rsbuild/core": "~2.1.11",
+    "@rsbuild/core": "~2.1.13",
     "serve": "14.2.6"
   }
 }
