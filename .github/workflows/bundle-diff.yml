@@ -64,3 +64,4 @@ jobs:
           file_path: 'packages/*/.rsdoctor/**/rsdoctor-data.json'
           target_branch: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || github.ref_name }}
           enable_ai_analysis: true
+          ai_model: qwen-plus
