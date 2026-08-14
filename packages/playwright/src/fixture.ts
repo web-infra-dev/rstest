@@ -33,6 +33,7 @@ import {
 import type {
   FixtureLifecycle,
   FileFixtureOptions,
+  WorkerFixtureOptions,
   Fixtures,
   TestAPIs,
   TestForFn,
@@ -1524,52 +1525,94 @@ type PlaywrightNamedFixture<Value, Context> =
 type PlaywrightTestFixtureName<
   Name extends string,
   FileFixtures,
-> = Name extends keyof FileFixtures ? never : NamedFixtureName<Name>;
-
-type PlaywrightFileFixtureName<
-  Name extends string,
-  TestFixtures,
-  FileFixtures,
-> = Name extends keyof TestFixtures | keyof FileFixtures
+  WorkerFixtures,
+> = Name extends keyof FileFixtures | keyof WorkerFixtures
   ? never
   : NamedFixtureName<Name>;
 
-type PlaywrightExtend<TestFixtures, FileFixtures> = {
+type PlaywrightScopedFixtureName<
+  Name extends string,
+  TestFixtures,
+  FileFixtures,
+  WorkerFixtures,
+> = Name extends keyof TestFixtures | keyof FileFixtures | keyof WorkerFixtures
+  ? never
+  : NamedFixtureName<Name>;
+
+type PlaywrightExtend<TestFixtures, FileFixtures, WorkerFixtures> = {
   <T extends Record<string, any> = object>(
-    fixtures: PlaywrightFixtures<T, TestFixtures & FileFixtures> &
-      Partial<Record<keyof FileFixtures, never>>,
-  ): PlaywrightTest<MergeContext<TestFixtures, T>, FileFixtures>;
+    fixtures: PlaywrightFixtures<
+      T,
+      TestFixtures & FileFixtures & WorkerFixtures
+    > &
+      Partial<Record<keyof FileFixtures | keyof WorkerFixtures, never>>,
+  ): PlaywrightTest<
+    MergeContext<TestFixtures, T>,
+    FileFixtures,
+    WorkerFixtures
+  >;
   <Name extends string, Value>(
-    name: PlaywrightTestFixtureName<Name, FileFixtures>,
+    name: PlaywrightTestFixtureName<Name, FileFixtures, WorkerFixtures>,
     fixture: PlaywrightNamedFixture<
       Value,
-      Omit<TestContext & TestFixtures & FileFixtures, Name>
+      Omit<TestContext & TestFixtures & FileFixtures & WorkerFixtures, Name>
     >,
-  ): PlaywrightTest<MergeNamedContext<TestFixtures, Name, Value>, FileFixtures>;
+  ): PlaywrightTest<
+    MergeNamedContext<TestFixtures, Name, Value>,
+    FileFixtures,
+    WorkerFixtures
+  >;
   <Name extends string, Value>(
-    name: PlaywrightFileFixtureName<Name, TestFixtures, FileFixtures>,
+    name: PlaywrightScopedFixtureName<
+      Name,
+      TestFixtures,
+      FileFixtures,
+      WorkerFixtures
+    >,
+    options: WorkerFixtureOptions,
+    fixture: PlaywrightNamedFixture<Value, Omit<WorkerFixtures, Name>>,
+  ): PlaywrightTest<
+    TestFixtures,
+    FileFixtures,
+    MergeNamedContext<WorkerFixtures, Name, Value>
+  >;
+  <Name extends string, Value>(
+    name: PlaywrightScopedFixtureName<
+      Name,
+      TestFixtures,
+      FileFixtures,
+      WorkerFixtures
+    >,
     options: FileFixtureOptions,
-    fixture: PlaywrightNamedFixture<Value, Omit<FileFixtures, Name>>,
-  ): PlaywrightTest<TestFixtures, MergeNamedContext<FileFixtures, Name, Value>>;
+    fixture: PlaywrightNamedFixture<
+      Value,
+      Omit<FileFixtures & WorkerFixtures, Name>
+    >,
+  ): PlaywrightTest<
+    TestFixtures,
+    MergeNamedContext<FileFixtures, Name, Value>,
+    WorkerFixtures
+  >;
 };
 
 export type PlaywrightTest<
   TestFixtures = PlaywrightFixture,
   FileFixtures = object,
-> = PlaywrightTestBase<TestFixtures & FileFixtures> & {
-  extend: PlaywrightExtend<TestFixtures, FileFixtures>;
+  WorkerFixtures = object,
+> = PlaywrightTestBase<TestFixtures & FileFixtures & WorkerFixtures> & {
+  extend: PlaywrightExtend<TestFixtures, FileFixtures, WorkerFixtures>;
   afterAll: RstestAfterAll;
-  afterEach: <HookContext = TestFixtures & FileFixtures>(
+  afterEach: <HookContext = TestFixtures & FileFixtures & WorkerFixtures>(
     fn: TestCallback<HookContext>,
     timeout?: number,
   ) => void;
   beforeAll: RstestBeforeAll;
-  beforeEach: <HookContext = TestFixtures & FileFixtures>(
+  beforeEach: <HookContext = TestFixtures & FileFixtures & WorkerFixtures>(
     fn: BeforeEachCallback<HookContext>,
     timeout?: number,
   ) => void;
   describe: typeof rstestDescribe;
-  fail: PlaywrightTestBase<TestFixtures & FileFixtures>;
+  fail: PlaywrightTestBase<TestFixtures & FileFixtures & WorkerFixtures>;
 };
 
 const createPlaywrightTest = <ExtraContext>(

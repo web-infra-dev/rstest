@@ -12,6 +12,7 @@ import { createRunner, runnerAPI } from '../runner';
 import type { TaskContext } from '../worker/taskContext';
 import { assert, createFileExpect, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
+import type { RootSuiteListeners } from '../runner/runtime';
 
 /**
  * Live per-file API binding under `isolate: false` (the canonical contract).
@@ -40,7 +41,11 @@ import { createRstestUtilities } from './utilities';
 
 export const createRstestRuntime = async (
   workerState: WorkerState,
-  { taskContext }: { taskContext: TaskContext },
+  {
+    taskContext,
+  }: {
+    taskContext: TaskContext;
+  },
 ): Promise<{
   resolveImportMetaRstest: (filename: string) => Rstest | undefined;
   runner: {
@@ -51,6 +56,8 @@ export const createRstestRuntime = async (
     ) => Promise<TestFileResult>;
     collectTests: () => Promise<TestInfo[]>;
     getCurrentTest: () => TestCase | undefined;
+    getRootSuiteListeners: () => RootSuiteListeners;
+    setRootSuiteListeners: (listeners: RootSuiteListeners) => void;
   };
   api: Rstest;
 }> => {

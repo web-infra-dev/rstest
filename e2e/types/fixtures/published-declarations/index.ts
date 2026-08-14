@@ -53,6 +53,35 @@ fileFixtureTest.extend(
   ({ testValue }) => testValue.length,
 );
 
+const workerFixtureTest = test
+  .extend('workerBase', { scope: 'worker' }, (_context, { onCleanup }) => {
+    onCleanup(() => Promise.resolve());
+    // @ts-expect-error worker fixtures do not receive TestContext
+    void _context.task;
+    return { value: 42 };
+  })
+  .extend(
+    'workerValue',
+    { scope: 'worker' },
+    ({ workerBase }) => workerBase.value,
+  )
+  .extend(
+    'workerFileValue',
+    { scope: 'file' },
+    ({ workerValue }) => workerValue,
+  );
+
+workerFixtureTest(
+  'exposes inferred worker fixture types',
+  ({ workerValue, workerFileValue }) => {
+    expect(workerValue).toBeTypeOf('number');
+    expect(workerFileValue).toBeTypeOf('number');
+  },
+);
+
+// @ts-expect-error object fixtures cannot override worker-scoped fixtures
+workerFixtureTest.extend({ workerBase: { value: 1 } });
+
 const predicate = (value: string) => value.length > 0;
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 const broadlyTypedFunction: Function = predicate;

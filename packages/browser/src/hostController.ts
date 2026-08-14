@@ -667,6 +667,7 @@ export const runBrowserController = async (
       name: project.name,
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
+      hasSetupFiles: (project.normalizedConfig.setupFiles?.length ?? 0) > 0,
       runtimeConfig: serializableConfig(
         // `env` is the post-globalSetup change-set from the core pre-cycle
         // stage; the projection layers it between the static base and the
@@ -1303,6 +1304,7 @@ export const listBrowserTests = async (
       name: project.name,
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
+      hasSetupFiles: (project.normalizedConfig.setupFiles?.length ?? 0) > 0,
       runtimeConfig: serializableConfig(
         projectRuntimeConfig(project, {
           envMode: 'static',

@@ -41,6 +41,8 @@ export type BrowserProjectRuntime = {
   name: string;
   environmentName: string;
   projectRoot: string;
+  /** Setup modules are re-evaluated per file, so they cannot share a worker page. */
+  hasSetupFiles: boolean;
   runtimeConfig: SerializedRuntimeConfig;
   viewport?: BrowserViewport;
 };
@@ -54,7 +56,8 @@ export type TestFileInfo = {
   projectName: string;
 };
 
-export type FileCleanupDispatchMethod = 'start' | 'end';
+export type FileCleanupDispatchMethod =
+  'start' | 'end' | 'worker-start' | 'worker-end';
 
 export type FileCleanupDispatchPayload = {
   projectName: string;
@@ -112,6 +115,8 @@ export type BrowserHostConfig = {
     updateSnapshot: SnapshotUpdateState;
   };
   testFile?: string; // Optional: if provided, only run this specific test file
+  /** Test files assigned to one browser worker session. */
+  testFiles?: string[];
   /**
    * The run identity this document executes under — the runner's SOLE identity
    * source, adopted once at boot and stamped on every outbound message. Headed:

@@ -8,6 +8,8 @@ import type {
 } from '../../types';
 import { isObject } from '../../utils/helper';
 
+export type FixtureScope = 'worker' | 'file' | 'test';
+
 const namedFixtureNamePattern = /^[$A-Z_a-z][$\w]*$/;
 const reservedNamedFixtureNames = new Set<string>([
   ...Object.keys({
@@ -26,8 +28,10 @@ export const normalizeFixtures = (
 ): NormalizedFixtures => {
   const result: NormalizedFixtures = {};
   for (const key in fixtures) {
-    if (extendFixtures[key]?.scope === 'file') {
-      throw new Error(`The file-scoped fixture "${key}" cannot be overridden.`);
+    if (extendFixtures[key]?.scope) {
+      throw new Error(
+        `The ${extendFixtures[key]!.scope}-scoped fixture "${key}" cannot be overridden.`,
+      );
     }
     const fixtureOptionKeys = ['auto'];
     // @ts-expect-error
@@ -81,7 +85,7 @@ export const normalizeNamedFixture = (
   name: string,
   value: unknown,
   extendFixtures: NormalizedFixtures = {},
-  scope: 'file' | 'test' = 'test',
+  scope: FixtureScope = 'test',
 ): NormalizedFixtures => {
   if (
     !namedFixtureNamePattern.test(name) ||
@@ -92,12 +96,14 @@ export const normalizeNamedFixture = (
     );
   }
   const parent = extendFixtures[name];
-  if (parent?.scope === 'file') {
-    throw new Error(`The file-scoped fixture "${name}" cannot be overridden.`);
-  }
-  if (scope === 'file' && parent) {
+  if (parent?.scope) {
     throw new Error(
-      `The file-scoped fixture "${name}" cannot override an existing fixture.`,
+      `The ${parent.scope}-scoped fixture "${name}" cannot be overridden.`,
+    );
+  }
+  if (scope !== 'test' && parent) {
+    throw new Error(
+      `The ${scope}-scoped fixture "${name}" cannot override an existing fixture.`,
     );
   }
   const result: NormalizedFixtures = {
@@ -106,26 +112,30 @@ export const normalizeNamedFixture = (
       isFn: typeof value === 'function',
       value,
       mode: 'return',
-      scope: scope === 'file' ? 'file' : undefined,
+      scope: scope === 'test' ? undefined : scope,
     },
   };
   const fixture = result[name]!;
   if (fixture.isFn) {
     const usedProps = getFixtureUsedProps(fixture.value);
-    if (scope === 'file') {
+    if (scope !== 'test') {
       for (const property of usedProps) {
         if (property === name) {
           throw new Error(`Circular fixture dependency: ${name}`);
         }
         if (!Object.hasOwn(extendFixtures, property)) {
           throw new Error(
-            `The file-scoped fixture "${name}" cannot depend on test context "${property}".`,
+            `The ${scope}-scoped fixture "${name}" cannot depend on test context "${property}".`,
           );
         }
         const dependency = extendFixtures[property]!;
-        if (dependency.scope !== 'file') {
+        const allowed =
+          scope === 'worker'
+            ? dependency.scope === 'worker'
+            : dependency.scope === 'worker' || dependency.scope === 'file';
+        if (!allowed) {
           throw new Error(
-            `The file-scoped fixture "${name}" cannot depend on the test-scoped fixture "${property}".`,
+            `The ${scope}-scoped fixture "${name}" cannot depend on the ${dependency.scope ?? 'test'}-scoped fixture "${property}".`,
           );
         }
       }
@@ -154,6 +164,7 @@ type RunNamedFixtureSetup = <Value>(
 
 type FixtureResolverOptions = {
   fileFixtureManager?: FileFixtureManager;
+  workerFixtureManager?: FixtureScopeManager;
   runNamedFixtureSetup?: RunNamedFixtureSetup;
   wrapNamedFixtureCleanup?: (
     cleanup: () => Promise<void>,
@@ -174,7 +185,9 @@ type FileFixtureInstance = {
   value?: unknown;
 };
 
-export class FileFixtureManager {
+export class FixtureScopeManager {
+  constructor(private readonly scope: 'worker' | 'file') {}
+
   private readonly instances = new Map<
     NormalizedFixture,
     FileFixtureInstance
@@ -211,12 +224,19 @@ export class FileFixtureManager {
       instance.setup = Promise.resolve().then(async () => {
         const fixtureContext = Object.create(null) as Record<string, unknown>;
         for (const dependencyName of fixture.deps ?? []) {
-          const dependency = this.getFixture(
+          const dependencyDefinition = fixtures[dependencyName]!;
+          const dependencyManager =
+            dependencyDefinition.scope === 'worker' && this.scope === 'file'
+              ? workerFixtureManager
+              : this;
+          const dependency = dependencyManager.getFixture(
             dependencyName,
-            fixtures[dependencyName]!,
+            dependencyDefinition,
             fixtures,
           );
-          dependency.dependents.add(instance);
+          if (dependencyManager === this) {
+            dependency.dependents.add(instance);
+          }
           await dependency.start();
           if (dependency.status === 'failed') {
             throw dependency.error;
@@ -274,7 +294,7 @@ export class FileFixtureManager {
   ): Promise<unknown> {
     if (this.cleaning) {
       throw new Error(
-        `Cannot set up file-scoped fixture "${name}" during cleanup.`,
+        `Cannot set up ${this.scope}-scoped fixture "${name}" during cleanup.`,
       );
     }
     const instance = this.getFixture(name, fixture, fixtures);
@@ -318,6 +338,7 @@ export class FileFixtureManager {
 
     await Promise.all([...this.instances.values()].map(cleanupInstance));
     this.instances.clear();
+    this.cleaning = false;
 
     if (errors.length === 1) {
       throw errors[0];
@@ -326,7 +347,7 @@ export class FileFixtureManager {
       throw new AggregateError(
         errors,
         [
-          'Failed to clean up file-scoped fixtures.',
+          `Failed to clean up ${this.scope}-scoped fixtures.`,
           ...errors
             .map((error) =>
               error instanceof Error ? error.message : String(error),
@@ -337,6 +358,18 @@ export class FileFixtureManager {
     }
   }
 }
+
+export class FileFixtureManager extends FixtureScopeManager {
+  constructor() {
+    super('file');
+  }
+}
+
+export const workerFixtureManager: FixtureScopeManager =
+  new FixtureScopeManager('worker');
+
+export const cleanupWorkerFixtures = (): Promise<void> =>
+  workerFixtureManager.cleanup();
 
 class PreviouslyFailedFixtureError extends Error {}
 
@@ -402,10 +435,13 @@ export const createFixtureResolver = (
       throw new Error(`Circular fixture dependency: ${name}`);
     }
 
-    if (fixture.scope === 'file') {
-      const fileFixtureManager = options.fileFixtureManager;
-      if (!fileFixtureManager) {
-        throw new Error('File fixture manager is not available.');
+    if (fixture.scope) {
+      const fixtureManager =
+        fixture.scope === 'worker'
+          ? options.workerFixtureManager
+          : options.fileFixtureManager;
+      if (!fixtureManager) {
+        throw new Error(`${fixture.scope} fixture manager is not available.`);
       }
       pendingMap.add(name);
       let cancelWait: (() => void) | undefined;
@@ -417,7 +453,7 @@ export const createFixtureResolver = (
         cancelWait?.();
       });
       try {
-        const resolved = fileFixtureManager
+        const resolved = fixtureManager
           .resolve(name, fixture, fixtures, runNamedFixtureSetup)
           .then((value) => ({ status: 'resolved' as const, value }));
         const resolution = await Promise.race([resolved, cancelled]);

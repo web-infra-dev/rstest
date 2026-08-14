@@ -91,6 +91,112 @@ class CleanupTimeoutWorker implements PoolWorker {
   }
 }
 
+class WorkerCleanupErrorWorker implements PoolWorker {
+  readonly name = 'worker-cleanup-error-worker';
+  private readonly events = new EventEmitter();
+  private live = true;
+  cleanupRequests = 0;
+
+  async start(): Promise<void> {}
+
+  async stop(): Promise<void> {
+    this.live = false;
+    queueMicrotask(() => this.events.emit('exit', 0, null));
+  }
+
+  send(request: WorkerRequest): void {
+    if (request.type === 'start') {
+      queueMicrotask(() => {
+        this.events.emit(
+          'message',
+          wrapWorkerResponse({ type: 'started', pid: 1 }),
+        );
+      });
+      return;
+    }
+    if (request.type === 'cleanup') {
+      this.cleanupRequests++;
+      queueMicrotask(() => {
+        this.events.emit(
+          'message',
+          wrapWorkerResponse({ type: 'cleanupFinished' }),
+        );
+      });
+      return;
+    }
+    if (request.type !== 'run') {
+      return;
+    }
+    this.events.emit(
+      'message',
+      wrapWorkerResponse({
+        type: 'fileCleanupStarted',
+        taskId: request.taskId,
+      }),
+    );
+    this.events.emit(
+      'message',
+      wrapWorkerResponse({
+        type: 'workerCleanupStarted',
+        taskId: request.taskId,
+      }),
+    );
+    this.events.emit(
+      'message',
+      wrapWorkerResponse({
+        type: 'workerCleanupFinished',
+        taskId: request.taskId,
+        error: { message: 'worker cleanup failed' },
+      }),
+    );
+    this.events.emit(
+      'message',
+      wrapWorkerResponse({
+        type: 'runFinished',
+        taskId: request.taskId,
+        result: {
+          coverageRaw: { preserved: true },
+          name: '',
+          project: 'default',
+          results: [],
+          status: 'fail',
+          testId: 'file:/test.ts',
+          testPath: '/test.ts',
+          errors: [{ message: 'worker cleanup failed' }],
+        },
+      }),
+    );
+  }
+
+  sendRaw(_envelope: Envelope): void {}
+
+  on<E extends PoolWorkerEventName>(
+    event: E,
+    listener: PoolWorkerEvents[E],
+  ): void {
+    this.events.on(event, listener);
+  }
+
+  off<E extends PoolWorkerEventName>(
+    event: E,
+    listener: PoolWorkerEvents[E],
+  ): void {
+    this.events.off(event, listener);
+  }
+
+  getCapturedStderr(): string {
+    return '';
+  }
+
+  resetCapturedStderr(): void {}
+
+  async waitForStderrSettle(): Promise<void> {}
+
+  hasLiveChild(): boolean {
+    return this.live;
+  }
+}
+
 const createTask = (): PoolTask =>
   ({
     options: {},
@@ -129,5 +235,40 @@ describe('PoolRunner file fixture cleanup watchdog', () => {
       rs.useRealTimers();
       await runner.stop();
     }
+  });
+});
+
+describe('PoolRunner worker fixture cleanup', () => {
+  it('keeps the completed result when worker cleanup reports an error', async () => {
+    const runner = new PoolRunner(new WorkerCleanupErrorWorker(), {
+      environmentKey: 'node',
+      workerId: 1,
+    });
+
+    await runner.start();
+    await expect(runner.runTest(createTask())).resolves.toEqual(
+      expect.objectContaining({
+        coverageRaw: { preserved: true },
+        status: 'fail',
+        errors: [expect.objectContaining({ message: 'worker cleanup failed' })],
+      }),
+    );
+    expect(runner.isUsable()).toBe(false);
+    await runner.stop();
+  });
+
+  it('coalesces concurrent worker cleanup requests', async () => {
+    const worker = new WorkerCleanupErrorWorker();
+    const runner = new PoolRunner(worker, {
+      environmentKey: 'node',
+      workerId: 1,
+    });
+
+    await runner.start();
+    const cleanupPromise = runner.cleanupWorkerFixtures();
+    const stopPromise = runner.stop();
+    await Promise.all([cleanupPromise, stopPromise]);
+
+    expect(worker.cleanupRequests).toBe(1);
   });
 });

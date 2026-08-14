@@ -505,6 +505,12 @@ export function createNodeExecutor(
       projectPlans.map((plan) => plan.execute(plan.finalEntries)),
     );
 
+    const workerCleanupErrors = !isWatchMode
+      ? await pool.cleanupWorkerFixtures()
+      : context.normalizedConfig.isolate === false
+        ? await pool.drainWorkerStopErrors()
+        : [];
+
     await writeBundleCoverageResults(
       rootPath,
       returns.flatMap((result) => result.bundleCoverage),
@@ -537,7 +543,10 @@ export function createNodeExecutor(
     return {
       results: returns.flatMap((r) => r.results),
       testResults: returns.flatMap((r) => r.testResults),
-      errors: returns.flatMap((r) => r.errors || []),
+      errors: [
+        ...returns.flatMap((r) => r.errors || []),
+        ...workerCleanupErrors,
+      ],
       testPaths: currentEntries.map((e) => e.testPath),
       deletedTestPaths: currentDeletedEntries,
       duration: { buildTime, testTime },

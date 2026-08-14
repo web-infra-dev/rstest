@@ -64,7 +64,7 @@ pnpm --filter @rstest/browser lint
 
 This package requires `@rstest/core` and `playwright` as peer dependencies, and consumes two internal `@rstest/core` entrypoints:
 
-- `@rstest/core/internal/browser-runtime` (client side): `createRstestRuntime`, `setRealTimers`, `globalApis`, and types (WorkerState, RuntimeConfig, etc.)
+- `@rstest/core/internal/browser-runtime` (client side): `createRstestRuntime`, `setRealTimers`, `getRealTimers`, `globalApis`, and types (WorkerState, RuntimeConfig, etc.)
 - `@rstest/core/internal/browser` (host side): logger/color/TTY utilities, `createRunnerEventSink`, and the run-cycle contract types
 
 ## Do

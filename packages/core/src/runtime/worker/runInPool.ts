@@ -21,6 +21,7 @@ import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
 import type { FileCleanupHooks } from '../runner';
+import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { createAsyncLeakDetector } from './asyncLeaks';
 import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
@@ -170,6 +171,7 @@ const preparePool = async (
   globalCleanups.length = 0;
 
   const taskContext = createNodeTaskContext();
+  const writeOriginalLog = createOriginalLogWriter();
   setRealTimers();
 
   // `mockRuntimeCode.js` gates its Module Federation shims on this worker-wide
@@ -233,9 +235,19 @@ const preparePool = async (
       // `onConsoleLog` policy, matching `isolate: true` where late logs are lost
       // as the worker is torn down.
       // See https://github.com/web-infra-dev/rstest/issues/1367.
-      void rpc.onConsoleLog(log).catch(() => {});
+      void rpc.onConsoleLog(log).catch(() => {
+        // Worker-scoped cleanup runs after the host has disposed the final
+        // task RPC. Preserve diagnostics from that cleanup by falling back to
+        // the worker's original stream when the reporting channel is closed.
+        if (silent !== true) {
+          writeOriginalLog({
+            content: `${log.content}\n`,
+            type: log.type,
+          });
+        }
+      });
     },
-    writeOriginalLog: createOriginalLogWriter(),
+    writeOriginalLog,
   });
 
   if (shouldInterceptConsole) {
@@ -477,6 +489,8 @@ const loadFiles = async ({
 export const runInPool = async (
   options: RunWorkerOptions['options'],
   lifecycleHooks: FileCleanupHooks & {
+    onWorkerCleanupStart?: () => MaybePromise<void>;
+    onWorkerCleanupEnd?: (error?: unknown) => MaybePromise<void>;
     onTestEnvironmentFallback?: (
       fallback: TestEnvironmentModuleFallback,
     ) => void;
@@ -501,6 +515,19 @@ export const runInPool = async (
     },
   } = options;
 
+  const cleanupWorkerFixtureScope = async (): Promise<unknown> => {
+    await lifecycleHooks.onWorkerCleanupStart?.();
+    let cleanupError: unknown;
+    try {
+      await cleanupWorkerFixtures();
+    } catch (error) {
+      cleanupError = error;
+    } finally {
+      await lifecycleHooks.onWorkerCleanupEnd?.(cleanupError);
+    }
+    return cleanupError;
+  };
+
   const importLoader = () =>
     options.context.outputModule
       ? import('./loadEsModule')
@@ -512,6 +539,13 @@ export const runInPool = async (
   // loading (see `flushAllLoaderCaches` for why both loaders, not just this
   // task's).
   if (!isolate && lastBuildId !== undefined && lastBuildId !== buildId) {
+    // A rebuild replaces fixture definitions too. Retire instances created by
+    // the previous module graph before loading the new graph, otherwise both
+    // generations can hold external resources in one reused worker.
+    const cleanupError = await cleanupWorkerFixtureScope();
+    if (cleanupError) {
+      throw cleanupError;
+    }
     const { flushAllLoaderCaches } = await import('./interop');
     await flushAllLoaderCaches();
   }
@@ -756,6 +790,7 @@ export const runInPool = async (
       tracker.transition('tests');
     };
 
+    let fileCleanupResult: TestFileResult | undefined;
     const runnerHooks: RunnerHooks & FileCleanupHooks = {
       onTestFileReady: async (test) => {
         await rpc.onTestFileReady(test);
@@ -791,12 +826,15 @@ export const runInPool = async (
         await rpc.onTestCaseResult(result);
       },
       onFileCleanupStart: async (result) => {
-        if (result) {
-          await collectCoverage(result);
-        }
+        fileCleanupResult = result;
         await lifecycleHooks.onFileCleanupStart?.(result);
       },
-      onFileCleanupEnd: lifecycleHooks.onFileCleanupEnd,
+      onFileCleanupEnd: async () => {
+        await lifecycleHooks.onFileCleanupEnd?.();
+        if (fileCleanupResult) {
+          await collectCoverage(fileCleanupResult);
+        }
+      },
       getCountOfFailedTests: async () => {
         return rpc.getCountOfFailedTests();
       },
@@ -846,12 +884,21 @@ export const runInPool = async (
     return runResult;
   } finally {
     tracker.transition('teardown');
+    taskContext?.setFallback(undefined);
+    asyncLeakDetector?.disable();
+    if (isolate) {
+      const workerCleanupError = await cleanupWorkerFixtureScope();
+      if (workerCleanupError && runResult) {
+        runResult.status = 'fail';
+        runResult.errors = [
+          ...(runResult.errors ?? []),
+          ...(await formatTestError(workerCleanupError)),
+        ];
+      }
+    }
     if (coverageProvider) {
       coverageProvider.cleanup();
     }
-
-    taskContext?.setFallback(undefined);
-    asyncLeakDetector?.disable();
     await teardown();
     tracker.end();
     if (runResult) {

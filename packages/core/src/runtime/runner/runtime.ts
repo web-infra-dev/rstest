@@ -50,6 +50,13 @@ import { registerTestSuiteListener, wrapTimeout } from './task';
 
 type CollectStatus = 'lazy' | 'running';
 
+export type RootSuiteListeners = {
+  beforeAllListeners: BeforeAllListener[];
+  afterAllListeners: AfterAllListener[];
+  beforeEachListeners: BeforeEachListener[];
+  afterEachListeners: AfterEachListener[];
+};
+
 /**
  * Run-mode / concurrency modifiers shared by the `test` and `describe` APIs.
  * Both factories install these as chainable getters (`test.skip`,
@@ -362,6 +369,32 @@ export class RunnerRuntime {
     }
 
     return this.tests;
+  }
+
+  /**
+   * Capture hooks registered by a setup file so a browser worker can replay
+   * them on each per-file runtime while keeping the setup module cached.
+   */
+  getRootSuiteListeners(): RootSuiteListeners {
+    const root = this.tests.find(
+      (test): test is TestSuite =>
+        test.type === 'suite' && test.name === ROOT_SUITE_NAME,
+    );
+    return {
+      beforeAllListeners: [...(root?.beforeAllListeners ?? [])],
+      afterAllListeners: [...(root?.afterAllListeners ?? [])],
+      beforeEachListeners: [...(root?.beforeEachListeners ?? [])],
+      afterEachListeners: [...(root?.afterEachListeners ?? [])],
+    };
+  }
+
+  /** Replay setup-file hooks on a fresh file runtime. */
+  setRootSuiteListeners(listeners: RootSuiteListeners): void {
+    const root = this.getCurrentSuite();
+    root.beforeAllListeners = [...listeners.beforeAllListeners];
+    root.afterAllListeners = [...listeners.afterAllListeners];
+    root.beforeEachListeners = [...listeners.beforeEachListeners];
+    root.afterEachListeners = [...listeners.afterEachListeners];
   }
 
   addTestCase(test: Omit<TestCase, 'testPath' | 'context' | 'testId'>): void {
@@ -722,23 +755,23 @@ const buildRuntimeAPI = (): CollectionAPI => {
         } else if (args.length === 3) {
           if (
             !isPlainObject(args[1]) ||
-            args[1].scope !== 'file' ||
+            !['file', 'worker'].includes(args[1].scope as string) ||
             Object.keys(args[1]).some((key) => key !== 'scope')
           ) {
             throw new Error(
-              "test.extend(name, options, fixture) expects { scope: 'file' } as options.",
+              "test.extend(name, options, fixture) expects { scope: 'file' | 'worker' } as options.",
             );
           }
           if (!currentRuntime().isTopLevelCollection()) {
             throw new Error(
-              'File-scoped fixtures must be defined at the top level of the test file.',
+              `${args[1].scope === 'worker' ? 'worker' : 'File'}-scoped fixtures must be defined at the top level of the test file.`,
             );
           }
           normalizedFixtures = normalizeNamedFixture(
             args[0],
             args[2],
             extendFixtures,
-            'file',
+            args[1].scope as 'file' | 'worker',
           );
         } else {
           throw new Error(

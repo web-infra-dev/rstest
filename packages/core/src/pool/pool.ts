@@ -26,6 +26,7 @@ export class Pool {
    */
   private readonly stoppingRunners = new Set<PoolRunner>();
   private readonly stoppingPromises = new Set<Promise<void>>();
+  private readonly workerStopErrors: Error[] = [];
   private readonly slotWaiters: Array<() => void> = [];
   /**
    * Set of currently-assigned worker ids. Mirrors Jest's `JEST_WORKER_ID`
@@ -57,6 +58,37 @@ export class Pool {
 
   async runTest(task: PoolTask): Promise<TestFileResult> {
     return this.dispatch(task, 'run') as Promise<TestFileResult>;
+  }
+
+  async cleanupWorkerFixtures(): Promise<Error[]> {
+    if (this.options.isolate) {
+      return [];
+    }
+
+    // A reusable runner can already be stopping when the idle floor sheds an
+    // environment-mismatched worker. Its stop path owns worker fixture
+    // cleanup, so drain those promises before finalizing the run and preserve
+    // any errors they reported.
+    const errors = await this.drainWorkerStopErrors();
+    const idleErrors = await Promise.all(
+      this.idleRunners.map(async (runner) => {
+        try {
+          await runner.cleanupWorkerFixtures();
+          return undefined;
+        } catch (error) {
+          return error instanceof Error ? error : new Error(String(error));
+        }
+      }),
+    );
+    errors.push(
+      ...idleErrors.filter((error): error is Error => error !== undefined),
+    );
+    return errors;
+  }
+
+  async drainWorkerStopErrors(): Promise<Error[]> {
+    await Promise.all([...this.stoppingPromises]);
+    return this.workerStopErrors.splice(0);
   }
 
   async collectTests(task: PoolTask): Promise<CollectTaskResult> {
@@ -276,7 +308,11 @@ export class Pool {
     this.stoppingRunners.add(runner);
     const stopPromise: Promise<void> = runner
       .stop(options)
-      .catch(() => undefined)
+      .catch((error: unknown) => {
+        this.workerStopErrors.push(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      })
       .finally(() => {
         this.stoppingRunners.delete(runner);
         this.stoppingPromises.delete(stopPromise);
@@ -300,12 +336,25 @@ export class Pool {
       this.slotWaiters.shift()?.();
     }
     const runners = [...this.activeRunners, ...this.idleRunners];
-    await Promise.all(runners.map((r) => r.stop().catch(() => undefined)));
+    await Promise.all(
+      runners.map((runner) =>
+        runner.stop().catch((error: unknown) => {
+          this.workerStopErrors.push(
+            error instanceof Error ? error : new Error(String(error)),
+          );
+        }),
+      ),
+    );
     // Drain background-stopping runners — `isolate: true` releases hand
     // children off here, and `close()` must not return until they are gone.
     await Promise.all([...this.stoppingPromises]);
     this.idleRunners.length = 0;
     this.activeRunners.clear();
     this.isClosed = true;
+    const errors = this.workerStopErrors.splice(0);
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) {
+      throw new AggregateError(errors, 'Failed to stop test workers.');
+    }
   }
 }

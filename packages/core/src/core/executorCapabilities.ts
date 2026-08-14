@@ -45,9 +45,7 @@ export const executorCapabilities: Record<
   federation: { node: 'supported', browser: 'supported' },
   // Stripped from the browser wire; the client hardcodes `environment: 'browser'`.
   testEnvironment: { node: 'supported', browser: 'stripped' },
-  // Reaches the browser but is a no-op today (each file runs in a fresh
-  // context); a real browser `isolate: false` is a future executor fork.
-  isolate: { node: 'supported', browser: 'ignored-warn' },
+  isolate: { node: 'supported', browser: 'supported' },
   hookTimeout: { node: 'supported', browser: 'supported' },
   // Browser coverage is host-wired, not client-read.
   coverage: { node: 'supported', browser: 'stripped' },

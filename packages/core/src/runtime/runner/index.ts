@@ -12,7 +12,7 @@ import { getFileTaskId } from '../../utils/helper';
 import { fileContext, setFileContext } from '../fileContext';
 import type { TaskContext } from '../worker/taskContext';
 import { TestRunner } from './runner';
-import { RunnerRuntime, runtimeAPI } from './runtime';
+import { RunnerRuntime, runtimeAPI, type RootSuiteListeners } from './runtime';
 import { traverseUpdateTest } from './task';
 
 // The running file's execution-phase runner (see the live-binding contract in
@@ -60,6 +60,8 @@ export function createRunner({
     ) => Promise<TestFileResult>;
     collectTests: () => Promise<TestInfo[]>;
     getCurrentTest: TestRunner['getCurrentTest'];
+    getRootSuiteListeners: () => RootSuiteListeners;
+    setRootSuiteListeners: (listeners: RootSuiteListeners) => void;
   };
 } {
   const {
@@ -147,6 +149,9 @@ export function createRunner({
         return tests.map(toTestInfo);
       },
       getCurrentTest: () => testRunner.getCurrentTest(),
+      getRootSuiteListeners: () => runtimeInstance.getRootSuiteListeners(),
+      setRootSuiteListeners: (listeners) =>
+        runtimeInstance.setRootSuiteListeners(listeners),
     },
   };
 }

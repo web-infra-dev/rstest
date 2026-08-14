@@ -376,6 +376,18 @@ test.extend({}).describe('extended test API', () => {
     typedHookTest.afterEach(({ hookTitle }) => {
       void hookTitle;
     });
+
+    const typedWorkerHookTest = test.extend(
+      'workerHookTitle',
+      { scope: 'worker' },
+      () => 'worker hook title',
+    );
+    typedWorkerHookTest.beforeEach(({ workerHookTitle }) => {
+      void workerHookTitle;
+    });
+    typedWorkerHookTest.afterEach(({ workerHookTitle }) => {
+      void workerHookTitle;
+    });
   };
   void assertExtendedHookTypes;
 

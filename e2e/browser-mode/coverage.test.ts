@@ -101,6 +101,56 @@ describe('browser mode - coverage', () => {
     expect(cli.stdout.replaceAll(' ', '')).toContain('multiply.ts|0|100|0|0');
   });
 
+  it('includes code executed by file fixture cleanup in V8 coverage', async () => {
+    const fixtureDir = join(__dirname, 'fixtures/browser-coverage');
+    const reportsDirectory = join(fixtureDir, 'coverage-v8-cleanup');
+    const reportPath = join(reportsDirectory, 'coverage-final.json');
+    fs.rmSync(reportsDirectory, { recursive: true, force: true });
+
+    const { expectExecSuccess } = await runBrowserCli('browser-coverage', {
+      args: ['-c', 'rstest.v8Cleanup.config.mts'],
+    });
+
+    await expectExecSuccess();
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8')) as Record<
+      string,
+      { s: Record<string, number> }
+    >;
+    const cleanupCoverage = Object.entries(report).find(([file]) =>
+      file.replaceAll('\\', '/').endsWith('/src/cleanup.ts'),
+    )?.[1];
+
+    expect(cleanupCoverage).toBeDefined();
+    expect(
+      Object.values(cleanupCoverage?.s ?? {}).some((value) => value > 0),
+    ).toBe(true);
+  });
+
+  it('includes code executed by file fixture cleanup in Istanbul coverage', async () => {
+    const fixtureDir = join(__dirname, 'fixtures/browser-coverage');
+    const reportsDirectory = join(fixtureDir, 'coverage-istanbul-cleanup');
+    const reportPath = join(reportsDirectory, 'coverage-final.json');
+    fs.rmSync(reportsDirectory, { recursive: true, force: true });
+
+    const { expectExecSuccess } = await runBrowserCli('browser-coverage', {
+      args: ['-c', 'rstest.istanbulCleanup.config.mts'],
+    });
+
+    await expectExecSuccess();
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8')) as Record<
+      string,
+      { s: Record<string, number> }
+    >;
+    const cleanupCoverage = Object.entries(report).find(([file]) =>
+      file.replaceAll('\\', '/').endsWith('/src/cleanup.ts'),
+    )?.[1];
+
+    expect(cleanupCoverage).toBeDefined();
+    expect(
+      Object.values(cleanupCoverage?.s ?? {}).some((value) => value > 0),
+    ).toBe(true);
+  });
+
   it('preserves V8 coverage from concurrent pages when one fails fatally', async () => {
     const fixtureDir = join(__dirname, 'fixtures/browser-coverage');
     const reportsDirectory = join(fixtureDir, 'coverage-v8-concurrent-failure');

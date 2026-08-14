@@ -38,13 +38,6 @@ const ignoredKeyWarnings: Partial<
       `Ignoring testEnvironment '${config.testEnvironment.name}' in browser ` +
       'mode: the browser itself is the test environment.',
   },
-  isolate: {
-    isNonDefault: (config) => config.isolate === false,
-    message: () =>
-      'Ignoring isolate: false in browser mode: each test file still runs in ' +
-      'a fresh context.',
-    browserOnly: true,
-  },
   detectAsyncLeaks: {
     isNonDefault: (config) => config.detectAsyncLeaks === true,
     message: () =>
@@ -221,6 +214,30 @@ const reportUnsupportedBrowserOptions = (context: RstestContext): void => {
         warnings.add(descriptor.message(config));
       }
     }
+  }
+
+  if (
+    isBrowserOnlyRun &&
+    browserProjects.some(
+      ({ normalizedConfig: config }) =>
+        config.isolate === false && config.browser.headless === false,
+    )
+  ) {
+    warnings.add(
+      'Browser mode keeps headed file frames isolated, so worker-scoped fixtures do not span files when browser.headless is false.',
+    );
+  }
+
+  if (
+    isBrowserOnlyRun &&
+    browserProjects.some(
+      ({ normalizedConfig: config }) =>
+        config.isolate === false && (config.setupFiles?.length ?? 0) > 0,
+    )
+  ) {
+    warnings.add(
+      'Browser projects with setupFiles stay file-isolated, even when isolate is false, so setup modules can run for every file.',
+    );
   }
 
   for (const message of warnings) {

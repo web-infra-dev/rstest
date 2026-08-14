@@ -35,7 +35,11 @@ import {
 import { createExpect, getGlobalExpect, resetExpectState } from '../api/expect';
 import { formatTestError, TestSkipError } from '../util';
 import type { TaskContext } from '../worker/taskContext';
-import { createFixtureResolver, FileFixtureManager } from './fixtures';
+import {
+  createFixtureResolver,
+  FileFixtureManager,
+  workerFixtureManager,
+} from './fixtures';
 import type { FixtureResolver } from './fixtures';
 import { cloneTaskMeta } from './metadata';
 import {
@@ -986,6 +990,7 @@ export class TestRunner {
 
     return createFixtureResolver(test, context, fixtureCleanups, {
       fileFixtureManager: this.fileFixtureManager,
+      workerFixtureManager,
       runNamedFixtureSetup: (setup, onTimeout) =>
         wrapTimeout({
           name: 'fixture setup',
