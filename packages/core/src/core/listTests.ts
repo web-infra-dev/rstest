@@ -527,15 +527,16 @@ export async function listTests(
     isWatchMode: false,
   });
 
-  // An invalid browser config must fail the list whether or not the plan left
-  // a browser test to collect — the executor load inside collectBrowserTests
-  // is the only other thing that would validate it. Stricter than the run
-  // path, which skips the check when node tests exist (see the empty-run
+  // An invalid browser config must fail the list whether or not this list
+  // loads a browser executor — the executor load inside collectBrowserTests
+  // is the only other thing that would validate it, and both an empty browser
+  // plan and the `--filesOnly` pure plan read bypass it. Stricter than the
+  // run path, which skips the check when node tests exist (see the empty-run
   // branch in `runTests.ts` for the divergence and its e2e pin).
   if (
     browserProjects.length &&
-    !planner.hasBrowserTestsToRun() &&
-    !planner.hasValidatedBrowserConfig()
+    !planner.hasValidatedBrowserConfig() &&
+    (filesOnly || !planner.hasBrowserTestsToRun())
   ) {
     await validateBrowserRunConfig(context, browserProjects);
   }

@@ -334,6 +334,41 @@ describe('prepareRsbuild', () => {
     });
   });
 
+  it('should validate the browser config in a filesOnly list without loading an executor', async () => {
+    await withTempDir('rstest-list-files-only-', async (tempRoot) => {
+      writeFileSync(join(tempRoot, 'a-browser.test.ts'), 'export {};\n');
+
+      const context = new Rstest(
+        {
+          cwd: tempRoot,
+          command: 'list',
+          embedded: true,
+          projects: [
+            {
+              config: {
+                name: 'browser',
+                root: tempRoot,
+                include: ['a-browser.test.ts'],
+                browser: { enabled: true, provider: 'playwright' },
+              },
+            },
+          ],
+        },
+        { root: tempRoot },
+      );
+
+      const list = await listTests(context, { json: false, filesOnly: true });
+
+      expect(list.map((item) => item.testPath)).toEqual([
+        join(tempRoot, 'a-browser.test.ts'),
+      ]);
+      // The filesOnly listing is a pure plan read — no executor, no dev
+      // server — so the direct check is the only browser config validation.
+      expect(browserExecutorLoads).toEqual([]);
+      expect(validateBrowserConfigCalls).toBe(1);
+    });
+  });
+
   it('should list node tests added by modifyRstestConfig hooks to an empty-glob project', async () => {
     await withTempDir('rstest-list-hook-added-', async (tempRoot) => {
       writeFileSync(join(tempRoot, 'added-node.test.ts'), 'export {};\n');
