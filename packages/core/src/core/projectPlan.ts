@@ -27,7 +27,7 @@ export const getProjectEntries = async ({
   });
 };
 
-export type RunProjectPlan = {
+export type ProjectPlan = {
   projects: ProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
   browserProjectsToRun: ProjectContext[];
@@ -69,7 +69,7 @@ type ResolveRunnableProjectsOptions = {
   strictEnvironmentComments?: boolean;
 };
 
-export const createRunProjectPlanState = ({
+export const createProjectPlanState = ({
   context,
   isWatchMode,
 }: {
@@ -77,10 +77,10 @@ export const createRunProjectPlanState = ({
   isWatchMode: boolean;
 }): {
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
-  getPlan: () => RunProjectPlan;
+  getPlan: () => ProjectPlan;
   resolveRunnableProjects: (
     options?: ResolveRunnableProjectsOptions,
-  ) => Promise<RunProjectPlan>;
+  ) => Promise<ProjectPlan>;
   validateEnvironmentComments: () => Promise<void>;
 } => {
   let allProjects = context.projects;
@@ -91,7 +91,7 @@ export const createRunProjectPlanState = ({
   let environmentGroupsChanged = false;
   let pendingStrictEnvironmentCommentValidation = false;
 
-  const getPlan = (): RunProjectPlan => ({
+  const getPlan = (): ProjectPlan => ({
     projects: allProjects,
     entriesCache,
     browserProjectsToRun,
@@ -127,7 +127,7 @@ export const createRunProjectPlanState = ({
   const resolveRunnableProjects = async ({
     silentShardMessage = false,
     strictEnvironmentComments = false,
-  }: ResolveRunnableProjectsOptions = {}): Promise<RunProjectPlan> => {
+  }: ResolveRunnableProjectsOptions = {}): Promise<ProjectPlan> => {
     const shouldPreserveEnvironmentPartitions =
       environmentGroupsResolved && environmentGroupsChanged;
 

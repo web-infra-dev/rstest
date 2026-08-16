@@ -6,13 +6,13 @@ import {
 } from '../../utils';
 import { type BrowserExecutorLoadOptions, runBrowserDiscovery } from './loader';
 import { getUserRstestConfigPluginProjects } from '../modifyRstestConfig';
-import type { RunProjectPlan } from '../projectPlan';
+import type { ProjectPlan } from '../projectPlan';
 import type { Rstest } from '../rstest';
 
 /**
  * The browser-side questions a resolved run plan can answer: which browser
  * projects run, and the option bags the browser executor/watch session are
- * launched with. `RunPlanner` re-exposes exactly this, so the orchestrator asks
+ * launched with. `TestPlanner` re-exposes exactly this, so the orchestrator asks
  * one object and the filter-classification detail stays under `core/browser/`.
  */
 export interface BrowserRunPlan {
@@ -41,10 +41,10 @@ interface BrowserRunPlanner extends BrowserRunPlan {
    * runtime boot and can add test files to an otherwise-empty project), then
    * re-resolve the run plan. No-op when discovery is not needed.
    *
-   * `createRunPlanner` is the only caller and drives it while it is still
+   * `createTestPlanner` is the only caller and drives it while it is still
    * building, which is what keeps the once-only state below — the applied-hook
    * environment set and the discovery-ran flag — from ever being observed
-   * half-applied: by the time anything holds a `RunPlanner`, discovery has
+   * half-applied: by the time anything holds a `TestPlanner`, discovery has
    * either finished or been declined.
    */
   runConfigHookDiscovery(): Promise<void>;
@@ -59,7 +59,7 @@ export function createBrowserRunPlanner({
   onTraceEvents,
 }: {
   context: Rstest;
-  getPlan: () => RunProjectPlan;
+  getPlan: () => ProjectPlan;
   /** Re-resolve after the discovery boot's hooks changed project configs. */
   refreshPlan: () => Promise<void>;
   browserProjects: ProjectContext[];

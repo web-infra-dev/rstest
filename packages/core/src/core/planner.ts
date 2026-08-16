@@ -6,8 +6,8 @@ import {
   createBrowserRunPlanner,
 } from './browser/runPlanner';
 import {
-  createRunProjectPlanState,
-  type RunProjectPlan,
+  createProjectPlanState,
+  type ProjectPlan,
   syncNodeProjects,
 } from './projectPlan';
 import { prepareRsbuild } from './rsbuild';
@@ -60,9 +60,9 @@ export type NodeBuild = {
  * is settled by the time this returns and has no re-entry point afterwards, so
  * nothing can catch it half-applied.
  */
-export interface RunPlanner extends BrowserRunPlan {
+export interface TestPlanner extends BrowserRunPlan {
   /** The resolved plan: browser + node runnable subsets and their entries. */
-  getPlan(): RunProjectPlan;
+  getPlan(): ProjectPlan;
   hasNodeTestsToRun(): boolean;
   /** A coverage-plugin load error captured while preparing Rsbuild, if any. */
   coveragePluginLoadError(): unknown;
@@ -72,7 +72,7 @@ export interface RunPlanner extends BrowserRunPlan {
   readonly nodeBuild: NodeBuild | undefined;
 }
 
-export type CreateRunPlannerOptions = {
+export type CreateTestPlannerOptions = {
   browserProjects: ProjectContext[];
   nodeProjects: ProjectContext[];
   isWatchMode: boolean;
@@ -80,16 +80,16 @@ export type CreateRunPlannerOptions = {
   onTraceEvents?: (events: TraceEvent[]) => void;
 };
 
-export async function createRunPlanner(
+export async function createTestPlanner(
   context: Rstest,
   {
     browserProjects,
     nodeProjects,
     isWatchMode,
     onTraceEvents,
-  }: CreateRunPlannerOptions,
-): Promise<RunPlanner> {
-  const projectPlanState = createRunProjectPlanState({
+  }: CreateTestPlannerOptions,
+): Promise<TestPlanner> {
+  const projectPlanState = createProjectPlanState({
     context,
     isWatchMode,
   });
@@ -97,7 +97,7 @@ export async function createRunPlanner(
 
   let coveragePluginLoadError: unknown;
 
-  const getPlan = (): RunProjectPlan => projectPlanState.getPlan();
+  const getPlan = (): ProjectPlan => projectPlanState.getPlan();
 
   const plan = await resolveRunnableProjects({ silentShardMessage: true });
 
