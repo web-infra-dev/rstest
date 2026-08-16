@@ -43,13 +43,13 @@ export function logShardMessage({
 /**
  * Collects all test entries, shards them, and returns a Map of sharded entries per project.
  * Returns `undefined` if sharding is not configured.
+ *
+ * Never logs the shard banner itself — the planner announces the final counts
+ * once after its init barrier; this only reports them via `onShardCounts`.
  */
 export async function resolveShardedEntries(
   context: RstestContext,
-  {
-    silent = false,
-    onShardCounts,
-  }: { silent?: boolean; onShardCounts?: (counts: ShardCounts) => void } = {},
+  { onShardCounts }: { onShardCounts?: (counts: ShardCounts) => void } = {},
 ): Promise<Map<string, ProjectEntries> | undefined> {
   const {
     normalizedConfig,
@@ -91,13 +91,6 @@ export async function resolveShardedEntries(
   const testFilesInShardCount = shardedEntries.length;
 
   onShardCounts?.({ testFilesInShardCount, totalTestFileCount });
-  if (!silent) {
-    logShardMessage({
-      shard,
-      testFilesInShardCount,
-      totalTestFileCount,
-    });
-  }
 
   const shardedEntriesByProject = new Map<string, Record<string, string>>();
   for (const { project, alias, testPath } of shardedEntries) {

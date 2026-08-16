@@ -87,9 +87,6 @@ export const createProjectPlanState = ({
   // interim counts. Every resolve records the freshest counts here and the
   // planner announces them exactly once, after the barrier closes.
   let lastShardCounts: ShardCounts | undefined;
-  const recordShardCounts = (counts: ShardCounts) => {
-    lastShardCounts = counts;
-  };
 
   const getPlan = (): ProjectPlan => ({
     projects: allProjects,
@@ -135,15 +132,16 @@ export const createProjectPlanState = ({
         context,
         projects: allProjects,
         getProjectEntries: (project) => getProjectEntries({ context, project }),
-        onShardCounts: recordShardCounts,
       });
       allProjects = refreshed.projects;
       entriesCache = refreshed.entriesCache;
+      lastShardCounts = refreshed.shardCounts ?? lastShardCounts;
     } else if (context.normalizedConfig.shard) {
       entriesCache =
         (await resolveShardedEntries(context, {
-          silent: true,
-          onShardCounts: recordShardCounts,
+          onShardCounts: (counts) => {
+            lastShardCounts = counts;
+          },
         })) || new Map();
     } else {
       entriesCache = new Map();
@@ -203,6 +201,8 @@ export const createProjectPlanState = ({
       return;
     }
     logShardMessage({ shard, ...lastShardCounts });
+    // Consumed on print, so a second announce is structurally a no-op.
+    lastShardCounts = undefined;
   };
 
   return {

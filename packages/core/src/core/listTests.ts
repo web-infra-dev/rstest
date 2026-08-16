@@ -27,8 +27,8 @@ import {
   runBrowserGlobalSetupStage,
 } from './browser/globalSetupStage';
 import {
+  type BrowserTestExecutor,
   loadBrowserExecutor,
-  validateBrowserRunConfig,
 } from './browser/loader';
 import { ensureTestEnvironmentDependencies } from './envDependencies';
 import { createRsbuildServer } from './rsbuild';
@@ -165,7 +165,7 @@ const collectNodeTests = async ({
   const nodeProjects = planner.getPlan().nodeProjectsToRun;
   const { nodeBuild } = planner;
 
-  if (!nodeBuild || nodeProjects.length === 0) {
+  if (!nodeBuild || !planner.hasNodeTestsToRun()) {
     return {
       list: [],
       getSourceMap: async () => null,
@@ -299,7 +299,7 @@ const collectNodeTests = async ({
 };
 
 type PreparedBrowserCollection = {
-  executor: Awaited<ReturnType<typeof loadBrowserExecutor>>;
+  executor: BrowserTestExecutor;
   stage: BrowserGlobalSetupStageResult;
 };
 
@@ -378,19 +378,13 @@ const collectBrowserTests = async (
 };
 
 /**
- * The `--filesOnly` listing: a pure read of the resolved plan. Iterates
- * `context.projects` (not the runnable subsets) to keep the configured project
- * order; projects the plan resolved out have no entries and contribute nothing.
+ * The `--filesOnly` listing: a pure read of the resolved plan. Iterates the
+ * plan's full project list (not the runnable subsets) in the resolver's order;
+ * projects the plan resolved out have no entries and contribute nothing.
  */
-const collectTestFiles = ({
-  context,
-  planner,
-}: {
-  context: Rstest;
-  planner: TestPlanner;
-}) => {
-  const { entriesCache } = planner.getPlan();
-  const list: ListCommandResult[] = context.projects.flatMap((project) =>
+const collectTestFiles = (planner: TestPlanner) => {
+  const { projects, entriesCache } = planner.getPlan();
+  const list: ListCommandResult[] = projects.flatMap((project) =>
     Object.values(entriesCache.get(project.environmentName)?.entries ?? {}).map(
       (testPath) => ({
         testPath,
@@ -532,22 +526,10 @@ export async function listTests(
     isWatchMode: false,
   });
 
-  // An invalid browser config must fail the list whether or not the plan left
-  // a browser test to collect — the executor load inside collectBrowserTests
-  // is the only other thing that would validate it. Mirrors the run path's
-  // empty-run branch.
-  if (
-    browserProjects.length &&
-    !planner.hasBrowserTestsToRun() &&
-    !planner.hasValidatedBrowserConfig()
-  ) {
-    await validateBrowserRunConfig(context, browserProjects);
-  }
-
   let collected: Awaited<ReturnType<typeof collectAllTests>>;
   try {
     collected = filesOnly
-      ? collectTestFiles({ context, planner })
+      ? collectTestFiles(planner)
       : await collectAllTests({ context, planner });
   } catch (error) {
     await runGlobalTeardown();

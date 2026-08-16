@@ -19,7 +19,6 @@ import {
 import {
   type BrowserTestExecutor,
   loadBrowserExecutor,
-  validateBrowserRunConfig,
 } from './browser/loader';
 import {
   FATAL_SIGNALS,
@@ -177,18 +176,11 @@ export async function runTests(context: Rstest): Promise<void> {
   // `--related` resolution lands — the plan globs nothing for it, so no executor
   // is ever launched and the no-test-files verdict comes from the one finalize.
   if (!hasNodeTestsToRun && !hasBrowserTestsToRun) {
-    // Constructing a browser executor normally validates its config, and this
-    // branch may reach the end without one — so ask for the check directly
-    // unless the discovery boot already validated after config hooks ran.
+    // The planner already validated the browser config for this shape (its
+    // `ensureBrowserConfigValidated` barrier step), so a missing or
+    // version-mismatched `@rstest/browser` reported and exited before reaching
+    // here instead of finalizing with "no test files found" and hiding it.
     //
-    // This reaches empty *mixed* runs, not only browser-only ones: an empty
-    // mixed run whose `@rstest/browser` is missing or version-mismatched
-    // reports that and exits instead of finalizing with "no test files found"
-    // and hiding it. Deliberate — a broken install is the more useful verdict,
-    // and the loader's exit no longer drags the unexpected-exit banner with it.
-    if (browserProjects.length && !planner.hasValidatedBrowserConfig()) {
-      await validateBrowserRunConfig(context, browserProjects);
-    }
     // An empty run is still a run as far as reporters are concerned. Every
     // other shape pairs a start with its end — the non-watch run below, every
     // watch cycle — and this branch was the one that finalized without ever

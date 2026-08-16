@@ -164,6 +164,14 @@ export function matchRules(
 }
 
 describe('prepareRsbuild', () => {
+  beforeEach(() => {
+    browserExecutorLoads.length = 0;
+    browserDiscoveryBoots.length = 0;
+    validateBrowserConfigCalls = 0;
+    poolTestEnvironmentModules.length = 0;
+    poolCloseCount = 0;
+  });
+
   it('should add setup files to coverage excludes without duplicates', () => {
     const coverage = {
       enabled: true,
@@ -245,8 +253,6 @@ describe('prepareRsbuild', () => {
         shardedConfig,
       );
 
-      browserExecutorLoads.length = 0;
-      validateBrowserConfigCalls = 0;
       const list = await listTests(context, { json: false });
 
       expect(list.map((item) => item.testPath)).not.toContain(
@@ -312,9 +318,6 @@ describe('prepareRsbuild', () => {
         shardedConfig,
       );
 
-      browserExecutorLoads.length = 0;
-      browserDiscoveryBoots.length = 0;
-      validateBrowserConfigCalls = 0;
       const list = await listTests(context, { json: false });
 
       expect(list.map((item) => item.testPath)).toEqual([
@@ -484,7 +487,6 @@ describe('prepareRsbuild', () => {
         },
       );
 
-      poolTestEnvironmentModules.length = 0;
       await listTests(context, { json: false });
 
       const dependency = poolTestEnvironmentModules
@@ -518,7 +520,6 @@ describe('prepareRsbuild', () => {
         },
       );
 
-      poolTestEnvironmentModules.length = 0;
       await expect(listTests(context, { json: false })).resolves.toEqual([]);
 
       // The plan resolves the zero-entry project out, so no pool is created
@@ -544,7 +545,6 @@ describe('prepareRsbuild', () => {
           },
         );
 
-        poolCloseCount = 0;
         poolCollectError = new Error('collect failed');
 
         await expect(listTests(context, { json: false })).rejects.toThrow(
