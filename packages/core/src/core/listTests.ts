@@ -29,6 +29,7 @@ import {
 import {
   type BrowserTestExecutor,
   loadBrowserExecutor,
+  validateBrowserRunConfig,
 } from './browser/loader';
 import { ensureTestEnvironmentDependencies } from './envDependencies';
 import { createRsbuildServer } from './rsbuild';
@@ -525,6 +526,19 @@ export async function listTests(
     nodeProjects,
     isWatchMode: false,
   });
+
+  // An invalid browser config must fail the list whether or not the plan left
+  // a browser test to collect — the executor load inside collectBrowserTests
+  // is the only other thing that would validate it. Stricter than the run
+  // path, which skips the check when node tests exist (see the empty-run
+  // branch in `runTests.ts` for the divergence and its e2e pin).
+  if (
+    browserProjects.length &&
+    !planner.hasBrowserTestsToRun() &&
+    !planner.hasValidatedBrowserConfig()
+  ) {
+    await validateBrowserRunConfig(context, browserProjects);
+  }
 
   let collected: Awaited<ReturnType<typeof collectAllTests>>;
   try {

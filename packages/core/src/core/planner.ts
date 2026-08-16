@@ -168,15 +168,10 @@ export async function createTestPlanner(
   // hooks — is skipped and the run stays browser-only from here down.
   const nodeBuild = nodeProjects.length ? await buildNodeSide() : undefined;
 
-  // The browser half of the barrier. Destructured so the discovery and
-  // validation steps are spent here and only the query half reaches the
-  // returned planner — a second caller is what the once-only flags inside it
-  // could not survive.
-  const {
-    runConfigHookDiscovery,
-    ensureBrowserConfigValidated,
-    ...browserPlan
-  } = createBrowserRunPlanner({
+  // The browser half of the barrier. Destructured so the discovery step is spent
+  // here and only the query half reaches the returned planner — a second caller
+  // is what the once-only flags inside it could not survive.
+  const { runConfigHookDiscovery, ...browserPlan } = createBrowserRunPlanner({
     context,
     getPlan,
     refreshPlan: resyncPlan,
@@ -185,10 +180,6 @@ export async function createTestPlanner(
     onTraceEvents,
   });
   await runConfigHookDiscovery();
-  // An invalid browser config must fail the command even when the plan left no
-  // browser test to boot a validating runtime for (e.g. a shard slice that
-  // emptied the browser side).
-  await ensureBrowserConfigValidated();
 
   // The one shard-banner print of the whole process, placed after the barrier
   // so the counts are the final plan's — every earlier resolve (pre-hook,

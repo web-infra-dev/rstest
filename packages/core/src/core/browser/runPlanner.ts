@@ -4,11 +4,7 @@ import {
   isFuzzyBasenameFilter,
   type TraceEvent,
 } from '../../utils';
-import {
-  type BrowserExecutorLoadOptions,
-  runBrowserDiscovery,
-  validateBrowserRunConfig,
-} from './loader';
+import { type BrowserExecutorLoadOptions, runBrowserDiscovery } from './loader';
 import { getUserRstestConfigPluginProjects } from '../modifyRstestConfig';
 import type { ProjectPlan } from '../projectPlan';
 import type { Rstest } from '../rstest';
@@ -23,6 +19,16 @@ import type { Rstest } from '../rstest';
 export interface BrowserRunPlan {
   hasBrowserTestsToRun(): boolean;
   getBrowserProjectsToRun(): ProjectContext[];
+  /**
+   * Whether the discovery boot completed the config-validation barrier after
+   * browser `modifyRstestConfig` hooks ran. Each command's standalone
+   * `validateBrowserRunConfig` call asks because validating again reprints
+   * every unsupported-option warning (`reportUnsupportedBrowserOptions` has no
+   * cross-call guard). When to validate at all stays a per-command policy:
+   * `run` skips a browser side its filters left empty (pinned by the related
+   * e2e against an invalid provider), while `list` validates it.
+   */
+  hasValidatedBrowserConfig(): boolean;
   /**
    * Options for constructing the real (non-discovery) browser executor, on
    * either command. `filesOnly` is owned by the discovery boot, never by a
@@ -47,17 +53,6 @@ interface BrowserRunPlanner extends BrowserRunPlan {
    * either finished or been declined.
    */
   runConfigHookDiscovery(): Promise<void>;
-  /**
-   * Validate the browser config exactly when nothing else will: an invalid
-   * config (unsupported provider, core/browser version mismatch) has to fail
-   * the command even when the plan left no browser test to run. Every path
-   * that boots a browser runtime — the discovery boot above, the real executor
-   * load — validates as part of booting, so this is a no-op whenever one of
-   * them runs; validating twice would also reprint every unsupported-option
-   * warning (`reportUnsupportedBrowserOptions` has no cross-call guard).
-   * Driven by `createTestPlanner` after discovery, like the boot above.
-   */
-  ensureBrowserConfigValidated(): Promise<void>;
 }
 
 export function createBrowserRunPlanner({
@@ -238,19 +233,10 @@ export function createBrowserRunPlanner({
       hasRunBrowserConfigHookDiscovery = true;
       await refreshPlan();
     },
-    async ensureBrowserConfigValidated() {
-      const nothingElseValidates =
-        browserProjects.length > 0 &&
-        !hasRunBrowserConfigHookDiscovery &&
-        getPlan().browserProjectsToRun.length === 0 &&
-        !shouldRunBrowserDiscoveryFallback();
-      if (nothingElseValidates) {
-        await validateBrowserRunConfig(context, browserProjects);
-      }
-    },
     hasBrowserTestsToRun: () =>
       getPlan().browserProjectsToRun.length > 0 ||
       shouldRunBrowserDiscoveryFallback(),
+    hasValidatedBrowserConfig: () => hasRunBrowserConfigHookDiscovery,
     getBrowserProjectsToRun,
     getExecutorRunOptions,
   };
