@@ -26,42 +26,36 @@ const poolTestEnvironmentModules: Array<
 let poolCollectError: Error | undefined;
 let poolCloseCount = 0;
 
+const browserExecutorLoads: string[][] = [];
+const browserDiscoveryBoots: string[][] = [];
+let validateBrowserConfigCalls = 0;
+
 rs.mock('../../src/core/browser/loader', () => {
-  const listBrowserTests = async (
-    context: RstestContext,
-    options?: {
+  const createBrowserExecutor = async (
+    _context: RstestContext,
+    options: {
+      projects: RstestContext['projects'];
       shardedEntries?: Map<string, { entries: Record<string, string> }>;
     },
   ) => ({
-    close: async () => undefined,
-    list: context.projects
-      .filter((project) => project.normalizedConfig.browser.enabled)
-      .flatMap((project) =>
+    name: 'browser',
+    init: async () => undefined,
+    runCycle: async () => {
+      throw new Error('not used in this test');
+    },
+    // Mirrors the real executor: the sharded slice arrives at load time, so a
+    // load with the wrong project subset produces the wrong listing.
+    collect: async () => ({
+      list: options.projects.flatMap((project) =>
         Object.values(
-          options?.shardedEntries?.get(project.environmentName)?.entries || {},
+          options.shardedEntries?.get(project.environmentName)?.entries || {},
         ).map((testPath) => ({
           project: project.name,
           testPath,
           tests: [],
         })),
       ),
-  });
-  const createBrowserExecutor = async (
-    context: RstestContext,
-    options: { projects: RstestContext['projects'] },
-  ) => ({
-    name: 'browser',
-    projects: options.projects,
-    init: async () => undefined,
-    runCycle: async () => {
-      throw new Error('not used in this test');
-    },
-    collect: async (opts: {
-      shardedEntries?: Map<string, { entries: Record<string, string> }>;
-    }) => {
-      const { list } = await listBrowserTests(context, opts);
-      return { list };
-    },
+    }),
     close: async () => undefined,
   });
   return {
@@ -70,10 +64,34 @@ rs.mock('../../src/core/browser/loader', () => {
       createBrowserExecutor,
       runBrowserTests: async () => undefined,
     }),
+    runBrowserDiscovery: async (
+      _context: RstestContext,
+      browserProjects: RstestContext['projects'],
+    ) => {
+      browserDiscoveryBoots.push(browserProjects.map((p) => p.name));
+      return undefined;
+    },
+    validateBrowserRunConfig: async () => {
+      validateBrowserConfigCalls += 1;
+    },
     loadBrowserExecutor: async (
       context: RstestContext,
       browserProjects: RstestContext['projects'],
-    ) => createBrowserExecutor(context, { projects: browserProjects }),
+      _coverageProvider: null,
+      options?: {
+        shardedEntries?: Map<string, { entries: Record<string, string> }>;
+        configAlreadyValidated?: boolean;
+      },
+    ) => {
+      browserExecutorLoads.push(browserProjects.map((p) => p.name));
+      if (!options?.configAlreadyValidated) {
+        validateBrowserConfigCalls += 1;
+      }
+      return createBrowserExecutor(context, {
+        projects: browserProjects,
+        shardedEntries: options?.shardedEntries,
+      });
+    },
   };
 });
 
@@ -227,6 +245,8 @@ describe('prepareRsbuild', () => {
         shardedConfig,
       );
 
+      browserExecutorLoads.length = 0;
+      validateBrowserConfigCalls = 0;
       const list = await listTests(context, { json: false });
 
       expect(list.map((item) => item.testPath)).not.toContain(
@@ -237,6 +257,11 @@ describe('prepareRsbuild', () => {
         'ab-node.test.ts',
         'c-node.test.ts',
       ]);
+      // The post-hook shard slice holds only node files, so no browser
+      // executor (and no dev server) exists for this list — but the browser
+      // config is still validated exactly once.
+      expect(browserExecutorLoads).toEqual([]);
+      expect(validateBrowserConfigCalls).toBe(1);
     });
   });
 
@@ -322,7 +347,9 @@ describe('prepareRsbuild', () => {
       poolTestEnvironmentModules.length = 0;
       await expect(listTests(context, { json: false })).resolves.toEqual([]);
 
-      expect(poolTestEnvironmentModules.at(-1)?.size).toBe(0);
+      // The plan resolves the zero-entry project out, so no pool is created
+      // at all — not even one with an empty environment-module map.
+      expect(poolTestEnvironmentModules).toHaveLength(0);
     });
   });
 
