@@ -22,7 +22,10 @@ import {
   runGlobalSetup,
   runGlobalTeardown,
 } from './globalSetup';
-import { runBrowserGlobalSetupStage } from './browser/globalSetupStage';
+import {
+  type BrowserGlobalSetupStageResult,
+  runBrowserGlobalSetupStage,
+} from './browser/globalSetupStage';
 import {
   loadBrowserExecutor,
   validateBrowserRunConfig,
@@ -295,28 +298,27 @@ const collectNodeTests = async ({
   }
 };
 
+type PreparedBrowserCollection = {
+  executor: Awaited<ReturnType<typeof loadBrowserExecutor>>;
+  stage: BrowserGlobalSetupStageResult;
+};
+
 /**
- * Collect tests from browser mode projects through the executor seam, over the
- * plan's browser subset — the same subset and executor options a run would
- * launch with, so a shard-empty or file-empty browser project never boots a
- * dev server here either.
+ * Load the browser executor over the plan's browser subset — the same subset
+ * and executor options a run would launch with, so a shard-empty or file-empty
+ * browser project never boots a dev server here either — and run the browser
+ * globalSetup stage. Sequenced before node collection starts: the stage
+ * mutates the host `process.env`, which node workers re-read at dispatch.
  */
-const collectBrowserTests = async ({
+const prepareBrowserCollection = async ({
   context,
   planner,
 }: {
   context: Rstest;
   planner: TestPlanner;
-}): Promise<{
-  errors?: FormattedError[];
-  list: ListCommandResult[];
-  close: () => Promise<void>;
-}> => {
+}): Promise<PreparedBrowserCollection | undefined> => {
   if (!planner.hasBrowserTestsToRun()) {
-    return {
-      list: [],
-      close: async () => undefined,
-    };
+    return undefined;
   }
 
   const browserProjects = planner.getBrowserProjectsToRun();
@@ -327,22 +329,49 @@ const collectBrowserTests = async ({
     planner.getExecutorRunOptions(browserProjects),
   );
 
-  const close = async () => {
-    await executor.close();
-  };
-
   try {
     const stage = await runBrowserGlobalSetupStage(context, browserProjects, {
       entriesCache: planner.getPlan().entriesCache,
     });
-    if (stage.errors.length) {
-      return { list: [], errors: stage.errors, close };
-    }
+    return { executor, stage };
+  } catch (error) {
+    // A rejected setup must still close an in-flight browser launch.
+    await executor.close().catch(() => undefined);
+    throw error;
+  }
+};
 
+/**
+ * Collect tests from browser mode projects through the executor seam.
+ */
+const collectBrowserTests = async (
+  prepared: PreparedBrowserCollection | undefined,
+): Promise<{
+  errors?: FormattedError[];
+  list: ListCommandResult[];
+  close: () => Promise<void>;
+}> => {
+  if (!prepared) {
+    return {
+      list: [],
+      close: async () => undefined,
+    };
+  }
+
+  const { executor, stage } = prepared;
+  const close = async () => {
+    await executor.close();
+  };
+
+  if (stage.errors.length) {
+    return { list: [], errors: stage.errors, close };
+  }
+
+  try {
     const { list } = await executor.collect({ env: stage.env });
     return { list, close };
   } catch (error) {
-    // A rejected setup or collect must still close an in-flight browser launch.
+    // A rejected collect must still close an in-flight browser launch.
     await executor.close().catch(() => undefined);
     throw error;
   }
@@ -394,12 +423,14 @@ const collectAllTests = async ({
   getSourceMap: (name: string) => Promise<string | null | undefined>;
   close: () => Promise<void>;
 }> => {
+  const prepared = await prepareBrowserCollection({ context, planner });
+
   // Settle both sides before unwrapping: a fail-fast `Promise.all` would leak
   // the surviving side's resources (node rsbuild server + pool, or browser
   // provider + dev server) when the other side rejects. Close the survivor,
   // then let the re-await below rethrow the first failure in order.
   const nodePromise = collectNodeTests({ context, planner });
-  const browserPromise = collectBrowserTests({ context, planner });
+  const browserPromise = collectBrowserTests(prepared);
   const [nodeSettled, browserSettled] = await Promise.allSettled([
     nodePromise,
     browserPromise,
