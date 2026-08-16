@@ -90,8 +90,7 @@ export async function runBrowserGlobalSetupStage(
   // browser controller will use, so a project whose shard slice is empty never
   // runs its globalSetup. Only an unsharded list falls back to a per-project
   // glob.
-  const gateEntries =
-    entriesCache ?? (await resolveShardedEntries(context, { silent: true }));
+  const gateEntries = entriesCache ?? (await resolveShardedEntries(context));
 
   const candidates = (
     await Promise.all(

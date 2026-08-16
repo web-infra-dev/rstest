@@ -7,16 +7,12 @@ import type {
   ListCommandOptions,
   ListCommandResult,
   Location,
-  ProjectContext,
-  RstestContext,
   TestInfo,
 } from '../types';
 import {
   bgColor,
   color,
   getTaskNameWithPrefix,
-  isFilterInsideProject as isFilterInsideProjectRoot,
-  isFuzzyBasenameFilter as isFuzzyBasenameFilterWithMode,
   logger,
   prettyTestPath,
   ROOT_SUITE_NAME,
@@ -30,13 +26,16 @@ import {
   type BrowserGlobalSetupStageResult,
   runBrowserGlobalSetupStage,
 } from './browser/globalSetupStage';
-import type { BrowserTestExecutor } from './browser/loader';
+import {
+  type BrowserTestExecutor,
+  loadBrowserExecutor,
+  validateBrowserRunConfig,
+} from './browser/loader';
 import { ensureTestEnvironmentDependencies } from './envDependencies';
-import { createSetupFileState } from './setupFileState';
-import { createRsbuildServer, prepareRsbuild } from './rsbuild';
+import { createRsbuildServer } from './rsbuild';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';
-import { createListProjectPlanState, syncNodeProjects } from './projectPlan';
-import { getUserRstestConfigPluginProjects } from './modifyRstestConfig';
+import { createTestPlanner, type TestPlanner } from './planner';
+import type { Rstest } from './rstest';
 import { prepareTestEnvironmentModules } from './testEnvironmentModule';
 
 type ListedTest = {
@@ -45,12 +44,6 @@ type ListedTest = {
   project?: string;
   location?: Location;
   type: 'file' | 'suite' | 'case';
-};
-
-type PreparedBrowserCollection = {
-  executor: BrowserTestExecutor;
-  stage: BrowserGlobalSetupStageResult;
-  shardedEntries?: Map<string, { entries: Record<string, string> }>;
 };
 
 const SummaryProjectLabel = color.gray('Projects'.padStart(11));
@@ -158,24 +151,22 @@ const createListSummaryPayload = ({
 };
 
 /**
- * Collect tests from node mode projects using Rsbuild and worker pool.
+ * Collect tests from node mode projects using the planner's node build and the
+ * worker pool. The plan's node subset is post-hook and empty-project-free, so
+ * no dev server, dependency preparation, or pool exists for a project the plan
+ * resolved out.
  */
 const collectNodeTests = async ({
   context,
-  nodeProjects,
-  globTestSourceEntries,
-  beforeCollect,
-  onRsbuildConfigResolved,
-  onModifyRstestConfigApplied,
+  planner,
 }: {
-  context: RstestContext;
-  nodeProjects: ProjectContext[];
-  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
-  beforeCollect?: () => Promise<void>;
-  onRsbuildConfigResolved?: () => Promise<void>;
-  onModifyRstestConfigApplied?: () => Promise<void>;
+  context: Rstest;
+  planner: TestPlanner;
 }) => {
-  if (nodeProjects.length === 0) {
+  const nodeProjects = planner.getPlan().nodeProjectsToRun;
+  const { nodeBuild } = planner;
+
+  if (!nodeBuild || !planner.hasNodeTestsToRun()) {
     return {
       list: [],
       getSourceMap: async () => null,
@@ -183,26 +174,7 @@ const collectNodeTests = async ({
     };
   }
 
-  const setupFileState = createSetupFileState();
-
-  const rsbuildInstance = await prepareRsbuild({
-    context,
-    globTestSourceEntries,
-    setupFileState,
-    targetProjects: nodeProjects,
-    getSetupFileProjects: () => ({
-      setupProjects: nodeProjects,
-      globalSetupProjects: context.projects,
-    }),
-    onModifyRstestConfigApplied: async () => {
-      await onModifyRstestConfigApplied?.();
-      syncNodeProjects(nodeProjects, context.projects);
-    },
-    onRsbuildConfigResolved: async () => {
-      await onRsbuildConfigResolved?.();
-      syncNodeProjects(nodeProjects, context.projects);
-    },
-  });
+  const { rsbuildInstance, setupFileState, globTestSourceEntries } = nodeBuild;
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     globTestSourceEntries,
@@ -233,28 +205,11 @@ const collectNodeTests = async ({
   };
 
   try {
-    // createRsbuildServer applies modifyRstestConfig while initializing the
-    // compiler, so dependency resolution observes the final environment/root.
-    const projectsWithEntries = (
-      await Promise.all(
-        nodeProjects.map(async (project) => ({
-          project,
-          entries: await globTestSourceEntries(project.environmentName),
-        })),
-      )
-    )
-      .filter(({ entries }) => Object.keys(entries).length > 0)
-      .map(({ project }) => project);
-
-    await ensureTestEnvironmentDependencies(
-      projectsWithEntries,
-      context.rootPath,
-    );
+    await ensureTestEnvironmentDependencies(nodeProjects, context.rootPath);
     testEnvironmentModules = await prepareTestEnvironmentModules({
-      projects: projectsWithEntries,
+      projects: nodeProjects,
       rootPath: context.rootPath,
     });
-    await beforeCollect?.();
 
     pool = await createPool({
       context,
@@ -344,93 +299,101 @@ const collectNodeTests = async ({
   }
 };
 
+type PreparedBrowserCollection = {
+  executor: BrowserTestExecutor;
+  stage: BrowserGlobalSetupStageResult;
+};
+
 /**
- * Collect tests from browser mode projects using headless browser.
+ * Load the browser executor over the plan's browser subset — the same subset
+ * and executor options a run would launch with, so a shard-empty or file-empty
+ * browser project never boots a dev server here either — and run the browser
+ * globalSetup stage. Sequenced before node collection starts: the stage
+ * mutates the host `process.env`, which node workers re-read at dispatch.
  */
-const collectBrowserTests = async ({
+const prepareBrowserCollection = async ({
   context,
-  browserProjects,
-  shardedEntries,
-  freezeShardedEntries,
-  filesOnly,
-  appliedModifyRstestConfigEnvironments,
-  prepared,
+  planner,
 }: {
-  context: RstestContext;
-  browserProjects: ProjectContext[];
-  shardedEntries?: Map<string, { entries: Record<string, string> }>;
-  freezeShardedEntries?: boolean;
-  filesOnly?: boolean;
-  appliedModifyRstestConfigEnvironments?: Set<string>;
-  prepared?: PreparedBrowserCollection;
-}): Promise<{
+  context: Rstest;
+  planner: TestPlanner;
+}): Promise<PreparedBrowserCollection | undefined> => {
+  if (!planner.hasBrowserTestsToRun()) {
+    return undefined;
+  }
+
+  const browserProjects = planner.getBrowserProjectsToRun();
+  const executor = await loadBrowserExecutor(
+    context,
+    browserProjects,
+    null,
+    planner.getExecutorRunOptions(browserProjects),
+  );
+
+  try {
+    const stage = await runBrowserGlobalSetupStage(context, browserProjects, {
+      entriesCache: planner.getPlan().entriesCache,
+    });
+    return { executor, stage };
+  } catch (error) {
+    // A rejected setup must still close an in-flight browser launch.
+    await executor.close().catch(() => undefined);
+    throw error;
+  }
+};
+
+/**
+ * Collect tests from browser mode projects through the executor seam.
+ */
+const collectBrowserTests = async (
+  prepared: PreparedBrowserCollection | undefined,
+): Promise<{
   errors?: FormattedError[];
   list: ListCommandResult[];
   close: () => Promise<void>;
 }> => {
-  if (browserProjects.length === 0) {
+  if (!prepared) {
     return {
       list: [],
       close: async () => undefined,
     };
   }
 
-  // Collect through the executor seam so `rstest list` and the run path share
-  // one browser entry point (import stays dynamic: no browser module load for
-  // node-only lists).
-  const { loadBrowserExecutor } = await import('./browser/loader');
-  const executor =
-    prepared?.executor ??
-    (await loadBrowserExecutor(context, browserProjects, null, {
-      shardedEntries,
-      freezeShardedEntries,
-      filesOnly,
-      appliedModifyRstestConfigEnvironments,
-    }));
-
+  const { executor, stage } = prepared;
   const close = async () => {
     await executor.close();
   };
 
-  try {
-    const stage = filesOnly
-      ? undefined
-      : (prepared?.stage ??
-        (await runBrowserGlobalSetupStage(context, browserProjects, {
-          entriesCache: shardedEntries,
-        })));
-    if (stage?.errors.length) {
-      return { list: [], errors: stage.errors, close };
-    }
+  if (stage.errors.length) {
+    return { list: [], errors: stage.errors, close };
+  }
 
-    const { list } = await executor.collect({ env: stage?.env });
+  try {
+    const { list } = await executor.collect({ env: stage.env });
     return { list, close };
   } catch (error) {
-    // A rejected setup or collect must still close an in-flight browser launch.
+    // A rejected collect must still close an in-flight browser launch.
     await executor.close().catch(() => undefined);
     throw error;
   }
 };
 
-const collectTestFiles = async ({
-  context,
-  globTestSourceEntries,
-}: {
-  context: RstestContext;
-  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
-}) => {
-  const projectLists: ListCommandResult[][] = await Promise.all(
-    context.projects.map(async (project) => {
-      const files = await globTestSourceEntries(project.environmentName);
-      return Object.values(files).map((testPath) => ({
+/**
+ * The `--filesOnly` listing: a pure read of the resolved plan. Iterates the
+ * plan's full project list (not the runnable subsets) in the resolver's order;
+ * projects the plan resolved out have no entries and contribute nothing.
+ */
+const collectTestFiles = (planner: TestPlanner) => {
+  const { projects, entriesCache } = planner.getPlan();
+  const list: ListCommandResult[] = projects.flatMap((project) =>
+    Object.values(entriesCache.get(project.environmentName)?.entries ?? {}).map(
+      (testPath) => ({
         testPath,
         project: project.name,
         tests: [],
-      }));
-    }),
+      }),
+    ),
   );
-
-  const list = projectLists.flat();
 
   return {
     close: async () => undefined,
@@ -441,135 +404,28 @@ const collectTestFiles = async ({
 };
 
 /**
- * Collect all tests by separating browser and node mode projects.
+ * Collect both sides of the plan concurrently.
  */
 const collectAllTests = async ({
   context,
-  globTestSourceEntries,
-  getShardedEntries,
-  collectBrowserAfterConfigHooks,
-  onModifyRstestConfigApplied,
-  onRsbuildConfigResolved,
-  appliedModifyRstestConfigEnvironments,
+  planner,
 }: {
-  context: RstestContext;
-  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
-  getShardedEntries?: () =>
-    Map<string, { entries: Record<string, string> }> | undefined;
-  collectBrowserAfterConfigHooks?: boolean;
-  onModifyRstestConfigApplied?: () => Promise<void>;
-  onRsbuildConfigResolved?: () => Promise<void>;
-  appliedModifyRstestConfigEnvironments?: Set<string>;
+  context: Rstest;
+  planner: TestPlanner;
 }): Promise<{
   errors?: FormattedError[];
   list: ListCommandResult[];
   getSourceMap: (name: string) => Promise<string | null | undefined>;
   close: () => Promise<void>;
 }> => {
-  // Separate browser and node mode projects
-  const browserProjects = context.projects.filter(isBrowserProject);
-  const nodeProjects = context.projects.filter(isNodeProject);
-  const freezeShardedEntries = Boolean(
-    context.normalizedConfig.shard && nodeProjects.length,
-  );
-  let preparedBrowserCollection: PreparedBrowserCollection | undefined;
-
-  const prepareBrowserCollection = async () => {
-    if (!browserProjects.length) {
-      return;
-    }
-
-    const shardedEntries = getShardedEntries?.();
-    const { loadBrowserExecutor } = await import('./browser/loader');
-    const executor = await loadBrowserExecutor(context, browserProjects, null, {
-      shardedEntries,
-      freezeShardedEntries,
-      appliedModifyRstestConfigEnvironments,
-    });
-
-    try {
-      const stage = await runBrowserGlobalSetupStage(context, browserProjects, {
-        entriesCache: shardedEntries,
-      });
-      preparedBrowserCollection = { executor, stage, shardedEntries };
-    } catch (error) {
-      await executor.close().catch(() => undefined);
-      throw error;
-    }
-  };
-
-  const collectBrowser = () =>
-    collectBrowserTests({
-      context,
-      browserProjects,
-      shardedEntries:
-        preparedBrowserCollection?.shardedEntries ?? getShardedEntries?.(),
-      freezeShardedEntries,
-      appliedModifyRstestConfigEnvironments,
-      prepared: preparedBrowserCollection,
-    });
-
-  if (collectBrowserAfterConfigHooks && nodeProjects.length) {
-    let refreshedAfterConfigHooks = false;
-    let nodeResult: Awaited<ReturnType<typeof collectNodeTests>>;
-    try {
-      nodeResult = await collectNodeTests({
-        context,
-        nodeProjects,
-        globTestSourceEntries,
-        beforeCollect: async () => {
-          if (
-            !refreshedAfterConfigHooks &&
-            !context.projects.some((project) => project._environmentGroup)
-          ) {
-            await onModifyRstestConfigApplied?.();
-          }
-          await prepareBrowserCollection();
-        },
-        onRsbuildConfigResolved,
-        onModifyRstestConfigApplied: async () => {
-          refreshedAfterConfigHooks = true;
-          await onModifyRstestConfigApplied?.();
-        },
-      });
-    } catch (error) {
-      await preparedBrowserCollection?.executor.close().catch(() => undefined);
-      throw error;
-    }
-    let browserResult: Awaited<ReturnType<typeof collectBrowser>>;
-    try {
-      browserResult = await collectBrowser();
-    } catch (error) {
-      await nodeResult.close();
-      throw error;
-    }
-
-    return {
-      errors: [...(nodeResult.errors ?? []), ...(browserResult.errors ?? [])],
-      list: [...nodeResult.list, ...browserResult.list],
-      getSourceMap: nodeResult.getSourceMap,
-      close: async () => {
-        const closePromises = [nodeResult.close(), browserResult.close()];
-        await Promise.allSettled(closePromises);
-        await Promise.all(closePromises);
-      },
-    };
-  }
-
-  await prepareBrowserCollection();
+  const prepared = await prepareBrowserCollection({ context, planner });
 
   // Settle both sides before unwrapping: a fail-fast `Promise.all` would leak
   // the surviving side's resources (node rsbuild server + pool, or browser
   // provider + dev server) when the other side rejects. Close the survivor,
   // then let the re-await below rethrow the first failure in order.
-  const nodePromise = collectNodeTests({
-    context,
-    nodeProjects,
-    globTestSourceEntries,
-    onRsbuildConfigResolved,
-    onModifyRstestConfigApplied,
-  });
-  const browserPromise = collectBrowser();
+  const nodePromise = collectNodeTests({ context, planner });
+  const browserPromise = collectBrowserTests(prepared);
   const [nodeSettled, browserSettled] = await Promise.allSettled([
     nodePromise,
     browserPromise,
@@ -603,7 +459,7 @@ const collectAllTests = async ({
 };
 
 export async function listTests(
-  context: RstestContext,
+  context: Rstest,
   {
     filesOnly,
     json,
@@ -613,14 +469,10 @@ export async function listTests(
   }: ListCommandOptions,
 ): Promise<ListCommandResult[]> {
   const { rootPath } = context;
-  const { shard } = context.normalizedConfig;
+  // Read before the planner resolves: environment-comment grouping may split
+  // one configured project into several, which must not flip on the project
+  // column.
   const showProject = context.projects.length > 1;
-
-  const isFilterInsideProject = (filter: string, project: ProjectContext) =>
-    isFilterInsideProjectRoot(filter, project.rootPath, rootPath);
-
-  const isFuzzyBasenameFilter = (filter: string) =>
-    isFuzzyBasenameFilterWithMode(filter, context.fileFilterMode);
 
   if (context.relatedResolutionEmpty) {
     const tests: ListedTest[] = [];
@@ -661,146 +513,39 @@ export async function listTests(
     return [];
   }
 
-  const listPlanState = createListProjectPlanState(context);
-  const appliedBrowserModifyRstestConfigEnvironments = new Set<string>();
-  const {
-    globTestSourceEntries,
-    refreshListEntries,
-    validateEnvironmentComments,
-  } = listPlanState;
-
+  const browserProjects = context.projects.filter(isBrowserProject);
   const nodeProjects = context.projects.filter(isNodeProject);
-  const shouldPrintShardAfterConfigHooks = Boolean(
-    shard && !filesOnly && nodeProjects.length,
-  );
 
-  const applyBrowserFilesOnlyConfigHooks = async () => {
-    const browserProjects = context.projects.filter(isBrowserProject);
+  // The same init barrier the run path resolves through: node and browser
+  // `modifyRstestConfig` hooks fire inside the planner (the browser's via the
+  // files-only discovery boot), the runnable subsets are resolved from
+  // post-hook entries with empty projects dropped, and the shard banner is
+  // announced once. Nothing below reads a plan that is still moving.
+  const planner = await createTestPlanner(context, {
+    browserProjects,
+    nodeProjects,
+    isWatchMode: false,
+  });
 
-    if (!browserProjects.length) {
-      return;
-    }
-
-    const browserConfigHookProjects =
-      getUserRstestConfigPluginProjects(browserProjects);
-    if (!browserConfigHookProjects.length) {
-      return;
-    }
-
-    let projectsToInitialize = browserConfigHookProjects;
-    if (
-      context.fileFilters?.length &&
-      !context.fileFilters.some(isFuzzyBasenameFilter)
-    ) {
-      const matchedProjects = browserConfigHookProjects.filter((project) =>
-        context.fileFilters?.some((filter) =>
-          isFilterInsideProject(filter, project),
-        ),
-      );
-      if (matchedProjects.length > 0) {
-        projectsToInitialize = matchedProjects;
-      } else if (
-        context.fileFilters.every((filter) =>
-          [...browserProjects, ...nodeProjects].some((project) =>
-            isFilterInsideProject(filter, project),
-          ),
-        )
-      ) {
-        return;
-      }
-    }
-
-    const browserResult = await collectBrowserTests({
-      context,
-      browserProjects: projectsToInitialize,
-      shardedEntries: shard
-        ? listPlanState.getShardedBrowserEntries?.()
-        : undefined,
-      filesOnly: true,
-      appliedModifyRstestConfigEnvironments:
-        appliedBrowserModifyRstestConfigEnvironments,
-    });
-    await browserResult.close();
-    await refreshListEntries({
-      silentShardMessage: true,
-      strictEnvironmentComments: true,
-    });
-  };
-
-  if (nodeProjects.length && filesOnly) {
-    await refreshListEntries({
-      silentShardMessage: Boolean(shard),
-      strictEnvironmentComments: false,
-    });
-    syncNodeProjects(nodeProjects, context.projects);
-    let refreshedAfterConfigHooks = false;
-
-    const rsbuildInstance = await prepareRsbuild({
-      context,
-      globTestSourceEntries,
-      setupFileState: createSetupFileState(),
-      targetProjects: nodeProjects,
-      onModifyRstestConfigApplied: async () => {
-        refreshedAfterConfigHooks = true;
-        await refreshListEntries({
-          silentShardMessage: !shard,
-          strictEnvironmentComments: false,
-        });
-        syncNodeProjects(nodeProjects, context.projects);
-      },
-      onRsbuildConfigResolved: validateEnvironmentComments,
-    });
-    await rsbuildInstance.initConfigs({ action: 'dev' });
-    if (!refreshedAfterConfigHooks) {
-      await refreshListEntries({
-        silentShardMessage: !shard,
-        strictEnvironmentComments: true,
-      });
-      syncNodeProjects(nodeProjects, context.projects);
-    }
-
-    await applyBrowserFilesOnlyConfigHooks();
-  } else if (filesOnly) {
-    await refreshListEntries({
-      silentShardMessage: Boolean(shard),
-      strictEnvironmentComments: !nodeProjects.length,
-    });
-
-    await applyBrowserFilesOnlyConfigHooks();
-  } else {
-    await refreshListEntries({
-      silentShardMessage: shouldPrintShardAfterConfigHooks,
-      strictEnvironmentComments: !nodeProjects.length,
-    });
-    if (shouldPrintShardAfterConfigHooks) {
-      await applyBrowserFilesOnlyConfigHooks();
-    }
+  // An invalid browser config must fail the list whether or not this list
+  // loads a browser executor — the executor load inside collectBrowserTests
+  // is the only other thing that would validate it, and both an empty browser
+  // plan and the `--filesOnly` pure plan read bypass it. Stricter than the
+  // run path, which skips the check when node tests exist (see the empty-run
+  // branch in `runTests.ts` for the divergence and its e2e pin).
+  if (
+    browserProjects.length &&
+    !planner.hasValidatedBrowserConfig() &&
+    (filesOnly || !planner.hasBrowserTestsToRun())
+  ) {
+    await validateBrowserRunConfig(context, browserProjects);
   }
 
-  const collection = filesOnly
-    ? collectTestFiles({
-        context,
-        globTestSourceEntries,
-      })
-    : collectAllTests({
-        context,
-        globTestSourceEntries,
-        getShardedEntries: shard
-          ? listPlanState.getShardedBrowserEntries
-          : undefined,
-        collectBrowserAfterConfigHooks: shouldPrintShardAfterConfigHooks,
-        onRsbuildConfigResolved: validateEnvironmentComments,
-        onModifyRstestConfigApplied: () =>
-          refreshListEntries({
-            silentShardMessage: !shouldPrintShardAfterConfigHooks,
-            strictEnvironmentComments: false,
-          }),
-        appliedModifyRstestConfigEnvironments:
-          appliedBrowserModifyRstestConfigEnvironments,
-      });
-  let collected: Awaited<typeof collection>;
+  let collected: Awaited<ReturnType<typeof collectAllTests>>;
   try {
-    collected = await collection;
+    collected = filesOnly
+      ? collectTestFiles(planner)
+      : await collectAllTests({ context, planner });
   } catch (error) {
     await runGlobalTeardown();
     throw error;

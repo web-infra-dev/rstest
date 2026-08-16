@@ -6,8 +6,8 @@ import {
   createBrowserRunPlanner,
 } from './browser/runPlanner';
 import {
-  createRunProjectPlanState,
-  type RunProjectPlan,
+  createProjectPlanState,
+  type ProjectPlan,
   syncNodeProjects,
 } from './projectPlan';
 import { prepareRsbuild } from './rsbuild';
@@ -60,9 +60,9 @@ export type NodeBuild = {
  * is settled by the time this returns and has no re-entry point afterwards, so
  * nothing can catch it half-applied.
  */
-export interface RunPlanner extends BrowserRunPlan {
+export interface TestPlanner extends BrowserRunPlan {
   /** The resolved plan: browser + node runnable subsets and their entries. */
-  getPlan(): RunProjectPlan;
+  getPlan(): ProjectPlan;
   hasNodeTestsToRun(): boolean;
   /** A coverage-plugin load error captured while preparing Rsbuild, if any. */
   coveragePluginLoadError(): unknown;
@@ -72,7 +72,7 @@ export interface RunPlanner extends BrowserRunPlan {
   readonly nodeBuild: NodeBuild | undefined;
 }
 
-export type CreateRunPlannerOptions = {
+export type CreateTestPlannerOptions = {
   browserProjects: ProjectContext[];
   nodeProjects: ProjectContext[];
   isWatchMode: boolean;
@@ -80,16 +80,16 @@ export type CreateRunPlannerOptions = {
   onTraceEvents?: (events: TraceEvent[]) => void;
 };
 
-export async function createRunPlanner(
+export async function createTestPlanner(
   context: Rstest,
   {
     browserProjects,
     nodeProjects,
     isWatchMode,
     onTraceEvents,
-  }: CreateRunPlannerOptions,
-): Promise<RunPlanner> {
-  const projectPlanState = createRunProjectPlanState({
+  }: CreateTestPlannerOptions,
+): Promise<TestPlanner> {
+  const projectPlanState = createProjectPlanState({
     context,
     isWatchMode,
   });
@@ -97,9 +97,9 @@ export async function createRunPlanner(
 
   let coveragePluginLoadError: unknown;
 
-  const getPlan = (): RunProjectPlan => projectPlanState.getPlan();
+  const getPlan = (): ProjectPlan => projectPlanState.getPlan();
 
-  const plan = await resolveRunnableProjects({ silentShardMessage: true });
+  const plan = await resolveRunnableProjects();
 
   // The Rsbuild project set: the planned node subset, plus every node project the
   // plan left out — those still need an environment for their
@@ -126,16 +126,11 @@ export async function createRunPlanner(
   /**
    * The planner's one mutation path: re-resolve after a `modifyRstestConfig`
    * hook changed project configs, then splice the result back into
-   * `rsbuildProjects` in place, for the reason given above. Callers differ only
-   * in `silentShardMessage`, so keep that at the call site where the choice is
-   * visible.
+   * `rsbuildProjects` in place, for the reason given above.
    */
-  const resyncPlan = async (extra?: {
-    silentShardMessage?: boolean;
-  }): Promise<void> => {
+  const resyncPlan = async (): Promise<void> => {
     const refreshed = await resolveRunnableProjects({
       strictEnvironmentComments: true,
-      ...extra,
     });
     syncNodeProjects(rsbuildProjects, refreshed.nodeProjectsToRun);
   };
@@ -173,23 +168,23 @@ export async function createRunPlanner(
   // hooks — is skipped and the run stays browser-only from here down.
   const nodeBuild = nodeProjects.length ? await buildNodeSide() : undefined;
 
-  // Re-resolve after browser-side `modifyRstestConfig` hooks changed project
-  // configs (the discovery boot below can add test files to an otherwise-empty
-  // browser project).
-  const refreshPlan = () => resyncPlan({ silentShardMessage: true });
-
   // The browser half of the barrier. Destructured so the discovery step is spent
   // here and only the query half reaches the returned planner — a second caller
   // is what the once-only flags inside it could not survive.
   const { runConfigHookDiscovery, ...browserPlan } = createBrowserRunPlanner({
     context,
     getPlan,
-    refreshPlan,
+    refreshPlan: resyncPlan,
     browserProjects,
     nodeProjects,
     onTraceEvents,
   });
   await runConfigHookDiscovery();
+
+  // The one shard-banner print of the whole process, placed after the barrier
+  // so the counts are the final plan's — every earlier resolve (pre-hook,
+  // post-hook, post-discovery) only recorded them.
+  projectPlanState.announceShardSlice();
 
   const globTestEntries = async (): Promise<string[]> => {
     const projects = getPlan().nodeProjectsToRun;

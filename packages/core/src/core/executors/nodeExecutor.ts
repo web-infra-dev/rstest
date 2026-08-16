@@ -18,7 +18,7 @@ import { writeBundleCoverageResults } from '../bundleCoverage';
 import { ensureTestEnvironmentDependencies } from '../envDependencies';
 import { claimGlobalSetupOnce, runGlobalSetup } from '../globalSetup';
 import { applyOnlyFailuresSelection } from '../onlyFailures';
-import type { RunProjectPlan } from '../projectPlan';
+import type { ProjectPlan } from '../projectPlan';
 import { createRsbuildServer } from '../rsbuild';
 import {
   readResultsCache,
@@ -171,14 +171,14 @@ export type NodeExecutor = TestExecutor &
 /**
  * Everything the node adapter needs from the planner. `setupFileState` and
  * `globTestSourceEntries` must arrive as the planner's own objects, never copies
- * — the planner's `RunPlanner` doc records what a snapshot of either breaks.
+ * — the planner's `TestPlanner` doc records what a snapshot of either breaks.
  */
 type CreateNodeExecutorOptions = {
   /** Already prepared and config-hooked by the planner. */
   rsbuildInstance: RsbuildInstance;
   setupFileState: SetupFileState;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
-  getPlan: () => RunProjectPlan;
+  getPlan: () => ProjectPlan;
   /** The single run-scoped provider, or null when coverage produces none. */
   coverageProvider: CoverageProvider | null;
   isWatchMode: boolean;

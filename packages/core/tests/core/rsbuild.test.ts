@@ -26,42 +26,36 @@ const poolTestEnvironmentModules: Array<
 let poolCollectError: Error | undefined;
 let poolCloseCount = 0;
 
+const browserExecutorLoads: string[][] = [];
+const browserDiscoveryBoots: string[][] = [];
+let validateBrowserConfigCalls = 0;
+
 rs.mock('../../src/core/browser/loader', () => {
-  const listBrowserTests = async (
-    context: RstestContext,
-    options?: {
+  const createBrowserExecutor = async (
+    _context: RstestContext,
+    options: {
+      projects: RstestContext['projects'];
       shardedEntries?: Map<string, { entries: Record<string, string> }>;
     },
   ) => ({
-    close: async () => undefined,
-    list: context.projects
-      .filter((project) => project.normalizedConfig.browser.enabled)
-      .flatMap((project) =>
+    name: 'browser',
+    init: async () => undefined,
+    runCycle: async () => {
+      throw new Error('not used in this test');
+    },
+    // Mirrors the real executor: the sharded slice arrives at load time, so a
+    // load with the wrong project subset produces the wrong listing.
+    collect: async () => ({
+      list: options.projects.flatMap((project) =>
         Object.values(
-          options?.shardedEntries?.get(project.environmentName)?.entries || {},
+          options.shardedEntries?.get(project.environmentName)?.entries || {},
         ).map((testPath) => ({
           project: project.name,
           testPath,
           tests: [],
         })),
       ),
-  });
-  const createBrowserExecutor = async (
-    context: RstestContext,
-    options: { projects: RstestContext['projects'] },
-  ) => ({
-    name: 'browser',
-    projects: options.projects,
-    init: async () => undefined,
-    runCycle: async () => {
-      throw new Error('not used in this test');
-    },
-    collect: async (opts: {
-      shardedEntries?: Map<string, { entries: Record<string, string> }>;
-    }) => {
-      const { list } = await listBrowserTests(context, opts);
-      return { list };
-    },
+    }),
     close: async () => undefined,
   });
   return {
@@ -70,10 +64,34 @@ rs.mock('../../src/core/browser/loader', () => {
       createBrowserExecutor,
       runBrowserTests: async () => undefined,
     }),
+    runBrowserDiscovery: async (
+      _context: RstestContext,
+      browserProjects: RstestContext['projects'],
+    ) => {
+      browserDiscoveryBoots.push(browserProjects.map((p) => p.name));
+      return undefined;
+    },
+    validateBrowserRunConfig: async () => {
+      validateBrowserConfigCalls += 1;
+    },
     loadBrowserExecutor: async (
       context: RstestContext,
       browserProjects: RstestContext['projects'],
-    ) => createBrowserExecutor(context, { projects: browserProjects }),
+      _coverageProvider: null,
+      options?: {
+        shardedEntries?: Map<string, { entries: Record<string, string> }>;
+        configAlreadyValidated?: boolean;
+      },
+    ) => {
+      browserExecutorLoads.push(browserProjects.map((p) => p.name));
+      if (!options?.configAlreadyValidated) {
+        validateBrowserConfigCalls += 1;
+      }
+      return createBrowserExecutor(context, {
+        projects: browserProjects,
+        shardedEntries: options?.shardedEntries,
+      });
+    },
   };
 });
 
@@ -146,6 +164,14 @@ export function matchRules(
 }
 
 describe('prepareRsbuild', () => {
+  beforeEach(() => {
+    browserExecutorLoads.length = 0;
+    browserDiscoveryBoots.length = 0;
+    validateBrowserConfigCalls = 0;
+    poolTestEnvironmentModules.length = 0;
+    poolCloseCount = 0;
+  });
+
   it('should add setup files to coverage excludes without duplicates', () => {
     const coverage = {
       enabled: true,
@@ -237,6 +263,217 @@ describe('prepareRsbuild', () => {
         'ab-node.test.ts',
         'c-node.test.ts',
       ]);
+      // The post-hook shard slice holds only node files, so no browser
+      // executor (and no dev server) exists for this list — but the browser
+      // config is still validated exactly once.
+      expect(browserExecutorLoads).toEqual([]);
+      expect(validateBrowserConfigCalls).toBe(1);
+    });
+  });
+
+  it('should shard-filter browser-only projects through the plan', async () => {
+    await withTempDir('rstest-list-shard-browser-only-', async (tempRoot) => {
+      for (const file of ['a-browser.test.ts', 'b-browser.test.ts']) {
+        writeFileSync(join(tempRoot, file), 'export {};\n');
+      }
+
+      // An ordinary Rsbuild plugin without a modifyRstestConfig callback: the
+      // discovery boot must still settle these projects, and the shard filter
+      // must still drop the shard-empty sibling afterwards.
+      const noopPlugin: RsbuildPlugin = {
+        name: 'noop-plugin-without-config-hook',
+        setup() {},
+      };
+
+      const shardedConfig: ResolvedRstestConfig = {
+        root: tempRoot,
+        shard: { index: 1, count: 2 },
+      };
+      const context = new Rstest(
+        {
+          cwd: tempRoot,
+          command: 'list',
+          embedded: true,
+          projects: [
+            {
+              config: {
+                name: 'browser-a',
+                root: tempRoot,
+                include: ['a-browser.test.ts'],
+                plugins: [noopPlugin],
+                browser: { enabled: true, provider: 'playwright' },
+              },
+            },
+            {
+              config: {
+                name: 'browser-b',
+                root: tempRoot,
+                include: ['b-browser.test.ts'],
+                plugins: [noopPlugin],
+                browser: { enabled: true, provider: 'playwright' },
+              },
+            },
+          ],
+        },
+        shardedConfig,
+      );
+
+      const list = await listTests(context, { json: false });
+
+      expect(list.map((item) => item.testPath)).toEqual([
+        join(tempRoot, 'a-browser.test.ts'),
+      ]);
+      // The discovery boot covers the plugin-bearing projects once; the real
+      // collect loads only the shard-active subset, so the shard-empty
+      // sibling gets no executor and no dev server.
+      expect(browserDiscoveryBoots).toEqual([['browser-a', 'browser-b']]);
+      expect(browserExecutorLoads).toEqual([['browser-a']]);
+      // configAlreadyValidated flows from the discovery barrier, so the
+      // executor load performs no second validation.
+      expect(validateBrowserConfigCalls).toBe(0);
+    });
+  });
+
+  it('should validate the browser config in a filesOnly list without loading an executor', async () => {
+    await withTempDir('rstest-list-files-only-', async (tempRoot) => {
+      writeFileSync(join(tempRoot, 'a-browser.test.ts'), 'export {};\n');
+
+      const context = new Rstest(
+        {
+          cwd: tempRoot,
+          command: 'list',
+          embedded: true,
+          projects: [
+            {
+              config: {
+                name: 'browser',
+                root: tempRoot,
+                include: ['a-browser.test.ts'],
+                browser: { enabled: true, provider: 'playwright' },
+              },
+            },
+          ],
+        },
+        { root: tempRoot },
+      );
+
+      const list = await listTests(context, { json: false, filesOnly: true });
+
+      expect(list.map((item) => item.testPath)).toEqual([
+        join(tempRoot, 'a-browser.test.ts'),
+      ]);
+      // The filesOnly listing is a pure plan read — no executor, no dev
+      // server — so the direct check is the only browser config validation.
+      expect(browserExecutorLoads).toEqual([]);
+      expect(validateBrowserConfigCalls).toBe(1);
+    });
+  });
+
+  it('should list node tests added by modifyRstestConfig hooks to an empty-glob project', async () => {
+    await withTempDir('rstest-list-hook-added-', async (tempRoot) => {
+      writeFileSync(join(tempRoot, 'added-node.test.ts'), 'export {};\n');
+
+      // The project's own glob matches nothing, so the plan resolves it out —
+      // but its environment must stay alive long enough for the hook to add
+      // the file and put the project back in the plan.
+      const addFilesPlugin: RsbuildPlugin = {
+        name: 'modify-rstest-add-files',
+        setup(api) {
+          api
+            .useExposed<RstestExposeAPI>('rstest')
+            ?.modifyRstestConfig((config) => {
+              config.include = ['added-node.test.ts'];
+            });
+        },
+      };
+
+      const context = new Rstest(
+        {
+          cwd: tempRoot,
+          command: 'list',
+          embedded: true,
+          projects: [],
+        },
+        {
+          root: tempRoot,
+          include: ['missing/**/*.test.ts'],
+          plugins: [addFilesPlugin],
+        },
+      );
+
+      const list = await listTests(context, { json: false });
+
+      expect(list.map((item) => item.testPath)).toEqual([
+        join(tempRoot, 'added-node.test.ts'),
+      ]);
+    });
+  });
+
+  it('should not create a compiler for an empty node sibling once config hooks apply', async () => {
+    await withTempDir('rstest-list-empty-sibling-', async (tempRoot) => {
+      writeFileSync(join(tempRoot, 'full-node.test.ts'), 'export {};\n');
+
+      const hookPlugin: RsbuildPlugin = {
+        name: 'modify-rstest-touch-config',
+        setup(api) {
+          api
+            .useExposed<RstestExposeAPI>('rstest')
+            ?.modifyRstestConfig((config) => {
+              config.include = ['full-node.test.ts'];
+            });
+        },
+      };
+      // The zero-entry sibling must be spliced out of the Rsbuild environment
+      // set after the hooks settle. onAfterCreateCompiler is a global hook (it
+      // fires for the sibling's MultiCompiler too), so the guard checks the
+      // created compiler names instead of merely firing.
+      const compilerGuardPlugin: RsbuildPlugin = {
+        name: 'empty-node-compiler-guard',
+        setup(api) {
+          api.onAfterCreateCompiler(({ compiler }) => {
+            const names =
+              'compilers' in compiler
+                ? compiler.compilers.map((child) => child.name)
+                : [compiler.name];
+            if (names.includes('node-empty')) {
+              throw new Error('EMPTY_NODE_SHOULD_NOT_CREATE_COMPILER');
+            }
+          });
+        },
+      };
+
+      const context = new Rstest(
+        {
+          cwd: tempRoot,
+          command: 'list',
+          embedded: true,
+          projects: [
+            {
+              config: {
+                name: 'node-full',
+                root: tempRoot,
+                include: ['full-node.test.ts'],
+                plugins: [hookPlugin],
+              },
+            },
+            {
+              config: {
+                name: 'node-empty',
+                root: tempRoot,
+                include: ['missing/**/*.test.ts'],
+                plugins: [compilerGuardPlugin],
+              },
+            },
+          ],
+        },
+        { root: tempRoot },
+      );
+
+      const list = await listTests(context, { json: false });
+
+      expect(list.map((item) => item.testPath)).toEqual([
+        join(tempRoot, 'full-node.test.ts'),
+      ]);
     });
   });
 
@@ -285,7 +522,6 @@ describe('prepareRsbuild', () => {
         },
       );
 
-      poolTestEnvironmentModules.length = 0;
       await listTests(context, { json: false });
 
       const dependency = poolTestEnvironmentModules
@@ -319,10 +555,11 @@ describe('prepareRsbuild', () => {
         },
       );
 
-      poolTestEnvironmentModules.length = 0;
       await expect(listTests(context, { json: false })).resolves.toEqual([]);
 
-      expect(poolTestEnvironmentModules.at(-1)?.size).toBe(0);
+      // The plan resolves the zero-entry project out, so no pool is created
+      // at all — not even one with an empty environment-module map.
+      expect(poolTestEnvironmentModules).toHaveLength(0);
     });
   });
 
@@ -343,7 +580,6 @@ describe('prepareRsbuild', () => {
           },
         );
 
-        poolCloseCount = 0;
         poolCollectError = new Error('collect failed');
 
         await expect(listTests(context, { json: false })).rejects.toThrow(

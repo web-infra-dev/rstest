@@ -1305,7 +1305,7 @@ export const createBrowserRuntime = async ({
     const updatedShardedEntries = freezeShardedEntries
       ? shardedEntries
       : context.normalizedConfig.shard
-        ? await resolveShardedEntries(context, { silent: true })
+        ? await resolveShardedEntries(context)
         : shardedEntries;
     projectEntries = await resolveProjectEntries(
       context,

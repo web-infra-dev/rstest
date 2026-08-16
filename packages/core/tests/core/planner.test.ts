@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
-import { createRunPlanner } from '../../src/core/planner';
+import { createTestPlanner } from '../../src/core/planner';
 import { prepareRsbuild } from '../../src/core/rsbuild';
 import { Rstest } from '../../src/core/rstest';
 
@@ -51,7 +51,7 @@ const createContext = (
     { root },
   );
 
-describe('createRunPlanner cold-start gate', () => {
+describe('createTestPlanner cold-start gate', () => {
   let tempRoot: string;
 
   beforeEach(() => {
@@ -68,7 +68,7 @@ describe('createRunPlanner cold-start gate', () => {
     const context = createContext(tempRoot, [
       { name: 'browser-a', browser: true },
     ]);
-    const planner = await createRunPlanner(context, {
+    const planner = await createTestPlanner(context, {
       browserProjects: context.projects,
       nodeProjects: [],
       isWatchMode: false,
@@ -86,7 +86,7 @@ describe('createRunPlanner cold-start gate', () => {
   // behavior, so no e2e can see it either. Also pins "exactly one boot".
   it('boots one for a run that has node projects', async () => {
     const context = createContext(tempRoot, [{ name: 'node-a' }]);
-    const planner = await createRunPlanner(context, {
+    const planner = await createTestPlanner(context, {
       browserProjects: [],
       nodeProjects: context.projects,
       isWatchMode: false,

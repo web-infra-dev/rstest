@@ -2,7 +2,7 @@ import type { ProjectContext, ProjectEntries, RstestContext } from '../types';
 import {
   applyEnvironmentComment,
   getShardedFiles,
-  logShardMessage,
+  type ShardCounts,
 } from '../utils';
 import {
   getEnvironmentKey,
@@ -17,16 +17,14 @@ type GetProjectEntries = (
 type RefreshEnvironmentPartitionResult = {
   projects: ProjectContext[];
   entriesCache: Map<string, ProjectEntries>;
+  /** Present only when the run is sharded. */
+  shardCounts?: ShardCounts;
 };
 
 type RefreshEnvironmentPartitionEntry = {
   project: ProjectContext;
   alias: string;
   testPath: string;
-};
-
-type ShardMessageOptions = {
-  silent?: boolean;
 };
 
 const getSourceEnvironmentName = (project: ProjectContext): string =>
@@ -224,12 +222,10 @@ export const refreshEnvironmentPartitionEntries = async ({
   context,
   projects,
   getProjectEntries,
-  shardMessage,
 }: {
   context: RstestContext;
   projects: ProjectContext[];
   getProjectEntries: GetProjectEntries;
-  shardMessage?: ShardMessageOptions;
 }): Promise<RefreshEnvironmentPartitionResult> => {
   const sourceProjects = groupProjectsBySource(projects);
   const refreshedEntries: RefreshEnvironmentPartitionEntry[] = [];
@@ -361,14 +357,6 @@ export const refreshEnvironmentPartitionEntries = async ({
     ? getShardedFiles(refreshedEntries, context.normalizedConfig.shard)
     : refreshedEntries;
 
-  if (context.normalizedConfig.shard && !shardMessage?.silent) {
-    logShardMessage({
-      shard: context.normalizedConfig.shard,
-      testFilesInShardCount: entriesToRun.length,
-      totalTestFileCount: refreshedEntries.length,
-    });
-  }
-
   const refreshedEntriesCache = createEmptyEntriesCache(
     refreshedProjects,
     context.fileFilters,
@@ -388,5 +376,11 @@ export const refreshEnvironmentPartitionEntries = async ({
   return {
     projects: refreshedProjects,
     entriesCache: refreshedEntriesCache,
+    shardCounts: context.normalizedConfig.shard
+      ? {
+          testFilesInShardCount: entriesToRun.length,
+          totalTestFileCount: refreshedEntries.length,
+        }
+      : undefined,
   };
 };

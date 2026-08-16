@@ -1,4 +1,4 @@
-import type { ProjectContext, ProjectEntries, RstestContext } from '../types';
+import type { ProjectContext, ProjectEntries } from '../types';
 import { groupProjectEntriesByEnvironment } from './environmentGroups';
 import { isBrowserProject } from './isBrowserProject';
 
@@ -84,62 +84,4 @@ export const resolveRunnableProjectsByEntries = async ({
       (project) => !isBrowserProject(project) && shouldRunProject(project),
     ),
   };
-};
-
-export const applyEnvironmentGroupsToListEntries = async ({
-  context,
-  testEntries,
-  globTestSourceEntries,
-  ignoreInvalidEnvironmentComments = false,
-}: {
-  context: RstestContext;
-  testEntries: Record<string, Record<string, string>>;
-  globTestSourceEntries: GlobTestSourceEntries;
-  ignoreInvalidEnvironmentComments?: boolean;
-}): Promise<{ changed: boolean }> => {
-  if (!context.normalizedConfig.shard) {
-    await Promise.all(
-      context.projects.map((project) =>
-        globTestSourceEntries(project.environmentName),
-      ),
-    );
-  }
-
-  const grouped = await groupProjectEntriesByEnvironment({
-    entriesCache: new Map(
-      Object.entries(testEntries).map(([environmentName, entries]) => [
-        environmentName,
-        { entries },
-      ]),
-    ),
-    projects: context.projects.filter((project) => !isBrowserProject(project)),
-    ignoreInvalidEnvironmentComments,
-  });
-
-  if (!grouped.changed) {
-    return { changed: false };
-  }
-
-  const nodeEnvironmentNames = new Set(
-    context.projects
-      .filter((project) => !isBrowserProject(project))
-      .map((project) => project.environmentName),
-  );
-
-  for (const key of Object.keys(testEntries)) {
-    if (nodeEnvironmentNames.has(key)) {
-      delete testEntries[key];
-    }
-  }
-
-  for (const [environmentName, entries] of grouped.entriesCache) {
-    testEntries[environmentName] = entries.entries;
-  }
-
-  context.projects = [
-    ...context.projects.filter(isBrowserProject),
-    ...grouped.projects,
-  ];
-
-  return { changed: true };
 };

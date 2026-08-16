@@ -35,7 +35,7 @@ import {
 import { createNodeExecutor } from './executors/nodeExecutor';
 import { runGlobalTeardown } from './globalSetup';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';
-import { createRunPlanner } from './planner';
+import { createTestPlanner } from './planner';
 import type { Rstest } from './rstest';
 import {
   createWatchCycleDriver,
@@ -122,7 +122,7 @@ export async function runTests(context: Rstest): Promise<void> {
   // step, and every run shape — node-only, browser-only, mixed — comes through
   // here.
   // ===================================================================
-  const planner = await createRunPlanner(context, {
+  const planner = await createTestPlanner(context, {
     browserProjects,
     nodeProjects,
     isWatchMode,
@@ -158,7 +158,7 @@ export async function runTests(context: Rstest): Promise<void> {
   // brings up no node build for a run with zero node projects, so that run
   // constructs no node executor and pays for no node Rsbuild instance.
   // Constructing a `NodeExecutor` is not the cost being avoided — it allocates
-  // closures and nothing else — so re-adding a branch above `createRunPlanner`
+  // closures and nothing else — so re-adding a branch above `createTestPlanner`
   // to "save" it is the regression the gate exists to prevent.
   const { nodeBuild } = planner;
   const nodeExecutor = nodeBuild
@@ -186,6 +186,13 @@ export async function runTests(context: Rstest): Promise<void> {
     // reports that and exits instead of finalizing with "no test files found"
     // and hiding it. Deliberate — a broken install is the more useful verdict,
     // and the loader's exit no longer drags the unexpected-exit banner with it.
+    //
+    // Equally deliberate is what this branch does NOT cover: a run with node
+    // tests skips the check even when its filters left the browser side empty
+    // (`--related` on node-only sources must not touch an invalid browser
+    // config — pinned in `e2e/filter/related.test.ts`), while `list` validates
+    // that shape. The policy is per-command, so it lives here, not on the
+    // planner.
     if (browserProjects.length && !planner.hasValidatedBrowserConfig()) {
       await validateBrowserRunConfig(context, browserProjects);
     }

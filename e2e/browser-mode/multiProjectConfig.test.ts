@@ -60,6 +60,20 @@ describe.sequential('browser mode - multi project config isolation', () => {
     expect(cli.stdout).toMatch(/Tests.*2 passed/);
   });
 
+  // `rstest list` used to create a compiler for the zero-file node project —
+  // the fixture's #1363 guard plugin throws on compiler creation — while the
+  // run command already resolves such projects out of the plan.
+  it('lists tests without creating a compiler for an empty node project', async () => {
+    const { expectExecSuccess, cli } = await runBrowserCliWithCwd(
+      getFixturePath('multi-project-config'),
+      { command: 'list' },
+    );
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('jsxRuntime.test.tsx');
+    expect(cli.stdout).toContain('smoke.test.ts');
+  });
+
   it('runs mixed-mode browser tests added by modifyRstestConfig hooks', async () => {
     const { expectExecSuccess, cli } = await runBrowserCli(
       'modify-rstest-mixed',

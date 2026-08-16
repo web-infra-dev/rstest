@@ -3,10 +3,7 @@ import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { normalize } from 'pathe';
 import { groupProjectEntriesByEnvironment } from '../../src/core/environmentGroups';
-import {
-  createListProjectPlanState,
-  createRunProjectPlanState,
-} from '../../src/core/projectPlan';
+import { createProjectPlanState } from '../../src/core/projectPlan';
 import type { ProjectContext, RstestContext } from '../../src/types';
 import {
   applyEnvironmentComment,
@@ -438,7 +435,7 @@ const jsdom = '// @rstest-environment jsdom';
         },
         fileFilters: [],
       } as unknown as RstestContext;
-      const planState = createRunProjectPlanState({
+      const planState = createProjectPlanState({
         context,
         isWatchMode: false,
       });
@@ -489,7 +486,7 @@ const jsdom = '// @rstest-environment jsdom';
         normalizedConfig: {},
         fileFilters: [],
       } as unknown as RstestContext;
-      const planState = createRunProjectPlanState({
+      const planState = createProjectPlanState({
         context,
         isWatchMode: false,
       });
@@ -550,7 +547,7 @@ const jsdom = '// @rstest-environment jsdom';
         normalizedConfig: {},
         fileFilters: [],
       } as unknown as RstestContext;
-      const planState = createRunProjectPlanState({
+      const planState = createProjectPlanState({
         context,
         isWatchMode: false,
       });
@@ -631,7 +628,7 @@ const jsdom = '// @rstest-environment jsdom';
         normalizedConfig: {},
         fileFilters: [],
       } as unknown as RstestContext;
-      const planState = createRunProjectPlanState({
+      const planState = createProjectPlanState({
         context,
         isWatchMode: false,
       });
@@ -699,7 +696,7 @@ const jsdom = '// @rstest-environment jsdom';
         normalizedConfig: {},
         fileFilters: [],
       } as unknown as RstestContext;
-      const planState = createRunProjectPlanState({
+      const planState = createProjectPlanState({
         context,
         isWatchMode: false,
       });
@@ -747,7 +744,7 @@ const jsdom = '// @rstest-environment jsdom';
         },
         fileFilters: [],
       } as unknown as RstestContext;
-      const planState = createRunProjectPlanState({
+      const planState = createProjectPlanState({
         context,
         isWatchMode: false,
       });
@@ -804,7 +801,7 @@ const jsdom = '// @rstest-environment jsdom';
         normalizedConfig: {},
         fileFilters: [],
       } as unknown as RstestContext;
-      const planState = createRunProjectPlanState({
+      const planState = createProjectPlanState({
         context,
         isWatchMode: false,
       });
@@ -861,7 +858,7 @@ const jsdom = '// @rstest-environment jsdom';
         normalizedConfig: {},
         fileFilters: [],
       } as unknown as RstestContext;
-      const planState = createRunProjectPlanState({
+      const planState = createProjectPlanState({
         context,
         isWatchMode: true,
       });
@@ -925,7 +922,7 @@ const jsdom = '// @rstest-environment jsdom';
         normalizedConfig: {},
         fileFilters: [],
       } as unknown as RstestContext;
-      const planState = createRunProjectPlanState({
+      const planState = createProjectPlanState({
         context,
         isWatchMode: false,
       });
@@ -983,7 +980,7 @@ const jsdom = '// @rstest-environment jsdom';
         normalizedConfig: {},
         fileFilters: [],
       } as unknown as RstestContext;
-      const planState = createRunProjectPlanState({
+      const planState = createProjectPlanState({
         context,
         isWatchMode: false,
       });
@@ -1061,7 +1058,7 @@ const jsdom = '// @rstest-environment jsdom';
         normalizedConfig: {},
         fileFilters: [],
       } as unknown as RstestContext;
-      const planState = createRunProjectPlanState({
+      const planState = createProjectPlanState({
         context,
         isWatchMode: false,
       });
@@ -1120,7 +1117,7 @@ const jsdom = '// @rstest-environment jsdom';
         },
         fileFilters: [],
       } as unknown as RstestContext;
-      const planState = createRunProjectPlanState({
+      const planState = createProjectPlanState({
         context,
         isWatchMode: false,
       });
@@ -1154,7 +1151,7 @@ const jsdom = '// @rstest-environment jsdom';
     });
   });
 
-  it('refreshes sharded browser entries after list partition refresh', async () => {
+  it('refreshes sharded browser entries after an environment partition refresh', async () => {
     await withTempDir('rstest-env-comment-', async (root) => {
       const nodeFile = path.join(root, 'a.test.ts');
       const jsdomFile = path.join(root, 'b.test.ts');
@@ -1213,12 +1210,10 @@ const jsdom = '// @rstest-environment jsdom';
         },
         fileFilters: [],
       } as unknown as RstestContext;
-      const planState = createListProjectPlanState(context);
+      const planState = createProjectPlanState({ context, isWatchMode: false });
 
-      await planState.refreshListEntries({ strictEnvironmentComments: false });
-      expect(planState.getShardedBrowserEntries()?.get('browser')).toEqual({
-        entries: {},
-      });
+      const initialPlan = await planState.resolveRunnableProjects();
+      expect(initialPlan.entriesCache.get('browser')?.entries).toEqual({});
 
       for (const item of context.projects) {
         if (item.normalizedConfig.browser.enabled) {
@@ -1230,12 +1225,12 @@ const jsdom = '// @rstest-environment jsdom';
         }
       }
 
-      await planState.refreshListEntries({ strictEnvironmentComments: true });
+      const refreshedPlan = await planState.resolveRunnableProjects({
+        strictEnvironmentComments: true,
+      });
 
-      expect(planState.getShardedBrowserEntries()?.get('browser')).toEqual({
-        entries: {
-          '0~test~ts': normalize(newBrowserFile),
-        },
+      expect(refreshedPlan.entriesCache.get('browser')?.entries).toEqual({
+        '0~test~ts': normalize(newBrowserFile),
       });
     });
   });
@@ -1265,7 +1260,7 @@ const jsdom = '// @rstest-environment jsdom';
         normalizedConfig: {},
         fileFilters: [],
       } as unknown as RstestContext;
-      const planState = createRunProjectPlanState({
+      const planState = createProjectPlanState({
         context,
         isWatchMode: false,
       });
