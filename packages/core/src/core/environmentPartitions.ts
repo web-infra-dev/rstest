@@ -2,7 +2,7 @@ import type { ProjectContext, ProjectEntries, RstestContext } from '../types';
 import {
   applyEnvironmentComment,
   getShardedFiles,
-  logShardMessage,
+  type ShardCounts,
 } from '../utils';
 import {
   getEnvironmentKey,
@@ -23,10 +23,6 @@ type RefreshEnvironmentPartitionEntry = {
   project: ProjectContext;
   alias: string;
   testPath: string;
-};
-
-type ShardMessageOptions = {
-  silent?: boolean;
 };
 
 const getSourceEnvironmentName = (project: ProjectContext): string =>
@@ -224,12 +220,12 @@ export const refreshEnvironmentPartitionEntries = async ({
   context,
   projects,
   getProjectEntries,
-  shardMessage,
+  onShardCounts,
 }: {
   context: RstestContext;
   projects: ProjectContext[];
   getProjectEntries: GetProjectEntries;
-  shardMessage?: ShardMessageOptions;
+  onShardCounts?: (counts: ShardCounts) => void;
 }): Promise<RefreshEnvironmentPartitionResult> => {
   const sourceProjects = groupProjectsBySource(projects);
   const refreshedEntries: RefreshEnvironmentPartitionEntry[] = [];
@@ -361,9 +357,8 @@ export const refreshEnvironmentPartitionEntries = async ({
     ? getShardedFiles(refreshedEntries, context.normalizedConfig.shard)
     : refreshedEntries;
 
-  if (context.normalizedConfig.shard && !shardMessage?.silent) {
-    logShardMessage({
-      shard: context.normalizedConfig.shard,
+  if (context.normalizedConfig.shard) {
+    onShardCounts?.({
       testFilesInShardCount: entriesToRun.length,
       totalTestFileCount: refreshedEntries.length,
     });

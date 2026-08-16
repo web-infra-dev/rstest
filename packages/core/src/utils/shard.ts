@@ -23,15 +23,16 @@ export function getShardedFiles<T extends { testPath: string }>(
     .slice(start, end);
 }
 
+export type ShardCounts = {
+  testFilesInShardCount: number;
+  totalTestFileCount: number;
+};
+
 export function logShardMessage({
   shard,
   testFilesInShardCount,
   totalTestFileCount,
-}: {
-  shard: ShardConfig;
-  testFilesInShardCount: number;
-  totalTestFileCount: number;
-}): void {
+}: { shard: ShardConfig } & ShardCounts): void {
   logger.log(
     color.green(
       `Running shard ${shard.index} of ${shard.count} (${testFilesInShardCount} of ${totalTestFileCount} test files)\n`,
@@ -45,7 +46,10 @@ export function logShardMessage({
  */
 export async function resolveShardedEntries(
   context: RstestContext,
-  { silent = false }: { silent?: boolean } = {},
+  {
+    silent = false,
+    onShardCounts,
+  }: { silent?: boolean; onShardCounts?: (counts: ShardCounts) => void } = {},
 ): Promise<Map<string, ProjectEntries> | undefined> {
   const {
     normalizedConfig,
@@ -86,6 +90,7 @@ export async function resolveShardedEntries(
   const totalTestFileCount = allTestEntriesBeforeSharding.length;
   const testFilesInShardCount = shardedEntries.length;
 
+  onShardCounts?.({ testFilesInShardCount, totalTestFileCount });
   if (!silent) {
     logShardMessage({
       shard,

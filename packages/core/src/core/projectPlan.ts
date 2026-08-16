@@ -1,5 +1,10 @@
 import type { ProjectContext, ProjectEntries, RstestContext } from '../types';
-import { getTestEntries, resolveShardedEntries } from '../utils';
+import {
+  getTestEntries,
+  logShardMessage,
+  resolveShardedEntries,
+  type ShardCounts,
+} from '../utils';
 import {
   applyEnvironmentGroupsToListEntries,
   resolveRunnableProjectsByEntries,
@@ -65,7 +70,6 @@ const getEntriesCacheRecord = (
   );
 
 type ResolveRunnableProjectsOptions = {
-  silentShardMessage?: boolean;
   strictEnvironmentComments?: boolean;
 };
 
@@ -82,6 +86,7 @@ export const createProjectPlanState = ({
     options?: ResolveRunnableProjectsOptions,
   ) => Promise<ProjectPlan>;
   validateEnvironmentComments: () => Promise<void>;
+  announceShardSlice: () => void;
 } => {
   let allProjects = context.projects;
   let entriesCache: Map<string, ProjectEntries> = new Map();
@@ -90,6 +95,14 @@ export const createProjectPlanState = ({
   let environmentGroupsResolved = false;
   let environmentGroupsChanged = false;
   let pendingStrictEnvironmentCommentValidation = false;
+  // Resolution never logs the shard banner — it can run several times per init
+  // (pre-hook, post-hook, post-discovery) and each pass would print its own
+  // interim counts. Every resolve records the freshest counts here and the
+  // planner announces them exactly once, after the barrier closes.
+  let lastShardCounts: ShardCounts | undefined;
+  const recordShardCounts = (counts: ShardCounts) => {
+    lastShardCounts = counts;
+  };
 
   const getPlan = (): ProjectPlan => ({
     projects: allProjects,
@@ -125,7 +138,6 @@ export const createProjectPlanState = ({
   };
 
   const resolveRunnableProjects = async ({
-    silentShardMessage = false,
     strictEnvironmentComments = false,
   }: ResolveRunnableProjectsOptions = {}): Promise<ProjectPlan> => {
     const shouldPreserveEnvironmentPartitions =
@@ -136,16 +148,15 @@ export const createProjectPlanState = ({
         context,
         projects: allProjects,
         getProjectEntries: (project) => getProjectEntries({ context, project }),
-        shardMessage: {
-          silent: silentShardMessage,
-        },
+        onShardCounts: recordShardCounts,
       });
       allProjects = refreshed.projects;
       entriesCache = refreshed.entriesCache;
     } else if (context.normalizedConfig.shard) {
       entriesCache =
         (await resolveShardedEntries(context, {
-          silent: silentShardMessage,
+          silent: true,
+          onShardCounts: recordShardCounts,
         })) || new Map();
     } else {
       entriesCache = new Map();
@@ -199,11 +210,20 @@ export const createProjectPlanState = ({
     pendingStrictEnvironmentCommentValidation = false;
   };
 
+  const announceShardSlice = (): void => {
+    const { shard } = context.normalizedConfig;
+    if (!shard || !lastShardCounts) {
+      return;
+    }
+    logShardMessage({ shard, ...lastShardCounts });
+  };
+
   return {
     globTestSourceEntries,
     getPlan,
     resolveRunnableProjects,
     validateEnvironmentComments,
+    announceShardSlice,
   };
 };
 
@@ -281,9 +301,6 @@ export const createListProjectPlanState = (
         context,
         projects: context.projects,
         getProjectEntries: (project) => getProjectEntries({ context, project }),
-        shardMessage: {
-          silent: silentShardMessage,
-        },
       });
       context.projects = refreshed.projects;
       Object.assign(testEntries, getEntriesCacheRecord(refreshed.entriesCache));
