@@ -5,6 +5,7 @@ import { prepareFixtures } from '../scripts';
 import {
   deleteFixtureTarget,
   killCliProcessTree,
+  runBrowserCliWithCwd,
   runBrowserWatchCliWithCwd,
 } from './utils';
 
@@ -77,4 +78,27 @@ describe('browser mode - watch with multiple projects', () => {
       await deleteFixtureTarget(fs, fixturesTargetPath);
     }
   }, 60_000);
+
+  // Regression for https://github.com/web-infra-dev/rstest/issues/1484: `rstest
+  // list --shard` must not list tests from shard-excluded files, and a project
+  // whose shard slice is empty must not start a dev server. Lives here so the
+  // `watch-multi-project` fixture is only launched from this test file (see the
+  // port-uniqueness rule in fixtures/ports.ts).
+  it('lists only the sharded slice and skips shard-empty projects', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCliWithCwd(
+      path.join(__dirname, 'fixtures', 'watch-multi-project'),
+      { command: 'list', args: ['--shard=1/4'] },
+    );
+
+    await expectExecSuccess();
+
+    // 4 (project, file) pairs across 2 projects: a 1-of-4 shard holds exactly
+    // one pair, so exactly one project has entries and the other must neither
+    // be listed nor compiled.
+    const entries = cli.stdout
+      .split('\n')
+      .filter((line) => line.includes(' > '));
+    expect(entries).toHaveLength(1);
+    expect(cli.stdout.match(/build started/g) ?? []).toHaveLength(1);
+  });
 });

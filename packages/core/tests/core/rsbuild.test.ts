@@ -265,6 +265,180 @@ describe('prepareRsbuild', () => {
     });
   });
 
+  it('should shard-filter browser-only projects through the plan', async () => {
+    await withTempDir('rstest-list-shard-browser-only-', async (tempRoot) => {
+      for (const file of ['a-browser.test.ts', 'b-browser.test.ts']) {
+        writeFileSync(join(tempRoot, file), 'export {};\n');
+      }
+
+      // An ordinary Rsbuild plugin without a modifyRstestConfig callback: the
+      // discovery boot must still settle these projects, and the shard filter
+      // must still drop the shard-empty sibling afterwards.
+      const noopPlugin: RsbuildPlugin = {
+        name: 'noop-plugin-without-config-hook',
+        setup() {},
+      };
+
+      const shardedConfig: ResolvedRstestConfig = {
+        root: tempRoot,
+        shard: { index: 1, count: 2 },
+      };
+      const context = new Rstest(
+        {
+          cwd: tempRoot,
+          command: 'list',
+          embedded: true,
+          projects: [
+            {
+              config: {
+                name: 'browser-a',
+                root: tempRoot,
+                include: ['a-browser.test.ts'],
+                plugins: [noopPlugin],
+                browser: { enabled: true, provider: 'playwright' },
+              },
+            },
+            {
+              config: {
+                name: 'browser-b',
+                root: tempRoot,
+                include: ['b-browser.test.ts'],
+                plugins: [noopPlugin],
+                browser: { enabled: true, provider: 'playwright' },
+              },
+            },
+          ],
+        },
+        shardedConfig,
+      );
+
+      browserExecutorLoads.length = 0;
+      browserDiscoveryBoots.length = 0;
+      validateBrowserConfigCalls = 0;
+      const list = await listTests(context, { json: false });
+
+      expect(list.map((item) => item.testPath)).toEqual([
+        join(tempRoot, 'a-browser.test.ts'),
+      ]);
+      // The discovery boot covers the plugin-bearing projects once; the real
+      // collect loads only the shard-active subset, so the shard-empty
+      // sibling gets no executor and no dev server.
+      expect(browserDiscoveryBoots).toEqual([['browser-a', 'browser-b']]);
+      expect(browserExecutorLoads).toEqual([['browser-a']]);
+      // configAlreadyValidated flows from the discovery barrier, so the
+      // executor load performs no second validation.
+      expect(validateBrowserConfigCalls).toBe(0);
+    });
+  });
+
+  it('should list node tests added by modifyRstestConfig hooks to an empty-glob project', async () => {
+    await withTempDir('rstest-list-hook-added-', async (tempRoot) => {
+      writeFileSync(join(tempRoot, 'added-node.test.ts'), 'export {};\n');
+
+      // The project's own glob matches nothing, so the plan resolves it out —
+      // but its environment must stay alive long enough for the hook to add
+      // the file and put the project back in the plan.
+      const addFilesPlugin: RsbuildPlugin = {
+        name: 'modify-rstest-add-files',
+        setup(api) {
+          api
+            .useExposed<RstestExposeAPI>('rstest')
+            ?.modifyRstestConfig((config) => {
+              config.include = ['added-node.test.ts'];
+            });
+        },
+      };
+
+      const context = new Rstest(
+        {
+          cwd: tempRoot,
+          command: 'list',
+          embedded: true,
+          projects: [],
+        },
+        {
+          root: tempRoot,
+          include: ['missing/**/*.test.ts'],
+          plugins: [addFilesPlugin],
+        },
+      );
+
+      const list = await listTests(context, { json: false });
+
+      expect(list.map((item) => item.testPath)).toEqual([
+        join(tempRoot, 'added-node.test.ts'),
+      ]);
+    });
+  });
+
+  it('should not create a compiler for an empty node sibling once config hooks apply', async () => {
+    await withTempDir('rstest-list-empty-sibling-', async (tempRoot) => {
+      writeFileSync(join(tempRoot, 'full-node.test.ts'), 'export {};\n');
+
+      const hookPlugin: RsbuildPlugin = {
+        name: 'modify-rstest-touch-config',
+        setup(api) {
+          api
+            .useExposed<RstestExposeAPI>('rstest')
+            ?.modifyRstestConfig((config) => {
+              config.include = ['full-node.test.ts'];
+            });
+        },
+      };
+      // The zero-entry sibling must be spliced out of the Rsbuild environment
+      // set after the hooks settle. onAfterCreateCompiler is a global hook (it
+      // fires for the sibling's MultiCompiler too), so the guard checks the
+      // created compiler names instead of merely firing.
+      const compilerGuardPlugin: RsbuildPlugin = {
+        name: 'empty-node-compiler-guard',
+        setup(api) {
+          api.onAfterCreateCompiler(({ compiler }) => {
+            const names =
+              'compilers' in compiler
+                ? compiler.compilers.map((child) => child.name)
+                : [compiler.name];
+            if (names.includes('node-empty')) {
+              throw new Error('EMPTY_NODE_SHOULD_NOT_CREATE_COMPILER');
+            }
+          });
+        },
+      };
+
+      const context = new Rstest(
+        {
+          cwd: tempRoot,
+          command: 'list',
+          embedded: true,
+          projects: [
+            {
+              config: {
+                name: 'node-full',
+                root: tempRoot,
+                include: ['full-node.test.ts'],
+                plugins: [hookPlugin],
+              },
+            },
+            {
+              config: {
+                name: 'node-empty',
+                root: tempRoot,
+                include: ['missing/**/*.test.ts'],
+                plugins: [compilerGuardPlugin],
+              },
+            },
+          ],
+        },
+        { root: tempRoot },
+      );
+
+      const list = await listTests(context, { json: false });
+
+      expect(list.map((item) => item.testPath)).toEqual([
+        join(tempRoot, 'full-node.test.ts'),
+      ]);
+    });
+  });
+
   it('should resolve list environment dependencies after modifyRstestConfig', async () => {
     await withTempDir('rstest-list-environment-', async (tempRoot) => {
       const packageRoot = join(tempRoot, 'node_modules/jsdom');

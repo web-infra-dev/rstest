@@ -167,8 +167,8 @@ export interface TestExecutor {
   /**
    * List tests without running them. Optional because only the browser executor
    * implements it today (`rstest list` collects browser tests through it); the
-   * node list flow stays in `listTests.ts`'s dedicated plan-state flow until a
-   * later phase converges it onto the seam.
+   * node list collect still lives in `listTests.ts` — it consumes the planner's
+   * plan and node build, but has not converged onto this seam member yet.
    */
   collect?(
     options: Pick<ExecutorRunCycleOptions, 'env' | 'fileFilters'>,
