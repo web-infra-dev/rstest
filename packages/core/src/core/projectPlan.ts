@@ -5,12 +5,9 @@ import {
   resolveShardedEntries,
   type ShardCounts,
 } from '../utils';
-import {
-  applyEnvironmentGroupsToListEntries,
-  resolveRunnableProjectsByEntries,
-} from './environmentEntries';
+import { resolveRunnableProjectsByEntries } from './environmentEntries';
 import { refreshEnvironmentPartitionEntries } from './environmentPartitions';
-import { isBrowserProject, isNodeProject } from './isBrowserProject';
+import { isNodeProject } from './isBrowserProject';
 
 export const getProjectEntries = async ({
   context,
@@ -58,16 +55,6 @@ const isSameProjectList = (
       other.environmentName === project.environmentName
     );
   });
-
-const getEntriesCacheRecord = (
-  entriesCache: Map<string, ProjectEntries>,
-): Record<string, Record<string, string>> =>
-  Object.fromEntries(
-    Array.from(entriesCache.entries()).map(([environmentName, entries]) => [
-      environmentName,
-      entries.entries,
-    ]),
-  );
 
 type ResolveRunnableProjectsOptions = {
   strictEnvironmentComments?: boolean;
@@ -224,126 +211,5 @@ export const createProjectPlanState = ({
     resolveRunnableProjects,
     validateEnvironmentComments,
     announceShardSlice,
-  };
-};
-
-type RefreshListEntriesOptions = {
-  silentShardMessage?: boolean;
-  strictEnvironmentComments?: boolean;
-};
-
-export const createListProjectPlanState = (
-  context: RstestContext,
-): {
-  globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
-  refreshListEntries: (options?: RefreshListEntriesOptions) => Promise<void>;
-  validateEnvironmentComments: () => Promise<void>;
-  getShardedBrowserEntries: () =>
-    Map<string, { entries: Record<string, string> }> | undefined;
-} => {
-  const testEntries: Record<string, Record<string, string>> = {};
-  let shardedBrowserEntries:
-    Map<string, { entries: Record<string, string> }> | undefined;
-  let environmentGroupsResolved = false;
-  let environmentGroupsChanged = false;
-  let pendingStrictEnvironmentCommentValidation = false;
-
-  const globTestSourceEntries = async (
-    name: string,
-  ): Promise<Record<string, string>> => {
-    if (testEntries[name]) {
-      return testEntries[name];
-    }
-
-    const project = context.projects.find((p) => p.environmentName === name);
-    if (!project) {
-      return {};
-    }
-
-    const entries = await getProjectEntries({ context, project });
-    testEntries[name] = entries;
-
-    return entries;
-  };
-
-  const refreshListEntries = async ({
-    silentShardMessage = true,
-    strictEnvironmentComments = true,
-  }: RefreshListEntriesOptions = {}): Promise<void> => {
-    for (const key of Object.keys(testEntries)) {
-      delete testEntries[key];
-    }
-
-    const shardedEntries = await resolveShardedEntries(context, {
-      silent: silentShardMessage,
-    });
-    shardedBrowserEntries = undefined;
-
-    if (context.normalizedConfig.shard && shardedEntries) {
-      for (const [key, value] of shardedEntries.entries()) {
-        testEntries[key] = value.entries;
-      }
-
-      shardedBrowserEntries = new Map();
-      for (const project of context.projects.filter(isBrowserProject)) {
-        shardedBrowserEntries.set(project.environmentName, {
-          entries: testEntries[project.environmentName] || {},
-        });
-      }
-    }
-
-    const shouldPreserveEnvironmentPartitions =
-      environmentGroupsResolved && environmentGroupsChanged;
-    const ignoreInvalidEnvironmentComments = !strictEnvironmentComments;
-
-    if (shouldPreserveEnvironmentPartitions) {
-      const refreshed = await refreshEnvironmentPartitionEntries({
-        context,
-        projects: context.projects,
-        getProjectEntries: (project) => getProjectEntries({ context, project }),
-      });
-      context.projects = refreshed.projects;
-      Object.assign(testEntries, getEntriesCacheRecord(refreshed.entriesCache));
-      if (context.normalizedConfig.shard) {
-        shardedBrowserEntries = new Map();
-        for (const project of context.projects.filter(isBrowserProject)) {
-          shardedBrowserEntries.set(project.environmentName, {
-            entries:
-              refreshed.entriesCache.get(project.environmentName)?.entries ||
-              {},
-          });
-        }
-      }
-    } else {
-      const grouped = await applyEnvironmentGroupsToListEntries({
-        context,
-        testEntries,
-        globTestSourceEntries,
-        ignoreInvalidEnvironmentComments,
-      });
-      if (!environmentGroupsResolved) {
-        environmentGroupsChanged = grouped.changed;
-      }
-    }
-
-    pendingStrictEnvironmentCommentValidation =
-      ignoreInvalidEnvironmentComments;
-    environmentGroupsResolved = true;
-  };
-
-  const validateEnvironmentComments = async (): Promise<void> => {
-    if (!pendingStrictEnvironmentCommentValidation) {
-      return;
-    }
-
-    await refreshListEntries({ strictEnvironmentComments: true });
-    pendingStrictEnvironmentCommentValidation = false;
-  };
-
-  return {
-    globTestSourceEntries,
-    refreshListEntries,
-    validateEnvironmentComments,
-    getShardedBrowserEntries: () => shardedBrowserEntries,
   };
 };
