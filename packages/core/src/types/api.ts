@@ -432,4 +432,6 @@ export type Rstest = RunnerAPI & {
   assert: typeof assert;
   rstest: RstestUtilities;
   rs: RstestUtilities;
+  /** Internal lifecycle hook for Node-side integrations. */
+  registerWorkerCleanup: (cleanup: () => MaybePromise<void>) => () => boolean;
 };

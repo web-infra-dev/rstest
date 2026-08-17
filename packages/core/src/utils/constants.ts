@@ -321,16 +321,17 @@ const globalApiList = [
   'onTestFailed',
 ] as const satisfies readonly (keyof Rstest)[];
 
-export const globalApis: readonly (keyof Rstest)[] = globalApiList;
+type GlobalApi = Exclude<keyof Rstest, 'registerWorkerCleanup'>;
+export const globalApis: readonly GlobalApi[] = globalApiList;
 
 /**
  * Exhaustiveness guard for {@link globalApis}. `satisfies` above rejects a
  * *wrong* key, but a short array still compiles — a new {@link Rstest} API
  * silently missing here is never registered onto `globalThis` under
  * `globals: true`. This alias resolves to a descriptive tuple (not `true`) when
- * any `Rstest` key is absent, failing the assignment below at compile time.
+ * any global `Rstest` API key is absent, failing the assignment below at compile time.
  */
-type MissingGlobalApis = Exclude<keyof Rstest, (typeof globalApiList)[number]>;
+type MissingGlobalApis = Exclude<GlobalApi, (typeof globalApiList)[number]>;
 type GlobalApisAreExhaustive = [MissingGlobalApis] extends [never]
   ? true
   : ['globalApis is missing keys of Rstest:', MissingGlobalApis];

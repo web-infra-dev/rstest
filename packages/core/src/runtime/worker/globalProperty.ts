@@ -1,6 +1,8 @@
 import type { Rstest } from '../../types';
 import { globalApis } from '../../utils/constants';
 
+type GlobalApi = (typeof globalApis)[number];
+
 export const installGlobalProperty = (
   target: object,
   key: PropertyKey,
@@ -21,7 +23,7 @@ export const installGlobalProperty = (
 };
 
 export const installGlobalApis = (
-  api: Rstest,
+  api: Pick<Rstest, GlobalApi>,
   target: object = globalThis,
 ): (() => void) => {
   const restores = globalApis.map((key) =>

@@ -9,6 +9,7 @@ import type {
   WorkerState,
 } from '../../types';
 import { createRunner, runnerAPI } from '../runner';
+import { registerWorkerCleanup } from '../runner/workerCleanup';
 import type { TaskContext } from '../worker/taskContext';
 import { assert, createFileExpect, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
@@ -88,6 +89,7 @@ export const createRstestRuntime = async (
       assert,
       rstest,
       rs: rstest,
+      registerWorkerCleanup,
     },
   };
 
