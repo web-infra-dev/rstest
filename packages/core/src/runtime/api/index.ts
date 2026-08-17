@@ -15,6 +15,10 @@ import { assert, createFileExpect, setupChaiConfig } from './expect';
 import { createRstestUtilities } from './utilities';
 import type { RootSuiteListeners } from '../runner/runtime';
 
+type RuntimeRstest = Rstest & {
+  registerWorkerCleanup: typeof registerWorkerCleanup;
+};
+
 /**
  * Live per-file API binding under `isolate: false` (the canonical contract).
  *
@@ -60,7 +64,7 @@ export const createRstestRuntime = async (
     getRootSuiteListeners: () => RootSuiteListeners;
     setRootSuiteListeners: (listeners: RootSuiteListeners) => void;
   };
-  api: Rstest;
+  api: RuntimeRstest;
 }> => {
   const [{ runner }, { SnapshotPlugin, ensureSnapshotClient }] =
     await Promise.all([

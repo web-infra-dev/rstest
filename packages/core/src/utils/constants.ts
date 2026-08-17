@@ -321,7 +321,7 @@ const globalApiList = [
   'onTestFailed',
 ] as const satisfies readonly (keyof Rstest)[];
 
-type GlobalApi = Exclude<keyof Rstest, 'registerWorkerCleanup'>;
+type GlobalApi = keyof Rstest;
 export const globalApis: readonly GlobalApi[] = globalApiList;
 
 /**
