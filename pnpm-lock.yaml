@@ -92,8 +92,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0(@rsbuild/core@2.1.13(@module-federation/runtime-tools@2.8.1))(@rspack/core@2.1.10(@module-federation/runtime-tools@2.8.1)(@swc/helpers@0.5.23))
       '@rslib/core':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
+        specifier: 1.0.0-beta.3
+        version: 1.0.0-beta.3(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
       '@rstest/browser':
         specifier: workspace:*
         version: link:../packages/browser
@@ -973,8 +973,8 @@ importers:
         specifier: ~2.1.13
         version: 2.1.13(@module-federation/runtime-tools@2.8.1)
       '@rslib/core':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
+        specifier: 1.0.0-beta.3
+        version: 1.0.0-beta.3(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -985,8 +985,8 @@ importers:
   packages/adapter-rslib:
     devDependencies:
       '@rslib/core':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
+        specifier: 1.0.0-beta.3
+        version: 1.0.0-beta.3(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1003,8 +1003,8 @@ importers:
   packages/adapter-rspack:
     devDependencies:
       '@rslib/core':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
+        specifier: 1.0.0-beta.3
+        version: 1.0.0-beta.3(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
       '@rspack/cli':
         specifier: ~2.1.10
         version: 2.1.10(@rspack/core@2.1.10(@module-federation/runtime-tools@2.8.1)(@swc/helpers@0.5.23))(@rspack/dev-server@2.2.0(@rspack/core@2.1.10(@module-federation/runtime-tools@2.8.1)(@swc/helpers@0.5.23)))
@@ -1040,8 +1040,8 @@ importers:
         version: 8.21.3
     devDependencies:
       '@rslib/core':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
+        specifier: 1.0.0-beta.3
+        version: 1.0.0-beta.3(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
       '@rstest/browser-ui':
         specifier: workspace:*
         version: link:../browser-ui
@@ -1076,8 +1076,8 @@ importers:
   packages/browser-react:
     devDependencies:
       '@rslib/core':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
+        specifier: 1.0.0-beta.3
+        version: 1.0.0-beta.3(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1177,8 +1177,8 @@ importers:
         specifier: ^2.0.1
         version: 2.0.1(@rsbuild/core@2.1.13(@module-federation/runtime-tools@2.8.1))
       '@rslib/core':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
+        specifier: 1.0.0-beta.3
+        version: 1.0.0-beta.3(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../../scripts/tsconfig
@@ -1309,8 +1309,8 @@ importers:
         specifier: ~2.1.13
         version: 2.1.13(@module-federation/runtime-tools@2.8.1)
       '@rslib/core':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
+        specifier: 1.0.0-beta.3
+        version: 1.0.0-beta.3(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1364,8 +1364,8 @@ importers:
         specifier: ~2.1.13
         version: 2.1.13(@module-federation/runtime-tools@2.8.1)
       '@rslib/core':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
+        specifier: 1.0.0-beta.3
+        version: 1.0.0-beta.3(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1394,8 +1394,8 @@ importers:
   packages/playwright:
     devDependencies:
       '@rslib/core':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
+        specifier: 1.0.0-beta.3
+        version: 1.0.0-beta.3(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -1415,8 +1415,8 @@ importers:
         specifier: ~2.1.13
         version: 2.1.13(@module-federation/runtime-tools@2.8.1)
       '@rslib/core':
-        specifier: 1.0.0-beta.2
-        version: 1.0.0-beta.2(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
+        specifier: 1.0.0-beta.3
+        version: 1.0.0-beta.3(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)
       '@rstest/core':
         specifier: workspace:*
         version: link:../core
@@ -3662,8 +3662,8 @@ packages:
   '@rsdoctor/utils@1.6.1':
     resolution: {integrity: sha512-Ll+X1nAE3eBq9BpBNZvAT+4hZZMQt/rxrBRzL/I8o6S3CBpo5Kh2A2JaYgCJLiYKh0kFQfuIWuOVpR3/yoFWJg==}
 
-  '@rslib/core@1.0.0-beta.2':
-    resolution: {integrity: sha512-A0j3MBP8Kga8Qrh7znO2UKf00Sga37PJCiTGUqVVBHb+u58fNoGXZtFAgeH6qKjf5eU1wYt4WptXX/1blOAfRw==}
+  '@rslib/core@1.0.0-beta.3':
+    resolution: {integrity: sha512-OtfmaBoGlHo1KYvQ3+B0ZLy3zUsAdoRZfWieaxoJMJ9uKAws2//afFgvUqeSDkkSJDlp8TDdgt4hib+QaFOaGQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -7933,8 +7933,8 @@ packages:
       '@rsbuild/core':
         optional: true
 
-  rsbuild-plugin-dts@1.0.0-beta.2:
-    resolution: {integrity: sha512-xOYa/kw/y29kKFFNjd+CIemlq+CB8E7LhqNkIzg7HT9dYNBVBpZvnnL6OEsOgjeuqzKpGSCRgZN/dDoVOk4VhQ==}
+  rsbuild-plugin-dts@1.0.0-beta.3:
+    resolution: {integrity: sha512-Q8x/yyOsy8sNR8sHn0xuZsul7ErT5kXkTmDwCIxQ8esiMCW7QKjfyXDa4kvTxWn7oSQ5NP/O6qZM2vEA07thKw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
       '@microsoft/api-extractor': ^7
@@ -11471,10 +11471,10 @@ snapshots:
       - '@rspack/core'
       - webpack
 
-  '@rslib/core@1.0.0-beta.2(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)':
+  '@rslib/core@1.0.0-beta.3(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@module-federation/runtime-tools@2.8.1)(typescript@6.0.3)':
     dependencies:
       '@rsbuild/core': 2.1.13(@module-federation/runtime-tools@2.8.1)
-      rsbuild-plugin-dts: 1.0.0-beta.2(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@rsbuild/core@2.1.13)(typescript@6.0.3)
+      rsbuild-plugin-dts: 1.0.0-beta.3(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@rsbuild/core@2.1.13)(typescript@6.0.3)
     optionalDependencies:
       '@microsoft/api-extractor': 7.58.12(@types/node@22.18.6)
       typescript: 6.0.3
@@ -16431,7 +16431,7 @@ snapshots:
     optionalDependencies:
       '@rsbuild/core': 2.1.13(@module-federation/runtime-tools@2.8.1)
 
-  rsbuild-plugin-dts@1.0.0-beta.2(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@rsbuild/core@2.1.13)(typescript@6.0.3):
+  rsbuild-plugin-dts@1.0.0-beta.3(@microsoft/api-extractor@7.58.12(@types/node@22.18.6))(@rsbuild/core@2.1.13)(typescript@6.0.3):
     dependencies:
       '@ast-grep/napi': 0.37.0
       '@rsbuild/core': 2.1.13(@module-federation/runtime-tools@2.8.1)
