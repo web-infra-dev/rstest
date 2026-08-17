@@ -19,8 +19,17 @@ const NO_ISOLATE_EXCLUDES = ['watch/**', 'mock/**', 'browser-mode/**'];
  */
 const THREADS_EXCLUDES = ['browser-mode/**'];
 
+const E2E_MODE =
+  process.env.RSTEST_OUTPUT_MODULE === 'false'
+    ? 'commonjs'
+    : process.env.ISOLATE === 'false'
+      ? 'no-isolate'
+      : process.env.RSTEST_POOL_TYPE === 'threads'
+        ? 'threads'
+        : undefined;
+
 export default defineConfig({
-  name: 'rstest:e2e',
+  name: E2E_MODE ? `rstest:e2e:${E2E_MODE}` : 'rstest:e2e',
   setupFiles: ['../scripts/rstest.setup.ts'],
   // Increased timeout for CI to handle slower environments (e.g., Node.js 22 on Windows)
   // and reduce flaky timeouts caused by resource contention under high parallelism.
