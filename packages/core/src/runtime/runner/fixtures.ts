@@ -3,6 +3,7 @@ import type {
   Fixtures,
   NormalizedFixture,
   NormalizedFixtures,
+  MaybePromise,
   TestCase,
   TestContext,
 } from '../../types';
@@ -368,8 +369,41 @@ export class FileFixtureManager extends FixtureScopeManager {
 export const workerFixtureManager: FixtureScopeManager =
   new FixtureScopeManager('worker');
 
-export const cleanupWorkerFixtures = (): Promise<void> =>
-  workerFixtureManager.cleanup();
+const workerCleanupCallbacks = new Set<() => MaybePromise<void>>();
+
+export const registerWorkerCleanup = (
+  cleanup: () => MaybePromise<void>,
+): (() => boolean) => {
+  workerCleanupCallbacks.add(cleanup);
+  return () => workerCleanupCallbacks.delete(cleanup);
+};
+
+export const cleanupWorkerFixtures = async (): Promise<void> => {
+  const errors: unknown[] = [];
+
+  try {
+    await workerFixtureManager.cleanup();
+  } catch (error) {
+    errors.push(error);
+  }
+
+  const cleanups = [...workerCleanupCallbacks];
+  workerCleanupCallbacks.clear();
+  for (const cleanup of cleanups) {
+    try {
+      await cleanup();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+
+  if (errors.length === 1) {
+    throw errors[0];
+  }
+  if (errors.length > 1) {
+    throw new AggregateError(errors, 'Failed to clean up worker resources.');
+  }
+};
 
 class PreviouslyFailedFixtureError extends Error {}
 

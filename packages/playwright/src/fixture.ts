@@ -26,7 +26,6 @@ import {
   beforeAll as rstestBeforeAll,
   beforeEach as rstestBeforeEach,
   describe as rstestDescribe,
-  rstest,
   expect as rstestExpect,
   test as base,
 } from '@rstest/core';
@@ -41,6 +40,7 @@ import type {
   Use,
 } from '@rstest/core';
 import type { TestContext } from '@rstest/core';
+import * as coreBrowserRuntime from '@rstest/core/internal/browser-runtime';
 import { chromium, request as playwrightRequest } from 'playwright';
 import { withPlaywrightExpect } from './expect';
 import type {
@@ -205,7 +205,6 @@ const PAUSE_ENV = 'RSTEST_PLAYWRIGHT_PAUSE';
 const TRACE_ENV = 'RSTEST_PLAYWRIGHT_TRACE';
 const TRACE_OUTPUT_DIR_ENV = 'RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR';
 const DEBUG_PAUSE_TIMEOUT = 24 * 60 * 60 * 1000;
-const BROWSER_IDLE_CLOSE_DELAY = 1000;
 const DEFAULT_STATIC_SERVER_HOST = '127.0.0.1';
 const DEFAULT_TRACE_OUTPUT_DIR = join('.rstest', 'playwright-traces');
 const TEST_EACH_CONTEXT_SYMBOL = Symbol.for('rstest.test.each.context');
@@ -229,7 +228,7 @@ const CONTENT_TYPES: Record<string, string> = {
 const browserCache = new Map<string, Promise<Browser>>();
 let activeBrowserFixtureCount = 0;
 let browserCleanupPromise: Promise<void> | undefined;
-let browserCleanupTimer: ReturnType<typeof setTimeout> | undefined;
+let browserWorkerCleanupRegistered = false;
 
 const browserTypes = {
   chromium,
@@ -554,6 +553,7 @@ const getBrowserCacheKey = (options: PlaywrightOptions) =>
   });
 
 const getBrowser = (options: PlaywrightOptions) => {
+  registerBrowserWorkerCleanup();
   const browserName = options.browserName ?? DEFAULT_BROWSER_NAME;
   const key = getBrowserCacheKey(options);
   const cachedBrowser = browserCache.get(key);
@@ -576,29 +576,26 @@ const closeBrowser = async (): Promise<void> => {
   await Promise.all(browsers.map(async (browser) => (await browser).close()));
 };
 
-const getRealTimers = () => {
-  try {
-    const realTimers = rstest.getRealTimers();
-
-    return {
-      setTimeout:
-        realTimers.setTimeout ?? globalThis.setTimeout.bind(globalThis),
-      clearTimeout:
-        realTimers.clearTimeout ?? globalThis.clearTimeout.bind(globalThis),
-    };
-  } catch {
-    return {
-      setTimeout: globalThis.setTimeout.bind(globalThis),
-      clearTimeout: globalThis.clearTimeout.bind(globalThis),
-    };
+const registerBrowserWorkerCleanup = () => {
+  if (browserWorkerCleanupRegistered) {
+    return;
   }
-};
 
-const clearBrowserCleanupTimer = () => {
-  if (browserCleanupTimer) {
-    getRealTimers().clearTimeout(browserCleanupTimer);
-    browserCleanupTimer = undefined;
+  browserWorkerCleanupRegistered = true;
+  const cleanup = async () => {
+    browserWorkerCleanupRegistered = false;
+    await closeBrowser();
+  };
+  if (coreBrowserRuntime.registerWorkerCleanup) {
+    coreBrowserRuntime.registerWorkerCleanup(cleanup);
+    return;
   }
+  process.once('beforeExit', () => {
+    void cleanup();
+  });
+  process.once('exit', () => {
+    browserCache.clear();
+  });
 };
 
 const closeBrowserWhenIdle = async () => {
@@ -613,20 +610,7 @@ const closeBrowserWhenIdle = async () => {
   await browserCleanupPromise;
 };
 
-const scheduleBrowserCleanupWhenIdle = () => {
-  if (activeBrowserFixtureCount > 0 || browserCache.size === 0) {
-    return;
-  }
-
-  clearBrowserCleanupTimer();
-  browserCleanupTimer = getRealTimers().setTimeout(() => {
-    browserCleanupTimer = undefined;
-    void closeBrowserWhenIdle();
-  }, BROWSER_IDLE_CLOSE_DELAY);
-};
-
 const retainBrowser = () => {
-  clearBrowserCleanupTimer();
   activeBrowserFixtureCount++;
   let released = false;
 
@@ -638,9 +622,7 @@ const retainBrowser = () => {
     released = true;
     activeBrowserFixtureCount--;
 
-    if (scheduleCleanup) {
-      scheduleBrowserCleanupWhenIdle();
-    } else {
+    if (!scheduleCleanup) {
       await closeBrowserWhenIdle();
     }
   };

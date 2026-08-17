@@ -2,9 +2,24 @@ import { describe, expect, it } from '@rstest/core';
 import {
   createFixtureResolver,
   FileFixtureManager,
+  cleanupWorkerFixtures,
   normalizeFixtures,
   normalizeNamedFixture,
+  registerWorkerCleanup,
 } from '../../../src/runtime/runner/fixtures';
+
+describe('worker cleanup callbacks', () => {
+  it('runs registered callbacks when the worker scope is cleaned up', async () => {
+    const events: string[] = [];
+    registerWorkerCleanup(() => {
+      events.push('cleanup');
+    });
+
+    await cleanupWorkerFixtures();
+
+    expect(events).toEqual(['cleanup']);
+  });
+});
 
 describe('normalizeFixtures', () => {
   it('treats a single-function tuple as a fixture function', () => {
