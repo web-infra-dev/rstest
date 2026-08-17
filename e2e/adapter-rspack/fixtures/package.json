@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "devDependencies": {
-    "@rspack/cli": "~2.1.9",
-    "@rspack/core": "~2.1.9",
+    "@rspack/cli": "~2.1.10",
+    "@rspack/core": "~2.1.10",
     "@rstest/adapter-rspack": "workspace:*",
     "@rstest/core": "workspace:*",
     "strip-ansi": "^7.2.0"
