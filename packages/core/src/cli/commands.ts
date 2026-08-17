@@ -940,7 +940,7 @@ export const runRest = async ({
         process.off('unhandledRejection', unexpectedlyExitHandler);
       });
 
-      watchFilesForRestart({
+      await watchFilesForRestart({
         rstest,
         options,
         filters,

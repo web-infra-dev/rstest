@@ -35,5 +35,13 @@ export async function createChokidar(
     }
   }
 
-  return chokidar.watch(Array.from(watchFiles), options);
+  const watcher = chokidar.watch(Array.from(watchFiles), options);
+  // chokidar emits `ready` only after a watched path finishes its initial scan,
+  // so an empty set (globs that matched nothing) would never resolve.
+  if (watchFiles.size > 0) {
+    await new Promise<void>((resolve) =>
+      watcher.once('ready', () => resolve()),
+    );
+  }
+  return watcher;
 }

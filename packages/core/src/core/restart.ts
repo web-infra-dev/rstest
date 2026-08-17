@@ -93,6 +93,11 @@ export async function watchFilesForRestart({
     ignoreInitial: true,
     // If watching fails due to read permissions, the errors will be suppressed silently.
     ignorePermissionErrors: true,
+    // `fs.watch` is only armed some time after `ready`, so a config edit right
+    // after startup is dropped. Polling this handful of files is cheap and its
+    // `ready` means the stat baselines are recorded.
+    usePolling: true,
+    interval: 100,
     ...watchOptions,
   });
 
