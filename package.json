@@ -23,7 +23,7 @@
     "typecheck": "pnpm run lint:type"
   },
   "devDependencies": {
-    "@rslint/core": "^0.7.3",
+    "@rslint/core": "^0.8.0",
     "@rstest/core": "workspace:*",
     "@types/node": "^22.16.5",
     "bumpp": "^11.1.0",
