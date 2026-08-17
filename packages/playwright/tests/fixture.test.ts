@@ -137,6 +137,25 @@ browserTest.sequential('reuses the shared browser', ({ browser }) => {
   expect(browser).toBe(sharedBrowser);
 });
 
+let disconnectedBrowser: Browser | undefined;
+
+browserTest.sequential(
+  'relaunches the browser after it disconnects',
+  async ({ browser }) => {
+    disconnectedBrowser = browser;
+    await browser.close();
+    expect(browser.isConnected()).toBe(false);
+  },
+);
+
+browserTest.sequential(
+  'evicts disconnected browsers from the cache',
+  ({ browser }) => {
+    expect(browser).not.toBe(disconnectedBrowser);
+    expect(browser.isConnected()).toBe(true);
+  },
+);
+
 browserTest.extend({
   playwright: {
     ...ciPlaywrightOptions,

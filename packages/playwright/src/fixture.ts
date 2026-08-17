@@ -228,6 +228,7 @@ const CONTENT_TYPES: Record<string, string> = {
 const browserCache = new Map<string, Promise<Browser>>();
 let activeBrowserFixtureCount = 0;
 let browserCleanupPromise: Promise<void> | undefined;
+let browserCleanupRequested = false;
 let browserWorkerCleanupRegistered = false;
 
 const browserTypes = {
@@ -552,26 +553,55 @@ const getBrowserCacheKey = (options: PlaywrightOptions) =>
     launchOptions: resolveLaunchOptions(options),
   });
 
-const getBrowser = (options: PlaywrightOptions) => {
+const getBrowser = async (options: PlaywrightOptions) => {
   registerBrowserWorkerCleanup();
   const browserName = options.browserName ?? DEFAULT_BROWSER_NAME;
   const key = getBrowserCacheKey(options);
   const cachedBrowser = browserCache.get(key);
 
   if (cachedBrowser) {
-    return cachedBrowser;
+    const browser = await cachedBrowser;
+    if (browser.isConnected()) {
+      return browser;
+    }
+
+    if (browserCache.get(key) === cachedBrowser) {
+      browserCache.delete(key);
+    }
+  }
+
+  const activeBrowser = browserCache.get(key);
+  if (activeBrowser) {
+    return activeBrowser;
   }
 
   const browser = browserTypes[browserName].launch(
     resolveLaunchOptions(options),
   );
   browserCache.set(key, browser);
+
+  browser.then(
+    (resolvedBrowser) => {
+      resolvedBrowser.once('disconnected', () => {
+        if (browserCache.get(key) === browser) {
+          browserCache.delete(key);
+        }
+      });
+    },
+    () => {
+      if (browserCache.get(key) === browser) {
+        browserCache.delete(key);
+      }
+    },
+  );
+
   return browser;
 };
 
 const closeBrowser = async (): Promise<void> => {
   const browsers = [...browserCache.values()];
   browserCache.clear();
+  browserCleanupRequested = false;
 
   await Promise.all(browsers.map(async (browser) => (await browser).close()));
 };
@@ -590,10 +620,15 @@ const registerBrowserWorkerCleanup = () => {
 };
 
 const closeBrowserWhenIdle = async () => {
-  if (activeBrowserFixtureCount > 0 || browserCache.size === 0) {
+  if (browserCache.size === 0) {
+    browserCleanupRequested = false;
+    return;
+  }
+  if (activeBrowserFixtureCount > 0) {
     return;
   }
 
+  browserCleanupRequested = false;
   browserCleanupPromise ??= closeBrowser().finally(() => {
     browserCleanupPromise = undefined;
   });
@@ -614,6 +649,10 @@ const retainBrowser = () => {
     activeBrowserFixtureCount--;
 
     if (!scheduleCleanup) {
+      browserCleanupRequested = true;
+    }
+
+    if (!scheduleCleanup || browserCleanupRequested) {
       await closeBrowserWhenIdle();
     }
   };

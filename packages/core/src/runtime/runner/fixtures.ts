@@ -393,7 +393,17 @@ export const cleanupWorkerFixtures = async (): Promise<void> => {
     throw errors[0];
   }
   if (errors.length > 1) {
-    throw new AggregateError(errors, 'Failed to clean up worker resources.');
+    throw new AggregateError(
+      errors,
+      [
+        'Failed to clean up worker resources.',
+        ...errors
+          .map((error) =>
+            error instanceof Error ? error.message : String(error),
+          )
+          .map((message) => `Worker cleanup failed: ${message}`),
+      ].join('\n'),
+    );
   }
 };
 

@@ -19,6 +19,30 @@ describe('worker cleanup callbacks', () => {
 
     expect(events).toEqual(['cleanup']);
   });
+
+  it('includes all worker cleanup errors in the aggregate message', async () => {
+    registerWorkerCleanup(() => {
+      throw new Error('first cleanup failed');
+    });
+    registerWorkerCleanup(() => {
+      throw new Error('second cleanup failed');
+    });
+
+    let error: unknown;
+    try {
+      await cleanupWorkerFixtures();
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toMatchObject({
+      message: [
+        'Failed to clean up worker resources.',
+        'Worker cleanup failed: first cleanup failed',
+        'Worker cleanup failed: second cleanup failed',
+      ].join('\n'),
+    });
+  });
 });
 
 describe('normalizeFixtures', () => {
