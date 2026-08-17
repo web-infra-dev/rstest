@@ -244,7 +244,11 @@ describe('Test API', () => {
     const start = Date.now();
     const { cli, expectExecFailed } = await runRstestCli({
       command: 'rstest',
-      args: ['run', 'fixtures/namedFixtureCleanupTimeout.test.ts'],
+      args: [
+        'run',
+        'fixtures/namedFixtureCleanupTimeout.test.ts',
+        '--disableConsoleIntercept',
+      ],
       options: {
         nodeOptions: {
           cwd: dirname(fileURLToPath(import.meta.url)),
@@ -254,18 +258,13 @@ describe('Test API', () => {
 
     await expectExecFailed();
     expect(Date.now() - start).toBeLessThan(10_000);
-    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
-      'fixture setup timed out in 100ms',
-    );
-    expect(cli.stdout).toContain('RSTEST_NAMED_FIXTURE_SETUP_TIMEOUT_CLEANUP');
-    expect(cli.stdout).toContain('RSTEST_NAMED_FIXTURE_LATE_CLEANUP');
-    expect(cli.stdout).toContain('RSTEST_NAMED_FIXTURE_LATE_CLEANUP_ORDER_OK');
-    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
-      'fixture cleanup timed out in 100ms',
-    );
-    expect(`${cli.stdout}\n${cli.stderr}`).toContain(
-      'RSTEST_NAMED_FIXTURE_LATE_CLEANUP_FAILED',
-    );
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output).toContain('fixture setup timed out in 100ms');
+    expect(output).toContain('RSTEST_NAMED_FIXTURE_SETUP_TIMEOUT_CLEANUP');
+    expect(output).toContain('RSTEST_NAMED_FIXTURE_LATE_CLEANUP');
+    expect(output).toContain('RSTEST_NAMED_FIXTURE_LATE_CLEANUP_ORDER_OK');
+    expect(output).toContain('fixture cleanup timed out in 100ms');
+    expect(output).toContain('RSTEST_NAMED_FIXTURE_LATE_CLEANUP_FAILED');
   });
 
   it('preserves setup timeout when cancellation cleanup fails', async () => {
