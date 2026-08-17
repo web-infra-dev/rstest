@@ -27,6 +27,7 @@ import {
   beforeEach as rstestBeforeEach,
   describe as rstestDescribe,
   expect as rstestExpect,
+  registerWorkerCleanup,
   test as base,
 } from '@rstest/core';
 import type {
@@ -40,7 +41,6 @@ import type {
   Use,
 } from '@rstest/core';
 import type { TestContext } from '@rstest/core';
-import * as coreRuntime from '@rstest/core';
 import { chromium, request as playwrightRequest } from 'playwright';
 import { withPlaywrightExpect } from './expect';
 import type {
@@ -586,16 +586,7 @@ const registerBrowserWorkerCleanup = () => {
     browserWorkerCleanupRegistered = false;
     await closeBrowser();
   };
-  if (coreRuntime.registerWorkerCleanup) {
-    coreRuntime.registerWorkerCleanup(cleanup);
-    return;
-  }
-  process.once('beforeExit', () => {
-    void cleanup();
-  });
-  process.once('exit', () => {
-    browserCache.clear();
-  });
+  registerWorkerCleanup(cleanup);
 };
 
 const closeBrowserWhenIdle = async () => {
