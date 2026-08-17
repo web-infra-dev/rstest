@@ -31,17 +31,17 @@
     "cross-env": "^10.1.0",
     "cspell-ban-words": "^0.0.4",
     "heading-case": "^1.1.5",
-    "knip": "^6.32.1",
+    "knip": "^6.32.2",
     "lefthook": "^2.1.10",
-    "pkg-pr-new": "^0.0.87",
+    "pkg-pr-new": "^0.0.88",
     "playwright": "^1.62.1",
     "prettier": "^3.9.6",
     "prettier-plugin-packagejson": "^3.0.2",
     "typescript": "^6.0.3"
   },
-  "packageManager": "pnpm@11.21.0",
+  "packageManager": "pnpm@11.22.0",
   "engines": {
     "node": "^20.19.0 || >=22.12.0",
-    "pnpm": ">=11.21.0"
+    "pnpm": ">=11.22.0"
   }
 }

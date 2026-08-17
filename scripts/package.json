@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@rsdoctor/rspack-plugin": "^1.6.1",
+    "@rsdoctor/rspack-plugin": "^1.6.2",
     "@rstest/core": "workspace:*",
     "marked": "^18.0.9",
     "path-serializer": "0.6.0",
