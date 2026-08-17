@@ -40,7 +40,7 @@ import type {
   Use,
 } from '@rstest/core';
 import type { TestContext } from '@rstest/core';
-import * as coreBrowserRuntime from '@rstest/core/internal/browser-runtime';
+import * as coreRuntime from '@rstest/core';
 import { chromium, request as playwrightRequest } from 'playwright';
 import { withPlaywrightExpect } from './expect';
 import type {
@@ -586,8 +586,8 @@ const registerBrowserWorkerCleanup = () => {
     browserWorkerCleanupRegistered = false;
     await closeBrowser();
   };
-  if (coreBrowserRuntime.registerWorkerCleanup) {
-    coreBrowserRuntime.registerWorkerCleanup(cleanup);
+  if (coreRuntime.registerWorkerCleanup) {
+    coreRuntime.registerWorkerCleanup(cleanup);
     return;
   }
   process.once('beforeExit', () => {

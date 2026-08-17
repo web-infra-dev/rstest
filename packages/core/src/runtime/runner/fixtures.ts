@@ -3,11 +3,13 @@ import type {
   Fixtures,
   NormalizedFixture,
   NormalizedFixtures,
-  MaybePromise,
   TestCase,
   TestContext,
 } from '../../types';
+import { takeWorkerCleanups } from './workerCleanup';
 import { isObject } from '../../utils/helper';
+
+export { registerWorkerCleanup } from './workerCleanup';
 
 export type FixtureScope = 'worker' | 'file' | 'test';
 
@@ -369,15 +371,6 @@ export class FileFixtureManager extends FixtureScopeManager {
 export const workerFixtureManager: FixtureScopeManager =
   new FixtureScopeManager('worker');
 
-const workerCleanupCallbacks = new Set<() => MaybePromise<void>>();
-
-export const registerWorkerCleanup = (
-  cleanup: () => MaybePromise<void>,
-): (() => boolean) => {
-  workerCleanupCallbacks.add(cleanup);
-  return () => workerCleanupCallbacks.delete(cleanup);
-};
-
 export const cleanupWorkerFixtures = async (): Promise<void> => {
   const errors: unknown[] = [];
 
@@ -387,8 +380,7 @@ export const cleanupWorkerFixtures = async (): Promise<void> => {
     errors.push(error);
   }
 
-  const cleanups = [...workerCleanupCallbacks];
-  workerCleanupCallbacks.clear();
+  const cleanups = takeWorkerCleanups();
   for (const cleanup of cleanups) {
     try {
       await cleanup();

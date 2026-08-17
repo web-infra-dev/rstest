@@ -18,10 +18,7 @@ export { registerElementExpect } from './runtime/api/expect';
 export * from './runtime/api/public';
 export { getRealTimers, setRealTimers } from './runtime/util';
 export { createBrowserTaskContext } from './runtime/worker/taskContext.browser';
-export {
-  cleanupWorkerFixtures,
-  registerWorkerCleanup,
-} from './runtime/runner/fixtures';
+export { cleanupWorkerFixtures } from './runtime/runner/fixtures';
 export type { TaskContext } from './runtime/worker/taskContext';
 export type { FileCleanupHooks } from './runtime/runner';
 // Types for browser runtime

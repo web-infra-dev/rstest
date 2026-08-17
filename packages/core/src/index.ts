@@ -18,6 +18,11 @@ export { loadConfig, mergeProjectConfig, mergeRstestConfig } from './config';
 export { createRstest } from './core';
 export * from './runtime/api/public';
 
+// Node-side integrations use this hook to release resources at worker exit.
+// The registry is global-symbol backed so independently bundled Node runtime
+// entries still observe the same callbacks.
+export { registerWorkerCleanup } from './runtime/runner/workerCleanup';
+
 export type {
   CoverageOptions,
   CoverageProvider,
