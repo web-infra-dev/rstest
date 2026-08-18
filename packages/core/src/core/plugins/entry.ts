@@ -71,8 +71,7 @@ export const pluginEntryWatch: (params: {
         };
 
         config.watchOptions ??= {};
-        // FIXME: Temporarily default to 5 to debounce rerun in watch mode.
-        config.watchOptions.aggregateTimeout = 5;
+        config.watchOptions.aggregateTimeout = 100;
         // TODO: rspack should support `(string | RegExp)[]` type
         // https://github.com/web-infra-dev/rspack/issues/10596
         config.watchOptions.ignored = castArray(
@@ -94,6 +93,8 @@ export const pluginEntryWatch: (params: {
           '**/*.snap',
         );
 
+        config.experiments ??= {};
+        config.experiments.nativeWatcher ??= true;
         const configFilePath = context.projects.find(
           (project) => project.environmentName === environment.name,
         )?.configFilePath;
