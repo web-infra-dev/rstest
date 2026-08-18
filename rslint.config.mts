@@ -1,4 +1,4 @@
-import { defineConfig, ts } from '@rslint/core';
+import { defineConfig, js, ts } from '@rslint/core';
 
 // Unit tests must be OS-agnostic: CI runs the ut job on ubuntu only, so a test
 // whose behavior branches on the host platform silently loses its non-Linux
@@ -229,6 +229,10 @@ export const osAgnosticTests = {
 
 export default defineConfig([
   { ignores: ['**/dist/**', '**/dist-types/**'] },
+  {
+    ...js.configs.recommended,
+    files: ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts'],
+  },
   ts.configs.recommended,
   {
     languageOptions: {
