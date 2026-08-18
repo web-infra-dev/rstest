@@ -1,4 +1,4 @@
-import type { RstestContext } from '../types';
+import type { InternalContext } from '../types';
 
 /**
  * Reset what a watch cycle must not inherit, before either executor streams
@@ -28,9 +28,10 @@ import type { RstestContext } from '../types';
  * update.
  */
 export function prepareWatchCycleState(
-  context: RstestContext,
+  context: InternalContext,
   { isFirstCycle }: { isFirstCycle: boolean },
 ): void {
+  context.exitCode.reset();
   context.stateManager.reset();
   if (!isFirstCycle) {
     context.snapshotManager.clear();
@@ -38,14 +39,14 @@ export function prepareWatchCycleState(
 }
 
 /** Test paths whose latest run failed — the `f` shortcut's rerun set. */
-export const collectFailedTestPaths = (context: RstestContext): string[] =>
+export const collectFailedTestPaths = (context: InternalContext): string[] =>
   context.reporterResults.results
     .filter((result) => result.status === 'fail')
     .map((result) => result.testPath);
 
 /** Test paths with unmatched snapshots — the `u` shortcut's rerun set. */
 export const collectUnmatchedSnapshotTestPaths = (
-  context: RstestContext,
+  context: InternalContext,
 ): string[] =>
   context.reporterResults.results
     .filter((result) => result.snapshotResult?.unmatched)

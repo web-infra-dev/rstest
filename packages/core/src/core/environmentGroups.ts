@@ -1,6 +1,6 @@
 import type {
+  InternalProjectContext,
   NormalizedProjectConfig,
-  ProjectContext,
   ProjectEntries,
   TestEnvironmentModuleReference,
 } from '../types';
@@ -31,8 +31,9 @@ const formatEnvironmentName = (name: string): string =>
 const formatGroupName = (projectName: string, groupIndex: number): string =>
   `${projectName}-environment-${groupIndex}`;
 
-export const getProjectEnvironmentKey = (project: ProjectContext): string =>
-  stableJson(project.normalizedConfig.testEnvironment);
+export const getProjectEnvironmentKey = (
+  project: InternalProjectContext,
+): string => stableJson(project.normalizedConfig.testEnvironment);
 
 export const getEnvironmentKey = (
   testEnvironment: NormalizedProjectConfig['testEnvironment'],
@@ -58,15 +59,15 @@ export const groupProjectEntriesByEnvironment = async ({
   ignoreInvalidEnvironmentComments = false,
 }: {
   entriesCache: Map<string, ProjectEntries>;
-  projects: ProjectContext[];
+  projects: InternalProjectContext[];
   ignoreInvalidEnvironmentComments?: boolean;
 }): Promise<{
   entriesCache: Map<string, ProjectEntries>;
-  projects: ProjectContext[];
+  projects: InternalProjectContext[];
   changed: boolean;
 }> => {
   const groupedEntriesCache = new Map<string, ProjectEntries>();
-  const groupedProjects: ProjectContext[] = [];
+  const groupedProjects: InternalProjectContext[] = [];
   let changed = false;
 
   for (const project of projects) {

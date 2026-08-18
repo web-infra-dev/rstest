@@ -13,15 +13,15 @@ import {
   getSetupFiles,
   getTestEntries,
   initModifyRstestConfigHooks,
+  type InternalContext,
+  type InternalProjectContext,
   isDebug,
   logger,
   loadCoverageProvider,
   pluginMockRuntime,
-  type ProjectContext,
   resolveProjectBuildCache,
   resolveShardedEntries,
   RSTEST_ENV_SYMBOL_KEY,
-  type RstestContext,
   rsbuild,
   type WatchInvalidationState,
 } from '@rstest/core/internal/browser';
@@ -71,7 +71,7 @@ export const serializeForInlineScript = (value: unknown): string => {
 // Type Definitions
 
 type BrowserProjectEntries = {
-  project: ProjectContext;
+  project: InternalProjectContext;
   setupFiles: string[];
   testFiles: string[];
 };
@@ -125,15 +125,15 @@ export type BrowserProviderProject = {
 
 type BrowserLaunchOptions = {
   provider: BrowserProvider;
-  browser: ProjectContext['normalizedConfig']['browser']['browser'];
-  headless: ProjectContext['normalizedConfig']['browser']['headless'];
-  port: ProjectContext['normalizedConfig']['browser']['port'];
-  strictPort: ProjectContext['normalizedConfig']['browser']['strictPort'];
+  browser: InternalProjectContext['normalizedConfig']['browser']['browser'];
+  headless: InternalProjectContext['normalizedConfig']['browser']['headless'];
+  port: InternalProjectContext['normalizedConfig']['browser']['port'];
+  strictPort: InternalProjectContext['normalizedConfig']['browser']['strictPort'];
   providerOptions: Record<string, unknown>;
 };
 
 const getBrowserProviderOptions = (
-  project: ProjectContext,
+  project: InternalProjectContext,
 ): Record<string, unknown> => {
   const browserConfig = project.normalizedConfig.browser as {
     providerOptions?: Record<string, unknown>;
@@ -794,13 +794,15 @@ const getAffectedTestFiles = ({
   return outcome.affectedPaths;
 };
 
-export const getBrowserProjects = (context: RstestContext): ProjectContext[] =>
+export const getBrowserProjects = (
+  context: InternalContext,
+): InternalProjectContext[] =>
   context.projects.filter(
     (project) => project.normalizedConfig.browser.enabled,
   );
 
 const getBrowserRsbuildEnvironmentConfig = (
-  project: ProjectContext,
+  project: InternalProjectContext,
 ): RsbuildEnvironmentConfig => ({
   plugins: project.normalizedConfig.plugins,
   root: project.rootPath,
@@ -810,7 +812,7 @@ const getBrowserRsbuildEnvironmentConfig = (
 // and browser server fetch timeout.
 
 const getBrowserLaunchOptions = (
-  project: ProjectContext,
+  project: InternalProjectContext,
 ): BrowserLaunchOptions => ({
   provider: project.normalizedConfig.browser.provider,
   browser: project.normalizedConfig.browser.browser,
@@ -821,7 +823,7 @@ const getBrowserLaunchOptions = (
 });
 
 const ensureConsistentBrowserLaunchOptions = (
-  projects: ProjectContext[],
+  projects: InternalProjectContext[],
 ): BrowserLaunchOptions => {
   if (projects.length === 0) {
     throw new Error('No browser-enabled projects found.');
@@ -852,11 +854,11 @@ const ensureConsistentBrowserLaunchOptions = (
 };
 
 export const collectProjectEntries = async (
-  context: RstestContext,
+  context: InternalContext,
   // The explicit browser-project subset the executor was constructed with. Falls
   // back to re-deriving from `context` for internal callers (e.g. the watch
   // plugin) that do not carry the plan's project list.
-  browserProjects: ProjectContext[] = getBrowserProjects(context),
+  browserProjects: InternalProjectContext[] = getBrowserProjects(context),
 ): Promise<BrowserProjectEntries[]> => {
   return Promise.all(
     browserProjects.map(async (project) => {
@@ -870,7 +872,7 @@ export const collectProjectEntries = async (
         includeSource,
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
-        fileFilters: context.fileFilters || [],
+        fileFilters: context.fileFilters,
         fileFilterMode: context.fileFilterMode,
       });
 
@@ -1196,13 +1198,13 @@ export const createBrowserRuntime = async ({
   skipProviderLaunch,
   appliedModifyRstestConfigEnvironments,
 }: {
-  context: RstestContext;
+  context: InternalContext;
   projectEntries: BrowserProjectEntries[];
   /**
    * The explicit browser-project subset (plan output). Drives launch-option
    * consistency and the container origin (`browserProjects[0]`).
    */
-  browserProjects: ProjectContext[];
+  browserProjects: InternalProjectContext[];
   shardedEntries?: Map<string, { entries: Record<string, string> }>;
   freezeShardedEntries?: boolean;
   tempDir: string;
@@ -1243,7 +1245,7 @@ export const createBrowserRuntime = async ({
   const watchState = createBrowserWatchState();
   const manifestModules: Array<{
     manifestPath: string;
-    project: ProjectContext;
+    project: InternalProjectContext;
     modules: Record<string, string>;
   }> = [];
 
@@ -1273,14 +1275,14 @@ export const createBrowserRuntime = async ({
     };
   };
 
-  const getProjectEntry = (project: ProjectContext) =>
+  const getProjectEntry = (project: InternalProjectContext) =>
     projectEntries.find(
       (item) => item.project.environmentName === project.environmentName,
     );
 
   const refreshManifestModule = (manifestModule: {
     manifestPath: string;
-    project: ProjectContext;
+    project: InternalProjectContext;
     modules: Record<string, string>;
   }): void => {
     const entry = getProjectEntry(manifestModule.project);
@@ -1464,7 +1466,7 @@ export const createBrowserRuntime = async ({
 
   // ---- Build one isolated rsbuild instance + dev server per project ----
   const buildProjectServer = async (
-    project: ProjectContext,
+    project: InternalProjectContext,
     isContainerServer: boolean,
   ): Promise<BrowserProjectServer> => {
     const manifestPath = join(
@@ -1985,9 +1987,9 @@ export const createBrowserRuntime = async ({
 };
 
 export async function resolveProjectEntries(
-  context: RstestContext,
+  context: InternalContext,
   shardedEntries: Map<string, { entries: Record<string, string> }> | undefined,
-  browserProjects: ProjectContext[],
+  browserProjects: InternalProjectContext[],
 ): Promise<BrowserProjectEntries[]> {
   if (shardedEntries) {
     const projectEntries: BrowserProjectEntries[] = [];

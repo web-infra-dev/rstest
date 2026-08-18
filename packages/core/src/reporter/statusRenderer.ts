@@ -123,6 +123,10 @@ export class StatusRenderer {
     this.renderer?.finish();
   }
 
+  stop(): void {
+    this.renderer.stop();
+  }
+
   suspendWindowOutput(): void {
     this.renderer.suspendWindowOutput();
   }

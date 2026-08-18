@@ -1,11 +1,11 @@
 import { ensureCoverageProviderInstalled } from '../coverage';
-import type { ProjectContext, RstestContext } from '../types';
+import type { InternalContext, InternalProjectContext } from '../types';
 import { ensureTestEnvironmentDependencies } from './envDependencies';
 
 type EnsureRunDependenciesOptions = {
-  projects: ProjectContext[];
+  projects: InternalProjectContext[];
   rootPath: string;
-  coverage: RstestContext['normalizedConfig']['coverage'];
+  coverage: InternalContext['normalizedConfig']['coverage'];
 };
 
 export const ensureRunDependencies = async ({

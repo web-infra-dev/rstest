@@ -88,7 +88,7 @@ export async function runTests(context: Rstest): Promise<void> {
       logger.warn(
         `onlyFailures is ignored when combined with --${context.relatedMode}.`,
       );
-    } else if (context.fileFilters?.length) {
+    } else if (context.fileFilters !== undefined) {
       logger.warn(
         'onlyFailures is ignored when explicit file filters are provided.',
       );
@@ -216,6 +216,7 @@ export async function runTests(context: Rstest): Promise<void> {
     await runLifecycleStep('trace shutdown', () =>
       traceController.shutdown(activeTraceRun),
     );
+    context.exitCode.finishCycle();
     return;
   }
 
@@ -265,7 +266,9 @@ export async function runTests(context: Rstest): Promise<void> {
         await Promise.all(closePromises);
       } finally {
         // User teardown must still run when an executor close throws.
-        await runLifecycleStep('global teardown', () => runGlobalTeardown());
+        await runLifecycleStep('global teardown', () =>
+          runGlobalTeardown(context),
+        );
       }
     };
 
@@ -319,10 +322,10 @@ export async function runTests(context: Rstest): Promise<void> {
             `Rstest exited unexpectedly with code ${code}, terminating test run.`,
           ),
         );
-        runGlobalTeardown().catch((error) => {
+        runGlobalTeardown(context).catch((error) => {
           logger.log(color.red(`Error in global teardown: ${error}`));
         });
-        process.exitCode = 1;
+        context.exitCode.raise(1);
       }
     };
 
@@ -353,8 +356,8 @@ export async function runTests(context: Rstest): Promise<void> {
         executors.push(browserExecutor);
         await browserExecutor.init();
         // Core-owned pre-cycle globalSetup stage over the resolved browser
-        // subset. It mutates the shared host `process.env`, so browser setups'
-        // env changes are also visible to node workers dispatched below.
+        // subset. Its context-local env changes are visible to both the browser
+        // cycle and node workers dispatched below.
         browserStage = await runBrowserGlobalSetupStage(
           context,
           browserProjectsToRun,
@@ -410,6 +413,7 @@ export async function runTests(context: Rstest): Promise<void> {
     await runLifecycleStep('trace wait for exit', () =>
       traceController.waitForExit(),
     );
+    context.exitCode.finishCycle();
     return;
   }
 
@@ -418,7 +422,7 @@ export async function runTests(context: Rstest): Promise<void> {
   // every signal is one queued cycle + finalize — a node rebuild landing during
   // a browser rerun waits instead of interleaving on the shared `stateManager`.
   // ===================================================================
-  const enableCliShortcuts = isCliShortcutsEnabled();
+  const enableCliShortcuts = isCliShortcutsEnabled(context);
   // Constructed (not launched) below so its invalidation subscriber, the shared
   // teardown, and the stdin owner — all three closing over it — are in place
   // before either side's first cycle. Loading it can exit on a version mismatch,
@@ -468,9 +472,11 @@ export async function runTests(context: Rstest): Promise<void> {
     );
   }
 
-  let nodeFileFilters = context.fileFilters?.length
-    ? await planner.globTestEntries(context.fileFilters)
-    : undefined;
+  let nodeFileFilterPatterns = context.fileFilters;
+  let nodeFileFilters =
+    nodeFileFilterPatterns !== undefined
+      ? await planner.globTestEntries(nodeFileFilterPatterns)
+      : undefined;
   const browserTarget = browserExecutor;
   const watchTargets: WatchSessionTargets = {
     node: nodeExecutorToRun
@@ -482,6 +488,7 @@ export async function runTests(context: Rstest): Promise<void> {
             }),
           globTestEntries: (filters) => planner.globTestEntries(filters),
           setFileFilters: (fileFilters) => {
+            nodeFileFilterPatterns = undefined;
             nodeFileFilters = fileFilters;
           },
         }
@@ -495,6 +502,7 @@ export async function runTests(context: Rstest): Promise<void> {
   // config-change restart hook. The browser side closes first: its runtime owns
   // the servers the node executor's shutdown does not know about.
   const watchTeardown = createWatchTeardown({
+    context,
     executors: [
       ...(browserExecutor ? [browserExecutor] : []),
       ...(nodeExecutor ? [nodeExecutor] : []),
@@ -503,11 +511,18 @@ export async function runTests(context: Rstest): Promise<void> {
     getTraceRun: () => activeTraceRun,
   });
   const closeWatchSession = () => watchTeardown.close();
+  context.closeWatchSession = closeWatchSession;
+  watchTeardown.addCleanup(() => {
+    context.closeWatchSession = undefined;
+  });
   isSessionClosing = () => watchTeardown.isClosing();
   watchTeardown.addCleanup(registerWatchSignalExit(context, closeWatchSession));
 
   const { onBeforeRestart } = await import('./restart');
-  onBeforeRestart(closeWatchSession);
+  // The restart cleaner queue remains module-global until RFC PR2 makes the
+  // restart lifecycle context-local. This session must still remove its own
+  // registration when a host closes it without restarting.
+  watchTeardown.addCleanup(onBeforeRestart(closeWatchSession));
 
   // Installed before the first cycle so the ready banner can never appear
   // before stdin has an owner (a keystroke answering it would be swallowed).
@@ -541,11 +556,11 @@ export async function runTests(context: Rstest): Promise<void> {
   try {
     if (browserExecutor) {
       // Ahead of the node dev server, for the reason the non-watch assembly runs
-      // the stage before dispatching node work: it mutates the shared host
-      // `process.env`, which the pool re-reads at dispatch, so a node cycle
-      // started first would miss the browser setups' env changes. The node
+      // the stage before dispatching node work: the pool composes its env from
+      // the context-local overlay at dispatch, so a node cycle started first
+      // would miss the browser setups' env changes. The node
       // dependency check comes first in turn, so a node project that cannot run
-      // rejects the session before a user setup has mutated anything — which is
+      // rejects the session before a user setup has run — which is
       // why `validateRunDependencies` is a seam member of its own rather than
       // something `ensureRunResources` alone owns.
       if (nodeExecutorToRun) {
@@ -585,13 +600,18 @@ export async function runTests(context: Rstest): Promise<void> {
     if (nodeExecutorToRun) {
       // The node executor's rebuilds are the watch trigger; its initial compile
       // signals too, which is what drives the first node cycle.
-      nodeExecutorToRun.onInvalidate(({ isFirstBuild }) =>
-        watchDriver.runCycle(nodeExecutorToRun, {
+      nodeExecutorToRun.onInvalidate(async ({ isFirstBuild }) => {
+        if (nodeFileFilterPatterns !== undefined) {
+          nodeFileFilters = await planner.globTestEntries(
+            nodeFileFilterPatterns,
+          );
+        }
+        return watchDriver.runCycle(nodeExecutorToRun, {
           mode: isFirstBuild ? 'all' : 'on-demand',
           fileFilters: nodeFileFilters,
           trigger: 'invalidation',
-        }),
-      );
+        });
+      });
       // Start the node dev server now that the subscriber is in place. `runCycle`
       // (invoked from that callback) reuses these resources via the in-flight
       // guard rather than starting a second server.
@@ -614,7 +634,7 @@ export async function runTests(context: Rstest): Promise<void> {
         // boots in the background; a failed boot must still be reported.
         initialBrowserCycle.catch((error) => {
           logger.error(color.red('Browser Mode watch session failed:'), error);
-          process.exitCode = 1;
+          context.exitCode.raise(1);
         });
       } else {
         await initialBrowserCycle;

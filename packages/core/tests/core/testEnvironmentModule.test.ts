@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import type { ProjectContext, TestEnvironmentPrebundle } from '../../src/types';
+import type {
+  InternalProjectContext,
+  TestEnvironmentPrebundle,
+} from '../../src/types';
 import { prepareTestEnvironmentModules } from '../../src/core/testEnvironmentModule';
 import { logger } from '../../src/utils';
 
@@ -18,7 +21,7 @@ const createProject = (
     outputModule?: boolean;
     prebundle?: TestEnvironmentPrebundle;
   } = {},
-): ProjectContext => {
+): InternalProjectContext => {
   return {
     rootPath,
     environmentName,
@@ -29,7 +32,7 @@ const createProject = (
         ...(prebundle === undefined ? {} : { prebundle }),
       },
     },
-  } as ProjectContext;
+  } as InternalProjectContext;
 };
 
 const createPackage = (

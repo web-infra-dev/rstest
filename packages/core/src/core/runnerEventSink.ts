@@ -1,6 +1,6 @@
 import type {
-  ProjectContext,
-  RstestContext,
+  InternalContext,
+  InternalProjectContext,
   RuntimeRPC,
   TestCaseInfo,
   TestFileInfo,
@@ -62,8 +62,8 @@ export interface RunnerEventSink extends HostDrivenEvents {
 }
 
 export function createRunnerEventSink(
-  context: RstestContext,
-  projectConfig: ProjectContext['normalizedConfig'],
+  context: InternalContext,
+  projectConfig: InternalProjectContext['normalizedConfig'],
 ): RunnerEventSink {
   const { reporters } = context;
 

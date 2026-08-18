@@ -75,6 +75,22 @@ describe('test projects', () => {
     ).toBeTruthy();
   });
 
+  it('uses config root to resolve project paths', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'packages/node/test/index.test.ts', '--globals'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures-root-anchor'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('packages/node/test/index.test.ts');
+    expect(cli.stdout).toContain('Tests 3 passed');
+  });
+
   it('should run projects fail when project not found', async () => {
     const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',

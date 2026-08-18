@@ -6,7 +6,7 @@ import {
   RSTEST_DYNAMIC_IMPORT_HOOK,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from '../../runtime/worker/runtimeHooks';
-import type { RstestContext } from '../../types';
+import type { InternalContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
 import { runtimeChunkNameForEnvironment } from '../runtimeChunk';
 import {
@@ -22,7 +22,7 @@ import __rstest_shim_module__ from 'node:module';
 const require = /*#__PURE__*/ __rstest_shim_module__.createRequire(import.meta.url);
 `;
 
-export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
+export const pluginBasic: (context: InternalContext) => RsbuildPlugin = (
   context,
 ) => ({
   name: 'rstest:basic',

@@ -14,6 +14,8 @@ import {
   type FormattedError,
   getPrettyConsoleName,
   hasUserRstestConfigPlugins,
+  type InternalContext,
+  type InternalProjectContext,
   isDebug,
   isTTY,
   type ListCommandResult,
@@ -21,9 +23,7 @@ import {
   logWatchReadyMessage,
   projectRuntimeConfig,
   PhaseTracker,
-  type ProjectContext,
   type RunnerEventSink,
-  type RstestContext,
   resolveSnapshotPathDefault,
   serializableConfig,
   type TestFileResult,
@@ -123,14 +123,13 @@ let nextBrowserFilePid = 1_000_000_000;
  * lifecycle for such a launch, but in watch mode its report deliberately leaves
  * the exit code alone — a rerun matching nothing is not a failure. Such a launch
  * opened no session, so no later cycle can raise the code either. That makes
- * this the host's only write to `process.exitCode`: a boot failure looks like a
- * second launch-path exception but is not one, because it rides the outcome out
- * of `failWithError` and core raises the code from there. One-shot runs keep
- * going through the cycle, and a caller that passed `allowEmptyRun` — today only
- * the config-hook discovery boot — reads the outcome instead of the process.
+ * this the only launch path that raises the context exit code directly: a boot
+ * failure rides the outcome out of `failWithError` and core raises it from
+ * there. One-shot runs keep going through the cycle, and a caller that passed
+ * `allowEmptyRun` reads the outcome instead of the context status.
  */
 const resolveEmptyLaunchExitCode = (
-  current: number | string | undefined,
+  current: number,
   {
     allowEmptyRun,
     isWatchMode,
@@ -140,15 +139,15 @@ const resolveEmptyLaunchExitCode = (
     isWatchMode: boolean;
     passWithNoTests: boolean;
   },
-): number | string | undefined => {
+): number => {
   if (allowEmptyRun || !isWatchMode || passWithNoTests) {
     return current;
   }
   // Never downgrade: a code already raised by an earlier failure stands.
-  return current === undefined || current === 0 ? 1 : current;
+  return Math.max(current, 1);
 };
 
-const getMaxTestTimeoutForRpc = (projects: ProjectContext[]): number =>
+const getMaxTestTimeoutForRpc = (projects: InternalProjectContext[]): number =>
   Math.max(
     ...projects.map(
       (p) => p.normalizedConfig.testTimeout ?? DEFAULT_TEST_TIMEOUT,
@@ -195,7 +194,7 @@ export type BrowserControllerResult = BrowserTestRunResult & {
 };
 
 export const runBrowserController = async (
-  context: RstestContext,
+  context: InternalContext,
   options?: BrowserControllerOptions,
 ): Promise<BrowserControllerResult | void> => {
   const {
@@ -416,11 +415,13 @@ export const runBrowserController = async (
   };
 
   const writeEmptyLaunchExitCode = (): void => {
-    process.exitCode = resolveEmptyLaunchExitCode(process.exitCode, {
-      allowEmptyRun,
-      isWatchMode,
-      passWithNoTests: context.normalizedConfig.passWithNoTests,
-    });
+    context.exitCode.raise(
+      resolveEmptyLaunchExitCode(context.exitCode.current, {
+        allowEmptyRun,
+        isWatchMode,
+        passWithNoTests: context.normalizedConfig.passWithNoTests,
+      }),
+    );
   };
 
   if (totalTests === 0 && !shouldInitializeEmptyBrowserHooks) {
@@ -663,7 +664,7 @@ export const runBrowserController = async (
   // Only include browser mode projects in runtime configs
   // Normalize projectRoot to posix format for cross-platform compatibility
   const projectRuntimeConfigs: BrowserProjectRuntime[] = browserProjects.map(
-    (project: ProjectContext) => ({
+    (project: InternalProjectContext) => ({
       name: project.name,
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
@@ -1211,7 +1212,7 @@ export type ListBrowserTestsResult = {
  * and collects their test structure (describe/test declarations).
  */
 export const listBrowserTests = async (
-  context: RstestContext,
+  context: InternalContext,
   options?: ListBrowserTestsOptions,
 ): Promise<ListBrowserTestsResult> => {
   const browserProjects = options?.projects ?? getBrowserProjects(context);
@@ -1300,7 +1301,7 @@ export const listBrowserTests = async (
   // Get browser projects for runtime config
   // Normalize projectRoot to posix format for cross-platform compatibility
   const projectRuntimeConfigs: BrowserProjectRuntime[] = browserProjects.map(
-    (project: ProjectContext) => ({
+    (project: InternalProjectContext) => ({
       name: project.name,
       environmentName: project.environmentName,
       projectRoot: normalize(project.rootPath),
