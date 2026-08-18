@@ -26,8 +26,8 @@ import {
   beforeAll as rstestBeforeAll,
   beforeEach as rstestBeforeEach,
   describe as rstestDescribe,
-  rstest,
   expect as rstestExpect,
+  registerWorkerCleanup,
   test as base,
 } from '@rstest/core';
 import type {
@@ -205,7 +205,6 @@ const PAUSE_ENV = 'RSTEST_PLAYWRIGHT_PAUSE';
 const TRACE_ENV = 'RSTEST_PLAYWRIGHT_TRACE';
 const TRACE_OUTPUT_DIR_ENV = 'RSTEST_PLAYWRIGHT_TRACE_OUTPUT_DIR';
 const DEBUG_PAUSE_TIMEOUT = 24 * 60 * 60 * 1000;
-const BROWSER_IDLE_CLOSE_DELAY = 1000;
 const DEFAULT_STATIC_SERVER_HOST = '127.0.0.1';
 const DEFAULT_TRACE_OUTPUT_DIR = join('.rstest', 'playwright-traces');
 const TEST_EACH_CONTEXT_SYMBOL = Symbol.for('rstest.test.each.context');
@@ -229,7 +228,8 @@ const CONTENT_TYPES: Record<string, string> = {
 const browserCache = new Map<string, Promise<Browser>>();
 let activeBrowserFixtureCount = 0;
 let browserCleanupPromise: Promise<void> | undefined;
-let browserCleanupTimer: ReturnType<typeof setTimeout> | undefined;
+let browserCleanupRequested = false;
+let browserWorkerCleanupRegistered = false;
 
 const browserTypes = {
   chromium,
@@ -553,59 +553,82 @@ const getBrowserCacheKey = (options: PlaywrightOptions) =>
     launchOptions: resolveLaunchOptions(options),
   });
 
-const getBrowser = (options: PlaywrightOptions) => {
+const getBrowser = async (options: PlaywrightOptions) => {
+  registerBrowserWorkerCleanup();
   const browserName = options.browserName ?? DEFAULT_BROWSER_NAME;
   const key = getBrowserCacheKey(options);
   const cachedBrowser = browserCache.get(key);
 
   if (cachedBrowser) {
-    return cachedBrowser;
+    const browser = await cachedBrowser;
+    if (browser.isConnected()) {
+      return browser;
+    }
+
+    if (browserCache.get(key) === cachedBrowser) {
+      browserCache.delete(key);
+    }
+  }
+
+  const activeBrowser = browserCache.get(key);
+  if (activeBrowser) {
+    return activeBrowser;
   }
 
   const browser = browserTypes[browserName].launch(
     resolveLaunchOptions(options),
   );
   browserCache.set(key, browser);
+
+  browser.then(
+    (resolvedBrowser) => {
+      resolvedBrowser.once('disconnected', () => {
+        if (browserCache.get(key) === browser) {
+          browserCache.delete(key);
+        }
+      });
+    },
+    () => {
+      if (browserCache.get(key) === browser) {
+        browserCache.delete(key);
+      }
+    },
+  );
+
   return browser;
 };
 
 const closeBrowser = async (): Promise<void> => {
   const browsers = [...browserCache.values()];
   browserCache.clear();
+  browserCleanupRequested = false;
 
   await Promise.all(browsers.map(async (browser) => (await browser).close()));
 };
 
-const getRealTimers = () => {
-  try {
-    const realTimers = rstest.getRealTimers();
-
-    return {
-      setTimeout:
-        realTimers.setTimeout ?? globalThis.setTimeout.bind(globalThis),
-      clearTimeout:
-        realTimers.clearTimeout ?? globalThis.clearTimeout.bind(globalThis),
-    };
-  } catch {
-    return {
-      setTimeout: globalThis.setTimeout.bind(globalThis),
-      clearTimeout: globalThis.clearTimeout.bind(globalThis),
-    };
-  }
-};
-
-const clearBrowserCleanupTimer = () => {
-  if (browserCleanupTimer) {
-    getRealTimers().clearTimeout(browserCleanupTimer);
-    browserCleanupTimer = undefined;
-  }
-};
-
-const closeBrowserWhenIdle = async () => {
-  if (activeBrowserFixtureCount > 0 || browserCache.size === 0) {
+const registerBrowserWorkerCleanup = () => {
+  if (browserWorkerCleanupRegistered) {
     return;
   }
 
+  browserWorkerCleanupRegistered = true;
+  const cleanup = async () => {
+    browserWorkerCleanupRegistered = false;
+    await closeBrowser();
+  };
+  registerWorkerCleanup(cleanup);
+};
+
+const closeBrowserWhenIdle = async () => {
+  if (browserCache.size === 0) {
+    browserCleanupRequested = false;
+    return;
+  }
+  if (activeBrowserFixtureCount > 0) {
+    return;
+  }
+
+  browserCleanupRequested = false;
   browserCleanupPromise ??= closeBrowser().finally(() => {
     browserCleanupPromise = undefined;
   });
@@ -613,20 +636,7 @@ const closeBrowserWhenIdle = async () => {
   await browserCleanupPromise;
 };
 
-const scheduleBrowserCleanupWhenIdle = () => {
-  if (activeBrowserFixtureCount > 0 || browserCache.size === 0) {
-    return;
-  }
-
-  clearBrowserCleanupTimer();
-  browserCleanupTimer = getRealTimers().setTimeout(() => {
-    browserCleanupTimer = undefined;
-    void closeBrowserWhenIdle();
-  }, BROWSER_IDLE_CLOSE_DELAY);
-};
-
 const retainBrowser = () => {
-  clearBrowserCleanupTimer();
   activeBrowserFixtureCount++;
   let released = false;
 
@@ -638,9 +648,11 @@ const retainBrowser = () => {
     released = true;
     activeBrowserFixtureCount--;
 
-    if (scheduleCleanup) {
-      scheduleBrowserCleanupWhenIdle();
-    } else {
+    if (!scheduleCleanup) {
+      browserCleanupRequested = true;
+    }
+
+    if (!scheduleCleanup || browserCleanupRequested) {
       await closeBrowserWhenIdle();
     }
   };

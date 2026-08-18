@@ -6,7 +6,10 @@ import type {
   TestCase,
   TestContext,
 } from '../../types';
+import { takeWorkerCleanups } from './workerCleanup';
 import { isObject } from '../../utils/helper';
+
+export { registerWorkerCleanup } from './workerCleanup';
 
 export type FixtureScope = 'worker' | 'file' | 'test';
 
@@ -368,8 +371,41 @@ export class FileFixtureManager extends FixtureScopeManager {
 export const workerFixtureManager: FixtureScopeManager =
   new FixtureScopeManager('worker');
 
-export const cleanupWorkerFixtures = (): Promise<void> =>
-  workerFixtureManager.cleanup();
+export const cleanupWorkerFixtures = async (): Promise<void> => {
+  const errors: unknown[] = [];
+
+  try {
+    await workerFixtureManager.cleanup();
+  } catch (error) {
+    errors.push(error);
+  }
+
+  const cleanups = takeWorkerCleanups();
+  for (const cleanup of cleanups) {
+    try {
+      await cleanup();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+
+  if (errors.length === 1) {
+    throw errors[0];
+  }
+  if (errors.length > 1) {
+    throw new AggregateError(
+      errors,
+      [
+        'Failed to clean up worker resources.',
+        ...errors
+          .map((error) =>
+            error instanceof Error ? error.message : String(error),
+          )
+          .map((message) => `Worker cleanup failed: ${message}`),
+      ].join('\n'),
+    );
+  }
+};
 
 class PreviouslyFailedFixtureError extends Error {}
 

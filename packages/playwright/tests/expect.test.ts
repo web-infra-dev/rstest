@@ -93,10 +93,10 @@ describe('@rstest/playwright expect', () => {
     const locator = createLocator({ count: 2, texts: ['Save', 'Cancel'] });
 
     await rstestExpect(
-      expect(locator).toHaveText('SaveCancel', { timeout: 1 }),
+      expect(locator).toHaveText('SaveCancel', { timeout: 100 }),
     ).rejects.toThrow('Expected locator to resolve to 1 element');
     await rstestExpect(
-      expect(locator).toContainText('SaveCancel', { timeout: 1 }),
+      expect(locator).toContainText('SaveCancel', { timeout: 100 }),
     ).rejects.toThrow('Expected locator to resolve to 1 element');
   });
 

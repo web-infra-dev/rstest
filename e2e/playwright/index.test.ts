@@ -1,3 +1,4 @@
+import { readFile, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -52,6 +53,40 @@ describe('@rstest/playwright', () => {
 
     await expectExecSuccess();
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_FOR_FIXTURES_OK');
+  });
+
+  it('reuses and cleans up a browser across worker files', async () => {
+    const cleanupMarker = join(
+      __dirname,
+      'fixtures',
+      'browser-reuse-cleanup.txt',
+    );
+    await rm(cleanupMarker, { force: true });
+
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        '--globals',
+        '--pool.maxWorkers=1',
+        'browser-reuse-a.test.ts',
+        'browser-reuse-b.test.ts',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CROSS_FILE_FIRST_OK');
+    expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_CROSS_FILE_REUSE_OK');
+    expect(cli.stdout).toContain('Test Files 2 passed');
+    await expect(readFile(cleanupMarker, 'utf8')).resolves.toBe(
+      'RSTEST_PLAYWRIGHT_CROSS_FILE_CLEANUP_OK',
+    );
+    await rm(cleanupMarker, { force: true });
   });
 
   it('writes Playwright trace debug artifacts', async () => {
