@@ -9,10 +9,7 @@ type EnvSource = Record<string, string | undefined>;
 interface InheritEnvOptions {
   /** Node: spread the full env (defaults to `process.env`). */
   envMode: 'inherit';
-  /**
-   * Full env base to inherit from; defaults to `process.env`, read at
-   * projection time so globalSetup mutations are already applied.
-   */
+  /** Full env base to inherit from; defaults to `process.env`. */
   env?: EnvSource;
 }
 
@@ -133,8 +130,7 @@ export function projectRuntimeConfig(
     logHeapUsage,
     detectAsyncLeaks,
     env: {
-      // Read env at projection time so a globalSetup-modified `process.env`
-      // (or an explicit snapshot) is captured correctly.
+      // Read the supplied run-local environment at projection time.
       ...envSource,
       ...env,
     },

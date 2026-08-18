@@ -33,11 +33,15 @@ function runDir(extensionPath: string): string {
  * workspace. Generating it per run keeps each run's starting state identical
  * and keeps a failure from reaching the repository.
  */
-function writeWorkspaceFile(dir: string, fixturesRoot: string): string {
+function writeWorkspaceFile(
+  dir: string,
+  fixturesRoot: string,
+  corePackageJson: string,
+): string {
   const file = path.join(dir, 'fixtures.code-workspace');
   const workspace = {
     folders: [{ path: path.join(fixturesRoot, 'workspace-1') }],
-    settings: {},
+    settings: { 'rstest.rstestPackagePath': corePackageJson },
   };
   writeFileSync(file, `${JSON.stringify(workspace, null, 2)}\n`);
   return file;
@@ -57,13 +61,17 @@ async function main() {
   const scratchDir = runDir(extensionDevelopmentPath);
 
   try {
+    const corePackageJson = path.resolve(
+      extensionDevelopmentPath,
+      '../core/package.json',
+    );
     // Download VS Code, unzip it and run the integration test
     await runTests({
       extensionDevelopmentPath,
       extensionTestsPath,
       launchArgs: [
         // Launch the Extension Host with the fixtures workspace
-        writeWorkspaceFile(scratchDir, fixturesRoot),
+        writeWorkspaceFile(scratchDir, fixturesRoot, corePackageJson),
         // This disables all extensions except the one being testing
         '--disable-extensions',
         `--user-data-dir=${scratchDir}`,

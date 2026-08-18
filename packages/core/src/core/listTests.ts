@@ -246,7 +246,7 @@ const collectNodeTests = async ({
             sourceMapsPromise,
           ]);
 
-          const { success, errors } = await runGlobalSetup({
+          const { success, errors } = await runGlobalSetup(context, {
             globalSetupEntries,
             assetFiles,
             sourceMaps,
@@ -308,8 +308,8 @@ type PreparedBrowserCollection = {
  * Load the browser executor over the plan's browser subset — the same subset
  * and executor options a run would launch with, so a shard-empty or file-empty
  * browser project never boots a dev server here either — and run the browser
- * globalSetup stage. Sequenced before node collection starts: the stage
- * mutates the host `process.env`, which node workers re-read at dispatch.
+ * globalSetup stage. Sequenced before node collection starts so the stage's
+ * context-local environment overlay reaches node workers at dispatch.
  */
 const prepareBrowserCollection = async ({
   context,
@@ -510,6 +510,7 @@ export async function listTests(
       });
     }
 
+    context.exitCode.finishCycle();
     return [];
   }
 
@@ -547,7 +548,7 @@ export async function listTests(
       ? collectTestFiles(planner)
       : await collectAllTests({ context, planner });
   } catch (error) {
-    await runGlobalTeardown();
+    await runGlobalTeardown(context);
     throw error;
   }
   const { list, close, getSourceMap, errors = [] } = collected;
@@ -555,7 +556,7 @@ export async function listTests(
     try {
       await close();
     } finally {
-      await runGlobalTeardown();
+      await runGlobalTeardown(context);
     }
   };
 
@@ -588,7 +589,7 @@ export async function listTests(
   const hasError = list.some((file) => file.errors?.length) || errors.length;
   if (hasError) {
     const { printError } = await import('../utils/error');
-    process.exitCode = 1;
+    context.exitCode.raise(1);
     for (const file of list) {
       const relativePath = relative(rootPath, file.testPath);
 
@@ -625,6 +626,7 @@ export async function listTests(
     }
 
     await closeCollection();
+    context.exitCode.finishCycle();
     return list;
   }
 
@@ -697,6 +699,7 @@ export async function listTests(
   }
 
   await closeCollection();
+  context.exitCode.finishCycle();
 
   return list;
 }

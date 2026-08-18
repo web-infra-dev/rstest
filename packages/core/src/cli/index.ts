@@ -2,8 +2,7 @@ import { logger } from '../utils/logger';
 import { setupCommands } from './commands';
 import { prepareCli } from './prepare';
 
-export { initCli } from './init';
-
+/** @experimental Subject to change until 1.0.0. */
 export type RunCLIOptions = {
   /**
    * The command-line arguments to parse, matching the shape of Node.js `process.argv`
@@ -12,6 +11,7 @@ export type RunCLIOptions = {
   argv?: string[];
 };
 
+/** @experimental Subject to change until 1.0.0. */
 export function runCLI({ argv = process.argv }: RunCLIOptions = {}): void {
   prepareCli();
 

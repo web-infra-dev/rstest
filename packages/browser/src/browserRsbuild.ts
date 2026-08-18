@@ -870,7 +870,7 @@ export const collectProjectEntries = async (
         includeSource,
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
-        fileFilters: context.fileFilters || [],
+        fileFilters: context.fileFilters,
         fileFilterMode: context.fileFilterMode,
       });
 

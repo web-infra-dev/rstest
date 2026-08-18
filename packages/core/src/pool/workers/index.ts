@@ -8,12 +8,13 @@ export function createPoolWorker(
   options: PoolOptions,
   workerId: number,
 ): PoolWorker {
+  const env = options.getEnv?.() ?? options.env;
   switch (task.worker) {
     case 'forks': {
       return new ForksPoolWorker({
         name: `forks-${workerId}`,
         filename: options.workerEntry,
-        env: options.env,
+        env,
         execArgv: options.execArgv,
         forwardStdio: options.forwardStdio,
       });
@@ -22,7 +23,7 @@ export function createPoolWorker(
       return new ThreadsPoolWorker({
         name: `threads-${workerId}`,
         filename: options.workerEntry,
-        env: options.env,
+        env,
         execArgv: options.execArgv,
         forwardStdio: options.forwardStdio,
       });

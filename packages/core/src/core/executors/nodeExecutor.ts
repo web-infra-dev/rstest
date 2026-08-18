@@ -184,6 +184,7 @@ type CreateNodeExecutorOptions = {
   isWatchMode: boolean;
   /** Returns the cycle's active trace buffer (reallocated by core each cycle). */
   getTraceRun: () => TraceRun;
+  onGlobalSetupFailure?: (errors: unknown[]) => void;
 };
 
 export function createNodeExecutor(
@@ -196,6 +197,7 @@ export function createNodeExecutor(
     coverageProvider,
     isWatchMode,
     getTraceRun,
+    onGlobalSetupFailure,
   }: CreateNodeExecutorOptions,
 ): NodeExecutor {
   const { rootPath } = context;
@@ -407,42 +409,48 @@ export function createNodeExecutor(
               globalSetupEntries.length,
             )
           ) {
-            const files = globalSetupEntries.flatMap((e) => e.files!);
-            const globalSetupTraceArgs = {
-              project: p.name,
-              testPath: '<globalSetup>',
-            };
-            const [assetFiles, sourceMaps] = await span(
-              'host:global-setup-assets',
-              'host',
-              () => Promise.all([getAssetFiles(files), getSourceMaps(files)]),
-              globalSetupTraceArgs,
-            );
-
-            const { success, errors } = await span(
-              'host:global-setup',
-              'host',
-              () =>
-                runGlobalSetup({
-                  globalSetupEntries,
-                  assetFiles,
-                  sourceMaps,
-                  interopDefault: true,
-                  outputModule: p.outputModule,
-                  federation: p.normalizedConfig.federation,
-                }),
-              globalSetupTraceArgs,
-            );
-            if (!success) {
-              return {
-                results: [],
-                testResults: [],
-                bundleCoverage: [],
-                errors,
-                assetNames,
-                getAssetFiles,
-                getSourceMaps,
+            try {
+              const files = globalSetupEntries.flatMap((e) => e.files!);
+              const globalSetupTraceArgs = {
+                project: p.name,
+                testPath: '<globalSetup>',
               };
+              const [assetFiles, sourceMaps] = await span(
+                'host:global-setup-assets',
+                'host',
+                () => Promise.all([getAssetFiles(files), getSourceMaps(files)]),
+                globalSetupTraceArgs,
+              );
+
+              const { success, errors } = await span(
+                'host:global-setup',
+                'host',
+                () =>
+                  runGlobalSetup(context, {
+                    globalSetupEntries,
+                    assetFiles,
+                    sourceMaps,
+                    interopDefault: true,
+                    outputModule: p.outputModule,
+                    federation: p.normalizedConfig.federation,
+                  }),
+                globalSetupTraceArgs,
+              );
+              if (!success) {
+                onGlobalSetupFailure?.(errors ?? []);
+                return {
+                  results: [],
+                  testResults: [],
+                  bundleCoverage: [],
+                  errors,
+                  assetNames,
+                  getAssetFiles,
+                  getSourceMaps,
+                };
+              }
+            } catch (error) {
+              onGlobalSetupFailure?.([error]);
+              throw error;
             }
           }
 
@@ -483,9 +491,8 @@ export function createNodeExecutor(
       }),
     );
 
-    const isExplicitlyScoped = !!(
-      fileFilters?.length || context.fileFilters?.length
-    );
+    const isExplicitlyScoped =
+      fileFilters !== undefined || context.fileFilters !== undefined;
     if (
       context.normalizedConfig.onlyFailures &&
       !isWatchMode &&

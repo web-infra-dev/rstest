@@ -363,12 +363,12 @@ export async function generateCoverage(
       if (!thresholdResult.success) {
         logger.log('');
         logger.stderr(thresholdResult.message);
-        process.exitCode = 1;
+        context.exitCode.raise(1);
       }
     }
   } catch (error) {
     logger.stderr('Failed to generate coverage reports:', error);
-    process.exitCode = 1;
+    context.exitCode.raise(1);
   }
 }
 

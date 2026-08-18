@@ -554,8 +554,9 @@ export const runInPool = async (
   const cleanups: (() => MaybePromise<void>)[] = [];
 
   const exit = process.exit.bind(process);
-  process.exit = (code = process.exitCode || 0): never => {
-    throw new Error(`process.exit unexpectedly called with "${code}"`);
+  process.exit = (code): never => {
+    const effectiveCode = code ?? Reflect.get(process, 'exitCode') ?? 0;
+    throw new Error(`process.exit unexpectedly called with "${effectiveCode}"`);
   };
 
   const kill = process.kill.bind(process);

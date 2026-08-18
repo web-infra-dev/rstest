@@ -1,0 +1,405 @@
+---
+description: Create and control Rstest instances from Node.js without invoking the CLI.
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Programmatic API
+
+<ApiMeta addedVersion="0.12.0" />
+
+The [@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core) programmatic API lets a Node.js host create reusable Rstest instances, run or list tests, start watch sessions, and merge blob reports.
+
+Import it from the `/api` entry:
+
+```ts
+import { createRstest } from '@rstest/core/api';
+```
+
+All exports from this entry are experimental and may change before Rstest 1.0.0.
+
+## Host process safety
+
+Each Rstest instance owns its exit status, `globalSetup` environment changes, and teardown callbacks. Running tests does not replace the host's `process.exitCode`, and environment changes from `globalSetup` are passed only to that instance's workers. This allows independent instances to run concurrently in one process.
+
+`createRstest` initializes the constant `NODE_ENV=test` and `RSTEST=true` markers in the host environment. It does not restore or snapshot process globals.
+
+Unlike the CLI, the programmatic API never discovers `rstest.config.*`. Pass an inline config or load one explicitly in a config factory.
+
+## createRstest
+
+Creates a reusable Rstest instance. Configuration is resolved once during creation, so invalid creation-time configuration rejects this call. Each operation resolves it again to observe the latest value returned by a config factory.
+
+- **Type:**
+
+```ts
+type RstestConfigFn = () => RstestConfig | Promise<RstestConfig>;
+
+interface CreateRstestOptions {
+  cwd?: string;
+  config?: RstestConfig | RstestConfigFn;
+}
+
+function createRstest(options?: CreateRstestOptions): Promise<RstestInstance>;
+```
+
+`cwd` defaults to `process.cwd()` and is the base for resolving a relative `config.root`. Omitting `config` uses an empty inline config; it does not load a config file from `cwd`.
+
+### With an inline config
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  cwd: './packages/app',
+  config: {
+    include: ['src/**/*.test.ts'],
+    reporters: [],
+  },
+});
+
+const result = await rstest.run();
+console.log(result.ok);
+```
+
+### With a config factory
+
+A factory is useful when every operation should read mutable host state. It takes no arguments and may be asynchronous.
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+let pattern = 'src/**/*.test.ts';
+
+const rstest = await createRstest({
+  config: () => ({
+    include: [pattern],
+    reporters: [],
+  }),
+});
+
+await rstest.run();
+pattern = 'integration/**/*.test.ts';
+await rstest.run();
+```
+
+### Loading a config file explicitly
+
+Use `loadConfig` from the main entry when file discovery is desired. `loadConfig` resolves `extends`; passing its result to `createRstest` is idempotent and does not apply the extension twice.
+
+```ts
+import { loadConfig } from '@rstest/core';
+import { createRstest } from '@rstest/core/api';
+
+const cwd = './packages/app';
+const rstest = await createRstest({
+  cwd,
+  config: async () => (await loadConfig({ cwd })).content,
+});
+```
+
+## Instance context
+
+`context` is the creation-time, read-only summary. It does not change when later operations re-resolve a config factory.
+
+- **Type:**
+
+```ts
+interface RstestProjectSummary {
+  name: string;
+  root: string;
+  configFilePath?: string;
+}
+
+interface RstestInstanceContext {
+  readonly version: string;
+  readonly root: string;
+  readonly config: Readonly<ResolvedRstestConfig>;
+  readonly projects: readonly RstestProjectSummary[];
+}
+```
+
+`projects` contains explicit project summaries. It is empty when the root config creates only the implicit default project.
+
+## run
+
+Runs one test cycle. `run()` always fulfills with a `TestRunResult`: test failures, build failures, and errors while resolving the operation's config become `ok: false` results instead of promise rejections.
+
+- **Type:**
+
+```ts
+interface CreateRunnerOptions {
+  filters?: string[];
+  filterMode?: 'fuzzy' | 'exact';
+  related?: boolean;
+  changed?: boolean | string;
+  shard?: string | { index: number; count: number };
+  project?: string[];
+}
+
+interface RunnerCycleOptions {
+  filters?: string[];
+  filterMode?: 'fuzzy' | 'exact';
+  testNamePattern?: RegExp | string;
+  update?: boolean;
+  bail?: number | boolean;
+  passWithNoTests?: boolean;
+}
+
+interface RunOptions extends CreateRunnerOptions, RunnerCycleOptions {}
+
+interface RstestInstance {
+  run(options?: RunOptions): Promise<TestRunResult>;
+}
+```
+
+Build-time options choose the files to compile:
+
+- `filters` uses case-insensitive substring matching by default. Set `filterMode: 'exact'` for normalized path equality. Omit `filters` to select all files; an explicit empty array selects none in either mode.
+- `related` treats `filters` as source files and selects their related tests.
+- `changed` selects tests related to working tree changes, optionally since a Git ref.
+- `changed: false` disables changed-file selection.
+- `shard` accepts the CLI-style `"1/3"` form or `{ index: 1, count: 3 }`.
+- `project` supports project names, `*` wildcards, and `!` exclusions.
+
+The remaining options apply only to that cycle. `update: false` explicitly disables snapshot updates; omitting `update` keeps the configured/default mode. A reusable runner makes the build-time/runtime distinction explicit.
+
+Browser projects are supported by `run()`.
+
+## TestRunResult
+
+- **Type:**
+
+```ts
+interface SerializedError {
+  name: string;
+  message: string;
+  stack?: string;
+  diff?: string;
+  actual?: string;
+  expected?: string;
+  retryCount?: number;
+  cause?: SerializedError;
+}
+
+interface TestResult {
+  status: TestResultStatus;
+  name: string;
+  testPath: string;
+  parentNames?: string[];
+  duration?: number;
+  errors?: SerializedError[];
+  retryErrors?: SerializedError[];
+  retryCount?: number;
+  project: string;
+  meta?: TaskMeta;
+}
+
+interface TestFileResult extends TestResult {
+  results: TestResult[];
+}
+
+interface TestRunResult {
+  ok: boolean;
+  files: TestFileResult[];
+  stats: {
+    tests: {
+      total: number;
+      passed: number;
+      failed: number;
+      skipped: number;
+      todo: number;
+    };
+    files: {
+      total: number;
+      failed: number;
+    };
+  };
+  unhandledErrors: SerializedError[];
+  duration: { total: number };
+  snapshot?: SnapshotSummary;
+  coverage?: CoverageMapData;
+}
+```
+
+`ok` is `true` only when no test or file failed, there are no unhandled errors, the cycle did not fail because no tests matched, and no other subsystem raised the instance exit status. The last condition includes failures such as a coverage threshold or `globalSetup` teardown failure.
+
+`snapshot` is absent only when execution stops before a run begins, such as an operation-time config failure. `coverage` is present when coverage is enabled.
+
+Errors are projected into JSON-safe objects; internal reporter error classes are not exposed.
+
+## createRunner
+
+Creates a reusable Node runner whose compiled test-file set stays fixed for its lifetime.
+
+- **Type:**
+
+```ts
+interface RunnerBuildResult {
+  testFiles: string[];
+}
+
+type RunnerRunOptions = RunnerCycleOptions;
+
+interface RstestRunner {
+  build(): Promise<RunnerBuildResult>;
+  run(options?: RunnerRunOptions): Promise<TestRunResult>;
+  close(): Promise<void>;
+}
+
+interface RstestInstance {
+  createRunner(options?: CreateRunnerOptions): Promise<RstestRunner>;
+}
+```
+
+Call `build()` exactly once before `run()`. Unlike one-shot `run()`, a compilation failure rejects `build()` so the host can distinguish a build that never reached test reporting.
+
+Runtime `filters` can only narrow the files returned by `build()`; they cannot add a file that was not compiled. Runtime options are restored after every cycle and do not leak into later runs.
+
+`close()` is idempotent and runs pending `globalSetup` teardown. It rejects if teardown fails, and repeated calls observe the same result. `build()` and `run()` reject after closure. If `globalSetup` fails, later `run()` calls return the same failed state without running tests; create a new runner to retry setup. `createRunner()` rejects browser configurations and the blob reporter; use one-shot `run()` for browser projects or blob reports.
+
+```ts
+const runner = await rstest.createRunner({
+  filters: ['src/'],
+});
+
+try {
+  const { testFiles } = await runner.build();
+  console.log(`Built ${testFiles.length} files`);
+
+  const unitResult = await runner.run({
+    testNamePattern: 'unit',
+  });
+  const allBuiltResult = await runner.run();
+} finally {
+  await runner.close();
+}
+```
+
+## watch
+
+Starts a Node watch session and returns a handle that closes it.
+
+- **Type:**
+
+```ts
+interface WatchOptions {
+  onResult?: (result: TestRunResult) => void;
+}
+
+interface RstestWatcher {
+  close(): Promise<void>;
+}
+
+type RstestWatchHandle = RstestWatcher;
+
+interface RstestInstance {
+  watch(options?: WatchOptions & RunOptions): Promise<RstestWatcher>;
+}
+```
+
+`onResult` runs after every completed cycle, including the initial cycle. Its result is cycle-scoped: `files` and `stats` contain only files that actually ran in that cycle. To maintain session state, merge results by `testPath` in the host.
+
+Errors thrown by `onResult` are isolated and do not stop the watch session. Calling `close()` releases the compiler, workers, file watchers, and pending `globalSetup` teardown. It rejects when a `globalSetup` teardown fails.
+
+Because they select a fixed test set for a one-shot run, enabled `related` and `changed` selectors are rejected by `watch()`. `changed: false` is treated as disabled. Use `run()` for enabled selectors.
+
+Programmatic browser watch is not supported yet and rejects during startup. Use `run()` for one-shot browser execution.
+
+```ts
+const watcher = await rstest.watch({
+  onResult(result) {
+    console.log(
+      result.ok,
+      result.files.map((file) => file.testPath),
+    );
+  },
+});
+
+await watcher.close();
+```
+
+## listTests
+
+Collects test files and test declarations without running their bodies.
+
+- **Type:**
+
+```ts
+interface ListOptions {
+  filesOnly?: boolean;
+  includeSuites?: boolean;
+  printLocation?: boolean;
+}
+
+interface ListedTest {
+  file: string;
+  name?: string;
+  taskName?: string;
+  parentNames?: string[];
+  project?: string;
+  location?: Location;
+  runMode?: 'skip' | 'todo';
+  type: 'file' | 'suite' | 'case';
+}
+
+interface RstestInstance {
+  listTests(options?: ListOptions & RunOptions): Promise<ListedTest[]>;
+}
+```
+
+Set `filesOnly` to skip collecting declarations. `includeSuites` includes named suites as separate entries. `printLocation` adds source locations.
+
+`listTests()` rejects when collection fails instead of returning a partial or empty list.
+
+`project` is present only when more than one project is configured. `taskName` is the declaration's own name, while `name` includes its suite prefix; `parentNames` provides the hierarchy without parsing that display name. Skipped and todo declarations are included with `runMode` set to `skip` or `todo`; runnable declarations omit `runMode`.
+
+`listTests()` intentionally ignores `shard`, even when it is present in `RunOptions`. This differs from `rstest list --shard`, which lists only the selected shard.
+
+## mergeReports
+
+Merges blob reports through the same result model as a run.
+
+- **Type:**
+
+```ts
+interface MergeReportsOptions {
+  path?: string;
+  cleanup?: boolean;
+}
+
+interface RstestInstance {
+  mergeReports(options?: MergeReportsOptions): Promise<TestRunResult>;
+}
+```
+
+`path` selects the blob-report directory. `cleanup` removes consumed reports after a successful merge.
+
+## runCLI
+
+Use `runCLI` when an embedding needs complete CLI parsing and process-oriented behavior rather than host-safe instance methods.
+
+- **Type:**
+
+```ts
+interface RunCLIOptions {
+  argv?: string[];
+}
+
+function runCLI(options?: RunCLIOptions): void;
+```
+
+`runCLI` is exported from `@rstest/core/api`, not from the main `@rstest/core` entry.
+
+## Migration from the one-shot API
+
+Create an instance, then call `run()`:
+
+```ts
+const rstest = await createRstest({ cwd, config });
+const result = await rstest.run();
+```
+
+If the previous integration loaded a config file, load it explicitly with `loadConfig` as shown above.
+
+The main `@rstest/core` entry no longer exports `createRstest`, `initCli`, or `runCLI`. Import `createRstest` and `runCLI` from `@rstest/core/api`.

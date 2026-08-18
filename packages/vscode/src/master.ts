@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import net from 'node:net';
 import path, { dirname } from 'node:path';
 import { type BirpcReturn, createBirpc } from 'birpc';
@@ -18,12 +18,64 @@ import { runInTerminal as sendToTerminal, shellQuote } from './terminal';
 import { TestRunReporter } from './testRunReporter';
 import { toErrorMessage } from './utils';
 import {
-  formatCoreVersionWarningMessage,
-  shouldWarnCoreVersion,
+  formatConfiguredCoreVersionWarningMessage,
+  formatUnsupportedCoreVersionMessage,
+  isUnsupportedCoreVersion,
 } from './versionCheck';
 import type { Worker } from './worker';
 
-export const runningWorkers = new Set<BirpcReturn<Worker, TestRunReporter>>();
+type WorkerRpc = BirpcReturn<Worker, TestRunReporter>;
+
+export const runningWorkers = new Set<WorkerRpc>();
+export const WATCHER_CLOSE_TIMEOUT_MS = 30_000;
+const forceKilledWorkers = new WeakSet<WorkerRpc>();
+const workerClosePromises = new WeakMap<WorkerRpc, Promise<void>>();
+
+export const closeWorkerGracefully = (worker: WorkerRpc): Promise<void> => {
+  if (worker.$closed) {
+    return Promise.resolve();
+  }
+  const pendingClose = workerClosePromises.get(worker);
+  if (pendingClose) {
+    return pendingClose;
+  }
+
+  const closePromise = (async () => {
+    let timer: NodeJS.Timeout | undefined;
+    let closeTimedOut = false;
+    try {
+      await Promise.race([
+        Promise.resolve()
+          .then(() => worker.closeWatcher())
+          .catch((error) => {
+            logger.warn('Failed to close the continuous test watcher', error);
+          }),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(() => {
+            closeTimedOut = true;
+            resolve();
+          }, WATCHER_CLOSE_TIMEOUT_MS);
+          timer.unref();
+        }),
+      ]);
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      if (closeTimedOut) {
+        forceKilledWorkers.add(worker);
+        logger.warn(
+          'Timed out waiting for the continuous test watcher to close; terminating the worker. Watcher teardown was skipped.',
+        );
+      }
+      if (!worker.$closed) {
+        worker.$close();
+      }
+    }
+  })();
+  workerClosePromises.set(worker, closePromise);
+  return closePromise;
+};
 
 // Default host for a fixed debug port. The spawn (`--inspect-wait`), the port
 // preflight, and the attach config must all use the same host: on a dual-stack
@@ -48,8 +100,9 @@ const isPortAvailable = (port: number, host?: string): Promise<boolean> =>
   });
 
 export class RstestApi {
-  private childProcesses = new Set<ChildProcess>();
-  private coreVersionTooLowWarned = false;
+  private workers = new Set<WorkerRpc>();
+  private configuredCoreVersionWarned = false;
+  private disposePromise?: Promise<void>;
 
   constructor(
     private workspace: vscode.WorkspaceFolder,
@@ -184,11 +237,20 @@ export class RstestApi {
         });
       }
 
-      if (shouldWarnCoreVersion(coreVersion) && !this.coreVersionTooLowWarned) {
-        this.coreVersionTooLowWarned = true;
-        vscode.window.showWarningMessage(
-          formatCoreVersionWarningMessage(coreVersion),
-        );
+      if (isUnsupportedCoreVersion(coreVersion)) {
+        if (configured) {
+          // An explicit package path is a developer override. Feature branches
+          // keep the previous release version until their release PR, so local
+          // extension development must be able to target the checkout's core.
+          if (!this.configuredCoreVersionWarned) {
+            this.configuredCoreVersionWarned = true;
+            vscode.window.showWarningMessage(
+              formatConfiguredCoreVersionWarningMessage(coreVersion),
+            );
+          }
+        } else {
+          throw new Error(formatUnsupportedCoreVersionMessage(coreVersion));
+        }
       }
 
       return nodeExport;
@@ -230,14 +292,16 @@ export class RstestApi {
 
   public async listTests(include?: string[]) {
     const worker = await this.createChildProcess();
-    const tests = await worker.listTests({
-      rstestPath: this.resolveRstestPath(),
-      configFilePath: this.configFilePath,
-      include,
-      includeTaskLocation: true,
-    });
-    worker.$close();
-    return tests;
+    try {
+      return await worker.listTests({
+        rstestPath: this.resolveRstestPath(),
+        configFilePath: this.configFilePath,
+        include,
+        includeTaskLocation: true,
+      });
+    } finally {
+      worker.$close();
+    }
   }
 
   public async runTest({
@@ -298,8 +362,7 @@ export class RstestApi {
       run,
     );
     token.onCancellationRequested(() => {
-      worker.$close();
-      onFinish();
+      void closeWorkerGracefully(worker).finally(onFinish);
     });
 
     void worker
@@ -315,6 +378,7 @@ export class RstestApi {
         coverage: coverageEnabled ? { enabled: true } : undefined,
         includeTaskLocation: true,
       })
+      .then(onFinish)
       .catch((error) => {
         if (!token.isCancellationRequested) {
           const message = toErrorMessage(error);
@@ -457,7 +521,6 @@ export class RstestApi {
         },
       },
     );
-    this.childProcesses.add(rstestProcess);
 
     rstestProcess.stdout?.on('data', (d) => {
       const content = d.toString();
@@ -479,12 +542,15 @@ export class RstestApi {
       bind: 'functions',
       timeout: 600_000,
       off: () => {
-        rstestProcess.kill();
-        this.childProcesses.delete(rstestProcess);
+        rstestProcess.kill(
+          forceKilledWorkers.has(worker) ? 'SIGKILL' : 'SIGTERM',
+        );
+        this.workers.delete(worker);
         runningWorkers.delete(worker);
       },
     });
 
+    this.workers.add(worker);
     runningWorkers.add(worker);
 
     logger.debug('Sent init payload to worker', {
@@ -542,10 +608,13 @@ export class RstestApi {
     return worker;
   }
 
-  public dispose() {
-    for (const child of this.childProcesses) {
-      child.kill();
-    }
-    this.childProcesses.clear();
+  public dispose(): Promise<void> {
+    // VS Code does not always await project disposal during refresh or host
+    // shutdown. Starting every close eagerly still gives teardown its best
+    // chance, while explicit callers and deactivate() can await the same work.
+    this.disposePromise ??= Promise.all(
+      Array.from(this.workers, closeWorkerGracefully),
+    ).then(() => undefined);
+    return this.disposePromise;
   }
 }

@@ -1,4 +1,5 @@
 import type { SnapshotManager } from '@vitest/snapshot/manager';
+import type { RstestExitCode } from '../core/exitCode';
 import type { TestStateManager } from '../core/stateManager';
 import type {
   EnvironmentName,
@@ -22,6 +23,15 @@ export type ProjectEntries = {
 
 export type RstestCommand = 'watch' | 'run' | 'list' | 'merge-reports';
 export type FileFilterMode = 'fuzzy' | 'exact';
+
+export interface RunnerCycleOptions {
+  filters?: string[];
+  filterMode?: FileFilterMode;
+  testNamePattern?: RegExp | string;
+  update?: boolean;
+  bail?: number | boolean;
+  passWithNoTests?: boolean;
+}
 
 export type Project = { config: RstestConfig; configFilePath?: string };
 
@@ -117,6 +127,16 @@ export type RstestContext = {
   trace: boolean;
   /** See the `embedded` option on `createRstest`. */
   embedded: boolean;
+  /** Run-local exit status. CLI code may mirror it to the host process. */
+  exitCode: RstestExitCode;
+  /** Environment changes produced by this context's global setup hooks. */
+  workerEnv: Record<string, string | undefined>;
+  /** Global teardown callbacks owned by this context. */
+  globalTeardownCallbacks: Array<
+    () => boolean | void | Promise<boolean | void>
+  >;
+  /** Active watch-session closer for programmatic hosts. */
+  closeWatchSession?: () => Promise<void>;
   reporters: Reporter[];
   snapshotManager: SnapshotManager;
   stateManager: TestStateManager;

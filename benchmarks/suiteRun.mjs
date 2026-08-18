@@ -16,11 +16,8 @@ import { Bench } from 'tinybench';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = resolve(__dirname, 'fixtures');
 
-const { initCli, createRstest } = await import('@rstest/core');
-
-const benchmarkOptions = {
-  reporter: [],
-};
+const { loadConfig, mergeRstestConfig } = await import('@rstest/core');
+const { createRstest } = await import('@rstest/core/api');
 
 const bench = withCodSpeed(
   new Bench({
@@ -32,23 +29,22 @@ const bench = withCodSpeed(
 );
 
 async function runFixture(fixtureName) {
-  const { config, configFilePath, projects } = await initCli({
-    root: resolve(fixturesRoot, fixtureName),
-    ...benchmarkOptions,
+  const cwd = resolve(fixturesRoot, fixtureName);
+  const { content } = await loadConfig({ cwd });
+  const rstest = await createRstest({
+    cwd,
+    config: mergeRstestConfig(content, { reporters: [] }),
   });
+  const result = await rstest.run();
 
-  const rstest = createRstest({ config, configFilePath, projects }, 'run', []);
-  await rstest.runTests();
-
-  if (process.exitCode && process.exitCode !== 0) {
+  if (!result.ok) {
+    const details = result.unhandledErrors
+      .map((error) => error.message)
+      .join('; ');
     throw new Error(
-      `CPU benchmark fixture "${fixtureName}" failed with exit code ${process.exitCode}`,
+      `CPU benchmark fixture "${fixtureName}" failed${details ? `: ${details}` : ''}`,
     );
   }
-
-  // Reset process.exitCode between iterations because runTests() uses it to
-  // signal failures to the CLI.
-  process.exitCode = undefined;
 }
 
 bench.add('compile', async () => {
