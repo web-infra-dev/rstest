@@ -1,10 +1,10 @@
 import { registerWorkerCleanup } from '@rstest/core';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { expect, test } from '@rstest/playwright';
-import { rememberBrowser } from './browser-reuse-state';
+import { expect } from '@rstest/playwright';
+import { browserTest, rememberBrowser } from './browser-reuse-state';
 
-test('reuses the browser from the previous file', ({ browser }) => {
+browserTest('reuses the browser from the previous file', ({ browser }) => {
   const previousBrowser = rememberBrowser(browser);
   if (previousBrowser) {
     expect(browser).toBe(previousBrowser);
