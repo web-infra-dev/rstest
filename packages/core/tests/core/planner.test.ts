@@ -31,11 +31,12 @@ const prepareRsbuildSpy = rs.mocked(prepareRsbuild);
 const createContext = (
   root: string,
   projects: Array<{ name: string; browser?: boolean }>,
+  command: 'run' | 'watch' = 'run',
 ) =>
   new Rstest(
     {
       cwd: root,
-      command: 'run',
+      command,
       embedded: true,
       projects: projects.map(({ name, browser }) => ({
         config: {
@@ -94,5 +95,47 @@ describe('createTestPlanner cold-start gate', () => {
 
     expect(prepareRsbuildSpy).toHaveBeenCalledTimes(1);
     expect(planner.nodeBuild).toBeDefined();
+  });
+
+  it('prepares watch environments hidden by the initial file filter', async () => {
+    writeFileSync(
+      join(tempRoot, 'dom.test.ts'),
+      '// @rstest-environment jsdom\nexport {};\n',
+    );
+    const context = createContext(tempRoot, [{ name: 'node-a' }], 'watch');
+    context.fileFilters = ['a.test.ts'];
+
+    await createTestPlanner(context, {
+      browserProjects: [],
+      nodeProjects: context.projects,
+      isWatchMode: true,
+    });
+
+    const targetProjects = prepareRsbuildSpy.mock.calls[0]![0]!.targetProjects;
+    expect(targetProjects?.map((project) => project.environmentName)).toEqual([
+      'node-a',
+      'node-a-environment-1',
+    ]);
+  });
+
+  it('returns entries from projects revealed by a watch filter refresh', async () => {
+    writeFileSync(
+      join(tempRoot, 'dom.test.ts'),
+      '// @rstest-environment jsdom\nexport {};\n',
+    );
+    const context = createContext(tempRoot, [{ name: 'node-a' }], 'watch');
+    context.fileFilters = ['a.test.ts'];
+    const planner = await createTestPlanner(context, {
+      browserProjects: [],
+      nodeProjects: context.projects,
+      isWatchMode: true,
+    });
+
+    context.fileFilters = undefined;
+    const entries = await planner.globTestEntries();
+
+    expect(entries).toHaveLength(2);
+    expect(entries.some((entry) => entry.endsWith('a.test.ts'))).toBe(true);
+    expect(entries.some((entry) => entry.endsWith('dom.test.ts'))).toBe(true);
   });
 });

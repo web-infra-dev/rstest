@@ -7,6 +7,7 @@ import {
 } from './browser/runPlanner';
 import {
   createProjectPlanState,
+  discoverWatchEnvironmentProjects,
   type ProjectPlan,
   syncNodeProjects,
 } from './projectPlan';
@@ -107,6 +108,13 @@ export async function createTestPlanner(
 
   const plan = await resolveRunnableProjects();
 
+  const watchEnvironmentProjects = isWatchMode
+    ? await discoverWatchEnvironmentProjects({
+        context,
+        projects: nodeProjects,
+      })
+    : [];
+
   // The Rsbuild project set: the planned node subset, plus every node project the
   // plan left out — those still need an environment for their
   // `modifyRstestConfig` hooks to fire in, and a hook is allowed to add the test
@@ -115,19 +123,44 @@ export async function createTestPlanner(
   // re-reads it inside its config hook; that is why `syncNodeProjects` splices it
   // in place instead of replacing it. Empty — and spliced to empty forever — on a
   // zero-node run, which never builds the node side at all.
-  const plannedNodeSourceNames = new Set(
-    plan.nodeProjectsToRun.map(
-      (project) =>
-        project._environmentGroup?.sourceEnvironmentName ??
-        project.environmentName,
-    ),
-  );
-  const rsbuildProjects: ProjectContext[] = [
-    ...plan.nodeProjectsToRun,
-    ...nodeProjects.filter(
-      (project) => !plannedNodeSourceNames.has(project.environmentName),
-    ),
-  ];
+  const getSourceEnvironmentName = (project: ProjectContext): string =>
+    project._environmentGroup?.sourceEnvironmentName ?? project.environmentName;
+
+  const getRsbuildNodeProjects = (
+    runnableProjects: ProjectContext[],
+  ): ProjectContext[] => {
+    const projectsByEnvironment = new Map<string, ProjectContext>();
+    for (const project of [...runnableProjects, ...watchEnvironmentProjects]) {
+      projectsByEnvironment.set(project.environmentName, project);
+    }
+
+    const sourceEnvironmentNames = new Set(
+      [...projectsByEnvironment.values()].map(getSourceEnvironmentName),
+    );
+    for (const project of nodeProjects) {
+      if (
+        !sourceEnvironmentNames.has(project.environmentName) &&
+        !projectsByEnvironment.has(project.environmentName)
+      ) {
+        projectsByEnvironment.set(project.environmentName, project);
+      }
+    }
+    return [...projectsByEnvironment.values()];
+  };
+
+  const rsbuildProjects: ProjectContext[] = isWatchMode
+    ? getRsbuildNodeProjects(plan.nodeProjectsToRun)
+    : (() => {
+        const plannedNodeSourceNames = new Set(
+          plan.nodeProjectsToRun.map(getSourceEnvironmentName),
+        );
+        return [
+          ...plan.nodeProjectsToRun,
+          ...nodeProjects.filter(
+            (project) => !plannedNodeSourceNames.has(project.environmentName),
+          ),
+        ];
+      })();
 
   /**
    * The planner's one mutation path: re-resolve after a `modifyRstestConfig`
@@ -138,7 +171,12 @@ export async function createTestPlanner(
     const refreshed = await resolveRunnableProjects({
       strictEnvironmentComments: true,
     });
-    syncNodeProjects(rsbuildProjects, refreshed.nodeProjectsToRun);
+    syncNodeProjects(
+      rsbuildProjects,
+      isWatchMode
+        ? getRsbuildNodeProjects(refreshed.nodeProjectsToRun)
+        : refreshed.nodeProjectsToRun,
+    );
   };
 
   const buildNodeSide = async (): Promise<NodeBuild> => {
@@ -198,14 +236,29 @@ export async function createTestPlanner(
   projectPlanState.announceShardSlice();
 
   const globTestEntries = async (): Promise<string[]> => {
-    const projects = getPlan().nodeProjectsToRun;
-    const perProject = await Promise.all(
-      projects.map((project) => globTestSourceEntries(project.environmentName)),
-    );
-    return perProject.reduce<string[]>(
-      (acc, entries) => acc.concat(...Object.values(entries)),
-      [],
-    );
+    let projects = getPlan().nodeProjectsToRun;
+    while (true) {
+      const perProject = await Promise.all(
+        projects.map((project) =>
+          globTestSourceEntries(project.environmentName),
+        ),
+      );
+      const refreshedProjects = getPlan().nodeProjectsToRun;
+      const sameProjects =
+        projects.length === refreshedProjects.length &&
+        projects.every(
+          (project, index) =>
+            project.environmentName ===
+            refreshedProjects[index]?.environmentName,
+        );
+      if (sameProjects) {
+        return perProject.reduce<string[]>(
+          (acc, entries) => acc.concat(...Object.values(entries)),
+          [],
+        );
+      }
+      projects = refreshedProjects;
+    }
   };
 
   return {

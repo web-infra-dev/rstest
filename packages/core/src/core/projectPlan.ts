@@ -5,6 +5,7 @@ import {
   resolveShardedEntries,
   type ShardCounts,
 } from '../utils';
+import { groupProjectEntriesByEnvironment } from './environmentGroups';
 import { resolveRunnableProjectsByEntries } from './environmentEntries';
 import { refreshEnvironmentPartitionEntries } from './environmentPartitions';
 import { isNodeProject } from './isBrowserProject';
@@ -27,6 +28,51 @@ export const getProjectEntries = async ({
     fileFilters: context.fileFilters || [],
     fileFilterMode: context.fileFilterMode,
   });
+};
+
+/**
+ * Watch's initial file filter controls the first run, but it must not control
+ * which compiler environments exist: a later `a`/`p` can reveal an annotated
+ * file that needs a synthetic environment. Discover those environments before
+ * Rsbuild is created, while leaving the actual plan scoped to the filter.
+ */
+export const discoverWatchEnvironmentProjects = async ({
+  context,
+  projects,
+}: {
+  context: RstestContext;
+  projects: ProjectContext[];
+}): Promise<ProjectContext[]> => {
+  if (!context.fileFilters?.length || !projects.length) {
+    return [];
+  }
+
+  const fileFilters = context.fileFilters;
+  context.fileFilters = undefined;
+  try {
+    const entriesCache = new Map<string, ProjectEntries>(
+      await Promise.all(
+        projects.map(
+          async (project) =>
+            [
+              project.environmentName,
+              {
+                entries: await getProjectEntries({ context, project }),
+                fileFilters: undefined,
+              },
+            ] as const,
+        ),
+      ),
+    );
+    const grouped = await groupProjectEntriesByEnvironment({
+      entriesCache,
+      projects,
+      ignoreInvalidEnvironmentComments: true,
+    });
+    return grouped.projects;
+  } finally {
+    context.fileFilters = fileFilters;
+  }
 };
 
 export type ProjectPlan = {
