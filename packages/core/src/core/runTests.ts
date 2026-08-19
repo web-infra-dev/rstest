@@ -35,7 +35,6 @@ import {
 import { createNodeExecutor } from './executors/nodeExecutor';
 import { runGlobalTeardown } from './globalSetup';
 import { isBrowserProject, isNodeProject } from './isBrowserProject';
-import { triggerRerun } from './plugins/entry';
 import { createTestPlanner } from './planner';
 import type { Rstest } from './rstest';
 import {
@@ -470,41 +469,12 @@ export async function runTests(context: Rstest): Promise<void> {
   }
 
   const browserTarget = browserExecutor;
-  let forceRerunOnce = false;
-  const pendingRunAll: Array<{
-    resolve: () => void;
-    reject: (error: unknown) => void;
-  }> = [];
-
-  const runNodeAll = async (): Promise<void> => {
-    forceRerunOnce = true;
-    const cycle = new Promise<void>((resolve, reject) => {
-      pendingRunAll.push({ resolve, reject });
-    });
-
-    if (!triggerRerun()) {
-      forceRerunOnce = false;
-      const request = pendingRunAll.pop();
-      try {
-        await watchDriver.runCycle(nodeExecutorToRun!, {
-          mode: 'all',
-          trigger: 'run-all',
-        });
-        request?.resolve();
-      } catch (error) {
-        request?.reject(error);
-      }
-    }
-
-    await cycle;
-  };
-
   const watchTargets: WatchSessionTargets = {
     node: nodeExecutorToRun
       ? {
           runCycle: (options) =>
             watchDriver.runCycle(nodeExecutorToRun, options),
-          runAll: runNodeAll,
+          runAll: () => nodeExecutorToRun.runAll(),
           globTestEntries: () => planner.globTestEntries(),
         }
       : undefined,
@@ -608,20 +578,11 @@ export async function runTests(context: Rstest): Promise<void> {
     if (nodeExecutorToRun) {
       // The node executor's rebuilds are the watch trigger; its initial compile
       // signals too, which is what drives the first node cycle.
-      nodeExecutorToRun.onInvalidate(({ isFirstBuild }) => {
-        const forceRerun = forceRerunOnce;
-        forceRerunOnce = false;
+      nodeExecutorToRun.onInvalidate(({ isFirstBuild, isRunAll }) => {
         const cycle = watchDriver.runCycle(nodeExecutorToRun, {
-          mode: isFirstBuild || forceRerun ? 'all' : 'on-demand',
-          trigger: forceRerun ? 'run-all' : 'invalidation',
+          mode: isFirstBuild || isRunAll ? 'all' : 'on-demand',
+          trigger: isRunAll ? 'run-all' : 'invalidation',
         });
-        if (forceRerun) {
-          const requests = pendingRunAll.splice(0);
-          cycle.then(
-            () => requests.forEach(({ resolve }) => resolve()),
-            (error) => requests.forEach(({ reject }) => reject(error)),
-          );
-        }
         return cycle;
       });
       // Start the node dev server now that the subscriber is in place. `runCycle`

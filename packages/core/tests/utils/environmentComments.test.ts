@@ -39,6 +39,49 @@ const createProject = (): ProjectContext => ({
 });
 
 describe('environment comments', () => {
+  it('reapplies shard slices when watch filters change', async () => {
+    await withTempDir('rstest-watch-shard-', async (root) => {
+      for (const name of ['a', 'b', 'c', 'd']) {
+        writeFileSync(path.join(root, `${name}.test.ts`), `// ${name}\n`);
+      }
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['*.test.ts'],
+          exclude: { patterns: [], override: false },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: { shard: { index: 1, count: 2 } },
+        fileFilters: [],
+      } as unknown as RstestContext;
+      const planState = createProjectPlanState({
+        context,
+        isWatchMode: true,
+      });
+
+      await planState.resolveRunnableProjects();
+
+      context.fileFilters = ['c.test.ts', 'd.test.ts'];
+      expect(await planState.globTestSourceEntries('default')).toEqual({
+        'c~test~ts': normalize(path.join(root, 'c.test.ts')),
+      });
+
+      context.fileFilters = undefined;
+      expect(await planState.globTestSourceEntries('default')).toEqual({
+        'a~test~ts': normalize(path.join(root, 'a.test.ts')),
+        'b~test~ts': normalize(path.join(root, 'b.test.ts')),
+      });
+    });
+  });
+
   it('parses rstest environment and options comments', () => {
     expect(
       parseEnvironmentComment(`/**

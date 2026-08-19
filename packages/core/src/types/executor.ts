@@ -88,6 +88,8 @@ export interface ExecutorRunCycleOptions {
 export type ExecutorInvalidationCallback = (hint: {
   isFirstBuild: boolean;
   fileFilters?: string[];
+  /** Node watch only: this compile was requested by the `a` shortcut. */
+  isRunAll?: boolean;
 }) => void | Promise<void>;
 
 /**

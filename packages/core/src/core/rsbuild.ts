@@ -17,7 +17,11 @@ import type {
 import { isDebug } from '../utils';
 import { isMemorySufficient } from '../utils/memory';
 import { pluginBasic } from './plugins/basic';
-import { pluginEntryWatch } from './plugins/entry';
+import {
+  createWatchRerunController,
+  pluginEntryWatch,
+  type WatchRerunController,
+} from './plugins/entry';
 import { pluginExternal } from './plugins/external';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
@@ -178,7 +182,9 @@ export const prepareRsbuild = async ({
   onModifyRstestConfigApplied,
   onRsbuildConfigResolved,
   onCoveragePluginLoadError,
-}: PrepareRsbuildOptions): Promise<RsbuildInstance> => {
+}: PrepareRsbuildOptions): Promise<
+  RsbuildInstance & { watchRerun?: WatchRerunController }
+> => {
   const {
     command,
     normalizedConfig: { coverage, dev = {}, isolate, pool },
@@ -207,6 +213,8 @@ export const prepareRsbuild = async ({
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
 
   const writeToDisk = dev.writeToDisk || debugMode;
+  const watchRerun =
+    command === 'watch' ? createWatchRerunController() : undefined;
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest',
     config: {
@@ -233,6 +241,7 @@ export const prepareRsbuild = async ({
           context,
           testEntryPathState: isolate ? undefined : testEntryPathState,
           isWatch: command === 'watch',
+          watchRerun,
         }),
         pluginExternal(context),
         !isolate ? pluginCacheControl(getSetupPaths, testEntryPathState) : null,
@@ -265,7 +274,7 @@ export const prepareRsbuild = async ({
     onCoveragePluginLoadError(error);
   }
 
-  return rsbuildInstance;
+  return Object.assign(rsbuildInstance, { watchRerun });
 };
 
 const calcEntriesToRerun = (

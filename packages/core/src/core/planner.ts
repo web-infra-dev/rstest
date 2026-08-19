@@ -11,6 +11,7 @@ import {
   syncNodeProjects,
 } from './projectPlan';
 import { prepareRsbuild } from './rsbuild';
+import type { WatchRerunController } from './plugins/entry';
 import type { Rstest } from './rstest';
 import { createSetupFileState, type SetupFileState } from './setupFileState';
 
@@ -40,6 +41,7 @@ export type NodeBuild = {
   readonly rsbuildInstance: RsbuildInstance;
   readonly setupFileState: SetupFileState;
   globTestSourceEntries(name: string): Promise<Record<string, string>>;
+  readonly watchRerun?: WatchRerunController;
 };
 
 /**
@@ -158,7 +160,12 @@ export async function createTestPlanner(
     // Where the node `modifyRstestConfig` hooks actually fire.
     await rsbuildInstance.initConfigs({ action: 'dev' });
 
-    return { rsbuildInstance, setupFileState, globTestSourceEntries };
+    return {
+      rsbuildInstance,
+      setupFileState,
+      globTestSourceEntries,
+      watchRerun: rsbuildInstance.watchRerun,
+    };
   };
 
   // The cold-start gate, as a planner condition rather than an orchestrator

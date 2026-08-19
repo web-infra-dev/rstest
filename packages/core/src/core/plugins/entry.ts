@@ -29,16 +29,63 @@ class TestFileWatchPlugin {
 }
 
 const rstestVirtualEntryFlag = 'rstest-virtual-entry-';
-const rerunTriggers = new Map<string, () => void>();
 const configuredWatchConfigs = new WeakMap<object, Set<string>>();
 
-export const triggerRerun = (): boolean => {
-  let hasTrigger = false;
-  for (const trigger of rerunTriggers.values()) {
-    hasTrigger = true;
-    trigger();
-  }
-  return hasTrigger;
+export type WatchRerunController = {
+  register: (
+    environmentName: string,
+    virtualEntryPath: string,
+    trigger: () => void,
+  ) => void;
+  trigger: () => boolean;
+  markVirtualEntryChange: (modifiedFile?: string | ReadonlySet<string>) => void;
+  consumeVirtualEntryChange: () => boolean;
+  clear: () => void;
+};
+
+export const createWatchRerunController = (): WatchRerunController => {
+  const triggers = new Map<string, () => void>();
+  const virtualEntryPaths = new Set<string>();
+  let hasVirtualEntryChange = false;
+
+  return {
+    register(environmentName, virtualEntryPath, trigger) {
+      triggers.set(environmentName, trigger);
+      virtualEntryPaths.add(path.normalize(virtualEntryPath));
+    },
+    trigger() {
+      if (!triggers.size) {
+        return false;
+      }
+      for (const trigger of triggers.values()) {
+        trigger();
+      }
+      return true;
+    },
+    markVirtualEntryChange(modifiedFile) {
+      if (!modifiedFile) {
+        return;
+      }
+      const modifiedFiles =
+        typeof modifiedFile === 'string' ? [modifiedFile] : modifiedFile;
+      for (const file of modifiedFiles) {
+        if (virtualEntryPaths.has(path.normalize(file))) {
+          hasVirtualEntryChange = true;
+          return;
+        }
+      }
+    },
+    consumeVirtualEntryChange() {
+      const result = hasVirtualEntryChange;
+      hasVirtualEntryChange = false;
+      return result;
+    },
+    clear() {
+      triggers.clear();
+      virtualEntryPaths.clear();
+      hasVirtualEntryChange = false;
+    },
+  };
 };
 
 export const pluginEntryWatch: (params: {
@@ -49,6 +96,7 @@ export const pluginEntryWatch: (params: {
   testEntryPathState?: TestEntryPathState;
   isWatch: boolean;
   configFilePath?: string;
+  watchRerun?: WatchRerunController;
 }) => RsbuildPlugin = ({
   isWatch,
   globTestSourceEntries,
@@ -56,11 +104,12 @@ export const pluginEntryWatch: (params: {
   globalSetupFiles,
   context,
   testEntryPathState,
+  watchRerun,
 }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
     api.onCloseDevServer(() => {
-      rerunTriggers.clear();
+      watchRerun?.clear();
     });
 
     const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
@@ -98,7 +147,10 @@ export const pluginEntryWatch: (params: {
         };
 
         const virtualEntryPath = path.join(
-          environment.config.root,
+          context.rootPath,
+          'node_modules',
+          '.cache',
+          'rstest',
           `${rstestVirtualEntryFlag}${environment.name}.js`,
         );
         let virtualEntryVersion = 0;
@@ -112,11 +164,31 @@ export const pluginEntryWatch: (params: {
         config.plugins.push({
           apply(compiler: Rspack.Compiler) {
             virtualModulesPlugin.apply(compiler);
-            rerunTriggers.set(environment.name, () => {
+            compiler.hooks.watchRun.tap(
+              'Rstest:VirtualEntryWatchPlugin',
+              (watchingCompiler) => {
+                watchRerun?.markVirtualEntryChange(
+                  watchingCompiler.modifiedFiles,
+                );
+              },
+            );
+            compiler.hooks.invalid.tap(
+              'Rstest:VirtualEntryWatchPlugin',
+              (invalidatedFile) => {
+                watchRerun?.markVirtualEntryChange(
+                  invalidatedFile ?? undefined,
+                );
+              },
+            );
+            watchRerun?.register(environment.name, virtualEntryPath, () => {
               virtualEntryVersion += 1;
               virtualModulesPlugin.writeModule(
                 virtualEntryPath,
                 getVirtualEntryContent(),
+              );
+              compiler.watching?.invalidateWithChangesAndRemovals(
+                new Set([virtualEntryPath]),
+                new Set(),
               );
             });
           },

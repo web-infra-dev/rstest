@@ -29,6 +29,7 @@ import type { Rstest } from '../rstest';
 import type { SetupFileState } from '../setupFileState';
 import { prepareTestEnvironmentModules } from '../testEnvironmentModule';
 import { type SequenceHints, sortTestEntries } from '../testSequencer';
+import type { WatchRerunController } from '../plugins/entry';
 
 type RsbuildStats = Awaited<
   ReturnType<Awaited<ReturnType<typeof createRsbuildServer>>['getRsbuildStats']>
@@ -154,6 +155,8 @@ export const createCoverageResourceLoaders = (
  */
 export type NodeExecutor = TestExecutor &
   Required<Pick<TestExecutor, 'onInvalidate'>> & {
+    /** Schedule a full rerun through the next virtual-entry compilation. */
+    runAll(): Promise<void>;
     /**
      * Start the dev server + worker pool up front (idempotent, in-flight
      * guarded). Watch calls this after subscribing to invalidations so the first
@@ -179,6 +182,7 @@ type CreateNodeExecutorOptions = {
   setupFileState: SetupFileState;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
   getPlan: () => ProjectPlan;
+  watchRerun?: WatchRerunController;
   /** The single run-scoped provider, or null when coverage produces none. */
   coverageProvider: CoverageProvider | null;
   isWatchMode: boolean;
@@ -193,6 +197,7 @@ export function createNodeExecutor(
     setupFileState,
     globTestSourceEntries,
     getPlan,
+    watchRerun,
     coverageProvider,
     isWatchMode,
     getTraceRun,
@@ -235,6 +240,11 @@ export function createNodeExecutor(
   // that was already sitting in the queue from taking the rebuild's span with it
   // when it dispatches first.
   let pendingBuildTime: number | undefined;
+  let onInvalidation: ExecutorInvalidationCallback | undefined;
+  const pendingRunAll: Array<{
+    resolve: () => void;
+    reject: (error: unknown) => void;
+  }> = [];
 
   const validateRunDependencies = (): Promise<void> => {
     runDependencyValidationPromise ??= ensureTestEnvironmentDependencies(
@@ -592,7 +602,44 @@ export function createNodeExecutor(
    * {@link ExecutorInvalidationCallback} for what holding it costs and the
    * shape that would close it.
    */
+  const dispatchInvalidation = (hint: {
+    isFirstBuild: boolean;
+    isRunAll?: boolean;
+  }): Promise<void> => {
+    if (!onInvalidation) {
+      return Promise.reject(new Error('Node watch invalidation is not ready'));
+    }
+
+    const cycle = Promise.resolve(onInvalidation(hint));
+    if (hint.isRunAll) {
+      const requests = pendingRunAll.splice(0);
+      cycle.then(
+        () => requests.forEach(({ resolve }) => resolve()),
+        (error) => requests.forEach(({ reject }) => reject(error)),
+      );
+    }
+    return cycle;
+  };
+
+  const runAll = async (): Promise<void> => {
+    const cycle = new Promise<void>((resolve, reject) => {
+      pendingRunAll.push({ resolve, reject });
+    });
+
+    if (!watchRerun?.trigger()) {
+      dispatchInvalidation({ isFirstBuild: false, isRunAll: true }).catch(
+        (error) => {
+          const requests = pendingRunAll.splice(0);
+          requests.forEach(({ reject }) => reject(error));
+        },
+      );
+    }
+
+    await cycle;
+  };
+
   const onInvalidate = (cb: ExecutorInvalidationCallback): void => {
+    onInvalidation = cb;
     rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
       compileStart = Date.now();
       if (!isFirstCompile) {
@@ -604,7 +651,10 @@ export function createNodeExecutor(
         pendingBuildTime = Date.now() - compileStart;
         compileStart = undefined;
       }
-      return cb({ isFirstBuild: isFirstCompile });
+      return dispatchInvalidation({
+        isFirstBuild: isFirstCompile,
+        isRunAll: watchRerun?.consumeVirtualEntryChange(),
+      });
     });
   };
 
@@ -615,6 +665,8 @@ export function createNodeExecutor(
       return;
     }
     didClose = true;
+    const closeError = new Error('Node watch executor closed');
+    pendingRunAll.splice(0).forEach(({ reject }) => reject(closeError));
     if (runDependencyValidationPromise) {
       await runDependencyValidationPromise.catch(() => undefined);
     }
@@ -656,6 +708,7 @@ export function createNodeExecutor(
     init: async () => {},
     runCycle,
     onInvalidate,
+    runAll,
     close,
     // Watch: start the dev server (and pool) up front so its first compile fires
     // the invalidation that drives the initial run. In non-watch runs `runCycle`

@@ -91,6 +91,7 @@ export const createProjectPlanState = ({
   let nodeProjectsToRun: ProjectContext[] = [];
   let environmentGroupsResolved = false;
   let environmentGroupsChanged = false;
+  let resolvingRunnableProjects = false;
   let pendingStrictEnvironmentCommentValidation = false;
   // Resolution never logs the shard banner — it can run several times per init
   // (pre-hook, post-hook, post-discovery) and each pass would print its own
@@ -118,6 +119,23 @@ export const createProjectPlanState = ({
         areFileFiltersEqual(cachedEntries.fileFilters, context.fileFilters))
     ) {
       return cachedEntries.entries;
+    }
+
+    const shouldRefreshThroughPlanner =
+      context.normalizedConfig.shard ||
+      (environmentGroupsResolved && environmentGroupsChanged);
+    if (
+      isWatchMode &&
+      shouldRefreshThroughPlanner &&
+      !resolvingRunnableProjects
+    ) {
+      resolvingRunnableProjects = true;
+      try {
+        await resolveRunnableProjects();
+        return entriesCache.get(name)?.entries || {};
+      } finally {
+        resolvingRunnableProjects = false;
+      }
     }
 
     const project =
