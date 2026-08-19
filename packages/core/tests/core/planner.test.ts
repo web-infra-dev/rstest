@@ -138,4 +138,23 @@ describe('createTestPlanner cold-start gate', () => {
     expect(entries.some((entry) => entry.endsWith('a.test.ts'))).toBe(true);
     expect(entries.some((entry) => entry.endsWith('dom.test.ts'))).toBe(true);
   });
+
+  it('strictly validates environment comments revealed by a watch filter', async () => {
+    writeFileSync(
+      join(tempRoot, 'invalid.test.ts'),
+      '// @rstest-environment custom\nexport {};\n',
+    );
+    const context = createContext(tempRoot, [{ name: 'node-a' }], 'watch');
+    context.fileFilters = ['a.test.ts'];
+    const planner = await createTestPlanner(context, {
+      browserProjects: [],
+      nodeProjects: context.projects,
+      isWatchMode: true,
+    });
+
+    context.fileFilters = undefined;
+    await expect(planner.globTestEntries()).rejects.toThrow(
+      'Unsupported test environment "custom"',
+    );
+  });
 });

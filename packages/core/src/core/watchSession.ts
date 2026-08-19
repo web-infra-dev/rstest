@@ -84,6 +84,8 @@ export type WatchCycleOptions = {
  */
 export interface WatchCycleDriver {
   runCycle(executor: TestExecutor, options?: WatchCycleOptions): Promise<void>;
+  /** Run a plan/resource reconfiguration between two serialized cycles. */
+  runReconfigure<T>(task: () => Promise<T>): Promise<T>;
   /**
    * Whether every one of `executors` has settled its first cycle of this
    * session. Shortcuts are installed before the first one so the ready banner
@@ -282,6 +284,16 @@ export function createWatchCycleDriver({
   };
 
   return {
+    runReconfigure<T>(task: () => Promise<T>): Promise<T> {
+      const operation = tail.then(() => {
+        if (isSessionClosing()) {
+          throw new Error('Watch session is closing');
+        }
+        return task();
+      });
+      tail = operation.catch(() => {});
+      return operation;
+    },
     runCycle(executor, options = {}) {
       const resolved = {
         ...options,
@@ -337,6 +349,8 @@ export interface WatchSessionTargets {
     runAll: () => Promise<void>;
     /** Re-glob node entries for the `p` (file filter) shortcut. */
     globTestEntries: () => Promise<string[]>;
+    /** Apply a file filter and replan before the next node cycle. */
+    prepareFileFilters?: (filters: string[] | undefined) => Promise<string[]>;
   };
   browser?: {
     /** Ask the browser host to schedule a cycle over these paths. */
@@ -448,8 +462,12 @@ export function createWatchShortcutHandlers(
         } else {
           logger.log(`\n${color.dim('Cleared file filters')}\n`);
         }
-        context.fileFilters = filters;
-        const entries = await node.globTestEntries();
+        const entries = await (node.prepareFileFilters
+          ? node.prepareFileFilters(filters)
+          : (() => {
+              context.fileFilters = filters;
+              return node.globTestEntries();
+            })());
 
         if (!entries.length) {
           logger.log(

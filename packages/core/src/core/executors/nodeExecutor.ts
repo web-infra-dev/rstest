@@ -19,6 +19,7 @@ import { ensureTestEnvironmentDependencies } from '../envDependencies';
 import { claimGlobalSetupOnce, runGlobalSetup } from '../globalSetup';
 import { applyOnlyFailuresSelection } from '../onlyFailures';
 import type { ProjectPlan } from '../projectPlan';
+import type { NodeBuild } from '../planner';
 import { createRsbuildServer } from '../rsbuild';
 import {
   readResultsCache,
@@ -26,7 +27,7 @@ import {
   writeResultsCache,
 } from '../resultsCache';
 import type { Rstest } from '../rstest';
-import type { SetupFileProjects, SetupFileState } from '../setupFileState';
+import type { SetupFileState } from '../setupFileState';
 import { prepareTestEnvironmentModules } from '../testEnvironmentModule';
 import { type SequenceHints, sortTestEntries } from '../testSequencer';
 import type { WatchRerunController } from '../plugins/entry';
@@ -157,7 +158,7 @@ export type NodeExecutor = TestExecutor &
   Required<Pick<TestExecutor, 'onInvalidate'>> & {
     /** Schedule a full rerun through the next virtual-entry compilation. */
     runAll(): Promise<void>;
-    /** Refresh long-lived node resources after the planner changes its set. */
+    /** Record a plan change for synchronization before the next node cycle. */
     refreshPlan(plan: ProjectPlan): Promise<void>;
     /**
      * Start the dev server + worker pool up front (idempotent, in-flight
@@ -190,6 +191,10 @@ type CreateNodeExecutorOptions = {
   isWatchMode: boolean;
   /** Returns the cycle's active trace buffer (reallocated by core each cycle). */
   getTraceRun: () => TraceRun;
+  /** Recreate the node build after its environment topology changes. */
+  recreateNodeBuild: () => Promise<NodeBuild>;
+  /** Current compiler topology, kept in sync by the planner before refresh. */
+  getEnvironmentNames: () => string[];
 };
 
 export function createNodeExecutor(
@@ -203,9 +208,16 @@ export function createNodeExecutor(
     coverageProvider,
     isWatchMode,
     getTraceRun,
+    recreateNodeBuild,
+    getEnvironmentNames,
   }: CreateNodeExecutorOptions,
 ): NodeExecutor {
   const { rootPath } = context;
+
+  let currentRsbuildInstance = rsbuildInstance;
+  let currentSetupFileState = setupFileState;
+  let currentWatchRerun = watchRerun;
+  let currentEnvironmentNames = getEnvironmentNames();
 
   // Lazily created on first runCycle (so a run with no node tests to run never
   // pays for a server + pool — the browser-only cold-start path).
@@ -232,6 +244,9 @@ export function createNodeExecutor(
     Promise<NonNullable<typeof runResources>> | undefined;
   let runDependencyValidationPromise: Promise<void> | undefined;
   let entryFiles: string[] = [];
+  let pendingPlan: ProjectPlan | undefined;
+  let skipNextFirstBuildInvalidation = false;
+  let bindWatchCallbacks = (): void => {};
   let didClose = false;
   // When a dev compile starts. Paired with the compile's end into a completed
   // span below; on its own it is not a build time, because cycles are queued
@@ -278,9 +293,9 @@ export function createNodeExecutor(
       },
       isWatchMode,
       globTestSourceEntries,
-      setupFiles: setupFileState.setupFiles,
-      globalSetupFiles: setupFileState.globalSetupFiles,
-      rsbuildInstance,
+      setupFiles: currentSetupFileState.setupFiles,
+      globalSetupFiles: currentSetupFileState.globalSetupFiles,
+      rsbuildInstance: currentRsbuildInstance,
       rootPath,
     });
 
@@ -322,6 +337,69 @@ export function createNodeExecutor(
     }
   };
 
+  const closeRunResources = async (): Promise<void> => {
+    if (runResourcesPromise) {
+      await runResourcesPromise.catch(() => undefined);
+      if (!runResources) {
+        runResourcesPromise = undefined;
+      }
+    }
+    if (!runResources) {
+      return;
+    }
+    const resources = runResources;
+    runResources = undefined;
+    runResourcesPromise = undefined;
+    try {
+      await resources.pool.close();
+    } finally {
+      try {
+        await resources.closeServer();
+      } finally {
+        await resources.cleanupTestEnvironmentModules();
+      }
+    }
+  };
+
+  const sameEnvironmentNames = (left: string[], right: string[]): boolean =>
+    left.length === right.length &&
+    left.every((name, index) => name === right[index]);
+
+  const syncPlan = async (plan: ProjectPlan): Promise<void> => {
+    pendingPlan = undefined;
+    const nextEnvironmentNames = getEnvironmentNames();
+
+    if (!sameEnvironmentNames(currentEnvironmentNames, nextEnvironmentNames)) {
+      await closeRunResources();
+      const nextBuild = await recreateNodeBuild();
+      currentRsbuildInstance = nextBuild.rsbuildInstance;
+      currentSetupFileState = nextBuild.setupFileState;
+      currentWatchRerun = nextBuild.watchRerun;
+      currentEnvironmentNames = nextBuild.environmentNames;
+      entryFiles = [];
+      // The new dev server's first compile is only the compiler warm-up for
+      // the cycle that requested the restart. That cycle already has the
+      // selected entries, so dispatching a second cycle here would deadlock
+      // against the serialized watch queue and duplicate the run.
+      skipNextFirstBuildInvalidation = true;
+      bindWatchCallbacks();
+      return;
+    }
+
+    currentSetupFileState.refresh({
+      setupProjects: plan.nodeProjectsToRun,
+      globalSetupProjects: plan.projects,
+    });
+    entryFiles = Array.from(plan.entriesCache.values()).reduce<string[]>(
+      (acc, entry) => acc.concat(Object.values(entry.entries) || []),
+      [],
+    );
+
+    if (runResources) {
+      await runResources.updateTestEnvironmentModules(plan.nodeProjectsToRun);
+    }
+  };
+
   const runCycle = async (
     opts: ExecutorRunCycleOptions,
   ): Promise<ExecutorCycleOutcome> => {
@@ -336,6 +414,7 @@ export function createNodeExecutor(
       rebuildTime = pendingBuildTime;
       pendingBuildTime = undefined;
     }
+    await syncPlan(pendingPlan ?? getPlan());
     const cycleStart = Date.now();
     const { getRsbuildStats, pool } = await ensureRunResources();
     const { nodeProjectsToRun: projects } = getPlan();
@@ -585,20 +664,7 @@ export function createNodeExecutor(
   };
 
   const refreshPlan = async (plan: ProjectPlan): Promise<void> => {
-    const setupProjects: SetupFileProjects = {
-      setupProjects: plan.nodeProjectsToRun,
-      globalSetupProjects: plan.projects,
-    };
-    setupFileState.refresh(setupProjects);
-    entryFiles = Array.from(plan.entriesCache.values()).reduce<string[]>(
-      (acc, entry) => acc.concat(Object.values(entry.entries) || []),
-      [],
-    );
-
-    const resources = runResources;
-    if (resources) {
-      await resources.updateTestEnvironmentModules(plan.nodeProjectsToRun);
-    }
+    pendingPlan = plan;
   };
 
   /**
@@ -649,7 +715,7 @@ export function createNodeExecutor(
       pendingRunAll.push({ resolve, reject });
     });
 
-    if (!watchRerun?.trigger()) {
+    if (!currentWatchRerun?.trigger()) {
       dispatchInvalidation({ isFirstBuild: false, isRunAll: true }).catch(
         (error) => {
           const requests = pendingRunAll.splice(0);
@@ -663,22 +729,29 @@ export function createNodeExecutor(
 
   const onInvalidate = (cb: ExecutorInvalidationCallback): void => {
     onInvalidation = cb;
-    rsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
-      compileStart = Date.now();
-      if (!isFirstCompile) {
-        clearScreen();
-      }
-    });
-    rsbuildInstance.onAfterDevCompile(({ isFirstCompile }) => {
-      if (compileStart !== undefined) {
-        pendingBuildTime = Date.now() - compileStart;
-        compileStart = undefined;
-      }
-      return dispatchInvalidation({
-        isFirstBuild: isFirstCompile,
-        isRunAll: watchRerun?.consumeVirtualEntryChange(),
+    bindWatchCallbacks = (): void => {
+      currentRsbuildInstance.onBeforeDevCompile(({ isFirstCompile }) => {
+        compileStart = Date.now();
+        if (!isFirstCompile) {
+          clearScreen();
+        }
       });
-    });
+      currentRsbuildInstance.onAfterDevCompile(({ isFirstCompile }) => {
+        if (compileStart !== undefined) {
+          pendingBuildTime = Date.now() - compileStart;
+          compileStart = undefined;
+        }
+        if (skipNextFirstBuildInvalidation && isFirstCompile) {
+          skipNextFirstBuildInvalidation = false;
+          return;
+        }
+        return dispatchInvalidation({
+          isFirstBuild: isFirstCompile,
+          isRunAll: currentWatchRerun?.consumeVirtualEntryChange(),
+        });
+      });
+    };
+    bindWatchCallbacks();
   };
 
   // Idempotent: the single `executors.close()` exit path may race a signal
@@ -696,23 +769,7 @@ export function createNodeExecutor(
     // Settle an in-flight resource start first: a close racing startup (e.g. a
     // config-change restart during watch boot) must tear down the server and
     // pool that start is about to produce, not skip them.
-    if (runResourcesPromise) {
-      await runResourcesPromise.catch(() => undefined);
-    }
-    if (runResources) {
-      const resources = runResources;
-      runResources = undefined;
-      runResourcesPromise = undefined;
-      try {
-        await resources.pool.close();
-      } finally {
-        try {
-          await resources.closeServer();
-        } finally {
-          await resources.cleanupTestEnvironmentModules();
-        }
-      }
-    }
+    await closeRunResources();
   };
 
   return {

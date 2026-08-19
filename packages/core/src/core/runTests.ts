@@ -168,6 +168,8 @@ export async function runTests(context: Rstest): Promise<void> {
         coverageProvider,
         isWatchMode,
         getTraceRun: () => activeTraceRun,
+        recreateNodeBuild: nodeBuild.recreate,
+        getEnvironmentNames: planner.getNodeBuildEnvironmentNames,
       })
     : undefined;
   if (nodeExecutor) {
@@ -479,6 +481,11 @@ export async function runTests(context: Rstest): Promise<void> {
             watchDriver.runCycle(nodeExecutorToRun, options),
           runAll: () => nodeExecutorToRun.runAll(),
           globTestEntries: () => planner.globTestEntries(),
+          prepareFileFilters: (filters) =>
+            watchDriver.runReconfigure(async () => {
+              context.fileFilters = filters;
+              return planner.globTestEntries();
+            }),
         }
       : undefined,
     browser: browserTarget && {

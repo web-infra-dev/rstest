@@ -168,6 +168,27 @@ describe('createWatchTeardown', () => {
 });
 
 describe('createWatchCycleDriver', () => {
+  it('serializes plan reconfiguration behind an active cycle', async () => {
+    const context = createContext();
+    const driver = createDriver(context);
+    const { executor, release, started } = createGatedExecutor('node');
+    const order: string[] = [];
+
+    const first = driver.runCycle(executor, { mode: 'all' });
+    await started();
+    const reconfigure = driver.runReconfigure(async () => {
+      order.push('reconfigure');
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(order).toEqual([]);
+
+    release();
+    await first;
+    await reconfigure;
+    expect(order).toEqual(['reconfigure']);
+  });
+
   it('clears the failed-test count even on a first cycle, so bail stays cycle-scoped', async () => {
     // The other half of the mixed-watch startup order: the browser's first
     // cycle must not inherit the node initial cycle's failures, or a `bail`

@@ -176,7 +176,9 @@ export const createProjectPlanState = ({
       cachedEntries &&
       (context.normalizedConfig.shard || environmentGroupsResolved)
     ) {
-      runnableProjectsRefresh ??= resolveRunnableProjects().finally(() => {
+      runnableProjectsRefresh ??= resolveRunnableProjects({
+        strictEnvironmentComments: true,
+      }).finally(() => {
         runnableProjectsRefresh = undefined;
       });
       const refreshedPlan = await runnableProjectsRefresh;

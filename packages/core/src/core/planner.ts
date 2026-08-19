@@ -41,8 +41,12 @@ export type NodeBuild = {
   /** Already prepared, config-hooked, and `initConfigs`-ed by the planner. */
   readonly rsbuildInstance: RsbuildInstance;
   readonly setupFileState: SetupFileState;
+  /** Environment names present in the compiler instance. */
+  readonly environmentNames: string[];
   globTestSourceEntries(name: string): Promise<Record<string, string>>;
   readonly watchRerun?: WatchRerunController;
+  /** Create a fresh compiler after the node environment topology changes. */
+  recreate(): Promise<NodeBuild>;
 };
 
 /**
@@ -71,7 +75,9 @@ export interface TestPlanner extends BrowserRunPlan {
   coveragePluginLoadError(): unknown;
   /** Re-glob every runnable node project's test entries as a flat path list. */
   globTestEntries(): Promise<string[]>;
-  /** Attach the node-side resource refresh used by watch replanning. */
+  /** Environment names currently provisioned in the node compiler topology. */
+  getNodeBuildEnvironmentNames(): string[];
+  /** Attach the node-side plan synchronizer used by watch replanning. */
   setNodePlanRefreshHandler(
     handler: (plan: ProjectPlan) => Promise<void>,
   ): void;
@@ -108,12 +114,26 @@ export async function createTestPlanner(
 
   const plan = await resolveRunnableProjects();
 
-  const watchEnvironmentProjects = isWatchMode
+  let watchEnvironmentProjects = isWatchMode
     ? await discoverWatchEnvironmentProjects({
         context,
         projects: nodeProjects,
       })
     : [];
+
+  const addWatchEnvironmentProjects = (projects: ProjectContext[]): void => {
+    const knownNames = new Set(
+      watchEnvironmentProjects.map((project) => project.environmentName),
+    );
+    const newProjects = projects.filter(
+      (project) => !knownNames.has(project.environmentName),
+    );
+    if (!newProjects.length) {
+      return;
+    }
+    watchEnvironmentProjects = [...watchEnvironmentProjects, ...newProjects];
+  };
+  addWatchEnvironmentProjects(watchEnvironmentProjects);
 
   // The Rsbuild project set: the planned node subset, plus every node project the
   // plan left out — those still need an environment for their
@@ -168,6 +188,13 @@ export async function createTestPlanner(
    * `rsbuildProjects` in place, for the reason given above.
    */
   const resyncPlan = async (): Promise<void> => {
+    if (isWatchMode) {
+      const discovered = await discoverWatchEnvironmentProjects({
+        context,
+        projects: nodeProjects,
+      });
+      addWatchEnvironmentProjects(discovered);
+    }
     const refreshed = await resolveRunnableProjects({
       strictEnvironmentComments: true,
     });
@@ -178,6 +205,8 @@ export async function createTestPlanner(
         : refreshed.nodeProjectsToRun,
     );
   };
+
+  const appliedModifyRstestConfigEnvironments = new Set<string>();
 
   const buildNodeSide = async (): Promise<NodeBuild> => {
     const setupFileState = createSetupFileState();
@@ -197,6 +226,7 @@ export async function createTestPlanner(
       }),
       onModifyRstestConfigApplied: () => resyncPlan(),
       onRsbuildConfigResolved: projectPlanState.validateEnvironmentComments,
+      appliedModifyRstestConfigEnvironments,
     });
 
     // Where the node `modifyRstestConfig` hooks actually fire.
@@ -205,8 +235,12 @@ export async function createTestPlanner(
     return {
       rsbuildInstance,
       setupFileState,
+      environmentNames: rsbuildProjects.map(
+        (project) => project.environmentName,
+      ),
       globTestSourceEntries,
       watchRerun: rsbuildInstance.watchRerun,
+      recreate: buildNodeSide,
     };
   };
 
@@ -267,7 +301,18 @@ export async function createTestPlanner(
     hasNodeTestsToRun: () => getPlan().nodeProjectsToRun.length > 0,
     coveragePluginLoadError: () => coveragePluginLoadError,
     globTestEntries,
-    setNodePlanRefreshHandler: projectPlanState.setPlanRefreshHandler,
+    getNodeBuildEnvironmentNames: () =>
+      rsbuildProjects.map((project) => project.environmentName),
+    setNodePlanRefreshHandler: (handler) =>
+      projectPlanState.setPlanRefreshHandler(async (nextPlan) => {
+        syncNodeProjects(
+          rsbuildProjects,
+          isWatchMode
+            ? getRsbuildNodeProjects(nextPlan.nodeProjectsToRun)
+            : nextPlan.nodeProjectsToRun,
+        );
+        await handler(nextPlan);
+      }),
     nodeBuild,
   };
 }

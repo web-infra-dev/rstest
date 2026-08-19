@@ -135,6 +135,7 @@ type PrepareRsbuildOptions = {
   extraPlugins?: RsbuildPlugin[];
   onModifyRstestConfigApplied?: () => Promise<void>;
   onRsbuildConfigResolved?: () => Promise<void>;
+  appliedModifyRstestConfigEnvironments?: Set<string>;
   onCoveragePluginLoadError?: (error: unknown) => void;
 };
 
@@ -181,6 +182,7 @@ export const prepareRsbuild = async ({
   extraPlugins = [],
   onModifyRstestConfigApplied,
   onRsbuildConfigResolved,
+  appliedModifyRstestConfigEnvironments,
   onCoveragePluginLoadError,
 }: PrepareRsbuildOptions): Promise<
   RsbuildInstance & { watchRerun?: WatchRerunController }
@@ -262,6 +264,7 @@ export const prepareRsbuild = async ({
         await onRsbuildConfigResolved?.();
         updateSetupFileMaps();
       },
+      appliedEnvironmentNames: appliedModifyRstestConfigEnvironments,
     },
   );
 
