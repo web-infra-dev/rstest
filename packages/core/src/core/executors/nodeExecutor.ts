@@ -26,7 +26,7 @@ import {
   writeResultsCache,
 } from '../resultsCache';
 import type { Rstest } from '../rstest';
-import type { SetupFileState } from '../setupFileState';
+import type { SetupFileProjects, SetupFileState } from '../setupFileState';
 import { prepareTestEnvironmentModules } from '../testEnvironmentModule';
 import { type SequenceHints, sortTestEntries } from '../testSequencer';
 import type { WatchRerunController } from '../plugins/entry';
@@ -157,6 +157,8 @@ export type NodeExecutor = TestExecutor &
   Required<Pick<TestExecutor, 'onInvalidate'>> & {
     /** Schedule a full rerun through the next virtual-entry compilation. */
     runAll(): Promise<void>;
+    /** Refresh long-lived node resources after the planner changes its set. */
+    refreshPlan(plan: ProjectPlan): Promise<void>;
     /**
      * Start the dev server + worker pool up front (idempotent, in-flight
      * guarded). Watch calls this after subscribing to invalidations so the first
@@ -215,6 +217,9 @@ export function createNodeExecutor(
         }) => Promise<RsbuildStats>;
         closeServer: () => Promise<void>;
         pool: Awaited<ReturnType<typeof createPool>>;
+        updateTestEnvironmentModules: (
+          projects: ProjectPlan['nodeProjectsToRun'],
+        ) => Promise<void>;
         cleanupTestEnvironmentModules: () => Promise<void>;
       }
     | undefined;
@@ -303,6 +308,7 @@ export function createNodeExecutor(
         getRsbuildStats,
         closeServer,
         pool,
+        updateTestEnvironmentModules: testEnvironmentModules.update,
         cleanupTestEnvironmentModules: testEnvironmentModules.cleanup,
       };
       return runResources;
@@ -578,6 +584,23 @@ export function createNodeExecutor(
     };
   };
 
+  const refreshPlan = async (plan: ProjectPlan): Promise<void> => {
+    const setupProjects: SetupFileProjects = {
+      setupProjects: plan.nodeProjectsToRun,
+      globalSetupProjects: plan.projects,
+    };
+    setupFileState.refresh(setupProjects);
+    entryFiles = Array.from(plan.entriesCache.values()).reduce<string[]>(
+      (acc, entry) => acc.concat(Object.values(entry.entries) || []),
+      [],
+    );
+
+    const resources = runResources;
+    if (resources) {
+      await resources.updateTestEnvironmentModules(plan.nodeProjectsToRun);
+    }
+  };
+
   /**
    * The node transport's watch signal is the dev server's compile cycle, so the
    * hooks are wired here rather than in the orchestrator: the rebuild-start
@@ -709,6 +732,7 @@ export function createNodeExecutor(
     runCycle,
     onInvalidate,
     runAll,
+    refreshPlan,
     close,
     // Watch: start the dev server (and pool) up front so its first compile fires
     // the invalidation that drives the initial run. In non-watch runs `runCycle`

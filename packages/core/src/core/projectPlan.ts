@@ -70,6 +70,8 @@ type ResolveRunnableProjectsOptions = {
   strictEnvironmentComments?: boolean;
 };
 
+type PlanRefreshHandler = (plan: ProjectPlan) => Promise<void>;
+
 export const createProjectPlanState = ({
   context,
   isWatchMode,
@@ -84,6 +86,7 @@ export const createProjectPlanState = ({
   ) => Promise<ProjectPlan>;
   validateEnvironmentComments: () => Promise<void>;
   announceShardSlice: () => void;
+  setPlanRefreshHandler: (handler: PlanRefreshHandler) => void;
 } => {
   let allProjects = context.projects;
   let entriesCache: Map<string, ProjectEntries> = new Map();
@@ -91,7 +94,8 @@ export const createProjectPlanState = ({
   let nodeProjectsToRun: ProjectContext[] = [];
   let environmentGroupsResolved = false;
   let environmentGroupsChanged = false;
-  let resolvingRunnableProjects = false;
+  let runnableProjectsRefresh: Promise<ProjectPlan> | undefined;
+  let planRefreshHandler: PlanRefreshHandler | undefined;
   let pendingStrictEnvironmentCommentValidation = false;
   // Resolution never logs the shard banner — it can run several times per init
   // (pre-hook, post-hook, post-discovery) and each pass would print its own
@@ -121,21 +125,16 @@ export const createProjectPlanState = ({
       return cachedEntries.entries;
     }
 
-    const shouldRefreshThroughPlanner =
-      context.normalizedConfig.shard ||
-      (environmentGroupsResolved && environmentGroupsChanged);
     if (
       isWatchMode &&
-      shouldRefreshThroughPlanner &&
-      !resolvingRunnableProjects
+      cachedEntries &&
+      (context.normalizedConfig.shard || environmentGroupsResolved)
     ) {
-      resolvingRunnableProjects = true;
-      try {
-        await resolveRunnableProjects();
-        return entriesCache.get(name)?.entries || {};
-      } finally {
-        resolvingRunnableProjects = false;
-      }
+      runnableProjectsRefresh ??= resolveRunnableProjects().finally(() => {
+        runnableProjectsRefresh = undefined;
+      });
+      const refreshedPlan = await runnableProjectsRefresh;
+      return refreshedPlan.entriesCache.get(name)?.entries || {};
     }
 
     const project =
@@ -215,6 +214,8 @@ export const createProjectPlanState = ({
       nodeProjectsToRun = nodeProjectsToRun.filter(hasShardedEntries);
     }
 
+    await planRefreshHandler?.(getPlan());
+
     environmentGroupsResolved = true;
     return getPlan();
   };
@@ -244,5 +245,8 @@ export const createProjectPlanState = ({
     resolveRunnableProjects,
     validateEnvironmentComments,
     announceShardSlice,
+    setPlanRefreshHandler: (handler) => {
+      planRefreshHandler = handler;
+    },
   };
 };

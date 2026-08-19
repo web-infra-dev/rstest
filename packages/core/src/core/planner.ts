@@ -70,6 +70,10 @@ export interface TestPlanner extends BrowserRunPlan {
   coveragePluginLoadError(): unknown;
   /** Re-glob every runnable node project's test entries as a flat path list. */
   globTestEntries(): Promise<string[]>;
+  /** Attach the node-side resource refresh used by watch replanning. */
+  setNodePlanRefreshHandler(
+    handler: (plan: ProjectPlan) => Promise<void>,
+  ): void;
   /** The node build, or `undefined` for a zero-node run — see {@link NodeBuild}. */
   readonly nodeBuild: NodeBuild | undefined;
 }
@@ -210,6 +214,7 @@ export async function createTestPlanner(
     hasNodeTestsToRun: () => getPlan().nodeProjectsToRun.length > 0,
     coveragePluginLoadError: () => coveragePluginLoadError,
     globTestEntries,
+    setNodePlanRefreshHandler: projectPlanState.setPlanRefreshHandler,
     nodeBuild,
   };
 }

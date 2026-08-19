@@ -82,6 +82,56 @@ describe('environment comments', () => {
     });
   });
 
+  it('discovers environment partitions when watch filters reveal them', async () => {
+    await withTempDir('rstest-watch-environment-', async (root) => {
+      writeFileSync(path.join(root, 'base.test.ts'), '// base\n');
+      writeFileSync(
+        path.join(root, 'dom.test.ts'),
+        '// @rstest-environment jsdom\n',
+      );
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['*.test.ts'],
+          exclude: { patterns: [], override: false },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: {},
+        fileFilters: ['base.test.ts'],
+      } as unknown as RstestContext;
+      const planState = createProjectPlanState({
+        context,
+        isWatchMode: true,
+      });
+
+      await planState.resolveRunnableProjects();
+      expect(planState.getPlan().projects).toHaveLength(1);
+
+      context.fileFilters = undefined;
+      await planState.globTestSourceEntries('default');
+
+      const plan = planState.getPlan();
+      expect(
+        plan.projects.some(
+          (item) => item.normalizedConfig.testEnvironment.name === 'jsdom',
+        ),
+      ).toBe(true);
+      expect(
+        plan.nodeProjectsToRun.some(
+          (item) => item.normalizedConfig.testEnvironment.name === 'jsdom',
+        ),
+      ).toBe(true);
+    });
+  });
+
   it('parses rstest environment and options comments', () => {
     expect(
       parseEnvironmentComment(`/**

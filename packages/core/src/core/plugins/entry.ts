@@ -186,6 +186,9 @@ export const pluginEntryWatch: (params: {
                 virtualEntryPath,
                 getVirtualEntryContent(),
               );
+              // node_modules is intentionally ignored by the file watcher, so
+              // this explicit invalidation is the single effective trigger for
+              // the internal virtual module.
               compiler.watching?.invalidateWithChangesAndRemovals(
                 new Set([virtualEntryPath]),
                 new Set(),

@@ -170,6 +170,9 @@ export async function runTests(context: Rstest): Promise<void> {
         getTraceRun: () => activeTraceRun,
       })
     : undefined;
+  if (nodeExecutor) {
+    planner.setNodePlanRefreshHandler(nodeExecutor.refreshPlan);
+  }
   await nodeExecutor?.init();
 
   // Nothing to run on either side: route the empty run through the shared
