@@ -14,9 +14,9 @@
   <a href="https://codspeed.io/web-infra-dev/rstest?utm_source=badge"><img src="https://img.shields.io/endpoint?url=https://codspeed.io/badge.json" alt="CodSpeed" /></a>
 </p>
 
-Rstest is a JavaScript testing framework powered by Rspack. It delivers comprehensive, first-class support for the Rspack ecosystem, enabling seamless integration into existing Rspack-based projects.
+Rstest is a fast, modern JavaScript testing framework powered by Rspack. It provides Jest-compatible APIs and out-of-the-box support for TypeScript, ESM, CJS, and more.
 
-Rstest offers full Jest-compatible APIs while providing native, out-of-the-box support for TypeScript, ESM, and more, ensuring a modern and efficient testing experience.
+Rstest works with any JavaScript or TypeScript project. Projects using Rspack, Rsbuild, or Rslib can additionally reuse their existing build configuration for consistent transforms and module resolution.
 
 ## 📖 Documentation
 
