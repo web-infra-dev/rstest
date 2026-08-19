@@ -116,6 +116,9 @@ describe('createTestPlanner cold-start gate', () => {
       'node-a',
       'node-a-environment-1',
     ]);
+    expect(targetProjects?.[0]).toBe(
+      context.projects.find((project) => project.environmentName === 'node-a'),
+    );
   });
 
   it('returns entries from projects revealed by a watch filter refresh', async () => {

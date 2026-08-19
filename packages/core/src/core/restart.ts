@@ -1,11 +1,32 @@
 import path from 'node:path';
 import type { ChokidarOptions } from 'chokidar';
 import { type CommonOptions, runRest } from '../cli/commands';
-import type { RstestInstance } from '../types';
+import type { RstestContext, RstestInstance } from '../types';
 import { color, isColorSupported, isTTY, logger } from '../utils';
 import { createChokidar } from '../utils/watchFiles';
 
 type Cleaner = () => unknown;
+type WatchRestart = (filters: Array<string | number>) => Promise<void>;
+
+const watchRestarts = new WeakMap<RstestContext, WatchRestart>();
+
+export const registerWatchRestart = (
+  context: RstestContext,
+  restartWatch: WatchRestart,
+): void => {
+  watchRestarts.set(context, restartWatch);
+};
+
+export const requestWatchRestart = (
+  context: RstestContext,
+  filters: Array<string | number>,
+): Promise<void> => {
+  const restartWatch = watchRestarts.get(context);
+  if (!restartWatch) {
+    throw new Error('Rstest watch restart is not registered');
+  }
+  return restartWatch(filters);
+};
 
 let cleaners: Cleaner[] = [];
 
@@ -48,7 +69,7 @@ const beforeRestart = async ({
   cleaners = [];
 };
 
-const restart = async ({
+export const restart = async ({
   filePath,
   clear = true,
   options,

@@ -41,12 +41,8 @@ export type NodeBuild = {
   /** Already prepared, config-hooked, and `initConfigs`-ed by the planner. */
   readonly rsbuildInstance: RsbuildInstance;
   readonly setupFileState: SetupFileState;
-  /** Environment names present in the compiler instance. */
-  readonly environmentNames: string[];
   globTestSourceEntries(name: string): Promise<Record<string, string>>;
   readonly watchRerun?: WatchRerunController;
-  /** Create a fresh compiler after the node environment topology changes. */
-  recreate(): Promise<NodeBuild>;
 };
 
 /**
@@ -150,8 +146,13 @@ export async function createTestPlanner(
     runnableProjects: ProjectContext[],
   ): ProjectContext[] => {
     const projectsByEnvironment = new Map<string, ProjectContext>();
-    for (const project of [...runnableProjects, ...watchEnvironmentProjects]) {
+    for (const project of runnableProjects) {
       projectsByEnvironment.set(project.environmentName, project);
+    }
+    for (const project of watchEnvironmentProjects) {
+      if (!projectsByEnvironment.has(project.environmentName)) {
+        projectsByEnvironment.set(project.environmentName, project);
+      }
     }
 
     const sourceEnvironmentNames = new Set(
@@ -235,12 +236,8 @@ export async function createTestPlanner(
     return {
       rsbuildInstance,
       setupFileState,
-      environmentNames: rsbuildProjects.map(
-        (project) => project.environmentName,
-      ),
       globTestSourceEntries,
       watchRerun: rsbuildInstance.watchRerun,
-      recreate: buildNodeSide,
     };
   };
 

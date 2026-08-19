@@ -168,7 +168,6 @@ export async function runTests(context: Rstest): Promise<void> {
         coverageProvider,
         isWatchMode,
         getTraceRun: () => activeTraceRun,
-        recreateNodeBuild: nodeBuild.recreate,
         getEnvironmentNames: planner.getNodeBuildEnvironmentNames,
       })
     : undefined;
@@ -451,6 +450,28 @@ export async function runTests(context: Rstest): Promise<void> {
     isSessionClosing: () => isSessionClosing(),
   });
 
+  const { onBeforeRestart, requestWatchRestart } = await import('./restart');
+  let watchRestartPromise: Promise<void> | undefined;
+  const restartWatchSession = (
+    filters: string[] | undefined,
+  ): Promise<void> => {
+    watchRestartPromise ??= requestWatchRestart(context, filters ?? []);
+    return watchRestartPromise;
+  };
+  let restartScheduled = false;
+  const scheduleWatchRestart = (): void => {
+    if (restartScheduled) {
+      return;
+    }
+    restartScheduled = true;
+    setTimeout(() => {
+      restartWatchSession(context.fileFilters).catch((error) => {
+        logger.error(color.red('Rstest watch restart failed:'), error);
+        process.exitCode = 1;
+      });
+    }, 0);
+  };
+
   if (hasBrowserTestsToRun) {
     const browserProjectsToRun = planner.getBrowserProjectsToRun();
     browserExecutor = await loadBrowserExecutor(
@@ -484,7 +505,11 @@ export async function runTests(context: Rstest): Promise<void> {
           prepareFileFilters: (filters) =>
             watchDriver.runReconfigure(async () => {
               context.fileFilters = filters;
-              return planner.globTestEntries();
+              const entries = await planner.globTestEntries();
+              if (nodeExecutorToRun.needsRestart()) {
+                await restartWatchSession(filters);
+              }
+              return entries;
             }),
         }
       : undefined,
@@ -508,7 +533,6 @@ export async function runTests(context: Rstest): Promise<void> {
   isSessionClosing = () => watchTeardown.isClosing();
   watchTeardown.addCleanup(registerWatchSignalExit(context, closeWatchSession));
 
-  const { onBeforeRestart } = await import('./restart');
   onBeforeRestart(closeWatchSession);
 
   // Installed before the first cycle so the ready banner can never appear
@@ -589,6 +613,10 @@ export async function runTests(context: Rstest): Promise<void> {
       // The node executor's rebuilds are the watch trigger; its initial compile
       // signals too, which is what drives the first node cycle.
       nodeExecutorToRun.onInvalidate(({ isFirstBuild, isRunAll }) => {
+        if (nodeExecutorToRun.needsRestart()) {
+          scheduleWatchRestart();
+          return Promise.resolve();
+        }
         const cycle = watchDriver.runCycle(nodeExecutorToRun, {
           mode: isFirstBuild || isRunAll ? 'all' : 'on-demand',
           trigger: isRunAll ? 'run-all' : 'invalidation',

@@ -432,6 +432,7 @@ export function createWatchShortcutHandlers(
         // to drop when the user asks for every test again.
         context.normalizedConfig.testNamePattern = undefined;
         context.fileFilters = undefined;
+        await node.prepareFileFilters?.(undefined);
         await node.runAll();
       }
       await browser?.rerun();

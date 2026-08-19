@@ -932,13 +932,25 @@ export const runRest = async ({
     process.on('unhandledRejection', unexpectedlyExitHandler);
 
     if (command === 'watch') {
-      const { watchFilesForRestart, onBeforeRestart } =
-        await import('../core/restart');
+      const {
+        registerWatchRestart,
+        restart,
+        watchFilesForRestart,
+        onBeforeRestart,
+      } = await import('../core/restart');
 
       onBeforeRestart(() => {
         process.off('uncaughtException', unexpectedlyExitHandler);
         process.off('unhandledRejection', unexpectedlyExitHandler);
       });
+
+      registerWatchRestart(rstest.context, (currentFilters) =>
+        restart({
+          options,
+          filters: currentFilters,
+          root: rstest!.context.rootPath,
+        }).then(() => undefined),
+      );
 
       await watchFilesForRestart({
         rstest,

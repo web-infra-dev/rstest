@@ -19,7 +19,6 @@ import { ensureTestEnvironmentDependencies } from '../envDependencies';
 import { claimGlobalSetupOnce, runGlobalSetup } from '../globalSetup';
 import { applyOnlyFailuresSelection } from '../onlyFailures';
 import type { ProjectPlan } from '../projectPlan';
-import type { NodeBuild } from '../planner';
 import { createRsbuildServer } from '../rsbuild';
 import {
   readResultsCache,
@@ -160,6 +159,8 @@ export type NodeExecutor = TestExecutor &
     runAll(): Promise<void>;
     /** Record a plan change for synchronization before the next node cycle. */
     refreshPlan(plan: ProjectPlan): Promise<void>;
+    /** Whether the planner now requires a different environment topology. */
+    needsRestart(): boolean;
     /**
      * Start the dev server + worker pool up front (idempotent, in-flight
      * guarded). Watch calls this after subscribing to invalidations so the first
@@ -191,8 +192,6 @@ type CreateNodeExecutorOptions = {
   isWatchMode: boolean;
   /** Returns the cycle's active trace buffer (reallocated by core each cycle). */
   getTraceRun: () => TraceRun;
-  /** Recreate the node build after its environment topology changes. */
-  recreateNodeBuild: () => Promise<NodeBuild>;
   /** Current compiler topology, kept in sync by the planner before refresh. */
   getEnvironmentNames: () => string[];
 };
@@ -208,16 +207,18 @@ export function createNodeExecutor(
     coverageProvider,
     isWatchMode,
     getTraceRun,
-    recreateNodeBuild,
     getEnvironmentNames,
   }: CreateNodeExecutorOptions,
 ): NodeExecutor {
   const { rootPath } = context;
 
-  let currentRsbuildInstance = rsbuildInstance;
-  let currentSetupFileState = setupFileState;
-  let currentWatchRerun = watchRerun;
-  let currentEnvironmentNames = getEnvironmentNames();
+  const currentRsbuildInstance = rsbuildInstance;
+  const currentSetupFileState = setupFileState;
+  const currentWatchRerun = watchRerun;
+  const currentEnvironmentNames = getEnvironmentNames();
+  const currentRunnableEnvironmentNames = getPlan().nodeProjectsToRun.map(
+    (project) => project.environmentName,
+  );
 
   // Lazily created on first runCycle (so a run with no node tests to run never
   // pays for a server + pool — the browser-only cold-start path).
@@ -245,7 +246,6 @@ export function createNodeExecutor(
   let runDependencyValidationPromise: Promise<void> | undefined;
   let entryFiles: string[] = [];
   let pendingPlan: ProjectPlan | undefined;
-  let skipNextFirstBuildInvalidation = false;
   let bindWatchCallbacks = (): void => {};
   let didClose = false;
   // When a dev compile starts. Paired with the compile's end into a completed
@@ -367,24 +367,6 @@ export function createNodeExecutor(
 
   const syncPlan = async (plan: ProjectPlan): Promise<void> => {
     pendingPlan = undefined;
-    const nextEnvironmentNames = getEnvironmentNames();
-
-    if (!sameEnvironmentNames(currentEnvironmentNames, nextEnvironmentNames)) {
-      await closeRunResources();
-      const nextBuild = await recreateNodeBuild();
-      currentRsbuildInstance = nextBuild.rsbuildInstance;
-      currentSetupFileState = nextBuild.setupFileState;
-      currentWatchRerun = nextBuild.watchRerun;
-      currentEnvironmentNames = nextBuild.environmentNames;
-      entryFiles = [];
-      // The new dev server's first compile is only the compiler warm-up for
-      // the cycle that requested the restart. That cycle already has the
-      // selected entries, so dispatching a second cycle here would deadlock
-      // against the serialized watch queue and duplicate the run.
-      skipNextFirstBuildInvalidation = true;
-      bindWatchCallbacks();
-      return;
-    }
 
     currentSetupFileState.refresh({
       setupProjects: plan.nodeProjectsToRun,
@@ -667,6 +649,13 @@ export function createNodeExecutor(
     pendingPlan = plan;
   };
 
+  const needsRestart = (): boolean =>
+    !sameEnvironmentNames(currentEnvironmentNames, getEnvironmentNames()) ||
+    !sameEnvironmentNames(
+      currentRunnableEnvironmentNames,
+      getPlan().nodeProjectsToRun.map((project) => project.environmentName),
+    );
+
   /**
    * The node transport's watch signal is the dev server's compile cycle, so the
    * hooks are wired here rather than in the orchestrator: the rebuild-start
@@ -741,10 +730,6 @@ export function createNodeExecutor(
           pendingBuildTime = Date.now() - compileStart;
           compileStart = undefined;
         }
-        if (skipNextFirstBuildInvalidation && isFirstCompile) {
-          skipNextFirstBuildInvalidation = false;
-          return;
-        }
         return dispatchInvalidation({
           isFirstBuild: isFirstCompile,
           isRunAll: currentWatchRerun?.consumeVirtualEntryChange(),
@@ -790,6 +775,7 @@ export function createNodeExecutor(
     onInvalidate,
     runAll,
     refreshPlan,
+    needsRestart,
     close,
     // Watch: start the dev server (and pool) up front so its first compile fires
     // the invalidation that drives the initial run. In non-watch runs `runCycle`
