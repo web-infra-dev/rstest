@@ -28,6 +28,19 @@ class TestFileWatchPlugin {
   }
 }
 
+const rstestVirtualEntryFlag = 'rstest-virtual-entry-';
+const rerunTriggers = new Map<string, () => void>();
+const configuredWatchConfigs = new WeakMap<object, Set<string>>();
+
+export const triggerRerun = (): boolean => {
+  let hasTrigger = false;
+  for (const trigger of rerunTriggers.values()) {
+    hasTrigger = true;
+    trigger();
+  }
+  return hasTrigger;
+};
+
 export const pluginEntryWatch: (params: {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
@@ -46,6 +59,10 @@ export const pluginEntryWatch: (params: {
 }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
+    api.onCloseDevServer(() => {
+      rerunTriggers.clear();
+    });
+
     const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
     const getSourceEntries = async (environmentName: string) => {
       const sourceEntries = await globTestSourceEntries(environmentName);
@@ -58,8 +75,18 @@ export const pluginEntryWatch: (params: {
       return sourceEntries;
     };
 
-    api.modifyRspackConfig(async (config, { environment }) => {
+    api.modifyRspackConfig(async (config, { environment, rspack }) => {
       if (isWatch) {
+        let configuredEnvironments = configuredWatchConfigs.get(config);
+        if (!configuredEnvironments) {
+          configuredEnvironments = new Set();
+          configuredWatchConfigs.set(config, configuredEnvironments);
+        }
+        if (configuredEnvironments.has(environment.name)) {
+          return;
+        }
+        configuredEnvironments.add(environment.name);
+
         config.plugins.push(new TestFileWatchPlugin(environment.config.root));
         config.entry = async () => {
           const sourceEntries = await getSourceEntries(environment.name);
@@ -69,6 +96,31 @@ export const pluginEntryWatch: (params: {
             ...(globalSetupFiles?.[environment.name] || {}),
           };
         };
+
+        const virtualEntryPath = path.join(
+          environment.config.root,
+          `${rstestVirtualEntryFlag}${environment.name}.js`,
+        );
+        let virtualEntryVersion = 0;
+        const getVirtualEntryContent = () =>
+          `export const virtualEntry = ${virtualEntryVersion};`;
+        const virtualModulesPlugin =
+          new rspack.experiments.VirtualModulesPlugin({
+            [virtualEntryPath]: getVirtualEntryContent(),
+          });
+
+        config.plugins.push({
+          apply(compiler: Rspack.Compiler) {
+            virtualModulesPlugin.apply(compiler);
+            rerunTriggers.set(environment.name, () => {
+              virtualEntryVersion += 1;
+              virtualModulesPlugin.writeModule(
+                virtualEntryPath,
+                getVirtualEntryContent(),
+              );
+            });
+          },
+        });
 
         config.watchOptions ??= {};
         config.watchOptions.aggregateTimeout = 100;
@@ -95,6 +147,7 @@ export const pluginEntryWatch: (params: {
 
         config.experiments ??= {};
         config.experiments.nativeWatcher ??= true;
+
         const configFilePath = context.projects.find(
           (project) => project.environmentName === environment.name,
         )?.configFilePath;

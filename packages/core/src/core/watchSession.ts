@@ -333,6 +333,8 @@ export function createWatchCycleDriver({
 export interface WatchSessionTargets {
   node?: {
     runCycle: (options?: WatchCycleOptions) => Promise<void>;
+    /** Recompile the node entries before running the full test set. */
+    runAll: () => Promise<void>;
     /** Re-glob node entries for the `p` (file filter) shortcut. */
     globTestEntries: () => Promise<string[]>;
   };
@@ -416,7 +418,7 @@ export function createWatchShortcutHandlers(
         // to drop when the user asks for every test again.
         context.normalizedConfig.testNamePattern = undefined;
         context.fileFilters = undefined;
-        await node.runCycle({ mode: 'all', trigger: 'run-all' });
+        await node.runAll();
       }
       await browser?.rerun();
     }),

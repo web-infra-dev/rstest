@@ -545,6 +545,9 @@ describe('createWatchShortcutHandlers arming', () => {
       runCycle: async () => {
         cycles.push('node');
       },
+      runAll: async () => {
+        cycles.push('node');
+      },
       globTestEntries: async () => ['/a.test.ts'],
     },
     browser: {
@@ -599,6 +602,7 @@ describe('createWatchShortcutHandlers arming', () => {
             seen.push(context.snapshotManager.options.updateSnapshot);
             await parked;
           },
+          runAll: async () => {},
           globTestEntries: async () => [],
         },
       },

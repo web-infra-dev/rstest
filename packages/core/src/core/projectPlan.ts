@@ -36,6 +36,16 @@ export type ProjectPlan = {
   nodeProjectsToRun: ProjectContext[];
 };
 
+const areFileFiltersEqual = (left?: string[], right?: string[]): boolean => {
+  const leftFilters = left ?? [];
+  const rightFilters = right ?? [];
+
+  return (
+    leftFilters.length === rightFilters.length &&
+    leftFilters.every((filter, index) => filter === rightFilters[index])
+  );
+};
+
 export const syncNodeProjects = (
   target: ProjectContext[],
   projects: ProjectContext[],
@@ -101,8 +111,13 @@ export const createProjectPlanState = ({
     if (context.relatedResolutionEmpty) {
       return {};
     }
-    if (entriesCache.has(name)) {
-      return entriesCache.get(name)!.entries;
+    const cachedEntries = entriesCache.get(name);
+    if (
+      cachedEntries &&
+      (!isWatchMode ||
+        areFileFiltersEqual(cachedEntries.fileFilters, context.fileFilters))
+    ) {
+      return cachedEntries.entries;
     }
 
     const project =
