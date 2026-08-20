@@ -57,6 +57,7 @@ export const BROWSER_PORTS = {
   'browser-coverage-config-warnings': 5272,
   'browser-coverage-v8': 5280,
   'browser-coverage-v8-webkit': 5282,
+  'empty-suite': 5284,
   'watch-setup': 5278,
   'basic-federation': 5274,
   'basic-federation-watch': 5276,

@@ -28,6 +28,7 @@ describe('no tests', () => {
       logs.find((log) => log.includes('Test Files 3 failed')),
     ).toBeDefined();
     expect(logs.find((log) => log.includes('Tests no tests'))).toBeDefined();
+    expect(cli.log).not.toContain('[empty-suite-hook]');
   });
 
   it('should passWithNoTests with passWithNoTests flag', async () => {
@@ -51,6 +52,7 @@ describe('no tests', () => {
       logs.find((log) => log.includes('Test Files 3 passed')),
     ).toBeDefined();
     expect(logs.find((log) => log.includes('Tests no tests'))).toBeDefined();
+    expect(cli.log).not.toContain('[empty-suite-hook]');
   });
 
   it('should not check coverage provider when no tests match', async () => {

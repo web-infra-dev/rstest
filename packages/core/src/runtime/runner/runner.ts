@@ -578,22 +578,23 @@ export class TestRunner {
             if (test.tests.length === 0) {
               if (['todo', 'skip'].includes(test.runMode)) {
                 defaultStatus = 'skip';
-                hooks.onTestSuiteResult?.(result);
-                return result;
-              }
-              if (passWithNoTests) {
+              } else if (passWithNoTests) {
                 result.status = 'pass';
-                hooks.onTestSuiteResult?.(result);
-                return result;
+              } else {
+                result.status = 'fail';
+                result.errors?.push({
+                  message: `No test found in suite: ${test.name}`,
+                  name: 'No tests',
+                });
               }
-              const noTestError = {
-                message: `No test found in suite: ${test.name}`,
-                name: 'No tests',
-              };
 
-              result.errors?.push(noTestError);
+              hooks.onTestSuiteResult?.(result);
+              return result;
             }
 
+            const shouldRunSuiteHooks =
+              test.hasRunnableTests === true &&
+              ['run', 'only'].includes(test.runMode);
             const cleanups: ((ctx: SuiteContext) => void)[] = [];
             let hasBeforeAllError = false;
             const suiteContext: SuiteContext = {
@@ -609,10 +610,7 @@ export class TestRunner {
               },
             };
 
-            if (
-              ['run', 'only'].includes(test.runMode) &&
-              test.beforeAllListeners
-            ) {
+            if (shouldRunSuiteHooks && test.beforeAllListeners) {
               try {
                 for (const fn of test.beforeAllListeners) {
                   const cleanupFn = await fn(suiteContext);
@@ -641,7 +639,7 @@ export class TestRunner {
               .reverse()
               .concat(cleanups);
 
-            if (['run', 'only'].includes(test.runMode) && afterAllFns.length) {
+            if (shouldRunSuiteHooks && afterAllFns.length) {
               try {
                 for (const fn of afterAllFns) {
                   await fn(suiteContext);

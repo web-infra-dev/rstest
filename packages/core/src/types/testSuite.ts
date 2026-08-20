@@ -127,6 +127,8 @@ export type TestSuiteInfo = {
 };
 
 export type TestSuite = TestSuiteInfo & {
+  /** @internal */
+  hasRunnableTests?: boolean;
   each?: boolean;
   inTestEach?: boolean;
   concurrent?: boolean;
