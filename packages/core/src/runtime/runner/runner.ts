@@ -53,6 +53,7 @@ import {
 } from './task';
 
 const RealDate = Date;
+const RealAbortController = AbortController;
 
 /**
  * Sample heap usage when `logHeapUsage` is enabled. Guarded so the shared
@@ -333,9 +334,23 @@ export class TestRunner {
       }
 
       if (!result) {
+        const runTest = test.fn
+          ? wrapTimeout({
+              name: 'test',
+              fn: test.fn,
+              timeout: test.timeout,
+              stackTraceError: test.stackTraceError,
+              onTimeout: (error) =>
+                this.abortContextSignal(test.context, error),
+              getAssertionCalls: () => {
+                return this.getAssertionState(test).assertionCalls;
+              },
+            })
+          : undefined;
+
         if (test.fails) {
           try {
-            await test.fn?.(test.context);
+            await runTest?.(test.context);
             this.afterRunTest(test);
 
             result = {
@@ -370,20 +385,7 @@ export class TestRunner {
           }
         } else {
           try {
-            if (test.fn) {
-              const fn = wrapTimeout({
-                name: 'test',
-                fn: test.fn,
-                timeout: test.timeout,
-                stackTraceError: test.stackTraceError,
-                onTimeout: (error) =>
-                  this.abortContextSignal(test.context, error),
-                getAssertionCalls: () => {
-                  return this.getAssertionState(test).assertionCalls;
-                },
-              });
-              await fn(test.context);
-            }
+            await runTest?.(test.context);
             this.afterRunTest(test);
             result = {
               testId: test.testId,
@@ -878,10 +880,11 @@ export class TestRunner {
     }) as unknown as TestContext;
 
     const current = this._test;
-    const abortController = new AbortController();
+    const abortController = new RealAbortController();
     this.abortControllers.set(context, abortController);
 
     Object.defineProperty(context, 'signal', {
+      configurable: true,
       value: abortController.signal,
     });
 

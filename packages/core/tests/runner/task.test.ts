@@ -26,4 +26,23 @@ describe('wrapTimeout', () => {
     expect(timeoutError).toBe(rejectedError);
     expect(timeoutError?.message).toBe('test timed out in 10ms');
   });
+
+  it('rejects before aborting a signal when the callback listens synchronously', async () => {
+    setRealTimers();
+    const controller = new AbortController();
+    const run = wrapTimeout({
+      name: 'test',
+      fn: () =>
+        new Promise<void>((resolve) => {
+          controller.signal.addEventListener('abort', () => resolve(), {
+            once: true,
+          });
+        }),
+      timeout: 10,
+      onTimeout: () => controller.abort(),
+      stackTraceError: new Error('stack'),
+    });
+
+    await expect(run()).rejects.toThrow('test timed out in 10ms');
+  });
 });

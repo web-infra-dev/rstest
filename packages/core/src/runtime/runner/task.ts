@@ -319,8 +319,8 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
 
         // Create timeout error with the provided stack trace from test registration
         const error = makeError(message, stackTraceError);
-        onTimeout?.(error);
         reject(error);
+        onTimeout?.(error);
       }, timeout);
     });
 
