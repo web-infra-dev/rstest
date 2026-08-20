@@ -53,6 +53,7 @@ import {
 } from './task';
 
 const RealDate = Date;
+const RealAbortController = AbortController;
 
 /**
  * Sample heap usage when `logHeapUsage` is enabled. Guarded so the shared
@@ -75,6 +76,10 @@ export class TestRunner {
   private workerState: WorkerState | undefined;
   private readonly fileFixtureManager = new FileFixtureManager();
   private readonly localExpects = new WeakMap<TestContext, RstestExpect>();
+  private readonly abortControllers = new WeakMap<
+    TestContext,
+    AbortController
+  >();
 
   constructor(private readonly taskContext: TaskContext) {}
 
@@ -237,10 +242,14 @@ export class TestRunner {
         };
         let hookExecution: ReturnType<typeof runHook> | undefined;
         try {
-          return await runWithTimeout(fn, (callback) => {
-            hookExecution = runHook(callback);
-            return hookExecution;
-          });
+          return await runWithTimeout(
+            fn,
+            (callback) => {
+              hookExecution = runHook(callback);
+              return hookExecution;
+            },
+            (error) => this.abortContextSignal(test.context, error),
+          );
         } catch (error) {
           const cancellation =
             !callbackStarted && fixtureResolver.cancelPendingFixtures();
@@ -325,9 +334,23 @@ export class TestRunner {
       }
 
       if (!result) {
+        const runTest = test.fn
+          ? wrapTimeout({
+              name: 'test',
+              fn: test.fn,
+              timeout: test.timeout,
+              stackTraceError: test.stackTraceError,
+              onTimeout: (error) =>
+                this.abortContextSignal(test.context, error),
+              getAssertionCalls: () => {
+                return this.getAssertionState(test).assertionCalls;
+              },
+            })
+          : undefined;
+
         if (test.fails) {
           try {
-            await test.fn?.(test.context);
+            await runTest?.(test.context);
             this.afterRunTest(test);
 
             result = {
@@ -362,18 +385,7 @@ export class TestRunner {
           }
         } else {
           try {
-            if (test.fn) {
-              const fn = wrapTimeout({
-                name: 'test',
-                fn: test.fn,
-                timeout: test.timeout,
-                stackTraceError: test.stackTraceError,
-                getAssertionCalls: () => {
-                  return this.getAssertionState(test).assertionCalls;
-                },
-              });
-              await fn(test.context);
-            }
+            await runTest?.(test.context);
             this.afterRunTest(test);
             result = {
               testId: test.testId,
@@ -868,6 +880,13 @@ export class TestRunner {
     }) as unknown as TestContext;
 
     const current = this._test;
+    const abortController = new RealAbortController();
+    this.abortControllers.set(context, abortController);
+
+    Object.defineProperty(context, 'signal', {
+      configurable: true,
+      value: abortController.signal,
+    });
 
     context.task = {
       id: test.testId,
@@ -939,6 +958,7 @@ export class TestRunner {
         name: 'onTestFinished hook',
         fn,
         timeout: timeout ?? this.workerState!.runtimeConfig.hookTimeout,
+        onTimeout: (error) => this.abortContextSignal(test.context, error),
         stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );
@@ -957,6 +977,7 @@ export class TestRunner {
         name: 'onTestFailed hook',
         fn,
         timeout: timeout ?? this.workerState!.runtimeConfig.hookTimeout,
+        onTimeout: (error) => this.abortContextSignal(test.context, error),
         stackTraceError: new Error(SYNTHETIC_STACK_ERROR_MESSAGE),
       }),
     );
@@ -996,7 +1017,10 @@ export class TestRunner {
           name: 'fixture setup',
           fn: setup,
           timeout: test.timeout,
-          onTimeout,
+          onTimeout: (error) => {
+            this.abortContextSignal(context, error);
+            onTimeout();
+          },
           stackTraceError: test.stackTraceError,
         })(),
       wrapNamedFixtureCleanup: (cleanup) =>
@@ -1004,9 +1028,14 @@ export class TestRunner {
           name: 'fixture cleanup',
           fn: cleanup,
           timeout: test.timeout,
+          onTimeout: (error) => this.abortContextSignal(context, error),
           stackTraceError: test.stackTraceError,
         }),
     });
+  }
+
+  private abortContextSignal(context: TestContext, error: Error): void {
+    this.abortControllers.get(context)?.abort(error);
   }
 
   private getAssertionState(test: TestCase) {

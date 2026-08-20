@@ -1,0 +1,48 @@
+import { wrapTimeout } from '../../src/runtime/runner/task';
+import { setRealTimers } from '../../src/runtime/util';
+
+describe('wrapTimeout', () => {
+  it('passes the rejected timeout error to onTimeout', async () => {
+    setRealTimers();
+    let timeoutError: Error | undefined;
+    const run = wrapTimeout({
+      name: 'test',
+      fn: () => new Promise(() => {}),
+      timeout: 10,
+      onTimeout: (error) => {
+        timeoutError = error;
+      },
+      stackTraceError: new Error('stack'),
+    });
+
+    let rejectedError: unknown;
+    try {
+      await run();
+    } catch (error) {
+      rejectedError = error;
+    }
+
+    expect(timeoutError).toBeInstanceOf(Error);
+    expect(timeoutError).toBe(rejectedError);
+    expect(timeoutError?.message).toBe('test timed out in 10ms');
+  });
+
+  it('rejects before aborting a signal when the callback listens synchronously', async () => {
+    setRealTimers();
+    const controller = new AbortController();
+    const run = wrapTimeout({
+      name: 'test',
+      fn: () =>
+        new Promise<void>((resolve) => {
+          controller.signal.addEventListener('abort', () => resolve(), {
+            once: true,
+          });
+        }),
+      timeout: 10,
+      onTimeout: () => controller.abort(),
+      stackTraceError: new Error('stack'),
+    });
+
+    await expect(run()).rejects.toThrow('test timed out in 10ms');
+  });
+});

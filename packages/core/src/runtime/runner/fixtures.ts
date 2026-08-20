@@ -19,6 +19,7 @@ const reservedNamedFixtureNames = new Set<string>([
     expect: true,
     onTestFailed: true,
     onTestFinished: true,
+    signal: true,
     skip: true,
     task: true,
   } satisfies Record<keyof TestContext, true>),

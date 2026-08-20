@@ -284,7 +284,7 @@ type TimeoutOptions<T extends (...args: any[]) => any> = {
   name: string;
   fn: T;
   timeout?: number;
-  onTimeout?: () => void;
+  onTimeout?: (error: Error) => void;
   getAssertionCalls?: () => number;
   stackTraceError: Error;
 };
@@ -317,9 +317,10 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
             : ' (no expect assertions completed)';
         const message = `${name} timed out in ${timeout}ms${getAssertionCalls ? assertionInfo : ''}`;
 
-        onTimeout?.();
         // Create timeout error with the provided stack trace from test registration
-        reject(makeError(message, stackTraceError));
+        const error = makeError(message, stackTraceError);
+        reject(error);
+        onTimeout?.(error);
       }, timeout);
     });
 
@@ -349,6 +350,7 @@ export function wrapTimeout<T extends (...args: any[]) => any>({
 export async function runWithTimeout<T>(
   fn: (...args: any[]) => any,
   run: (callback: (...args: any[]) => any) => T | PromiseLike<T>,
+  onTimeout?: (error: Error) => void,
 ): Promise<T> {
   const options = timeoutOptions.get(fn);
   if (!options) {
@@ -358,6 +360,10 @@ export async function runWithTimeout<T>(
   const wrapped = wrapTimeout({
     ...options,
     fn: () => run(options.fn),
+    onTimeout: (error) => {
+      options.onTimeout?.(error);
+      onTimeout?.(error);
+    },
   });
   return wrapped();
 }
