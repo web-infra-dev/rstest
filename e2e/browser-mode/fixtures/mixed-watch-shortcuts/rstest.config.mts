@@ -17,6 +17,7 @@ export default defineConfig({
     {
       name: 'browser',
       include: ['browser-tests/**/*.test.ts'],
+      globalSetup: ['./browserGlobalSetup.ts'],
       testTimeout: BROWSER_TEST_TIMEOUT,
       browser: {
         enabled: true,

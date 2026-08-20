@@ -1,6 +1,6 @@
 import type { RsbuildInstance } from '@rsbuild/core';
 import type { ProjectContext } from '../types';
-import type { TraceEvent } from '../utils';
+import { filterFiles, type TraceEvent } from '../utils';
 import {
   type BrowserRunPlan,
   createBrowserRunPlanner,
@@ -66,8 +66,8 @@ export interface TestPlanner extends BrowserRunPlan {
   hasNodeTestsToRun(): boolean;
   /** A coverage-plugin load error captured while preparing Rsbuild, if any. */
   coveragePluginLoadError(): unknown;
-  /** Re-glob every runnable node project's test entries as a flat path list. */
-  globTestEntries(): Promise<string[]>;
+  /** Select paths from the pre-scanned node watch entry graph. */
+  globTestEntries(filters?: string[]): Promise<string[]>;
   /** The node build, or `undefined` for a zero-node run — see {@link NodeBuild}. */
   readonly nodeBuild: NodeBuild | undefined;
 }
@@ -186,15 +186,15 @@ export async function createTestPlanner(
   // post-hook, post-discovery) only recorded them.
   projectPlanState.announceShardSlice();
 
-  const globTestEntries = async (): Promise<string[]> => {
-    const projects = getPlan().nodeProjectsToRun;
-    const perProject = await Promise.all(
-      projects.map((project) => globTestSourceEntries(project.environmentName)),
+  const globTestEntries = async (filters?: string[]): Promise<string[]> => {
+    const entries = getPlan().nodeProjectsToRun.flatMap((project) =>
+      Object.values(
+        getPlan().entriesCache.get(project.environmentName)?.entries || {},
+      ),
     );
-    return perProject.reduce<string[]>(
-      (acc, entries) => acc.concat(...Object.values(entries)),
-      [],
-    );
+    return filters
+      ? filterFiles(entries, filters, context.rootPath, context.fileFilterMode)
+      : entries;
   };
 
   return {

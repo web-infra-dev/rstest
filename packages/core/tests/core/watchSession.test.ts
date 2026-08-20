@@ -546,6 +546,7 @@ describe('createWatchShortcutHandlers arming', () => {
         cycles.push('node');
       },
       globTestEntries: async () => ['/a.test.ts'],
+      setFileFilters: () => {},
     },
     browser: {
       rerun: async () => {
@@ -600,6 +601,7 @@ describe('createWatchShortcutHandlers arming', () => {
             await parked;
           },
           globTestEntries: async () => [],
+          setFileFilters: () => {},
         },
       },
       async () => {},
@@ -612,6 +614,40 @@ describe('createWatchShortcutHandlers arming', () => {
 
     expect(seen).toEqual(['all', 'all']);
     expect(context.snapshotManager.options.updateSnapshot).toBe(original);
+  });
+
+  it('keeps interactive file filters on the node target', async () => {
+    const context = createContext();
+    context.fileFilters = ['startup-filter'];
+    const cycles: string[] = [];
+    let nodeFileFilters: string[] | undefined;
+    const handlers = createWatchShortcutHandlers(
+      context,
+      {
+        node: {
+          runCycle: async () => {
+            cycles.push('node');
+          },
+          globTestEntries: async (filters) =>
+            filters?.length ? ['/node.test.ts'] : [],
+          setFileFilters: (filters) => {
+            nodeFileFilters = filters;
+          },
+        },
+        browser: {
+          rerun: async () => {
+            cycles.push('browser');
+          },
+        },
+      },
+      async () => {},
+    );
+
+    await handlers.runWithFileFilters!(['node']);
+
+    expect(nodeFileFilters).toEqual(['/node.test.ts']);
+    expect(context.fileFilters).toEqual(['startup-filter']);
+    expect(cycles).toEqual(['node']);
   });
 
   it('leaves the quit handler reachable before the first cycle', async () => {

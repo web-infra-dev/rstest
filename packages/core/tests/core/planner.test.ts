@@ -31,11 +31,12 @@ const prepareRsbuildSpy = rs.mocked(prepareRsbuild);
 const createContext = (
   root: string,
   projects: Array<{ name: string; browser?: boolean }>,
+  command: 'run' | 'watch' = 'run',
 ) =>
   new Rstest(
     {
       cwd: root,
-      command: 'run',
+      command,
       embedded: true,
       projects: projects.map(({ name, browser }) => ({
         config: {
@@ -94,5 +95,51 @@ describe('createTestPlanner cold-start gate', () => {
 
     expect(prepareRsbuildSpy).toHaveBeenCalledTimes(1);
     expect(planner.nodeBuild).toBeDefined();
+  });
+
+  it('prepares watch environments hidden by the initial file filter', async () => {
+    writeFileSync(
+      join(tempRoot, 'dom.test.ts'),
+      '// @rstest-environment jsdom\nexport {};\n',
+    );
+    const context = createContext(tempRoot, [{ name: 'node-a' }], 'watch');
+    context.fileFilters = ['a.test.ts'];
+
+    await createTestPlanner(context, {
+      browserProjects: [],
+      nodeProjects: context.projects,
+      isWatchMode: true,
+    });
+
+    const targetProjects = prepareRsbuildSpy.mock.calls[0]![0]!.targetProjects;
+    expect(targetProjects?.map((project) => project.environmentName)).toEqual([
+      'node-a',
+      'node-a-environment-1',
+    ]);
+    expect(targetProjects?.[0]).toBe(
+      context.projects.find((project) => project.environmentName === 'node-a'),
+    );
+  });
+
+  it('filters the stable watch entry graph without changing startup filters', async () => {
+    writeFileSync(
+      join(tempRoot, 'dom.test.ts'),
+      '// @rstest-environment jsdom\nexport {};\n',
+    );
+    const context = createContext(tempRoot, [{ name: 'node-a' }], 'watch');
+    context.fileFilters = ['a.test.ts'];
+    const planner = await createTestPlanner(context, {
+      browserProjects: [],
+      nodeProjects: context.projects,
+      isWatchMode: true,
+    });
+
+    const filteredEntries = await planner.globTestEntries(['a.test.ts']);
+    const allEntries = await planner.globTestEntries();
+
+    expect(filteredEntries).toHaveLength(1);
+    expect(filteredEntries[0]).toMatch(/a\.test\.ts$/);
+    expect(allEntries).toHaveLength(2);
+    expect(context.fileFilters).toEqual(['a.test.ts']);
   });
 });

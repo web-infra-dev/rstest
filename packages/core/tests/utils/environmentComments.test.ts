@@ -39,6 +39,95 @@ const createProject = (): ProjectContext => ({
 });
 
 describe('environment comments', () => {
+  it('keeps the watch shard stable when runtime filters change', async () => {
+    await withTempDir('rstest-watch-shard-', async (root) => {
+      for (const name of ['a', 'b', 'c', 'd']) {
+        writeFileSync(path.join(root, `${name}.test.ts`), `// ${name}\n`);
+      }
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['*.test.ts'],
+          exclude: { patterns: [], override: false },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: { shard: { index: 1, count: 2 } },
+        fileFilters: ['c.test.ts', 'd.test.ts'],
+      } as unknown as RstestContext;
+      const planState = createProjectPlanState({
+        context,
+        isWatchMode: true,
+      });
+
+      await planState.resolveRunnableProjects();
+
+      expect(await planState.globTestSourceEntries('default')).toEqual({
+        'a~test~ts': normalize(path.join(root, 'a.test.ts')),
+        'b~test~ts': normalize(path.join(root, 'b.test.ts')),
+      });
+
+      context.fileFilters = undefined;
+      expect(await planState.globTestSourceEntries('default')).toEqual({
+        'a~test~ts': normalize(path.join(root, 'a.test.ts')),
+        'b~test~ts': normalize(path.join(root, 'b.test.ts')),
+      });
+    });
+  });
+
+  it('pre-scans watch environment partitions outside startup filters', async () => {
+    await withTempDir('rstest-watch-environment-', async (root) => {
+      writeFileSync(path.join(root, 'base.test.ts'), '// base\n');
+      writeFileSync(
+        path.join(root, 'dom.test.ts'),
+        '// @rstest-environment jsdom\n',
+      );
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['*.test.ts'],
+          exclude: { patterns: [], override: false },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: {},
+        fileFilters: ['base.test.ts'],
+      } as unknown as RstestContext;
+      const planState = createProjectPlanState({
+        context,
+        isWatchMode: true,
+      });
+
+      await planState.resolveRunnableProjects();
+      const plan = planState.getPlan();
+      expect(plan.projects).toHaveLength(2);
+      expect(
+        plan.projects.some(
+          (item) => item.normalizedConfig.testEnvironment.name === 'jsdom',
+        ),
+      ).toBe(true);
+      expect(
+        plan.nodeProjectsToRun.some(
+          (item) => item.normalizedConfig.testEnvironment.name === 'jsdom',
+        ),
+      ).toBe(true);
+    });
+  });
+
   it('parses rstest environment and options comments', () => {
     expect(
       parseEnvironmentComment(`/**

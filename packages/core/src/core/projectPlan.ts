@@ -12,9 +12,11 @@ import { isNodeProject } from './isBrowserProject';
 export const getProjectEntries = async ({
   context,
   project,
+  fileFilters = context.fileFilters || [],
 }: {
   context: RstestContext;
   project: ProjectContext;
+  fileFilters?: string[];
 }): Promise<Record<string, string>> => {
   const { include, exclude, includeSource, root } = project.normalizedConfig;
 
@@ -24,7 +26,7 @@ export const getProjectEntries = async ({
     includeSource,
     rootPath: context.rootPath,
     projectRoot: root,
-    fileFilters: context.fileFilters || [],
+    fileFilters,
     fileFilterMode: context.fileFilterMode,
   });
 };
@@ -95,6 +97,9 @@ export const createProjectPlanState = ({
     nodeProjectsToRun,
   });
 
+  const getProjectFileFilters = (project: ProjectContext): string[] =>
+    isWatchMode && isNodeProject(project) ? [] : context.fileFilters || [];
+
   const globTestSourceEntries = async (
     name: string,
   ): Promise<Record<string, string>> => {
@@ -112,10 +117,15 @@ export const createProjectPlanState = ({
       return {};
     }
 
-    const entries = await getProjectEntries({ context, project });
+    const fileFilters = getProjectFileFilters(project);
+    const entries = await getProjectEntries({
+      context,
+      project,
+      fileFilters,
+    });
     entriesCache.set(name, {
       entries,
-      fileFilters: context.fileFilters,
+      fileFilters,
     });
 
     return entries;
@@ -131,7 +141,12 @@ export const createProjectPlanState = ({
       const refreshed = await refreshEnvironmentPartitionEntries({
         context,
         projects: allProjects,
-        getProjectEntries: (project) => getProjectEntries({ context, project }),
+        getProjectEntries: (project) =>
+          getProjectEntries({
+            context,
+            project,
+            fileFilters: getProjectFileFilters(project),
+          }),
       });
       allProjects = refreshed.projects;
       entriesCache = refreshed.entriesCache;
@@ -139,6 +154,7 @@ export const createProjectPlanState = ({
     } else if (context.normalizedConfig.shard) {
       entriesCache =
         (await resolveShardedEntries(context, {
+          getFileFilters: getProjectFileFilters,
           onShardCounts: (counts) => {
             lastShardCounts = counts;
           },

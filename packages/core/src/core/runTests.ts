@@ -468,13 +468,22 @@ export async function runTests(context: Rstest): Promise<void> {
     );
   }
 
+  let nodeFileFilters = context.fileFilters?.length
+    ? await planner.globTestEntries(context.fileFilters)
+    : undefined;
   const browserTarget = browserExecutor;
   const watchTargets: WatchSessionTargets = {
     node: nodeExecutorToRun
       ? {
           runCycle: (options) =>
-            watchDriver.runCycle(nodeExecutorToRun, options),
-          globTestEntries: () => planner.globTestEntries(),
+            watchDriver.runCycle(nodeExecutorToRun, {
+              ...options,
+              fileFilters: options?.fileFilters ?? nodeFileFilters,
+            }),
+          globTestEntries: (filters) => planner.globTestEntries(filters),
+          setFileFilters: (fileFilters) => {
+            nodeFileFilters = fileFilters;
+          },
         }
       : undefined,
     browser: browserTarget && {
@@ -504,10 +513,9 @@ export async function runTests(context: Rstest): Promise<void> {
   // before stdin has an owner (a keystroke answering it would be swallowed).
   if (enableCliShortcuts) {
     // Every executor this run has, not just the ones a given key queues a cycle
-    // for: `p` is node-only, but the `context.fileFilters` it writes are state
-    // the browser side re-reads on its next cycle. A key is answerable only once
-    // every one of them is past its first cycle, and in a mixed run the node
-    // side gets there first while the browser host still has no watch session.
+    // for. A key is answerable only once every one of them is past its first
+    // cycle, and in a mixed run the node side gets there first while the browser
+    // host still has no watch session.
     const shortcutExecutors = [
       ...(nodeExecutorToRun ? [nodeExecutorToRun] : []),
       ...(browserExecutor ? [browserExecutor] : []),
@@ -580,6 +588,7 @@ export async function runTests(context: Rstest): Promise<void> {
       nodeExecutorToRun.onInvalidate(({ isFirstBuild }) =>
         watchDriver.runCycle(nodeExecutorToRun, {
           mode: isFirstBuild ? 'all' : 'on-demand',
+          fileFilters: nodeFileFilters,
           trigger: 'invalidation',
         }),
       );

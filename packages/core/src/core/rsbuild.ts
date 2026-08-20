@@ -546,7 +546,7 @@ export const createRsbuildServer = async ({
         });
       } else if (sourceEntries[entry]) {
         if (
-          fileFilters?.length &&
+          fileFilters !== undefined &&
           !fileFilters.includes(sourceEntries[entry])
         ) {
           continue;
