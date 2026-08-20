@@ -150,6 +150,21 @@ describe('TestOptions', () => {
     expectStderrLog(/test timed out in 50ms/);
   }, 10000);
 
+  it('aborts a fresh context signal for each timed-out attempt', async () => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'fixtures/testContextSignal.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+    expect(cli.stdout).toContain('RSTEST_TEST_CONTEXT_SIGNAL_ABORTED');
+  });
+
   it('rejects TestOptions in the third position at runtime', async () => {
     const { expectExecFailed, expectStderrLog } = await runRstestCli({
       command: 'rstest',

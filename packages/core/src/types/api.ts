@@ -31,6 +31,8 @@ export interface TestContext {
     /** Mutable metadata copied to the current test result. */
     meta: TaskMeta;
   };
+  /** Signal aborted with the timeout error when the current attempt times out. */
+  readonly signal: AbortSignal;
   expect: RstestExpect;
   /** Skip the current test during execution. */
   skip: () => never;

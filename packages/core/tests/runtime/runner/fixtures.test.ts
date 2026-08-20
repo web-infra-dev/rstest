@@ -159,6 +159,7 @@ describe('normalizeNamedFixture', () => {
     'expect',
     'onTestFailed',
     'onTestFinished',
+    'signal',
     'skip',
     'task',
   ])('rejects unsupported named fixture name %s', (name) => {

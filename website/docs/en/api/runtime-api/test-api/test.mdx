@@ -644,6 +644,8 @@ export interface TestContext {
     /** Mutable metadata copied to the current test result. Added in 0.11.1. */
     meta: TaskMeta;
   };
+  /** Signal aborted with the timeout error when the current attempt times out. Added in 0.11.9. */
+  readonly signal: AbortSignal;
   /** The `expect` API bound to the current test */
   expect: Expect;
   /** Skip the current test during execution */
@@ -658,6 +660,46 @@ export interface TestContext {
 <ApiMeta addedVersion="0.11.6" />
 
 Use `context.task.retryCount` to read the current retry index from tests, hooks, and fixtures. It is `0` for the initial attempt, `1` for the first retry, and resets to `0` for each run configured through `repeats`.
+
+#### signal
+
+<ApiMeta addedVersion="0.11.9" />
+
+`context.signal` is aborted with the timeout error when the current test attempt times out. This includes timeouts in the test callback, per-test hooks, and fixtures. Every retry and repeat receives a fresh signal, so a timeout in one attempt does not cancel the next attempt.
+
+Pass the signal to APIs that support cancellation so their in-flight work can stop when Rstest stops waiting for the attempt:
+
+```ts
+import { test } from '@rstest/core';
+
+test('loads a user', { timeout: 1_000 }, async ({ signal }) => {
+  await fetch('/api/user', { signal });
+});
+```
+
+Node.js APIs that accept an `AbortSignal` work the same way. For example, pass it to `fs.readFile` when loading a large fixture so the pending file read can be cancelled if the test times out:
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { test } from '@rstest/core';
+
+test('loads a large fixture', { timeout: 1_000 }, async ({ signal }) => {
+  const contents = await readFile('./fixtures/large-data.json', {
+    encoding: 'utf8',
+    signal,
+  });
+
+  JSON.parse(contents);
+});
+```
+
+If the file read is still pending after one second, `signal.reason` is the same error that Rstest reports for the failed attempt:
+
+```text
+Error: test timed out in 1000ms (no expect assertions completed)
+```
+
+APIs may surface cancellation differently. For example, `fs.readFile` rejects with an `AbortError`, while its `cause` points to the timeout error supplied through the signal.
 
 Use `context.task.meta` to attach JSON-serializable metadata to the current test result. You can mutate the metadata object or replace it with a new metadata object. Custom reporters and the programmatic API can read this metadata from `TestResult.meta`:
 
