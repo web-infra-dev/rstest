@@ -1,18 +1,16 @@
 import type { RsbuildInstance } from '@rsbuild/core';
 import type { ProjectContext } from '../types';
-import type { TraceEvent } from '../utils';
+import { filterFiles, type TraceEvent } from '../utils';
 import {
   type BrowserRunPlan,
   createBrowserRunPlanner,
 } from './browser/runPlanner';
 import {
   createProjectPlanState,
-  discoverWatchEnvironmentProjects,
   type ProjectPlan,
   syncNodeProjects,
 } from './projectPlan';
 import { prepareRsbuild } from './rsbuild';
-import type { WatchRerunController } from './plugins/entry';
 import type { Rstest } from './rstest';
 import { createSetupFileState, type SetupFileState } from './setupFileState';
 
@@ -42,7 +40,6 @@ export type NodeBuild = {
   readonly rsbuildInstance: RsbuildInstance;
   readonly setupFileState: SetupFileState;
   globTestSourceEntries(name: string): Promise<Record<string, string>>;
-  readonly watchRerun?: WatchRerunController;
 };
 
 /**
@@ -69,14 +66,8 @@ export interface TestPlanner extends BrowserRunPlan {
   hasNodeTestsToRun(): boolean;
   /** A coverage-plugin load error captured while preparing Rsbuild, if any. */
   coveragePluginLoadError(): unknown;
-  /** Re-glob every runnable node project's test entries as a flat path list. */
-  globTestEntries(): Promise<string[]>;
-  /** Environment names currently provisioned in the node compiler topology. */
-  getNodeBuildEnvironmentNames(): string[];
-  /** Attach the node-side plan synchronizer used by watch replanning. */
-  setNodePlanRefreshHandler(
-    handler: (plan: ProjectPlan) => Promise<void>,
-  ): void;
+  /** Select paths from the pre-scanned node watch entry graph. */
+  globTestEntries(filters?: string[]): Promise<string[]>;
   /** The node build, or `undefined` for a zero-node run — see {@link NodeBuild}. */
   readonly nodeBuild: NodeBuild | undefined;
 }
@@ -110,27 +101,6 @@ export async function createTestPlanner(
 
   const plan = await resolveRunnableProjects();
 
-  let watchEnvironmentProjects = isWatchMode
-    ? await discoverWatchEnvironmentProjects({
-        context,
-        projects: nodeProjects,
-      })
-    : [];
-
-  const addWatchEnvironmentProjects = (projects: ProjectContext[]): void => {
-    const knownNames = new Set(
-      watchEnvironmentProjects.map((project) => project.environmentName),
-    );
-    const newProjects = projects.filter(
-      (project) => !knownNames.has(project.environmentName),
-    );
-    if (!newProjects.length) {
-      return;
-    }
-    watchEnvironmentProjects = [...watchEnvironmentProjects, ...newProjects];
-  };
-  addWatchEnvironmentProjects(watchEnvironmentProjects);
-
   // The Rsbuild project set: the planned node subset, plus every node project the
   // plan left out — those still need an environment for their
   // `modifyRstestConfig` hooks to fire in, and a hook is allowed to add the test
@@ -139,49 +109,19 @@ export async function createTestPlanner(
   // re-reads it inside its config hook; that is why `syncNodeProjects` splices it
   // in place instead of replacing it. Empty — and spliced to empty forever — on a
   // zero-node run, which never builds the node side at all.
-  const getSourceEnvironmentName = (project: ProjectContext): string =>
-    project._environmentGroup?.sourceEnvironmentName ?? project.environmentName;
-
-  const getRsbuildNodeProjects = (
-    runnableProjects: ProjectContext[],
-  ): ProjectContext[] => {
-    const projectsByEnvironment = new Map<string, ProjectContext>();
-    for (const project of runnableProjects) {
-      projectsByEnvironment.set(project.environmentName, project);
-    }
-    for (const project of watchEnvironmentProjects) {
-      if (!projectsByEnvironment.has(project.environmentName)) {
-        projectsByEnvironment.set(project.environmentName, project);
-      }
-    }
-
-    const sourceEnvironmentNames = new Set(
-      [...projectsByEnvironment.values()].map(getSourceEnvironmentName),
-    );
-    for (const project of nodeProjects) {
-      if (
-        !sourceEnvironmentNames.has(project.environmentName) &&
-        !projectsByEnvironment.has(project.environmentName)
-      ) {
-        projectsByEnvironment.set(project.environmentName, project);
-      }
-    }
-    return [...projectsByEnvironment.values()];
-  };
-
-  const rsbuildProjects: ProjectContext[] = isWatchMode
-    ? getRsbuildNodeProjects(plan.nodeProjectsToRun)
-    : (() => {
-        const plannedNodeSourceNames = new Set(
-          plan.nodeProjectsToRun.map(getSourceEnvironmentName),
-        );
-        return [
-          ...plan.nodeProjectsToRun,
-          ...nodeProjects.filter(
-            (project) => !plannedNodeSourceNames.has(project.environmentName),
-          ),
-        ];
-      })();
+  const plannedNodeSourceNames = new Set(
+    plan.nodeProjectsToRun.map(
+      (project) =>
+        project._environmentGroup?.sourceEnvironmentName ??
+        project.environmentName,
+    ),
+  );
+  const rsbuildProjects: ProjectContext[] = [
+    ...plan.nodeProjectsToRun,
+    ...nodeProjects.filter(
+      (project) => !plannedNodeSourceNames.has(project.environmentName),
+    ),
+  ];
 
   /**
    * The planner's one mutation path: re-resolve after a `modifyRstestConfig`
@@ -189,25 +129,11 @@ export async function createTestPlanner(
    * `rsbuildProjects` in place, for the reason given above.
    */
   const resyncPlan = async (): Promise<void> => {
-    if (isWatchMode) {
-      const discovered = await discoverWatchEnvironmentProjects({
-        context,
-        projects: nodeProjects,
-      });
-      addWatchEnvironmentProjects(discovered);
-    }
     const refreshed = await resolveRunnableProjects({
       strictEnvironmentComments: true,
     });
-    syncNodeProjects(
-      rsbuildProjects,
-      isWatchMode
-        ? getRsbuildNodeProjects(refreshed.nodeProjectsToRun)
-        : refreshed.nodeProjectsToRun,
-    );
+    syncNodeProjects(rsbuildProjects, refreshed.nodeProjectsToRun);
   };
-
-  const appliedModifyRstestConfigEnvironments = new Set<string>();
 
   const buildNodeSide = async (): Promise<NodeBuild> => {
     const setupFileState = createSetupFileState();
@@ -227,18 +153,12 @@ export async function createTestPlanner(
       }),
       onModifyRstestConfigApplied: () => resyncPlan(),
       onRsbuildConfigResolved: projectPlanState.validateEnvironmentComments,
-      appliedModifyRstestConfigEnvironments,
     });
 
     // Where the node `modifyRstestConfig` hooks actually fire.
     await rsbuildInstance.initConfigs({ action: 'dev' });
 
-    return {
-      rsbuildInstance,
-      setupFileState,
-      globTestSourceEntries,
-      watchRerun: rsbuildInstance.watchRerun,
-    };
+    return { rsbuildInstance, setupFileState, globTestSourceEntries };
   };
 
   // The cold-start gate, as a planner condition rather than an orchestrator
@@ -266,30 +186,15 @@ export async function createTestPlanner(
   // post-hook, post-discovery) only recorded them.
   projectPlanState.announceShardSlice();
 
-  const globTestEntries = async (): Promise<string[]> => {
-    let projects = getPlan().nodeProjectsToRun;
-    while (true) {
-      const perProject = await Promise.all(
-        projects.map((project) =>
-          globTestSourceEntries(project.environmentName),
-        ),
-      );
-      const refreshedProjects = getPlan().nodeProjectsToRun;
-      const sameProjects =
-        projects.length === refreshedProjects.length &&
-        projects.every(
-          (project, index) =>
-            project.environmentName ===
-            refreshedProjects[index]?.environmentName,
-        );
-      if (sameProjects) {
-        return perProject.reduce<string[]>(
-          (acc, entries) => acc.concat(...Object.values(entries)),
-          [],
-        );
-      }
-      projects = refreshedProjects;
-    }
+  const globTestEntries = async (filters?: string[]): Promise<string[]> => {
+    const entries = getPlan().nodeProjectsToRun.flatMap((project) =>
+      Object.values(
+        getPlan().entriesCache.get(project.environmentName)?.entries || {},
+      ),
+    );
+    return filters
+      ? filterFiles(entries, filters, context.rootPath, context.fileFilterMode)
+      : entries;
   };
 
   return {
@@ -298,18 +203,6 @@ export async function createTestPlanner(
     hasNodeTestsToRun: () => getPlan().nodeProjectsToRun.length > 0,
     coveragePluginLoadError: () => coveragePluginLoadError,
     globTestEntries,
-    getNodeBuildEnvironmentNames: () =>
-      rsbuildProjects.map((project) => project.environmentName),
-    setNodePlanRefreshHandler: (handler) =>
-      projectPlanState.setPlanRefreshHandler(async (nextPlan) => {
-        syncNodeProjects(
-          rsbuildProjects,
-          isWatchMode
-            ? getRsbuildNodeProjects(nextPlan.nodeProjectsToRun)
-            : nextPlan.nodeProjectsToRun,
-        );
-        await handler(nextPlan);
-      }),
     nodeBuild,
   };
 }

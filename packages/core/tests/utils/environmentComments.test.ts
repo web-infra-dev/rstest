@@ -39,7 +39,7 @@ const createProject = (): ProjectContext => ({
 });
 
 describe('environment comments', () => {
-  it('reapplies shard slices when watch filters change', async () => {
+  it('keeps the watch shard stable when runtime filters change', async () => {
     await withTempDir('rstest-watch-shard-', async (root) => {
       for (const name of ['a', 'b', 'c', 'd']) {
         writeFileSync(path.join(root, `${name}.test.ts`), `// ${name}\n`);
@@ -60,7 +60,7 @@ describe('environment comments', () => {
         rootPath: root,
         projects: [project],
         normalizedConfig: { shard: { index: 1, count: 2 } },
-        fileFilters: [],
+        fileFilters: ['c.test.ts', 'd.test.ts'],
       } as unknown as RstestContext;
       const planState = createProjectPlanState({
         context,
@@ -69,9 +69,9 @@ describe('environment comments', () => {
 
       await planState.resolveRunnableProjects();
 
-      context.fileFilters = ['c.test.ts', 'd.test.ts'];
       expect(await planState.globTestSourceEntries('default')).toEqual({
-        'c~test~ts': normalize(path.join(root, 'c.test.ts')),
+        'a~test~ts': normalize(path.join(root, 'a.test.ts')),
+        'b~test~ts': normalize(path.join(root, 'b.test.ts')),
       });
 
       context.fileFilters = undefined;
@@ -82,7 +82,7 @@ describe('environment comments', () => {
     });
   });
 
-  it('discovers environment partitions when watch filters reveal them', async () => {
+  it('pre-scans watch environment partitions outside startup filters', async () => {
     await withTempDir('rstest-watch-environment-', async (root) => {
       writeFileSync(path.join(root, 'base.test.ts'), '// base\n');
       writeFileSync(
@@ -113,12 +113,8 @@ describe('environment comments', () => {
       });
 
       await planState.resolveRunnableProjects();
-      expect(planState.getPlan().projects).toHaveLength(1);
-
-      context.fileFilters = undefined;
-      await planState.globTestSourceEntries('default');
-
       const plan = planState.getPlan();
+      expect(plan.projects).toHaveLength(2);
       expect(
         plan.projects.some(
           (item) => item.normalizedConfig.testEnvironment.name === 'jsdom',

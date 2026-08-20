@@ -28,66 +28,6 @@ class TestFileWatchPlugin {
   }
 }
 
-const rstestVirtualEntryFlag = 'rstest-virtual-entry-';
-const configuredWatchConfigs = new WeakMap<object, Set<string>>();
-
-export type WatchRerunController = {
-  register: (
-    environmentName: string,
-    virtualEntryPath: string,
-    trigger: () => void,
-  ) => void;
-  trigger: () => boolean;
-  markVirtualEntryChange: (modifiedFile?: string | ReadonlySet<string>) => void;
-  consumeVirtualEntryChange: () => boolean;
-  clear: () => void;
-};
-
-export const createWatchRerunController = (): WatchRerunController => {
-  const triggers = new Map<string, () => void>();
-  const virtualEntryPaths = new Set<string>();
-  let hasVirtualEntryChange = false;
-
-  return {
-    register(environmentName, virtualEntryPath, trigger) {
-      triggers.set(environmentName, trigger);
-      virtualEntryPaths.add(path.normalize(virtualEntryPath));
-    },
-    trigger() {
-      if (!triggers.size) {
-        return false;
-      }
-      for (const trigger of triggers.values()) {
-        trigger();
-      }
-      return true;
-    },
-    markVirtualEntryChange(modifiedFile) {
-      if (!modifiedFile) {
-        return;
-      }
-      const modifiedFiles =
-        typeof modifiedFile === 'string' ? [modifiedFile] : modifiedFile;
-      for (const file of modifiedFiles) {
-        if (virtualEntryPaths.has(path.normalize(file))) {
-          hasVirtualEntryChange = true;
-          return;
-        }
-      }
-    },
-    consumeVirtualEntryChange() {
-      const result = hasVirtualEntryChange;
-      hasVirtualEntryChange = false;
-      return result;
-    },
-    clear() {
-      triggers.clear();
-      virtualEntryPaths.clear();
-      hasVirtualEntryChange = false;
-    },
-  };
-};
-
 export const pluginEntryWatch: (params: {
   context: RstestContext;
   globTestSourceEntries: (name: string) => Promise<Record<string, string>>;
@@ -96,7 +36,6 @@ export const pluginEntryWatch: (params: {
   testEntryPathState?: TestEntryPathState;
   isWatch: boolean;
   configFilePath?: string;
-  watchRerun?: WatchRerunController;
 }) => RsbuildPlugin = ({
   isWatch,
   globTestSourceEntries,
@@ -104,14 +43,9 @@ export const pluginEntryWatch: (params: {
   globalSetupFiles,
   context,
   testEntryPathState,
-  watchRerun,
 }) => ({
   name: 'rstest:entry-watch',
   setup: (api) => {
-    api.onCloseDevServer(() => {
-      watchRerun?.clear();
-    });
-
     const outputDistPathRoot = context.normalizedConfig.output.distPath.root;
     const getSourceEntries = async (environmentName: string) => {
       const sourceEntries = await globTestSourceEntries(environmentName);
@@ -124,18 +58,8 @@ export const pluginEntryWatch: (params: {
       return sourceEntries;
     };
 
-    api.modifyRspackConfig(async (config, { environment, rspack }) => {
+    api.modifyRspackConfig(async (config, { environment }) => {
       if (isWatch) {
-        let configuredEnvironments = configuredWatchConfigs.get(config);
-        if (!configuredEnvironments) {
-          configuredEnvironments = new Set();
-          configuredWatchConfigs.set(config, configuredEnvironments);
-        }
-        if (configuredEnvironments.has(environment.name)) {
-          return;
-        }
-        configuredEnvironments.add(environment.name);
-
         config.plugins.push(new TestFileWatchPlugin(environment.config.root));
         config.entry = async () => {
           const sourceEntries = await getSourceEntries(environment.name);
@@ -145,55 +69,6 @@ export const pluginEntryWatch: (params: {
             ...(globalSetupFiles?.[environment.name] || {}),
           };
         };
-
-        const virtualEntryPath = path.join(
-          outputDistPathRoot,
-          '.rstest-virtual-entry',
-          `${rstestVirtualEntryFlag}${environment.name}.js`,
-        );
-        let virtualEntryVersion = 0;
-        const getVirtualEntryContent = () =>
-          `export const virtualEntry = ${virtualEntryVersion};`;
-        const virtualModulesPlugin =
-          new rspack.experiments.VirtualModulesPlugin({
-            [virtualEntryPath]: getVirtualEntryContent(),
-          });
-
-        config.plugins.push({
-          apply(compiler: Rspack.Compiler) {
-            virtualModulesPlugin.apply(compiler);
-            compiler.hooks.watchRun.tap(
-              'Rstest:VirtualEntryWatchPlugin',
-              (watchingCompiler) => {
-                watchRerun?.markVirtualEntryChange(
-                  watchingCompiler.modifiedFiles,
-                );
-              },
-            );
-            compiler.hooks.invalid.tap(
-              'Rstest:VirtualEntryWatchPlugin',
-              (invalidatedFile) => {
-                watchRerun?.markVirtualEntryChange(
-                  invalidatedFile ?? undefined,
-                );
-              },
-            );
-            watchRerun?.register(environment.name, virtualEntryPath, () => {
-              virtualEntryVersion += 1;
-              virtualModulesPlugin.writeModule(
-                virtualEntryPath,
-                getVirtualEntryContent(),
-              );
-              // node_modules is intentionally ignored by the file watcher, so
-              // this explicit invalidation is the single effective trigger for
-              // the internal virtual module.
-              compiler.watching?.invalidateWithChangesAndRemovals(
-                new Set([virtualEntryPath]),
-                new Set(),
-              );
-            });
-          },
-        });
 
         config.watchOptions ??= {};
         config.watchOptions.aggregateTimeout = 100;
@@ -220,7 +95,6 @@ export const pluginEntryWatch: (params: {
 
         config.experiments ??= {};
         config.experiments.nativeWatcher ??= true;
-
         const configFilePath = context.projects.find(
           (project) => project.environmentName === environment.name,
         )?.configFilePath;

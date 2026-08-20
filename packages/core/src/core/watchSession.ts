@@ -84,8 +84,6 @@ export type WatchCycleOptions = {
  */
 export interface WatchCycleDriver {
   runCycle(executor: TestExecutor, options?: WatchCycleOptions): Promise<void>;
-  /** Run a plan/resource reconfiguration between two serialized cycles. */
-  runReconfigure<T>(task: () => Promise<T>): Promise<T>;
   /**
    * Whether every one of `executors` has settled its first cycle of this
    * session. Shortcuts are installed before the first one so the ready banner
@@ -284,16 +282,6 @@ export function createWatchCycleDriver({
   };
 
   return {
-    runReconfigure<T>(task: () => Promise<T>): Promise<T> {
-      const operation = tail.then(() => {
-        if (isSessionClosing()) {
-          throw new Error('Watch session is closing');
-        }
-        return task();
-      });
-      tail = operation.catch(() => {});
-      return operation;
-    },
     runCycle(executor, options = {}) {
       const resolved = {
         ...options,
@@ -345,12 +333,10 @@ export function createWatchCycleDriver({
 export interface WatchSessionTargets {
   node?: {
     runCycle: (options?: WatchCycleOptions) => Promise<void>;
-    /** Recompile the node entries before running the full test set. */
-    runAll: () => Promise<void>;
-    /** Re-glob node entries for the `p` (file filter) shortcut. */
-    globTestEntries: () => Promise<string[]>;
-    /** Apply a file filter and replan before the next node cycle. */
-    prepareFileFilters?: (filters: string[] | undefined) => Promise<string[]>;
+    /** Select node entries for the `p` (file filter) shortcut. */
+    globTestEntries: (filters?: string[]) => Promise<string[]>;
+    /** Persist the node-only file selection for later invalidation cycles. */
+    setFileFilters: (fileFilters: string[] | undefined) => void;
   };
   browser?: {
     /** Ask the browser host to schedule a cycle over these paths. */
@@ -379,11 +365,10 @@ export function createWatchShortcutHandlers(
    * server is still coming up — starting a second full startup run — or a
    * browser side whose watch session does not exist yet, which drops the
    * keystroke in silence. One gate covers every key, the node-only `t`/`p`
-   * included: `p` queues no browser cycle, but it writes `context.fileFilters`,
-   * which the browser host re-reads while collecting the entries for its next
-   * one. `t`'s pattern crosses the seam only inside the runtime config the host
-   * projects at launch, so a `t` pressed later never reaches the browser side
-   * at all.
+   * included: `p` queues no browser cycle, and its selected paths stay on the
+   * node target. `t`'s pattern crosses the seam only inside the runtime config
+   * the host projects at launch, so a `t` pressed later never reaches the
+   * browser side at all.
    */
   isArmed: () => boolean = () => true,
 ): Parameters<typeof setupCliShortcuts>[0] {
@@ -427,20 +412,13 @@ export function createWatchShortcutHandlers(
     canRerun,
     runAll: whenArmed(async () => {
       clearScreen();
+      context.normalizedConfig.testNamePattern = undefined;
+      context.fileFilters = undefined;
       if (node) {
-        // `t`/`p` scope the node side only, so only the node side has scoping
-        // to drop when the user asks for every test again.
-        context.normalizedConfig.testNamePattern = undefined;
-        context.fileFilters = undefined;
-        if (node.prepareFileFilters) {
-          await node.prepareFileFilters(undefined);
-        } else {
-          await node.runAll();
-          await browser?.rerun();
-        }
-      } else {
-        await browser?.rerun();
+        node.setFileFilters(undefined);
+        await node.runCycle({ mode: 'all', trigger: 'run-all' });
       }
+      await browser?.rerun();
     }),
     runWithTestNamePattern:
       node &&
@@ -469,13 +447,8 @@ export function createWatchShortcutHandlers(
           logger.log(`\n${color.dim('Cleared file filters')}\n`);
         }
 
-        if (node.prepareFileFilters) {
-          await node.prepareFileFilters(filters);
-          return;
-        }
-
-        context.fileFilters = filters;
-        const entries = await node.globTestEntries();
+        const entries = await node.globTestEntries(filters);
+        node.setFileFilters(filters ? entries : undefined);
 
         if (!entries.length) {
           logger.log(

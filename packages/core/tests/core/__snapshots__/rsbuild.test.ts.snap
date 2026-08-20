@@ -2658,9 +2658,6 @@ exports[`prepareRsbuild > should generate rspack config correctly in watch mode 
     TestFileWatchPlugin {
       "contextToWatch": "<ROOT>/packages/core",
     },
-    {
-      "apply": [Function],
-    },
     RstestPlugin {
       "_args": [
         {

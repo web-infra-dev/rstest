@@ -121,7 +121,7 @@ describe('createTestPlanner cold-start gate', () => {
     );
   });
 
-  it('returns entries from projects revealed by a watch filter refresh', async () => {
+  it('filters the stable watch entry graph without changing startup filters', async () => {
     writeFileSync(
       join(tempRoot, 'dom.test.ts'),
       '// @rstest-environment jsdom\nexport {};\n',
@@ -134,30 +134,12 @@ describe('createTestPlanner cold-start gate', () => {
       isWatchMode: true,
     });
 
-    context.fileFilters = undefined;
-    const entries = await planner.globTestEntries();
+    const filteredEntries = await planner.globTestEntries(['a.test.ts']);
+    const allEntries = await planner.globTestEntries();
 
-    expect(entries).toHaveLength(2);
-    expect(entries.some((entry) => entry.endsWith('a.test.ts'))).toBe(true);
-    expect(entries.some((entry) => entry.endsWith('dom.test.ts'))).toBe(true);
-  });
-
-  it('strictly validates environment comments revealed by a watch filter', async () => {
-    writeFileSync(
-      join(tempRoot, 'invalid.test.ts'),
-      '// @rstest-environment custom\nexport {};\n',
-    );
-    const context = createContext(tempRoot, [{ name: 'node-a' }], 'watch');
-    context.fileFilters = ['a.test.ts'];
-    const planner = await createTestPlanner(context, {
-      browserProjects: [],
-      nodeProjects: context.projects,
-      isWatchMode: true,
-    });
-
-    context.fileFilters = undefined;
-    await expect(planner.globTestEntries()).rejects.toThrow(
-      'Unsupported test environment "custom"',
-    );
+    expect(filteredEntries).toHaveLength(1);
+    expect(filteredEntries[0]).toMatch(/a\.test\.ts$/);
+    expect(allEntries).toHaveLength(2);
+    expect(context.fileFilters).toEqual(['a.test.ts']);
   });
 });

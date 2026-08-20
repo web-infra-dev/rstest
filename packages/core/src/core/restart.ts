@@ -1,59 +1,19 @@
 import path from 'node:path';
 import type { ChokidarOptions } from 'chokidar';
 import { type CommonOptions, runRest } from '../cli/commands';
-import type { RstestContext, RstestInstance } from '../types';
+import type { RstestInstance } from '../types';
 import { color, isColorSupported, isTTY, logger } from '../utils';
 import { createChokidar } from '../utils/watchFiles';
 
 type Cleaner = () => unknown;
-type WatchRestart = (filters: Array<string | number>) => Promise<void>;
 
-type WatchRestartState = {
-  restart?: WatchRestart;
-  cleaners: Cleaner[];
-};
-
-const watchRestartStates = new WeakMap<RstestContext, WatchRestartState>();
-
-const getWatchRestartState = (context: RstestContext): WatchRestartState => {
-  let state = watchRestartStates.get(context);
-  if (!state) {
-    state = { cleaners: [] };
-    watchRestartStates.set(context, state);
-  }
-  return state;
-};
-
-export const registerWatchRestart = (
-  context: RstestContext,
-  restartWatch: WatchRestart,
-): void => {
-  const state = getWatchRestartState(context);
-  // The CLI installs the config-reload implementation before core starts the
-  // watch session. Embedded callers do not have that outer command, so core
-  // may install its in-process fallback later without replacing the CLI path.
-  state.restart ??= restartWatch;
-};
-
-export const requestWatchRestart = (
-  context: RstestContext,
-  filters: Array<string | number>,
-): Promise<void> => {
-  const restartWatch = getWatchRestartState(context).restart;
-  if (!restartWatch) {
-    throw new Error('Rstest watch restart is not registered');
-  }
-  return restartWatch(filters);
-};
+let cleaners: Cleaner[] = [];
 
 /**
  * Add a cleaner to handle side effects
  */
-export const onBeforeRestart = (
-  context: RstestContext,
-  cleaner: Cleaner,
-): void => {
-  getWatchRestartState(context).cleaners.push(cleaner);
+export const onBeforeRestart = (cleaner: Cleaner): void => {
+  cleaners.push(cleaner);
 };
 
 const clearConsole = () => {
@@ -63,12 +23,10 @@ const clearConsole = () => {
 };
 
 const beforeRestart = async ({
-  context,
   filePath,
   root,
   clear = true,
 }: {
-  context: RstestContext;
   root: string;
   filePath?: string;
   clear?: boolean;
@@ -84,42 +42,26 @@ const beforeRestart = async ({
     logger.info('restarting Rstest...\n');
   }
 
-  const state = getWatchRestartState(context);
-  const cleaners = state.cleaners;
-  state.cleaners = [];
   for (const cleaner of cleaners) {
     await cleaner();
   }
+  cleaners = [];
 };
 
-export const prepareWatchRestart = async ({
-  context,
-  root,
-  clear = true,
-}: {
-  context: RstestContext;
-  root: string;
-  clear?: boolean;
-}): Promise<void> => {
-  await beforeRestart({ context, root, clear });
-};
-
-export const restart = async ({
-  context,
+const restart = async ({
   filePath,
   clear = true,
   options,
   filters,
   root,
 }: {
-  context: RstestContext;
   root: string;
   options: CommonOptions;
   filters: Array<string | number>;
   filePath?: string;
   clear?: boolean;
 }): Promise<boolean> => {
-  await beforeRestart({ context, filePath, root, clear });
+  await beforeRestart({ filePath, root, clear });
 
   await runRest({ options, filters, command: 'watch' });
 
@@ -159,8 +101,6 @@ export async function watchFilesForRestart({
     ...watchOptions,
   });
 
-  onBeforeRestart(rstest.context, () => watcher.close());
-
   let restarting = false;
 
   const onChange = async (filePath: string) => {
@@ -169,15 +109,11 @@ export async function watchFilesForRestart({
     }
     restarting = true;
 
-    const restarted = await restart({
-      context: rstest.context,
-      options,
-      root,
-      filters: rstest.context.fileFilters ?? filters,
-      filePath,
-    });
+    const restarted = await restart({ options, root, filters, filePath });
 
-    if (!restarted) {
+    if (restarted) {
+      await watcher.close();
+    } else {
       logger.error('Restart failed');
     }
 

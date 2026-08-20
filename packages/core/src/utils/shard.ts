@@ -49,14 +49,15 @@ export function logShardMessage({
  */
 export async function resolveShardedEntries(
   context: RstestContext,
-  { onShardCounts }: { onShardCounts?: (counts: ShardCounts) => void } = {},
+  {
+    onShardCounts,
+    getFileFilters = () => context.fileFilters || [],
+  }: {
+    onShardCounts?: (counts: ShardCounts) => void;
+    getFileFilters?: (project: RstestContext['projects'][number]) => string[];
+  } = {},
 ): Promise<Map<string, ProjectEntries> | undefined> {
-  const {
-    normalizedConfig,
-    projects: allProjects,
-    rootPath,
-    fileFilters,
-  } = context;
+  const { normalizedConfig, projects: allProjects, rootPath } = context;
   const { shard } = normalizedConfig;
 
   if (!shard) {
@@ -67,13 +68,14 @@ export async function resolveShardedEntries(
     await Promise.all(
       allProjects.map(async (p) => {
         const { include, exclude, includeSource, root } = p.normalizedConfig;
+        const fileFilters = getFileFilters(p);
         const entries = await getTestEntries({
           include,
           exclude: exclude.patterns,
           includeSource,
           rootPath,
           projectRoot: root,
-          fileFilters: fileFilters || [],
+          fileFilters,
           fileFilterMode: context.fileFilterMode,
         });
         return Object.entries(entries).map(([alias, testPath]) => ({
@@ -104,7 +106,7 @@ export async function resolveShardedEntries(
   for (const p of allProjects) {
     entriesCache.set(p.environmentName, {
       entries: shardedEntriesByProject.get(p.environmentName) || {},
-      fileFilters: fileFilters,
+      fileFilters: getFileFilters(p),
     });
   }
 

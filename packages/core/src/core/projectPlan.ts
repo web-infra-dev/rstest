@@ -5,7 +5,6 @@ import {
   resolveShardedEntries,
   type ShardCounts,
 } from '../utils';
-import { groupProjectEntriesByEnvironment } from './environmentGroups';
 import { resolveRunnableProjectsByEntries } from './environmentEntries';
 import { refreshEnvironmentPartitionEntries } from './environmentPartitions';
 import { isNodeProject } from './isBrowserProject';
@@ -13,9 +12,11 @@ import { isNodeProject } from './isBrowserProject';
 export const getProjectEntries = async ({
   context,
   project,
+  fileFilters = context.fileFilters || [],
 }: {
   context: RstestContext;
   project: ProjectContext;
+  fileFilters?: string[];
 }): Promise<Record<string, string>> => {
   const { include, exclude, includeSource, root } = project.normalizedConfig;
 
@@ -25,54 +26,9 @@ export const getProjectEntries = async ({
     includeSource,
     rootPath: context.rootPath,
     projectRoot: root,
-    fileFilters: context.fileFilters || [],
+    fileFilters,
     fileFilterMode: context.fileFilterMode,
   });
-};
-
-/**
- * Watch's initial file filter controls the first run, but it must not control
- * which compiler environments exist: a later `a`/`p` can reveal an annotated
- * file that needs a synthetic environment. Discover those environments before
- * Rsbuild is created, while leaving the actual plan scoped to the filter.
- */
-export const discoverWatchEnvironmentProjects = async ({
-  context,
-  projects,
-}: {
-  context: RstestContext;
-  projects: ProjectContext[];
-}): Promise<ProjectContext[]> => {
-  if (!context.fileFilters?.length || !projects.length) {
-    return [];
-  }
-
-  const fileFilters = context.fileFilters;
-  context.fileFilters = undefined;
-  try {
-    const entriesCache = new Map<string, ProjectEntries>(
-      await Promise.all(
-        projects.map(
-          async (project) =>
-            [
-              project.environmentName,
-              {
-                entries: await getProjectEntries({ context, project }),
-                fileFilters: undefined,
-              },
-            ] as const,
-        ),
-      ),
-    );
-    const grouped = await groupProjectEntriesByEnvironment({
-      entriesCache,
-      projects,
-      ignoreInvalidEnvironmentComments: true,
-    });
-    return grouped.projects;
-  } finally {
-    context.fileFilters = fileFilters;
-  }
 };
 
 export type ProjectPlan = {
@@ -80,16 +36,6 @@ export type ProjectPlan = {
   entriesCache: Map<string, ProjectEntries>;
   browserProjectsToRun: ProjectContext[];
   nodeProjectsToRun: ProjectContext[];
-};
-
-const areFileFiltersEqual = (left?: string[], right?: string[]): boolean => {
-  const leftFilters = left ?? [];
-  const rightFilters = right ?? [];
-
-  return (
-    leftFilters.length === rightFilters.length &&
-    leftFilters.every((filter, index) => filter === rightFilters[index])
-  );
 };
 
 export const syncNodeProjects = (
@@ -116,8 +62,6 @@ type ResolveRunnableProjectsOptions = {
   strictEnvironmentComments?: boolean;
 };
 
-type PlanRefreshHandler = (plan: ProjectPlan) => Promise<void>;
-
 export const createProjectPlanState = ({
   context,
   isWatchMode,
@@ -132,7 +76,6 @@ export const createProjectPlanState = ({
   ) => Promise<ProjectPlan>;
   validateEnvironmentComments: () => Promise<void>;
   announceShardSlice: () => void;
-  setPlanRefreshHandler: (handler: PlanRefreshHandler) => void;
 } => {
   let allProjects = context.projects;
   let entriesCache: Map<string, ProjectEntries> = new Map();
@@ -140,8 +83,6 @@ export const createProjectPlanState = ({
   let nodeProjectsToRun: ProjectContext[] = [];
   let environmentGroupsResolved = false;
   let environmentGroupsChanged = false;
-  let runnableProjectsRefresh: Promise<ProjectPlan> | undefined;
-  let planRefreshHandler: PlanRefreshHandler | undefined;
   let pendingStrictEnvironmentCommentValidation = false;
   // Resolution never logs the shard banner — it can run several times per init
   // (pre-hook, post-hook, post-discovery) and each pass would print its own
@@ -156,33 +97,17 @@ export const createProjectPlanState = ({
     nodeProjectsToRun,
   });
 
+  const getProjectFileFilters = (project: ProjectContext): string[] =>
+    isWatchMode && isNodeProject(project) ? [] : context.fileFilters || [];
+
   const globTestSourceEntries = async (
     name: string,
   ): Promise<Record<string, string>> => {
     if (context.relatedResolutionEmpty) {
       return {};
     }
-    const cachedEntries = entriesCache.get(name);
-    if (
-      cachedEntries &&
-      (!isWatchMode ||
-        areFileFiltersEqual(cachedEntries.fileFilters, context.fileFilters))
-    ) {
-      return cachedEntries.entries;
-    }
-
-    if (
-      isWatchMode &&
-      cachedEntries &&
-      (context.normalizedConfig.shard || environmentGroupsResolved)
-    ) {
-      runnableProjectsRefresh ??= resolveRunnableProjects({
-        strictEnvironmentComments: true,
-      }).finally(() => {
-        runnableProjectsRefresh = undefined;
-      });
-      const refreshedPlan = await runnableProjectsRefresh;
-      return refreshedPlan.entriesCache.get(name)?.entries || {};
+    if (entriesCache.has(name)) {
+      return entriesCache.get(name)!.entries;
     }
 
     const project =
@@ -192,10 +117,15 @@ export const createProjectPlanState = ({
       return {};
     }
 
-    const entries = await getProjectEntries({ context, project });
+    const fileFilters = getProjectFileFilters(project);
+    const entries = await getProjectEntries({
+      context,
+      project,
+      fileFilters,
+    });
     entriesCache.set(name, {
       entries,
-      fileFilters: context.fileFilters,
+      fileFilters,
     });
 
     return entries;
@@ -211,7 +141,12 @@ export const createProjectPlanState = ({
       const refreshed = await refreshEnvironmentPartitionEntries({
         context,
         projects: allProjects,
-        getProjectEntries: (project) => getProjectEntries({ context, project }),
+        getProjectEntries: (project) =>
+          getProjectEntries({
+            context,
+            project,
+            fileFilters: getProjectFileFilters(project),
+          }),
       });
       allProjects = refreshed.projects;
       entriesCache = refreshed.entriesCache;
@@ -219,6 +154,7 @@ export const createProjectPlanState = ({
     } else if (context.normalizedConfig.shard) {
       entriesCache =
         (await resolveShardedEntries(context, {
+          getFileFilters: getProjectFileFilters,
           onShardCounts: (counts) => {
             lastShardCounts = counts;
           },
@@ -262,8 +198,6 @@ export const createProjectPlanState = ({
       nodeProjectsToRun = nodeProjectsToRun.filter(hasShardedEntries);
     }
 
-    await planRefreshHandler?.(getPlan());
-
     environmentGroupsResolved = true;
     return getPlan();
   };
@@ -293,8 +227,5 @@ export const createProjectPlanState = ({
     resolveRunnableProjects,
     validateEnvironmentComments,
     announceShardSlice,
-    setPlanRefreshHandler: (handler) => {
-      planRefreshHandler = handler;
-    },
   };
 };

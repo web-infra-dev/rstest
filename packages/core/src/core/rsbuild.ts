@@ -17,11 +17,7 @@ import type {
 import { isDebug } from '../utils';
 import { isMemorySufficient } from '../utils/memory';
 import { pluginBasic } from './plugins/basic';
-import {
-  createWatchRerunController,
-  pluginEntryWatch,
-  type WatchRerunController,
-} from './plugins/entry';
+import { pluginEntryWatch } from './plugins/entry';
 import { pluginExternal } from './plugins/external';
 import { pluginIgnoreResolveError } from './plugins/ignoreResolveError';
 import { pluginInspect } from './plugins/inspect';
@@ -135,7 +131,6 @@ type PrepareRsbuildOptions = {
   extraPlugins?: RsbuildPlugin[];
   onModifyRstestConfigApplied?: () => Promise<void>;
   onRsbuildConfigResolved?: () => Promise<void>;
-  appliedModifyRstestConfigEnvironments?: Set<string>;
   onCoveragePluginLoadError?: (error: unknown) => void;
 };
 
@@ -182,11 +177,8 @@ export const prepareRsbuild = async ({
   extraPlugins = [],
   onModifyRstestConfigApplied,
   onRsbuildConfigResolved,
-  appliedModifyRstestConfigEnvironments,
   onCoveragePluginLoadError,
-}: PrepareRsbuildOptions): Promise<
-  RsbuildInstance & { watchRerun?: WatchRerunController }
-> => {
+}: PrepareRsbuildOptions): Promise<RsbuildInstance> => {
   const {
     command,
     normalizedConfig: { coverage, dev = {}, isolate, pool },
@@ -215,8 +207,6 @@ export const prepareRsbuild = async ({
   RsbuildLogger.level = debugMode ? 'verbose' : 'error';
 
   const writeToDisk = dev.writeToDisk || debugMode;
-  const watchRerun =
-    command === 'watch' ? createWatchRerunController() : undefined;
   const rsbuildInstance = await createRsbuild({
     callerName: 'rstest',
     config: {
@@ -243,7 +233,6 @@ export const prepareRsbuild = async ({
           context,
           testEntryPathState: isolate ? undefined : testEntryPathState,
           isWatch: command === 'watch',
-          watchRerun,
         }),
         pluginExternal(context),
         !isolate ? pluginCacheControl(getSetupPaths, testEntryPathState) : null,
@@ -264,7 +253,6 @@ export const prepareRsbuild = async ({
         await onRsbuildConfigResolved?.();
         updateSetupFileMaps();
       },
-      appliedEnvironmentNames: appliedModifyRstestConfigEnvironments,
     },
   );
 
@@ -277,7 +265,7 @@ export const prepareRsbuild = async ({
     onCoveragePluginLoadError(error);
   }
 
-  return Object.assign(rsbuildInstance, { watchRerun });
+  return rsbuildInstance;
 };
 
 const calcEntriesToRerun = (
@@ -558,7 +546,7 @@ export const createRsbuildServer = async ({
         });
       } else if (sourceEntries[entry]) {
         if (
-          fileFilters?.length &&
+          fileFilters !== undefined &&
           !fileFilters.includes(sourceEntries[entry])
         ) {
           continue;

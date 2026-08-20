@@ -168,12 +168,8 @@ export async function runTests(context: Rstest): Promise<void> {
         coverageProvider,
         isWatchMode,
         getTraceRun: () => activeTraceRun,
-        getEnvironmentNames: planner.getNodeBuildEnvironmentNames,
       })
     : undefined;
-  if (nodeExecutor) {
-    planner.setNodePlanRefreshHandler(nodeExecutor.refreshPlan);
-  }
   await nodeExecutor?.init();
 
   // Nothing to run on either side: route the empty run through the shared
@@ -450,40 +446,6 @@ export async function runTests(context: Rstest): Promise<void> {
     isSessionClosing: () => isSessionClosing(),
   });
 
-  const {
-    onBeforeRestart,
-    prepareWatchRestart,
-    registerWatchRestart,
-    requestWatchRestart,
-  } = await import('./restart');
-
-  registerWatchRestart(context, async (filters) => {
-    await prepareWatchRestart({ context, root: context.rootPath });
-    context.fileFilters = filters.map(String);
-    await runTests(context);
-  });
-
-  let watchRestartPromise: Promise<void> | undefined;
-  const restartWatchSession = (
-    filters: string[] | undefined,
-  ): Promise<void> => {
-    watchRestartPromise ??= requestWatchRestart(context, filters ?? []);
-    return watchRestartPromise;
-  };
-  let restartScheduled = false;
-  const scheduleWatchRestart = (): void => {
-    if (restartScheduled) {
-      return;
-    }
-    restartScheduled = true;
-    setTimeout(() => {
-      restartWatchSession(context.fileFilters).catch((error) => {
-        logger.error(color.red('Rstest watch restart failed:'), error);
-        process.exitCode = 1;
-      });
-    }, 0);
-  };
-
   if (hasBrowserTestsToRun) {
     const browserProjectsToRun = planner.getBrowserProjectsToRun();
     browserExecutor = await loadBrowserExecutor(
@@ -506,20 +468,22 @@ export async function runTests(context: Rstest): Promise<void> {
     );
   }
 
+  let nodeFileFilters = context.fileFilters?.length
+    ? await planner.globTestEntries(context.fileFilters)
+    : undefined;
   const browserTarget = browserExecutor;
   const watchTargets: WatchSessionTargets = {
     node: nodeExecutorToRun
       ? {
           runCycle: (options) =>
-            watchDriver.runCycle(nodeExecutorToRun, options),
-          runAll: () => nodeExecutorToRun.runAll(),
-          globTestEntries: () => planner.globTestEntries(),
-          prepareFileFilters: (filters) =>
-            watchDriver.runReconfigure(async () => {
-              context.fileFilters = filters;
-              await restartWatchSession(filters);
-              return [];
+            watchDriver.runCycle(nodeExecutorToRun, {
+              ...options,
+              fileFilters: options?.fileFilters ?? nodeFileFilters,
             }),
+          globTestEntries: (filters) => planner.globTestEntries(filters),
+          setFileFilters: (fileFilters) => {
+            nodeFileFilters = fileFilters;
+          },
         }
       : undefined,
     browser: browserTarget && {
@@ -542,16 +506,16 @@ export async function runTests(context: Rstest): Promise<void> {
   isSessionClosing = () => watchTeardown.isClosing();
   watchTeardown.addCleanup(registerWatchSignalExit(context, closeWatchSession));
 
-  onBeforeRestart(context, closeWatchSession);
+  const { onBeforeRestart } = await import('./restart');
+  onBeforeRestart(closeWatchSession);
 
   // Installed before the first cycle so the ready banner can never appear
   // before stdin has an owner (a keystroke answering it would be swallowed).
   if (enableCliShortcuts) {
     // Every executor this run has, not just the ones a given key queues a cycle
-    // for: `p` is node-only, but the `context.fileFilters` it writes are state
-    // the browser side re-reads on its next cycle. A key is answerable only once
-    // every one of them is past its first cycle, and in a mixed run the node
-    // side gets there first while the browser host still has no watch session.
+    // for. A key is answerable only once every one of them is past its first
+    // cycle, and in a mixed run the node side gets there first while the browser
+    // host still has no watch session.
     const shortcutExecutors = [
       ...(nodeExecutorToRun ? [nodeExecutorToRun] : []),
       ...(browserExecutor ? [browserExecutor] : []),
@@ -621,17 +585,13 @@ export async function runTests(context: Rstest): Promise<void> {
     if (nodeExecutorToRun) {
       // The node executor's rebuilds are the watch trigger; its initial compile
       // signals too, which is what drives the first node cycle.
-      nodeExecutorToRun.onInvalidate(({ isFirstBuild, isRunAll }) => {
-        if (nodeExecutorToRun.needsRestart()) {
-          scheduleWatchRestart();
-          return Promise.resolve();
-        }
-        const cycle = watchDriver.runCycle(nodeExecutorToRun, {
-          mode: isFirstBuild || isRunAll ? 'all' : 'on-demand',
-          trigger: isRunAll ? 'run-all' : 'invalidation',
-        });
-        return cycle;
-      });
+      nodeExecutorToRun.onInvalidate(({ isFirstBuild }) =>
+        watchDriver.runCycle(nodeExecutorToRun, {
+          mode: isFirstBuild ? 'all' : 'on-demand',
+          fileFilters: nodeFileFilters,
+          trigger: 'invalidation',
+        }),
+      );
       // Start the node dev server now that the subscriber is in place. `runCycle`
       // (invoked from that callback) reuses these resources via the in-flight
       // guard rather than starting a second server.

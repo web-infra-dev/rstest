@@ -168,27 +168,6 @@ describe('createWatchTeardown', () => {
 });
 
 describe('createWatchCycleDriver', () => {
-  it('serializes plan reconfiguration behind an active cycle', async () => {
-    const context = createContext();
-    const driver = createDriver(context);
-    const { executor, release, started } = createGatedExecutor('node');
-    const order: string[] = [];
-
-    const first = driver.runCycle(executor, { mode: 'all' });
-    await started();
-    const reconfigure = driver.runReconfigure(async () => {
-      order.push('reconfigure');
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(order).toEqual([]);
-
-    release();
-    await first;
-    await reconfigure;
-    expect(order).toEqual(['reconfigure']);
-  });
-
   it('clears the failed-test count even on a first cycle, so bail stays cycle-scoped', async () => {
     // The other half of the mixed-watch startup order: the browser's first
     // cycle must not inherit the node initial cycle's failures, or a `bail`
@@ -566,10 +545,8 @@ describe('createWatchShortcutHandlers arming', () => {
       runCycle: async () => {
         cycles.push('node');
       },
-      runAll: async () => {
-        cycles.push('node');
-      },
       globTestEntries: async () => ['/a.test.ts'],
+      setFileFilters: () => {},
     },
     browser: {
       rerun: async () => {
@@ -623,8 +600,8 @@ describe('createWatchShortcutHandlers arming', () => {
             seen.push(context.snapshotManager.options.updateSnapshot);
             await parked;
           },
-          runAll: async () => {},
           globTestEntries: async () => [],
+          setFileFilters: () => {},
         },
       },
       async () => {},
@@ -637,6 +614,40 @@ describe('createWatchShortcutHandlers arming', () => {
 
     expect(seen).toEqual(['all', 'all']);
     expect(context.snapshotManager.options.updateSnapshot).toBe(original);
+  });
+
+  it('keeps interactive file filters on the node target', async () => {
+    const context = createContext();
+    context.fileFilters = ['startup-filter'];
+    const cycles: string[] = [];
+    let nodeFileFilters: string[] | undefined;
+    const handlers = createWatchShortcutHandlers(
+      context,
+      {
+        node: {
+          runCycle: async () => {
+            cycles.push('node');
+          },
+          globTestEntries: async (filters) =>
+            filters?.length ? ['/node.test.ts'] : [],
+          setFileFilters: (filters) => {
+            nodeFileFilters = filters;
+          },
+        },
+        browser: {
+          rerun: async () => {
+            cycles.push('browser');
+          },
+        },
+      },
+      async () => {},
+    );
+
+    await handlers.runWithFileFilters!(['node']);
+
+    expect(nodeFileFilters).toEqual(['/node.test.ts']);
+    expect(context.fileFilters).toEqual(['startup-filter']);
+    expect(cycles).toEqual(['node']);
   });
 
   it('leaves the quit handler reachable before the first cycle', async () => {
