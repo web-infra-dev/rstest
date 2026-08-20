@@ -633,6 +633,8 @@ export interface TestContext {
     /** Mutable metadata copied to the current test result. Added in 0.11.1. */
     meta: TaskMeta;
   };
+  /** 当前 attempt 超时时，以 timeout error 中止的 Signal。0.11.9 新增。 */
+  readonly signal: AbortSignal;
   /** The `expect` API bound to the current test */
   expect: Expect;
   /** Skip the current test during execution */
@@ -647,6 +649,46 @@ export interface TestContext {
 <ApiMeta addedVersion="0.11.6" />
 
 你可以通过 `context.task.retryCount` 在测试、Hook 和 fixture 中读取当前的 retry index。初次尝试时该值为 `0`，第一次 retry 时为 `1`；配置 `repeats` 后，每次 repeat 都会从 `0` 重新计数。
+
+#### signal
+
+<ApiMeta addedVersion="0.11.9" />
+
+当前测试 attempt 超时时，`context.signal` 会以对应的 timeout error 中止，包括测试回调、per-test Hook 和 fixture 中发生的超时。每次 retry 和 repeat 都会获得一个新的 signal，因此一次 attempt 超时不会取消下一次 attempt。
+
+将 signal 传给支持取消操作的 API，可以在 Rstest 停止等待当前 attempt 时终止尚未完成的工作：
+
+```ts
+import { test } from '@rstest/core';
+
+test('loads a user', { timeout: 1_000 }, async ({ signal }) => {
+  await fetch('/api/user', { signal });
+});
+```
+
+接受 `AbortSignal` 的 Node.js API 也遵循相同约定。例如，读取大型 fixture 时将 signal 传给 `fs.readFile`，测试超时后就能取消尚未完成的文件读取：
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { test } from '@rstest/core';
+
+test('loads a large fixture', { timeout: 1_000 }, async ({ signal }) => {
+  const contents = await readFile('./fixtures/large-data.json', {
+    encoding: 'utf8',
+    signal,
+  });
+
+  JSON.parse(contents);
+});
+```
+
+如果文件在一秒后仍未读取完成，`signal.reason` 就是 Rstest 为这次失败的 attempt 报告的同一个 error：
+
+```text
+Error: test timed out in 1000ms (no expect assertions completed)
+```
+
+不同 API 暴露取消操作的方式可能不同。例如，`fs.readFile` 会抛出 `AbortError`，其 `cause` 指向通过 signal 传入的 timeout error。
 
 你可以使用 `context.task.meta` 给当前测试结果附加可 JSON 序列化的元数据。既可以修改该对象，也可以整体替换为一个新的 metadata 对象。自定义 Reporter 和 programmatic API 可以从 `TestResult.meta` 读取这些数据：
 

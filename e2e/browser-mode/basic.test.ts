@@ -21,6 +21,8 @@ describe('browser mode - basic', () => {
     expect(cli.stdout).toContain('fileFixtures.test.ts');
     expect(cli.stdout).toContain('RSTEST_BROWSER_FILE_FIXTURE_CLEANUP_OK');
     expect(cli.stdout).toContain('retryContext.test.ts');
+    expect(cli.stdout).toContain('signalContext.test.ts');
+    expect(cli.stdout).toContain('RSTEST_BROWSER_CONTEXT_SIGNAL_ABORTED');
     expect(cli.stdout).not.toContain('/scheduler.html');
   });
 
