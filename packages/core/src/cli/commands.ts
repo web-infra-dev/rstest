@@ -939,14 +939,18 @@ export const runRest = async ({
         onBeforeRestart,
       } = await import('../core/restart');
 
-      onBeforeRestart(() => {
+      onBeforeRestart(rstest.context, () => {
         process.off('uncaughtException', unexpectedlyExitHandler);
         process.off('unhandledRejection', unexpectedlyExitHandler);
       });
 
       registerWatchRestart(rstest.context, (currentFilters) =>
         restart({
-          options,
+          context: rstest!.context,
+          options: {
+            ...options,
+            testNamePattern: rstest!.context.normalizedConfig.testNamePattern,
+          },
           filters: currentFilters,
           root: rstest!.context.rootPath,
         }).then(() => undefined),

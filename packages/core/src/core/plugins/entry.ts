@@ -147,10 +147,8 @@ export const pluginEntryWatch: (params: {
         };
 
         const virtualEntryPath = path.join(
-          context.rootPath,
-          'node_modules',
-          '.cache',
-          'rstest',
+          outputDistPathRoot,
+          '.rstest-virtual-entry',
           `${rstestVirtualEntryFlag}${environment.name}.js`,
         );
         let virtualEntryVersion = 0;

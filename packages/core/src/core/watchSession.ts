@@ -432,10 +432,15 @@ export function createWatchShortcutHandlers(
         // to drop when the user asks for every test again.
         context.normalizedConfig.testNamePattern = undefined;
         context.fileFilters = undefined;
-        await node.prepareFileFilters?.(undefined);
-        await node.runAll();
+        if (node.prepareFileFilters) {
+          await node.prepareFileFilters(undefined);
+        } else {
+          await node.runAll();
+          await browser?.rerun();
+        }
+      } else {
+        await browser?.rerun();
       }
-      await browser?.rerun();
     }),
     runWithTestNamePattern:
       node &&
@@ -463,12 +468,14 @@ export function createWatchShortcutHandlers(
         } else {
           logger.log(`\n${color.dim('Cleared file filters')}\n`);
         }
-        const entries = await (node.prepareFileFilters
-          ? node.prepareFileFilters(filters)
-          : (() => {
-              context.fileFilters = filters;
-              return node.globTestEntries();
-            })());
+
+        if (node.prepareFileFilters) {
+          await node.prepareFileFilters(filters);
+          return;
+        }
+
+        context.fileFilters = filters;
+        const entries = await node.globTestEntries();
 
         if (!entries.length) {
           logger.log(

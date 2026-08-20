@@ -450,7 +450,19 @@ export async function runTests(context: Rstest): Promise<void> {
     isSessionClosing: () => isSessionClosing(),
   });
 
-  const { onBeforeRestart, requestWatchRestart } = await import('./restart');
+  const {
+    onBeforeRestart,
+    prepareWatchRestart,
+    registerWatchRestart,
+    requestWatchRestart,
+  } = await import('./restart');
+
+  registerWatchRestart(context, async (filters) => {
+    await prepareWatchRestart({ context, root: context.rootPath });
+    context.fileFilters = filters.map(String);
+    await runTests(context);
+  });
+
   let watchRestartPromise: Promise<void> | undefined;
   const restartWatchSession = (
     filters: string[] | undefined,
@@ -505,11 +517,8 @@ export async function runTests(context: Rstest): Promise<void> {
           prepareFileFilters: (filters) =>
             watchDriver.runReconfigure(async () => {
               context.fileFilters = filters;
-              const entries = await planner.globTestEntries();
-              if (nodeExecutorToRun.needsRestart()) {
-                await restartWatchSession(filters);
-              }
-              return entries;
+              await restartWatchSession(filters);
+              return [];
             }),
         }
       : undefined,
@@ -533,7 +542,7 @@ export async function runTests(context: Rstest): Promise<void> {
   isSessionClosing = () => watchTeardown.isClosing();
   watchTeardown.addCleanup(registerWatchSignalExit(context, closeWatchSession));
 
-  onBeforeRestart(closeWatchSession);
+  onBeforeRestart(context, closeWatchSession);
 
   // Installed before the first cycle so the ready banner can never appear
   // before stdin has an owner (a keystroke answering it would be swallowed).
