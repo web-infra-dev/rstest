@@ -15,6 +15,8 @@ Hooks 允许你在测试或测试套件执行之前或之后运行初始化和�
 
 在当前套件的所有测试之前运行。
 
+当前套件中没有可执行的测试时，例如所有测试都被跳过、被测试名称筛选排除，或未被 `test.only` 选中，Rstest 不会执行该 hook。
+
 ```ts
 import { beforeAll } from '@rstest/core';
 
@@ -45,6 +47,8 @@ beforeAll(async () => {
 - **类型：** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
 
 在当前套件的所有测试之后运行。
+
+当前套件中没有可执行的测试时，例如所有测试都被跳过、被测试名称筛选排除，或未被 `test.only` 选中，Rstest 不会执行该 hook。
 
 ```ts
 import { afterAll } from '@rstest/core';

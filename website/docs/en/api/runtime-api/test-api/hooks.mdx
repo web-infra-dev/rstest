@@ -15,6 +15,8 @@ Hooks allow you to run setup and teardown logic before or after your tests or te
 
 Runs once before all tests in the current suite.
 
+Rstest does not run this hook when the current suite has no tests to run. For example, this happens when all tests are skipped, excluded by test name filtering, or not selected by `test.only`.
+
 ```ts
 import { beforeAll } from '@rstest/core';
 
@@ -45,6 +47,8 @@ beforeAll(async () => {
 - **Type:** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
 
 Runs once after all tests in the current suite.
+
+Rstest does not run this hook when the current suite has no tests to run. For example, this happens when all tests are skipped, excluded by test name filtering, or not selected by `test.only`.
 
 ```ts
 import { afterAll } from '@rstest/core';

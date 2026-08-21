@@ -3,7 +3,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import { sleep } from '../scripts';
-import { runBrowserCliWithCwd, runBrowserWatchCli } from './utils';
+import {
+  runBrowserCli,
+  runBrowserCliWithCwd,
+  runBrowserWatchCli,
+} from './utils';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -12,6 +16,23 @@ const countMarkers = (output: string, marker: string): number =>
   output.match(new RegExp(marker, 'g'))?.length ?? 0;
 
 describe('browser mode - no tests', () => {
+  it('does not run suite hooks when a test file has no runnable tests', async () => {
+    const { cli, expectExecFailed } = await runBrowserCli('empty-suite');
+
+    await expectExecFailed();
+    expect(cli.log).toContain('No test found in suite');
+    expect(cli.log).not.toContain('EMPTY_SUITE_HOOK_RAN');
+  });
+
+  it('does not run empty suite hooks with passWithNoTests', async () => {
+    const { cli, expectExecSuccess } = await runBrowserCli('empty-suite', {
+      args: ['--passWithNoTests'],
+    });
+
+    await expectExecSuccess();
+    expect(cli.log).not.toContain('EMPTY_SUITE_HOOK_RAN');
+  });
+
   it('should exit with code 1 by default when no tests found', async () => {
     const { cli, expectExecFailed } = await runBrowserCliWithCwd(
       join(__dirname, 'fixtures', 'no-tests'),

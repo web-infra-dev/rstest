@@ -116,6 +116,7 @@ const traverseUpdateTestRunModeWithContext = (
   context: TestModeContext,
 ): void => {
   if (testSuite.tests.length === 0) {
+    testSuite.hasRunnableTests = false;
     return;
   }
 
@@ -131,6 +132,7 @@ const traverseUpdateTestRunModeWithContext = (
   const runSubOnly =
     runOnly && testSuite.runMode !== 'only' ? runOnly : childrenHaveOnly;
   let hasRunTest = false;
+  let hasRunnableTests = false;
   let allTodoTest = true;
 
   for (const test of testSuite.tests) {
@@ -154,10 +156,20 @@ const traverseUpdateTestRunModeWithContext = (
       hasRunTest = true;
     }
 
+    if (
+      (test.type === 'case' &&
+        (test.runMode === 'run' || test.runMode === 'only')) ||
+      (test.type === 'suite' && test.hasRunnableTests)
+    ) {
+      hasRunnableTests = true;
+    }
+
     if (test.runMode !== 'todo') {
       allTodoTest = false;
     }
   }
+
+  testSuite.hasRunnableTests = hasRunnableTests;
 
   if (testSuite.runMode !== 'run') {
     return;
