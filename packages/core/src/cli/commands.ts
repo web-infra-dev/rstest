@@ -1,15 +1,12 @@
 import cac, { type CAC, type Command } from 'cac';
-import { normalize, relative, resolve } from 'pathe';
-import picomatch from 'picomatch';
 import type {
-  FileFilterMode,
   ListCommandOptions,
-  Project,
   RstestCommand,
-  RstestConfig,
   RstestInstance,
 } from '../types';
 import { color, determineAgent, formatError, logger } from '../utils';
+import { buildResolvedRunner, isRelatedRun } from '../core/buildRunner';
+import { mirrorExitCode } from './exitCode';
 import type { CommonOptions } from './init';
 import { showRstest } from './prepare';
 
@@ -557,313 +554,17 @@ const resolveCliRuntime = async (options: CommonOptions) => {
     import('./init'),
     import('../core'),
   ]);
-  const { config, configFilePath, projects } = await initCli(options);
+  const inputs = await initCli(options);
+  const buildCliRunner: typeof createRstest = (...args) => {
+    const rstest = createRstest(...args);
+    mirrorExitCode(rstest.context);
+    return rstest;
+  };
 
   return {
-    config,
-    configFilePath,
-    projects,
-    createRstest,
+    inputs,
+    createRstest: buildCliRunner,
   };
-};
-
-export const normalizeCliFilters = (
-  filters: ReadonlyArray<string | number>,
-): string[] => filters.map((filter) => normalize(String(filter)));
-
-export const isRelatedRun = (options: CommonOptions): boolean =>
-  options.related === true ||
-  options.findRelatedTests === true ||
-  options.changed !== undefined;
-
-export const validateRelatedCliOptions = (options: CommonOptions): void => {
-  const relatedOptionCount = [
-    options.related === true,
-    options.findRelatedTests === true,
-    options.changed !== undefined,
-  ].filter(Boolean).length;
-
-  if (relatedOptionCount > 1) {
-    throw new Error(
-      'Options `--related`, `--findRelatedTests`, and `--changed` cannot be used together.',
-    );
-  }
-};
-
-const formatGitError = (error: unknown): string | undefined => {
-  if (error instanceof Error) {
-    if ('code' in error && error.code === 'ENOENT') {
-      return 'Git is not installed or not available on PATH.';
-    }
-
-    const stderr = 'stderr' in error ? error.stderr : undefined;
-    if (typeof stderr === 'string' && stderr.trim()) {
-      return stderr.trim().split('\n')[0];
-    }
-
-    if (error.message) {
-      return error.message;
-    }
-  }
-
-  return undefined;
-};
-
-export const getForceRerunTriggers = ({
-  rootTriggers,
-  projects,
-}: {
-  rootTriggers: string[];
-  projects: Array<{ normalizedConfig: { forceRerunTriggers: string[] } }>;
-}): string[] =>
-  Array.from(
-    new Set([
-      ...rootTriggers,
-      ...projects.flatMap(
-        (project) => project.normalizedConfig.forceRerunTriggers,
-      ),
-    ]),
-  );
-
-export const getForceRerunTriggerFiles = ({
-  changedFiles,
-  triggers,
-  rootPath,
-}: {
-  changedFiles: string[];
-  triggers: string[];
-  rootPath: string;
-}): string[] => {
-  if (!triggers.length || !changedFiles.length) {
-    return [];
-  }
-
-  const matcher = picomatch(
-    triggers.map((trigger) => normalize(trigger)),
-    { windows: true },
-  );
-
-  return changedFiles.filter(
-    (file) =>
-      matcher(normalize(relative(rootPath, file))) || matcher(normalize(file)),
-  );
-};
-
-export const hasForceRerunTrigger = ({
-  changedFiles,
-  triggers,
-  rootPath,
-}: {
-  changedFiles: string[];
-  triggers: string[];
-  rootPath: string;
-}): boolean =>
-  getForceRerunTriggerFiles({ changedFiles, triggers, rootPath }).length > 0;
-
-export const resolveChangedFiles = async (
-  cwd: string,
-  since?: string,
-): Promise<string[]> => {
-  const { execFile } = await import('node:child_process');
-  const { promisify } = await import('node:util');
-  const execFileAsync = promisify(execFile);
-  const normalizedCwd = normalize(cwd);
-  const runGit = async (args: string[], gitCwd = cwd) => {
-    const { stdout } = await execFileAsync('git', args, {
-      cwd: gitCwd,
-      encoding: 'utf8',
-      maxBuffer: 10 * 1024 * 1024,
-    });
-
-    return stdout;
-  };
-  const resolveGitRoot = async () => {
-    const cdup = await runGit(['rev-parse', '--show-cdup']);
-
-    return normalize(resolve(cwd, cdup.trim()));
-  };
-  const git = async (args: string[], gitRoot: string) => {
-    const stdout = await runGit(args, gitRoot);
-
-    return stdout
-      .split('\0')
-      .filter(Boolean)
-      .map((file) => normalize(resolve(gitRoot, file)));
-  };
-
-  try {
-    const gitRoot = await resolveGitRoot();
-    const [committedFiles, stagedFiles, unstagedFiles] = await Promise.all([
-      since
-        ? git(
-            [
-              'diff',
-              '--name-only',
-              '-z',
-              '--diff-filter=ACMRTUXB',
-              `${since}...HEAD`,
-            ],
-            gitRoot,
-          )
-        : [],
-      git(
-        ['diff', '--name-only', '-z', '--cached', '--diff-filter=ACMRTUXB'],
-        gitRoot,
-      ),
-      git(
-        ['ls-files', '-z', '--others', '--modified', '--exclude-standard'],
-        gitRoot,
-      ),
-    ]);
-
-    return Array.from(
-      new Set([...committedFiles, ...stagedFiles, ...unstagedFiles]),
-    ).sort();
-  } catch (error) {
-    const reason = formatGitError(error);
-
-    throw new Error(
-      `Failed to resolve changed files for \`--changed\` from ${normalizedCwd}. Make sure the current root is inside a Git repository.${reason ? ` Git error: ${reason}` : ''}`,
-      { cause: error },
-    );
-  }
-};
-
-const getCoverageChangedOption = (options: CommonOptions) => {
-  if (options.coverage === undefined || typeof options.coverage === 'boolean') {
-    return undefined;
-  }
-
-  return options.coverage.changed;
-};
-
-const resolveEffectiveCliFilters = async ({
-  options,
-  filters,
-  createRstest,
-  config,
-  configFilePath,
-  projects,
-}: {
-  options: CommonOptions;
-  filters: Array<string | number>;
-  createRstest: (
-    input: {
-      config: RstestConfig;
-      configFilePath?: string;
-      projects: Project[];
-    },
-    command: RstestCommand,
-    fileFilters: string[],
-  ) => RstestInstance;
-  config: RstestConfig;
-  configFilePath?: string;
-  projects: Project[];
-}): Promise<{
-  effectiveFilters: string[];
-  fileFilterMode: FileFilterMode;
-  relatedFilters?: string[];
-  relatedMode?: 'related' | 'changed';
-  relatedResolutionEmpty?: boolean;
-  changedCoverageFilters?: string[];
-  relatedRerunReason?: 'forceRerunTrigger';
-  relatedRerunFiles?: string[];
-}> => {
-  const normalizedFilters = normalizeCliFilters(filters);
-
-  if (!isRelatedRun(options)) {
-    return { effectiveFilters: normalizedFilters, fileFilterMode: 'fuzzy' };
-  }
-
-  validateRelatedCliOptions(options);
-
-  if (options.changed !== undefined && normalizedFilters.length > 0) {
-    throw new Error(
-      'The `--changed` option cannot be used with positional filters.',
-    );
-  }
-
-  const { resolveRelatedTestFiles } = await import('../core/related');
-  const rstest = createRstest({ config, configFilePath, projects }, 'list', []);
-
-  const sourceFilters =
-    options.changed !== undefined
-      ? await resolveChangedFiles(
-          rstest.context.rootPath,
-          typeof options.changed === 'string' ? options.changed : undefined,
-        )
-      : normalizedFilters;
-
-  const forceRerunTriggerFiles =
-    options.changed !== undefined
-      ? getForceRerunTriggerFiles({
-          changedFiles: sourceFilters,
-          triggers: getForceRerunTriggers({
-            rootTriggers: rstest.context.normalizedConfig.forceRerunTriggers,
-            projects: rstest.context.projects,
-          }),
-          rootPath: rstest.context.rootPath,
-        })
-      : [];
-
-  if (forceRerunTriggerFiles.length) {
-    return {
-      effectiveFilters: [],
-      fileFilterMode: 'fuzzy',
-      relatedFilters: sourceFilters,
-      relatedMode: 'changed',
-      relatedResolutionEmpty: false,
-      relatedRerunReason: 'forceRerunTrigger',
-      relatedRerunFiles: forceRerunTriggerFiles.map((file) =>
-        normalize(relative(rstest.context.rootPath, file)),
-      ),
-    };
-  }
-
-  const relatedFiles = await resolveRelatedTestFiles(rstest.context, {
-    sourceFilters,
-    filterLabel: options.changed !== undefined ? '--changed' : '--related',
-    allowEmpty: options.changed !== undefined,
-  });
-  const coverageChanged = getCoverageChangedOption(options);
-
-  return {
-    effectiveFilters: relatedFiles,
-    fileFilterMode: 'exact',
-    relatedFilters: sourceFilters,
-    relatedMode: options.changed !== undefined ? 'changed' : 'related',
-    relatedResolutionEmpty: relatedFiles.length === 0,
-    changedCoverageFilters:
-      options.changed !== undefined && coverageChanged === undefined
-        ? sourceFilters
-        : undefined,
-  };
-};
-
-const resolveCoverageChangedFilters = async (
-  rstest: RstestInstance,
-): Promise<string[] | undefined> => {
-  const { changed } = rstest.context.normalizedConfig.coverage;
-
-  if (changed === undefined) {
-    return rstest.context.changedCoverageFilters;
-  }
-  if (changed === false) {
-    return undefined;
-  }
-
-  try {
-    return await resolveChangedFiles(
-      rstest.context.rootPath,
-      typeof changed === 'string' ? changed : undefined,
-    );
-  } catch (error) {
-    const reason = formatGitError(error);
-    logger.warn(
-      `Failed to resolve changed files for \`coverage.changed\`, falling back to full coverage.${reason ? ` Git error: ${reason}` : ''}`,
-    );
-    return undefined;
-  }
 };
 
 export const runRest = async ({
@@ -892,40 +593,14 @@ export const runRest = async ({
   };
 
   try {
-    const { config, configFilePath, projects, createRstest } =
-      await resolveCliRuntime(options);
-    const {
-      effectiveFilters,
-      fileFilterMode,
-      relatedFilters,
-      relatedMode,
-      relatedResolutionEmpty,
-      changedCoverageFilters,
-      relatedRerunReason,
-      relatedRerunFiles,
-    } = await resolveEffectiveCliFilters({
+    const { inputs, createRstest } = await resolveCliRuntime(options);
+    rstest = await buildResolvedRunner({
+      inputs,
       options,
-      filters,
-      createRstest,
-      config,
-      configFilePath,
-      projects,
-    });
-
-    rstest = createRstest(
-      { config, configFilePath, projects, trace: options.trace },
       command,
-      effectiveFilters,
-      fileFilterMode,
-    );
-    rstest.context.relatedFilters = relatedFilters;
-    rstest.context.relatedMode = relatedMode;
-    rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
-    rstest.context.changedCoverageFilters = changedCoverageFilters;
-    rstest.context.changedCoverageFilters =
-      await resolveCoverageChangedFilters(rstest);
-    rstest.context.relatedRerunReason = relatedRerunReason;
-    rstest.context.relatedRerunFiles = relatedRerunFiles;
+      filters: filters.length ? filters : undefined,
+      createRstestContext: createRstest,
+    });
 
     process.on('uncaughtException', unexpectedlyExitHandler);
 
@@ -1032,45 +707,19 @@ export function createCli(): CAC {
   listCommand.action(
     async (filters: string[], options: CommonOptions & ListCommandOptions) => {
       try {
-        const { config, configFilePath, projects, createRstest } =
-          await resolveCliRuntime(options);
+        const { inputs, createRstest } = await resolveCliRuntime(options);
 
         if (options.printLocation) {
-          config.includeTaskLocation = true;
+          inputs.config.includeTaskLocation = true;
         }
 
-        const {
-          effectiveFilters,
-          fileFilterMode,
-          relatedFilters,
-          relatedMode,
-          relatedResolutionEmpty,
-          changedCoverageFilters,
-          relatedRerunReason,
-          relatedRerunFiles,
-        } = await resolveEffectiveCliFilters({
+        const rstest = await buildResolvedRunner({
+          inputs,
           options,
-          filters,
-          createRstest,
-          config,
-          configFilePath,
-          projects,
+          command: 'list',
+          filters: filters.length ? filters : undefined,
+          createRstestContext: createRstest,
         });
-
-        const rstest = createRstest(
-          { config, configFilePath, projects },
-          'list',
-          effectiveFilters,
-          fileFilterMode,
-        );
-        rstest.context.relatedFilters = relatedFilters;
-        rstest.context.relatedMode = relatedMode;
-        rstest.context.relatedResolutionEmpty = relatedResolutionEmpty;
-        rstest.context.changedCoverageFilters = changedCoverageFilters;
-        rstest.context.changedCoverageFilters =
-          await resolveCoverageChangedFilters(rstest);
-        rstest.context.relatedRerunReason = relatedRerunReason;
-        rstest.context.relatedRerunFiles = relatedRerunFiles;
 
         await rstest.listTests({
           filesOnly: options.filesOnly,
@@ -1102,15 +751,14 @@ export function createCli(): CAC {
         showRstest();
       }
       try {
-        const { config, configFilePath, projects, createRstest } =
-          await resolveCliRuntime(options);
-        const rstest = createRstest(
-          { config, configFilePath, projects },
-          'merge-reports',
-          [],
-        );
-        rstest.context.changedCoverageFilters =
-          await resolveCoverageChangedFilters(rstest);
+        const { inputs, createRstest } = await resolveCliRuntime(options);
+        const rstest = await buildResolvedRunner({
+          inputs,
+          options,
+          command: 'merge-reports',
+          filters: undefined,
+          createRstestContext: createRstest,
+        });
 
         await rstest.mergeReports({ path, cleanup: options.cleanup });
       } catch (err) {

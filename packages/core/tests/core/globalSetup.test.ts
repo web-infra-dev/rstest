@@ -7,6 +7,8 @@ import {
   runGlobalSetup,
   runGlobalTeardown,
 } from '../../src/core/globalSetup';
+import { createExitCode } from '../../src/core/exitCode';
+import type { RstestContext } from '../../src/types';
 
 // Self-contained fake of the globalSetup IPC child: replies to every `setup`
 // message with a successful result carrying a fixed env change-set, so
@@ -96,7 +98,7 @@ class MockChildProcess extends EventEmitter {
 }
 
 const createWorker = (child: MockChildProcess): GlobalSetupWorker =>
-  new GlobalSetupWorker(() => child as unknown as ChildProcess);
+  new GlobalSetupWorker({}, () => child as unknown as ChildProcess);
 
 describe('GlobalSetupWorker', () => {
   it('should reject when IPC send reports an error', async () => {
@@ -122,11 +124,16 @@ describe('GlobalSetupWorker', () => {
 });
 
 describe('runGlobalSetup', () => {
-  it('applies the worker env change-set until global teardown', async () => {
+  it('stores the worker env change-set without changing the host env', async () => {
     process.env.RSTEST_GS_UNIT = 'before-setup';
+    const context = {
+      workerEnv: {},
+      globalTeardownCallbacks: [],
+      exitCode: createExitCode(),
+    } as unknown as RstestContext;
 
     try {
-      const result = await runGlobalSetup({
+      const result = await runGlobalSetup(context, {
         globalSetupEntries: [],
         assetFiles: {},
         sourceMaps: {},
@@ -137,13 +144,36 @@ describe('runGlobalSetup', () => {
 
       expect(result.success).toBe(true);
       expect(result.envChanges).toEqual({ RSTEST_GS_UNIT: 'from-worker' });
-      // The change-set is applied to the host env while tests run.
-      expect(process.env.RSTEST_GS_UNIT).toBe('from-worker');
+      expect(context.workerEnv).toEqual({ RSTEST_GS_UNIT: 'from-worker' });
+      expect(process.env.RSTEST_GS_UNIT).toBe('before-setup');
 
-      await runGlobalTeardown();
+      await expect(runGlobalTeardown(context)).resolves.toBe(true);
       expect(process.env.RSTEST_GS_UNIT).toBe('before-setup');
     } finally {
       delete process.env.RSTEST_GS_UNIT;
     }
+  });
+});
+
+describe('runGlobalTeardown', () => {
+  it('returns failure after draining every callback in reverse order', async () => {
+    const calls: string[] = [];
+    const context = {
+      globalTeardownCallbacks: [
+        () => {
+          calls.push('first');
+        },
+        () => {
+          calls.push('second');
+          return false;
+        },
+      ],
+      exitCode: createExitCode(),
+    } as unknown as RstestContext;
+
+    await expect(runGlobalTeardown(context)).resolves.toBe(false);
+    expect(calls).toEqual(['second', 'first']);
+    expect(context.globalTeardownCallbacks).toEqual([]);
+    expect(context.exitCode.current).toBe(1);
   });
 });

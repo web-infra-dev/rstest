@@ -9,7 +9,8 @@ import { withCodSpeed } from '@codspeed/tinybench-plugin';
 import { Bench } from 'tinybench';
 import { createFrontendMemoryFixture } from './createFrontendMemoryFixture.mjs';
 
-const { initCli, createRstest } = await import('@rstest/core');
+const { loadConfig, mergeRstestConfig } = await import('@rstest/core');
+const { createRstest } = await import('@rstest/core/api');
 
 const bench = withCodSpeed(
   new Bench({
@@ -23,21 +24,21 @@ const bench = withCodSpeed(
 const fixture = await createFrontendMemoryFixture();
 
 async function runSyntheticFrontendProject() {
-  const { config, configFilePath, projects } = await initCli({
-    reporter: [],
-    root: fixture.root,
+  const { content } = await loadConfig({ cwd: fixture.root });
+  const rstest = await createRstest({
+    cwd: fixture.root,
+    config: mergeRstestConfig(content, { reporters: [] }),
   });
+  const result = await rstest.run();
 
-  const rstest = createRstest({ config, configFilePath, projects }, 'run', []);
-  await rstest.runTests();
-
-  if (process.exitCode && process.exitCode !== 0) {
+  if (!result.ok) {
+    const details = result.unhandledErrors
+      .map((error) => error.message)
+      .join('; ');
     throw new Error(
-      `Synthetic frontend memory benchmark failed with exit code ${process.exitCode}`,
+      `Synthetic frontend memory benchmark failed${details ? `: ${details}` : ''}`,
     );
   }
-
-  process.exitCode = undefined;
 }
 
 bench.add('frontend-memory-full-run', async () => {

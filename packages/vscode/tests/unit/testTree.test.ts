@@ -1,4 +1,5 @@
 import { describe, expect, it, rs } from '@rstest/core';
+import type { ListedTest } from '@rstest/core/api';
 
 rs.mock('vscode', () => {
   class Range {
@@ -166,5 +167,147 @@ describe('TestFile.updateFromList', () => {
     expect(root.children.get(getTestItemId('renders', 1)).range.startLine).toBe(
       8,
     );
+  });
+
+  it('builds a hierarchy from flat listed tests', async () => {
+    const { TestFile } = await import('../../src/testTree');
+    const controller = createController();
+    const uri = { fsPath: '/x/flat.test.ts', toString: () => 'file:///x' };
+    const file = new TestFile({} as any, uri as any, controller);
+    const root = controller.createTestItem('root', 'flat.test.ts', uri);
+    file.setTestItem(root);
+
+    file.updateFromList([
+      {
+        file: uri.fsPath,
+        name: 'outer',
+        taskName: 'outer',
+        parentNames: [],
+        type: 'suite',
+      },
+      {
+        file: uri.fsPath,
+        name: 'outer case',
+        taskName: 'case',
+        parentNames: ['outer'],
+        type: 'case',
+      },
+    ] satisfies ListedTest[]);
+
+    expect(root.children.get('outer').children.get('case').label).toBe('case');
+  });
+
+  it('renders skipped and todo tests from a structured list', async () => {
+    const { TestFile } = await import('../../src/testTree');
+    const controller = createController();
+    const uri = { fsPath: '/x/skipped.test.ts', toString: () => 'file:///x' };
+    const file = new TestFile({} as any, uri as any, controller);
+    const root = controller.createTestItem('root', 'skipped.test.ts', uri);
+    file.setTestItem(root);
+
+    file.updateFromList([
+      {
+        file: uri.fsPath,
+        name: 'skipped case',
+        taskName: 'skipped case',
+        parentNames: [],
+        runMode: 'skip',
+        type: 'case',
+      },
+      {
+        file: uri.fsPath,
+        name: 'todo case',
+        taskName: 'todo case',
+        parentNames: [],
+        runMode: 'todo',
+        type: 'case',
+      },
+    ] satisfies ListedTest[]);
+
+    expect(root.children.size).toBe(2);
+    expect(root.children.get('skipped case').description).toBe('skip');
+    expect(root.children.get('todo case').description).toBe('todo');
+  });
+
+  it('clears the runtime tree when a changed file has no declarations', async () => {
+    const { groupListedTestsByFile, TestFile } =
+      await import('../../src/testTree');
+    const controller = createController();
+    const uri = {
+      fsPath: '/x/removed.test.ts',
+      toString: () => 'file:///x/removed.test.ts',
+    };
+    const file = new TestFile({} as any, uri as any, controller);
+    const root = controller.createTestItem('root', 'removed.test.ts', uri);
+    file.setTestItem(root);
+    file.updateFromList([
+      {
+        file: uri.fsPath,
+        name: 'last declaration',
+        taskName: 'last declaration',
+        parentNames: [],
+        type: 'case',
+      },
+    ] satisfies ListedTest[]);
+    expect(root.children.size).toBe(1);
+
+    const updates = groupListedTestsByFile([], [uri.fsPath]);
+    expect(updates).toHaveLength(1);
+    for (const update of updates) {
+      file.updateFromList(update.tests);
+    }
+
+    expect(root.children.size).toBe(0);
+  });
+
+  it('renders only the first project hierarchy for a shared file', async () => {
+    const { TestFile } = await import('../../src/testTree');
+    const controller = createController();
+    const uri = { fsPath: '/x/shared.test.ts', toString: () => 'file:///x' };
+    const file = new TestFile({} as any, uri as any, controller);
+    const root = controller.createTestItem('root', 'shared.test.ts', uri);
+    file.setTestItem(root);
+
+    file.updateFromList([
+      {
+        file: uri.fsPath,
+        name: 'shared suite',
+        taskName: 'shared suite',
+        parentNames: [],
+        project: 'alpha',
+        type: 'suite',
+      },
+      {
+        file: uri.fsPath,
+        name: 'shared suite > alpha case',
+        taskName: 'alpha case',
+        parentNames: ['shared suite'],
+        project: 'alpha',
+        type: 'case',
+      },
+      {
+        file: uri.fsPath,
+        name: 'shared suite',
+        taskName: 'shared suite',
+        parentNames: [],
+        project: 'beta',
+        type: 'suite',
+      },
+      {
+        file: uri.fsPath,
+        name: 'shared suite > beta case',
+        taskName: 'beta case',
+        parentNames: ['shared suite'],
+        project: 'beta',
+        type: 'case',
+      },
+    ] satisfies ListedTest[]);
+
+    expect(root.children.size).toBe(1);
+    const suite = root.children.get('shared suite');
+    expect(suite.error).toBeUndefined();
+    expect(suite.children.size).toBe(1);
+    expect(suite.children.get('alpha case').label).toBe('alpha case');
+    expect(suite.children.get('beta case')).toBeUndefined();
   });
 });

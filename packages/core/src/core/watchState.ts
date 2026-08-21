@@ -1,5 +1,22 @@
 import type { RstestContext } from '../types';
 
+export function resetRunCycleState(
+  context: RstestContext,
+  {
+    resetReporterResults,
+    resetSnapshot,
+  }: { resetReporterResults: boolean; resetSnapshot: boolean },
+): void {
+  context.exitCode.reset();
+  context.stateManager.reset();
+  if (resetReporterResults) {
+    context.reporterResults = { results: [], testResults: [] };
+  }
+  if (resetSnapshot) {
+    context.snapshotManager.clear();
+  }
+}
+
 /**
  * Reset what a watch cycle must not inherit, before either executor streams
  * events into it. Core's watch cycle driver is the only caller, ahead of every
@@ -31,10 +48,10 @@ export function prepareWatchCycleState(
   context: RstestContext,
   { isFirstCycle }: { isFirstCycle: boolean },
 ): void {
-  context.stateManager.reset();
-  if (!isFirstCycle) {
-    context.snapshotManager.clear();
-  }
+  resetRunCycleState(context, {
+    resetReporterResults: false,
+    resetSnapshot: !isFirstCycle,
+  });
 }
 
 /** Test paths whose latest run failed — the `f` shortcut's rerun set. */

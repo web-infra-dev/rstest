@@ -522,7 +522,7 @@ const jsdom = '// @rstest-environment jsdom';
             count: 1,
           },
         },
-        fileFilters: [],
+        fileFilters: undefined,
       } as unknown as RstestContext;
       const planState = createProjectPlanState({
         context,
@@ -544,6 +544,59 @@ const jsdom = '// @rstest-environment jsdom';
         refreshed.entriesCache.get('default-environment-1')?.entries,
       ).toEqual({
         'b~test~ts': normalize(jsdomFile),
+      });
+    });
+  });
+
+  it('keeps dynamic watch entries in their environment partition', async () => {
+    await withTempDir('rstest-env-comment-', async (root) => {
+      const nodeFile = path.join(root, 'node.test.ts');
+      const jsdomFile = path.join(root, 'jsdom.test.ts');
+      const addedJsdomFile = path.join(root, 'added-jsdom.test.ts');
+      writeFileSync(nodeFile, '// node test\n');
+      writeFileSync(jsdomFile, '// @rstest-environment jsdom\n');
+
+      const project: ProjectContext = {
+        ...createProject(),
+        rootPath: root,
+        normalizedConfig: {
+          ...createProject().normalizedConfig,
+          root,
+          include: ['*.test.ts'],
+          exclude: {
+            patterns: [],
+            override: false,
+          },
+          includeSource: [],
+        },
+      };
+      const context = {
+        rootPath: root,
+        projects: [project],
+        normalizedConfig: {},
+        fileFilters: undefined,
+      } as unknown as RstestContext;
+      const planState = createProjectPlanState({
+        context,
+        isWatchMode: true,
+      });
+
+      await planState.resolveRunnableProjects();
+      writeFileSync(
+        addedJsdomFile,
+        '// @rstest-environment jsdom\n// added during watch\n',
+      );
+
+      await expect(planState.globTestSourceEntries('default')).resolves.toEqual(
+        {
+          'node~test~ts': normalize(nodeFile),
+        },
+      );
+      await expect(
+        planState.globTestSourceEntries('default-environment-1'),
+      ).resolves.toEqual({
+        'added-jsdom~test~ts': normalize(addedJsdomFile),
+        'jsdom~test~ts': normalize(jsdomFile),
       });
     });
   });
@@ -573,7 +626,7 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
+        fileFilters: undefined,
       } as unknown as RstestContext;
       const planState = createProjectPlanState({
         context,
@@ -634,7 +687,7 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
+        fileFilters: undefined,
       } as unknown as RstestContext;
       const planState = createProjectPlanState({
         context,
@@ -715,7 +768,7 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
+        fileFilters: undefined,
       } as unknown as RstestContext;
       const planState = createProjectPlanState({
         context,
@@ -783,7 +836,7 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [browserProject, nodeProject],
         normalizedConfig: {},
-        fileFilters: [],
+        fileFilters: undefined,
       } as unknown as RstestContext;
       const planState = createProjectPlanState({
         context,
@@ -831,7 +884,7 @@ const jsdom = '// @rstest-environment jsdom';
             count: 1,
           },
         },
-        fileFilters: [],
+        fileFilters: undefined,
       } as unknown as RstestContext;
       const planState = createProjectPlanState({
         context,
@@ -888,7 +941,7 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
+        fileFilters: undefined,
       } as unknown as RstestContext;
       const planState = createProjectPlanState({
         context,
@@ -945,7 +998,7 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
+        fileFilters: undefined,
       } as unknown as RstestContext;
       const planState = createProjectPlanState({
         context,
@@ -1009,7 +1062,7 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
+        fileFilters: undefined,
       } as unknown as RstestContext;
       const planState = createProjectPlanState({
         context,
@@ -1067,7 +1120,7 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
+        fileFilters: undefined,
       } as unknown as RstestContext;
       const planState = createProjectPlanState({
         context,
@@ -1145,7 +1198,7 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
+        fileFilters: undefined,
       } as unknown as RstestContext;
       const planState = createProjectPlanState({
         context,
@@ -1204,7 +1257,7 @@ const jsdom = '// @rstest-environment jsdom';
             count: 2,
           },
         },
-        fileFilters: [],
+        fileFilters: undefined,
       } as unknown as RstestContext;
       const planState = createProjectPlanState({
         context,
@@ -1297,7 +1350,7 @@ const jsdom = '// @rstest-environment jsdom';
             count: 2,
           },
         },
-        fileFilters: [],
+        fileFilters: undefined,
       } as unknown as RstestContext;
       const planState = createProjectPlanState({ context, isWatchMode: false });
 
@@ -1347,7 +1400,7 @@ const jsdom = '// @rstest-environment jsdom';
         rootPath: root,
         projects: [project],
         normalizedConfig: {},
-        fileFilters: [],
+        fileFilters: undefined,
       } as unknown as RstestContext;
       const planState = createProjectPlanState({
         context,

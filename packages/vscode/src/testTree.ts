@@ -1,5 +1,6 @@
 import { TextDecoder } from 'node:util';
 import type { TestInfo } from '@rstest/core';
+import type { ListedTest } from '@rstest/core/api';
 import vscode from 'vscode';
 import { ROOT_SUITE_NAME } from '../../core/src/utils/constants';
 import { logger } from './logger';
@@ -54,6 +55,24 @@ export function gatherTestItems(
   });
   return items;
 }
+
+export const groupListedTestsByFile = (
+  tests: ListedTest[],
+  requestedFiles: string[] = [],
+): Array<{ uri: vscode.Uri; tests: ListedTest[] }> => {
+  const byFile = new Map<string, ListedTest[]>(
+    requestedFiles.map((file) => [file, []]),
+  );
+  for (const test of tests) {
+    const entries = byFile.get(test.file) ?? [];
+    entries.push(test);
+    byFile.set(test.file, entries);
+  }
+  return Array.from(byFile, ([file, entries]) => ({
+    uri: vscode.Uri.file(file),
+    tests: entries,
+  }));
+};
 
 export class TestFolder {
   constructor(
@@ -147,7 +166,21 @@ export class TestFile {
     this.testItem?.children.replace(this.children);
   }
 
-  public updateFromList(tests: TestInfo[]) {
+  public updateFromList(tests: TestInfo[] | ListedTest[]) {
+    const listedTests = tests.filter(isListedTest);
+    if (listedTests.length) {
+      // A file has one VS Code URI even when several projects collect it.
+      // Render one declaration tree instead of merging the project copies.
+      const firstProject = listedTests[0].project;
+      this.updateFromListedTests(
+        listedTests.filter((test) => test.project === firstProject),
+      );
+      return;
+    }
+    const testInfos = tests.filter(
+      (test): test is TestInfo => !isListedTest(test),
+    );
+
     // A run's reported tests may arrive without a source location (the runtime
     // only emits locations when `includeTaskLocation` resolves one, which
     // depends on the project's core version and build). Snapshot the ranges we
@@ -200,13 +233,88 @@ export class TestFile {
     };
     const children: vscode.TestItem[] = [];
     const realTests =
-      tests[0]?.type === 'suite' && tests[0].name === ROOT_SUITE_NAME
-        ? tests[0].tests
-        : tests;
+      testInfos[0]?.type === 'suite' && testInfos[0].name === ROOT_SUITE_NAME
+        ? testInfos[0].tests
+        : testInfos;
     realTests.forEach((test) => {
       handleChild(test, children, [], []);
     });
     this.children = children;
+    this.testItem?.children.replace(this.children);
+  }
+
+  private updateFromListedTests(tests: ListedTest[]): void {
+    const previousRanges = new Map<string, vscode.Range>();
+    const rangeKey = (idPath: string[]) => idPath.join('\x00');
+    const snapshot = (item: vscode.TestItem, idPath: string[]) => {
+      if (item.range) previousRanges.set(rangeKey(idPath), item.range);
+      item.children.forEach((child) => snapshot(child, [...idPath, child.id]));
+    };
+    this.children.forEach((item) => snapshot(item, [item.id]));
+
+    type Parent = {
+      names: string[];
+      ids: string[];
+      children: vscode.TestItem[];
+      item?: vscode.TestItem;
+    };
+    const root: Parent = { names: [], ids: [], children: [] };
+    const parents: Parent[] = [root];
+    const finalizeParent = (): void => {
+      const parent = parents.pop()!;
+      parent.item?.children.replace(parent.children);
+    };
+
+    for (const test of tests) {
+      const parentNames = test.parentNames ?? [];
+      while (
+        parents.length > 1 &&
+        parents.at(-1)!.names.join('\x00') !== parentNames.join('\x00')
+      ) {
+        finalizeParent();
+      }
+      const parent = parents.at(-1)!;
+      const taskName = test.taskName ?? test.name;
+      if (!taskName) continue;
+      const id = getTestItemId(
+        taskName,
+        siblingIndexOf(parent.children, taskName),
+      );
+      const ids = [...parent.ids, id];
+      const location = test.location;
+      const range = location
+        ? new vscode.Range(
+            location.line - 1,
+            location.column - 1,
+            location.line - 1,
+            location.column - 1,
+          )
+        : previousRanges.get(rangeKey(ids));
+      const testItem = this.onTest(
+        range,
+        taskName,
+        test.type === 'suite' ? 'suite' : 'test',
+        parent.children,
+        parentNames,
+      );
+      testItem.description = test.runMode;
+
+      if (test.type === 'suite') {
+        const children: vscode.TestItem[] = [];
+        parents.push({
+          names: [...parentNames, taskName],
+          ids,
+          children,
+          item: testItem,
+        });
+      }
+    }
+
+    while (parents.length > 1) {
+      finalizeParent();
+    }
+
+    this.children = root.children;
     this.testItem?.children.replace(this.children);
   }
 
@@ -240,6 +348,9 @@ export class TestFile {
     return testItem;
   }
 }
+
+const isListedTest = (test: TestInfo | ListedTest): test is ListedTest =>
+  'file' in test;
 
 export class TestCase {
   constructor(

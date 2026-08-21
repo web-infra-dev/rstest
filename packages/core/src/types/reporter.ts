@@ -1,4 +1,7 @@
-import type { SourceMapInput } from '@jridgewell/trace-mapping';
+import type {
+  DecodedSourceMap,
+  EncodedSourceMap,
+} from '@jridgewell/trace-mapping';
 import type { SnapshotSummary } from '@vitest/snapshot';
 import type { Options as WindowRendererOptionsOptions } from '../reporter/windowedRenderer';
 import type { CoverageMapData } from './coverage';
@@ -18,7 +21,11 @@ export type Duration = {
   testTime: number;
 };
 
-export type { SnapshotSummary, SourceMapInput };
+export type { SnapshotSummary };
+
+// Deliberately omit the nominal TraceMap class so declarations inlined by the
+// main and /api entries remain structurally assignable.
+export type SourceMapInput = string | EncodedSourceMap | DecodedSourceMap;
 
 export type GetSourcemap = (
   sourcePath: string,

@@ -31,6 +31,7 @@ import { selectMemoryGate } from './memoryGate';
 import { getEnvironmentKey } from '../core/environmentGroups';
 import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/envDependencies';
 import { projectRuntimeConfig } from '../core/runtimeConfigProjection';
+import { composeWorkerEnv } from '../core/workerEnv';
 import { prepareAssetFilesForIPC } from '../utils/assetFiles';
 import {
   type BundleCoverageResult,
@@ -47,8 +48,14 @@ import type { PoolTask, PoolWorkerKind } from './types';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const getRuntimeConfig = (context: ProjectContext): RuntimeConfig =>
-  projectRuntimeConfig(context, { envMode: 'inherit' });
+const getRuntimeConfig = (
+  context: RstestContext,
+  project: ProjectContext,
+): RuntimeConfig =>
+  projectRuntimeConfig(project, {
+    envMode: 'inherit',
+    env: composeWorkerEnv(context.workerEnv),
+  });
 
 const filterAssetsByEntry = async (
   entryInfo: EntryInfo,
@@ -398,11 +405,11 @@ export const createPool = async ({
       ...execArgv,
       ...(isDeno ? [] : getNodeExecArgv()),
     ],
-    env: {
+    getEnv: () => ({
       NODE_ENV: 'test',
       ...getForceColorEnv(),
-      ...process.env,
-    } as Record<string, string>,
+      ...composeWorkerEnv(context.workerEnv),
+    }),
     memoryGate: selectMemoryGate(workerKind),
     onTestEnvironmentFallback: ({ packageName, reason }) => {
       logger.warn(
@@ -431,7 +438,7 @@ export const createPool = async ({
       traceSpan,
     }) => {
       const projectName = project.name;
-      const runtimeConfig = getRuntimeConfig(project);
+      const runtimeConfig = getRuntimeConfig(context, project);
       const sink = createProjectSink(project);
       const rpcMethods = sinkToRuntimeRpc(sink);
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);
@@ -576,7 +583,7 @@ export const createPool = async ({
       project,
       updateSnapshot,
     }) => {
-      const runtimeConfig = getRuntimeConfig(project);
+      const runtimeConfig = getRuntimeConfig(context, project);
       const projectName = project.normalizedConfig.name;
       const rpcMethods = sinkToRuntimeRpc(createProjectSink(project));
       const setupAssets = setupEntries.flatMap((entry) => entry.files || []);

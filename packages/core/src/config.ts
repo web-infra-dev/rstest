@@ -133,6 +133,7 @@ export const resolveExtends = async (
   );
 
   const merged = mergeRstestConfig(...resolvedExtends, config);
+  merged.extends = undefined;
 
   if (config.forceRerunTriggers === undefined) {
     const extendedForceRerunTriggers = resolvedExtends.flatMap(

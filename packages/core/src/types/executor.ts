@@ -1,8 +1,8 @@
-import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { TraceEvent } from '../utils/trace';
 import type { ListCommandResult, ProjectContext } from './core';
 import type { CoverageMapData, RawCoverageResolveOptions } from './coverage';
+import type { SourceMapInput } from './reporter';
 import type { TestFileResult, TestResult } from './testSuite';
 
 /**
@@ -46,11 +46,10 @@ export interface ExecutorRunCycleOptions {
   updateSnapshot: SnapshotUpdateState;
   /**
    * Post-globalSetup env change-set produced by the core-owned pre-cycle
-   * globalSetup stage (browser projects' setups only). The node executor
-   * ignores it — the stage already mutated the host `process.env`, which the
-   * pool re-reads at dispatch; the browser executor merges it into the per-run
-   * env store between the static base (`NODE_ENV`/`RSTEST`) and the user
-   * `test.env` config.
+   * globalSetup stage (browser projects' setups only). The node executor reads
+   * the same context-local overlay directly; the browser executor merges this
+   * change-set into the per-run env store between the static base
+   * (`NODE_ENV`/`RSTEST`) and the user `test.env` config.
    */
   env?: Record<string, string | undefined>;
   onTraceEvents?: (events: TraceEvent[]) => void;

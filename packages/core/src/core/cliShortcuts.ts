@@ -253,7 +253,7 @@ export async function setupCliShortcuts({
         try {
           await closeServer();
         } finally {
-          process.exit(process.exitCode ?? 0);
+          process.exit();
         }
       },
     },

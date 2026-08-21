@@ -1,0 +1,405 @@
+---
+description: 在 Node.js 中创建和控制 Rstest 实例，无需调用 CLI。
+---
+
+import { ApiMeta } from '@components/ApiMeta';
+
+# Programmatic API
+
+<ApiMeta addedVersion="0.12.0" />
+
+[@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core) 的 programmatic API 允许 Node.js 宿主创建可复用的 Rstest 实例、运行或列出测试、启动 watch session，以及合并 blob report。
+
+请从 `/api` 入口导入：
+
+```ts
+import { createRstest } from '@rstest/core/api';
+```
+
+此入口的所有导出目前都是 experimental，在 Rstest 1.0.0 之前可能发生变化。
+
+## 宿主进程安全
+
+每个 Rstest 实例独立持有退出状态、`globalSetup` 环境变量变更和 teardown callback。运行测试不会替换宿主的 `process.exitCode`，`globalSetup` 产生的环境变量变更也只会传递给当前实例的 worker。因此，同一进程可以并发运行多个相互独立的实例。
+
+`createRstest` 会在宿主环境中初始化恒定的 `NODE_ENV=test` 和 `RSTEST=true` 标记。它不会恢复或 snapshot 进程全局状态。
+
+与 CLI 不同，programmatic API 永远不会自动发现 `rstest.config.*`。请传入 inline config，或在 config factory 中显式加载配置。
+
+## createRstest
+
+创建一个可复用的 Rstest 实例。创建时会解析一次配置，因此无效的创建期配置会使此调用 reject。每个 operation 会再次解析配置，以获取 config factory 返回的最新值。
+
+- **类型：**
+
+```ts
+type RstestConfigFn = () => RstestConfig | Promise<RstestConfig>;
+
+interface CreateRstestOptions {
+  cwd?: string;
+  config?: RstestConfig | RstestConfigFn;
+}
+
+function createRstest(options?: CreateRstestOptions): Promise<RstestInstance>;
+```
+
+`cwd` 默认为 `process.cwd()`，并作为相对 `config.root` 的解析基准。省略 `config` 会使用空的 inline config，不会从 `cwd` 加载配置文件。
+
+### 使用 inline config
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+const rstest = await createRstest({
+  cwd: './packages/app',
+  config: {
+    include: ['src/**/*.test.ts'],
+    reporters: [],
+  },
+});
+
+const result = await rstest.run();
+console.log(result.ok);
+```
+
+### 使用 config factory
+
+当每个 operation 都需要读取可变的宿主状态时，可以使用 factory。它不接收参数，并且可以是 asynchronous function。
+
+```ts
+import { createRstest } from '@rstest/core/api';
+
+let pattern = 'src/**/*.test.ts';
+
+const rstest = await createRstest({
+  config: () => ({
+    include: [pattern],
+    reporters: [],
+  }),
+});
+
+await rstest.run();
+pattern = 'integration/**/*.test.ts';
+await rstest.run();
+```
+
+### 显式加载配置文件
+
+如果需要文件发现，请使用主入口导出的 `loadConfig`。`loadConfig` 会解析 `extends`；将其结果传给 `createRstest` 是幂等的，不会重复应用 extension。
+
+```ts
+import { loadConfig } from '@rstest/core';
+import { createRstest } from '@rstest/core/api';
+
+const cwd = './packages/app';
+const rstest = await createRstest({
+  cwd,
+  config: async () => (await loadConfig({ cwd })).content,
+});
+```
+
+## Instance context
+
+`context` 是创建期的只读摘要。后续 operation 重新解析 config factory 时，它不会变化。
+
+- **类型：**
+
+```ts
+interface RstestProjectSummary {
+  name: string;
+  root: string;
+  configFilePath?: string;
+}
+
+interface RstestInstanceContext {
+  readonly version: string;
+  readonly root: string;
+  readonly config: Readonly<ResolvedRstestConfig>;
+  readonly projects: readonly RstestProjectSummary[];
+}
+```
+
+`projects` 包含显式 project 的摘要。当根配置只创建隐式默认 project 时，此数组为空。
+
+## run
+
+运行一个测试 cycle。`run()` 始终 fulfill 并返回 `TestRunResult`：测试失败、构建失败和 operation 期间的配置解析错误都会变成 `ok: false` 的结果，而不是 promise rejection。
+
+- **类型：**
+
+```ts
+interface CreateRunnerOptions {
+  filters?: string[];
+  filterMode?: 'fuzzy' | 'exact';
+  related?: boolean;
+  changed?: boolean | string;
+  shard?: string | { index: number; count: number };
+  project?: string[];
+}
+
+interface RunnerCycleOptions {
+  filters?: string[];
+  filterMode?: 'fuzzy' | 'exact';
+  testNamePattern?: RegExp | string;
+  update?: boolean;
+  bail?: number | boolean;
+  passWithNoTests?: boolean;
+}
+
+interface RunOptions extends CreateRunnerOptions, RunnerCycleOptions {}
+
+interface RstestInstance {
+  run(options?: RunOptions): Promise<TestRunResult>;
+}
+```
+
+构建期选项决定需要编译的文件：
+
+- `filters` 默认使用不区分大小写的子字符串匹配。设置 `filterMode: 'exact'` 后会使用规范化路径全等匹配。省略 `filters` 时选择所有文件；显式传入空数组时，两种 mode 都不会选择任何文件。
+- `related` 将 `filters` 视为源文件，并选择与其关联的测试。
+- `changed` 选择与工作区变更相关的测试，也可以指定一个起始 Git ref。
+- `changed: false` 会禁用 changed-file 选择。
+- `shard` 接受 CLI 风格的 `"1/3"` 或 `{ index: 1, count: 3 }`。
+- `project` 支持 project 名称、`*` 通配符和 `!` 排除项。
+
+其余选项只应用于当前 cycle。`update: false` 会显式禁用 snapshot 更新；省略 `update` 时会保留配置或默认 mode。可复用 runner 会显式区分构建期和运行期。
+
+`run()` 支持 browser project。
+
+## TestRunResult
+
+- **类型：**
+
+```ts
+interface SerializedError {
+  name: string;
+  message: string;
+  stack?: string;
+  diff?: string;
+  actual?: string;
+  expected?: string;
+  retryCount?: number;
+  cause?: SerializedError;
+}
+
+interface TestResult {
+  status: TestResultStatus;
+  name: string;
+  testPath: string;
+  parentNames?: string[];
+  duration?: number;
+  errors?: SerializedError[];
+  retryErrors?: SerializedError[];
+  retryCount?: number;
+  project: string;
+  meta?: TaskMeta;
+}
+
+interface TestFileResult extends TestResult {
+  results: TestResult[];
+}
+
+interface TestRunResult {
+  ok: boolean;
+  files: TestFileResult[];
+  stats: {
+    tests: {
+      total: number;
+      passed: number;
+      failed: number;
+      skipped: number;
+      todo: number;
+    };
+    files: {
+      total: number;
+      failed: number;
+    };
+  };
+  unhandledErrors: SerializedError[];
+  duration: { total: number };
+  snapshot?: SnapshotSummary;
+  coverage?: CoverageMapData;
+}
+```
+
+只有在没有 test 或 file 失败、没有 unhandled error、cycle 未因找不到测试而失败，并且其他 subsystem 没有提高实例退出状态时，`ok` 才为 `true`。最后一项涵盖 coverage threshold 或 `globalSetup` teardown 失败等情况。
+
+只有在 run 开始前终止执行时，例如 operation 期间配置失败，`snapshot` 才会缺失。启用 coverage 时会提供 `coverage`。
+
+错误会被投影为 JSON-safe object，不会暴露内部 reporter error class。
+
+## createRunner
+
+创建一个可复用的 Node runner，其已编译测试文件集合在整个生命周期中保持不变。
+
+- **类型：**
+
+```ts
+interface RunnerBuildResult {
+  testFiles: string[];
+}
+
+type RunnerRunOptions = RunnerCycleOptions;
+
+interface RstestRunner {
+  build(): Promise<RunnerBuildResult>;
+  run(options?: RunnerRunOptions): Promise<TestRunResult>;
+  close(): Promise<void>;
+}
+
+interface RstestInstance {
+  createRunner(options?: CreateRunnerOptions): Promise<RstestRunner>;
+}
+```
+
+在 `run()` 之前必须且只能调用一次 `build()`。与一次性的 `run()` 不同，编译失败会使 `build()` reject，以便宿主识别从未进入测试报告阶段的构建。
+
+运行期 `filters` 只能收窄 `build()` 返回的文件，不能加入未编译的文件。运行期选项会在每个 cycle 后恢复，不会泄漏到后续 run。
+
+`close()` 是幂等的，并会运行待处理的 `globalSetup` teardown。teardown 失败时它会 reject，重复调用会得到相同结果。关闭后，`build()` 和 `run()` 都会 reject。如果 `globalSetup` 失败，后续 `run()` 会直接返回相同的失败状态而不执行测试；如需重试 setup，请创建新的 runner。`createRunner()` 会拒绝 browser 配置和 blob reporter；browser project 或 blob report 请使用一次性的 `run()`。
+
+```ts
+const runner = await rstest.createRunner({
+  filters: ['src/'],
+});
+
+try {
+  const { testFiles } = await runner.build();
+  console.log(`Built ${testFiles.length} files`);
+
+  const unitResult = await runner.run({
+    testNamePattern: 'unit',
+  });
+  const allBuiltResult = await runner.run();
+} finally {
+  await runner.close();
+}
+```
+
+## watch
+
+启动 Node watch session，并返回用于关闭它的 handle。
+
+- **类型：**
+
+```ts
+interface WatchOptions {
+  onResult?: (result: TestRunResult) => void;
+}
+
+interface RstestWatcher {
+  close(): Promise<void>;
+}
+
+type RstestWatchHandle = RstestWatcher;
+
+interface RstestInstance {
+  watch(options?: WatchOptions & RunOptions): Promise<RstestWatcher>;
+}
+```
+
+每个已完成的 cycle（包括初始 cycle）之后，都会调用 `onResult`。结果按当前 cycle 统计：`files` 和 `stats` 只包含该 cycle 实际执行的文件。如需维护 session 状态，请在宿主中按 `testPath` 合并结果。
+
+`onResult` 抛出的错误会被隔离，不会停止 watch session。调用 `close()` 会释放 compiler、worker、file watcher 和待处理的 `globalSetup` teardown。如果 `globalSetup` teardown 失败，`close()` 会 reject。
+
+启用的 `related` 和 `changed` selector 会为一次性 run 选择固定的测试集合，因此 `watch()` 会拒绝它们。`changed: false` 视为禁用。使用启用的 selector 时请调用 `run()`。
+
+Programmatic browser watch 暂不支持，并会在启动时 reject。一次性 browser 执行请使用 `run()`。
+
+```ts
+const watcher = await rstest.watch({
+  onResult(result) {
+    console.log(
+      result.ok,
+      result.files.map((file) => file.testPath),
+    );
+  },
+});
+
+await watcher.close();
+```
+
+## listTests
+
+收集测试文件和测试声明，但不运行测试 body。
+
+- **类型：**
+
+```ts
+interface ListOptions {
+  filesOnly?: boolean;
+  includeSuites?: boolean;
+  printLocation?: boolean;
+}
+
+interface ListedTest {
+  file: string;
+  name?: string;
+  taskName?: string;
+  parentNames?: string[];
+  project?: string;
+  location?: Location;
+  runMode?: 'skip' | 'todo';
+  type: 'file' | 'suite' | 'case';
+}
+
+interface RstestInstance {
+  listTests(options?: ListOptions & RunOptions): Promise<ListedTest[]>;
+}
+```
+
+设置 `filesOnly` 可跳过声明收集。`includeSuites` 会将具名 suite 作为独立 entry 返回。`printLocation` 会加入源码位置。
+
+collection 失败时，`listTests()` 会 reject，而不是返回部分列表或空列表。
+
+只有配置多个 project 时才会提供 `project`。`taskName` 是声明自身的名称，`name` 包含 suite 前缀；`parentNames` 提供层级，无需解析 display name。skipped 和 todo 声明也会返回，`runMode` 分别为 `skip` 或 `todo`；可运行声明不提供 `runMode`。
+
+即使 `RunOptions` 中存在 `shard`，`listTests()` 也会刻意忽略它。这与 `rstest list --shard` 不同，后者只列出选定 shard。
+
+## mergeReports
+
+通过与 run 相同的结果模型合并 blob report。
+
+- **类型：**
+
+```ts
+interface MergeReportsOptions {
+  path?: string;
+  cleanup?: boolean;
+}
+
+interface RstestInstance {
+  mergeReports(options?: MergeReportsOptions): Promise<TestRunResult>;
+}
+```
+
+`path` 用于选择 blob report 目录。`cleanup` 会在合并成功后删除已消费的 report。
+
+## runCLI
+
+如果嵌入场景需要完整的 CLI 参数解析和面向进程的行为，而不是宿主安全的实例方法，请使用 `runCLI`。
+
+- **类型：**
+
+```ts
+interface RunCLIOptions {
+  argv?: string[];
+}
+
+function runCLI(options?: RunCLIOptions): void;
+```
+
+`runCLI` 从 `@rstest/core/api` 导出，不再从 `@rstest/core` 主入口导出。
+
+## 从 one-shot API 迁移
+
+创建实例后调用 `run()`：
+
+```ts
+const rstest = await createRstest({ cwd, config });
+const result = await rstest.run();
+```
+
+如果之前的集成会读取配置文件，请按上文示例使用 `loadConfig` 显式加载。
+
+`@rstest/core` 主入口不再导出 `createRstest`、`initCli` 或 `runCLI`。请从 `@rstest/core/api` 导入 `createRstest` 和 `runCLI`。

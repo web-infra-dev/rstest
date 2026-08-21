@@ -1,8 +1,7 @@
-import type { SourceMapInput } from '@jridgewell/trace-mapping';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type { ProjectContext } from './core';
 import type { RawCoverageResolveOptions } from './coverage';
-import type { GetSourcemap } from './reporter';
+import type { GetSourcemap, SourceMapInput } from './reporter';
 import type { TestFileResult, TestResult } from './testSuite';
 import type { TraceEvent } from '../utils/trace';
 

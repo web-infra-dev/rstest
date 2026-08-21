@@ -104,7 +104,7 @@ export function createBrowserRunPlanner({
       return false;
     }
 
-    if (!context.fileFilters?.length) {
+    if (context.fileFilters === undefined) {
       return true;
     }
 
@@ -125,7 +125,7 @@ export function createBrowserRunPlanner({
     !context.fileFilters?.some(isBrowserProjectPathFilter);
 
   const getBrowserProjectsForDiscovery = () => {
-    if (!context.fileFilters?.length) {
+    if (context.fileFilters === undefined) {
       return browserConfigHookProjects;
     }
 

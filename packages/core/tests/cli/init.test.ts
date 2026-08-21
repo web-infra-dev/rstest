@@ -143,6 +143,19 @@ describe('mergeWithCLIOptions', () => {
 
     expect(config.shard).toEqual({ index: 1, count: 3 });
   });
+
+  it.each([
+    { changed: false, passWithNoTests: undefined },
+    { changed: true, passWithNoTests: true },
+    { changed: 'main', passWithNoTests: true },
+  ])(
+    'sets passWithNoTests to $passWithNoTests for changed: $changed',
+    ({ changed, passWithNoTests }) => {
+      const config = mergeWithCLIOptions({}, { changed });
+
+      expect(config.passWithNoTests).toBe(passWithNoTests);
+    },
+  );
 });
 
 describe('resolveProjects', () => {
