@@ -39,7 +39,7 @@ Use `@rstest/playwright` when you want Playwright-driven E2E tests to run in the
 
 ## Use an agent prompt
 
-To migrate an existing Playwright Test project to `@rstest/playwright`, use the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill with a Coding Agent that supports Skills. Agent Skills are domain-specific knowledge packs that help Coding Agents provide more accurate suggestions or perform actions for a specific scenario. The [skills](https://www.npmjs.com/package/skills) package installs these skills into a Coding Agent. The `migrate-to-rstest` skill provides general migration guardrails; use this page for Playwright-specific API, configuration, and fixture mappings.
+To migrate an existing Playwright Test project to `@rstest/playwright`, use the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill with a Coding Agent that supports Skills. Agent Skills are domain-specific knowledge packs that help Coding Agents provide more accurate suggestions or perform actions for a specific scenario. The [skills](https://www.npmjs.com/package/skills) package installs these skills into a Coding Agent. The `migrate-to-rstest` skill includes Playwright-specific migration guidance for configuration, fixtures, and behavior parity.
 
 Install the skill first:
 
@@ -53,7 +53,7 @@ Then copy the following prompt and send it to your Coding Agent:
 <Prompt
   title="Migrate Playwright to @rstest/playwright"
   description="Copy this prompt and send it to your Coding Agent."
-  prompt={`Migrate this Playwright Test project to @rstest/playwright. Use the installed migrate-to-rstest skill for scope detection, dependency gates, discovery parity, and verification. Use https://rstest.rs/guide/advanced/playwright.md for Playwright-specific API, configuration, and fixture mappings; do not apply Jest/Vitest-only migration steps. Preserve existing test behavior and coverage, and verify test discovery and results after the migration.`}
+  prompt={`Migrate this Playwright Test project to @rstest/playwright using the migrate-to-rstest skill. Follow its Playwright migration reference, preserve existing behavior and coverage, and report unsupported configuration or fixture features instead of silently dropping them.`}
 />
 
 ## Install
