@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of https://github.com/facebook/jest.
  */
 
+import { createRequire } from 'node:module';
 import type {
   Config as FakeTimerInstallOpts,
   FakeTimers as FakeTimerWithContext,
@@ -39,12 +40,15 @@ const isDate = (value: unknown): value is Date =>
   Object.prototype.toString.call(value) === '[object Date]';
 
 const loadFakeTimersModule = () => {
-  // TODO: Switch back to createRequire(import.meta.url) once Rspack supports
-  // preserving that pattern without breaking bundling/runtime resolution.
-  // Preserve the public sync timer API while avoiding module init work
-  // on worker startup when fake timers are never used.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-  const loaded = require('@sinonjs/fake-timers');
+  // Rspack bundles this `createRequire` call (parser enabled for this file in
+  // rslib.config.ts), so the dependency stays inside the chunk for both the
+  // Node and browser targets. Preserve the public sync timer API while
+  // avoiding module init work on worker startup when fake timers are never used.
+  const require = createRequire(import.meta.url);
+  const loaded: Pick<
+    typeof import('@sinonjs/fake-timers'),
+    'withGlobal'
+  > = require('@sinonjs/fake-timers');
   return { withGlobal: loaded.withGlobal };
 };
 
