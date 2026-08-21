@@ -6,6 +6,9 @@ settings:
 
 packageExtensionsChecksum: sha256-/oXUNlAVRCvDfhpsbH+E7MlrA1cfGnTrmqgmHjY2sMM=
 
+patchedDependencies:
+  heading-case@1.1.5: 66ba77080eac793f7336982caaafa9f2d92b0e450bda91f73b62730d9165f283
+
 importers:
 
   .:
@@ -33,7 +36,7 @@ importers:
         version: 0.0.4
       heading-case:
         specifier: ^1.1.5
-        version: 1.1.5
+        version: 1.1.5(patch_hash=66ba77080eac793f7336982caaafa9f2d92b0e450bda91f73b62730d9165f283)
       knip:
         specifier: ^6.32.2
         version: 6.32.2
@@ -14237,7 +14240,7 @@ snapshots:
 
   he@1.2.0: {}
 
-  heading-case@1.1.5: {}
+  heading-case@1.1.5(patch_hash=66ba77080eac793f7336982caaafa9f2d92b0e450bda91f73b62730d9165f283): {}
 
   hex-rgb@4.3.0: {}
 

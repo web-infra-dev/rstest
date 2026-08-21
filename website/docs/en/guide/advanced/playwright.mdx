@@ -3,6 +3,7 @@ description: This guide covers how to use @rstest/playwright to drive Playwright
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
+import { Prompt } from '@rspress/core/theme';
 import { PackageManagerTabs } from '@theme';
 
 # Playwright
@@ -35,6 +36,25 @@ Because `@rstest/playwright` controls an external page instead of running the te
 | Test API      | Import `test` and `expect` from `@rstest/playwright`  | Import `test` and `expect` from `@playwright/test` |
 
 Use `@rstest/playwright` when you want Playwright-driven E2E tests to run in the same Rstest workflow as the rest of your tests. Use native Playwright when you want the full Playwright Test runner workflow and its configuration model.
+
+## Use an agent prompt
+
+To migrate an existing Playwright Test project to `@rstest/playwright`, use the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill with a Coding Agent that supports Skills. Agent Skills are domain-specific knowledge packs that help Coding Agents provide more accurate suggestions or perform actions for a specific scenario. The [skills](https://www.npmjs.com/package/skills) package installs these skills into a Coding Agent. The `migrate-to-rstest` skill includes Playwright-specific migration guidance for configuration, fixtures, and behavior parity.
+
+Install the skill first:
+
+<PackageManagerTabs
+  command="skills add rstackjs/agent-skills --skill migrate-to-rstest"
+  dlx
+/>
+
+Then copy the following prompt and send it to your Coding Agent:
+
+<Prompt
+  title="Migrate Playwright to @rstest/playwright"
+  description="Copy this prompt and send it to your Coding Agent."
+  prompt={`Migrate this Playwright Test project to @rstest/playwright using the migrate-to-rstest skill. Follow its Playwright migration reference, preserve existing behavior and coverage, and report unsupported configuration or fixture features instead of silently dropping them.`}
+/>
 
 ## Install
 

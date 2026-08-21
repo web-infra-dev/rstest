@@ -3,6 +3,7 @@ description: 本指南介绍如何使用 @rstest/playwright，在运行于 Node.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
+import { Prompt } from '@rspress/core/theme';
 import { PackageManagerTabs } from '@theme';
 
 # Playwright
@@ -35,6 +36,25 @@ import { PackageManagerTabs } from '@theme';
 | 测试 API | 从 `@rstest/playwright` 导入 `test` 和 `expect` | 从 `@playwright/test` 导入 `test` 和 `expect` |
 
 如果希望 Playwright E2E 测试和其他 Rstest 测试使用同一套 Rstest 工作流，可以使用 `@rstest/playwright`。如果希望使用完整的 Playwright Test runner 工作流和配置模型，可以使用原生 Playwright。
+
+## 使用 Agent prompt
+
+如果要将现有的 Playwright Test 项目迁移到 `@rstest/playwright`，可以让支持 Skills 的 Coding Agent 使用 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill 辅助完成迁移。Agent Skills 是可以安装到 Coding Agent 中的领域知识包，能够帮助 Agent 针对特定场景提供更准确的建议或执行操作。[skills](https://www.npmjs.com/package/skills) 包用于将这些 skill 安装到 Coding Agent 中。`migrate-to-rstest` skill 包含针对 Playwright 配置、fixtures 和行为一致性的迁移指南。
+
+先安装该 skill：
+
+<PackageManagerTabs
+  command="skills add rstackjs/agent-skills --skill migrate-to-rstest"
+  dlx
+/>
+
+然后复制下面的 prompt 并发送给你的 Coding Agent：
+
+<Prompt
+  title="将 Playwright 迁移到 @rstest/playwright"
+  description="复制这个 prompt 并发送给你的 Coding Agent。"
+  prompt={`Migrate this Playwright Test project to @rstest/playwright using the migrate-to-rstest skill. Follow its Playwright migration reference, preserve existing behavior and coverage, and report unsupported configuration or fixture features instead of silently dropping them.`}
+/>
 
 ## 安装
 
