@@ -28,6 +28,12 @@ hoistPattern: ['@secretlint/*']
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@module-federation/*'
+  - '@swc-next/parser@0.1.2'
+  - '@swc-next/parser-binding-darwin-arm64@0.1.2'
+  - '@swc-next/parser-binding-darwin-x64@0.1.2'
+  - '@swc-next/parser-binding-linux-arm64-gnu@0.1.2'
+  - '@swc-next/parser-binding-linux-x64-gnu@0.1.2'
+  - '@swc-next/parser-binding-win32-x64-msvc@0.1.2'
   - '@rspack/*'
   - '@rsbuild/*'
   - '@rslib/*'
