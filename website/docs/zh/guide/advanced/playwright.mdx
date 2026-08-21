@@ -39,7 +39,9 @@ import { PackageManagerTabs } from '@theme';
 
 ## 使用 Agent prompt
 
-如果要将现有的 Playwright Test 项目迁移到 `@rstest/playwright`，可以让支持 Skills 的 Coding Agent 使用 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill 辅助完成迁移。先安装该 skill：
+如果要将现有的 Playwright Test 项目迁移到 `@rstest/playwright`，可以让支持 Skills 的 Coding Agent 使用 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill 辅助完成迁移。Agent Skills 是可以安装到 Coding Agent 中的领域知识包，能够帮助 Agent 针对特定场景提供更准确的建议或执行操作。[skills](https://www.npmjs.com/package/skills) 包用于将这些 skill 安装到 Coding Agent 中。`migrate-to-rstest` skill 提供通用的迁移约束；Playwright 特有的 API、配置和 fixture 映射请以本页为准。
+
+先安装该 skill：
 
 <PackageManagerTabs
   command="skills add rstackjs/agent-skills --skill migrate-to-rstest"
@@ -51,7 +53,7 @@ import { PackageManagerTabs } from '@theme';
 <Prompt
   title="将 Playwright 迁移到 @rstest/playwright"
   description="复制这个 prompt 并发送给你的 Coding Agent。"
-  prompt={`Migrate this Playwright Test project to @rstest/playwright by following the migrate-to-rstest skill. Preserve existing test behavior and coverage, migrate the Playwright Test configuration and fixtures, and verify test discovery and results after the migration.`}
+  prompt={`Migrate this Playwright Test project to @rstest/playwright. Use the installed migrate-to-rstest skill for scope detection, dependency gates, discovery parity, and verification. Use https://rstest.rs/guide/advanced/playwright.md for Playwright-specific API, configuration, and fixture mappings; do not apply Jest/Vitest-only migration steps. Preserve existing test behavior and coverage, and verify test discovery and results after the migration.`}
 />
 
 ## 安装
