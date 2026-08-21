@@ -31,14 +31,14 @@ Use this prompt to add Rstest to a project that doesn't have a test runner confi
 https://rstest.rs/guide/start/agent-install.md`}
 />
 
-### Migrate from Jest or Vitest
+### Migrate from Jest, Vitest, or playwright
 
-Use this prompt to migrate an existing Jest or Vitest project to Rstest. For convenience, the linked instructions inline the full [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill so nothing needs to be installed; alternatively, you can [install the skill](#agent-skills) and use it directly:
+Use this prompt to migrate an existing Jest, Vitest, or Playwright Test project to Rstest. Playwright Test projects migrate to `@rstest/playwright`. For convenience, the linked instructions inline the full [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill so nothing needs to be installed; alternatively, you can [install the skill](#agent-skills) and use it directly:
 
 <Prompt
   title="Migrate to Rstest"
   description="Copy this prompt and send it to your coding agent."
-  prompt={`Migrate this project to Rstest, the JavaScript testing framework, by following the instructions here:
+  prompt={`Migrate this project to Rstest, the JavaScript testing framework. Detect whether it uses Jest, Vitest, or Playwright Test; for Playwright Test, migrate to @rstest/playwright. Follow the instructions here:
 https://rstest.rs/guide/start/agent-migrate.md`}
 />
 
@@ -48,7 +48,7 @@ Agent Skills are domain-specific knowledge packs that can be installed into Agen
 
 In the [rstackjs/agent-skills](https://github.com/rstackjs/agent-skills) repository, there are many skills for the Rstack ecosystem. The skills related to Rstest include:
 
-- [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest): Migrate Jest or Vitest projects to Rstest.
+- [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest): Migrate Jest, Vitest, or Playwright Test projects to Rstest, using `@rstest/playwright` for Playwright E2E tests.
 - [rstest-best-practices](https://github.com/rstackjs/agent-skills#rstest-best-practices): Share best practices for using Rstest.
 - [rstest-debugging](https://github.com/rstackjs/agent-skills#rstest-debugging): Debug Rstest issues systematically, including performance regressions. Use it when Rstest is slower than expected, slower than Jest or Vitest, or when you need to determine whether the bottleneck is in build startup or test execution before trying config or code changes.
 
@@ -62,7 +62,7 @@ In Coding Agents that support skills, you can use the [skills](https://www.npmjs
 After installation, simply use natural language prompts to trigger the skill, for example:
 
 ```
-Help me migrate this Jest project to Rstest
+Help me migrate this Playwright Test project to @rstest/playwright
 ```
 
 ## llms.txt
