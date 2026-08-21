@@ -9,8 +9,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import type { NormalizedCoverageOptions } from '@rstest/core';
+import { parseSync, type SourceType } from '@swc-next/parser';
 import type { FileCoverageData } from 'istanbul-lib-coverage';
-import { parse } from 'yuku-parser';
 import { CoverageProvider } from '../src/provider';
 import type { IstanbulFileCoverageData } from '../src/utils';
 import { convertV8CoverageWithAst } from '../src/v8AstConverter';
@@ -122,9 +122,10 @@ function getProviderInternals(provider: CoverageProvider): ProviderInternals {
 }
 
 function parseModule(code: string) {
-  return parse(code, {
+  return parseSync(code, {
     preserveParens: false,
-    sourceType: 'module',
+    // SWC Next's ambient const enum cannot be referenced under isolatedModules.
+    sourceType: 'module' as SourceType,
   });
 }
 
@@ -282,14 +283,14 @@ describe('coverage-v8 provider', () => {
     expect(fileCoverage.f).toEqual({ 0: 0 });
   });
 
-  it('uses Yuku UTF-16 spans with V8 offsets', async () => {
-    const file = join(tmpdir(), 'rstest-coverage-v8-yuku-unicode.js');
+  it('uses SWC Next UTF-16 spans with V8 offsets', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-swc-next-unicode.js');
     const code = 'const label = "😀";\nconst value = () => 1;';
     const ast = parseModule(code);
 
     const coverage = await convertV8CoverageWithAst({
       ast,
-      cacheKey: `${file}:yuku-unicode`,
+      cacheKey: `${file}:swc-next-unicode`,
       code,
       coverage: {
         url: pathToFileURL(file).href,
@@ -309,14 +310,14 @@ describe('coverage-v8 provider', () => {
     });
   });
 
-  it('converts Yuku ESTree destructuring defaults and logical branches', async () => {
-    const file = join(tmpdir(), 'rstest-coverage-v8-yuku-branches.js');
+  it('converts SWC Next ESTree destructuring defaults and logical branches', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-swc-next-branches.js');
     const code = 'const { value = 1 } = input;\nconst result = (a && b) || c;';
     const ast = parseModule(code);
 
     const coverage = await convertV8CoverageWithAst({
       ast,
-      cacheKey: `${file}:yuku-branches`,
+      cacheKey: `${file}:swc-next-branches`,
       code,
       coverage: {
         url: pathToFileURL(file).href,
@@ -561,8 +562,8 @@ describe('coverage-v8 provider', () => {
     expect(coverage[file]?.b[0]).toEqual([1]);
   });
 
-  it('uses Yuku comments for ignore hints', async () => {
-    const file = join(tmpdir(), 'rstest-coverage-v8-yuku-comments.js');
+  it('uses SWC Next comments for ignore hints', async () => {
+    const file = join(tmpdir(), 'rstest-coverage-v8-swc-next-comments.js');
     const code = `const marker = "/* v8 ignore if */";
 if (first) { foo(); } else { bar(); }
 const label = "😀";
@@ -571,7 +572,7 @@ const label = "😀";
 
     const coverage = await convertV8CoverageWithAst({
       ast,
-      cacheKey: `${file}:yuku-comments`,
+      cacheKey: `${file}:swc-next-comments`,
       code,
       coverage: {
         url: pathToFileURL(file).href,
@@ -676,7 +677,7 @@ const label = "😀";
     expect(coverage[file]?.b[0]).toEqual([1]);
   });
 
-  it('honors ignore-file comments before reporting parser errors', async () => {
+  it('honors ignore-file comments in files with syntax errors', async () => {
     const file = join(tmpdir(), 'rstest-coverage-v8-ignore-file.js');
     const code = '/* c8 ignore file */ const =;';
 
