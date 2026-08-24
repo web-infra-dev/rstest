@@ -27,9 +27,9 @@
     "lint": "rslint ."
   },
   "dependencies": {
-    "antd": "^6.6.0",
-    "birpc": "^4.1.0",
-    "lucide-react": "^1.31.0",
+    "antd": "^6.6.1",
+    "birpc": "^4.2.0",
+    "lucide-react": "^1.33.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

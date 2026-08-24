@@ -275,7 +275,7 @@
     "@types/vscode": "1.97.0",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "3.9.2",
-    "birpc": "^4.1.0",
+    "birpc": "^4.2.0",
     "core-js-pure": "^3.50.0",
     "mocha": "^11.8.0",
     "ovsx": "^1.1.1",
@@ -284,7 +284,7 @@
     "tinyglobby": "^0.2.17",
     "typescript": "^6.0.3",
     "valibot": "^1.4.2",
-    "yuku-parser": "^0.8.7"
+    "yuku-parser": "^0.9.0"
   },
   "engines": {
     "vscode": "^1.97.0"
