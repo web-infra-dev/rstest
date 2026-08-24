@@ -140,7 +140,7 @@ test('mobile page', async ({ page }) => {
 });
 ```
 
-If only a few tests need different options, call `test.extend` again from those test files using the shared `test` as the base.
+If only a few tests need different options, call `test.extend` again from those test files using the shared `test` as the base. Overriding the `playwright` fixture replaces its value instead of merging it, so the new value must include every shared option that the test should preserve.
 
 The `playwright` fixture supports these options:
 

@@ -140,7 +140,7 @@ test('mobile page', async ({ page }) => {
 });
 ```
 
-如果只有少数测试需要不同的选项，可以在对应测试文件中基于共享的 `test` 再次调用 `test.extend`。
+如果只有少数测试需要不同的选项，可以在对应测试文件中基于共享的 `test` 再次调用 `test.extend`。再次覆盖 `playwright` fixture 会替换而不是合并共享选项，因此新的值必须包含该测试需要保留的所有共享选项。
 
 `playwright` fixture 支持以下选项：
 
