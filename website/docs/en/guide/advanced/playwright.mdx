@@ -12,7 +12,7 @@ import { PackageManagerTabs } from '@theme';
 
 [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) provides [Playwright](https://playwright.dev/) fixtures and Playwright-style assertions for Rstest tests that run in Node.js workers. Use it for E2E tests against a complete page or app, such as a local dev server, a preview server, or a deployed URL. The test runs in Node.js and uses Playwright to drive the page.
 
-## Rstest playwright vs native playwright
+## vs native Playwright
 
 `@rstest/playwright` and native Playwright use different runners and configuration files:
 
@@ -24,7 +24,7 @@ import { PackageManagerTabs } from '@theme';
 
 Use `@rstest/playwright` when you want Playwright-driven E2E tests to run in the same Rstest workflow as the rest of your tests. Use native Playwright when you want the full Playwright Test runner workflow and its configuration model.
 
-## Rstest browser mode vs playwright
+## vs Rstest browser mode
 
 The main difference is the testing scenario: Rstest browser mode web-bundles test modules and runs test code in a browser runtime, while `@rstest/playwright` controls a page that is already prepared by your app or server.
 
