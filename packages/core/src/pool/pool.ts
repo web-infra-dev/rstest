@@ -186,6 +186,7 @@ export class Pool {
       const runner = new PoolRunner(worker, {
         workerId,
         environmentKey,
+        memoryLimit: this.options.memoryLimit,
         onTestEnvironmentFallback: this.handleTestEnvironmentFallback,
       });
       this.activeRunners.add(runner);
@@ -253,7 +254,8 @@ export class Pool {
       this.options.isolate !== false ||
       this.isClosing ||
       this.isClosed ||
-      !runner.isUsable()
+      !runner.isUsable() ||
+      runner.shouldRecycle()
     ) {
       // Background dispose. The slot stays accounted for in `stoppingRunners`
       // until the child actually exits, so `isolate: true` cannot transiently

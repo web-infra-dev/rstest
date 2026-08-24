@@ -1,3 +1,4 @@
+import { createContext, runInContext } from 'node:vm';
 import type { Window as HappyDOMWindow } from 'happy-dom';
 import type {
   TestEnvironment,
@@ -68,6 +69,57 @@ export const setupEnvironment = async (
         await win.happyDOM.cancelAsync();
       }
       cleanupGlobal();
+    },
+  };
+};
+
+export const setupVM = async (
+  options: HappyDOMOptions,
+  context: TestEnvironmentContext,
+  dependency?: HappyDOMModule,
+): Promise<{
+  context: ReturnType<typeof createContext>;
+  teardown: () => Promise<void>;
+}> => {
+  if (!dependency) {
+    checkPkgInstalled('happy-dom');
+  }
+
+  const { Window, GlobalWindow } = dependency ?? (await import('happy-dom'));
+  const WindowClass = GlobalWindow || Window;
+  const resolvedOptions = options ?? {};
+  const win = new WindowClass({
+    ...resolvedOptions,
+    url: resolvedOptions.url || 'http://localhost:3000',
+    console: undefined,
+  });
+  const vmContext = createContext(win as unknown as object);
+  const vmGlobal = runInContext('globalThis', vmContext) as typeof globalThis;
+  const nodeTimers: NodeTimerPrimitives = {
+    clearInterval: globalThis.clearInterval,
+    clearTimeout: globalThis.clearTimeout,
+    setInterval: globalThis.setInterval,
+    setTimeout: globalThis.setTimeout,
+  };
+  const cleanupObjectURLs = installObjectURLTracker(
+    win.URL as unknown as typeof URL,
+    context,
+  );
+  const cleanupTimers = installTimerTracking(vmGlobal, nodeTimers, context);
+  const cleanupHandler = addDefaultErrorHandler(vmGlobal as unknown as Window);
+
+  return {
+    context: vmContext,
+    async teardown() {
+      cleanupHandler();
+      cleanupTimers();
+      cleanupObjectURLs();
+      if (win.close && win.happyDOM.abort) {
+        await win.happyDOM.abort();
+        win.close();
+      } else {
+        await win.happyDOM.cancelAsync();
+      }
     },
   };
 };

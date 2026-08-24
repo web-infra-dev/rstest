@@ -6,10 +6,12 @@ import { onTestFinished, rs } from '@rstest/core';
 import path from 'pathe';
 import type { AssetFiles } from '../../src/types';
 import {
+  clearCompilationCache as clearEsCompilationCache,
   clearModuleCache as clearEsModuleCache,
   loadModule as loadEsModule,
 } from '../../src/runtime/worker/loadEsModule';
 import {
+  clearCompilationCache as clearCjsCompilationCache,
   clearModuleCache as clearCjsModuleCache,
   loadModule,
 } from '../../src/runtime/worker/loadModule';
@@ -21,7 +23,9 @@ import {
 describe('require.resolve origin runtime helper', () => {
   afterEach(() => {
     clearEsModuleCache();
+    clearEsCompilationCache();
     clearCjsModuleCache();
+    clearCjsCompilationCache();
   });
 
   it('resolves relative specifiers against injected source module origin', () => {
@@ -232,6 +236,76 @@ describe('require.resolve origin runtime helper', () => {
     expect(extraParamOptions?.columnOffset).toBe(0);
     expect(extraParamOptions?.lineOffset).toBe(baseOptions?.lineOffset);
     expect(extraParamOptions?.lineOffset).toBe(-1);
+  });
+
+  it('reuses setup compilation data across VM contexts', () => {
+    const compileFunctionSpy = rs.spyOn(vm, 'compileFunction');
+    onTestFinished(() => {
+      compileFunctionSpy.mockRestore();
+    });
+
+    const dir = path.join(
+      os.tmpdir(),
+      `rstest-cjs-compile-cache-${Date.now()}`,
+    );
+    const loadOptions = {
+      codeContent: `module.exports = globalThis;`,
+      distPath: path.join(dir, 'setup.js'),
+      testPath: path.join(dir, 'test.spec.ts'),
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+      cacheCompilation: true,
+    };
+
+    loadModule({ ...loadOptions, vmContext: vm.createContext({}) });
+    clearCjsModuleCache();
+    loadModule({ ...loadOptions, vmContext: vm.createContext({}) });
+
+    const [, , options] = compileFunctionSpy.mock.lastCall!;
+    expect(options?.cachedData).toBeInstanceOf(Buffer);
+  });
+
+  it('reuses ESM setup compilation data across VM contexts', async () => {
+    // @types/node does not declare SourceTextModule.createCachedData yet.
+    const modulePrototype = vm.SourceTextModule.prototype as unknown as {
+      createCachedData: () => Buffer;
+    };
+    const originalCreateCachedData = modulePrototype.createCachedData;
+    let createCachedDataCalls = 0;
+    modulePrototype.createCachedData = function () {
+      createCachedDataCalls++;
+      return originalCreateCachedData.call(this);
+    };
+    onTestFinished(() => {
+      modulePrototype.createCachedData = originalCreateCachedData;
+    });
+
+    const dir = path.join(
+      os.tmpdir(),
+      `rstest-esm-compile-cache-${Date.now()}`,
+    );
+    const loadOptions = {
+      codeContent: `export const marker = 1;`,
+      distPath: path.join(dir, 'setup.mjs'),
+      testPath: path.join(dir, 'test.spec.ts'),
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+      cacheCompilation: true,
+    };
+
+    await loadEsModule({
+      ...loadOptions,
+      vmContext: vm.createContext({}),
+    });
+    clearEsModuleCache();
+    await loadEsModule({
+      ...loadOptions,
+      vmContext: vm.createContext({}),
+    });
+
+    expect(createCachedDataCalls).toBe(1);
   });
 
   it('preserves CommonJS stack trace line offsets', () => {

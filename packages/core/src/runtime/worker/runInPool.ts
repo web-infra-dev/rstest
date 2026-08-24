@@ -1,4 +1,5 @@
 import type { FileCoverageData } from 'istanbul-lib-coverage';
+import { createContext, runInContext, Script, type Context } from 'node:vm';
 import { isMainThread, threadId } from 'node:worker_threads';
 import { normalize } from 'pathe';
 import { install } from 'source-map-support';
@@ -134,6 +135,65 @@ const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
   }
 };
 
+const installVmNodeGlobals = (runtimeGlobal: Record<string, any>): void => {
+  const excluded = new Set(['GLOBAL', 'root', 'global', 'globalThis']);
+  for (const key of Object.getOwnPropertyNames(globalThis)) {
+    if (excluded.has(key) || key in runtimeGlobal) {
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, key);
+    if (descriptor) {
+      Object.defineProperty(runtimeGlobal, key, descriptor);
+    }
+  }
+
+  Object.assign(runtimeGlobal, {
+    process,
+    Buffer,
+    ArrayBuffer,
+    Uint8Array,
+    global: runtimeGlobal,
+    setImmediate,
+    clearImmediate,
+  });
+};
+
+const captureVmContextKeysScript = new Script(
+  'Object.getOwnPropertyNames(globalThis).concat(Object.getOwnPropertySymbols(globalThis))',
+);
+const stripVmContextScript = new Script(`(initialKeys) => {
+  const globalObject = globalThis;
+  try { globalObject.document.body.textContent = ''; } catch {}
+  try { globalObject.document.head.textContent = ''; } catch {}
+  let keys = [];
+  try {
+    keys = Object.getOwnPropertyNames(globalObject).concat(Object.getOwnPropertySymbols(globalObject));
+  } catch {}
+  for (const key of keys) {
+    if (initialKeys.has(key)) continue;
+    try { delete globalObject[key]; } catch {}
+  }
+}`);
+
+const captureVmContextKeys = (context: Context): Set<string | symbol> => {
+  try {
+    return new Set(captureVmContextKeysScript.runInContext(context));
+  } catch {
+    return new Set();
+  }
+};
+
+const stripVmContext = (
+  context: Context,
+  initialKeys: Set<string | symbol>,
+): void => {
+  try {
+    stripVmContextScript.runInContext(context)(initialKeys);
+  } catch {
+    // The context may already be in the process of being torn down.
+  }
+};
+
 const createOriginalLogWriter = () => {
   const stdoutWrite = process.stdout.write.bind(process.stdout);
   const stderrWrite = process.stderr.write.bind(process.stderr);
@@ -174,18 +234,11 @@ const preparePool = async (
   const writeOriginalLog = createOriginalLogWriter();
   setRealTimers();
 
-  // `mockRuntimeCode.js` gates its Module Federation shims on this worker-wide
-  // flag, so it must be set before any bundle code is evaluated.
-  const federation = context.runtimeConfig.federation === true;
-  (globalThis as Record<string, unknown>).__rstest_federation__ = federation;
-  // With `isolate: false` a previous file in this worker may have installed the
-  // global dynamic-import fallback (`mockRuntimeCode.js`). Hide it from
-  // non-federation files so federation stays strictly opt-in, and hand it back
-  // on federation re-entry — the installing runtime chunk is kept across files
-  // and never re-executes, so dropping it outright would be permanent.
-  setFederationDynamicImportOrigin(federation, testPath);
-
   const cleanupFns: (() => MaybePromise<void>)[] = [];
+  const isVmPool = context.pool === 'vmThreads';
+  let vmContext: Context | undefined;
+  let initialVmContextKeys: Set<string | symbol> | undefined;
+  let runtimeGlobal = globalThis as Record<string, any>;
 
   const disposeFns: (() => void)[] = [];
   const { rpc } = createRuntimeRpc(
@@ -213,6 +266,48 @@ const preparePool = async (
   } = context;
 
   setupEnv(env);
+
+  if (isVmPool) {
+    if (testEnvironment.name === 'node') {
+      vmContext = createContext({});
+    } else {
+      const loadEnvironment = environmentLoaders[testEnvironment.name];
+      if (!loadEnvironment) {
+        throw new Error(`Unknown test environment: ${testEnvironment.name}`);
+      }
+      const [{ setupVM }, environmentModule] = await Promise.all([
+        loadEnvironment(),
+        loadTestEnvironmentModule(
+          context.testEnvironmentModule,
+          onTestEnvironmentFallback,
+        ),
+      ]);
+      const vmEnvironment = await setupVM(
+        testEnvironment.options || {},
+        { scope: 'file' },
+        environmentModule,
+      );
+      vmContext = vmEnvironment.context;
+      cleanupFns.push(vmEnvironment.teardown);
+    }
+    runtimeGlobal = runInContext('globalThis', vmContext!) as Record<
+      string,
+      any
+    >;
+    installVmNodeGlobals(runtimeGlobal);
+    initialVmContextKeys = captureVmContextKeys(vmContext);
+  }
+
+  // `mockRuntimeCode.js` gates its Module Federation shims on this worker-wide
+  // flag, so it must be set before any bundle code is evaluated.
+  const federation = context.runtimeConfig.federation === true;
+  runtimeGlobal.__rstest_federation__ = federation;
+  // With `isolate: false` a previous file in this worker may have installed the
+  // global dynamic-import fallback (`mockRuntimeCode.js`). Hide it from
+  // non-federation files so federation stays strictly opt-in, and hand it back
+  // on federation re-entry — the installing runtime chunk is kept across files
+  // and never re-executes, so dropping it outright would be permanent.
+  setFederationDynamicImportOrigin(federation, testPath, runtimeGlobal);
 
   const shouldInterceptConsole =
     !disableConsoleIntercept || silent === true || silent === 'passed-only';
@@ -268,7 +363,7 @@ const preparePool = async (
       getCurrentTask: () => taskContext.getCurrent(),
     });
     globalCleanups.push(
-      installGlobalProperty(global, 'console', customConsole),
+      installGlobalProperty(runtimeGlobal, 'console', customConsole),
     );
   }
 
@@ -328,7 +423,7 @@ const preparePool = async (
   );
 
   tracker?.transition('envSetup');
-  const hasPinnedEnvironment = activeEnvironmentKey !== undefined;
+  const hasPinnedEnvironment = !isVmPool && activeEnvironmentKey !== undefined;
   if (hasPinnedEnvironment && activeEnvironmentKey !== environmentKey) {
     // Unreachable: the scheduler only reuses a worker for tasks matching its
     // pinned environment (`Pool.acquireRunner`). The throw guards against a
@@ -343,7 +438,7 @@ const preparePool = async (
   // teardown is `MaybePromise<void>` and is awaited via `Promise.all` in
   // `cleanup`, so a single uniform wrapper preserves both the sync (jsdom) and
   // async (happy-dom) teardown shapes.
-  if (testEnvironment.name !== 'node' && !hasPinnedEnvironment) {
+  if (!isVmPool && testEnvironment.name !== 'node' && !hasPinnedEnvironment) {
     const loadEnvironment = environmentLoaders[testEnvironment.name];
     if (!loadEnvironment) {
       throw new Error(`Unknown test environment: ${testEnvironment.name}`);
@@ -357,32 +452,34 @@ const preparePool = async (
       ),
     ]);
     const { teardown } = await setup(
-      global,
+      runtimeGlobal as typeof globalThis,
       testEnvironment.options || {},
       { scope },
       environmentModule,
     );
     if (scope === 'file') {
-      cleanupFns.push(() => teardown(global));
+      cleanupFns.push(() => teardown(runtimeGlobal as typeof globalThis));
     }
   }
   // Pin only after setup succeeded. A setup failure (e.g. an invalid jsdom
   // option) surfaces as a file-level failure and leaves the worker reusable;
   // pinning eagerly would make every later same-key task skip setup and run
   // bare-Node against a config the user asked to be a DOM.
-  if (!isolate) {
+  if (!isVmPool && !isolate) {
     activeEnvironmentKey = environmentKey;
   }
   tracker?.transition('prepare');
 
   if (globals) {
-    globalCleanups.push(installGlobalApis(api));
+    globalCleanups.push(installGlobalApis(api, runtimeGlobal));
   }
 
   const rstestContext = {
-    global,
-    console: global.console,
-    Error,
+    global: runtimeGlobal,
+    console: runtimeGlobal.console,
+    Error: vmContext
+      ? (runInContext('Error', vmContext) as typeof Error)
+      : Error,
   };
 
   Object.assign(rstestContext.global, {
@@ -398,9 +495,15 @@ const preparePool = async (
     silentConsoleController,
     api,
     taskContext,
+    vmContext,
     unhandledErrors,
     cleanup: async () => {
       await Promise.all(cleanupFns.map((fn) => fn()));
+      if (vmContext && initialVmContextKeys) {
+        const { flushAllLoaderCaches } = await import('./interop');
+        await flushAllLoaderCaches();
+        stripVmContext(vmContext, initialVmContextKeys);
+      }
     },
   };
 };
@@ -416,6 +519,8 @@ const loadFiles = async ({
   isolate,
   outputModule,
   federation,
+  vmContext,
+  runtimeGlobal,
   tracker,
 }: {
   setupEntries: RunWorkerOptions['options']['setupEntries'];
@@ -428,6 +533,8 @@ const loadFiles = async ({
   isolate: boolean;
   outputModule: boolean;
   federation: boolean;
+  vmContext?: Context;
+  runtimeGlobal: Record<string, unknown>;
   tracker?: PhaseTracker;
 }): Promise<void> => {
   const { loadModule } = outputModule
@@ -438,7 +545,7 @@ const loadFiles = async ({
   // A reused worker can hold several projects' runtime chunks at once, so pass
   // the current entry path to every self-scoped cleaner. Only its
   // owning chunk can map that path to a cached module id.
-  if (!isolate) {
+  if (!isolate && !vmContext) {
     await loadModule({
       codeContent: `if (global && global.__rstest_cache_cleaners__) {
   global.__rstest_cache_cleaners__.forEach((fn) => fn(${JSON.stringify(normalize(testPath))}));
@@ -458,7 +565,7 @@ const loadFiles = async ({
     distPath: setupDistPath,
     testPath: setupTestPath,
   } of setupEntries) {
-    setFederationDynamicImportOrigin(federation, setupTestPath);
+    setFederationDynamicImportOrigin(federation, setupTestPath, runtimeGlobal);
 
     await loadModule({
       codeContent: getAssetText(assetFiles, setupDistPath),
@@ -469,11 +576,13 @@ const loadFiles = async ({
       assetFiles,
       interopDefault,
       virtualFsAssetFiles,
+      vmContext,
+      cacheCompilation: true,
     });
   }
 
   tracker?.transition('collect');
-  setFederationDynamicImportOrigin(federation, testPath);
+  setFederationDynamicImportOrigin(federation, testPath, runtimeGlobal);
   await loadModule({
     codeContent: getAssetText(assetFiles, distPath),
     distPath,
@@ -483,6 +592,7 @@ const loadFiles = async ({
     assetFiles,
     interopDefault,
     virtualFsAssetFiles,
+    vmContext,
   });
 };
 
@@ -538,7 +648,17 @@ export const runInPool = async (
   // build's cache. Fully flush every loader on the rebuild boundary before
   // loading (see `flushAllLoaderCaches` for why both loaders, not just this
   // task's).
-  if (!isolate && lastBuildId !== undefined && lastBuildId !== buildId) {
+  const isVmPool = options.context.pool === 'vmThreads';
+  const buildChanged = lastBuildId !== undefined && lastBuildId !== buildId;
+  if (buildChanged) {
+    const [esmLoader, cjsLoader] = await Promise.all([
+      import('./loadEsModule'),
+      import('./loadModule'),
+    ]);
+    esmLoader.clearCompilationCache();
+    cjsLoader.clearCompilationCache();
+  }
+  if (!isVmPool && !isolate && buildChanged) {
     // A rebuild replaces fixture definitions too. Retire instances created by
     // the previous module graph before loading the new graph, otherwise both
     // generations can hold external resources in one reused worker.
@@ -579,7 +699,10 @@ export const runInPool = async (
     // Run teardown
     await Promise.all(cleanups.map((fn) => fn()));
 
-    if (!isolate) {
+    if (isVmPool) {
+      const { flushAllLoaderCaches } = await import('./interop');
+      await flushAllLoaderCaches();
+    } else if (!isolate) {
       const { clearModuleCache } = await importLoader();
       // Keep the shared runtime chunk so imported module state survives across
       // files. Its cache-control runtime invalidates setup and the next current
@@ -604,6 +727,7 @@ export const runInPool = async (
         cleanup,
         unhandledErrors,
         interopDefault,
+        vmContext,
       } = await preparePool(
         options,
         undefined,
@@ -626,6 +750,8 @@ export const runInPool = async (
         isolate,
         outputModule: options.context.outputModule,
         federation: federation === true,
+        vmContext,
+        runtimeGlobal: rstestContext.global,
       });
       const tests = await runner.collectTests();
       return {
@@ -672,6 +798,7 @@ export const runInPool = async (
       cleanup,
       unhandledErrors,
       interopDefault,
+      vmContext,
       taskContext: preparedTaskContext,
     } = await preparePool(
       options,
@@ -742,6 +869,8 @@ export const runInPool = async (
         isolate,
         outputModule: options.context.outputModule,
         federation: federation === true,
+        vmContext,
+        runtimeGlobal: rstestContext.global,
         tracker,
       });
     } finally {
@@ -886,7 +1015,7 @@ export const runInPool = async (
     tracker.transition('teardown');
     taskContext?.setFallback(undefined);
     asyncLeakDetector?.disable();
-    if (isolate) {
+    if (isolate || isVmPool) {
       const workerCleanupError = await cleanupWorkerFixtureScope();
       if (workerCleanupError && runResult) {
         runResult.status = 'fail';

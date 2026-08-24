@@ -93,6 +93,8 @@ const defineRstestDynamicImport =
     returnModule,
     esmMode,
     runtimeDistPath,
+    vmContext,
+    cacheCompilation,
   }: {
     esmMode: EsmMode;
     assetFiles: AssetFiles;
@@ -101,6 +103,8 @@ const defineRstestDynamicImport =
     runtimeDistPath?: string;
     testPath: string;
     interopDefault: boolean;
+    vmContext?: vm.Context;
+    cacheCompilation: boolean;
   }) =>
   async (
     specifier: string,
@@ -131,7 +135,7 @@ const defineRstestDynamicImport =
         wasmPath.startsWith('file://') ? fileURLToPath(wasmPath) : wasmPath,
       );
       if (existsSync(wasmFsPath)) {
-        return loadWasm(wasmFsPath, returnModule);
+        return loadWasm(wasmFsPath, returnModule, vmContext);
       }
     }
 
@@ -146,6 +150,8 @@ const defineRstestDynamicImport =
           assetFiles,
           interopDefault,
           esmMode,
+          vmContext,
+          cacheCompilation,
         });
       } catch (err) {
         logger.error(
@@ -160,10 +166,17 @@ const defineRstestDynamicImport =
       importAttributes,
       interopDefault,
       returnModule,
+      vmContext,
     });
   };
 
 const esmCache = new Map<string, SourceTextModule>();
+// Cache only V8's parse/compile metadata; SourceTextModule instances remain
+// tied to the VM context that evaluated them.
+const compilationCache = new Map<
+  string,
+  { code: string; cachedData: Buffer }
+>();
 
 // With `isolate: false` the kept runtime chunk's `import.meta` hooks (wasm /
 // dynamic-import resolution) capture this asset map BY REFERENCE at creation
@@ -183,7 +196,7 @@ const accumulatedAssetFiles: AssetFiles = {};
 // runtime chunk and keep all of them; reset only on a full clear.
 const keptRuntimeChunks = new Set<string>();
 
-// setup and rstest module should not be cached
+// Keep module instances per file; only setup compilation metadata is shared.
 export const loadModule = async ({
   codeContent,
   distPath,
@@ -192,6 +205,8 @@ export const loadModule = async ({
   interopDefault,
   esmMode = EsmMode.Unknown,
   runtimeDistPath,
+  vmContext,
+  cacheCompilation = false,
 }: {
   esmMode?: EsmMode;
   interopDefault: boolean;
@@ -201,6 +216,8 @@ export const loadModule = async ({
   testPath: string;
   rstestContext: Record<string, any>;
   assetFiles: AssetFiles;
+  vmContext?: vm.Context;
+  cacheCompilation?: boolean;
 }): Promise<any> => {
   // Fold this file's assets into the persistent map. Recursive loads (dynamic
   // imports) re-pass that same map, so skip the no-op self-merge.
@@ -213,8 +230,14 @@ export const loadModule = async ({
     : codeContent;
   let esm = esmCache.get(distPath);
   if (!esm) {
+    const cached = cacheCompilation
+      ? compilationCache.get(distPath)
+      : undefined;
+    const cachedData = cached?.code === code ? cached.cachedData : undefined;
     esm = new vm.SourceTextModule(code, {
       identifier: distPath,
+      ...(vmContext ? { context: vmContext } : {}),
+      ...(cachedData ? { cachedData } : {}),
       lineOffset: 0,
       columnOffset: 0,
       initializeImportMeta: (meta) => {
@@ -230,6 +253,8 @@ export const loadModule = async ({
           interopDefault,
           returnModule: false,
           esmMode: EsmMode.Unknown,
+          vmContext,
+          cacheCompilation,
         });
         // @ts-expect-error
         meta[RSTEST_REQUIRE_RESOLVE_HOOK] = defineRstestRequireResolve({
@@ -247,9 +272,22 @@ export const loadModule = async ({
           interopDefault,
           returnModule: true,
           esmMode: EsmMode.Unlinked,
+          vmContext,
+          cacheCompilation,
         })(specifier, importAttributes as ImportCallOptions);
       },
     });
+    if (cacheCompilation && !cachedData) {
+      const createCachedData = (
+        esm as SourceTextModule & { createCachedData?: () => Buffer }
+      ).createCachedData;
+      if (createCachedData) {
+        compilationCache.set(distPath, {
+          code,
+          cachedData: createCachedData.call(esm),
+        });
+      }
+    }
     if (distPath) esmCache.set(distPath, esm);
   }
 
@@ -265,6 +303,8 @@ export const loadModule = async ({
         interopDefault,
         returnModule: true,
         esmMode: EsmMode.Unlinked,
+        vmContext,
+        cacheCompilation,
       })(
         specifier,
         {},
@@ -315,4 +355,8 @@ export const clearModuleCache = (keep?: string): void => {
     clearCacheCleaners();
   }
   clearSyntheticModuleCache();
+};
+
+export const clearCompilationCache = (): void => {
+  compilationCache.clear();
 };

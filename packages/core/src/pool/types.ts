@@ -2,7 +2,7 @@ import type { RuntimeRPC, RunWorkerOptions } from '../types';
 import type { MemoryGate } from './memoryGate';
 import type { TestEnvironmentModuleFallback } from './protocol';
 
-export type PoolWorkerKind = 'forks' | 'threads';
+export type PoolWorkerKind = 'forks' | 'threads' | 'vmThreads';
 
 export type PoolTask = {
   worker: PoolWorkerKind;
@@ -16,6 +16,8 @@ export type PoolOptions = {
   maxWorkers: number;
   minWorkers: number;
   isolate: boolean;
+  /** Recycle a VM worker after it reports this much heap usage, when set. */
+  memoryLimit?: number;
   env?: Record<string, string>;
   execArgv?: string[];
   /**

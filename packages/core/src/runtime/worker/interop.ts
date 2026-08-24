@@ -117,6 +117,21 @@ export function createInteropProxy(mod: any, defaultExport: any): any {
 // races the V8 module-graph evaluation and segfaults the worker. One instance
 // per resolved id structurally eliminates the race (mirrors vitest#7741).
 const smCache = new Map<string, vm.SyntheticModule>();
+let vmSmCaches = new WeakMap<object, Map<string, vm.SyntheticModule>>();
+
+const getSyntheticModuleCache = (
+  context?: vm.Context,
+): Map<string, vm.SyntheticModule> => {
+  if (!context) {
+    return smCache;
+  }
+  let cache = vmSmCaches.get(context);
+  if (!cache) {
+    cache = new Map();
+    vmSmCaches.set(context, cache);
+  }
+  return cache;
+};
 
 /**
  * Wrap a plain exports object in a `vm.SyntheticModule` so it can participate
@@ -133,10 +148,12 @@ export const asModule = async (
   something: Record<string, any>,
   resolvedId: string,
   defaultExport?: unknown,
+  context?: vm.Context,
 ): Promise<vm.SyntheticModule> => {
   const { SyntheticModule } = await import('node:vm');
+  const cache = getSyntheticModuleCache(context);
 
-  const cached = smCache.get(resolvedId);
+  const cached = cache.get(resolvedId);
   if (cached) return cached;
 
   const hasDefault = defaultExport !== undefined || 'default' in something;
@@ -156,10 +173,13 @@ export const asModule = async (
         );
       }
     },
-    { identifier: resolvedId },
+    {
+      identifier: resolvedId,
+      ...(context ? { context } : {}),
+    },
   );
 
-  smCache.set(resolvedId, syntheticModule);
+  cache.set(resolvedId, syntheticModule);
 
   await syntheticModule.link((() => undefined) as unknown as vm.ModuleLinker);
 
@@ -172,6 +192,7 @@ export const asModule = async (
 
 export const clearSyntheticModuleCache = (): void => {
   smCache.clear();
+  vmSmCaches = new WeakMap();
 };
 
 /**

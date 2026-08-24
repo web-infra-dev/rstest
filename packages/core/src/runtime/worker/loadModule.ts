@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { createRequire as createNativeRequire } from 'node:module';
+import type { ImportAttributes } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import path from 'pathe';
@@ -184,6 +185,8 @@ const createRequire = (
   assetFiles: AssetFiles,
   interopDefault: boolean,
   virtualFsAssetFiles?: AssetFiles,
+  vmContext?: vm.Context,
+  cacheCompilation = false,
 ): NodeJS.Require => {
   const _require = (() => {
     try {
@@ -220,6 +223,8 @@ const createRequire = (
           assetFiles,
           interopDefault,
           virtualFsAssetFiles,
+          vmContext,
+          cacheCompilation,
         });
       } catch (err) {
         logger.error(
@@ -247,10 +252,12 @@ const defineRstestDynamicImport =
     testPath,
     interopDefault,
     returnModule = false,
+    vmContext,
   }: {
     returnModule?: boolean;
     testPath: string;
     interopDefault: boolean;
+    vmContext?: vm.Context;
   }) =>
   async (
     specifier: string,
@@ -270,7 +277,7 @@ const defineRstestDynamicImport =
       );
 
       if (existsSync(normalizedPath)) {
-        return loadWasm(normalizedPath, returnModule);
+        return loadWasm(normalizedPath, returnModule, vmContext);
       }
     }
 
@@ -279,6 +286,7 @@ const defineRstestDynamicImport =
       importAttributes,
       interopDefault,
       returnModule,
+      vmContext,
     });
   };
 
@@ -294,7 +302,7 @@ const accumulatedAssetFiles: AssetFiles = {};
 // reset only on a full clear; see `loadEsModule.ts` for the full rationale.
 const keptRuntimeChunks = new Set<string>();
 
-// setup and rstest module should not be cached
+// Keep module instances per file; only setup compilation metadata is shared.
 export const loadModule = ({
   codeContent,
   distPath,
@@ -303,6 +311,8 @@ export const loadModule = ({
   assetFiles: assetFilesArg,
   interopDefault,
   virtualFsAssetFiles: virtualFsAssetFilesArg,
+  vmContext,
+  cacheCompilation = false,
 }: {
   interopDefault: boolean;
   codeContent: string;
@@ -311,6 +321,8 @@ export const loadModule = ({
   rstestContext: Record<string, any>;
   assetFiles: AssetFiles;
   virtualFsAssetFiles?: AssetFiles;
+  vmContext?: vm.Context;
+  cacheCompilation?: boolean;
 }): any => {
   // Fold this file's assets into the persistent map. Recursive loads (require /
   // dynamic imports) re-pass that same map, so skip the no-op self-merge.
@@ -341,10 +353,13 @@ export const loadModule = ({
       assetFiles,
       interopDefault,
       virtualFsAssetFiles,
+      vmContext,
+      cacheCompilation,
     ),
     [RSTEST_DYNAMIC_IMPORT_HOOK]: defineRstestDynamicImport({
       testPath,
       interopDefault,
+      vmContext,
     }),
     [RSTEST_REQUIRE_RESOLVE_HOOK]: defineRstestRequireResolve({
       testPath,
@@ -358,25 +373,64 @@ export const loadModule = ({
 
   const code = `'use strict';return function(){\n${codeContent}\n}`;
 
-  const fn = vm.compileFunction(code, Object.keys(context), {
+  const params = Object.keys(context);
+  const cached = cacheCompilation ? compilationCache.get(distPath) : undefined;
+  const cachedData =
+    cached?.code === code &&
+    cached.params.length === params.length &&
+    cached.params.every((param, index) => param === params[index])
+      ? cached.cachedData
+      : undefined;
+  const importModuleDynamically = (
+    specifier: string,
+    _referencer: unknown,
+    importAttributes: ImportAttributes,
+  ) => {
+    return defineRstestDynamicImport({
+      testPath,
+      interopDefault,
+      returnModule: true,
+      vmContext,
+    })(specifier, importAttributes as ImportCallOptions);
+  };
+  let fn = vm.compileFunction(code, params, {
     // Used in stack traces produced by this script.
     filename: distPath,
     lineOffset: -1,
     columnOffset: 0,
-    importModuleDynamically: (specifier, _referencer, importAttributes) => {
-      return defineRstestDynamicImport({
-        testPath,
-        interopDefault,
-        returnModule: true,
-      })(specifier, importAttributes as ImportCallOptions);
-    },
+    ...(vmContext ? { parsingContext: vmContext } : {}),
+    ...(cachedData
+      ? { cachedData }
+      : cacheCompilation
+        ? { produceCachedData: true }
+        : {}),
+    importModuleDynamically,
   });
+  if (cachedData && fn.cachedDataRejected) {
+    fn = vm.compileFunction(code, params, {
+      filename: distPath,
+      lineOffset: -1,
+      columnOffset: 0,
+      ...(vmContext ? { parsingContext: vmContext } : {}),
+      produceCachedData: true,
+      importModuleDynamically,
+    });
+  }
+  if (cacheCompilation && fn.cachedDataProduced && fn.cachedData) {
+    compilationCache.set(distPath, { code, params, cachedData: fn.cachedData });
+  }
   fn(...Object.values(context)).call(localModule.exports);
 
   return localModule.exports;
 };
 
 const moduleCache = new Map<string, any>();
+// V8 cached data is safe to instantiate in multiple realms; module exports are
+// deliberately not stored here, so setup dependencies keep file isolation.
+const compilationCache = new Map<
+  string,
+  { code: string; params: string[]; cachedData: Buffer }
+>();
 
 export const cacheableLoadModule = ({
   codeContent,
@@ -386,6 +440,8 @@ export const cacheableLoadModule = ({
   assetFiles,
   interopDefault,
   virtualFsAssetFiles,
+  vmContext,
+  cacheCompilation = false,
 }: {
   interopDefault: boolean;
   codeContent: string;
@@ -394,6 +450,8 @@ export const cacheableLoadModule = ({
   rstestContext: Record<string, any>;
   assetFiles: AssetFiles;
   virtualFsAssetFiles?: AssetFiles;
+  vmContext?: vm.Context;
+  cacheCompilation?: boolean;
 }): any => {
   if (moduleCache.has(testPath)) {
     return moduleCache.get(testPath);
@@ -406,6 +464,8 @@ export const cacheableLoadModule = ({
     assetFiles,
     interopDefault,
     virtualFsAssetFiles,
+    vmContext,
+    cacheCompilation,
   });
   moduleCache.set(testPath, mod);
   return mod;
@@ -439,4 +499,8 @@ export const clearModuleCache = (keep?: string): void => {
     clearCacheCleaners();
   }
   clearSyntheticModuleCache();
+};
+
+export const clearCompilationCache = (): void => {
+  compilationCache.clear();
 };

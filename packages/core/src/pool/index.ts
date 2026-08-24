@@ -26,7 +26,7 @@ import {
 } from '../utils';
 import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
-import { getNumCpus, parseWorkers } from '../utils/workers';
+import { getNumCpus, parseMemoryLimit, parseWorkers } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
 import { getEnvironmentKey } from '../core/environmentGroups';
 import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/envDependencies';
@@ -193,6 +193,7 @@ const buildTask = async ({
           taskId: index + 1,
           buildId,
           project: project.name,
+          pool: workerKind,
           rootPath: context.rootPath,
           projectRoot: project.rootPath,
           runtimeConfig,
@@ -390,7 +391,18 @@ export const createPool = async ({
 
   const pool = new Pool({
     workerEntry: resolve(__dirname, './worker.js'),
-    isolate,
+    // VM threads amortize worker startup while recreating the VM realm for
+    // every file. The runtime still receives the user's isolate value so it
+    // can preserve file-level cleanup semantics.
+    isolate: workerKind === 'vmThreads' ? false : isolate,
+    // VM contexts can retain module and realm allocations until their worker
+    // exits. Recycle from the worker's own V8 heap report, like Jest and
+    // Vitest, while keeping the worker alive below the limit. The default
+    // gives each VM worker an equal share of the machine memory.
+    memoryLimit:
+      workerKind === 'vmThreads'
+        ? parseMemoryLimit(poolOptions.memoryLimit ?? 1 / maxWorkers)
+        : undefined,
     maxWorkers,
     minWorkers,
     execArgv: [

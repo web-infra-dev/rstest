@@ -10,13 +10,15 @@ import { ApiMeta } from '@components/ApiMeta';
 - **类型：**
 
 ```ts
-export type RstestPoolType = 'forks' | 'threads';
+export type RstestPoolType = 'forks' | 'threads' | 'vmThreads';
 
 export type RstestPoolOptions = {
   /** 用于运行测试的线程池 */
   type?: RstestPoolType;
   /** 最大运行的线程池的数量或百分比 */
   maxWorkers?: number | string;
+  /** 在 VM worker 超过该内存上限后回收，支持字节数、百分比和单位字符串。 */
+  memoryLimit?: number | string;
   /** 向子进程中的 node 进程传递附加参数。 */
   execArgv?: string[];
 };
@@ -42,7 +44,7 @@ const defaultPool = {
 
 ## Pool 类型
 
-Rstest 支持两种 pool 类型，它们共享同一套 scheduler、RPC 和结果聚合逻辑，差异仅在于 worker 的创建方式。
+Rstest 支持三种 pool 类型，它们共享同一套 scheduler、RPC 和结果聚合逻辑，差异在于 worker 的创建方式和隔离方式。
 
 ### forks
 
@@ -54,6 +56,14 @@ Rstest 支持两种 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 每个测试文件运行在通过 `node:worker_threads` 创建的 worker thread 中。Worker 与主进程共享 V8 heap 和 stdio。
 
+### vmThreads
+
+<ApiMeta addedVersion="0.11.10" />
+
+`vmThreads` 复用 Node.js worker thread，同时为每个测试文件创建新的 `vm.Context`。这样可以隔离文件级 JavaScript global、DOM 对象和 bundle module graph，又不需要为每个文件重新创建 worker thread。它适合 DOM 测试较多、环境初始化成本高，同时 worker 启动成本也比较明显的测试套件。
+
+VM context 不会隔离进程级状态。`process.env`、`process.chdir`、signal handler、native addon，以及通过 Node 原生 `require` 加载的模块仍属于 worker thread，可能在文件之间共享。VM context 还具有 cross-realm identity，因此一个文件创建的值可能无法通过另一个文件中 constructor 的 `instanceof` 检查。
+
 ## 如何选择 pool 类型
 
 `forks` 是默认值，多数现有测试代码都依赖按文件维度的进程隔离。如果不确定要不要切换，建议先继续使用 `forks`。
@@ -64,15 +74,24 @@ Rstest 支持两种 pool 类型，它们共享同一套 scheduler、RPC 和结�
 - 并行运行时机器内存吃紧或观察到 OOM — threads 共享主进程的 V8 heap，多个 worker 不会各占一份 V8 实例。
 - 测试代码本身不修改 cwd / 环境变量 / signal handler，也不依赖按文件重置的进程级状态。
 
+下列情况可以考虑切换到 `vmThreads`：
+
+- 每个文件都需要新的 global 或 DOM 环境，但每文件创建 worker thread 的成本占比明显。
+- 测试可以兼容 cross-realm value，且不依赖进程级隔离。
+- 希望 `isolate: false` 继续影响 Rstest fixture cleanup，同时每个文件仍使用新的 VM realm。
+
 下列情况建议继续使用 `forks`：
 
 - 测试里会修改 `process.chdir`、环境变量、signal handler 等进程级状态，并依赖按文件之间互相隔离。
 - 项目使用 native addon（如 `better-sqlite3`、`sharp`、`canvas`）—— 未针对 worker thread 设计的 addon 在 `threads` 下可能让整个运行直接 abort（`SIGSEGV` / `SIGABRT`，且无法捕获）。
 - 希望单个测试文件的硬性崩溃被限制在该 worker 内，不影响主进程和其他用例。
+- 需要严格的进程级隔离。此时应使用 `forks`；`vmThreads` 会刻意共享 worker thread 的进程状态。
 
 ## 控制文件级并行度
 
 `pool.maxWorkers` 控制同时运行的测试文件数量。当测试会竞争同一个数据库、端口、fixture 目录或其他外部资源时，可以用它限制并行度。
+
+`pool.memoryLimit` 仅作用于 `vmThreads`。每个文件运行结束后，Rstest 会读取 worker 的 V8 `heapUsed`；超过上限的 worker 会在接收下一个文件前回收。`(0, 1]` 的数字表示系统内存比例，更大的数字表示字节数；字符串支持 `%`、`MB`、`MiB`、`GB` 和 `GiB`。未设置时，每个 VM worker 默认获得系统内存的等额份额。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

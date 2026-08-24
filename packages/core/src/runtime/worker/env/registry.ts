@@ -1,3 +1,4 @@
+import type vm from 'node:vm';
 import type {
   EnvironmentName,
   TestEnvironment,
@@ -5,6 +6,11 @@ import type {
   TestEnvironmentReturn,
 } from '../../../types';
 import type { LoadedTestEnvironmentModule } from './testEnvironmentModule';
+
+type VmEnvironmentReturn = {
+  context: vm.Context;
+  teardown: () => void | Promise<void>;
+};
 
 /**
  * Lazy loaders for the non-`node` test environments, keyed by environment name.
@@ -25,10 +31,15 @@ export const environmentLoaders: Record<
       context: TestEnvironmentContext,
       environmentModule?: LoadedTestEnvironmentModule,
     ) => Promise<TestEnvironmentReturn>;
+    setupVM: (
+      options: Record<string, any>,
+      context: TestEnvironmentContext,
+      environmentModule?: LoadedTestEnvironmentModule,
+    ) => Promise<VmEnvironmentReturn>;
   }>
 > = {
   jsdom: async () => {
-    const { environment, setupEnvironment } = await import('./jsdom');
+    const { environment, setupEnvironment, setupVM } = await import('./jsdom');
     return {
       environment,
       setup: (global, options, context, environmentModule) =>
@@ -40,15 +51,32 @@ export const environmentLoaders: Record<
             ? environmentModule.module
             : undefined,
         ),
+      setupVM: (options, context, environmentModule) =>
+        setupVM(
+          options,
+          context,
+          environmentModule?.name === 'jsdom'
+            ? environmentModule.module
+            : undefined,
+        ),
     };
   },
   'happy-dom': async () => {
-    const { environment, setupEnvironment } = await import('./happyDom');
+    const { environment, setupEnvironment, setupVM } =
+      await import('./happyDom');
     return {
       environment,
       setup: (global, options, context, environmentModule) =>
         setupEnvironment(
           global,
+          options,
+          context,
+          environmentModule?.name === 'happy-dom'
+            ? environmentModule.module
+            : undefined,
+        ),
+      setupVM: (options, context, environmentModule) =>
+        setupVM(
           options,
           context,
           environmentModule?.name === 'happy-dom'

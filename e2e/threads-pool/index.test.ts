@@ -8,18 +8,22 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('threads pool e2e', () => {
-  it('should run tests under the threads pool', async ({ onTestFinished }) => {
-    const { expectExecSuccess } = await runRstestCli({
-      command: 'rstest',
-      args: ['run'],
+  for (const pool of ['threads', 'vmThreads'] as const) {
+    it(`should run tests under the ${pool} pool`, async ({
       onTestFinished,
-      options: {
-        nodeOptions: {
-          cwd: join(__dirname, './fixtures'),
+    }) => {
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', '--pool', pool],
+        onTestFinished,
+        options: {
+          nodeOptions: {
+            cwd: join(__dirname, './fixtures'),
+          },
         },
-      },
-    });
+      });
 
-    await expectExecSuccess();
-  });
+      await expectExecSuccess();
+    });
+  }
 });

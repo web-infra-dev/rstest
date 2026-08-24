@@ -68,13 +68,15 @@ export type ExpectConfig = {
   poll?: ExpectPollConfig;
 };
 
-export type RstestPoolType = 'forks' | 'threads';
+export type RstestPoolType = 'forks' | 'threads' | 'vmThreads';
 
 export type RstestPoolOptions = {
   /** Pool used to run tests in. */
   type?: RstestPoolType;
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
+  /** Memory limit in bytes (or a percentage/unit string) before a VM worker is recycled. */
+  memoryLimit?: number | string;
   /** Pass additional arguments to node process in the child processes. */
   execArgv?: string[];
 };

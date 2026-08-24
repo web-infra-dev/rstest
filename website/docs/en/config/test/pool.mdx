@@ -10,13 +10,15 @@ import { ApiMeta } from '@components/ApiMeta';
 - **Type:**
 
 ```ts
-export type RstestPoolType = 'forks' | 'threads';
+export type RstestPoolType = 'forks' | 'threads' | 'vmThreads';
 
 export type RstestPoolOptions = {
   /** Pool used to run tests in. */
   type?: RstestPoolType;
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
+  /** Memory limit in bytes (or a percentage/unit string) before a VM worker is recycled. */
+  memoryLimit?: number | string;
   /** Pass additional arguments to node process in the child processes. */
   execArgv?: string[];
 };
@@ -42,7 +44,7 @@ Options of pool used to run tests in.
 
 ## Pool types
 
-Rstest supports two pool types. Both share the same scheduler, RPC, and result-aggregation logic — they differ only in how workers are spawned.
+Rstest supports three pool types. All share the same scheduler, RPC, and result-aggregation logic — they differ in how workers are spawned and isolated.
 
 ### forks
 
@@ -54,6 +56,14 @@ Each test file runs in a separate Node.js child process spawned via `child_proce
 
 Each test file runs in a Node.js worker thread spawned via `node:worker_threads`. Workers share the parent process's V8 heap and stdio.
 
+### vmThreads
+
+<ApiMeta addedVersion="0.11.10" />
+
+`vmThreads` reuses Node.js worker threads while creating a fresh `vm.Context` for every test file. This keeps file-level JavaScript globals, DOM objects, and the bundled module graph isolated without paying for a new worker thread for every file. It is intended for DOM-heavy suites where environment setup is expensive but worker startup is also measurable.
+
+The VM context does not isolate process-level state. `process.env`, `process.chdir`, signal handlers, native addons, and modules loaded through Node's native `require` still belong to the worker thread and can be shared by files. VM contexts also have cross-realm identity, so values created in one file may not pass `instanceof` checks against constructors from another file.
+
 ## Choose a pool type
 
 `forks` is the default — most existing test code relies on per-file process isolation. If you're not sure, keep using `forks`.
@@ -64,15 +74,24 @@ Consider switching to `threads` when:
 - Parallel runs are memory-bound on your machine, or you see OOM — threads share the parent V8 heap instead of each carrying their own instance.
 - Your tests don't mutate cwd / env vars / signal handlers and don't rely on per-file resets of process-level state.
 
+Consider switching to `vmThreads` when:
+
+- Each file needs a fresh global or DOM environment, but creating a worker thread per file dominates runtime.
+- Your tests are compatible with cross-realm values and do not depend on process-level isolation.
+- You want `isolate: false` to affect Rstest fixture cleanup while retaining a fresh VM realm for every file.
+
 Stick with `forks` when:
 
 - Your tests mutate `process.chdir`, env vars, or signal handlers and rely on per-file isolation.
 - Your project uses native addons (e.g. `better-sqlite3`, `sharp`, `canvas`) — one not built for worker threads can abort the whole run under `threads` (`SIGSEGV` / `SIGABRT`, not a catchable error).
 - You want a hard crash in one test file contained inside its own worker, without risking the parent process or sibling tests.
+- You need strict process-level isolation. Use `forks`; `vmThreads` deliberately shares the worker thread's process state.
 
 ## Control file-level parallelism
 
 `pool.maxWorkers` controls how many test files can run at the same time. Use it when tests compete for the same database, port, fixture directory, or other external resource.
+
+`pool.memoryLimit` applies to `vmThreads`. It is checked against the worker's V8 `heapUsed` after each file; a worker over the limit is recycled before another file is assigned to it. Numbers in `(0, 1]` are treated as a fraction of system memory, larger numbers are bytes, and strings may use `%`, `MB`, `MiB`, `GB`, or `GiB`. When omitted, each VM worker receives an equal share of system memory.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

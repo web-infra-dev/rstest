@@ -2,6 +2,7 @@ import type { SnapshotClient, SnapshotUpdateState } from '@vitest/snapshot';
 import type { SnapshotEnvironment } from '@vitest/snapshot/environment';
 import type { EnvironmentName } from './config';
 import type { ProjectContext, RstestContext } from './core';
+import type { RstestPoolType } from './config';
 import type {
   TestCaseInfo,
   TestFileInfo,
@@ -117,6 +118,8 @@ export type CurrentTaskInfo = Pick<
 >;
 
 export type WorkerContext = {
+  /** Set by the node pool; browser runtimes do not have a node worker pool. */
+  pool?: RstestPoolType;
   rootPath: RstestContext['rootPath'];
   projectRoot: ProjectContext['rootPath'];
   project: string;

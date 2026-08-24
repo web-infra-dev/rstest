@@ -1,5 +1,7 @@
 import { Blob as NodeBlob } from 'node:buffer';
 import { URL as NodeURL } from 'node:url';
+import { runInContext } from 'node:vm';
+import type vm from 'node:vm';
 import type { ConstructorOptions, DOMWindow } from 'jsdom';
 import type {
   TestEnvironment,
@@ -187,6 +189,75 @@ export const setupEnvironment = async (
       cleanupTimers();
       dom.window.close();
       cleanupGlobal();
+    },
+  };
+};
+
+export const setupVM = async (
+  options: Record<string, any>,
+  context: TestEnvironmentContext,
+  dependency?: JSDOMModule,
+): Promise<{ context: vm.Context; teardown: () => void }> => {
+  if (!dependency) {
+    checkPkgInstalled('jsdom');
+  }
+  const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } =
+    dependency ?? (await import('jsdom'));
+  const {
+    html = '<!DOCTYPE html>',
+    userAgent,
+    url = 'http://localhost:3000',
+    contentType = 'text/html',
+    pretendToBeVisual = true,
+    includeNodeLocations = false,
+    runScripts = 'dangerously',
+    resources,
+    console = false,
+    cookieJar = false,
+    beforeParse,
+    ...restOptions
+  } = options as JSDOMOptions;
+
+  let cleanupObjectURLs = () => {};
+  const virtualConsole = console ? new VirtualConsole() : undefined;
+  const dom = new JSDOM(html, {
+    pretendToBeVisual,
+    resources:
+      resources ?? (userAgent ? new ResourceLoader({ userAgent }) : undefined),
+    runScripts,
+    url,
+    virtualConsole,
+    cookieJar: cookieJar ? new CookieJar() : undefined,
+    includeNodeLocations,
+    contentType,
+    userAgent,
+    ...restOptions,
+    beforeParse(window) {
+      beforeParse?.(window);
+      cleanupObjectURLs = installJSDOMObjectURL(window, context);
+    },
+  });
+  const vmContext = dom.getInternalVMContext();
+  const nodeTimers: NodeTimerPrimitives = {
+    clearInterval: globalThis.clearInterval,
+    clearTimeout: globalThis.clearTimeout,
+    setInterval: globalThis.setInterval,
+    setTimeout: globalThis.setTimeout,
+  };
+  const vmGlobal = runInContext('globalThis', vmContext) as typeof globalThis;
+  if (virtualConsole && vmGlobal.console) {
+    forwardVirtualConsole(virtualConsole, vmGlobal.console);
+  }
+  const cleanupTimers = installTimerTracking(vmGlobal, nodeTimers, context);
+  const cleanupHandler = addDefaultErrorHandler(vmGlobal as unknown as Window);
+
+  return {
+    context: vmContext,
+    teardown() {
+      cleanupHandler();
+      cleanupObjectURLs();
+      cleanupTimers();
+      dom.window.close();
     },
   };
 };

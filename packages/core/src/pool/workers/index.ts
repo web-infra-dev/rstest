@@ -27,6 +27,15 @@ export function createPoolWorker(
         forwardStdio: options.forwardStdio,
       });
     }
+    case 'vmThreads': {
+      return new ThreadsPoolWorker({
+        name: `vmThreads-${workerId}`,
+        filename: options.workerEntry,
+        env: options.env,
+        execArgv: options.execArgv,
+        forwardStdio: options.forwardStdio,
+      });
+    }
     default: {
       const _exhaustive: never = task.worker;
       throw new Error(`Unknown pool worker: ${String(_exhaustive)}`);

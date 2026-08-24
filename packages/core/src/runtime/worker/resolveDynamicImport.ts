@@ -5,6 +5,7 @@ import {
 } from 'node:module';
 import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import type vm from 'node:vm';
 import {
   asModule,
   createInteropProxy,
@@ -105,6 +106,7 @@ export const resolveImportSpecifier = ({
 export const loadWasm = async (
   filePath: string,
   returnModule?: boolean,
+  vmContext?: vm.Context,
 ): Promise<any> => {
   const wasmModule = await WebAssembly.compile(
     Buffer.from(await readFile(filePath)),
@@ -117,7 +119,9 @@ export const loadWasm = async (
   // with no synthetic `default` (`'default' in ns === false`), so pass no
   // default export — `returnModule` then matches that shape unless the wasm
   // itself exports a member named `default`.
-  return returnModule ? asModule(exports, filePath) : exports;
+  return returnModule
+    ? asModule(exports, filePath, undefined, vmContext)
+    : exports;
 };
 
 /**
@@ -142,11 +146,13 @@ export const finalizeDynamicImport = async ({
   importAttributes,
   interopDefault,
   returnModule,
+  vmContext,
 }: {
   modulePath: string;
   importAttributes: ImportCallOptions;
   interopDefault: boolean;
   returnModule?: boolean;
+  vmContext?: vm.Context;
 }): Promise<any> => {
   // Rstest importAttributes is used internally to distinguish `importActual`
   // and normal imports, and should not be passed to Node.js side, otherwise it
@@ -162,7 +168,12 @@ export const finalizeDynamicImport = async ({
     });
 
     return returnModule
-      ? asModule(importedModule.default, modulePath, importedModule.default)
+      ? asModule(
+          importedModule.default,
+          modulePath,
+          importedModule.default,
+          vmContext,
+        )
       : {
           ...importedModule.default,
           default: importedModule.default,
@@ -181,14 +192,19 @@ export const finalizeDynamicImport = async ({
   ) {
     const { mod, defaultExport } = interopModule(importedModule);
     if (returnModule) {
-      return asModule(mod, modulePath, defaultExport);
+      return asModule(mod, modulePath, defaultExport, vmContext);
     }
 
     return createInteropProxy(mod, defaultExport);
   }
 
   if (returnModule) {
-    return asModule(importedModule, modulePath, importedModule.default);
+    return asModule(
+      importedModule,
+      modulePath,
+      importedModule.default,
+      vmContext,
+    );
   }
   return importedModule;
 };
