@@ -10,7 +10,19 @@ import { PackageManagerTabs } from '@theme';
 
 <ApiMeta addedVersion="0.11.1" />
 
-[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) provides Playwright fixtures and Playwright-style assertions for Rstest tests that run in Node.js workers. Use it for E2E tests against a complete page or app, such as a local dev server, a preview server, or a deployed URL. The test runs in Node.js and uses Playwright to drive the page.
+[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) provides [Playwright](https://playwright.dev/) fixtures and Playwright-style assertions for Rstest tests that run in Node.js workers. Use it for E2E tests against a complete page or app, such as a local dev server, a preview server, or a deployed URL. The test runs in Node.js and uses Playwright to drive the page.
+
+## Rstest playwright vs native playwright
+
+`@rstest/playwright` and native Playwright use different runners and configuration files:
+
+| Item          | `@rstest/playwright`                                  | Native Playwright                                  |
+| ------------- | ----------------------------------------------------- | -------------------------------------------------- |
+| Runner        | Rstest runner                                         | Playwright Test runner                             |
+| Configuration | `rstest.config.ts` and `playwright` fixture overrides | `playwright.config.ts`                             |
+| Test API      | Import `test` and `expect` from `@rstest/playwright`  | Import `test` and `expect` from `@playwright/test` |
+
+Use `@rstest/playwright` when you want Playwright-driven E2E tests to run in the same Rstest workflow as the rest of your tests. Use native Playwright when you want the full Playwright Test runner workflow and its configuration model.
 
 ## Rstest browser mode vs playwright
 
@@ -25,19 +37,7 @@ The main difference is the testing scenario: Rstest browser mode web-bundles tes
 
 Because `@rstest/playwright` controls an external page instead of running the test in Rstest's browser runner, it does not use the Browser UI preview iframe. For visual debugging, use headed mode with `PWDEBUG=1`.
 
-## Rstest playwright vs native playwright
-
-`@rstest/playwright` and native Playwright use different runners and configuration files:
-
-| Item          | `@rstest/playwright`                                  | Native Playwright                                  |
-| ------------- | ----------------------------------------------------- | -------------------------------------------------- |
-| Runner        | Rstest runner                                         | Playwright Test runner                             |
-| Configuration | `rstest.config.ts` and `playwright` fixture overrides | `playwright.config.ts`                             |
-| Test API      | Import `test` and `expect` from `@rstest/playwright`  | Import `test` and `expect` from `@playwright/test` |
-
-Use `@rstest/playwright` when you want Playwright-driven E2E tests to run in the same Rstest workflow as the rest of your tests. Use native Playwright when you want the full Playwright Test runner workflow and its configuration model.
-
-## Use an agent prompt
+## Migrate to @rstest/playwright
 
 To migrate an existing Playwright Test project to `@rstest/playwright`, use the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill with a Coding Agent that supports Skills. Agent Skills are domain-specific knowledge packs that help Coding Agents provide more accurate suggestions or perform actions for a specific scenario. The [skills](https://www.npmjs.com/package/skills) package installs these skills into a Coding Agent. The `migrate-to-rstest` skill includes Playwright-specific migration guidance for configuration, fixtures, and behavior parity.
 
@@ -112,6 +112,46 @@ export default defineConfig({
   testEnvironment: 'node',
 });
 ```
+
+## Configure playwright options
+
+Global Playwright configuration in `rstest.config.ts` is not supported yet. If multiple test files use the same options, define a shared module that overrides the `playwright` fixture with `test.extend`, then import `test` and `expect` from that module in every test file:
+
+```ts title="tests/e2e.ts"
+import { expect, test as base } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+export { expect };
+export const test = base.extend({
+  playwright: {
+    contextOptions: {
+      viewport: { width: 390, height: 844 },
+    },
+  } satisfies PlaywrightOptions,
+});
+```
+
+```ts title="tests/home.test.ts"
+import { expect, test } from './e2e';
+
+test('mobile page', async ({ page }) => {
+  await page.goto('http://localhost:3000');
+  await expect(page.locator('main')).toBeAttached();
+});
+```
+
+If only a few tests need different options, call `test.extend` again from those test files using the shared `test` as the base.
+
+The `playwright` fixture supports these options:
+
+| Option           | Description                                          |
+| ---------------- | ---------------------------------------------------- |
+| `browserName`    | Browser engine to launch. Currently only `chromium`. |
+| `launchOptions`  | Options passed to `browserType.launch()`.            |
+| `contextOptions` | Options passed to `browser.newContext()`.            |
+| `requestOptions` | Options passed to `request.newContext()`.            |
+| `debug`          | Convenience options for local headed debugging.      |
+| `trace`          | Capture Playwright trace artifacts for debugging.    |
 
 ## Fixtures
 
@@ -286,39 +326,6 @@ await expect(page.locator('.message')).toContainText('Saved', {
 await expect(page.locator('.error')).not.toBeAttached();
 await expect.soft(page).toHaveTitle(/Dashboard/);
 ```
-
-## Configure playwright options
-
-Global `playwright` configuration is not supported yet. Override the `playwright` fixture when a test file needs custom Playwright options:
-
-```ts
-import { expect, test } from '@rstest/playwright';
-import type { PlaywrightOptions } from '@rstest/playwright';
-
-const e2e = test.extend({
-  playwright: {
-    contextOptions: {
-      viewport: { width: 390, height: 844 },
-    },
-  } satisfies PlaywrightOptions,
-});
-
-e2e('mobile page', async ({ page }) => {
-  await page.goto('http://localhost:3000');
-  await expect(page.locator('main')).toBeAttached();
-});
-```
-
-The `playwright` fixture supports these options:
-
-| Option           | Description                                          |
-| ---------------- | ---------------------------------------------------- |
-| `browserName`    | Browser engine to launch. Currently only `chromium`. |
-| `launchOptions`  | Options passed to `browserType.launch()`.            |
-| `contextOptions` | Options passed to `browser.newContext()`.            |
-| `requestOptions` | Options passed to `request.newContext()`.            |
-| `debug`          | Convenience options for local headed debugging.      |
-| `trace`          | Capture Playwright trace artifacts for debugging.    |
 
 ## Trace debugging
 

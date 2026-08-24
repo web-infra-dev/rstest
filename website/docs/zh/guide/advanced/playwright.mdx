@@ -10,7 +10,19 @@ import { PackageManagerTabs } from '@theme';
 
 <ApiMeta addedVersion="0.11.1" />
 
-[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 为运行在 Node.js worker 中的 Rstest 测试提供 Playwright fixtures 和 Playwright 风格的断言。它适合对一个完整页面或应用做 E2E 测试，例如本地 dev server、preview server 或线上 URL。测试代码运行在 Node.js 中，并通过 Playwright 控制页面。
+[@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright) 为运行在 Node.js worker 中的 Rstest 测试提供 [Playwright](https://playwright.dev/) fixtures 和 Playwright 风格的断言。它适合对一个完整页面或应用做 E2E 测试，例如本地 dev server、preview server 或线上 URL。测试代码运行在 Node.js 中，并通过 Playwright 控制页面。
+
+## 与原生 Playwright 的区别
+
+`@rstest/playwright` 和原生 Playwright 主要区别在 runner 和配置方式：
+
+| 项目     | `@rstest/playwright`                            | 原生 Playwright                               |
+| -------- | ----------------------------------------------- | --------------------------------------------- |
+| Runner   | Rstest runner                                   | Playwright Test runner                        |
+| 配置方式 | `rstest.config.ts` 和 `playwright` fixture 覆盖 | `playwright.config.ts`                        |
+| 测试 API | 从 `@rstest/playwright` 导入 `test` 和 `expect` | 从 `@playwright/test` 导入 `test` 和 `expect` |
+
+如果希望 Playwright E2E 测试和其他 Rstest 测试使用同一套 Rstest 工作流，可以使用 `@rstest/playwright`。如果希望使用完整的 Playwright Test runner 工作流和配置模型，可以使用原生 Playwright。
 
 ## 与 Rstest browser mode 的区别
 
@@ -25,19 +37,7 @@ import { PackageManagerTabs } from '@theme';
 
 由于 `@rstest/playwright` 控制的是外部页面，而不是 Rstest browser mode 的 runner iframe，因此它不走 Browser UI 的预览 iframe。需要本地可视化调试时，可以使用 `PWDEBUG=1` 开启 headed 模式。
 
-## 与原生 Playwright 的区别
-
-`@rstest/playwright` 和原生 Playwright 主要区别在 runner 和配置方式：
-
-| 项目     | `@rstest/playwright`                            | 原生 Playwright                               |
-| -------- | ----------------------------------------------- | --------------------------------------------- |
-| Runner   | Rstest runner                                   | Playwright Test runner                        |
-| 配置方式 | `rstest.config.ts` 和 `playwright` fixture 覆盖 | `playwright.config.ts`                        |
-| 测试 API | 从 `@rstest/playwright` 导入 `test` 和 `expect` | 从 `@playwright/test` 导入 `test` 和 `expect` |
-
-如果希望 Playwright E2E 测试和其他 Rstest 测试使用同一套 Rstest 工作流，可以使用 `@rstest/playwright`。如果希望使用完整的 Playwright Test runner 工作流和配置模型，可以使用原生 Playwright。
-
-## 使用 Agent prompt
+## 迁移到 @rstest/playwright
 
 如果要将现有的 Playwright Test 项目迁移到 `@rstest/playwright`，可以让支持 Skills 的 Coding Agent 使用 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill 辅助完成迁移。Agent Skills 是可以安装到 Coding Agent 中的领域知识包，能够帮助 Agent 针对特定场景提供更准确的建议或执行操作。[skills](https://www.npmjs.com/package/skills) 包用于将这些 skill 安装到 Coding Agent 中。`migrate-to-rstest` skill 包含针对 Playwright 配置、fixtures 和行为一致性的迁移指南。
 
@@ -112,6 +112,46 @@ export default defineConfig({
   testEnvironment: 'node',
 });
 ```
+
+## 配置 Playwright 选项
+
+暂不支持在 `rstest.config.ts` 中添加全局 Playwright 配置项。如果多个测试文件需要使用同一组选项，推荐在共享模块中通过 `test.extend` 覆盖 `playwright` fixture，并让测试文件统一从该模块导入 `test` 和 `expect`：
+
+```ts title="tests/e2e.ts"
+import { expect, test as base } from '@rstest/playwright';
+import type { PlaywrightOptions } from '@rstest/playwright';
+
+export { expect };
+export const test = base.extend({
+  playwright: {
+    contextOptions: {
+      viewport: { width: 390, height: 844 },
+    },
+  } satisfies PlaywrightOptions,
+});
+```
+
+```ts title="tests/home.test.ts"
+import { expect, test } from './e2e';
+
+test('mobile page', async ({ page }) => {
+  await page.goto('http://localhost:3000');
+  await expect(page.locator('main')).toBeAttached();
+});
+```
+
+如果只有少数测试需要不同的选项，可以在对应测试文件中基于共享的 `test` 再次调用 `test.extend`。
+
+`playwright` fixture 支持以下选项：
+
+| 选项             | 说明                                        |
+| ---------------- | ------------------------------------------- |
+| `browserName`    | 要启动的浏览器引擎。目前只支持 `chromium`。 |
+| `launchOptions`  | 传给 `browserType.launch()` 的选项。        |
+| `contextOptions` | 传给 `browser.newContext()` 的选项。        |
+| `requestOptions` | 传给 `request.newContext()` 的选项。        |
+| `debug`          | 用于本地 headed 调试的便捷选项。            |
+| `trace`          | 捕获用于调试的 Playwright trace 产物。      |
 
 ## Fixtures
 
@@ -286,39 +326,6 @@ await expect(page.locator('.message')).toContainText('Saved', {
 await expect(page.locator('.error')).not.toBeAttached();
 await expect.soft(page).toHaveTitle(/Dashboard/);
 ```
-
-## 配置 Playwright 选项
-
-暂不支持在 rstest.config.ts 中添加全局 playwright 配置项。当某个测试文件需要自定义 Playwright 选项时，可以覆盖 `playwright` fixture：
-
-```ts
-import { expect, test } from '@rstest/playwright';
-import type { PlaywrightOptions } from '@rstest/playwright';
-
-const e2e = test.extend({
-  playwright: {
-    contextOptions: {
-      viewport: { width: 390, height: 844 },
-    },
-  } satisfies PlaywrightOptions,
-});
-
-e2e('mobile page', async ({ page }) => {
-  await page.goto('http://localhost:3000');
-  await expect(page.locator('main')).toBeAttached();
-});
-```
-
-`playwright` fixture 支持以下选项：
-
-| 选项             | 说明                                        |
-| ---------------- | ------------------------------------------- |
-| `browserName`    | 要启动的浏览器引擎。目前只支持 `chromium`。 |
-| `launchOptions`  | 传给 `browserType.launch()` 的选项。        |
-| `contextOptions` | 传给 `browser.newContext()` 的选项。        |
-| `requestOptions` | 传给 `request.newContext()` 的选项。        |
-| `debug`          | 用于本地 headed 调试的便捷选项。            |
-| `trace`          | 捕获用于调试的 Playwright trace 产物。      |
 
 ## Trace 调试
 
