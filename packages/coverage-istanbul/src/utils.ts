@@ -26,7 +26,7 @@ export type IstanbulFileCoverageData = FileCoverageData & {
 type FileCoverageInput = FileCoverage | FileCoverageData;
 
 // ATTENTION: when swc-plugin-coverage-instrument version changed, magic value should be updated too
-// https://github.com/kwonoj/swc-plugin-coverage-instrument/blob/63e9d5e16dbe61073c62af4b7dfed3c1779cbafa/spec/util/constants.ts#L1-L2
+// https://github.com/kwonoj/swc-plugin-coverage-instrument/blob/5339fc0c89125b42d5bacde973f069b5d1e6d9e6/spec/util/constants.ts#L1-L2
 const COVERAGE_MAGIC_KEY = '_coverageSchema';
 const COVERAGE_MAGIC_VALUE = '11020577277169172593';
 
