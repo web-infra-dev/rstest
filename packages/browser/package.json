@@ -60,8 +60,8 @@
     "@types/convert-source-map": "^2.0.3",
     "@types/picomatch": "^4.0.3",
     "@types/ws": "^8.18.1",
-    "@vitest/snapshot": "^4.1.10",
-    "birpc": "^4.1.0",
+    "@vitest/snapshot": "^4.1.11",
+    "birpc": "^4.2.0",
     "picomatch": "^4.0.5",
     "playwright": "^1.62.1"
   },
