@@ -127,10 +127,10 @@ describe('@rstest/playwright expect', () => {
   });
 
   it('retries visibility assertions until the locator becomes visible', async () => {
-    const visibleAt = Date.now() + 20;
+    let attempts = 0;
     const locator = {
       ...createLocator({ texts: ['Hello'] }),
-      isVisible: async () => Date.now() >= visibleAt,
+      isVisible: async () => ++attempts >= 2,
     } as unknown as Locator;
 
     await expect(locator).toBeVisible({ timeout: 100 });
