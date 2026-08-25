@@ -126,6 +126,16 @@ describe('@rstest/playwright expect', () => {
     await expect(locator).not.toBeEmpty();
   });
 
+  it('retries visibility assertions until the locator becomes visible', async () => {
+    const visibleAt = Date.now() + 20;
+    const locator = {
+      ...createLocator({ texts: ['Hello'] }),
+      isVisible: async () => Date.now() >= visibleAt,
+    } as unknown as Locator;
+
+    await expect(locator).toBeVisible({ timeout: 100 });
+  });
+
   it('supports viewport assertions', async () => {
     const locator = createLocator({ texts: ['Hello'] });
 
@@ -283,6 +293,46 @@ describe('@rstest/playwright expect', () => {
       expect(realPerformanceNow() - realStart).toBeLessThan(1000);
     } finally {
       rstest.useRealTimers();
+    }
+  });
+
+  test('does not start a zero-length retry at the assertion deadline', async () => {
+    const realTimers = rstest.getRealTimers();
+    let currentTime = 0;
+    const getRealSystemTime = rstest
+      .spyOn(rstest, 'getRealSystemTime')
+      .mockImplementation(() => currentTime);
+    const getRealTimers = rstest
+      .spyOn(rstest, 'getRealTimers')
+      .mockReturnValue({
+        ...realTimers,
+        setTimeout: ((callback: () => void, timeout: number) => {
+          if (timeout <= 50) {
+            currentTime = 100;
+            callback();
+          }
+          return realTimers.setTimeout(() => {}, 0);
+        }) as typeof realTimers.setTimeout,
+      });
+    let attempts = 0;
+    const locator = {
+      ...createLocator({ texts: ['Hello'] }),
+      isVisible: async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          return false;
+        }
+        return new Promise<boolean>(() => {});
+      },
+    } as unknown as Locator;
+
+    try {
+      await rstestExpect(
+        expect(locator).toBeVisible({ timeout: 100 }),
+      ).rejects.toThrow('Expected locator to be visible.');
+    } finally {
+      getRealSystemTime.mockRestore();
+      getRealTimers.mockRestore();
     }
   });
 

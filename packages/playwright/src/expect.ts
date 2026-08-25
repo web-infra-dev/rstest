@@ -330,8 +330,10 @@ const waitForExpectation = async (
   const timeout = options?.timeout ?? DEFAULT_EXPECT_TIMEOUT;
   const deadline = getRealNow() + timeout;
   let lastError: unknown;
+  let firstAttempt = true;
 
-  while (getRealNow() <= deadline) {
+  while (firstAttempt || getRealNow() < deadline) {
+    firstAttempt = false;
     try {
       await runWithTimeout(check, Math.max(deadline - getRealNow(), 0));
       return;
