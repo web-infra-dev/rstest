@@ -23,9 +23,19 @@ export default defineConfig({
     {
       name: 'test-global-teardown-order',
       setup(api) {
-        if (!api.useExposed<RstestExposeAPI>('rstest')) {
+        const rstestApi = api.useExposed<RstestExposeAPI>('rstest');
+        if (!rstestApi) {
           throw new Error('Rstest API is unavailable during plugin setup');
         }
+        const rstestConfig = rstestApi.getRstestConfig();
+        rstestApi.modifyRstestConfig((config) => {
+          config.env = {
+            ...config.env,
+            RSTEST_E2E_PLUGIN_BROWSER_ENABLED: String(
+              rstestConfig.browser?.enabled,
+            ),
+          };
+        });
         api.onCloseDevServer(() => {
           console.log('[browser-dev-server] closed');
         });
