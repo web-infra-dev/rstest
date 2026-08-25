@@ -127,13 +127,37 @@ describe('@rstest/playwright expect', () => {
   });
 
   it('retries visibility assertions until the locator becomes visible', async () => {
+    const realTimers = rstest.getRealTimers();
+    let currentTime = 0;
+    let pollTimerResolved = false;
+    const getRealSystemTime = rstest
+      .spyOn(rstest, 'getRealSystemTime')
+      .mockImplementation(() => currentTime);
+    const getRealTimers = rstest
+      .spyOn(rstest, 'getRealTimers')
+      .mockReturnValue({
+        ...realTimers,
+        setTimeout: ((callback: () => void, timeout: number) => {
+          if (timeout === 50 && !pollTimerResolved) {
+            pollTimerResolved = true;
+            currentTime = 50;
+            callback();
+          }
+          return realTimers.setTimeout(() => {}, 0);
+        }) as typeof realTimers.setTimeout,
+      });
     let attempts = 0;
     const locator = {
       ...createLocator({ texts: ['Hello'] }),
       isVisible: async () => ++attempts >= 2,
     } as unknown as Locator;
 
-    await expect(locator).toBeVisible({ timeout: 100 });
+    try {
+      await expect(locator).toBeVisible({ timeout: 100 });
+    } finally {
+      getRealSystemTime.mockRestore();
+      getRealTimers.mockRestore();
+    }
   });
 
   it('supports viewport assertions', async () => {
@@ -299,6 +323,7 @@ describe('@rstest/playwright expect', () => {
   test('does not start a zero-length retry at the assertion deadline', async () => {
     const realTimers = rstest.getRealTimers();
     let currentTime = 0;
+    let pollTimerResolved = false;
     const getRealSystemTime = rstest
       .spyOn(rstest, 'getRealSystemTime')
       .mockImplementation(() => currentTime);
@@ -307,8 +332,11 @@ describe('@rstest/playwright expect', () => {
       .mockReturnValue({
         ...realTimers,
         setTimeout: ((callback: () => void, timeout: number) => {
-          if (timeout <= 50) {
+          if (timeout === 50 && !pollTimerResolved) {
+            pollTimerResolved = true;
             currentTime = 100;
+            callback();
+          } else if (timeout === 0) {
             callback();
           }
           return realTimers.setTimeout(() => {}, 0);
@@ -334,6 +362,17 @@ describe('@rstest/playwright expect', () => {
       getRealSystemTime.mockRestore();
       getRealTimers.mockRestore();
     }
+  });
+
+  test('treats a non-finite assertion timeout as expired', async () => {
+    const locator = {
+      ...createLocator({ texts: ['Hello'] }),
+      isVisible: async () => false,
+    } as unknown as Locator;
+
+    await rstestExpect(
+      expect(locator).toBeVisible({ timeout: Number.NaN }),
+    ).rejects.toThrow('Expected locator to be visible.');
   });
 
   test('clears timeout timers after successful Playwright assertions', async () => {

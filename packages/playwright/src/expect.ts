@@ -340,13 +340,16 @@ const waitForExpectation = async (
 
     firstAttempt = false;
     try {
-      await runWithTimeout(check, Math.max(remaining, 0));
+      await runWithTimeout(
+        check,
+        Number.isFinite(remaining) ? Math.max(remaining, 0) : 0,
+      );
       return;
     } catch (error) {
       lastError = error;
 
       const remainingAfterCheck = deadline - getRealNow();
-      if (remainingAfterCheck <= 0) {
+      if (!Number.isFinite(remainingAfterCheck) || remainingAfterCheck <= 0) {
         break;
       }
 
