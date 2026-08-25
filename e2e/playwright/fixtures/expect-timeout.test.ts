@@ -15,5 +15,5 @@ test('preserves the locator assertion error after timeout', async ({
 
   await expect(
     page.locator('h1').filter({ hasText: 'Missing heading' }),
-  ).toBeVisible({ timeout: 100 });
+  ).toBeVisible({ timeout: 1000 });
 });
