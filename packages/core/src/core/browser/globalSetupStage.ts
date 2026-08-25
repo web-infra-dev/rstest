@@ -8,7 +8,10 @@ import type {
 } from '../../types';
 import { isDebug, resolveShardedEntries } from '../../utils';
 import { claimGlobalSetupOnce, runGlobalSetup } from '../globalSetup';
-import { getRsbuildEnvironmentConfig } from '../modifyRstestConfig';
+import {
+  getRsbuildEnvironmentConfig,
+  initModifyRstestConfigHooks,
+} from '../modifyRstestConfig';
 import { getProjectEntries } from '../projectPlan';
 import { pluginBasic } from '../plugins/basic';
 import { pluginEntryWatch } from '../plugins/entry';
@@ -116,10 +119,11 @@ export async function runBrowserGlobalSetupStage(
     return { errors: [] };
   }
 
+  const candidateProjects = candidates.map(({ project }) => project);
   const setupFileState = createSetupFileState();
   setupFileState.refresh({
     setupProjects: [],
-    globalSetupProjects: candidates.map(({ project }) => project),
+    globalSetupProjects: candidateProjects,
   });
 
   const { dev = {} } = context.normalizedConfig;
@@ -141,7 +145,7 @@ export async function runBrowserGlobalSetupStage(
         writeToDisk: dev.writeToDisk || debugMode,
       },
       environments: Object.fromEntries(
-        candidates.map(({ project }) => [
+        candidateProjects.map((project) => [
           project.environmentName,
           getRsbuildEnvironmentConfig(project),
         ]),
@@ -161,6 +165,20 @@ export async function runBrowserGlobalSetupStage(
       ],
     },
   });
+
+  initModifyRstestConfigHooks(
+    context,
+    rsbuildInstance,
+    candidateProjects,
+    candidateProjects,
+    {
+      // Discovery already applied these callbacks. This compile only needs to
+      // expose the settled project config before user plugin setup runs.
+      appliedEnvironmentNames: new Set(
+        candidateProjects.map((project) => project.environmentName),
+      ),
+    },
+  );
 
   const { getRsbuildStats, closeServer } = await createRsbuildServer({
     isWatchMode: false,
