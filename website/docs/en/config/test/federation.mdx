@@ -14,7 +14,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 Whether to enable [Module Federation](https://module-federation.io/) support.
 
-Rstest supports Module Federation in both Node Mode and Browser Mode. Node-based runners, including `testEnvironment: 'node'` and DOM-simulated environments such as `jsdom` and `happy-dom`, use Rstest's compatibility shims for federation runtimes that load chunks through Node APIs. Browser Mode uses the bundler's web federation runtime.
+Rstest supports Module Federation in both Node Mode and Browser Mode. Node-based runners, including `testEnvironment: 'node'` and DOM-simulated environments such as `jsdom` and `happy-dom`, use Rstest's compatibility shims for federation runtimes that load chunks through Node APIs. Node Mode support is available from Rstest `0.11.4`. Browser Mode uses the bundler's web federation runtime and requires Rstest `0.11.7` or newer.
 
 Rstest evaluates test bundles inside a single worker runtime so that module mocks stay effective. Module Federation runtimes load remote entries and chunks on their own — via Node `fs`/`vm`/`eval` or over HTTP — outside of that runtime. When `federation` is enabled, Rstest installs additional runtime shims to make the two work together:
 
@@ -57,7 +57,7 @@ export default defineConfig({
     federation({
       name: 'main_app',
       remotes: {
-        'component-app': 'component_app@http://localhost:3001/remoteEntry.js',
+        'component-app': 'component_app@http://localhost:3001/remoteEntry.cjs',
       },
       shared: {
         react: { singleton: true },
@@ -67,4 +67,4 @@ export default defineConfig({
 });
 ```
 
-See the [federation example](https://github.com/web-infra-dev/rstest/tree/main/examples/federation) for a complete setup with Browser Mode, HTTP remotes, local CommonJS remotes, and SSR tests.
+This Node-based example consumes a Node-targeted `remoteEntry.cjs`. Browser Mode should consume the browser build's `remoteEntry.js`. See the [Module Federation guide](/guide/integration/module-federation) for the distinction and the [federation example](https://github.com/web-infra-dev/rstest/tree/main/examples/federation) for a complete setup with Browser Mode, HTTP remotes, local CommonJS remotes, and SSR tests.

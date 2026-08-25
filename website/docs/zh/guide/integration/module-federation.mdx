@@ -10,7 +10,7 @@ description: 了解如何使用 Rstest 在 Node、JSDOM 和 Browser Mode 中加�
 
 ## 版本要求
 
-请使用 `@rstest/core@0.11.4` 或更高版本。Rstest 从 `0.11.4` 开始提供 Module Federation 兼容模式。
+Node 和 JSDOM 测试需要 `@rstest/core@0.11.4` 或更高版本。Browser Mode 支持需要 `@rstest/core@0.11.7` 或更高版本。
 
 ## 安装集成插件
 
@@ -34,7 +34,7 @@ export default defineConfig({
     federation({
       name: 'host',
       remotes: {
-        'component-app': 'component_app@http://localhost:3001/remoteEntry.js',
+        'component-app': 'component_app@http://localhost:3001/remoteEntry.cjs',
       },
       shared: {
         react: { singleton: true },
@@ -46,6 +46,8 @@ export default defineConfig({
 ```
 
 该插件会为基于 Node 的测试环境自动启用 Rstest 兼容模式。使用该插件时，请勿再设置 `federation: true`。
+
+JSDOM 测试仍使用 Rstest 的 Node runner，因此该配置指向面向 Node 的 remote entry。请为 Node 构建 remote，并将其暴露为 `remoteEntry.cjs` 等 CommonJS entry。Browser Mode 则消费浏览器构建的 `remoteEntry.js`。
 
 ## 在测试前启动 remote
 
