@@ -14,8 +14,8 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@module-federation/rsbuild-plugin": "https://pkg.pr.new/module-federation/core/@module-federation/rsbuild-plugin@1152301",
-    "@module-federation/rstest": "https://pkg.pr.new/module-federation/core/@module-federation/rstest@b1b37d6",
+    "@module-federation/rsbuild-plugin": "2.9.0",
+    "@module-federation/rstest": "2.9.0",
     "@rsbuild/core": "~2.2.0-beta.2",
     "@rsbuild/plugin-react": "^2.1.0",
     "@rstest/browser": "workspace:*",
