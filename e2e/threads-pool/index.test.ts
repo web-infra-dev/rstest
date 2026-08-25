@@ -3,9 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, it } from '@rstest/core';
 import { runRstestCli } from '../scripts/';
 
-const __filename = fileURLToPath(import.meta.url);
-
-const __dirname = dirname(__filename);
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe('threads pool e2e', () => {
   for (const pool of ['threads', 'vmThreads'] as const) {

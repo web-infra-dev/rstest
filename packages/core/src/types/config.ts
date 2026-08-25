@@ -75,7 +75,10 @@ export type RstestPoolOptions = {
   type?: RstestPoolType;
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
-  /** Memory limit in bytes (or a percentage/unit string) before a VM worker is recycled. */
+  /**
+   * Memory limit in bytes (or a percentage/unit string) before a VM worker is recycled.
+   * @default undefined (equal share of system memory for vmThreads)
+   */
   memoryLimit?: number | string;
   /** Pass additional arguments to node process in the child processes. */
   execArgv?: string[];

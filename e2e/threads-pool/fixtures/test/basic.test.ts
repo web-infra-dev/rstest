@@ -1,6 +1,8 @@
 import { describe, expect, it } from '@rstest/core';
 import { getCount, increment } from '../src/index';
 
+const FILE_MARKER = '__rstest_threads_pool_file_marker__';
+
 describe('threads pool - basic', () => {
   it('runs sync tests', () => {
     expect(1 + 1).toBe(2);
@@ -21,5 +23,13 @@ describe('threads pool - basic', () => {
     // undefined. This is the simplest invariant that distinguishes the two
     // pool types from the test runtime.
     expect(typeof process.send).toBe('undefined');
+  });
+
+  it('starts with a clean file global', () => {
+    expect(document.body).toBeDefined();
+    const fileGlobal = globalThis as typeof globalThis &
+      Record<string, unknown>;
+    expect(fileGlobal[FILE_MARKER]).toBeUndefined();
+    fileGlobal[FILE_MARKER] = 'basic';
   });
 });

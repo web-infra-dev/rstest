@@ -17,7 +17,10 @@ export type RstestPoolOptions = {
   type?: RstestPoolType;
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
-  /** Memory limit in bytes (or a percentage/unit string) before a VM worker is recycled. */
+  /**
+   * Memory limit in bytes (or a percentage/unit string) before a VM worker is recycled.
+   * @default undefined (equal share of system memory for vmThreads)
+   */
   memoryLimit?: number | string;
   /** Pass additional arguments to node process in the child processes. */
   execArgv?: string[];
@@ -90,6 +93,8 @@ Stick with `forks` when:
 ## Control file-level parallelism
 
 `pool.maxWorkers` controls how many test files can run at the same time. Use it when tests compete for the same database, port, fixture directory, or other external resource.
+
+<ApiMeta addedVersion="0.11.10" />
 
 `pool.memoryLimit` applies to `vmThreads`. It is checked against the worker's V8 `heapUsed` after each file; a worker over the limit is recycled before another file is assigned to it. Numbers in `(0, 1]` are treated as a fraction of system memory, larger numbers are bytes, and strings may use `%`, `MB`, `MiB`, `GB`, or `GiB`. When omitted, each VM worker receives an equal share of system memory.
 

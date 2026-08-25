@@ -117,7 +117,10 @@ export function createInteropProxy(mod: any, defaultExport: any): any {
 // races the V8 module-graph evaluation and segfaults the worker. One instance
 // per resolved id structurally eliminates the race (mirrors vitest#7741).
 const smCache = new Map<string, vm.SyntheticModule>();
-let vmSmCaches = new WeakMap<object, Map<string, vm.SyntheticModule>>();
+let vmSyntheticModuleCaches = new WeakMap<
+  object,
+  Map<string, vm.SyntheticModule>
+>();
 
 const getSyntheticModuleCache = (
   context?: vm.Context,
@@ -125,10 +128,10 @@ const getSyntheticModuleCache = (
   if (!context) {
     return smCache;
   }
-  let cache = vmSmCaches.get(context);
+  let cache = vmSyntheticModuleCaches.get(context);
   if (!cache) {
     cache = new Map();
-    vmSmCaches.set(context, cache);
+    vmSyntheticModuleCaches.set(context, cache);
   }
   return cache;
 };
@@ -192,7 +195,7 @@ export const asModule = async (
 
 export const clearSyntheticModuleCache = (): void => {
   smCache.clear();
-  vmSmCaches = new WeakMap();
+  vmSyntheticModuleCaches = new WeakMap();
 };
 
 /**

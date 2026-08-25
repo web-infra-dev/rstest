@@ -17,7 +17,10 @@ export type RstestPoolOptions = {
   type?: RstestPoolType;
   /** 最大运行的线程池的数量或百分比 */
   maxWorkers?: number | string;
-  /** 在 VM worker 超过该内存上限后回收，支持字节数、百分比和单位字符串。 */
+  /**
+   * 在 VM worker 超过该内存上限后回收，支持字节数、百分比和单位字符串。
+   * @default undefined（vmThreads 平均分配系统内存）
+   */
   memoryLimit?: number | string;
   /** 向子进程中的 node 进程传递附加参数。 */
   execArgv?: string[];
@@ -90,6 +93,8 @@ VM context 不会隔离进程级状态。`process.env`、`process.chdir`、signa
 ## 控制文件级并行度
 
 `pool.maxWorkers` 控制同时运行的测试文件数量。当测试会竞争同一个数据库、端口、fixture 目录或其他外部资源时，可以用它限制并行度。
+
+<ApiMeta addedVersion="0.11.10" />
 
 `pool.memoryLimit` 仅作用于 `vmThreads`。每个文件运行结束后，Rstest 会读取 worker 的 V8 `heapUsed`；超过上限的 worker 会在接收下一个文件前回收。`(0, 1]` 的数字表示系统内存比例，更大的数字表示字节数；字符串支持 `%`、`MB`、`MiB`、`GB` 和 `GiB`。未设置时，每个 VM worker 默认获得系统内存的等额份额。
 
