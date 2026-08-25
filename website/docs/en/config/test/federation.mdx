@@ -6,7 +6,7 @@ description: Enable Module Federation support.
 
 import { ApiMeta } from '@components/ApiMeta';
 
-<ApiMeta addedVersion="0.12.0" />
+<ApiMeta addedVersion="0.11.4" />
 
 - **Type:** `boolean`
 - **Default:** `false`
@@ -44,14 +44,15 @@ export default defineConfig({
 
 ## Testing a federated app
 
-`federation` only prepares the test runtime. The Module Federation build itself (remotes, exposes, shared modules) is configured through a bundler plugin such as [@module-federation/rstest](https://github.com/module-federation/core), which applies the federation setup to the Rstest build:
+`federation` only prepares the test runtime; it does not configure remotes, exposes, or shared modules. When you use [@module-federation/rstest](https://github.com/module-federation/core), the plugin configures the Module Federation build and automatically enables Rstest's compatibility mode for Node-based test environments, so do not also set `federation: true`.
+
+Start with the [Module Federation guide](/guide/integration/module-federation) for installation and the Rstest testing workflow. See the [official Rstest integration guide](https://module-federation.io/integrations/build-tool/rstest.html) for reusing an Rsbuild federation configuration and the complete plugin options.
 
 ```ts title="rstest.config.ts"
 import { federation } from '@module-federation/rstest';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  federation: true,
   plugins: [
     federation({
       name: 'main_app',

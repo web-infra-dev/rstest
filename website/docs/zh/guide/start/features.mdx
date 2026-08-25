@@ -22,6 +22,12 @@ Rstest 基于 Rspack 的 bundling pipeline 运行测试，因此可以利用 Tre
 
 了解更多关于 [配置 SWC](/guide/basic/configure-rstest#配置-swc)。
 
+## 测试 Module Federation 应用
+
+Rstest 可以在 Node、JSDOM 和 Browser Mode 测试中加载真实的 [Module Federation](https://module-federation.io/) remote。配合 [@module-federation/rstest](https://github.com/module-federation/core)，测试会实际覆盖 remote 加载和共享依赖，而不是使用 mock 替换 federation 边界。
+
+了解更多关于 [Module Federation 测试](/guide/integration/module-federation)。
+
 ## 多项目测试
 
 Rstest 可以在同一个进程中运行多个测试项目，每个项目都可以保留自己的配置和环境。这适合 monorepo、多应用工作区，以及需要分别覆盖 Node、DOM 或 Browser Mode 的项目。

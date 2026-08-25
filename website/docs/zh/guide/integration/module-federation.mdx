@@ -1,0 +1,78 @@
+---
+description: 了解如何使用 Rstest 在 Node、JSDOM 和 Browser Mode 中加载并测试真实的 Module Federation 远程模块。
+---
+
+# Module Federation
+
+[Module Federation](https://module-federation.io/) 支持不同应用在独立构建后，于运行时暴露和消费模块。当你需要确认 host 能否加载真实 remote、解析共享依赖并正确执行暴露模块时，可以使用 Rstest 测试 federation 边界。
+
+[@module-federation/rstest](https://github.com/module-federation/core) 为 Rstest 构建配置 Module Federation。它支持 Node 和 JSDOM 测试环境以及 Browser Mode，因此同一个测试项目可以覆盖服务端与浏览器端 consumer。
+
+## 版本要求
+
+请使用 `@rstest/core@0.11.4` 或更高版本。Rstest 从 `0.11.4` 开始提供 Module Federation 兼容模式。
+
+## 安装集成插件
+
+将 `@module-federation/rstest` 添加到现有 Rstest 项目。该插件负责配置消费 federation 模块的测试 host；remote 应用仍需使用自己的 Module Federation 构建插件进行构建或启动。
+
+import { PackageManagerTabs } from '@theme';
+
+<PackageManagerTabs command="add @module-federation/rstest -D" />
+
+## 配置测试 host
+
+注册 `federation` 插件，并使用与应用代码导入一致的 remote 名称：
+
+```ts title="rstest.config.ts"
+import { federation } from '@module-federation/rstest';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  testEnvironment: 'jsdom',
+  plugins: [
+    federation({
+      name: 'host',
+      remotes: {
+        'component-app': 'component_app@http://localhost:3001/remoteEntry.js',
+      },
+      shared: {
+        react: { singleton: true },
+        'react-dom': { singleton: true },
+      },
+    }),
+  ],
+});
+```
+
+该插件会为基于 Node 的测试环境自动启用 Rstest 兼容模式。使用该插件时，请勿再设置 `federation: true`。
+
+## 在测试前启动 remote
+
+测试 worker 导入 host 应用前，remote entry 必须已经可用。使用 [`globalSetup`](/config/test/global-setup) 统一构建或启动 remote server，并在返回的 teardown 或导出的 `teardown` 函数中停止它们。这样可以避免每个测试文件重复启动同一个 server。
+
+## 测试暴露模块
+
+像应用代码一样，通过 federation specifier 导入暴露模块：
+
+```ts title="remote.test.ts"
+import { expect, it } from '@rstest/core';
+
+it('loads a federated remote', async () => {
+  const remote = await import('component-app/Button');
+
+  expect(remote.default).toBeDefined();
+});
+```
+
+这种方式会实际经过 remote 加载和 Module Federation runtime，而不是使用 mock 替换 federation 边界。
+
+## 使用 Browser mode
+
+当 remote 必须在真实浏览器中运行时，请先配置 [Browser Mode](/guide/browser-testing/getting-started)，并在该项目的 Rstest 配置中保留同一个 `federation` 插件。该插件会从解析后的配置中检测 `browser.enabled`，并使用 Web federation runtime，而不是 Node 专用默认配置。
+
+## 了解更多
+
+- [`federation`](/config/test/federation) 参考文档介绍了独立配置项、CLI flag 和 Rstest runtime 行为。
+- [Rstest 官方集成指南](https://module-federation.io/integrations/build-tool/rstest.html)介绍了如何复用 Rsbuild federation 配置、插件选项和 producer 构建。
+- 完整的 [Rstest federation 示例](https://github.com/web-infra-dev/rstest/tree/main/examples/federation)覆盖了 Node、JSDOM 和 Browser Mode 中的 HTTP remote 与本地 CommonJS remote。
