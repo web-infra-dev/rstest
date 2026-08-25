@@ -486,7 +486,7 @@ Module._resolveFilename = function (request, ...args) {
       const initialTestIndex = cli.stdout.indexOf('Test Files 1 passed');
       expect(initialSetupIndex).toBeGreaterThanOrEqual(0);
       expect(initialTestIndex).toBeGreaterThan(initialSetupIndex);
-      expect(cli.stdout).toMatch(/Tests.*3 passed/);
+      expect(cli.stdout).toMatch(/Tests.*4 passed/);
 
       // A rerun stays inside the session, so it must not run setup again.
       await sleep(1000);

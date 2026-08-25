@@ -17,4 +17,9 @@ describe(`browser globalSetup env propagation (${import.meta.env.RSTEST_E2E_GS})
     expect(import.meta.env.NODE_ENV).toBe('test');
     expect(process.env.RSTEST).toBe('true');
   });
+
+  it('reads and modifies Rstest config from browser plugin setup', () => {
+    expect(import.meta.env.RSTEST_E2E_PLUGIN_BROWSER_ENABLED).toBe('true');
+    expect(process.env.RSTEST_E2E_PLUGIN_BROWSER_ENABLED).toBe('true');
+  });
 });
