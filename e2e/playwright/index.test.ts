@@ -55,6 +55,24 @@ describe('@rstest/playwright', () => {
     expect(cli.stdout).toContain('RSTEST_PLAYWRIGHT_FOR_FIXTURES_OK');
   });
 
+  it('preserves Playwright assertion errors at the timeout deadline', async () => {
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', 'expect-timeout.test.ts'],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecFailed();
+    expect(cli.stdout).toContain('Expected locator to be visible.');
+    expect(cli.stdout).not.toContain(
+      'Playwright assertion timed out after 0ms.',
+    );
+  });
+
   it('reuses and cleans up a browser across worker files', async () => {
     const cleanupMarker = join(
       __dirname,
