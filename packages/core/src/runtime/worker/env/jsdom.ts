@@ -44,129 +44,71 @@ export const forwardVirtualConsole = (
   }
 };
 
-function patchAddEventListener(rootWindow: DOMWindow): () => void {
-  const patchedWindows = new WeakSet<DOMWindow>();
-  const cleanups: Array<() => void> = [];
+function patchAddEventListener(
+  window: DOMWindow,
+  NodeAbortSignal: typeof AbortSignal,
+  context: TestEnvironmentContext,
+): () => void {
+  const abortControllers = new WeakMap<AbortSignal, AbortController>();
+  const signalForwarders =
+    context.scope === 'file'
+      ? new Map<AbortSignal, EventListener>()
+      : undefined;
+  const JSDOMAbortSignal = window.AbortSignal;
+  const JSDOMAbortController = window.AbortController;
+  const eventTargetPrototype = window.EventTarget.prototype;
+  const originalAddEventListener = eventTargetPrototype.addEventListener;
 
-  const patchWindow = (window: DOMWindow): void => {
-    if (patchedWindows.has(window)) {
-      return;
-    }
-    patchedWindows.add(window);
-
-    const abortControllers = new WeakMap<AbortSignal, AbortController>();
-    const signalForwarders = new Map<AbortSignal, EventListener>();
-    const JSDOMAbortSignal = window.AbortSignal;
-    const JSDOMAbortController = window.AbortController;
-    const eventTargetPrototype = window.EventTarget.prototype;
-    const originalAddEventListener = eventTargetPrototype.addEventListener;
-
-    eventTargetPrototype.addEventListener = function addEventListener(
-      type: string,
-      callback: EventListenerOrEventListenerObject | null,
-      options?: AddEventListenerOptions | boolean,
-    ): void {
-      if (typeof options === 'object' && options?.signal != null) {
-        const { signal } = options;
-        if (
-          !Object.prototype.isPrototypeOf.call(
-            JSDOMAbortSignal.prototype,
-            signal,
-          )
-        ) {
-          let jsdomAbortController = abortControllers.get(signal);
-          if (!jsdomAbortController) {
-            const controller = new JSDOMAbortController();
-            if (signal.aborted) {
+  eventTargetPrototype.addEventListener = function addEventListener(
+    type: string,
+    callback: EventListenerOrEventListenerObject | null,
+    options?: AddEventListenerOptions | boolean,
+  ): void {
+    if (typeof options === 'object' && options !== null) {
+      const signal = options.signal;
+      if (
+        signal != null &&
+        !Object.prototype.isPrototypeOf.call(
+          JSDOMAbortSignal.prototype,
+          signal,
+        ) &&
+        Object.prototype.isPrototypeOf.call(NodeAbortSignal.prototype, signal)
+      ) {
+        let jsdomAbortController = abortControllers.get(signal);
+        if (!jsdomAbortController) {
+          const controller = new JSDOMAbortController();
+          if (signal.aborted) {
+            controller.abort(signal.reason);
+          } else {
+            const forwardAbort = () => {
+              signalForwarders?.delete(signal);
               controller.abort(signal.reason);
-            } else {
-              const forwardAbort = () => {
-                signalForwarders.delete(signal);
-                controller.abort(signal.reason);
-              };
-              signal.addEventListener('abort', forwardAbort, { once: true });
-              signalForwarders.set(signal, forwardAbort);
-            }
-            jsdomAbortController = controller;
-            abortControllers.set(signal, jsdomAbortController);
+            };
+            signal.addEventListener('abort', forwardAbort, { once: true });
+            signalForwarders?.set(signal, forwardAbort);
           }
-
-          return originalAddEventListener.call(this, type, callback, {
-            capture: options.capture,
-            once: options.once,
-            passive: options.passive,
-            signal: jsdomAbortController.signal,
-          });
+          jsdomAbortController = controller;
+          abortControllers.set(signal, jsdomAbortController);
         }
+
+        return originalAddEventListener.call(this, type, callback, {
+          capture: options.capture,
+          once: options.once,
+          passive: options.passive,
+          signal: jsdomAbortController.signal,
+        });
       }
+    }
 
-      return originalAddEventListener.call(this, type, callback, options);
-    };
-
-    // Each iframe has its own jsdom EventTarget and AbortSignal realm. Patch a
-    // child realm before exposing its window or document to test code.
-    const iframePrototype = window.HTMLIFrameElement.prototype;
-    const contentWindowDescriptor = Object.getOwnPropertyDescriptor(
-      iframePrototype,
-      'contentWindow',
-    )!;
-    const contentDocumentDescriptor = Object.getOwnPropertyDescriptor(
-      iframePrototype,
-      'contentDocument',
-    )!;
-
-    Object.defineProperty(iframePrototype, 'contentWindow', {
-      ...contentWindowDescriptor,
-      get(this: HTMLIFrameElement) {
-        const childWindow: DOMWindow | null =
-          contentWindowDescriptor.get!.call(this);
-        if (childWindow) {
-          patchWindow(childWindow);
-        }
-        return childWindow;
-      },
-    });
-    Object.defineProperty(iframePrototype, 'contentDocument', {
-      ...contentDocumentDescriptor,
-      get(this: HTMLIFrameElement) {
-        const childDocument: Document | null =
-          contentDocumentDescriptor.get!.call(this);
-        if (childDocument) {
-          const childWindow: DOMWindow | null =
-            contentWindowDescriptor.get!.call(this);
-          if (childWindow) {
-            patchWindow(childWindow);
-          }
-        }
-        return childDocument;
-      },
-    });
-
-    cleanups.push(() => {
-      for (const [signal, forwardAbort] of signalForwarders) {
-        signal.removeEventListener('abort', forwardAbort);
-      }
-      signalForwarders.clear();
-      eventTargetPrototype.addEventListener = originalAddEventListener;
-      Object.defineProperty(
-        iframePrototype,
-        'contentWindow',
-        contentWindowDescriptor,
-      );
-      Object.defineProperty(
-        iframePrototype,
-        'contentDocument',
-        contentDocumentDescriptor,
-      );
-    });
+    return originalAddEventListener.call(this, type, callback, options);
   };
 
-  patchWindow(rootWindow);
-
   return () => {
-    for (const cleanup of cleanups.reverse()) {
-      cleanup();
+    for (const [signal, forwardAbort] of signalForwarders ?? []) {
+      signal.removeEventListener('abort', forwardAbort);
     }
+    signalForwarders?.clear();
+    eventTargetPrototype.addEventListener = originalAddEventListener;
   };
 }
 
@@ -275,7 +217,6 @@ export const setupEnvironment = async (
     beforeParse,
     ...restOptions
   } = options as JSDOMOptions;
-  let cleanupAddEventListener = () => {};
   let cleanupObjectURLs = () => {};
   const virtualConsole =
     console && global.console ? new VirtualConsole() : undefined;
@@ -295,11 +236,15 @@ export const setupEnvironment = async (
     userAgent,
     ...restOptions,
     beforeParse(window) {
-      cleanupAddEventListener = patchAddEventListener(window);
       beforeParse?.(window);
       cleanupObjectURLs = installJSDOMObjectURL(window, context);
     },
   });
+  const cleanupAddEventListener = patchAddEventListener(
+    dom.window,
+    global.AbortSignal,
+    context,
+  );
 
   const cleanupGlobal = installGlobal(global, dom.window, {
     additionalKeys: ['URL', 'URLSearchParams'],
