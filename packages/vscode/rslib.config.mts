@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import { defineConfig, rspack } from '@rslib/core';
+import { licensePlugin } from '../core/licensePlugin';
 import { rslibRspackConfig } from '../../scripts/rslibConfig';
 import { rsdoctorCIPlugin } from '../../scripts/rsdoctorPlugin';
 
@@ -46,6 +47,12 @@ export default defineConfig({
                 },
               ],
             }),
+            // only load & apply licensePlugin in lib build
+            process.argv.includes('--watch') || !process.argv.includes('build')
+              ? null
+              : await licensePlugin('rstest VS Code extension', false, [
+                  '@rstest/core',
+                ]),
             rsdoctorCIPlugin({ reportDir: '.rsdoctor/extension' }),
           ].filter(Boolean),
         },

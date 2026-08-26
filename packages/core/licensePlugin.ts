@@ -10,7 +10,11 @@ type PackageLicenseMeta =
     ? Meta
     : never;
 
-export async function licensePlugin() {
+export async function licensePlugin(
+  packageName = '@rstest/core',
+  includeCodeReferences = true,
+  excludedPackages: readonly string[] = [],
+) {
   const { default: WebpackLicensePlugin } =
     await import('webpack-license-plugin');
 
@@ -28,7 +32,11 @@ export async function licensePlugin() {
       return '';
     }
 
-    return licenseText
+    const relevantLicenseText = includeCodeReferences
+      ? licenseText
+      : licenseText.split('\n## Code references', 1)[0].trimEnd();
+
+    return relevantLicenseText
       .split('\n')
       .map((line) => `> ${line}`)
       .join('\n');
@@ -57,7 +65,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## Code references
+${
+  includeCodeReferences
+    ? `## Code references
 
 This project references and adapts code from the following projects:
 
@@ -315,11 +325,14 @@ Licensed under Apache license in the repository at https://github.com/microsoft/
 > See the License for the specific language governing permissions and
 > limitations under the License.
 
-## Third-party licenses
+`
+    : ''
+}## Third-party licenses
 
-The following third-party packages are bundled into @rstest/core.
+The following third-party packages are bundled into ${packageName}.
 
 ${packages
+  .filter(({ name }) => !excludedPackages.includes(name))
   .sort((left, right) => {
     return left.name < right.name ? -1 : 1;
   })
