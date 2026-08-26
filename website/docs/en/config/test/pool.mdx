@@ -67,6 +67,8 @@ Each test file runs in a Node.js worker thread spawned via `node:worker_threads`
 
 The VM context does not isolate process-level state. `process.env`, `process.chdir`, signal handlers, native addons, and modules loaded through Node's native `require` still belong to the worker thread and can be shared by files. VM contexts also have cross-realm identity, so values created in one file may not pass `instanceof` checks against constructors from another file.
 
+Each `vmThreads` worker also keeps a bounded cache of immutable bundle and source-map bytes between files. After the first file, unchanged assets are referenced from that worker instead of being transferred again. The cache is limited to at most 64 MiB or one quarter of the worker's `memoryLimit`, whichever is smaller; it is cleared on rebuild or worker recycle. Evaluated module instances are not cached across VM contexts.
+
 ## Choose a pool type
 
 `forks` is the default — most existing test code relies on per-file process isolation. If you're not sure, keep using `forks`.

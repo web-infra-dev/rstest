@@ -67,6 +67,8 @@ Rstest 支持三种 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 VM context 不会隔离进程级状态。`process.env`、`process.chdir`、signal handler、native addon，以及通过 Node 原生 `require` 加载的模块仍属于 worker thread，可能在文件之间共享。VM context 还具有 cross-realm identity，因此一个文件创建的值可能无法通过另一个文件中 constructor 的 `instanceof` 检查。
 
+每个 `vmThreads` worker 还会在文件之间保留一份有大小上限的 bundle 和 source map 不可变字节缓存。第一个文件之后，未变化的资源会直接复用，不再重复传输。缓存上限为 64 MiB 与 worker `memoryLimit` 四分之一中的较小值；watch rebuild 或 worker 回收时会清空。已执行的 module instance 不会跨 VM Context 缓存。
+
 ## 如何选择 pool 类型
 
 `forks` 是默认值，多数现有测试代码都依赖按文件维度的进程隔离。如果不确定要不要切换，建议先继续使用 `forks`。

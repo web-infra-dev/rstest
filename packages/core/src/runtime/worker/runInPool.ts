@@ -7,6 +7,7 @@ import type {
   AssetFiles,
   MaybePromise,
   RunnerHooks,
+  RuntimeRPC,
   RunWorkerOptions,
   TestFileResult,
   TestInfo,
@@ -28,6 +29,7 @@ import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
 import { installGlobalApis, installGlobalProperty } from './globalProperty';
 import { PhaseTracker } from './phaseTracker';
+import { WorkerAssetCache } from './assetCache';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
 import { createSilentConsoleController } from './silentConsole';
@@ -102,6 +104,64 @@ let activeEnvironmentKey: string | undefined;
  * runtime chunk and reintroducing the cross-project regression (#1376).
  */
 let lastBuildId: number | undefined;
+const workerAssetCache = new WorkerAssetCache(0);
+
+const loadTaskAssets = async (
+  options: RunWorkerOptions['options'],
+  assets: RunWorkerOptions['options']['assets'],
+  rpc: Pick<RuntimeRPC, 'getAssetsByEntry'>,
+): Promise<NonNullable<RunWorkerOptions['options']['assets']>> => {
+  if (assets) {
+    return assets;
+  }
+
+  const { assetNames, context } = options;
+  if (context.pool !== 'vmThreads' || context.assetCacheLimit === undefined) {
+    return rpc.getAssetsByEntry(assetNames);
+  }
+
+  workerAssetCache.configure(context.assetCacheLimit);
+  const missingAssetNames = assetNames.filter(
+    (name) => workerAssetCache.get(`asset:${name}`) === undefined,
+  );
+  const missingSourceMapNames = assetNames.filter(
+    (name) => workerAssetCache.get(`sourceMap:${name}`) === undefined,
+  );
+  const fetched =
+    missingAssetNames.length || missingSourceMapNames.length
+      ? await rpc.getAssetsByEntry(missingAssetNames, missingSourceMapNames)
+      : { assetFiles: {}, sourceMaps: {} };
+
+  for (const [name, content] of Object.entries(fetched.assetFiles)) {
+    workerAssetCache.set(`asset:${name}`, content);
+  }
+  for (const [name, content] of Object.entries(fetched.sourceMaps)) {
+    workerAssetCache.set(`sourceMap:${name}`, content);
+  }
+  for (const name of missingSourceMapNames) {
+    if (!(name in fetched.sourceMaps)) {
+      workerAssetCache.set(`sourceMap:${name}`, '');
+    }
+  }
+
+  const assetFiles: AssetFiles = {};
+  const sourceMaps: Record<string, string> = {};
+  for (const name of assetNames) {
+    const asset =
+      fetched.assetFiles[name] ?? workerAssetCache.get(`asset:${name}`);
+    if (asset !== undefined) {
+      assetFiles[name] = asset;
+    }
+
+    const sourceMap =
+      fetched.sourceMaps[name] ?? workerAssetCache.get(`sourceMap:${name}`);
+    if (typeof sourceMap === 'string' && sourceMap) {
+      sourceMaps[name] = sourceMap;
+    }
+  }
+
+  return { assetFiles, sourceMaps };
+};
 
 const setErrorName = (error: Error, type: string): Error => {
   try {
@@ -651,6 +711,7 @@ export const runInPool = async (
   const isVmPool = options.context.pool === 'vmThreads';
   const buildChanged = lastBuildId !== undefined && lastBuildId !== buildId;
   if (buildChanged) {
+    workerAssetCache.clear();
     const [esmLoader, cjsLoader] = await Promise.all([
       import('./loadEsModule'),
       import('./loadModule'),
@@ -734,7 +795,7 @@ export const runInPool = async (
         lifecycleHooks.onTestEnvironmentFallback,
       );
       const { assetFiles, sourceMaps: sourceMapsFromAssets } =
-        assets || (await rpc.getAssetsByEntry());
+        await loadTaskAssets(options, assets, rpc);
       sourceMaps = sourceMapsFromAssets;
 
       cleanups.push(cleanup);
@@ -836,7 +897,7 @@ export const runInPool = async (
 
     tracker.transition('load');
     const { assetFiles, sourceMaps: sourceMapsFromAssets } =
-      assets || (await rpc.getAssetsByEntry());
+      await loadTaskAssets(options, assets, rpc);
     sourceMaps = sourceMapsFromAssets;
 
     cleanups.push(cleanup);

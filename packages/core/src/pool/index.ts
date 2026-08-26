@@ -50,25 +50,27 @@ const __dirname = dirname(__filename);
 const getRuntimeConfig = (context: ProjectContext): RuntimeConfig =>
   projectRuntimeConfig(context, { envMode: 'inherit' });
 
-const filterAssetsByEntry = async (
+const VM_ASSET_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+
+const getVmAssetCacheLimit = (
+  memoryLimit: number | undefined,
+): number | undefined =>
+  memoryLimit === undefined
+    ? undefined
+    : Math.min(VM_ASSET_CACHE_MAX_BYTES, Math.floor(memoryLimit / 4));
+
+const getAssetNames = (
   entryInfo: EntryInfo,
-  getAssetFiles: (names: string[]) => Promise<Record<string, Buffer>>,
-  getSourceMaps: (names: string[]) => Promise<Record<string, string>>,
   setupAssets: string[],
   allAssetNames: string[] | undefined,
   federation: boolean,
-) => {
+): string[] => {
   const entryAssetNames =
     federation && allAssetNames
       ? allAssetNames.filter((name) => !name.endsWith('.map'))
       : entryInfo.files!;
-  const assetNames = Array.from(new Set([...entryAssetNames, ...setupAssets]));
-  const [neededFiles, neededSourceMaps] = await Promise.all([
-    getAssetFiles(assetNames),
-    getSourceMaps(assetNames),
-  ]);
 
-  return { assetFiles: neededFiles, sourceMaps: neededSourceMaps };
+  return Array.from(new Set([...entryAssetNames, ...setupAssets]));
 };
 
 const getNodeExecArgv = () => {
@@ -120,6 +122,7 @@ const buildTask = async ({
   traceSpan,
   testEnvironmentModule,
   buildId = 0,
+  assetCacheLimit,
   captureBundleCoverage = false,
 }: {
   type: 'run' | 'collect';
@@ -139,6 +142,7 @@ const buildTask = async ({
   traceSpan: TraceSpan;
   testEnvironmentModule?: TestEnvironmentModuleReference;
   buildId?: number;
+  assetCacheLimit?: number;
   captureBundleCoverage?: boolean;
 }): Promise<{
   task: PoolTask;
@@ -146,15 +150,24 @@ const buildTask = async ({
 }> => {
   const bundleCoverageAssets: Record<string, number> | undefined =
     captureBundleCoverage ? {} : undefined;
-  const getAssets = async () => {
-    const assets = await filterAssetsByEntry(
-      entryInfo,
-      getAssetFiles,
-      getSourceMaps,
-      setupAssets,
-      assetNames,
-      project.normalizedConfig.federation,
-    );
+  const taskAssetNames = getAssetNames(
+    entryInfo,
+    setupAssets,
+    assetNames,
+    project.normalizedConfig.federation,
+  );
+  const getAssets = async (
+    requestedAssetNames = taskAssetNames,
+    requestedSourceMapNames = requestedAssetNames,
+  ) => {
+    const [neededFiles, neededSourceMaps] = await Promise.all([
+      getAssetFiles(requestedAssetNames),
+      getSourceMaps(requestedSourceMapNames),
+    ]);
+    const assets = {
+      assetFiles: neededFiles,
+      sourceMaps: neededSourceMaps,
+    };
     if (bundleCoverageAssets) {
       for (const [name, content] of Object.entries(assets.assetFiles)) {
         bundleCoverageAssets[name] = content.byteLength;
@@ -177,6 +190,7 @@ const buildTask = async ({
       type,
       options: {
         entryInfo,
+        assetNames: taskAssetNames,
         // Known limit: the config portion is `stableJson`, so environment option
         // values JSON cannot express (an `html` ArrayBuffer, a `beforeParse`
         // function, a `virtualConsole` instance) collapse to identical bytes —
@@ -198,6 +212,7 @@ const buildTask = async ({
           projectRoot: project.rootPath,
           runtimeConfig,
           testEnvironmentModule,
+          assetCacheLimit,
           trace: context.trace,
         },
         type,
@@ -205,9 +220,12 @@ const buildTask = async ({
         updateSnapshot,
         // Federation entries need the complete compilation asset map. Fetch it
         // when a worker starts the task so concurrent task preparation cannot
-        // retain one full copy per test entry.
+        // retain one full copy per test entry. vmThreads deliberately uses the
+        // lazy path below so each worker can cache shared assets by name.
         assets:
-          isMemorySufficient() && !project.normalizedConfig.federation
+          workerKind !== 'vmThreads' &&
+          isMemorySufficient() &&
+          !project.normalizedConfig.federation
             ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {
                 ...traceArgs,
                 mode: 'eager',
@@ -216,12 +234,15 @@ const buildTask = async ({
       },
       rpcMethods: {
         ...rpcMethods,
-        // getAssetsByEntry is only used when memory is not sufficient since it may be slow
-        getAssetsByEntry: () =>
-          traceSpan('host:get-assets-by-entry', 'host', getAssets, {
-            ...traceArgs,
-            mode: 'rpc',
-          }),
+        // vmThreads uses this path for its per-worker asset cache; other pools
+        // use it when eager host-side asset delivery is not safe.
+        getAssetsByEntry: (requestedAssetNames, requestedSourceMapNames) =>
+          traceSpan(
+            'host:get-assets-by-entry',
+            'host',
+            () => getAssets(requestedAssetNames, requestedSourceMapNames),
+            { ...traceArgs, mode: 'rpc' },
+          ),
       },
     },
     bundleCoverageAssets,
@@ -388,6 +409,12 @@ export const createPool = async ({
   // Internal idle-runner floor for `isolate: false`. It is not user-tunable
   // (no public `pool.minWorkers`), so it can never exceed `maxWorkers`.
   const minWorkers = Math.min(maxWorkers, recommendCount);
+  const memoryLimit =
+    workerKind === 'vmThreads'
+      ? parseMemoryLimit(poolOptions.memoryLimit ?? 1 / maxWorkers)
+      : undefined;
+  const assetCacheLimit =
+    workerKind === 'vmThreads' ? getVmAssetCacheLimit(memoryLimit) : undefined;
 
   const pool = new Pool({
     workerEntry: resolve(__dirname, './worker.js'),
@@ -399,10 +426,7 @@ export const createPool = async ({
     // exits. Recycle from the worker's own V8 heap report, like Jest and
     // Vitest, while keeping the worker alive below the limit. The default
     // gives each VM worker an equal share of the machine memory.
-    memoryLimit:
-      workerKind === 'vmThreads'
-        ? parseMemoryLimit(poolOptions.memoryLimit ?? 1 / maxWorkers)
-        : undefined,
+    memoryLimit,
     maxWorkers,
     minWorkers,
     execArgv: [
@@ -493,6 +517,7 @@ export const createPool = async ({
                     project.environmentName,
                   ),
                   buildId,
+                  assetCacheLimit,
                   captureBundleCoverage,
                 }),
               traceArgs,
@@ -615,6 +640,7 @@ export const createPool = async ({
             testEnvironmentModule: testEnvironmentModules?.get(
               project.environmentName,
             ),
+            assetCacheLimit,
           });
 
           return pool.collectTests(task).catch((err: FormattedError) => {
