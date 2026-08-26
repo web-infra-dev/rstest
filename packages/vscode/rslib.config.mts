@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { dirname } from 'node:path';
 import { defineConfig, rspack } from '@rslib/core';
 import { licensePlugin } from '../core/licensePlugin';
 import { rslibRspackConfig } from '../../scripts/rslibConfig';
@@ -15,6 +16,9 @@ const yukuRequire = createRequire(require.resolve('yuku-parser'));
 // Yuku computes this package name at runtime, so Rspack cannot discover it.
 const yukuBindingPath = yukuRequire.resolve(
   `@yuku-parser/binding-${yukuBindingSuffix}`,
+);
+const yukuBindingPackage = yukuRequire(
+  `${dirname(yukuBindingPath)}/package.json`,
 );
 
 export default defineConfig({
@@ -50,9 +54,19 @@ export default defineConfig({
             // only load & apply licensePlugin in lib build
             process.argv.includes('--watch') || !process.argv.includes('build')
               ? null
-              : await licensePlugin('rstest VS Code extension', false, [
-                  '@rstest/core',
-                ]),
+              : await licensePlugin(
+                  'rstest VS Code extension',
+                  false,
+                  ['@rstest/core'],
+                  [
+                    {
+                      name: yukuBindingPackage.name,
+                      license: yukuBindingPackage.license,
+                      licenseText: '',
+                      repository: yukuBindingPackage.repository.url,
+                    },
+                  ],
+                ),
             rsdoctorCIPlugin({ reportDir: '.rsdoctor/extension' }),
           ].filter(Boolean),
         },

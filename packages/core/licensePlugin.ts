@@ -10,10 +10,16 @@ type PackageLicenseMeta =
     ? Meta
     : never;
 
+type AdditionalPackageLicenseMeta = Pick<
+  PackageLicenseMeta,
+  'name' | 'license' | 'licenseText' | 'repository'
+>;
+
 export async function licensePlugin(
   packageName = '@rstest/core',
   includeCodeReferences = true,
   excludedPackages: readonly string[] = [],
+  additionalPackages: readonly AdditionalPackageLicenseMeta[] = [],
 ) {
   const { default: WebpackLicensePlugin } =
     await import('webpack-license-plugin');
@@ -353,7 +359,7 @@ ${packages
     additionalFiles: {
       '../LICENSE.md': (packages) => {
         const uniquePackages = new Map<string, PackageLicenseMeta>();
-        for (const pkg of packages) {
+        for (const pkg of [...packages, ...additionalPackages]) {
           if (!uniquePackages.has(pkg.name)) {
             uniquePackages.set(pkg.name, pkg);
           }

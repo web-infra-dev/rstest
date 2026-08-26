@@ -150,6 +150,10 @@ Licensed under MIT license in the repository at git+https://github.com/jridgewel
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
+### @yuku-parser/binding-darwin-arm64
+
+Licensed under MIT license in the repository at https://github.com/yuku-toolchain/yuku.
+
 ### birpc
 
 Licensed under MIT license in the repository at git+https://github.com/antfu-collective/birpc.git.
