@@ -672,14 +672,18 @@ export const createRsbuildServer = async ({
         );
       },
       getSourceMaps: async (names: string[]) => {
-        return Object.fromEntries(
-          await Promise.all(
-            names.map(async (name) => {
-              const content = await getSourceMap(name);
-              return [name, content];
-            }),
-          ),
-        );
+        const sourceMaps: Record<string, string> = {};
+        for (const { name, content } of await Promise.all(
+          names.map(async (name) => ({
+            name,
+            content: await getSourceMap(name),
+          })),
+        )) {
+          if (content !== null) {
+            sourceMaps[name] = content;
+          }
+        }
+        return sourceMaps;
       },
     };
   };

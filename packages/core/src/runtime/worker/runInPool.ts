@@ -136,7 +136,9 @@ const loadTaskAssets = async (
     workerAssetCache.set(`asset:${name}`, content);
   }
   for (const [name, content] of Object.entries(fetched.sourceMaps)) {
-    workerAssetCache.set(`sourceMap:${name}`, content);
+    if (typeof content === 'string') {
+      workerAssetCache.set(`sourceMap:${name}`, content);
+    }
   }
   for (const name of missingSourceMapNames) {
     if (!(name in fetched.sourceMaps)) {
