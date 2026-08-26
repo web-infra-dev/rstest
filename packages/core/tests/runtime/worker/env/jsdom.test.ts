@@ -1,3 +1,4 @@
+import { getEventListeners } from 'node:events';
 import { promisify } from 'node:util';
 import { expect, test } from '@rstest/core';
 import type { DOMWindow } from 'jsdom';
@@ -59,11 +60,58 @@ test('bridges Node AbortSignal to jsdom event listeners', async () => {
       testGlobal.document.dispatchEvent(new testGlobal.Event(type));
       expect(calls).toBe(1);
     }
+
+    const abortedController = new testGlobal.AbortController();
+    abortedController.abort();
+    let calls = 0;
+    const type = 'rstest-aborted-signal';
+    testGlobal.document.addEventListener(type, () => calls++, {
+      signal: abortedController.signal,
+    });
+    testGlobal.document.dispatchEvent(new testGlobal.Event(type));
+    expect(calls).toBe(0);
   } finally {
     await teardown(testGlobal);
   }
 
   expect(eventTargetPrototype.addEventListener).toBe(originalAddEventListener);
+});
+
+test('removes Node AbortSignal forwarders', async () => {
+  const testGlobal = createTestGlobal();
+  const { teardown } = await environment.setup(
+    testGlobal,
+    {},
+    { scope: 'file' },
+  );
+  const abortedController = new testGlobal.AbortController();
+  const lingeringController = new testGlobal.AbortController();
+
+  try {
+    testGlobal.document.addEventListener('aborted', () => {}, {
+      signal: abortedController.signal,
+    });
+    expect(getEventListeners(abortedController.signal, 'abort')).toHaveLength(
+      1,
+    );
+    abortedController.abort();
+    expect(getEventListeners(abortedController.signal, 'abort')).toHaveLength(
+      0,
+    );
+
+    testGlobal.document.addEventListener('lingering', () => {}, {
+      signal: lingeringController.signal,
+    });
+    expect(getEventListeners(lingeringController.signal, 'abort')).toHaveLength(
+      1,
+    );
+  } finally {
+    await teardown(testGlobal);
+  }
+
+  expect(getEventListeners(lingeringController.signal, 'abort')).toHaveLength(
+    0,
+  );
 });
 
 test('forwards the console with the pre-v27 jsdom API', () => {

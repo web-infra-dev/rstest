@@ -44,45 +44,127 @@ export const forwardVirtualConsole = (
   }
 };
 
-function patchAddEventListener(window: DOMWindow): () => void {
-  const abortControllers = new WeakMap<AbortSignal, AbortController>();
-  const JSDOMAbortSignal = window.AbortSignal;
-  const JSDOMAbortController = window.AbortController;
-  const prototype = window.EventTarget.prototype;
-  const originalAddEventListener = prototype.addEventListener;
+function patchAddEventListener(rootWindow: DOMWindow): () => void {
+  const patchedWindows = new WeakSet<DOMWindow>();
+  const cleanups: Array<() => void> = [];
 
-  prototype.addEventListener = function addEventListener(
-    type: string,
-    callback: EventListenerOrEventListenerObject | null,
-    options?: AddEventListenerOptions | boolean,
-  ): void {
-    if (typeof options === 'object' && options?.signal != null) {
-      const { signal, ...otherOptions } = options;
-      if (
-        !Object.prototype.isPrototypeOf.call(JSDOMAbortSignal.prototype, signal)
-      ) {
-        let jsdomAbortController = abortControllers.get(signal);
-        if (!jsdomAbortController) {
-          const controller = new JSDOMAbortController();
-          signal.addEventListener('abort', () => {
-            controller.abort(signal.reason);
-          });
-          jsdomAbortController = controller;
-          abortControllers.set(signal, jsdomAbortController);
-        }
-
-        return originalAddEventListener.call(this, type, callback, {
-          ...otherOptions,
-          signal: jsdomAbortController.signal,
-        });
-      }
+  const patchWindow = (window: DOMWindow): void => {
+    if (patchedWindows.has(window)) {
+      return;
     }
+    patchedWindows.add(window);
 
-    return originalAddEventListener.call(this, type, callback, options);
+    const abortControllers = new WeakMap<AbortSignal, AbortController>();
+    const signalForwarders = new Map<AbortSignal, EventListener>();
+    const JSDOMAbortSignal = window.AbortSignal;
+    const JSDOMAbortController = window.AbortController;
+    const eventTargetPrototype = window.EventTarget.prototype;
+    const originalAddEventListener = eventTargetPrototype.addEventListener;
+
+    eventTargetPrototype.addEventListener = function addEventListener(
+      type: string,
+      callback: EventListenerOrEventListenerObject | null,
+      options?: AddEventListenerOptions | boolean,
+    ): void {
+      if (typeof options === 'object' && options?.signal != null) {
+        const { signal, ...otherOptions } = options;
+        if (
+          !Object.prototype.isPrototypeOf.call(
+            JSDOMAbortSignal.prototype,
+            signal,
+          )
+        ) {
+          let jsdomAbortController = abortControllers.get(signal);
+          if (!jsdomAbortController) {
+            const controller = new JSDOMAbortController();
+            if (signal.aborted) {
+              controller.abort(signal.reason);
+            } else {
+              const forwardAbort = () => {
+                signalForwarders.delete(signal);
+                controller.abort(signal.reason);
+              };
+              signal.addEventListener('abort', forwardAbort, { once: true });
+              signalForwarders.set(signal, forwardAbort);
+            }
+            jsdomAbortController = controller;
+            abortControllers.set(signal, jsdomAbortController);
+          }
+
+          return originalAddEventListener.call(this, type, callback, {
+            ...otherOptions,
+            signal: jsdomAbortController.signal,
+          });
+        }
+      }
+
+      return originalAddEventListener.call(this, type, callback, options);
+    };
+
+    // Each iframe has its own jsdom EventTarget and AbortSignal realm. Patch a
+    // child realm before exposing its window or document to test code.
+    const iframePrototype = window.HTMLIFrameElement.prototype;
+    const contentWindowDescriptor = Object.getOwnPropertyDescriptor(
+      iframePrototype,
+      'contentWindow',
+    )!;
+    const contentDocumentDescriptor = Object.getOwnPropertyDescriptor(
+      iframePrototype,
+      'contentDocument',
+    )!;
+
+    Object.defineProperty(iframePrototype, 'contentWindow', {
+      ...contentWindowDescriptor,
+      get(this: HTMLIFrameElement) {
+        const childWindow: DOMWindow | null =
+          contentWindowDescriptor.get!.call(this);
+        if (childWindow) {
+          patchWindow(childWindow);
+        }
+        return childWindow;
+      },
+    });
+    Object.defineProperty(iframePrototype, 'contentDocument', {
+      ...contentDocumentDescriptor,
+      get(this: HTMLIFrameElement) {
+        const childDocument: Document | null =
+          contentDocumentDescriptor.get!.call(this);
+        if (childDocument) {
+          const childWindow: DOMWindow | null =
+            contentWindowDescriptor.get!.call(this);
+          if (childWindow) {
+            patchWindow(childWindow);
+          }
+        }
+        return childDocument;
+      },
+    });
+
+    cleanups.push(() => {
+      for (const [signal, forwardAbort] of signalForwarders) {
+        signal.removeEventListener('abort', forwardAbort);
+      }
+      signalForwarders.clear();
+      eventTargetPrototype.addEventListener = originalAddEventListener;
+      Object.defineProperty(
+        iframePrototype,
+        'contentWindow',
+        contentWindowDescriptor,
+      );
+      Object.defineProperty(
+        iframePrototype,
+        'contentDocument',
+        contentDocumentDescriptor,
+      );
+    });
   };
 
+  patchWindow(rootWindow);
+
   return () => {
-    prototype.addEventListener = originalAddEventListener;
+    for (const cleanup of cleanups.reverse()) {
+      cleanup();
+    }
   };
 }
 
