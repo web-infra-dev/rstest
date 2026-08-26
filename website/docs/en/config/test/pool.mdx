@@ -41,7 +41,7 @@ const defaultPool = {
 };
 ```
 
-- **CLI:** `--pool <type>`, `--pool.type <type>`, `--pool.maxWorkers <value>`, `--pool.execArgv <arg>`
+- **CLI:** `--pool <type>`, `--pool.type <type>`, `--pool.maxWorkers <value>`, `--pool.memoryLimit <limit>`, `--pool.execArgv <arg>`
 
 Options of pool used to run tests in.
 
@@ -112,6 +112,12 @@ You can also pass the same value from the CLI:
 
 ```bash
 npx rstest --pool.maxWorkers 1
+```
+
+For `vmThreads`, you can set the worker recycling threshold from the CLI:
+
+```bash
+npx rstest --pool vmThreads --pool.memoryLimit 256MB
 ```
 
 Common values:

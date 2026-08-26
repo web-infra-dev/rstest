@@ -190,6 +190,10 @@ const poolOptionDefinitions: OptionDefinition[] = [
     'Maximum number or percentage of workers (e.g. 4 or 50%)',
   ],
   [
+    '--pool.memoryLimit <limit>',
+    'Memory limit for VM workers before recycling (e.g. 256MB or 50%)',
+  ],
+  [
     '--pool.execArgv <arg>',
     'Additional Node.js execArgv passed to worker processes (can be specified multiple times)',
   ],

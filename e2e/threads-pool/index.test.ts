@@ -12,7 +12,12 @@ describe('threads pool e2e', () => {
     }) => {
       const { expectExecSuccess } = await runRstestCli({
         command: 'rstest',
-        args: ['run', '--pool', pool],
+        args: [
+          'run',
+          '--pool',
+          pool,
+          ...(pool === 'vmThreads' ? ['--pool.memoryLimit', '256MB'] : []),
+        ],
         onTestFinished,
         options: {
           nodeOptions: {

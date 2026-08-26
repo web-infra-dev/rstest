@@ -41,7 +41,7 @@ const defaultPool = {
 };
 ```
 
-- **CLI：** `--pool <type>`, `--pool.type <type>`, `--pool.maxWorkers <value>`, `--pool.execArgv <arg>`
+- **CLI：** `--pool <type>`、`--pool.type <type>`、`--pool.maxWorkers <value>`、`--pool.memoryLimit <limit>`、`--pool.execArgv <arg>`
 
 用于运行测试的线程池的选项。
 
@@ -112,6 +112,12 @@ export default defineConfig({
 
 ```bash
 npx rstest --pool.maxWorkers 1
+```
+
+对于 `vmThreads`，也可以通过 CLI 设置 worker 回收阈值：
+
+```bash
+npx rstest --pool vmThreads --pool.memoryLimit 256MB
 ```
 
 常见取值：

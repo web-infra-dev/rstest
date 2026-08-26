@@ -38,6 +38,7 @@ export type CommonOptions = {
     | {
         type?: string;
         maxWorkers?: string | number;
+        memoryLimit?: string | number;
         execArgv?: string[] | string;
       };
   /**
@@ -399,6 +400,10 @@ export function mergeWithCLIOptions(
 
       if (poolFromCli.maxWorkers !== undefined) {
         pool.maxWorkers = poolFromCli.maxWorkers as any;
+      }
+
+      if (poolFromCli.memoryLimit !== undefined) {
+        pool.memoryLimit = poolFromCli.memoryLimit as any;
       }
 
       if (poolFromCli.execArgv !== undefined) {
