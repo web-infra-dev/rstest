@@ -67,7 +67,7 @@ function patchAddEventListener(rootWindow: DOMWindow): () => void {
       options?: AddEventListenerOptions | boolean,
     ): void {
       if (typeof options === 'object' && options?.signal != null) {
-        const { signal, ...otherOptions } = options;
+        const { signal } = options;
         if (
           !Object.prototype.isPrototypeOf.call(
             JSDOMAbortSignal.prototype,
@@ -92,7 +92,9 @@ function patchAddEventListener(rootWindow: DOMWindow): () => void {
           }
 
           return originalAddEventListener.call(this, type, callback, {
-            ...otherOptions,
+            capture: options.capture,
+            once: options.once,
+            passive: options.passive,
             signal: jsdomAbortController.signal,
           });
         }
@@ -273,6 +275,7 @@ export const setupEnvironment = async (
     beforeParse,
     ...restOptions
   } = options as JSDOMOptions;
+  let cleanupAddEventListener = () => {};
   let cleanupObjectURLs = () => {};
   const virtualConsole =
     console && global.console ? new VirtualConsole() : undefined;
@@ -292,12 +295,12 @@ export const setupEnvironment = async (
     userAgent,
     ...restOptions,
     beforeParse(window) {
+      cleanupAddEventListener = patchAddEventListener(window);
       beforeParse?.(window);
       cleanupObjectURLs = installJSDOMObjectURL(window, context);
     },
   });
 
-  const cleanupAddEventListener = patchAddEventListener(dom.window);
   const cleanupGlobal = installGlobal(global, dom.window, {
     additionalKeys: ['URL', 'URLSearchParams'],
   });

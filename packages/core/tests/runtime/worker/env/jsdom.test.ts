@@ -25,14 +25,14 @@ test('bridges Node AbortSignal to jsdom event listeners', async () => {
   const testGlobal = createTestGlobal();
   let JSDOMAbortController!: typeof AbortController;
   let eventTargetPrototype!: EventTarget;
-  let originalAddEventListener!: EventTarget['addEventListener'];
+  let patchedAddEventListener!: EventTarget['addEventListener'];
   const { teardown } = await environment.setup(
     testGlobal,
     {
       beforeParse(window: DOMWindow) {
         JSDOMAbortController = window.AbortController;
         eventTargetPrototype = window.EventTarget.prototype;
-        originalAddEventListener = eventTargetPrototype.addEventListener;
+        patchedAddEventListener = eventTargetPrototype.addEventListener;
       },
     },
     { scope: 'file' },
@@ -40,9 +40,7 @@ test('bridges Node AbortSignal to jsdom event listeners', async () => {
 
   try {
     expect(testGlobal.AbortController).toBe(globalThis.AbortController);
-    expect(eventTargetPrototype.addEventListener).not.toBe(
-      originalAddEventListener,
-    );
+    expect(eventTargetPrototype.addEventListener).toBe(patchedAddEventListener);
 
     for (const controller of [
       new testGlobal.AbortController(),
@@ -74,7 +72,9 @@ test('bridges Node AbortSignal to jsdom event listeners', async () => {
     await teardown(testGlobal);
   }
 
-  expect(eventTargetPrototype.addEventListener).toBe(originalAddEventListener);
+  expect(eventTargetPrototype.addEventListener).not.toBe(
+    patchedAddEventListener,
+  );
 });
 
 test('removes Node AbortSignal forwarders', async () => {
@@ -198,10 +198,20 @@ test('clears pending Node timers during jsdom teardown', async () => {
 test('should preserve URL customizations from beforeParse', async () => {
   const testGlobal = { console, URL, URLSearchParams } as typeof globalThis;
   const originalURL = testGlobal.URL;
+  const controller = new AbortController();
+  let beforeParseCalls = 0;
   const { teardown } = await environment.setup(
     testGlobal,
     {
       beforeParse(window: DOMWindow) {
+        const type = 'rstest-before-parse-abort-signal';
+        window.addEventListener(type, () => beforeParseCalls++, {
+          signal: controller.signal,
+        });
+        window.dispatchEvent(new window.Event(type));
+        controller.abort();
+        window.dispatchEvent(new window.Event(type));
+
         const OriginalURL = window.URL as typeof URL;
         class CustomURL extends OriginalURL {}
         Object.defineProperty(CustomURL, 'beforeParseMarker', { value: true });
@@ -212,6 +222,7 @@ test('should preserve URL customizations from beforeParse', async () => {
   );
 
   try {
+    expect(beforeParseCalls).toBe(1);
     expect(
       (testGlobal.URL as typeof URL & { beforeParseMarker: boolean })
         .beforeParseMarker,
