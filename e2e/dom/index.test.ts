@@ -55,6 +55,11 @@ describe('jsdom', () => {
     await expectExecSuccess();
   });
 
+  it('should accept Node AbortSignal in DOM event listeners', async () => {
+    const { expectExecSuccess } = await runCli('test/abortSignal', 'jsdom');
+    await expectExecSuccess();
+  });
+
   it('should only prebundle when explicitly enabled', async ({
     onTestFinished,
   }) => {

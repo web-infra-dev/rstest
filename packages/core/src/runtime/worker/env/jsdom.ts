@@ -44,6 +44,48 @@ export const forwardVirtualConsole = (
   }
 };
 
+function patchAddEventListener(window: DOMWindow): () => void {
+  const abortControllers = new WeakMap<AbortSignal, AbortController>();
+  const JSDOMAbortSignal = window.AbortSignal;
+  const JSDOMAbortController = window.AbortController;
+  const prototype = window.EventTarget.prototype;
+  const originalAddEventListener = prototype.addEventListener;
+
+  prototype.addEventListener = function addEventListener(
+    type: string,
+    callback: EventListenerOrEventListenerObject | null,
+    options?: AddEventListenerOptions | boolean,
+  ): void {
+    if (typeof options === 'object' && options?.signal != null) {
+      const { signal, ...otherOptions } = options;
+      if (
+        !Object.prototype.isPrototypeOf.call(JSDOMAbortSignal.prototype, signal)
+      ) {
+        let jsdomAbortController = abortControllers.get(signal);
+        if (!jsdomAbortController) {
+          const controller = new JSDOMAbortController();
+          signal.addEventListener('abort', () => {
+            controller.abort(signal.reason);
+          });
+          jsdomAbortController = controller;
+          abortControllers.set(signal, jsdomAbortController);
+        }
+
+        return originalAddEventListener.call(this, type, callback, {
+          ...otherOptions,
+          signal: jsdomAbortController.signal,
+        });
+      }
+    }
+
+    return originalAddEventListener.call(this, type, callback, options);
+  };
+
+  return () => {
+    prototype.addEventListener = originalAddEventListener;
+  };
+}
+
 type JSDOMModule = typeof import('jsdom');
 
 function installJSDOMObjectURL(
@@ -173,6 +215,7 @@ export const setupEnvironment = async (
     },
   });
 
+  const cleanupAddEventListener = patchAddEventListener(dom.window);
   const cleanupGlobal = installGlobal(global, dom.window, {
     additionalKeys: ['URL', 'URLSearchParams'],
   });
@@ -183,6 +226,7 @@ export const setupEnvironment = async (
   return {
     teardown() {
       cleanupHandler();
+      cleanupAddEventListener();
       cleanupObjectURLs();
       cleanupTimers();
       dom.window.close();
