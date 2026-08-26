@@ -338,7 +338,6 @@ Licensed under Apache license in the repository at https://github.com/microsoft/
 The following third-party packages are bundled into ${packageName}.
 
 ${packages
-  .filter(({ name }) => !excludedPackages.includes(name))
   .sort((left, right) => {
     return left.name < right.name ? -1 : 1;
   })
@@ -359,7 +358,10 @@ ${packages
     additionalFiles: {
       '../LICENSE.md': (packages) => {
         const uniquePackages = new Map<string, PackageLicenseMeta>();
-        for (const pkg of [...packages, ...additionalPackages]) {
+        for (const pkg of [
+          ...packages.filter(({ name }) => !excludedPackages.includes(name)),
+          ...additionalPackages,
+        ]) {
           if (!uniquePackages.has(pkg.name)) {
             uniquePackages.set(pkg.name, pkg);
           }

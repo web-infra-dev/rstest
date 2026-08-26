@@ -12,7 +12,11 @@ const vsceTarget =
 const yukuBindingSuffix = vsceTarget.startsWith('linux-')
   ? `${vsceTarget}-gnu`
   : vsceTarget;
-const yukuRequire = createRequire(require.resolve('yuku-parser'));
+const yukuParserPath = require.resolve('yuku-parser');
+const yukuRequire = createRequire(yukuParserPath);
+const yukuParserPackage = yukuRequire(
+  `${dirname(yukuParserPath)}/package.json`,
+);
 // Yuku computes this package name at runtime, so Rspack cannot discover it.
 const yukuBindingPath = yukuRequire.resolve(
   `@yuku-parser/binding-${yukuBindingSuffix}`,
@@ -20,7 +24,7 @@ const yukuBindingPath = yukuRequire.resolve(
 const yukuBindingPackage = yukuRequire(
   `${dirname(yukuBindingPath)}/package.json`,
 );
-// The binding package omits its LICENSE file; keep the upstream notice in the
+// Yuku packages omit their LICENSE files; keep the upstream notice in the
 // generated VSIX license: https://github.com/yuku-toolchain/yuku/blob/main/LICENSE
 const yukuLicenseText = `MIT License
 
@@ -81,13 +85,19 @@ export default defineConfig({
               : await licensePlugin(
                   'rstest VS Code extension',
                   false,
-                  ['@rstest/core'],
+                  ['@rstest/core', 'yuku-parser'],
                   [
                     {
                       name: yukuBindingPackage.name,
                       license: yukuBindingPackage.license,
                       licenseText: yukuLicenseText,
                       repository: yukuBindingPackage.repository.url,
+                    },
+                    {
+                      name: yukuParserPackage.name,
+                      license: yukuParserPackage.license,
+                      licenseText: yukuLicenseText,
+                      repository: yukuParserPackage.repository.url,
                     },
                   ],
                 ),
