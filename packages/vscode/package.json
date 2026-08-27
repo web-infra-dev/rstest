@@ -279,12 +279,12 @@
     "core-js-pure": "^3.50.0",
     "mocha": "^11.8.0",
     "ovsx": "^1.1.1",
-    "picomatch": "^4.0.5",
+    "picomatch": "^4.0.7",
     "semver": "^7.8.5",
     "tinyglobby": "^0.2.17",
     "typescript": "^6.0.3",
     "valibot": "^1.4.2",
-    "yuku-parser": "^0.9.0"
+    "yuku-parser": "^0.9.1"
   },
   "engines": {
     "vscode": "^1.97.0"
