@@ -147,6 +147,57 @@ describe('loadEsModule', () => {
     });
   });
 
+  it('should await concurrent links to the same external ESM graph', async () => {
+    const vmContext = vm.createContext({});
+    const externalPath = fixturePath('vm-external/index.mjs');
+    const loadExternal = (name: string) =>
+      loadModule({
+        codeContent: [
+          `import { inspectRealm } from ${JSON.stringify(externalPath)};`,
+          `export default inspectRealm({ from: ${JSON.stringify(name)} });`,
+        ].join('\n'),
+        distPath: `/virtual/dist/${name}.mjs`,
+        testPath: __filename,
+        rstestContext: {},
+        assetFiles: {},
+        interopDefault: true,
+        vmContext,
+      });
+
+    const [first, second] = await Promise.all([
+      loadExternal('first'),
+      loadExternal('second'),
+    ]);
+
+    expect(first.default.esm).toBe(true);
+    expect(second.default.esm).toBe(true);
+  });
+
+  it('should await a shared dependency linked through concurrent parents', async () => {
+    const vmContext = vm.createContext({});
+    const loadParent = (name: 'left' | 'right') =>
+      loadModule({
+        codeContent: [
+          `import { ${name} } from ${JSON.stringify(fixturePath(`vm-external/diamond/${name}.mjs`))};`,
+          `export default ${name};`,
+        ].join('\n'),
+        distPath: `/virtual/dist/diamond-${name}.mjs`,
+        testPath: __filename,
+        rstestContext: {},
+        assetFiles: {},
+        interopDefault: true,
+        vmContext,
+      });
+
+    const [left, right] = await Promise.all([
+      loadParent('left'),
+      loadParent('right'),
+    ]);
+
+    expect(left.default).toBe(true);
+    expect(right.default).toBe(true);
+  });
+
   it('should not pollute the namespace of a real native ESM module with only named exports', async () => {
     const mod = await loadModule({
       codeContent: [

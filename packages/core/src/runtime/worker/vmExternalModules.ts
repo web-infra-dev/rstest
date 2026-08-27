@@ -110,7 +110,11 @@ const stripCommonJsPrefix = (source: string): string =>
 
 class VmExternalModules {
   private readonly commonJsCache = new Map<string, CommonJsModule>();
-  private readonly esmCache = new Map<string, vm.Module>();
+  private readonly esmCache = new Map<string, vm.SourceTextModule>();
+  private readonly esmLinkCache = new Map<
+    string,
+    Promise<vm.SourceTextModule>
+  >();
   private readonly jsonCache = new Map<string, unknown>();
   private readonly parseJson: (source: string) => unknown;
   private moduleBuiltin: unknown;
@@ -189,11 +193,12 @@ class VmExternalModules {
   private async getModule(
     resolvedId: string,
     interopDefault: boolean,
+    linkingAncestors?: ReadonlySet<string>,
   ): Promise<vm.Module> {
     const format = getModuleFormat(resolvedId);
     switch (format) {
       case 'module':
-        return this.loadEsm(resolvedId, interopDefault);
+        return this.loadEsm(resolvedId, interopDefault, linkingAncestors);
       case 'commonjs':
       case 'json': {
         const exports =
@@ -292,13 +297,18 @@ class VmExternalModules {
   private async loadEsm(
     resolvedId: string,
     interopDefault: boolean,
+    linkingAncestors?: ReadonlySet<string>,
   ): Promise<vm.SourceTextModule> {
     const identifier = resolvedId.startsWith('file:')
       ? resolvedId
       : pathToFileURL(resolvedId).href;
     const cachedModule = this.esmCache.get(identifier);
     if (cachedModule) {
-      return cachedModule as vm.SourceTextModule;
+      if (linkingAncestors?.has(identifier)) {
+        return cachedModule;
+      }
+      const linking = this.esmLinkCache.get(identifier);
+      return linking ?? cachedModule;
     }
 
     const filePath = getFilePath(identifier);
@@ -341,18 +351,24 @@ class VmExternalModules {
       }
     }
 
-    try {
-      await module.link((specifier, referencer) =>
+    const nextAncestors = new Set(linkingAncestors);
+    nextAncestors.add(identifier);
+    const linking = module
+      .link((specifier, referencer) =>
         this.getModule(
           this.resolve(specifier, referencer.identifier),
           interopDefault,
+          nextAncestors,
         ),
-      );
-      return module;
-    } catch (error) {
-      this.esmCache.delete(identifier);
-      throw error;
-    }
+      )
+      .then(() => module)
+      .catch((error: unknown) => {
+        this.esmCache.delete(identifier);
+        this.esmLinkCache.delete(identifier);
+        throw error;
+      });
+    this.esmLinkCache.set(identifier, linking);
+    return linking;
   }
 
   private loadBuiltin(specifier: string): unknown {
