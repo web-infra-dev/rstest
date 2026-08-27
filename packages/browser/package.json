@@ -62,7 +62,7 @@
     "@types/ws": "^8.18.1",
     "@vitest/snapshot": "^4.1.11",
     "birpc": "^4.2.0",
-    "picomatch": "^4.0.5",
+    "picomatch": "^4.0.7",
     "playwright": "^1.62.1"
   },
   "peerDependencies": {
