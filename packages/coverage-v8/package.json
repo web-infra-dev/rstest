@@ -37,13 +37,13 @@
     "istanbul-lib-coverage": "^3.2.2",
     "istanbul-lib-report": "^3.0.1",
     "istanbul-reports": "^3.2.0",
-    "picomatch": "^4.0.5",
-    "yuku-ast": "^0.9.0",
-    "yuku-parser": "^0.9.0"
+    "picomatch": "^4.0.7",
+    "yuku-ast": "^0.9.1",
+    "yuku-parser": "^0.9.1"
   },
   "devDependencies": {
     "@rsbuild/core": "~2.2.0",
-    "@rslib/core": "1.0.0-beta.3",
+    "@rslib/core": "1.0.0-rc.2",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
     "@types/istanbul-lib-coverage": "^2.0.6",

@@ -53,7 +53,7 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
-    "@rslib/core": "1.0.0-beta.3",
+    "@rslib/core": "1.0.0-rc.2",
     "@rstest/browser-ui": "workspace:*",
     "@rstest/core": "workspace:*",
     "@rstest/tsconfig": "workspace:*",
@@ -62,7 +62,7 @@
     "@types/ws": "^8.18.1",
     "@vitest/snapshot": "^4.1.11",
     "birpc": "^4.2.0",
-    "picomatch": "^4.0.5",
+    "picomatch": "^4.0.7",
     "playwright": "^1.62.1"
   },
   "peerDependencies": {
