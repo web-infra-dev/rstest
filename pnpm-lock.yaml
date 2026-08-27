@@ -1521,9 +1521,9 @@ importers:
       '@rspress/plugin-client-redirects':
         specifier: 2.0.19
         version: 2.0.19(@rspress/core@2.0.19(@module-federation/runtime-tools@2.9.0)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))
-      '@rstack-dev/doc-ui':
-        specifier: 1.14.8
-        version: 1.14.8(@rspress/core@2.0.19(@module-federation/runtime-tools@2.9.0)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))
+      '@rstackjs/doc-ui':
+        specifier: 1.14.9
+        version: 1.14.9(@rspress/core@2.0.19(@module-federation/runtime-tools@2.9.0)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))
       '@rstest/tsconfig':
         specifier: workspace:*
         version: link:../scripts/tsconfig
@@ -3906,8 +3906,8 @@ packages:
   '@rspress/shared@2.0.19':
     resolution: {integrity: sha512-INrETllWuR49lksqCz+xeLSO6rKtHA+5Ix2YQWcP9nerCuTSyGYwH8eBC0HrIacJkGHxB8wkkbV99tyzGtY8Wg==}
 
-  '@rstack-dev/doc-ui@1.14.8':
-    resolution: {integrity: sha512-CAibkpvCnJEcxsypu3ZE9JjtQw+1+iJGv9X09Yg4//9FevHpfaHW+b2onFG+Z/xOlUXGg83rJTb7CO6YbToP0w==}
+  '@rstackjs/doc-ui@1.14.9':
+    resolution: {integrity: sha512-Te7Wx4K9JuvluP7HsH/Dpdju5QhClUe17/9YBzHlul+x2wg63jOkngv79DlMXyYDJgHQ+11vZfz18B+bnPhttw==}
     peerDependencies:
       '@rspress/core': '>=2.0.0'
     peerDependenciesMeta:
@@ -11626,7 +11626,7 @@ snapshots:
       - core-js
       - supports-color
 
-  '@rstack-dev/doc-ui@1.14.8(@rspress/core@2.0.19(@module-federation/runtime-tools@2.9.0)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))':
+  '@rstackjs/doc-ui@1.14.9(@rspress/core@2.0.19(@module-federation/runtime-tools@2.9.0)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1))':
     optionalDependencies:
       '@rspress/core': 2.0.19(@module-federation/runtime-tools@2.9.0)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(supports-color@8.1.1)
 

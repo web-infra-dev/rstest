@@ -18,7 +18,7 @@
     "@rspress/core": "2.0.19",
     "@rspress/plugin-algolia": "2.0.19",
     "@rspress/plugin-client-redirects": "2.0.19",
-    "@rstack-dev/doc-ui": "1.14.8",
+    "@rstackjs/doc-ui": "1.14.9",
     "@rstest/tsconfig": "workspace:*",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.18",

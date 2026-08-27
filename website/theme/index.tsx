@@ -9,10 +9,11 @@ import {
   Search as PluginAlgoliaSearch,
   ZH_LOCALES,
 } from '@rspress/plugin-algolia/runtime';
-import { BlogBackButton } from '@rstack-dev/doc-ui/blog-back-button';
-import { NavIcon } from '@rstack-dev/doc-ui/nav-icon';
+import { BlogBackButton } from '@rstackjs/doc-ui/blog-back-button';
+import { NavIcon } from '@rstackjs/doc-ui/nav-icon';
 
 import { HomeLayout } from './pages';
+import '@rstackjs/doc-ui/theme.css';
 import './index.scss';
 
 const Search = () => {

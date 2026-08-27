@@ -31,7 +31,7 @@ minimumReleaseAgeExclude:
   - '@rstest/*'
   - '@rsdoctor/*'
   - '@rslint/*'
-  - '@rstack-dev/doc-ui'
+  - '@rstackjs/doc-ui'
   - rsbuild-plugin-dts
   # Renovate security update: svelte@5.55.7
   - svelte@5.55.7
