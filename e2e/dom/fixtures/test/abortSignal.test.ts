@@ -67,3 +67,49 @@ test('reads a Node signal option once', () => {
 
   expect(reads).toBe(1);
 });
+
+test('reads listener options in Web IDL order', () => {
+  const controller = new AbortController();
+  const reads: string[] = [];
+  const options = {
+    get capture() {
+      reads.push('capture');
+      return false;
+    },
+    get once() {
+      reads.push('once');
+      return true;
+    },
+    get passive() {
+      reads.push('passive');
+      return false;
+    },
+    get signal() {
+      reads.push('signal');
+      return controller.signal;
+    },
+  };
+
+  document.addEventListener('rstest-listener-option-order', () => {}, options);
+
+  expect(reads).toEqual(['capture', 'once', 'passive', 'signal']);
+});
+
+test('accepts callable listener options dictionaries', () => {
+  const controller = new AbortController();
+  const options = Object.assign(() => {}, { signal: controller.signal });
+  let calls = 0;
+  const type = 'rstest-callable-listener-options';
+
+  document.addEventListener(
+    type,
+    () => calls++,
+    options as unknown as AddEventListenerOptions,
+  );
+  document.dispatchEvent(new Event(type));
+  expect(calls).toBe(1);
+
+  controller.abort();
+  document.dispatchEvent(new Event(type));
+  expect(calls).toBe(1);
+});

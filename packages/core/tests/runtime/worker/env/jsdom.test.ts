@@ -70,6 +70,22 @@ test('bridges Node AbortSignal to jsdom event listeners', async () => {
     });
     testGlobal.document.dispatchEvent(new testGlobal.Event(type));
     expect(calls).toBe(0);
+
+    const syntheticController = new testGlobal.AbortController();
+    let syntheticCalls = 0;
+    const syntheticType = 'rstest-synthetic-abort-event';
+    testGlobal.document.addEventListener(
+      syntheticType,
+      () => syntheticCalls++,
+      { signal: syntheticController.signal },
+    );
+    syntheticController.signal.dispatchEvent(new Event('abort'));
+    testGlobal.document.dispatchEvent(new testGlobal.Event(syntheticType));
+    expect(syntheticCalls).toBe(1);
+
+    syntheticController.abort();
+    testGlobal.document.dispatchEvent(new testGlobal.Event(syntheticType));
+    expect(syntheticCalls).toBe(1);
   } finally {
     await teardown(testGlobal);
   }

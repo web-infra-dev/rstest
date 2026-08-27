@@ -64,8 +64,20 @@ function patchAddEventListener(
     callback: EventListenerOrEventListenerObject | null,
     options?: AddEventListenerOptions | boolean,
   ): void {
-    if (typeof options === 'object' && options !== null) {
-      const signal = options.signal;
+    const optionsValue = options as unknown;
+    if (
+      optionsValue !== null &&
+      (typeof optionsValue === 'object' || typeof optionsValue === 'function')
+    ) {
+      const listenerOptions = optionsValue as AddEventListenerOptions;
+      // Web IDL converts inherited dictionary members first, then this
+      // dictionary's members in lexicographic order.
+      const capture = Boolean(listenerOptions.capture);
+      const once = Boolean(listenerOptions.once);
+      const passive = Boolean(listenerOptions.passive);
+      const signal = listenerOptions.signal;
+      let compatibleSignal = signal;
+
       if (
         signal != null &&
         !Object.prototype.isPrototypeOf.call(
@@ -81,23 +93,28 @@ function patchAddEventListener(
             controller.abort(signal.reason);
           } else {
             const forwardAbort = () => {
+              if (!signal.aborted) {
+                return;
+              }
+              signal.removeEventListener('abort', forwardAbort);
               signalForwarders?.delete(signal);
               controller.abort(signal.reason);
             };
-            signal.addEventListener('abort', forwardAbort, { once: true });
+            signal.addEventListener('abort', forwardAbort);
             signalForwarders?.set(signal, forwardAbort);
           }
           jsdomAbortController = controller;
           abortControllers.set(signal, jsdomAbortController);
         }
-
-        return originalAddEventListener.call(this, type, callback, {
-          capture: options.capture,
-          once: options.once,
-          passive: options.passive,
-          signal: jsdomAbortController.signal,
-        });
+        compatibleSignal = jsdomAbortController.signal;
       }
+
+      return originalAddEventListener.call(this, type, callback, {
+        capture,
+        once,
+        passive,
+        signal: compatibleSignal,
+      });
     }
 
     return originalAddEventListener.call(this, type, callback, options);
