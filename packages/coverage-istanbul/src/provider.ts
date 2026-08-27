@@ -31,6 +31,7 @@ export class CoverageProvider implements RstestCoverageProvider {
   readonly supportsDeferredCoverageFinalization = true;
 
   private coverageMap: CoverageMap | null = null;
+  private coverageGlobal: typeof globalThis = globalThis;
   // Cache to avoid redundant readFile calls in generateCoverageForUntestedFiles and generateReports.
   private sourcemapUrlCache = new Map<string, string | undefined>();
 
@@ -39,11 +40,9 @@ export class CoverageProvider implements RstestCoverageProvider {
     private root?: string,
   ) {}
 
-  init(): void {
-    // Initialize global coverage object
-    if (typeof globalThis !== 'undefined') {
-      globalThis.__coverage__ = globalThis.__coverage__ || {};
-    }
+  init(options?: Parameters<RstestCoverageProvider['init']>[0]): void {
+    this.coverageGlobal = options?.global ?? globalThis;
+    this.coverageGlobal.__coverage__ = this.coverageGlobal.__coverage__ || {};
   }
 
   async generateCoverageForUntestedFiles({
@@ -90,7 +89,7 @@ export class CoverageProvider implements RstestCoverageProvider {
     assetFiles?: Record<string, string>;
     sourceMaps?: Record<string, string>;
   }): CoverageMap | null {
-    if (typeof globalThis === 'undefined' || !globalThis.__coverage__) {
+    if (!this.coverageGlobal.__coverage__) {
       return null;
     }
 
@@ -100,7 +99,7 @@ export class CoverageProvider implements RstestCoverageProvider {
       }
       // Merge current coverage data
       if (this.coverageMap) {
-        this.coverageMap.merge(globalThis.__coverage__);
+        this.coverageMap.merge(this.coverageGlobal.__coverage__);
       }
 
       return this.coverageMap;
@@ -193,8 +192,8 @@ export class CoverageProvider implements RstestCoverageProvider {
   }
 
   cleanup(): void {
-    if (typeof globalThis !== 'undefined' && '__coverage__' in globalThis) {
-      delete globalThis.__coverage__;
+    if ('__coverage__' in this.coverageGlobal) {
+      delete this.coverageGlobal.__coverage__;
     }
     this.coverageMap = null;
   }

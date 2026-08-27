@@ -210,7 +210,26 @@ export const initSpy = (
       if (mockImplementationOnce.length) {
         impl = mockImplementationOnce.shift()!;
       }
-      return impl?.apply(this, args);
+      const result = impl?.apply(this, args);
+      if (
+        result !== null &&
+        typeof result === 'object' &&
+        Object.prototype.toString.call(result) === '[object Promise]' &&
+        'then' in result &&
+        typeof result.then === 'function' &&
+        !(result instanceof Promise)
+      ) {
+        const resultIndex = spyState.results.length;
+        void result.then(
+          (value: unknown) => {
+            spyState.resolves[resultIndex] = ['ok', value];
+          },
+          (error: unknown) => {
+            spyState.resolves[resultIndex] = ['error', error];
+          },
+        );
+      }
+      return result;
     }
 
     spyState.willCall(willCall);

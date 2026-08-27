@@ -16,12 +16,15 @@ describe('threads pool e2e', () => {
           'run',
           '--pool',
           pool,
+          '--isolate',
+          'true',
           ...(pool === 'vmThreads' ? ['--pool.memoryLimit', '256MB'] : []),
         ],
         onTestFinished,
         options: {
           nodeOptions: {
             cwd: join(__dirname, './fixtures'),
+            env: { ISOLATE: undefined },
           },
         },
       });
@@ -42,11 +45,14 @@ describe('threads pool e2e', () => {
         'vmThreads',
         '--pool.memoryLimit',
         '256MB',
+        '--isolate',
+        'true',
       ],
       onTestFinished,
       options: {
         nodeOptions: {
           cwd: join(__dirname, '..'),
+          env: { ISOLATE: undefined },
         },
       },
     });

@@ -17,18 +17,11 @@ import {
   RSTEST_DYNAMIC_IMPORT_HOOK,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from './runtimeHooks';
+import { createVmTimersLoader } from './timers';
 import { getVmExternalModules } from './vmExternalModules';
+import { workerCache } from './workerCache';
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
-
-const VM_TIMER_EXPORTS = new Set([
-  'setTimeout',
-  'clearTimeout',
-  'setInterval',
-  'clearInterval',
-  'setImmediate',
-  'clearImmediate',
-]);
 
 const getAssetName = (
   assetFiles: AssetFiles,
@@ -206,26 +199,14 @@ const createRequire = (
       return createNativeRequire(distPath);
     }
   })();
-
-  const loadTimersModule = (id: string): unknown => {
-    const timersModule = _require(id) as Record<PropertyKey, unknown>;
-    if (!vmContext) {
-      return timersModule;
-    }
-
-    const runtimeGlobal = vm.runInContext('globalThis', vmContext) as Record<
-      PropertyKey,
-      unknown
-    >;
-    return new Proxy(timersModule, {
-      get(target, property, receiver) {
-        if (typeof property === 'string' && VM_TIMER_EXPORTS.has(property)) {
-          return runtimeGlobal[property];
-        }
-        return Reflect.get(target, property, receiver);
-      },
-    });
-  };
+  const loadTimersModule = vmContext
+    ? createVmTimersLoader(
+        vm.runInContext('globalThis', vmContext) as Record<
+          PropertyKey,
+          unknown
+        >,
+      )
+    : undefined;
 
   const require = ((id: string) => {
     if (id === 'fs' || id === 'node:fs') {
@@ -235,8 +216,8 @@ const createRequire = (
         : fsModule;
     }
 
-    if (vmContext && (id === 'timers' || id === 'node:timers')) {
-      return loadTimersModule(id);
+    if (loadTimersModule && (id === 'timers' || id === 'node:timers')) {
+      return loadTimersModule(_require(id) as Record<PropertyKey, unknown>);
     }
 
     const currentDirectory = path.dirname(distPath);
@@ -479,10 +460,18 @@ const getModuleCache = (vmContext?: vm.Context): Map<string, any> => {
 
 // V8 cached data is safe to instantiate in multiple realms; module exports are
 // deliberately not stored here, so setup dependencies keep file isolation.
-const compilationCache = new Map<
-  string,
-  { code: string; params: string[]; cachedData: Buffer }
->();
+type CommonJsCompilationCacheEntry = {
+  code: string;
+  params: string[];
+  cachedData: Buffer;
+};
+const compilationCache = workerCache.namespace<CommonJsCompilationCacheEntry>(
+  'commonjs-compilation',
+  ({ code, params, cachedData }) =>
+    Buffer.byteLength(code) +
+    params.reduce((size, param) => size + Buffer.byteLength(param), 0) +
+    cachedData.byteLength,
+);
 
 export const cacheableLoadModule = ({
   codeContent,

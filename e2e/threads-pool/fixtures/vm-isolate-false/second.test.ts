@@ -15,8 +15,15 @@ workerTest('isolates the second file', ({ workerValue }) => {
   expect(fileGlobal.__RSTEST_VM_SETUP_COUNT__).toBe(1);
   expect(fileGlobal[FILE_MARKER]).toBeUndefined();
   expect(getCount()).toBe(0);
+  expect(
+    (Promise as typeof Promise & { __RSTEST_VM_FILE__?: string })
+      .__RSTEST_VM_FILE__,
+  ).toBeUndefined();
 
   fileGlobal[FILE_MARKER] = 'second';
+  (
+    Promise as typeof Promise & { __RSTEST_VM_FILE__?: string }
+  ).__RSTEST_VM_FILE__ = 'second';
   increment();
   expect(getCount()).toBe(1);
   console.log(`VM_THREAD_ID:${threadId}`);

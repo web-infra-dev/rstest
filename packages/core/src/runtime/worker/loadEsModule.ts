@@ -16,6 +16,7 @@ import {
   RSTEST_DYNAMIC_IMPORT_HOOK,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from './runtimeHooks';
+import { workerCache } from './workerCache';
 
 export enum EsmMode {
   Unknown = 0,
@@ -188,10 +189,11 @@ const getEsmCache = (vmContext?: vm.Context): Map<string, SourceTextModule> => {
 
 // Cache only V8's parse/compile metadata; SourceTextModule instances remain
 // tied to the VM context that evaluated them.
-const compilationCache = new Map<
-  string,
-  { code: string; cachedData: Buffer }
->();
+type EsmCompilationCacheEntry = { code: string; cachedData: Buffer };
+const compilationCache = workerCache.namespace<EsmCompilationCacheEntry>(
+  'esm-compilation',
+  ({ code, cachedData }) => Buffer.byteLength(code) + cachedData.byteLength,
+);
 
 // With `isolate: false` the kept runtime chunk's `import.meta` hooks (wasm /
 // dynamic-import resolution) capture this asset map BY REFERENCE at creation

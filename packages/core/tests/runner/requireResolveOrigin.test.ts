@@ -19,6 +19,7 @@ import {
   importMetaHook,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from '../../src/runtime/worker/runtimeHooks';
+import { workerCache } from '../../src/runtime/worker/workerCache';
 
 describe('require.resolve origin runtime helper', () => {
   afterEach(() => {
@@ -26,6 +27,7 @@ describe('require.resolve origin runtime helper', () => {
     clearEsCompilationCache();
     clearCjsModuleCache();
     clearCjsCompilationCache();
+    workerCache.configure(0);
   });
 
   it('resolves relative specifiers against injected source module origin', () => {
@@ -239,6 +241,7 @@ describe('require.resolve origin runtime helper', () => {
   });
 
   it('reuses setup compilation data across VM contexts', () => {
+    workerCache.configure(1024 * 1024);
     const compileFunctionSpy = rs.spyOn(vm, 'compileFunction');
     onTestFinished(() => {
       compileFunctionSpy.mockRestore();
@@ -291,6 +294,7 @@ describe('require.resolve origin runtime helper', () => {
   });
 
   it('reuses ESM setup compilation data across VM contexts', async () => {
+    workerCache.configure(1024 * 1024);
     // @types/node does not declare SourceTextModule.createCachedData yet.
     const modulePrototype = vm.SourceTextModule.prototype as unknown as {
       createCachedData: () => Buffer;

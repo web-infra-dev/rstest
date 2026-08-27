@@ -702,7 +702,9 @@ export class CoverageProvider implements RstestCoverageProvider {
     }
   }
 
-  async init(): Promise<void> {
+  async init(
+    _options?: Parameters<RstestCoverageProvider['init']>[0],
+  ): Promise<void> {
     this.session = new inspector.Session();
     this.session.connect();
     await this.session.post('Profiler.enable');

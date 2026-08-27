@@ -50,14 +50,14 @@ const __dirname = dirname(__filename);
 const getRuntimeConfig = (context: ProjectContext): RuntimeConfig =>
   projectRuntimeConfig(context, { envMode: 'inherit' });
 
-const VM_ASSET_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+const VM_WORKER_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 
-const getVmAssetCacheLimit = (
+const getVmWorkerCacheLimit = (
   memoryLimit: number | undefined,
 ): number | undefined =>
   memoryLimit === undefined
     ? undefined
-    : Math.min(VM_ASSET_CACHE_MAX_BYTES, Math.floor(memoryLimit / 4));
+    : Math.min(VM_WORKER_CACHE_MAX_BYTES, Math.floor(memoryLimit / 4));
 
 const getAssetNames = (
   entryInfo: EntryInfo,
@@ -122,7 +122,7 @@ const buildTask = async ({
   traceSpan,
   testEnvironmentModule,
   buildId = 0,
-  assetCacheLimit,
+  workerCacheLimit,
   captureBundleCoverage = false,
 }: {
   type: 'run' | 'collect';
@@ -142,7 +142,7 @@ const buildTask = async ({
   traceSpan: TraceSpan;
   testEnvironmentModule?: TestEnvironmentModuleReference;
   buildId?: number;
-  assetCacheLimit?: number;
+  workerCacheLimit?: number;
   captureBundleCoverage?: boolean;
 }): Promise<{
   task: PoolTask;
@@ -212,7 +212,9 @@ const buildTask = async ({
           projectRoot: project.rootPath,
           runtimeConfig,
           testEnvironmentModule,
-          assetCacheLimit: captureBundleCoverage ? undefined : assetCacheLimit,
+          workerCacheLimit: captureBundleCoverage
+            ? undefined
+            : workerCacheLimit,
           trace: context.trace,
         },
         type,
@@ -412,8 +414,8 @@ export const createPool = async ({
     workerKind === 'vmThreads'
       ? parseMemoryLimit(poolOptions.memoryLimit ?? 1 / maxWorkers)
       : undefined;
-  const assetCacheLimit =
-    workerKind === 'vmThreads' ? getVmAssetCacheLimit(memoryLimit) : undefined;
+  const workerCacheLimit =
+    workerKind === 'vmThreads' ? getVmWorkerCacheLimit(memoryLimit) : undefined;
 
   const pool = new Pool({
     workerEntry: resolve(__dirname, './worker.js'),
@@ -516,7 +518,7 @@ export const createPool = async ({
                     project.environmentName,
                   ),
                   buildId,
-                  assetCacheLimit,
+                  workerCacheLimit,
                   captureBundleCoverage,
                 }),
               traceArgs,
@@ -639,7 +641,7 @@ export const createPool = async ({
             testEnvironmentModule: testEnvironmentModules?.get(
               project.environmentName,
             ),
-            assetCacheLimit,
+            workerCacheLimit,
           });
 
           return pool.collectTests(task).catch((err: FormattedError) => {

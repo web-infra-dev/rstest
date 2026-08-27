@@ -31,6 +31,10 @@ export const setFileContext = (context: FileContext): void => {
   current = context;
 };
 
+export const clearFileContext = (): void => {
+  current = undefined;
+};
+
 /**
  * Resolve the running file's context. Throws when called outside a prepared
  * rstest runtime (e.g. importing `@rstest/core` APIs in a plain node script).

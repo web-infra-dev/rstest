@@ -4,8 +4,29 @@ import { dirname, extname, join, parse } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import { asModule, interopModule } from './interop';
+import { createVmTimersLoader, VM_TIMER_EXPORTS } from './timers';
+import { workerCache } from './workerCache';
 
-type ModuleFormat = 'commonjs' | 'json' | 'module' | 'native';
+type ModuleFormat = 'commonjs' | 'json' | 'module' | 'native' | 'unsupported';
+type EsmLinkOperation = {
+  promise: Promise<vm.Module>;
+  reject: (reason?: unknown) => void;
+  resolve: (value: vm.Module | PromiseLike<vm.Module>) => void;
+};
+
+const createEsmLinkOperation = (): EsmLinkOperation => {
+  let rejectOperation: EsmLinkOperation['reject'];
+  let resolveOperation: EsmLinkOperation['resolve'];
+  const promise = new Promise<vm.Module>((resolve, reject) => {
+    rejectOperation = reject;
+    resolveOperation = resolve;
+  });
+  return {
+    promise,
+    reject: rejectOperation!,
+    resolve: resolveOperation!,
+  };
+};
 
 type CommonJsModule = {
   children: CommonJsModule[];
@@ -21,16 +42,29 @@ type CommonJsModule = {
 };
 
 const importMetaResolve = import.meta.resolve?.bind(import.meta);
-const sourceCache = new Map<string, string>();
-const packageTypeCache = new Map<string, 'commonjs' | 'module'>();
-const commonJsCompilationCache = new Map<
-  string,
-  { code: string; cachedData: Buffer }
->();
-const esmCompilationCache = new Map<
-  string,
-  { code: string; cachedData: Buffer }
->();
+const sourceCache = workerCache.namespace<string>('external-source', (source) =>
+  Buffer.byteLength(source),
+);
+const packageTypeCache = workerCache.namespace<'commonjs' | 'module'>(
+  'external-package-type',
+  () => 0,
+);
+type ExternalCompilationCacheEntry = { code: string; cachedData: Buffer };
+const getCompilationCacheSize = ({
+  code,
+  cachedData,
+}: ExternalCompilationCacheEntry): number =>
+  Buffer.byteLength(code) + cachedData.byteLength;
+const commonJsCompilationCache =
+  workerCache.namespace<ExternalCompilationCacheEntry>(
+    'external-commonjs-compilation',
+    getCompilationCacheSize,
+  );
+const esmCompilationCache =
+  workerCache.namespace<ExternalCompilationCacheEntry>(
+    'external-esm-compilation',
+    getCompilationCacheSize,
+  );
 
 let executors = new WeakMap<vm.Context, VmExternalModules>();
 
@@ -86,12 +120,14 @@ const getFilePath = (resolvedId: string): string =>
     : resolvedId;
 
 const getModuleFormat = (resolvedId: string): ModuleFormat => {
-  if (isBuiltin(resolvedId) || resolvedId.endsWith('.node')) {
+  if (isBuiltin(resolvedId)) {
     return 'native';
   }
 
   const filePath = getFilePath(resolvedId);
   switch (extname(filePath)) {
+    case '':
+      return resolvePackageType(filePath);
     case '.cjs':
       return 'commonjs';
     case '.json':
@@ -100,35 +136,78 @@ const getModuleFormat = (resolvedId: string): ModuleFormat => {
       return 'module';
     case '.js':
       return resolvePackageType(filePath);
-    default:
+    case '.node':
       return 'native';
+    default:
+      return 'unsupported';
   }
 };
 
 const stripCommonJsPrefix = (source: string): string =>
   source.replace(/^\uFEFF/, '').replace(/^#!.*(?:\r?\n|$)/, '');
 
+const getNodeModulePaths = (filePath: string): string[] =>
+  createNativeRequire(filePath).resolve.paths('__rstest_module_lookup__') ?? [];
+
+const createRequireEsmError = (filePath: string): NodeJS.ErrnoException => {
+  const error: NodeJS.ErrnoException = new Error(
+    `require() of ES Module ${filePath} is not supported in the vmThreads pool. Use dynamic import() instead.`,
+  );
+  error.code = 'ERR_REQUIRE_ESM';
+  return error;
+};
+
+const createUnsupportedFormatError = (
+  filePath: string,
+): NodeJS.ErrnoException => {
+  const extension = extname(filePath) || '(no extension)';
+  const error: NodeJS.ErrnoException = new Error(
+    `External module ${filePath} has unsupported format ${extension} in the vmThreads pool. Bundle this module instead of externalizing it.`,
+  );
+  error.code = 'ERR_UNKNOWN_FILE_EXTENSION';
+  return error;
+};
+
 class VmExternalModules {
   private readonly commonJsCache = new Map<string, CommonJsModule>();
   private readonly esmCache = new Map<string, vm.SourceTextModule>();
-  private readonly esmLinkCache = new Map<
-    string,
-    Promise<vm.SourceTextModule>
-  >();
-  private readonly jsonCache = new Map<string, unknown>();
+  private readonly esmLinkOperations = new Map<string, EsmLinkOperation>();
+  private readonly jsonCache = new Map<string, CommonJsModule>();
+  private readonly loadVmTimers: ReturnType<typeof createVmTimersLoader>;
   private readonly parseJson: (source: string) => unknown;
+  private readonly requireCache: NodeJS.Require['cache'];
+  private linkQueue: Promise<void> = Promise.resolve();
   private moduleBuiltin: unknown;
 
   constructor(private readonly context: vm.Context) {
+    this.loadVmTimers = createVmTimersLoader(
+      vm.runInContext('globalThis', context) as Record<PropertyKey, unknown>,
+    );
     this.parseJson = vm.runInContext('JSON.parse', context) as (
       source: string,
     ) => unknown;
+    const cacheTarget = vm.runInContext(
+      'Object.create(null)',
+      context,
+    ) as NodeJS.Require['cache'];
+    this.requireCache = new Proxy(cacheTarget, {
+      deleteProperty: (target, property) => {
+        if (typeof property === 'string') {
+          this.commonJsCache.delete(property);
+          this.jsonCache.delete(property);
+        }
+        return Reflect.deleteProperty(target, property);
+      },
+    });
   }
 
-  createRequire = (filename: string | URL): NodeJS.Require => {
+  createRequire = (
+    filename: string | URL,
+    getParentModule?: () => CommonJsModule,
+  ): NodeJS.Require => {
     const nativeRequire = createNativeRequire(filename);
     const require = ((specifier: string) =>
-      this.require(specifier, filename)) as NodeJS.Require;
+      this.require(specifier, filename, getParentModule?.())) as NodeJS.Require;
 
     require.resolve = nativeRequire.resolve.bind(
       nativeRequire,
@@ -137,12 +216,16 @@ class VmExternalModules {
       nativeRequire.resolve,
     );
     require.main = nativeRequire.main;
-    require.cache = nativeRequire.cache;
+    require.cache = this.requireCache;
     require.extensions = nativeRequire.extensions;
     return require;
   };
 
-  require(specifier: string, parent: string | URL): unknown {
+  require(
+    specifier: string,
+    parent: string | URL,
+    parentModule?: CommonJsModule,
+  ): unknown {
     if (isBuiltin(specifier)) {
       return this.loadBuiltin(specifier);
     }
@@ -151,12 +234,18 @@ class VmExternalModules {
     const resolved = nativeRequire.resolve(specifier);
     switch (getModuleFormat(resolved)) {
       case 'commonjs':
-        return this.loadCommonJs(resolved);
+        return this.loadCommonJs(resolved, parentModule);
       case 'json':
-        return this.loadJson(resolved);
+        return this.loadJson(resolved, parentModule);
       case 'module':
+        // Native require(esm) would evaluate the module in Node's host realm,
+        // bypassing the file VM and breaking isolation. A synchronous VM ESM
+        // evaluator is not available on every supported Node release.
+        throw createRequireEsmError(resolved);
       case 'native':
         return nativeRequire(resolved);
+      case 'unsupported':
+        throw createUnsupportedFormatError(resolved);
     }
   }
 
@@ -165,15 +254,34 @@ class VmExternalModules {
     interopDefault: boolean,
     returnModule: boolean,
   ): Promise<unknown> {
-    const module = await this.getModule(resolvedId, interopDefault);
+    const module = await this.enqueueLinkedModule(resolvedId, interopDefault);
     if (returnModule) {
       return module;
     }
-
-    if (module.status !== 'evaluated') {
+    if (module.status !== 'evaluated' && module.status !== 'evaluating') {
       await module.evaluate();
     }
     return module.namespace;
+  }
+
+  private enqueueLinkedModule(
+    resolvedId: string,
+    interopDefault: boolean,
+  ): Promise<vm.Module> {
+    // Node may invoke sibling linker callbacks concurrently. Linking external
+    // roots in parallel can split one cyclic graph into operations that wait on
+    // each other. Queue linking only; evaluation remains concurrent and may
+    // itself perform dynamic imports without deadlocking this queue.
+    const linkedModule = this.linkQueue.then(async () => {
+      const module = await this.getModule(resolvedId, interopDefault);
+      await this.linkModule(module, interopDefault);
+      return module;
+    });
+    this.linkQueue = linkedModule.then(
+      () => undefined,
+      () => undefined,
+    );
+    return linkedModule;
   }
 
   private resolve(specifier: string, parent: string): string {
@@ -193,12 +301,11 @@ class VmExternalModules {
   private async getModule(
     resolvedId: string,
     interopDefault: boolean,
-    linkingAncestors?: ReadonlySet<string>,
   ): Promise<vm.Module> {
     const format = getModuleFormat(resolvedId);
     switch (format) {
       case 'module':
-        return this.loadEsm(resolvedId, interopDefault, linkingAncestors);
+        return this.loadEsm(resolvedId, interopDefault);
       case 'commonjs':
       case 'json': {
         const exports =
@@ -217,28 +324,56 @@ class VmExternalModules {
       }
       case 'native':
         return this.loadNativeModule(resolvedId);
+      case 'unsupported':
+        throw createUnsupportedFormatError(getFilePath(resolvedId));
     }
   }
 
-  private loadCommonJs(filePath: string): unknown {
+  private attachChild(
+    parentModule: CommonJsModule | undefined,
+    childModule: CommonJsModule,
+  ): void {
+    if (!parentModule) {
+      return;
+    }
+    childModule.parent ??= parentModule;
+    if (!parentModule.children.includes(childModule)) {
+      parentModule.children.push(childModule);
+    }
+  }
+
+  private loadCommonJs(
+    filePath: string,
+    parentModule?: CommonJsModule,
+  ): unknown {
     const cachedModule = this.commonJsCache.get(filePath);
     if (cachedModule) {
+      this.attachChild(parentModule, cachedModule);
       return cachedModule.exports;
     }
+    const injectedModule = this.requireCache[filePath] as
+      { exports: unknown } | undefined;
+    if (injectedModule && 'exports' in injectedModule) {
+      return injectedModule.exports;
+    }
 
-    const module: CommonJsModule = {
+    let module: CommonJsModule;
+    const moduleRequire = this.createRequire(filePath, () => module);
+    module = {
       children: [],
       exports: vm.runInContext('Object.create(Object.prototype)', this.context),
       filename: filePath,
       id: filePath,
       isPreloading: false,
       loaded: false,
-      parent: null,
+      parent: parentModule ?? null,
       path: dirname(filePath),
-      paths: [],
-      require: this.createRequire(filePath),
+      paths: getNodeModulePaths(filePath),
+      require: moduleRequire,
     };
     this.commonJsCache.set(filePath, module);
+    this.requireCache[filePath] = module;
+    this.attachChild(parentModule, module);
 
     const code = stripCommonJsPrefix(readSource(filePath));
     const cached = commonJsCompilationCache.get(filePath);
@@ -283,32 +418,52 @@ class VmExternalModules {
       return module.exports;
     } catch (error) {
       this.commonJsCache.delete(filePath);
+      Reflect.deleteProperty(this.requireCache, filePath);
       throw error;
     }
   }
 
-  private loadJson(filePath: string): unknown {
-    if (!this.jsonCache.has(filePath)) {
-      this.jsonCache.set(filePath, this.parseJson(readSource(filePath)));
+  private loadJson(filePath: string, parentModule?: CommonJsModule): unknown {
+    let module = this.jsonCache.get(filePath);
+    if (!module) {
+      const injectedModule = this.requireCache[filePath] as
+        { exports: unknown } | undefined;
+      if (injectedModule && 'exports' in injectedModule) {
+        return injectedModule.exports;
+      }
     }
-    return this.jsonCache.get(filePath);
+    if (!module) {
+      module = {
+        children: [],
+        exports: this.parseJson(readSource(filePath)),
+        filename: filePath,
+        id: filePath,
+        isPreloading: false,
+        loaded: true,
+        parent: parentModule ?? null,
+        path: dirname(filePath),
+        paths: getNodeModulePaths(filePath),
+        require: this.createRequire(filePath),
+      };
+      this.jsonCache.set(filePath, module);
+      this.requireCache[filePath] = module;
+    } else {
+      this.jsonCache.set(filePath, module);
+    }
+    this.attachChild(parentModule, module);
+    return module.exports;
   }
 
   private async loadEsm(
     resolvedId: string,
     interopDefault: boolean,
-    linkingAncestors?: ReadonlySet<string>,
   ): Promise<vm.SourceTextModule> {
     const identifier = resolvedId.startsWith('file:')
       ? resolvedId
       : pathToFileURL(resolvedId).href;
     const cachedModule = this.esmCache.get(identifier);
     if (cachedModule) {
-      if (linkingAncestors?.has(identifier)) {
-        return cachedModule;
-      }
-      const linking = this.esmLinkCache.get(identifier);
-      return linking ?? cachedModule;
+      return cachedModule;
     }
 
     const filePath = getFilePath(identifier);
@@ -327,11 +482,14 @@ class VmExternalModules {
           this.resolve(specifier, identifier);
       },
       importModuleDynamically: async (specifier, referencer) => {
-        const imported = await this.getModule(
+        const imported = await this.enqueueLinkedModule(
           this.resolve(specifier, referencer.identifier),
           interopDefault,
         );
-        if (imported.status !== 'evaluated') {
+        if (
+          imported.status !== 'evaluated' &&
+          imported.status !== 'evaluating'
+        ) {
           await imported.evaluate();
         }
         return imported;
@@ -351,29 +509,67 @@ class VmExternalModules {
       }
     }
 
-    const nextAncestors = new Set(linkingAncestors);
-    nextAncestors.add(identifier);
-    const linking = module
-      .link((specifier, referencer) =>
-        this.getModule(
-          this.resolve(specifier, referencer.identifier),
-          interopDefault,
-          nextAncestors,
-        ),
-      )
-      .then(() => module)
-      .catch((error: unknown) => {
-        this.esmCache.delete(identifier);
-        this.esmLinkCache.delete(identifier);
-        throw error;
-      });
-    this.esmLinkCache.set(identifier, linking);
-    return linking;
+    return module;
+  }
+
+  private async linkModule(
+    module: vm.Module,
+    interopDefault: boolean,
+  ): Promise<void> {
+    const existingOperation = this.esmLinkOperations.get(module.identifier);
+    if (existingOperation) {
+      await existingOperation.promise;
+      return;
+    }
+
+    if (module.status === 'unlinked') {
+      const operation = createEsmLinkOperation();
+      this.esmLinkOperations.set(module.identifier, operation);
+      void module
+        .link(async (specifier, referencer) => {
+          const dependency = await this.getModule(
+            this.resolve(specifier, referencer.identifier),
+            interopDefault,
+          );
+          if (
+            dependency.status === 'unlinked' ||
+            dependency.status === 'linking'
+          ) {
+            const dependencyOperation = this.esmLinkOperations.get(
+              dependency.identifier,
+            );
+            if (dependencyOperation && dependencyOperation !== operation) {
+              await dependencyOperation.promise;
+            } else if (!dependencyOperation) {
+              this.esmLinkOperations.set(dependency.identifier, operation);
+            }
+          }
+          return dependency;
+        })
+        .then(
+          () => operation.resolve(module),
+          (error: unknown) => {
+            for (const [identifier, owner] of this.esmLinkOperations) {
+              if (owner === operation) {
+                this.esmCache.delete(identifier);
+                this.esmLinkOperations.delete(identifier);
+              }
+            }
+            operation.reject(error);
+          },
+        );
+      await operation.promise;
+    }
   }
 
   private loadBuiltin(specifier: string): unknown {
     const normalized = specifier.replace(/^node:/, '');
     const nativeRequire = createNativeRequire(import.meta.url);
+    if (normalized === 'timers') {
+      return this.loadVmTimers(
+        nativeRequire(specifier) as Record<PropertyKey, unknown>,
+      );
+    }
     if (normalized !== 'module') {
       return nativeRequire(specifier);
     }
@@ -402,12 +598,26 @@ class VmExternalModules {
   }
 
   private async loadNativeModule(resolvedId: string): Promise<vm.Module> {
-    const imported = await import(resolvedId);
     if (!isBuiltin(resolvedId.replace(/^node:/, ''))) {
-      return asModule(imported, resolvedId, imported.default, this.context);
+      const exports = createNativeRequire(import.meta.url)(
+        getFilePath(resolvedId),
+      );
+      return asModule(exports, resolvedId, exports, this.context);
     }
 
+    const imported = await import(resolvedId);
     const normalized = resolvedId.replace(/^node:/, '');
+    if (normalized === 'timers') {
+      const timers = this.loadBuiltin(resolvedId) as Record<
+        PropertyKey,
+        unknown
+      >;
+      const exports = { ...imported, default: timers };
+      for (const name of VM_TIMER_EXPORTS) {
+        exports[name] = timers[name];
+      }
+      return asModule(exports, resolvedId, timers, this.context);
+    }
     if (normalized !== 'module') {
       return asModule(imported, resolvedId, imported.default, this.context);
     }

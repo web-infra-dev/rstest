@@ -8,6 +8,7 @@ import {
   loadModule,
   shouldInjectSourceURL,
 } from '../../src/runtime/worker/loadEsModule';
+import { getVmExternalModules } from '../../src/runtime/worker/vmExternalModules';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturePath = (name: string) => resolve(__dirname, 'fixtures', name);
@@ -147,6 +148,84 @@ describe('loadEsModule', () => {
     });
   });
 
+  it('should bind external timers imports to the VM global', async () => {
+    const vmTimeout = () => {};
+    const vmContext = vm.createContext({ setTimeout: vmTimeout });
+    const externalPath = fixturePath('vm-external/timers.mjs');
+    const mod = await loadModule({
+      codeContent: [
+        `import { inspectTimers } from ${JSON.stringify(externalPath)};`,
+        'export default inspectTimers();',
+      ].join('\n'),
+      distPath: '/virtual/dist/external-timers.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+      vmContext,
+    });
+
+    expect(mod.default).toEqual({ defaultExport: true, namedExport: true });
+  });
+
+  it('should expose Node CommonJS module relationships inside the VM', async () => {
+    const vmContext = vm.createContext({});
+    const externalPath = fixturePath('vm-external/module-semantics/parent.cjs');
+    const mod = await loadModule({
+      codeContent: [
+        `import semantics from ${JSON.stringify(externalPath)};`,
+        'export default semantics;',
+      ].join('\n'),
+      distPath: '/virtual/dist/commonjs-semantics.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+      vmContext,
+    });
+
+    expect(mod.default).toEqual({
+      cachedBeforeDelete: true,
+      first: {
+        cacheDescriptorMatches: true,
+        cachedDuringExecution: true,
+        hasLookupPaths: true,
+        hasParent: true,
+        parentHasChild: true,
+      },
+      injected: { fromCache: true },
+      reloadedAfterDelete: true,
+      second: {
+        cacheDescriptorMatches: true,
+        cachedDuringExecution: true,
+        hasLookupPaths: true,
+        hasParent: true,
+        parentHasChild: true,
+      },
+    });
+  });
+
+  it('should not evaluate require(esm) outside the VM realm', async () => {
+    const vmContext = vm.createContext({});
+    const externalPath = fixturePath(
+      'vm-external/module-semantics/require-esm.cjs',
+    );
+    const mod = await loadModule({
+      codeContent: [
+        `import result from ${JSON.stringify(externalPath)};`,
+        'export default result.code;',
+      ].join('\n'),
+      distPath: '/virtual/dist/require-esm.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+      vmContext,
+    });
+
+    expect(mod.default).toBe('ERR_REQUIRE_ESM');
+  });
+
   it('should await concurrent links to the same external ESM graph', async () => {
     const vmContext = vm.createContext({});
     const externalPath = fixturePath('vm-external/index.mjs');
@@ -196,6 +275,61 @@ describe('loadEsModule', () => {
 
     expect(left.default).toBe(true);
     expect(right.default).toBe(true);
+  });
+
+  it('should link a cycle reached through sibling branches', async () => {
+    const vmContext = vm.createContext({});
+    const fixture = (name: string) =>
+      JSON.stringify(fixturePath(`vm-external/cross-cycle/${name}.mjs`));
+    const mod = await loadModule({
+      codeContent: [
+        `import { fromB } from ${fixture('b')};`,
+        `import { throughD } from ${fixture('c')};`,
+        'export default [fromB(), throughD()];',
+      ].join('\n'),
+      distPath: '/virtual/dist/cross-branch-cycle.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+      vmContext,
+    });
+
+    expect(mod.default).toEqual(['b:c', 'c']);
+  });
+
+  it('should serialize concurrent dynamic imports of cyclic roots', async () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+
+    const [fromB, fromC] = await Promise.all([
+      executor.import(
+        fixturePath('vm-external/cross-cycle/b.mjs'),
+        true,
+        false,
+      ),
+      executor.import(
+        fixturePath('vm-external/cross-cycle/c.mjs'),
+        true,
+        false,
+      ),
+    ]);
+
+    expect((fromB as { fromB: () => string }).fromB()).toBe('b:c');
+    expect((fromC as { throughD: () => string }).throughD()).toBe('c');
+  });
+
+  it('should reject unsupported external formats instead of host-evaluating them', async () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+
+    await expect(
+      executor.import(
+        fixturePath('vm-external/module-semantics/unsupported.custom'),
+        true,
+        false,
+      ),
+    ).rejects.toMatchObject({ code: 'ERR_UNKNOWN_FILE_EXTENSION' });
   });
 
   it('should not pollute the namespace of a real native ESM module with only named exports', async () => {

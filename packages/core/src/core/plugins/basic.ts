@@ -6,6 +6,7 @@ import {
   RSTEST_DYNAMIC_IMPORT_HOOK,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from '../../runtime/worker/runtimeHooks';
+import { createVmTimersShim } from '../../runtime/worker/timers';
 import type { RstestContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
 import { runtimeChunkNameForEnvironment } from '../runtimeChunk';
@@ -20,31 +21,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const requireShim = `// Rstest ESM shims
 import __rstest_shim_module__ from 'node:module';
 const __rstest_native_require = /*#__PURE__*/ __rstest_shim_module__.createRequire(import.meta.url);
-const __rstest_timer_exports = new Set([
-  'setTimeout',
-  'clearTimeout',
-  'setInterval',
-  'clearInterval',
-  'setImmediate',
-  'clearImmediate',
-]);
-const __rstest_load_timers = (id) => {
-  const timers = __rstest_native_require(id);
-  return new Proxy(timers, {
-    get(target, property, receiver) {
-      if (typeof property === 'string' && __rstest_timer_exports.has(property)) {
-        return globalThis[property];
-      }
-      return Reflect.get(target, property, receiver);
-    },
-  });
-};
+${createVmTimersShim()}
 const require = (id) =>
   id === 'timers' || id === 'node:timers'
     ? __rstest_load_timers(id)
     : __rstest_native_require(id);
 require.resolve = __rstest_native_require.resolve;
 require.main = __rstest_native_require.main;
+require.cache = __rstest_native_require.cache;
+require.extensions = __rstest_native_require.extensions;
 `;
 
 export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (

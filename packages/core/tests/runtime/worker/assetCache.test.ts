@@ -1,11 +1,13 @@
 import {
+  createWorkerAssetCache,
   loadCachedAssets,
-  WorkerAssetCache,
 } from '../../../src/runtime/worker/assetCache';
+import { WorkerCache } from '../../../src/runtime/worker/workerCache';
 
-describe('WorkerAssetCache', () => {
+describe('WorkerCache', () => {
   it('evicts the least recently used assets by byte size', () => {
-    const cache = new WorkerAssetCache(6);
+    const workerCache = new WorkerCache(150);
+    const cache = createWorkerAssetCache(workerCache).assetFiles;
 
     cache.set('a', '1234');
     cache.set('b', '12');
@@ -19,27 +21,36 @@ describe('WorkerAssetCache', () => {
   });
 
   it('does not retain an asset larger than the budget', () => {
-    const cache = new WorkerAssetCache(3);
+    const cache = createWorkerAssetCache(new WorkerCache(78)).assetFiles;
 
     cache.set('large', '1234');
 
     expect(cache.get('large')).toBeUndefined();
   });
 
+  it('accounts for metadata when a cached value has no content bytes', () => {
+    const cache = new WorkerCache(64).namespace<string>('empty', () => 0);
+
+    cache.set('value', '');
+
+    expect(cache.get('value')).toBeUndefined();
+  });
+
   it('clears entries when the budget changes', () => {
-    const cache = new WorkerAssetCache(4);
+    const workerCache = new WorkerCache(80);
+    const cache = createWorkerAssetCache(workerCache).assetFiles;
     cache.set('asset', '1234');
 
-    cache.configure(8);
+    workerCache.configure(160);
 
     expect(cache.get('asset')).toBeUndefined();
   });
 
   it('retains cache hits needed by a task while fetched assets update the LRU', async () => {
-    const cache = new WorkerAssetCache(6);
-    cache.set('sourceMap:a', '');
-    cache.set('sourceMap:b', '');
-    cache.set('asset:a', 'aaaa');
+    const cache = createWorkerAssetCache(new WorkerCache(230));
+    cache.sourceMaps.set('a', '');
+    cache.sourceMaps.set('b', '');
+    cache.assetFiles.set('a', 'aaaa');
     const getAssetsByEntry = rs.fn(async () => ({
       assetFiles: { b: 'bbbb' },
       sourceMaps: {},
@@ -52,7 +63,21 @@ describe('WorkerAssetCache', () => {
       assetFiles: { a: 'aaaa', b: 'bbbb' },
       sourceMaps: {},
     });
-    expect(cache.get('asset:a')).toBeUndefined();
-    expect(cache.get('asset:b')).toBe('bbbb');
+    expect(cache.assetFiles.get('a')).toBeUndefined();
+    expect(cache.assetFiles.get('b')).toBe('bbbb');
+  });
+
+  it('shares one byte budget across cache namespaces', () => {
+    const workerCache = new WorkerCache(150);
+    const assets = createWorkerAssetCache(workerCache).assetFiles;
+    const compilation = workerCache.namespace<string>('compilation', (value) =>
+      Buffer.byteLength(value),
+    );
+    assets.set('asset', '1234');
+
+    compilation.set('setup', '1234');
+
+    expect(assets.get('asset')).toBeUndefined();
+    expect(compilation.get('setup')).toBe('1234');
   });
 });

@@ -8,6 +8,14 @@ it('executes external modules in the test VM realm', () => {
     esm: true,
     filename: 'realm.mjs',
     importedJson: 'external-json',
+    moduleSemantics: {
+      first: { cached: true, hasParent: true, parentHasChild: true },
+      reloaded: true,
+      second: { cached: true, hasParent: true, parentHasChild: true },
+    },
+    requireEsmError: 'ERR_REQUIRE_ESM',
     requiredJson: 'external-json',
+    siblingCycle: ['b:c', 'c'],
+    timers: true,
   });
 });

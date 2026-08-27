@@ -134,8 +134,8 @@ export type WorkerContext = {
    * its kept module cache before loading (#1373).
    */
   buildId: number;
-  /** Byte budget for immutable bundle assets kept between vmThreads tasks. */
-  assetCacheLimit?: number;
+  /** Byte budget for immutable assets and compilation data kept by vmThreads. */
+  workerCacheLimit?: number;
   outputModule: boolean;
   testEnvironmentModule?: TestEnvironmentModuleReference;
   /** When true, the worker emits Perfetto trace events alongside phase totals. */

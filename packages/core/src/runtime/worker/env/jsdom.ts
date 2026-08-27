@@ -127,6 +127,66 @@ function patchAddEventListener(
 
 type JSDOMModule = typeof import('jsdom');
 
+const loadJSDOM = async (dependency?: JSDOMModule): Promise<JSDOMModule> => {
+  if (!dependency) {
+    checkPkgInstalled('jsdom');
+  }
+  return dependency ?? import('jsdom');
+};
+
+const createJSDOM = (
+  dependency: JSDOMModule,
+  options: Record<string, any>,
+  context: TestEnvironmentContext,
+  enableVirtualConsole: boolean,
+  virtualConsoleTarget?: Console,
+) => {
+  const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } = dependency;
+  const {
+    html = '<!DOCTYPE html>',
+    userAgent,
+    url = 'http://localhost:3000',
+    contentType = 'text/html',
+    pretendToBeVisual = true,
+    includeNodeLocations = false,
+    runScripts = 'dangerously',
+    resources,
+    console = false,
+    cookieJar = false,
+    beforeParse,
+    ...restOptions
+  } = options as JSDOMOptions;
+  let cleanupObjectURLs = () => {};
+  const virtualConsole =
+    console && enableVirtualConsole ? new VirtualConsole() : undefined;
+  if (virtualConsole && virtualConsoleTarget) {
+    forwardVirtualConsole(virtualConsole, virtualConsoleTarget);
+  }
+  const dom = new JSDOM(html, {
+    pretendToBeVisual,
+    resources:
+      resources ?? (userAgent ? new ResourceLoader({ userAgent }) : undefined),
+    runScripts,
+    url,
+    virtualConsole,
+    cookieJar: cookieJar ? new CookieJar() : undefined,
+    includeNodeLocations,
+    contentType,
+    userAgent,
+    ...restOptions,
+    beforeParse(window) {
+      beforeParse?.(window);
+      cleanupObjectURLs = installJSDOMObjectURL(window, context);
+    },
+  });
+
+  return {
+    cleanupObjectURLs: () => cleanupObjectURLs(),
+    dom,
+    virtualConsole,
+  };
+};
+
 function installJSDOMObjectURL(
   window: DOMWindow,
   context: TestEnvironmentContext,
@@ -204,11 +264,7 @@ export const setupEnvironment = async (
   context: TestEnvironmentContext,
   dependency?: JSDOMModule,
 ): Promise<TestEnvironmentReturn> => {
-  if (!dependency) {
-    checkPkgInstalled('jsdom');
-  }
-  const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } =
-    dependency ?? (await import('jsdom'));
+  const jsdom = await loadJSDOM(dependency);
   const nodeTimers: NodeTimerPrimitives = {
     clearInterval: global.clearInterval ?? globalThis.clearInterval,
     clearTimeout: global.clearTimeout ?? globalThis.clearTimeout,
@@ -216,43 +272,13 @@ export const setupEnvironment = async (
     setTimeout: global.setTimeout ?? globalThis.setTimeout,
   };
 
-  const {
-    html = '<!DOCTYPE html>',
-    userAgent,
-    url = 'http://localhost:3000',
-    contentType = 'text/html',
-    pretendToBeVisual = true,
-    includeNodeLocations = false,
-    runScripts = 'dangerously',
-    resources,
-    console = false,
-    cookieJar = false,
-    beforeParse,
-    ...restOptions
-  } = options as JSDOMOptions;
-  let cleanupObjectURLs = () => {};
-  const virtualConsole =
-    console && global.console ? new VirtualConsole() : undefined;
-  if (virtualConsole && global.console) {
-    forwardVirtualConsole(virtualConsole, global.console);
-  }
-  const dom = new JSDOM(html, {
-    pretendToBeVisual,
-    resources:
-      resources ?? (userAgent ? new ResourceLoader({ userAgent }) : undefined),
-    runScripts,
-    url,
-    virtualConsole,
-    cookieJar: cookieJar ? new CookieJar() : undefined,
-    includeNodeLocations,
-    contentType,
-    userAgent,
-    ...restOptions,
-    beforeParse(window) {
-      beforeParse?.(window);
-      cleanupObjectURLs = installJSDOMObjectURL(window, context);
-    },
-  });
+  const { cleanupObjectURLs, dom } = createJSDOM(
+    jsdom,
+    options,
+    context,
+    global.console !== undefined,
+    global.console,
+  );
   const cleanupAddEventListener = patchAddEventListener(
     dom.window,
     global.AbortSignal,
@@ -282,45 +308,13 @@ export const setupVM = async (
   context: TestEnvironmentContext,
   dependency?: JSDOMModule,
 ): Promise<{ context: vm.Context; teardown: () => void }> => {
-  if (!dependency) {
-    checkPkgInstalled('jsdom');
-  }
-  const { CookieJar, JSDOM, ResourceLoader, VirtualConsole } =
-    dependency ?? (await import('jsdom'));
-  const {
-    html = '<!DOCTYPE html>',
-    userAgent,
-    url = 'http://localhost:3000',
-    contentType = 'text/html',
-    pretendToBeVisual = true,
-    includeNodeLocations = false,
-    runScripts = 'dangerously',
-    resources,
-    console = false,
-    cookieJar = false,
-    beforeParse,
-    ...restOptions
-  } = options as JSDOMOptions;
-
-  let cleanupObjectURLs = () => {};
-  const virtualConsole = console ? new VirtualConsole() : undefined;
-  const dom = new JSDOM(html, {
-    pretendToBeVisual,
-    resources:
-      resources ?? (userAgent ? new ResourceLoader({ userAgent }) : undefined),
-    runScripts,
-    url,
-    virtualConsole,
-    cookieJar: cookieJar ? new CookieJar() : undefined,
-    includeNodeLocations,
-    contentType,
-    userAgent,
-    ...restOptions,
-    beforeParse(window) {
-      beforeParse?.(window);
-      cleanupObjectURLs = installJSDOMObjectURL(window, context);
-    },
-  });
+  const jsdom = await loadJSDOM(dependency);
+  const { cleanupObjectURLs, dom, virtualConsole } = createJSDOM(
+    jsdom,
+    options,
+    context,
+    true,
+  );
   const vmContext = dom.getInternalVMContext();
   const nodeTimers: NodeTimerPrimitives = {
     clearInterval: globalThis.clearInterval,

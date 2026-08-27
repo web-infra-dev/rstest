@@ -1,4 +1,5 @@
 import type { FileCoverageData } from 'istanbul-lib-coverage';
+import { setFlagsFromString } from 'node:v8';
 import { createContext, runInContext, Script, type Context } from 'node:vm';
 import { isMainThread, threadId } from 'node:worker_threads';
 import { normalize } from 'pathe';
@@ -22,6 +23,7 @@ import {
 import { getFileTaskId } from '../../utils/helper';
 import { color } from '../../utils/logger';
 import { formatTestError, getRealTimers, setRealTimers } from '../util';
+import { clearFileContext } from '../fileContext';
 import type { FileCleanupHooks } from '../runner';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
 import { createAsyncLeakDetector } from './asyncLeaks';
@@ -29,7 +31,7 @@ import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
 import { installGlobalApis, installGlobalProperty } from './globalProperty';
 import { PhaseTracker } from './phaseTracker';
-import { loadCachedAssets, WorkerAssetCache } from './assetCache';
+import { loadCachedAssets, workerAssetCache } from './assetCache';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
 import { createSilentConsoleController } from './silentConsole';
@@ -37,8 +39,20 @@ import { RstestSnapshotEnvironment } from './snapshot';
 import { createNodeTaskContext } from './taskContext.node';
 import type { TaskContext } from './taskContext';
 import { clearVmExternalCompilationCache } from './vmExternalModules';
+import { workerCache } from './workerCache';
 
 let sourceMaps: Record<string, string> = {};
+let vmCompilationCacheDisabled = false;
+
+const disableVmCompilationCache = (): void => {
+  if (vmCompilationCacheDisabled) {
+    return;
+  }
+  // V8's isolate-wide compilation cache is unbounded and retains scripts from
+  // every disposed Context. vmThreads uses the bounded worker cache instead.
+  setFlagsFromString('--no-compilation-cache');
+  vmCompilationCacheDisabled = true;
+};
 
 // Threads-pool workers all share `process.pid` with the host, and each
 // worker_thread has its own JS context, so PhaseTracker's `nextThreadId`
@@ -64,12 +78,31 @@ install({
 });
 
 /**
- * Restores task-scoped global mutations at the next task boundary, rather than
- * file teardown, so late callbacks keep the console and RPC they captured.
- * Console interception and optional global APIs register their inverses here
- * before a reused worker can serve another project.
+ * Restores task-scoped global mutations at the next task boundary for regular
+ * `isolate: false` pools, so late callbacks keep the console and RPC they
+ * captured. VM pools drain the same list during file teardown so the completed
+ * realm is not retained when worker memory is sampled.
  */
 const globalCleanups: (() => void)[] = [];
+
+const runGlobalCleanups = (): void => {
+  const cleanups = globalCleanups.splice(0);
+  const errors: unknown[] = [];
+  for (const cleanup of cleanups) {
+    try {
+      cleanup();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length === 1) {
+    throw errors[0];
+  }
+  if (errors.length > 1) {
+    throw new AggregateError(errors, 'Failed to restore worker globals.');
+  }
+};
+
 let isTeardown = false;
 /**
  * Test environment kept alive across files on a reused worker
@@ -105,23 +138,23 @@ let activeEnvironmentKey: string | undefined;
  * runtime chunk and reintroducing the cross-project regression (#1376).
  */
 let lastBuildId: number | undefined;
-const workerAssetCache = new WorkerAssetCache(0);
-
 const loadTaskAssets = async (
   options: RunWorkerOptions['options'],
   assets: RunWorkerOptions['options']['assets'],
   rpc: Pick<RuntimeRPC, 'getAssetsByEntry'>,
 ): Promise<NonNullable<RunWorkerOptions['options']['assets']>> => {
+  const { assetNames, context } = options;
+  if (context.pool === 'vmThreads') {
+    workerCache.configure(context.workerCacheLimit ?? 0);
+  }
   if (assets) {
     return assets;
   }
 
-  const { assetNames, context } = options;
-  if (context.pool !== 'vmThreads' || context.assetCacheLimit === undefined) {
+  if (context.pool !== 'vmThreads' || context.workerCacheLimit === undefined) {
     return rpc.getAssetsByEntry(assetNames);
   }
 
-  workerAssetCache.configure(context.assetCacheLimit);
   return loadCachedAssets(assetNames, workerAssetCache, rpc.getAssetsByEntry);
 };
 
@@ -174,9 +207,6 @@ const installVmNodeGlobals = (runtimeGlobal: Record<string, any>): void => {
     Buffer,
     ArrayBuffer,
     Uint8Array,
-    // Keep promise-returning mocks compatible with tinyspy, which is loaded
-    // from the host realm and records settled results via `instanceof Promise`.
-    Promise,
     global: runtimeGlobal,
     setImmediate,
     clearImmediate,
@@ -239,6 +269,52 @@ const createOriginalLogWriter = () => {
   };
 };
 
+const prepareVmRuntimeRealm = async (
+  context: RunWorkerOptions['options']['context'],
+  cleanupFns: (() => MaybePromise<void>)[],
+  onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void,
+): Promise<{
+  initialKeys: Set<string | symbol>;
+  runtimeGlobal: Record<string, any>;
+  vmContext: Context;
+}> => {
+  const { testEnvironment } = context.runtimeConfig;
+  let vmContext: Context;
+  if (testEnvironment.name === 'node') {
+    vmContext = createContext({});
+  } else {
+    const loadEnvironment = environmentLoaders[testEnvironment.name];
+    if (!loadEnvironment) {
+      throw new Error(`Unknown test environment: ${testEnvironment.name}`);
+    }
+    const [{ setupVM }, environmentModule] = await Promise.all([
+      loadEnvironment(),
+      loadTestEnvironmentModule(
+        context.testEnvironmentModule,
+        onTestEnvironmentFallback,
+      ),
+    ]);
+    const vmEnvironment = await setupVM(
+      testEnvironment.options || {},
+      { scope: 'file' },
+      environmentModule,
+    );
+    vmContext = vmEnvironment.context;
+    cleanupFns.push(vmEnvironment.teardown);
+  }
+
+  const runtimeGlobal = runInContext('globalThis', vmContext) as Record<
+    string,
+    any
+  >;
+  installVmNodeGlobals(runtimeGlobal);
+  return {
+    initialKeys: captureVmContextKeys(vmContext),
+    runtimeGlobal,
+    vmContext,
+  };
+};
+
 const preparePool = async (
   {
     entryInfo: { distPath, testPath },
@@ -250,10 +326,7 @@ const preparePool = async (
   onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void,
 ) => {
   // Reset globalCleanups only when preparePool is called again (running without isolation)
-  globalCleanups.forEach((fn) => {
-    fn();
-  });
-  globalCleanups.length = 0;
+  runGlobalCleanups();
 
   const taskContext = createNodeTaskContext();
   const writeOriginalLog = createOriginalLogWriter();
@@ -270,268 +343,301 @@ const preparePool = async (
     createWorkerRpcOptions({ dispose: disposeFns }),
   );
 
-  globalCleanups.push(() => {
-    disposeFns.forEach((fn) => {
-      fn();
+  let preparedPoolCleaned = false;
+  const cleanupPreparedPool = async (forceGlobalCleanup = false) => {
+    if (preparedPoolCleaned) {
+      return;
+    }
+    preparedPoolCleaned = true;
+
+    const errors: unknown[] = [];
+    const cleanupResults = await Promise.allSettled(
+      cleanupFns.map((fn) => fn()),
+    );
+    for (const result of cleanupResults) {
+      if (result.status === 'rejected') {
+        errors.push(result.reason);
+      }
+    }
+
+    if (isVmPool || forceGlobalCleanup) {
+      try {
+        runGlobalCleanups();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (vmContext && initialVmContextKeys) {
+      try {
+        const { flushAllLoaderCaches } = await import('./interop');
+        await flushAllLoaderCaches();
+        stripVmContext(vmContext, initialVmContextKeys);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (isVmPool) {
+      clearFileContext();
+      sourceMaps = {};
+    }
+
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, 'Failed to clean up the test runtime.');
+    }
+  };
+
+  try {
+    globalCleanups.push(() => {
+      disposeFns.forEach((fn) => {
+        fn();
+      });
+      rpc.$close();
     });
-    rpc.$close();
-  });
 
-  const {
-    runtimeConfig: {
-      globals,
-      printConsoleTrace,
-      disableConsoleIntercept,
-      silent,
-      testEnvironment,
-      snapshotFormat,
-      env,
-      isolate,
-    },
-  } = context;
+    const {
+      runtimeConfig: {
+        globals,
+        printConsoleTrace,
+        disableConsoleIntercept,
+        silent,
+        testEnvironment,
+        snapshotFormat,
+        env,
+        isolate,
+      },
+    } = context;
 
-  setupEnv(env);
+    setupEnv(env);
 
-  if (isVmPool) {
-    if (testEnvironment.name === 'node') {
-      vmContext = createContext({});
-    } else {
+    if (isVmPool) {
+      const vmRealm = await prepareVmRuntimeRealm(
+        context,
+        cleanupFns,
+        onTestEnvironmentFallback,
+      );
+      vmContext = vmRealm.vmContext;
+      runtimeGlobal = vmRealm.runtimeGlobal;
+      initialVmContextKeys = vmRealm.initialKeys;
+    }
+
+    // `mockRuntimeCode.js` gates its Module Federation shims on this worker-wide
+    // flag, so it must be set before any bundle code is evaluated.
+    const federation = context.runtimeConfig.federation === true;
+    runtimeGlobal.__rstest_federation__ = federation;
+    // With `isolate: false` a previous file in this worker may have installed the
+    // global dynamic-import fallback (`mockRuntimeCode.js`). Hide it from
+    // non-federation files so federation stays strictly opt-in, and hand it back
+    // on federation re-entry — the installing runtime chunk is kept across files
+    // and never re-executes, so dropping it outright would be permanent.
+    setFederationDynamicImportOrigin(federation, testPath, runtimeGlobal);
+
+    const shouldInterceptConsole =
+      !disableConsoleIntercept || silent === true || silent === 'passed-only';
+
+    const silentConsoleController = createSilentConsoleController({
+      runtimeConfig: {
+        disableConsoleIntercept,
+        silent,
+      },
+      emitInterceptedLog: (log) => {
+        // Forwarding console output to the host is best-effort, fire-and-forget:
+        // the result is never awaited. With `isolate: false` a captured console
+        // (e.g. a logger that flushes from a late `setTimeout`/microtask) can fire
+        // after this file's birpc channel has been closed or disposed by the host,
+        // so the call rejects — immediately once the channel is `$close()`d, or
+        // later when `$close()` rejects the still-pending request. Swallowing it
+        // drops such an orphan log instead of surfacing an `unhandledRejection`
+        // that fails the run and is misattributed to whichever file is currently
+        // running. A dropped late log also stays subject to the host's
+        // `onConsoleLog` policy, matching `isolate: true` where late logs are lost
+        // as the worker is torn down.
+        // See https://github.com/web-infra-dev/rstest/issues/1367.
+        void rpc.onConsoleLog(log).catch(() => {
+          // Worker-scoped cleanup runs after the host has disposed the final
+          // task RPC. Preserve diagnostics from that cleanup by falling back to
+          // the worker's original stream when the reporting channel is closed.
+          if (silent !== true) {
+            writeOriginalLog({
+              content: `${log.content}\n`,
+              type: log.type,
+            });
+          }
+        });
+      },
+      writeOriginalLog,
+    });
+
+    if (shouldInterceptConsole) {
+      const { createCustomConsole } = await import('./console');
+
+      // Keep a minimal internal interception path when `silent` is enabled.
+      // In `disableConsoleIntercept + silent` mode, logs are buffered in the
+      // worker first and later replayed to the original worker streams according
+      // to the silent policy, instead of being reported to the host.
+
+      const customConsole = createCustomConsole({
+        onConsoleLog: (log) => {
+          silentConsoleController.onConsoleLog(log);
+        },
+        testPath,
+        project: context.project,
+        printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
+        getCurrentTask: () => taskContext.getCurrent(),
+      });
+      globalCleanups.push(
+        installGlobalProperty(runtimeGlobal, 'console', customConsole),
+      );
+    }
+
+    const interopDefault = true;
+
+    const workerState: WorkerState = {
+      ...context,
+      snapshotOptions: {
+        updateSnapshot,
+        snapshotEnvironment: new RstestSnapshotEnvironment({
+          resolveSnapshotPath: (filepath: string) =>
+            rpc.resolveSnapshotPath(filepath),
+        }),
+        snapshotFormat,
+      },
+      distPath,
+      testPath,
+      environment: 'node',
+    };
+
+    const { createRstestRuntime } = await import('../api');
+
+    const unhandledErrors: Error[] = [];
+
+    const handleError = (e: Error | string, type: string) => {
+      const rawError: Error = typeof e === 'string' ? new Error(e) : e;
+      const error =
+        !rawError.name || rawError.name === 'Error'
+          ? setErrorName(rawError, type)
+          : rawError;
+
+      if (isTeardown) {
+        error.stack = `${color.yellow('Caught error after test environment was torn down:')}\n\n${error.stack}`;
+        console.error(error);
+      } else {
+        console.error(error);
+        unhandledErrors.push(error);
+      }
+    };
+
+    const uncaughtException = (e: Error) => handleError(e, 'uncaughtException');
+    const unhandledRejection = (e: Error) =>
+      handleError(e, 'unhandledRejection');
+
+    process.on('uncaughtException', uncaughtException);
+    process.on('unhandledRejection', unhandledRejection);
+
+    globalCleanups.push(() => {
+      process.off('uncaughtException', uncaughtException);
+      process.off('unhandledRejection', unhandledRejection);
+    });
+
+    const { api, resolveImportMetaRstest, runner } = await createRstestRuntime(
+      workerState,
+      {
+        taskContext,
+        runtimeGlobal,
+      },
+    );
+
+    tracker?.transition('envSetup');
+    const hasPinnedEnvironment =
+      !isVmPool && activeEnvironmentKey !== undefined;
+    if (hasPinnedEnvironment && activeEnvironmentKey !== environmentKey) {
+      // Unreachable: the scheduler only reuses a worker for tasks matching its
+      // pinned environment (`Pool.acquireRunner`). The throw guards against a
+      // future regression in that affinity — swapping environments here would
+      // leave persisted modules holding captures of the previous one.
+      throw new Error(
+        `Test environment changed on a reused worker: ${activeEnvironmentKey} -> ${environmentKey}`,
+      );
+    }
+    // `node` is the no-op fast path; every other environment is resolved through
+    // the registry so adding one is a single entry instead of a new switch arm.
+    // teardown is `MaybePromise<void>` and is awaited via `Promise.all` in
+    // `cleanup`, so a single uniform wrapper preserves both the sync (jsdom) and
+    // async (happy-dom) teardown shapes.
+    if (!isVmPool && testEnvironment.name !== 'node' && !hasPinnedEnvironment) {
       const loadEnvironment = environmentLoaders[testEnvironment.name];
       if (!loadEnvironment) {
         throw new Error(`Unknown test environment: ${testEnvironment.name}`);
       }
-      const [{ setupVM }, environmentModule] = await Promise.all([
+      const scope = isolate ? 'file' : 'worker';
+      const [{ setup }, environmentModule] = await Promise.all([
         loadEnvironment(),
         loadTestEnvironmentModule(
           context.testEnvironmentModule,
           onTestEnvironmentFallback,
         ),
       ]);
-      const vmEnvironment = await setupVM(
+      const { teardown } = await setup(
+        runtimeGlobal as typeof globalThis,
         testEnvironment.options || {},
-        { scope: 'file' },
+        { scope },
         environmentModule,
       );
-      vmContext = vmEnvironment.context;
-      cleanupFns.push(vmEnvironment.teardown);
-    }
-    runtimeGlobal = runInContext('globalThis', vmContext!) as Record<
-      string,
-      any
-    >;
-    installVmNodeGlobals(runtimeGlobal);
-    initialVmContextKeys = captureVmContextKeys(vmContext);
-  }
-
-  // `mockRuntimeCode.js` gates its Module Federation shims on this worker-wide
-  // flag, so it must be set before any bundle code is evaluated.
-  const federation = context.runtimeConfig.federation === true;
-  runtimeGlobal.__rstest_federation__ = federation;
-  // With `isolate: false` a previous file in this worker may have installed the
-  // global dynamic-import fallback (`mockRuntimeCode.js`). Hide it from
-  // non-federation files so federation stays strictly opt-in, and hand it back
-  // on federation re-entry — the installing runtime chunk is kept across files
-  // and never re-executes, so dropping it outright would be permanent.
-  setFederationDynamicImportOrigin(federation, testPath, runtimeGlobal);
-
-  const shouldInterceptConsole =
-    !disableConsoleIntercept || silent === true || silent === 'passed-only';
-
-  const silentConsoleController = createSilentConsoleController({
-    runtimeConfig: {
-      disableConsoleIntercept,
-      silent,
-    },
-    emitInterceptedLog: (log) => {
-      // Forwarding console output to the host is best-effort, fire-and-forget:
-      // the result is never awaited. With `isolate: false` a captured console
-      // (e.g. a logger that flushes from a late `setTimeout`/microtask) can fire
-      // after this file's birpc channel has been closed or disposed by the host,
-      // so the call rejects — immediately once the channel is `$close()`d, or
-      // later when `$close()` rejects the still-pending request. Swallowing it
-      // drops such an orphan log instead of surfacing an `unhandledRejection`
-      // that fails the run and is misattributed to whichever file is currently
-      // running. A dropped late log also stays subject to the host's
-      // `onConsoleLog` policy, matching `isolate: true` where late logs are lost
-      // as the worker is torn down.
-      // See https://github.com/web-infra-dev/rstest/issues/1367.
-      void rpc.onConsoleLog(log).catch(() => {
-        // Worker-scoped cleanup runs after the host has disposed the final
-        // task RPC. Preserve diagnostics from that cleanup by falling back to
-        // the worker's original stream when the reporting channel is closed.
-        if (silent !== true) {
-          writeOriginalLog({
-            content: `${log.content}\n`,
-            type: log.type,
-          });
-        }
-      });
-    },
-    writeOriginalLog,
-  });
-
-  if (shouldInterceptConsole) {
-    const { createCustomConsole } = await import('./console');
-
-    // Keep a minimal internal interception path when `silent` is enabled.
-    // In `disableConsoleIntercept + silent` mode, logs are buffered in the
-    // worker first and later replayed to the original worker streams according
-    // to the silent policy, instead of being reported to the host.
-
-    const customConsole = createCustomConsole({
-      onConsoleLog: (log) => {
-        silentConsoleController.onConsoleLog(log);
-      },
-      testPath,
-      project: context.project,
-      printConsoleTrace: !disableConsoleIntercept && printConsoleTrace,
-      getCurrentTask: () => taskContext.getCurrent(),
-    });
-    globalCleanups.push(
-      installGlobalProperty(runtimeGlobal, 'console', customConsole),
-    );
-  }
-
-  const interopDefault = true;
-
-  const workerState: WorkerState = {
-    ...context,
-    snapshotOptions: {
-      updateSnapshot,
-      snapshotEnvironment: new RstestSnapshotEnvironment({
-        resolveSnapshotPath: (filepath: string) =>
-          rpc.resolveSnapshotPath(filepath),
-      }),
-      snapshotFormat,
-    },
-    distPath,
-    testPath,
-    environment: 'node',
-  };
-
-  const { createRstestRuntime } = await import('../api');
-
-  const unhandledErrors: Error[] = [];
-
-  const handleError = (e: Error | string, type: string) => {
-    const rawError: Error = typeof e === 'string' ? new Error(e) : e;
-    const error =
-      !rawError.name || rawError.name === 'Error'
-        ? setErrorName(rawError, type)
-        : rawError;
-
-    if (isTeardown) {
-      error.stack = `${color.yellow('Caught error after test environment was torn down:')}\n\n${error.stack}`;
-      console.error(error);
-    } else {
-      console.error(error);
-      unhandledErrors.push(error);
-    }
-  };
-
-  const uncaughtException = (e: Error) => handleError(e, 'uncaughtException');
-  const unhandledRejection = (e: Error) => handleError(e, 'unhandledRejection');
-
-  process.on('uncaughtException', uncaughtException);
-  process.on('unhandledRejection', unhandledRejection);
-
-  globalCleanups.push(() => {
-    process.off('uncaughtException', uncaughtException);
-    process.off('unhandledRejection', unhandledRejection);
-  });
-
-  const { api, resolveImportMetaRstest, runner } = await createRstestRuntime(
-    workerState,
-    {
-      taskContext,
-      runtimeGlobal,
-    },
-  );
-
-  tracker?.transition('envSetup');
-  const hasPinnedEnvironment = !isVmPool && activeEnvironmentKey !== undefined;
-  if (hasPinnedEnvironment && activeEnvironmentKey !== environmentKey) {
-    // Unreachable: the scheduler only reuses a worker for tasks matching its
-    // pinned environment (`Pool.acquireRunner`). The throw guards against a
-    // future regression in that affinity — swapping environments here would
-    // leave persisted modules holding captures of the previous one.
-    throw new Error(
-      `Test environment changed on a reused worker: ${activeEnvironmentKey} -> ${environmentKey}`,
-    );
-  }
-  // `node` is the no-op fast path; every other environment is resolved through
-  // the registry so adding one is a single entry instead of a new switch arm.
-  // teardown is `MaybePromise<void>` and is awaited via `Promise.all` in
-  // `cleanup`, so a single uniform wrapper preserves both the sync (jsdom) and
-  // async (happy-dom) teardown shapes.
-  if (!isVmPool && testEnvironment.name !== 'node' && !hasPinnedEnvironment) {
-    const loadEnvironment = environmentLoaders[testEnvironment.name];
-    if (!loadEnvironment) {
-      throw new Error(`Unknown test environment: ${testEnvironment.name}`);
-    }
-    const scope = isolate ? 'file' : 'worker';
-    const [{ setup }, environmentModule] = await Promise.all([
-      loadEnvironment(),
-      loadTestEnvironmentModule(
-        context.testEnvironmentModule,
-        onTestEnvironmentFallback,
-      ),
-    ]);
-    const { teardown } = await setup(
-      runtimeGlobal as typeof globalThis,
-      testEnvironment.options || {},
-      { scope },
-      environmentModule,
-    );
-    if (scope === 'file') {
-      cleanupFns.push(() => teardown(runtimeGlobal as typeof globalThis));
-    }
-  }
-  // Pin only after setup succeeded. A setup failure (e.g. an invalid jsdom
-  // option) surfaces as a file-level failure and leaves the worker reusable;
-  // pinning eagerly would make every later same-key task skip setup and run
-  // bare-Node against a config the user asked to be a DOM.
-  if (!isVmPool && !isolate) {
-    activeEnvironmentKey = environmentKey;
-  }
-  tracker?.transition('prepare');
-
-  if (globals) {
-    globalCleanups.push(installGlobalApis(api, runtimeGlobal));
-  }
-
-  const rstestContext = {
-    global: runtimeGlobal,
-    console: runtimeGlobal.console,
-    Error: vmContext
-      ? (runInContext('Error', vmContext) as typeof Error)
-      : Error,
-  };
-
-  Object.assign(rstestContext.global, {
-    [RSTEST_API_GLOBAL_KEY]: api,
-    [RSTEST_IMPORT_META_GLOBAL_KEY]: resolveImportMetaRstest,
-  });
-
-  return {
-    interopDefault,
-    rstestContext,
-    runner,
-    rpc,
-    silentConsoleController,
-    api,
-    taskContext,
-    vmContext,
-    unhandledErrors,
-    cleanup: async () => {
-      await Promise.all(cleanupFns.map((fn) => fn()));
-      if (vmContext && initialVmContextKeys) {
-        const { flushAllLoaderCaches } = await import('./interop');
-        await flushAllLoaderCaches();
-        stripVmContext(vmContext, initialVmContextKeys);
+      if (scope === 'file') {
+        cleanupFns.push(() => teardown(runtimeGlobal as typeof globalThis));
       }
-    },
-  };
+    }
+    // Pin only after setup succeeded. A setup failure (e.g. an invalid jsdom
+    // option) surfaces as a file-level failure and leaves the worker reusable;
+    // pinning eagerly would make every later same-key task skip setup and run
+    // bare-Node against a config the user asked to be a DOM.
+    if (!isVmPool && !isolate) {
+      activeEnvironmentKey = environmentKey;
+    }
+    tracker?.transition('prepare');
+
+    if (globals) {
+      globalCleanups.push(installGlobalApis(api, runtimeGlobal));
+    }
+
+    const rstestContext = {
+      global: runtimeGlobal,
+      console: runtimeGlobal.console,
+      Error: vmContext
+        ? (runInContext('Error', vmContext) as typeof Error)
+        : Error,
+    };
+
+    Object.assign(rstestContext.global, {
+      [RSTEST_API_GLOBAL_KEY]: api,
+      [RSTEST_IMPORT_META_GLOBAL_KEY]: resolveImportMetaRstest,
+    });
+
+    return {
+      interopDefault,
+      rstestContext,
+      runner,
+      rpc,
+      silentConsoleController,
+      api,
+      taskContext,
+      vmContext,
+      unhandledErrors,
+      cleanup: cleanupPreparedPool,
+    };
+  } catch (error) {
+    try {
+      await cleanupPreparedPool(true);
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        'Failed to prepare and clean up the test runtime.',
+      );
+    }
+    throw error;
+  }
 };
 
 const loadFiles = async ({
@@ -603,7 +709,7 @@ const loadFiles = async ({
       interopDefault,
       virtualFsAssetFiles,
       vmContext,
-      cacheCompilation: true,
+      cacheCompilation: vmContext !== undefined,
     });
   }
 
@@ -675,9 +781,12 @@ export const runInPool = async (
   // loading (see `flushAllLoaderCaches` for why both loaders, not just this
   // task's).
   const isVmPool = options.context.pool === 'vmThreads';
+  if (isVmPool) {
+    disableVmCompilationCache();
+  }
   const buildChanged = lastBuildId !== undefined && lastBuildId !== buildId;
   if (buildChanged) {
-    workerAssetCache.clear();
+    workerCache.clear();
     const [esmLoader, cjsLoader] = await Promise.all([
       import('./loadEsModule'),
       import('./loadModule'),
@@ -700,6 +809,21 @@ export const runInPool = async (
   lastBuildId = buildId;
 
   const cleanups: (() => MaybePromise<void>)[] = [];
+  const pendingRunnerHooks = new Set<Promise<void>>();
+
+  const trackRunnerHook = (call: Promise<void>): Promise<void> => {
+    if (!isVmPool) {
+      return call;
+    }
+    pendingRunnerHooks.add(call);
+    void call.then(
+      () => pendingRunnerHooks.delete(call),
+      () => {
+        // Keep rejected calls in the set so teardown can report them.
+      },
+    );
+    return call;
+  };
 
   const exit = process.exit.bind(process);
   process.exit = (code = process.exitCode || 0): never => {
@@ -724,21 +848,46 @@ export const runInPool = async (
   const teardown = async () => {
     await new Promise((resolve) => getRealTimers().setTimeout!(resolve));
 
-    // Run teardown
-    await Promise.all(cleanups.map((fn) => fn()));
-
+    const errors: unknown[] = [];
     if (isVmPool) {
-      const { flushAllLoaderCaches } = await import('./interop');
-      await flushAllLoaderCaches();
-    } else if (!isolate) {
-      const { clearModuleCache } = await importLoader();
-      // Keep the shared runtime chunk so imported module state survives across
-      // files. Its cache-control runtime invalidates setup and the next current
-      // entry immediately before that file loads.
-      clearModuleCache(runtimeDistPath);
+      const runnerHookResults = await Promise.allSettled(pendingRunnerHooks);
+      pendingRunnerHooks.clear();
+      for (const result of runnerHookResults) {
+        if (result.status === 'rejected') {
+          errors.push(result.reason);
+        }
+      }
+    }
+    const cleanupResults = await Promise.allSettled(cleanups.map((fn) => fn()));
+    for (const result of cleanupResults) {
+      if (result.status === 'rejected') {
+        errors.push(result.reason);
+      }
     }
 
-    isTeardown = true;
+    try {
+      if (isVmPool) {
+        const { flushAllLoaderCaches } = await import('./interop');
+        await flushAllLoaderCaches();
+      } else if (!isolate) {
+        const { clearModuleCache } = await importLoader();
+        // Keep the shared runtime chunk so imported module state survives across
+        // files. Its cache-control runtime invalidates setup and the next current
+        // entry immediately before that file loads.
+        clearModuleCache(runtimeDistPath);
+      }
+    } catch (error) {
+      errors.push(error);
+    } finally {
+      isTeardown = true;
+    }
+
+    if (errors.length === 1) {
+      throw errors[0];
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, 'Failed to tear down the test runtime.');
+    }
   };
 
   // Initialize coverage collector if coverage is enabled
@@ -761,11 +910,10 @@ export const runInPool = async (
         undefined,
         lifecycleHooks.onTestEnvironmentFallback,
       );
+      cleanups.push(cleanup);
       const { assetFiles, sourceMaps: sourceMapsFromAssets } =
         await loadTaskAssets(options, assets, rpc);
       sourceMaps = sourceMapsFromAssets;
-
-      cleanups.push(cleanup);
 
       await loadFiles({
         rstestContext,
@@ -812,7 +960,15 @@ export const runInPool = async (
         }
       : undefined,
   );
-  let runResult: TestFileResult | undefined;
+  let runResult: TestFileResult = {
+    testId: getFileTaskId(testPath),
+    project,
+    testPath,
+    status: 'fail',
+    name: '',
+    results: [],
+    errors: [],
+  };
   let asyncLeakDetector: ReturnType<typeof createAsyncLeakDetector> | undefined;
 
   try {
@@ -834,6 +990,7 @@ export const runInPool = async (
       lifecycleHooks.onTestEnvironmentFallback,
     );
     taskContext = preparedTaskContext;
+    cleanups.push(cleanup);
     if (detectAsyncLeaks) {
       asyncLeakDetector = createAsyncLeakDetector(taskContext);
       asyncLeakDetector.enable();
@@ -859,15 +1016,17 @@ export const runInPool = async (
       );
     }
     if (coverageProvider) {
-      await coverageProvider.init();
+      await coverageProvider.init({
+        // Coverage providers execute in the worker realm, while instrumented
+        // code executes in this file's VM realm.
+        global: rstestContext.global as typeof globalThis,
+      });
     }
 
     tracker.transition('load');
     const { assetFiles, sourceMaps: sourceMapsFromAssets } =
       await loadTaskAssets(options, assets, rpc);
     sourceMaps = sourceMapsFromAssets;
-
-    cleanups.push(cleanup);
 
     rpc.onTestFileStart?.({
       testId: getFileTaskId(testPath),
@@ -949,39 +1108,49 @@ export const runInPool = async (
 
     let fileCleanupResult: TestFileResult | undefined;
     const runnerHooks: RunnerHooks & FileCleanupHooks = {
-      onTestFileReady: async (test) => {
-        await rpc.onTestFileReady(test);
-      },
-      onTestSuiteStart: async (test) => {
-        tracker.recordSuiteStart(test);
-        await rpc.onTestSuiteStart(test);
-      },
-      onTestSuiteResult: async (result) => {
-        tracker.recordSuiteResult(result);
-        silentConsoleController.flushBufferedLogsForTask({
-          taskId: result.testId,
-          status: result.status,
-          taskParentNames: result.parentNames,
-          taskType: 'suite',
-          testPath: result.testPath,
-        });
-        await rpc.onTestSuiteResult(result);
-      },
-      onTestCaseStart: async (test) => {
-        tracker.recordCaseStart(test);
-        await rpc.onTestCaseStart(test);
-      },
-      onTestCaseResult: async (result) => {
-        tracker.recordCaseResult(result);
-        silentConsoleController.flushBufferedLogsForTask({
-          taskId: result.testId,
-          status: result.status,
-          taskParentNames: result.parentNames,
-          taskType: 'case',
-          testPath: result.testPath,
-        });
-        await rpc.onTestCaseResult(result);
-      },
+      onTestFileReady: (test) => trackRunnerHook(rpc.onTestFileReady(test)),
+      onTestSuiteStart: (test) =>
+        trackRunnerHook(
+          (async () => {
+            tracker.recordSuiteStart(test);
+            await rpc.onTestSuiteStart(test);
+          })(),
+        ),
+      onTestSuiteResult: (result) =>
+        trackRunnerHook(
+          (async () => {
+            tracker.recordSuiteResult(result);
+            silentConsoleController.flushBufferedLogsForTask({
+              taskId: result.testId,
+              status: result.status,
+              taskParentNames: result.parentNames,
+              taskType: 'suite',
+              testPath: result.testPath,
+            });
+            await rpc.onTestSuiteResult(result);
+          })(),
+        ),
+      onTestCaseStart: (test) =>
+        trackRunnerHook(
+          (async () => {
+            tracker.recordCaseStart(test);
+            await rpc.onTestCaseStart(test);
+          })(),
+        ),
+      onTestCaseResult: (result) =>
+        trackRunnerHook(
+          (async () => {
+            tracker.recordCaseResult(result);
+            silentConsoleController.flushBufferedLogsForTask({
+              taskId: result.testId,
+              status: result.status,
+              taskParentNames: result.parentNames,
+              taskType: 'case',
+              testPath: result.testPath,
+            });
+            await rpc.onTestCaseResult(result);
+          })(),
+        ),
       onFileCleanupStart: async (result) => {
         fileCleanupResult = result;
         await lifecycleHooks.onFileCleanupStart?.(result);
@@ -1043,26 +1212,42 @@ export const runInPool = async (
     tracker.transition('teardown');
     taskContext?.setFallback(undefined);
     asyncLeakDetector?.disable();
-    if (isolate || isVmPool) {
-      const workerCleanupError = await cleanupWorkerFixtureScope();
-      if (workerCleanupError && runResult) {
-        runResult.status = 'fail';
-        runResult.errors = [
-          ...(runResult.errors ?? []),
-          ...(await formatTestError(workerCleanupError)),
-        ];
+    const teardownErrors: unknown[] = [];
+    try {
+      if (isolate || isVmPool) {
+        const workerCleanupError = await cleanupWorkerFixtureScope();
+        if (workerCleanupError) {
+          runResult.status = 'fail';
+          runResult.errors = [
+            ...(runResult.errors ?? []),
+            ...(await formatTestError(workerCleanupError)),
+          ];
+        }
       }
+    } catch (error) {
+      teardownErrors.push(error);
     }
-    if (coverageProvider) {
-      coverageProvider.cleanup();
+    try {
+      coverageProvider?.cleanup();
+    } catch (error) {
+      teardownErrors.push(error);
     }
-    await teardown();
+    try {
+      await teardown();
+    } catch (error) {
+      teardownErrors.push(error);
+    }
     tracker.end();
-    if (runResult) {
-      const traceEvents = tracker.getTraceEvents();
-      if (traceEvents) {
-        runResult.traceEvents = traceEvents;
-      }
+    if (teardownErrors.length > 0) {
+      runResult.status = 'fail';
+      runResult.errors = [
+        ...(runResult.errors ?? []),
+        ...(await formatTestError(teardownErrors)),
+      ];
+    }
+    const traceEvents = tracker.getTraceEvents();
+    if (traceEvents) {
+      runResult.traceEvents = traceEvents;
     }
   }
 };

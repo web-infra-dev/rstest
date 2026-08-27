@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import v8 from 'node:v8';
+import type { RstestPoolType } from '../types/config';
 import { ENV } from '../utils/env';
 import { isDebug, logger } from '../utils/logger';
 import { isWorkerResponseEnvelope } from './protocol';
@@ -257,7 +258,7 @@ export const createDefaultMemoryGate = (): MemoryGate | undefined => {
  * use the default `createDefaultMemoryGate`.
  */
 export const selectMemoryGate = (
-  workerKind: 'forks' | 'threads' | 'vmThreads',
+  workerKind: RstestPoolType,
   makeGate: () => MemoryGate | undefined = createDefaultMemoryGate,
 ): MemoryGate | undefined => {
   return workerKind === 'forks' ? makeGate() : undefined;

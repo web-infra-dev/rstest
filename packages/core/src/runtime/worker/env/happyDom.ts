@@ -17,33 +17,61 @@ import {
 type HappyDOMOptions = ConstructorParameters<typeof HappyDOMWindow>[0];
 type HappyDOMModule = typeof import('happy-dom');
 
+const loadHappyDOM = async (
+  dependency?: HappyDOMModule,
+): Promise<HappyDOMModule> => {
+  if (!dependency) {
+    checkPkgInstalled('happy-dom');
+  }
+  return dependency ?? import('happy-dom');
+};
+
+const createHappyDOMWindow = (
+  dependency: HappyDOMModule,
+  options: HappyDOMOptions,
+  console: Console | undefined,
+) => {
+  const { Window, GlobalWindow } = dependency;
+  // Prefer GlobalWindow so globals such as TextEncoder and Uint8Array are
+  // exposed; Window keeps compatibility with older happy-dom releases.
+  const WindowClass = GlobalWindow || Window;
+  const resolvedOptions = options ?? {};
+  return new WindowClass({
+    ...resolvedOptions,
+    url: resolvedOptions.url || 'http://localhost:3000',
+    console,
+  });
+};
+
+const closeHappyDOMWindow = async (
+  win: InstanceType<HappyDOMModule['Window']>,
+): Promise<void> => {
+  if (win.close && win.happyDOM.abort) {
+    await win.happyDOM.abort();
+    win.close();
+  } else {
+    await win.happyDOM.cancelAsync();
+  }
+};
+
 export const setupEnvironment = async (
   global: typeof globalThis,
   options: HappyDOMOptions,
   context: TestEnvironmentContext,
   dependency?: HappyDOMModule,
 ): Promise<TestEnvironmentReturn> => {
-  if (!dependency) {
-    checkPkgInstalled('happy-dom');
-  }
-
-  const { Window, GlobalWindow } = dependency ?? (await import('happy-dom'));
+  const happyDOM = await loadHappyDOM(dependency);
   const nodeTimers: NodeTimerPrimitives = {
     clearInterval: global.clearInterval ?? globalThis.clearInterval,
     clearTimeout: global.clearTimeout ?? globalThis.clearTimeout,
     setInterval: global.setInterval ?? globalThis.setInterval,
     setTimeout: global.setTimeout ?? globalThis.setTimeout,
   };
-  // Prefer GlobalWindow to run happy-dom in the global scope so globals like
-  // TextEncoder and Uint8Array are correctly exposed; fall back to Window for
-  // backward compatibility with older happy-dom versions that lack GlobalWindow.
-  const WindowClass = GlobalWindow || Window;
-  const resolvedOptions = options ?? {};
-  const win = new WindowClass({
-    ...resolvedOptions,
-    url: resolvedOptions.url || 'http://localhost:3000',
-    console: console && global.console ? global.console : undefined,
-  });
+  const win = createHappyDOMWindow(
+    happyDOM,
+    options,
+    console && global.console ? global.console : undefined,
+  );
   const cleanupObjectURLs = installObjectURLTracker(
     win.URL as unknown as typeof URL,
     context,
@@ -62,12 +90,7 @@ export const setupEnvironment = async (
       cleanupHandler();
       cleanupTimers();
       cleanupObjectURLs();
-      if (win.close && win.happyDOM.abort) {
-        await win.happyDOM.abort();
-        win.close();
-      } else {
-        await win.happyDOM.cancelAsync();
-      }
+      await closeHappyDOMWindow(win);
       cleanupGlobal();
     },
   };
@@ -81,18 +104,8 @@ export const setupVM = async (
   context: ReturnType<typeof createContext>;
   teardown: () => Promise<void>;
 }> => {
-  if (!dependency) {
-    checkPkgInstalled('happy-dom');
-  }
-
-  const { Window, GlobalWindow } = dependency ?? (await import('happy-dom'));
-  const WindowClass = GlobalWindow || Window;
-  const resolvedOptions = options ?? {};
-  const win = new WindowClass({
-    ...resolvedOptions,
-    url: resolvedOptions.url || 'http://localhost:3000',
-    console: undefined,
-  });
+  const happyDOM = await loadHappyDOM(dependency);
+  const win = createHappyDOMWindow(happyDOM, options, undefined);
   const vmContext = createContext(win as unknown as object);
   const vmGlobal = runInContext('globalThis', vmContext) as typeof globalThis;
   const nodeTimers: NodeTimerPrimitives = {
@@ -114,12 +127,7 @@ export const setupVM = async (
       cleanupHandler();
       cleanupTimers();
       cleanupObjectURLs();
-      if (win.close && win.happyDOM.abort) {
-        await win.happyDOM.abort();
-        win.close();
-      } else {
-        await win.happyDOM.cancelAsync();
-      }
+      await closeHappyDOMWindow(win);
     },
   };
 };
