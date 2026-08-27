@@ -212,18 +212,17 @@ const buildTask = async ({
           projectRoot: project.rootPath,
           runtimeConfig,
           testEnvironmentModule,
-          assetCacheLimit,
+          assetCacheLimit: captureBundleCoverage ? undefined : assetCacheLimit,
           trace: context.trace,
         },
         type,
         setupEntries,
         updateSnapshot,
-        // Federation entries need the complete compilation asset map. Fetch it
-        // when a worker starts the task so concurrent task preparation cannot
-        // retain one full copy per test entry. vmThreads deliberately uses the
-        // lazy path below so each worker can cache shared assets by name.
+        // Bundle coverage needs the complete per-task asset map, so its debug
+        // mode deliberately bypasses the vmThreads cache. In normal runs,
+        // vmThreads uses the lazy path below and caches shared assets by name.
         assets:
-          workerKind !== 'vmThreads' &&
+          (workerKind !== 'vmThreads' || captureBundleCoverage) &&
           isMemorySufficient() &&
           !project.normalizedConfig.federation
             ? await traceSpan('host:get-assets-by-entry', 'host', getAssets, {

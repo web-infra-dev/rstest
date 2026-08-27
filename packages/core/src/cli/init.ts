@@ -403,7 +403,7 @@ export function mergeWithCLIOptions(
       }
 
       if (poolFromCli.memoryLimit !== undefined) {
-        pool.memoryLimit = poolFromCli.memoryLimit as any;
+        pool.memoryLimit = poolFromCli.memoryLimit;
       }
 
       if (poolFromCli.execArgv !== undefined) {

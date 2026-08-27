@@ -57,15 +57,15 @@ Rstest 支持三种 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 <ApiMeta addedVersion="0.10.0" />
 
-每个测试文件运行在通过 `node:worker_threads` 创建的 worker thread 中。Worker 与主进程共享 V8 heap 和 stdio。
+每个测试文件运行在通过 `node:worker_threads` 创建的 worker thread 中。每个 worker 都拥有独立的 V8 isolate 和 heap，但所有 worker 共享同一个操作系统进程，内存会汇总到该进程的 RSS。Rstest 会将各 worker 的 stdout 和 stderr 传回主进程。
 
 ### vmThreads
 
-<ApiMeta addedVersion="0.11.10" />
+<ApiMeta addedVersion="0.11.11" />
 
 `vmThreads` 复用 Node.js worker thread，同时为每个测试文件创建新的 `vm.Context`。这样可以隔离文件级 JavaScript global、DOM 对象和 bundle module graph，又不需要为每个文件重新创建 worker thread。它适合 DOM 测试较多、环境初始化成本高，同时 worker 启动成本也比较明显的测试套件。
 
-VM context 不会隔离进程级状态。`process.env`、`process.chdir`、signal handler、native addon，以及通过 Node 原生 `require` 加载的模块仍属于 worker thread，可能在文件之间共享。VM context 还具有 cross-realm identity，因此一个文件创建的值可能无法通过另一个文件中 constructor 的 `instanceof` 检查。
+VM context 不会隔离 worker 级状态。对 `process.env`、signal handler、native addon 以及 VM context 之外其他状态的修改，可能在同一个 worker 继续执行其他文件时保留下来。Node.js 不支持在任何 worker thread 内调用 `process.chdir()`，因此 `threads` 和 `vmThreads` 都无法运行调用它的测试或 setup 文件。VM context 还具有 cross-realm identity，因此一个文件创建的值可能无法通过另一个文件中 constructor 的 `instanceof` 检查。
 
 每个 `vmThreads` worker 还会在文件之间保留一份有大小上限的 bundle 和 source map 不可变字节缓存。第一个文件之后，未变化的资源会直接复用，不再重复传输。缓存上限为 64 MiB 与 worker `memoryLimit` 四分之一中的较小值；watch rebuild 或 worker 回收时会清空。已执行的 module instance 不会跨 VM Context 缓存。
 
@@ -76,8 +76,8 @@ VM context 不会隔离进程级状态。`process.env`、`process.chdir`、signa
 下列情况可以考虑切换到 `threads`：
 
 - 测试以小型用例为主、单文件耗时短，worker 启动开销在总时间中占比明显 — `worker_threads` 启动比 `child_process.fork` 快约 10×，watch 模式 rerun 体感几乎秒回。
-- 并行运行时机器内存吃紧或观察到 OOM — threads 共享主进程的 V8 heap，多个 worker 不会各占一份 V8 实例。
-- 测试代码本身不修改 cwd / 环境变量 / signal handler，也不依赖按文件重置的进程级状态。
+- Worker 启动是主要瓶颈，且测试套件可以共享同一个操作系统进程。各 worker 的 heap 仍然独立，并会计入同一个进程的 RSS。
+- 测试代码不调用 `process.chdir()`、不修改 worker 级状态，也不依赖在文件之间重置这些状态。
 
 下列情况可以考虑切换到 `vmThreads`：
 
@@ -87,7 +87,7 @@ VM context 不会隔离进程级状态。`process.env`、`process.chdir`、signa
 
 下列情况建议继续使用 `forks`：
 
-- 测试里会修改 `process.chdir`、环境变量、signal handler 等进程级状态，并依赖按文件之间互相隔离。
+- 测试里会调用 `process.chdir()`、修改 worker 级状态，或依赖按文件维度的进程隔离。
 - 项目使用 native addon（如 `better-sqlite3`、`sharp`、`canvas`）—— 未针对 worker thread 设计的 addon 在 `threads` 下可能让整个运行直接 abort（`SIGSEGV` / `SIGABRT`，且无法捕获）。
 - 希望单个测试文件的硬性崩溃被限制在该 worker 内，不影响主进程和其他用例。
 - 需要严格的进程级隔离。此时应使用 `forks`；`vmThreads` 会刻意共享 worker thread 的进程状态。
@@ -96,7 +96,7 @@ VM context 不会隔离进程级状态。`process.env`、`process.chdir`、signa
 
 `pool.maxWorkers` 控制同时运行的测试文件数量。当测试会竞争同一个数据库、端口、fixture 目录或其他外部资源时，可以用它限制并行度。
 
-<ApiMeta addedVersion="0.11.10" />
+<ApiMeta addedVersion="0.11.11" />
 
 `pool.memoryLimit` 仅作用于 `vmThreads`。每个文件运行结束后，Rstest 会读取 worker 的 V8 `heapUsed`；超过上限的 worker 会在接收下一个文件前回收。`(0, 1]` 的数字表示系统内存比例，更大的数字表示字节数；字符串支持 `%`、`MB`、`MiB`、`GB` 和 `GiB`。未设置时，每个 VM worker 默认获得系统内存的等额份额。
 

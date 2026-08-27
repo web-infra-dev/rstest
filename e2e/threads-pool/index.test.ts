@@ -29,4 +29,28 @@ describe('threads pool e2e', () => {
       await expectExecSuccess();
     });
   }
+
+  it('should support the complete importActual path under vmThreads', async ({
+    onTestFinished,
+  }) => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        './mock/tests/importActual.test.ts',
+        '--pool',
+        'vmThreads',
+        '--pool.memoryLimit',
+        '256MB',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, '..'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
 });

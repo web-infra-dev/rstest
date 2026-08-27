@@ -29,7 +29,7 @@ import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
 import { installGlobalApis, installGlobalProperty } from './globalProperty';
 import { PhaseTracker } from './phaseTracker';
-import { WorkerAssetCache } from './assetCache';
+import { loadCachedAssets, WorkerAssetCache } from './assetCache';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
 import { createSilentConsoleController } from './silentConsole';
@@ -122,48 +122,7 @@ const loadTaskAssets = async (
   }
 
   workerAssetCache.configure(context.assetCacheLimit);
-  const missingAssetNames = assetNames.filter(
-    (name) => workerAssetCache.get(`asset:${name}`) === undefined,
-  );
-  const missingSourceMapNames = assetNames.filter(
-    (name) => workerAssetCache.get(`sourceMap:${name}`) === undefined,
-  );
-  const fetched =
-    missingAssetNames.length || missingSourceMapNames.length
-      ? await rpc.getAssetsByEntry(missingAssetNames, missingSourceMapNames)
-      : { assetFiles: {}, sourceMaps: {} };
-
-  for (const [name, content] of Object.entries(fetched.assetFiles)) {
-    workerAssetCache.set(`asset:${name}`, content);
-  }
-  for (const [name, content] of Object.entries(fetched.sourceMaps)) {
-    if (typeof content === 'string') {
-      workerAssetCache.set(`sourceMap:${name}`, content);
-    }
-  }
-  for (const name of missingSourceMapNames) {
-    if (!(name in fetched.sourceMaps)) {
-      workerAssetCache.set(`sourceMap:${name}`, '');
-    }
-  }
-
-  const assetFiles: AssetFiles = {};
-  const sourceMaps: Record<string, string> = {};
-  for (const name of assetNames) {
-    const asset =
-      fetched.assetFiles[name] ?? workerAssetCache.get(`asset:${name}`);
-    if (asset !== undefined) {
-      assetFiles[name] = asset;
-    }
-
-    const sourceMap =
-      fetched.sourceMaps[name] ?? workerAssetCache.get(`sourceMap:${name}`);
-    if (typeof sourceMap === 'string' && sourceMap) {
-      sourceMaps[name] = sourceMap;
-    }
-  }
-
-  return { assetFiles, sourceMaps };
+  return loadCachedAssets(assetNames, workerAssetCache, rpc.getAssetsByEntry);
 };
 
 const setErrorName = (error: Error, type: string): Error => {

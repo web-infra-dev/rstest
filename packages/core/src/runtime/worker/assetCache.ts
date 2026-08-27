@@ -1,4 +1,8 @@
-import type { AssetFileContent } from '../../types/worker';
+import type {
+  AssetFileContent,
+  AssetFiles,
+  RuntimeRPC,
+} from '../../types/worker';
 
 type CacheEntry = {
   content: AssetFileContent;
@@ -82,3 +86,58 @@ export class WorkerAssetCache {
     this.totalBytes = 0;
   }
 }
+
+export const loadCachedAssets = async (
+  assetNames: string[],
+  cache: WorkerAssetCache,
+  getAssetsByEntry: RuntimeRPC['getAssetsByEntry'],
+): Promise<{
+  assetFiles: AssetFiles;
+  sourceMaps: Record<string, string>;
+}> => {
+  const assetFiles: AssetFiles = {};
+  const sourceMaps: Record<string, string> = {};
+  const missingAssetNames: string[] = [];
+  const missingSourceMapNames: string[] = [];
+
+  for (const name of assetNames) {
+    const asset = cache.get(`asset:${name}`);
+    if (asset === undefined) {
+      missingAssetNames.push(name);
+    } else {
+      assetFiles[name] = asset;
+    }
+
+    const sourceMap = cache.get(`sourceMap:${name}`);
+    if (sourceMap === undefined) {
+      missingSourceMapNames.push(name);
+    } else if (typeof sourceMap === 'string' && sourceMap) {
+      sourceMaps[name] = sourceMap;
+    }
+  }
+
+  const fetched =
+    missingAssetNames.length || missingSourceMapNames.length
+      ? await getAssetsByEntry(missingAssetNames, missingSourceMapNames)
+      : { assetFiles: {}, sourceMaps: {} };
+
+  Object.assign(assetFiles, fetched.assetFiles);
+  Object.assign(sourceMaps, fetched.sourceMaps);
+
+  // Populate the LRU only after the task's complete asset set is retained in
+  // the return value. An insertion may evict an earlier hit when one task is
+  // larger than the cache budget, but that must only affect later tasks.
+  for (const [name, content] of Object.entries(fetched.assetFiles)) {
+    cache.set(`asset:${name}`, content);
+  }
+  for (const [name, content] of Object.entries(fetched.sourceMaps)) {
+    cache.set(`sourceMap:${name}`, content);
+  }
+  for (const name of missingSourceMapNames) {
+    if (!(name in fetched.sourceMaps)) {
+      cache.set(`sourceMap:${name}`, '');
+    }
+  }
+
+  return { assetFiles, sourceMaps };
+};
