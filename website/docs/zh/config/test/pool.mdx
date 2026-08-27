@@ -65,6 +65,8 @@ Rstest 支持三种 pool 类型，它们共享同一套 scheduler、RPC 和结�
 
 `vmThreads` 复用 Node.js worker thread，同时为每个测试文件创建新的 `vm.Context`。这样可以隔离文件级 JavaScript global、DOM 对象和 bundle module graph，又不需要为每个文件重新创建 worker thread。它适合 DOM 测试较多、环境初始化成本高，同时 worker 启动成本也比较明显的测试套件。
 
+[`isolate`](/config/test/isolate) 选项对 `vmThreads` 不生效。为了保持配置兼容性，Rstest 会接受 `isolate: false`，但每个文件仍会获得新的 VM context、module graph、test environment 和 worker scope fixture 生命周期。
+
 VM context 不会隔离 worker 级状态。对 `process.env`、signal handler、native addon 以及 VM context 之外其他状态的修改，可能在同一个 worker 继续执行其他文件时保留下来。Node.js 不支持在任何 worker thread 内调用 `process.chdir()`，因此 `threads` 和 `vmThreads` 都无法运行调用它的测试或 setup 文件。VM context 还具有 cross-realm identity，因此一个文件创建的值可能无法通过另一个文件中 constructor 的 `instanceof` 检查。
 
 每个 `vmThreads` worker 还会在文件之间保留一份有大小上限的 bundle 和 source map 不可变字节缓存。第一个文件之后，未变化的资源会直接复用，不再重复传输。缓存上限为 64 MiB 与 worker `memoryLimit` 四分之一中的较小值；watch rebuild 或 worker 回收时会清空。已执行的 module instance 不会跨 VM Context 缓存。
@@ -83,7 +85,7 @@ VM context 不会隔离 worker 级状态。对 `process.env`、signal handler、
 
 - 每个文件都需要新的 global 或 DOM 环境，但每文件创建 worker thread 的成本占比明显。
 - 测试可以兼容 cross-realm value，且不依赖进程级隔离。
-- 希望 `isolate: false` 继续影响 Rstest fixture cleanup，同时每个文件仍使用新的 VM realm。
+- 共享配置设置了 `isolate: false`，但当前测试套件仍需保持文件级 JavaScript 隔离。
 
 下列情况建议继续使用 `forks`：
 

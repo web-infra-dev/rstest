@@ -65,6 +65,8 @@ Each test file runs in a Node.js worker thread spawned via `node:worker_threads`
 
 `vmThreads` reuses Node.js worker threads while creating a fresh `vm.Context` for every test file. This keeps file-level JavaScript globals, DOM objects, and the bundled module graph isolated without paying for a new worker thread for every file. It is intended for DOM-heavy suites where environment setup is expensive but worker startup is also measurable.
 
+The [`isolate`](/config/test/isolate) option has no effect on `vmThreads`. Passing `isolate: false` is accepted for configuration compatibility, but every file still receives a fresh VM context, module graph, test environment, and worker-scoped fixture lifecycle.
+
 The VM context does not isolate worker-level state. Changes to `process.env`, signal handlers, native addons, and other state outside the VM context may persist when the same worker runs another file. Node.js does not support `process.chdir()` inside any worker thread, so neither `threads` nor `vmThreads` can run tests or setup files that call it. VM contexts also have cross-realm identity, so values created in one file may not pass `instanceof` checks against constructors from another file.
 
 Each `vmThreads` worker also keeps a bounded cache of immutable bundle and source-map bytes between files. After the first file, unchanged assets are referenced from that worker instead of being transferred again. The cache is limited to at most 64 MiB or one quarter of the worker's `memoryLimit`, whichever is smaller; it is cleared on rebuild or worker recycle. Evaluated module instances are not cached across VM contexts.
@@ -83,7 +85,7 @@ Consider switching to `vmThreads` when:
 
 - Each file needs a fresh global or DOM environment, but creating a worker thread per file dominates runtime.
 - Your tests are compatible with cross-realm values and do not depend on process-level isolation.
-- You want `isolate: false` to affect Rstest fixture cleanup while retaining a fresh VM realm for every file.
+- A shared configuration sets `isolate: false`, but this suite must retain file-level JavaScript isolation.
 
 Stick with `forks` when:
 

@@ -418,8 +418,8 @@ export const createPool = async ({
   const pool = new Pool({
     workerEntry: resolve(__dirname, './worker.js'),
     // VM threads amortize worker startup while recreating the VM realm for
-    // every file. The runtime still receives the user's isolate value so it
-    // can preserve file-level cleanup semantics.
+    // every file, so host worker reuse is independent of the user's isolate
+    // setting. VM runtime lifecycle branches remain file-scoped by pool type.
     isolate: workerKind === 'vmThreads' ? false : isolate,
     // VM contexts can retain module and realm allocations until their worker
     // exits. Recycle from the worker's own V8 heap report, like Jest and

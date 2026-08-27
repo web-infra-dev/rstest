@@ -94,10 +94,15 @@ export const castArray = <T>(arr?: T | T[]): T[] => {
 };
 
 export const isPlainObject = (obj: unknown): obj is Record<string, any> => {
+  if (obj === null || typeof obj !== 'object') {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(obj);
   return (
-    obj !== null &&
-    typeof obj === 'object' &&
-    Object.getPrototypeOf(obj) === Object.prototype
+    prototype !== null &&
+    Object.getPrototypeOf(prototype) === null &&
+    prototype.constructor?.name === 'Object'
   );
 };
 

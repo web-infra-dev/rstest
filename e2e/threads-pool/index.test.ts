@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it } from '@rstest/core';
+import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts/';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -52,5 +52,42 @@ describe('threads pool e2e', () => {
     });
 
     await expectExecSuccess();
+  });
+
+  it('keeps vmThreads file-isolated when isolate is false', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        '--pool',
+        'vmThreads',
+        '--pool.maxWorkers',
+        '1',
+        '--pool.memoryLimit',
+        '256MB',
+        '--isolate=false',
+      ],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, './fixtures/vm-isolate-false'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    const output = `${cli.stdout}\n${cli.stderr}`;
+    expect(output.match(/VM_SETUP_FILE/g)).toHaveLength(2);
+    expect(output.match(/VM_WORKER_FIXTURE_SETUP/g)).toHaveLength(2);
+    expect(output.match(/VM_WORKER_FIXTURE_CLEANUP/g)).toHaveLength(2);
+
+    const threadIds = [...output.matchAll(/VM_THREAD_ID:(\d+)/g)].map(
+      (match) => match[1],
+    );
+    expect(threadIds).toHaveLength(2);
+    expect(new Set(threadIds).size).toBe(1);
   });
 });

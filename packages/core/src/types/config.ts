@@ -402,7 +402,8 @@ export interface RstestConfig {
    */
   pool?: RstestPoolType | RstestPoolOptions;
   /**
-   * Run tests in an isolated environment
+   * Run tests in an isolated environment. This option has no effect on the
+   * `vmThreads` pool, which always creates a fresh VM context for every file.
    *
    * @default true
    */
