@@ -16,7 +16,7 @@
   "publisher": "rstack",
   "main": "./dist/extension.js",
   "scripts": {
-    "build": "rslib build",
+    "build": "rslib build && npx prettier ./LICENSE.md --write",
     "build:local": "cross-env SOURCEMAP=true rslib build",
     "preinstall": "[ -f icon.png ] || curl https://assets.rspack.rs/rstest/rstest-logo-512x512.png --output icon.png",
     "lint": "rslint .",
