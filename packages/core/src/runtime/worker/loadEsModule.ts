@@ -171,6 +171,21 @@ const defineRstestDynamicImport =
   };
 
 const esmCache = new Map<string, SourceTextModule>();
+const vmEsmCaches = new WeakMap<vm.Context, Map<string, SourceTextModule>>();
+
+const getEsmCache = (vmContext?: vm.Context): Map<string, SourceTextModule> => {
+  if (!vmContext) {
+    return esmCache;
+  }
+
+  let cache = vmEsmCaches.get(vmContext);
+  if (!cache) {
+    cache = new Map();
+    vmEsmCaches.set(vmContext, cache);
+  }
+  return cache;
+};
+
 // Cache only V8's parse/compile metadata; SourceTextModule instances remain
 // tied to the VM context that evaluated them.
 const compilationCache = new Map<
@@ -228,7 +243,8 @@ export const loadModule = async ({
   const code = shouldInjectSourceURL()
     ? appendSourceURL(codeContent, distPath)
     : codeContent;
-  let esm = esmCache.get(distPath);
+  const cache = getEsmCache(vmContext);
+  let esm = cache.get(distPath);
   if (!esm) {
     const cached = cacheCompilation
       ? compilationCache.get(distPath)
@@ -288,7 +304,7 @@ export const loadModule = async ({
         });
       }
     }
-    if (distPath) esmCache.set(distPath, esm);
+    if (distPath) cache.set(distPath, esm);
   }
 
   if (esmMode === EsmMode.Unlinked) return esm;

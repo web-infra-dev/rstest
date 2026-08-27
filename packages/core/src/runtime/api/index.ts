@@ -48,8 +48,10 @@ export const createRstestRuntime = async (
   workerState: WorkerState,
   {
     taskContext,
+    runtimeGlobal,
   }: {
     taskContext: TaskContext;
+    runtimeGlobal?: Record<string, unknown>;
   },
 ): Promise<{
   resolveImportMetaRstest: (filename: string) => Rstest | undefined;
@@ -68,7 +70,9 @@ export const createRstestRuntime = async (
 }> => {
   const [{ runner }, { SnapshotPlugin, ensureSnapshotClient }] =
     await Promise.all([
-      Promise.resolve(createRunner({ workerState, taskContext })),
+      Promise.resolve(
+        createRunner({ workerState, taskContext, runtimeGlobal }),
+      ),
       import(/* webpackChunkName: "snapshot" */ './snapshot'),
     ]);
 
@@ -98,7 +102,12 @@ export const createRstestRuntime = async (
   };
 
   // Published live for real-module importers (`public.ts` reads `RSTEST_API`).
+  // VM bundles see the VM global, while an external `@rstest/core` module
+  // imported by setup files runs in the worker host realm. Publish both
+  // worker-local surfaces so that wrapper APIs resolve the current file in
+  // either realm without sharing state across worker threads.
   globalThis.RSTEST_API = runtime.api;
+  (runtimeGlobal ?? globalThis).RSTEST_API = runtime.api;
 
   const testPath = normalize(workerState.testPath);
 

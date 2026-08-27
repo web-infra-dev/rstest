@@ -1,5 +1,6 @@
 import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 import { asModule } from '../../src/runtime/worker/interop';
 import {
   appendSourceURL,
@@ -96,6 +97,54 @@ describe('loadEsModule', () => {
     const sm2 = await asModule({ bar: 'b' }, '/cache/shared');
 
     expect(sm2).toBe(sm1);
+  });
+
+  it('should not reuse ESM module instances across VM contexts', async () => {
+    const loadOptions = {
+      codeContent: 'export default globalThis;',
+      distPath: '/virtual/dist/shared.mjs',
+      testPath: '/virtual/tests/shared.test.ts',
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: false,
+    };
+    const firstContext = vm.createContext({});
+    const secondContext = vm.createContext({});
+
+    const first = await loadModule({ ...loadOptions, vmContext: firstContext });
+    const second = await loadModule({
+      ...loadOptions,
+      vmContext: secondContext,
+    });
+
+    expect(first.default).not.toBe(second.default);
+    expect(first.default).toBe(vm.runInContext('globalThis', firstContext));
+    expect(second.default).toBe(vm.runInContext('globalThis', secondContext));
+  });
+
+  it('should evaluate external modules in the provided VM context', async () => {
+    const vmContext = vm.createContext({});
+    const externalPath = fixturePath('vm-external/index.mjs');
+    const mod = await loadModule({
+      codeContent: [
+        `import { inspectRealm } from ${JSON.stringify(externalPath)};`,
+        'export default inspectRealm({ from: "vm" });',
+      ].join('\n'),
+      distPath: '/virtual/dist/external-entry.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+      vmContext,
+    });
+
+    expect(mod.default).toEqual({
+      commonJs: true,
+      esm: true,
+      filename: 'index.mjs',
+      importedJson: 'fixture-json',
+      requiredJson: 'fixture-json',
+    });
   });
 
   it('should not pollute the namespace of a real native ESM module with only named exports', async () => {

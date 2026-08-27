@@ -12,6 +12,7 @@ import {
   interopModule,
   shouldInterop,
 } from './interop';
+import { getVmExternalModules } from './vmExternalModules';
 
 /**
  * Shared dynamic-import resolution + interop policy for both worker loaders.
@@ -159,6 +160,14 @@ export const finalizeDynamicImport = async ({
   // will cause ERR_IMPORT_ATTRIBUTE_UNSUPPORTED error.
   if (importAttributes?.with?.rstest) {
     delete importAttributes.with.rstest;
+  }
+
+  if (vmContext) {
+    return getVmExternalModules(vmContext).import(
+      modulePath,
+      interopDefault,
+      returnModule === true,
+    );
   }
 
   if (modulePath.endsWith('.json')) {

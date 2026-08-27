@@ -11,6 +11,10 @@ describe('test interop', () => {
   beforeAll(() => {
     fse.copySync(
       join(__dirname, './fixtures/test-interop'),
+      join(__dirname, './node_modules/test-interop'),
+    );
+    fse.copySync(
+      join(__dirname, './fixtures/test-interop'),
       join(__dirname, './fixtures/test-pkg/node_modules/test-interop'),
     );
     fse.copySync(
@@ -60,6 +64,25 @@ describe('test interop', () => {
               './fixtures/rstest.lodash.config.mts',
             ]
           : ['run', './fixtures/interopLodash', '--testEnvironment=node'],
+      options: {
+        nodeOptions: {
+          cwd: __dirname,
+        },
+      },
+    });
+
+    await expectExecSuccess();
+  });
+
+  it('should execute external modules in the vmThreads realm', async () => {
+    const { expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        './fixtures/vmRealm.test.ts',
+        '-c',
+        './fixtures/rstest.vmExternal.config.mts',
+      ],
       options: {
         nodeOptions: {
           cwd: __dirname,

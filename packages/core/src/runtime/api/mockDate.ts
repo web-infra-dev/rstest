@@ -111,7 +111,10 @@ MockDate.toString = function toString() {
   return RealDate.toString();
 };
 
-export function mockDate(date: string | number | Date): void {
+export function mockDate(
+  date: string | number | Date,
+  target: typeof globalThis = globalThis,
+): void {
   const dateObj = new RealDate(date.valueOf());
   if (Number.isNaN(dateObj.getTime())) {
     throw new TypeError(`mockdate: The time set is an invalid date: ${date}`);
@@ -119,11 +122,11 @@ export function mockDate(date: string | number | Date): void {
 
   // MockDate intentionally omits `Date`'s callable-without-new string overload.
   // @ts-expect-error overriding the global Date constructor
-  globalThis.Date = MockDate;
+  target.Date = MockDate;
 
   now = dateObj.valueOf();
 }
 
-export function resetDate(): void {
-  globalThis.Date = RealDate;
+export function resetDate(target: typeof globalThis = globalThis): void {
+  target.Date = RealDate;
 }

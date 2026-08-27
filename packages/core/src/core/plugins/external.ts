@@ -297,6 +297,18 @@ export const pluginExternal: (context: RstestContext) => RsbuildPlugin = (
             // Make sure that externals configuration is not modified by users
             config.externals = castArray(config.externals) || [];
 
+            // A CommonJS bundle loads plain string externals with synchronous
+            // require() by default. VM contexts cannot synchronously link an
+            // ESM dependency graph on every supported Node version, so route
+            // those externals through Rspack's async import path instead. Items
+            // with an explicit external type keep their own semantics.
+            if (
+              context.normalizedConfig.pool.type === 'vmThreads' &&
+              !outputModule
+            ) {
+              config.externalsType = 'import';
+            }
+
             config.externals.unshift(rstestCoreGlobalExternal);
 
             config.externalsPresets ??= {};

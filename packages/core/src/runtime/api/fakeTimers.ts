@@ -64,6 +64,7 @@ export class FakeTimers {
   private _fakingTime: boolean;
   private _fakingDate: Date | null;
   private readonly _fakeTimers: FakeTimerWithContext;
+  private readonly _global: typeof globalThis;
 
   constructor({
     global,
@@ -72,6 +73,7 @@ export class FakeTimers {
     global: typeof globalThis;
     config?: FakeTimerInstallOpts;
   }) {
+    this._global = global;
     this._config = config;
     this._fakingTime = false;
     this._fakingDate = null;
@@ -178,7 +180,7 @@ export class FakeTimers {
 
   private _resetFakingDate(): void {
     if (this._fakingDate) {
-      resetDate();
+      resetDate(this._global);
       this._fakingDate = null;
     }
   }
@@ -253,7 +255,7 @@ export class FakeTimers {
     // only after `mockDate` validates the input, so an invalid value throws
     // without corrupting a previously pinned date.
     const date = this._toFakeDate(now);
-    mockDate(date);
+    mockDate(date, this._global);
     this._fakingDate = date;
   }
 

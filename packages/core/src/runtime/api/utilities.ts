@@ -17,10 +17,22 @@ import { initSpy } from './spy';
 const DEFAULT_WAIT_TIMEOUT = 1000;
 const DEFAULT_WAIT_INTERVAL = 50;
 
-const getRealSetTimeout = () =>
-  getRealTimers().setTimeout ?? globalThis.setTimeout.bind(globalThis);
-const getRealClearTimeout = () =>
-  getRealTimers().clearTimeout ?? globalThis.clearTimeout.bind(globalThis);
+const getRuntimeGlobal = (): typeof globalThis =>
+  (fileContext().runtimeGlobal as typeof globalThis | undefined) ?? globalThis;
+
+const getRealSetTimeout = () => {
+  const runtimeGlobal = getRuntimeGlobal();
+  return (
+    getRealTimers().setTimeout ?? runtimeGlobal.setTimeout.bind(runtimeGlobal)
+  );
+};
+const getRealClearTimeout = () => {
+  const runtimeGlobal = getRuntimeGlobal();
+  return (
+    getRealTimers().clearTimeout ??
+    runtimeGlobal.clearTimeout.bind(runtimeGlobal)
+  );
+};
 
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => getRealSetTimeout()(resolve, ms));
@@ -157,18 +169,18 @@ const buildRstestUtilities = async (): Promise<{
   const originalEnvValues = new Map<string, EnvStackEntry[]>();
   const originalGlobalValues = new Map<PropertyKey, GlobalStackEntry[]>();
   const timerStack: TimerStackEntry[] = [];
+  const timersByGlobal = new WeakMap<object, InstanceType<typeof FakeTimers>>();
 
   const { FakeTimers } = await import(
     /* webpackChunkName: "fake-timers" */ './fakeTimers'
   );
 
-  let _timers: InstanceType<typeof FakeTimers>;
   let currentFakeTimersConfig: FakeTimerInstallOpts | undefined;
 
   let originalConfig: undefined | RuntimeConfig;
 
   const resolveRuntimeEnv = (): RuntimeEnvStore => {
-    const globalRef = globalThis as GlobalWithRuntimeEnv;
+    const globalRef = getRuntimeGlobal() as GlobalWithRuntimeEnv;
     const runtimeEnv = globalRef[RSTEST_ENV_SYMBOL];
     if (runtimeEnv && typeof runtimeEnv === 'object') {
       return runtimeEnv as RuntimeEnvStore;
@@ -184,12 +196,13 @@ const buildRstestUtilities = async (): Promise<{
   };
 
   const timers = () => {
-    if (!_timers) {
-      _timers = new FakeTimers({
-        global: globalThis,
-      });
+    const runtimeGlobal = getRuntimeGlobal();
+    let timer = timersByGlobal.get(runtimeGlobal);
+    if (!timer) {
+      timer = new FakeTimers({ global: runtimeGlobal });
+      timersByGlobal.set(runtimeGlobal, timer);
     }
-    return _timers;
+    return timer;
   };
 
   const createDisposableRstestUtilities = (
@@ -250,15 +263,16 @@ const buildRstestUtilities = async (): Promise<{
   };
 
   const restoreGlobalValue = (name: PropertyKey, entry: GlobalStackEntry) => {
+    const runtimeGlobal = getRuntimeGlobal();
     restoreScopedEntry(originalGlobalValues.get(name), entry, {
       onSupersede: (laterEntry) => {
         laterEntry.descriptor = entry.descriptor;
       },
       onTail: () => {
         if (!entry.descriptor) {
-          Reflect.deleteProperty(globalThis, name);
+          Reflect.deleteProperty(runtimeGlobal, name);
         } else {
-          Object.defineProperty(globalThis, name, entry.descriptor);
+          Object.defineProperty(runtimeGlobal, name, entry.descriptor);
         }
       },
       onEmpty: () => originalGlobalValues.delete(name),
@@ -427,13 +441,14 @@ const buildRstestUtilities = async (): Promise<{
       return rstest;
     },
     stubGlobal: (name: string | symbol | number, value: any) => {
+      const runtimeGlobal = getRuntimeGlobal();
       const descriptorStack = originalGlobalValues.get(name) ?? [];
       const entry = {
-        descriptor: Object.getOwnPropertyDescriptor(globalThis, name),
+        descriptor: Object.getOwnPropertyDescriptor(runtimeGlobal, name),
       };
       descriptorStack.push(entry);
       originalGlobalValues.set(name, descriptorStack);
-      Object.defineProperty(globalThis, name, {
+      Object.defineProperty(runtimeGlobal, name, {
         value,
         writable: true,
         configurable: true,
@@ -444,15 +459,16 @@ const buildRstestUtilities = async (): Promise<{
       );
     },
     unstubAllGlobals: () => {
+      const runtimeGlobal = getRuntimeGlobal();
       originalGlobalValues.forEach((descriptorStack, name) => {
         const original = descriptorStack[0];
         if (!original) {
           return;
         }
         if (!original.descriptor) {
-          Reflect.deleteProperty(globalThis, name);
+          Reflect.deleteProperty(runtimeGlobal, name);
         } else {
-          Object.defineProperty(globalThis, name, original.descriptor);
+          Object.defineProperty(runtimeGlobal, name, original.descriptor);
         }
       });
       originalGlobalValues.clear();
@@ -483,19 +499,20 @@ const buildRstestUtilities = async (): Promise<{
       return rstest;
     },
     getRealSystemTime: () => {
-      return _timers ? timers().getRealSystemTime() : Date.now();
+      const timer = timersByGlobal.get(getRuntimeGlobal());
+      return timer ? timer.getRealSystemTime() : getRuntimeGlobal().Date.now();
     },
     getRealTimers: () => ({
       setTimeout: getRealSetTimeout(),
       clearTimeout: getRealClearTimeout(),
       setImmediate:
         getRealTimers().setImmediate ??
-        (typeof globalThis.setImmediate === 'function'
-          ? globalThis.setImmediate.bind(globalThis)
+        (typeof getRuntimeGlobal().setImmediate === 'function'
+          ? getRuntimeGlobal().setImmediate.bind(getRuntimeGlobal())
           : undefined),
     }),
     isFakeTimers: () => {
-      return _timers ? timers().isFakeTimers() : false;
+      return timersByGlobal.get(getRuntimeGlobal())?.isFakeTimers() ?? false;
     },
     runAllTimers: () => {
       timers().runAllTimers();

@@ -48,9 +48,11 @@ export const runnerAPI: RunnerAPI = {
 export function createRunner({
   workerState,
   taskContext,
+  runtimeGlobal,
 }: {
   workerState: WorkerState;
   taskContext: TaskContext;
+  runtimeGlobal?: Record<string, unknown>;
 }): {
   runner: {
     runTests: (
@@ -77,7 +79,12 @@ export function createRunner({
   const testRunner: TestRunner = new TestRunner(taskContext);
   // Publish this file's context as one unit; every stable forwarder (runner
   // surface, `expect`, `rstest` config methods) resolves it at call time.
-  setFileContext({ workerState, runnerRuntime: runtimeInstance, testRunner });
+  setFileContext({
+    workerState,
+    runtimeGlobal,
+    runnerRuntime: runtimeInstance,
+    testRunner,
+  });
 
   return {
     runner: {

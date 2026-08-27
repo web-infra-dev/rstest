@@ -266,6 +266,30 @@ describe('require.resolve origin runtime helper', () => {
     expect(options?.cachedData).toBeInstanceOf(Buffer);
   });
 
+  it('should not reuse CommonJS module instances across VM contexts', () => {
+    const dir = path.join(
+      os.tmpdir(),
+      `rstest-cjs-context-cache-${Date.now()}`,
+    );
+    const loadOptions = {
+      codeContent: 'module.exports = globalThis;',
+      distPath: path.join(dir, 'shared.js'),
+      testPath: path.join(dir, 'shared.test.ts'),
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+    };
+    const firstContext = vm.createContext({});
+    const secondContext = vm.createContext({});
+
+    const first = loadModule({ ...loadOptions, vmContext: firstContext });
+    const second = loadModule({ ...loadOptions, vmContext: secondContext });
+
+    expect(first).not.toBe(second);
+    expect(first).toBe(vm.runInContext('globalThis', firstContext));
+    expect(second).toBe(vm.runInContext('globalThis', secondContext));
+  });
+
   it('reuses ESM setup compilation data across VM contexts', async () => {
     // @types/node does not declare SourceTextModule.createCachedData yet.
     const modulePrototype = vm.SourceTextModule.prototype as unknown as {

@@ -36,6 +36,7 @@ import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
 import { createNodeTaskContext } from './taskContext.node';
 import type { TaskContext } from './taskContext';
+import { clearVmExternalCompilationCache } from './vmExternalModules';
 
 let sourceMaps: Record<string, string> = {};
 
@@ -214,6 +215,9 @@ const installVmNodeGlobals = (runtimeGlobal: Record<string, any>): void => {
     Buffer,
     ArrayBuffer,
     Uint8Array,
+    // Keep promise-returning mocks compatible with tinyspy, which is loaded
+    // from the host realm and records settled results via `instanceof Promise`.
+    Promise,
     global: runtimeGlobal,
     setImmediate,
     clearImmediate,
@@ -481,6 +485,7 @@ const preparePool = async (
     workerState,
     {
       taskContext,
+      runtimeGlobal,
     },
   );
 
@@ -720,6 +725,7 @@ export const runInPool = async (
     ]);
     esmLoader.clearCompilationCache();
     cjsLoader.clearCompilationCache();
+    clearVmExternalCompilationCache();
   }
   if (!isVmPool && !isolate && buildChanged) {
     // A rebuild replaces fixture definitions too. Retire instances created by

@@ -17,8 +17,18 @@ import {
   RSTEST_DYNAMIC_IMPORT_HOOK,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from './runtimeHooks';
+import { getVmExternalModules } from './vmExternalModules';
 
 const isRelativePath = (p: string) => /^\.\.?\//.test(p);
+
+const VM_TIMER_EXPORTS = new Set([
+  'setTimeout',
+  'clearTimeout',
+  'setInterval',
+  'clearInterval',
+  'setImmediate',
+  'clearImmediate',
+]);
 
 const getAssetName = (
   assetFiles: AssetFiles,
@@ -197,12 +207,36 @@ const createRequire = (
     }
   })();
 
+  const loadTimersModule = (id: string): unknown => {
+    const timersModule = _require(id) as Record<PropertyKey, unknown>;
+    if (!vmContext) {
+      return timersModule;
+    }
+
+    const runtimeGlobal = vm.runInContext('globalThis', vmContext) as Record<
+      PropertyKey,
+      unknown
+    >;
+    return new Proxy(timersModule, {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && VM_TIMER_EXPORTS.has(property)) {
+          return runtimeGlobal[property];
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+  };
+
   const require = ((id: string) => {
     if (id === 'fs' || id === 'node:fs') {
       const fsModule = _require(id);
       return virtualFsAssetFiles
         ? createVirtualFsAssetProxy(fsModule, virtualFsAssetFiles)
         : fsModule;
+    }
+
+    if (vmContext && (id === 'timers' || id === 'node:timers')) {
+      return loadTimersModule(id);
     }
 
     const currentDirectory = path.dirname(distPath);
@@ -232,6 +266,9 @@ const createRequire = (
           err instanceof Error ? err.message : err,
         );
       }
+    }
+    if (vmContext) {
+      return getVmExternalModules(vmContext).require(id, filename);
     }
     const resolved = _require.resolve(id);
     return _require(resolved);
@@ -425,6 +462,21 @@ export const loadModule = ({
 };
 
 const moduleCache = new Map<string, any>();
+const vmModuleCaches = new WeakMap<vm.Context, Map<string, any>>();
+
+const getModuleCache = (vmContext?: vm.Context): Map<string, any> => {
+  if (!vmContext) {
+    return moduleCache;
+  }
+
+  let cache = vmModuleCaches.get(vmContext);
+  if (!cache) {
+    cache = new Map();
+    vmModuleCaches.set(vmContext, cache);
+  }
+  return cache;
+};
+
 // V8 cached data is safe to instantiate in multiple realms; module exports are
 // deliberately not stored here, so setup dependencies keep file isolation.
 const compilationCache = new Map<
@@ -453,8 +505,9 @@ export const cacheableLoadModule = ({
   vmContext?: vm.Context;
   cacheCompilation?: boolean;
 }): any => {
-  if (moduleCache.has(testPath)) {
-    return moduleCache.get(testPath);
+  const cache = getModuleCache(vmContext);
+  if (cache.has(testPath)) {
+    return cache.get(testPath);
   }
   const mod = loadModule({
     codeContent,
@@ -467,7 +520,7 @@ export const cacheableLoadModule = ({
     vmContext,
     cacheCompilation,
   });
-  moduleCache.set(testPath, mod);
+  cache.set(testPath, mod);
   return mod;
 };
 
