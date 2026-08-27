@@ -43,6 +43,9 @@ packageExtensions:
       '@vue/server-renderer': 3.5.17
       vue: ^3.5.17
 
+patchedDependencies:
+  webpack-license-plugin@4.5.1: patches/webpack-license-plugin@4.5.1.patch
+
 # Prevent un-reviewed build scripts
 strictDepBuilds: true
 

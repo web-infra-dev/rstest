@@ -116,7 +116,6 @@
     "tinyglobby": "^0.2.17",
     "tinyspy": "^4.0.4",
     "url-extras": "^0.1.0",
-    "webpack": "^5.109.2",
     "webpack-license-plugin": "^4.5.1"
   },
   "peerDependencies": {
