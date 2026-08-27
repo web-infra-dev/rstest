@@ -47,17 +47,43 @@ export const forwardVirtualConsole = (
 function patchAddEventListener(
   window: DOMWindow,
   NodeAbortSignal: typeof AbortSignal,
-  context: TestEnvironmentContext,
 ): () => void {
-  const abortControllers = new WeakMap<AbortSignal, AbortController>();
-  const signalForwarders =
-    context.scope === 'file'
-      ? new Map<AbortSignal, EventListener>()
-      : undefined;
-  const JSDOMAbortSignal = window.AbortSignal;
+  const abortBridges = new WeakMap<
+    AbortSignal,
+    { controller: AbortController; forwardingSignal: AbortSignal }
+  >();
   const JSDOMAbortController = window.AbortController;
   const eventTargetPrototype = window.EventTarget.prototype;
   const originalAddEventListener = eventTargetPrototype.addEventListener;
+
+  const getCompatibleSignal = (signal: unknown): unknown => {
+    if (
+      typeof signal !== 'object' ||
+      signal === null ||
+      !Object.prototype.isPrototypeOf.call(NodeAbortSignal.prototype, signal)
+    ) {
+      return signal;
+    }
+
+    const nodeSignal = signal as AbortSignal;
+    let bridge = abortBridges.get(nodeSignal);
+    if (!bridge) {
+      const controller = new JSDOMAbortController();
+      const forwardingSignal = NodeAbortSignal.any([nodeSignal]);
+      if (forwardingSignal.aborted) {
+        controller.abort(forwardingSignal.reason);
+      } else {
+        forwardingSignal.addEventListener(
+          'abort',
+          () => controller.abort(forwardingSignal.reason),
+          { once: true },
+        );
+      }
+      bridge = { controller, forwardingSignal };
+      abortBridges.set(nodeSignal, bridge);
+    }
+    return bridge.controller.signal;
+  };
 
   eventTargetPrototype.addEventListener = function addEventListener(
     type: string,
@@ -69,51 +95,23 @@ function patchAddEventListener(
       optionsValue !== null &&
       (typeof optionsValue === 'object' || typeof optionsValue === 'function')
     ) {
-      const listenerOptions = optionsValue as AddEventListenerOptions;
-      // Web IDL converts inherited dictionary members first, then this
-      // dictionary's members in lexicographic order.
-      const capture = Boolean(listenerOptions.capture);
-      const once = Boolean(listenerOptions.once);
-      const passive = Boolean(listenerOptions.passive);
-      const signal = listenerOptions.signal;
-      let compatibleSignal = signal;
-
-      if (
-        signal != null &&
-        !Object.prototype.isPrototypeOf.call(
-          JSDOMAbortSignal.prototype,
-          signal,
-        ) &&
-        Object.prototype.isPrototypeOf.call(NodeAbortSignal.prototype, signal)
-      ) {
-        let jsdomAbortController = abortControllers.get(signal);
-        if (!jsdomAbortController) {
-          const controller = new JSDOMAbortController();
-          if (signal.aborted) {
-            controller.abort(signal.reason);
-          } else {
-            const forwardAbort = () => {
-              if (!signal.aborted) {
-                return;
-              }
-              signal.removeEventListener('abort', forwardAbort);
-              signalForwarders?.delete(signal);
-              controller.abort(signal.reason);
-            };
-            signal.addEventListener('abort', forwardAbort);
-            signalForwarders?.set(signal, forwardAbort);
-          }
-          jsdomAbortController = controller;
-          abortControllers.set(signal, jsdomAbortController);
-        }
-        compatibleSignal = jsdomAbortController.signal;
-      }
+      const listenerOptions = optionsValue as object;
+      const read = (key: keyof AddEventListenerOptions) =>
+        Reflect.get(listenerOptions, key, listenerOptions);
 
       return originalAddEventListener.call(this, type, callback, {
-        capture,
-        once,
-        passive,
-        signal: compatibleSignal,
+        get capture() {
+          return read('capture');
+        },
+        get once() {
+          return read('once');
+        },
+        get passive() {
+          return read('passive');
+        },
+        get signal() {
+          return getCompatibleSignal(read('signal')) as AbortSignal | undefined;
+        },
       });
     }
 
@@ -121,10 +119,6 @@ function patchAddEventListener(
   };
 
   return () => {
-    for (const [signal, forwardAbort] of signalForwarders ?? []) {
-      signal.removeEventListener('abort', forwardAbort);
-    }
-    signalForwarders?.clear();
     eventTargetPrototype.addEventListener = originalAddEventListener;
   };
 }
@@ -260,7 +254,6 @@ export const setupEnvironment = async (
   const cleanupAddEventListener = patchAddEventListener(
     dom.window,
     global.AbortSignal,
-    context,
   );
 
   const cleanupGlobal = installGlobal(global, dom.window, {
