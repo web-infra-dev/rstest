@@ -45,6 +45,7 @@ packageExtensions:
 
 patchedDependencies:
   heading-case@1.1.5: patches/heading-case@1.1.5.patch
+  webpack-license-plugin@4.5.1: patches/webpack-license-plugin@4.5.1.patch
 
 # Prevent un-reviewed build scripts
 strictDepBuilds: true
