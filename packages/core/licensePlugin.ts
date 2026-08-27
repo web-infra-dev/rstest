@@ -1,14 +1,16 @@
 type WebpackLicensePluginCtor =
   (typeof import('webpack-license-plugin'))['default'];
 
-type PackageLicenseMeta =
-  NonNullable<
-    ConstructorParameters<WebpackLicensePluginCtor>[0]
-  > extends Partial<{
-    additionalFiles: Record<string, (packages: Array<infer Meta>) => unknown>;
-  }>
-    ? Meta
-    : never;
+type WebpackLicensePluginOptions = NonNullable<
+  ConstructorParameters<WebpackLicensePluginCtor>[0]
+>;
+
+type PackageLicenseMeta = {
+  name: string;
+  license?: string | null;
+  licenseText?: string | null;
+  repository?: string;
+};
 
 type AdditionalPackageLicenseMeta = Pick<
   PackageLicenseMeta,

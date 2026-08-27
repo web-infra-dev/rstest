@@ -46,6 +46,85 @@ export const forwardVirtualConsole = (
   }
 };
 
+function patchAddEventListener(
+  window: DOMWindow,
+  NodeAbortSignal: typeof AbortSignal,
+): () => void {
+  const abortBridges = new WeakMap<
+    AbortSignal,
+    { controller: AbortController; forwardingSignal: AbortSignal }
+  >();
+  const JSDOMAbortController = window.AbortController;
+  const eventTargetPrototype = window.EventTarget.prototype;
+  const originalAddEventListener = eventTargetPrototype.addEventListener;
+
+  const getCompatibleSignal = (signal: unknown): unknown => {
+    if (
+      typeof signal !== 'object' ||
+      signal === null ||
+      !Object.prototype.isPrototypeOf.call(NodeAbortSignal.prototype, signal)
+    ) {
+      return signal;
+    }
+
+    const nodeSignal = signal as AbortSignal;
+    let bridge = abortBridges.get(nodeSignal);
+    if (!bridge) {
+      const controller = new JSDOMAbortController();
+      const forwardingSignal = NodeAbortSignal.any([nodeSignal]);
+      if (forwardingSignal.aborted) {
+        controller.abort(forwardingSignal.reason);
+      } else {
+        forwardingSignal.addEventListener(
+          'abort',
+          () => controller.abort(forwardingSignal.reason),
+          { once: true },
+        );
+      }
+      bridge = { controller, forwardingSignal };
+      abortBridges.set(nodeSignal, bridge);
+    }
+    return bridge.controller.signal;
+  };
+
+  eventTargetPrototype.addEventListener = function addEventListener(
+    type: string,
+    callback: EventListenerOrEventListenerObject | null,
+    options?: AddEventListenerOptions | boolean,
+  ): void {
+    const optionsValue = options as unknown;
+    if (
+      optionsValue !== null &&
+      (typeof optionsValue === 'object' || typeof optionsValue === 'function')
+    ) {
+      const listenerOptions = optionsValue as object;
+      const read = (key: keyof AddEventListenerOptions) =>
+        Reflect.get(listenerOptions, key, listenerOptions);
+
+      return originalAddEventListener.call(this, type, callback, {
+        get capture() {
+          return read('capture');
+        },
+        get once() {
+          return read('once');
+        },
+        get passive() {
+          return read('passive');
+        },
+        get signal() {
+          return getCompatibleSignal(read('signal')) as AbortSignal | undefined;
+        },
+      });
+    }
+
+    return originalAddEventListener.call(this, type, callback, options);
+  };
+
+  return () => {
+    eventTargetPrototype.addEventListener = originalAddEventListener;
+  };
+}
+
 type JSDOMModule = typeof import('jsdom');
 
 function installJSDOMObjectURL(
@@ -174,6 +253,10 @@ export const setupEnvironment = async (
       cleanupObjectURLs = installJSDOMObjectURL(window, context);
     },
   });
+  const cleanupAddEventListener = patchAddEventListener(
+    dom.window,
+    global.AbortSignal,
+  );
 
   const cleanupGlobal = installGlobal(global, dom.window, {
     additionalKeys: ['URL', 'URLSearchParams'],
@@ -185,6 +268,7 @@ export const setupEnvironment = async (
   return {
     teardown() {
       cleanupHandler();
+      cleanupAddEventListener();
       cleanupObjectURLs();
       cleanupTimers();
       dom.window.close();
