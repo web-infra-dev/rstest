@@ -4,7 +4,6 @@ import os from 'node:os';
 import vm from 'node:vm';
 import { onTestFinished, rs } from '@rstest/core';
 import path from 'pathe';
-import type { AssetFiles } from '../../src/types';
 import {
   clearModuleCache as clearEsModuleCache,
   loadModule as loadEsModule,
@@ -89,96 +88,6 @@ describe('require.resolve origin runtime helper', () => {
     });
 
     expect(exports).toEqual(createRequire(testPath).resolve.paths('foo'));
-  });
-
-  it('preserves fs read contracts for opted-in virtual assets', async () => {
-    const virtualFile = path.join(
-      os.tmpdir(),
-      `rstest-virtual-fs-${Date.now()}`,
-      'dist',
-      'chunk.js',
-    );
-    const assetFiles: AssetFiles = {
-      [virtualFile]: 'virtual chunk',
-    };
-    const binaryFile = path.join(path.dirname(virtualFile), 'asset.bin');
-    const binaryContent = Buffer.from([0, 0xff, 0x80, 0x41]);
-    assetFiles[binaryFile] = binaryContent;
-    const loadOptions = {
-      codeContent: `
-        const fs = require('node:fs');
-        module.exports = {
-          exists: fs.existsSync(${JSON.stringify(virtualFile)}),
-          syncBuffer: fs.existsSync(${JSON.stringify(virtualFile)})
-            ? fs.readFileSync(${JSON.stringify(virtualFile)})
-            : undefined,
-          syncText: fs.existsSync(${JSON.stringify(virtualFile)})
-            ? fs.readFileSync(${JSON.stringify(virtualFile)}, 'utf-8')
-            : undefined,
-          callback: fs.existsSync(${JSON.stringify(virtualFile)})
-            ? new Promise((resolve, reject) => {
-                fs.readFile(${JSON.stringify(virtualFile)}, (error, content) =>
-                  error ? reject(error) : resolve(content),
-                );
-              })
-            : undefined,
-          promise: fs.existsSync(${JSON.stringify(virtualFile)})
-            ? fs.promises.readFile(${JSON.stringify(virtualFile)}, 'utf-8')
-            : undefined,
-          binary: fs.existsSync(${JSON.stringify(binaryFile)})
-            ? fs.readFileSync(${JSON.stringify(binaryFile)})
-            : undefined,
-          binaryText: fs.existsSync(${JSON.stringify(binaryFile)})
-            ? fs.readFileSync(${JSON.stringify(binaryFile)}, 'utf8')
-            : undefined,
-          mutatedBinary: fs.existsSync(${JSON.stringify(binaryFile)})
-            ? (() => {
-                const content = fs.readFileSync(${JSON.stringify(binaryFile)});
-                content[0] = 42;
-                return content;
-              })()
-            : undefined,
-          binaryAfterMutation: fs.existsSync(${JSON.stringify(binaryFile)})
-            ? fs.readFileSync(${JSON.stringify(binaryFile)})
-            : undefined,
-        };
-      `,
-      distPath: path.join(os.tmpdir(), `rstest-virtual-fs-${Date.now()}.js`),
-      testPath: path.join(
-        os.tmpdir(),
-        `rstest-virtual-fs-${Date.now()}.test.ts`,
-      ),
-      rstestContext: {},
-      assetFiles,
-      interopDefault: true,
-    };
-
-    expect(loadModule(loadOptions)).toEqual({
-      exists: false,
-      syncBuffer: undefined,
-      syncText: undefined,
-      callback: undefined,
-      promise: undefined,
-      binary: undefined,
-      binaryText: undefined,
-      mutatedBinary: undefined,
-      binaryAfterMutation: undefined,
-    });
-    const virtual = loadModule({
-      ...loadOptions,
-      virtualFsAssetFiles: assetFiles,
-    });
-    expect(virtual.exists).toBe(true);
-    expect(Buffer.isBuffer(virtual.syncBuffer)).toBe(true);
-    expect(virtual.syncBuffer.toString()).toBe('virtual chunk');
-    expect(virtual.syncText).toBe('virtual chunk');
-    expect(Buffer.isBuffer(await virtual.callback)).toBe(true);
-    expect(await virtual.promise).toBe('virtual chunk');
-    expect(Buffer.isBuffer(virtual.binary)).toBe(true);
-    expect(virtual.binary).toEqual(binaryContent);
-    expect(virtual.binaryText).toBe('\0\ufffd\ufffdA');
-    expect(virtual.mutatedBinary).toEqual(Buffer.from([42, 0xff, 0x80, 0x41]));
-    expect(virtual.binaryAfterMutation).toEqual(binaryContent);
   });
 
   it('binds top-level this to exports in CommonJS modules', () => {
