@@ -88,7 +88,8 @@ export class RunnerRuntime {
    * - running: collect it immediately.
    */
   private collectStatus: CollectStatus = 'lazy';
-  private currentCollectList: (() => MaybePromise<void>)[] = [];
+  private currentCollectList: Array<(() => MaybePromise<void>) | undefined> =
+    [];
   private suiteCollectionDepth = 0;
   private readonly runtimeConfig;
   private readonly project: string;
@@ -356,9 +357,11 @@ export class RunnerRuntime {
     const currentCollectList = this.currentCollectList;
     // reset currentCollectList
     this.currentCollectList = [];
-    while (currentCollectList.length > 0) {
+    let collectIndex = 0;
+    while (collectIndex < currentCollectList.length) {
       this.collectStatus = 'running';
-      const fn = currentCollectList.shift()!;
+      const fn = currentCollectList[collectIndex++]!;
+      currentCollectList[collectIndex - 1] = undefined;
       await fn();
     }
   }

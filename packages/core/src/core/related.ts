@@ -228,13 +228,14 @@ const collectReachableDependents = ({
 }): Set<string> => {
   const visited = new Set<string>();
   const queue = Array.from(initialSources);
+  let queueIndex = 0;
 
   for (const source of queue) {
     visited.add(source);
   }
 
-  while (queue.length > 0) {
-    const currentSource = queue.shift()!;
+  while (queueIndex < queue.length) {
+    const currentSource = queue[queueIndex++]!;
 
     for (const dependent of dependentsBySource.get(currentSource) || []) {
       if (visited.has(dependent)) {
