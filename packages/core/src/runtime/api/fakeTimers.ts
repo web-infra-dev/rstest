@@ -12,7 +12,7 @@ import type {
   Clock as InstalledClock,
   Timer as FakeTimerRecord,
 } from '@sinonjs/fake-timers';
-import { mockDate, RealDate, resetDate } from './mockDate';
+import { mockDate, resetDate } from './mockDate';
 
 export type { FakeTimerInstallOpts };
 
@@ -65,6 +65,7 @@ export class FakeTimers {
   private _fakingDate: Date | null;
   private readonly _fakeTimers: FakeTimerWithContext;
   private readonly _global: typeof globalThis;
+  private readonly _realDate: DateConstructor;
 
   constructor({
     global,
@@ -74,6 +75,7 @@ export class FakeTimers {
     config?: FakeTimerInstallOpts;
   }) {
     this._global = global;
+    this._realDate = global.Date;
     this._config = config;
     this._fakingTime = false;
     this._fakingDate = null;
@@ -200,7 +202,7 @@ export class FakeTimers {
   }: FakeTimerInstallOpts = {}): void {
     // Carry over the time pinned by a prior Date-only setSystemTime() so that
     // promoting to full fake timers keeps the same "now".
-    const fakeDate = this._fakingDate ?? Date.now();
+    const fakeDate = this._fakingDate ?? this._realDate.now();
     this._resetFakingDate();
 
     if (this._fakingTime) {
@@ -269,7 +271,7 @@ export class FakeTimers {
     // Clone the Date so a later mutation of the caller's object can't leak into
     // the pin (which a promotion or scoped restore would otherwise pick up).
     if (isDate(now)) {
-      return new RealDate(now.valueOf());
+      return new this._realDate(now.valueOf());
     }
     // Temporal-like value, e.g. `{ epochMilliseconds }`.
     return new Date(now.epochMilliseconds);
@@ -319,7 +321,7 @@ export class FakeTimers {
   }
 
   getRealSystemTime(): number {
-    return RealDate.now();
+    return this._realDate.now();
   }
 
   /**
@@ -335,7 +337,7 @@ export class FakeTimers {
     if (this._fakingTime) {
       return this._clock.now;
     }
-    return Date.now();
+    return this._global.Date.now();
   }
 
   getTimerCount(): number {

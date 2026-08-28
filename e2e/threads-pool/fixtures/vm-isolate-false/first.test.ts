@@ -1,5 +1,5 @@
 import { threadId } from 'node:worker_threads';
-import { expect } from '@rstest/core';
+import { expect, rs } from '@rstest/core';
 import { getCount, increment } from './shared';
 import { workerTest } from './workerFixture';
 
@@ -24,6 +24,12 @@ workerTest('isolates the first file', ({ workerValue }) => {
   (
     Promise as typeof Promise & { __RSTEST_VM_FILE__?: string }
   ).__RSTEST_VM_FILE__ = 'first';
+  const RealmDate = Date;
+  rs.setSystemTime(0);
+  expect(Date).not.toBe(RealmDate);
+  expect(new Date()).toBeInstanceOf(RealmDate);
+  rs.useRealTimers();
+  expect(Date).toBe(RealmDate);
   increment();
   expect(getCount()).toBe(1);
   console.log(`VM_THREAD_ID:${threadId}`);
