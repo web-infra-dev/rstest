@@ -26,6 +26,8 @@ describe('coverage istanbul-specific behavior', () => {
         '256MB',
         '--coverage.reporters',
         'text-summary',
+        '--coverage.reporters',
+        'json',
         '--coverage.reportsDirectory',
         reportsDirectory,
       ],
@@ -34,6 +36,12 @@ describe('coverage istanbul-specific behavior', () => {
 
     await expectExecSuccess();
     expect(cli.stdout).toContain('Statements   : 100% ( 2/2 )');
+    const coverage = fs.readJsonSync(
+      join(fixturePath, reportsDirectory, 'coverage-final.json'),
+    ) as Record<string, unknown>;
+    expect(Object.keys(coverage)).toEqual([
+      expect.stringMatching(/\/src\/index\.ts$/),
+    ]);
   });
 
   it('enables the default provider with --coverage', async ({

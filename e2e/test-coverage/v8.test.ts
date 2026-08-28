@@ -12,9 +12,12 @@ describe('coverage v8-specific behavior', () => {
       onTestFinished,
     }) => {
       const debugDirectory = join(fixturePath, '.rstest');
+      const reportsDirectory = `test-temp-v8-${pool}`;
+      const reportPath = join(fixturePath, reportsDirectory);
       const removeDebugOutput = () => fs.removeSync(debugDirectory);
       removeDebugOutput();
       onTestFinished(removeDebugOutput);
+      onTestFinished(() => fs.removeSync(reportPath));
 
       const { expectExecSuccess } = await runRstestCli({
         command: 'rstest',
@@ -27,6 +30,10 @@ describe('coverage v8-specific behavior', () => {
           ...(pool === 'vmThreads' ? ['--pool.memoryLimit', '256MB'] : []),
           '--coverage.reporters',
           'text-summary',
+          '--coverage.reporters',
+          'json',
+          '--coverage.reportsDirectory',
+          reportsDirectory,
         ],
         options: {
           nodeOptions: {
@@ -60,6 +67,13 @@ describe('coverage v8-specific behavior', () => {
           test.rawV8.entries.every((entry) => entry.filePath in test.assets),
         ).toBeTruthy();
       }
+
+      const coverage = fs.readJsonSync(
+        join(reportPath, 'coverage-final.json'),
+      ) as Record<string, unknown>;
+      expect(Object.keys(coverage)).toContainEqual(
+        expect.stringMatching(/\/src\/index\.ts$/),
+      );
     });
   }
 
