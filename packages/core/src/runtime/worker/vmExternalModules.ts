@@ -1,13 +1,26 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { createRequire as createNativeRequire, isBuiltin } from 'node:module';
-import { dirname, extname, join, parse } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readFileSync } from 'node:fs';
+import {
+  createRequire as createNativeRequire,
+  isBuiltin,
+  Module,
+} from 'node:module';
+import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
+import { dirname, extname } from 'pathe';
 import { asModule, getOrCreateSyntheticModule, interopModule } from './interop';
 import { createVmTimersLoader, VM_TIMER_EXPORTS } from './timers';
-import { workerCache } from './workerCache';
-
-type ModuleFormat = 'commonjs' | 'json' | 'module' | 'native' | 'unsupported';
+import {
+  clearExternalModuleCache,
+  getCommonJsCompilationCache,
+  getEsmCompilationCache,
+  getExternalFilePath as getFilePath,
+  getExternalModuleFormat as getModuleFormat,
+  parseExternalDataUri as parseDataUri,
+  readExternalSource as readSource,
+  resolveExternalSpecifier,
+  setCommonJsCompilationCache,
+  setEsmCompilationCache,
+} from './vmExternalModuleCache';
 type EsmLinkOperation = {
   promise: Promise<vm.Module>;
   reject: (reason?: unknown) => void;
@@ -60,31 +73,6 @@ type CommonJsModule = {
   paths: string[];
   require: NodeJS.Require;
 };
-
-const importMetaResolve = import.meta.resolve?.bind(import.meta);
-const sourceCache = workerCache.namespace<string>('external-source', (source) =>
-  Buffer.byteLength(source),
-);
-const packageTypeCache = workerCache.namespace<'commonjs' | 'module'>(
-  'external-package-type',
-  () => 0,
-);
-type ExternalCompilationCacheEntry = { code: string; cachedData: Buffer };
-const getCompilationCacheSize = ({
-  code,
-  cachedData,
-}: ExternalCompilationCacheEntry): number =>
-  Buffer.byteLength(code) + cachedData.byteLength;
-const commonJsCompilationCache =
-  workerCache.namespace<ExternalCompilationCacheEntry>(
-    'external-commonjs-compilation',
-    getCompilationCacheSize,
-  );
-const esmCompilationCache =
-  workerCache.namespace<ExternalCompilationCacheEntry>(
-    'external-esm-compilation',
-    getCompilationCacheSize,
-  );
 
 // `hasAsyncGraph` ships with the complete synchronous graph API that Node
 // itself uses for require(esm): moduleRequests, linkRequests and instantiate.
@@ -146,80 +134,62 @@ const resolveRequire = (
   });
 
 let executors = new WeakMap<vm.Context, VmExternalModules>();
+let scriptExecutors = new WeakMap<vm.Script, VmExternalModules>();
 
-const readSource = (filePath: string): string => {
-  let source = sourceCache.get(filePath);
-  if (source === undefined) {
-    source = readFileSync(filePath, 'utf8');
-    sourceCache.set(filePath, source);
+type CommonJsScript = vm.Script & { identifier: string };
+
+const staticCommonJsImportModuleDynamically: vm.DynamicModuleLoader<
+  vm.Script
+> = (specifier, referencer) => {
+  const executor = scriptExecutors.get(referencer);
+  if (!executor) {
+    throw new Error(
+      `Cannot import "${specifier}": the test context was torn down.`,
+    );
   }
-  return source;
+  const identifier = Reflect.get(referencer, 'identifier');
+  if (typeof identifier !== 'string') {
+    throw new Error(
+      `Cannot import "${specifier}": the CommonJS referrer has no identifier.`,
+    );
+  }
+  return executor.importModuleDynamically(specifier, identifier);
 };
 
-const resolvePackageType = (filePath: string): 'commonjs' | 'module' => {
-  let directory = dirname(filePath);
-  const visited: string[] = [];
-
-  while (true) {
-    const cached = packageTypeCache.get(directory);
-    if (cached) {
-      for (const item of visited) {
-        packageTypeCache.set(item, cached);
-      }
-      return cached;
-    }
-
-    visited.push(directory);
-    const packageJsonPath = join(directory, 'package.json');
-    if (existsSync(packageJsonPath)) {
-      const packageJson = JSON.parse(readSource(packageJsonPath)) as {
-        type?: unknown;
-      };
-      const type = packageJson.type === 'module' ? 'module' : 'commonjs';
-      for (const item of visited) {
-        packageTypeCache.set(item, type);
-      }
-      return type;
-    }
-
-    const parent = dirname(directory);
-    if (parent === directory || directory === parse(directory).root) {
-      for (const item of visited) {
-        packageTypeCache.set(item, 'commonjs');
-      }
-      return 'commonjs';
-    }
-    directory = parent;
+const getContextExecutor = (module: vm.SourceTextModule): VmExternalModules => {
+  const executor = executors.get(module.context);
+  if (!executor) {
+    throw new Error(
+      `Cannot import "${module.identifier}": its vm context was torn down.`,
+    );
   }
+  return executor;
 };
 
-const getFilePath = (resolvedId: string): string =>
-  resolvedId.startsWith('file:')
-    ? fileURLToPath(new URL(resolvedId))
-    : resolvedId;
+const staticImportModuleDynamically: vm.DynamicModuleLoader<
+  vm.SourceTextModule
+> = (specifier, referencer) =>
+  getContextExecutor(referencer).importModuleDynamically(
+    specifier,
+    referencer.identifier,
+  );
 
-const getModuleFormat = (resolvedId: string): ModuleFormat => {
-  if (isBuiltin(resolvedId)) {
-    return 'native';
+const staticInitializeImportMeta = (
+  meta: ImportMeta,
+  module: vm.SourceTextModule,
+): void => {
+  const { identifier } = module;
+  meta.url = identifier;
+  if (identifier.startsWith('file:')) {
+    const filePath = getFilePath(identifier);
+    meta.filename = filePath;
+    meta.dirname = dirname(filePath);
   }
-
-  const filePath = getFilePath(resolvedId);
-  switch (extname(filePath)) {
-    case '':
-      return resolvePackageType(filePath);
-    case '.cjs':
-      return 'commonjs';
-    case '.json':
-      return 'json';
-    case '.mjs':
-      return 'module';
-    case '.js':
-      return resolvePackageType(filePath);
-    case '.node':
-      return 'native';
-    default:
-      return 'unsupported';
-  }
+  meta.resolve = (specifier: string, parent?: string | URL) =>
+    getContextExecutor(module).resolve(
+      specifier,
+      parent === undefined ? identifier : parent.toString(),
+    );
 };
 
 const stripCommonJsPrefix = (source: string): string =>
@@ -287,6 +257,11 @@ class VmExternalModules {
   private readonly loadVmTimers: ReturnType<typeof createVmTimersLoader>;
   private readonly parseJson: (source: string) => unknown;
   private readonly requireCache: NodeJS.Require['cache'];
+  private readonly scripts = new Set<vm.Script>();
+  private readonly webAssemblyCache = new Map<
+    string,
+    Promise<vm.SyntheticModule>
+  >();
   private linkQueue: Promise<void> = Promise.resolve();
   private moduleBuiltin: unknown;
   private interopDefault = true;
@@ -346,6 +321,8 @@ class VmExternalModules {
     const nativeRequire = createNativeRequire(parent);
     const resolved = resolveRequire(nativeRequire, specifier);
     switch (getModuleFormat(resolved)) {
+      case 'data':
+        throw createRequireEsmError(resolved);
       case 'commonjs':
         return this.loadCommonJs(resolved, parentModule);
       case 'json':
@@ -354,11 +331,14 @@ class VmExternalModules {
         if (!supportsSyncEsmEvaluate) {
           throw createRequireEsmError(resolved);
         }
-        return extname(resolved) === '.mjs'
-          ? this.requireEsm(resolved)
-          : this.loadCommonJs(resolved, parentModule);
+        return this.requireEsm(resolved);
       case 'native':
         return nativeRequire(resolved);
+      case 'wasm':
+        throw createRequireAsyncModuleError(
+          resolved,
+          'WebAssembly modules cannot be loaded synchronously',
+        );
       case 'unsupported':
         throw createUnsupportedFormatError(resolved);
     }
@@ -400,18 +380,29 @@ class VmExternalModules {
     return linkedModule;
   }
 
-  private resolve(specifier: string, parent: string): string {
-    if (isBuiltin(specifier)) {
-      return specifier;
+  resolve(specifier: string, parent: string): string {
+    return resolveExternalSpecifier(specifier, parent);
+  }
+
+  async importModuleDynamically(
+    specifier: string,
+    parent: string,
+  ): Promise<vm.Module> {
+    const imported = await this.enqueueLinkedModule(
+      this.resolve(specifier, parent),
+      this.interopDefault,
+    );
+    if (imported.status !== 'evaluated' && imported.status !== 'evaluating') {
+      await imported.evaluate();
     }
-    const parentUrl = parent.startsWith('file:')
-      ? parent
-      : pathToFileURL(parent).href;
-    if (importMetaResolve) {
-      return importMetaResolve(specifier, parentUrl);
+    return imported;
+  }
+
+  dispose(): void {
+    for (const script of this.scripts) {
+      scriptExecutors.delete(script);
     }
-    return pathToFileURL(createNativeRequire(parentUrl).resolve(specifier))
-      .href;
+    this.scripts.clear();
   }
 
   private async getModule(
@@ -420,8 +411,10 @@ class VmExternalModules {
   ): Promise<vm.Module> {
     const format = getModuleFormat(resolvedId);
     switch (format) {
+      case 'data':
+        return this.loadDataModule(resolvedId);
       case 'module':
-        return this.loadEsm(resolvedId, interopDefault);
+        return this.loadEsm(resolvedId);
       case 'commonjs':
         return this.getCommonJsSyntheticModule(
           resolvedId,
@@ -435,6 +428,11 @@ class VmExternalModules {
         );
       case 'native':
         return this.loadNativeModule(resolvedId);
+      case 'wasm':
+        return this.loadWebAssemblyModule(
+          resolvedId,
+          readFileSync(getFilePath(resolvedId)),
+        );
       case 'unsupported':
         throw createUnsupportedFormatError(getFilePath(resolvedId));
     }
@@ -448,7 +446,7 @@ class VmExternalModules {
     const namespace =
       exports !== null &&
       (typeof exports === 'object' || typeof exports === 'function')
-        ? Object.assign({ default: exports }, exports)
+        ? Object.assign({}, exports, { default: exports })
         : { default: exports };
     const { mod, defaultExport } = interopDefault
       ? interopModule(namespace)
@@ -474,44 +472,154 @@ class VmExternalModules {
     );
   }
 
+  private async loadDataModule(identifier: string): Promise<vm.Module> {
+    const { code, mime } = parseDataUri(identifier);
+    if (mime === 'application/wasm') {
+      return this.loadWebAssemblyModule(identifier, code);
+    }
+    if (mime === 'application/json') {
+      return this.getJsonSyntheticModule(identifier, this.parseJson(code));
+    }
+
+    const cached = this.esmCache.get(identifier);
+    if (cached) {
+      return cached;
+    }
+    const module = this.createEsmModule(identifier, code);
+    this.esmCache.set(identifier, module);
+    return module;
+  }
+
+  private async loadWebAssemblyModule(
+    identifier: string,
+    source: Uint8Array,
+  ): Promise<vm.SyntheticModule> {
+    const cached = this.webAssemblyCache.get(identifier);
+    if (cached) {
+      return cached;
+    }
+
+    const loading = (async () => {
+      const compiled = await WebAssembly.compile(Buffer.from(source));
+      const imports = WebAssembly.Module.imports(compiled);
+      const dependencies = new Map<string, vm.Module>();
+      for (const { module: specifier } of imports) {
+        if (!dependencies.has(specifier)) {
+          dependencies.set(
+            specifier,
+            await this.getModule(
+              this.resolve(specifier, identifier),
+              this.interopDefault,
+            ),
+          );
+        }
+      }
+
+      const syntheticModule = new vm.SyntheticModule(
+        WebAssembly.Module.exports(compiled).map(({ name }) => name),
+        async () => {
+          const importObject: WebAssembly.Imports = {};
+          for (const { module: specifier, name } of imports) {
+            const dependency = dependencies.get(specifier)!;
+            await this.linkModule(dependency, this.interopDefault);
+            if (
+              dependency.status !== 'evaluated' &&
+              dependency.status !== 'evaluating'
+            ) {
+              await dependency.evaluate();
+            }
+            const namespace = dependency.namespace as Record<string, unknown>;
+            const moduleImports = (importObject[specifier] ??= {});
+            moduleImports[name] = namespace[name] as WebAssembly.ImportValue;
+          }
+
+          const instance = new WebAssembly.Instance(compiled, importObject);
+          for (const { name } of WebAssembly.Module.exports(compiled)) {
+            syntheticModule.setExport(name, instance.exports[name]);
+          }
+        },
+        { context: this.context, identifier },
+      );
+      return syntheticModule;
+    })();
+    this.webAssemblyCache.set(identifier, loading);
+    try {
+      return await loading;
+    } catch (error) {
+      this.webAssemblyCache.delete(identifier);
+      throw error;
+    }
+  }
+
   private materializeSyncModule(
     identifier: string,
     forceEsmSource: boolean,
   ): { kind: 'ready'; module: vm.Module } | { code: string; kind: 'source' } {
     const format = getModuleFormat(identifier);
-    const filePath = getFilePath(identifier);
     switch (format) {
+      case 'data': {
+        const { code, mime } = parseDataUri(identifier);
+        if (mime === 'application/wasm') {
+          throw createRequireAsyncModuleError(
+            identifier,
+            'WebAssembly modules cannot be loaded synchronously',
+          );
+        }
+        if (mime === 'application/json') {
+          return {
+            kind: 'ready',
+            module: this.getJsonSyntheticModule(
+              identifier,
+              this.parseJson(code),
+            ),
+          };
+        }
+        return { code, kind: 'source' };
+      }
       case 'module':
-        return { code: readSource(filePath), kind: 'source' };
-      case 'commonjs':
+        return {
+          code: readSource(getFilePath(identifier)),
+          kind: 'source',
+        };
+      case 'commonjs': {
+        const commonJsPath = getFilePath(identifier);
         return forceEsmSource
-          ? { code: readSource(filePath), kind: 'source' }
+          ? { code: readSource(commonJsPath), kind: 'source' }
           : {
               kind: 'ready',
               module: this.getCommonJsSyntheticModule(
                 identifier,
-                this.loadCommonJs(filePath),
+                this.loadCommonJs(commonJsPath),
               ),
             };
-      case 'json':
+      }
+      case 'json': {
+        const jsonPath = getFilePath(identifier);
         return {
           kind: 'ready',
           module: this.getJsonSyntheticModule(
             identifier,
-            this.loadJson(filePath),
+            this.loadJson(jsonPath),
           ),
         };
+      }
       case 'native': {
+        const nativePath = getFilePath(identifier);
         const exports = isBuiltin(identifier)
           ? this.loadBuiltin(identifier)
-          : createNativeRequire(import.meta.url)(filePath);
+          : createNativeRequire(import.meta.url)(nativePath);
         return {
           kind: 'ready',
           module: this.getCommonJsSyntheticModule(identifier, exports),
         };
       }
+      case 'wasm':
+        throw createRequireAsyncModuleError(
+          identifier,
+          'WebAssembly modules cannot be loaded synchronously',
+        );
       case 'unsupported':
-        throw createUnsupportedFormatError(filePath);
+        throw createUnsupportedFormatError(getFilePath(identifier));
     }
   }
 
@@ -528,6 +636,24 @@ class VmExternalModules {
     }
   }
 
+  private getRequireCacheEntry(
+    filePath: string,
+    parentModule?: CommonJsModule,
+  ): { exports: unknown; hit: true } | { hit: false } {
+    const entry = this.requireCache[filePath] as
+      { exports: unknown } | undefined;
+    if (!entry || !('exports' in entry)) {
+      return { hit: false };
+    }
+
+    const internalModule =
+      this.commonJsCache.get(filePath) ?? this.jsonCache.get(filePath);
+    if (internalModule === entry) {
+      this.attachChild(parentModule, internalModule);
+    }
+    return { exports: entry.exports, hit: true };
+  }
+
   private loadCommonJs(
     filePath: string,
     parentModule?: CommonJsModule,
@@ -535,15 +661,9 @@ class VmExternalModules {
     if (this.esmSyntaxFallbackFiles.has(filePath)) {
       return this.requireEsm(filePath);
     }
-    const cachedModule = this.commonJsCache.get(filePath);
-    if (cachedModule) {
-      this.attachChild(parentModule, cachedModule);
-      return cachedModule.exports;
-    }
-    const injectedModule = this.requireCache[filePath] as
-      { exports: unknown } | undefined;
-    if (injectedModule && 'exports' in injectedModule) {
-      return injectedModule.exports;
+    const requireCacheEntry = this.getRequireCacheEntry(filePath, parentModule);
+    if (requireCacheEntry.hit) {
+      return requireCacheEntry.exports;
     }
 
     let module: CommonJsModule;
@@ -565,37 +685,29 @@ class VmExternalModules {
     this.attachChild(parentModule, module);
 
     const code = stripCommonJsPrefix(readSource(filePath));
-    const cached = commonJsCompilationCache.get(filePath);
+    const wrappedCode = Module.wrap(code);
+    const cached = getCommonJsCompilationCache(filePath);
     const cachedData = cached?.code === code ? cached.cachedData : undefined;
-    const compile = (data?: Buffer) =>
-      vm.compileFunction(
-        code,
-        ['exports', 'require', 'module', '__filename', '__dirname'],
-        {
-          filename: filePath,
-          parsingContext: this.context,
-          ...(data ? { cachedData: data } : { produceCachedData: true }),
-          importModuleDynamically: (specifier) =>
-            this.import(
-              this.resolve(specifier, pathToFileURL(filePath).href),
-              true,
-              true,
-            ) as Promise<vm.Module>,
-        },
-      );
+    const compile = (data?: Buffer): CommonJsScript => {
+      const script = new vm.Script(wrappedCode, {
+        filename: filePath,
+        ...(data ? { cachedData: data } : {}),
+        importModuleDynamically: staticCommonJsImportModuleDynamically,
+      }) as CommonJsScript;
+      script.identifier = filePath;
+      return script;
+    };
 
-    let fn: ReturnType<typeof compile>;
+    let script: CommonJsScript;
+    let shouldCacheCompilation = cachedData === undefined;
     try {
-      fn = compile(cachedData);
-      if (cachedData && fn.cachedDataRejected) {
-        fn = compile();
+      script = compile(cachedData);
+      if (cachedData && script.cachedDataRejected) {
+        script = compile();
+        shouldCacheCompilation = true;
       }
-      if (fn.cachedDataProduced && fn.cachedData) {
-        commonJsCompilationCache.set(filePath, {
-          code,
-          cachedData: fn.cachedData,
-        });
-      }
+      scriptExecutors.set(script, this);
+      this.scripts.add(script);
     } catch (error) {
       this.commonJsCache.delete(filePath);
       Reflect.deleteProperty(this.requireCache, filePath);
@@ -618,6 +730,13 @@ class VmExternalModules {
     }
 
     try {
+      const fn = script.runInContext(this.context) as (
+        exports: unknown,
+        require: NodeJS.Require,
+        module: CommonJsModule,
+        filename: string,
+        dirname: string,
+      ) => void;
       fn.call(
         module.exports,
         module.exports,
@@ -627,6 +746,12 @@ class VmExternalModules {
         dirname(filePath),
       );
       module.loaded = true;
+      if (shouldCacheCompilation) {
+        setCommonJsCompilationCache(filePath, {
+          code,
+          cachedData: script.createCachedData(),
+        });
+      }
       return module.exports;
     } catch (error) {
       this.commonJsCache.delete(filePath);
@@ -636,14 +761,11 @@ class VmExternalModules {
   }
 
   private loadJson(filePath: string, parentModule?: CommonJsModule): unknown {
-    let module = this.jsonCache.get(filePath);
-    if (!module) {
-      const injectedModule = this.requireCache[filePath] as
-        { exports: unknown } | undefined;
-      if (injectedModule && 'exports' in injectedModule) {
-        return injectedModule.exports;
-      }
+    const requireCacheEntry = this.getRequireCacheEntry(filePath, parentModule);
+    if (requireCacheEntry.hit) {
+      return requireCacheEntry.exports;
     }
+    let module = this.jsonCache.get(filePath);
     if (!module) {
       module = {
         children: [],
@@ -718,11 +840,7 @@ class VmExternalModules {
         continue;
       }
 
-      const module = this.createEsmModule(
-        identifier,
-        disposition.code,
-        this.interopDefault,
-      );
+      const module = this.createEsmModule(identifier, disposition.code);
       if (module.hasTopLevelAwait()) {
         throw createRequireAsyncModuleError(
           identifier,
@@ -804,10 +922,7 @@ class VmExternalModules {
     return module;
   }
 
-  private async loadEsm(
-    resolvedId: string,
-    interopDefault: boolean,
-  ): Promise<SyncSourceTextModule> {
+  private async loadEsm(resolvedId: string): Promise<SyncSourceTextModule> {
     const identifier = resolvedId.startsWith('file:')
       ? resolvedId
       : pathToFileURL(resolvedId).href;
@@ -818,7 +933,7 @@ class VmExternalModules {
 
     const filePath = getFilePath(identifier);
     const code = readSource(filePath);
-    const module = this.createEsmModule(identifier, code, interopDefault);
+    const module = this.createEsmModule(identifier, code);
     this.esmCache.set(identifier, module);
     return module;
   }
@@ -826,35 +941,18 @@ class VmExternalModules {
   private createEsmModule(
     identifier: string,
     code: string,
-    interopDefault: boolean,
   ): SyncSourceTextModule {
-    const filePath = getFilePath(identifier);
-    const cached = esmCompilationCache.get(filePath);
+    const cacheKey = identifier.startsWith('file:')
+      ? getFilePath(identifier)
+      : identifier;
+    const cached = getEsmCompilationCache(cacheKey);
     const cachedData = cached?.code === code ? cached.cachedData : undefined;
     const module = new vm.SourceTextModule(code, {
       identifier,
       context: this.context,
       ...(cachedData ? { cachedData } : {}),
-      initializeImportMeta: (meta) => {
-        meta.url = identifier;
-        meta.filename = filePath;
-        meta.dirname = dirname(filePath);
-        meta.resolve = (specifier: string) =>
-          this.resolve(specifier, identifier);
-      },
-      importModuleDynamically: async (specifier, referencer) => {
-        const imported = await this.enqueueLinkedModule(
-          this.resolve(specifier, referencer.identifier),
-          interopDefault,
-        );
-        if (
-          imported.status !== 'evaluated' &&
-          imported.status !== 'evaluating'
-        ) {
-          await imported.evaluate();
-        }
-        return imported;
-      },
+      initializeImportMeta: staticInitializeImportMeta,
+      importModuleDynamically: staticImportModuleDynamically,
     }) as SyncSourceTextModule;
 
     if (!cachedData) {
@@ -862,7 +960,7 @@ class VmExternalModules {
         module as vm.SourceTextModule & { createCachedData?: () => Buffer }
       ).createCachedData;
       if (createCachedData) {
-        esmCompilationCache.set(filePath, {
+        setEsmCompilationCache(cacheKey, {
           code,
           cachedData: createCachedData.call(module),
         });
@@ -1004,10 +1102,14 @@ export const getVmExternalModules = (
   return executor;
 };
 
+export const disposeVmExternalModules = (context: vm.Context): void => {
+  const executor = executors.get(context);
+  executors.delete(context);
+  executor?.dispose();
+};
+
 export const clearVmExternalCompilationCache = (): void => {
-  sourceCache.clear();
-  packageTypeCache.clear();
-  commonJsCompilationCache.clear();
-  esmCompilationCache.clear();
+  clearExternalModuleCache();
   executors = new WeakMap();
+  scriptExecutors = new WeakMap();
 };

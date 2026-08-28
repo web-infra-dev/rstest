@@ -283,6 +283,8 @@ importers:
 
   e2e/externals/fixtures/test-interop: {}
 
+  e2e/externals/fixtures/test-interop/explicit-esm: {}
+
   e2e/externals/fixtures/test-lodash: {}
 
   e2e/externals/fixtures/test-module-field: {}
@@ -1286,6 +1288,8 @@ importers:
         version: 4.5.1(patch_hash=81ef529661db8cd15383f446caaeb02a0e8e8909c386ebe9b91ec16cf3a7b0d6)
 
   packages/core/tests/runner/fixtures/bare-parent: {}
+
+  packages/core/tests/runner/fixtures/vm-external/module-semantics/explicit-esm: {}
 
   packages/coverage-istanbul:
     dependencies:

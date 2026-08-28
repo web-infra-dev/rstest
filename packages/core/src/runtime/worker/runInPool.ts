@@ -38,7 +38,10 @@ import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
 import { createNodeTaskContext } from './taskContext.node';
 import type { TaskContext } from './taskContext';
-import { clearVmExternalCompilationCache } from './vmExternalModules';
+import {
+  clearVmExternalCompilationCache,
+  disposeVmExternalModules,
+} from './vmExternalModules';
 import { workerCache } from './workerCache';
 
 let sourceMaps: Record<string, string> = {};
@@ -190,7 +193,9 @@ const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
   }
 };
 
-const installVmNodeGlobals = (runtimeGlobal: Record<string, any>): void => {
+type VmRuntimeGlobal = typeof globalThis & Record<string, unknown>;
+
+const installVmNodeGlobals = (runtimeGlobal: VmRuntimeGlobal): void => {
   const excluded = new Set(['GLOBAL', 'root', 'global', 'globalThis']);
   for (const key of Object.getOwnPropertyNames(globalThis)) {
     if (excluded.has(key) || key in runtimeGlobal) {
@@ -275,7 +280,7 @@ const prepareVmRuntimeRealm = async (
   onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void,
 ): Promise<{
   initialKeys: Set<string | symbol>;
-  runtimeGlobal: Record<string, any>;
+  runtimeGlobal: VmRuntimeGlobal;
   vmContext: Context;
 }> => {
   const { testEnvironment } = context.runtimeConfig;
@@ -303,10 +308,10 @@ const prepareVmRuntimeRealm = async (
     cleanupFns.push(vmEnvironment.teardown);
   }
 
-  const runtimeGlobal = runInContext('globalThis', vmContext) as Record<
-    string,
-    any
-  >;
+  const runtimeGlobal = runInContext(
+    'globalThis',
+    vmContext,
+  ) as VmRuntimeGlobal;
   installVmNodeGlobals(runtimeGlobal);
   return {
     initialKeys: captureVmContextKeys(vmContext),
@@ -336,7 +341,7 @@ const preparePool = async (
   const isVmPool = context.pool === 'vmThreads';
   let vmContext: Context | undefined;
   let initialVmContextKeys: Set<string | symbol> | undefined;
-  let runtimeGlobal = globalThis as Record<string, any>;
+  let runtimeGlobal = globalThis as VmRuntimeGlobal;
 
   const disposeFns: (() => void)[] = [];
   const { rpc } = createRuntimeRpc(
@@ -371,6 +376,11 @@ const preparePool = async (
       try {
         const { flushAllLoaderCaches } = await import('./interop');
         await flushAllLoaderCaches();
+      } catch (error) {
+        errors.push(error);
+      }
+      disposeVmExternalModules(vmContext);
+      try {
         stripVmContext(vmContext, initialVmContextKeys);
       } catch (error) {
         errors.push(error);

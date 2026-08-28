@@ -74,7 +74,29 @@ describe('test interop', () => {
     await expectExecSuccess();
   });
 
-  it('should execute external modules in the vmThreads realm', async () => {
+  it('should execute external modules in the vmThreads realm', async ({
+    onTestFinished,
+  }) => {
+    const wasmSource = Buffer.from(
+      'AGFzbQEAAAABBQFgAAF/AhcBDy4vd2FzbS1nbHVlLm1qcwNpbXAAAAMCAQAHBwEDZXhwAAEKBgEEABAACw==',
+      'base64',
+    );
+    const wasmPaths = [
+      join(__dirname, './node_modules/test-interop/external.wasm'),
+      join(
+        __dirname,
+        './fixtures/test-pkg/node_modules/test-interop/external.wasm',
+      ),
+    ];
+    for (const wasmPath of wasmPaths) {
+      fse.writeFileSync(wasmPath, wasmSource);
+    }
+    onTestFinished(() => {
+      for (const wasmPath of wasmPaths) {
+        fse.removeSync(wasmPath);
+      }
+    });
+
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',
       args: [

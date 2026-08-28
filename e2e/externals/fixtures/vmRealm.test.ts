@@ -8,18 +8,24 @@ it('executes external modules in the test VM realm', () => {
     commonJs: true,
     esm: true,
     filename: 'realm.mjs',
+    dataUrls: { javascript: 'data-js', json: 1 },
     importedJson: 'external-json',
     moduleSemantics: {
       first: { cached: true, hasParent: true, parentHasChild: true },
+      originalJson: 'original-json',
+      replaced: { replaced: true },
+      replacedJson: 'replaced-json',
       reloaded: true,
       second: { cached: true, hasParent: true, parentHasChild: true },
     },
+    plainDefault: { default: 'inner', named: 1 },
     requiredEsm:
       'hasAsyncGraph' in vm.SourceTextModule.prototype
-        ? { sameRealm: true, value: 'esm' }
+        ? { explicitEsm: 'esm', sameRealm: true, value: 'esm' }
         : { code: 'ERR_REQUIRE_ESM' },
     requiredJson: 'external-json',
     siblingCycle: ['b:c', 'c'],
     timers: true,
+    wasm: 42,
   });
 });

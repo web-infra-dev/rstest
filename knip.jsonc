@@ -13,6 +13,10 @@
     "@vue/server-renderer",
     "vue",
   ],
+  "ignore": [
+    // Runtime-loaded fixture in a nested type=module package boundary.
+    "packages/core/tests/runner/fixtures/vm-external/module-semantics/explicit-esm/value.js",
+  ],
   "workspaces": {
     ".": {
       "entry": [

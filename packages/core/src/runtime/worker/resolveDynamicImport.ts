@@ -88,9 +88,11 @@ export const resolveImportSpecifier = ({
   // re-resolves as `D:\D:\...` (double drive letter).
   return isAbsolute(specifier)
     ? pathToFileURL(specifier).href
-    : isBuiltinSpecifier(specifier)
-      ? toNodeBuiltin(specifier)
-      : resolveModule(specifier, resolveBase);
+    : specifier.startsWith('data:')
+      ? specifier
+      : isBuiltinSpecifier(specifier)
+        ? toNodeBuiltin(specifier)
+        : resolveModule(specifier, resolveBase);
 };
 
 /**

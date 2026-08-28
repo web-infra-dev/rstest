@@ -1,4 +1,6 @@
-import { dirname, resolve, sep } from 'node:path';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { asModule } from '../../src/runtime/worker/interop';
@@ -8,7 +10,14 @@ import {
   loadModule,
   shouldInjectSourceURL,
 } from '../../src/runtime/worker/loadEsModule';
-import { getVmExternalModules } from '../../src/runtime/worker/vmExternalModules';
+import {
+  clearVmExternalCompilationCache,
+  disposeVmExternalModules,
+  getVmExternalModules,
+} from '../../src/runtime/worker/vmExternalModules';
+import { workerCache } from '../../src/runtime/worker/workerCache';
+
+// cspell:ignore QEAAAA
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturePath = (name: string) => resolve(__dirname, 'fixtures', name);
@@ -194,6 +203,9 @@ describe('loadEsModule', () => {
         parentHasChild: true,
       },
       injected: { fromCache: true },
+      originalJson: 'fixture-json',
+      replaced: { replaced: true },
+      replacedJson: 'replaced-json',
       reloadedAfterDelete: true,
       second: {
         cacheDescriptorMatches: true,
@@ -203,6 +215,119 @@ describe('loadEsModule', () => {
         parentHasChild: true,
       },
     });
+  });
+
+  it('should preserve the complete CommonJS value as its default export', async () => {
+    const vmContext = vm.createContext({});
+    const externalPath = fixturePath(
+      'vm-external/module-semantics/plain-default.cjs',
+    );
+    const mod = await loadModule({
+      codeContent: [
+        `import value from ${JSON.stringify(externalPath)};`,
+        'export default value;',
+      ].join('\n'),
+      distPath: '/virtual/dist/plain-commonjs-default.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+      vmContext,
+    });
+
+    expect(mod.default).toEqual({ default: 'inner', named: 1 });
+  });
+
+  it('should keep CommonJS dynamic imports bound to their VM context', async () => {
+    const firstContext = vm.createContext({});
+    const externalPath = fixturePath(
+      'vm-external/module-semantics/dynamic.cjs',
+    );
+    const loadOptions = {
+      codeContent: [
+        `import load from ${JSON.stringify(externalPath)};`,
+        'export default load;',
+      ].join('\n'),
+      distPath: '/virtual/dist/commonjs-dynamic-import.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+    };
+    const first = await loadModule({
+      ...loadOptions,
+      vmContext: firstContext,
+    });
+
+    await expect(first.default()).resolves.toMatchObject({ value: 'esm' });
+    disposeVmExternalModules(firstContext);
+
+    const secondContext = vm.createContext({});
+    const second = await loadModule({
+      ...loadOptions,
+      vmContext: secondContext,
+    });
+    await expect(first.default()).rejects.toThrow('test context was torn down');
+    await expect(second.default()).resolves.toMatchObject({ value: 'esm' });
+  });
+
+  it('should load JavaScript, JSON, and WebAssembly data URLs', async () => {
+    const vmContext = vm.createContext({});
+    const mod = await loadModule({
+      codeContent: [
+        "import { value } from 'data:text/javascript,export%20const%20value%20=%20%22data-js%22';",
+        "import data from 'data:application/json,%7B%22value%22%3A1%7D' with { type: 'json' };",
+        "import 'data:application/wasm;base64,AGFzbQEAAAA=';",
+        'export default { json: data.value, value };',
+      ].join('\n'),
+      distPath: '/virtual/dist/data-urls.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+      vmContext,
+    });
+
+    expect(mod.default).toEqual({ json: 1, value: 'data-js' });
+  });
+
+  it('should refresh cached external source after the file changes', async () => {
+    const temporaryDirectory = mkdtempSync(
+      join(tmpdir(), 'rstest-vm-external-'),
+    );
+    const externalPath = join(temporaryDirectory, 'external.mjs');
+    const contexts: vm.Context[] = [];
+    workerCache.configure(1024 * 1024);
+
+    try {
+      writeFileSync(externalPath, "export const value = 'first';\n");
+      const firstContext = vm.createContext({});
+      contexts.push(firstContext);
+      const first = await getVmExternalModules(firstContext).import(
+        externalPath,
+        true,
+        false,
+      );
+      expect(first).toMatchObject({ value: 'first' });
+      disposeVmExternalModules(firstContext);
+
+      writeFileSync(externalPath, "export const value = 'second';\n");
+      const secondContext = vm.createContext({});
+      contexts.push(secondContext);
+      const second = await getVmExternalModules(secondContext).import(
+        externalPath,
+        true,
+        false,
+      );
+      expect(second).toMatchObject({ value: 'second' });
+    } finally {
+      for (const context of contexts) {
+        disposeVmExternalModules(context);
+      }
+      clearVmExternalCompilationCache();
+      workerCache.configure(0);
+      rmSync(temporaryDirectory, { force: true, recursive: true });
+    }
   });
 
   it('should evaluate require(esm) inside the VM realm when Node supports it', async () => {
@@ -262,6 +387,25 @@ describe('loadEsModule', () => {
       );
       expect((requiredSecond as { state: object }).state).toBe(
         (importedFirst as { state: object }).state,
+      );
+    }
+  });
+
+  it('should require syntax-compatible .js as ESM in a module package', () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const explicitEsmPath = fixturePath(
+      'vm-external/module-semantics/explicit-esm/value.js',
+    );
+
+    if ('hasAsyncGraph' in vm.SourceTextModule.prototype) {
+      executor.require(explicitEsmPath, __filename);
+      expect(
+        vm.runInContext('globalThis.__RSTEST_EXPLICIT_ESM__', vmContext),
+      ).toBe('esm');
+    } else {
+      expect(() => executor.require(explicitEsmPath, __filename)).toThrow(
+        expect.objectContaining({ code: 'ERR_REQUIRE_ESM' }),
       );
     }
   });
