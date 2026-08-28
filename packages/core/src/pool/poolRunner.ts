@@ -64,7 +64,7 @@ let nextTaskSeq = 0;
 type PoolRunnerOptions = {
   workerId: number;
   environmentKey: string;
-  memoryLimit?: number;
+  vmMemoryLimit?: number;
   onTestEnvironmentFallback?: (fallback: TestEnvironmentModuleFallback) => void;
 };
 
@@ -109,13 +109,13 @@ export class PoolRunner {
   private readonly onTestEnvironmentFallback?: (
     fallback: TestEnvironmentModuleFallback,
   ) => void;
-  private readonly memoryLimit: number | undefined;
-  private memoryLimitReached = false;
+  private readonly vmMemoryLimit: number | undefined;
+  private vmMemoryLimitReached = false;
 
   constructor(worker: PoolWorker, options: PoolRunnerOptions) {
     this.workerId = options.workerId;
     this.environmentKey = options.environmentKey;
-    this.memoryLimit = options.memoryLimit;
+    this.vmMemoryLimit = options.vmMemoryLimit;
     this.onTestEnvironmentFallback = options.onTestEnvironmentFallback;
     this.worker = worker;
 
@@ -133,7 +133,7 @@ export class PoolRunner {
   }
 
   shouldRecycle(): boolean {
-    return this.memoryLimitReached;
+    return this.vmMemoryLimitReached;
   }
 
   start(): Promise<void> {
@@ -489,11 +489,11 @@ export class PoolRunner {
 
   private recordMemoryUsage(heapUsed: number | undefined): void {
     if (
-      this.memoryLimit !== undefined &&
+      this.vmMemoryLimit !== undefined &&
       heapUsed !== undefined &&
-      heapUsed >= this.memoryLimit
+      heapUsed >= this.vmMemoryLimit
     ) {
-      this.memoryLimitReached = true;
+      this.vmMemoryLimitReached = true;
     }
   }
 

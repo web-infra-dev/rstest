@@ -7,15 +7,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 describe('test EsModulesLinkingError', () => {
-  for (const pool of ['forks', 'vmThreads'] as const) {
-    it(`should not print EsModulesLinkingError under ${pool}`, async () => {
+  it.for(['forks', 'vmThreads'] as const)(
+    'should not print EsModulesLinkingError under %s',
+    async (pool) => {
       const { cli, expectExecSuccess } = await runRstestCli({
         command: 'rstest',
         args: [
           'run',
           '--pool',
           pool,
-          ...(pool === 'vmThreads' ? ['--pool.memoryLimit', '256MB'] : []),
+          ...(pool === 'vmThreads' ? ['--pool.vmMemoryLimit', '256MB'] : []),
         ],
         options: {
           nodeOptions: {
@@ -31,6 +32,6 @@ describe('test EsModulesLinkingError', () => {
       expect(
         logs.find((log) => log.match(/ESModulesLinkingError: export 'value'/)),
       ).toBeUndefined();
-    });
-  }
+    },
+  );
 });

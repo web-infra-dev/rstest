@@ -7,7 +7,11 @@ import {
 import { pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 import { dirname, extname } from 'pathe';
-import { asModule, getOrCreateSyntheticModule, interopModule } from './interop';
+import {
+  asModule,
+  getOrCreateSyntheticModule,
+  interopModule,
+} from '../interop';
 import { createVmTimersLoader, VM_TIMER_EXPORTS } from './timers';
 import {
   clearExternalModuleCache,
@@ -20,7 +24,7 @@ import {
   resolveExternalSpecifier,
   setCommonJsCompilationCache,
   setEsmCompilationCache,
-} from './vmExternalModuleCache';
+} from './externalModuleCache';
 type EsmLinkOperation = {
   promise: Promise<vm.Module>;
   reject: (reason?: unknown) => void;

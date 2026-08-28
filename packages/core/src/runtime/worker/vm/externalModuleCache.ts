@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createRequire, isBuiltin } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, extname, join, parse } from 'pathe';
-import { workerCache } from './workerCache';
+import { workerCache } from './cache';
 
 export type ExternalModuleFormat =
   'commonjs' | 'data' | 'json' | 'module' | 'native' | 'unsupported' | 'wasm';

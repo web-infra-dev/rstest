@@ -57,7 +57,7 @@ describe('valueTakingOptions (derived from option definitions)', () => {
         '--maxConcurrency',
         '--pool',
         '--pool.execArgv',
-        '--pool.memoryLimit',
+        '--pool.vmMemoryLimit',
         '--pool.maxWorkers',
         '--pool.type',
         '--project',
@@ -98,7 +98,7 @@ describe('requiredDotOptions (derived from option definitions)', () => {
         '--coverage.reporters',
         '--coverage.reportsDirectory',
         '--pool.execArgv',
-        '--pool.memoryLimit',
+        '--pool.vmMemoryLimit',
         '--pool.maxWorkers',
         '--pool.type',
         '--source.tsconfigPath',
@@ -321,10 +321,10 @@ describe('CLI help output', () => {
       cli.parse(['node', 'rstest', 'run', '--pool.execArgv'], { run: false }),
     ).toThrow('option `--pool.execArgv <arg>` value is missing');
     expect(() =>
-      cli.parse(['node', 'rstest', 'run', '--pool.memoryLimit'], {
+      cli.parse(['node', 'rstest', 'run', '--pool.vmMemoryLimit'], {
         run: false,
       }),
-    ).toThrow('option `--pool.memoryLimit <limit>` value is missing');
+    ).toThrow('option `--pool.vmMemoryLimit <limit>` value is missing');
   });
 
   it('accepts required pool dot-notation option values', () => {
@@ -336,7 +336,7 @@ describe('CLI help output', () => {
         '--pool.type=forks',
         '--pool.maxWorkers',
         '2',
-        '--pool.memoryLimit',
+        '--pool.vmMemoryLimit',
         '256MB',
         '--pool.execArgv=--no-warnings',
       ],
@@ -346,9 +346,18 @@ describe('CLI help output', () => {
     expect(parsed.options.pool).toEqual({
       type: 'forks',
       maxWorkers: 2,
-      memoryLimit: '256MB',
+      vmMemoryLimit: '256MB',
       execArgv: '--no-warnings',
     });
+  });
+
+  it('rejects unknown pool dot-notation options', () => {
+    expect(() =>
+      createCli().parse(
+        ['node', 'rstest', 'run', '--pool.memoryLimit', '256MB'],
+        { run: false },
+      ),
+    ).toThrow('Unknown option `--pool.memoryLimit`');
   });
 
   it('rejects missing values in repeated required pool dot-notation options', () => {

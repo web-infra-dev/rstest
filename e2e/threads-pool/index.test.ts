@@ -8,10 +8,9 @@ import { runRstestCli } from '../scripts/';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe('threads pool e2e', () => {
-  for (const pool of ['threads', 'vmThreads'] as const) {
-    it(`should run tests under the ${pool} pool`, async ({
-      onTestFinished,
-    }) => {
+  it.for(['threads', 'vmThreads'] as const)(
+    'should run tests under the %s pool',
+    async (pool, { onTestFinished }) => {
       const { expectExecSuccess } = await runRstestCli({
         command: 'rstest',
         args: [
@@ -20,7 +19,7 @@ describe('threads pool e2e', () => {
           pool,
           '--isolate',
           'true',
-          ...(pool === 'vmThreads' ? ['--pool.memoryLimit', '256MB'] : []),
+          ...(pool === 'vmThreads' ? ['--pool.vmMemoryLimit', '256MB'] : []),
         ],
         onTestFinished,
         options: {
@@ -32,8 +31,8 @@ describe('threads pool e2e', () => {
       });
 
       await expectExecSuccess();
-    });
-  }
+    },
+  );
 
   it('should support the complete importActual path under vmThreads', async ({
     onTestFinished,
@@ -45,7 +44,7 @@ describe('threads pool e2e', () => {
         './mock/tests/importActual.test.ts',
         '--pool',
         'vmThreads',
-        '--pool.memoryLimit',
+        '--pool.vmMemoryLimit',
         '256MB',
         '--isolate',
         'true',
@@ -78,7 +77,7 @@ describe('threads pool e2e', () => {
         'vmThreads',
         '--pool.maxWorkers',
         '1',
-        '--pool.memoryLimit',
+        '--pool.vmMemoryLimit',
         '256MB',
         '--isolate=false',
       ],

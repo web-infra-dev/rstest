@@ -186,7 +186,7 @@ export class Pool {
       const runner = new PoolRunner(worker, {
         workerId,
         environmentKey,
-        memoryLimit: this.options.memoryLimit,
+        vmMemoryLimit: this.options.vmMemoryLimit,
         onTestEnvironmentFallback: this.handleTestEnvironmentFallback,
       });
       this.activeRunners.add(runner);

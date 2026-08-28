@@ -23,10 +23,9 @@ const expectedSummary = {
 
 for (const provider of coverageProviders) {
   describe(`coverage sourcemaps (${provider})`, () => {
-    for (const pool of ['forks', 'vmThreads'] as const) {
-      it(`maps generated coverage back to TypeScript sources under ${pool}`, async ({
-        onTestFinished,
-      }) => {
+    it.for(['forks', 'vmThreads'] as const)(
+      'maps generated coverage back to TypeScript sources under %s',
+      async (pool, { onTestFinished }) => {
         const fixturePath = join(__dirname, 'fixtures');
         const reportsDirectory = `test-temp-${provider}-${pool}-sourcemap-coverage`;
         const generatedPath = join(fixturePath, 'test-temp-sourcemap');
@@ -75,7 +74,7 @@ for (const provider of coverageProviders) {
             'rstest.sourcemap.config.ts',
             '--pool',
             pool,
-            ...(pool === 'vmThreads' ? ['--pool.memoryLimit', '256MB'] : []),
+            ...(pool === 'vmThreads' ? ['--pool.vmMemoryLimit', '256MB'] : []),
             '--coverage.provider',
             provider,
             '--coverage.reportsDirectory',
@@ -107,7 +106,7 @@ for (const provider of coverageProviders) {
           ?.replaceAll(' ', '');
 
         expect(allFilesLog).toMatch(expectedSummary[provider].allFiles);
-      });
-    }
+      },
+    );
   });
 }

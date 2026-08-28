@@ -26,7 +26,7 @@ import {
 } from '../utils';
 import { type TraceEvent, type TraceSpan, noopTraceSpan } from '../utils/trace';
 import { isMemorySufficient } from '../utils/memory';
-import { getNumCpus, parseMemoryLimit, parseWorkers } from '../utils/workers';
+import { getNumCpus, parseVmMemoryLimit, parseWorkers } from '../utils/workers';
 import { selectMemoryGate } from './memoryGate';
 import { getEnvironmentKey } from '../core/environmentGroups';
 import { formatTestEnvironmentPrebundleFallbackWarning } from '../core/envDependencies';
@@ -53,11 +53,11 @@ const getRuntimeConfig = (context: ProjectContext): RuntimeConfig =>
 const VM_WORKER_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 
 const getVmWorkerCacheLimit = (
-  memoryLimit: number | undefined,
+  vmMemoryLimit: number | undefined,
 ): number | undefined =>
-  memoryLimit === undefined
+  vmMemoryLimit === undefined
     ? undefined
-    : Math.min(VM_WORKER_CACHE_MAX_BYTES, Math.floor(memoryLimit / 4));
+    : Math.min(VM_WORKER_CACHE_MAX_BYTES, Math.floor(vmMemoryLimit / 4));
 
 const getAssetNames = (
   entryInfo: EntryInfo,
@@ -410,12 +410,14 @@ export const createPool = async ({
   // Internal idle-runner floor for `isolate: false`. It is not user-tunable
   // (no public `pool.minWorkers`), so it can never exceed `maxWorkers`.
   const minWorkers = Math.min(maxWorkers, recommendCount);
-  const memoryLimit =
+  const vmMemoryLimit =
     workerKind === 'vmThreads'
-      ? parseMemoryLimit(poolOptions.memoryLimit ?? 1 / maxWorkers)
+      ? parseVmMemoryLimit(poolOptions.vmMemoryLimit ?? 1 / maxWorkers)
       : undefined;
   const workerCacheLimit =
-    workerKind === 'vmThreads' ? getVmWorkerCacheLimit(memoryLimit) : undefined;
+    workerKind === 'vmThreads'
+      ? getVmWorkerCacheLimit(vmMemoryLimit)
+      : undefined;
 
   const pool = new Pool({
     workerEntry: resolve(__dirname, './worker.js'),
@@ -427,7 +429,7 @@ export const createPool = async ({
     // exits. Recycle from the worker's own V8 heap report, like Jest and
     // Vitest, while keeping the worker alive below the limit. The default
     // gives each VM worker an equal share of the machine memory.
-    memoryLimit,
+    vmMemoryLimit,
     maxWorkers,
     minWorkers,
     execArgv: [

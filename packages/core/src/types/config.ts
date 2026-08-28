@@ -79,7 +79,7 @@ export type RstestPoolOptions = {
    * Memory limit in bytes (or a percentage/unit string) before a VM worker is recycled.
    * @default undefined (equal share of system memory for vmThreads)
    */
-  memoryLimit?: number | string;
+  vmMemoryLimit?: number | string;
   /** Pass additional arguments to node process in the child processes. */
   execArgv?: string[];
 };

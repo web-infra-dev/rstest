@@ -31,7 +31,7 @@ import { environmentLoaders } from './env/registry';
 import { loadTestEnvironmentModule } from './env/testEnvironmentModule';
 import { installGlobalApis, installGlobalProperty } from './globalProperty';
 import { PhaseTracker } from './phaseTracker';
-import { loadCachedAssets, workerAssetCache } from './assetCache';
+import { loadCachedAssets, workerAssetCache } from './vm/assetCache';
 import { createRuntimeRpc, createWorkerRpcOptions } from './rpc';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
 import { createSilentConsoleController } from './silentConsole';
@@ -41,8 +41,8 @@ import type { TaskContext } from './taskContext';
 import {
   clearVmExternalCompilationCache,
   disposeVmExternalModules,
-} from './vmExternalModules';
-import { workerCache } from './workerCache';
+} from './vm/externalModules';
+import { workerCache } from './vm/cache';
 
 let sourceMaps: Record<string, string> = {};
 let vmCompilationCacheDisabled = false;

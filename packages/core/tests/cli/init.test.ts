@@ -144,16 +144,16 @@ describe('mergeWithCLIOptions', () => {
     expect(config.shard).toEqual({ index: 1, count: 3 });
   });
 
-  it('merges pool.memoryLimit without replacing existing pool fields', () => {
+  it('merges pool.vmMemoryLimit without replacing existing pool fields', () => {
     const config = mergeWithCLIOptions(
       { pool: { type: 'vmThreads', maxWorkers: 2 } },
-      { pool: { memoryLimit: '256MB' } },
+      { pool: { vmMemoryLimit: '256MB' } },
     );
 
     expect(config.pool).toEqual({
       type: 'vmThreads',
       maxWorkers: 2,
-      memoryLimit: '256MB',
+      vmMemoryLimit: '256MB',
     });
   });
 });
@@ -951,7 +951,7 @@ describe('resolveProjects', () => {
       });
     });
 
-    it('should apply --pool.memoryLimit', async () => {
+    it('should apply --pool.vmMemoryLimit', async () => {
       const projects = await resolveProjects({
         config: {
           projects: [{ name: 'test-project' }],
@@ -959,13 +959,13 @@ describe('resolveProjects', () => {
         root: rootPath,
         options: {
           pool: {
-            memoryLimit: '256MB',
+            vmMemoryLimit: '256MB',
           },
         },
       });
 
       expect(projects[0]!.config.pool).toEqual({
-        memoryLimit: '256MB',
+        vmMemoryLimit: '256MB',
       });
     });
 

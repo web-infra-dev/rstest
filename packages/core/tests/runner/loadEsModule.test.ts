@@ -14,8 +14,8 @@ import {
   clearVmExternalCompilationCache,
   disposeVmExternalModules,
   getVmExternalModules,
-} from '../../src/runtime/worker/vmExternalModules';
-import { workerCache } from '../../src/runtime/worker/workerCache';
+} from '../../src/runtime/worker/vm/externalModules';
+import { workerCache } from '../../src/runtime/worker/vm/cache';
 
 // cspell:ignore QEAAAA
 

@@ -190,7 +190,7 @@ const poolOptionDefinitions: OptionDefinition[] = [
     'Maximum number or percentage of workers (e.g. 4 or 50%)',
   ],
   [
-    '--pool.memoryLimit <limit>',
+    '--pool.vmMemoryLimit <limit>',
     'Memory limit for VM workers before recycling (e.g. 256MB or 50%)',
   ],
   [
@@ -416,6 +416,16 @@ const normalizePoolCliArgs = (argv: string[]): string[] => {
 
   if (!hasPoolNestedOption) {
     return argv;
+  }
+
+  const poolOptions = new Set(
+    [...valueTakingOptions].filter((option) => option.startsWith('--pool.')),
+  );
+  for (const arg of argv) {
+    const option = arg.split('=', 1)[0];
+    if (option?.startsWith('--pool.') && !poolOptions.has(option)) {
+      throw new Error(`Unknown option \`${option}\``);
+    }
   }
 
   return argv.map((arg) => {

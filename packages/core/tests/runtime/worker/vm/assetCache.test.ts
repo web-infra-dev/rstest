@@ -1,8 +1,8 @@
 import {
   createWorkerAssetCache,
   loadCachedAssets,
-} from '../../../src/runtime/worker/assetCache';
-import { WorkerCache } from '../../../src/runtime/worker/workerCache';
+} from '../../../../src/runtime/worker/vm/assetCache';
+import { WorkerCache } from '../../../../src/runtime/worker/vm/cache';
 
 describe('WorkerCache', () => {
   it('evicts the least recently used assets by byte size', () => {

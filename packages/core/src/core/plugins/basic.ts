@@ -6,7 +6,7 @@ import {
   RSTEST_DYNAMIC_IMPORT_HOOK,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from '../../runtime/worker/runtimeHooks';
-import { createVmTimersShim } from '../../runtime/worker/timers';
+import { createVmTimersShim } from '../../runtime/worker/vm/timers';
 import type { RstestContext } from '../../types';
 import { getTempRstestOutputDir, resolveProjectBuildCache } from '../../utils';
 import { runtimeChunkNameForEnvironment } from '../runtimeChunk';

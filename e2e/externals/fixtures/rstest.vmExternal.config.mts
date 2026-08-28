@@ -4,10 +4,10 @@ export default defineConfig({
   pool: {
     type: 'vmThreads',
     maxWorkers: 1,
-    memoryLimit: '256MB',
+    vmMemoryLimit: '256MB',
   },
   output: {
     bundleDependencies: true,
-    externals: ['test-interop/realm.mjs'],
+    externals: ['test-vm-external/index.mjs'],
   },
 });

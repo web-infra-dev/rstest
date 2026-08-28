@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import fs from 'fs-extra';
+import { normalize } from 'pathe';
 import { runRstestCli } from '../scripts';
 
 const fixturePath = join(__dirname, 'fixtures');
@@ -22,7 +23,7 @@ describe('coverage istanbul-specific behavior', () => {
         'vmThreads',
         '--pool.maxWorkers',
         '1',
-        '--pool.memoryLimit',
+        '--pool.vmMemoryLimit',
         '256MB',
         '--coverage.reporters',
         'text-summary',
@@ -39,7 +40,7 @@ describe('coverage istanbul-specific behavior', () => {
     const coverage = fs.readJsonSync(
       join(fixturePath, reportsDirectory, 'coverage-final.json'),
     ) as Record<string, unknown>;
-    expect(Object.keys(coverage)).toEqual([
+    expect(Object.keys(coverage).map(normalize)).toEqual([
       expect.stringMatching(/\/src\/index\.ts$/),
     ]);
   });

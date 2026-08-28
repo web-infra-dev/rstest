@@ -19,7 +19,7 @@ import {
   importMetaHook,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from '../../src/runtime/worker/runtimeHooks';
-import { workerCache } from '../../src/runtime/worker/workerCache';
+import { workerCache } from '../../src/runtime/worker/vm/cache';
 
 describe('require.resolve origin runtime helper', () => {
   afterEach(() => {

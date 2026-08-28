@@ -2,12 +2,12 @@ import type {
   AssetFileContent,
   AssetFiles,
   RuntimeRPC,
-} from '../../types/worker';
+} from '../../../types/worker';
 import {
   type WorkerCache,
   type WorkerCacheNamespace,
   workerCache,
-} from './workerCache';
+} from './cache';
 
 const getContentSize = (content: AssetFileContent): number => {
   if (typeof content === 'string') {

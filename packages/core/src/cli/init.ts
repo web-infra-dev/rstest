@@ -38,7 +38,7 @@ export type CommonOptions = {
     | {
         type?: string;
         maxWorkers?: string | number;
-        memoryLimit?: string | number;
+        vmMemoryLimit?: string | number;
         execArgv?: string[] | string;
       };
   /**
@@ -402,8 +402,8 @@ export function mergeWithCLIOptions(
         pool.maxWorkers = poolFromCli.maxWorkers as any;
       }
 
-      if (poolFromCli.memoryLimit !== undefined) {
-        pool.memoryLimit = poolFromCli.memoryLimit;
+      if (poolFromCli.vmMemoryLimit !== undefined) {
+        pool.vmMemoryLimit = poolFromCli.vmMemoryLimit;
       }
 
       if (poolFromCli.execArgv !== undefined) {

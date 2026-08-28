@@ -21,6 +21,10 @@ describe('test interop', () => {
       join(__dirname, './fixtures/test-lodash'),
       join(__dirname, './fixtures/test-pkg/node_modules/test-lodash'),
     );
+    fse.copySync(
+      join(__dirname, './fixtures/test-vm-external'),
+      join(__dirname, './node_modules/test-vm-external'),
+    );
   });
 
   it('should interopDefault correctly in jsdom test environment', async () => {
@@ -81,21 +85,12 @@ describe('test interop', () => {
       'AGFzbQEAAAABBQFgAAF/AhcBDy4vd2FzbS1nbHVlLm1qcwNpbXAAAAMCAQAHBwEDZXhwAAEKBgEEABAACw==',
       'base64',
     );
-    const wasmPaths = [
-      join(__dirname, './node_modules/test-interop/external.wasm'),
-      join(
-        __dirname,
-        './fixtures/test-pkg/node_modules/test-interop/external.wasm',
-      ),
-    ];
-    for (const wasmPath of wasmPaths) {
-      fse.writeFileSync(wasmPath, wasmSource);
-    }
-    onTestFinished(() => {
-      for (const wasmPath of wasmPaths) {
-        fse.removeSync(wasmPath);
-      }
-    });
+    const wasmPath = join(
+      __dirname,
+      './node_modules/test-vm-external/external.wasm',
+    );
+    fse.writeFileSync(wasmPath, wasmSource);
+    onTestFinished(() => fse.removeSync(wasmPath));
 
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',

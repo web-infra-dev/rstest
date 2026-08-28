@@ -1,16 +1,16 @@
 import { join } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import fs from 'fs-extra';
+import { normalize } from 'pathe';
 import { runRstestCli } from '../scripts';
 
 const fixturePath = join(__dirname, 'fixtures');
 const enableConfig = 'rstest.enable.v8.config.ts';
 
 describe('coverage v8-specific behavior', () => {
-  for (const pool of ['forks', 'vmThreads'] as const) {
-    it(`writes bundle assets alongside raw V8 coverage under ${pool}`, async ({
-      onTestFinished,
-    }) => {
+  it.for(['forks', 'vmThreads'] as const)(
+    'writes bundle assets alongside raw V8 coverage under %s',
+    async (pool, { onTestFinished }) => {
       const debugDirectory = join(fixturePath, '.rstest');
       const reportsDirectory = `test-temp-v8-${pool}`;
       const reportPath = join(fixturePath, reportsDirectory);
@@ -27,7 +27,7 @@ describe('coverage v8-specific behavior', () => {
           enableConfig,
           '--pool',
           pool,
-          ...(pool === 'vmThreads' ? ['--pool.memoryLimit', '256MB'] : []),
+          ...(pool === 'vmThreads' ? ['--pool.vmMemoryLimit', '256MB'] : []),
           '--coverage.reporters',
           'text-summary',
           '--coverage.reporters',
@@ -71,11 +71,11 @@ describe('coverage v8-specific behavior', () => {
       const coverage = fs.readJsonSync(
         join(reportPath, 'coverage-final.json'),
       ) as Record<string, unknown>;
-      expect(Object.keys(coverage)).toContainEqual(
+      expect(Object.keys(coverage).map(normalize)).toContainEqual(
         expect.stringMatching(/\/src\/index\.ts$/),
       );
-    });
-  }
+    },
+  );
 
   it('preserves the configured provider with --coverage', async ({
     onTestFinished,

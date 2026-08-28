@@ -16,7 +16,7 @@ import {
   RSTEST_DYNAMIC_IMPORT_HOOK,
   RSTEST_REQUIRE_RESOLVE_HOOK,
 } from './runtimeHooks';
-import { workerCache } from './workerCache';
+import { workerCache } from './vm/cache';
 
 export enum EsmMode {
   Unknown = 0,

@@ -283,8 +283,6 @@ importers:
 
   e2e/externals/fixtures/test-interop: {}
 
-  e2e/externals/fixtures/test-interop/explicit-esm: {}
-
   e2e/externals/fixtures/test-lodash: {}
 
   e2e/externals/fixtures/test-module-field: {}
@@ -294,6 +292,8 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+
+  e2e/externals/fixtures/test-vm-external: {}
 
   e2e/federation/fixtures/basic: {}
 

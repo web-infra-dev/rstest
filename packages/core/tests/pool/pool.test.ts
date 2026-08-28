@@ -129,7 +129,7 @@ describe('Pool - VM worker memory limit', () => {
         isolate: false,
         maxWorkers: 1,
         minWorkers: 1,
-        memoryLimit: 100,
+        vmMemoryLimit: 100,
       }),
     );
     try {

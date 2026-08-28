@@ -12,7 +12,7 @@ import {
   interopModule,
   shouldInterop,
 } from './interop';
-import { getVmExternalModules } from './vmExternalModules';
+import { getVmExternalModules } from './vm/externalModules';
 
 /**
  * Shared dynamic-import resolution + interop policy for both worker loaders.
