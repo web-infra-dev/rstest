@@ -498,14 +498,15 @@ export class TestRunner {
     ): Promise<TestResult[]> => {
       const tests = [...allTest];
       const results: TestResult[] = [];
+      let testIndex = 0;
 
-      while (tests.length) {
-        const suite = tests.shift()!;
+      while (testIndex < tests.length) {
+        const suite = tests[testIndex++]!;
 
         if (suite.concurrent) {
           const cases = [suite];
-          while (tests[0]?.concurrent) {
-            cases.push(tests.shift()!);
+          while (tests[testIndex]?.concurrent) {
+            cases.push(tests[testIndex++]!);
           }
 
           const result = await Promise.all(
