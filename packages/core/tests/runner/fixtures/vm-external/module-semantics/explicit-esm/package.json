@@ -1,3 +1,4 @@
 {
+  "name": "vm-external-explicit-esm",
   "type": "module"
 }
