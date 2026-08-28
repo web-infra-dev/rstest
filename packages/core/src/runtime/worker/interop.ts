@@ -1,4 +1,4 @@
-import type vm from 'node:vm';
+import vm from 'node:vm';
 
 export const shouldInterop = ({
   interopDefault = true,
@@ -136,6 +136,56 @@ const getSyntheticModuleCache = (
   return cache;
 };
 
+export const getOrCreateSyntheticModule = (
+  something: Record<string, any>,
+  resolvedId: string,
+  defaultExport?: unknown,
+  context?: vm.Context,
+  moduleExports?: { value: unknown },
+): vm.SyntheticModule => {
+  const cache = getSyntheticModuleCache(context);
+  const cached = cache.get(resolvedId);
+  if (cached) {
+    return cached;
+  }
+
+  const hasDefault = defaultExport !== undefined || 'default' in something;
+  const namedKeys = Object.keys(something).filter(
+    (key) => key !== 'default' && (key !== 'module.exports' || !moduleExports),
+  );
+  const exports = [
+    ...(hasDefault ? ['default'] : []),
+    ...namedKeys,
+    ...(moduleExports ? ['module.exports'] : []),
+  ];
+  const resolvedDefault = hasDefault
+    ? (defaultExport ?? something.default)
+    : undefined;
+
+  const syntheticModule = new vm.SyntheticModule(
+    exports,
+    () => {
+      for (const name of exports) {
+        syntheticModule.setExport(
+          name,
+          name === 'default'
+            ? resolvedDefault
+            : name === 'module.exports'
+              ? moduleExports?.value
+              : something[name],
+        );
+      }
+    },
+    {
+      identifier: resolvedId,
+      ...(context ? { context } : {}),
+    },
+  );
+
+  cache.set(resolvedId, syntheticModule);
+  return syntheticModule;
+};
+
 /**
  * Wrap a plain exports object in a `vm.SyntheticModule` so it can participate
  * in the `vm.Module` graph as a link() or importModuleDynamically result.
@@ -153,42 +203,20 @@ export const asModule = async (
   defaultExport?: unknown,
   context?: vm.Context,
 ): Promise<vm.SyntheticModule> => {
-  const { SyntheticModule } = await import('node:vm');
-  const cache = getSyntheticModuleCache(context);
-
-  const cached = cache.get(resolvedId);
-  if (cached) return cached;
-
-  const hasDefault = defaultExport !== undefined || 'default' in something;
-  const namedKeys = Object.keys(something).filter((k) => k !== 'default');
-  const exports = hasDefault ? ['default', ...namedKeys] : namedKeys;
-  const resolvedDefault = hasDefault
-    ? (defaultExport ?? something.default)
-    : undefined;
-
-  const syntheticModule = new SyntheticModule(
-    exports,
-    () => {
-      for (const name of exports) {
-        syntheticModule.setExport(
-          name,
-          name === 'default' ? resolvedDefault : something[name],
-        );
-      }
-    },
-    {
-      identifier: resolvedId,
-      ...(context ? { context } : {}),
-    },
+  const syntheticModule = getOrCreateSyntheticModule(
+    something,
+    resolvedId,
+    defaultExport,
+    context,
   );
-
-  cache.set(resolvedId, syntheticModule);
-
-  await syntheticModule.link((() => undefined) as unknown as vm.ModuleLinker);
-
-  // @ts-expect-error copy from webpack
-  if (syntheticModule.instantiate) syntheticModule.instantiate();
-  await syntheticModule.evaluate();
+  if (syntheticModule.status === 'unlinked') {
+    await syntheticModule.link(() => {
+      throw new Error('Synthetic modules cannot have dependencies.');
+    });
+  }
+  if (syntheticModule.status === 'linked') {
+    await syntheticModule.evaluate();
+  }
 
   return syntheticModule;
 };

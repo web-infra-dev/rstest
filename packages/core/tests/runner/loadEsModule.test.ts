@@ -205,7 +205,7 @@ describe('loadEsModule', () => {
     });
   });
 
-  it('should not evaluate require(esm) outside the VM realm', async () => {
+  it('should evaluate require(esm) inside the VM realm when Node supports it', async () => {
     const vmContext = vm.createContext({});
     const externalPath = fixturePath(
       'vm-external/module-semantics/require-esm.cjs',
@@ -213,7 +213,7 @@ describe('loadEsModule', () => {
     const mod = await loadModule({
       codeContent: [
         `import result from ${JSON.stringify(externalPath)};`,
-        'export default result.code;',
+        'export default result;',
       ].join('\n'),
       distPath: '/virtual/dist/require-esm.mjs',
       testPath: __filename,
@@ -223,7 +223,181 @@ describe('loadEsModule', () => {
       vmContext,
     });
 
-    expect(mod.default).toBe('ERR_REQUIRE_ESM');
+    expect(mod.default).toEqual(
+      'hasAsyncGraph' in vm.SourceTextModule.prototype
+        ? {
+            bridgeValue: 'nested-require-esm',
+            code: undefined,
+            commonJsValue: 'commonjs',
+            cycle: ['b:c', 'c'],
+            filename: 'dependency.mjs',
+            jsonLabel: 'fixture-json',
+            jsonSameRealm: true,
+            loadDynamic: expect.any(Function),
+            sameNamespace: true,
+            sameRealm: true,
+            state: expect.any(Object),
+            value: 'esm',
+          }
+        : { code: 'ERR_REQUIRE_ESM' },
+    );
+
+    if ('hasAsyncGraph' in vm.SourceTextModule.prototype) {
+      const executor = getVmExternalModules(vmContext);
+      const imported = await executor.import(
+        fixturePath('vm-external/module-semantics/dependency.mjs'),
+        true,
+        false,
+      );
+      expect((imported as { state: object }).state).toBe(mod.default.state);
+
+      const importFirstPath = fixturePath(
+        'vm-external/module-semantics/import-first.mjs',
+      );
+      const dynamicallyImported = await mod.default.loadDynamic();
+      const importedFirst = await executor.import(importFirstPath, true, false);
+      const requiredSecond = executor.require(importFirstPath, __filename);
+      expect(dynamicallyImported.state).toBe(
+        (importedFirst as { state: object }).state,
+      );
+      expect((requiredSecond as { state: object }).state).toBe(
+        (importedFirst as { state: object }).state,
+      );
+    }
+  });
+
+  it('should reject require(esm) when its graph uses top-level await', async () => {
+    const vmContext = vm.createContext({});
+    const externalPath = fixturePath(
+      'vm-external/module-semantics/require-async-esm.cjs',
+    );
+    const mod = await loadModule({
+      codeContent: [
+        `import result from ${JSON.stringify(externalPath)};`,
+        'export default result.code;',
+      ].join('\n'),
+      distPath: '/virtual/dist/require-async-esm.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+      vmContext,
+    });
+
+    expect(mod.default).toBe(
+      'hasAsyncGraph' in vm.SourceTextModule.prototype
+        ? 'ERR_REQUIRE_ASYNC_MODULE'
+        : 'ERR_REQUIRE_ESM',
+    );
+
+    if ('hasAsyncGraph' in vm.SourceTextModule.prototype) {
+      const executor = getVmExternalModules(vmContext);
+      const asyncModulePath = fixturePath(
+        'vm-external/module-semantics/async-dependency.mjs',
+      );
+      const imported = await executor.import(asyncModulePath, true, false);
+      expect(imported).toMatchObject({ value: 'async-esm' });
+      let requireError: unknown;
+      try {
+        executor.require(asyncModulePath, __filename);
+      } catch (error) {
+        requireError = error;
+      }
+      expect(requireError).toMatchObject({ code: 'ERR_REQUIRE_ASYNC_MODULE' });
+    }
+  });
+
+  it('should honor the module.exports ESM interop export', async () => {
+    const vmContext = vm.createContext({});
+    const externalPath = fixturePath(
+      'vm-external/module-semantics/require-module-exports.cjs',
+    );
+    const mod = await loadModule({
+      codeContent: [
+        `import result from ${JSON.stringify(externalPath)};`,
+        'export default result;',
+      ].join('\n'),
+      distPath: '/virtual/dist/require-module-exports.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+      vmContext,
+    });
+
+    expect(mod.default).toEqual(
+      'hasAsyncGraph' in vm.SourceTextModule.prototype
+        ? { customized: true }
+        : { code: 'ERR_REQUIRE_ESM' },
+    );
+  });
+
+  it('should retry an ambiguous .js file as ESM after CJS parsing fails', async () => {
+    const vmContext = vm.createContext({});
+    const externalPath = fixturePath(
+      'vm-external/module-semantics/ambiguous/require.cjs',
+    );
+    const mod = await loadModule({
+      codeContent: [
+        `import result from ${JSON.stringify(externalPath)};`,
+        'export default result.value;',
+      ].join('\n'),
+      distPath: '/virtual/dist/require-ambiguous-esm.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+      vmContext,
+    });
+
+    expect(mod.default).toBe(
+      'hasAsyncGraph' in vm.SourceTextModule.prototype
+        ? 'syntax-detected-esm'
+        : undefined,
+    );
+  });
+
+  it('should select module-sync only when synchronous VM ESM is supported', async () => {
+    const vmContext = vm.createContext({});
+    const externalPath = fixturePath('bare-parent/bare-parent-pkg/index.mjs');
+    const mod = await loadModule({
+      codeContent: [
+        `import { condition as result } from ${JSON.stringify(externalPath)};`,
+        'export default { code: result.code, value: result.value };',
+      ].join('\n'),
+      distPath: '/virtual/dist/require-condition.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+      vmContext,
+    });
+
+    expect(mod.default).toEqual(
+      'hasAsyncGraph' in vm.SourceTextModule.prototype
+        ? { code: undefined, value: 'module-sync-esm' }
+        : Number(process.versions.node.split('.')[0]) >= 22
+          ? { code: undefined, value: 'require-commonjs' }
+          : { code: 'ERR_REQUIRE_ESM', value: undefined },
+    );
+  });
+
+  it('should cache require(esm) evaluation errors', async () => {
+    if (!('hasAsyncGraph' in vm.SourceTextModule.prototype)) {
+      return;
+    }
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const externalPath = fixturePath('vm-external/module-semantics/throws.mjs');
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      expect(() => executor.require(externalPath, __filename)).toThrow(
+        'sync esm evaluation failed',
+      );
+    }
+    await expect(executor.import(externalPath, true, false)).rejects.toThrow(
+      'sync esm evaluation failed',
+    );
   });
 
   it('should await concurrent links to the same external ESM graph', async () => {

@@ -71,7 +71,7 @@ VM context 不会隔离 worker 级状态。对 `process.env`、signal handler、
 
 每个 `vmThreads` worker 还会在文件之间保留一份有大小上限的缓存，统一存放不可变的 bundle 字节、source map、external source text 和 V8 compilation data。第一个文件之后，未变化的资源会直接复用，不再重复传输；未变化的 module 也可以跳过部分解析和编译工作。这些条目共用一个预算：64 MiB 与 worker `memoryLimit` 四分之一中的较小值。Rstest 会为这些 worker 关闭 V8 没有大小限制的 isolate 级 compilation cache，改由这份有上限的缓存提供可复用 compilation data。watch rebuild 或 worker 回收时会清空缓存；已执行的 module instance 和 setup 执行状态不会跨 VM Context 缓存。
 
-External JavaScript ES module、CommonJS module 和 JSON module 会在当前文件的 VM 中执行。CommonJS module 可以 `require()` 其他 CommonJS 或 JSON module，但为了避免依赖落到 worker host realm 中执行，`require()` ES module 会被拒绝；这类依赖请改用动态 `import()`。TypeScript 源码、自定义 loader 等其他扩展名的 external 文件需要先 bundle，再通过 `vmThreads` 运行。
+External JavaScript ES module、CommonJS module 和 JSON module 会在当前文件的 VM 中执行。在 Node.js 24.9 及以上版本中，CommonJS module 可以同步 `require()` 不包含 top-level await 的 ES module，完整依赖图仍在当前文件的 VM 中执行；异步依赖图会与 Node.js 一致抛出 `ERR_REQUIRE_ASYNC_MODULE`。更低版本的 Node.js 会在 `vmThreads` 中拒绝 `require()` ES module，此时请改用动态 `import()`。TypeScript 源码、自定义 loader 等其他扩展名的 external 文件需要先 bundle，再通过 `vmThreads` 运行。
 
 ## 如何选择 pool 类型
 

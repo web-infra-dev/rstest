@@ -1,6 +1,10 @@
 try {
-  require('./required-esm.mjs');
-  module.exports = undefined;
+  const namespace = require('./required-esm.mjs');
+  module.exports = {
+    sameRealm:
+      Object.getPrototypeOf(namespace.realmObject) === Object.prototype,
+    value: namespace.value,
+  };
 } catch (error) {
-  module.exports = error.code;
+  module.exports = { code: error.code };
 }

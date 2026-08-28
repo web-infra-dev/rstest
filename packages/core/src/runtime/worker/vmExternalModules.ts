@@ -3,7 +3,7 @@ import { createRequire as createNativeRequire, isBuiltin } from 'node:module';
 import { dirname, extname, join, parse } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
-import { asModule, interopModule } from './interop';
+import { asModule, getOrCreateSyntheticModule, interopModule } from './interop';
 import { createVmTimersLoader, VM_TIMER_EXPORTS } from './timers';
 import { workerCache } from './workerCache';
 
@@ -13,6 +13,26 @@ type EsmLinkOperation = {
   reject: (reason?: unknown) => void;
   resolve: (value: vm.Module | PromiseLike<vm.Module>) => void;
 };
+
+type SyncSourceTextModule = vm.SourceTextModule & {
+  hasAsyncGraph: () => boolean;
+  hasTopLevelAwait: () => boolean;
+  instantiate: () => void;
+  linkRequests: (modules: readonly vm.Module[]) => void;
+  readonly moduleRequests: readonly { specifier: string }[];
+};
+
+type SyncModuleEntry =
+  | {
+      commit: false;
+      dependencies?: undefined;
+      module: vm.Module;
+    }
+  | {
+      commit: true;
+      dependencies: string[];
+      module: SyncSourceTextModule;
+    };
 
 const createEsmLinkOperation = (): EsmLinkOperation => {
   let rejectOperation: EsmLinkOperation['reject'];
@@ -65,6 +85,65 @@ const esmCompilationCache =
     'external-esm-compilation',
     getCompilationCacheSize,
   );
+
+// `hasAsyncGraph` ships with the complete synchronous graph API that Node
+// itself uses for require(esm): moduleRequests, linkRequests and instantiate.
+const supportsSyncEsmEvaluate =
+  typeof vm.SourceTextModule !== 'undefined' &&
+  typeof Reflect.get(vm.SourceTextModule.prototype, 'hasAsyncGraph') ===
+    'function';
+
+// Selecting `module-sync` without the VM graph API can resolve a package to an
+// ESM-only entry that this loader cannot execute synchronously.
+const requireConditions = (() => {
+  const conditions = ['node', 'require', 'node-addons'];
+  if (supportsSyncEsmEvaluate) {
+    conditions.push('module-sync');
+  }
+  const args = [
+    ...process.execArgv,
+    ...(process.env.NODE_OPTIONS?.split(/\s+/) ?? []),
+  ];
+  for (let index = 0; index < args.length; index++) {
+    const argument = args[index];
+    if (argument === undefined) {
+      continue;
+    }
+    const inlineCondition = argument.match(/^(?:--conditions|-C)=(.+)$/)?.[1];
+    if (inlineCondition) {
+      conditions.push(inlineCondition);
+    } else if (
+      (argument === '--conditions' || argument === '-C') &&
+      index + 1 < args.length
+    ) {
+      const condition = args[++index];
+      if (condition !== undefined) {
+        conditions.push(condition);
+      }
+    }
+  }
+  if (!supportsSyncEsmEvaluate) {
+    return new Set(
+      conditions.filter((condition) => condition !== 'module-sync'),
+    );
+  }
+  return new Set(conditions);
+})();
+
+type RequireResolveWithConditions = (
+  specifier: string,
+  options?: { conditions?: Set<string>; paths?: string[] },
+) => string;
+
+const resolveRequire = (
+  nativeRequire: NodeJS.Require,
+  specifier: string,
+  options?: { paths?: string[] },
+): string =>
+  (nativeRequire.resolve as RequireResolveWithConditions)(specifier, {
+    ...options,
+    conditions: requireConditions,
+  });
 
 let executors = new WeakMap<vm.Context, VmExternalModules>();
 
@@ -157,6 +236,37 @@ const createRequireEsmError = (filePath: string): NodeJS.ErrnoException => {
   return error;
 };
 
+const createRequireAsyncModuleError = (
+  identifier: string,
+  detail: string,
+): NodeJS.ErrnoException => {
+  const error: NodeJS.ErrnoException = new Error(
+    `require() cannot be used to load ES Module ${identifier}: ${detail}. Use import() instead.`,
+  );
+  error.code = 'ERR_REQUIRE_ASYNC_MODULE';
+  return error;
+};
+
+const createConcurrentRequireError = (
+  identifier: string,
+): NodeJS.ErrnoException => {
+  const error: NodeJS.ErrnoException = new Error(
+    `Cannot require() ES Module ${identifier} synchronously because it is currently being loaded by import().`,
+  );
+  error.code = 'ERR_REQUIRE_ESM';
+  return error;
+};
+
+const isSyntaxError = (error: unknown): boolean =>
+  error instanceof SyntaxError ||
+  (typeof error === 'object' &&
+    error !== null &&
+    Reflect.get(error, 'name') === 'SyntaxError');
+
+const moduleHasAsyncGraph = (module: vm.Module): boolean =>
+  module instanceof vm.SourceTextModule &&
+  (module as SyncSourceTextModule).hasAsyncGraph();
+
 const createUnsupportedFormatError = (
   filePath: string,
 ): NodeJS.ErrnoException => {
@@ -170,14 +280,16 @@ const createUnsupportedFormatError = (
 
 class VmExternalModules {
   private readonly commonJsCache = new Map<string, CommonJsModule>();
-  private readonly esmCache = new Map<string, vm.SourceTextModule>();
+  private readonly esmCache = new Map<string, SyncSourceTextModule>();
   private readonly esmLinkOperations = new Map<string, EsmLinkOperation>();
+  private readonly esmSyntaxFallbackFiles = new Set<string>();
   private readonly jsonCache = new Map<string, CommonJsModule>();
   private readonly loadVmTimers: ReturnType<typeof createVmTimersLoader>;
   private readonly parseJson: (source: string) => unknown;
   private readonly requireCache: NodeJS.Require['cache'];
   private linkQueue: Promise<void> = Promise.resolve();
   private moduleBuiltin: unknown;
+  private interopDefault = true;
 
   constructor(private readonly context: vm.Context) {
     this.loadVmTimers = createVmTimersLoader(
@@ -209,11 +321,12 @@ class VmExternalModules {
     const require = ((specifier: string) =>
       this.require(specifier, filename, getParentModule?.())) as NodeJS.Require;
 
-    require.resolve = nativeRequire.resolve.bind(
-      nativeRequire,
-    ) as NodeJS.RequireResolve;
-    require.resolve.paths = nativeRequire.resolve.paths.bind(
-      nativeRequire.resolve,
+    require.resolve = Object.assign(
+      (specifier: string, options?: { paths?: string[] }) =>
+        resolveRequire(nativeRequire, specifier, options),
+      {
+        paths: nativeRequire.resolve.paths.bind(nativeRequire.resolve),
+      },
     );
     require.main = nativeRequire.main;
     require.cache = this.requireCache;
@@ -231,17 +344,19 @@ class VmExternalModules {
     }
 
     const nativeRequire = createNativeRequire(parent);
-    const resolved = nativeRequire.resolve(specifier);
+    const resolved = resolveRequire(nativeRequire, specifier);
     switch (getModuleFormat(resolved)) {
       case 'commonjs':
         return this.loadCommonJs(resolved, parentModule);
       case 'json':
         return this.loadJson(resolved, parentModule);
       case 'module':
-        // Native require(esm) would evaluate the module in Node's host realm,
-        // bypassing the file VM and breaking isolation. A synchronous VM ESM
-        // evaluator is not available on every supported Node release.
-        throw createRequireEsmError(resolved);
+        if (!supportsSyncEsmEvaluate) {
+          throw createRequireEsmError(resolved);
+        }
+        return extname(resolved) === '.mjs'
+          ? this.requireEsm(resolved)
+          : this.loadCommonJs(resolved, parentModule);
       case 'native':
         return nativeRequire(resolved);
       case 'unsupported':
@@ -254,6 +369,7 @@ class VmExternalModules {
     interopDefault: boolean,
     returnModule: boolean,
   ): Promise<unknown> {
+    this.interopDefault = interopDefault;
     const module = await this.enqueueLinkedModule(resolvedId, interopDefault);
     if (returnModule) {
       return module;
@@ -307,25 +423,95 @@ class VmExternalModules {
       case 'module':
         return this.loadEsm(resolvedId, interopDefault);
       case 'commonjs':
-      case 'json': {
-        const exports =
-          format === 'json'
-            ? this.loadJson(getFilePath(resolvedId))
-            : this.loadCommonJs(getFilePath(resolvedId));
-        const namespace =
-          exports !== null &&
-          (typeof exports === 'object' || typeof exports === 'function')
-            ? Object.assign({ default: exports }, exports)
-            : { default: exports };
-        const { mod, defaultExport } = interopDefault
-          ? interopModule(namespace)
-          : { mod: namespace, defaultExport: namespace.default };
-        return asModule(mod, resolvedId, defaultExport, this.context);
-      }
+        return this.getCommonJsSyntheticModule(
+          resolvedId,
+          this.loadCommonJs(getFilePath(resolvedId)),
+          interopDefault,
+        );
+      case 'json':
+        return this.getJsonSyntheticModule(
+          resolvedId,
+          this.loadJson(getFilePath(resolvedId)),
+        );
       case 'native':
         return this.loadNativeModule(resolvedId);
       case 'unsupported':
         throw createUnsupportedFormatError(getFilePath(resolvedId));
+    }
+  }
+
+  private getCommonJsSyntheticModule(
+    resolvedId: string,
+    exports: unknown,
+    interopDefault = this.interopDefault,
+  ): vm.SyntheticModule {
+    const namespace =
+      exports !== null &&
+      (typeof exports === 'object' || typeof exports === 'function')
+        ? Object.assign({ default: exports }, exports)
+        : { default: exports };
+    const { mod, defaultExport } = interopDefault
+      ? interopModule(namespace)
+      : { mod: namespace, defaultExport: namespace.default };
+    return getOrCreateSyntheticModule(
+      mod,
+      resolvedId,
+      defaultExport,
+      this.context,
+      { value: exports },
+    );
+  }
+
+  private getJsonSyntheticModule(
+    resolvedId: string,
+    value: unknown,
+  ): vm.SyntheticModule {
+    return getOrCreateSyntheticModule(
+      { default: value },
+      resolvedId,
+      value,
+      this.context,
+    );
+  }
+
+  private materializeSyncModule(
+    identifier: string,
+    forceEsmSource: boolean,
+  ): { kind: 'ready'; module: vm.Module } | { code: string; kind: 'source' } {
+    const format = getModuleFormat(identifier);
+    const filePath = getFilePath(identifier);
+    switch (format) {
+      case 'module':
+        return { code: readSource(filePath), kind: 'source' };
+      case 'commonjs':
+        return forceEsmSource
+          ? { code: readSource(filePath), kind: 'source' }
+          : {
+              kind: 'ready',
+              module: this.getCommonJsSyntheticModule(
+                identifier,
+                this.loadCommonJs(filePath),
+              ),
+            };
+      case 'json':
+        return {
+          kind: 'ready',
+          module: this.getJsonSyntheticModule(
+            identifier,
+            this.loadJson(filePath),
+          ),
+        };
+      case 'native': {
+        const exports = isBuiltin(identifier)
+          ? this.loadBuiltin(identifier)
+          : createNativeRequire(import.meta.url)(filePath);
+        return {
+          kind: 'ready',
+          module: this.getCommonJsSyntheticModule(identifier, exports),
+        };
+      }
+      case 'unsupported':
+        throw createUnsupportedFormatError(filePath);
     }
   }
 
@@ -346,6 +532,9 @@ class VmExternalModules {
     filePath: string,
     parentModule?: CommonJsModule,
   ): unknown {
+    if (this.esmSyntaxFallbackFiles.has(filePath)) {
+      return this.requireEsm(filePath);
+    }
     const cachedModule = this.commonJsCache.get(filePath);
     if (cachedModule) {
       this.attachChild(parentModule, cachedModule);
@@ -395,8 +584,9 @@ class VmExternalModules {
         },
       );
 
+    let fn: ReturnType<typeof compile>;
     try {
-      let fn = compile(cachedData);
+      fn = compile(cachedData);
       if (cachedData && fn.cachedDataRejected) {
         fn = compile();
       }
@@ -406,6 +596,28 @@ class VmExternalModules {
           cachedData: fn.cachedData,
         });
       }
+    } catch (error) {
+      this.commonJsCache.delete(filePath);
+      Reflect.deleteProperty(this.requireCache, filePath);
+      if (
+        supportsSyncEsmEvaluate &&
+        extname(filePath) === '.js' &&
+        isSyntaxError(error)
+      ) {
+        try {
+          const exports = this.requireEsm(filePath, true);
+          this.esmSyntaxFallbackFiles.add(filePath);
+          return exports;
+        } catch (esmError) {
+          if (!isSyntaxError(esmError)) {
+            throw esmError;
+          }
+        }
+      }
+      throw error;
+    }
+
+    try {
       fn.call(
         module.exports,
         module.exports,
@@ -454,10 +666,148 @@ class VmExternalModules {
     return module.exports;
   }
 
+  private requireEsm(filePath: string, forceEsmSource = false): unknown {
+    if (!supportsSyncEsmEvaluate) {
+      throw createRequireEsmError(filePath);
+    }
+    const identifier = pathToFileURL(filePath).href;
+    const module = this.requireEsModuleSync(identifier, forceEsmSource);
+    return Reflect.has(module.namespace, 'module.exports')
+      ? Reflect.get(module.namespace, 'module.exports')
+      : module.namespace;
+  }
+
+  private requireEsModuleSync(
+    rootIdentifier: string,
+    forceRootSource: boolean,
+  ): SyncSourceTextModule {
+    const cachedRoot = this.esmCache.get(rootIdentifier);
+    if (cachedRoot) {
+      return this.reuseSyncModule(rootIdentifier, cachedRoot);
+    }
+
+    // Keep new modules private until every dependency is proven synchronous.
+    // A rejected require must not poison a later dynamic import of the graph.
+    const scratch = new Map<string, SyncModuleEntry>();
+    const pendingIdentifiers = [rootIdentifier];
+
+    while (pendingIdentifiers.length > 0) {
+      const identifier = pendingIdentifiers.pop()!;
+      if (scratch.has(identifier)) {
+        continue;
+      }
+
+      const cached = this.esmCache.get(identifier);
+      if (cached) {
+        scratch.set(identifier, {
+          commit: false,
+          module: this.reuseSyncModule(identifier, cached),
+        });
+        continue;
+      }
+
+      const disposition = this.materializeSyncModule(
+        identifier,
+        forceRootSource && identifier === rootIdentifier,
+      );
+      if (disposition.kind === 'ready') {
+        scratch.set(identifier, {
+          commit: false,
+          module: disposition.module,
+        });
+        continue;
+      }
+
+      const module = this.createEsmModule(
+        identifier,
+        disposition.code,
+        this.interopDefault,
+      );
+      if (module.hasTopLevelAwait()) {
+        throw createRequireAsyncModuleError(
+          identifier,
+          'the module uses top-level await',
+        );
+      }
+      const dependencies = module.moduleRequests.map(({ specifier }) =>
+        this.resolve(specifier, identifier),
+      );
+      scratch.set(identifier, { commit: true, dependencies, module });
+      for (const dependency of dependencies) {
+        if (!scratch.has(dependency)) {
+          pendingIdentifiers.push(dependency);
+        }
+      }
+    }
+
+    for (const entry of scratch.values()) {
+      if (entry.commit) {
+        entry.module.linkRequests(
+          entry.dependencies.map(
+            (dependency) => scratch.get(dependency)!.module,
+          ),
+        );
+      }
+    }
+
+    const root = scratch.get(rootIdentifier)!;
+    if (!root.commit) {
+      throw new Error(
+        `[rstest] Expected ${rootIdentifier} to be an ESM source module.`,
+      );
+    }
+    root.module.instantiate();
+    if (moduleHasAsyncGraph(root.module)) {
+      throw createRequireAsyncModuleError(
+        rootIdentifier,
+        'its dependency graph uses top-level await',
+      );
+    }
+
+    for (const [identifier, entry] of scratch) {
+      if (entry.commit && !this.esmCache.has(identifier)) {
+        this.esmCache.set(identifier, entry.module);
+      }
+    }
+
+    // Once the graph has no TLA, V8 settles evaluate() before it returns. The
+    // promise still needs a rejection handler while the synchronous status and
+    // original evaluation error are read below.
+    void root.module.evaluate().catch(() => undefined);
+    if (root.module.status === 'errored') {
+      throw root.module.error;
+    }
+    if (root.module.status !== 'evaluated') {
+      throw new Error(
+        `[rstest] Expected synchronous ESM evaluation to complete for ${rootIdentifier}, but the module status is "${root.module.status}".`,
+      );
+    }
+    return root.module;
+  }
+
+  private reuseSyncModule(
+    identifier: string,
+    module: SyncSourceTextModule,
+  ): SyncSourceTextModule {
+    if (module.status === 'errored') {
+      throw module.error;
+    }
+    if (module.status !== 'evaluated') {
+      throw createConcurrentRequireError(identifier);
+    }
+    if (moduleHasAsyncGraph(module)) {
+      throw createRequireAsyncModuleError(
+        identifier,
+        'the module uses top-level await',
+      );
+    }
+    return module;
+  }
+
   private async loadEsm(
     resolvedId: string,
     interopDefault: boolean,
-  ): Promise<vm.SourceTextModule> {
+  ): Promise<SyncSourceTextModule> {
     const identifier = resolvedId.startsWith('file:')
       ? resolvedId
       : pathToFileURL(resolvedId).href;
@@ -468,6 +818,17 @@ class VmExternalModules {
 
     const filePath = getFilePath(identifier);
     const code = readSource(filePath);
+    const module = this.createEsmModule(identifier, code, interopDefault);
+    this.esmCache.set(identifier, module);
+    return module;
+  }
+
+  private createEsmModule(
+    identifier: string,
+    code: string,
+    interopDefault: boolean,
+  ): SyncSourceTextModule {
+    const filePath = getFilePath(identifier);
     const cached = esmCompilationCache.get(filePath);
     const cachedData = cached?.code === code ? cached.cachedData : undefined;
     const module = new vm.SourceTextModule(code, {
@@ -494,8 +855,7 @@ class VmExternalModules {
         }
         return imported;
       },
-    });
-    this.esmCache.set(identifier, module);
+    }) as SyncSourceTextModule;
 
     if (!cachedData) {
       const createCachedData = (
