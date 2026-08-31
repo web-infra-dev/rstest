@@ -47,6 +47,22 @@ export type RstestConfigExport =
  * This function helps you to autocomplete configuration types.
  * It accepts a Rstest config object, or a function that returns a config.
  */
+export function defineConfig<
+  const Config extends RstestConfig,
+  const Definition extends Config | (() => Config) | (() => Promise<Config>),
+>(
+  config: Definition &
+    (Definition extends (...args: never[]) => infer CallbackResult
+      ? [Awaited<CallbackResult>] extends [RstestConfig]
+        ? unknown
+        : never
+      : RstestConfig &
+          Record<Exclude<keyof Definition, keyof RstestConfig>, never>),
+): Definition extends (...args: never[]) => infer CallbackResult
+  ? [CallbackResult] extends [RstestConfig]
+    ? RstestConfigSyncFn
+    : RstestConfigAsyncFn
+  : RstestConfig;
 export function defineConfig<const Config extends RstestConfig>(
   config: () => Config,
 ): RstestConfigSyncFn;
