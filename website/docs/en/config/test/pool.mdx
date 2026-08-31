@@ -18,9 +18,12 @@ export type RstestPoolOptions = {
   /** Maximum number or percentage of workers to run tests in. */
   maxWorkers?: number | string;
   /**
-   * Memory limit in bytes (or a percentage/unit string) before a VM worker is recycled.
+   * V8 heap threshold used to recycle a `vmThreads` worker after it finishes a test file.
+   * This is a worker-recycling threshold, not a hard process RSS limit.
+   * Values in `(0, 1]` are fractions of system memory; larger numbers are bytes,
+   * and strings may use `%`, `MB`, `MiB`, `GB`, or `GiB` suffixes.
    * Currently supported only by `vmThreads`.
-   * @default undefined (equal share of system memory for vmThreads)
+   * @default undefined (`system memory / maxWorkers` for `vmThreads`)
    */
   memoryLimit?: number | string;
   /** Pass additional arguments to node process in the child processes. */
@@ -48,7 +51,7 @@ Options of pool used to run tests in.
 
 ## Pool types
 
-Rstest supports three pool types. All share the same scheduler, RPC, and result-aggregation logic — they differ in how workers are spawned and isolated.
+Rstest supports the following pool types. All share the same scheduler, RPC, and result-aggregation logic — they differ in how workers are spawned and isolated.
 
 ### forks
 

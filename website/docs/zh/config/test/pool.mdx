@@ -18,9 +18,11 @@ export type RstestPoolOptions = {
   /** 最大运行的线程池的数量或百分比 */
   maxWorkers?: number | string;
   /**
-   * 在 VM worker 超过该内存上限后回收，支持字节数、百分比和单位字符串。
+   * `vmThreads` worker 完成一个测试文件后，如果报告的 V8 `heapUsed` 达到该阈值，
+   * 则会在分配下一个文件前回收 worker。这是 worker 回收阈值，不是进程 RSS 的硬上限。
+   * 支持字节数、百分比和单位字符串。
    * 当前仅由 `vmThreads` 支持。
-   * @default undefined（vmThreads 平均分配系统内存）
+   * @default undefined（`vmThreads` 使用 `系统内存 / maxWorkers`）
    */
   memoryLimit?: number | string;
   /** 向子进程中的 node 进程传递附加参数。 */
@@ -48,7 +50,7 @@ const defaultPool = {
 
 ## Pool 类型
 
-Rstest 支持三种 pool 类型，它们共享同一套 scheduler、RPC 和结果聚合逻辑，差异在于 worker 的创建方式和隔离方式。
+Rstest 支持以下 pool 类型，它们共享同一套 scheduler、RPC 和结果聚合逻辑，差异在于 worker 的创建方式和隔离方式。
 
 ### forks
 
