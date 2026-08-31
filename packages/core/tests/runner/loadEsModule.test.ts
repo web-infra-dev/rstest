@@ -244,6 +244,26 @@ describe('loadEsModule', () => {
     expect(mod.default).toEqual({ default: 'inner', named: 1 });
   });
 
+  it('should expose named exports from CommonJS reexports', async () => {
+    const vmContext = vm.createContext({});
+    const externalPath = fixturePath(
+      'vm-external/module-semantics/reexport-import.mjs',
+    );
+    const mod = await loadModule({
+      codeContent: [
+        `export { default } from ${JSON.stringify(externalPath)};`,
+      ].join('\n'),
+      distPath: '/virtual/dist/commonjs-reexport.mjs',
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+      vmContext,
+    });
+
+    expect(mod.default).toBe('reexported');
+  });
+
   it('should reject named imports that the CommonJS lexer cannot detect', async () => {
     const vmContext = vm.createContext({});
     const externalPath = fixturePath(

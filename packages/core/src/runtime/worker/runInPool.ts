@@ -195,8 +195,27 @@ const setupEnv = (env?: Partial<NodeJS.ProcessEnv>) => {
 
 type VmRuntimeGlobal = typeof globalThis & Record<string, unknown>;
 
-const installVmNodeGlobals = (runtimeGlobal: VmRuntimeGlobal): void => {
-  const excluded = new Set(['GLOBAL', 'root', 'global', 'globalThis']);
+const createVmFunction = <T>(
+  vmContext: Context,
+  source: string,
+  hostFunction: T,
+): T => {
+  const createFunction = runInContext(source, vmContext) as (value: T) => T;
+  return createFunction(hostFunction);
+};
+
+const installVmNodeGlobals = (
+  runtimeGlobal: VmRuntimeGlobal,
+  vmContext: Context,
+): void => {
+  const excluded = new Set([
+    'GLOBAL',
+    'root',
+    'global',
+    'globalThis',
+    'fetch',
+    'structuredClone',
+  ]);
   for (const key of Object.getOwnPropertyNames(globalThis)) {
     if (excluded.has(key) || key in runtimeGlobal) {
       continue;
@@ -207,11 +226,90 @@ const installVmNodeGlobals = (runtimeGlobal: VmRuntimeGlobal): void => {
     }
   }
 
+  if (!('fetch' in runtimeGlobal) && typeof globalThis.fetch === 'function') {
+    Reflect.set(
+      runtimeGlobal,
+      'fetch',
+      createVmFunction(
+        vmContext,
+        '(hostFetch) => async (...args) => hostFetch(...args)',
+        globalThis.fetch,
+      ),
+    );
+  }
+  if (
+    !('structuredClone' in runtimeGlobal) &&
+    typeof globalThis.structuredClone === 'function'
+  ) {
+    Reflect.set(
+      runtimeGlobal,
+      'structuredClone',
+      createVmFunction(
+        vmContext,
+        `(hostStructuredClone) => {
+        const rehome = (value, seen) => {
+          if (value === null || typeof value !== 'object' || seen.has(value)) {
+            return value;
+          }
+          seen.add(value);
+
+          const tag = Object.prototype.toString.call(value);
+          if (tag === '[object Array]') {
+            Object.setPrototypeOf(value, Array.prototype);
+          } else if (tag === '[object Map]') {
+            Object.setPrototypeOf(value, Map.prototype);
+            for (const [key, entry] of value) {
+              rehome(key, seen);
+              rehome(entry, seen);
+            }
+          } else if (tag === '[object Set]') {
+            Object.setPrototypeOf(value, Set.prototype);
+            for (const entry of value) {
+              rehome(entry, seen);
+            }
+          } else if (tag === '[object Date]') {
+            Object.setPrototypeOf(value, Date.prototype);
+          } else if (tag === '[object RegExp]') {
+            Object.setPrototypeOf(value, RegExp.prototype);
+          } else if (tag === '[object Error]') {
+            Object.setPrototypeOf(value, Error.prototype);
+          } else if (tag === '[object ArrayBuffer]') {
+            Object.setPrototypeOf(value, ArrayBuffer.prototype);
+          } else if (tag === '[object DataView]') {
+            Object.setPrototypeOf(value, DataView.prototype);
+          } else if (tag.endsWith('Array]')) {
+            const constructorName = tag.slice(8, -1);
+            const constructor = globalThis[constructorName];
+            if (constructor && 'prototype' in constructor) {
+              Object.setPrototypeOf(value, constructor.prototype);
+            }
+          } else {
+            Object.setPrototypeOf(
+              value,
+              Object.getPrototypeOf(value) === null ? null : Object.prototype,
+            );
+          }
+
+          for (const key of Reflect.ownKeys(value)) {
+            const descriptor = Object.getOwnPropertyDescriptor(value, key);
+            if (descriptor && 'value' in descriptor) {
+              rehome(descriptor.value, seen);
+            }
+          }
+          return value;
+        };
+
+        return (value, options) =>
+          rehome(hostStructuredClone(value, options), new WeakSet());
+        }`,
+        globalThis.structuredClone,
+      ),
+    );
+  }
+
   Object.assign(runtimeGlobal, {
     process,
     Buffer,
-    ArrayBuffer,
-    Uint8Array,
     global: runtimeGlobal,
     setImmediate,
     clearImmediate,
@@ -315,7 +413,7 @@ const prepareVmRuntimeRealm = async (
     'globalThis',
     vmContext,
   ) as VmRuntimeGlobal;
-  installVmNodeGlobals(runtimeGlobal);
+  installVmNodeGlobals(runtimeGlobal, vmContext);
   return {
     initialKeys: captureVmContextKeys(vmContext),
     runtimeGlobal,

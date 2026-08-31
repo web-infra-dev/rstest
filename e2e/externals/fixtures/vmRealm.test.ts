@@ -3,7 +3,8 @@ import vm from 'node:vm';
 // @ts-expect-error: the package is copied into node_modules by the e2e harness
 import * as vmExternal from 'test-vm-external/index.mjs';
 
-const { inspectRealm, verifyUnsupportedImportAttribute } = vmExternal;
+const { inspectRealm, verifyNodeGlobals, verifyUnsupportedImportAttribute } =
+  vmExternal;
 
 it('executes external modules in the test VM realm', async () => {
   expect(inspectRealm({ from: 'vm' })).toEqual({
@@ -30,4 +31,10 @@ it('executes external modules in the test VM realm', async () => {
   expect(await verifyUnsupportedImportAttribute()).toBe(
     'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
   );
+  await expect(verifyNodeGlobals()).resolves.toEqual({
+    fetchPromise: true,
+    responseText: 'vm',
+    structuredCloneNestedObject: true,
+    structuredCloneObject: true,
+  });
 });

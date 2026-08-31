@@ -83,6 +83,12 @@ type CommonJsModule = {
   require: NodeJS.Require;
 };
 
+type CommonJsExportMetadata = {
+  code: string;
+  names: string[];
+  reexports: string[];
+};
+
 type BuiltinModuleRecord = {
   module: vm.SyntheticModule;
   imported: Record<string, unknown>;
@@ -318,7 +324,7 @@ class VmExternalModules {
   >();
   private readonly commonJsExportNames = new Map<
     string,
-    { code: string; names: string[] }
+    CommonJsExportMetadata
   >();
   private readonly builtinModuleRecords = new Map<
     string,
@@ -627,14 +633,49 @@ class VmExternalModules {
   }
 
   private getCommonJsExportNames(filePath: string): string[] {
+    return this.getCommonJsExportNamesFrom(filePath, new Set());
+  }
+
+  private getCommonJsExportNamesFrom(
+    filePath: string,
+    visited: Set<string>,
+  ): string[] {
+    if (visited.has(filePath)) {
+      return [];
+    }
+    visited.add(filePath);
+
     const source = readSource(filePath);
     const cached = this.commonJsExportNames.get(filePath);
-    if (cached?.code === source) {
-      return cached.names;
+    const metadata =
+      cached?.code === source
+        ? cached
+        : (() => {
+            const { exports: names, reexports } = parseCommonJsExports(source);
+            const nextMetadata = { code: source, names, reexports };
+            this.commonJsExportNames.set(filePath, nextMetadata);
+            return nextMetadata;
+          })();
+
+    const names = new Set(metadata.names);
+    for (const reexport of metadata.reexports) {
+      let resolvedId: string;
+      try {
+        resolvedId = this.resolve(reexport, filePath);
+      } catch {
+        continue;
+      }
+      if (getModuleFormat(resolvedId) !== 'commonjs') {
+        continue;
+      }
+      for (const name of this.getCommonJsExportNamesFrom(
+        getFilePath(resolvedId),
+        visited,
+      )) {
+        names.add(name);
+      }
     }
-    const names = parseCommonJsExports(source).exports;
-    this.commonJsExportNames.set(filePath, { code: source, names });
-    return names;
+    return [...names];
   }
 
   private getJsonSyntheticModule(

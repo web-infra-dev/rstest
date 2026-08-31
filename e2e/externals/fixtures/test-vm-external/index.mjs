@@ -47,3 +47,15 @@ export const verifyUnsupportedImportAttribute = async () => {
     return error?.code;
   }
 };
+
+export const verifyNodeGlobals = async () => {
+  const pendingResponse = fetch('data:text/plain,vm');
+  const response = await pendingResponse;
+  return {
+    fetchPromise: pendingResponse instanceof Promise,
+    responseText: await response.text(),
+    structuredCloneObject: structuredClone({}) instanceof Object,
+    structuredCloneNestedObject:
+      structuredClone({ nested: {} }).nested instanceof Object,
+  };
+};
