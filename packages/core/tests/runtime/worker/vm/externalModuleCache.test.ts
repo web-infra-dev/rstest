@@ -27,4 +27,10 @@ describe('parseExternalDataUri', () => {
       mime: 'text/javascript',
     });
   });
+
+  it('ignores data URL fragments when decoding the payload', () => {
+    expect(
+      parseExternalDataUri('data:text/javascript,export%20default%201#v1'),
+    ).toEqual({ code: 'export default 1', mime: 'text/javascript' });
+  });
 });

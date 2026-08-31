@@ -51,7 +51,11 @@ export const verifyUnsupportedImportAttribute = async () => {
 export const verifyNodeGlobals = async () => {
   const pendingResponse = fetch('data:text/plain,vm');
   const response = await pendingResponse;
+  const clonedBlob = structuredClone(new Blob(['blob']));
   return {
+    blobSize: clonedBlob.size,
+    blobText: await clonedBlob.text(),
+    clonedBlob: clonedBlob instanceof Blob,
     fetchPromise: pendingResponse instanceof Promise,
     responseText: await response.text(),
     structuredCloneObject: structuredClone({}) instanceof Object,

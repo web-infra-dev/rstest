@@ -277,20 +277,22 @@ const installVmNodeGlobals = (
             Object.setPrototypeOf(value, ArrayBuffer.prototype);
           } else if (tag === '[object DataView]') {
             Object.setPrototypeOf(value, DataView.prototype);
-          } else if (tag.endsWith('Array]')) {
+          } else {
             const constructorName = tag.slice(8, -1);
             const constructor = globalThis[constructorName];
-            if (constructor && 'prototype' in constructor) {
+            if (typeof constructor === 'function' && constructor.prototype) {
               Object.setPrototypeOf(value, constructor.prototype);
+            } else {
+              Object.setPrototypeOf(
+                value,
+                Object.getPrototypeOf(value) === null
+                  ? null
+                  : Object.prototype,
+              );
             }
-          } else {
-            Object.setPrototypeOf(
-              value,
-              Object.getPrototypeOf(value) === null ? null : Object.prototype,
-            );
           }
 
-          for (const key of Reflect.ownKeys(value)) {
+          for (const key of Object.keys(value)) {
             const descriptor = Object.getOwnPropertyDescriptor(value, key);
             if (descriptor && 'value' in descriptor) {
               restoreValue(descriptor.value, seen);

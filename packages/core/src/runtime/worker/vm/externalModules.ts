@@ -388,7 +388,7 @@ class VmExternalModules {
 
     const nativeRequire = createNativeRequire(parent);
     const resolved = resolveRequire(nativeRequire, specifier);
-    switch (getModuleFormat(resolved)) {
+    switch (getModuleFormat(resolved, 'require')) {
       case 'data':
         throw createRequireEsmError(resolved);
       case 'commonjs':
@@ -1030,7 +1030,10 @@ class VmExternalModules {
         Object.getOwnPropertyDescriptor(module.namespace, key)!,
       );
     }
-    if (!Reflect.has(namespace, '__esModule')) {
+    if (
+      Reflect.has(namespace, 'default') &&
+      !Reflect.has(namespace, '__esModule')
+    ) {
       Object.defineProperty(namespace, '__esModule', {
         configurable: false,
         enumerable: true,

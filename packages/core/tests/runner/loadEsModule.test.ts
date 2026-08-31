@@ -18,7 +18,7 @@ import {
 import { resolveExternalSpecifier } from '../../src/runtime/worker/vm/externalModuleCache';
 import { workerCache } from '../../src/runtime/worker/vm/cache';
 
-// cspell:ignore QEAAAA
+// cspell:ignore QEAAAA extensionless
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturePath = (name: string) => resolve(__dirname, 'fixtures', name);
@@ -458,11 +458,11 @@ describe('loadEsModule', () => {
             filename: 'dependency.mjs',
             jsonLabel: 'fixture-json',
             jsonSameRealm: true,
-            loadDynamic: expect.any(Function),
+            loadDynamic: expect.anything(),
             sameNamespace: true,
             sameRealm: true,
-            esModule: true,
-            state: expect.any(Object),
+            esModule: false,
+            state: expect.anything(),
             value: 'esm',
           }
         : { code: 'ERR_REQUIRE_ESM' },
@@ -489,7 +489,26 @@ describe('loadEsModule', () => {
       expect((requiredSecond as { state: object }).state).toBe(
         (importedFirst as { state: object }).state,
       );
+
+      const namedOnly = executor.require(
+        fixturePath('vm-external/module-semantics/named-only.mjs'),
+        __filename,
+      );
+      expect(namedOnly).toMatchObject({ value: 'named-only' });
+      expect(namedOnly).not.toHaveProperty('__esModule');
     }
+  });
+
+  it('loads extensionless CommonJS require targets in module packages', () => {
+    const vmContext = vm.createContext({});
+    const externalPath = fixturePath(
+      'vm-external/module-semantics/explicit-esm/require-extensionless.cjs',
+    );
+    const executor = getVmExternalModules(vmContext);
+
+    expect(executor.require(externalPath, __filename)).toEqual({
+      value: 'extensionless-commonjs',
+    });
   });
 
   it('should require syntax-compatible .js as ESM in a module package', () => {

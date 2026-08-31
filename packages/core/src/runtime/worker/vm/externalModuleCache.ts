@@ -6,6 +6,7 @@ import { workerCache } from './cache';
 
 export type ExternalModuleFormat =
   'commonjs' | 'data' | 'json' | 'module' | 'native' | 'unsupported' | 'wasm';
+export type ExternalModuleLoadMode = 'import' | 'require';
 
 type PackageType = 'ambiguous' | 'commonjs' | 'module';
 
@@ -129,6 +130,7 @@ export const getExternalFilePath = (resolvedId: string): string =>
 
 export const getExternalModuleFormat = (
   resolvedId: string,
+  mode: ExternalModuleLoadMode = 'import',
 ): ExternalModuleFormat => {
   if (isBuiltin(resolvedId)) {
     return 'native';
@@ -140,7 +142,9 @@ export const getExternalModuleFormat = (
   const filePath = getExternalFilePath(resolvedId);
   switch (extname(filePath)) {
     case '':
-      return resolvePackageType(filePath) === 'module' ? 'module' : 'commonjs';
+      return mode === 'require' || resolvePackageType(filePath) !== 'module'
+        ? 'commonjs'
+        : 'module';
     case '.cjs':
       return 'commonjs';
     case '.json':
@@ -159,7 +163,8 @@ export const getExternalModuleFormat = (
 };
 
 export const parseExternalDataUri = (identifier: string): ParsedDataUri => {
-  const match = identifier.match(dataUriPattern);
+  const dataUri = identifier.split('#', 1)[0]!;
+  const match = dataUri.match(dataUriPattern);
   if (!match?.groups) {
     throw new Error(`Invalid data URL: ${identifier}`);
   }
@@ -212,9 +217,11 @@ export const resolveExternalSpecifier = (
     return cached;
   }
 
-  const parentUrl = /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(parent)
-    ? parent
-    : pathToFileURL(parent).href;
+  const isWindowsPath = /^[a-zA-Z]:[\\/]/.test(parent);
+  const parentUrl =
+    !isWindowsPath && /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(parent)
+      ? parent
+      : pathToFileURL(parent).href;
   const resolved = importMetaResolve
     ? importMetaResolve(specifier, parentUrl)
     : pathToFileURL(createRequire(parentUrl).resolve(specifier)).href;

@@ -21,7 +21,7 @@ it('executes external modules in the test VM realm', async () => {
     plainDefault: { default: 'inner', named: 1 },
     requiredEsm:
       'hasAsyncGraph' in vm.SourceTextModule.prototype
-        ? { esModule: true, sameRealm: true, value: 'esm' }
+        ? { esModule: false, sameRealm: true, value: 'esm' }
         : { code: 'ERR_REQUIRE_ESM' },
     requiredJson: 'external-json',
     timers: true,
@@ -32,6 +32,9 @@ it('executes external modules in the test VM realm', async () => {
     'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
   );
   await expect(verifyNodeGlobals()).resolves.toEqual({
+    blobSize: 4,
+    blobText: 'blob',
+    clonedBlob: true,
     fetchPromise: true,
     responseText: 'vm',
     structuredCloneNestedObject: true,
