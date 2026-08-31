@@ -84,6 +84,10 @@ export default {
 };
 ```
 
+:::warning
+如果项目使用 [`@rstest/adapter-rspack`](/guide/integration/rspack)，本指南中的 Rsbuild plugin 和 `output.cssModules` 示例不适用。该 adapter 会禁用 Rstest 内置的 Rsbuild CSS plugin，并改用 `rspack.config.ts` 中继承的 CSS 规则。请在 Rspack 配置中设置 Less、Sass 和 CSS Modules。
+:::
+
 ## CSS Modules 的性能优化
 
 Rstest 的默认 CSS Modules 处理会尽量保持与 Rsbuild 构建结果一致。因此，导入 `.module.less` 或 `.module.scss` 时，仍可能执行对应的 Less 或 Sass 编译。
@@ -99,7 +103,11 @@ import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   tools: {
-    rspack(config, { rspack }) {
+    rspack(config, { rspack, isServer }) {
+      if (!isServer) {
+        return;
+      }
+
       config.plugins.push(
         new rspack.NormalModuleReplacementPlugin(
           /\.module\.(css|less|sass|scss)$/,
@@ -117,6 +125,7 @@ export default defineConfig({
 
 - `styles.button` 通常返回 `button`，不会返回真实构建中的 hash class name。
 - 不会验证 Less、Sass 或 CSS Modules 语法是否正确。
+- CSS Module 文件不存在或路径写错时不会被发现，因为请求会在解析原文件之前被替换。这样测试构建可能通过，但应用构建仍会失败。
 - 不适合验证 `composes`、`:global`、真实 class name、样式产物或客户端与服务端 class name 是否一致。
 
 因此，建议只在测试关注组件逻辑、不关注样式 class name 时使用。需要验证真实 CSS Modules 行为的测试，应保留 Rstest 默认处理；需要验证浏览器渲染效果的测试，应使用 Browser Mode。
