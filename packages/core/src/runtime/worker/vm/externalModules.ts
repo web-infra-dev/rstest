@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs';
 import {
+  initSync as initializeCommonJsLexer,
+  parse as parseCommonJsExports,
+} from 'cjs-module-lexer';
+import {
   createRequire as createNativeRequire,
   isBuiltin,
   Module,
@@ -91,6 +95,8 @@ const supportsSyncEsmEvaluate =
   typeof vm.SourceTextModule !== 'undefined' &&
   typeof Reflect.get(vm.SourceTextModule.prototype, 'hasAsyncGraph') ===
     'function';
+
+initializeCommonJsLexer();
 
 // Selecting `module-sync` without the VM graph API can resolve a package to an
 // ESM-only entry that this loader cannot execute synchronously.
@@ -295,6 +301,10 @@ const createUnsupportedFormatError = (
 class VmExternalModules {
   private readonly commonJsCache = new Map<string, CommonJsModule>();
   private readonly esmCache = new Map<string, SyncSourceTextModule>();
+  private readonly esmRequireNamespaceCache = new Map<
+    string,
+    Record<PropertyKey, unknown>
+  >();
   private readonly esmLinkOperations = new Map<string, EsmLinkOperation>();
   private readonly esmSyntaxFallbackFiles = new Set<string>();
   private readonly jsonCache = new Map<string, CommonJsModule>();
@@ -305,6 +315,10 @@ class VmExternalModules {
   private readonly webAssemblyCache = new Map<
     string,
     Promise<vm.SyntheticModule>
+  >();
+  private readonly commonJsExportNames = new Map<
+    string,
+    { code: string; names: string[] }
   >();
   private readonly builtinModuleRecords = new Map<
     string,
@@ -472,12 +486,15 @@ class VmExternalModules {
         return this.loadDataModule(resolvedId);
       case 'module':
         return this.loadEsm(resolvedId);
-      case 'commonjs':
+      case 'commonjs': {
+        const filePath = getFilePath(resolvedId);
         return this.getCommonJsSyntheticModule(
           resolvedId,
-          this.loadCommonJs(getFilePath(resolvedId)),
+          this.loadCommonJs(filePath),
           interopDefault,
+          this.getCommonJsExportNames(filePath),
         );
+      }
       case 'json':
         return this.getJsonSyntheticModule(
           resolvedId,
@@ -558,18 +575,30 @@ class VmExternalModules {
     resolvedId: string,
     exports: unknown,
     interopDefault = this.interopDefault,
+    namedExports?: readonly string[],
   ): vm.SyntheticModule {
+    const exportNames =
+      namedExports ??
+      (exports !== null &&
+      (typeof exports === 'object' || typeof exports === 'function')
+        ? Object.getOwnPropertyNames(exports)
+        : []);
     const namespace: Record<string, any> =
       exports !== null &&
       (typeof exports === 'object' || typeof exports === 'function')
         ? Object.defineProperties(
             {},
             Object.fromEntries(
-              Object.getOwnPropertyNames(exports)
+              exportNames
                 .filter((name) => name !== 'default')
                 .map((name) => [
                   name,
-                  Object.getOwnPropertyDescriptor(exports, name)!,
+                  Object.getOwnPropertyDescriptor(exports, name) ?? {
+                    configurable: true,
+                    enumerable: true,
+                    value: undefined,
+                    writable: true,
+                  },
                 ]),
             ),
           )
@@ -595,6 +624,17 @@ class VmExternalModules {
       this.context,
       { value: exports },
     );
+  }
+
+  private getCommonJsExportNames(filePath: string): string[] {
+    const source = readSource(filePath);
+    const cached = this.commonJsExportNames.get(filePath);
+    if (cached?.code === source) {
+      return cached.names;
+    }
+    const names = parseCommonJsExports(source).exports;
+    this.commonJsExportNames.set(filePath, { code: source, names });
+    return names;
   }
 
   private getJsonSyntheticModule(
@@ -727,6 +767,8 @@ class VmExternalModules {
               module: this.getCommonJsSyntheticModule(
                 identifier,
                 this.loadCommonJs(commonJsPath),
+                this.interopDefault,
+                this.getCommonJsExportNames(commonJsPath),
               ),
             };
       }
@@ -932,9 +974,31 @@ class VmExternalModules {
     }
     const identifier = pathToFileURL(filePath).href;
     const module = this.requireEsModuleSync(identifier, forceEsmSource);
-    return Reflect.has(module.namespace, 'module.exports')
-      ? Reflect.get(module.namespace, 'module.exports')
-      : module.namespace;
+    if (Reflect.has(module.namespace, 'module.exports')) {
+      return Reflect.get(module.namespace, 'module.exports');
+    }
+    const cachedNamespace = this.esmRequireNamespaceCache.get(identifier);
+    if (cachedNamespace) {
+      return cachedNamespace;
+    }
+    const namespace = Object.create(null) as Record<PropertyKey, unknown>;
+    for (const key of Reflect.ownKeys(module.namespace)) {
+      Object.defineProperty(
+        namespace,
+        key,
+        Object.getOwnPropertyDescriptor(module.namespace, key)!,
+      );
+    }
+    if (!Reflect.has(namespace, '__esModule')) {
+      Object.defineProperty(namespace, '__esModule', {
+        configurable: false,
+        enumerable: true,
+        value: true,
+        writable: true,
+      });
+    }
+    this.esmRequireNamespaceCache.set(identifier, namespace);
+    return namespace;
   }
 
   private requireEsModuleSync(

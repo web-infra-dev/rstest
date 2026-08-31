@@ -20,7 +20,7 @@ it('executes external modules in the test VM realm', async () => {
     plainDefault: { default: 'inner', named: 1 },
     requiredEsm:
       'hasAsyncGraph' in vm.SourceTextModule.prototype
-        ? { sameRealm: true, value: 'esm' }
+        ? { esModule: true, sameRealm: true, value: 'esm' }
         : { code: 'ERR_REQUIRE_ESM' },
     requiredJson: 'external-json',
     timers: true,

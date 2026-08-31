@@ -1,1 +1,1 @@
-module.exports = { cjsValue: 'commonjs' };
+exports.cjsValue = 'commonjs';

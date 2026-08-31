@@ -15,6 +15,7 @@ import {
   disposeVmExternalModules,
   getVmExternalModules,
 } from '../../src/runtime/worker/vm/externalModules';
+import { resolveExternalSpecifier } from '../../src/runtime/worker/vm/externalModuleCache';
 import { workerCache } from '../../src/runtime/worker/vm/cache';
 
 // cspell:ignore QEAAAA
@@ -25,6 +26,11 @@ const fixturePath = (name: string) => resolve(__dirname, 'fixtures', name);
 describe('loadEsModule', () => {
   afterEach(() => {
     clearModuleCache();
+  });
+
+  it('canonicalizes bare builtin external imports', () => {
+    expect(resolveExternalSpecifier('fs', __filename)).toBe('node:fs');
+    expect(resolveExternalSpecifier('node:fs', __filename)).toBe('node:fs');
   });
 
   it('should link nested modules that statically import builtins', async () => {
@@ -238,6 +244,16 @@ describe('loadEsModule', () => {
     expect(mod.default).toEqual({ default: 'inner', named: 1 });
   });
 
+  it('should reject named imports that the CommonJS lexer cannot detect', async () => {
+    const vmContext = vm.createContext({});
+    const externalPath = fixturePath(
+      'vm-external/module-semantics/invalid-named-import.mjs',
+    );
+    const executor = getVmExternalModules(vmContext);
+
+    await expect(executor.import(externalPath, true, false)).rejects.toThrow();
+  });
+
   it('should keep CommonJS dynamic imports bound to their VM context', async () => {
     const firstContext = vm.createContext({});
     const externalPath = fixturePath(
@@ -425,6 +441,7 @@ describe('loadEsModule', () => {
             loadDynamic: expect.any(Function),
             sameNamespace: true,
             sameRealm: true,
+            esModule: true,
             state: expect.any(Object),
             value: 'esm',
           }

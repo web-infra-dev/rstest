@@ -146,6 +146,27 @@ test('does not drop VM console events during JSDOM initialization', async () => 
   }
 });
 
+test('forwards deferred VM console events to the configured target', async () => {
+  const calls: unknown[][] = [];
+  const { setVirtualConsoleTarget, teardown } = await setupVM(
+    {
+      console: true,
+      html: '<script>console.warn("during initialization")</script>',
+    },
+    { scope: 'file' },
+  );
+
+  try {
+    setVirtualConsoleTarget({
+      warn: (...args: unknown[]) => calls.push(args),
+    } as unknown as Console);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(calls).toEqual([['during initialization']]);
+  } finally {
+    teardown();
+  }
+});
+
 test('bridges Node AbortSignal to VM JSDOM event listeners', async () => {
   const { context, teardown } = await setupVM({}, { scope: 'file' });
   const vmGlobal = runInContext('globalThis', context) as typeof globalThis;

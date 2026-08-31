@@ -116,7 +116,21 @@ export const initSpy = (
       typeof methodName === 'string'
         ? methodName
         : Object.values(methodName)[0]!;
-    const existing = obj[propertyName];
+    let descriptor: PropertyDescriptor | undefined;
+    let current: object | null = obj;
+    while (current) {
+      descriptor = Object.getOwnPropertyDescriptor(current, propertyName);
+      if (descriptor) {
+        break;
+      }
+      current = Object.getPrototypeOf(current);
+    }
+    const existing =
+      typeof methodName === 'string'
+        ? descriptor?.value
+        : 'getter' in methodName
+          ? descriptor?.get
+          : descriptor?.set;
     if (typeof existing === 'function') {
       const realmSpy = realmSpies.get(existing);
       if (realmSpy) {
@@ -368,7 +382,7 @@ export const initSpy = (
     realmSpies.set(realmSpy, realmSpy);
     projectMocks().add(new WeakRef(realmSpy));
     if (realmSpy !== spyFn) {
-      const descriptor = Object.getOwnPropertyDescriptor(obj, propertyName);
+      descriptor = Object.getOwnPropertyDescriptor(obj, propertyName);
       if (descriptor) {
         if (typeof methodName === 'string') {
           descriptor.value = realmSpy;

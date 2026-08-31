@@ -200,7 +200,10 @@ export const resolveExternalSpecifier = (
   specifier: string,
   parent: string,
 ): string => {
-  if (isBuiltin(specifier) || specifier.startsWith('data:')) {
+  if (isBuiltin(specifier)) {
+    return specifier.startsWith('node:') ? specifier : `node:${specifier}`;
+  }
+  if (specifier.startsWith('data:')) {
     return specifier;
   }
   const cacheKey = `${parent}\0${specifier}`;

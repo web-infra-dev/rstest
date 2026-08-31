@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import timers, { setTimeout } from 'node:timers';
 import helper from './helper.cjs';
-import { value as nonEnumerableValue } from './non-enumerable.cjs';
+import nonEnumerableModule from './non-enumerable.cjs';
 import metadata from './data.json' with { type: 'json' };
 import requiredEsm from './require-esm.cjs';
 import { verifyBuiltinSync } from './builtin-sync.mjs';
@@ -28,7 +28,7 @@ export const inspectRealm = (value) => ({
     json: dataJson.value,
   },
   importedJson: metadata.label,
-  nonEnumerableValue,
+  nonEnumerableValue: nonEnumerableModule.value,
   plainDefault: { default: helper.default, named: helper.named },
   requiredEsm,
   requiredJson: requiredMetadata.label,

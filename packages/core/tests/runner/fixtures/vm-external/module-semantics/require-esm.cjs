@@ -13,6 +13,7 @@ try {
     sameNamespace: namespace === cachedNamespace,
     sameRealm:
       Object.getPrototypeOf(namespace.realmObject) === Object.prototype,
+    esModule: namespace.__esModule === true,
     state: namespace.state,
     value: namespace.value,
   };

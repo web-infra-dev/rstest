@@ -52,23 +52,23 @@ const createDeferredConsole = (): {
 } => {
   let target: Console | undefined;
   const pending: { method: PropertyKey; args: unknown[] }[] = [];
-  const deferred = new Proxy(
-    {},
-    {
-      get:
-        (_target, method: PropertyKey) =>
-        (...args: unknown[]) => {
-          if (target) {
-            const fn = Reflect.get(target, method);
-            if (typeof fn === 'function') {
-              Reflect.apply(fn, target, args);
-            }
-            return;
+  const methods = Object.fromEntries(
+    Object.keys(globalThis.console).map((method) => [method, undefined]),
+  );
+  const deferred = new Proxy(methods, {
+    get:
+      (_target, method: PropertyKey) =>
+      (...args: unknown[]) => {
+        if (target) {
+          const fn = Reflect.get(target, method);
+          if (typeof fn === 'function') {
+            Reflect.apply(fn, target, args);
           }
-          pending.push({ method, args });
-        },
-    },
-  ) as Console;
+          return;
+        }
+        pending.push({ method, args });
+      },
+  }) as unknown as Console;
 
   return {
     console: deferred,
@@ -354,7 +354,11 @@ export const setupVM = async (
   options: Record<string, any>,
   context: TestEnvironmentContext,
   dependency?: JSDOMModule,
-): Promise<{ context: vm.Context; teardown: () => void }> => {
+): Promise<{
+  context: vm.Context;
+  setVirtualConsoleTarget: (target: Console) => void;
+  teardown: () => void;
+}> => {
   const jsdom = await loadJSDOM(dependency);
   const { cleanupObjectURLs, dom, setVirtualConsoleTarget, virtualConsole } =
     createJSDOM(jsdom, options, context, true);
@@ -366,9 +370,6 @@ export const setupVM = async (
     setTimeout: globalThis.setTimeout,
   };
   const vmGlobal = runInContext('globalThis', vmContext) as typeof globalThis;
-  if (virtualConsole && vmGlobal.console) {
-    setVirtualConsoleTarget(vmGlobal.console);
-  }
   const cleanupAddEventListener = patchAddEventListener(
     dom.window,
     globalThis.AbortSignal,
@@ -378,6 +379,11 @@ export const setupVM = async (
 
   return {
     context: vmContext,
+    setVirtualConsoleTarget: (target) => {
+      if (virtualConsole) {
+        setVirtualConsoleTarget(target);
+      }
+    },
     teardown() {
       cleanupHandler();
       cleanupAddEventListener();

@@ -282,9 +282,11 @@ const prepareVmRuntimeRealm = async (
   initialKeys: Set<string | symbol>;
   runtimeGlobal: VmRuntimeGlobal;
   vmContext: Context;
+  setVirtualConsoleTarget?: (target: Console) => void;
 }> => {
   const { testEnvironment } = context.runtimeConfig;
   let vmContext: Context;
+  let setVirtualConsoleTarget: ((target: Console) => void) | undefined;
   if (testEnvironment.name === 'node') {
     vmContext = createContext({});
   } else {
@@ -306,6 +308,7 @@ const prepareVmRuntimeRealm = async (
     );
     vmContext = vmEnvironment.context;
     cleanupFns.push(vmEnvironment.teardown);
+    setVirtualConsoleTarget = vmEnvironment.setVirtualConsoleTarget;
   }
 
   const runtimeGlobal = runInContext(
@@ -316,6 +319,7 @@ const prepareVmRuntimeRealm = async (
   return {
     initialKeys: captureVmContextKeys(vmContext),
     runtimeGlobal,
+    setVirtualConsoleTarget,
     vmContext,
   };
 };
@@ -342,6 +346,7 @@ const preparePool = async (
   let vmContext: Context | undefined;
   let initialVmContextKeys: Set<string | symbol> | undefined;
   let runtimeGlobal = globalThis as VmRuntimeGlobal;
+  let setVirtualConsoleTarget: ((target: Console) => void) | undefined;
 
   const disposeFns: (() => void)[] = [];
   const { rpc } = createRuntimeRpc(
@@ -431,6 +436,7 @@ const preparePool = async (
       vmContext = vmRealm.vmContext;
       runtimeGlobal = vmRealm.runtimeGlobal;
       initialVmContextKeys = vmRealm.initialKeys;
+      setVirtualConsoleTarget = vmRealm.setVirtualConsoleTarget;
     }
 
     // `mockRuntimeCode.js` gates its Module Federation shims on this worker-wide
@@ -507,6 +513,10 @@ const preparePool = async (
       globalCleanups.push(
         installGlobalProperty(runtimeGlobal, 'console', globalThis.console),
       );
+    }
+
+    if (isVmPool && runtimeGlobal.console) {
+      setVirtualConsoleTarget?.(runtimeGlobal.console);
     }
 
     const interopDefault = true;

@@ -10,6 +10,7 @@ import type { LoadedTestEnvironmentModule } from './testEnvironmentModule';
 type VmEnvironmentReturn = {
   context: vm.Context;
   teardown: () => void | Promise<void>;
+  setVirtualConsoleTarget?: (target: Console) => void;
 };
 
 /**
