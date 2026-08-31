@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { RsbuildPlugin } from '@rsbuild/core';
+import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import {
   importMetaHook,
   RSTEST_DYNAMIC_IMPORT_HOOK,
@@ -65,6 +65,7 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
           tools,
           dev,
           testEnvironment,
+          federation,
         },
         outputModule,
         rootPath,
@@ -133,6 +134,33 @@ export const pluginBasic: (context: RstestContext) => RsbuildPlugin = (
               config.mode = isProd ? 'production' : 'development';
               config.output ??= {};
               config.output.iife = false;
+              if (federation) {
+                // Module Federation's Node preset makes chunk loading fs-based
+                // (`readFileVm`), but the bundle's assets only exist in the
+                // in-memory `assetFiles` map, never on disk. `require`-based
+                // loading routes chunks through the vm-injected `require`,
+                // which resolves them from that map.
+                config.output.chunkLoading = 'require';
+                // The config-level value above states the intent, but
+                // `@module-federation/rstest` >= 2.9.0 explicitly writes
+                // `output.chunkLoading = 'async-node'` from its own config
+                // hook (earlier versions only set `target`), and hook order
+                // puts it after this one. Enforce at compiler level instead:
+                // plugin `apply` runs after every config-level hook and
+                // before rspack derives target defaults, so this write wins
+                // regardless of what federation plugins do to the config
+                // object. A federation plugin that writes the field in its
+                // own `apply` (e.g. a hand-wired `StreamingTargetPlugin`)
+                // still wins — documented limitation. `chunkFormat` stays on
+                // the target-derived `'commonjs'`.
+                config.plugins ??= [];
+                config.plugins.push({
+                  name: 'RstestFederationRequireChunkLoading',
+                  apply(compiler: Rspack.Compiler) {
+                    compiler.options.output.chunkLoading = 'require';
+                  },
+                });
+              }
               // polyfill interop
               // TODO: if we ever expose `output.importFunctionName` as a user
               // option, rspack#13849's rewrite still reads it directly to pick

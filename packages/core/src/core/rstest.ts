@@ -108,6 +108,7 @@ export class Rstest implements RstestContext {
     results: [],
     testResults: [],
   };
+  private reporterResultIndex = new Map<string, number>();
   public stateManager: TestStateManager = new TestStateManager();
 
   public testState: RstestTestState = {
@@ -296,12 +297,14 @@ export class Rstest implements RstestContext {
   ): void {
     // Update or add results
     results.forEach((item) => {
-      const existingIndex = this.reporterResults.results.findIndex(
-        (r) => r.testPath === item.testPath,
-      );
-      if (existingIndex !== -1) {
+      const existingIndex = this.reporterResultIndex.get(item.testPath);
+      if (existingIndex !== undefined) {
         this.reporterResults.results[existingIndex] = item;
       } else {
+        this.reporterResultIndex.set(
+          item.testPath,
+          this.reporterResults.results.length,
+        );
         this.reporterResults.results.push(item);
       }
     });
@@ -333,6 +336,10 @@ export class Rstest implements RstestContext {
     const byTestPath = (a: { testPath: string }, b: { testPath: string }) =>
       a.testPath.localeCompare(b.testPath);
     this.reporterResults.results.sort(byTestPath);
+    this.reporterResultIndex.clear();
+    this.reporterResults.results.forEach((result, index) => {
+      this.reporterResultIndex.set(result.testPath, index);
+    });
     this.reporterResults.testResults.sort(byTestPath);
   }
 }

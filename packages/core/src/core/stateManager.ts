@@ -17,8 +17,15 @@ export class TestStateManager {
 
   public testModules: TestFileResult[] = [];
   public testFiles: string[] | undefined = undefined;
+  private failedTestCount = 0;
 
   onTestFileStart(testPath: string): void {
+    const currentModule = this.runningModules.get(testPath);
+    if (currentModule) {
+      this.failedTestCount -= currentModule.results.filter(
+        (result) => result.status === 'fail',
+      ).length;
+    }
     this.runningModules.set(testPath, { runningTests: [], results: [] });
   }
 
@@ -30,14 +37,16 @@ export class TestStateManager {
         results: [result],
       });
     } else {
-      // Find and remove the test from runningTests by matching testId
-      const filteredRunningTests = currentModule.runningTests.filter(
-        (t) => t.testId !== result.testId,
+      const runningTestIndex = currentModule.runningTests.findIndex(
+        (test) => test.testId === result.testId,
       );
-      this.runningModules.set(result.testPath, {
-        runningTests: filteredRunningTests,
-        results: [...currentModule.results, result],
-      });
+      if (runningTestIndex !== -1) {
+        currentModule.runningTests.splice(runningTestIndex, 1);
+      }
+      currentModule.results.push(result);
+    }
+    if (result.status === 'fail') {
+      this.failedTestCount++;
     }
   }
 
@@ -49,33 +58,34 @@ export class TestStateManager {
         results: [],
       });
     } else {
-      // Remove from runningTests if it exists (for restart scenarios)
-      const filteredRunningTests = currentModule.runningTests.filter(
-        (t) => t.testId !== test.testId,
+      const runningTestIndex = currentModule.runningTests.findIndex(
+        (runningTest) => runningTest.testId === test.testId,
       );
-      this.runningModules.set(test.testPath, {
-        runningTests: [...filteredRunningTests, test],
-        results: currentModule.results,
-      });
+      if (runningTestIndex !== -1) {
+        currentModule.runningTests.splice(runningTestIndex, 1);
+      }
+      currentModule.runningTests.push(test);
     }
   }
 
   getCountOfFailedTests(): number {
-    const testResults: TestResult[] = Array.from(this.runningModules.values())
-      .flatMap(({ results }) => results)
-      .concat(
-        this.testModules.flatMap((mod) =>
-          mod.results.length > 0
-            ? mod.results
-            : [{ status: mod.status } as TestResult],
-        ),
-      );
-
-    return testResults.filter((t) => t.status === 'fail').length;
+    return this.failedTestCount;
   }
 
   onTestFileResult(test: TestFileResult): void {
+    const currentModule = this.runningModules.get(test.testPath);
+    if (currentModule) {
+      this.failedTestCount -= currentModule.results.filter(
+        (result) => result.status === 'fail',
+      ).length;
+    }
     this.runningModules.delete(test.testPath);
+    this.failedTestCount +=
+      test.results.length > 0
+        ? test.results.filter((result) => result.status === 'fail').length
+        : test.status === 'fail'
+          ? 1
+          : 0;
     this.testModules.push(test);
   }
 
@@ -83,5 +93,6 @@ export class TestStateManager {
     this.runningModules.clear();
     this.testModules = [];
     this.testFiles = undefined;
+    this.failedTestCount = 0;
   }
 }

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import path from 'pathe';
 import type { AssetFiles } from '../../types/worker';
-import { getAssetBuffer, getAssetText } from '../../utils/assetFiles';
+import { getAssetText } from '../../utils/assetFiles';
 import { logger } from '../../utils/logger';
 import { clearCacheCleaners, clearSyntheticModuleCache } from './interop';
 import {
@@ -37,111 +37,6 @@ const getAssetName = (
   }
   return undefined;
 };
-
-const formatAssetContent = (
-  assetFiles: AssetFiles,
-  name: string,
-  options?: unknown,
-) => {
-  const buffer = getAssetBuffer(assetFiles, name);
-  const encoding =
-    typeof options === 'string'
-      ? options
-      : options && typeof options === 'object' && 'encoding' in options
-        ? options.encoding
-        : undefined;
-  return typeof encoding === 'string'
-    ? buffer.toString(encoding as BufferEncoding)
-    : buffer;
-};
-
-const createVirtualFsAssetProxy = (
-  fsModule: typeof import('node:fs'),
-  assetFiles: AssetFiles,
-): typeof import('node:fs') =>
-  new Proxy(fsModule, {
-    get(target, property, receiver) {
-      if (property === 'existsSync') {
-        return (filePath: unknown) =>
-          getAssetName(assetFiles, filePath) !== undefined ||
-          target.existsSync(
-            filePath as Parameters<typeof target.existsSync>[0],
-          );
-      }
-
-      if (property === 'readFile') {
-        return (
-          filePath: unknown,
-          optionsOrCallback: unknown,
-          maybeCallback?: unknown,
-        ) => {
-          const callback =
-            typeof optionsOrCallback === 'function'
-              ? optionsOrCallback
-              : maybeCallback;
-          const name = getAssetName(assetFiles, filePath);
-
-          if (name !== undefined && typeof callback === 'function') {
-            queueMicrotask(() =>
-              callback(
-                null,
-                formatAssetContent(assetFiles, name, optionsOrCallback),
-              ),
-            );
-            return;
-          }
-
-          return Reflect.apply(
-            target.readFile,
-            target,
-            [filePath, optionsOrCallback, maybeCallback].filter(
-              (value) => value !== undefined,
-            ),
-          );
-        };
-      }
-
-      if (property === 'readFileSync') {
-        return (filePath: unknown, options?: unknown) => {
-          const name = getAssetName(assetFiles, filePath);
-          if (name !== undefined) {
-            return formatAssetContent(assetFiles, name, options);
-          }
-          return target.readFileSync(
-            filePath as Parameters<typeof target.readFileSync>[0],
-            options as Parameters<typeof target.readFileSync>[1],
-          );
-        };
-      }
-
-      if (property === 'promises') {
-        return new Proxy(target.promises, {
-          get(promisesTarget, promisesProperty, promisesReceiver) {
-            if (promisesProperty === 'readFile') {
-              return (filePath: unknown, options?: unknown) => {
-                const name = getAssetName(assetFiles, filePath);
-                return name === undefined
-                  ? Reflect.apply(promisesTarget.readFile, promisesTarget, [
-                      filePath,
-                      options,
-                    ])
-                  : Promise.resolve(
-                      formatAssetContent(assetFiles, name, options),
-                    );
-              };
-            }
-            return Reflect.get(
-              promisesTarget,
-              promisesProperty,
-              promisesReceiver,
-            );
-          },
-        });
-      }
-
-      return Reflect.get(target, property, receiver);
-    },
-  });
 
 const defineRstestRequireResolve =
   ({
@@ -187,7 +82,6 @@ const createRequire = (
   rstestContext: Record<string, any>,
   assetFiles: AssetFiles,
   interopDefault: boolean,
-  virtualFsAssetFiles?: AssetFiles,
   vmContext?: vm.Context,
   cacheCompilation = false,
 ): NodeJS.Require => {
@@ -209,13 +103,6 @@ const createRequire = (
     : undefined;
 
   const require = ((id: string) => {
-    if (id === 'fs' || id === 'node:fs') {
-      const fsModule = _require(id);
-      return virtualFsAssetFiles
-        ? createVirtualFsAssetProxy(fsModule, virtualFsAssetFiles)
-        : fsModule;
-    }
-
     if (loadTimersModule && (id === 'timers' || id === 'node:timers')) {
       return loadTimersModule(_require(id) as Record<PropertyKey, unknown>);
     }
@@ -237,7 +124,6 @@ const createRequire = (
           rstestContext,
           assetFiles,
           interopDefault,
-          virtualFsAssetFiles,
           vmContext,
           cacheCompilation,
         });
@@ -328,7 +214,6 @@ export const loadModule = ({
   rstestContext,
   assetFiles: assetFilesArg,
   interopDefault,
-  virtualFsAssetFiles: virtualFsAssetFilesArg,
   vmContext,
   cacheCompilation = false,
 }: {
@@ -338,7 +223,6 @@ export const loadModule = ({
   testPath: string;
   rstestContext: Record<string, any>;
   assetFiles: AssetFiles;
-  virtualFsAssetFiles?: AssetFiles;
   vmContext?: vm.Context;
   cacheCompilation?: boolean;
 }): any => {
@@ -348,7 +232,6 @@ export const loadModule = ({
     Object.assign(accumulatedAssetFiles, assetFilesArg);
   }
   const assetFiles = accumulatedAssetFiles;
-  const virtualFsAssetFiles = virtualFsAssetFilesArg ? assetFiles : undefined;
   const fileDir = path.dirname(testPath);
 
   const localModule = {
@@ -370,7 +253,6 @@ export const loadModule = ({
       rstestContext,
       assetFiles,
       interopDefault,
-      virtualFsAssetFiles,
       vmContext,
       cacheCompilation,
     ),
@@ -480,7 +362,6 @@ export const cacheableLoadModule = ({
   rstestContext,
   assetFiles,
   interopDefault,
-  virtualFsAssetFiles,
   vmContext,
   cacheCompilation = false,
 }: {
@@ -490,7 +371,6 @@ export const cacheableLoadModule = ({
   testPath: string;
   rstestContext: Record<string, any>;
   assetFiles: AssetFiles;
-  virtualFsAssetFiles?: AssetFiles;
   vmContext?: vm.Context;
   cacheCompilation?: boolean;
 }): any => {
@@ -505,7 +385,6 @@ export const cacheableLoadModule = ({
     rstestContext,
     assetFiles,
     interopDefault,
-    virtualFsAssetFiles,
     vmContext,
     cacheCompilation,
   });
