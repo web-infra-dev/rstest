@@ -1,0 +1,131 @@
+---
+description: Learn how Rstest handles CSS, CSS Modules, Less, and Sass, and how to optimize style processing when needed.
+---
+
+import { PackageManagerTabs } from '@theme';
+
+# CSS
+
+Rstest is built on Rsbuild and Rspack, so you can import CSS files and CSS Modules directly. Rstest chooses the appropriate processing behavior for the current test environment.
+
+## Default behavior
+
+In Node.js tests, Rstest does not emit CSS by default:
+
+- Regular CSS files do not produce style assets. When the corresponding plugin is enabled, Less and Sass files still run through preprocessing so syntax and compilation errors are reported, but no style assets are emitted.
+- CSS Modules are still processed and export class name mappings for component tests.
+
+For example, the following imports work without additional CSS configuration:
+
+```tsx title="Button.tsx"
+import styles from './Button.module.css';
+import './reset.css';
+
+export function Button() {
+  return <button className={styles.button}>Submit</button>;
+}
+```
+
+```ts title="Button.test.tsx"
+import { expect, test } from '@rstest/core';
+import styles from './Button.module.css';
+
+test('loads CSS Modules', () => {
+  expect(styles.button).toEqual(expect.any(String));
+});
+```
+
+CSS Modules commonly use filenames such as `.module.css`, `.module.less`, or `.module.scss`. You can customize class name generation and other CSS Modules options through [`output.cssModules`](/config/build/output#outputcssmodules).
+
+In Browser Mode, tests run in a real browser and styles participate in page rendering. Use [Browser Mode](/guide/browser-testing/) when you need to verify computed styles, layout, or visual behavior.
+
+## Using Less or Sass
+
+Rstest has built-in support for regular CSS and CSS Modules. Less, Sass, and other preprocessors require the corresponding Rsbuild plugin.
+
+### Less
+
+[@rsbuild/plugin-less](https://github.com/web-infra-dev/rsbuild/tree/main/packages/plugin-less) compiles Less files, including `.module.less` files.
+
+<PackageManagerTabs command="add @rsbuild/plugin-less -D" />
+
+```ts title="rstest.config.ts"
+import { pluginLess } from '@rsbuild/plugin-less';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [pluginLess()],
+});
+```
+
+### Sass
+
+[@rsbuild/plugin-sass](https://github.com/web-infra-dev/rsbuild/tree/main/packages/plugin-sass) compiles Sass and SCSS files, including `.module.sass` and `.module.scss` files.
+
+<PackageManagerTabs command="add @rsbuild/plugin-sass -D" />
+
+```ts title="rstest.config.ts"
+import { pluginSass } from '@rsbuild/plugin-sass';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [pluginSass()],
+});
+```
+
+If your project already reuses an Rsbuild config through [`@rstest/adapter-rsbuild`](/guide/integration/rsbuild), configure these plugins in `rsbuild.config.ts` instead of duplicating them in `rstest.config.ts`.
+
+```ts title="rsbuild.config.ts"
+import { pluginLess } from '@rsbuild/plugin-less';
+import { pluginSass } from '@rsbuild/plugin-sass';
+
+export default {
+  plugins: [pluginLess(), pluginSass()],
+};
+```
+
+:::warning
+If you use [`@rstest/adapter-rspack`](/guide/integration/rspack), this guide's Rsbuild plugin and `output.cssModules` examples do not apply. That adapter disables Rstest's built-in Rsbuild CSS plugins and uses the CSS rules from `rspack.config.ts` instead. Configure Less, Sass, and CSS Modules in your Rspack configuration.
+:::
+
+## Optimizing CSS Modules performance
+
+Rstest's default CSS Modules processing aims to stay consistent with the Rsbuild build. As a result, importing `.module.less` or `.module.scss` files can still run the corresponding Less or Sass compiler.
+
+If a test only needs to read properties such as `styles.button` and does not care about the generated class name, you can use [`identity-obj-proxy`](https://github.com/keyz/identity-obj-proxy) as a CSS Modules substitute:
+
+<PackageManagerTabs command="add identity-obj-proxy -D" />
+
+Use `NormalModuleReplacementPlugin` to replace CSS Modules files:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  tools: {
+    rspack(config, { rspack, isServer }) {
+      if (!isServer) {
+        return;
+      }
+
+      config.plugins.push(
+        new rspack.NormalModuleReplacementPlugin(
+          /\.module\.(css|less|sass|scss)$/,
+          (resource) => {
+            resource.request = 'identity-obj-proxy';
+          },
+        ),
+      );
+    },
+  },
+});
+```
+
+This bypasses CSS Modules preprocessing and transformation, so it is usually faster, especially when many Sass files are imported. However, it is only a test substitute:
+
+- `styles.button` usually returns `button`, not the hashed class name from a real build.
+- Less, Sass, and CSS Modules syntax are not validated.
+- Missing or misspelled CSS Module files are not detected because the request is replaced before the original file is resolved. The application build can still fail even if the test build passes.
+- It is not suitable for testing `composes`, `:global`, real class names, emitted styles, or client/server class name consistency.
+
+Use this approach only when tests focus on component logic rather than style class names. Keep Rstest's default processing when you need to verify real CSS Modules behavior, and use Browser Mode when you need to verify browser rendering.
