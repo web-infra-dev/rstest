@@ -1,3 +1,4 @@
+import { runInContext } from 'node:vm';
 import { promisify } from 'node:util';
 import { expect, test } from '@rstest/core';
 import type { DOMWindow } from 'jsdom';
@@ -140,6 +141,33 @@ test('does not drop VM console events during JSDOM initialization', async () => 
 
   try {
     expect(calls).toEqual([['during initialization']]);
+  } finally {
+    teardown();
+  }
+});
+
+test('bridges Node AbortSignal to VM JSDOM event listeners', async () => {
+  const { context, teardown } = await setupVM({}, { scope: 'file' });
+  const vmGlobal = runInContext('globalThis', context) as typeof globalThis;
+  const controller = new AbortController();
+  let calls = 0;
+
+  try {
+    vmGlobal.document.addEventListener(
+      'rstest-vm-abort-signal',
+      () => calls++,
+      { signal: controller.signal },
+    );
+    vmGlobal.document.dispatchEvent(
+      new vmGlobal.Event('rstest-vm-abort-signal'),
+    );
+    expect(calls).toBe(1);
+
+    controller.abort();
+    vmGlobal.document.dispatchEvent(
+      new vmGlobal.Event('rstest-vm-abort-signal'),
+    );
+    expect(calls).toBe(1);
   } finally {
     teardown();
   }

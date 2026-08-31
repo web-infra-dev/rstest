@@ -369,6 +369,10 @@ export const setupVM = async (
   if (virtualConsole && vmGlobal.console) {
     setVirtualConsoleTarget(vmGlobal.console);
   }
+  const cleanupAddEventListener = patchAddEventListener(
+    dom.window,
+    globalThis.AbortSignal,
+  );
   const cleanupTimers = installTimerTracking(vmGlobal, nodeTimers, context);
   const cleanupHandler = addDefaultErrorHandler(vmGlobal as unknown as Window);
 
@@ -376,6 +380,7 @@ export const setupVM = async (
     context: vmContext,
     teardown() {
       cleanupHandler();
+      cleanupAddEventListener();
       cleanupObjectURLs();
       cleanupTimers();
       dom.window.close();

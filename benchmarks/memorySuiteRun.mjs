@@ -26,11 +26,9 @@ if (pool !== 'forks' && pool !== 'vmThreads') {
     `RSTEST_BENCH_MEMORY_POOL must be "forks" or "vmThreads", received "${pool}".`,
   );
 }
-const maxWorkers = Number.parseInt(
-  process.env.RSTEST_BENCH_MEMORY_WORKERS ?? '4',
-  10,
-);
-if (!Number.isSafeInteger(maxWorkers) || maxWorkers < 1) {
+const maxWorkersValue = (process.env.RSTEST_BENCH_MEMORY_WORKERS ?? '4').trim();
+const maxWorkers = Number(maxWorkersValue);
+if (!/^[1-9]\d*$/.test(maxWorkersValue) || !Number.isSafeInteger(maxWorkers)) {
   throw new Error('RSTEST_BENCH_MEMORY_WORKERS must be a positive integer.');
 }
 const prebundle =

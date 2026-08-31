@@ -48,6 +48,7 @@ export const initSpy = (
   // See https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3457255132
   // and https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3458343793.
   const mocksByProject = new Map<string, Set<WeakRef<MockInstance>>>();
+  const realmSpies = new WeakMap<(...args: any[]) => any, MockInstance>();
 
   const projectMocks = (): Set<WeakRef<MockInstance>> => {
     const key = getProjectKey();
@@ -108,9 +109,21 @@ export const initSpy = (
 
   const wrapSpy = <T extends FunctionLike>(
     obj: Record<string, any>,
-    methodName: string,
+    methodName: string | { getter: string } | { setter: string },
     mockFn?: NormalizedProcedure<T>,
   ): Mock<T> => {
+    const propertyName =
+      typeof methodName === 'string'
+        ? methodName
+        : Object.values(methodName)[0]!;
+    const existing = obj[propertyName];
+    if (typeof existing === 'function') {
+      const realmSpy = realmSpies.get(existing);
+      if (realmSpy) {
+        return realmSpy as Mock<T>;
+      }
+    }
+
     const spyImpl = internalSpyOn(obj, methodName, mockFn) as SpyInternalImpl<
       Parameters<T>,
       ReturnType<T>
@@ -132,7 +145,7 @@ export const initSpy = (
 
     const spyState = getInternalState(spyImpl);
 
-    spyFn.getMockName = () => mockName || methodName;
+    spyFn.getMockName = () => mockName || propertyName;
 
     spyFn.mockName = (name: string) => {
       mockName = name;
@@ -351,9 +364,26 @@ export const initSpy = (
       });
     }
 
-    projectMocks().add(new WeakRef(spyFn));
+    const realmSpy = wrapRealmMock(spyFn);
+    realmSpies.set(realmSpy, realmSpy);
+    projectMocks().add(new WeakRef(realmSpy));
+    if (realmSpy !== spyFn) {
+      const descriptor = Object.getOwnPropertyDescriptor(obj, propertyName);
+      if (descriptor) {
+        if (typeof methodName === 'string') {
+          descriptor.value = realmSpy;
+        } else if ('getter' in methodName) {
+          descriptor.get = realmSpy;
+        } else {
+          descriptor.set = realmSpy as unknown as NonNullable<
+            PropertyDescriptor['set']
+          >;
+        }
+        Object.defineProperty(obj, propertyName, descriptor);
+      }
+    }
 
-    return wrapRealmMock(spyFn);
+    return realmSpy;
   };
 
   const forEachMock = (callback: (mock: MockInstance) => void): void => {
@@ -433,7 +463,10 @@ export const initSpy = (
       ? { [accessTypeMap[accessType]]: methodName }
       : methodName;
 
-    return wrapSpy(obj, method as string);
+    return wrapSpy(
+      obj,
+      method as string | { getter: string } | { setter: string },
+    );
   };
 
   /**

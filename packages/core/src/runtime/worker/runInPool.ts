@@ -500,6 +500,13 @@ const preparePool = async (
       globalCleanups.push(
         installGlobalProperty(runtimeGlobal, 'console', customConsole),
       );
+    } else if (isVmPool) {
+      // `vm.createContext` installs a console that intentionally discards
+      // output. With interception disabled, expose the worker console so
+      // direct `console.log` calls retain Node's normal stdout/stderr behavior.
+      globalCleanups.push(
+        installGlobalProperty(runtimeGlobal, 'console', globalThis.console),
+      );
     }
 
     const interopDefault = true;
@@ -902,6 +909,14 @@ export const runInPool = async (
   > | null = null;
 
   if (type === 'collect') {
+    let collectResult:
+      | {
+          project: string;
+          testPath: string;
+          tests: TestInfo[];
+          errors: Awaited<ReturnType<typeof formatTestError>>;
+        }
+      | undefined;
     try {
       const {
         rstestContext,
@@ -936,22 +951,33 @@ export const runInPool = async (
         runtimeGlobal: rstestContext.global,
       });
       const tests = await runner.collectTests();
-      return {
+      collectResult = {
         project,
         testPath,
         tests,
         errors: await formatTestError(unhandledErrors),
       };
     } catch (err) {
-      return {
+      collectResult = {
         project,
         testPath,
         tests: [],
         errors: await formatTestError(err),
       };
     } finally {
-      await teardown();
+      try {
+        const workerCleanupError = await cleanupWorkerFixtureScope();
+        if (workerCleanupError && collectResult) {
+          collectResult.errors = [
+            ...collectResult.errors,
+            ...(await formatTestError(workerCleanupError)),
+          ];
+        }
+      } finally {
+        await teardown();
+      }
     }
+    return collectResult!;
   }
 
   let taskContext: TaskContext | undefined;

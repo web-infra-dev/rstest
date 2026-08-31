@@ -150,7 +150,7 @@ export const getOrCreateSyntheticModule = (
   }
 
   const hasDefault = defaultExport !== undefined || 'default' in something;
-  const namedKeys = Object.keys(something).filter(
+  const namedKeys = Object.getOwnPropertyNames(something).filter(
     (key) => key !== 'default' && (key !== 'module.exports' || !moduleExports),
   );
   const exports = [

@@ -28,7 +28,7 @@ export type ParsedDataUri =
 
 const importMetaResolve = import.meta.resolve?.bind(import.meta);
 const dataUriPattern =
-  /^data:(?<mime>text\/javascript|application\/json|application\/wasm)(?:;(?<encoding>charset=utf-8|base64))?,(?<code>.*)$/;
+  /^data:(?<mime>text\/javascript|application\/javascript|application\/json|application\/wasm)(?<parameters>(?:;[^,]*)*),(?<code>.*)$/i;
 type ExternalSourceCacheEntry = {
   mtimeNs: bigint;
   size: bigint;
@@ -164,30 +164,35 @@ export const parseExternalDataUri = (identifier: string): ParsedDataUri => {
     throw new Error(`Invalid data URL: ${identifier}`);
   }
 
-  const { code, encoding, mime } = match.groups;
+  const { code, mime: rawMime, parameters = '' } = match.groups;
   if (code === undefined) {
     throw new Error(`Invalid data URL: ${identifier}`);
   }
+  if (rawMime === undefined) {
+    throw new Error('Invalid data URL MIME type: ' + identifier);
+  }
+  const mime = rawMime.toLowerCase();
+  const encodings = parameters
+    .split(';')
+    .filter(Boolean)
+    .map((parameter) => parameter.toLowerCase());
+  const isBase64 = encodings.includes('base64');
   if (mime === 'application/wasm') {
-    if (encoding !== 'base64') {
+    if (!isBase64) {
       throw new Error(
-        encoding
-          ? `Invalid WebAssembly data URL encoding: ${encoding}`
+        encodings.length
+          ? `Invalid WebAssembly data URL encoding: ${encodings.join(';')}`
           : 'WebAssembly data URLs require base64 encoding',
       );
     }
-    return { code: Buffer.from(code, 'base64'), mime };
+    return { code: Buffer.from(code, 'base64'), mime: 'application/wasm' };
   }
 
-  if (mime !== 'application/json' && mime !== 'text/javascript') {
-    throw new Error(`Invalid data URL MIME type: ${mime}`);
-  }
   return {
-    code:
-      encoding === 'base64'
-        ? Buffer.from(code, 'base64').toString()
-        : decodeURIComponent(code),
-    mime,
+    code: isBase64
+      ? Buffer.from(code, 'base64').toString()
+      : decodeURIComponent(code),
+    mime: mime === 'application/json' ? 'application/json' : 'text/javascript',
   };
 };
 

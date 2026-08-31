@@ -79,6 +79,12 @@ type CommonJsModule = {
   require: NodeJS.Require;
 };
 
+type BuiltinModuleRecord = {
+  module: vm.SyntheticModule;
+  imported: Record<string, unknown>;
+  overrides: Set<string>;
+};
+
 // `hasAsyncGraph` ships with the complete synchronous graph API that Node
 // itself uses for require(esm): moduleRequests, linkRequests and instantiate.
 const supportsSyncEsmEvaluate =
@@ -299,6 +305,10 @@ class VmExternalModules {
   private readonly webAssemblyCache = new Map<
     string,
     Promise<vm.SyntheticModule>
+  >();
+  private readonly builtinModuleRecords = new Map<
+    string,
+    BuiltinModuleRecord
   >();
   private linkQueue: Promise<void> = Promise.resolve();
   private moduleBuiltin: unknown;
@@ -531,7 +541,15 @@ class VmExternalModules {
     if (type === 'json') {
       throw createImportAttributeError(
         'ERR_IMPORT_ATTRIBUTE_TYPE_INCOMPATIBLE',
-        `Module "${resolvedId}" is not of type "json"`,
+        'Module "' + resolvedId + '" is not of type "json"',
+      );
+    }
+
+    if (attributeNames.length > 0) {
+      const unsupported = attributeNames[0]!;
+      throw createImportAttributeError(
+        'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
+        `Import attribute "${unsupported}" with value "${attributes[unsupported]}" is not supported in ${resolvedId}`,
       );
     }
   }
@@ -541,11 +559,32 @@ class VmExternalModules {
     exports: unknown,
     interopDefault = this.interopDefault,
   ): vm.SyntheticModule {
-    const namespace =
+    const namespace: Record<string, any> =
       exports !== null &&
       (typeof exports === 'object' || typeof exports === 'function')
-        ? Object.assign({}, exports, { default: exports })
+        ? Object.defineProperties(
+            {},
+            Object.fromEntries(
+              Object.getOwnPropertyNames(exports)
+                .filter((name) => name !== 'default')
+                .map((name) => [
+                  name,
+                  Object.getOwnPropertyDescriptor(exports, name)!,
+                ]),
+            ),
+          )
         : { default: exports };
+    if (
+      exports !== null &&
+      (typeof exports === 'object' || typeof exports === 'function')
+    ) {
+      Object.defineProperty(namespace, 'default', {
+        configurable: true,
+        enumerable: true,
+        value: exports,
+        writable: true,
+      });
+    }
     const { mod, defaultExport } = interopDefault
       ? interopModule(namespace)
       : { mod: namespace, defaultExport: namespace.default };
@@ -1149,12 +1188,39 @@ class VmExternalModules {
         if (property === 'Module') {
           return moduleBuiltin;
         }
+        if (property === 'syncBuiltinESMExports') {
+          return this.syncBuiltinESMExports;
+        }
         return Reflect.get(target, property, receiver);
       },
     });
     this.moduleBuiltin = moduleBuiltin;
     return moduleBuiltin;
   }
+
+  private syncBuiltinESMExports = (): void => {
+    const nativeModule = createNativeRequire(import.meta.url)(
+      'node:module',
+    ) as {
+      syncBuiltinESMExports: () => void;
+    };
+    nativeModule.syncBuiltinESMExports();
+
+    for (const {
+      module,
+      imported,
+      overrides,
+    } of this.builtinModuleRecords.values()) {
+      if (module.status !== 'evaluated') {
+        continue;
+      }
+      for (const name of Object.keys(imported)) {
+        if (!overrides.has(name)) {
+          module.setExport(name, imported[name]);
+        }
+      }
+    }
+  };
 
   private async loadNativeModule(resolvedId: string): Promise<vm.Module> {
     if (!isBuiltin(resolvedId.replace(/^node:/, ''))) {
@@ -1166,29 +1232,49 @@ class VmExternalModules {
 
     const imported = await import(resolvedId);
     const normalized = resolvedId.replace(/^node:/, '');
+    const overrides = new Set<string>();
+    let exports: Record<string, unknown>;
+    let defaultExport = imported.default;
     if (normalized === 'timers') {
       const timers = this.loadBuiltin(resolvedId) as Record<
         PropertyKey,
         unknown
       >;
-      const exports = { ...imported, default: timers };
+      exports = { ...imported, default: timers };
       for (const name of VM_TIMER_EXPORTS) {
         exports[name] = timers[name];
+        overrides.add(name);
       }
-      return asModule(exports, resolvedId, timers, this.context);
-    }
-    if (normalized !== 'module') {
-      return asModule(imported, resolvedId, imported.default, this.context);
+      defaultExport = timers;
+    } else if (normalized === 'module') {
+      const moduleBuiltin = this.loadBuiltin(resolvedId);
+      exports = {
+        ...imported,
+        Module: moduleBuiltin,
+        createRequire: this.createRequire,
+        syncBuiltinESMExports: this.syncBuiltinESMExports,
+        default: moduleBuiltin,
+      };
+      overrides.add('Module');
+      overrides.add('createRequire');
+      overrides.add('syncBuiltinESMExports');
+      defaultExport = moduleBuiltin;
+    } else {
+      exports = imported;
     }
 
-    const moduleBuiltin = this.loadBuiltin(resolvedId);
-    const exports = {
-      ...imported,
-      Module: moduleBuiltin,
-      createRequire: this.createRequire,
-      default: moduleBuiltin,
-    };
-    return asModule(exports, resolvedId, moduleBuiltin, this.context);
+    const module = await asModule(
+      exports,
+      resolvedId,
+      defaultExport,
+      this.context,
+    );
+    this.builtinModuleRecords.set(resolvedId, {
+      module,
+      imported,
+      overrides,
+    });
+    return module;
   }
 }
 

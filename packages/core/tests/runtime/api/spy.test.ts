@@ -21,6 +21,35 @@ describe('initSpy fn()', () => {
     expect(isVmFunction(mock)).toBe(true);
   });
 
+  it('installs and reuses the VM-realm spy for a spied method', () => {
+    const context = runInNewContext('globalThis', {}) as Record<
+      string,
+      unknown
+    >;
+    const { spyOn } = initSpy(
+      () => '',
+      () => context,
+    );
+    const object = {
+      method: () => 'value',
+    };
+    const original = object.method;
+    const isVmFunction = runInNewContext(
+      '(value) => value instanceof Function',
+      context,
+    ) as (value: unknown) => boolean;
+
+    const spy = spyOn(object, 'method');
+
+    expect(object.method).toBe(spy);
+    expect(isVmFunction(object.method)).toBe(true);
+    expect(spyOn(object, 'method')).toBe(spy);
+    expect(object.method()).toBe('value');
+
+    spy.mockRestore();
+    expect(object.method).toBe(original);
+  });
+
   it('tracks calls, results and invocationCallOrder', () => {
     const { fn } = initSpy();
     const spy = fn((x: number) => x * 2);

@@ -69,4 +69,30 @@ describe('console log', () => {
     expect(logs.some((log) => log.startsWith('I'))).toBeTruthy();
     expect(logs.some((log) => log.includes('log.test.ts:4:11'))).toBeFalsy();
   });
+
+  it('should forward the native console in vmThreads when interception is disabled', async () => {
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: [
+        'run',
+        'log.test',
+        '--pool',
+        'vmThreads',
+        '--pool.memoryLimit',
+        '256MB',
+        '--disableConsoleIntercept',
+      ],
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await cli.exec;
+    const logs = cli.stdout.split('\n').filter(Boolean);
+
+    expect(logs.some((log) => log.includes("I'm log"))).toBeTruthy();
+    expect(logs.some((log) => log.includes("I'm info"))).toBeTruthy();
+  });
 });
