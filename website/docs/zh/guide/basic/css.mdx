@@ -1,0 +1,121 @@
+---
+description: 介绍 Rstest 对 CSS、CSS Modules、Less 和 Sass 的处理方式，以及如何按需优化样式处理性能。
+---
+
+import { PackageManagerTabs } from '@theme';
+
+# CSS
+
+Rstest 基于 Rsbuild 和 Rspack 构建，因此可以直接导入 CSS 文件和 CSS Modules。Rstest 会根据当前测试环境选择合适的处理方式。
+
+## 默认行为
+
+在 Node.js 测试中，Rstest 默认不输出 CSS：
+
+- 普通 CSS、Less 或 Sass 文件不会生成样式产物，避免执行不必要的样式处理。
+- CSS Modules 仍会被处理，并导出 class name 映射，供组件测试使用。
+
+例如，下面的代码可以直接在测试中导入：
+
+```tsx title="Button.tsx"
+import styles from './Button.module.css';
+import './reset.css';
+
+export function Button() {
+  return <button className={styles.button}>Submit</button>;
+}
+```
+
+```ts title="Button.test.tsx"
+import { expect, test } from '@rstest/core';
+import styles from './Button.module.css';
+
+test('loads CSS Modules', () => {
+  expect(styles.button).toEqual(expect.any(String));
+});
+```
+
+CSS Modules 通常使用 `.module.css`、`.module.less` 或 `.module.scss` 文件名。你可以通过 [`output.cssModules`](/config/build/output#outputcssmodules) 自定义 class name 生成规则和其他 CSS Modules 选项。
+
+在 Browser Mode 中，测试运行在真实浏览器中，样式会参与页面渲染。如果需要验证 computed styles、布局或视觉效果，请使用 [Browser Mode](/guide/browser-testing/)。
+
+## 使用 Less 或 Sass
+
+Rstest 内置支持普通 CSS 和 CSS Modules。Less、Sass 等预处理器需要安装并启用对应的 Rsbuild plugin。
+
+### Less
+
+[@rsbuild/plugin-less](https://github.com/web-infra-dev/rsbuild/tree/main/packages/plugin-less) 用于编译 Less 文件，包括 CSS Modules 中的 `.module.less` 文件。
+
+<PackageManagerTabs command="add @rsbuild/plugin-less -D" />
+
+```ts title="rstest.config.ts"
+import { pluginLess } from '@rsbuild/plugin-less';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [pluginLess()],
+});
+```
+
+### Sass
+
+[@rsbuild/plugin-sass](https://github.com/web-infra-dev/rsbuild/tree/main/packages/plugin-sass) 用于编译 Sass 和 SCSS 文件，包括 `.module.sass` 和 `.module.scss` 文件。
+
+<PackageManagerTabs command="add @rsbuild/plugin-sass -D" />
+
+```ts title="rstest.config.ts"
+import { pluginSass } from '@rsbuild/plugin-sass';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  plugins: [pluginSass()],
+});
+```
+
+如果项目已经通过 [`@rstest/adapter-rsbuild`](/guide/integration/rsbuild) 复用 Rsbuild 配置，请把这些 plugin 配置在 `rsbuild.config.ts` 中，而不是重复配置在 `rstest.config.ts` 中。
+
+```ts title="rsbuild.config.ts"
+import { pluginLess } from '@rsbuild/plugin-less';
+import { pluginSass } from '@rsbuild/plugin-sass';
+
+export default {
+  plugins: [pluginLess(), pluginSass()],
+};
+```
+
+## CSS Modules 的性能优化
+
+Rstest 的默认 CSS Modules 处理会尽量保持与 Rsbuild 构建结果一致。因此，导入 `.module.less` 或 `.module.scss` 时，仍可能执行对应的 Less 或 Sass 编译。
+
+如果测试只需要读取 `styles.button` 这样的属性，不关心真实生成的 class name，可以使用 [`identity-obj-proxy`](https://github.com/keyz/identity-obj-proxy) 替代 CSS Modules 模块：
+
+<PackageManagerTabs command="add identity-obj-proxy -D" />
+
+然后通过 `NormalModuleReplacementPlugin` 替换 CSS Modules 文件：
+
+```ts title="rstest.config.ts"
+import { rspack } from '@rspack/core';
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  tools: {
+    rspack: {
+      plugins: [
+        new rspack.NormalModuleReplacementPlugin(
+          /\.module\.(css|less|sass|scss)$/,
+          'identity-obj-proxy',
+        ),
+      ],
+    },
+  },
+});
+```
+
+这个方式可以绕过 CSS Modules 的预处理和转换，通常会更快，尤其是 Sass 文件较多时。但它只是一个测试替身：
+
+- `styles.button` 通常返回 `button`，不会返回真实构建中的 hash class name。
+- 不会验证 Less、Sass 或 CSS Modules 语法是否正确。
+- 不适合验证 `composes`、`:global`、真实 class name、样式产物或客户端与服务端 class name 是否一致。
+
+因此，建议只在测试关注组件逻辑、不关注样式 class name 时使用。需要验证真实 CSS Modules 行为的测试，应保留 Rstest 默认处理；需要验证浏览器渲染效果的测试，应使用 Browser Mode。
