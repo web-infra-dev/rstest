@@ -220,7 +220,27 @@ describe('loadEsModule', () => {
         hasParent: true,
         parentHasChild: true,
       },
+      moduleConstructor: {
+        hasLoad: true,
+        hasResolveFilename: true,
+        isModule: true,
+        sameConstructor: true,
+      },
     });
+  });
+
+  it('should reject ESM imports of native addons', async () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const addonPath = fixturePath(
+      'vm-external/module-semantics/native-addon.node',
+    );
+
+    await expect(executor.import(addonPath, true, false)).rejects.toMatchObject(
+      {
+        code: 'ERR_UNKNOWN_FILE_EXTENSION',
+      },
+    );
   });
 
   it('should preserve the complete CommonJS value as its default export', async () => {

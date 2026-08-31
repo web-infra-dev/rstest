@@ -1292,6 +1292,8 @@ importers:
 
   packages/core/tests/runner/fixtures/bare-parent: {}
 
+  packages/core/tests/runner/fixtures/vm-external/module-semantics/ambiguous: {}
+
   packages/core/tests/runner/fixtures/vm-external/module-semantics/explicit-commonjs: {}
 
   packages/core/tests/runner/fixtures/vm-external/module-semantics/explicit-esm: {}

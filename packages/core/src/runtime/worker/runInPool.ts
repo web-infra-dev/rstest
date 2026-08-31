@@ -272,7 +272,14 @@ const installVmNodeGlobals = (
           } else if (tag === '[object RegExp]') {
             Object.setPrototypeOf(value, RegExp.prototype);
           } else if (tag === '[object Error]') {
-            Object.setPrototypeOf(value, Error.prototype);
+            const constructor = globalThis[value.name];
+            Object.setPrototypeOf(
+              value,
+              typeof constructor === 'function' &&
+                (constructor === Error || constructor.prototype instanceof Error)
+                ? constructor.prototype
+                : Error.prototype,
+            );
           } else if (tag === '[object ArrayBuffer]') {
             Object.setPrototypeOf(value, ArrayBuffer.prototype);
           } else if (tag === '[object DataView]') {

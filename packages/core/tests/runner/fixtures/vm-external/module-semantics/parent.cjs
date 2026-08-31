@@ -12,6 +12,7 @@ const replacedJson = require(jsonPath);
 const injectedPath = require.resolve('./injected.cjs');
 require.cache[injectedPath] = { exports: { fromCache: true } };
 const injected = require(injectedPath);
+const { Module } = require('node:module');
 
 module.exports = {
   cachedBeforeDelete,
@@ -22,4 +23,11 @@ module.exports = {
   replacedJson: replacedJson.label,
   reloadedAfterDelete: first !== second,
   second,
+  moduleConstructor: {
+    hasLoad: typeof module.constructor._load === 'function',
+    hasResolveFilename:
+      typeof module.constructor._resolveFilename === 'function',
+    isModule: module instanceof Module,
+    sameConstructor: module.constructor === Module,
+  },
 };

@@ -70,17 +70,8 @@ const createEsmLinkOperation = (): EsmLinkOperation => {
   };
 };
 
-type CommonJsModule = {
-  children: CommonJsModule[];
+type CommonJsModule = Module & {
   exports: unknown;
-  filename: string;
-  id: string;
-  isPreloading: boolean;
-  loaded: boolean;
-  parent: CommonJsModule | null;
-  path: string;
-  paths: string[];
-  require: NodeJS.Require;
 };
 
 type CommonJsExportMetadata = {
@@ -507,6 +498,12 @@ class VmExternalModules {
           this.loadJson(getFilePath(resolvedId)),
         );
       case 'native':
+        if (
+          !isBuiltin(resolvedId.replace(/^node:/, '')) &&
+          extname(getFilePath(resolvedId)) === '.node'
+        ) {
+          throw createUnsupportedFormatError(getFilePath(resolvedId));
+        }
         return this.loadNativeModule(resolvedId);
       case 'wasm':
         return this.loadWebAssemblyModule(
@@ -888,18 +885,17 @@ class VmExternalModules {
 
     let module: CommonJsModule;
     const moduleRequire = this.createRequire(filePath, () => module);
-    module = {
-      children: [],
-      exports: vm.runInContext('Object.create(Object.prototype)', this.context),
-      filename: filePath,
-      id: filePath,
-      isPreloading: false,
-      loaded: false,
-      parent: parentModule ?? null,
-      path: dirname(filePath),
-      paths: getNodeModulePaths(filePath),
-      require: moduleRequire,
-    };
+    module = new Module(filePath, parentModule);
+    module.exports = vm.runInContext(
+      'Object.create(Object.prototype)',
+      this.context,
+    );
+    module.filename = filePath;
+    module.id = filePath;
+    module.loaded = false;
+    module.path = dirname(filePath);
+    module.paths = getNodeModulePaths(filePath);
+    module.require = moduleRequire;
     this.commonJsCache.set(filePath, module);
     this.requireCache[filePath] = module;
     this.attachChild(parentModule, module);
@@ -961,7 +957,7 @@ class VmExternalModules {
       fn.call(
         module.exports,
         module.exports,
-        module.require,
+        moduleRequire,
         module,
         filePath,
         dirname(filePath),
@@ -986,25 +982,16 @@ class VmExternalModules {
     if (requireCacheEntry.hit) {
       return requireCacheEntry.exports;
     }
-    let module = this.jsonCache.get(filePath);
-    if (!module) {
-      module = {
-        children: [],
-        exports: this.parseJson(readSource(filePath)),
-        filename: filePath,
-        id: filePath,
-        isPreloading: false,
-        loaded: true,
-        parent: parentModule ?? null,
-        path: dirname(filePath),
-        paths: getNodeModulePaths(filePath),
-        require: this.createRequire(filePath),
-      };
-      this.jsonCache.set(filePath, module);
-      this.requireCache[filePath] = module;
-    } else {
-      this.jsonCache.set(filePath, module);
-    }
+    const module = new Module(filePath, parentModule) as CommonJsModule;
+    module.exports = this.parseJson(readSource(filePath));
+    module.filename = filePath;
+    module.id = filePath;
+    module.loaded = true;
+    module.path = dirname(filePath);
+    module.paths = getNodeModulePaths(filePath);
+    module.require = this.createRequire(filePath);
+    this.jsonCache.set(filePath, module);
+    this.requireCache[filePath] = module;
     this.attachChild(parentModule, module);
     return module.exports;
   }
@@ -1293,9 +1280,6 @@ class VmExternalModules {
         if (property === 'createRequire') {
           return this.createRequire;
         }
-        if (property === 'Module') {
-          return moduleBuiltin;
-        }
         if (property === 'syncBuiltinESMExports') {
           return this.syncBuiltinESMExports;
         }
@@ -1358,7 +1342,7 @@ class VmExternalModules {
       const moduleBuiltin = this.loadBuiltin(resolvedId);
       exports = {
         ...imported,
-        Module: moduleBuiltin,
+        Module,
         createRequire: this.createRequire,
         syncBuiltinESMExports: this.syncBuiltinESMExports,
         default: moduleBuiltin,

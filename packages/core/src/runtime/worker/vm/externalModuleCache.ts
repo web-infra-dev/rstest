@@ -93,7 +93,11 @@ const resolvePackageType = (filePath: string): PackageType => {
         type?: unknown;
       };
       const type: PackageType =
-        packageJson.type === 'module' ? 'module' : 'commonjs';
+        packageJson.type === 'module'
+          ? 'module'
+          : packageJson.type === 'commonjs'
+            ? 'commonjs'
+            : 'ambiguous';
       for (const item of visited) {
         packageTypeCache.set(item, type);
       }

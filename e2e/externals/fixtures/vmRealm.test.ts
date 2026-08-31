@@ -35,6 +35,8 @@ it('executes external modules in the test VM realm', async () => {
     blobSize: 4,
     blobText: 'blob',
     clonedBlob: true,
+    clonedTypeError: true,
+    clonedTypeErrorName: 'TypeError',
     fetchPromise: true,
     responseText: 'vm',
     structuredCloneNestedObject: true,
