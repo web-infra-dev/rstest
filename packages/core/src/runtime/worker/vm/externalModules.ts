@@ -19,6 +19,7 @@ import {
   getEsmCompilationCache,
   getExternalFilePath as getFilePath,
   getExternalModuleFormat as getModuleFormat,
+  isAmbiguousJavaScriptModule,
   parseExternalDataUri as parseDataUri,
   readExternalSource as readSource,
   resolveExternalSpecifier,
@@ -144,7 +145,7 @@ type CommonJsScript = vm.Script & { identifier: string };
 
 const staticCommonJsImportModuleDynamically: vm.DynamicModuleLoader<
   vm.Script
-> = (specifier, referencer) => {
+> = (specifier, referencer, importAttributes) => {
   const executor = scriptExecutors.get(referencer);
   if (!executor) {
     throw new Error(
@@ -157,7 +158,11 @@ const staticCommonJsImportModuleDynamically: vm.DynamicModuleLoader<
       `Cannot import "${specifier}": the CommonJS referrer has no identifier.`,
     );
   }
-  return executor.importModuleDynamically(specifier, identifier);
+  return executor.importModuleDynamically(
+    specifier,
+    identifier,
+    importAttributes as unknown as ExternalImportAttributes,
+  );
 };
 
 const getContextExecutor = (module: vm.SourceTextModule): VmExternalModules => {
@@ -172,10 +177,11 @@ const getContextExecutor = (module: vm.SourceTextModule): VmExternalModules => {
 
 const staticImportModuleDynamically: vm.DynamicModuleLoader<
   vm.SourceTextModule
-> = (specifier, referencer) =>
+> = (specifier, referencer, importAttributes) =>
   getContextExecutor(referencer).importModuleDynamically(
     specifier,
     referencer.identifier,
+    importAttributes as unknown as ExternalImportAttributes,
   );
 
 const staticInitializeImportMeta = (
@@ -236,6 +242,34 @@ const isSyntaxError = (error: unknown): boolean =>
   (typeof error === 'object' &&
     error !== null &&
     Reflect.get(error, 'name') === 'SyntaxError');
+
+type ExternalImportAttributes = Record<string, string | undefined> | undefined;
+
+const getImportAttributes = (
+  importAttributes:
+    ExternalImportAttributes | { with?: ExternalImportAttributes },
+): Record<string, string> => {
+  if (!importAttributes) {
+    return {};
+  }
+  const withAttributes = Reflect.get(importAttributes, 'with');
+  if (withAttributes && typeof withAttributes === 'object') {
+    return withAttributes as Record<string, string>;
+  }
+  return importAttributes as Record<string, string>;
+};
+
+const createImportAttributeError = (
+  code:
+    | 'ERR_IMPORT_ATTRIBUTE_MISSING'
+    | 'ERR_IMPORT_ATTRIBUTE_TYPE_INCOMPATIBLE'
+    | 'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
+  message: string,
+): NodeJS.ErrnoException => {
+  const error: NodeJS.ErrnoException = new Error(message);
+  error.code = code;
+  return error;
+};
 
 const moduleHasAsyncGraph = (module: vm.Module): boolean =>
   module instanceof vm.SourceTextModule &&
@@ -352,9 +386,14 @@ class VmExternalModules {
     resolvedId: string,
     interopDefault: boolean,
     returnModule: boolean,
+    importAttributes?: ExternalImportAttributes,
   ): Promise<unknown> {
     this.interopDefault = interopDefault;
-    const module = await this.enqueueLinkedModule(resolvedId, interopDefault);
+    const module = await this.enqueueLinkedModule(
+      resolvedId,
+      interopDefault,
+      importAttributes,
+    );
     if (returnModule) {
       return module;
     }
@@ -367,12 +406,14 @@ class VmExternalModules {
   private enqueueLinkedModule(
     resolvedId: string,
     interopDefault: boolean,
+    importAttributes?: ExternalImportAttributes,
   ): Promise<vm.Module> {
     // Node may invoke sibling linker callbacks concurrently. Linking external
     // roots in parallel can split one cyclic graph into operations that wait on
     // each other. Queue linking only; evaluation remains concurrent and may
     // itself perform dynamic imports without deadlocking this queue.
     const linkedModule = this.linkQueue.then(async () => {
+      this.validateImportAttributes(resolvedId, importAttributes);
       const module = await this.getModule(resolvedId, interopDefault);
       await this.linkModule(module, interopDefault);
       return module;
@@ -391,10 +432,12 @@ class VmExternalModules {
   async importModuleDynamically(
     specifier: string,
     parent: string,
+    importAttributes?: ExternalImportAttributes,
   ): Promise<vm.Module> {
     const imported = await this.enqueueLinkedModule(
       this.resolve(specifier, parent),
       this.interopDefault,
+      importAttributes,
     );
     if (imported.status !== 'evaluated' && imported.status !== 'evaluating') {
       await imported.evaluate();
@@ -439,6 +482,57 @@ class VmExternalModules {
         );
       case 'unsupported':
         throw createUnsupportedFormatError(getFilePath(resolvedId));
+    }
+  }
+
+  private validateImportAttributes(
+    resolvedId: string,
+    importAttributes?: ExternalImportAttributes,
+  ): void {
+    const attributes = getImportAttributes(importAttributes);
+    const attributeNames = Object.keys(attributes);
+    const moduleFormat = getModuleFormat(resolvedId);
+    const format =
+      moduleFormat === 'data'
+        ? (() => {
+            const { mime } = parseDataUri(resolvedId);
+            return mime === 'application/json'
+              ? 'json'
+              : mime === 'application/wasm'
+                ? 'wasm'
+                : 'module';
+          })()
+        : moduleFormat;
+    const type = attributes.type;
+
+    if (format === 'json') {
+      if (type === undefined) {
+        throw createImportAttributeError(
+          'ERR_IMPORT_ATTRIBUTE_MISSING',
+          `Module "${resolvedId}" needs an import attribute of "type: json"`,
+        );
+      }
+      if (type !== 'json') {
+        throw createImportAttributeError(
+          'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
+          `Import attribute "type" with value "${type}" is not supported in ${resolvedId}`,
+        );
+      }
+      const unsupported = attributeNames.find((name) => name !== 'type');
+      if (unsupported) {
+        throw createImportAttributeError(
+          'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
+          `Import attribute "${unsupported}" with value "${attributes[unsupported]}" is not supported in ${resolvedId}`,
+        );
+      }
+      return;
+    }
+
+    if (type === 'json') {
+      throw createImportAttributeError(
+        'ERR_IMPORT_ATTRIBUTE_TYPE_INCOMPATIBLE',
+        `Module "${resolvedId}" is not of type "json"`,
+      );
     }
   }
 
@@ -519,24 +613,24 @@ class VmExternalModules {
         }
       }
 
+      const importObject: WebAssembly.Imports = {};
+      for (const { module: specifier, name } of imports) {
+        const dependency = dependencies.get(specifier)!;
+        await this.linkModule(dependency, this.interopDefault);
+        if (
+          dependency.status !== 'evaluated' &&
+          dependency.status !== 'evaluating'
+        ) {
+          await dependency.evaluate();
+        }
+        const namespace = dependency.namespace as Record<string, unknown>;
+        const moduleImports = (importObject[specifier] ??= {});
+        moduleImports[name] = namespace[name] as WebAssembly.ImportValue;
+      }
+
       const syntheticModule = new vm.SyntheticModule(
         WebAssembly.Module.exports(compiled).map(({ name }) => name),
-        async () => {
-          const importObject: WebAssembly.Imports = {};
-          for (const { module: specifier, name } of imports) {
-            const dependency = dependencies.get(specifier)!;
-            await this.linkModule(dependency, this.interopDefault);
-            if (
-              dependency.status !== 'evaluated' &&
-              dependency.status !== 'evaluating'
-            ) {
-              await dependency.evaluate();
-            }
-            const namespace = dependency.namespace as Record<string, unknown>;
-            const moduleImports = (importObject[specifier] ??= {});
-            moduleImports[name] = namespace[name] as WebAssembly.ImportValue;
-          }
-
+        () => {
           const instance = new WebAssembly.Instance(compiled, importObject);
           for (const { name } of WebAssembly.Module.exports(compiled)) {
             syntheticModule.setExport(name, instance.exports[name]);
@@ -718,6 +812,7 @@ class VmExternalModules {
       if (
         supportsSyncEsmEvaluate &&
         extname(filePath) === '.js' &&
+        isAmbiguousJavaScriptModule(filePath) &&
         isSyntaxError(error)
       ) {
         try {
@@ -988,11 +1083,13 @@ class VmExternalModules {
       const operation = createEsmLinkOperation();
       this.esmLinkOperations.set(module.identifier, operation);
       void module
-        .link(async (specifier, referencer) => {
-          const dependency = await this.getModule(
-            this.resolve(specifier, referencer.identifier),
-            interopDefault,
+        .link(async (specifier, referencer, extra) => {
+          const resolvedId = this.resolve(specifier, referencer.identifier);
+          this.validateImportAttributes(
+            resolvedId,
+            extra.attributes as unknown as ExternalImportAttributes,
           );
+          const dependency = await this.getModule(resolvedId, interopDefault);
           if (
             dependency.status === 'unlinked' ||
             dependency.status === 'linking'

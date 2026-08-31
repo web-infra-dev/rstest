@@ -7,6 +7,8 @@ import { workerCache } from './cache';
 export type ExternalModuleFormat =
   'commonjs' | 'data' | 'json' | 'module' | 'native' | 'unsupported' | 'wasm';
 
+type PackageType = 'ambiguous' | 'commonjs' | 'module';
+
 export type CommonJsCompilationCacheEntry = {
   cachedData: Buffer;
   code: string;
@@ -36,7 +38,7 @@ const sourceCache = workerCache.namespace<ExternalSourceCacheEntry>(
   'external-source',
   ({ source }) => Buffer.byteLength(source),
 );
-const packageTypeCache = workerCache.namespace<'commonjs' | 'module'>(
+const packageTypeCache = workerCache.namespace<PackageType>(
   'external-package-type',
   () => 0,
 );
@@ -70,7 +72,7 @@ export const readExternalSource = (filePath: string): string => {
   return source;
 };
 
-const resolvePackageType = (filePath: string): 'commonjs' | 'module' => {
+const resolvePackageType = (filePath: string): PackageType => {
   let directory = dirname(filePath);
   const visited: string[] = [];
 
@@ -89,7 +91,8 @@ const resolvePackageType = (filePath: string): 'commonjs' | 'module' => {
       const packageJson = JSON.parse(readExternalSource(packageJsonPath)) as {
         type?: unknown;
       };
-      const type = packageJson.type === 'module' ? 'module' : 'commonjs';
+      const type: PackageType =
+        packageJson.type === 'module' ? 'module' : 'commonjs';
       for (const item of visited) {
         packageTypeCache.set(item, type);
       }
@@ -99,12 +102,24 @@ const resolvePackageType = (filePath: string): 'commonjs' | 'module' => {
     const parent = dirname(directory);
     if (parent === directory || directory === parse(directory).root) {
       for (const item of visited) {
-        packageTypeCache.set(item, 'commonjs');
+        packageTypeCache.set(item, 'ambiguous');
       }
-      return 'commonjs';
+      return 'ambiguous';
     }
     directory = parent;
   }
+};
+
+export const isAmbiguousJavaScriptModule = (resolvedId: string): boolean => {
+  if (resolvedId.startsWith('data:')) {
+    return false;
+  }
+  const filePath = getExternalFilePath(resolvedId);
+  const extension = extname(filePath);
+  return (
+    (extension === '' || extension === '.js') &&
+    resolvePackageType(filePath) === 'ambiguous'
+  );
 };
 
 export const getExternalFilePath = (resolvedId: string): string =>
@@ -125,7 +140,7 @@ export const getExternalModuleFormat = (
   const filePath = getExternalFilePath(resolvedId);
   switch (extname(filePath)) {
     case '':
-      return resolvePackageType(filePath);
+      return resolvePackageType(filePath) === 'module' ? 'module' : 'commonjs';
     case '.cjs':
       return 'commonjs';
     case '.json':
@@ -133,7 +148,7 @@ export const getExternalModuleFormat = (
     case '.mjs':
       return 'module';
     case '.js':
-      return resolvePackageType(filePath);
+      return resolvePackageType(filePath) === 'module' ? 'module' : 'commonjs';
     case '.node':
       return 'native';
     case '.wasm':

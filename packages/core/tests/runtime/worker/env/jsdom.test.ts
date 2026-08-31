@@ -4,6 +4,7 @@ import type { DOMWindow } from 'jsdom';
 import {
   environment,
   forwardVirtualConsole,
+  setupVM,
 } from '../../../../src/runtime/worker/env/jsdom';
 
 const createTestGlobal = (): typeof globalThis =>
@@ -123,6 +124,25 @@ test('forwards the console with the jsdom v27+ API', () => {
   );
 
   expect(forwarded).toEqual([console]);
+});
+
+test('does not drop VM console events during JSDOM initialization', async () => {
+  const calls: unknown[][] = [];
+  const { teardown } = await setupVM(
+    {
+      html: '<script>console.warn("during initialization")</script>',
+      beforeParse(window: DOMWindow) {
+        window.console.warn = (...args: unknown[]) => calls.push(args);
+      },
+    },
+    { scope: 'file' },
+  );
+
+  try {
+    expect(calls).toEqual([['during initialization']]);
+  } finally {
+    teardown();
+  }
 });
 
 test('clears pending Node timers during jsdom teardown', async () => {

@@ -46,6 +46,44 @@ export const forwardVirtualConsole = (
   }
 };
 
+const createDeferredConsole = (): {
+  console: Console;
+  setTarget: (target: Console) => void;
+} => {
+  let target: Console | undefined;
+  const pending: { method: PropertyKey; args: unknown[] }[] = [];
+  const deferred = new Proxy(
+    {},
+    {
+      get:
+        (_target, method: PropertyKey) =>
+        (...args: unknown[]) => {
+          if (target) {
+            const fn = Reflect.get(target, method);
+            if (typeof fn === 'function') {
+              Reflect.apply(fn, target, args);
+            }
+            return;
+          }
+          pending.push({ method, args });
+        },
+    },
+  ) as Console;
+
+  return {
+    console: deferred,
+    setTarget(nextTarget) {
+      target = nextTarget;
+      for (const { args, method } of pending.splice(0)) {
+        const fn = Reflect.get(target, method);
+        if (typeof fn === 'function') {
+          Reflect.apply(fn, target, args);
+        }
+      }
+    },
+  };
+};
+
 function patchAddEventListener(
   window: DOMWindow,
   NodeAbortSignal: typeof AbortSignal,
@@ -159,8 +197,15 @@ const createJSDOM = (
   let cleanupObjectURLs = () => {};
   const virtualConsole =
     console && enableVirtualConsole ? new VirtualConsole() : undefined;
-  if (virtualConsole && virtualConsoleTarget) {
-    forwardVirtualConsole(virtualConsole, virtualConsoleTarget);
+  const deferredConsole =
+    virtualConsole && !virtualConsoleTarget
+      ? createDeferredConsole()
+      : undefined;
+  if (virtualConsole) {
+    forwardVirtualConsole(
+      virtualConsole,
+      virtualConsoleTarget ?? deferredConsole!.console,
+    );
   }
   const dom = new JSDOM(html, {
     pretendToBeVisual,
@@ -183,6 +228,8 @@ const createJSDOM = (
   return {
     cleanupObjectURLs: () => cleanupObjectURLs(),
     dom,
+    setVirtualConsoleTarget: (target: Console) =>
+      deferredConsole?.setTarget(target),
     virtualConsole,
   };
 };
@@ -309,12 +356,8 @@ export const setupVM = async (
   dependency?: JSDOMModule,
 ): Promise<{ context: vm.Context; teardown: () => void }> => {
   const jsdom = await loadJSDOM(dependency);
-  const { cleanupObjectURLs, dom, virtualConsole } = createJSDOM(
-    jsdom,
-    options,
-    context,
-    true,
-  );
+  const { cleanupObjectURLs, dom, setVirtualConsoleTarget, virtualConsole } =
+    createJSDOM(jsdom, options, context, true);
   const vmContext = dom.getInternalVMContext();
   const nodeTimers: NodeTimerPrimitives = {
     clearInterval: globalThis.clearInterval,
@@ -324,7 +367,7 @@ export const setupVM = async (
   };
   const vmGlobal = runInContext('globalThis', vmContext) as typeof globalThis;
   if (virtualConsole && vmGlobal.console) {
-    forwardVirtualConsole(virtualConsole, vmGlobal.console);
+    setVirtualConsoleTarget(vmGlobal.console);
   }
   const cleanupTimers = installTimerTracking(vmGlobal, nodeTimers, context);
   const cleanupHandler = addDefaultErrorHandler(vmGlobal as unknown as Window);

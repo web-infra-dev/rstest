@@ -291,6 +291,70 @@ describe('loadEsModule', () => {
     expect(mod.default).toEqual({ json: 1, value: 'data-js' });
   });
 
+  it('should preserve WebAssembly imports when loading an external module', async () => {
+    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'rstest-vm-wasm-'));
+    const wasmPath = join(temporaryDirectory, 'value.wasm');
+    const context = vm.createContext({});
+    const wasm = Buffer.from([
+      0, 97, 115, 109, 1, 0, 0, 0, 1, 6, 1, 96, 1, 127, 1, 127, 2, 17, 1, 9, 46,
+      47, 101, 110, 118, 46, 109, 106, 115, 3, 97, 100, 100, 0, 0, 3, 2, 1, 0,
+      7, 7, 1, 3, 114, 117, 110, 0, 1, 10, 8, 1, 6, 0, 32, 0, 16, 0, 11,
+    ]);
+
+    try {
+      writeFileSync(wasmPath, wasm);
+      writeFileSync(
+        join(temporaryDirectory, 'env.mjs'),
+        'export const add = (value) => value + 1;\n',
+      );
+      const mod = await loadModule({
+        codeContent: [
+          `import { run } from ${JSON.stringify(wasmPath)};`,
+          'export default run(2);',
+        ].join('\n'),
+        distPath: '/virtual/dist/external-wasm.mjs',
+        testPath: __filename,
+        rstestContext: {},
+        assetFiles: {},
+        interopDefault: true,
+        vmContext: context,
+      });
+
+      expect(mod.default).toBe(3);
+    } finally {
+      disposeVmExternalModules(context);
+      rmSync(temporaryDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it('should enforce JSON import attributes in the VM loader', async () => {
+    const jsonUrl = 'data:application/json,%7B%22value%22%3A1%7D';
+    const loadOptions = {
+      testPath: __filename,
+      rstestContext: {},
+      assetFiles: {},
+      interopDefault: true,
+    };
+
+    await expect(
+      loadModule({
+        ...loadOptions,
+        distPath: '/virtual/dist/json-attributes-missing.mjs',
+        vmContext: vm.createContext({}),
+        codeContent: `import value from ${JSON.stringify(jsonUrl)}; export default value;`,
+      }),
+    ).rejects.toMatchObject({ code: 'ERR_IMPORT_ATTRIBUTE_MISSING' });
+
+    await expect(
+      loadModule({
+        ...loadOptions,
+        distPath: '/virtual/dist/json-attributes-wrong.mjs',
+        vmContext: vm.createContext({}),
+        codeContent: `import value from ${JSON.stringify(jsonUrl)} with { type: 'javascript' }; export default value;`,
+      }),
+    ).rejects.toMatchObject({ code: 'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED' });
+  });
+
   it('should refresh cached external source after the file changes', async () => {
     const temporaryDirectory = mkdtempSync(
       join(tmpdir(), 'rstest-vm-external-'),
@@ -408,6 +472,18 @@ describe('loadEsModule', () => {
         expect.objectContaining({ code: 'ERR_REQUIRE_ESM' }),
       );
     }
+  });
+
+  it('should not reinterpret explicit CommonJS .js as ESM after a syntax error', () => {
+    const vmContext = vm.createContext({});
+    const executor = getVmExternalModules(vmContext);
+    const explicitCommonJsPath = fixturePath(
+      'vm-external/module-semantics/explicit-commonjs/value.js',
+    );
+
+    expect(() => executor.require(explicitCommonJsPath, __filename)).toThrow(
+      /Unexpected token/,
+    );
   });
 
   it('should reject require(esm) when its graph uses top-level await', async () => {

@@ -91,11 +91,14 @@ function isBuiltinReadonly(target: unknown, prop: Key): boolean {
 /**
  * Collect all method names from an object's prototype chain
  */
-function collectPrototypeMethods(proto: any): Key[] {
+function collectPrototypeMethods(
+  proto: any,
+  constructors: GlobalConstructors,
+): Key[] {
   const methods: Key[] = [];
   let current = proto;
 
-  while (current && current !== Object.prototype) {
+  while (current && current !== constructors.Object.prototype) {
     for (const key of [
       ...Object.getOwnPropertyNames(current),
       ...Object.getOwnPropertySymbols(current),
@@ -247,7 +250,7 @@ export function mockObject<T extends Record<Key, any>>(
    */
   const createFunctionMock = (fn: (...args: any[]) => any): Mock => {
     const prototypeMembers = fn.prototype
-      ? collectPrototypeMethods(fn.prototype)
+      ? collectPrototypeMethods(fn.prototype, globalConstructors)
       : [];
 
     return createMockInstance({
@@ -301,7 +304,9 @@ export function mockObject<T extends Record<Key, any>>(
 
     // Handle plain objects
     if (isPlainObject(value)) {
-      const result: Record<Key, any> = {};
+      const result = globalConstructors.Object.create(
+        globalConstructors.Object.prototype,
+      ) as Record<Key, any>;
       processedRefs.set(value, result);
       processProperties(value, result, snapshot);
       return result;

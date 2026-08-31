@@ -45,7 +45,7 @@ export default defineConfig({
   },
   pool: ${JSON.stringify({
     maxWorkers,
-    ...(pool === 'vmThreads' ? { memoryLimit } : {}),
+    ...(pool === 'vmThreads' ? { vmMemoryLimit: memoryLimit } : {}),
     type: pool,
   })},
   testEnvironment: ${JSON.stringify({ name: 'jsdom', prebundle })},

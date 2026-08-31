@@ -21,6 +21,7 @@ export const initSpy = (
   // bucket for callers (and unit tests) that don't run multiple projects.
   // See https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3458343793.
   getProjectKey: () => string = () => '',
+  getRuntimeGlobal: () => Record<string, unknown> = () => globalThis,
 ): Pick<RstestUtilities, 'isMockFunction' | 'spyOn' | 'fn'> & {
   /**
    * Run `callback` against every live registered mock of the running file's
@@ -53,6 +54,56 @@ export const initSpy = (
     const set = mocksByProject.get(key) ?? new Set<WeakRef<MockInstance>>();
     mocksByProject.set(key, set);
     return set;
+  };
+
+  const wrapRealmMock = <T extends FunctionLike>(spyFn: Mock<T>): Mock<T> => {
+    const realmFunction = getRuntimeGlobal().Function;
+    if (typeof realmFunction !== 'function' || realmFunction === Function) {
+      return spyFn;
+    }
+
+    const createFactory = realmFunction as unknown as (
+      ...args: string[]
+    ) => (implementation: FunctionLike) => FunctionLike;
+    const factory = createFactory(
+      'implementation',
+      'return function(...args) { return new.target ? Reflect.construct(implementation, args, new.target) : implementation.apply(this, args); };',
+    );
+    const realmSpy = factory(spyFn) as Mock<T>;
+
+    for (const key of Reflect.ownKeys(spyFn)) {
+      if (key === 'caller' || key === 'callee' || key === 'arguments') {
+        continue;
+      }
+      if (key === 'length' || key === 'name' || key === 'prototype') {
+        continue;
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(spyFn, key);
+      if (!descriptor) {
+        continue;
+      }
+      if (typeof descriptor.value === 'function') {
+        const value = descriptor.value;
+        descriptor.value = (...args: unknown[]) => {
+          const result = Reflect.apply(value, spyFn, args);
+          return result === spyFn ? realmSpy : result;
+        };
+      }
+      Object.defineProperty(realmSpy, key, descriptor);
+    }
+
+    Object.defineProperty(realmSpy, 'name', {
+      configurable: true,
+      value: spyFn.name,
+    });
+    Object.defineProperty(realmSpy, 'length', {
+      configurable: true,
+      value: spyFn.length,
+    });
+    if (spyFn.prototype) {
+      realmSpy.prototype = spyFn.prototype;
+    }
+    return realmSpy;
   };
 
   const wrapSpy = <T extends FunctionLike>(
@@ -302,7 +353,7 @@ export const initSpy = (
 
     projectMocks().add(new WeakRef(spyFn));
 
-    return spyFn;
+    return wrapRealmMock(spyFn);
   };
 
   const forEachMock = (callback: (mock: MockInstance) => void): void => {
@@ -461,7 +512,13 @@ export const initSpy = (
       );
 
       // Make sure the mock can be used with 'new'
-      Object.setPrototypeOf(mock, Function.prototype);
+      const realmFunction = getRuntimeGlobal().Function;
+      Object.setPrototypeOf(
+        mock,
+        typeof realmFunction === 'function'
+          ? realmFunction.prototype
+          : Function.prototype,
+      );
       mock.prototype = originalImplementation.prototype;
 
       return mock;

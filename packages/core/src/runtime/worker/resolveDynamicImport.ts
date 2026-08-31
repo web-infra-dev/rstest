@@ -96,11 +96,12 @@ export const resolveImportSpecifier = ({
 };
 
 /**
- * Compile and instantiate a `.wasm` module from its on-disk source, with no
- * importObject. This is the runtime path for `import(new URL('./x.wasm',
- * import.meta.url).href)` and other non-literal `.wasm` specifiers (#1455);
- * direct `import './x.wasm'` is instead turned into a self-contained module by
- * `wasmLoader.mjs`, which builds its own importObject and never reaches here.
+ * Compile and instantiate a `.wasm` module from its on-disk source. VM imports
+ * use the external-module loader so WebAssembly dependencies are resolved in
+ * the same realm; the native path remains the fallback for non-VM execution.
+ * This is the runtime path for `import(new URL('./x.wasm', import.meta.url).href)`
+ * and other non-literal `.wasm` specifiers (#1455); direct `import './x.wasm'`
+ * is instead turned into a self-contained module by `wasmLoader.mjs`.
  *
  * `Buffer.from` normalizes the read to an `ArrayBuffer`-backed buffer so it
  * satisfies `WebAssembly.compile`'s `BufferSource` (a raw `readFile` result is
@@ -111,6 +112,14 @@ export const loadWasm = async (
   returnModule?: boolean,
   vmContext?: vm.Context,
 ): Promise<any> => {
+  if (vmContext) {
+    return getVmExternalModules(vmContext).import(
+      pathToFileURL(filePath).href,
+      true,
+      returnModule === true,
+    );
+  }
+
   const wasmModule = await WebAssembly.compile(
     Buffer.from(await readFile(filePath)),
   );
@@ -160,23 +169,24 @@ export const finalizeDynamicImport = async ({
   // Rstest importAttributes is used internally to distinguish `importActual`
   // and normal imports, and should not be passed to Node.js side, otherwise it
   // will cause ERR_IMPORT_ATTRIBUTE_UNSUPPORTED error.
-  if (importAttributes?.with?.rstest) {
-    delete importAttributes.with.rstest;
-  }
+  const attributes = Object.fromEntries(
+    Object.entries(importAttributes?.with ?? importAttributes ?? {}).filter(
+      ([name]) => name !== 'rstest',
+    ),
+  );
 
   if (vmContext) {
     return getVmExternalModules(vmContext).import(
       modulePath,
       interopDefault,
       returnModule === true,
+      attributes,
     );
   }
 
   if (modulePath.endsWith('.json')) {
     // `await import(jsonPath)` should return `{ default: jsonExports, ...jsonExports }`.
-    const importedModule = await import(modulePath, {
-      with: { type: 'json' },
-    });
+    const importedModule = await import(modulePath, { with: attributes });
 
     return returnModule
       ? asModule(
@@ -191,7 +201,7 @@ export const finalizeDynamicImport = async ({
         };
   }
 
-  const importedModule = await import(modulePath, importAttributes);
+  const importedModule = await import(modulePath, { with: attributes });
 
   if (
     shouldInterop({

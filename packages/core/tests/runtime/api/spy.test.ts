@@ -3,6 +3,24 @@ import { describe, expect, it } from '@rstest/core';
 import { initSpy } from '../../../src/runtime/api/spy';
 
 describe('initSpy fn()', () => {
+  it('creates mocks in the supplied VM realm', () => {
+    const context = runInNewContext('globalThis', {}) as Record<
+      string,
+      unknown
+    >;
+    const { fn } = initSpy(
+      () => '',
+      () => context,
+    );
+    const mock = fn();
+    const isVmFunction = runInNewContext(
+      '(value) => value instanceof Function',
+      context,
+    ) as (value: unknown) => boolean;
+
+    expect(isVmFunction(mock)).toBe(true);
+  });
+
   it('tracks calls, results and invocationCallOrder', () => {
     const { fn } = initSpy();
     const spy = fn((x: number) => x * 2);

@@ -312,7 +312,7 @@ export const loadModule = async ({
   if (esmMode === EsmMode.Unlinked) return esm;
 
   if (esm.status === 'unlinked') {
-    await esm.link((specifier, referencingModule) =>
+    await esm.link((specifier, referencingModule, extra) =>
       defineRstestDynamicImport({
         assetFiles,
         testPath,
@@ -325,7 +325,7 @@ export const loadModule = async ({
         cacheCompilation,
       })(
         specifier,
-        {},
+        extra.attributes as unknown as ImportCallOptions,
         isRelativePath(specifier) ? referencingModule.identifier : undefined,
       ),
     );
@@ -339,7 +339,13 @@ export const loadModule = async ({
     default: unknown;
   };
 
-  return ns.default && ns.default instanceof Promise ? ns.default : ns;
+  const defaultExport: unknown = ns.default;
+  return defaultExport !== null &&
+    (typeof defaultExport === 'object' ||
+      typeof defaultExport === 'function') &&
+    typeof Reflect.get(defaultExport, 'then') === 'function'
+    ? defaultExport
+    : ns;
 };
 
 /**

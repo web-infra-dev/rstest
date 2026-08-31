@@ -313,7 +313,7 @@ const buildRstestUtilities = async (): Promise<{
     forEachMock,
     createMockInstance,
     resetCallOrder,
-  } = initSpy(() => fileContext().workerState.project);
+  } = initSpy(() => fileContext().workerState.project, getRuntimeGlobal);
 
   const rstest: RstestUtilities = {
     fn,
@@ -323,20 +323,21 @@ const buildRstestUtilities = async (): Promise<{
       value: T,
       options?: { spy?: boolean },
     ): MaybeMockedDeep<T> => {
+      const runtimeGlobal = getRuntimeGlobal();
       return mockObjectImpl(
         {
           globalConstructors: {
-            Object,
-            Function,
-            Array,
-            Map,
-            RegExp,
+            Object: runtimeGlobal.Object,
+            Function: runtimeGlobal.Function,
+            Array: runtimeGlobal.Array,
+            Map: runtimeGlobal.Map,
+            RegExp: runtimeGlobal.RegExp,
           },
           createMockInstance,
           type: options?.spy ? 'autospy' : 'automock',
         },
         { value },
-        {},
+        runtimeGlobal.Object.create(runtimeGlobal.Object.prototype),
       ).value as MaybeMockedDeep<T>;
     },
     // Type helper - just returns the same item
